@@ -1,6 +1,9 @@
 """Tests for precompiled pipeline functions."""
 
+import pytest
+
 from translit import (
+    TranslitError,
     catalog_key,
     display_clean,
     ml_normalize,
@@ -317,12 +320,7 @@ class TestStripBidi:
     # ── Exhaustive: every handled char in one string ─────────────
     def test_all_bidi_chars_at_once(self) -> None:
         # 13 characters: soft hyphen + ALM + LRM + RLM + 5 embeddings + 4 isolates
-        text = (
-            "\u00ad\u061c"
-            "\u200e\u200f"
-            "\u202a\u202b\u202c\u202d\u202e"
-            "\u2066\u2067\u2068\u2069"
-        )
+        text = "\u00ad\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
         assert len(text) == 13
         assert strip_bidi("x" + text + "y") == "xy"
 
@@ -330,3 +328,36 @@ class TestStripBidi:
     def test_alm_in_spoofing(self) -> None:
         """ALM between Latin chars can influence bidi reordering for visual spoofing."""
         assert strip_bidi("admin\u061cuser") == "adminuser"
+
+
+class TestMlNormalizeEmojiStyle:
+    """Regression: fix #4 — invalid emoji_style must raise TranslitError, not silently no-op.
+
+    Before the fix, any unknown emoji_style value silently skipped emoji expansion
+    with no indication of the error.
+    """
+
+    def test_cldr_expands_emoji(self) -> None:
+        """emoji='cldr' (default) must expand emoji to CLDR short names."""
+        result = ml_normalize("Hello \U0001f600")
+        assert "grinning face" in result
+
+    def test_none_leaves_emoji_unchanged(self) -> None:
+        """emoji='none' must leave emoji characters in place."""
+        result = ml_normalize("Hello \U0001f600", emoji="none")
+        assert "\U0001f600" in result
+
+    def test_invalid_emoji_style_raises(self) -> None:
+        """Any value other than 'cldr' or 'none' must raise TranslitError."""
+        with pytest.raises(TranslitError, match="emoji_style"):
+            ml_normalize("hello", emoji="emoji15")
+
+    def test_invalid_emoji_style_empty_string_raises(self) -> None:
+        """Empty string is not a valid emoji_style — must raise TranslitError."""
+        with pytest.raises(TranslitError, match="emoji_style"):
+            ml_normalize("hello", emoji="")
+
+    def test_invalid_emoji_style_uppercase_raises(self) -> None:
+        """'CLDR' (wrong case) must raise TranslitError — matching is case-sensitive."""
+        with pytest.raises(TranslitError, match="emoji_style"):
+            ml_normalize("hello", emoji="CLDR")

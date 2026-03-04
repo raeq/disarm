@@ -361,3 +361,45 @@ class TestEdgeCases:
         assert "grinning face" in result
         assert "Москва" in result
         assert "北京" in result
+
+
+class TestProviderExceptionHandling:
+    """Regression: fix #5 — a provider that raises an exception must not crash demojize.
+
+    The EmojiProvider.lookup() contract: any exception is silently suppressed and
+    the built-in CLDR tables are consulted as a fallback.
+    """
+
+    def test_raising_provider_falls_back_to_builtin(self) -> None:
+        """A provider that always raises must fall through to built-in CLDR names."""
+
+        class RaisingProvider:
+            def lookup(self, sequence: list) -> str | None:
+                raise RuntimeError("provider is broken")
+
+        result = demojize("😀", provider=RaisingProvider())  # type: ignore[arg-type]
+        assert result == "grinning face"
+
+    def test_provider_returning_none_falls_back_to_builtin(self) -> None:
+        """A provider that returns None for all sequences triggers built-in fallback."""
+
+        class NullProvider:
+            def lookup(self, sequence: list) -> str | None:
+                return None
+
+        result = demojize("😀", provider=NullProvider())  # type: ignore[arg-type]
+        assert result == "grinning face"
+
+    def test_partially_raising_provider_handles_known_emoji(self) -> None:
+        """A provider that raises for some sequences must still expand known ones via fallback."""
+
+        class PartialProvider:
+            def lookup(self, sequence: list) -> str | None:
+                if sequence == [0x1F600]:
+                    raise ValueError("known but broken")
+                return None
+
+        result = demojize("😀😂", provider=PartialProvider())  # type: ignore[arg-type]
+        # Both emoji fall back to built-in CLDR names
+        assert "grinning face" in result
+        assert "face with tears of joy" in result

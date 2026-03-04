@@ -312,18 +312,12 @@ class TestLanguageProfileSmoke:
 
     @pytest.mark.parametrize(
         "lang,input_text,expected",
-        [
-            pytest.param(lang, inp, exp, id=lang)
-            for lang, (inp, exp) in LANG_SMOKE_TESTS.items()
-        ],
+        [pytest.param(lang, inp, exp, id=lang) for lang, (inp, exp) in LANG_SMOKE_TESTS.items()],
     )
-    def test_lang_transliteration(
-        self, lang: str, input_text: str, expected: str
-    ) -> None:
+    def test_lang_transliteration(self, lang: str, input_text: str, expected: str) -> None:
         result = transliterate(input_text, lang=lang)
         assert result == expected, (
-            f"lang={lang!r}: transliterate({input_text!r}) = {result!r}, "
-            f"expected {expected!r}"
+            f"lang={lang!r}: transliterate({input_text!r}) = {result!r}, expected {expected!r}"
         )
 
 
@@ -398,3 +392,39 @@ class TestLanguageProfileRegistry:
             assert result == "hello world 123", (
                 f"lang={lang!r}: ASCII passthrough failed, got {result!r}"
             )
+
+
+class TestReplaceWithEmpty:
+    """Regression: fix #6 — replace_with="" is documented as equivalent to errors="ignore".
+
+    Before the fix, this equivalence was undocumented, causing user confusion
+    when empty replace_with silently dropped characters instead of replacing them.
+    """
+
+    def test_replace_with_empty_equals_ignore_latin(self) -> None:
+        """replace_with='' must produce the same result as errors='ignore' for diacritics."""
+        ignore = transliterate("café", errors="ignore")
+        replace_empty = transliterate("café", errors="replace", replace_with="")
+        assert ignore == replace_empty
+
+    def test_replace_with_empty_equals_ignore_cjk(self) -> None:
+        """replace_with='' must produce the same result as errors='ignore' for CJK fallback chars."""
+        # Use a character unlikely to be in any table with no lang set
+        text = "hello★world"
+        ignore = transliterate(text, errors="ignore")
+        replace_empty = transliterate(text, errors="replace", replace_with="")
+        assert ignore == replace_empty
+
+    def test_replace_with_nonempty_substitutes(self) -> None:
+        """Non-empty replace_with must substitute the replacement string (not drop the char)."""
+        result = transliterate("★", errors="replace", replace_with="[?]")
+        assert result == "[?]"
+
+    def test_unidecode_compat_uses_replace_with_empty(self) -> None:
+        """The unidecode() shim uses replace_with='' — result must match errors='ignore'."""
+        from translit._compat import unidecode
+
+        text = "café★résumé"
+        compat = unidecode(text)
+        native = transliterate(text, errors="replace", replace_with="")
+        assert compat == native

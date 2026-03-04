@@ -122,3 +122,47 @@ class TestNFCNormalization:
         nfd = sanitize_filename("Mu\u0308nchen.txt")
         nfc = sanitize_filename("M\u00fcnchen.txt")
         assert nfd == nfc
+
+
+class TestUtf8SafeTruncation:
+    """Regression: fix #1 — char_boundary_floor prevents UTF-8 corruption on truncation.
+
+    Each test exercises a distinct truncation code path in _sanitize_filename.
+    The invariant in every case: len(result) <= max_length and result is valid text.
+    """
+
+    def test_plain_stem_truncation_bounded(self) -> None:
+        """Long ASCII stem truncated — output must not exceed max_length."""
+        result = sanitize_filename("a" * 300 + ".txt", max_length=10)
+        assert len(result) <= 10
+        assert result.endswith(".txt")
+
+    def test_reserved_name_truncation_bounded(self) -> None:
+        """Reserved-name prefix (_NUL) + truncation must stay within max_length."""
+        result = sanitize_filename("NUL.txt", max_length=4)
+        assert len(result) <= 4
+
+    def test_extension_exceeds_max_truncates_whole(self) -> None:
+        """When extension alone exceeds max_length, the whole string is truncated."""
+        result = sanitize_filename("name.verylongext", max_length=3)
+        assert len(result) <= 3
+
+    def test_post_truncation_reserved_check_bounded(self) -> None:
+        """Truncation that produces a reserved name adds '_'; result stays <= max_length.
+
+        'NULtra.txt' truncated to 3 chars becomes 'NUL' (reserved).
+        The post-truncation check prefixes '_', then re-truncates to max_length.
+        """
+        result = sanitize_filename("NULtra.txt", max_length=3, preserve_extension=False)
+        assert len(result) <= 3
+
+    def test_stem_truncation_with_extension_bounded(self) -> None:
+        """Stem budget = max_length - ext_len; combined result must be <= max_length."""
+        result = sanitize_filename("a" * 100 + ".pdf", max_length=15)
+        assert len(result) <= 15
+        assert result.endswith(".pdf")
+
+    def test_no_preserve_extension_truncation_bounded(self) -> None:
+        """When preserve_extension=False, truncation must not exceed max_length."""
+        result = sanitize_filename("a" * 100 + ".pdf", max_length=8, preserve_extension=False)
+        assert len(result) <= 8

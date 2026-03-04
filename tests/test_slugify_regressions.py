@@ -64,3 +64,37 @@ class TestRegexPattern:
     def test_regex_basic(self) -> None:
         result = slugify("abc-123-def", regex_pattern=r"[0-9]+")
         assert "123" not in result
+
+
+class TestControlCharEntityDecoding:
+    """Regression: fix #2 — entities that decode to control chars must not appear in slugs.
+
+    Before the fix, &#0; decoded to U+0000 (NUL) which passed through the
+    slugify pipeline. Now control chars are filtered at the entity decode step.
+    """
+
+    def test_nul_entity_decimal_not_in_slug(self) -> None:
+        """&#0; must not produce a NUL byte in the slug output."""
+        result = slugify("hello&#0;world")
+        assert "\x00" not in result
+
+    def test_nul_entity_hex_not_in_slug(self) -> None:
+        """&#x0; (hex NUL) must not produce a NUL byte in the slug output."""
+        result = slugify("&#x0;")
+        assert "\x00" not in result
+
+    def test_backspace_entity_not_in_slug(self) -> None:
+        """&#8; (U+0008 backspace) is a control char — must not appear in slug."""
+        result = slugify("hello&#8;world")
+        assert "\x08" not in result
+
+    def test_tab_entity_not_in_slug(self) -> None:
+        """&#9; (U+0009 tab) is a control char — must not appear in slug."""
+        result = slugify("hello&#9;world")
+        assert "\x09" not in result
+
+    def test_valid_entity_still_decodes(self) -> None:
+        """Regression guard: the filter must not break valid entity decoding."""
+        assert slugify("caf&#233;") == "cafe"
+        assert slugify("caf&#xe9;") == "cafe"
+        assert slugify("&#65;BC") == "abc"

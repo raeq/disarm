@@ -12,6 +12,7 @@ Tests cover:
 import pytest
 
 from translit import (
+    TranslitError,
     detect_scripts,
     is_confusable,
     is_mixed_script,
@@ -102,11 +103,10 @@ class TestNormalizeConfusables:
         text = "The quick brown fox"
         assert normalize_confusables(text) == text
 
-    def test_non_latin_target_returns_unchanged(self) -> None:
-        """When target_script is not 'latin', no normalization occurs."""
-        text = "\u0430\u0435"  # Cyrillic а е
-        result = normalize_confusables(text, target_script="cyrillic")
-        assert result == text
+    def test_non_latin_target_raises(self) -> None:
+        """Only 'latin' is supported; any other target_script raises TranslitError."""
+        with pytest.raises(TranslitError, match="target_script must be 'latin'"):
+            normalize_confusables("\u0430\u0435", target_script="cyrillic")
 
 
 class TestIsConfusable:

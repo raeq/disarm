@@ -164,6 +164,26 @@ class TestIsSafeHostname:
         assert hasattr(details, "has_confusables")
         assert hasattr(details, "canonical")
 
+    # --- Regression: fix #3 — IPv6 literals must not trigger script analysis ---
+
+    def test_ipv6_loopback_is_safe(self) -> None:
+        """[::1] is an IPv6 literal — not an IDN hostname, must be safe."""
+        safe, details = is_safe_hostname("[::1]")
+        assert safe
+        assert not details.mixed_script
+        assert not details.has_confusables
+
+    def test_ipv6_full_address_is_safe(self) -> None:
+        """[2001:db8::1] must be treated as safe without script analysis."""
+        safe, details = is_safe_hostname("[2001:db8::1]")
+        assert safe
+        assert details.scripts == []
+
+    def test_ipv6_with_port_like_syntax_is_safe(self) -> None:
+        """Bracket + colon is the distinguishing pattern for IPv6 literals."""
+        safe, _ = is_safe_hostname("[fe80::1%eth0]")
+        assert safe
+
 
 # ===== Encoding Detection =====
 

@@ -137,5 +137,8 @@ site/
 # ── Maturin / PyO3 ───────────────────────────────────
 *.d
 
+# ── macOS debug symbols (dSYM bundles) ───────────────
+*.dSYM/
+
 CLAUDE.md
 .claude/

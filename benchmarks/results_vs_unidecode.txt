@@ -1,0 +1,18 @@
+
+Latin diacritics (3000 chars):
+  unirust             : 0.094s ( 319,009,600 chars/sec)
+  Unidecode           : 5.502s (   5,453,057 chars/sec)
+  text-unidecode      : 2.404s (  12,477,183 chars/sec)
+  anyascii            : 2.345s (  12,795,034 chars/sec)
+
+Cyrillic (2250 chars):
+  unirust             : 0.210s ( 107,240,423 chars/sec)
+  Unidecode           : 5.723s (   3,931,409 chars/sec)
+  text-unidecode      : 2.091s (  10,760,884 chars/sec)
+  anyascii            : 3.639s (   6,182,771 chars/sec)
+
+Mixed scripts (1550 chars):
+  unirust             : 0.089s ( 175,007,346 chars/sec)
+  Unidecode           : 2.957s (   5,241,880 chars/sec)
+  text-unidecode      : 1.268s (  12,220,913 chars/sec)
+  anyascii            : 1.535s (  10,099,285 chars/sec)

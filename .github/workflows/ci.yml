@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  rust-check:
+    name: Rust check, clippy & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo check --no-default-features
+      - run: cargo clippy --no-default-features -- -D warnings
+      - run: cargo test --no-default-features
+
+  build-and-test:
+    name: Build & test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.9", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install maturin
+        run: pip install maturin[patchelf]
+      - name: Build wheel and install test deps
+        run: |
+          maturin develop
+          pip install -e ".[test]"
+      - name: Run tests
+        run: pytest tests/ --ignore=tests/test_typing.py -q --tb=short
+      - name: Run doctests
+        run: pytest --doctest-modules python/translit/__init__.py python/translit/_compat.py -q
+      - name: Lint (ruff)
+        run: |
+          pip install ruff
+          ruff check python/ tests/
+      - name: Type check (mypy)
+        if: matrix.python-version != '3.9'
+        run: |
+          pip install mypy
+          mypy python/translit/__init__.py --ignore-missing-imports
+
+  bench:
+    name: Benchmarks (compile + smoke test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Criterion benchmarks (short run)
+        run: cargo bench --no-default-features -- --warm-up-time 1 --measurement-time 2 --sample-size 10
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python quick benchmarks
+        run: |
+          pip install maturin[patchelf]
+          maturin develop
+          python benchmarks/bench_quick.py
+
+  release:
+    name: Build release wheels
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [rust-check, build-and-test]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist/*.whl
+
+  publish:
+    name: Publish to PyPI
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: upload
+          args: --non-interactive --skip-existing dist/*

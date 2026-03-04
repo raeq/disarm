@@ -1,0 +1,388 @@
+use pyo3::prelude::*;
+
+use crate::tables::case_folding_data;
+
+/// Full Unicode case folding per CaseFolding.txt (status C + F).
+///
+/// Unlike `str.lower()` / `char::to_lowercase()`, this performs *full* case
+/// folding: ß→ss, İ→i̇, ﬁ→fi, µ→μ, ſ→s, ς→σ, and ~1,500 other mappings
+/// including Cherokee, Adlam, and all ligature expansions.
+///
+/// Fast paths:
+/// 1. Pure-ASCII bypass — if the entire string is ASCII, use branchless
+///    bitwise lowercasing with no PHF lookup.
+/// 2. Per-character ASCII check — uppercase A-Z are lowered inline.
+/// 3. PHF lookup — O(1) for all 1,557 Unicode case folding entries.
+/// 4. Identity fallback — characters not in the table map to themselves.
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _fold_case(text: &str) -> String {
+    // Fast path: pure ASCII — branchless bulk lowering, no heap probe.
+    if text.is_ascii() {
+        return text.to_ascii_lowercase();
+    }
+
+    let mut result = String::with_capacity(text.len());
+
+    for ch in text.chars() {
+        if ch.is_ascii() {
+            // Inline ASCII lowercase — no PHF lookup needed.
+            result.push(if ch.is_ascii_uppercase() {
+                (ch as u8 + 32) as char
+            } else {
+                ch
+            });
+        } else if let Some(folded) = case_folding_data::lookup(ch) {
+            result.push_str(folded);
+        } else {
+            // Not in case folding table → maps to itself.
+            result.push(ch);
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── ASCII fast path ─────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_basic() {
+        assert_eq!(_fold_case("Hello"), "hello");
+        assert_eq!(_fold_case("Straße"), "strasse");
+    }
+
+    #[test]
+    fn test_fold_case_ascii_fast_path() {
+        assert_eq!(_fold_case("HELLO WORLD"), "hello world");
+        assert_eq!(_fold_case("already lowercase"), "already lowercase");
+        assert_eq!(_fold_case("MiXeD CaSe 123!"), "mixed case 123!");
+    }
+
+    #[test]
+    fn test_fold_case_pure_ascii_digits_and_punctuation() {
+        // Digits and punctuation pass through unchanged.
+        assert_eq!(_fold_case("12345!@#$%"), "12345!@#$%");
+        assert_eq!(_fold_case("foo_bar-baz.qux"), "foo_bar-baz.qux");
+    }
+
+    #[test]
+    fn test_fold_case_empty_string() {
+        assert_eq!(_fold_case(""), "");
+    }
+
+    #[test]
+    fn test_fold_case_single_ascii_char() {
+        assert_eq!(_fold_case("A"), "a");
+        assert_eq!(_fold_case("z"), "z");
+        assert_eq!(_fold_case("7"), "7");
+    }
+
+    // ── Latin ligatures ─────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_ligatures() {
+        assert_eq!(_fold_case("ﬁnd ﬂat ﬀ ﬃ ﬄ"), "find flat ff ffi ffl");
+        assert_eq!(_fold_case("ﬅop ﬆop"), "stop stop");
+    }
+
+    // ── Latin Extended: characters where fold != lower ────────────
+
+    #[test]
+    fn test_fold_case_micro_sign_to_greek_mu() {
+        // µ (U+00B5 micro sign) → μ (U+03BC Greek small mu)
+        assert_eq!(_fold_case("\u{00B5}"), "\u{03BC}");
+    }
+
+    #[test]
+    fn test_fold_case_long_s_to_s() {
+        // ſ (U+017F long s) → s
+        assert_eq!(_fold_case("\u{017F}"), "s");
+    }
+
+    #[test]
+    fn test_fold_case_eszett() {
+        // ß (U+00DF) → ss
+        assert_eq!(_fold_case("ß"), "ss");
+        // ẞ (U+1E9E capital eszett) → ss
+        assert_eq!(_fold_case("ẞ"), "ss");
+    }
+
+    #[test]
+    fn test_fold_case_dotted_i() {
+        // İ (U+0130) → i + combining dot above (U+0307)
+        assert_eq!(_fold_case("\u{0130}"), "i\u{0307}");
+    }
+
+    // ── Greek ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_greek_uppercase() {
+        assert_eq!(_fold_case("ΑΒΓΔ"), "αβγδ");
+        assert_eq!(_fold_case("ΩΨΧΦ"), "ωψχφ");
+    }
+
+    #[test]
+    fn test_fold_case_greek_final_sigma() {
+        // ς (U+03C2 final sigma) → σ (U+03C3)
+        assert_eq!(_fold_case("\u{03C2}"), "\u{03C3}");
+    }
+
+    #[test]
+    fn test_fold_case_greek_variant_forms() {
+        // ϐ (U+03D0 beta symbol) → β
+        assert_eq!(_fold_case("\u{03D0}"), "\u{03B2}");
+        // ϑ (U+03D1 theta symbol) → θ
+        assert_eq!(_fold_case("\u{03D1}"), "\u{03B8}");
+        // ϕ (U+03D5 phi symbol) → φ
+        assert_eq!(_fold_case("\u{03D5}"), "\u{03C6}");
+        // ϖ (U+03D6 pi symbol) → π
+        assert_eq!(_fold_case("\u{03D6}"), "\u{03C0}");
+        // ϰ (U+03F0 kappa symbol) → κ
+        assert_eq!(_fold_case("\u{03F0}"), "\u{03BA}");
+        // ϱ (U+03F1 rho symbol) → ρ
+        assert_eq!(_fold_case("\u{03F1}"), "\u{03C1}");
+    }
+
+    #[test]
+    fn test_fold_case_greek_with_tonos() {
+        // ΐ (U+0390) → ΐ decomposed: ι + combining diaeresis + combining acute
+        assert_eq!(_fold_case("\u{0390}"), "\u{03B9}\u{0308}\u{0301}");
+    }
+
+    // ── Cyrillic ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_cyrillic_uppercase() {
+        assert_eq!(_fold_case("АБВГД"), "абвгд");
+        assert_eq!(_fold_case("ЭЮЯЪ"), "эюяъ");
+    }
+
+    #[test]
+    fn test_fold_case_cyrillic_mixed() {
+        assert_eq!(_fold_case("Москва"), "москва");
+        assert_eq!(_fold_case("КИЇВ"), "київ");
+    }
+
+    // ── Armenian ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_armenian() {
+        // Ա (U+0531) → ա (U+0561)
+        assert_eq!(_fold_case("\u{0531}"), "\u{0561}");
+        // Armenian ligature և (U+0587) → եւ
+        assert_eq!(_fold_case("\u{0587}"), "\u{0565}\u{0582}");
+    }
+
+    // ── Georgian ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_georgian_mtavruli() {
+        // Mtavruli Ა (U+1C90) → ა (U+10D0)
+        assert_eq!(_fold_case("\u{1C90}"), "\u{10D0}");
+    }
+
+    // ── Cherokee ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_cherokee() {
+        // Cherokee is unusual: CaseFolding.txt maps the *small* forms
+        // (U+AB70–U+ABBF) to the original uppercase forms (U+13A0–U+13EF).
+        // The uppercase forms themselves have no folding entry → identity.
+        assert_eq!(_fold_case("\u{13A0}"), "\u{13A0}"); // Ꭰ stays Ꭰ
+                                                        // Small ꭰ (U+AB70) folds to Ꭰ (U+13A0)
+        assert_eq!(_fold_case("\u{AB70}"), "\u{13A0}");
+        assert_eq!(_fold_case("\u{AB71}"), "\u{13A1}");
+    }
+
+    // ── Adlam ────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_adlam() {
+        // Adlam capital 𞤀 (U+1E900) → small 𞤢 (U+1E922)
+        assert_eq!(_fold_case("\u{1E900}"), "\u{1E922}");
+        // Adlam capital 𞤁 (U+1E901) → small 𞤣 (U+1E923)
+        assert_eq!(_fold_case("\u{1E901}"), "\u{1E923}");
+    }
+
+    // ── Fullwidth Latin ──────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_fullwidth_latin() {
+        // Ａ (U+FF21) → ａ (U+FF41)
+        assert_eq!(_fold_case("\u{FF21}"), "\u{FF41}");
+        // Ｚ (U+FF3A) → ｚ (U+FF5A)
+        assert_eq!(_fold_case("\u{FF3A}"), "\u{FF5A}");
+    }
+
+    // ── Mixed-script strings ─────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_mixed_scripts() {
+        assert_eq!(_fold_case("Café ΣΟΦΙΑ"), "café σοφια");
+    }
+
+    #[test]
+    fn test_fold_case_mixed_ascii_and_non_ascii() {
+        // ASCII uppercase + non-ASCII uppercase in one string.
+        assert_eq!(_fold_case("ABC Straße ÄÖÜ"), "abc strasse äöü");
+    }
+
+    #[test]
+    fn test_fold_case_mixed_cjk_and_latin() {
+        // CJK passes through; Latin folds.
+        assert_eq!(_fold_case("Hello 你好 WORLD"), "hello 你好 world");
+    }
+
+    // ── Identity / passthrough ───────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_identity_cjk() {
+        assert_eq!(_fold_case("你好世界"), "你好世界");
+    }
+
+    #[test]
+    fn test_fold_case_identity_emoji() {
+        assert_eq!(_fold_case("🎉🚀💡"), "🎉🚀💡");
+    }
+
+    #[test]
+    fn test_fold_case_identity_already_folded() {
+        // Already-folded non-ASCII should pass through unchanged.
+        assert_eq!(_fold_case("café résumé naïve"), "café résumé naïve");
+    }
+
+    // ── Edge cases ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_fold_case_string_length_grows() {
+        // ß→ss doubles the char; verify the output length is correct.
+        assert_eq!(_fold_case("ßßß"), "ssssss");
+        assert_eq!(_fold_case("ßßß").len(), 6);
+    }
+
+    #[test]
+    fn test_fold_case_combining_characters_preserved() {
+        // Combining marks that are not in CaseFolding.txt pass through.
+        // é as e + combining acute accent
+        let input = "e\u{0301}";
+        assert_eq!(_fold_case(input), input);
+    }
+
+    #[test]
+    fn test_fold_case_null_byte() {
+        // Null byte is valid in the middle of a Rust &str.
+        assert_eq!(_fold_case("A\0B"), "a\0b");
+    }
+
+    #[test]
+    fn test_fold_case_surrogate_boundary() {
+        // Characters near the BMP boundary.
+        // U+FFFF is not a case-folding entry → identity.
+        assert_eq!(_fold_case("\u{FFFF}"), "\u{FFFF}");
+        // U+10000 (𐀀 Linear B Syllable B008 A) → identity.
+        assert_eq!(_fold_case("\u{10000}"), "\u{10000}");
+    }
+
+    #[test]
+    fn test_fold_case_deseret() {
+        // Deseret capital 𐐀 (U+10400) → small 𐐨 (U+10428)
+        assert_eq!(_fold_case("\u{10400}"), "\u{10428}");
+    }
+
+    #[test]
+    fn test_fold_case_osage() {
+        // Osage capital 𐒰 (U+104B0) → small 𐓘 (U+104D8)
+        assert_eq!(_fold_case("\u{104B0}"), "\u{104D8}");
+    }
+
+    #[test]
+    fn test_fold_case_warang_citi() {
+        // Warang Citi capital 𑢠 (U+118A0) → small 𑣀 (U+118C0)
+        assert_eq!(_fold_case("\u{118A0}"), "\u{118C0}");
+    }
+
+    #[test]
+    fn test_fold_case_agrees_with_casefolding_txt() {
+        // Spot-check a handful of entries across the full range
+        // to verify the PHF data matches CaseFolding.txt expectations.
+        let cases: &[(char, &str)] = &[
+            ('A', "a"),
+            ('Z', "z"),
+            ('À', "à"),                       // U+00C0 → U+00E0
+            ('Ð', "ð"),                       // U+00D0 → U+00F0
+            ('Ø', "ø"),                       // U+00D8 → U+00F8
+            ('Ʃ', "ʃ"),                       // U+01A9 → U+0283
+            ('Ω', "ω"),                       // U+03A9 → U+03C9
+            ('Ж', "ж"),                       // U+0416 → U+0436
+            ('\u{0587}', "\u{0565}\u{0582}"), // Armenian և → եւ
+        ];
+        for &(input, expected) in cases {
+            let got = _fold_case(&input.to_string());
+            assert_eq!(
+                got, expected,
+                "fold_case(U+{:04X} {:?}) = {:?}, expected {:?}",
+                input as u32, input, got, expected
+            );
+        }
+    }
+
+    // ── Property-based tests ─────────────────────────────────────────
+
+    mod proptest_properties {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(1000))]
+
+            /// Case folding is idempotent: fold(fold(x)) == fold(x).
+            #[test]
+            fn fold_case_idempotent(s in "\\PC*") {
+                let once = _fold_case(&s);
+                let twice = _fold_case(&once);
+                prop_assert_eq!(&once, &twice);
+            }
+
+            /// After folding, no ASCII uppercase letters remain.
+            #[test]
+            fn fold_case_no_ascii_uppercase(s in "\\PC*") {
+                let result = _fold_case(&s);
+                for ch in result.chars() {
+                    if ch.is_ascii() {
+                        prop_assert!(
+                            !ch.is_ascii_uppercase(),
+                            "uppercase {ch:?} in fold output: {result:?}"
+                        );
+                    }
+                }
+            }
+
+            /// Output char count ≥ input char count (folding never drops characters,
+            /// though byte length may shrink for ligatures like ﬅ → st).
+            #[test]
+            fn fold_case_never_drops_chars(s in "\\PC*") {
+                let result = _fold_case(&s);
+                prop_assert!(
+                    result.chars().count() >= s.chars().count(),
+                    "fold_case dropped chars: {} → {}",
+                    s.chars().count(),
+                    result.chars().count()
+                );
+            }
+
+            /// Pure ASCII input stays pure ASCII after folding.
+            #[test]
+            fn fold_case_ascii_stays_ascii(s in "[\\x00-\\x7f]*") {
+                let result = _fold_case(&s);
+                prop_assert!(
+                    result.is_ascii(),
+                    "non-ASCII in fold of ASCII input: {result:?}"
+                );
+            }
+        }
+    }
+}

@@ -1,0 +1,130 @@
+"""Type stubs for unirust.Text fluent builder."""
+
+from collections.abc import Iterable
+
+from unirust._enums import Script
+from unirust._types import EmojiProvider, ErrorMode, NormalizationForm, Platform
+
+class Text:
+    """Immutable wrapper for fluent Unicode text processing."""
+
+    def __init__(self, text: str) -> None: ...
+    @property
+    def value(self) -> str:
+        """Return the underlying string."""
+        ...
+    def __str__(self) -> str: ...
+    def __repr__(self) -> str: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+    def __len__(self) -> int: ...
+    def __bool__(self) -> bool: ...
+
+    # Chainable transforms
+    def normalize(self, *, form: NormalizationForm = "NFC") -> Text:
+        """Unicode normalization (NFC, NFD, NFKC, NFKD)."""
+        ...
+    def normalize_confusables(self, *, target_script: str = "latin") -> Text:
+        """Replace confusable homoglyphs with target-script equivalents."""
+        ...
+    def strip_accents(self) -> Text:
+        """Remove diacritical marks, preserving base characters."""
+        ...
+    def transliterate(
+        self,
+        *,
+        lang: str | None = None,
+        errors: ErrorMode = "replace",
+        replace_with: str = "[?]",
+        strict_iso9: bool = False,
+    ) -> Text:
+        """Unicode → ASCII transliteration."""
+        ...
+    def fold_case(self) -> Text:
+        """Full Unicode case folding (1,557 mappings from CaseFolding.txt)."""
+        ...
+    def collapse_whitespace(
+        self,
+        *,
+        strip_control: bool = True,
+        strip_zero_width: bool = True,
+    ) -> Text:
+        """Normalize whitespace to single ASCII spaces."""
+        ...
+    def slugify(
+        self,
+        *,
+        separator: str = "-",
+        lowercase: bool = True,
+        max_length: int = 0,
+        word_boundary: bool = False,
+        save_order: bool = False,
+        stopwords: Iterable[str] = (),
+        regex_pattern: str | None = None,
+        replacements: Iterable[tuple[str, str]] = (),
+        allow_unicode: bool = False,
+        lang: str | None = None,
+        entities: bool = True,
+        decimal: bool = True,
+        hexadecimal: bool = True,
+    ) -> Text:
+        """Generate a URL-safe slug."""
+        ...
+    def sanitize_filename(
+        self,
+        *,
+        separator: str = "_",
+        max_length: int = 255,
+        platform: Platform = "universal",
+        lang: str | None = None,
+        preserve_extension: bool = True,
+    ) -> Text:
+        """Sanitize into a safe filename."""
+        ...
+    def demojize(
+        self,
+        *,
+        strip_modifiers: bool = False,
+        errors: ErrorMode = "replace",
+        replace_with: str = "[?]",
+        provider: EmojiProvider | None = None,
+    ) -> Text:
+        """Expand emoji to CLDR short-name text descriptions."""
+        ...
+    def strip_bidi(self) -> Text:
+        """Strip bidirectional override and formatting characters."""
+        ...
+    def security_clean(self) -> Text:
+        """Apply the security_clean pipeline (NFKC → confusables → whitespace → bidi)."""
+        ...
+    def ml_normalize(
+        self,
+        *,
+        lang: str | None = None,
+        emoji: str = "cldr",
+    ) -> Text:
+        """Apply the ML/NLP normalization pipeline."""
+        ...
+    def display_clean(self) -> Text:
+        """Apply display-safe text cleaning."""
+        ...
+
+    # Non-chaining predicates
+    def is_ascii(self) -> bool:
+        """True if all characters are U+0000–U+007F."""
+        ...
+    def is_normalized(self, *, form: NormalizationForm = "NFC") -> bool:
+        """True if already in the specified normalization form."""
+        ...
+    def is_confusable(self, *, target_script: str = "latin") -> bool:
+        """True if text contains confusable homoglyphs."""
+        ...
+    def is_mixed_script(self) -> bool:
+        """True if text contains characters from multiple Unicode scripts."""
+        ...
+    def detect_scripts(self) -> list[Script]:
+        """Return Unicode scripts present, in order of first appearance."""
+        ...
+    def grapheme_len(self) -> int:
+        """Count user-perceived characters (extended grapheme clusters)."""
+        ...

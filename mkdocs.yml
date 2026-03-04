@@ -1,0 +1,135 @@
+site_name: unirust
+site_url: https://unirust.readthedocs.io/
+site_description: Fast Unicode transliteration, slugification, and text normalization
+site_author: Richard Quinn
+repo_url: https://github.com/raeq/unirust
+repo_name: raeq/unirust
+edit_uri: edit/master/docs/
+use_directory_urls: false
+
+copyright: Copyright &copy; 2026 Richard Quinn
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [python]
+          options:
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            heading_level: 3
+            members_order: source
+            show_signature_annotations: true
+            separate_signature: true
+            docstring_style: google
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+  - def_list
+  - footnotes
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - Getting Started: user-guide/getting-started.md
+      - Transliteration: user-guide/transliteration.md
+      - Slugification: user-guide/slugification.md
+      - Normalization: user-guide/normalization.md
+      - Confusable Detection: user-guide/confusables.md
+      - Filename Sanitization: user-guide/filenames.md
+      - Text Cleaning: user-guide/text-cleaning.md
+      - Text Pipeline: user-guide/pipeline.md
+      - Language Support: user-guide/language-support.md
+  - API Reference:
+      - Overview: api/index.md
+      - Core Transforms: api/transforms.md
+      - Predicates: api/predicates.md
+      - Classes: api/classes.md
+      - Enums & Types: api/enums.md
+      - Language Profiles: api/language-profiles.md
+      - Exceptions: api/exceptions.md
+  - Guides:
+      - For Web Developers: web-developer-guide.md
+      - For ML / LLM Pipelines: ml-pipeline-guide.md
+      - For Security Engineers: security-guide.md
+      - For Librarians & Catalogers: librarian-guide.md
+      - For Scholars & Linguists: scholarly-guide.md
+  - Architecture:
+      - Transliteration Engine: architecture/transliteration-engine.md
+      - Data Tables & Caching: architecture/data-tables.md
+      - Emoji Engine: architecture/emoji-engine.md
+      - TextPipeline: architecture/pipeline.md
+      - Performance Optimization: architecture/performance.md
+      - Security & Hostnames: architecture/security.md
+      - Emoji Plugin System: architecture/emoji-plugins.md
+  - Migration:
+      - Why Migrate: migration/index.md
+      - From Unidecode: migration/from-unidecode.md
+      - From python-slugify: migration/from-python-slugify.md
+      - From confusable_homoglyphs: migration/from-confusable-homoglyphs.md
+      - From pathvalidate: migration/from-pathvalidate.md
+      - From anyascii: migration/from-anyascii.md
+  - Performance: performance.md
+  - Benchmarks: benchmarks.md
+  - Limitations: limitations.md
+  - Contributing: contributing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/raeq/unirust
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/unirust/

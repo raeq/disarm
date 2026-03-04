@@ -1,0 +1,244 @@
+//! Criterion benchmarks for translit core transforms.
+//!
+//! Run with: `cargo bench --no-default-features`
+//!
+//! These benchmarks measure the pure-Rust implementation functions
+//! directly, without PyO3 boundary-crossing overhead.
+
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+
+use _translit::case_fold::_fold_case;
+use _translit::grapheme::{_grapheme_len, _grapheme_split};
+use _translit::scripts::{_detect_scripts, _is_mixed_script};
+use _translit::slugify::{slugify_impl, SlugConfig};
+use _translit::tables::lookup_default;
+use _translit::transliterate::{transliterate_impl, ErrorMode};
+use _translit::whitespace::_collapse_whitespace;
+
+// ---------------------------------------------------------------------------
+// Input corpus
+// ---------------------------------------------------------------------------
+
+const ASCII_SHORT: &str = "hello world";
+const ASCII_LONG: &str = "The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump.";
+const LATIN_DIACRITICS: &str = "café résumé naïve Ångström";
+const CYRILLIC: &str = "Москва — столица России";
+const CJK: &str = "北京是中国的首都";
+const MIXED_SCRIPT: &str = "Hello Мир 世界 café";
+const EMOJI_TEXT: &str = "Hello 👨‍👩‍👧‍👦 World 🌍🎉";
+const WHITESPACE_MESSY: &str = "  hello   \t  world  \n  foo  \u{200B}  bar  \u{2060}  ";
+
+// ---------------------------------------------------------------------------
+// Transliteration benchmarks
+// ---------------------------------------------------------------------------
+
+fn bench_transliterate(c: &mut Criterion) {
+    let mut group = c.benchmark_group("transliterate");
+
+    for (name, input) in [
+        ("ascii_short", ASCII_SHORT),
+        ("ascii_long", ASCII_LONG),
+        ("latin_diacritics", LATIN_DIACRITICS),
+        ("cyrillic", CYRILLIC),
+        ("cjk", CJK),
+        ("mixed_script", MIXED_SCRIPT),
+    ] {
+        group.bench_with_input(BenchmarkId::new("default", name), input, |b, text| {
+            b.iter(|| transliterate_impl(black_box(text), None, ErrorMode::Replace, "[?]", false));
+        });
+    }
+
+    // Language-specific transliteration
+    group.bench_function("cyrillic_lang_ru", |b| {
+        b.iter(|| {
+            transliterate_impl(
+                black_box(CYRILLIC),
+                Some("ru"),
+                ErrorMode::Replace,
+                "[?]",
+                false,
+            )
+        });
+    });
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
+// Table lookup benchmarks
+// ---------------------------------------------------------------------------
+
+fn bench_table_lookup(c: &mut Criterion) {
+    let mut group = c.benchmark_group("table_lookup");
+
+    group.bench_function("latin_extended_e_acute", |b| {
+        b.iter(|| lookup_default(black_box('é')));
+    });
+
+    group.bench_function("cyrillic_zhe", |b| {
+        b.iter(|| lookup_default(black_box('Ж')));
+    });
+
+    group.bench_function("cjk_bei", |b| {
+        b.iter(|| lookup_default(black_box('北')));
+    });
+
+    group.bench_function("hangul_han", |b| {
+        b.iter(|| lookup_default(black_box('한')));
+    });
+
+    group.bench_function("ascii_passthrough", |b| {
+        b.iter(|| lookup_default(black_box('a')));
+    });
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
+// Slugify benchmarks
+// ---------------------------------------------------------------------------
+
+fn bench_slugify(c: &mut Criterion) {
+    let mut group = c.benchmark_group("slugify");
+
+    let default_config = SlugConfig::default();
+
+    for (name, input) in [
+        ("ascii_title", "Hello World This Is A Title"),
+        ("unicode_title", "Héllo Wörld Straße München"),
+        ("long_text", "The Quick Brown Fox Jumps Over The Lazy Dog And Then Some More Words To Make It Long Enough"),
+    ] {
+        group.bench_with_input(BenchmarkId::new("default", name), input, |b, text| {
+            b.iter(|| slugify_impl(black_box(text), &default_config));
+        });
+    }
+
+    // With max_length + word_boundary
+    let bounded_config = SlugConfig {
+        max_length: 30,
+        word_boundary: true,
+        ..SlugConfig::default()
+    };
+    group.bench_function("bounded_30_word_boundary", |b| {
+        b.iter(|| {
+            slugify_impl(
+                black_box("The Quick Brown Fox Jumps Over The Lazy Dog"),
+                &bounded_config,
+            )
+        });
+    });
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
+// Case folding benchmarks
+// ---------------------------------------------------------------------------
+
+fn bench_fold_case(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fold_case");
+
+    for (name, input) in [
+        ("ascii_short", "HELLO WORLD"),
+        ("ascii_long", ASCII_LONG),
+        ("latin_diacritics", "CAFÉ RÉSUMÉ NAÏVE ÅNGSTRÖM"),
+        ("german_eszett", "GROSSE STRAßE"),
+        ("greek", "ΣΟΦΙΑ ΕΛΛΗΝΙΚΑ"),
+        ("mixed", "Hello Мир WORLD Straße"),
+    ] {
+        group.bench_with_input(BenchmarkId::new("fold", name), input, |b, text| {
+            b.iter(|| _fold_case(black_box(text)));
+        });
+    }
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
+// Whitespace benchmarks
+// ---------------------------------------------------------------------------
+
+fn bench_whitespace(c: &mut Criterion) {
+    let mut group = c.benchmark_group("whitespace");
+
+    group.bench_function("messy_full_strip", |b| {
+        b.iter(|| _collapse_whitespace(black_box(WHITESPACE_MESSY), true, true));
+    });
+
+    group.bench_function("messy_no_strip", |b| {
+        b.iter(|| _collapse_whitespace(black_box(WHITESPACE_MESSY), false, false));
+    });
+
+    group.bench_function("clean_passthrough", |b| {
+        b.iter(|| _collapse_whitespace(black_box("hello world"), true, true));
+    });
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
+// Script detection benchmarks
+// ---------------------------------------------------------------------------
+
+fn bench_scripts(c: &mut Criterion) {
+    let mut group = c.benchmark_group("scripts");
+
+    for (name, input) in [
+        ("ascii_only", ASCII_SHORT),
+        ("mixed_3_scripts", MIXED_SCRIPT),
+        ("cyrillic_pure", CYRILLIC),
+        ("cjk_pure", CJK),
+    ] {
+        group.bench_with_input(BenchmarkId::new("detect", name), input, |b, text| {
+            b.iter(|| _detect_scripts(black_box(text)));
+        });
+
+        group.bench_with_input(BenchmarkId::new("is_mixed", name), input, |b, text| {
+            b.iter(|| _is_mixed_script(black_box(text)));
+        });
+    }
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
+// Grapheme cluster benchmarks
+// ---------------------------------------------------------------------------
+
+fn bench_grapheme(c: &mut Criterion) {
+    let mut group = c.benchmark_group("grapheme");
+
+    group.bench_function("len_ascii", |b| {
+        b.iter(|| _grapheme_len(black_box(ASCII_SHORT)));
+    });
+
+    group.bench_function("len_emoji", |b| {
+        b.iter(|| _grapheme_len(black_box(EMOJI_TEXT)));
+    });
+
+    group.bench_function("split_ascii", |b| {
+        b.iter(|| _grapheme_split(black_box(ASCII_SHORT)));
+    });
+
+    group.bench_function("split_emoji", |b| {
+        b.iter(|| _grapheme_split(black_box(EMOJI_TEXT)));
+    });
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
+// Criterion groups
+// ---------------------------------------------------------------------------
+
+criterion_group!(
+    benches,
+    bench_transliterate,
+    bench_table_lookup,
+    bench_slugify,
+    bench_fold_case,
+    bench_whitespace,
+    bench_scripts,
+    bench_grapheme,
+);
+criterion_main!(benches);

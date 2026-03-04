@@ -1,0 +1,92 @@
+[package]
+name = "translit"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Fast Unicode transliteration (including CJK), slugification, and text normalization"
+repository = "https://github.com/raeq/translit"
+
+[lib]
+name = "_translit"
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = ["extension-module"]
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["abi3-py39"] }
+regex = "1"
+bitflags = "2"
+unicode-normalization = "0.1"
+once_cell = "1"
+phf = "0.11"
+unicode-segmentation = "1"
+encoding_rs = "0.8"
+chardetng = "0.1"
+
+[build-dependencies]
+phf_codegen = "0.11"
+
+[dev-dependencies]
+proptest = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench_core"
+path = "benchmarks/bench_core.rs"
+harness = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Allow these pedantic lints that don't add value for our codebase
+too_many_arguments = "allow"
+too_many_lines = "allow"
+similar_names = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+return_self_not_must_use = "allow"
+# These are from PyO3 patterns we can't avoid
+needless_pass_by_value = "allow"
+unused_self = "allow"
+struct_excessive_bools = "allow"
+doc_markdown = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+# PyO3 #[pyfunction] signatures require concrete HashMap, can't generalize hasher
+implicit_hasher = "allow"
+# ErrorMode::from_str returns PyResult, not compatible with std::str::FromStr
+should_implement_trait = "allow"
+# PyO3 functions use _prefix for Python-private naming convention
+used_underscore_items = "allow"
+# PyO3 functions must return PyResult even for infallible operations
+unnecessary_wraps = "allow"
+# Pedantic style preferences that don't improve correctness
+redundant_closure_for_method_calls = "allow"
+match_same_arms = "allow"
+if_not_else = "allow"
+unnested_or_patterns = "allow"
+# once_cell::Lazy is still widely used; LazyLock migration is a separate task
+type_complexity = "allow"
+non_std_lazy_statics = "allow"
+# Suppress LazyLock suggestion — once_cell migration is a separate task
+assigning_clones = "allow"
+# Allow these patterns that are clearer in our codebase
+if_same_then_else = "allow"
+single_match_else = "allow"
+manual_range_contains = "allow"
+explicit_counter_loop = "allow"
+fn_params_excessive_bools = "allow"
+redundant_closure = "allow"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

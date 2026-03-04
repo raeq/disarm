@@ -1,0 +1,40 @@
+==============================================================================
+unirust quick benchmarks (timeit, 50k iterations)
+==============================================================================
+
+--- transliterate ---
+  transliterate/ascii_short                      151.5 ns/op  (   6,599,967 ops/s)
+  transliterate/latin_diacritics                 910.8 ns/op  (   1,097,922 ops/s)
+  transliterate/cyrillic                        1008.6 ns/op  (     991,468 ops/s)
+  transliterate/cjk                             1025.5 ns/op  (     975,158 ops/s)
+  transliterate/mixed                            999.8 ns/op  (   1,000,229 ops/s)
+  transliterate/ascii_fast_path                  168.6 ns/op  (   5,931,341 ops/s)
+
+--- slugify ---
+  slugify/default                               2435.8 ns/op  (     410,540 ops/s)
+  slugify/with_options                          2412.4 ns/op  (     414,519 ops/s)
+
+--- fold_case ---
+  fold_case/ascii                                285.2 ns/op  (   3,505,746 ops/s)
+  fold_case/german                               283.8 ns/op  (   3,523,275 ops/s)
+  fold_case/mixed                                420.6 ns/op  (   2,377,291 ops/s)
+
+--- fold_case vs str.casefold() ---
+  fold_case/unirust                              460.4 ns/op  (   2,171,964 ops/s)
+  fold_case/str.casefold()                       207.6 ns/op  (   4,815,870 ops/s)
+
+--- precompiled pipelines ---
+  security_clean                                 902.5 ns/op  (   1,108,060 ops/s)
+  ml_normalize                                  1828.5 ns/op  (     546,904 ops/s)
+  display_clean                                  307.7 ns/op  (   3,250,022 ops/s)
+
+--- grapheme ---
+  grapheme_len/emoji                             601.5 ns/op  (   1,662,512 ops/s)
+  grapheme_len/ascii                             380.5 ns/op  (   2,628,004 ops/s)
+
+--- batch APIs (100 strings) ---
+  transliterate_batch/100                      24912.2 ns/op  (      40,141 ops/s)
+  transliterate_loop/100                       85237.6 ns/op  (      11,732 ops/s)
+
+==============================================================================
+Done. For rigorous benchmarks, use: python benchmarks/bench_pyperf.py

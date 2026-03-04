@@ -1,0 +1,511 @@
+
+running 259 tests
+test case_fold::tests::proptest_properties::fold_case_ascii_stays_ascii ... ignored
+test case_fold::tests::proptest_properties::fold_case_idempotent ... ignored
+test case_fold::tests::proptest_properties::fold_case_never_drops_chars ... ignored
+test case_fold::tests::proptest_properties::fold_case_no_ascii_uppercase ... ignored
+test case_fold::tests::test_fold_case_adlam ... ignored
+test case_fold::tests::test_fold_case_agrees_with_casefolding_txt ... ignored
+test case_fold::tests::test_fold_case_armenian ... ignored
+test case_fold::tests::test_fold_case_ascii_fast_path ... ignored
+test case_fold::tests::test_fold_case_basic ... ignored
+test case_fold::tests::test_fold_case_cherokee ... ignored
+test case_fold::tests::test_fold_case_combining_characters_preserved ... ignored
+test case_fold::tests::test_fold_case_cyrillic_mixed ... ignored
+test case_fold::tests::test_fold_case_cyrillic_uppercase ... ignored
+test case_fold::tests::test_fold_case_deseret ... ignored
+test case_fold::tests::test_fold_case_dotted_i ... ignored
+test case_fold::tests::test_fold_case_empty_string ... ignored
+test case_fold::tests::test_fold_case_eszett ... ignored
+test case_fold::tests::test_fold_case_fullwidth_latin ... ignored
+test case_fold::tests::test_fold_case_georgian_mtavruli ... ignored
+test case_fold::tests::test_fold_case_greek_final_sigma ... ignored
+test case_fold::tests::test_fold_case_greek_uppercase ... ignored
+test case_fold::tests::test_fold_case_greek_variant_forms ... ignored
+test case_fold::tests::test_fold_case_greek_with_tonos ... ignored
+test case_fold::tests::test_fold_case_identity_already_folded ... ignored
+test case_fold::tests::test_fold_case_identity_cjk ... ignored
+test case_fold::tests::test_fold_case_identity_emoji ... ignored
+test case_fold::tests::test_fold_case_ligatures ... ignored
+test case_fold::tests::test_fold_case_long_s_to_s ... ignored
+test case_fold::tests::test_fold_case_micro_sign_to_greek_mu ... ignored
+test case_fold::tests::test_fold_case_mixed_ascii_and_non_ascii ... ignored
+test case_fold::tests::test_fold_case_mixed_cjk_and_latin ... ignored
+test case_fold::tests::test_fold_case_mixed_scripts ... ignored
+test case_fold::tests::test_fold_case_null_byte ... ignored
+test case_fold::tests::test_fold_case_osage ... ignored
+test case_fold::tests::test_fold_case_pure_ascii_digits_and_punctuation ... ignored
+test case_fold::tests::test_fold_case_single_ascii_char ... ignored
+test case_fold::tests::test_fold_case_string_length_grows ... ignored
+test case_fold::tests::test_fold_case_surrogate_boundary ... ignored
+test case_fold::tests::test_fold_case_warang_citi ... ignored
+test confusables::tests::test_is_confusable_empty ... ignored
+test confusables::tests::test_is_confusable_false ... ignored
+test confusables::tests::test_is_confusable_true ... ignored
+test confusables::tests::test_normalize_confusables_cyrillic ... ignored
+test confusables::tests::test_normalize_confusables_empty ... ignored
+test confusables::tests::test_normalize_confusables_passthrough ... ignored
+test emoji::tests::test_demojize_rust_basic ... ignored
+test emoji::tests::test_demojize_rust_empty ... ignored
+test emoji::tests::test_demojize_rust_multiple ... ignored
+test emoji::tests::test_demojize_rust_no_emoji ... ignored
+test emoji::tests::test_encode_key_multi ... ignored
+test emoji::tests::test_encode_key_single ... ignored
+test emoji::tests::test_is_emoji_codepoint ... ignored
+test emoji::tests::test_is_emoji_modifier ... ignored
+test emoji::tests::test_match_single_emoji ... ignored
+test encoding::tests::test_decode_auto_detect ... ignored
+test encoding::tests::test_decode_latin1 ... ignored
+test encoding::tests::test_decode_unknown_encoding_errors ... ignored
+test encoding::tests::test_decode_utf8 ... ignored
+test encoding::tests::test_detect_empty_input ... ignored
+test encoding::tests::test_detect_utf8 ... ignored
+test encoding::tests::test_detect_utf8_with_bom ... ignored
+test filename::tests::proptest_properties::collapse_dots_idempotent ... ignored
+test filename::tests::proptest_properties::collapse_dots_no_double_dots ... ignored
+test filename::tests::proptest_properties::collapse_dots_preserves_non_dots ... ignored
+test filename::tests::proptest_properties::collapse_dots_preserves_singles ... ignored
+test filename::tests::test_collapse_dot_sequences_double ... ignored
+test filename::tests::test_collapse_dot_sequences_single_preserved ... ignored
+test filename::tests::test_collapse_dot_sequences_triple ... ignored
+test filename::tests::test_collapse_empty ... ignored
+test filename::tests::test_collapse_no_dots ... ignored
+test filename::tests::test_collapse_trailing_dots ... ignored
+test filename::tests::test_reserved_name_prefixed ... ignored
+test filename::tests::test_truncation_creates_reserved_name ... ignored
+test grapheme::tests::proptest_properties::split_len_consistent ... ignored
+test grapheme::tests::proptest_properties::split_roundtrip ... ignored
+test grapheme::tests::proptest_properties::truncate_at_full_length_is_identity ... ignored
+test grapheme::tests::proptest_properties::truncate_is_prefix ... ignored
+test grapheme::tests::proptest_properties::truncate_respects_limit ... ignored
+test grapheme::tests::test_grapheme_len_ascii ... ignored
+test grapheme::tests::test_grapheme_len_cafe_nfc ... ignored
+test grapheme::tests::test_grapheme_len_cafe_nfd ... ignored
+test grapheme::tests::test_grapheme_len_family_emoji ... ignored
+test grapheme::tests::test_grapheme_len_flag ... ignored
+test grapheme::tests::test_grapheme_len_hangul ... ignored
+test grapheme::tests::test_grapheme_split_basic ... ignored
+test grapheme::tests::test_grapheme_split_nfd ... ignored
+test grapheme::tests::test_grapheme_truncate_basic ... ignored
+test grapheme::tests::test_grapheme_truncate_emoji ... ignored
+test grapheme::tests::test_grapheme_truncate_nfd ... ignored
+test grapheme::tests::test_grapheme_truncate_within_limit ... ignored
+test hostname::tests::test_cyrillic_spoof ... ignored
+test hostname::tests::test_full_cyrillic_domain ... ignored
+test hostname::tests::test_punycode_safe ... ignored
+test hostname::tests::test_safe_hostname ... ignored
+test normalize::tests::proptest_properties::nfkc_implies_nfc ... ignored
+test normalize::tests::proptest_properties::nfkd_implies_nfd ... ignored
+test normalize::tests::proptest_properties::normalize_idempotent ... ignored
+test normalize::tests::proptest_properties::normalize_then_is_normalized ... ignored
+test normalize::tests::test_nfc_roundtrip ... ignored
+test presets::tests::test_catalog_key_dedup ... ignored
+test presets::tests::test_catalog_key_iso9 ... ignored
+test presets::tests::test_display_clean_basic ... ignored
+test presets::tests::test_ml_normalize_basic ... ignored
+test presets::tests::test_ml_normalize_ligature ... ignored
+test presets::tests::test_security_clean_arabic_letter_mark ... ignored
+test presets::tests::test_security_clean_bidi ... ignored
+test presets::tests::test_security_clean_homoglyph ... ignored
+test presets::tests::test_security_clean_invisible_math_operators ... ignored
+test presets::tests::test_security_clean_soft_hyphen ... ignored
+test presets::tests::test_security_clean_zwsp ... ignored
+test presets::tests::test_strip_bidi_all_at_once ... ignored
+test presets::tests::test_strip_bidi_arabic_letter_mark ... ignored
+test presets::tests::test_strip_bidi_embeddings_overrides ... ignored
+test presets::tests::test_strip_bidi_isolates ... ignored
+test presets::tests::test_strip_bidi_marks ... ignored
+test presets::tests::test_strip_bidi_preserves_normal ... ignored
+test presets::tests::test_strip_bidi_soft_hyphen ... ignored
+test scripts::tests::test_arabic_block_boundaries ... ignored
+test scripts::tests::test_armenian_ligature_detected_in_text ... ignored
+test scripts::tests::test_armenian_ligatures_in_alphabetic_pf ... ignored
+test scripts::tests::test_canadian_aboriginal_extended ... ignored
+test scripts::tests::test_cherokee_supplement_range ... ignored
+test scripts::tests::test_common_detection ... ignored
+test scripts::tests::test_cyrillic_block_boundaries ... ignored
+test scripts::tests::test_detect_arabic ... ignored
+test scripts::tests::test_detect_armenian ... ignored
+test scripts::tests::test_detect_balinese ... ignored
+test scripts::tests::test_detect_bengali ... ignored
+test scripts::tests::test_detect_canadian_aboriginal ... ignored
+test scripts::tests::test_detect_cherokee ... ignored
+test scripts::tests::test_detect_coptic ... ignored
+test scripts::tests::test_detect_ethiopic ... ignored
+test scripts::tests::test_detect_georgian ... ignored
+test scripts::tests::test_detect_gujarati ... ignored
+test scripts::tests::test_detect_gurmukhi ... ignored
+test scripts::tests::test_detect_han ... ignored
+test scripts::tests::test_detect_hangul ... ignored
+test scripts::tests::test_detect_hebrew ... ignored
+test scripts::tests::test_detect_javanese ... ignored
+test scripts::tests::test_detect_kannada ... ignored
+test scripts::tests::test_detect_khmer ... ignored
+test scripts::tests::test_detect_lao ... ignored
+test scripts::tests::test_detect_latin ... ignored
+test scripts::tests::test_detect_malayalam ... ignored
+test scripts::tests::test_detect_mongolian ... ignored
+test scripts::tests::test_detect_myanmar ... ignored
+test scripts::tests::test_detect_new_tai_lue ... ignored
+test scripts::tests::test_detect_nko ... ignored
+test scripts::tests::test_detect_ogham ... ignored
+test scripts::tests::test_detect_oriya ... ignored
+test scripts::tests::test_detect_runic ... ignored
+test scripts::tests::test_detect_sinhala ... ignored
+test scripts::tests::test_detect_syriac ... ignored
+test scripts::tests::test_detect_tai_le ... ignored
+test scripts::tests::test_detect_tamil ... ignored
+test scripts::tests::test_detect_telugu ... ignored
+test scripts::tests::test_detect_thaana ... ignored
+test scripts::tests::test_detect_thai ... ignored
+test scripts::tests::test_detect_tibetan ... ignored
+test scripts::tests::test_detect_vai ... ignored
+test scripts::tests::test_devanagari_extended_range ... ignored
+test scripts::tests::test_digits_only_no_scripts ... ignored
+test scripts::tests::test_empty_string_no_scripts ... ignored
+test scripts::tests::test_ethiopic_extended ... ignored
+test scripts::tests::test_ethiopic_extended_a ... ignored
+test scripts::tests::test_georgian_extended ... ignored
+test scripts::tests::test_greek_block_boundaries ... ignored
+test scripts::tests::test_han_supplementary_planes ... ignored
+test scripts::tests::test_hangul_block_boundaries ... ignored
+test scripts::tests::test_inherited_combining_diacriticals ... ignored
+test scripts::tests::test_inherited_combining_extended ... ignored
+test scripts::tests::test_inherited_combining_half_marks ... ignored
+test scripts::tests::test_inherited_combining_marks ... ignored
+test scripts::tests::test_inherited_combining_supplement ... ignored
+test scripts::tests::test_inherited_combining_symbols ... ignored
+test scripts::tests::test_khmer_symbols_range ... ignored
+test scripts::tests::test_latin_block_boundaries ... ignored
+test scripts::tests::test_latin_ligature_fi_detected_as_latin_in_text ... ignored
+test scripts::tests::test_latin_ligatures_in_alphabetic_pf ... ignored
+test scripts::tests::test_mixed_latin_and_armenian_ligatures ... ignored
+test scripts::tests::test_mixed_script ... ignored
+test scripts::tests::test_myanmar_extended_a_range ... ignored
+test scripts::tests::test_script_order_preserved ... ignored
+test scripts::tests::test_single_script ... ignored
+test scripts::tests::test_syriac_supplement ... ignored
+test scripts::tests::test_three_scripts_detected ... ignored
+test slugify::tests::proptest_properties::slugify_empty_is_empty ... ignored
+test slugify::tests::proptest_properties::slugify_idempotent_on_slugs ... ignored
+test slugify::tests::proptest_properties::slugify_max_length ... ignored
+test slugify::tests::proptest_properties::slugify_output_charset ... ignored
+test slugify::tests::proptest_properties::slugify_output_is_ascii ... ignored
+test slugify::tests::proptest_properties::slugify_unicode_max_length_no_panic ... ignored
+test slugify::tests::test_allow_unicode ... ignored
+test slugify::tests::test_allow_unicode_max_length_exact_boundary ... ignored
+test slugify::tests::test_allow_unicode_max_length_no_panic ... ignored
+test slugify::tests::test_allow_unicode_word_boundary_no_panic ... ignored
+test slugify::tests::test_ascii_passthrough ... ignored
+test slugify::tests::test_consecutive_separators_collapsed ... ignored
+test slugify::tests::test_decode_entity_digit_limit ... ignored
+test slugify::tests::test_decode_malformed_entity ... ignored
+test slugify::tests::test_decode_malformed_entity_semicolon_preserved ... ignored
+test slugify::tests::test_decode_named_entities ... ignored
+test slugify::tests::test_decode_numeric_entity_decimal ... ignored
+test slugify::tests::test_decode_numeric_entity_hex ... ignored
+test slugify::tests::test_empty_input ... ignored
+test slugify::tests::test_entities_disabled ... ignored
+test slugify::tests::test_floor_char_boundary ... ignored
+test slugify::tests::test_max_length ... ignored
+test slugify::tests::test_max_length_word_boundary ... ignored
+test slugify::tests::test_no_lowercase ... ignored
+test slugify::tests::test_regex_pattern ... ignored
+test slugify::tests::test_replacements ... ignored
+test slugify::tests::test_separator ... ignored
+test slugify::tests::test_stopwords ... ignored
+test slugify::tests::test_stopwords_uses_hashset ... ignored
+test slugify::tests::test_strip_trailing_separator ... ignored
+test slugify::tests::test_truncate_at_boundary_no_separator_found ... ignored
+test slugify::tests::test_truncate_at_boundary_no_truncation_needed ... ignored
+test slugify::tests::test_truncate_at_boundary_with_separator ... ignored
+test tables::hangul::tests::test_compat_jamo ... ignored
+test tables::hangul::tests::test_hangul_basic ... ignored
+test tables::hangul::tests::test_hangul_no_final ... ignored
+test tables::hangul::tests::test_hangul_seoul ... ignored
+test tables::hangul::tests::test_non_hangul_returns_none ... ignored
+test tables::hanzi_pinyin::tests::test_lookup_basic ... ignored
+test tables::hanzi_pinyin::tests::test_lookup_not_found ... ignored
+test tables::tests::test_emoji_single_lookup ... ignored
+test tables::tests::test_hangul_cache_consistency ... ignored
+test tables::tests::test_list_langs_contains_builtins ... ignored
+test tables::tests::test_list_langs_sorted ... ignored
+test tables::tests::test_lookup_confusable ... ignored
+test tables::tests::test_lookup_confusable_non_latin_target ... ignored
+test tables::tests::test_lookup_default_ascii ... ignored
+test tables::tests::test_lookup_default_hangul ... ignored
+test tables::tests::test_lookup_default_hanzi ... ignored
+test tables::tests::test_lookup_default_latin_extended ... ignored
+test tables::tests::test_lookup_default_unmapped ... ignored
+test tables::tests::test_max_emoji_seq_len_covers_all_sequences ... ignored
+test tables::tests::test_max_emoji_seq_len_positive ... ignored
+test tables::tests::test_register_lang_invalidates_cache ... ignored
+test tables::tests::test_register_lang_lookup_cached ... ignored
+test transliterate::tests::proptest_properties::strip_accents_idempotent ... ignored
+test transliterate::tests::proptest_properties::strip_accents_output_is_nfc ... ignored
+test transliterate::tests::proptest_properties::transliterate_ascii_passthrough ... ignored
+test transliterate::tests::proptest_properties::transliterate_ignore_is_ascii ... ignored
+test transliterate::tests::proptest_properties::transliterate_preserve_nonempty ... ignored
+test transliterate::tests::test_ascii_passthrough ... ignored
+test transliterate::tests::test_is_ascii ... ignored
+test whitespace::tests::proptest_properties::alphanumeric_passthrough ... ignored
+test whitespace::tests::proptest_properties::collapse_whitespace_idempotent ... ignored
+test whitespace::tests::proptest_properties::no_consecutive_spaces ... ignored
+test whitespace::tests::proptest_properties::no_leading_trailing_whitespace ... ignored
+test whitespace::tests::test_collapse_whitespace ... ignored
+test whitespace::tests::test_nul_preserved_without_control ... ignored
+test whitespace::tests::test_nul_stripped_with_control ... ignored
+test whitespace::tests::test_strip_all_zero_width_chars ... ignored
+test whitespace::tests::test_strip_invisible_math_operators ... ignored
+test whitespace::tests::test_strip_zero_width ... ignored
+test whitespace::tests::test_zero_width_preserved_when_disabled ... ignored
+
+test result: ok. 0 passed; 0 failed; 259 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+transliterate/default/ascii_short
+                        time:   [4.1267 ns 4.1310 ns 4.1356 ns]
+                        change: [-1.0343% -0.4455% -0.0621%] (p = 0.06 > 0.05)
+                        No change in performance detected.
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+transliterate/default/ascii_long
+                        time:   [11.435 ns 11.560 ns 11.695 ns]
+                        change: [-14.538% -13.340% -12.005%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 7 outliers among 100 measurements (7.00%)
+  5 (5.00%) high mild
+  2 (2.00%) high severe
+transliterate/default/latin_diacritics
+                        time:   [88.250 ns 88.601 ns 88.922 ns]
+                        change: [-10.872% -5.6090% -1.5035%] (p = 0.01 < 0.05)
+                        Performance has improved.
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) low mild
+  3 (3.00%) high mild
+transliterate/default/cyrillic
+                        time:   [181.28 ns 182.06 ns 183.12 ns]
+                        change: [-0.8721% -0.2889% +0.2577%] (p = 0.34 > 0.05)
+                        No change in performance detected.
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+transliterate/default/cjk
+                        time:   [210.62 ns 214.18 ns 217.67 ns]
+                        change: [+6.8036% +8.6472% +10.545%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+transliterate/default/mixed_script
+                        time:   [112.73 ns 113.07 ns 113.62 ns]
+                        change: [-1.7731% -0.9878% -0.4348%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high severe
+transliterate/cyrillic_lang_ru
+                        time:   [709.07 ns 709.66 ns 710.32 ns]
+                        change: [-1.1489% -0.7385% -0.4010%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+Found 5 outliers among 100 measurements (5.00%)
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+
+table_lookup/latin_extended_e_acute
+                        time:   [2.4284 ns 2.4301 ns 2.4318 ns]
+                        change: [-1.5140% -0.9177% -0.4246%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+Found 5 outliers among 100 measurements (5.00%)
+  1 (1.00%) low mild
+  2 (2.00%) high mild
+  2 (2.00%) high severe
+table_lookup/cyrillic_zhe
+                        time:   [2.4387 ns 2.4439 ns 2.4498 ns]
+                        change: [-0.4917% +0.0402% +0.5536%] (p = 0.88 > 0.05)
+                        No change in performance detected.
+Found 6 outliers among 100 measurements (6.00%)
+  4 (4.00%) high mild
+  2 (2.00%) high severe
+table_lookup/cjk_bei    time:   [14.709 ns 14.801 ns 14.900 ns]
+                        change: [+1.3032% +1.9753% +2.8054%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) high mild
+  3 (3.00%) high severe
+table_lookup/hangul_han time:   [16.512 ns 16.631 ns 16.796 ns]
+                        change: [-1.7200% -1.0954% -0.4061%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+Found 11 outliers among 100 measurements (11.00%)
+  3 (3.00%) low mild
+  2 (2.00%) high mild
+  6 (6.00%) high severe
+table_lookup/ascii_passthrough
+                        time:   [2.4282 ns 2.4298 ns 2.4314 ns]
+                        change: [-2.3368% -1.2787% -0.4135%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+Found 4 outliers among 100 measurements (4.00%)
+  2 (2.00%) high mild
+  2 (2.00%) high severe
+
+slugify/default/ascii_title
+                        time:   [393.58 ns 394.29 ns 395.02 ns]
+                        change: [-2.4717% -2.1750% -1.8879%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+slugify/default/unicode_title
+                        time:   [454.81 ns 455.65 ns 456.45 ns]
+                        change: [-2.2813% -1.9720% -1.6533%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+slugify/default/long_text
+                        time:   [675.69 ns 677.46 ns 679.38 ns]
+                        change: [+0.7358% +1.1335% +1.5465%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+Found 5 outliers among 100 measurements (5.00%)
+  4 (4.00%) high mild
+  1 (1.00%) high severe
+slugify/bounded_30_word_boundary
+                        time:   [497.15 ns 498.07 ns 499.12 ns]
+                        change: [+0.0360% +0.4166% +0.8020%] (p = 0.03 < 0.05)
+                        Change within noise threshold.
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+
+fold_case/fold/ascii_short
+                        time:   [17.136 ns 17.161 ns 17.188 ns]
+                        change: [+2.7089% +3.0211% +3.3298%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 8 outliers among 100 measurements (8.00%)
+  5 (5.00%) high mild
+  3 (3.00%) high severe
+fold_case/fold/ascii_long
+                        time:   [28.009 ns 28.091 ns 28.177 ns]
+                        change: [+2.7470% +3.1622% +3.5377%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 5 outliers among 100 measurements (5.00%)
+  1 (1.00%) low mild
+  4 (4.00%) high mild
+fold_case/fold/latin_diacritics
+                        time:   [149.76 ns 154.75 ns 160.95 ns]
+                        change: [+0.6809% +2.4366% +4.8484%] (p = 0.01 < 0.05)
+                        Change within noise threshold.
+Found 7 outliers among 100 measurements (7.00%)
+  1 (1.00%) high mild
+  6 (6.00%) high severe
+fold_case/fold/german_eszett
+                        time:   [55.448 ns 55.485 ns 55.520 ns]
+                        change: [+0.3346% +0.5785% +0.7620%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) low mild
+  1 (1.00%) high mild
+fold_case/fold/greek    time:   [254.19 ns 257.91 ns 261.83 ns]
+                        change: [+1.6160% +2.4757% +3.5027%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 14 outliers among 100 measurements (14.00%)
+  9 (9.00%) high mild
+  5 (5.00%) high severe
+fold_case/fold/mixed    time:   [108.71 ns 108.85 ns 109.01 ns]
+                        change: [+0.3555% +0.6645% +1.0371%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+Found 13 outliers among 100 measurements (13.00%)
+  1 (1.00%) low mild
+  5 (5.00%) high mild
+  7 (7.00%) high severe
+
+whitespace/messy_full_strip
+                        time:   [171.43 ns 171.76 ns 172.08 ns]
+                        change: [+0.2384% +0.5142% +0.7851%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+whitespace/messy_no_strip
+                        time:   [173.16 ns 173.51 ns 173.88 ns]
+                        change: [+70.494% +73.363% +76.361%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) low mild
+  1 (1.00%) high severe
+whitespace/clean_passthrough
+                        time:   [66.749 ns 66.801 ns 66.856 ns]
+                        change: [+79.744% +83.786% +88.010%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 7 outliers among 100 measurements (7.00%)
+  1 (1.00%) low mild
+  4 (4.00%) high mild
+  2 (2.00%) high severe
+
+scripts/detect/ascii_only
+                        time:   [225.28 ns 225.63 ns 226.07 ns]
+                        change: [+9.3822% +10.486% +11.604%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 3 outliers among 100 measurements (3.00%)
+  1 (1.00%) low mild
+  2 (2.00%) high severe
+scripts/is_mixed/ascii_only
+                        time:   [73.196 ns 73.479 ns 73.814 ns]
+                        change: [-65.006% -64.770% -64.533%] (p = 0.00 < 0.05)
+                        Performance has improved.
+scripts/detect/mixed_3_scripts
+                        time:   [513.99 ns 515.24 ns 516.82 ns]
+                        change: [+21.080% +22.654% +24.384%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 16 outliers among 100 measurements (16.00%)
+  10 (10.00%) high mild
+  6 (6.00%) high severe
+scripts/is_mixed/mixed_3_scripts
+                        time:   [53.462 ns 53.734 ns 54.015 ns]
+                        change: [-87.511% -87.351% -87.180%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 7 outliers among 100 measurements (7.00%)
+  2 (2.00%) high mild
+  5 (5.00%) high severe
+scripts/detect/cyrillic_pure
+                        time:   [581.95 ns 589.70 ns 600.55 ns]
+                        change: [+43.275% +56.228% +70.132%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 16 outliers among 100 measurements (16.00%)
+  16 (16.00%) high severe
+scripts/is_mixed/cyrillic_pure
+                        time:   [256.96 ns 257.79 ns 258.73 ns]
+                        change: [-42.723% -41.508% -40.261%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+scripts/detect/cjk_pure time:   [322.93 ns 335.15 ns 350.75 ns]
+                        change: [+34.685% +40.131% +45.970%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 18 outliers among 100 measurements (18.00%)
+  4 (4.00%) high mild
+  14 (14.00%) high severe
+scripts/is_mixed/cjk_pure
+                        time:   [189.71 ns 190.28 ns 190.93 ns]
+                        change: [-20.326% -19.887% -19.426%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 9 outliers among 100 measurements (9.00%)
+  5 (5.00%) high mild
+  4 (4.00%) high severe
+
+grapheme/len_ascii      time:   [185.39 ns 186.02 ns 186.94 ns]
+                        change: [+76.125% +79.710% +83.587%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 16 outliers among 100 measurements (16.00%)
+  6 (6.00%) high mild
+  10 (10.00%) high severe
+grapheme/len_emoji      time:   [459.73 ns 466.81 ns 474.27 ns]
+                        change: [+76.214% +77.882% +79.341%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 11 outliers among 100 measurements (11.00%)
+  2 (2.00%) high mild
+  9 (9.00%) high severe
+grapheme/split_ascii    time:   [505.24 ns 515.07 ns 524.88 ns]
+                        change: [+77.864% +82.170% +86.664%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 7 outliers among 100 measurements (7.00%)
+  7 (7.00%) high mild
+grapheme/split_emoji    time:   [831.36 ns 832.24 ns 833.31 ns]
+                        change: [+90.778% +91.774% +92.814%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 6 outliers among 100 measurements (6.00%)
+  1 (1.00%) low mild
+  2 (2.00%) high mild
+  3 (3.00%) high severe
+

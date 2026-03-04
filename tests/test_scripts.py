@@ -11,12 +11,10 @@ path. They do NOT require any mocking.
 """
 
 import pytest
+from conftest import SCRIPT_SAMPLES
 
 from translit import detect_scripts, is_mixed_script
 from translit._enums import Script
-
-from conftest import SCRIPT_SAMPLES
-
 
 # ═══════════════════════════════════════════════════════════════════
 # Layer 1: Per-script detection — every enum member must be detected

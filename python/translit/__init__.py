@@ -5,62 +5,9 @@ from __future__ import annotations
 import unicodedata as _unicodedata
 from collections.abc import Iterable
 
-from translit._translit import (
-    # Core transforms (Rust implementations)
-    _transliterate,
-    _slugify,
-    _normalize,  # noqa: F401  (used by normalize_batch and internal pipelines)
-    _normalize_confusables,
-    _sanitize_filename,
-    _strip_accents,
-    _fold_case,
-    _collapse_whitespace,
-    _demojize,
-    # Precompiled pipelines
-    _security_clean,
-    _ml_normalize,
-    _catalog_key,
-    _display_clean,
-    _strip_bidi,
-    # Grapheme cluster functions
-    _grapheme_len,
-    _grapheme_split,
-    _grapheme_truncate,
-    # Hostname safety
-    _is_safe_hostname,
-    SafeHostnameDetails,
-    # Encoding detection
-    _detect_encoding,
-    _decode_to_utf8,
-    # Predicates
-    _detect_scripts,
-    _is_mixed_script,
-    _is_confusable,
-    _is_ascii,
-    _is_normalized,
-    # Stateful
-    _Slugifier,
-    _UniqueSlugifier,
-    _TextPipeline,
-    # Language profiles
-    _list_langs,
-    _register_lang,
-    _register_replacements,
-    _remove_replacement,
-    _clear_replacements,
-    # Batch APIs (single PyO3 boundary crossing for N strings)
-    _transliterate_batch,
-    _slugify_batch,
-    _normalize_batch,
-    _strip_accents_batch,
-    # Emoji provider
-    _set_emoji_provider,
-    # Exception
-    TranslitError,
-)
-
-from translit._enums import Script
 from translit._enums import (
+    # Non-European languages
+    LANG_AR,
     # European languages
     LANG_BG,
     LANG_CA,
@@ -78,6 +25,8 @@ from translit._enums import (
     LANG_HU,
     LANG_IS,
     LANG_IT,
+    LANG_JA,
+    LANG_KO,
     LANG_LT,
     LANG_LV,
     LANG_MT,
@@ -86,6 +35,7 @@ from translit._enums import (
     LANG_PL,
     LANG_PT,
     LANG_RO,
+    LANG_RU,
     LANG_SK,
     LANG_SL,
     LANG_SQ,
@@ -94,15 +44,63 @@ from translit._enums import (
     LANG_TR,
     LANG_UK,
     LANG_VI,
-    # Non-European languages
-    LANG_AR,
-    LANG_JA,
-    LANG_KO,
-    LANG_RU,
     LANG_ZH,
+    Script,
 )
-from translit._types import ErrorMode, NF, Platform, NormalizationForm, EmojiProvider
-
+from translit._translit import (
+    SafeHostnameDetails,
+    # Exception
+    TranslitError,
+    _catalog_key,
+    _clear_replacements,
+    _collapse_whitespace,
+    _decode_to_utf8,
+    _demojize,
+    # Encoding detection
+    _detect_encoding,
+    # Predicates
+    _detect_scripts,
+    _display_clean,
+    _fold_case,
+    # Grapheme cluster functions
+    _grapheme_len,
+    _grapheme_split,
+    _grapheme_truncate,
+    _is_ascii,
+    _is_confusable,
+    _is_mixed_script,
+    _is_normalized,
+    # Hostname safety
+    _is_safe_hostname,
+    # Language profiles
+    _list_langs,
+    _ml_normalize,
+    _normalize,  # noqa: F401  (used by normalize_batch and internal pipelines)
+    _normalize_batch,
+    _normalize_confusables,
+    _register_lang,
+    _register_replacements,
+    _remove_replacement,
+    _sanitize_filename,
+    # Precompiled pipelines
+    _security_clean,
+    # Emoji provider
+    _set_emoji_provider,
+    # Stateful
+    _Slugifier,
+    _slugify,
+    _slugify_batch,
+    _strip_accents,
+    _strip_accents_batch,
+    _strip_bidi,
+    _TextPipeline,
+    # Core transforms (Rust implementations)
+    _transliterate,
+    # Batch APIs (single PyO3 boundary crossing for N strings)
+    _transliterate_batch,
+    _UniqueSlugifier,
+)
+from translit._types import NF, EmojiProvider, ErrorMode, NormalizationForm, Platform
 
 # --- Core transforms ---
 
@@ -134,6 +132,10 @@ def transliterate(
 
     Returns:
         ASCII transliteration of the input.
+
+    Raises:
+        TranslitError: If an internal Rust error occurs (e.g. invalid
+            ``errors`` value passed at runtime).
 
     Examples:
         >>> transliterate("café résumé")
@@ -204,6 +206,11 @@ def slugify(
 
     Returns:
         URL-safe slug string.
+
+    Raises:
+        TranslitError: If an internal Rust error occurs.
+        NotImplementedError: If ``pretranslate`` is passed as a callable
+            (only dict is supported in the compatibility shim).
 
     Examples:
         >>> slugify("Hello World!")
@@ -287,6 +294,9 @@ def normalize_confusables(
     Returns:
         String with confusable characters replaced by target-script equivalents.
 
+    Raises:
+        TranslitError: If an internal Rust error occurs.
+
     Examples:
         >>> normalize_confusables("Ηello")  # Greek Η looks like Latin H
         'Hello'
@@ -320,6 +330,9 @@ def sanitize_filename(
 
     Returns:
         Safe filename string.
+
+    Raises:
+        TranslitError: If an internal Rust error occurs.
 
     Examples:
         >>> sanitize_filename("My Report (final).pdf")
@@ -462,6 +475,10 @@ def demojize(
     Returns:
         Text with emoji replaced by their descriptions.
 
+    Raises:
+        TranslitError: If an internal Rust error occurs or the provider
+            raises an exception.
+
     Examples:
         >>> demojize("I ❤️ Python 🐍")
         'I red heart Python snake'
@@ -521,6 +538,9 @@ def transliterate_batch(
     Returns:
         List of ASCII transliterations, same length as input.
 
+    Raises:
+        TranslitError: If an internal Rust error occurs.
+
     Examples:
         >>> transliterate_batch(["café", "naïve", "résumé"])
         ['cafe', 'naive', 'resume']
@@ -575,6 +595,9 @@ def slugify_batch(
 
     Returns:
         List of slugs, same length as input.
+
+    Raises:
+        TranslitError: If an internal Rust error occurs.
 
     Examples:
         >>> slugify_batch(["Hello World", "Foo Bar"])
@@ -688,6 +711,9 @@ def ml_normalize(
     Returns:
         Clean, accent-free, lowercased text.
 
+    Raises:
+        TranslitError: If an internal Rust error occurs.
+
     Examples:
         >>> ml_normalize("Café RÉSUMÉ")
         'cafe resume'
@@ -717,6 +743,9 @@ def catalog_key(
 
     Returns:
         Canonical deduplication key string.
+
+    Raises:
+        TranslitError: If an internal Rust error occurs.
 
     Examples:
         >>> catalog_key("  Café  RÉSUMÉ  ")
@@ -896,6 +925,9 @@ def detect_encoding(data: bytes) -> tuple[str, float]:
     Returns:
         Tuple of (encoding_name, confidence) where confidence is 0.0–1.0.
 
+    Raises:
+        TranslitError: If the byte sequence cannot be analyzed.
+
     Examples:
         >>> enc, conf = detect_encoding(b"Hello World")
         >>> enc
@@ -921,6 +953,9 @@ def decode_to_utf8(data: bytes, encoding: str | None = None) -> tuple[str, bool]
     Returns:
         Tuple of (decoded_text, had_errors) where had_errors is True if
         any characters were replaced during lossy conversion.
+
+    Raises:
+        TranslitError: If the encoding name is unknown or decoding fails.
 
     Examples:
         >>> text, had_errors = decode_to_utf8(b"caf\\xe9", "windows-1252")
@@ -1218,6 +1253,9 @@ def list_langs() -> list[str]:
     Returns:
         Sorted list of language code strings (e.g. ["ar", "bg", "de", ...]).
 
+    Raises:
+        TranslitError: If the language table lock is poisoned.
+
     Examples:
         >>> "de" in list_langs()
         True
@@ -1233,6 +1271,10 @@ def register_lang(code: str, mappings: dict[str, str]) -> None:
     Args:
         code: Language code string (e.g. "xx", "custom").
         mappings: Dict of source→replacement character mappings.
+
+    Raises:
+        TranslitError: If the language table lock is poisoned or the
+            mapping cannot be stored.
 
     Examples:
         >>> register_lang("xx", {"Ä": "Ae", "ä": "ae", "Ö": "Oe", "ö": "oe"})
@@ -1290,19 +1332,19 @@ def clear_replacements() -> None:
 
 # --- Compatibility aliases ---
 
-from translit._compat import unidecode, ascii_fold  # noqa: E402, F401
-from translit._compat import (  # noqa: E402, F401
+from translit._compat import (  # noqa: E402, F401  # noqa: E402, F401
     Slugify,
     UniqueSlugify,
-    slugify_url,
-    slugify_filename,
-    slugify_unicode,
-    slugify_ru,
+    ascii_fold,
     slugify_de,
     slugify_el,
+    slugify_filename,
+    slugify_ru,
+    slugify_unicode,
+    slugify_url,
+    unidecode,
 )
 from translit._text import Text  # noqa: E402
-
 
 # --- Public API ---
 

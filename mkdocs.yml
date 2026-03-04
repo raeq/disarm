@@ -125,7 +125,9 @@ nav:
   - Performance: performance.md
   - Benchmarks: benchmarks.md
   - Limitations: limitations.md
-  - Contributing: contributing.md
+  - Changelog: ../CHANGELOG.md
+  - Contributing: ../CONTRIBUTING.md
+  - Security: ../SECURITY.md
 
 extra:
   social:

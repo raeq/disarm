@@ -5,8 +5,8 @@ passes and invalid usage is rejected.
 """
 
 import subprocess
-import textwrap
 import tempfile
+import textwrap
 
 import pytest
 

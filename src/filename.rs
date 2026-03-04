@@ -4,9 +4,15 @@ use unicode_normalization::UnicodeNormalization;
 use crate::transliterate;
 
 /// Windows reserved filenames.
+///
+/// Covers the standard device names (CON–LPT9) documented at
+/// <https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file>.
+/// Legacy 16-bit device names (CLOCK$, KEYBD$, SCREEN$) are also blocked as
+/// they remain reserved on some Windows versions.
 const WINDOWS_RESERVED: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON", "PRN", "AUX", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+    "COM8", "COM9", "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CLOCK$", "KEYBD$", "SCREEN$",
 ];
 
 /// Characters illegal on various platforms.
@@ -264,10 +270,7 @@ mod tests {
         // "NULtra.txt" truncated to max_length=3 would produce "NUL"
         // which is a Windows reserved name. The post-truncation check
         // should prefix it with underscore.
-        let result = _sanitize_filename(
-            "NULtra.txt", "_", 3, "universal", None, false,
-        )
-        .unwrap();
+        let result = _sanitize_filename("NULtra.txt", "_", 3, "universal", None, false).unwrap();
         // Must not be exactly a reserved name
         let upper = result.to_uppercase();
         assert!(
@@ -279,10 +282,7 @@ mod tests {
     #[test]
     fn test_reserved_name_prefixed() {
         // Direct reserved name gets underscore prefix
-        let result = _sanitize_filename(
-            "CON", "_", 255, "universal", None, false,
-        )
-        .unwrap();
+        let result = _sanitize_filename("CON", "_", 255, "universal", None, false).unwrap();
         assert!(result.starts_with('_'));
     }
 

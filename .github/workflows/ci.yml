@@ -46,10 +46,17 @@ jobs:
         run: |
           maturin develop
           pip install -e ".[test]"
+          pip install pytest-cov
       - name: Run tests
-        run: pytest tests/ --ignore=tests/test_typing.py -q --tb=short
+        run: pytest tests/ --ignore=tests/test_typing.py -q --tb=short --cov=translit --cov-report=xml --cov-report=term-missing
       - name: Run doctests
         run: pytest --doctest-modules python/translit/__init__.py python/translit/_compat.py -q
+      - name: Upload coverage report
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
       - name: Lint (ruff)
         run: |
           pip install ruff

@@ -6,7 +6,6 @@ changes, these tests MUST be updated intentionally.
 
 from __future__ import annotations
 
-
 from translit import sanitize_filename
 
 

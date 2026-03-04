@@ -189,6 +189,9 @@ pub fn slugify_impl(text: &str, config: &SlugConfig) -> String {
     }
 
     // Step 7: Remove stopwords
+    // Note: if *all* words match the stopword list the result will be an empty
+    // string.  This is intentional — callers that need a non-empty fallback
+    // should check `slug.is_empty()` and supply one (e.g. a hash of the input).
     if !config.stopwords.is_empty() {
         let stopset: HashSet<&str> = config.stopwords.iter().map(String::as_str).collect();
         let filtered: Vec<&str> = slug
@@ -697,10 +700,7 @@ mod tests {
         // Empty hex entity: &#x; should pass through as &#x;
         assert_eq!(decode_numeric_entities("&#x;"), "&#x;");
         // Invalid codepoint (too large for Unicode) with semicolon
-        assert_eq!(
-            decode_numeric_entities("&#xFFFFFFFF;"),
-            "&#xFFFFFFFF;"
-        );
+        assert_eq!(decode_numeric_entities("&#xFFFFFFFF;"), "&#xFFFFFFFF;");
         // Valid format but zero codepoint (U+0000 via char::from_u32 returns Some)
         // &#0; → U+0000 (NUL), which is a valid char in Rust
         let result = decode_numeric_entities("&#0;");

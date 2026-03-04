@@ -9,14 +9,13 @@ import warnings
 from translit import (
     Slugify,
     UniqueSlugify,
-    slugify_url,
-    slugify_filename,
-    slugify_unicode,
-    slugify_ru,
     slugify_de,
     slugify_el,
+    slugify_filename,
+    slugify_ru,
+    slugify_unicode,
+    slugify_url,
 )
-
 
 # ---------------------------------------------------------------------------
 # Slugify class

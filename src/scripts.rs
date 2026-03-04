@@ -58,7 +58,8 @@ fn detect_char_script(ch: char) -> &'static str {
         || (0x2C60..=0x2C7F).contains(&cp)   // Latin Extended-C
         || (0xA720..=0xA7FF).contains(&cp)   // Latin Extended-D
         || (0xAB30..=0xAB6F).contains(&cp)   // Latin Extended-E
-        || (0xFB00..=0xFB06).contains(&cp)   // Latin ligatures in Alphabetic PF (ﬀ ﬁ ﬂ ﬃ ﬄ ﬅ ﬆ)
+        || (0xFB00..=0xFB06).contains(&cp)
+    // Latin ligatures in Alphabetic PF (ﬀ ﬁ ﬂ ﬃ ﬄ ﬅ ﬆ)
     {
         return "Latin";
     }
@@ -81,8 +82,8 @@ fn detect_char_script(ch: char) -> &'static str {
     }
 
     // ── Armenian ─────────────────────────────────────────
-    if (0x0530..=0x058F).contains(&cp)
-        || (0xFB13..=0xFB17).contains(&cp)   // Armenian ligatures in Alphabetic PF (ﬓ ﬔ ﬕ ﬖ ﬗ)
+    if (0x0530..=0x058F).contains(&cp) || (0xFB13..=0xFB17).contains(&cp)
+    // Armenian ligatures in Alphabetic PF (ﬓ ﬔ ﬕ ﬖ ﬗ)
     {
         return "Armenian";
     }
@@ -755,13 +756,13 @@ mod tests {
         // FB00–FB06 are LATIN ligatures, not Armenian.
         // They share the Alphabetic Presentation Forms block with Armenian
         // ligatures (FB13–FB17), which caused the original misclassification.
-        assert_eq!(detect_char_script('\u{FB00}'), "Latin");  // ﬀ  LATIN SMALL LIGATURE FF
-        assert_eq!(detect_char_script('\u{FB01}'), "Latin");  // ﬁ  LATIN SMALL LIGATURE FI
-        assert_eq!(detect_char_script('\u{FB02}'), "Latin");  // ﬂ  LATIN SMALL LIGATURE FL
-        assert_eq!(detect_char_script('\u{FB03}'), "Latin");  // ﬃ  LATIN SMALL LIGATURE FFI
-        assert_eq!(detect_char_script('\u{FB04}'), "Latin");  // ﬄ  LATIN SMALL LIGATURE FFL
-        assert_eq!(detect_char_script('\u{FB05}'), "Latin");  // ﬅ  LATIN SMALL LIGATURE LONG S T
-        assert_eq!(detect_char_script('\u{FB06}'), "Latin");  // ﬆ  LATIN SMALL LIGATURE ST
+        assert_eq!(detect_char_script('\u{FB00}'), "Latin"); // ﬀ  LATIN SMALL LIGATURE FF
+        assert_eq!(detect_char_script('\u{FB01}'), "Latin"); // ﬁ  LATIN SMALL LIGATURE FI
+        assert_eq!(detect_char_script('\u{FB02}'), "Latin"); // ﬂ  LATIN SMALL LIGATURE FL
+        assert_eq!(detect_char_script('\u{FB03}'), "Latin"); // ﬃ  LATIN SMALL LIGATURE FFI
+        assert_eq!(detect_char_script('\u{FB04}'), "Latin"); // ﬄ  LATIN SMALL LIGATURE FFL
+        assert_eq!(detect_char_script('\u{FB05}'), "Latin"); // ﬅ  LATIN SMALL LIGATURE LONG S T
+        assert_eq!(detect_char_script('\u{FB06}'), "Latin"); // ﬆ  LATIN SMALL LIGATURE ST
     }
 
     #[test]

@@ -19,6 +19,8 @@ use std::sync::RwLock;
 
 use once_cell::sync::Lazy;
 
+use crate::unicode_ranges as ur;
+
 /// Cache for Hangul romanization results to bound the number of `Box::leak` calls.
 /// There are at most 11,172 precomposed Hangul syllables plus ~51 compatibility jamo,
 /// so this cache is naturally bounded.
@@ -63,13 +65,14 @@ const BUILTIN_LANGS: &[&str] = &[
 pub fn lookup_default(ch: char) -> Option<&'static str> {
     let cp = ch as u32;
 
-    // CJK Unified Ideographs (U+3400–U+9FFF, U+F900–U+FAFF)
-    if (0x3400..=0x9FFF).contains(&cp) || (0xF900..=0xFAFF).contains(&cp) {
+    // CJK Unified Ideographs (Extension A + Unified + Compat)
+    if ur::CJK_EXT_A.contains(&cp) || ur::CJK_UNIFIED.contains(&cp) || ur::CJK_COMPAT.contains(&cp)
+    {
         return hanzi_pinyin::lookup_hanzi(ch).or_else(|| transliteration::lookup(ch));
     }
 
-    // Hangul Syllables (U+AC00–U+D7AF) and Compatibility Jamo (U+3131–U+3163)
-    if (0xAC00..=0xD7AF).contains(&cp) || (0x3131..=0x3163).contains(&cp) {
+    // Hangul Syllables and Compatibility Jamo
+    if ur::HANGUL_SYLLABLES.contains(&cp) || ur::HANGUL_COMPAT_JAMO.contains(&cp) {
         return lookup_hangul_static(ch).or_else(|| transliteration::lookup(ch));
     }
 
@@ -82,9 +85,15 @@ pub fn lookup_default(ch: char) -> Option<&'static str> {
 ///
 /// Uses a cache to ensure each character is leaked at most once.
 /// The cache is bounded by the Unicode Hangul syllable range (~11,172 entries).
+///
+/// Lock poisoning (from a thread panic while holding the guard) is recovered
+/// from by calling `into_inner()` on the `PoisonError`, which returns the
+/// underlying data so the cache remains usable rather than silently falling
+/// through with no error.
 fn lookup_hangul_static(ch: char) -> Option<&'static str> {
     // Fast path: check read lock first
-    if let Ok(cache) = HANGUL_CACHE.read() {
+    {
+        let cache = HANGUL_CACHE.read().unwrap_or_else(|e| e.into_inner());
         if let Some(&cached) = cache.get(&ch) {
             return Some(cached);
         }
@@ -93,9 +102,8 @@ fn lookup_hangul_static(ch: char) -> Option<&'static str> {
     // Slow path: compute, leak, and cache
     hangul::romanize_hangul(ch).map(|s| {
         let leaked: &'static str = Box::leak(s.into_boxed_str());
-        if let Ok(mut cache) = HANGUL_CACHE.write() {
-            cache.insert(ch, leaked);
-        }
+        let mut cache = HANGUL_CACHE.write().unwrap_or_else(|e| e.into_inner());
+        cache.insert(ch, leaked);
         leaked
     })
 }
@@ -120,7 +128,8 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
 
     // Fast path: check the leak cache (read lock, no allocation).
     // Two-level lookup: first by &str (no allocation), then by char.
-    if let Ok(cache) = LANG_LEAK_CACHE.read() {
+    {
+        let cache = LANG_LEAK_CACHE.read().unwrap_or_else(|e| e.into_inner());
         if let Some(char_cache) = cache.get(lang) {
             if let Some(&cached) = char_cache.get(&ch) {
                 return Some(cached);
@@ -132,27 +141,24 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
     // Clone the replacement string under a read lock, then acquire the
     // cache write lock to check-then-leak atomically (prevents duplicate
     // leaks under concurrent access).
-    let replacement_clone: Option<String> = LANG_TABLES
-        .read()
-        .ok()
-        .and_then(|table| {
-            table
-                .get(lang)
-                .and_then(|char_map| char_map.get(&ch).cloned())
-        });
+    let replacement_clone: Option<String> = {
+        let table = LANG_TABLES.read().unwrap_or_else(|e| e.into_inner());
+        table
+            .get(lang)
+            .and_then(|char_map| char_map.get(&ch).cloned())
+    };
 
     if let Some(replacement) = replacement_clone {
         // Acquire cache write lock *before* leaking to ensure at most one
         // thread leaks per (lang, char) pair.
-        if let Ok(mut cache) = LANG_LEAK_CACHE.write() {
-            // Double-check: another thread may have inserted while we waited
-            if let Some(&existing) = cache.get(lang).and_then(|m| m.get(&ch)) {
-                return Some(existing);
-            }
-            let leaked: &'static str = Box::leak(replacement.into_boxed_str());
-            cache.entry(lang.to_owned()).or_default().insert(ch, leaked);
-            return Some(leaked);
+        let mut cache = LANG_LEAK_CACHE.write().unwrap_or_else(|e| e.into_inner());
+        // Double-check: another thread may have inserted while we waited
+        if let Some(&existing) = cache.get(lang).and_then(|m| m.get(&ch)) {
+            return Some(existing);
         }
+        let leaked: &'static str = Box::leak(replacement.into_boxed_str());
+        cache.entry(lang.to_owned()).or_default().insert(ch, leaked);
+        return Some(leaked);
     }
 
     None
@@ -171,11 +177,10 @@ pub fn list_langs() -> Vec<String> {
     let mut langs: Vec<String> = BUILTIN_LANGS.iter().map(|s| s.to_string()).collect();
 
     // Add user-registered languages
-    if let Ok(table) = LANG_TABLES.read() {
-        for key in table.keys() {
-            if !langs.contains(key) {
-                langs.push(key.clone());
-            }
+    let table = LANG_TABLES.read().unwrap_or_else(|e| e.into_inner());
+    for key in table.keys() {
+        if !langs.contains(key) {
+            langs.push(key.clone());
         }
     }
 
@@ -217,10 +222,10 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) {
     // Lock order: LANG_LEAK_CACHE first, then LANG_TABLES.
     // This is the only place both locks are held simultaneously,
     // so deadlock is impossible as long as the order is consistent.
-    if let Ok(mut cache) = LANG_LEAK_CACHE.write() {
-        if let Ok(mut table) = LANG_TABLES.write() {
-            table.insert(code.to_owned(), char_map);
-        }
+    {
+        let mut cache = LANG_LEAK_CACHE.write().unwrap_or_else(|e| e.into_inner());
+        let mut table = LANG_TABLES.write().unwrap_or_else(|e| e.into_inner());
+        table.insert(code.to_owned(), char_map);
         // Invalidate cached leaks for this language so lookups pick up
         // the new mappings.  The old leaked strings are unreclaimable
         // (they are 'static), but this bounds future leaks to one per
@@ -240,26 +245,28 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) {
 /// silently overwritten with the new value.  Use [`clear_replacements`]
 /// to wipe the table, or [`remove_replacement`] to remove a single key.
 pub fn register_replacements(replacements: HashMap<String, String>) {
-    if let Ok(mut table) = GLOBAL_REPLACEMENTS.write() {
-        table.extend(replacements);
-    }
+    let mut table = GLOBAL_REPLACEMENTS
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
+    table.extend(replacements);
 }
 
 /// Remove a single global pre-transliteration replacement by key.
 ///
 /// Returns `true` if the key was present and removed, `false` otherwise.
 pub fn remove_replacement(key: &str) -> bool {
-    if let Ok(mut table) = GLOBAL_REPLACEMENTS.write() {
-        return table.remove(key).is_some();
-    }
-    false
+    let mut table = GLOBAL_REPLACEMENTS
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
+    table.remove(key).is_some()
 }
 
 /// Clear all global pre-transliteration replacements.
 pub fn clear_replacements() {
-    if let Ok(mut table) = GLOBAL_REPLACEMENTS.write() {
-        table.clear();
-    }
+    let mut table = GLOBAL_REPLACEMENTS
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
+    table.clear();
 }
 
 // --- Emoji lookups ---

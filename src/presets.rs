@@ -43,7 +43,7 @@ fn is_bidi_or_format(ch: char) -> bool {
         | '\u{2066}'           // LRI  Left-to-Right Isolate
         | '\u{2067}'           // RLI  Right-to-Left Isolate
         | '\u{2068}'           // FSI  First Strong Isolate
-        | '\u{2069}'           // PDI  Pop Directional Isolate
+        | '\u{2069}' // PDI  Pop Directional Isolate
     )
 }
 

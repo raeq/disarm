@@ -2,7 +2,7 @@
 
 import pytest
 
-from translit import transliterate, strip_accents, is_ascii, list_langs
+from translit import TranslitError, is_ascii, list_langs, strip_accents, transliterate
 
 
 class TestTransliterate:
@@ -49,7 +49,7 @@ class TestTransliterate:
         assert "\U00020000" in result
 
     def test_invalid_errors_mode(self) -> None:
-        with pytest.raises(Exception):  # TranslitError
+        with pytest.raises(TranslitError):
             transliterate("café", errors="explode")  # type: ignore[arg-type]
 
     def test_mixed_ascii_unicode(self) -> None:

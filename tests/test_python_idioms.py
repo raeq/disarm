@@ -11,23 +11,22 @@ from functools import partial, reduce
 from typing import Any, Literal, cast
 
 from translit import (
+    Slugifier,
     Text,
-    transliterate,
-    slugify,
-    normalize,
-    fold_case,
-    sanitize_filename,
+    TextPipeline,
+    UniqueSlugifier,
     detect_scripts,
+    fold_case,
     is_ascii,
-    is_mixed_script,
     is_confusable,
+    is_mixed_script,
     is_normalized,
     list_langs,
-    Slugifier,
-    UniqueSlugifier,
-    TextPipeline,
+    normalize,
+    sanitize_filename,
+    slugify,
+    transliterate,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════
 # Lambda functions

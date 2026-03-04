@@ -1,4 +1,5 @@
 //! Criterion benchmarks for translit core transforms.
+#![allow(missing_docs)] // Benchmark harness code does not require documentation.
 //!
 //! Run with: `cargo bench --no-default-features`
 //!

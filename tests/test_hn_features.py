@@ -2,16 +2,17 @@
 hostname safety, NFC in filenames, and encoding detection."""
 
 import pytest
+
 from translit import (
+    TranslitError,
+    decode_to_utf8,
+    detect_encoding,
     grapheme_len,
     grapheme_split,
     grapheme_truncate,
     is_safe_hostname,
-    detect_encoding,
-    decode_to_utf8,
     sanitize_filename,
 )
-
 
 # ===== Grapheme Cluster Functions =====
 
@@ -169,7 +170,7 @@ class TestIsSafeHostname:
 
 class TestDetectEncoding:
     def test_utf8_detection(self) -> None:
-        enc, conf = detect_encoding("café résumé".encode("utf-8"))
+        enc, conf = detect_encoding("café résumé".encode())
         assert enc == "UTF-8"
         assert conf > 0.0
 
@@ -192,7 +193,7 @@ class TestDetectEncoding:
 
 class TestDecodeToUtf8:
     def test_utf8_explicit(self) -> None:
-        text, had_errors = decode_to_utf8("café".encode("utf-8"), encoding="UTF-8")
+        text, had_errors = decode_to_utf8("café".encode(), encoding="UTF-8")
         assert text == "café"
         assert not had_errors
 
@@ -217,11 +218,11 @@ class TestDecodeToUtf8:
         assert not had_errors
 
     def test_auto_detect(self) -> None:
-        text, _ = decode_to_utf8("hello world".encode("utf-8"))
+        text, _ = decode_to_utf8(b"hello world")
         assert text == "hello world"
 
     def test_unknown_encoding_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(TranslitError):
             decode_to_utf8(b"test", encoding="FAKE-999")
 
     def test_lossy_decode(self) -> None:

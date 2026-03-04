@@ -11,14 +11,13 @@ Each test class documents which upstream bug inspired it.
 import pytest
 
 from translit import (
-    demojize,
-    transliterate,
-    collapse_whitespace,
-    slugify,
     Text,
     TextPipeline,
+    collapse_whitespace,
+    demojize,
+    slugify,
+    transliterate,
 )
-
 
 # ---------------------------------------------------------------------------
 # Malformed emoji sequences (emoji package: ZWJ IndexError, various)

@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import re
 
-from hypothesis import given, settings, assume
+from conftest import nf_forms, unicode_text
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from translit import (
+    UniqueSlugifier,
     collapse_whitespace,
     fold_case,
     grapheme_len,
@@ -25,11 +27,7 @@ from translit import (
     slugify,
     strip_accents,
     transliterate,
-    UniqueSlugifier,
 )
-
-from conftest import unicode_text, nf_forms
-
 
 # ---------------------------------------------------------------------------
 # 1. Normalization idempotence: normalize(normalize(x, F), F) == normalize(x, F)

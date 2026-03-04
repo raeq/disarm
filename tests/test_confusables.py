@@ -12,13 +12,12 @@ Tests cover:
 import pytest
 
 from translit import (
-    normalize_confusables,
+    detect_scripts,
     is_confusable,
     is_mixed_script,
-    detect_scripts,
+    normalize_confusables,
 )
 from translit._enums import Script
-
 
 # ─── Full confusable pair tables (mirrors confusables_data.rs) ──────────
 
@@ -174,7 +173,7 @@ class TestConfusableTableCompleteness:
 
     def test_all_targets_are_ascii(self) -> None:
         """All confusable targets should be ASCII characters."""
-        for source, target, desc in ALL_CONFUSABLE_PAIRS:
+        for _source, target, desc in ALL_CONFUSABLE_PAIRS:
             assert target.isascii(), f"Non-ASCII target in {desc}: {target!r}"
 
     def test_table_has_many_entries(self) -> None:

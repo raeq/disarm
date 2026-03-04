@@ -6,11 +6,10 @@ emoji parsing (via demojize), and transliteration with random Unicode.
 
 from __future__ import annotations
 
-from hypothesis import given, settings, HealthCheck
 import hypothesis.strategies as st
+from hypothesis import HealthCheck, given, settings
 
 import translit
-
 
 # ---------------------------------------------------------------------------
 # Strategies

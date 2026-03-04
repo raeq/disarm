@@ -6,7 +6,7 @@ EUC-KR, Big5, GB18030, and edge cases.
 
 from __future__ import annotations
 
-from translit import detect_encoding, decode_to_utf8
+from translit import decode_to_utf8, detect_encoding
 
 
 class TestDetectEncoding:
@@ -17,17 +17,17 @@ class TestDetectEncoding:
         assert enc.upper() in ("UTF-8", "ASCII", "WINDOWS-1252")
 
     def test_utf8_with_bom(self) -> None:
-        data = b"\xef\xbb\xbf" + "café".encode("utf-8")
+        data = b"\xef\xbb\xbf" + "café".encode()
         enc, conf = detect_encoding(data)
         assert "UTF" in enc.upper()
 
     def test_utf8_multibyte(self) -> None:
-        data = "北京是中国的首都".encode("utf-8")
+        data = "北京是中国的首都".encode()
         enc, conf = detect_encoding(data)
         assert enc.upper() == "UTF-8"
 
     def test_utf8_cyrillic(self) -> None:
-        data = "Москва — столица России".encode("utf-8")
+        data = "Москва — столица России".encode()
         enc, conf = detect_encoding(data)
         assert enc.upper() == "UTF-8"
 
@@ -77,7 +77,7 @@ class TestDetectEncoding:
         assert isinstance(conf, float)
 
     def test_confidence_range(self) -> None:
-        enc, conf = detect_encoding("Hello World".encode("utf-8"))
+        enc, conf = detect_encoding(b"Hello World")
         assert 0.0 <= conf <= 1.0
 
 
@@ -85,7 +85,7 @@ class TestDecodeToUtf8:
     """Decoding tests."""
 
     def test_utf8_roundtrip(self) -> None:
-        text, had_errors = decode_to_utf8("café résumé".encode("utf-8"), "utf-8")
+        text, had_errors = decode_to_utf8("café résumé".encode(), "utf-8")
         assert text == "café résumé"
         assert not had_errors
 

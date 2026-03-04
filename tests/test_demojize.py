@@ -15,12 +15,11 @@ from __future__ import annotations
 import pytest
 
 from translit import (
-    demojize,
-    set_emoji_provider,
     Text,
     TextPipeline,
+    demojize,
+    set_emoji_provider,
 )
-
 
 # ---------------------------------------------------------------------------
 # Basic single-emoji expansion

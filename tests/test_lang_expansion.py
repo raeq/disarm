@@ -10,8 +10,7 @@ Covers:
 - NFKC normalization path for half-width dakuten/handakuten
 """
 
-from translit import transliterate, slugify, Text, TextPipeline, normalize
-
+from translit import Text, TextPipeline, normalize, slugify, transliterate
 
 # ---------------------------------------------------------------------------
 # Default Cyrillic: й→y (BGN/PCGN)

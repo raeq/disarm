@@ -11,11 +11,11 @@ Also tests language aliases (da→NO, fi→SV, nb/nn→NO) to verify the
 dispatch table in lookup_lang().
 """
 
-import pytest
 from typing import Any
 
-from translit import transliterate
+import pytest
 
+from translit import transliterate
 
 # ─── Complete PHF override tables, extracted from transliteration.rs ─────
 #

@@ -1,3 +1,8 @@
+//! Fast Unicode transliteration, slugification, and text normalization — Rust core.
+//!
+//! All public access goes through the Python package `translit`.
+//! Rust-internal modules are marked `#[doc(hidden)]` and not part of the public API.
+
 use pyo3::prelude::*;
 
 // Core modules — `pub` so Criterion benchmarks (external crate) can access
@@ -29,6 +34,8 @@ pub mod slugify;
 pub mod tables;
 #[doc(hidden)]
 pub mod transliterate;
+#[doc(hidden)]
+pub mod unicode_ranges;
 #[doc(hidden)]
 pub mod whitespace;
 
@@ -98,4 +105,10 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-pyo3::create_exception!(translit, TranslitError, pyo3::exceptions::PyValueError);
+pyo3::create_exception!(
+    translit,
+    TranslitError,
+    pyo3::exceptions::PyValueError,
+    "Exception raised by translit for invalid input or internal Rust errors.\n\
+     Exposed to Python as ``translit.TranslitError``, a subclass of ``ValueError``."
+);

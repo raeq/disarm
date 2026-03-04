@@ -2,7 +2,7 @@
 
 import pytest
 
-from translit import sanitize_filename
+from translit import TranslitError, sanitize_filename
 
 
 class TestSanitizeFilename:
@@ -47,5 +47,5 @@ class TestSanitizeFilename:
         assert result  # Should produce something valid
 
     def test_invalid_platform(self) -> None:
-        with pytest.raises(Exception):  # TranslitError
+        with pytest.raises(TranslitError):
             sanitize_filename("test.txt", platform="invalid")  # type: ignore[arg-type]

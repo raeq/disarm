@@ -6,6 +6,12 @@ Provides:
 - ``Slugify`` / ``UniqueSlugify`` — awesome-slugify class aliases
 - ``slugify_url``, ``slugify_filename``, ``slugify_unicode`` — preconfigured instances
 - ``slugify_ru``, ``slugify_de``, ``slugify_el`` — language-specific instances
+
+.. deprecated::
+    The awesome-slugify compatibility layer (``Slugify``, ``UniqueSlugify``, and
+    the ``slugify_*`` pre-configured instances) emits ``DeprecationWarning`` for
+    unsupported parameters.  These aliases are planned for removal in v1.0.
+    Migrate to :func:`translit.slugify` directly.
 """
 
 from __future__ import annotations
@@ -13,11 +19,11 @@ from __future__ import annotations
 import warnings
 from typing import Any, Callable
 
+from translit import strip_accents, transliterate
 from translit._translit import (
     _Slugifier,
     _UniqueSlugifier,
 )
-from translit import transliterate, strip_accents
 
 
 def unidecode(text: str) -> str:
@@ -144,7 +150,7 @@ class Slugify:
         self._separator_val: str = str(resolved.get("separator", "-"))
 
         self._kwargs: dict[str, Any] = resolved
-        self._inner = _Slugifier(**resolved)
+        self._inner: _Slugifier = _Slugifier(**resolved)
 
     # --- awesome-slugify attribute-style configuration ---
 
@@ -275,14 +281,22 @@ class UniqueSlugify(Slugify):
             if uids is not None:
                 _uids = uids
                 _fn = unique_check_fn
-                check = lambda text: _fn(text, _uids)  # noqa: E731
+
+                def _check_with_fn(text: str) -> bool:
+                    return bool(_fn(text, _uids))
+
+                check = _check_with_fn
             else:
                 check = unique_check_fn
         elif uids is not None:
             _uids_set = uids
-            check = lambda text: text not in _uids_set  # noqa: E731
 
-        self._unique_inner = _UniqueSlugifier(check=check, **resolved)
+            def _check_not_in_uids(text: str) -> bool:
+                return text not in _uids_set
+
+            check = _check_not_in_uids
+
+        self._unique_inner: _UniqueSlugifier = _UniqueSlugifier(check=check, **resolved)
 
     def __call__(self, text: str, **kwargs: Any) -> str:
         result: str = str(self._unique_inner.slugify(text))

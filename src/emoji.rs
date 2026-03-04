@@ -21,9 +21,8 @@ static GLOBAL_PROVIDER: Lazy<RwLock<Option<PyObject>>> = Lazy::new(|| RwLock::ne
 
 /// Register a global Python emoji provider (or None to reset to default).
 pub fn set_provider(provider: Option<PyObject>) {
-    if let Ok(mut guard) = GLOBAL_PROVIDER.write() {
-        *guard = provider;
-    }
+    let mut guard = GLOBAL_PROVIDER.write().unwrap_or_else(|e| e.into_inner());
+    *guard = provider;
 }
 
 /// Error handling mode — mirrors transliterate.
@@ -54,7 +53,8 @@ fn encode_key(cps: &[char]) -> String {
         if i > 0 {
             key.push('_');
         }
-        write!(key, "{:04X}", c as u32).unwrap();
+        // SAFETY: write! to a String is infallible (String's fmt::Write impl never errors).
+        let _ = write!(key, "{:04X}", c as u32);
     }
     key
 }
@@ -265,10 +265,9 @@ pub fn _demojize(
     // 3. Built-in default (None)
     let effective_provider: Option<PyObject> = if provider.is_some() {
         provider
-    } else if let Ok(guard) = GLOBAL_PROVIDER.read() {
-        guard.as_ref().map(|p| p.clone_ref(py))
     } else {
-        None
+        let guard = GLOBAL_PROVIDER.read().unwrap_or_else(|e| e.into_inner());
+        guard.as_ref().map(|p| p.clone_ref(py))
     };
 
     Ok(demojize_impl(

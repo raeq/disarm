@@ -1,6 +1,6 @@
 """Tests for translit.slugify and Slugifier classes."""
 
-from translit import slugify, Slugifier, UniqueSlugifier
+from translit import Slugifier, UniqueSlugifier, slugify
 
 
 class TestSlugify:

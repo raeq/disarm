@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::tables;
+use crate::unicode_ranges as ur;
 
 /// Error handling mode for untransliterable characters.
 #[derive(Debug, Clone, Copy)]
@@ -57,23 +58,7 @@ pub fn transliterate_impl<'a>(
         return Cow::Borrowed(text);
     }
 
-    // Pre-size the output buffer.  For Latin/Cyrillic, 1:1 is a good estimate
-    // (most characters map to one ASCII char).  For CJK, each ideograph expands
-    // to a multi-letter pinyin/romaji syllable plus a space separator — typically
-    // 3–5× the UTF-8 byte length.  We sample the first non-ASCII codepoint to
-    // pick a multiplier, avoiding reallocations for CJK-heavy input.
-    let capacity_multiplier = text.chars().find(|c| !c.is_ascii()).map_or(1, |c| {
-        let cp = c as u32;
-        if (0x3000..=0x9FFF).contains(&cp)
-            || (0xAC00..=0xD7AF).contains(&cp)
-            || (0xF900..=0xFAFF).contains(&cp)
-        {
-            4 // CJK ideographs, Hangul, kana, CJK punctuation
-        } else {
-            1 // Latin/Cyrillic/Arabic/etc.
-        }
-    });
-    let mut result = String::with_capacity(text.len() * capacity_multiplier);
+    let mut result = String::with_capacity(estimate_capacity(text));
     // Track the script class of the previous character for space insertion.
     // 0 = none/start, 1 = ideograph (Han), 2 = Hangul, 3 = kana, 4 = ASCII/Latin, 5 = other
     let mut prev_class: u8 = 0;
@@ -96,15 +81,7 @@ pub fn transliterate_impl<'a>(
             continue;
         }
 
-        let char_class = if is_cjk_ideograph(ch) {
-            1_u8
-        } else if is_hangul(ch) {
-            2
-        } else if is_kana(ch) {
-            3
-        } else {
-            5
-        };
+        let char_class = classify_char(ch);
         let is_cjk = char_class <= 3; // ideograph, hangul, or kana
 
         // Lookup priority:
@@ -119,35 +96,15 @@ pub fn transliterate_impl<'a>(
 
         match mapped {
             Some(s) => {
-                // Insert a space at script transitions to prevent run-together
-                // transliterations. Spaces are inserted:
-                // - Between consecutive ideographs (each is a word): 北京 → "bei jing"
-                // - Between consecutive Hangul syllables: 서울 → "seo ul"
-                // - At ideograph↔kana boundaries: 東京タワー → "dong jing tawa-"
-                // - At CJK↔Latin boundaries (handled above for ASCII)
-                // NOT inserted between consecutive kana (they form words by concat).
-                if is_cjk && !s.is_empty() && prev_class != 0 {
-                    let needs_space = match (prev_class, char_class) {
-                        // Ideograph→ideograph: always space (each char is a "word")
-                        (1, 1) => true,
-                        // Hangul→Hangul: always space (each syllable is distinct)
-                        (2, 2) => true,
-                        // Kana→kana: NO space (concatenate for words like ひらがな)
-                        (3, 3) => false,
-                        // Cross-script transitions: space
-                        (1, 3) | (3, 1) => true, // ideograph↔kana
-                        (1, 2) | (2, 1) => true, // ideograph↔hangul
-                        (2, 3) | (3, 2) => true, // hangul↔kana
-                        // From ASCII/Latin/other to CJK
-                        (4, _) | (5, _) => true,
-                        _ => false,
-                    };
-                    if needs_space {
-                        if let Some(last) = last_appended {
-                            if last.is_alphanumeric() {
-                                result.push(' ');
-                                last_appended = Some(' ');
-                            }
+                if is_cjk
+                    && !s.is_empty()
+                    && prev_class != 0
+                    && needs_cjk_space(prev_class, char_class)
+                {
+                    if let Some(last) = last_appended {
+                        if last.is_alphanumeric() {
+                            result.push(' ');
+                            last_appended = Some(' ');
                         }
                     }
                 }
@@ -178,21 +135,79 @@ pub fn transliterate_impl<'a>(
     Cow::Owned(result)
 }
 
+/// Estimate the output buffer capacity based on a sample of the input.
+///
+/// For Latin/Cyrillic/Arabic, a 1:1 ratio is typical.
+/// For CJK, each ideograph expands to a multi-letter pinyin/romaji syllable
+/// plus a space separator — typically 3–5× the UTF-8 byte length.
+/// We sample the first non-ASCII codepoint to pick a multiplier, avoiding
+/// reallocations for CJK-heavy input without scanning the whole string.
+fn estimate_capacity(text: &str) -> usize {
+    let multiplier = text.chars().find(|c| !c.is_ascii()).map_or(1, |c| {
+        let cp = c as u32;
+        if ur::CJK_CAPACITY_RANGE.contains(&cp)
+            || ur::HANGUL_SYLLABLES.contains(&cp)
+            || ur::CJK_COMPAT.contains(&cp)
+        {
+            4
+        } else {
+            1
+        }
+    });
+    text.len() * multiplier
+}
+
+/// Classify a non-ASCII character into a script class:
+/// 1 = CJK ideograph, 2 = Hangul, 3 = kana, 5 = other
+#[inline]
+fn classify_char(ch: char) -> u8 {
+    if is_cjk_ideograph(ch) {
+        1
+    } else if is_hangul(ch) {
+        2
+    } else if is_kana(ch) {
+        3
+    } else {
+        5
+    }
+}
+
+/// Determine whether a space should be inserted between two adjacent CJK
+/// transliterations, given their script classes.
+///
+/// Spaces are inserted:
+/// - Between consecutive ideographs (each is a word): 北京 → "bei jing"
+/// - Between consecutive Hangul syllables: 서울 → "seo ul"
+/// - At ideograph↔kana boundaries: 東京タワー → "dong jing tawa-"
+/// - At CJK↔Latin boundaries (handled separately for ASCII)
+///
+/// NOT inserted between consecutive kana (they concatenate to form words).
+#[inline]
+fn needs_cjk_space(prev_class: u8, char_class: u8) -> bool {
+    match (prev_class, char_class) {
+        (1, 1) => true,          // ideograph→ideograph
+        (2, 2) => true,          // Hangul→Hangul
+        (3, 3) => false,         // kana→kana (no space)
+        (1, 3) | (3, 1) => true, // ideograph↔kana
+        (1, 2) | (2, 1) => true, // ideograph↔Hangul
+        (2, 3) | (3, 2) => true, // Hangul↔kana
+        (4, _) | (5, _) => true, // ASCII/other → CJK
+        _ => false,
+    }
+}
+
 /// Check if a character is a CJK Unified Ideograph (Han character).
 #[inline]
 fn is_cjk_ideograph(ch: char) -> bool {
     let cp = ch as u32;
-    (0x4E00..=0x9FFF).contains(&cp)       // CJK Unified Ideographs
-        || (0x3400..=0x4DBF).contains(&cp) // CJK Extension A
-        || (0xF900..=0xFAFF).contains(&cp) // CJK Compatibility Ideographs
+    ur::CJK_UNIFIED.contains(&cp) || ur::CJK_EXT_A.contains(&cp) || ur::CJK_COMPAT.contains(&cp)
 }
 
 /// Check if a character is a Hangul syllable or jamo.
 #[inline]
 fn is_hangul(ch: char) -> bool {
     let cp = ch as u32;
-    (0xAC00..=0xD7AF).contains(&cp)       // Hangul Syllables
-        || (0x3131..=0x3163).contains(&cp) // Compatibility Jamo
+    ur::HANGUL_SYLLABLES.contains(&cp) || ur::HANGUL_COMPAT_JAMO.contains(&cp)
 }
 
 /// Check if a character is Hiragana or Katakana.
@@ -200,9 +215,7 @@ fn is_hangul(ch: char) -> bool {
 #[inline]
 fn is_kana(ch: char) -> bool {
     let cp = ch as u32;
-    (0x3040..=0x309F).contains(&cp)       // Hiragana
-        || (0x30A0..=0x30FF).contains(&cp) // Katakana
-        || (0xFF65..=0xFF9F).contains(&cp) // Half-width Katakana
+    ur::HIRAGANA.contains(&cp) || ur::KATAKANA.contains(&cp) || ur::KATAKANA_HALFWIDTH.contains(&cp)
 }
 
 /// Remove diacritical marks while preserving base characters.

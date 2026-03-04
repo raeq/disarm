@@ -12,7 +12,6 @@ from hypothesis import strategies as st
 
 from translit._enums import Script
 
-
 # ---------------------------------------------------------------------------
 # Hypothesis strategies
 # ---------------------------------------------------------------------------

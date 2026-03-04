@@ -2,7 +2,7 @@
 
 import pytest
 
-from translit import normalize, is_normalized
+from translit import is_normalized, normalize
 
 
 class TestNormalize:
@@ -35,7 +35,7 @@ class TestNormalize:
         assert normalize("hello", form="NFC") == "hello"
 
     def test_invalid_form(self) -> None:
-        with pytest.raises(Exception):  # TranslitError
+        with pytest.raises(ValueError):  # normalize() delegates to CPython unicodedata
             normalize("café", form="INVALID")  # type: ignore[arg-type]
 
 

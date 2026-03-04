@@ -40,12 +40,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install maturin
+      - name: Install maturin (Linux)
+        if: runner.os == 'Linux'
         run: pip install maturin[patchelf]
+      - name: Install maturin (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: pip install maturin
       - name: Build wheel and install test deps
         run: |
-          maturin develop
-          pip install -e ".[test]"
+          maturin build --out dist
+          pip install dist/*.whl
+          pip install ".[test]"
           pip install pytest-cov
       - name: Run tests
         run: pytest tests/ --ignore=tests/test_typing.py -q --tb=short --cov=translit --cov-report=xml --cov-report=term-missing
@@ -81,7 +86,8 @@ jobs:
       - name: Python quick benchmarks
         run: |
           pip install maturin[patchelf]
-          maturin develop
+          maturin build --out dist
+          pip install dist/*.whl
           python benchmarks/bench_quick.py
 
   release:

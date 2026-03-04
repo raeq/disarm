@@ -703,10 +703,10 @@ mod tests {
         assert_eq!(decode_numeric_entities("&#x;"), "&#x;");
         // Invalid codepoint (too large for Unicode) with semicolon
         assert_eq!(decode_numeric_entities("&#xFFFFFFFF;"), "&#xFFFFFFFF;");
-        // Valid format but zero codepoint (U+0000 via char::from_u32 returns Some)
-        // &#0; → U+0000 (NUL), which is a valid char in Rust
+        // Valid format but zero codepoint (U+0000): NUL is a control character,
+        // so it is filtered out and the entity is passed through literally.
         let result = decode_numeric_entities("&#0;");
-        assert_eq!(result, "\0");
+        assert_eq!(result, "&#0;");
     }
 
     #[test]

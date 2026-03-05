@@ -54,6 +54,12 @@ static LANG_TABLES: Lazy<RwLock<HashMap<String, HashMap<char, String>>>> =
 static GLOBAL_REPLACEMENTS: Lazy<RwLock<HashMap<String, String>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
+/// Maximum number of entries allowed in `GLOBAL_REPLACEMENTS`.
+///
+/// Prevents unbounded memory growth from untrusted callers supplying very
+/// large replacement tables.
+pub const MAX_REPLACEMENTS: usize = 10_000;
+
 /// All built-in language codes, sorted.
 const BUILTIN_LANGS: &[&str] = &[
     "ar", "bg", "ca", "cs", "cy", "da", "de", "el", "es", "et", "fi", "fr", "ga", "hr", "hu", "is",
@@ -170,6 +176,12 @@ pub fn list_langs() -> Vec<String> {
 
 /// Register a custom language mapping.
 ///
+/// Returns `Err` if any mapping key is not exactly one Unicode scalar value.
+/// Valid keys must contain exactly one `char`; multi-character strings (e.g.
+/// grapheme clusters written as two or more codepoints) and empty strings are
+/// rejected so that callers receive an explicit diagnostic rather than having
+/// their entry silently discarded.
+///
 /// # Thread Safety
 ///
 /// This function is safe to call from multiple threads.  It acquires a write
@@ -179,18 +191,35 @@ pub fn list_langs() -> Vec<String> {
 ///
 /// After this call returns, all subsequent `lookup_lang()` calls for the
 /// given language code will see the new mappings.
-pub fn register_lang(code: &str, mappings: HashMap<String, String>) {
+pub fn register_lang(
+    code: &str,
+    mappings: HashMap<String, String>,
+) -> Result<(), Vec<String>> {
     let mut char_map = HashMap::new();
+    let mut bad_keys: Vec<String> = Vec::new();
     for (key, value) in mappings {
-        if let Some(ch) = key.chars().next() {
-            char_map.insert(ch, value);
+        let mut chars = key.chars();
+        match (chars.next(), chars.next()) {
+            (Some(ch), None) => {
+                char_map.insert(ch, value);
+            }
+            _ => bad_keys.push(key),
         }
+    }
+    if !bad_keys.is_empty() {
+        return Err(bad_keys);
     }
     let mut table = crate::recover_lock(LANG_TABLES.write());
     table.insert(code.to_owned(), char_map);
+    Ok(())
 }
 
 /// Register global pre-transliteration replacements.
+///
+/// Returns `Err(count)` if the new entries would push the total number of
+/// replacements beyond [`MAX_REPLACEMENTS`], where `count` is the number of
+/// entries in the table after any existing keys are overwritten.  No entries
+/// are written in the error case.
 ///
 /// # Thread Safety
 ///
@@ -200,9 +229,20 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) {
 /// New entries are merged into the existing table.  Existing keys are
 /// silently overwritten with the new value.  Use [`clear_replacements`]
 /// to wipe the table, or [`remove_replacement`] to remove a single key.
-pub fn register_replacements(replacements: HashMap<String, String>) {
+pub fn register_replacements(replacements: HashMap<String, String>) -> Result<(), usize> {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
+    // Compute worst-case size after merge: existing + all-new (ignoring overlap).
+    // This is conservative but avoids the cost of set-difference computation.
+    let new_keys: usize = replacements
+        .keys()
+        .filter(|k| !table.contains_key(*k))
+        .count();
+    let projected = table.len() + new_keys;
+    if projected > MAX_REPLACEMENTS {
+        return Err(projected);
+    }
     table.extend(replacements);
+    Ok(())
 }
 
 /// Remove a single global pre-transliteration replacement by key.
@@ -366,7 +406,7 @@ mod tests {
         // Register a custom language and verify the mapping is returned.
         let mut mappings = HashMap::new();
         mappings.insert("Ü".to_owned(), "Ue".to_owned());
-        register_lang("_test_cow_lookup", mappings);
+        register_lang("_test_cow_lookup", mappings).unwrap();
 
         let first = lookup_lang("_test_cow_lookup", 'Ü');
         let second = lookup_lang("_test_cow_lookup", 'Ü');
@@ -376,19 +416,38 @@ mod tests {
     }
 
     #[test]
+    fn test_register_lang_rejects_multi_char_key() {
+        // Keys that are not exactly one Unicode scalar value must be rejected.
+        let mut mappings = HashMap::new();
+        mappings.insert("AB".to_owned(), "ab".to_owned());
+        let result = register_lang("_test_bad_key", mappings);
+        assert!(result.is_err());
+        let bad = result.unwrap_err();
+        assert_eq!(bad, vec!["AB".to_owned()]);
+    }
+
+    #[test]
+    fn test_register_lang_rejects_empty_key() {
+        let mut mappings = HashMap::new();
+        mappings.insert(String::new(), "x".to_owned());
+        let result = register_lang("_test_empty_key", mappings);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_register_lang_invalidates_on_reregister() {
         // Register, look up, re-register with new value, look up again —
         // should see the new value immediately.
         let mut m1 = HashMap::new();
         m1.insert("Ö".to_owned(), "Oe".to_owned());
-        register_lang("_test_inval2", m1);
+        register_lang("_test_inval2", m1).unwrap();
 
         let first = lookup_lang("_test_inval2", 'Ö');
         assert_eq!(first.as_deref(), Some("Oe"));
 
         let mut m2 = HashMap::new();
         m2.insert("Ö".to_owned(), "O".to_owned());
-        register_lang("_test_inval2", m2);
+        register_lang("_test_inval2", m2).unwrap();
 
         let second = lookup_lang("_test_inval2", 'Ö');
         assert_eq!(second.as_deref(), Some("O"));
@@ -408,7 +467,7 @@ mod tests {
         // User-registered results should come back as Cow::Owned (cloned string).
         let mut m = HashMap::new();
         m.insert("X".to_owned(), "ex".to_owned());
-        register_lang("_test_owned", m);
+        register_lang("_test_owned", m).unwrap();
 
         let result = lookup_lang("_test_owned", 'X');
         if let Some(cow) = result {

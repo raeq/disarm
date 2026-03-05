@@ -108,6 +108,20 @@ fn match_emoji_at(chars: &[char], pos: usize) -> Option<(&'static str, usize)> {
     None
 }
 
+/// Emit a Python `UserWarning`, falling back to stderr if `warnings.warn` fails.
+///
+/// This ensures diagnostic messages are never silently swallowed even if the
+/// Python interpreter is in a state where `warnings` is unavailable.
+fn emit_warning(py: Python<'_>, msg: &str) {
+    if py
+        .import("warnings")
+        .and_then(|w| w.call_method1("warn", (msg,)))
+        .is_err()
+    {
+        eprintln!("translit warning: {msg}");
+    }
+}
+
 /// Try a Python provider's lookup method.
 ///
 /// Returns `Some((name, chars_consumed))` if the provider recognises the
@@ -137,9 +151,7 @@ fn try_python_provider(
                 let msg = format!(
                     "EmojiProvider.lookup() raised an exception and will be ignored: {e}"
                 );
-                let _ = py
-                    .import("warnings")
-                    .and_then(|w| w.call_method1("warn", (msg,)));
+                emit_warning(py, &msg);
                 return None;
             }
         };
@@ -152,9 +164,7 @@ fn try_python_provider(
                         "EmojiProvider.lookup() returned a non-string value \
                          and will be ignored: {e}"
                     );
-                    let _ = py
-                        .import("warnings")
-                        .and_then(|w| w.call_method1("warn", (msg,)));
+                    emit_warning(py, &msg);
                     return None;
                 }
             }

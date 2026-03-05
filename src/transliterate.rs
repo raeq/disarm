@@ -265,16 +265,31 @@ pub fn _list_langs() -> Vec<String> {
 #[pyfunction]
 #[pyo3(signature = (code, mappings))]
 pub fn _register_lang(code: &str, mappings: HashMap<String, String>) -> PyResult<()> {
-    tables::register_lang(code, mappings);
-    Ok(())
+    tables::register_lang(code, mappings).map_err(|bad_keys| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "register_lang(): mapping keys must be exactly one Unicode character; \
+             invalid keys: {}",
+            bad_keys
+                .iter()
+                .map(|k| format!("{k:?}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
+    })
 }
 
 /// Register global pre-transliteration replacements.
 #[pyfunction]
 #[pyo3(signature = (replacements,))]
 pub fn _register_replacements(replacements: HashMap<String, String>) -> PyResult<()> {
-    tables::register_replacements(replacements);
-    Ok(())
+    tables::register_replacements(replacements).map_err(|projected| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "register_replacements(): table would exceed the maximum of {} entries \
+             (projected size: {}); call clear_replacements() first",
+            tables::MAX_REPLACEMENTS,
+            projected
+        ))
+    })
 }
 
 /// Remove a single global pre-transliteration replacement by key.

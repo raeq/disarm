@@ -162,6 +162,22 @@ static COMPAT_JAMO: &[(char, &str)] = &[
     ('ㅣ', "i"),
 ];
 
+/// Look up a compatibility jamo character (U+3131–U+3163) directly.
+///
+/// Returns the Revised Romanization string as a `&'static str`, or `None`
+/// if `ch` is not in the compat-jamo range.  Unlike `romanize_hangul`, this
+/// function never allocates.
+pub fn lookup_compat_jamo(ch: char) -> Option<&'static str> {
+    if ('\u{3131}'..='\u{3163}').contains(&ch) {
+        COMPAT_JAMO
+            .iter()
+            .find(|&&(jamo, _)| jamo == ch)
+            .map(|&(_, roman)| roman)
+    } else {
+        None
+    }
+}
+
 /// Romanize a single Hangul syllable or compatibility jamo character.
 /// Returns None if the character is not in the Hangul range.
 pub fn romanize_hangul(ch: char) -> Option<String> {

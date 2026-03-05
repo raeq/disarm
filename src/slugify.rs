@@ -17,11 +17,21 @@ const MAX_ENTITY_DIGITS: usize = 10;
 /// match time, but compilation of an enormous pattern is also bounded here.
 const MAX_REGEX_PATTERN_BYTES: usize = 512;
 
+/// Maximum compiled DFA size for caller-supplied regex patterns, in bytes.
+///
+/// The `regex` crate uses finite automata (no catastrophic backtracking at
+/// match time), but compiling a large pattern can consume substantial memory
+/// and CPU.  This cap bounds both compile-time allocation and CPU for
+/// adversarial patterns that would otherwise produce a very large DFA.
+const MAX_REGEX_DFA_BYTES: usize = 1_048_576; // 1 MiB
+
 /// Validate and compile a caller-supplied regex pattern after enforcing a size cap.
 ///
-/// Returns `Err(String)` if the pattern exceeds `MAX_REGEX_PATTERN_BYTES` or
-/// if `regex::Regex::new` rejects it. Callers at the PyO3 boundary convert the
-/// `String` error to a `TranslitError` with `.map_err(|e| TranslitError::new_err(e))`.
+/// Returns `Err(String)` if the pattern exceeds `MAX_REGEX_PATTERN_BYTES`,
+/// if the compiled DFA would exceed `MAX_REGEX_DFA_BYTES`, or if
+/// `regex::RegexBuilder` rejects it for any other reason.
+/// Callers at the PyO3 boundary convert the `String` error to a
+/// `TranslitError` with `.map_err(|e| TranslitError::new_err(e))`.
 fn compile_regex(pattern: &str) -> Result<regex::Regex, String> {
     if pattern.len() > MAX_REGEX_PATTERN_BYTES {
         return Err(format!(
@@ -30,7 +40,10 @@ fn compile_regex(pattern: &str) -> Result<regex::Regex, String> {
             MAX_REGEX_PATTERN_BYTES
         ));
     }
-    regex::Regex::new(pattern).map_err(|e| format!("Invalid regex: {e}"))
+    regex::RegexBuilder::new(pattern)
+        .size_limit(MAX_REGEX_DFA_BYTES)
+        .build()
+        .map_err(|e| format!("Invalid regex: {e}"))
 }
 
 /// Find the largest byte index `<= index` that lies on a UTF-8 char boundary.

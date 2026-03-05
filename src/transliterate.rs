@@ -158,7 +158,7 @@ fn estimate_capacity(text: &str) -> usize {
             1
         }
     });
-    text.len() * multiplier
+    text.len().saturating_mul(multiplier)
 }
 
 /// Classify a non-ASCII character into a script class:

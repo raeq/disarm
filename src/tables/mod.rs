@@ -21,11 +21,28 @@ use once_cell::sync::Lazy;
 
 use crate::unicode_ranges as ur;
 
-/// Cache for Hangul romanization results to bound the number of `Box::leak` calls.
-/// There are at most 11,172 precomposed Hangul syllables plus ~51 compatibility jamo,
-/// so this cache is naturally bounded.
-static HANGUL_CACHE: Lazy<RwLock<HashMap<char, &'static str>>> =
-    Lazy::new(|| RwLock::new(HashMap::with_capacity(256)));
+/// Pre-computed romanizations for all 11,172 precomposed Hangul syllables
+/// (U+AC00–U+D7A3).  Indexed by `codepoint - 0xAC00`.
+///
+/// Using a `OnceCell<Vec<String>>` (initialised on first access) avoids
+/// `Box::leak` entirely: the returned `&'static str` slices borrow directly
+/// from this static storage, which lives for the lifetime of the process.
+static HANGUL_ROMANIZATIONS: once_cell::sync::OnceCell<Vec<String>> =
+    once_cell::sync::OnceCell::new();
+
+/// Return a `'static` reference to the pre-computed Hangul romanization table.
+fn hangul_romanizations() -> &'static Vec<String> {
+    HANGUL_ROMANIZATIONS.get_or_init(|| {
+        // 0xAC00 = Hangul base, 0xD7A3 = last precomposed syllable (11172 entries).
+        (0u32..11_172)
+            .map(|i| {
+                let ch = char::from_u32(0xAC00 + i)
+                    .expect("all Hangul syllable codepoints are valid");
+                hangul::romanize_hangul(ch).unwrap_or_default()
+            })
+            .collect()
+    })
+}
 
 /// Global user-registered language tables protected by RwLock.
 /// Reads (lookups) take a read lock — zero contention.
@@ -80,32 +97,25 @@ pub fn lookup_default(ch: char) -> Option<&'static str> {
     transliteration::lookup(ch)
 }
 
-/// Hangul romanization returns an owned String (algorithmically composed),
-/// so we leak it to get a `&'static str` for the lookup API.
+/// Look up the romanization for a Hangul syllable or compatibility jamo.
 ///
-/// Uses a cache to ensure each character is leaked at most once.
-/// The cache is bounded by the Unicode Hangul syllable range (~11,172 entries).
-///
-/// Lock poisoning (from a thread panic while holding the guard) is recovered
-/// from by calling `into_inner()` on the `PoisonError`, which returns the
-/// underlying data so the cache remains usable rather than silently falling
-/// through with no error.
+/// For precomposed syllables (U+AC00–U+D7A3) this is an O(1) index into
+/// the pre-computed `HANGUL_ROMANIZATIONS` table — no allocation, no lock,
+/// no `Box::leak`.  For compatibility jamo (U+3131–U+3163) it delegates to
+/// the static `COMPAT_JAMO` table in `hangul`.
 fn lookup_hangul_static(ch: char) -> Option<&'static str> {
-    // Fast path: check read lock first
-    {
-        let cache = HANGUL_CACHE.read().unwrap_or_else(|e| e.into_inner());
-        if let Some(&cached) = cache.get(&ch) {
-            return Some(cached);
-        }
-    }
+    let code = ch as u32;
 
-    // Slow path: compute, leak, and cache
-    hangul::romanize_hangul(ch).map(|s| {
-        let leaked: &'static str = Box::leak(s.into_boxed_str());
-        let mut cache = HANGUL_CACHE.write().unwrap_or_else(|e| e.into_inner());
-        cache.insert(ch, leaked);
-        leaked
-    })
+    if (0xAC00..=0xD7A3).contains(&code) {
+        let idx = (code - 0xAC00) as usize;
+        // `hangul_romanizations()` returns `&'static Vec<String>` (OnceCell).
+        // Indexing into a `&'static Vec<String>` yields `&'static String`,
+        // and `.as_str()` gives `&'static str` — no unsafe required.
+        let roms: &'static Vec<String> = hangul_romanizations();
+        Some(roms[idx].as_str())
+    } else {
+        hangul::lookup_compat_jamo(ch)
+    }
 }
 
 /// Look up a character in the ISO 9:1995 scholarly table (O(1) PHF).
@@ -129,7 +139,7 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
     // Fast path: check the leak cache (read lock, no allocation).
     // Two-level lookup: first by &str (no allocation), then by char.
     {
-        let cache = LANG_LEAK_CACHE.read().unwrap_or_else(|e| e.into_inner());
+        let cache = crate::recover_lock(LANG_LEAK_CACHE.read());
         if let Some(char_cache) = cache.get(lang) {
             if let Some(&cached) = char_cache.get(&ch) {
                 return Some(cached);
@@ -142,7 +152,7 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
     // cache write lock to check-then-leak atomically (prevents duplicate
     // leaks under concurrent access).
     let replacement_clone: Option<String> = {
-        let table = LANG_TABLES.read().unwrap_or_else(|e| e.into_inner());
+        let table = crate::recover_lock(LANG_TABLES.read());
         table
             .get(lang)
             .and_then(|char_map| char_map.get(&ch).cloned())
@@ -151,7 +161,7 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
     if let Some(replacement) = replacement_clone {
         // Acquire cache write lock *before* leaking to ensure at most one
         // thread leaks per (lang, char) pair.
-        let mut cache = LANG_LEAK_CACHE.write().unwrap_or_else(|e| e.into_inner());
+        let mut cache = crate::recover_lock(LANG_LEAK_CACHE.write());
         // Double-check: another thread may have inserted while we waited
         if let Some(&existing) = cache.get(lang).and_then(|m| m.get(&ch)) {
             return Some(existing);
@@ -177,7 +187,7 @@ pub fn list_langs() -> Vec<String> {
     let mut langs: Vec<String> = BUILTIN_LANGS.iter().map(|s| s.to_string()).collect();
 
     // Add user-registered languages
-    let table = LANG_TABLES.read().unwrap_or_else(|e| e.into_inner());
+    let table = crate::recover_lock(LANG_TABLES.read());
     for key in table.keys() {
         if !langs.contains(key) {
             langs.push(key.clone());
@@ -223,8 +233,8 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) {
     // This is the only place both locks are held simultaneously,
     // so deadlock is impossible as long as the order is consistent.
     {
-        let mut cache = LANG_LEAK_CACHE.write().unwrap_or_else(|e| e.into_inner());
-        let mut table = LANG_TABLES.write().unwrap_or_else(|e| e.into_inner());
+        let mut cache = crate::recover_lock(LANG_LEAK_CACHE.write());
+        let mut table = crate::recover_lock(LANG_TABLES.write());
         table.insert(code.to_owned(), char_map);
         // Invalidate cached leaks for this language so lookups pick up
         // the new mappings.  The old leaked strings are unreclaimable
@@ -245,9 +255,7 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) {
 /// silently overwritten with the new value.  Use [`clear_replacements`]
 /// to wipe the table, or [`remove_replacement`] to remove a single key.
 pub fn register_replacements(replacements: HashMap<String, String>) {
-    let mut table = GLOBAL_REPLACEMENTS
-        .write()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
     table.extend(replacements);
 }
 
@@ -255,17 +263,13 @@ pub fn register_replacements(replacements: HashMap<String, String>) {
 ///
 /// Returns `true` if the key was present and removed, `false` otherwise.
 pub fn remove_replacement(key: &str) -> bool {
-    let mut table = GLOBAL_REPLACEMENTS
-        .write()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
     table.remove(key).is_some()
 }
 
 /// Clear all global pre-transliteration replacements.
 pub fn clear_replacements() {
-    let mut table = GLOBAL_REPLACEMENTS
-        .write()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
     table.clear();
 }
 
@@ -331,7 +335,7 @@ mod tests {
 
     #[test]
     fn test_hangul_cache_consistency() {
-        // Calling twice should return the same pointer (from cache)
+        // Calling twice should return the same value (from cache)
         let first = lookup_hangul_static('가');
         let second = lookup_hangul_static('가');
         assert_eq!(first, second);

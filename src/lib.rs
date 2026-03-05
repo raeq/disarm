@@ -105,6 +105,22 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
+/// Recover from a poisoned `RwLock` or `Mutex`, logging a warning to stderr.
+///
+/// A poisoned lock means a thread panicked while holding it.  The underlying
+/// data may be in an inconsistent state.  We log a diagnostic and continue
+/// rather than propagating the panic to every subsequent caller.
+pub(crate) fn recover_lock<T>(result: std::sync::LockResult<T>) -> T {
+    result.unwrap_or_else(|e| {
+        eprintln!(
+            "translit: RwLock poisoned (a thread panicked while holding the lock). \
+             Recovering from poisoned state — data may be inconsistent. \
+             This is a bug; please report it."
+        );
+        e.into_inner()
+    })
+}
+
 pyo3::create_exception!(
     translit,
     TranslitError,

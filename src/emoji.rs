@@ -21,7 +21,7 @@ static GLOBAL_PROVIDER: Lazy<RwLock<Option<PyObject>>> = Lazy::new(|| RwLock::ne
 
 /// Register a global Python emoji provider (or None to reset to default).
 pub fn set_provider(provider: Option<PyObject>) {
-    let mut guard = GLOBAL_PROVIDER.write().unwrap_or_else(|e| e.into_inner());
+    let mut guard = crate::recover_lock(GLOBAL_PROVIDER.write());
     *guard = provider;
 }
 
@@ -46,17 +46,20 @@ impl ErrorMode {
     }
 }
 
-/// Encode a slice of codepoints as an uppercase hex key for PHF lookup.
-fn encode_key(cps: &[char]) -> String {
-    let mut key = String::with_capacity(cps.len() * 6);
+/// Write a slice of codepoints as an uppercase hex key into `buf`, reusing it.
+///
+/// Clears `buf` before writing.  Using a caller-supplied buffer avoids
+/// repeated allocation inside the O(max_seq_len) candidate loop in
+/// `match_emoji_at`.
+fn encode_key_into(buf: &mut String, cps: &[char]) {
+    buf.clear();
     for (i, &c) in cps.iter().enumerate() {
         if i > 0 {
-            key.push('_');
+            buf.push('_');
         }
-        // SAFETY: write! to a String is infallible (String's fmt::Write impl never errors).
-        let _ = write!(key, "{:04X}", c as u32);
+        // write! to a String is infallible (String's fmt::Write impl never errors).
+        let _ = write!(buf, "{:04X}", c as u32);
     }
-    key
 }
 
 /// Try to match the longest emoji sequence starting at `chars[pos]`.
@@ -68,6 +71,8 @@ fn match_emoji_at(chars: &[char], pos: usize) -> Option<(&'static str, usize)> {
     // Try multi-codepoint sequences first (longest match)
     if tables::is_emoji_multi_starter(ch) {
         let max_len = tables::max_emoji_seq_len().min(remaining);
+        // Single allocation for all candidate keys in this call.
+        let mut key_buf = String::with_capacity(max_len * 6);
         // Try longest sequences first
         for len in (2..=max_len).rev() {
             let seq = &chars[pos..pos + len];
@@ -79,8 +84,8 @@ fn match_emoji_at(chars: &[char], pos: usize) -> Option<(&'static str, usize)> {
                 continue;
             }
 
-            let key = encode_key(seq);
-            if let Some(name) = tables::lookup_emoji_multi(&key) {
+            encode_key_into(&mut key_buf, seq);
+            if let Some(name) = tables::lookup_emoji_multi(&key_buf) {
                 return Some((name, len));
             }
         }
@@ -296,7 +301,7 @@ pub fn _demojize(
     let effective_provider: Option<PyObject> = if provider.is_some() {
         provider
     } else {
-        let guard = GLOBAL_PROVIDER.read().unwrap_or_else(|e| e.into_inner());
+        let guard = crate::recover_lock(GLOBAL_PROVIDER.read());
         guard.as_ref().map(|p| p.clone_ref(py))
     };
 
@@ -391,15 +396,16 @@ mod tests {
 
     #[test]
     fn test_encode_key_single() {
-        assert_eq!(encode_key(&['\u{1F600}']), "1F600");
+        let mut buf = String::new();
+        encode_key_into(&mut buf, &['\u{1F600}']);
+        assert_eq!(buf, "1F600");
     }
 
     #[test]
     fn test_encode_key_multi() {
-        assert_eq!(
-            encode_key(&['\u{1F468}', '\u{200D}', '\u{1F469}']),
-            "1F468_200D_1F469"
-        );
+        let mut buf = String::new();
+        encode_key_into(&mut buf, &['\u{1F468}', '\u{200D}', '\u{1F469}']);
+        assert_eq!(buf, "1F468_200D_1F469");
     }
 
     #[test]

@@ -1,10 +1,24 @@
 use pyo3::prelude::*;
 use unicode_normalization::UnicodeNormalization;
 
+/// Maximum input size for normalization, in bytes.
+///
+/// Unicode NFKD can expand a single codepoint into up to 18 combining
+/// characters in pathological cases.  Capping input size bounds worst-case
+/// output size and prevents out-of-memory conditions on adversarial input.
+const MAX_NORMALIZE_INPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
+
 /// Unicode normalization (NFC, NFD, NFKC, NFKD).
 #[pyfunction]
 #[pyo3(signature = (text, *, form="NFC"))]
 pub fn _normalize(text: &str, form: &str) -> PyResult<String> {
+    if text.len() > MAX_NORMALIZE_INPUT_BYTES {
+        return Err(crate::TranslitError::new_err(format!(
+            "input too large ({} bytes); maximum for normalize() is {} bytes",
+            text.len(),
+            MAX_NORMALIZE_INPUT_BYTES
+        )));
+    }
     match form {
         "NFC" => Ok(text.nfc().collect()),
         "NFD" => Ok(text.nfd().collect()),
@@ -35,6 +49,16 @@ pub fn _is_normalized(text: &str, form: &str) -> PyResult<bool> {
 #[pyfunction]
 #[pyo3(signature = (texts, *, form="NFC"))]
 pub fn _normalize_batch(texts: Vec<String>, form: &str) -> PyResult<Vec<String>> {
+    // Validate each string's size before processing any.
+    for t in &texts {
+        if t.len() > MAX_NORMALIZE_INPUT_BYTES {
+            return Err(crate::TranslitError::new_err(format!(
+                "input too large ({} bytes); maximum for normalize() is {} bytes",
+                t.len(),
+                MAX_NORMALIZE_INPUT_BYTES
+            )));
+        }
+    }
     // Validate form once, then apply to all strings.
     match form {
         "NFC" => Ok(texts.iter().map(|t| t.nfc().collect()).collect()),

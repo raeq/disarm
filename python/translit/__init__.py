@@ -1276,8 +1276,81 @@ class TextPipeline:
     def __call__(self, text: str) -> str:
         return self._inner.process(text)
 
+    @property
+    def steps(self) -> list[tuple[str, str | None]]:
+        """Return the ordered list of active pipeline steps.
+
+        Each entry is a ``(step_name, parameter)`` tuple.  Steps are listed
+        in execution order.  ``parameter`` is ``None`` for parameterless
+        steps (e.g. ``fold_case``), or a string value for steps that accept
+        one (e.g. ``("normalize", "NFC")``).
+
+        Examples:
+            >>> pipe = TextPipeline(normalize="NFC", fold_case=True)
+            >>> pipe.steps
+            [('normalize', 'NFC'), ('fold_case', None)]
+        """
+        return self._inner.steps()
+
+    def explain(self) -> str:
+        """Return a human-readable description of the pipeline.
+
+        Examples:
+            >>> pipe = TextPipeline(normalize="NFC", fold_case=True, collapse_whitespace=True)
+            >>> print(pipe.explain())
+            TextPipeline with 3 steps:
+              1. normalize (form=NFC)
+              2. fold_case
+              3. collapse_whitespace
+        """
+        step_list = self.steps
+        if not step_list:
+            return "TextPipeline with 0 steps (passthrough)"
+        lines = [f"TextPipeline with {len(step_list)} step{'s' if len(step_list) != 1 else ''}:"]
+        for i, (name, param) in enumerate(step_list, 1):
+            if param is not None:
+                lines.append(f"  {i}. {name} ({param})")
+            else:
+                lines.append(f"  {i}. {name}")
+        return "\n".join(lines)
+
     def __repr__(self) -> str:
-        return "TextPipeline()"
+        return repr(self._inner)
+
+
+# --- Preset pipeline metadata ---
+
+PRESETS: dict[str, list[tuple[str, str | None]]] = {
+    "security_clean": [
+        ("normalize", "NFKC"),
+        ("confusables", "latin"),
+        ("collapse_whitespace", None),
+        ("strip_bidi", None),
+    ],
+    "ml_normalize": [
+        ("normalize", "NFKC"),
+        ("demojize", "cldr"),
+        ("strip_accents", None),
+        ("fold_case", None),
+        ("collapse_whitespace", None),
+    ],
+    "catalog_key": [
+        ("normalize", "NFKC"),
+        ("confusables", "latin"),
+        ("strip_accents", None),
+        ("fold_case", None),
+        ("collapse_whitespace", None),
+    ],
+    "display_clean": [
+        ("collapse_whitespace", None),
+    ],
+}
+"""Named preset pipelines and their ordered steps.
+
+Each key is a preset function name; each value is a list of
+``(step_name, parameter)`` tuples in execution order.  Use this to
+audit exactly which transforms a preset applies.
+"""
 
 
 # --- Language profiles ---
@@ -1423,6 +1496,8 @@ __all__ = [
     "is_confusable",
     "is_ascii",
     "is_normalized",
+    # Preset metadata
+    "PRESETS",
     # Stateful / builders
     "Text",
     "Slugifier",

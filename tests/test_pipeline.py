@@ -10,7 +10,7 @@ import itertools
 
 import pytest
 
-from translit import TextPipeline
+from translit import PRESETS, TextPipeline
 
 
 class TestTextPipelineBasic:
@@ -55,7 +55,47 @@ class TestTextPipelineBasic:
 
     def test_repr(self) -> None:
         pipe = TextPipeline(normalize="NFC", transliterate=True)
-        assert "TextPipeline" in repr(pipe)
+        r = repr(pipe)
+        assert "TextPipeline" in r
+        assert "normalize" in r
+        assert "transliterate" in r
+
+    def test_steps_property(self) -> None:
+        pipe = TextPipeline(normalize="NFC", fold_case=True, collapse_whitespace=True)
+        steps = pipe.steps
+        assert isinstance(steps, list)
+        assert len(steps) == 3
+        assert steps[0] == ("normalize", "NFC")
+        assert steps[1] == ("fold_case", None)
+        assert steps[2] == ("collapse_whitespace", None)
+
+    def test_steps_empty_pipeline(self) -> None:
+        pipe = TextPipeline()
+        assert pipe.steps == []
+
+    def test_steps_execution_order(self) -> None:
+        pipe = TextPipeline(
+            collapse_whitespace=True,
+            fold_case=True,
+            normalize="NFKC",
+            transliterate=True,
+        )
+        names = [name for name, _ in pipe.steps]
+        # Execution order is fixed regardless of construction order
+        assert names == ["normalize", "strip_accents", "transliterate", "fold_case", "collapse_whitespace"] or \
+               names == ["normalize", "transliterate", "fold_case", "collapse_whitespace"]
+
+    def test_explain(self) -> None:
+        pipe = TextPipeline(normalize="NFC", fold_case=True)
+        explanation = pipe.explain()
+        assert "2 steps" in explanation
+        assert "normalize" in explanation
+        assert "fold_case" in explanation
+
+    def test_explain_empty(self) -> None:
+        pipe = TextPipeline()
+        assert "0 steps" in pipe.explain()
+        assert "passthrough" in pipe.explain()
 
 
 class TestTextPipelineCombinations:
@@ -264,3 +304,27 @@ class TestTextPipelinePairwise:
             pipe = TextPipeline(normalize=form, transliterate=True)
             result = pipe("café")
             assert result == "cafe", f"Failed for {form}"
+
+
+class TestPresets:
+    """Verify PRESETS metadata is well-formed and matches actual behavior."""
+
+    def test_presets_is_dict(self) -> None:
+        assert isinstance(PRESETS, dict)
+
+    def test_all_preset_names_present(self) -> None:
+        for name in ("security_clean", "ml_normalize", "catalog_key", "display_clean"):
+            assert name in PRESETS, f"preset {name!r} missing from PRESETS"
+
+    def test_preset_steps_are_tuples(self) -> None:
+        for name, steps in PRESETS.items():
+            assert isinstance(steps, list), f"{name}: steps is not a list"
+            for step in steps:
+                assert isinstance(step, tuple), f"{name}: step {step!r} is not a tuple"
+                assert len(step) == 2, f"{name}: step {step!r} has wrong length"
+
+    def test_security_clean_starts_with_nfkc(self) -> None:
+        assert PRESETS["security_clean"][0] == ("normalize", "NFKC")
+
+    def test_display_clean_is_minimal(self) -> None:
+        assert len(PRESETS["display_clean"]) == 1

@@ -100,6 +100,50 @@ impl _TextPipeline {
         })
     }
 
+    /// Return the ordered list of active pipeline steps and their parameters.
+    fn steps(&self) -> Vec<(String, Option<String>)> {
+        let mut result = Vec::new();
+        // Return in execution order (same as process())
+        if self.steps.contains(PipelineSteps::NORMALIZE) {
+            result.push((
+                "normalize".to_owned(),
+                self.normalize_form.clone(),
+            ));
+        }
+        if self.steps.contains(PipelineSteps::CONFUSABLES) {
+            result.push(("confusables".to_owned(), Some("latin".to_owned())));
+        }
+        if self.steps.contains(PipelineSteps::DEMOJIZE) {
+            result.push(("demojize".to_owned(), None));
+        }
+        if self.steps.contains(PipelineSteps::STRIP_ACCENTS) {
+            result.push(("strip_accents".to_owned(), None));
+        }
+        if self.steps.contains(PipelineSteps::TRANSLITERATE) {
+            result.push((
+                "transliterate".to_owned(),
+                self.lang.clone(),
+            ));
+        }
+        if self.steps.contains(PipelineSteps::FOLD_CASE) {
+            result.push(("fold_case".to_owned(), None));
+        }
+        if self.steps.contains(PipelineSteps::COLLAPSE_WS) {
+            result.push(("collapse_whitespace".to_owned(), None));
+        }
+        result
+    }
+
+    fn __repr__(&self) -> String {
+        let parts: Vec<String> = self.steps().iter().map(|(name, param)| {
+            match param {
+                Some(p) => format!("{name}={p:?}"),
+                None => name.clone(),
+            }
+        }).collect();
+        format!("TextPipeline({})", parts.join(" -> "))
+    }
+
     /// Process text through the pipeline.
     fn process(&self, text: &str) -> PyResult<String> {
         let mut buf = text.to_owned();

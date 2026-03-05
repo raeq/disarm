@@ -83,9 +83,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install maturin (Linux)
+        if: runner.os == 'Linux'
+        run: pip install maturin[patchelf]
+      - name: Install maturin (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: pip install maturin
       - name: Python quick benchmarks
         run: |
-          pip install maturin[patchelf]
           maturin build --out dist
           pip install dist/*.whl
           python benchmarks/bench_quick.py

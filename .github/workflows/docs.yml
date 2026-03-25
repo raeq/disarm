@@ -9,6 +9,9 @@ on:
       - "python/translit/**"
       - ".readthedocs.yaml"
 
+permissions:
+  contents: read
+
 jobs:
   trigger-rtd-build:
     name: Trigger Read the Docs build

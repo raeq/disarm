@@ -1,46 +1,21 @@
-site_name: unirust
-site_url: https://unirust.readthedocs.io/
-site_description: Fast Unicode transliteration, slugification, and text normalization
+site_name: translit
+site_url: https://translit.readthedocs.io/
+site_description: Fast Unicode transliteration, slugification, and text normalization — powered by Rust
 site_author: Richard Quinn
-repo_url: https://github.com/raeq/unirust
-repo_name: raeq/unirust
-edit_uri: edit/master/docs/
+repo_url: https://github.com/raeq/translit
+repo_name: raeq/translit
+edit_uri: edit/main/docs/
 use_directory_urls: false
 
 copyright: Copyright &copy; 2026 Richard Quinn
 
 theme:
-  name: material
-  palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: deep purple
-      accent: amber
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: deep purple
-      accent: amber
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-  features:
-    - content.code.copy
-    - content.code.annotate
-    - navigation.instant
-    - navigation.tracking
-    - navigation.tabs
-    - navigation.sections
-    - navigation.expand
-    - navigation.top
-    - navigation.indexes
-    - search.suggest
-    - search.highlight
-    - toc.follow
-  icon:
-    repo: fontawesome/brands/github
+  name: readthedocs
+  highlightjs: true
+  hljs_languages:
+    - python
+    - rust
+    - bash
 
 plugins:
   - search
@@ -60,26 +35,21 @@ plugins:
 
 markdown_extensions:
   - admonition
+  - tables
+  - toc:
+      permalink: true
+  - def_list
+  - footnotes
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.highlight:
       anchor_linenums: true
-      line_spans: __span
-      pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.snippets
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
-  - tables
-  - toc:
-      permalink: true
   - attr_list
   - md_in_html
-  - def_list
-  - footnotes
 
 nav:
   - Home: index.md
@@ -96,7 +66,10 @@ nav:
   - API Reference:
       - Overview: api/index.md
       - Core Transforms: api/transforms.md
+      - Precompiled Pipelines: api/pipelines.md
       - Predicates: api/predicates.md
+      - Grapheme Clusters: api/graphemes.md
+      - Encoding: api/encoding.md
       - Classes: api/classes.md
       - Enums & Types: api/enums.md
       - Language Profiles: api/language-profiles.md
@@ -129,10 +102,3 @@ nav:
   - Changelog: ../CHANGELOG.md
   - Contributing: ../CONTRIBUTING.md
   - Security: ../SECURITY.md
-
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/raeq/unirust
-    - icon: fontawesome/brands/python
-      link: https://pypi.org/project/unirust/

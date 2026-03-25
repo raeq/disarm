@@ -171,6 +171,8 @@ unidecode("café")  # → "cafe"
 
 - [User Guide](docs/user-guide/)
 - [API Reference](docs/api/)
+- [Data Engineering Guide](docs/data-engineer-guide.md)
+- [ML / LLM Pipeline Guide](docs/ml-pipeline-guide.md)
 - [Security Guide](docs/security-guide.md)
 - [Limitations](docs/limitations.md)
 - [Migration from python-slugify / anyascii / Unidecode](docs/migration/)

@@ -103,6 +103,7 @@ nav:
       - Exceptions: api/exceptions.md
   - Guides:
       - For Web Developers: web-developer-guide.md
+      - For Data Engineers: data-engineer-guide.md
       - For ML / LLM Pipelines: ml-pipeline-guide.md
       - For Security Engineers: security-guide.md
       - For Librarians & Catalogers: librarian-guide.md

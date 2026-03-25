@@ -97,6 +97,17 @@ pipe("  Héllo\u200b Wörld  ")  # => "hello world"
 
 ---
 
+## Guides by role
+
+- **[For Data Engineers](data-engineer-guide.md)** — ETL normalization, deduplication, encoding detection, batch processing
+- **[For ML / LLM Pipelines](ml-pipeline-guide.md)** — Text preprocessing, emoji handling, TextPipeline
+- **[For Web Developers](web-developer-guide.md)** — URL slugs, filename sanitization, form cleaning
+- **[For Security Engineers](security-guide.md)** — Homoglyph detection, IDN validation, input canonicalization
+- **[For Librarians & Catalogers](librarian-guide.md)** — Catalog keys, title dedup, sort normalization
+- **[For Scholars & Linguists](scholarly-guide.md)** — ISO 9, script analysis, transliteration profiles
+
+---
+
 ## Migrating from legacy libraries
 
 translit provides parameter-compatible replacements for existing libraries:

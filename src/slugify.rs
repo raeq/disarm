@@ -396,8 +396,12 @@ fn decode_entities(text: &str) -> String {
 
     while i < len {
         if bytes[i] != b'&' {
-            result.push(bytes[i] as char);
-            i += 1;
+            // Advance by full UTF-8 character, not by byte.
+            // bytes[i] as char would corrupt multi-byte characters (é, ü, 中, etc.)
+            // by treating each continuation byte as a separate Latin-1 codepoint.
+            let ch = text[i..].chars().next().expect("non-empty slice");
+            result.push(ch);
+            i += ch.len_utf8();
             continue;
         }
 
@@ -805,6 +809,19 @@ mod tests {
         config.allow_unicode = true;
         let result = slugify_impl("café latte", &config);
         assert!(result.contains("café"));
+    }
+
+    #[test]
+    fn test_decode_entities_multibyte_utf8() {
+        // BUG-1: decode_entities previously used `bytes[i] as char` which
+        // corrupts multi-byte UTF-8 characters (é = 0xC3 0xA9 → Ã ©).
+        assert_eq!(decode_entities("café &amp; résumé"), "café & résumé");
+        assert_eq!(decode_entities("über &lt; cool"), "über < cool");
+        assert_eq!(decode_entities("中文 &amp; 日本語"), "中文 & 日本語");
+        assert_eq!(decode_entities("emoji 🎉 &amp; fun"), "emoji 🎉 & fun");
+        // Pure non-ASCII without entities hits the fast path (no &),
+        // but mixed input must also work correctly.
+        assert_eq!(decode_entities("café"), "café");
     }
 
     #[test]

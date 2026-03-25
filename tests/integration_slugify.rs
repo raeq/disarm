@@ -83,3 +83,26 @@ fn slugify_consecutive_separators_collapsed() {
         "consecutive separators should be collapsed"
     );
 }
+
+#[test]
+fn slugify_multibyte_with_entities() {
+    // BUG-1 regression: decode_entities must not corrupt multi-byte UTF-8
+    // when the input contains both non-ASCII chars and HTML entities.
+    let config = SlugConfig::default();
+    let result = slugify_impl("café &amp; résumé", &config);
+    assert!(
+        result.contains("cafe"),
+        "expected 'cafe' in slug, got: {result:?}"
+    );
+    assert!(
+        result.contains("resume"),
+        "expected 'resume' in slug, got: {result:?}"
+    );
+}
+
+#[test]
+fn slugify_cjk_with_entities() {
+    let config = SlugConfig::default();
+    let result = slugify_impl("中文 &amp; test", &config);
+    assert!(result.contains("test"), "expected 'test' in: {result:?}");
+}

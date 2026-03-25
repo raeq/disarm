@@ -1129,3 +1129,143 @@ class TestReplaceWithEmpty:
         compat = unidecode(text)
         native = transliterate(text, errors="replace", replace_with="")
         assert compat == native
+
+
+# ---------------------------------------------------------------------------
+# Real-world text samples for every supported language.
+# Each entry: lang -> (native_text, description).
+# The test asserts that transliterate(native_text, lang=lang).isascii() is True.
+# ---------------------------------------------------------------------------
+_ALL_LANG_ASCII_SAMPLES: dict[str, tuple[str, str]] = {
+    # --- European (Latin-based) ---
+    "bg": ("Република България е държава в Югоизточна Европа", "Bulgarian constitution"),
+    "ca": ("Catalunya és una comunitat autònoma d'Espanya", "Catalan"),
+    "cs": ("Česká republika je stát ve střední Evropě", "Czech"),
+    "cy": ("Cymru yw gwlad sy'n rhan o'r Deyrnas Unedig", "Welsh"),
+    "da": ("København er Danmarks hovedstad og største by", "Danish"),
+    "de": ("Die Bundesrepublik Deutschland ist ein Bundesstaat in Mitteleuropa", "German"),
+    "el": ("Η Ελληνική Δημοκρατία είναι χώρα της νοτιοανατολικής Ευρώπης", "Greek"),
+    "es": ("España es un país soberano transcontinental", "Spanish"),
+    "et": ("Eesti Vabariik on riik Põhja-Euroopas Läänemere ääres", "Estonian"),
+    "fi": ("Suomen tasavalta on valtio Pohjois-Euroopassa", "Finnish"),
+    "fr": ("La République française est un État transcontinental", "French"),
+    "ga": ("Éire nó Poblacht na hÉireann is tír í", "Irish"),
+    "hr": ("Republika Hrvatska je država u srednjoj Europi", "Croatian"),
+    "hu": ("Magyarország közép-európai ország", "Hungarian"),
+    "is": ("Ísland er eyríki á norðanverðum Atlantshafi", "Icelandic"),
+    "it": ("La Repubblica Italiana è uno Stato membro dell'Unione europea", "Italian"),
+    "lt": ("Lietuvos Respublika yra valstybė šiaurės Europoje", "Lithuanian"),
+    "lv": ("Latvijas Republika ir valsts Ziemeļeiropā", "Latvian"),
+    "mt": ("Ir-Repubblika ta' Malta hija stat gżejjer fil-Mediterran", "Maltese"),
+    "nl": ("Het Koninkrijk der Nederlanden is een staat in West-Europa", "Dutch"),
+    "no": ("Kongeriket Norge er et nordisk land i Skandinavia", "Norwegian"),
+    "pl": ("Rzeczpospolita Polska jest państwem w Europie Środkowej", "Polish"),
+    "pt": ("A República Portuguesa é um país situado no sudoeste da Europa", "Portuguese"),
+    "ro": ("România este un stat situat în sud-estul Europei", "Romanian"),
+    "sk": ("Slovenská republika je štát v strednej Európe", "Slovak"),
+    "sl": ("Republika Slovenija je država v srednji Evropi", "Slovenian"),
+    "sq": ("Republika e Shqipërisë është një shtet në Europën Juglindore", "Albanian"),
+    "sr": ("Република Србија је држава у Југоисточној Европи", "Serbian"),
+    "sv": ("Konungariket Sverige är ett nordiskt land på Skandinaviska halvön", "Swedish"),
+    "tr": ("Türkiye Cumhuriyeti Avrupa ile Asya arasında yer alan bir ülkedir", "Turkish"),
+    "uk": ("Україна є державою у Східній та Центральній Європі", "Ukrainian"),
+    "vi": ("Cộng hòa xã hội chủ nghĩa Việt Nam là một quốc gia", "Vietnamese"),
+    # --- East Asian ---
+    "ja": ("日本国は東アジアに位置する島国である", "Japanese"),
+    "ko": ("대한민국은 동아시아에 있는 공화국이다", "Korean"),
+    "zh": ("中华人民共和国是位于东亚的社会主义国家", "Chinese"),
+    # --- Middle Eastern ---
+    "ar": ("المملكة العربية السعودية دولة عربية تقع في شبه الجزيرة العربية", "Arabic"),
+    "he": ("מדינת ישראל היא מדינה במזרח התיכון", "Hebrew"),
+    # --- Indic ---
+    "hi": ("भारत गणराज्य दक्षिण एशिया में स्थित एक देश है", "Hindi"),
+    "bn": ("গণপ্রজাতন্ত্রী বাংলাদেশ দক্ষিণ এশিয়ার একটি রাষ্ট্র", "Bengali"),
+    "ta": ("தமிழ்நாடு இந்தியாவின் தெற்கே அமைந்துள்ள மாநிலம்", "Tamil"),
+    "te": ("తెలుగు భాష ద్రావిడ భాషా కుటుంబానికి చెందిన భాష", "Telugu"),
+    "gu": ("ગુજરાત ભારતનું એક રાજ્ય છે જે ભારતના પશ્ચિમ ભાગમાં", "Gujarati"),
+    "kn": ("ಕರ್ನಾಟಕ ದಕ್ಷಿಣ ಭಾರತದ ಒಂದು ರಾಜ್ಯ", "Kannada"),
+    "ml": ("കേരളം ഇന്ത്യയിലെ ഒരു സംസ്ഥാനമാണ്", "Malayalam"),
+    "mr": ("महाराष्ट्र हे भारतातील एक राज्य आहे", "Marathi"),
+    "ne": ("नेपाल एशियाको एक स्वतन्त्र देश हो", "Nepali"),
+    "or": ("ଓଡ଼ିଶା ଭାରତର ପୂର୍ବ ଉପକୂଳରେ ଅବସ୍ଥିତ", "Odia"),
+    "pa": ("ਪੰਜਾਬ ਭਾਰਤ ਦਾ ਇੱਕ ਰਾਜ ਹੈ", "Punjabi"),
+    "sa": ("संस्कृतम् जगतः एका प्राचीनतमा भाषा", "Sanskrit"),
+    "as": ("অসম ভাৰতৰ উত্তৰ পূৰ্বাঞ্চলৰ এখন ৰাজ্য", "Assamese"),
+    # --- Caucasian ---
+    "hy": ("Հայաdelays Հանրապdelays  Հայdelays  երdelays", "Armenian"),
+    "ka": ("საქართველო სახელმწიფოა აღმოსავლეთ ევროპაში", "Georgian"),
+    # --- South/Southeast Asian ---
+    "si": ("ශ්‍රී ලංකා ප්‍රජාතාන්ත්‍රික සමාජවාදී ජනරජය", "Sinhala"),
+    "th": ("ประเทศไทยเป็นรัฐชาติอันตั้งอยู่ในเอเชียตะวันออกเฉียงใต้", "Thai"),
+    "lo": ("ສາທາລະນະລັດ ປະຊາທິປະໄຕ ປະຊາຊົນລາວ", "Lao"),
+    "km": ("ព្រះរាជាណាចក្រកម្ពុជា ជាប្រទេសមួយ", "Khmer"),
+    "my": ("မြန်မာနိုင်ငံသည် အရှေ့တောင်အာရှတွင်", "Myanmar"),
+    # --- Tibetan ---
+    "bo": ("བོད་རང་སྐྱོང་ལྗོངས་ནི་རྒྱ་ནག་གི་ཁོངས་གཏོགས", "Tibetan"),
+    # --- African ---
+    "am": (
+        "የኢትዮጵያ ፌዴራላዊ ዲሞክራሲያዊ ሪፐብሊክ መንግሥት "
+        "የፌዴራሉ መንግስት ሁለት ምክር ቤቶች ሲኖሩት እነሱም "
+        "የሕዝብ ተወካዮች ምክር ቤትና የፌዴሬሽን ምክር ቤት ናቸው፡፡ "
+        "የፌዴራሉ መንግስት ከፍተኛ የሕግ አውጪ ስልጣን ያለው "
+        "የህዝብ ተወካዮች ምክር ቤት ነው፡፡ "
+        "አባላቱም በየአምስት አመቱ በሚደረግ አብላጫ ድምፅ ያገኘ "
+        "ተወዳዳሪ አሸናፊ በሚሆንበት የምርጫ ሥርዓት ይመረጣሉ፡፡ "
+        "የክልል ከፍተኛ የሕግ አውጪ አካል የክልሉ ምክር ቤት ነው፡፡",
+        "Amharic Ethiopian constitution preamble",
+    ),
+    # --- Russian (already covered by bg/sr/uk but test separately) ---
+    "ru": ("Российская Федерация является демократическим федеративным государством", "Russian"),
+}
+
+
+class TestAllLanguagesProduceAscii:
+    """Every supported language must produce pure ASCII output for real-world text.
+
+    This catches:
+    - Missing TSV entries (unmapped codepoints pass through as non-ASCII)
+    - Incorrect mappings that produce non-ASCII romanizations
+    - Regression from TSV edits
+    """
+
+    @pytest.mark.parametrize(
+        "lang,sample,desc",
+        [
+            pytest.param(lang, sample, desc, id=f"{lang}-{desc}")
+            for lang, (sample, desc) in _ALL_LANG_ASCII_SAMPLES.items()
+        ],
+    )
+    def test_transliterate_produces_ascii(self, lang: str, sample: str, desc: str) -> None:
+        result = transliterate(sample, lang=lang)
+        non_ascii = [
+            f"U+{ord(ch):04X} ({ch})" for ch in result if ord(ch) > 127
+        ]
+        assert result.isascii(), (
+            f"lang={lang!r} ({desc}): non-ASCII chars in output: {non_ascii}\n"
+            f"Input:  {sample!r}\n"
+            f"Output: {result!r}"
+        )
+
+    @pytest.mark.parametrize(
+        "lang,sample,desc",
+        [
+            pytest.param(lang, sample, desc, id=f"{lang}-{desc}")
+            for lang, (sample, desc) in _ALL_LANG_ASCII_SAMPLES.items()
+        ],
+    )
+    def test_transliterate_produces_nonempty(self, lang: str, sample: str, desc: str) -> None:
+        """Transliteration must produce non-empty output for non-empty input."""
+        result = transliterate(sample, lang=lang)
+        assert len(result.strip()) > 0, (
+            f"lang={lang!r} ({desc}): empty output for non-empty input\n"
+            f"Input: {sample!r}"
+        )
+
+    def test_all_registered_langs_have_samples(self) -> None:
+        """Every language in list_langs() must have a sample in this test."""
+        registered = {lang for lang in list_langs() if not lang.startswith("_")}
+        sampled = set(_ALL_LANG_ASCII_SAMPLES.keys())
+        missing = registered - sampled
+        assert not missing, (
+            f"Languages registered but missing ASCII test samples: {sorted(missing)}"
+        )

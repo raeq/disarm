@@ -2462,7 +2462,8 @@ FB17	mkh
 2D20	h
 # --- Ethiopic (U+1200-U+137F) --- BGN/PCGN romanization ---
 # Syllabary (consonant + vowel order)
-# Orders: 1=e(ä), 2=u, 3=i, 4=a, 5=e(é), 6=(schwa/bare), 7=o
+# Orders: 1=e(ä), 2=u, 3=i, 4=a, 5=e(é), 6=(schwa/bare), 7=o, 8=wa(labialized)
+# BGN/PCGN Amharic romanization
 1200	he
 1201	hu
 1202	hi
@@ -2470,6 +2471,7 @@ FB17	mkh
 1204	he
 1205	h
 1206	ho
+1207	hwa
 1208	le
 1209	lu
 120A	li
@@ -2477,13 +2479,15 @@ FB17	mkh
 120C	le
 120D	l
 120E	lo
-1210	he
-1211	hu
-1212	hi
-1213	ha
-1214	he
-1215	h
-1216	ho
+120F	lwa
+1210	hhe
+1211	hhu
+1212	hhi
+1213	hha
+1214	hhe
+1215	hh
+1216	hho
+1217	hhwa
 1218	me
 1219	mu
 121A	mi
@@ -2491,6 +2495,7 @@ FB17	mkh
 121C	me
 121D	m
 121E	mo
+121F	mwa
 1220	se
 1221	su
 1222	si
@@ -2498,6 +2503,7 @@ FB17	mkh
 1224	se
 1225	s
 1226	so
+1227	swa
 1228	re
 1229	ru
 122A	ri
@@ -2505,6 +2511,7 @@ FB17	mkh
 122C	re
 122D	r
 122E	ro
+122F	rwa
 1230	se
 1231	su
 1232	si
@@ -2512,6 +2519,7 @@ FB17	mkh
 1234	se
 1235	s
 1236	so
+1237	swa
 1238	she
 1239	shu
 123A	shi
@@ -2519,6 +2527,7 @@ FB17	mkh
 123C	she
 123D	sh
 123E	sho
+123F	shwa
 1240	qe
 1241	qu
 1242	qi
@@ -2526,13 +2535,14 @@ FB17	mkh
 1244	qe
 1245	q
 1246	qo
-1250	qe
-1251	qu
-1252	qi
-1253	qa
-1254	qe
-1255	q
-1256	qo
+1247	qwa
+1250	qhe
+1251	qhu
+1252	qhi
+1253	qha
+1254	qhe
+1255	qh
+1256	qho
 1260	be
 1261	bu
 1262	bi
@@ -2540,6 +2550,7 @@ FB17	mkh
 1264	be
 1265	b
 1266	bo
+1267	bwa
 1268	ve
 1269	vu
 126A	vi
@@ -2547,6 +2558,7 @@ FB17	mkh
 126C	ve
 126D	v
 126E	vo
+126F	vwa
 1270	te
 1271	tu
 1272	ti
@@ -2554,6 +2566,7 @@ FB17	mkh
 1274	te
 1275	t
 1276	to
+1277	twa
 1278	che
 1279	chu
 127A	chi
@@ -2561,6 +2574,7 @@ FB17	mkh
 127C	che
 127D	ch
 127E	cho
+127F	chwa
 1280	he
 1281	hu
 1282	hi
@@ -2568,6 +2582,7 @@ FB17	mkh
 1284	he
 1285	h
 1286	ho
+1287	hwa
 1290	ne
 1291	nu
 1292	ni
@@ -2575,6 +2590,7 @@ FB17	mkh
 1294	ne
 1295	n
 1296	no
+1297	nwa
 1298	nye
 1299	nyu
 129A	nyi
@@ -2582,12 +2598,7 @@ FB17	mkh
 129C	nye
 129D	ny
 129E	nyo
-12A0	e
-12A1	u
-12A2	i
-12A3	a
-12A4	e
-12A6	o
+129F	nywa
 12A8	ke
 12A9	ku
 12AA	ki
@@ -2595,6 +2606,7 @@ FB17	mkh
 12AC	ke
 12AD	k
 12AE	ko
+12AF	kwa
 12B8	khe
 12B9	khu
 12BA	khi
@@ -2609,12 +2621,7 @@ FB17	mkh
 12CC	we
 12CD	w
 12CE	wo
-12D0	e
-12D1	u
-12D2	i
-12D3	a
-12D4	e
-12D6	o
+12CF	wwa
 12D8	ze
 12D9	zu
 12DA	zi
@@ -2622,6 +2629,7 @@ FB17	mkh
 12DC	ze
 12DD	z
 12DE	zo
+12DF	zwa
 12E0	zhe
 12E1	zhu
 12E2	zhi
@@ -2629,6 +2637,7 @@ FB17	mkh
 12E4	zhe
 12E5	zh
 12E6	zho
+12E7	zhwa
 12E8	ye
 12E9	yu
 12EA	yi
@@ -2636,6 +2645,7 @@ FB17	mkh
 12EC	ye
 12ED	y
 12EE	yo
+12EF	ywa
 12F0	de
 12F1	du
 12F2	di
@@ -2643,20 +2653,31 @@ FB17	mkh
 12F4	de
 12F5	d
 12F6	do
-12F8	je
-12F9	ju
-12FA	ji
-12FB	ja
-12FC	je
-12FD	j
-12FE	jo
-1300	ge
-1301	gu
-1302	gi
-1303	ga
-1304	ge
-1305	g
-1306	go
+12F7	dwa
+12F8	dde
+12F9	ddu
+12FA	ddi
+12FB	dda
+12FC	dde
+12FD	dd
+12FE	ddo
+12FF	ddwa
+1300	je
+1301	ju
+1302	ji
+1303	ja
+1304	je
+1305	j
+1306	jo
+1307	jwa
+1308	ge
+1309	gu
+130A	gi
+130B	ga
+130C	ge
+130D	g
+130E	go
+130F	gwa
 1318	gge
 1319	ggu
 131A	ggi
@@ -2664,6 +2685,7 @@ FB17	mkh
 131C	gge
 131D	gg
 131E	ggo
+131F	ggwa
 1320	te
 1321	tu
 1322	ti
@@ -2671,6 +2693,7 @@ FB17	mkh
 1324	te
 1325	t
 1326	to
+1327	twa
 1328	che
 1329	chu
 132A	chi
@@ -2678,6 +2701,7 @@ FB17	mkh
 132C	che
 132D	ch
 132E	cho
+132F	chwa
 1330	pe
 1331	pu
 1332	pi
@@ -2685,6 +2709,7 @@ FB17	mkh
 1334	pe
 1335	p
 1336	po
+1337	pwa
 1338	tse
 1339	tsu
 133A	tsi
@@ -2692,6 +2717,7 @@ FB17	mkh
 133C	tse
 133D	ts
 133E	tso
+133F	tswa
 1340	tse
 1341	tsu
 1342	tsi
@@ -2699,6 +2725,7 @@ FB17	mkh
 1344	tse
 1345	ts
 1346	tso
+1347	tswa
 1348	fe
 1349	fu
 134A	fi
@@ -2706,6 +2733,7 @@ FB17	mkh
 134C	fe
 134D	f
 134E	fo
+134F	fwa
 1350	pe
 1351	pu
 1352	pi
@@ -2713,31 +2741,63 @@ FB17	mkh
 1354	pe
 1355	p
 1356	po
-# Labialized consonants
+1357	pwa
+# Glottal (vowel only)
+12A0	e
+12A1	u
+12A2	i
+12A3	a
+12A4	e
+12A5	e
+12A6	o
+12A7	wa
+# Pharyngeal (vowel only)
+12D0	e
+12D1	u
+12D2	i
+12D3	a
+12D4	e
+12D5	e
+12D6	o
+# Labialized sub-blocks
 1248	qwa
-1249	qwi
+124A	qwi
 124B	qwa
 124C	qwe
+124D	qw
 1258	qhwa
-1259	qhwi
+125A	qhwi
 125B	qhwa
 125C	qhwe
+125D	qhw
 1288	hwa
-1289	hwi
+128A	hwi
 128B	hwa
 128C	hwe
+128D	hw
 12B0	kwa
-12B1	kwi
+12B2	kwi
 12B3	kwa
 12B4	kwe
+12B5	kw
 12C0	khwa
-12C1	khwi
+12C2	khwi
 12C3	khwa
 12C4	khwe
-1308	gwa
-1309	gwi
-130B	gwa
-130C	gwe
+12C5	khw
+1310	gwa
+1312	gwi
+1313	gwa
+1314	gwe
+1315	gw
+# Special forms
+1358	rya
+1359	mya
+135A	fya
+# Combining marks (strip)
+135D	
+135E	
+135F	
 # Digits
 1369	1
 136A	2
@@ -2758,7 +2818,9 @@ FB17	mkh
 1379	80
 137A	90
 137B	100
+137C	10000
 # Punctuation
+1360	 
 1361	:
 1362	.
 1363	,
@@ -2766,7 +2828,114 @@ FB17	mkh
 1365	:
 1366	:
 1367	?
-1368	.
+1368	//
+# Supplement (U+1380-139F)
+1380	mwa
+1381	mwi
+1382	mwe
+1383	mwe
+1384	bwa
+1385	bwi
+1386	bwe
+1387	bwe
+1388	fwa
+1389	fwi
+138A	fwe
+138B	fwe
+138C	pwa
+138D	pwi
+138E	pwe
+138F	pwe
+1390	
+1391	
+1392	
+1393	
+1394	
+1395	
+1396	
+1397	
+1398	
+1399	
+# Extended (U+2D80-U+2DDE)
+2D80	loa
+2D81	moa
+2D82	roa
+2D83	soa
+2D84	shoa
+2D85	boa
+2D86	toa
+2D87	choa
+2D88	noa
+2D89	nyoa
+2D8A	oa
+2D8B	zoa
+2D8C	doa
+2D8D	ddoa
+2D8E	joa
+2D8F	toa
+2D90	choa
+2D91	poa
+2D92	poa
+2D93	ggwa
+2D94	ggwi
+2D95	ggwe
+2D96	ggwe
+2DA0	sse
+2DA1	ssu
+2DA2	ssi
+2DA3	ssa
+2DA4	sse
+2DA5	ss
+2DA6	sso
+2DA8	che
+2DA9	chu
+2DAA	chi
+2DAB	cha
+2DAC	che
+2DAD	ch
+2DAE	cho
+2DB0	zze
+2DB1	zzu
+2DB2	zzi
+2DB3	zza
+2DB4	zze
+2DB5	zz
+2DB6	zzo
+2DB8	chche
+2DB9	chchu
+2DBA	chchi
+2DBB	chcha
+2DBC	chche
+2DBD	chch
+2DBE	chcho
+2DC0	qye
+2DC1	qyu
+2DC2	qyi
+2DC3	qya
+2DC4	qye
+2DC5	qy
+2DC6	qyo
+2DC8	kye
+2DC9	kyu
+2DCA	kyi
+2DCB	kya
+2DCC	kye
+2DCD	ky
+2DCE	kyo
+2DD0	xye
+2DD1	xyu
+2DD2	xyi
+2DD3	xya
+2DD4	xye
+2DD5	xy
+2DD6	xyo
+2DD8	gye
+2DD9	gyu
+2DDA	gyi
+2DDB	gya
+2DDC	gye
+2DDD	gy
+2DDE	gyo
 # --- Tibetan (U+0F00-U+0FFF) --- Wylie transliteration ---
 # Special symbols
 0F00	om
@@ -2777,13 +2946,13 @@ FB17	mkh
 0F05	#
 0F06	.
 0F07	.
-0F08	|
+0F08	;
 0F09	*
 0F0A	*
-0F0B	
-0F0C	 
-0F0D	|
-0F0E	||
+0F0B
+0F0C
+0F0D	.
+0F0E	.
 0F0F	.
 0F10	.
 0F11	.

@@ -297,8 +297,14 @@ pub(crate) fn slugify_impl_with_stopset(
 fn filter_stopwords(slug: &str, separator: &str, stopset: &HashSet<String>) -> String {
     slug.split(separator)
         .filter(|w| !stopset.contains(*w))
-        .collect::<Vec<_>>()
-        .join(separator)
+        .enumerate()
+        .fold(String::with_capacity(slug.len()), |mut acc, (i, w)| {
+            if i > 0 {
+                acc.push_str(separator);
+            }
+            acc.push_str(w);
+            acc
+        })
 }
 
 /// Truncate slug at a word boundary (separator), char-boundary safe.

@@ -209,9 +209,14 @@ fn classify_char(ch: char) -> ScriptClass {
 /// - Between consecutive ideographs (each is a word): 北京 → "bei jing"
 /// - Between consecutive Hangul syllables: 서울 → "seo ul"
 /// - At ideograph↔kana boundaries: 東京タワー → "dong jing tawa-"
-/// - At CJK↔Latin boundaries (handled separately for ASCII)
+/// - After Latin/Other before any CJK: "hello東京" → "hello dong jing"
 ///
 /// NOT inserted between consecutive kana (they concatenate to form words).
+///
+/// Note: this function is only called when `curr` is a CJK class
+/// (Ideograph | Hangul | Kana), guarded by the `is_cjk` check at the
+/// call site. The last arm is explicitly enumerated to match that
+/// constraint rather than using a wildcard.
 #[inline]
 fn needs_cjk_space(prev: ScriptClass, curr: ScriptClass) -> bool {
     use ScriptClass::{Hangul, Ideograph, Kana, Latin, Other};
@@ -219,7 +224,7 @@ fn needs_cjk_space(prev: ScriptClass, curr: ScriptClass) -> bool {
         (prev, curr),
         (Ideograph | Kana | Hangul, Ideograph | Hangul)
             | (Ideograph | Hangul, Kana)
-            | (Latin | Other, _)
+            | (Latin | Other, Ideograph | Hangul | Kana)
     )
 }
 

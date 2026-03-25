@@ -19,21 +19,57 @@ const WINDOWS_RESERVED: &[&str] = &[
 const UNIVERSAL_ILLEGAL: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\0'];
 const POSIX_ILLEGAL: &[char] = &['/', '\0'];
 
-/// Returns the largest byte index ≤ `max` that is a valid UTF-8 char boundary
-/// in `s`. Used for safe truncation when the string may contain multi-byte chars.
-fn char_boundary_floor(s: &str, max: usize) -> usize {
-    let max = max.min(s.len());
-    let mut i = max;
-    while i > 0 && !s.is_char_boundary(i) {
-        i -= 1;
+use crate::utils::floor_char_boundary;
+
+/// Check if a stem (filename without extension) matches a Windows reserved name.
+fn is_windows_reserved(stem: &str) -> bool {
+    let upper = stem.to_uppercase();
+    WINDOWS_RESERVED.iter().any(|r| upper == *r)
+}
+
+/// Apply max_length truncation with optional extension preservation.
+///
+/// When `preserve_ext` is true and an extension is provided, the stem is
+/// truncated to make room for the extension within the budget.  If the
+/// extension alone exceeds the budget, both stem and extension are truncated
+/// as a unit.
+fn apply_max_length(name: &mut String, ext: Option<&str>, max_length: usize, preserve_ext: bool) {
+    if max_length == 0 || name.len() <= max_length {
+        return;
     }
-    i
+
+    if preserve_ext {
+        if let Some(ext) = ext {
+            let ext_len = ext.len();
+            if ext_len >= max_length {
+                // Extension alone exceeds limit — truncate the whole thing.
+                let safe = floor_char_boundary(name, max_length);
+                name.truncate(safe);
+            } else {
+                // Truncate stem to fit stem + extension within max_length.
+                let stem_budget = max_length - ext_len;
+                let safe = floor_char_boundary(name, stem_budget);
+                let mut new_name = name[..safe].to_owned();
+                new_name.push_str(ext);
+                *name = new_name;
+            }
+            return;
+        }
+    }
+
+    let safe = floor_char_boundary(name, max_length);
+    name.truncate(safe);
 }
 
 /// Collapse consecutive `.` sequences of length >= 2 to a single `.`.
 /// This neutralizes `..` path traversal while preserving single dots
 /// (which delimit file extensions).
 fn collapse_dot_sequences(text: &str) -> String {
+    // Fast path: no consecutive dots means nothing to collapse.
+    if !text.contains("..") {
+        return text.to_owned();
+    }
+
     let mut result = String::with_capacity(text.len());
     let mut dot_run = 0usize;
 
@@ -61,7 +97,7 @@ fn collapse_dot_sequences(text: &str) -> String {
 /// # `max_length` semantics
 /// `max_length` is measured in **bytes** (UTF-8 encoded), not Unicode
 /// characters. This matches the unit used by all major OS filesystem limits
-/// (ext4, APFS, NTFS: 255 bytes). The helper `char_boundary_floor` ensures
+/// (ext4, APFS, NTFS: 255 bytes). The helper `floor_char_boundary` ensures
 /// that truncation never splits a multi-byte character.
 ///
 /// # `preserve_extension` edge cases
@@ -110,7 +146,7 @@ pub fn _sanitize_filename(
     let transliterated = transliterate::transliterate_impl(
         &safe_text,
         lang,
-        transliterate::ErrorMode::Ignore,
+        crate::ErrorMode::Ignore,
         "",
         false,
     )
@@ -157,10 +193,29 @@ pub fn _sanitize_filename(
         result.truncate(result.len() - separator.len());
     }
 
-    // Strip leading/trailing dots and spaces
-    let result = result
-        .trim_matches(|c: char| c == '.' || c == ' ')
-        .to_owned();
+    // Strip leading dots and spaces with a single drain (avoids O(k²) repeated shifts).
+    {
+        let trim_start = result
+            .chars()
+            .take_while(|c| *c == '.' || *c == ' ')
+            .map(|c| c.len_utf8())
+            .sum::<usize>();
+        if trim_start > 0 {
+            result.drain(..trim_start);
+        }
+    }
+    // Strip trailing dots and spaces with a single truncate.
+    {
+        let trim_end = result
+            .chars()
+            .rev()
+            .take_while(|c| *c == '.' || *c == ' ')
+            .map(|c| c.len_utf8())
+            .sum::<usize>();
+        if trim_end > 0 {
+            result.truncate(result.len() - trim_end);
+        }
+    }
 
     // Sanitize the extension: remove illegal chars, keep only the leading dot
     // and valid filename characters.
@@ -176,21 +231,13 @@ pub fn _sanitize_filename(
     });
 
     // Handle Windows reserved names — must re-append extension before returning
-    if matches!(platform, "universal" | "windows") {
-        let upper = result.to_uppercase();
-        if WINDOWS_RESERVED.iter().any(|r| upper == *r) {
-            let mut final_name = format!("_{result}");
-            if let Some(ref ext) = sanitized_ext {
-                final_name.push_str(ext);
-            }
-            // Truncate if needed — walk to a char boundary to avoid splitting
-            // multi-byte sequences (e.g. after prefixing with '_').
-            if max_length > 0 && final_name.len() > max_length {
-                let safe = char_boundary_floor(&final_name, max_length);
-                final_name.truncate(safe);
-            }
-            return Ok(final_name);
+    if matches!(platform, "universal" | "windows") && is_windows_reserved(&result) {
+        let mut final_name = format!("_{result}");
+        if let Some(ref ext) = sanitized_ext {
+            final_name.push_str(ext);
         }
+        apply_max_length(&mut final_name, None, max_length, false);
+        return Ok(final_name);
     }
 
     // Append sanitized extension
@@ -200,49 +247,23 @@ pub fn _sanitize_filename(
     }
 
     // Extension-aware truncation
-    if max_length > 0 && final_name.len() > max_length {
-        if preserve_extension {
-            if let Some(ref ext) = sanitized_ext {
-                let ext_len = ext.len();
-                if ext_len >= max_length {
-                    // Extension alone exceeds limit — truncate the whole thing.
-                    let safe = char_boundary_floor(&final_name, max_length);
-                    final_name.truncate(safe);
-                } else {
-                    // Truncate stem to fit stem + extension within max_length.
-                    // char_boundary_floor ensures we never split a multi-byte char.
-                    let stem_budget = max_length - ext_len;
-                    let safe = char_boundary_floor(&final_name, stem_budget);
-                    let mut new_name = final_name[..safe].to_owned();
-                    new_name.push_str(ext);
-                    final_name = new_name;
-                }
-            } else {
-                let safe = char_boundary_floor(&final_name, max_length);
-                final_name.truncate(safe);
-            }
-        } else {
-            let safe = char_boundary_floor(&final_name, max_length);
-            final_name.truncate(safe);
-        }
-    }
+    apply_max_length(
+        &mut final_name,
+        sanitized_ext.as_deref(),
+        max_length,
+        preserve_extension,
+    );
 
     // Post-truncation reserved name check — truncation can create a reserved
     // name (e.g., "NULtra.txt" truncated to 3 bytes → "NUL").
     if matches!(platform, "universal" | "windows") {
-        // Extract stem (before first dot) to check against reserved names
         let check_stem = match final_name.find('.') {
             Some(pos) => &final_name[..pos],
             None => &final_name,
         };
-        let upper = check_stem.to_uppercase();
-        if WINDOWS_RESERVED.iter().any(|r| upper == *r) {
+        if is_windows_reserved(check_stem) {
             final_name.insert(0, '_');
-            // Re-truncate if the underscore pushed us over max_length.
-            if max_length > 0 && final_name.len() > max_length {
-                let safe = char_boundary_floor(&final_name, max_length);
-                final_name.truncate(safe);
-            }
+            apply_max_length(&mut final_name, None, max_length, false);
         }
     }
 

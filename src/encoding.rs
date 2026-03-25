@@ -1,6 +1,11 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
+/// Confidence score returned when chardetng reports high statistical confidence.
+const CONFIDENCE_HIGH: f64 = 0.95;
+/// Confidence score returned when chardetng reports ambiguous byte distribution.
+const CONFIDENCE_LOW: f64 = 0.50;
+
 /// Pure Rust encoding detection — no Python dependency.
 ///
 /// Returns (encoding_name, confidence).
@@ -9,7 +14,11 @@ pub fn detect_encoding_impl(bytes: &[u8]) -> (String, f64) {
     detector.feed(bytes, true);
     let (encoding, confident) = detector.guess_assess(None, true);
 
-    let confidence = if confident { 0.95 } else { 0.5 };
+    // chardetng returns a binary confident/not-confident flag, not a
+    // continuous score.  We map it to two fixed levels chosen to align
+    // with chardet/cChardet output ranges so that callers using
+    // min_confidence thresholds (e.g. 0.7) get intuitive results.
+    let confidence = if confident { CONFIDENCE_HIGH } else { CONFIDENCE_LOW };
 
     (encoding.name().to_owned(), confidence)
 }

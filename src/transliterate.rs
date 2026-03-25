@@ -4,26 +4,34 @@ use std::collections::HashMap;
 
 use crate::tables;
 use crate::unicode_ranges as ur;
+use crate::ErrorMode;
 
-/// Error handling mode for untransliterable characters.
-#[derive(Debug, Clone, Copy)]
-pub enum ErrorMode {
-    Replace,
-    Ignore,
-    Preserve,
-}
+/// Maximum input size for transliteration, in bytes.
+///
+/// Transliteration may expand CJK characters to multi-word ASCII (e.g.
+/// 你→"ni "), so worst-case output can be several times larger than input.
+/// This cap prevents excessive allocation on adversarial input.
+const MAX_TRANSLITERATE_INPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
 
-impl ErrorMode {
-    pub fn from_str(s: &str) -> PyResult<Self> {
-        match s {
-            "replace" => Ok(Self::Replace),
-            "ignore" => Ok(Self::Ignore),
-            "preserve" => Ok(Self::Preserve),
-            _ => Err(crate::TranslitError::new_err(format!(
-                "errors must be 'replace', 'ignore', or 'preserve', got '{s}'"
-            ))),
-        }
-    }
+/// Script class for tracking inter-script word spacing.
+///
+/// Used to determine whether a space separator should be inserted between
+/// adjacent transliterated characters (e.g. between consecutive CJK ideographs,
+/// but not between consecutive kana).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptClass {
+    /// Start-of-string or no character yet.
+    None,
+    /// CJK Unified Ideograph (Han character).
+    Ideograph,
+    /// Hangul syllable or jamo.
+    Hangul,
+    /// Hiragana or Katakana.
+    Kana,
+    /// ASCII / Latin character.
+    Latin,
+    /// Any other script (Cyrillic, Arabic, etc.).
+    Other,
 }
 
 /// Core transliteration: Unicode → ASCII.
@@ -36,6 +44,13 @@ pub fn _transliterate(
     replace_with: &str,
     strict_iso9: bool,
 ) -> PyResult<String> {
+    if text.len() > MAX_TRANSLITERATE_INPUT_BYTES {
+        return translit_err!(
+            "input too large ({} bytes); maximum for transliterate() is {} bytes",
+            text.len(),
+            MAX_TRANSLITERATE_INPUT_BYTES
+        );
+    }
     let error_mode = ErrorMode::from_str(errors)?;
     Ok(transliterate_impl(text, lang, error_mode, replace_with, strict_iso9).into_owned())
 }
@@ -59,16 +74,16 @@ pub fn transliterate_impl<'a>(
     }
 
     let mut result = String::with_capacity(estimate_capacity(text));
-    // Track the script class of the previous character for space insertion.
-    // 0 = none/start, 1 = ideograph (Han), 2 = Hangul, 3 = kana, 4 = ASCII/Latin, 5 = other
-    let mut prev_class: u8 = 0;
+    let mut prev_class = ScriptClass::None;
     // Track last char appended to `result` — avoids O(n) `result.chars().last()` scan.
     let mut last_appended: Option<char> = None;
 
     for ch in text.chars() {
         if ch.is_ascii() {
             // Insert space when transitioning from ideograph/Hangul to ASCII alnum
-            if (prev_class == 1 || prev_class == 2) && ch.is_alphanumeric() {
+            if matches!(prev_class, ScriptClass::Ideograph | ScriptClass::Hangul)
+                && ch.is_alphanumeric()
+            {
                 if let Some(last) = last_appended {
                     if last.is_alphanumeric() {
                         result.push(' ');
@@ -77,12 +92,15 @@ pub fn transliterate_impl<'a>(
             }
             result.push(ch);
             last_appended = Some(ch);
-            prev_class = 4;
+            prev_class = ScriptClass::Latin;
             continue;
         }
 
         let char_class = classify_char(ch);
-        let is_cjk = char_class <= 3; // ideograph, hangul, or kana
+        let is_cjk = matches!(
+            char_class,
+            ScriptClass::Ideograph | ScriptClass::Hangul | ScriptClass::Kana
+        );
 
         // Lookup priority:
         // 1. If strict_iso9: ISO 9 table → default table (lang overrides ignored)
@@ -100,7 +118,7 @@ pub fn transliterate_impl<'a>(
             Some(s) => {
                 if is_cjk
                     && !s.is_empty()
-                    && prev_class != 0
+                    && prev_class != ScriptClass::None
                     && needs_cjk_space(prev_class, char_class)
                 {
                     if let Some(last) = last_appended {
@@ -133,7 +151,7 @@ pub fn transliterate_impl<'a>(
                         last_appended = Some(ch);
                     }
                 }
-                prev_class = 5;
+                prev_class = ScriptClass::Other;
             }
         }
     }
@@ -173,18 +191,17 @@ fn estimate_capacity(text: &str) -> usize {
     text.len().saturating_mul(multiplier).min(MAX_CAPACITY_HINT)
 }
 
-/// Classify a non-ASCII character into a script class:
-/// 1 = CJK ideograph, 2 = Hangul, 3 = kana, 5 = other
+/// Classify a non-ASCII character into a script class for spacing decisions.
 #[inline]
-fn classify_char(ch: char) -> u8 {
+fn classify_char(ch: char) -> ScriptClass {
     if is_cjk_ideograph(ch) {
-        1
+        ScriptClass::Ideograph
     } else if is_hangul(ch) {
-        2
+        ScriptClass::Hangul
     } else if is_kana(ch) {
-        3
+        ScriptClass::Kana
     } else {
-        5
+        ScriptClass::Other
     }
 }
 
@@ -199,15 +216,16 @@ fn classify_char(ch: char) -> u8 {
 ///
 /// NOT inserted between consecutive kana (they concatenate to form words).
 #[inline]
-fn needs_cjk_space(prev_class: u8, char_class: u8) -> bool {
-    match (prev_class, char_class) {
-        (1, 1) => true,          // ideograph→ideograph
-        (2, 2) => true,          // Hangul→Hangul
-        (3, 3) => false,         // kana→kana (no space)
-        (1, 3) | (3, 1) => true, // ideograph↔kana
-        (1, 2) | (2, 1) => true, // ideograph↔Hangul
-        (2, 3) | (3, 2) => true, // Hangul↔kana
-        (4, _) | (5, _) => true, // ASCII/other → CJK
+fn needs_cjk_space(prev: ScriptClass, curr: ScriptClass) -> bool {
+    use ScriptClass::*;
+    match (prev, curr) {
+        (Ideograph, Ideograph) => true,
+        (Hangul, Hangul) => true,
+        (Kana, Kana) => false,
+        (Ideograph, Kana) | (Kana, Ideograph) => true,
+        (Ideograph, Hangul) | (Hangul, Ideograph) => true,
+        (Hangul, Kana) | (Kana, Hangul) => true,
+        (Latin, _) | (Other, _) => true,
         _ => false,
     }
 }
@@ -265,6 +283,18 @@ pub fn _list_langs() -> Vec<String> {
 #[pyfunction]
 #[pyo3(signature = (code, mappings))]
 pub fn _register_lang(code: &str, mappings: HashMap<String, String>) -> PyResult<()> {
+    // Guard against unbounded growth of the global language table.
+    let current = tables::registered_lang_count();
+    if current >= tables::MAX_REGISTERED_LANGS {
+        // Re-registering an existing code is always allowed (overwrite, not grow).
+        if !tables::has_registered_lang(code) {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "register_lang(): maximum of {} registered languages reached; \
+                 re-registering an existing code is still allowed",
+                tables::MAX_REGISTERED_LANGS
+            )));
+        }
+    }
     tables::register_lang(code, mappings).map_err(|bad_keys| {
         pyo3::exceptions::PyValueError::new_err(format!(
             "register_lang(): mapping keys must be exactly one Unicode character; \
@@ -319,6 +349,13 @@ pub fn _transliterate_batch(
     replace_with: &str,
     strict_iso9: bool,
 ) -> PyResult<Vec<String>> {
+    if texts.len() > crate::MAX_BATCH_SIZE {
+        return translit_err!(
+            "batch too large ({} items); maximum is {} items",
+            texts.len(),
+            crate::MAX_BATCH_SIZE
+        );
+    }
     let error_mode = ErrorMode::from_str(errors)?;
     Ok(texts
         .iter()
@@ -331,13 +368,20 @@ pub fn _transliterate_batch(
 /// Batch accent stripping: process a list of strings in a single PyO3 boundary crossing.
 #[pyfunction]
 #[pyo3(signature = (texts,))]
-pub fn _strip_accents_batch(texts: Vec<String>) -> Vec<String> {
+pub fn _strip_accents_batch(texts: Vec<String>) -> PyResult<Vec<String>> {
+    if texts.len() > crate::MAX_BATCH_SIZE {
+        return translit_err!(
+            "batch too large ({} items); maximum is {} items",
+            texts.len(),
+            crate::MAX_BATCH_SIZE
+        );
+    }
     use unicode_normalization::UnicodeNormalization;
-    texts
-        .iter()
+    Ok(texts
+        .into_iter()
         .map(|text| {
             if text.is_ascii() {
-                text.clone()
+                text // move, no clone — Vec is consumed by into_iter()
             } else {
                 text.nfd()
                     .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
@@ -345,7 +389,7 @@ pub fn _strip_accents_batch(texts: Vec<String>) -> Vec<String> {
                     .collect()
             }
         })
-        .collect()
+        .collect())
 }
 
 #[cfg(test)]

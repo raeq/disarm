@@ -3,6 +3,33 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::{confusables, scripts};
 
+/// Check if a bracketed string is a valid IPv6 literal per RFC 3986 §3.2.2.
+///
+/// Requires: starts with '[', ends with ']', content contains ':',
+/// only hex digits / colons / dots / '%' (zone ID), and no more than 7 colons.
+fn is_ipv6_literal(normalized: &str) -> bool {
+    if !(normalized.starts_with('[') && normalized.ends_with(']')) {
+        return false;
+    }
+    let inner = &normalized[1..normalized.len() - 1];
+    if inner.is_empty() || !inner.contains(':') {
+        return false;
+    }
+    // Validate colon count on the address portion (before any zone ID).
+    let addr_part = match inner.find('%') {
+        Some(pos) => &inner[..pos],
+        None => inner,
+    };
+    let colon_count = addr_part.chars().filter(|&c| c == ':').count();
+    if colon_count > 7 {
+        return false;
+    }
+    inner
+        .as_bytes()
+        .iter()
+        .all(|&b| b.is_ascii_hexdigit() || b == b':' || b == b'.' || b == b'%')
+}
+
 /// Check if a hostname is safe from Unicode homoglyph attacks.
 ///
 /// A hostname is considered unsafe if:
@@ -28,32 +55,17 @@ pub fn _is_safe_hostname(hostname: &str) -> PyResult<(bool, SafeHostnameDetails)
     // IPv6 literals (e.g. "[::1]", "[2001:db8::1]") are not IDN hostnames and
     // cannot be visually spoofed via homoglyph attacks. Return them as safe
     // without running the script/confusable analysis.
-    //
-    // We require:
-    //   1. Starts with '[' and ends with ']' (proper bracket wrapping).
-    //   2. Contains at least one ':' (distinguishes from bare hostnames).
-    //   3. The content between the brackets contains only characters that are
-    //      legal in an IPv6 address literal per RFC 3986 §3.2.2: hex digits,
-    //      colons, dots (for embedded IPv4), and '%' (zone ID).  Anything else
-    //      means the input is not a real IPv6 literal and must be analysed.
-    if normalized.starts_with('[') && normalized.ends_with(']') {
-        let inner = &normalized[1..normalized.len() - 1];
-        let is_ipv6_content = inner.contains(':')
-            && inner.chars().all(|c| {
-                c.is_ascii_hexdigit() || c == ':' || c == '.' || c == '%'
-            });
-        if is_ipv6_content {
-            return Ok((
-                true,
-                SafeHostnameDetails {
-                    safe: true,
-                    scripts: Vec::new(),
-                    mixed_script: false,
-                    has_confusables: false,
-                    canonical: normalized,
-                },
-            ));
-        }
+    if is_ipv6_literal(&normalized) {
+        return Ok((
+            true,
+            SafeHostnameDetails {
+                safe: true,
+                scripts: Vec::new(),
+                mixed_script: false,
+                has_confusables: false,
+                canonical: normalized,
+            },
+        ));
     }
 
     // 2. Split on dots to check each label
@@ -64,6 +76,9 @@ pub fn _is_safe_hostname(hostname: &str) -> PyResult<(bool, SafeHostnameDetails)
     let mut has_confusables = false;
 
     for label in normalized.split('.') {
+        // Empty labels arise from leading, trailing, or consecutive dots
+        // (e.g. "a..b" or "example.com.").  These are structurally
+        // malformed but not a homoglyph attack vector — skip them.
         if label.is_empty() {
             continue;
         }
@@ -82,18 +97,18 @@ pub fn _is_safe_hostname(hostname: &str) -> PyResult<(bool, SafeHostnameDetails)
         if label_scripts.len() > 1 {
             has_mixed = true;
 
-            // High-risk script combinations
+            // High-risk script combinations (visually confusable with Latin).
+            const HIGH_RISK_PAIRS: &[(&str, &str)] = &[
+                ("Cyrillic", "Latin"),
+                ("Greek", "Latin"),
+                ("Armenian", "Latin"),
+            ];
+
             let script_set: std::collections::HashSet<&str> =
                 label_scripts.iter().copied().collect();
 
-            let high_risk = [
-                ["Cyrillic", "Latin"],
-                ["Greek", "Latin"],
-                ["Armenian", "Latin"],
-            ];
-
-            for pair in &high_risk {
-                if script_set.contains(pair[0]) && script_set.contains(pair[1]) {
+            for &(a, b) in HIGH_RISK_PAIRS {
+                if script_set.contains(a) && script_set.contains(b) {
                     overall_safe = false;
                 }
             }

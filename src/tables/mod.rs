@@ -60,6 +60,23 @@ static GLOBAL_REPLACEMENTS: Lazy<RwLock<HashMap<String, String>>> =
 /// large replacement tables.
 pub const MAX_REPLACEMENTS: usize = 10_000;
 
+/// Maximum number of user-registered language profiles.
+///
+/// Prevents unbounded memory growth from untrusted callers repeatedly
+/// registering new language codes.  Re-registering an existing code
+/// (overwrite) does not count toward this limit.
+pub const MAX_REGISTERED_LANGS: usize = 100;
+
+/// Return the number of user-registered language profiles.
+pub fn registered_lang_count() -> usize {
+    crate::recover_lock(LANG_TABLES.read()).len()
+}
+
+/// True if the given language code has been user-registered.
+pub fn has_registered_lang(code: &str) -> bool {
+    crate::recover_lock(LANG_TABLES.read()).contains_key(code)
+}
+
 /// All built-in language codes, sorted.
 const BUILTIN_LANGS: &[&str] = &[
     "ar", "bg", "ca", "cs", "cy", "da", "de", "el", "es", "et", "fi", "fr", "ga", "hr", "hu", "is",
@@ -209,7 +226,7 @@ pub fn register_lang(
     if !bad_keys.is_empty() {
         return Err(bad_keys);
     }
-    let mut table = crate::recover_lock(LANG_TABLES.write());
+    let mut table = crate::recover_lock_or_clear(LANG_TABLES.write());
     table.insert(code.to_owned(), char_map);
     Ok(())
 }
@@ -230,7 +247,7 @@ pub fn register_lang(
 /// silently overwritten with the new value.  Use [`clear_replacements`]
 /// to wipe the table, or [`remove_replacement`] to remove a single key.
 pub fn register_replacements(replacements: HashMap<String, String>) -> Result<(), usize> {
-    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
+    let mut table = crate::recover_lock_or_clear(GLOBAL_REPLACEMENTS.write());
     // Compute worst-case size after merge: existing + all-new (ignoring overlap).
     // This is conservative but avoids the cost of set-difference computation.
     let new_keys: usize = replacements
@@ -249,13 +266,13 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
 ///
 /// Returns `true` if the key was present and removed, `false` otherwise.
 pub fn remove_replacement(key: &str) -> bool {
-    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
+    let mut table = crate::recover_lock_or_clear(GLOBAL_REPLACEMENTS.write());
     table.remove(key).is_some()
 }
 
 /// Clear all global pre-transliteration replacements.
 pub fn clear_replacements() {
-    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
+    let mut table = crate::recover_lock_or_clear(GLOBAL_REPLACEMENTS.write());
     table.clear();
 }
 

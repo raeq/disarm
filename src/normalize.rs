@@ -16,6 +16,15 @@ const MAX_NORMALIZE_INPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
 /// is not sufficient because each input byte can expand to many output bytes.
 const MAX_NORMALIZE_OUTPUT_BYTES: usize = 50 * 1024 * 1024; // 50 MiB
 
+/// Validate normalization form string. Returns an error for invalid forms.
+#[inline]
+fn validate_form(form: &str) -> PyResult<()> {
+    if !matches!(form, "NFC" | "NFD" | "NFKC" | "NFKD") {
+        return translit_err!("form must be 'NFC', 'NFD', 'NFKC', or 'NFKD', got '{form}'");
+    }
+    Ok(())
+}
+
 /// Normalise `text` and check that the output does not exceed the output cap.
 ///
 /// Collecting first then checking means the peak allocation equals the output
@@ -24,13 +33,13 @@ const MAX_NORMALIZE_OUTPUT_BYTES: usize = 50 * 1024 * 1024; // 50 MiB
 #[inline]
 fn normalize_checked(output: String, form: &str) -> PyResult<String> {
     if output.len() > MAX_NORMALIZE_OUTPUT_BYTES {
-        return Err(crate::TranslitError::new_err(format!(
+        return translit_err!(
             "normalize() output too large ({} bytes after {} normalization); \
              maximum output is {} bytes. Use a smaller input.",
             output.len(),
             form,
             MAX_NORMALIZE_OUTPUT_BYTES
-        )));
+        );
     }
     Ok(output)
 }
@@ -39,21 +48,20 @@ fn normalize_checked(output: String, form: &str) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text, *, form="NFC"))]
 pub fn _normalize(text: &str, form: &str) -> PyResult<String> {
+    validate_form(form)?;
     if text.len() > MAX_NORMALIZE_INPUT_BYTES {
-        return Err(crate::TranslitError::new_err(format!(
+        return translit_err!(
             "input too large ({} bytes); maximum for normalize() is {} bytes",
             text.len(),
             MAX_NORMALIZE_INPUT_BYTES
-        )));
+        );
     }
     match form {
         "NFC" => normalize_checked(text.nfc().collect(), form),
         "NFD" => normalize_checked(text.nfd().collect(), form),
         "NFKC" => normalize_checked(text.nfkc().collect(), form),
         "NFKD" => normalize_checked(text.nfkd().collect(), form),
-        _ => Err(crate::TranslitError::new_err(format!(
-            "form must be 'NFC', 'NFD', 'NFKC', or 'NFKD', got '{form}'"
-        ))),
+        _ => unreachable!(),
     }
 }
 
@@ -61,14 +69,13 @@ pub fn _normalize(text: &str, form: &str) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text, *, form="NFC"))]
 pub fn _is_normalized(text: &str, form: &str) -> PyResult<bool> {
+    validate_form(form)?;
     match form {
         "NFC" => Ok(unicode_normalization::is_nfc(text)),
         "NFD" => Ok(unicode_normalization::is_nfd(text)),
         "NFKC" => Ok(unicode_normalization::is_nfkc(text)),
         "NFKD" => Ok(unicode_normalization::is_nfkd(text)),
-        _ => Err(crate::TranslitError::new_err(format!(
-            "form must be 'NFC', 'NFD', 'NFKC', or 'NFKD', got '{form}'"
-        ))),
+        _ => unreachable!(),
     }
 }
 
@@ -76,17 +83,25 @@ pub fn _is_normalized(text: &str, form: &str) -> PyResult<bool> {
 #[pyfunction]
 #[pyo3(signature = (texts, *, form="NFC"))]
 pub fn _normalize_batch(texts: Vec<String>, form: &str) -> PyResult<Vec<String>> {
+    validate_form(form)?;
+    if texts.len() > crate::MAX_BATCH_SIZE {
+        return translit_err!(
+            "batch too large ({} items); maximum is {} items",
+            texts.len(),
+            crate::MAX_BATCH_SIZE
+        );
+    }
     // Validate each string's size before processing any.
     for t in &texts {
         if t.len() > MAX_NORMALIZE_INPUT_BYTES {
-            return Err(crate::TranslitError::new_err(format!(
+            return translit_err!(
                 "input too large ({} bytes); maximum for normalize() is {} bytes",
                 t.len(),
                 MAX_NORMALIZE_INPUT_BYTES
-            )));
+            );
         }
     }
-    // Validate form once, then apply to all strings.
+    // Apply the validated form to all strings.
     match form {
         "NFC" => texts
             .iter()
@@ -104,9 +119,7 @@ pub fn _normalize_batch(texts: Vec<String>, form: &str) -> PyResult<Vec<String>>
             .iter()
             .map(|t| normalize_checked(t.nfkd().collect(), form))
             .collect(),
-        _ => Err(crate::TranslitError::new_err(format!(
-            "form must be 'NFC', 'NFD', 'NFKC', or 'NFKD', got '{form}'"
-        ))),
+        _ => unreachable!(),
     }
 }
 

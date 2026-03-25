@@ -3,6 +3,27 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::{case_fold, confusables, emoji, transliterate, whitespace};
 
+/// Maximum input size for pipeline presets, in bytes.
+///
+/// Pipeline functions compose multiple transforms (NFKC, confusables,
+/// transliteration, etc.), each of which can expand the text.  This cap
+/// bounds worst-case memory usage across the entire pipeline.
+const MAX_PRESET_INPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
+
+/// Validate that preset input does not exceed the size cap.
+#[inline]
+fn check_preset_input(text: &str, fn_name: &str) -> PyResult<()> {
+    if text.len() > MAX_PRESET_INPUT_BYTES {
+        return translit_err!(
+            "input too large ({} bytes); maximum for {}() is {} bytes",
+            text.len(),
+            fn_name,
+            MAX_PRESET_INPUT_BYTES
+        );
+    }
+    Ok(())
+}
+
 /// Strip dangerous bidirectional override and formatting characters
 /// that `collapse_whitespace` does not handle.
 ///
@@ -53,22 +74,28 @@ fn is_bidi_or_format(ch: char) -> bool {
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → confusables → collapse_whitespace → strip bidi/format
+/// Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace
 ///
 /// Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
 /// zero-width injections and control chars, and removes dangerous bidi
 /// overrides and soft hyphens that could enable text reordering attacks.
+///
+/// `strip_bidi` runs *before* `collapse_whitespace` so that removing
+/// invisible characters (e.g. soft hyphen U+00AD) can expose leading,
+/// trailing, or consecutive whitespace that `collapse_whitespace` then
+/// normalizes.  This guarantees idempotency.
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _security_clean(text: &str) -> PyResult<String> {
+    check_preset_input(text, "security_clean")?;
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf: String = text.nfkc().collect();
     // 2. Confusables → Latin (neutralizes cross-script homoglyphs)
     let buf = confusables::_normalize_confusables(&buf, "latin")?;
-    // 3. Collapse whitespace + strip control + strip zero-width
-    let buf = whitespace::_collapse_whitespace(&buf, true, true);
-    // 4. Strip bidi overrides, isolates, marks, and soft hyphens
-    Ok(strip_bidi(&buf))
+    // 3. Strip bidi overrides, isolates, marks, and soft hyphens
+    let buf = strip_bidi(&buf);
+    // 4. Collapse whitespace + strip control + strip zero-width (final cleanup)
+    Ok(whitespace::_collapse_whitespace(&buf, true, true))
 }
 
 /// ML/NLP text normalization pipeline.
@@ -86,6 +113,7 @@ pub fn _security_clean(text: &str) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, emoji_style="cldr"))]
 pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyResult<String> {
+    check_preset_input(text, "ml_normalize")?;
     // Validate emoji_style — only two modes are supported.
     if !matches!(emoji_style, "cldr" | "none") {
         return Err(crate::TranslitError::new_err(format!(
@@ -103,7 +131,7 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
         buf = transliterate::transliterate_impl(
             &buf,
             lang,
-            transliterate::ErrorMode::Preserve,
+            crate::ErrorMode::Preserve,
             "",
             false,
         )
@@ -127,6 +155,7 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, strict_iso9=false))]
 pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResult<String> {
+    check_preset_input(text, "catalog_key")?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Confusables → Latin (normalize cross-source homoglyphs)
@@ -136,7 +165,7 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
         transliterate::transliterate_impl(
             &buf,
             lang,
-            transliterate::ErrorMode::Preserve,
+            crate::ErrorMode::Preserve,
             "",
             strict_iso9,
         )
@@ -162,8 +191,9 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
 /// whitespace to single spaces.
 #[pyfunction]
 #[pyo3(signature = (text,))]
-pub fn _display_clean(text: &str) -> String {
-    whitespace::_collapse_whitespace(text, true, true)
+pub fn _display_clean(text: &str) -> PyResult<String> {
+    check_preset_input(text, "display_clean")?;
+    Ok(whitespace::_collapse_whitespace(text, true, true))
 }
 
 // ---------------------------------------------------------------------------
@@ -314,8 +344,8 @@ mod tests {
 
     #[test]
     fn test_display_clean_basic() {
-        assert_eq!(_display_clean("hello   world"), "hello world");
-        assert_eq!(_display_clean("hello\x00world"), "helloworld");
-        assert_eq!(_display_clean("hello\u{200B}world"), "helloworld");
+        assert_eq!(_display_clean("hello   world").unwrap(), "hello world");
+        assert_eq!(_display_clean("hello\x00world").unwrap(), "helloworld");
+        assert_eq!(_display_clean("hello\u{200B}world").unwrap(), "helloworld");
     }
 }

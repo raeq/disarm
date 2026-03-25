@@ -55,7 +55,9 @@ jobs:
       - name: Run tests
         run: pytest tests/ --ignore=tests/test_typing.py -q --tb=short --cov=translit --cov-report=xml --cov-report=term-missing
       - name: Run doctests
-        run: pytest --doctest-modules python/translit/__init__.py python/translit/_compat.py -q
+        run: |
+          TRANSLIT_DIR=$(python -c "import translit, os; print(os.path.dirname(translit.__file__))")
+          pytest --doctest-modules "$TRANSLIT_DIR/__init__.py" "$TRANSLIT_DIR/_compat.py" -q
       - name: Upload coverage report
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: actions/upload-artifact@v4

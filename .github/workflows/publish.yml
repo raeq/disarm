@@ -116,3 +116,13 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+
+  docker:
+    name: Docker
+    needs: [publish]
+    uses: ./.github/workflows/docker.yml
+    with:
+      version: ${{ github.ref_name }}
+    permissions:
+      contents: read
+      packages: write

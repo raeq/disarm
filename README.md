@@ -198,6 +198,7 @@ remove_accents("café")   # → "cafe"       (alias for strip_accents)
 
 - [User Guide](docs/user-guide/)
 - [API Reference](docs/api/)
+- [Docker](docs/docker.md) — run translit from a container, no Python install needed
 - [Limitations](docs/limitations.md)
 - [Migration from python-slugify / anyascii / Unidecode](docs/migration/)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Literal
 
 ErrorMode = Literal["replace", "ignore", "preserve"]
@@ -79,6 +80,7 @@ class _TextPipeline:
         demojize: bool = False,
     ) -> None: ...
     def process(self, text: str) -> str: ...
+    def steps(self) -> list[tuple[str, str | None]]: ...
 
 def _transliterate(
     text: str,
@@ -96,9 +98,9 @@ def _slugify(
     max_length: int,
     word_boundary: bool,
     save_order: bool,
-    stopwords: tuple[str, ...],
+    stopwords: Sequence[str],
     regex_pattern: str | None,
-    replacements: tuple[tuple[str, str], ...],
+    replacements: Sequence[tuple[str, str]],
     allow_unicode: bool,
     lang: str | None,
     entities: bool,
@@ -179,9 +181,9 @@ def _slugify_batch(
     max_length: int,
     word_boundary: bool,
     save_order: bool,
-    stopwords: list[str],
+    stopwords: Sequence[str],
     regex_pattern: str | None,
-    replacements: list[tuple[str, str]],
+    replacements: Sequence[tuple[str, str]],
     allow_unicode: bool,
     lang: str | None,
     entities: bool,

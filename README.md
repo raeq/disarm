@@ -1,6 +1,10 @@
 # translit
 
+[![Documentation](https://readthedocs.org/projects/translit/badge/?version=latest)](https://translit.readthedocs.io/en/latest/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/translit/blob/main/LICENSE)
+
 Unicode text infrastructure for Python: transliteration, normalization, and safety analysis, powered by Rust.
+
+**[Documentation](https://translit.readthedocs.io/)** | **[GitHub](https://github.com/raeq/translit)** | **[PyPI](https://pypi.org/project/translit/)**
 
 ## Features
 

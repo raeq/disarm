@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] — 2026-03-25
+
+### Added
+- **Georgian transliteration** (`lang="ka"`): 114 TSV entries covering Mkhedruli,
+  Mtavruli, and supplement ranges. BGN/PCGN national romanization.
+- **Armenian transliteration** (`lang="hy"`): 86 TSV entries covering uppercase,
+  lowercase, and 5 ligatures (U+FB13–FB17). BGN/PCGN romanization.
+- **Sinhala transliteration** (`lang="si"`): 90 TSV entries. Extended Indic
+  Brahmic engine range from `0x0900..=0x0D7F` to `0x0900..=0x0DFF` with
+  dedicated `sinhala_char_role()` function for Sinhala-specific offsets.
+- **Thai transliteration** (`lang="th"`): 87 TSV entries using RTGS romanization.
+  New `ScriptClass::Tai` with tone-mark stripping and cancellation handling.
+- **Lao transliteration** (`lang="lo"`): 67 TSV entries using BGN/PCGN
+  romanization. Shares Tai engine with Thai via offset masking.
+- **Ethiopic transliteration** (`lang="am"`): 307 TSV entries for Ge'ez
+  alphasyllabary (34 consonant bases × 7 vowel orders + labialized forms +
+  digits). Pure data addition — no engine changes needed.
+- **Myanmar transliteration** (`lang="my"`): 89 TSV entries. New
+  `myanmar_char_role()` for Brahmic engine with virama (U+1039) and asat
+  (U+103A) support. Medials (U+103B–103E) classified as dependent vowels.
+- **Khmer transliteration** (`lang="km"`): 110 TSV entries. New
+  `khmer_char_role()` for Brahmic engine with coeng (U+17D2) as virama. All
+  consonants normalized to inherent 'a' regardless of series.
+- **Tibetan transliteration** (`lang="bo"`): 147 TSV entries. New
+  `tibetan_char_role()` for Brahmic engine with halanta (U+0F84) and subjoined
+  consonants (U+0F90–0FBC).
+- Unicode range constants: `TIBETAN` (0x0F00–0x0FFF), `MYANMAR` (0x1000–0x109F),
+  `KHMER` (0x1780–0x17FF) in `src/unicode_ranges.rs`.
+- Comprehensive test coverage: example-based tests for all 9 new scripts,
+  property-based tests (hypothesis + proptest), multi-script mixture tests.
+- Built-in language count: 51 → 60.
+
+### Changed
+- `is_indic()` extended to include Tibetan, Myanmar, and Khmer ranges for
+  Brahmic abugida processing.
+- `indic_char_role()` dispatches to script-specific functions for Sinhala,
+  Tibetan, Myanmar, and Khmer codepoint ranges.
+
 ## [0.1.3] — 2026-03-25
 
 ### Added

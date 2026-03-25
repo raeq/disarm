@@ -232,7 +232,7 @@ pub fn _sanitize_filename(
         if let Some(ref ext) = sanitized_ext {
             final_name.push_str(ext);
         }
-        apply_max_length(&mut final_name, None, max_length, false);
+        apply_max_length(&mut final_name, sanitized_ext.as_deref(), max_length, preserve_extension);
         return Ok(final_name);
     }
 
@@ -259,7 +259,7 @@ pub fn _sanitize_filename(
         };
         if is_windows_reserved(check_stem) {
             final_name.insert(0, '_');
-            apply_max_length(&mut final_name, None, max_length, false);
+            apply_max_length(&mut final_name, sanitized_ext.as_deref(), max_length, preserve_extension);
         }
     }
 
@@ -328,6 +328,29 @@ mod tests {
         // Direct reserved name gets underscore prefix
         let result = _sanitize_filename("CON", "_", 255, "universal", None, false).unwrap();
         assert!(result.starts_with('_'));
+    }
+
+    #[test]
+    fn test_reserved_name_preserve_extension() {
+        // Direct reserved name with preserve_extension=true must keep the extension intact
+        let result = _sanitize_filename("NUL.txt", "_", 7, "universal", None, true).unwrap();
+        assert!(result.ends_with(".txt"), "extension lost: {result}");
+        assert!(result.len() <= 7, "exceeds max_length: {result}");
+        // Must not be a reserved name
+        let stem = result.split('.').next().unwrap().to_uppercase();
+        assert!(
+            !WINDOWS_RESERVED.iter().any(|r| stem == *r),
+            "stem is reserved: {result}"
+        );
+    }
+
+    #[test]
+    fn test_truncation_creates_reserved_preserve_extension() {
+        // "NULtra.txt" truncated to max_length=7 with preserve_extension=true:
+        // stem gets truncated but extension must survive
+        let result = _sanitize_filename("NULtra.txt", "_", 7, "universal", None, true).unwrap();
+        assert!(result.ends_with(".txt"), "extension lost: {result}");
+        assert!(result.len() <= 7, "exceeds max_length: {result}");
     }
 
     mod proptest_properties {

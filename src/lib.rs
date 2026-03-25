@@ -49,7 +49,8 @@ impl ErrorMode {
 pub mod case_fold;
 #[doc(hidden)]
 pub mod confusables;
-mod emoji;
+#[doc(hidden)]
+pub mod emoji;
 mod encoding;
 #[doc(hidden)]
 pub mod filename;

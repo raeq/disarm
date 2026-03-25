@@ -237,7 +237,7 @@ class Text:
     def security_clean(self) -> Text:
         """Apply the security_clean precompiled pipeline.
 
-        NFKC → confusables → collapse_whitespace → strip bidi/format.
+        NFKC → confusables → strip bidi/format → collapse_whitespace.
         """
         return Text(self._t().security_clean(self._value))
 

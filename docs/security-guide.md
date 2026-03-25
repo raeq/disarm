@@ -182,12 +182,12 @@ The function executes a fixed four-stage Rust pipeline:
    superscripts, and other compatibility variants to their canonical forms.
 2. **Confusable normalization** — replaces cross-script homoglyphs with
    their Latin equivalents using Unicode TR39 tables.
-3. **Collapse whitespace** — merges runs of whitespace to single spaces,
-   strips zero-width characters (ZWSP, ZWNJ, ZWJ, BOM, word joiner)
-   and control characters.
-4. **Strip bidi/format** — removes soft hyphens (U+00AD), LRM/RLM,
+3. **Strip bidi/format** — removes soft hyphens (U+00AD), LRM/RLM,
    bidi embeddings/overrides (U+202A–U+202E), and bidi isolates
    (U+2066–U+2069).
+4. **Collapse whitespace** — merges runs of whitespace to single spaces,
+   strips zero-width characters (ZWSP, ZWNJ, ZWJ, BOM, word joiner)
+   and control characters.
 
 This is the recommended entry point for any input validation or
 canonicalization context. If you need a custom pipeline, you can still

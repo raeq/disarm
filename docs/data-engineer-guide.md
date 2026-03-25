@@ -29,7 +29,7 @@ catalog_key("café résumé")           # → "cafe resume"
 ```
 
 `catalog_key()` executes a fixed Rust pipeline:
-NFKC → confusables → strip_accents → transliterate → fold_case → collapse_whitespace.
+NFKC → confusables → transliterate → strip_accents → fold_case → collapse_whitespace.
 
 This handles ligatures (`ﬁ` → `fi`), fullwidth characters (`Ｈｅｌｌｏ` → `Hello`),
 accented variants, Cyrillic/Greek lookalikes, and case differences — all in
@@ -462,7 +462,7 @@ engineering tasks:
 
 | Pipeline | Steps | Use case |
 |---|---|---|
-| `catalog_key()` | NFKC → confusables → strip_accents → transliterate → fold_case → collapse_ws | Dedup keys, record matching |
+| `catalog_key()` | NFKC → confusables → transliterate → strip_accents → fold_case → collapse_ws | Dedup keys, record matching |
 | `ml_normalize()` | NFKC → demojize → strip_accents → fold_case → collapse_ws | Feature engineering |
 | `security_clean()` | NFKC → confusables → strip_bidi → collapse_ws | Input sanitization |
 | `display_clean()` | collapse_ws | UI text cleanup |

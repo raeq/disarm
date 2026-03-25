@@ -53,4 +53,4 @@ Script deduplication uses a `HashSet<&str>` to maintain O(1) per-character inser
 
 ## Precompiled security pipeline
 
-The `security_clean` preset composes the security-relevant transforms into a single pipeline: NFKC normalization → confusable normalization → transliteration → case folding → whitespace collapse. This is the recommended entry point for security-sensitive text processing where the goal is to produce a canonical Latin form that reveals the "true" content behind any Unicode obfuscation.
+The `security_clean` preset composes the security-relevant transforms into a single pipeline: NFKC normalization → confusable normalization → bidi stripping → whitespace collapse. This is the recommended entry point for security-sensitive text processing where the goal is to canonicalize Unicode content by neutralizing homoglyph spoofing, removing dangerous bidi overrides, and collapsing invisible characters.

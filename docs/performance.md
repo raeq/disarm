@@ -336,7 +336,7 @@ Rust. This makes the common case (already-ASCII text) effectively free:
 
 `transliterate_batch()`, `slugify_batch()`, `normalize_batch()`, and
 `strip_accents_batch()` accept a list of strings and process them in a single
-PyO3 boundary crossing, amortising the ~310 ns per-call overhead across N
+PyO3 boundary crossing, amortising the ~240 ns per-call overhead across N
 strings. For 100 mixed-script strings, batch transliteration is **2.7× faster**
 than calling `transliterate()` in a Python loop.
 

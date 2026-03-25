@@ -175,7 +175,7 @@ def transliterate(
     """
     if not isinstance(text, str):
         raise TypeError(f"transliterate() expects str, got {type(text).__name__}")
-    # Fast path: pure ASCII needs no transliteration (~30 ns vs ~4 µs PyO3 call).
+    # Fast path: pure ASCII needs no transliteration (~30 ns vs ~240 ns PyO3 call).
     if text.isascii():
         return text
     return _transliterate(
@@ -617,7 +617,7 @@ def set_emoji_provider(provider: EmojiProvider | None = None) -> None:
 
 # --- Batch APIs ---
 # These process a list of strings in a single PyO3 boundary crossing,
-# amortising the ~4 µs per-call overhead across N strings.
+# amortising the ~240 ns per-call overhead across N strings.
 
 
 def transliterate_batch(
@@ -631,8 +631,8 @@ def transliterate_batch(
     """Batch Unicode → ASCII transliteration.
 
     Processes all strings in a single Rust call, amortising the PyO3
-    boundary-crossing overhead. For N=1000, overhead drops from ~4 ms
-    (1000 × 4 µs) to ~4 µs (one crossing).
+    boundary-crossing overhead. For N=1000, overhead drops from ~240 µs
+    (1000 × 240 ns) to ~240 ns (one crossing).
 
     Args:
         texts: List of input Unicode strings.
@@ -1463,8 +1463,8 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "security_clean": [
         ("normalize", "NFKC"),
         ("confusables", "latin"),
-        ("collapse_whitespace", None),
         ("strip_bidi", None),
+        ("collapse_whitespace", None),
     ],
     "ml_normalize": [
         ("normalize", "NFKC"),

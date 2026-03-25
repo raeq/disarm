@@ -9,6 +9,13 @@ repos:
         types_or: [rust]
         pass_filenames: false
 
+      - id: ruff-check
+        name: ruff check
+        description: Lint Python source files with ruff
+        language: system
+        entry: ruff check --fix
+        types: [python]
+
       - id: ruff-format
         name: ruff format
         description: Format Python source files with ruff

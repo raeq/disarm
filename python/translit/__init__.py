@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import warnings as _warnings
 import unicodedata as _unicodedata
+import warnings as _warnings
 from collections.abc import Iterable
 
 from translit._enums import (

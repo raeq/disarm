@@ -145,6 +145,40 @@ pub fn transliterate_impl<'a>(
                 .or_else(|| tables::lookup_default(ch).map(Cow::Borrowed))
         };
 
+        // Indic virama/mātrā handling: strip the inherent "a" from the
+        // previous consonant when followed by virama or a dependent vowel
+        // sign.  This runs *before* the mapped/unmapped branch so that
+        // virama stripping is not contingent on the character having a table
+        // entry — correctness must not depend on table completeness.
+        if char_class == ScriptClass::Indic {
+            let role = indic_char_role(ch as u32);
+            match role {
+                IndicRole::Virama | IndicRole::DependentVowel if last_was_indic_consonant => {
+                    // Virama characters should have table entries (mapping to "")
+                    // so they are consumed rather than passed to the error handler.
+                    // This assert catches missing virama entries during development.
+                    debug_assert!(
+                        role != IndicRole::Virama || mapped.is_some(),
+                        "virama U+{:04X} missing from transliteration tables",
+                        ch as u32
+                    );
+                    // Pop the trailing inherent 'a' from the previous consonant
+                    if result.ends_with('a') {
+                        result.pop();
+                    }
+                    last_was_indic_consonant = false;
+                }
+                IndicRole::Consonant => {
+                    last_was_indic_consonant = true;
+                }
+                _ => {
+                    last_was_indic_consonant = false;
+                }
+            }
+        } else {
+            last_was_indic_consonant = false;
+        }
+
         if let Some(s) = mapped.as_deref() {
             if is_cjk
                 && !s.is_empty()
@@ -158,29 +192,6 @@ pub fn transliterate_impl<'a>(
                     }
                 }
             }
-            // Indic virama/mātrā handling: strip the inherent "a" from
-            // the previous consonant when followed by virama or a dependent
-            // vowel sign.
-            if char_class == ScriptClass::Indic {
-                let role = indic_char_role(ch as u32);
-                match role {
-                    IndicRole::Virama | IndicRole::DependentVowel if last_was_indic_consonant => {
-                        // Pop the trailing inherent 'a' from the previous consonant
-                        if result.ends_with('a') {
-                            result.pop();
-                        }
-                        last_was_indic_consonant = false;
-                    }
-                    IndicRole::Consonant => {
-                        last_was_indic_consonant = true;
-                    }
-                    _ => {
-                        last_was_indic_consonant = false;
-                    }
-                }
-            } else {
-                last_was_indic_consonant = false;
-            }
             result.push_str(s);
             // Track last char of the appended transliteration string
             if let Some(c) = s.chars().next_back() {
@@ -188,7 +199,6 @@ pub fn transliterate_impl<'a>(
             }
             prev_class = char_class;
         } else {
-            last_was_indic_consonant = false;
             match error_mode {
                 ErrorMode::Replace => {
                     // An empty replace_with is intentionally equivalent to

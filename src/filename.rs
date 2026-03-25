@@ -282,6 +282,7 @@ pub fn _sanitize_filename(
 }
 
 #[cfg(test)]
+#[allow(clippy::case_sensitive_file_extension_comparisons)]
 mod tests {
     use super::*;
 
@@ -511,7 +512,7 @@ mod tests {
         // exceeds max_length, or produces invalid filenames.
 
         fn reserved_name_strategy() -> impl Strategy<Value = String> {
-            prop::sample::select(WINDOWS_RESERVED).prop_map(|s| s.to_string())
+            prop::sample::select(WINDOWS_RESERVED).prop_map(str::to_string)
         }
 
         fn extension_strategy() -> impl Strategy<Value = String> {

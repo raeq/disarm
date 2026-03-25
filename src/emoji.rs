@@ -12,7 +12,7 @@ use pyo3::types::PyList;
 use std::fmt::Write;
 use std::sync::RwLock;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::tables;
 use crate::ErrorMode;
@@ -25,7 +25,7 @@ const VS16: char = '\u{FE0F}';
 const VS15: char = '\u{FE0E}';
 
 /// Sentinel for "no custom provider registered".
-static GLOBAL_PROVIDER: Lazy<RwLock<Option<PyObject>>> = Lazy::new(|| RwLock::new(None));
+static GLOBAL_PROVIDER: LazyLock<RwLock<Option<PyObject>>> = LazyLock::new(|| RwLock::new(None));
 
 /// Register a global Python emoji provider (or None to reset to default).
 pub fn set_provider(provider: Option<PyObject>) {

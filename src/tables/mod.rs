@@ -18,7 +18,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::unicode_ranges as ur;
 
@@ -28,8 +28,7 @@ use crate::unicode_ranges as ur;
 /// Using a `OnceCell<Vec<String>>` (initialised on first access) avoids
 /// `Box::leak` entirely: the returned `&'static str` slices borrow directly
 /// from this static storage, which lives for the lifetime of the process.
-static HANGUL_ROMANIZATIONS: once_cell::sync::OnceCell<Vec<String>> =
-    once_cell::sync::OnceCell::new();
+static HANGUL_ROMANIZATIONS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
 
 /// Return a `'static` reference to the pre-computed Hangul romanization table.
 fn hangul_romanizations() -> &'static Vec<String> {
@@ -48,11 +47,11 @@ fn hangul_romanizations() -> &'static Vec<String> {
 /// Global user-registered language tables protected by RwLock.
 /// Reads (lookups) take a read lock — zero contention.
 /// Writes (registration) take a write lock — rare, only during setup.
-static LANG_TABLES: Lazy<RwLock<HashMap<String, HashMap<char, String>>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static LANG_TABLES: LazyLock<RwLock<HashMap<String, HashMap<char, String>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
-static GLOBAL_REPLACEMENTS: Lazy<RwLock<HashMap<String, String>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+static GLOBAL_REPLACEMENTS: LazyLock<RwLock<HashMap<String, String>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// Maximum number of entries allowed in `GLOBAL_REPLACEMENTS`.
 ///

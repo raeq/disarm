@@ -71,6 +71,7 @@ class _TextPipeline:
         transliterate: bool = False,
         lang: str | None = None,
         strict_iso9: bool = False,
+        gost7034: bool = False,
         confusables: bool = False,
         strip_accents: bool = False,
         fold_case: bool = False,
@@ -89,6 +90,7 @@ def _transliterate(
     errors: ErrorMode,
     replace_with: str,
     strict_iso9: bool,
+    gost7034: bool,
 ) -> str: ...
 def _slugify(
     text: str,
@@ -174,6 +176,7 @@ def _transliterate_batch(
     errors: ErrorMode,
     replace_with: str,
     strict_iso9: bool,
+    gost7034: bool,
 ) -> list[str]: ...
 def _slugify_batch(
     texts: list[str],

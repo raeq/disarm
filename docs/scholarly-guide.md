@@ -85,6 +85,72 @@ pipe("Юность")  # → "junost"
 
 ---
 
+## GOST R 7.0.34-2014 Simplified Russian Transliteration
+
+GOST R 7.0.34-2014 is the current Russian national standard for simplified
+transliteration of Cyrillic to Latin, used in Russian bibliographic systems,
+publishing, and document exchange. Unlike ISO 9, it is Russian-specific (not
+pan-Cyrillic) and not designed to be reversible.
+
+The standard uses pure character-by-character substitution with no
+context-dependent rules.
+
+### Key Divergences
+
+| Cyrillic | Default (BGN/PCGN) | `gost7034=True` | `strict_iso9=True` (ISO 9) |
+|----------|--------------------|-----------------|-----------------------------|
+| х / Х    | kh / Kh            | **x / X**       | h / H                       |
+| ц / Ц    | ts / Ts            | **c / C**       | c / C                       |
+| щ / Щ    | shch / Shch        | **shh / Shh**   | shch / Shch                 |
+| й / Й    | y / Y              | **j / J**       | j / J                       |
+| ъ        | *(silent)*         | *(silent)*      | *(silent)*                  |
+| ь        | *(silent)*         | *(silent)*      | *(silent)*                  |
+| ё / Ё    | yo / Yo            | yo / Yo         | jo / Jo                     |
+| ю / Ю    | yu / Yu            | yu / Yu         | ju / Ju                     |
+| я / Я    | ya / Ya            | ya / Ya         | ja / Ja                     |
+
+### Usage
+
+```python
+from translit import transliterate
+
+# GOST R 7.0.34-2014
+transliterate("хлеб", gost7034=True)      # → "xleb"
+transliterate("цирк", gost7034=True)      # → "cirk"
+transliterate("щука", gost7034=True)      # → "shhuka"
+transliterate("Йогурт", gost7034=True)    # → "Jogurt"
+
+# Characters not overridden by GOST fall through to default
+transliterate("Москва", gost7034=True)    # → "Moskva"
+transliterate("юность", gost7034=True)    # → "yunost"
+```
+
+### Mutual Exclusion with ISO 9
+
+`gost7034` and `strict_iso9` are mutually exclusive. Setting both raises
+a `ValueError`:
+
+```python
+transliterate("тест", gost7034=True, strict_iso9=True)
+# → ValueError: strict_iso9 and gost7034 are mutually exclusive
+```
+
+### Pipeline and Builder Integration
+
+```python
+from translit import Text, TextPipeline
+
+# Text builder
+Text("хлеб").transliterate(gost7034=True).value
+# → "xleb"
+
+# Pre-compiled pipeline
+pipe = TextPipeline(transliterate=True, gost7034=True, fold_case=True)
+pipe("Щука")  # → "shhuka"
+```
+
+---
+
 ## Language-Specific Transliteration
 
 translit ships 37 language profiles. Each profile provides override

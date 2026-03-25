@@ -64,10 +64,12 @@ class TestTextPipelineBasic:
         pipe = TextPipeline(normalize="NFC", fold_case=True, collapse_whitespace=True)
         steps = pipe.steps
         assert isinstance(steps, list)
-        assert len(steps) == 3
+        assert len(steps) == 5
         assert steps[0] == ("normalize", "NFC")
         assert steps[1] == ("fold_case", None)
-        assert steps[2] == ("collapse_whitespace", None)
+        assert steps[2] == ("strip_control", None)
+        assert steps[3] == ("strip_zero_width", None)
+        assert steps[4] == ("collapse_whitespace", None)
 
     def test_steps_empty_pipeline(self) -> None:
         pipe = TextPipeline()
@@ -82,10 +84,13 @@ class TestTextPipelineBasic:
         )
         names = [name for name, _ in pipe.steps]
         # Execution order is fixed regardless of construction order.
+        # collapse_whitespace=True implies strip_control + strip_zero_width.
         assert names == [
             "normalize",
             "transliterate",
             "fold_case",
+            "strip_control",
+            "strip_zero_width",
             "collapse_whitespace",
         ]
 

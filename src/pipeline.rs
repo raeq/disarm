@@ -29,6 +29,7 @@ pub struct _TextPipeline {
     normalize_form: Option<String>,
     lang: Option<String>,
     strict_iso9: bool,
+    gost7034: bool,
 }
 
 #[pymethods]
@@ -40,6 +41,7 @@ impl _TextPipeline {
         transliterate=false,
         lang=None,
         strict_iso9=false,
+        gost7034=false,
         confusables=false,
         strip_accents=false,
         fold_case=false,
@@ -54,6 +56,7 @@ impl _TextPipeline {
         transliterate: bool,
         lang: Option<&str>,
         strict_iso9: bool,
+        gost7034: bool,
         confusables: bool,
         strip_accents: bool,
         fold_case: bool,
@@ -105,11 +108,18 @@ impl _TextPipeline {
             steps |= PipelineSteps::STRIP_ZERO_WIDTH;
         }
 
+        if strict_iso9 && gost7034 {
+            return Err(crate::TranslitError::new_err(
+                "strict_iso9 and gost7034 are mutually exclusive",
+            ));
+        }
+
         let pipeline = Self {
             steps,
             normalize_form: normalize.map(std::borrow::ToOwned::to_owned),
             lang: lang.map(std::borrow::ToOwned::to_owned),
             strict_iso9,
+            gost7034,
         };
 
         // Invariant: NORMALIZE step requires a normalize_form, and vice versa.
@@ -210,6 +220,7 @@ impl _TextPipeline {
                     crate::ErrorMode::Ignore,
                     "",
                     self.strict_iso9,
+                    self.gost7034,
                 )
                 .into_owned(),
             );
@@ -259,6 +270,7 @@ mod tests {
             normalize_form: normalize_form.map(ToOwned::to_owned),
             lang: None,
             strict_iso9: false,
+            gost7034: false,
         }
     }
 
@@ -425,7 +437,7 @@ mod tests {
         // collapse_whitespace=True with default strip_control/strip_zero_width (None)
         // should auto-enable both strip flags
         let p = _TextPipeline::new(
-            None, false, None, false, false, false, false, true, // collapse_whitespace
+            None, false, None, false, false, false, false, false, true, // collapse_whitespace
             None, // strip_control (defaults to collapse_whitespace=true)
             None, // strip_zero_width (defaults to collapse_whitespace=true)
             false,
@@ -443,6 +455,7 @@ mod tests {
             None,
             false,
             None,
+            false,
             false,
             false,
             false,
@@ -469,6 +482,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             false,      // collapse_whitespace
             Some(true), // strip_control
             None,       // strip_zero_width (defaults to collapse_whitespace=false)
@@ -484,7 +498,7 @@ mod tests {
     fn test_constructor_empty() {
         // Default constructor — no steps
         let p = _TextPipeline::new(
-            None, false, None, false, false, false, false, false, None, None, false,
+            None, false, None, false, false, false, false, false, false, None, None, false,
         )
         .unwrap();
         assert!(p.steps.is_empty());

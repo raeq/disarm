@@ -116,6 +116,7 @@ class Text:
         errors: ErrorMode = "replace",
         replace_with: str = "[?]",
         strict_iso9: bool = False,
+        gost7034: bool = False,
     ) -> Text:
         """Unicode → ASCII transliteration."""
         return Text(
@@ -125,6 +126,7 @@ class Text:
                 errors=errors,
                 replace_with=replace_with,
                 strict_iso9=strict_iso9,
+                gost7034=gost7034,
             )
         )
 

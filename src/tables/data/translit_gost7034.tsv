@@ -1,0 +1,15 @@
+# GOST R 7.0.34-2014: Rules for Simplified Transliteration of Russian Cyrillic
+# Primary mappings only (first column from the standard).
+# Characters not listed here fall through to the default BGN/PCGN table.
+0419	J
+0439	j
+0425	X
+0445	x
+0426	C
+0446	c
+0429	Shh
+0449	shh
+042A
+044A
+042C
+044C

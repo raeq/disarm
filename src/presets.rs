@@ -128,7 +128,7 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
     }
     // 3. Transliterate if lang is set (e.g. "de" for ü→ue, "ja" for kana)
     if lang.is_some() {
-        buf = transliterate::transliterate_impl(&buf, lang, crate::ErrorMode::Preserve, "", false)
+        buf = transliterate::transliterate_impl(&buf, lang, crate::ErrorMode::Preserve, "", false, false)
             .into_owned();
     }
     // 4. Strip accents (NFD decompose → remove combining marks → NFC)
@@ -156,7 +156,7 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
     let buf = confusables::_normalize_confusables(&buf, "latin")?;
     // 3. Transliterate if lang or strict_iso9 is set
     let buf = if lang.is_some() || strict_iso9 {
-        transliterate::transliterate_impl(&buf, lang, crate::ErrorMode::Preserve, "", strict_iso9)
+        transliterate::transliterate_impl(&buf, lang, crate::ErrorMode::Preserve, "", strict_iso9, false)
             .into_owned()
     } else {
         buf

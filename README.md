@@ -135,7 +135,7 @@ Transliteration applies different policies depending on the script. This table d
 | Script | Policy | Standard / Source | Example |
 |---|---|---|---|
 | Latin (accented) | Accent stripping | Unicode NFKD decomposition | `é` → `e` |
-| Cyrillic | Phonetic romanization | ISO 9:1995 (scholarly, via `strict_iso9=True`) or GOST-based (default) | `Москва` → `Moskva` |
+| Cyrillic | Phonetic romanization | BGN/PCGN (default), ISO 9:1995 (`strict_iso9=True`), GOST R 7.0.34 (`gost7034=True`) | `Москва` → `Moskva` |
 | Greek | Transliteration | BGN/PCGN romanization | `Αθήνα` → `Athena` |
 | Chinese (Hanzi) | Romanization | Unihan `kMandarin` (toneless pinyin) | `北京` → `bei jing` |
 | Korean (Hangul) | Romanization | Revised Romanization of Korean | `서울` → `seo ul` |

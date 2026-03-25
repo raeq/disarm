@@ -39,6 +39,12 @@ pub fn lookup_iso9(ch: char) -> Option<&'static str> {
     ISO9.get(&ch).copied()
 }
 
+/// Look up a character in the GOST R 7.0.34-2014 override table.
+#[inline]
+pub fn lookup_gost7034(ch: char) -> Option<&'static str> {
+    GOST7034.get(&ch).copied()
+}
+
 /// Look up a character in a language-specific PHF map.
 /// Returns None if the language has no override for this character.
 #[inline]

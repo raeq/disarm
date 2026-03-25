@@ -144,7 +144,7 @@ pub fn _sanitize_filename(
 
     // Transliterate to ASCII
     let transliterated =
-        transliterate::transliterate_impl(&safe_text, lang, crate::ErrorMode::Ignore, "", false)
+        transliterate::transliterate_impl(&safe_text, lang, crate::ErrorMode::Ignore, "", false, false)
             .into_owned();
 
     // Collapse dots again after transliteration — characters like U+2026

@@ -138,6 +138,14 @@ pub fn lookup_iso9(ch: char) -> Option<&'static str> {
     transliteration::lookup_iso9(ch)
 }
 
+/// Look up a character in the GOST R 7.0.34-2014 table (O(1) PHF).
+/// Returns None if GOST 7.0.34 has no override for this character, in which
+/// case the caller should fall through to the default table.
+#[inline]
+pub fn lookup_gost7034(ch: char) -> Option<&'static str> {
+    transliteration::lookup_gost7034(ch)
+}
+
 /// Look up a character in a language-specific table.
 ///
 /// Returns `Cow::Borrowed` for built-in PHF language maps (zero allocation),

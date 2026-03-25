@@ -92,6 +92,7 @@ fn main() {
         ("lang_bg", "LANG_BG"),
         ("lang_uk", "LANG_UK"),
         ("iso9", "ISO9"),
+        ("gost7034", "GOST7034"),
         ("lang_ru", "LANG_RU"),
         ("lang_sr", "LANG_SR"),
         ("lang_ja", "LANG_JA"),

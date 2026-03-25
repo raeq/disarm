@@ -221,6 +221,7 @@ pub(crate) fn slugify_impl_with_stopset(
             crate::ErrorMode::Ignore,
             "",
             false,
+            false,
         )
         .into_owned();
     }

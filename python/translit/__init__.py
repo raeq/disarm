@@ -131,6 +131,7 @@ def transliterate(
     errors: ErrorMode = "replace",
     replace_with: str = "[?]",
     strict_iso9: bool = False,
+    gost7034: bool = False,
 ) -> str:
     """Unicode → ASCII transliteration.
 
@@ -151,6 +152,9 @@ def transliterate(
                      When True, overrides both default and lang-specific
                      mappings with the international standard used in
                      linguistics and library science (e.g. й→j, ю→ju, я→ja).
+        gost7034: Use GOST R 7.0.34-2014 simplified transliteration for
+                  Russian Cyrillic. Mutually exclusive with *strict_iso9*.
+                  Key differences from default: х→x, ц→c, щ→shh, й→j.
 
     Returns:
         ASCII transliteration of the input.
@@ -158,6 +162,7 @@ def transliterate(
     Raises:
         TranslitError: If an internal Rust error occurs (e.g. invalid
             ``errors`` value passed at runtime).
+        ValueError: If both *strict_iso9* and *gost7034* are True.
 
     Examples:
         >>> transliterate("café résumé")
@@ -170,6 +175,8 @@ def transliterate(
         ''
         >>> transliterate("★", errors="preserve")
         '★'
+        >>> transliterate("хлеб", gost7034=True)
+        'xleb'
     """
     if not isinstance(text, str):
         raise TypeError(f"transliterate() expects str, got {type(text).__name__}")
@@ -182,6 +189,7 @@ def transliterate(
         errors=errors,
         replace_with=replace_with,
         strict_iso9=strict_iso9,
+        gost7034=gost7034,
     )
 
 
@@ -626,6 +634,7 @@ def transliterate_batch(
     errors: ErrorMode = "replace",
     replace_with: str = "[?]",
     strict_iso9: bool = False,
+    gost7034: bool = False,
 ) -> list[str]:
     """Batch Unicode → ASCII transliteration.
 
@@ -639,12 +648,15 @@ def transliterate_batch(
         errors: How to handle untransliterable characters.
         replace_with: Replacement string when errors="replace".
         strict_iso9: Use ISO 9:1995 scholarly transliteration for Cyrillic.
+        gost7034: Use GOST R 7.0.34-2014 simplified transliteration for
+                  Russian Cyrillic. Mutually exclusive with *strict_iso9*.
 
     Returns:
         List of ASCII transliterations, same length as input.
 
     Raises:
         TranslitError: If an internal Rust error occurs.
+        ValueError: If both *strict_iso9* and *gost7034* are True.
 
     Examples:
         >>> transliterate_batch(["café", "naïve", "résumé"])
@@ -664,6 +676,7 @@ def transliterate_batch(
         errors=errors,
         replace_with=replace_with,
         strict_iso9=strict_iso9,
+        gost7034=gost7034,
     )
 
 
@@ -1389,6 +1402,7 @@ class TextPipeline:
         transliterate: bool = False,
         lang: str | None = None,
         strict_iso9: bool = False,
+        gost7034: bool = False,
         confusables: bool = False,
         strip_accents: bool = False,
         fold_case: bool = False,
@@ -1402,6 +1416,7 @@ class TextPipeline:
             transliterate=transliterate,
             lang=lang,
             strict_iso9=strict_iso9,
+            gost7034=gost7034,
             confusables=confusables,
             strip_accents=strip_accents,
             fold_case=fold_case,

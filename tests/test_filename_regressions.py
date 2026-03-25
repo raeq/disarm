@@ -6,6 +6,8 @@ changes, these tests MUST be updated intentionally.
 
 from __future__ import annotations
 
+import pytest
+
 from translit import sanitize_filename
 
 
@@ -36,6 +38,108 @@ class TestWindowsReservedNames:
     def test_reserved_name_posix_no_prefix(self) -> None:
         """POSIX doesn't have reserved names."""
         assert sanitize_filename("CON.txt", platform="posix") == "CON.txt"
+
+
+class TestReservedNamePreserveExtension:
+    """Regression: reserved-name code paths must respect preserve_extension.
+
+    Bug: both reserved-name paths in _sanitize_filename called
+    apply_max_length(_, None, _, false), unconditionally disabling
+    extension preservation regardless of the preserve_extension parameter.
+    """
+
+    # ── Direct reserved name hits ──
+
+    def test_nul_txt_tight_max_length(self) -> None:
+        """NUL.txt with preserve_extension=True and tight max_length."""
+        result = sanitize_filename("NUL.txt", preserve_extension=True, max_length=7)
+        assert result.endswith(".txt"), f"extension lost: {result}"
+        assert len(result) <= 7, f"exceeds max_length: {result}"
+
+    def test_con_dat_tight_max_length(self) -> None:
+        result = sanitize_filename("CON.dat", preserve_extension=True, max_length=8)
+        assert result.endswith(".dat"), f"extension lost: {result}"
+        assert len(result) <= 8
+        assert result.startswith("_")
+
+    def test_aux_py_exact_fit(self) -> None:
+        """_AUX.py is exactly 7 bytes — should fit in max_length=7."""
+        result = sanitize_filename("AUX.py", preserve_extension=True, max_length=7)
+        assert result == "_AUX.py"
+
+    def test_prn_txt_very_tight(self) -> None:
+        """max_length=5 with .txt (4 bytes) leaves 1 byte for stem."""
+        result = sanitize_filename("PRN.txt", preserve_extension=True, max_length=5)
+        assert result.endswith(".txt"), f"extension lost: {result}"
+        assert len(result) <= 5
+
+    def test_lpt1_log_preserve(self) -> None:
+        result = sanitize_filename("LPT1.log", preserve_extension=True, max_length=9)
+        assert result.endswith(".log"), f"extension lost: {result}"
+        assert result.startswith("_")
+
+    def test_com9_csv_preserve(self) -> None:
+        result = sanitize_filename("COM9.csv", preserve_extension=True, max_length=9)
+        assert result.endswith(".csv"), f"extension lost: {result}"
+        assert result.startswith("_")
+
+    # ── Post-truncation reserved name hits ──
+
+    def test_nultra_txt_post_truncation(self) -> None:
+        """NULtra.txt truncated so stem becomes NUL (reserved)."""
+        result = sanitize_filename("NULtra.txt", preserve_extension=True, max_length=7)
+        assert result.endswith(".txt"), f"extension lost: {result}"
+        assert len(result) <= 7
+
+    def test_contest_pdf_post_truncation(self) -> None:
+        """CONtest.pdf truncated so stem becomes CON (reserved)."""
+        result = sanitize_filename("CONtest.pdf", preserve_extension=True, max_length=8)
+        assert result.endswith(".pdf"), f"extension lost: {result}"
+        assert len(result) <= 8
+
+    def test_auxiliary_doc_post_truncation(self) -> None:
+        """AUXiliary.doc truncated so stem becomes AUX (reserved)."""
+        result = sanitize_filename("AUXiliary.doc", preserve_extension=True, max_length=8)
+        assert result.endswith(".doc"), f"extension lost: {result}"
+        assert len(result) <= 8
+
+    # ── All reserved names with extension ──
+
+    RESERVED_NAMES = [
+        "CON", "PRN", "AUX", "NUL",
+        "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ]
+
+    @pytest.mark.parametrize("name", RESERVED_NAMES)
+    def test_all_reserved_preserve_ext(self, name: str) -> None:
+        """Every reserved name with .txt must preserve the extension."""
+        result = sanitize_filename(f"{name}.txt", preserve_extension=True)
+        assert result.endswith(".txt"), f"extension lost for {name}: {result}"
+        assert result.startswith("_"), f"missing prefix for {name}: {result}"
+
+    @pytest.mark.parametrize("name", RESERVED_NAMES)
+    def test_all_reserved_tight_preserve_ext(self, name: str) -> None:
+        """Every reserved name with tight max_length must preserve extension."""
+        # max_length = len("_") + len(name) + len(".tx") — tight but should keep .tx
+        ml = 1 + len(name) + 3
+        result = sanitize_filename(f"{name}.tx", preserve_extension=True, max_length=ml)
+        assert result.endswith(".tx"), f"extension lost for {name} (max_length={ml}): {result}"
+        assert len(result) <= ml
+
+    # ── Contrast: preserve_extension=False still truncates freely ──
+
+    def test_nul_preserve_false_no_guarantee(self) -> None:
+        result = sanitize_filename("NUL.txt", preserve_extension=False, max_length=5)
+        assert len(result) <= 5
+        # Extension may or may not survive — that's correct
+
+    # ── POSIX: no reserved name handling ──
+
+    def test_posix_nul_no_prefix(self) -> None:
+        result = sanitize_filename("NUL.txt", platform="posix", preserve_extension=True, max_length=7)
+        assert result.endswith(".txt"), f"extension lost: {result}"
+        assert not result.startswith("_"), f"unexpected prefix on posix: {result}"
 
 
 class TestExtensionPreservingTruncation:
@@ -166,3 +270,144 @@ class TestUtf8SafeTruncation:
         """When preserve_extension=False, truncation must not exceed max_length."""
         result = sanitize_filename("a" * 100 + ".pdf", max_length=8, preserve_extension=False)
         assert len(result) <= 8
+
+
+# ── Property-based invariant tests ─────────────────────────────────────
+# These tests use Hypothesis to verify structural invariants that must hold
+# for ALL inputs, catching any code path that silently drops extensions,
+# exceeds max_length, or produces reserved filenames.
+
+from hypothesis import given, settings, HealthCheck
+from hypothesis import strategies as st
+
+
+WINDOWS_RESERVED = [
+    "CON", "PRN", "AUX", "NUL",
+    "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+    "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CLOCK$", "KEYBD$", "SCREEN$",
+]
+
+
+class TestFilenameInvariants:
+    """Property-based tests for sanitize_filename structural invariants.
+
+    These are designed to catch the *class* of errors where a code path
+    bypasses a parameter (preserve_extension, max_length, platform) by
+    hardcoding a default instead of forwarding the caller's value.
+    """
+
+    @given(
+        stem=st.from_regex(r"[a-zA-Z0-9]{1,20}", fullmatch=True),
+        ext=st.from_regex(r"[a-z]{1,5}", fullmatch=True),
+        max_length=st.integers(min_value=5, max_value=50),
+    )
+    @settings(max_examples=300, suppress_health_check=[HealthCheck.too_slow])
+    def test_preserve_extension_always_keeps_ext(
+        self, stem: str, ext: str, max_length: int
+    ) -> None:
+        """When preserve_extension=True, the extension must survive if it fits."""
+        filename = f"{stem}.{ext}"
+        dot_ext = f".{ext}"
+        result = sanitize_filename(
+            filename, preserve_extension=True, max_length=max_length
+        )
+        assert len(result) <= max_length, f"exceeds max_length {max_length}: {result}"
+        if len(dot_ext) < max_length:
+            assert result.endswith(dot_ext), (
+                f"extension '{dot_ext}' lost from '{filename}' "
+                f"(max_length={max_length}): got '{result}'"
+            )
+
+    @given(
+        stem=st.from_regex(r"[a-zA-Z0-9]{1,30}", fullmatch=True),
+        ext=st.from_regex(r"[a-z]{1,5}", fullmatch=True),
+        max_length=st.integers(min_value=1, max_value=50),
+        preserve_extension=st.booleans(),
+    )
+    @settings(max_examples=300, suppress_health_check=[HealthCheck.too_slow])
+    def test_max_length_always_respected(
+        self, stem: str, ext: str, max_length: int, preserve_extension: bool
+    ) -> None:
+        """max_length must be respected regardless of preserve_extension."""
+        filename = f"{stem}.{ext}"
+        result = sanitize_filename(
+            filename,
+            preserve_extension=preserve_extension,
+            max_length=max_length,
+        )
+        assert len(result) <= max_length, (
+            f"exceeds max_length {max_length} "
+            f"(preserve_extension={preserve_extension}): '{result}'"
+        )
+
+    @given(
+        name=st.sampled_from(WINDOWS_RESERVED),
+        ext=st.from_regex(r"[a-z]{1,4}", fullmatch=True),
+        max_length=st.integers(min_value=6, max_value=50),
+    )
+    @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
+    def test_reserved_name_preserve_ext(
+        self, name: str, ext: str, max_length: int
+    ) -> None:
+        """Reserved names with preserve_extension=True must keep the extension."""
+        dot_ext = f".{ext}"
+        filename = f"{name}{dot_ext}"
+        result = sanitize_filename(
+            filename, preserve_extension=True, max_length=max_length
+        )
+        assert len(result) <= max_length, f"exceeds max_length {max_length}: {result}"
+        if len(dot_ext) < max_length:
+            assert result.endswith(dot_ext), (
+                f"extension '{dot_ext}' lost for reserved name '{name}': got '{result}'"
+            )
+
+    @given(
+        stem=st.from_regex(r"[A-Za-z]{1,15}", fullmatch=True),
+        ext=st.from_regex(r"[a-z]{1,4}", fullmatch=True),
+        max_length=st.integers(min_value=1, max_value=30),
+        preserve_extension=st.booleans(),
+    )
+    @settings(max_examples=300, suppress_health_check=[HealthCheck.too_slow])
+    def test_never_produces_bare_reserved_stem(
+        self, stem: str, ext: str, max_length: int, preserve_extension: bool
+    ) -> None:
+        """No code path should produce a bare Windows reserved name as the stem."""
+        filename = f"{stem}.{ext}"
+        result = sanitize_filename(
+            filename,
+            preserve_extension=preserve_extension,
+            max_length=max_length,
+        )
+        if result and "." in result:
+            result_stem = result.rsplit(".", 1)[0]
+        else:
+            result_stem = result
+        if result_stem:
+            upper_stem = result_stem.upper()
+            assert upper_stem not in WINDOWS_RESERVED, (
+                f"produced bare reserved stem '{result_stem}' from '{filename}' "
+                f"(max_length={max_length}, preserve_extension={preserve_extension})"
+            )
+
+    @given(
+        name=st.sampled_from(WINDOWS_RESERVED),
+        ext=st.from_regex(r"[a-z]{1,4}", fullmatch=True),
+        max_length=st.integers(min_value=6, max_value=50),
+        preserve_extension=st.booleans(),
+    )
+    @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
+    def test_reserved_name_max_length_with_both_preserve_modes(
+        self, name: str, ext: str, max_length: int, preserve_extension: bool
+    ) -> None:
+        """Reserved names must respect max_length with both preserve_extension modes."""
+        filename = f"{name}.{ext}"
+        result = sanitize_filename(
+            filename,
+            preserve_extension=preserve_extension,
+            max_length=max_length,
+        )
+        assert len(result) <= max_length, (
+            f"exceeds max_length {max_length} for reserved '{name}' "
+            f"(preserve_extension={preserve_extension}): '{result}'"
+        )

@@ -79,6 +79,15 @@ catalog_key("Mueller")               # → "mueller"
 # Now they match
 ```
 
+When the source language is unknown (e.g., multi-lingual data feeds), use
+`lang="auto"` to detect the script and apply the appropriate language profile:
+
+```python
+catalog_key("Москва", lang="auto")    # → "moskva" (detects Cyrillic → Russian)
+catalog_key("ภาษาไทย", lang="auto")   # → Thai romanization (detects Thai)
+catalog_key("café", lang="auto")      # → "cafe" (Latin-only → default table)
+```
+
 ### Batch Deduplication
 
 For large datasets, use the batch APIs to amortize Python↔Rust overhead:

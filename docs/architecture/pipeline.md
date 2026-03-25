@@ -55,7 +55,7 @@ The `demojize` step uses `emoji::demojize_rust()` — a Python-provider-free var
 
 ## Configuration capture
 
-All configuration is captured at construction time. The `normalize_form`, `lang`, and `strict_iso9` are stored as struct fields. The `strip_control` and `strip_zero_width` options are encoded directly into the bitflag set as `STRIP_CONTROL` and `STRIP_ZERO_WIDTH` flags. The constructor validates the normalization form string eagerly (rejecting invalid values immediately) so that `process()` never encounters bad configuration at call time.
+All configuration is captured at construction time. The `normalize_form`, `lang` (including `"auto"` for script-based detection), and `strict_iso9` are stored as struct fields. When `lang="auto"`, language resolution happens at call time inside `transliterate_impl()` — each input string's dominant script is detected and mapped to a language code. The `strip_control` and `strip_zero_width` options are encoded directly into the bitflag set as `STRIP_CONTROL` and `STRIP_ZERO_WIDTH` flags. The constructor validates the normalization form string eagerly (rejecting invalid values immediately) so that `process()` never encounters bad configuration at call time.
 
 This makes `TextPipeline` safe to share across threads (it implements `Send` via PyO3's `#[pyclass]`) and efficient for repeated calls — there is no per-call configuration parsing.
 

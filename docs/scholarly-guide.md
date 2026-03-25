@@ -191,6 +191,22 @@ Full list of 60 codes: `am`, `ar`, `as`, `bg`, `bn`, `bo`, `ca`, `cs`, `cy`, `da
 `lv`, `ml`, `mr`, `mt`, `my`, `ne`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sa`, `si`, `sk`,
 `sl`, `sq`, `sr`, `sv`, `ta`, `te`, `th`, `tr`, `uk`, `vi`, `zh`.
 
+### Auto-Detecting Language from Script
+
+When processing multi-script corpora where the source language varies per
+record, `lang="auto"` detects the dominant non-Latin script and selects the
+appropriate profile:
+
+```python
+transliterate("Москва", lang="auto")      # → "Moskva" (Cyrillic → Russian)
+transliterate("नमस्ते", lang="auto")        # → "namaste" (Devanagari → Hindi)
+transliterate("ქართული", lang="auto")      # → "kartuli" (Georgian)
+```
+
+For ambiguous scripts (Cyrillic → Russian, Devanagari → Hindi, Han → Chinese),
+the default may not match your source language. Pass an explicit code when
+accuracy matters.
+
 ### Runtime Language Registration
 
 For languages not covered by the built-in profiles, or for project-specific

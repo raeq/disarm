@@ -59,6 +59,10 @@ transliterate("カタカナ")       # → "katakana"
 transliterate("Ärger", lang="de")  # → "Aerger"
 transliterate("Київ", lang="uk")   # → "Kyiv"
 
+# Auto-detect language from script
+transliterate("Москва", lang="auto")  # → "Moskva" (detects Cyrillic → Russian)
+transliterate("ภาษาไทย", lang="auto")  # → Thai transliteration (detects Thai)
+
 # Slugification
 slugify("Hello World!")            # → "hello-world"
 slugify("café au lait")           # → "cafe-au-lait"

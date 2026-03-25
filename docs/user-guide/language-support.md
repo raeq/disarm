@@ -125,6 +125,65 @@ transliterate("東京タワー")         # => "dong jing tawa-"
 transliterate("東京タワー", lang="ja")  # => "dong jing tawa" (ー dropped)
 ```
 
+## Auto-detecting language from script
+
+When you don't know the language of the input text, pass `lang="auto"` to automatically detect the dominant non-Latin script and select the appropriate language profile:
+
+```python
+from translit import transliterate, slugify, LANG_AUTO
+
+# Detects Cyrillic → uses Russian ("ru") profile
+transliterate("Москва", lang="auto")         # => "Moskva"
+
+# Detects Thai → uses Thai ("th") profile
+transliterate("ภาษาไทย", lang="auto")         # => Thai transliteration
+
+# Detects Devanagari → uses Hindi ("hi") profile
+transliterate("नमस्ते", lang="auto")           # => "namaste"
+
+# Detects Hangul → uses Korean ("ko") profile
+slugify("한국어", lang="auto")                 # => Korean romanization slug
+
+# Works with all call sites
+from translit import TextPipeline, Slugifier
+
+pipe = TextPipeline(transliterate=True, lang="auto")
+pipe("こんにちは")    # => Japanese transliteration
+
+s = Slugifier(lang="auto")
+s("東京タワー")      # => CJK slug
+```
+
+### How auto-detection works
+
+1. Scans the input for the first non-Latin, non-Common character
+2. Maps the detected script to a default language code
+3. Falls back to default (no language override) if the text is Latin-only or the script has no mapping
+
+### Script-to-language mapping
+
+| Script | Default language | Ambiguity |
+|---|---|---|
+| Cyrillic | `ru` (Russian) | Multi-language — specify `uk`, `bg`, `sr` explicitly for non-Russian |
+| Devanagari | `hi` (Hindi) | Also used by Marathi, Nepali, Sanskrit |
+| Han | `zh` (Chinese) | Also used by Japanese kanji |
+| Hiragana / Katakana | `ja` (Japanese) | Unambiguous |
+| Hangul | `ko` (Korean) | Unambiguous |
+| Thai | `th` | Unambiguous |
+| Arabic | `ar` | Also used by Urdu, Persian |
+| Greek | `el` | Unambiguous |
+| Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Gurmukhi, Odia, Sinhala | respective language | Unambiguous |
+| Georgian, Armenian, Ethiopic, Tibetan, Lao, Myanmar, Khmer, Mongolian, Javanese, Hebrew | respective language | Unambiguous |
+
+For ambiguous scripts (Cyrillic, Devanagari, Han, Arabic), pass an explicit language code when accuracy matters.
+
+!!! tip
+    Use the `LANG_AUTO` constant for type safety:
+    ```python
+    from translit import LANG_AUTO, transliterate
+    transliterate("Москва", lang=LANG_AUTO)
+    ```
+
 ## Using language profiles
 
 ### With functions

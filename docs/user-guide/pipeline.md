@@ -109,7 +109,7 @@ for text in large_dataset:
 |---|---|---|---|
 | `normalize` | `str \| None` | `None` | Normalization form: `"NFC"`, `"NFD"`, `"NFKC"`, `"NFKD"` |
 | `transliterate` | `bool` | `False` | Convert to ASCII via transliteration tables |
-| `lang` | `str \| None` | `None` | Language profile for transliteration |
+| `lang` | `str \| None` | `None` | Language profile for transliteration. Use `"auto"` to detect from script. |
 | `confusables` | `bool` | `False` | Normalize confusable homoglyphs to Latin |
 | `strip_accents` | `bool` | `False` | Remove diacritical marks |
 | `fold_case` | `bool` | `False` | Unicode case folding |

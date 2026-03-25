@@ -211,6 +211,21 @@ transliterate("Юность")
 # → "Yunost"
 ```
 
+### Auto-Detecting Language from Script
+
+When the source language is unknown (common with batch catalog imports from
+heterogeneous sources), use `lang="auto"` to detect the script and apply
+the appropriate romanization:
+
+```python
+transliterate("Москва", lang="auto")      # → "Moskva" (Cyrillic → Russian)
+transliterate("ქართული", lang="auto")      # → "kartuli" (Georgian)
+transliterate("นมสเต", lang="auto")        # → Thai romanization
+```
+
+For Cyrillic records, auto-detection defaults to Russian. If you know the
+record is Ukrainian or Bulgarian, pass `lang="uk"` or `lang="bg"` explicitly.
+
 ### Language-Specific Overrides
 
 When the source language is known, language-specific romanization provides

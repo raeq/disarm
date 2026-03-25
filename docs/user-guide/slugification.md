@@ -94,6 +94,13 @@ slugify("Ärger im Büro", lang="de")
 # => "aerger-im-buero"
 ```
 
+Use `lang="auto"` to auto-detect the language from the script:
+
+```python
+slugify("Москва", lang="auto")     # => "moskva" (detects Cyrillic → Russian)
+slugify("ภาษาไทย", lang="auto")    # => Thai slug (detects Thai)
+```
+
 ### entities, decimal, hexadecimal
 
 Decode HTML entities and numeric character references:

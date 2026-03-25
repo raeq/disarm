@@ -97,6 +97,14 @@ slugify("Ünïcödé Ärticlé")                   # → "unicode-article"
 German `lang="de"` maps ü→ue and ä→ae (Duden standard), while the
 default simply strips the diacritic.
 
+When you don't know the source language (e.g., user-generated content in
+any script), use `lang="auto"` to auto-detect:
+
+```python
+slugify("Москва", lang="auto")           # → "moskva" (Cyrillic → Russian)
+slugify("ภาษาไทย", lang="auto")           # → Thai slug
+```
+
 ### Preserving Unicode Characters
 
 For sites that support Unicode URLs (common in internationalized domains),

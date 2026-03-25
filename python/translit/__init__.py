@@ -139,6 +139,8 @@ def transliterate(
         text: Input Unicode string.
         lang: Language code for language-specific mappings.
               e.g. "de" (ü→ue), "ja" (kanji→romaji), "zh" (hanzi→pinyin).
+              Use "auto" to detect the dominant non-Latin script and select
+              the appropriate language automatically.
               None uses best-effort default tables.
         errors: How to handle untransliterable characters.
                 "replace" — substitute with *replace_with*.
@@ -177,6 +179,8 @@ def transliterate(
         '★'
         >>> transliterate("хлеб", gost7034=True)
         'xleb'
+        >>> transliterate("Москва", lang="auto")
+        'Moskva'
     """
     if not isinstance(text, str):
         raise TypeError(f"transliterate() expects str, got {type(text).__name__}")
@@ -231,7 +235,7 @@ def slugify(
         regex_pattern: Custom regex for stripping characters.
         replacements: Pre-transliteration (old, new) substitution pairs.
         allow_unicode: Keep non-ASCII letters instead of transliterating.
-        lang: Language code for transliteration (e.g. "de", "ru").
+        lang: Language code for transliteration (e.g. "de", "ru", "auto").
         entities: Decode HTML entities before processing.
         decimal: Decode HTML decimal entities (&#123;).
         hexadecimal: Decode HTML hex entities (&#x7B;).

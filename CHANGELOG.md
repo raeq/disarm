@@ -8,6 +8,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ## [0.1.4] — 2026-03-25
 
 ### Added
+- **`lang="auto"` script-based language detection**: When `lang="auto"` is passed
+  to `transliterate()`, `slugify()`, `TextPipeline`, `Slugifier`, or any other
+  call site, the library detects the dominant non-Latin script in the input and
+  maps it to a default language code automatically. Maps 28 scripts to language
+  codes (e.g. Cyrillic→`ru`, Han→`zh`, Hiragana/Katakana→`ja`, Thai→`th`).
+  Zero overhead for `lang=None` or explicit lang codes.
+- `LANG_AUTO` constant (`"auto"`) in `translit._enums`.
 - **Georgian transliteration** (`lang="ka"`): 114 TSV entries covering Mkhedruli,
   Mtavruli, and supplement ranges. BGN/PCGN national romanization.
 - **Armenian transliteration** (`lang="hy"`): 86 TSV entries covering uppercase,

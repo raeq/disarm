@@ -19,12 +19,18 @@ Before processing, the engine samples the first non-ASCII codepoint to pick a bu
 
 This heuristic prevents reallocations for CJK-heavy input without over-allocating for Latin text.
 
+## Auto-language resolution
+
+When `lang="auto"` is passed, the engine resolves the language code before entering the main transliteration loop. `resolve_auto_lang()` scans the input for the first non-Latin, non-Common character, maps its script to a default ISO 639-1 code (e.g. Cyrillic → `"ru"`, Han → `"zh"`, Hiragana/Katakana → `"ja"`), and substitutes it for the `"auto"` sentinel. If no non-Latin script is found (Latin-only or empty input), `lang` becomes `None` and the default table is used.
+
+This resolution happens once per call, after the ASCII fast path but before the per-character loop. It adds zero overhead when `lang` is `None` or an explicit code.
+
 ## Lookup priority
 
 Each non-ASCII character goes through a fixed lookup chain:
 
 1. **Strict ISO 9 mode** (`strict_iso9=True`): ISO 9 table → default table. Language overrides are bypassed entirely.
-2. **Normal mode**: language-specific override (if `lang` is set) → default table.
+2. **Normal mode**: language-specific override (if `lang` is set, including auto-resolved) → default table.
 
 This is a flat two-level dispatch, not a fallback chain. ISO 9 and language modes are mutually exclusive.
 

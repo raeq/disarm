@@ -39,6 +39,7 @@ from translit import transliterate
 transliterate("Ünïcödé téxt")       # => "Unicode text"
 transliterate("北京市")              # => "bei jing shi"
 transliterate("Ü", lang="de")       # => "Ue" (German rules)
+transliterate("Москва", lang="auto")  # => "Moskva" (auto-detects Russian)
 ```
 
 ### Generate URL-safe slugs

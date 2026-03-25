@@ -406,6 +406,18 @@ transliterate("Київ")                  # → "Kiiv"  (default pan-Cyrillic)
 
 60 language profiles are available. See `list_langs()` for the full set.
 
+When the source language is unknown (common in multi-lingual corpora), use
+`lang="auto"` to detect the dominant script and apply the appropriate profile:
+
+```python
+transliterate("Москва", lang="auto")          # → "Moskva" (Cyrillic → Russian)
+transliterate("ภาษาไทย", lang="auto")          # → Thai romanization
+transliterate("Hello Москва", lang="auto")     # → "Hello Moskva" (first non-Latin script wins)
+```
+
+This is especially useful for multi-lingual datasets where different records
+are in different scripts.
+
 ---
 
 ## Batch Processing Pattern

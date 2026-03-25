@@ -196,3 +196,7 @@ from translit import LANG_DE, LANG_FR, LANG_ES  # etc.
 ### Non-European
 
 `LANG_AR`, `LANG_JA`, `LANG_KO`, `LANG_RU`, `LANG_ZH`
+
+### Auto-detection
+
+`LANG_AUTO` — pass as `lang="auto"` to auto-detect the language from the dominant non-Latin script in the input text. See [Language Support](../user-guide/language-support.md#auto-detecting-language-from-script) for the full script-to-language mapping.

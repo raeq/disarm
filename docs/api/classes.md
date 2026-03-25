@@ -84,6 +84,10 @@ from translit import Slugifier
 slug = Slugifier(separator="_", lang="de", max_length=50)
 slug("Ärger im Büro")     # => "aerger_im_buero"
 slug("Über den Wolken")   # => "ueber_den_wolken"
+
+# Auto-detect language from script
+auto_slug = Slugifier(lang="auto")
+auto_slug("Москва")       # => "moskva" (detects Cyrillic → Russian)
 ```
 
 Accepts all the same parameters as `slugify()`. Construct once, call many times.

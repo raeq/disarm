@@ -38,6 +38,19 @@ transliterate("İstanbul çağı", lang="tr")
 # => "Istanbul cagi"
 ```
 
+### Auto-detecting the language
+
+When the source language is unknown, `lang="auto"` detects the dominant non-Latin script and selects the appropriate language profile automatically:
+
+```python
+transliterate("Москва", lang="auto")          # => "Moskva" (Cyrillic → Russian)
+transliterate("ภาษาไทย", lang="auto")          # => Thai transliteration
+transliterate("café", lang="auto")             # => "cafe" (Latin-only → default table)
+transliterate("Hello Москва", lang="auto")     # => "Hello Moskva" (first non-Latin script wins)
+```
+
+For ambiguous scripts like Cyrillic (shared by Russian, Ukrainian, Bulgarian, etc.), auto-detection uses a default (Russian for Cyrillic). Pass an explicit code when the language is known.
+
 ### How overrides work
 
 The transliteration pipeline for each character:

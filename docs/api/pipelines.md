@@ -50,6 +50,7 @@ from translit import catalog_key
 
 catalog_key("  Café  RÉSUMÉ  ")       # => "cafe resume"
 catalog_key("Москва", lang="ru")      # => "moskva"
+catalog_key("Москва", lang="auto")    # => "moskva" (auto-detects Russian)
 catalog_key("Müller", lang="de")      # => "mueller"
 ```
 

@@ -22,6 +22,9 @@ print(langs)
 
 Returns both built-in and user-registered language codes, sorted alphabetically.
 
+!!! tip
+    Use `lang="auto"` to auto-detect the language from the dominant non-Latin script in the input, instead of specifying a code manually. See [Language Support](../user-guide/language-support.md#auto-detecting-language-from-script) for details.
+
 ---
 
 ## register_lang

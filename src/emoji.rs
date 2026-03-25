@@ -186,6 +186,11 @@ fn demojize_impl(
     replace_with: &str,
     provider: Option<&PyObject>,
 ) -> String {
+    // Fast path: pure-ASCII text cannot contain emoji.
+    if text.is_ascii() {
+        return text.to_owned();
+    }
+
     let chars: Vec<char> = text.chars().collect();
     let mut result = String::with_capacity(text.len());
     let mut i = 0;
@@ -359,6 +364,11 @@ fn strip_modifier_suffix(name: &str, strip_modifiers: bool) -> &str {
 
 /// Pure Rust demojize for use by TextPipeline (no Python provider support).
 pub fn demojize_rust(text: &str, strip_modifiers: bool) -> String {
+    // Fast path: pure-ASCII text cannot contain emoji.
+    if text.is_ascii() {
+        return text.to_owned();
+    }
+
     let chars: Vec<char> = text.chars().collect();
     let mut result = String::with_capacity(text.len());
     let mut i = 0;

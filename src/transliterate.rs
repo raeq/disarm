@@ -298,6 +298,8 @@ fn is_indic(ch: char) -> bool {
         || ur::TIBETAN.contains(&cp)
         || ur::MYANMAR.contains(&cp)
         || ur::KHMER.contains(&cp)
+        || ur::BALINESE.contains(&cp)
+        || ur::JAVANESE.contains(&cp)
 }
 
 /// Role of an Indic character for virama/mātrā context handling.
@@ -332,6 +334,12 @@ fn indic_char_role(cp: u32) -> IndicRole {
     }
     if (0x1780..=0x17FF).contains(&cp) {
         return khmer_char_role(cp);
+    }
+    if (0x1B00..=0x1B7F).contains(&cp) {
+        return balinese_char_role(cp);
+    }
+    if (0xA980..=0xA9DF).contains(&cp) {
+        return javanese_char_role(cp);
     }
     if !(0x0900..=0x0D7F).contains(&cp) {
         return IndicRole::None;
@@ -398,6 +406,30 @@ fn khmer_char_role(cp: u32) -> IndicRole {
         0x1780..=0x17A2 => IndicRole::Consonant,
         0x17B6..=0x17C5 => IndicRole::DependentVowel,
         0x17D2 => IndicRole::Virama,
+        _ => IndicRole::None,
+    }
+}
+
+/// Classify a Balinese codepoint's role. Balinese is a Brahmic abugida with
+/// consonants carrying inherent 'a', dependent vowels, and adeg-adeg (virama).
+#[inline]
+fn balinese_char_role(cp: u32) -> IndicRole {
+    match cp {
+        0x1B13..=0x1B33 => IndicRole::Consonant,
+        0x1B35..=0x1B43 => IndicRole::DependentVowel,
+        0x1B44 => IndicRole::Virama,
+        _ => IndicRole::None,
+    }
+}
+
+/// Classify a Javanese codepoint's role. Javanese is a Brahmic abugida with
+/// consonants carrying inherent 'a', dependent vowels, and pangkon (virama).
+#[inline]
+fn javanese_char_role(cp: u32) -> IndicRole {
+    match cp {
+        0xA990..=0xA9B2 => IndicRole::Consonant,
+        0xA9B4..=0xA9BC => IndicRole::DependentVowel,
+        0xA9C0 => IndicRole::Virama,
         _ => IndicRole::None,
     }
 }

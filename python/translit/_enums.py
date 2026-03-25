@@ -162,3 +162,8 @@ LANG_PA: str = "pa"  # Punjabi
 LANG_SA: str = "sa"  # Sanskrit
 LANG_TA: str = "ta"  # Tamil
 LANG_TE: str = "te"  # Telugu
+
+# Language code constants — New scripts (v0.1.5)
+LANG_DV: str = "dv"  # Dhivehi (Thaana)
+LANG_JV: str = "jv"  # Javanese
+LANG_MN: str = "mn"  # Mongolian

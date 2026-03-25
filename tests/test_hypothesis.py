@@ -1420,3 +1420,641 @@ class TestMultiScriptMixtureProperties:
                            ethiopic, myanmar, khmer, tibetan)
         result = transliterate(mixed, errors="ignore")
         assert is_ascii(result), f"Non-ASCII from 10-script mix: {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# 13. New script strategies (v0.1.5 additions)
+# ---------------------------------------------------------------------------
+
+# ── Arabic ──
+_arabic_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0621, 0x064B) if chr(c).isprintable()]
+        + [chr(c) for c in range(0x0660, 0x066A)]  # Arabic-Indic digits
+    ),
+    min_size=1, max_size=20,
+)
+_arabic_consonants = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0x0621, 0x063B)]),
+    min_size=1, max_size=20,
+)
+_arabic_presentation_b = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0xFE70, 0xFF00) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Syriac ──
+_syriac_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0710, 0x0730) if chr(c).isprintable()]
+        + [chr(c) for c in range(0x0730, 0x0740)]  # vowel points
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Thaana ──
+_thaana_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0780, 0x07B1) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── N'Ko ──
+_nko_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x07C0, 0x07FA) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Coptic ──
+_coptic_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x2C80, 0x2CC2) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Cherokee ──
+_cherokee_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x13A0, 0x13F6)]
+        + [chr(c) for c in range(0xAB70, 0xABC0)]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Canadian Aboriginal Syllabics ──
+_canadian_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x1401, 0x1677) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Vai ──
+_vai_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0xA500, 0xA62C) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Mongolian ──
+_mongolian_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x1820, 0x1879) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Runic ──
+_runic_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x16A0, 0x16F9) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Ogham ──
+_ogham_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x1681, 0x169B)]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── Balinese ──
+_balinese_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x1B05, 0x1B5A) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+_balinese_consonants = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0x1B13, 0x1B34)]),
+    min_size=1, max_size=20,
+)
+
+# ── Javanese ──
+_javanese_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0xA984, 0xA9C1) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+_javanese_consonants = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0xA990, 0xA9B3)]),
+    min_size=1, max_size=20,
+)
+
+# ── Tai Le ──
+_tai_le_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x1950, 0x196E)]
+        + [chr(c) for c in range(0x1970, 0x1975)]
+    ),
+    min_size=1, max_size=20,
+)
+
+# ── New Tai Lue ──
+_new_tai_lue_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x1980, 0x19AC)]
+        + [chr(c) for c in range(0x19B0, 0x19CA)]
+        + [chr(c) for c in range(0x19D0, 0x19DA)]
+    ),
+    min_size=1, max_size=20,
+)
+
+# Composite: all new scripts
+_any_new_script_text = st.one_of(
+    _arabic_text, _syriac_text, _thaana_text, _nko_text, _coptic_text,
+    _cherokee_text, _canadian_text, _vai_text, _mongolian_text,
+    _runic_text, _ogham_text, _balinese_text, _javanese_text,
+    _tai_le_text, _new_tai_lue_text,
+)
+
+
+# ---------------------------------------------------------------------------
+# 14. Arabic transliteration properties
+# ---------------------------------------------------------------------------
+
+
+class TestArabicTransliterationProperties:
+    """Property-based tests for Arabic script transliteration."""
+
+    @given(text=_arabic_text)
+    @settings(max_examples=500)
+    def test_arabic_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Arabic: {result!r}"
+
+    @given(text=_arabic_text)
+    @settings(max_examples=300)
+    def test_arabic_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_arabic_consonants)
+    @settings(max_examples=300)
+    def test_arabic_consonants_nonempty(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert len(result) > 0, f"Empty result from Arabic consonants: {text!r}"
+
+    @given(text=_arabic_presentation_b)
+    @settings(max_examples=300)
+    def test_arabic_presentation_forms_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Arabic Presentation Forms: {result!r}"
+
+    @given(text=_arabic_text)
+    @settings(max_examples=300)
+    def test_arabic_no_double_spaces(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert "  " not in result, f"Double space in: {result!r}"
+
+    @given(text=_arabic_text)
+    @settings(max_examples=300)
+    def test_arabic_slugify_valid(self, text: str) -> None:
+        result = slugify(text)
+        if result:
+            assert SLUG_PATTERN.match(result), f"Bad slug from Arabic: {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# 15. Simple alphabet / syllabary transliteration properties
+# ---------------------------------------------------------------------------
+
+
+class TestSimpleAlphabetTransliterationProperties:
+    """Property-based tests for simple alphabets and syllabaries.
+
+    These scripts have 1:1 character-to-romanization mappings with no
+    combining marks or abugida engine — pure TSV lookup.
+    """
+
+    @given(text=_syriac_text)
+    @settings(max_examples=300)
+    def test_syriac_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Syriac: {result!r}"
+
+    @given(text=_thaana_text)
+    @settings(max_examples=300)
+    def test_thaana_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Thaana: {result!r}"
+
+    @given(text=_nko_text)
+    @settings(max_examples=300)
+    def test_nko_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from N'Ko: {result!r}"
+
+    @given(text=_coptic_text)
+    @settings(max_examples=300)
+    def test_coptic_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Coptic: {result!r}"
+
+    @given(text=_cherokee_text)
+    @settings(max_examples=300)
+    def test_cherokee_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Cherokee: {result!r}"
+
+    @given(text=_canadian_text)
+    @settings(max_examples=300)
+    def test_canadian_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Canadian Aboriginal: {result!r}"
+
+    @given(text=_vai_text)
+    @settings(max_examples=300)
+    def test_vai_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Vai: {result!r}"
+
+    @given(text=_mongolian_text)
+    @settings(max_examples=300)
+    def test_mongolian_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Mongolian: {result!r}"
+
+    @given(text=_runic_text)
+    @settings(max_examples=300)
+    def test_runic_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Runic: {result!r}"
+
+    @given(text=_ogham_text)
+    @settings(max_examples=300)
+    def test_ogham_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Ogham: {result!r}"
+
+    @given(text=_tai_le_text)
+    @settings(max_examples=300)
+    def test_tai_le_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Tai Le: {result!r}"
+
+    @given(text=_new_tai_lue_text)
+    @settings(max_examples=300)
+    def test_new_tai_lue_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from New Tai Lue: {result!r}"
+
+    # --- Idempotency ---
+
+    @given(text=_syriac_text)
+    @settings(max_examples=200)
+    def test_syriac_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_thaana_text)
+    @settings(max_examples=200)
+    def test_thaana_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_coptic_text)
+    @settings(max_examples=200)
+    def test_coptic_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_cherokee_text)
+    @settings(max_examples=200)
+    def test_cherokee_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_mongolian_text)
+    @settings(max_examples=200)
+    def test_mongolian_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_runic_text)
+    @settings(max_examples=200)
+    def test_runic_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_ogham_text)
+    @settings(max_examples=200)
+    def test_ogham_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    # --- Slugify validity ---
+
+    @given(text=_cherokee_text)
+    @settings(max_examples=200)
+    def test_cherokee_slugify_valid(self, text: str) -> None:
+        result = slugify(text)
+        if result:
+            assert SLUG_PATTERN.match(result), f"Bad slug from Cherokee: {result!r}"
+
+    @given(text=_arabic_text)
+    @settings(max_examples=200)
+    def test_mongolian_slugify_valid(self, text: str) -> None:
+        result = slugify(text)
+        if result:
+            assert SLUG_PATTERN.match(result), f"Bad slug from Mongolian: {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# 16. Brahmic abugida properties (Balinese + Javanese)
+# ---------------------------------------------------------------------------
+
+
+class TestBalineseJavaneseTransliterationProperties:
+    """Property-based tests for Balinese and Javanese abugida scripts.
+
+    These use the Brahmic engine (virama strips inherent 'a',
+    dependent vowels replace inherent 'a').
+    """
+
+    @given(text=_balinese_text)
+    @settings(max_examples=500)
+    def test_balinese_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Balinese: {result!r}"
+
+    @given(text=_balinese_text)
+    @settings(max_examples=300)
+    def test_balinese_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_balinese_consonants)
+    @settings(max_examples=300)
+    def test_balinese_consonants_nonempty(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert len(result) > 0, f"Empty result from Balinese consonants: {text!r}"
+
+    @given(text=_balinese_consonants)
+    @settings(max_examples=300)
+    def test_balinese_bare_consonants_end_with_a(self, text: str) -> None:
+        """Bare Balinese consonants carry inherent 'a'."""
+        result = transliterate(text, errors="ignore")
+        if result:
+            assert result.endswith("a"), f"Bare consonants should end with 'a': {result!r}"
+
+    @given(text=_javanese_text)
+    @settings(max_examples=500)
+    def test_javanese_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Javanese: {result!r}"
+
+    @given(text=_javanese_text)
+    @settings(max_examples=300)
+    def test_javanese_idempotent(self, text: str) -> None:
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_javanese_consonants)
+    @settings(max_examples=300)
+    def test_javanese_consonants_nonempty(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert len(result) > 0, f"Empty result from Javanese consonants: {text!r}"
+
+    @given(text=_javanese_consonants)
+    @settings(max_examples=300)
+    def test_javanese_bare_consonants_end_with_a(self, text: str) -> None:
+        """Bare Javanese consonants carry inherent 'a'."""
+        result = transliterate(text, errors="ignore")
+        if result:
+            assert result.endswith("a"), f"Bare consonants should end with 'a': {result!r}"
+
+    @given(text=_balinese_text)
+    @settings(max_examples=200)
+    def test_balinese_no_double_spaces(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert "  " not in result, f"Double space in: {result!r}"
+
+    @given(text=_javanese_text)
+    @settings(max_examples=200)
+    def test_javanese_no_double_spaces(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert "  " not in result, f"Double space in: {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# 17. Expanded multi-script mixture properties (including new scripts)
+# ---------------------------------------------------------------------------
+
+
+class TestExpandedMultiScriptMixtureProperties:
+    """Multi-script mixture tests including the 15 newly added scripts."""
+
+    @given(arabic=_arabic_text, latin=_latin_text)
+    @settings(max_examples=300)
+    def test_arabic_latin_mixture_ascii(self, arabic: str, latin: str) -> None:
+        mixed = _interleave(arabic, latin)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Arabic+Latin: {result!r}"
+
+    @given(arabic=_arabic_text, indic=_any_indic_text)
+    @settings(max_examples=300)
+    def test_arabic_indic_mixture_ascii(self, arabic: str, indic: str) -> None:
+        mixed = _interleave(arabic, indic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Arabic+Indic: {result!r}"
+
+    @given(arabic=_arabic_text, cjk=_cjk_text)
+    @settings(max_examples=300)
+    def test_arabic_cjk_mixture_ascii(self, arabic: str, cjk: str) -> None:
+        mixed = _interleave(arabic, cjk)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Arabic+CJK: {result!r}"
+
+    @given(cherokee=_cherokee_text, latin=_latin_text)
+    @settings(max_examples=300)
+    def test_cherokee_latin_mixture_ascii(self, cherokee: str, latin: str) -> None:
+        mixed = _interleave(cherokee, latin)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Cherokee+Latin: {result!r}"
+
+    @given(mongolian=_mongolian_text, cyrillic=_cyrillic_text)
+    @settings(max_examples=300)
+    def test_mongolian_cyrillic_mixture_ascii(self, mongolian: str, cyrillic: str) -> None:
+        mixed = _interleave(mongolian, cyrillic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Mongolian+Cyrillic: {result!r}"
+
+    @given(balinese=_balinese_text, javanese=_javanese_text)
+    @settings(max_examples=300)
+    def test_balinese_javanese_mixture_ascii(self, balinese: str, javanese: str) -> None:
+        mixed = _interleave(balinese, javanese)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Balinese+Javanese: {result!r}"
+
+    @given(balinese=_balinese_text, indic=_any_indic_text)
+    @settings(max_examples=300)
+    def test_balinese_indic_mixture_ascii(self, balinese: str, indic: str) -> None:
+        """Balinese + other Brahmic scripts (boundary between Indic engines)."""
+        mixed = _interleave(balinese, indic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Balinese+Indic: {result!r}"
+
+    @given(tai_le=_tai_le_text, thai=_thai_text)
+    @settings(max_examples=300)
+    def test_tai_le_thai_mixture_ascii(self, tai_le: str, thai: str) -> None:
+        mixed = _interleave(tai_le, thai)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from TaiLe+Thai: {result!r}"
+
+    @given(new_tai_lue=_new_tai_lue_text, lao=_lao_text)
+    @settings(max_examples=300)
+    def test_new_tai_lue_lao_mixture_ascii(self, new_tai_lue: str, lao: str) -> None:
+        mixed = _interleave(new_tai_lue, lao)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from NewTaiLue+Lao: {result!r}"
+
+    @given(syriac=_syriac_text, arabic=_arabic_text)
+    @settings(max_examples=300)
+    def test_syriac_arabic_mixture_ascii(self, syriac: str, arabic: str) -> None:
+        """Syriac + Arabic (adjacent Unicode blocks, both RTL)."""
+        mixed = _interleave(syriac, arabic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Syriac+Arabic: {result!r}"
+
+    @given(thaana=_thaana_text, arabic=_arabic_text)
+    @settings(max_examples=300)
+    def test_thaana_arabic_mixture_ascii(self, thaana: str, arabic: str) -> None:
+        mixed = _interleave(thaana, arabic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Thaana+Arabic: {result!r}"
+
+    @given(coptic=_coptic_text, greek=st.text(
+        alphabet=st.sampled_from([chr(c) for c in range(0x0391, 0x03CA)]),
+        min_size=1, max_size=10,
+    ))
+    @settings(max_examples=300)
+    def test_coptic_greek_mixture_ascii(self, coptic: str, greek: str) -> None:
+        """Coptic + Greek (related scripts, adjacent blocks)."""
+        mixed = _interleave(coptic, greek)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Coptic+Greek: {result!r}"
+
+    @given(new_script=_any_new_script_text, latin=_extended_latin)
+    @settings(max_examples=300)
+    def test_any_new_script_with_latin_ascii(self, new_script: str, latin: str) -> None:
+        """Any new script + Extended Latin → ASCII."""
+        mixed = _interleave(new_script, latin)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from new_script+Latin: {result!r}"
+
+    @given(new_script=_any_new_script_text, cjk=_cjk_text)
+    @settings(max_examples=300)
+    def test_any_new_script_with_cjk_ascii(self, new_script: str, cjk: str) -> None:
+        """Any new script + CJK → ASCII."""
+        mixed = _interleave(new_script, cjk)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from new_script+CJK: {result!r}"
+
+    @given(
+        arabic=_arabic_text,
+        cherokee=_cherokee_text,
+        balinese=_balinese_text,
+        mongolian=_mongolian_text,
+        coptic=_coptic_text,
+    )
+    @settings(max_examples=200)
+    def test_five_new_scripts_mixture_ascii(
+        self, arabic: str, cherokee: str, balinese: str,
+        mongolian: str, coptic: str,
+    ) -> None:
+        """Five new scripts mixed together → ASCII."""
+        mixed = _interleave(arabic, cherokee, balinese, mongolian, coptic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from 5-new-script mix: {result!r}"
+
+    @given(
+        arabic=_arabic_text,
+        cherokee=_cherokee_text,
+        balinese=_balinese_text,
+        mongolian=_mongolian_text,
+        coptic=_coptic_text,
+    )
+    @settings(max_examples=200)
+    def test_five_new_scripts_mixture_idempotent(
+        self, arabic: str, cherokee: str, balinese: str,
+        mongolian: str, coptic: str,
+    ) -> None:
+        """Five new scripts mixture is idempotent."""
+        mixed = _interleave(arabic, cherokee, balinese, mongolian, coptic)
+        once = transliterate(mixed, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(
+        latin=_extended_latin,
+        cyrillic=_cyrillic_text,
+        arabic=_arabic_text,
+        indic=_any_indic_text,
+        hebrew=_hebrew_full,
+        cjk=_cjk_text,
+        thai=_thai_text,
+        ethiopic=_ethiopic_text,
+        cherokee=_cherokee_text,
+        balinese=_balinese_text,
+    )
+    @settings(max_examples=100)
+    def test_grand_mixture_ascii(
+        self, latin: str, cyrillic: str, arabic: str, indic: str,
+        hebrew: str, cjk: str, thai: str, ethiopic: str,
+        cherokee: str, balinese: str,
+    ) -> None:
+        """Grand 10-family mixture including new scripts → ASCII."""
+        mixed = _interleave(
+            latin, cyrillic, arabic, indic, hebrew,
+            cjk, thai, ethiopic, cherokee, balinese,
+        )
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from grand mix: {result!r}"
+
+    @given(
+        latin=_extended_latin,
+        cyrillic=_cyrillic_text,
+        arabic=_arabic_text,
+        indic=_any_indic_text,
+        hebrew=_hebrew_full,
+        cjk=_cjk_text,
+        thai=_thai_text,
+        ethiopic=_ethiopic_text,
+        cherokee=_cherokee_text,
+        balinese=_balinese_text,
+    )
+    @settings(max_examples=100)
+    def test_grand_mixture_idempotent(
+        self, latin: str, cyrillic: str, arabic: str, indic: str,
+        hebrew: str, cjk: str, thai: str, ethiopic: str,
+        cherokee: str, balinese: str,
+    ) -> None:
+        """Grand 10-family mixture is idempotent."""
+        mixed = _interleave(
+            latin, cyrillic, arabic, indic, hebrew,
+            cjk, thai, ethiopic, cherokee, balinese,
+        )
+        once = transliterate(mixed, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice

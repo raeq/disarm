@@ -56,3 +56,13 @@ pub const MYANMAR: std::ops::RangeInclusive<u32> = 0x1000..=0x109F;
 
 /// Khmer block (U+1780–U+17FF)
 pub const KHMER: std::ops::RangeInclusive<u32> = 0x1780..=0x17FF;
+
+// ── Balinese ──────────────────────────────────────────────────────────────
+
+/// Balinese block (U+1B00–U+1B7F)
+pub const BALINESE: std::ops::RangeInclusive<u32> = 0x1B00..=0x1B7F;
+
+// ── Javanese ──────────────────────────────────────────────────────────────
+
+/// Javanese block (U+A980–U+A9DF)
+pub const JAVANESE: std::ops::RangeInclusive<u32> = 0xA980..=0xA9DF;

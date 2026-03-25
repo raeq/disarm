@@ -1396,3 +1396,416 @@ proptest! {
         prop_assert_eq!(&*once, &*twice);
     }
 }
+
+// ── Strategies for new scripts (v0.1.5) ─────────────────────────────────────
+
+/// Generate Arabic text (U+0621-U+064A).
+fn arabic_text() -> BoxedStrategy<String> {
+    chars_in_range(0x0621, 0x064A)
+}
+
+/// Generate Arabic Presentation Forms-B (U+FE70-U+FEFF).
+fn arabic_presentation_text() -> BoxedStrategy<String> {
+    chars_in_range(0xFE70, 0xFEFC)
+}
+
+/// Generate Syriac text (U+0710-U+0740).
+fn syriac_text() -> BoxedStrategy<String> {
+    chars_in_range(0x0710, 0x073F)
+}
+
+/// Generate Thaana text (U+0780-U+07B0).
+fn thaana_text() -> BoxedStrategy<String> {
+    chars_in_range(0x0780, 0x07B0)
+}
+
+/// Generate N'Ko text (U+07C0-U+07F9).
+fn nko_text() -> BoxedStrategy<String> {
+    chars_in_range(0x07C0, 0x07E7)
+}
+
+/// Generate Coptic text (U+2C80-U+2CC1).
+fn coptic_text() -> BoxedStrategy<String> {
+    chars_in_range(0x2C80, 0x2CC1)
+}
+
+/// Generate Cherokee text (U+13A0-U+13F5).
+fn cherokee_text() -> BoxedStrategy<String> {
+    chars_in_range(0x13A0, 0x13F5)
+}
+
+/// Generate Canadian Aboriginal Syllabics text (U+1401-U+1676).
+fn canadian_text() -> BoxedStrategy<String> {
+    chars_in_range(0x1401, 0x1676)
+}
+
+/// Generate Vai text (U+A500-U+A62B).
+fn vai_text() -> BoxedStrategy<String> {
+    chars_in_range(0xA500, 0xA62B)
+}
+
+/// Generate Mongolian text (U+1820-U+1878).
+fn mongolian_text() -> BoxedStrategy<String> {
+    chars_in_range(0x1820, 0x1878)
+}
+
+/// Generate Runic text (U+16A0-U+16EA).
+fn runic_text() -> BoxedStrategy<String> {
+    chars_in_range(0x16A0, 0x16EA)
+}
+
+/// Generate Ogham text (U+1681-U+169A).
+fn ogham_text() -> BoxedStrategy<String> {
+    chars_in_range(0x1681, 0x169A)
+}
+
+/// Generate Balinese text (U+1B05-U+1B59).
+fn balinese_text() -> BoxedStrategy<String> {
+    chars_in_range(0x1B05, 0x1B44)
+}
+
+/// Generate Balinese consonants (U+1B13-U+1B33).
+fn balinese_consonants() -> BoxedStrategy<String> {
+    chars_in_range(0x1B13, 0x1B33)
+}
+
+/// Generate Javanese text (U+A984-U+A9C0).
+fn javanese_text() -> BoxedStrategy<String> {
+    chars_in_range(0xA984, 0xA9C0)
+}
+
+/// Generate Javanese consonants (U+A990-U+A9B2).
+fn javanese_consonants() -> BoxedStrategy<String> {
+    chars_in_range(0xA990, 0xA9B2)
+}
+
+/// Generate Tai Le text (U+1950-U+196D).
+fn tai_le_text() -> BoxedStrategy<String> {
+    chars_in_range(0x1950, 0x196D)
+}
+
+/// Generate New Tai Lue text (U+1980-U+19C9).
+fn new_tai_lue_text() -> BoxedStrategy<String> {
+    chars_in_range(0x1980, 0x19C9)
+}
+
+// ── Property tests for new scripts ──────────────────────────────────────────
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(300))]
+
+    // Arabic
+    #[test]
+    fn prop_arabic_produces_ascii(text in arabic_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Arabic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_arabic_idempotent(text in arabic_text()) {
+        let once = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    #[test]
+    fn prop_arabic_presentation_ascii(text in arabic_presentation_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Arabic Presentation: {:?}", result);
+    }
+
+    // Syriac
+    #[test]
+    fn prop_syriac_produces_ascii(text in syriac_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Syriac: {:?}", result);
+    }
+
+    #[test]
+    fn prop_syriac_idempotent(text in syriac_text()) {
+        let once = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    // Thaana
+    #[test]
+    fn prop_thaana_produces_ascii(text in thaana_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Thaana: {:?}", result);
+    }
+
+    #[test]
+    fn prop_thaana_idempotent(text in thaana_text()) {
+        let once = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    // N'Ko
+    #[test]
+    fn prop_nko_produces_ascii(text in nko_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from N'Ko: {:?}", result);
+    }
+
+    // Coptic
+    #[test]
+    fn prop_coptic_produces_ascii(text in coptic_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Coptic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_coptic_idempotent(text in coptic_text()) {
+        let once = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    // Cherokee
+    #[test]
+    fn prop_cherokee_produces_ascii(text in cherokee_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Cherokee: {:?}", result);
+    }
+
+    #[test]
+    fn prop_cherokee_idempotent(text in cherokee_text()) {
+        let once = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    // Canadian Aboriginal
+    #[test]
+    fn prop_canadian_produces_ascii(text in canadian_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Canadian Aboriginal: {:?}", result);
+    }
+
+    // Vai
+    #[test]
+    fn prop_vai_produces_ascii(text in vai_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Vai: {:?}", result);
+    }
+
+    // Mongolian
+    #[test]
+    fn prop_mongolian_produces_ascii(text in mongolian_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Mongolian: {:?}", result);
+    }
+
+    #[test]
+    fn prop_mongolian_idempotent(text in mongolian_text()) {
+        let once = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    // Runic
+    #[test]
+    fn prop_runic_produces_ascii(text in runic_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Runic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_runic_idempotent(text in runic_text()) {
+        let once = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    // Ogham
+    #[test]
+    fn prop_ogham_produces_ascii(text in ogham_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Ogham: {:?}", result);
+    }
+
+    // Balinese
+    #[test]
+    fn prop_balinese_produces_ascii(text in balinese_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Balinese: {:?}", result);
+    }
+
+    #[test]
+    fn prop_balinese_idempotent(text in balinese_text()) {
+        let once = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    #[test]
+    fn prop_balinese_consonants_end_with_a(s in balinese_consonants()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        if !result.is_empty() {
+            prop_assert!(result.ends_with('a'), "Bare Balinese consonants should end with 'a': {:?}", result);
+        }
+    }
+
+    // Javanese
+    #[test]
+    fn prop_javanese_produces_ascii(text in javanese_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Javanese: {:?}", result);
+    }
+
+    #[test]
+    fn prop_javanese_idempotent(text in javanese_text()) {
+        let once = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    #[test]
+    fn prop_javanese_consonants_end_with_a(s in javanese_consonants()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        if !result.is_empty() {
+            prop_assert!(result.ends_with('a'), "Bare Javanese consonants should end with 'a': {:?}", result);
+        }
+    }
+
+    // Tai Le
+    #[test]
+    fn prop_tai_le_produces_ascii(text in tai_le_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Tai Le: {:?}", result);
+    }
+
+    // New Tai Lue
+    #[test]
+    fn prop_new_tai_lue_produces_ascii(text in new_tai_lue_text()) {
+        let result = transliterate::transliterate_impl(&text, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from New Tai Lue: {:?}", result);
+    }
+}
+
+// ── Expanded multi-script mixture property tests (including new scripts) ────
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(200))]
+
+    #[test]
+    fn prop_arabic_latin_mixture_ascii(arabic in arabic_text(), latin in extended_latin_text()) {
+        let mixed = format!("{arabic} {latin}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Arabic+Latin: {:?}", result);
+    }
+
+    #[test]
+    fn prop_arabic_indic_mixture_ascii(arabic in arabic_text(), indic in any_indic_text()) {
+        let mixed = format!("{arabic} {indic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Arabic+Indic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_cherokee_latin_mixture_ascii(cherokee in cherokee_text(), latin in extended_latin_text()) {
+        let mixed = format!("{cherokee} {latin}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Cherokee+Latin: {:?}", result);
+    }
+
+    #[test]
+    fn prop_mongolian_cyrillic_mixture_ascii(mongolian in mongolian_text(), cyrillic in cyrillic_text()) {
+        let mixed = format!("{mongolian} {cyrillic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Mongolian+Cyrillic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_balinese_javanese_mixture_ascii(balinese in balinese_text(), javanese in javanese_text()) {
+        let mixed = format!("{balinese} {javanese}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Balinese+Javanese: {:?}", result);
+    }
+
+    #[test]
+    fn prop_balinese_indic_mixture_ascii(balinese in balinese_text(), indic in any_indic_text()) {
+        let mixed = format!("{balinese} {indic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Balinese+Indic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_syriac_arabic_mixture_ascii(syriac in syriac_text(), arabic in arabic_text()) {
+        let mixed = format!("{syriac} {arabic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Syriac+Arabic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_tai_le_thai_mixture_ascii(tai_le in tai_le_text(), thai in thai_text()) {
+        let mixed = format!("{tai_le} {thai}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from TaiLe+Thai: {:?}", result);
+    }
+
+    #[test]
+    fn prop_grand_mixture_ascii(
+        latin in extended_latin_text(),
+        cyrillic in cyrillic_text(),
+        arabic in arabic_text(),
+        indic in any_indic_text(),
+        hebrew in hebrew_text(),
+        cjk in cjk_text(),
+        thai in thai_text(),
+        cherokee in cherokee_text(),
+        balinese in balinese_text(),
+        mongolian in mongolian_text(),
+    ) {
+        let mixed = format!(
+            "{latin} {cyrillic} {arabic} {indic} {hebrew} {cjk} {thai} {cherokee} {balinese} {mongolian}"
+        );
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from grand mix: {:?}", result);
+    }
+
+    #[test]
+    fn prop_grand_mixture_idempotent(
+        latin in extended_latin_text(),
+        cyrillic in cyrillic_text(),
+        arabic in arabic_text(),
+        indic in any_indic_text(),
+        hebrew in hebrew_text(),
+        cjk in cjk_text(),
+        thai in thai_text(),
+        cherokee in cherokee_text(),
+        balinese in balinese_text(),
+        mongolian in mongolian_text(),
+    ) {
+        let mixed = format!(
+            "{latin} {cyrillic} {arabic} {indic} {hebrew} {cjk} {thai} {cherokee} {balinese} {mongolian}"
+        );
+        let once = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&*once, &*twice);
+    }
+
+    // Boundary tests — scripts directly adjacent (no space)
+    #[test]
+    fn prop_arabic_indic_no_boundary_artifacts(arabic in arabic_text(), indic in devanagari_text()) {
+        let mixed = format!("{arabic}{indic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII at Arabic/Indic boundary: {:?}", result);
+    }
+
+    #[test]
+    fn prop_balinese_javanese_no_boundary_artifacts(balinese in balinese_text(), javanese in javanese_text()) {
+        let mixed = format!("{balinese}{javanese}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII at Balinese/Javanese boundary: {:?}", result);
+    }
+
+    #[test]
+    fn prop_cherokee_canadian_no_boundary_artifacts(cherokee in cherokee_text(), canadian in canadian_text()) {
+        let mixed = format!("{cherokee}{canadian}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII at Cherokee/Canadian boundary: {:?}", result);
+    }
+}

@@ -1216,6 +1216,12 @@ _ALL_LANG_ASCII_SAMPLES: dict[str, tuple[str, str]] = {
     ),
     # --- Russian (already covered by bg/sr/uk but test separately) ---
     "ru": ("Российская Федерация является демократическим федеративным государством", "Russian"),
+    # --- Dhivehi (Thaana script) ---
+    "dv": ("ދިވެހިރާއްޖެ", "Dhivehi Maldives"),
+    # --- Javanese ---
+    "jv": ("\uA990\uA99F\uA9AA\uA9A3\uA9A8", "Javanese consonants"),
+    # --- Mongolian ---
+    "mn": ("\u182E\u1823\u1829\u182D\u1823\u182F", "Mongolian mongol"),
 }
 
 

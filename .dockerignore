@@ -16,10 +16,6 @@ __pycache__/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
-Cargo.lock
-Cargo.toml
-build.rs
-src/
 data/
 mkdocs.yml
 CONTRIBUTING.md

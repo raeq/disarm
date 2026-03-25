@@ -5,6 +5,7 @@
 
 use _translit::transliterate;
 use _translit::ErrorMode;
+use proptest::prelude::*;
 
 #[test]
 fn ascii_passthrough() {
@@ -387,5 +388,265 @@ fn hebrew_produces_ascii() {
             transliterate::transliterate_impl(sample, None, ErrorMode::Ignore, "", false, false);
         assert!(result.is_ascii(), "Expected ASCII for {sample:?}, got: {result:?}");
         assert!(!result.is_empty(), "Expected non-empty for {sample:?}");
+    }
+}
+
+// ===========================================================================
+// Property-based tests (proptest)
+// ===========================================================================
+
+/// Generate a random string from a Unicode range.
+fn chars_in_range(start: u32, end: u32) -> BoxedStrategy<String> {
+    let chars: Vec<char> = (start..=end).filter_map(char::from_u32).collect();
+    proptest::collection::vec(proptest::sample::select(chars), 1..=30)
+        .prop_map(|v| v.into_iter().collect::<String>())
+        .boxed()
+}
+
+/// Generate Devanagari text (U+0900-U+097F).
+fn devanagari_text() -> BoxedStrategy<String> {
+    chars_in_range(0x0900, 0x097F)
+}
+
+/// Generate Bengali text (U+0980-U+09FF).
+fn bengali_text() -> BoxedStrategy<String> {
+    chars_in_range(0x0980, 0x09FF)
+}
+
+/// Generate Tamil text (U+0B80-U+0BFF).
+fn tamil_text() -> BoxedStrategy<String> {
+    chars_in_range(0x0B80, 0x0BFF)
+}
+
+/// Generate text from any of the 9 Indic blocks (U+0900-U+0D7F).
+fn any_indic_text() -> BoxedStrategy<String> {
+    chars_in_range(0x0900, 0x0D7F)
+}
+
+/// Generate Hebrew text (U+0590-U+05FF).
+fn hebrew_text() -> BoxedStrategy<String> {
+    chars_in_range(0x0590, 0x05FF)
+}
+
+/// Generate Hebrew presentation forms (U+FB1D-U+FB4F).
+fn hebrew_presentation_text() -> BoxedStrategy<String> {
+    chars_in_range(0xFB1D, 0xFB4F)
+}
+
+/// Generate extended Latin text (U+00C0-U+024F).
+fn extended_latin_text() -> BoxedStrategy<String> {
+    chars_in_range(0x00C0, 0x024F)
+}
+
+/// Generate Cyrillic text (U+0400-U+04FF).
+fn cyrillic_text() -> BoxedStrategy<String> {
+    chars_in_range(0x0400, 0x04FF)
+}
+
+/// Generate CJK text (U+4E00-U+50FF).
+fn cjk_text() -> BoxedStrategy<String> {
+    chars_in_range(0x4E00, 0x50FF)
+}
+
+/// Generate Hangul text (U+AC00-U+ACFF).
+fn hangul_text() -> BoxedStrategy<String> {
+    chars_in_range(0xAC00, 0xACFF)
+}
+
+/// Devanagari consonants only (U+0915-U+0939).
+fn devanagari_consonants() -> BoxedStrategy<String> {
+    chars_in_range(0x0915, 0x0939)
+}
+
+// --- Indic property tests ---
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(500))]
+
+    #[test]
+    fn prop_devanagari_produces_ascii(s in devanagari_text()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Devanagari: {:?}", result);
+    }
+
+    #[test]
+    fn prop_bengali_produces_ascii(s in bengali_text()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Bengali: {:?}", result);
+    }
+
+    #[test]
+    fn prop_tamil_produces_ascii(s in tamil_text()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Tamil: {:?}", result);
+    }
+
+    #[test]
+    fn prop_any_indic_produces_ascii(s in any_indic_text()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Indic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_indic_idempotent(s in any_indic_text()) {
+        let once = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&once, &twice);
+    }
+
+    #[test]
+    fn prop_indic_no_double_spaces(s in any_indic_text()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(!result.contains("  "), "Double space in: {:?}", result);
+    }
+
+    #[test]
+    fn prop_devanagari_consonants_end_with_a(s in devanagari_consonants()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        if !result.is_empty() {
+            prop_assert!(result.ends_with('a'), "Bare consonants should end with 'a': {:?}", result);
+        }
+    }
+}
+
+// --- Hebrew property tests ---
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(500))]
+
+    #[test]
+    fn prop_hebrew_produces_ascii(s in hebrew_text()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Hebrew: {:?}", result);
+    }
+
+    #[test]
+    fn prop_hebrew_presentation_produces_ascii(s in hebrew_presentation_text()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Hebrew presentation: {:?}", result);
+    }
+
+    #[test]
+    fn prop_hebrew_idempotent(s in hebrew_text()) {
+        let once = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&once, &twice);
+    }
+
+    #[test]
+    fn prop_hebrew_no_double_spaces(s in hebrew_text()) {
+        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(!result.contains("  "), "Double space in: {:?}", result);
+    }
+}
+
+// --- Multi-script mixture property tests ---
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(300))]
+
+    #[test]
+    fn prop_latin_indic_mixture_ascii(latin in extended_latin_text(), indic in any_indic_text()) {
+        let mixed = format!("{latin} {indic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Latin+Indic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_latin_hebrew_mixture_ascii(latin in extended_latin_text(), hebrew in hebrew_text()) {
+        let mixed = format!("{latin} {hebrew}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Latin+Hebrew: {:?}", result);
+    }
+
+    #[test]
+    fn prop_indic_hebrew_mixture_ascii(indic in any_indic_text(), hebrew in hebrew_text()) {
+        let mixed = format!("{indic} {hebrew}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Indic+Hebrew: {:?}", result);
+    }
+
+    #[test]
+    fn prop_cyrillic_indic_mixture_ascii(cyrillic in cyrillic_text(), indic in any_indic_text()) {
+        let mixed = format!("{cyrillic} {indic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Cyrillic+Indic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_cyrillic_hebrew_mixture_ascii(cyrillic in cyrillic_text(), hebrew in hebrew_text()) {
+        let mixed = format!("{cyrillic} {hebrew}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Cyrillic+Hebrew: {:?}", result);
+    }
+
+    #[test]
+    fn prop_cjk_indic_mixture_ascii(cjk in cjk_text(), indic in any_indic_text()) {
+        let mixed = format!("{cjk} {indic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from CJK+Indic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_cjk_hebrew_mixture_ascii(cjk in cjk_text(), hebrew in hebrew_text()) {
+        let mixed = format!("{cjk} {hebrew}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from CJK+Hebrew: {:?}", result);
+    }
+
+    #[test]
+    fn prop_hangul_indic_mixture_ascii(hangul in hangul_text(), indic in any_indic_text()) {
+        let mixed = format!("{hangul} {indic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from Hangul+Indic: {:?}", result);
+    }
+
+    #[test]
+    fn prop_five_script_mixture_ascii(
+        latin in extended_latin_text(),
+        cyrillic in cyrillic_text(),
+        indic in any_indic_text(),
+        hebrew in hebrew_text(),
+        cjk in cjk_text(),
+    ) {
+        let mixed = format!("{latin} {cyrillic} {indic} {hebrew} {cjk}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII from 5-script mix: {:?}", result);
+    }
+
+    #[test]
+    fn prop_five_script_mixture_idempotent(
+        latin in extended_latin_text(),
+        cyrillic in cyrillic_text(),
+        indic in any_indic_text(),
+        hebrew in hebrew_text(),
+        cjk in cjk_text(),
+    ) {
+        let mixed = format!("{latin} {cyrillic} {indic} {hebrew} {cjk}");
+        let once = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false);
+        prop_assert_eq!(&once, &twice);
+    }
+
+    #[test]
+    fn prop_extended_latin_indic_no_boundary_artifacts(
+        latin in extended_latin_text(),
+        indic in devanagari_text(),
+    ) {
+        // Latin directly adjacent to Indic (no space) — should not crash or produce non-ASCII
+        let mixed = format!("{latin}{indic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII at Latin/Indic boundary: {:?}", result);
+    }
+
+    #[test]
+    fn prop_hebrew_indic_no_boundary_artifacts(
+        hebrew in hebrew_text(),
+        indic in devanagari_text(),
+    ) {
+        // Hebrew directly adjacent to Indic (no space)
+        let mixed = format!("{hebrew}{indic}");
+        let result = transliterate::transliterate_impl(&mixed, None, ErrorMode::Ignore, "", false, false);
+        prop_assert!(result.is_ascii(), "Non-ASCII at Hebrew/Indic boundary: {:?}", result);
     }
 }

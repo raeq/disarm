@@ -305,3 +305,448 @@ class TestUniqueSlugifierProperties:
         non_empty = [s for s in slugs if s]
         if non_empty:
             assert len(set(non_empty)) == len(non_empty), f"Duplicate slugs: {non_empty}"
+
+
+# ---------------------------------------------------------------------------
+# 10. Indic script transliteration properties
+# ---------------------------------------------------------------------------
+
+# Hypothesis strategies for script-specific text
+_devanagari_consonants = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0x0915, 0x093A)]),
+    min_size=1, max_size=20,
+)
+_devanagari_vowels = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0x0905, 0x0915)]),
+    min_size=1, max_size=20,
+)
+_devanagari_full = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0900, 0x0980) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_bengali_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0980, 0x0A00) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_tamil_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0B80, 0x0C00) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_telugu_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0C00, 0x0C80) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_gujarati_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0A80, 0x0B00) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_kannada_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0C80, 0x0D00) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_malayalam_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0D00, 0x0D80) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_gurmukhi_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0A00, 0x0A80) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_odia_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0B00, 0x0B80) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_any_indic_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0900, 0x0D80) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=40,
+)
+
+
+class TestIndicTransliterationProperties:
+    """Property-based tests for Indic (Brahmic) script transliteration."""
+
+    @given(text=_devanagari_full)
+    @settings(max_examples=500)
+    def test_devanagari_produces_ascii(self, text: str) -> None:
+        """Any Devanagari text transliterates to pure ASCII."""
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Devanagari: {result!r}"
+
+    @given(text=_bengali_text)
+    @settings(max_examples=300)
+    def test_bengali_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Bengali: {result!r}"
+
+    @given(text=_tamil_text)
+    @settings(max_examples=300)
+    def test_tamil_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Tamil: {result!r}"
+
+    @given(text=_telugu_text)
+    @settings(max_examples=300)
+    def test_telugu_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Telugu: {result!r}"
+
+    @given(text=_gujarati_text)
+    @settings(max_examples=300)
+    def test_gujarati_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Gujarati: {result!r}"
+
+    @given(text=_kannada_text)
+    @settings(max_examples=300)
+    def test_kannada_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Kannada: {result!r}"
+
+    @given(text=_malayalam_text)
+    @settings(max_examples=300)
+    def test_malayalam_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Malayalam: {result!r}"
+
+    @given(text=_gurmukhi_text)
+    @settings(max_examples=300)
+    def test_gurmukhi_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Gurmukhi: {result!r}"
+
+    @given(text=_odia_text)
+    @settings(max_examples=300)
+    def test_odia_produces_ascii(self, text: str) -> None:
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Odia: {result!r}"
+
+    @given(text=_any_indic_text)
+    @settings(max_examples=500)
+    def test_any_indic_produces_ascii(self, text: str) -> None:
+        """Any combination of characters from the full Indic range → ASCII."""
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Indic: {result!r}"
+
+    @given(text=_any_indic_text)
+    @settings(max_examples=300)
+    def test_indic_transliteration_idempotent(self, text: str) -> None:
+        """Transliterating Indic text twice gives the same result as once."""
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_devanagari_consonants)
+    @settings(max_examples=300)
+    def test_devanagari_consonants_end_with_a(self, text: str) -> None:
+        """Bare Devanagari consonants (no virama/mātrā following) carry inherent 'a'.
+        A string of only consonants should produce output ending in 'a'."""
+        result = transliterate(text, errors="ignore")
+        if result:
+            assert result[-1] == "a", f"Bare consonant string should end with 'a': {result!r}"
+
+    @given(text=_any_indic_text)
+    @settings(max_examples=300)
+    def test_indic_no_double_spaces(self, text: str) -> None:
+        """Transliterated Indic text should not contain double spaces."""
+        result = transliterate(text, errors="ignore")
+        assert "  " not in result, f"Double space in: {result!r}"
+
+    @given(text=_any_indic_text)
+    @settings(max_examples=300)
+    def test_indic_slugify_valid(self, text: str) -> None:
+        """Slugifying any Indic text produces a valid slug."""
+        result = slugify(text)
+        if result:
+            assert SLUG_PATTERN.match(result), f"Bad slug from Indic: {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# 11. Hebrew script transliteration properties
+# ---------------------------------------------------------------------------
+
+_hebrew_consonants = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0x05D0, 0x05EB)]),
+    min_size=1, max_size=20,
+)
+_hebrew_nikkud = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0x05B0, 0x05BE)]),
+    min_size=1, max_size=10,
+)
+_hebrew_full = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0590, 0x0600) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=30,
+)
+_hebrew_presentation = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0xFB1D, 0xFB50) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=15,
+)
+
+
+class TestHebrewTransliterationProperties:
+    """Property-based tests for Hebrew script transliteration."""
+
+    @given(text=_hebrew_full)
+    @settings(max_examples=500)
+    def test_hebrew_produces_ascii(self, text: str) -> None:
+        """Any Hebrew block text transliterates to pure ASCII."""
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Hebrew: {result!r}"
+
+    @given(text=_hebrew_consonants)
+    @settings(max_examples=300)
+    def test_hebrew_consonants_produce_ascii(self, text: str) -> None:
+        """Pure Hebrew consonants always produce ASCII.
+        Note: some consonants (Alef, Ayin) are silent and map to empty."""
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Hebrew consonants: {result!r}"
+
+    @given(text=_hebrew_presentation)
+    @settings(max_examples=300)
+    def test_hebrew_presentation_forms_produce_ascii(self, text: str) -> None:
+        """Hebrew presentation forms (FB1D-FB4F) produce ASCII."""
+        result = transliterate(text, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Hebrew presentation forms: {result!r}"
+
+    @given(text=_hebrew_full)
+    @settings(max_examples=300)
+    def test_hebrew_transliteration_idempotent(self, text: str) -> None:
+        """Transliterating Hebrew twice gives the same result as once."""
+        once = transliterate(text, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(text=_hebrew_full)
+    @settings(max_examples=300)
+    def test_hebrew_no_double_spaces(self, text: str) -> None:
+        """Transliterated Hebrew text should not contain double spaces."""
+        result = transliterate(text, errors="ignore")
+        assert "  " not in result, f"Double space in: {result!r}"
+
+    @given(text=_hebrew_full)
+    @settings(max_examples=300)
+    def test_hebrew_slugify_valid(self, text: str) -> None:
+        """Slugifying any Hebrew text produces a valid slug."""
+        result = slugify(text)
+        if result:
+            assert SLUG_PATTERN.match(result), f"Bad slug from Hebrew: {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# 12. Multi-script mixture properties
+# ---------------------------------------------------------------------------
+
+_latin_text = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x0041, 0x007B) if chr(c).isalpha()]
+    ),
+    min_size=1, max_size=20,
+)
+_extended_latin = st.text(
+    alphabet=st.sampled_from(
+        [chr(c) for c in range(0x00C0, 0x0250) if chr(c).isprintable()]
+        + [chr(c) for c in range(0x1E00, 0x1F00) if chr(c).isprintable()]
+    ),
+    min_size=1, max_size=20,
+)
+_cyrillic_text = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0x0400, 0x0500) if chr(c).isprintable()]),
+    min_size=1, max_size=20,
+)
+_cjk_text = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0x4E00, 0x5100)]),
+    min_size=1, max_size=10,
+)
+_hangul_text = st.text(
+    alphabet=st.sampled_from([chr(c) for c in range(0xAC00, 0xAD00)]),
+    min_size=1, max_size=10,
+)
+
+
+def _interleave(*parts: str) -> str:
+    """Interleave characters from multiple strings with spaces."""
+    return " ".join(p for p in parts if p)
+
+
+class TestMultiScriptMixtureProperties:
+    """Property-based tests for multi-script text mixtures."""
+
+    @given(latin=_latin_text, indic=_devanagari_full)
+    @settings(max_examples=300)
+    def test_latin_indic_mixture_ascii(self, latin: str, indic: str) -> None:
+        """Latin + Indic mixed text transliterates to ASCII."""
+        mixed = _interleave(latin, indic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Latin+Indic: {result!r}"
+
+    @given(latin=_latin_text, hebrew=_hebrew_full)
+    @settings(max_examples=300)
+    def test_latin_hebrew_mixture_ascii(self, latin: str, hebrew: str) -> None:
+        """Latin + Hebrew mixed text transliterates to ASCII."""
+        mixed = _interleave(latin, hebrew)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Latin+Hebrew: {result!r}"
+
+    @given(indic=_any_indic_text, hebrew=_hebrew_full)
+    @settings(max_examples=300)
+    def test_indic_hebrew_mixture_ascii(self, indic: str, hebrew: str) -> None:
+        """Indic + Hebrew mixed text transliterates to ASCII."""
+        mixed = _interleave(indic, hebrew)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Indic+Hebrew: {result!r}"
+
+    @given(
+        latin=_extended_latin,
+        indic=_any_indic_text,
+        hebrew=_hebrew_full,
+    )
+    @settings(max_examples=300)
+    def test_triple_mixture_ascii(self, latin: str, indic: str, hebrew: str) -> None:
+        """Extended Latin + Indic + Hebrew all in one string → ASCII."""
+        mixed = _interleave(latin, indic, hebrew)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from triple mix: {result!r}"
+
+    @given(cyrillic=_cyrillic_text, indic=_any_indic_text)
+    @settings(max_examples=300)
+    def test_cyrillic_indic_mixture_ascii(self, cyrillic: str, indic: str) -> None:
+        """Cyrillic + Indic mixed text transliterates to ASCII."""
+        mixed = _interleave(cyrillic, indic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Cyrillic+Indic: {result!r}"
+
+    @given(cyrillic=_cyrillic_text, hebrew=_hebrew_full)
+    @settings(max_examples=300)
+    def test_cyrillic_hebrew_mixture_ascii(self, cyrillic: str, hebrew: str) -> None:
+        """Cyrillic + Hebrew mixed text transliterates to ASCII."""
+        mixed = _interleave(cyrillic, hebrew)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Cyrillic+Hebrew: {result!r}"
+
+    @given(cjk=_cjk_text, indic=_any_indic_text)
+    @settings(max_examples=300)
+    def test_cjk_indic_mixture_ascii(self, cjk: str, indic: str) -> None:
+        """CJK + Indic mixed text transliterates to ASCII."""
+        mixed = _interleave(cjk, indic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from CJK+Indic: {result!r}"
+
+    @given(cjk=_cjk_text, hebrew=_hebrew_full)
+    @settings(max_examples=300)
+    def test_cjk_hebrew_mixture_ascii(self, cjk: str, hebrew: str) -> None:
+        """CJK + Hebrew mixed text transliterates to ASCII."""
+        mixed = _interleave(cjk, hebrew)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from CJK+Hebrew: {result!r}"
+
+    @given(hangul=_hangul_text, indic=_devanagari_full)
+    @settings(max_examples=300)
+    def test_hangul_indic_mixture_ascii(self, hangul: str, indic: str) -> None:
+        """Hangul + Indic mixed text transliterates to ASCII."""
+        mixed = _interleave(hangul, indic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from Hangul+Indic: {result!r}"
+
+    @given(extended=_extended_latin, indic=_any_indic_text)
+    @settings(max_examples=300)
+    def test_extended_latin_indic_mixture_ascii(self, extended: str, indic: str) -> None:
+        """Extended Latin (accented) + Indic transliterates to ASCII."""
+        mixed = _interleave(extended, indic)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from ExtLatin+Indic: {result!r}"
+
+    @given(extended=_extended_latin, hebrew=_hebrew_full)
+    @settings(max_examples=300)
+    def test_extended_latin_hebrew_mixture_ascii(self, extended: str, hebrew: str) -> None:
+        """Extended Latin (accented) + Hebrew transliterates to ASCII."""
+        mixed = _interleave(extended, hebrew)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from ExtLatin+Hebrew: {result!r}"
+
+    @given(
+        latin=_extended_latin,
+        cyrillic=_cyrillic_text,
+        indic=_any_indic_text,
+        hebrew=_hebrew_full,
+        cjk=_cjk_text,
+    )
+    @settings(max_examples=200)
+    def test_five_script_mixture_ascii(
+        self, latin: str, cyrillic: str, indic: str, hebrew: str, cjk: str
+    ) -> None:
+        """Five-script mixture (Latin+Cyrillic+Indic+Hebrew+CJK) → ASCII."""
+        mixed = _interleave(latin, cyrillic, indic, hebrew, cjk)
+        result = transliterate(mixed, errors="ignore")
+        assert is_ascii(result), f"Non-ASCII from 5-script mix: {result!r}"
+
+    @given(
+        latin=_extended_latin,
+        cyrillic=_cyrillic_text,
+        indic=_any_indic_text,
+        hebrew=_hebrew_full,
+        cjk=_cjk_text,
+    )
+    @settings(max_examples=200)
+    def test_five_script_mixture_idempotent(
+        self, latin: str, cyrillic: str, indic: str, hebrew: str, cjk: str
+    ) -> None:
+        """Five-script mixture transliteration is idempotent."""
+        mixed = _interleave(latin, cyrillic, indic, hebrew, cjk)
+        once = transliterate(mixed, errors="ignore")
+        twice = transliterate(once, errors="ignore")
+        assert once == twice
+
+    @given(
+        latin=_extended_latin,
+        indic=_any_indic_text,
+        hebrew=_hebrew_full,
+    )
+    @settings(max_examples=200)
+    def test_multi_script_slugify_valid(
+        self, latin: str, indic: str, hebrew: str
+    ) -> None:
+        """Slugifying multi-script text always produces a valid slug."""
+        mixed = _interleave(latin, indic, hebrew)
+        result = slugify(mixed)
+        if result:
+            assert SLUG_PATTERN.match(result), f"Bad slug from multi-script: {result!r}"
+
+    @given(
+        latin=_extended_latin,
+        indic=_any_indic_text,
+        hebrew=_hebrew_full,
+    )
+    @settings(max_examples=200)
+    def test_multi_script_preserve_nonempty(
+        self, latin: str, indic: str, hebrew: str
+    ) -> None:
+        """Multi-script text with errors='preserve' is never shorter than
+        it would be with errors='ignore'."""
+        mixed = _interleave(latin, indic, hebrew)
+        assume(len(mixed.strip()) > 0)
+        ignore_result = transliterate(mixed, errors="ignore")
+        preserve_result = transliterate(mixed, errors="preserve")
+        assert len(preserve_result) >= len(ignore_result)

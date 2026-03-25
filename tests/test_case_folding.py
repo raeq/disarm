@@ -384,13 +384,15 @@ class TestProperties:
         result = fold_case(text)
         assert result.isascii() or text == "", f"non-ASCII in fold of ASCII: {result!r}"
 
-    @given(st.text(
-        alphabet=st.characters(
-            max_codepoint=0xFFFF,
-            exclude_categories=("Cs",),  # exclude lone surrogates
-        ),
-        max_size=100,
-    ))
+    @given(
+        st.text(
+            alphabet=st.characters(
+                max_codepoint=0xFFFF,
+                exclude_categories=("Cs",),  # exclude lone surrogates
+            ),
+            max_size=100,
+        )
+    )
     @settings(max_examples=500)
     def test_matches_python_casefold(self, text: str) -> None:
         """fold_case should agree with str.casefold() where Python knows the mapping.

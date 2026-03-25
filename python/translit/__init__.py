@@ -118,9 +118,7 @@ def _validate_batch(texts: object, func_name: str) -> None:
         )
     for i, t in enumerate(texts):
         if not isinstance(t, str):
-            raise TypeError(
-                f"{func_name}() element {i} must be str, got {type(t).__name__}"
-            )
+            raise TypeError(f"{func_name}() element {i} must be str, got {type(t).__name__}")
 
 
 # --- Core transforms ---
@@ -263,7 +261,9 @@ def slugify(
         save_order=save_order,
         stopwords=stopwords if isinstance(stopwords, (tuple, list)) else tuple(stopwords),
         regex_pattern=regex_pattern,
-        replacements=replacements if isinstance(replacements, (tuple, list)) else tuple(replacements),
+        replacements=replacements
+        if isinstance(replacements, (tuple, list))
+        else tuple(replacements),
         allow_unicode=allow_unicode,
         lang=lang,
         entities=entities,
@@ -609,8 +609,7 @@ def set_emoji_provider(provider: EmojiProvider | None = None) -> None:
     """
     if provider is not None and not callable(getattr(provider, "lookup", None)):
         raise TypeError(
-            "EmojiProvider must have a callable lookup() method; "
-            f"got {type(provider).__name__}"
+            f"EmojiProvider must have a callable lookup() method; got {type(provider).__name__}"
         )
     _set_emoji_provider(provider)
 
@@ -730,7 +729,9 @@ def slugify_batch(
         save_order=save_order,
         stopwords=stopwords if isinstance(stopwords, (tuple, list)) else list(stopwords),
         regex_pattern=regex_pattern,
-        replacements=replacements if isinstance(replacements, (tuple, list)) else list(replacements),
+        replacements=replacements
+        if isinstance(replacements, (tuple, list))
+        else list(replacements),
         allow_unicode=allow_unicode,
         lang=lang,
         entities=entities,
@@ -1108,9 +1109,7 @@ def decode_to_utf8(
         False
     """
     if not (0.0 <= min_confidence <= 1.0):
-        raise ValueError(
-            f"min_confidence must be between 0.0 and 1.0, got {min_confidence}"
-        )
+        raise ValueError(f"min_confidence must be between 0.0 and 1.0, got {min_confidence}")
     return _decode_to_utf8(data, encoding=encoding, min_confidence=min_confidence)
 
 

@@ -19,32 +19,32 @@ from translit import (
 
 # Bidi override and formatting characters that security_clean must strip
 BIDI_CHARS = frozenset(
-    "\u00AD"   # Soft hyphen
-    "\u061C"   # Arabic Letter Mark
-    "\u200E"   # LRM
-    "\u200F"   # RLM
-    "\u202A"   # LRE
-    "\u202B"   # RLE
-    "\u202C"   # PDF
-    "\u202D"   # LRO
-    "\u202E"   # RLO
-    "\u2066"   # LRI
-    "\u2067"   # RLI
-    "\u2068"   # FSI
-    "\u2069"   # PDI
+    "\u00ad"  # Soft hyphen
+    "\u061c"  # Arabic Letter Mark
+    "\u200e"  # LRM
+    "\u200f"  # RLM
+    "\u202a"  # LRE
+    "\u202b"  # RLE
+    "\u202c"  # PDF
+    "\u202d"  # LRO
+    "\u202e"  # RLO
+    "\u2066"  # LRI
+    "\u2067"  # RLI
+    "\u2068"  # FSI
+    "\u2069"  # PDI
 )
 
 # Zero-width characters that collapse_whitespace strips
 ZERO_WIDTH_CHARS = frozenset(
-    "\u200B"   # Zero Width Space
-    "\u200C"   # Zero Width Non-Joiner
-    "\u200D"   # Zero Width Joiner
-    "\uFEFF"   # BOM / Zero Width No-Break Space
-    "\u2060"   # Word Joiner
-    "\u2061"   # Function Application (invisible math)
-    "\u2062"   # Invisible Times
-    "\u2063"   # Invisible Separator
-    "\u2064"   # Invisible Plus
+    "\u200b"  # Zero Width Space
+    "\u200c"  # Zero Width Non-Joiner
+    "\u200d"  # Zero Width Joiner
+    "\ufeff"  # BOM / Zero Width No-Break Space
+    "\u2060"  # Word Joiner
+    "\u2061"  # Function Application (invisible math)
+    "\u2062"  # Invisible Times
+    "\u2063"  # Invisible Separator
+    "\u2064"  # Invisible Plus
 )
 
 
@@ -125,9 +125,7 @@ class TestSecurityCleanNormalization:
         # strip_bidi strips chars. None of these introduce non-NFC chars.
         # So the output should still be NFC at minimum.
         assert is_normalized(result, form="NFC"), (
-            f"security_clean output is not NFC:\n"
-            f"  input:  {text!r}\n"
-            f"  output: {result!r}"
+            f"security_clean output is not NFC:\n  input:  {text!r}\n  output: {result!r}"
         )
 
 
@@ -178,20 +176,20 @@ class TestSecurityCleanComposite:
     def test_fullwidth_bypass(self) -> None:
         """NFKC collapses fullwidth chars that bypass naive filters."""
         # Fullwidth "admin" — U+FF41 U+FF44 U+FF4D U+FF49 U+FF4E
-        fullwidth = "\uFF41\uFF44\uFF4D\uFF49\uFF4E"
+        fullwidth = "\uff41\uff44\uff4d\uff49\uff4e"
         result = security_clean(fullwidth)
         assert result == "admin"
 
     def test_bidi_plus_homoglyph(self) -> None:
         """Combined bidi override + homoglyph attack."""
-        attack = "\u202E\u0430dmin"  # RLO + Cyrillic а
+        attack = "\u202e\u0430dmin"  # RLO + Cyrillic а
         result = security_clean(attack)
-        assert "\u202E" not in result
+        assert "\u202e" not in result
         assert not is_confusable(result)
 
     def test_zwsp_splitting_keyword(self) -> None:
         """Zero-width space splitting a keyword."""
-        attack = "pass\u200Bword"
+        attack = "pass\u200bword"
         result = security_clean(attack)
         assert result == "password"
 
@@ -201,14 +199,16 @@ class TestSecurityCleanComposite:
         result = security_clean(attack)
         assert result == "adminuser"
 
-    @given(text=st.text(
-        alphabet=st.sampled_from(
-            list("abcdefghijklmnopqrstuvwxyz ")
-            + ["\u200B", "\u200D", "\uFEFF", "\u202E", "\u061C", "\u0430", "\u043E"]
-        ),
-        min_size=1,
-        max_size=100,
-    ))
+    @given(
+        text=st.text(
+            alphabet=st.sampled_from(
+                list("abcdefghijklmnopqrstuvwxyz ")
+                + ["\u200b", "\u200d", "\ufeff", "\u202e", "\u061c", "\u0430", "\u043e"]
+            ),
+            min_size=1,
+            max_size=100,
+        )
+    )
     @settings(max_examples=500)
     def test_mixed_attack_vectors(self, text: str) -> None:
         """Random mix of ASCII + attack chars must always clean safely."""

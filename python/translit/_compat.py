@@ -64,10 +64,7 @@ _AWESOME_DEPRECATED_PARAMS: dict[str, str] = {
         "Use the lang parameter for language-specific transliteration."
     ),
     "fold_abbrs": "awesome-slugify's fold_abbrs is not supported in translit.",
-    "uids": (
-        "The 'uids' parameter is only supported by UniqueSlugify; "
-        "it is ignored by Slugify."
-    ),
+    "uids": ("The 'uids' parameter is only supported by UniqueSlugify; it is ignored by Slugify."),
 }
 
 

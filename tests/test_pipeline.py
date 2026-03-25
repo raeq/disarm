@@ -82,8 +82,13 @@ class TestTextPipelineBasic:
         )
         names = [name for name, _ in pipe.steps]
         # Execution order is fixed regardless of construction order
-        assert names == ["normalize", "strip_accents", "transliterate", "fold_case", "collapse_whitespace"] or \
-               names == ["normalize", "transliterate", "fold_case", "collapse_whitespace"]
+        assert names == [
+            "normalize",
+            "strip_accents",
+            "transliterate",
+            "fold_case",
+            "collapse_whitespace",
+        ] or names == ["normalize", "transliterate", "fold_case", "collapse_whitespace"]
 
     def test_explain(self) -> None:
         pipe = TextPipeline(normalize="NFC", fold_case=True)

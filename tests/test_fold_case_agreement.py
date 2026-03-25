@@ -29,6 +29,7 @@ def _has_unassigned_chars(text: str) -> bool:
     """True if text contains characters unassigned in Python's Unicode version."""
     return any(unicodedata.category(ch) == "Cn" for ch in text)
 
+
 # Strategy for pure-ASCII strings (printable + whitespace + control)
 ascii_text = st.text(
     alphabet=st.characters(max_codepoint=127),
@@ -108,21 +109,23 @@ class TestFoldCaseRustPythonAgreement:
     def test_known_expansions_match(self) -> None:
         """Spot-check known multi-char expansions."""
         cases = [
-            ("ß", "ss"),          # German eszett
-            ("ﬁ", "fi"),          # Latin ligature fi
-            ("ﬂ", "fl"),          # Latin ligature fl
-            ("ﬃ", "ffi"),         # Latin ligature ffi
-            ("ﬄ", "ffl"),         # Latin ligature ffl
-            ("ﬅ", "st"),          # Latin ligature st
-            ("ﬆ", "st"),          # Latin ligature st (alt)
-            ("İ", "i\u0307"),     # Dotted I → i + combining dot above
-            ("µ", "μ"),           # Micro sign → Greek mu
-            ("ſ", "s"),           # Long s
+            ("ß", "ss"),  # German eszett
+            ("ﬁ", "fi"),  # Latin ligature fi
+            ("ﬂ", "fl"),  # Latin ligature fl
+            ("ﬃ", "ffi"),  # Latin ligature ffi
+            ("ﬄ", "ffl"),  # Latin ligature ffl
+            ("ﬅ", "st"),  # Latin ligature st
+            ("ﬆ", "st"),  # Latin ligature st (alt)
+            ("İ", "i\u0307"),  # Dotted I → i + combining dot above
+            ("µ", "μ"),  # Micro sign → Greek mu
+            ("ſ", "s"),  # Long s
         ]
         for input_char, expected in cases:
             result = fold_case(input_char)
             python_result = input_char.casefold()
-            assert result == expected, f"fold_case({input_char!r}) = {result!r}, expected {expected!r}"
+            assert result == expected, (
+                f"fold_case({input_char!r}) = {result!r}, expected {expected!r}"
+            )
             assert result == python_result, f"Rust disagrees with Python on {input_char!r}"
 
 
@@ -151,8 +154,6 @@ class TestFoldCaseProperties:
     def test_char_count_never_decreases(self, text: str) -> None:
         """Case folding may expand (ß→ss) but never drops characters."""
         result = fold_case(text)
-        assert len(result) >= len(text) or not any(
-            text.casefold() != text for _ in [None]
-        )
+        assert len(result) >= len(text) or not any(text.casefold() != text for _ in [None])
         # Use the simpler, always-true check:
         assert len(list(result)) >= 0  # trivially true, catches panics

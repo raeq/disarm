@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Tests for emoji-to-text expansion (demojize).
 
 Covers:

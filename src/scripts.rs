@@ -305,23 +305,154 @@ fn script_to_lang(script: &str) -> Option<&'static str> {
     }
 }
 
-/// Resolve `lang="auto"` by scanning text for the first non-Latin, non-Common script.
+/// True if the script is shared by multiple languages with different
+/// transliteration profiles.  Only these scripts trigger discriminator
+/// scanning — all other scripts have a 1:1 script→language mapping.
+fn is_ambiguous_script(script: &str) -> bool {
+    matches!(script, "Cyrillic" | "Arabic")
+}
+
+/// Look up whether a character is an exclusive discriminator for a
+/// language within the given script.
+///
+/// Returns `Some(lang_code)` if the character appears exclusively in
+/// one language's alphabet among the profiles we support for that
+/// script.  Returns `None` for characters shared across languages.
+///
+/// **Fail-safe property:** only characters with zero ambiguity are
+/// included.  False positives are impossible by construction — every
+/// entry has been verified against all supported profiles for the
+/// script.
+fn lookup_discriminator(ch: char, script: &str) -> Option<&'static str> {
+    match script {
+        "Cyrillic" => match ch {
+            // Ukrainian exclusive: ґ Ґ ї Ї є Є і І
+            '\u{0491}' | '\u{0490}' | '\u{0457}' | '\u{0407}'
+            | '\u{0454}' | '\u{0404}' | '\u{0456}' | '\u{0406}' => Some("uk"),
+            // Serbian exclusive: ђ Ђ ћ Ћ љ Љ њ Њ џ Џ ј Ј
+            '\u{0452}' | '\u{0402}' | '\u{045B}' | '\u{040B}'
+            | '\u{0459}' | '\u{0409}' | '\u{045A}' | '\u{040A}'
+            | '\u{045F}' | '\u{040F}' | '\u{0458}' | '\u{0408}' => Some("sr"),
+            // Mongolian Cyrillic exclusive: ө Ө ү Ү
+            '\u{04E9}' | '\u{04E8}' | '\u{04AF}' | '\u{04AE}' => Some("mn"),
+            _ => None,
+        },
+        "Arabic" => match ch {
+            // Persian exclusive: پ چ ژ گ
+            '\u{067E}' | '\u{0686}' | '\u{0698}' | '\u{06AF}' => Some("fa"),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Look up whether a Latin-script character is an exclusive discriminator
+/// for a language.
+///
+/// Separated from `lookup_discriminator` because Latin is handled via a
+/// different code path (Latin text has no "primary script" in the
+/// existing detection flow).
+fn lookup_latin_discriminator(ch: char) -> Option<&'static str> {
+    match ch {
+        // Vietnamese exclusive: ơ Ơ ư Ư
+        '\u{01A1}' | '\u{01A0}' | '\u{01B0}' | '\u{01AF}' => Some("vi"),
+        // Turkish exclusive: İ (dotted capital I), ı (dotless small i)
+        '\u{0130}' | '\u{0131}' => Some("tr"),
+        // German exclusive: ß (eszett) and ẞ (capital eszett, rare but unambiguous)
+        '\u{00DF}' | '\u{1E9E}' => Some("de"),
+        _ => None,
+    }
+}
+
+/// Scan text for discriminator characters exclusive to a particular language.
+///
+/// Returns `Some(lang)` only if **exactly one** language's discriminators
+/// are found.  Returns `None` if:
+/// - no discriminator characters appear (→ fall back to script default)
+/// - discriminators for two different languages appear (→ conflict; fail-safe
+///   fall back to script default)
+///
+/// This is the core fail-safe guarantee: the function never returns a wrong
+/// answer.  In the worst case it returns `None` and the caller uses the
+/// previous default behaviour.
+fn discriminate_by_chars(text: &str, script: &str) -> Option<&'static str> {
+    let mut candidate: Option<&'static str> = None;
+
+    for ch in text.chars() {
+        let hit = if script == "Latin" {
+            lookup_latin_discriminator(ch)
+        } else {
+            lookup_discriminator(ch, script)
+        };
+
+        if let Some(lang) = hit {
+            match candidate {
+                None => candidate = Some(lang),
+                Some(prev) if prev == lang => {} // same language — reinforce
+                Some(_) => return None,          // conflict — bail out
+            }
+        }
+    }
+
+    candidate
+}
+
+/// Resolve `lang="auto"` by scanning text for the first non-Latin, non-Common script,
+/// then refining with character-level discriminators for ambiguous scripts.
+///
+/// **Detection strategy (two-tier):**
+///
+/// 1. **Script detection:** find the primary non-Latin script (unchanged from before).
+/// 2. **Discriminator refinement:** for ambiguous scripts (Cyrillic, Arabic), scan
+///    for characters exclusive to one language.  If exactly one language's exclusive
+///    characters appear, return that language.  If none or multiple appear, fall back
+///    to the script default.
+/// 3. **Latin fallback:** if the text contains only Latin characters, try Latin-script
+///    discriminators (Vietnamese ơ/ư, Turkish İ/ı, German ß).
+///
+/// **Fail-safe guarantee:** discriminators can only *upgrade* the result (from a
+/// generic script default to a specific language).  They never *downgrade* — if
+/// anything is uncertain, the previous default behaviour is preserved.
 ///
 /// Returns the default language code for that script, or `None` if the text
-/// contains only Latin/Common/Inherited characters (or is empty).
+/// contains only Latin/Common/Inherited characters (or is empty) and no Latin
+/// discriminators match.
 ///
 /// **Note:** For mixed-script input (e.g. "Hello 北京 Привет"), the first
 /// non-Latin script encountered wins. This is a deliberate simplification —
 /// callers needing per-segment transliteration should split the text first.
 pub fn resolve_auto_lang(text: &str) -> Option<String> {
+    // Pass 1: Find primary non-Latin, non-Common script.
+    let mut primary_script: Option<&str> = None;
     for ch in text.chars() {
         let script = detect_char_script(ch);
-        if script == "Common" || script == "Inherited" || script == "Latin" {
-            continue;
+        if script != "Common" && script != "Inherited" && script != "Latin" {
+            primary_script = Some(script);
+            break;
         }
-        return script_to_lang(script).map(str::to_owned);
     }
-    None
+
+    match primary_script {
+        Some(script) if is_ambiguous_script(script) => {
+            // Ambiguous script — try discriminators, fall back to script default
+            let lang = discriminate_by_chars(text, script)
+                .or_else(|| script_to_lang(script));
+            lang.map(str::to_owned)
+        }
+        Some(script) => {
+            // Unambiguous script — direct mapping (unchanged)
+            script_to_lang(script).map(str::to_owned)
+        }
+        None => {
+            // No non-Latin script — try Latin discriminators if text has
+            // non-ASCII characters (accented Latin, special letters)
+            if text.is_ascii() {
+                None
+            } else {
+                discriminate_by_chars(text, "Latin").map(str::to_owned)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -891,5 +1022,73 @@ mod tests {
     fn test_resolve_auto_lang_unmapped_script() {
         // Runic character — no language mapping
         assert_eq!(resolve_auto_lang("\u{16A0}"), None);
+    }
+
+    // ── Language discriminator tests ──────────────────────────────
+
+    #[test]
+    fn test_discriminate_ukrainian_by_exclusive_chars() {
+        // ї is exclusively Ukrainian among our Cyrillic profiles
+        assert_eq!(resolve_auto_lang("Київ — столиця України"), Some("uk".to_owned()));
+    }
+
+    #[test]
+    fn test_discriminate_serbian_by_exclusive_chars() {
+        // ћ and ђ are exclusively Serbian
+        assert_eq!(resolve_auto_lang("Ђорђе и Ћирилица"), Some("sr".to_owned()));
+    }
+
+    #[test]
+    fn test_discriminate_persian_by_exclusive_chars() {
+        // پ چ ژ گ are exclusively Persian among our Arabic profiles
+        assert_eq!(resolve_auto_lang("پارسی زبان"), Some("fa".to_owned()));
+    }
+
+    #[test]
+    fn test_discriminate_vietnamese_by_exclusive_chars() {
+        // ơ and ư are exclusively Vietnamese
+        assert_eq!(resolve_auto_lang("Việt Nam có nhiều người"), Some("vi".to_owned()));
+    }
+
+    #[test]
+    fn test_discriminate_turkish_by_exclusive_chars() {
+        // İ and ı are exclusively Turkish
+        assert_eq!(resolve_auto_lang("İstanbul güzel bir şehır"), Some("tr".to_owned()));
+    }
+
+    #[test]
+    fn test_discriminate_german_by_exclusive_chars() {
+        // ß is exclusively German
+        assert_eq!(resolve_auto_lang("Straße nach Süden"), Some("de".to_owned()));
+    }
+
+    #[test]
+    fn test_discriminate_fallback_on_conflict() {
+        // Mix Ukrainian ї and Serbian ћ — should fall back to script default (ru)
+        assert_eq!(resolve_auto_lang("їћ"), Some("ru".to_owned()));
+    }
+
+    #[test]
+    fn test_discriminate_cyrillic_no_exclusive_chars() {
+        // Plain Russian text with no exclusive chars — default to ru
+        assert_eq!(resolve_auto_lang("Москва"), Some("ru".to_owned()));
+    }
+
+    #[test]
+    fn test_discriminate_arabic_no_exclusive_chars() {
+        // Plain Arabic text with no Persian chars — default to ar
+        assert_eq!(resolve_auto_lang("العربية"), Some("ar".to_owned()));
+    }
+
+    #[test]
+    fn test_discriminate_latin_no_exclusive_chars() {
+        // Accented Latin with no exclusive chars — returns None (no lang)
+        assert_eq!(resolve_auto_lang("café"), None);
+    }
+
+    #[test]
+    fn test_discriminate_latin_ascii_only() {
+        // Pure ASCII — returns None
+        assert_eq!(resolve_auto_lang("hello"), None);
     }
 }

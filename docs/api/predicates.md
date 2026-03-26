@@ -32,6 +32,21 @@ Functions that inspect text and return boolean or structured results without mod
 
 ---
 
+## is_zalgo
+
+::: translit.is_zalgo
+
+```python
+from translit import is_zalgo
+
+is_zalgo("café")          # False (1 combining mark — normal)
+is_zalgo("Việt Nam")      # False (2 combining marks — normal)
+# Zalgo: 'a' with 20 stacked combining graves
+is_zalgo("a" + "\u0300" * 20)  # True
+```
+
+---
+
 ## is_safe_hostname
 
 ::: translit.is_safe_hostname

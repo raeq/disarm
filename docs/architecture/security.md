@@ -51,6 +51,12 @@ The reserved-name check examines the stem (before the first dot) and compares ca
 
 Script deduplication uses a `HashSet<&str>` to maintain O(1) per-character insertion while preserving first-seen ordering in the output vector. This replaced an earlier O(n²) implementation that scanned the output vector for duplicates.
 
-## Precompiled security pipeline
+## Precompiled security pipelines
 
 The `security_clean` preset composes the security-relevant transforms into a single pipeline: NFKC normalization → confusable normalization → bidi stripping → whitespace collapse. This is the recommended entry point for security-sensitive text processing where the goal is to canonicalize Unicode content by neutralizing homoglyph spoofing, removing dangerous bidi overrides, and collapsing invisible characters.
+
+The `sanitize_user_input` preset extends this approach for web application input: NFKC normalization → zalgo stripping → confusable normalization → bidi stripping → whitespace collapse. It adds zalgo text protection (capping combining marks at 2 per base character) while preserving the original script (no transliteration). This is the recommended entry point for sanitizing user-submitted form data, comments, and API payloads.
+
+## Zalgo detection
+
+The `is_zalgo()` predicate detects excessive combining mark stacking by walking the NFD decomposition and counting consecutive combining marks per base character. The default threshold of 3 marks is safe for all legitimate scripts — Vietnamese `ệ` (the most combining-mark-heavy legitimate character in common use) has exactly 2 marks in NFD. The `strip_zalgo()` function caps marks at a configurable limit (default: 2), preserving legitimate diacritics while removing abuse.

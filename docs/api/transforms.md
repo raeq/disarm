@@ -68,6 +68,24 @@ Functions that transform text. All are pure functions — they never mutate the 
 
 ---
 
+## strip_zalgo
+
+::: translit.strip_zalgo
+
+Caps the number of combining marks per base character, preserving legitimate diacritics (é, ñ, ệ) while removing zalgo stacking abuse.
+
+```python
+from translit import strip_zalgo
+
+strip_zalgo("café")           # => "café"  (1 mark — preserved)
+strip_zalgo("Việt Nam")       # => "Việt Nam"  (2 marks — preserved)
+
+# Strip all combining marks (like strip_accents)
+strip_zalgo("café", max_marks=0)  # => "cafe"
+```
+
+---
+
 ## Batch APIs
 
 The batch functions process multiple strings in a single Rust call, amortizing the Python → Rust boundary overhead (~240 ns per call). They return a `list[str]` in the same order as the input.

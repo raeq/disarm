@@ -408,19 +408,12 @@ result = (
 
 A complete pipeline for normalizing incoming catalog records. The
 `catalog_key()` function handles the search/dedup key in one call;
-use `TextPipeline` for sort keys and display normalization:
+`sort_key()` generates sort-friendly keys; `display_clean()` does
+lightweight cleanup for rendering:
 
 ```python
-from translit import catalog_key, display_clean, TextPipeline
+from translit import catalog_key, sort_key, display_clean
 from translit import is_mixed_script, detect_scripts
-
-# Sort keys need transliteration (ASCII), so use TextPipeline
-sort_pipe = TextPipeline(
-    normalize="NFKC",
-    transliterate=True,
-    fold_case=True,
-    collapse_whitespace=True,
-)
 
 for record in incoming_records:
     # Normalize for display (lightweight cleanup)
@@ -429,8 +422,8 @@ for record in incoming_records:
     # Generate dedup/search key (accent-insensitive, confusable-safe)
     record.search_key = catalog_key(record.raw_title)
 
-    # Generate sort key (ASCII transliterated)
-    record.sort_key = sort_pipe(record.raw_title)
+    # Generate sort key (transliterated, case-folded, preserves accents)
+    record.sort_key = sort_key(record.raw_title)
 
     # Flag mixed-script records for review
     if is_mixed_script(record.raw_title):

@@ -388,25 +388,71 @@ normalize("H₂O", form="NFKC")        # → "H2O"
 
 "Zalgo text" stacks dozens of combining diacritical marks on each
 character, creating visual noise that can break layouts, overwhelm parsers,
-or bypass content filters:
+or bypass content filters.
+
+### Detection
+
+```python
+from translit import is_zalgo
+
+is_zalgo("café")                   # False (1 combining mark — normal)
+is_zalgo("Việt Nam")               # False (2 marks — normal)
+is_zalgo("ḧ̸̡̢̧̛̗̱́̑̾̊̿̏̒̓̕ě̵̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕o")   # True
+```
+
+The `threshold` parameter (default: 3) controls how many consecutive
+combining marks per base character are tolerated before flagging as zalgo.
+Vietnamese `ệ` has 2 marks in NFD — the default is safe for all
+legitimate scripts.
+
+### Stripping (preserving legitimate diacritics)
+
+```python
+from translit import strip_zalgo
+
+# Caps combining marks at max_marks per base character (default: 2)
+strip_zalgo("café")                # → "café"  (1 mark — preserved)
+strip_zalgo("Việt Nam")            # → "Việt Nam"  (2 marks — preserved)
+# Zalgo stacking stripped to max 2 marks per base character
+```
+
+Unlike `strip_accents()` which removes **all** combining marks,
+`strip_zalgo()` preserves legitimate diacritics and only removes the
+excess.  Use `strip_accents()` when you want a fully ASCII-compatible
+result; use `strip_zalgo()` when you want to preserve the original script
+while neutralizing abuse.
+
+### Nuclear option
 
 ```python
 from translit import strip_accents
 
-# Strikethrough combining marks
+# Removes ALL combining marks — appropriate for search keys, not display
 strip_accents("h̵e̵l̵l̵o̵")       # → "hello"
 ```
-
-`strip_accents()` removes all Unicode combining marks (category M),
-stripping any stacked diacritics back to the base characters.
 
 ---
 
 ## Input Canonicalization Pipeline
 
-For security-critical input processing, use a pre-compiled pipeline that
-applies normalization, confusable resolution, and whitespace cleanup in a
-single pass:
+For user-submitted input that must be stored and displayed safely, use
+the precompiled `sanitize_user_input()` pipeline. It preserves the
+original script while neutralizing common attack vectors:
+
+```python
+from translit import sanitize_user_input
+
+sanitize_user_input("раypal")              # → "paypal" (homoglyph neutralized)
+sanitize_user_input("admin\u200Buser")     # → "adminuser" (zero-width stripped)
+sanitize_user_input("admin\u202Euser")     # → "adminuser" (bidi override stripped)
+sanitize_user_input("ﬁlter")              # → "filter" (NFKC normalized)
+```
+
+Pipeline: `NFKC → strip_zalgo → confusables → strip_bidi → collapse_whitespace`
+
+For security-critical contexts where you need even more control, use
+`security_clean()` (which skips zalgo stripping but otherwise follows
+the same pattern) or build a custom pipeline:
 
 ```python
 from translit import TextPipeline
@@ -426,22 +472,18 @@ security_pipe("ﬁlter")              # → "filter"
 
 **Username / display name validation:**
 ```python
-pipe = TextPipeline(
-    normalize="NFKC",
-    confusables=True,
-    collapse_whitespace=True,
-)
+from translit import sanitize_user_input
+
+# Handles zalgo, homoglyphs, bidi, zero-width, and control chars
+clean_name = sanitize_user_input(raw_input)
 ```
 
 **Search query sanitization:**
 ```python
-pipe = TextPipeline(
-    normalize="NFKC",
-    confusables=True,
-    strip_accents=True,
-    fold_case=True,
-    collapse_whitespace=True,
-)
+from translit import search_key
+
+# NFKC → transliterate → strip_accents → fold_case → collapse_ws
+normalized = search_key(query)
 ```
 
 **Log entry canonicalization:**

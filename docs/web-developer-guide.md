@@ -289,10 +289,54 @@ slugify("مرحبا بالعالم")             # → "mrhb-bl-lm"
 
 ---
 
-## Cleaning User-Submitted Text: `display_clean()`
+## Sanitizing User-Submitted Text: `sanitize_user_input()`
 
-Before rendering user-submitted content (comments, bios, form fields),
-strip invisible junk without altering visible characters:
+For form submissions, comments, bios, and API payloads, use
+`sanitize_user_input()` — a single-call pipeline that neutralizes
+common attack vectors while preserving the original script:
+
+```python
+from translit import sanitize_user_input
+
+sanitize_user_input("Hello, world!")        # → "Hello, world!"
+sanitize_user_input("p\u0430ypal")          # → "paypal"  (Cyrillic а → Latin a)
+sanitize_user_input("admin\u202Euser")      # → "adminuser"  (bidi override stripped)
+sanitize_user_input("hello\u200Bworld")     # → "helloworld"  (ZWSP stripped)
+```
+
+Pipeline: `NFKC → strip_zalgo → confusables → strip_bidi → collapse_whitespace`
+
+This handles:
+
+- **Zalgo text** — caps combining marks at 2 per base character
+- **Homoglyph spoofing** — neutralizes cross-script lookalikes
+- **Bidi overrides** — prevents text reordering attacks
+- **Zero-width injections** — strips invisible characters
+- **Control characters** — removes null bytes and control sequences
+- **Encoding tricks** — NFKC collapses fullwidth bypasses and ligatures
+
+No transliteration is applied — multilingual input keeps its original script.
+
+### Zalgo Detection
+
+To check whether input contains zalgo-style combining mark abuse before
+processing:
+
+```python
+from translit import is_zalgo, strip_zalgo
+
+is_zalgo("café")               # False (1 combining mark — normal)
+is_zalgo("Việt Nam")           # False (2 marks — normal)
+
+# Strip zalgo while preserving legitimate diacritics
+strip_zalgo(zalgo_text)         # caps at 2 marks per base char
+strip_zalgo(text, max_marks=0)  # strips ALL combining marks
+```
+
+### Lightweight Display Cleaning: `display_clean()`
+
+For rendering-only cleanup without homoglyph or zalgo protection,
+use the lighter `display_clean()`:
 
 ```python
 from translit import display_clean
@@ -304,14 +348,12 @@ display_clean("\uFEFFhello")          # → "hello"        (BOM stripped)
 display_clean("  hello  ")            # → "hello"        (trimmed)
 ```
 
-`display_clean()` collapses whitespace runs to single spaces, strips
-control characters and zero-width injections, and trims leading/trailing
-whitespace. It does **not** alter visible content — diacritics, emoji,
-and non-Latin scripts pass through unchanged.
+`display_clean()` strips bidi overrides, control characters, and
+zero-width injections, then collapses whitespace. It does **not** handle
+homoglyphs or zalgo — use `sanitize_user_input()` for that.
 
-For security-sensitive contexts (e.g., domain validation, username checks),
-use `security_clean()` instead, which additionally normalizes confusable
-homoglyphs and strips bidi overrides.
+For security-critical contexts (e.g., domain validation, username checks),
+use `security_clean()` instead.
 
 ---
 

@@ -12,7 +12,7 @@ Unicode text infrastructure for Python: transliteration, normalization, and safe
 - **[Slugification](docs/user-guide/slugification.md)**: URL-safe slugs with [python-slugify parameter compatibility](docs/migration/from-python-slugify.md)
 - **[Filename sanitization](docs/user-guide/filenames.md)**: Cross-platform safe filenames with NFC normalization, path traversal protection, and Windows reserved name handling
 - **[Text normalization](docs/user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, [confusable homoglyph detection](docs/user-guide/confusables.md) (TR39), full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](docs/user-guide/text-cleaning.md)
-- **[Precompiled pipelines](docs/api/pipelines.md)**: `security_clean`, `ml_normalize`, `catalog_key`, `display_clean` for common workflows
+- **[Precompiled pipelines](docs/api/pipelines.md)**: `security_clean`, `ml_normalize`, `catalog_key`, `display_clean`, `search_key`, `sort_key`, `sanitize_user_input` for common workflows
 - **[Grapheme clusters](docs/user-guide/graphemes.md)**: Correct user-perceived character counting, splitting, and truncation
 - **[Hostname safety](docs/api/predicates.md#is_safe_hostname)**: Mixed-script and homoglyph attack detection
 - **[Encoding detection](docs/api/encoding.md)**: Auto-detect and decode byte sequences to UTF-8 (chardetng)
@@ -82,7 +82,7 @@ This is context-free, character-by-character transliteration, the same approach 
 ## Precompiled pipelines
 
 ```python
-from translit import security_clean, ml_normalize, catalog_key
+from translit import security_clean, ml_normalize, catalog_key, sanitize_user_input
 
 # Security: NFKC → confusables → strip bidi → collapse whitespace
 security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")  # → "Real text"
@@ -93,6 +93,9 @@ ml_normalize("Café ☕ Ünïcödé")  # → "cafe hot beverage unicode"
 # Library catalog: NFKC → transliterate → confusables → strip accents → fold case
 catalog_key("Москва", lang="ru")  # → "moskva"
 catalog_key("ΩMEGA  café")        # → "omega cafe"
+
+# Web input: NFKC → strip zalgo → confusables → strip bidi → collapse whitespace
+sanitize_user_input("p\u0430ypal")  # → "paypal" (homoglyph neutralized)
 ```
 
 ## Text builder

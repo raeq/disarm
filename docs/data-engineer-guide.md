@@ -472,9 +472,12 @@ engineering tasks:
 | Pipeline | Steps | Use case |
 |---|---|---|
 | `catalog_key()` | NFKC → transliterate → confusables → strip_accents → fold_case → collapse_ws | Dedup keys, record matching |
+| `search_key()` | NFKC → transliterate → strip_accents → fold_case → collapse_ws | Search index keys |
+| `sort_key()` | NFKC → transliterate → fold_case → collapse_ws | Sort ordering |
 | `ml_normalize()` | NFKC → demojize → strip_accents → fold_case → collapse_ws | Feature engineering |
 | `security_clean()` | NFKC → confusables → strip_bidi → collapse_ws | Input sanitization |
-| `display_clean()` | collapse_ws | UI text cleanup |
+| `sanitize_user_input()` | NFKC → strip_zalgo → confusables → strip_bidi → collapse_ws | Web form input |
+| `display_clean()` | strip_bidi → collapse_ws | UI text cleanup |
 
 Each pipeline is a single compiled Rust function — no pipeline construction
 overhead at call time.

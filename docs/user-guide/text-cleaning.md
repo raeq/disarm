@@ -25,6 +25,31 @@ strip_accents("São Paulo")  # => "Sao Paulo"
 !!! note
     `strip_accents()` is distinct from `transliterate()`. Stripping accents preserves the original script (e.g., Cyrillic stays Cyrillic), while transliteration converts everything to ASCII.
 
+## strip_zalgo
+
+Remove excessive combining marks (zalgo text abuse) while preserving legitimate diacritics:
+
+```python
+from translit import strip_zalgo, is_zalgo
+
+# Legitimate diacritics are preserved
+strip_zalgo("café")          # => "café"   (1 mark — kept)
+strip_zalgo("Việt Nam")      # => "Việt Nam"  (2 marks — kept)
+
+# Zalgo stacking is stripped to max_marks (default: 2)
+is_zalgo("café")             # False
+is_zalgo("ḧ̸̡̢̧̛̗̱́̑̾̊̿̏̒̓̕ě̵̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕o")  # True
+```
+
+### strip_zalgo vs strip_accents
+
+| Function | Purpose | `café` | Zalgo `h̷̑ȇ̷l̷̑l̷̑ȏ̷` |
+|---|---|---|---|
+| `strip_zalgo()` | Remove excess marks only | `café` | `hello` |
+| `strip_accents()` | Remove **all** marks | `cafe` | `hello` |
+
+Use `strip_zalgo()` when you want to preserve legitimate diacritics in multilingual text. Use `strip_accents()` when you want fully ASCII-compatible output.
+
 ## fold_case
 
 Full Unicode case folding per CaseFolding.txt (Unicode 16.0) — a more thorough alternative to `.lower()`. Backed by a compile-time PHF table containing all 1,557 status-C and status-F mappings:

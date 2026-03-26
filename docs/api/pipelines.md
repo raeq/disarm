@@ -74,6 +74,62 @@ display_clean("admin\u202Euser")        # => "adminuser" (bidi override stripped
 
 ---
 
+## search_key
+
+::: translit.search_key
+
+### Pipeline steps
+
+`NFKC → transliterate → strip_accents → fold_case → collapse_whitespace`
+
+```python
+from translit import search_key
+
+search_key("Café RÉSUMÉ")              # => "cafe resume"
+search_key("Москва", lang="ru")        # => "moskva"
+search_key("ΩMEGA", lang="auto")       # => "omega"
+```
+
+---
+
+## sort_key
+
+::: translit.sort_key
+
+### Pipeline steps
+
+`NFKC → transliterate → fold_case → collapse_whitespace`
+
+```python
+from translit import sort_key
+
+sort_key("Über", lang="de")            # => "ueber"
+sort_key("Война и мир", lang="ru")     # => "voyna i mir"
+sort_key("Café")                       # => "cafe"
+```
+
+---
+
+## sanitize_user_input
+
+::: translit.sanitize_user_input
+
+### Pipeline steps
+
+`NFKC → strip_zalgo → confusables → strip_bidi → collapse_whitespace`
+
+```python
+from translit import sanitize_user_input
+
+sanitize_user_input("Hello, world!")        # => "Hello, world!"
+sanitize_user_input("p\u0430ypal")          # => "paypal" (Cyrillic а → Latin a)
+sanitize_user_input("admin\u202Euser")      # => "adminuser" (bidi override stripped)
+```
+
+Unlike `security_clean`, this pipeline also strips zalgo text (excessive combining mark stacking). Unlike `catalog_key`/`search_key`, it does **not** transliterate — the original script is preserved.
+
+---
+
 ## PRESETS
 
 ```python
@@ -86,6 +142,8 @@ Dict mapping preset function names to their ordered pipeline steps. Each value i
 >>> from translit import PRESETS
 >>> PRESETS["security_clean"]
 [('normalize', 'NFKC'), ('confusables', 'latin'), ('strip_bidi', None), ('collapse_whitespace', None)]
+>>> PRESETS["sanitize_user_input"]
+[('normalize', 'NFKC'), ('strip_zalgo', None), ('confusables', 'latin'), ('strip_bidi', None), ('collapse_whitespace', None)]
 ```
 
 Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.

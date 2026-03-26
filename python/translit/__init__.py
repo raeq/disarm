@@ -71,6 +71,7 @@ from translit._translit import (
     _is_normalized,
     # Hostname safety
     _is_safe_hostname,
+    _is_zalgo,
     # Language profiles
     _list_langs,
     _ml_normalize,
@@ -81,23 +82,21 @@ from translit._translit import (
     _register_replacements,
     _remove_replacement,
     _sanitize_filename,
+    _sanitize_user_input,
     # Precompiled pipelines
     _search_key,
     _security_clean,
-    _sort_key,
     # Emoji provider
     _set_emoji_provider,
     # Stateful
     _Slugifier,
     _slugify,
     _slugify_batch,
+    _sort_key,
     _strip_accents,
     _strip_accents_batch,
     _strip_bidi,
-    # Zalgo detection and stripping
-    _is_zalgo,
     _strip_zalgo,
-    _sanitize_user_input,
     _TextPipeline,
     # Core transforms (Rust implementations)
     _transliterate,

@@ -541,9 +541,9 @@ mod tests {
 
     #[test]
     fn test_sanitize_user_input_preserves_accents() {
-        // Legitimate diacritics are preserved (max_marks=2 keeps them)
-        assert_eq!(_sanitize_user_input("café").unwrap(), "cafe");
-        // Note: confusables maps to Latin, so é → e after NFKC + confusables
+        // Legitimate diacritics are preserved — no transliteration or accent stripping
+        assert_eq!(_sanitize_user_input("café").unwrap(), "café");
+        assert_eq!(_sanitize_user_input("résumé").unwrap(), "résumé");
     }
 
     #[test]

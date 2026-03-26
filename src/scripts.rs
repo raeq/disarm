@@ -327,12 +327,13 @@ fn lookup_discriminator(ch: char, script: &str) -> Option<&'static str> {
     match script {
         "Cyrillic" => match ch {
             // Ukrainian exclusive: ґ Ґ ї Ї є Є і І
-            '\u{0491}' | '\u{0490}' | '\u{0457}' | '\u{0407}'
-            | '\u{0454}' | '\u{0404}' | '\u{0456}' | '\u{0406}' => Some("uk"),
+            '\u{0491}' | '\u{0490}' | '\u{0457}' | '\u{0407}' | '\u{0454}' | '\u{0404}'
+            | '\u{0456}' | '\u{0406}' => Some("uk"),
             // Serbian exclusive: ђ Ђ ћ Ћ љ Љ њ Њ џ Џ ј Ј
-            '\u{0452}' | '\u{0402}' | '\u{045B}' | '\u{040B}'
-            | '\u{0459}' | '\u{0409}' | '\u{045A}' | '\u{040A}'
-            | '\u{045F}' | '\u{040F}' | '\u{0458}' | '\u{0408}' => Some("sr"),
+            '\u{0452}' | '\u{0402}' | '\u{045B}' | '\u{040B}' | '\u{0459}' | '\u{0409}'
+            | '\u{045A}' | '\u{040A}' | '\u{045F}' | '\u{040F}' | '\u{0458}' | '\u{0408}' => {
+                Some("sr")
+            }
             // Mongolian Cyrillic exclusive: ө Ө ү Ү
             '\u{04E9}' | '\u{04E8}' | '\u{04AF}' | '\u{04AE}' => Some("mn"),
             _ => None,
@@ -435,8 +436,7 @@ pub fn resolve_auto_lang(text: &str) -> Option<String> {
     match primary_script {
         Some(script) if is_ambiguous_script(script) => {
             // Ambiguous script — try discriminators, fall back to script default
-            let lang = discriminate_by_chars(text, script)
-                .or_else(|| script_to_lang(script));
+            let lang = discriminate_by_chars(text, script).or_else(|| script_to_lang(script));
             lang.map(str::to_owned)
         }
         Some(script) => {
@@ -1029,7 +1029,10 @@ mod tests {
     #[test]
     fn test_discriminate_ukrainian_by_exclusive_chars() {
         // ї is exclusively Ukrainian among our Cyrillic profiles
-        assert_eq!(resolve_auto_lang("Київ — столиця України"), Some("uk".to_owned()));
+        assert_eq!(
+            resolve_auto_lang("Київ — столиця України"),
+            Some("uk".to_owned())
+        );
     }
 
     #[test]
@@ -1047,19 +1050,28 @@ mod tests {
     #[test]
     fn test_discriminate_vietnamese_by_exclusive_chars() {
         // ơ and ư are exclusively Vietnamese
-        assert_eq!(resolve_auto_lang("Việt Nam có nhiều người"), Some("vi".to_owned()));
+        assert_eq!(
+            resolve_auto_lang("Việt Nam có nhiều người"),
+            Some("vi".to_owned())
+        );
     }
 
     #[test]
     fn test_discriminate_turkish_by_exclusive_chars() {
         // İ and ı are exclusively Turkish
-        assert_eq!(resolve_auto_lang("İstanbul güzel bir şehır"), Some("tr".to_owned()));
+        assert_eq!(
+            resolve_auto_lang("İstanbul güzel bir şehır"),
+            Some("tr".to_owned())
+        );
     }
 
     #[test]
     fn test_discriminate_german_by_exclusive_chars() {
         // ß is exclusively German
-        assert_eq!(resolve_auto_lang("Straße nach Süden"), Some("de".to_owned()));
+        assert_eq!(
+            resolve_auto_lang("Straße nach Süden"),
+            Some("de".to_owned())
+        );
     }
 
     #[test]

@@ -6,9 +6,7 @@ import warnings as _warnings
 from collections.abc import Iterable
 
 from translit._enums import (
-    # Non-European languages
     LANG_AR,
-    # European languages
     LANG_BG,
     LANG_CA,
     LANG_CS,
@@ -18,6 +16,7 @@ from translit._enums import (
     LANG_EL,
     LANG_ES,
     LANG_ET,
+    LANG_FA,
     LANG_FI,
     LANG_FR,
     LANG_GA,
@@ -1703,6 +1702,7 @@ __all__ = [
     "LANG_UK",
     "LANG_VI",
     "LANG_AR",
+    "LANG_FA",
     "LANG_JA",
     "LANG_KO",
     "LANG_RU",

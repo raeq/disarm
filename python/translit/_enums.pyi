@@ -93,6 +93,7 @@ LANG_UK: str
 LANG_VI: str
 # Non-European languages
 LANG_AR: str
+LANG_FA: str
 LANG_JA: str
 LANG_KO: str
 LANG_RU: str

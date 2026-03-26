@@ -117,8 +117,9 @@ LANG_TR: str = "tr"  # Turkish
 LANG_UK: str = "uk"  # Ukrainian
 LANG_VI: str = "vi"  # Vietnamese
 
-# Language code constants — non-European
+# Language code constants — Middle Eastern
 LANG_AR: str = "ar"  # Arabic
+LANG_FA: str = "fa"  # Persian (Farsi)
 LANG_JA: str = "ja"  # Japanese
 LANG_KO: str = "ko"  # Korean
 LANG_RU: str = "ru"  # Russian

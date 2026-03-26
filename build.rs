@@ -96,6 +96,7 @@ fn main() {
         ("lang_ru", "LANG_RU"),
         ("lang_sr", "LANG_SR"),
         ("lang_ja", "LANG_JA"),
+        ("lang_fa", "LANG_FA"),
     ];
 
     // Generate each language table to its own file, then combine

@@ -53,6 +53,12 @@ translit ships with 60 built-in language profiles that provide language-specific
 | `ar` | Arabic | Basic transliteration (Buckwalter-derived) |
 | `he` | Hebrew | Common Israeli romanization; Qof → q (SBL); presentation forms with dagesh |
 
+### Iranian languages
+
+| Code | Language | Notes |
+|---|---|---|
+| `fa` | Persian (Farsi) | UNGEGN-based romanization; ث→s, ذ→z, ض→z, ظ→z (Persian pronunciation) |
+
 ### Ethiopic languages
 
 | Code | Language | Script | Notes |
@@ -175,7 +181,7 @@ s("東京タワー")      # => CJK slug
 | Hiragana / Katakana | `ja` (Japanese) | Unambiguous |
 | Hangul | `ko` (Korean) | Unambiguous |
 | Thai | `th` | Unambiguous |
-| Arabic | `ar` | Also used by Urdu, Persian |
+| Arabic | `ar` | Also used by Persian (`fa`), Urdu |
 | Greek | `el` | Unambiguous |
 | Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Gurmukhi, Odia, Sinhala | respective language | Unambiguous |
 | Georgian, Armenian, Ethiopic, Tibetan, Lao, Myanmar, Khmer, Mongolian, Javanese, Hebrew | respective language | Unambiguous |

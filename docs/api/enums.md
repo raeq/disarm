@@ -197,9 +197,13 @@ from translit import LANG_DE, LANG_FR, LANG_ES  # etc.
 
 `LANG_VI`
 
-### East Asian & Other
+### Middle Eastern
 
-`LANG_AR`, `LANG_JA`, `LANG_KO`, `LANG_ZH`
+`LANG_AR`, `LANG_FA`
+
+### East Asian
+
+`LANG_JA`, `LANG_KO`, `LANG_ZH`
 
 ### Auto-detection
 

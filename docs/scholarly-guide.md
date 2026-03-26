@@ -191,9 +191,9 @@ pan-script defaults.
 | `zh` | Chinese   | Hanzi → pinyin                                  |
 | `ko` | Korean    | Hangul → romanization                           |
 
-Full list of 60 codes: `am`, `ar`, `as`, `bg`, `bn`, `bo`, `ca`, `cs`, `cy`, `da`, `de`, `el`,
-`es`, `et`, `fi`, `fr`, `ga`, `gu`, `he`, `hi`, `hr`, `hu`, `hy`, `is`, `it`, `ja`, `ka`, `km`, `kn`, `ko`, `lo`, `lt`,
-`lv`, `ml`, `mr`, `mt`, `my`, `ne`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sa`, `si`, `sk`,
+Full list of 64 codes: `am`, `ar`, `as`, `bg`, `bn`, `bo`, `ca`, `cs`, `cy`, `da`, `de`, `dv`, `el`,
+`es`, `et`, `fa`, `fi`, `fr`, `ga`, `gu`, `he`, `hi`, `hr`, `hu`, `hy`, `is`, `it`, `ja`, `jv`, `ka`, `km`, `kn`, `ko`, `lo`, `lt`,
+`lv`, `ml`, `mn`, `mr`, `mt`, `my`, `ne`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sa`, `si`, `sk`,
 `sl`, `sq`, `sr`, `sv`, `ta`, `te`, `th`, `tr`, `uk`, `vi`, `zh`.
 
 ### Auto-Detecting Language from Script

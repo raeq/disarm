@@ -69,6 +69,7 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
         "ru" => Some(&LANG_RU),
         "sr" => Some(&LANG_SR),
         "ja" => Some(&LANG_JA),
+        "fa" => Some(&LANG_FA), // Persian (Farsi)
         // Languages that need no overrides — default table handles them correctly:
         // cs, sk, pl, hu, ro, hr, sl, sq, mt, ga, cy, lv, lt, ar
         // CJK languages (zh, ko) are handled by dedicated modules (hanzi_pinyin, hangul)

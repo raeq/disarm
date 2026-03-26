@@ -94,6 +94,10 @@ from translit._translit import (
     _strip_accents,
     _strip_accents_batch,
     _strip_bidi,
+    # Zalgo detection and stripping
+    _is_zalgo,
+    _strip_zalgo,
+    _sanitize_user_input,
     _TextPipeline,
     # Core transforms (Rust implementations)
     _transliterate,
@@ -1009,6 +1013,82 @@ def strip_bidi(text: str) -> str:
     return _strip_bidi(text)
 
 
+def sanitize_user_input(text: str) -> str:
+    """Sanitize user-submitted input for web applications.
+
+    Preserves the original script (no transliteration) while neutralizing
+    common attack vectors: zalgo stacking, homoglyph spoofing, bidi
+    overrides, zero-width injections, and control characters.
+
+    Pipeline: ``NFKC → strip_zalgo → confusables → strip_bidi → collapse_whitespace``
+
+    Args:
+        text: User-submitted input string.
+
+    Returns:
+        Sanitized string safe for storage and display.
+
+    Examples:
+        >>> sanitize_user_input("Hello, world!")
+        'Hello, world!'
+        >>> sanitize_user_input("p\\u0430ypal")  # Cyrillic а → Latin a
+        'paypal'
+        >>> sanitize_user_input("admin\\u202euser")  # RLO stripped
+        'adminuser'
+    """
+    return _sanitize_user_input(text)
+
+
+def is_zalgo(text: str, *, threshold: int = 3) -> bool:
+    """Detect whether text contains zalgo-style combining mark abuse.
+
+    Returns ``True`` if any base character has more than *threshold*
+    consecutive combining marks in NFD decomposition.
+
+    Args:
+        text: Input string to check.
+        threshold: Maximum allowed combining marks per base character
+            (default: ``3``).  Vietnamese ``ệ`` has 2 marks in NFD —
+            the default is safe for all legitimate scripts.
+
+    Returns:
+        ``True`` if zalgo-style stacking is detected.
+
+    Examples:
+        >>> is_zalgo("café")
+        False
+        >>> is_zalgo("Việt Nam")
+        False
+        >>> is_zalgo("ḧ̸̡̢̧̛̗̱̜̼̯̞̙́̑̾̊̿̏̒̓̕ě̵̢̧̛̗̱̜̼̯̞̙̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̜̼̯̞̙̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̜̼̯̞̙̈́̑̾̊̿̏̒̓̕ơ̵̢̧̗̱̜̼̯̞̙̈́̑̾̊̿̏̒̓̕")
+        True
+    """
+    return _is_zalgo(text, threshold=threshold)
+
+
+def strip_zalgo(text: str, *, max_marks: int = 2) -> str:
+    """Strip excessive combining marks, preserving legitimate diacritics.
+
+    Caps the number of combining marks per base character at *max_marks*.
+    Operates in NFD space and recomposes to NFC.
+
+    Args:
+        text: Input string (may contain zalgo abuse).
+        max_marks: Maximum combining marks to keep per base character
+            (default: ``2``).  Set to ``0`` to strip all combining marks
+            (equivalent to :func:`strip_accents`).
+
+    Returns:
+        String with excess combining marks removed.
+
+    Examples:
+        >>> strip_zalgo("café")  # 1 combining mark — preserved
+        'café'
+        >>> strip_zalgo("Việt Nam")  # 2 marks — preserved
+        'Việt Nam'
+    """
+    return _strip_zalgo(text, max_marks=max_marks)
+
+
 # --- Grapheme cluster functions ---
 
 
@@ -1580,6 +1660,13 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("fold_case", None),
         ("collapse_whitespace", None),
     ],
+    "sanitize_user_input": [
+        ("normalize", "NFKC"),
+        ("strip_zalgo", None),
+        ("confusables", "latin"),
+        ("strip_bidi", None),
+        ("collapse_whitespace", None),
+    ],
 }
 """Named preset pipelines and their ordered steps.
 
@@ -1718,6 +1805,10 @@ __all__ = [
     "search_key",
     "sort_key",
     "strip_bidi",
+    "sanitize_user_input",
+    # Zalgo detection and stripping
+    "is_zalgo",
+    "strip_zalgo",
     # Grapheme clusters
     "grapheme_len",
     "grapheme_split",

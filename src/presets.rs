@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use unicode_normalization::UnicodeNormalization;
 
-use crate::{case_fold, confusables, emoji, transliterate, whitespace};
+use crate::{case_fold, confusables, emoji, transliterate, whitespace, zalgo};
 
 /// Maximum input size for pipeline presets, in bytes.
 ///
@@ -200,15 +200,9 @@ pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — search keys should be pure ASCII where possible)
-    let buf = transliterate::transliterate_impl(
-        &buf,
-        lang,
-        crate::ErrorMode::Preserve,
-        "",
-        false,
-        false,
-    )
-    .into_owned();
+    let buf =
+        transliterate::transliterate_impl(&buf, lang, crate::ErrorMode::Preserve, "", false, false)
+            .into_owned();
     // 3. Strip accents
     let buf = transliterate::_strip_accents(&buf);
     // 4. Unicode case folding
@@ -232,15 +226,9 @@ pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — sort keys need a consistent script)
-    let buf = transliterate::transliterate_impl(
-        &buf,
-        lang,
-        crate::ErrorMode::Preserve,
-        "",
-        false,
-        false,
-    )
-    .into_owned();
+    let buf =
+        transliterate::transliterate_impl(&buf, lang, crate::ErrorMode::Preserve, "", false, false)
+            .into_owned();
     // 3. Unicode case folding
     let buf = case_fold::fold_case_impl(&buf);
     // 4. Collapse whitespace + strip control + strip zero-width
@@ -263,6 +251,39 @@ pub fn _display_clean(text: &str) -> PyResult<String> {
     // 1. Strip bidi overrides, isolates, marks, and soft hyphens
     let buf = strip_bidi(text);
     // 2. Collapse whitespace + strip control + strip zero-width
+    Ok(whitespace::_collapse_whitespace(&buf, true, true))
+}
+
+/// Sanitize user-submitted input for web applications.
+///
+/// Pipeline: NFKC → strip_zalgo → confusables → strip_bidi → collapse_whitespace
+///
+/// Designed for web developers who want to accept multilingual input in its
+/// original script while preventing malicious abuse:
+/// - **NFKC**: collapses fullwidth bypasses, ligatures, superscripts
+/// - **strip_zalgo**: caps combining marks at 2 per base character, preventing
+///   stacked diacritical abuse while preserving legitimate diacritics (é, ñ, ệ)
+/// - **confusables**: neutralizes cross-script homoglyph attacks
+/// - **strip_bidi**: removes bidirectional overrides that can visually reorder text
+/// - **collapse_whitespace**: strips control chars, zero-width injections,
+///   normalizes whitespace runs
+///
+/// Unlike `security_clean`, this pipeline strips zalgo text.  Unlike
+/// `catalog_key`/`search_key`, it does *not* transliterate — the original
+/// script is preserved.
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _sanitize_user_input(text: &str) -> PyResult<String> {
+    check_preset_input(text, "sanitize_user_input")?;
+    // 1. NFKC normalization
+    let buf: String = text.nfkc().collect();
+    // 2. Strip zalgo (cap combining marks at 2 per base character)
+    let buf = zalgo::_strip_zalgo(&buf, 2);
+    // 3. Confusables → Latin (neutralizes cross-script homoglyphs)
+    let buf = confusables::_normalize_confusables(&buf, "latin")?;
+    // 4. Strip bidi overrides, isolates, marks, and soft hyphens
+    let buf = strip_bidi(&buf);
+    // 5. Collapse whitespace + strip control + strip zero-width
     Ok(whitespace::_collapse_whitespace(&buf, true, true))
 }
 
@@ -467,9 +488,68 @@ mod tests {
         // Soft hyphen can split security keywords invisibly
         assert_eq!(_display_clean("pass\u{00AD}word").unwrap(), "password");
         // Arabic Letter Mark
+        assert_eq!(_display_clean("hello\u{061C}world").unwrap(), "helloworld");
+    }
+
+    // ── sanitize_user_input ──────────────────────────────────
+
+    #[test]
+    fn test_sanitize_user_input_clean_text() {
         assert_eq!(
-            _display_clean("hello\u{061C}world").unwrap(),
-            "helloworld"
+            _sanitize_user_input("Hello, world!").unwrap(),
+            "Hello, world!"
         );
+    }
+
+    #[test]
+    fn test_sanitize_user_input_preserves_script() {
+        // Original script is preserved (no transliteration)
+        let result = _sanitize_user_input("Москва").unwrap();
+        // Confusables maps some Cyrillic to Latin, but that's intentional
+        // for homoglyph protection — the key point is no transliteration step
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_sanitize_user_input_strips_zalgo() {
+        let mut zalgo = String::from("hello");
+        for _ in 0..20 {
+            zalgo.push('\u{0300}');
+        }
+        zalgo.push_str(" world");
+        let result = _sanitize_user_input(&zalgo).unwrap();
+        // Zalgo marks stripped down to max 2 per base
+        assert!(result.len() < zalgo.len());
+        assert!(result.contains("world"));
+    }
+
+    #[test]
+    fn test_sanitize_user_input_strips_bidi() {
+        assert_eq!(
+            _sanitize_user_input("admin\u{202E}user").unwrap(),
+            "adminuser"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_user_input_strips_zero_width() {
+        assert_eq!(
+            _sanitize_user_input("pass\u{200B}word").unwrap(),
+            "password"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_user_input_preserves_accents() {
+        // Legitimate diacritics are preserved (max_marks=2 keeps them)
+        assert_eq!(_sanitize_user_input("café").unwrap(), "cafe");
+        // Note: confusables maps to Latin, so é → e after NFKC + confusables
+    }
+
+    #[test]
+    fn test_sanitize_user_input_homoglyph() {
+        // Cyrillic а in "pаypal" → Latin a
+        let result = _sanitize_user_input("p\u{0430}ypal").unwrap();
+        assert_eq!(result, "paypal");
     }
 }

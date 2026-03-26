@@ -77,6 +77,8 @@ pub mod transliterate;
 pub mod unicode_ranges;
 #[doc(hidden)]
 pub mod whitespace;
+#[doc(hidden)]
+pub mod zalgo;
 
 /// Internal Rust module. Not part of the public Python API.
 /// All public access goes through python/translit/__init__.py.
@@ -122,6 +124,11 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(presets::_search_key, m)?)?;
     m.add_function(wrap_pyfunction!(presets::_sort_key, m)?)?;
     m.add_function(wrap_pyfunction!(presets::_strip_bidi, m)?)?;
+    m.add_function(wrap_pyfunction!(presets::_sanitize_user_input, m)?)?;
+
+    // Zalgo detection and stripping
+    m.add_function(wrap_pyfunction!(zalgo::_is_zalgo, m)?)?;
+    m.add_function(wrap_pyfunction!(zalgo::_strip_zalgo, m)?)?;
 
     // Grapheme cluster functions
     m.add_function(wrap_pyfunction!(grapheme::_grapheme_len, m)?)?;

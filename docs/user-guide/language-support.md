@@ -184,6 +184,7 @@ s("東京タワー")      # => CJK slug
 | Arabic | `ar` | Also used by Persian (`fa`), Urdu |
 | Greek | `el` | Unambiguous |
 | Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Gurmukhi, Odia, Sinhala | respective language | Unambiguous |
+| Thaana | `dv` (Dhivehi) | Unambiguous |
 | Georgian, Armenian, Ethiopic, Tibetan, Lao, Myanmar, Khmer, Mongolian, Javanese, Hebrew | respective language | Unambiguous |
 
 For ambiguous scripts (Cyrillic, Devanagari, Han, Arabic), pass an explicit language code when accuracy matters.

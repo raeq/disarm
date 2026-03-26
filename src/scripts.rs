@@ -293,6 +293,7 @@ fn script_to_lang(script: &str) -> Option<&'static str> {
         "Hangul" => Some("ko"),
         "Hebrew" => Some("he"),
         "Arabic" => Some("ar"),
+        "Thaana" => Some("dv"),
         "Javanese" => Some("jv"),
         "Mongolian" => Some("mn"),
         "Devanagari" => Some("hi"),

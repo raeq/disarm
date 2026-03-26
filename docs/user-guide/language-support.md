@@ -173,21 +173,51 @@ s("東京タワー")      # => CJK slug
 
 ### Script-to-language mapping
 
-| Script | Default language | Ambiguity |
-|---|---|---|
-| Cyrillic | `ru` (Russian) | Multi-language — specify `uk`, `bg`, `sr` explicitly for non-Russian |
-| Devanagari | `hi` (Hindi) | Also used by Marathi, Nepali, Sanskrit |
-| Han | `zh` (Chinese) | Also used by Japanese kanji |
-| Hiragana / Katakana | `ja` (Japanese) | Unambiguous |
-| Hangul | `ko` (Korean) | Unambiguous |
-| Thai | `th` | Unambiguous |
-| Arabic | `ar` | Also used by Persian (`fa`), Urdu |
-| Greek | `el` | Unambiguous |
-| Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Gurmukhi, Odia, Sinhala | respective language | Unambiguous |
-| Thaana | `dv` (Dhivehi) | Unambiguous |
-| Georgian, Armenian, Ethiopic, Tibetan, Lao, Myanmar, Khmer, Mongolian, Javanese, Hebrew | respective language | Unambiguous |
+For **unambiguous scripts** (one script = one language), detection is immediate:
 
-For ambiguous scripts (Cyrillic, Devanagari, Han, Arabic), pass an explicit language code when accuracy matters.
+| Script | Default language |
+|---|---|
+| Georgian | `ka` |
+| Armenian | `hy` |
+| Thai | `th` |
+| Hangul | `ko` |
+| Hiragana / Katakana | `ja` |
+| Greek | `el` |
+| Thaana | `dv` (Dhivehi) |
+| Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Gurmukhi, Odia, Sinhala | respective language |
+| Ethiopic, Tibetan, Lao, Myanmar, Khmer, Mongolian, Javanese, Hebrew | respective language |
+
+### Character-level discrimination for ambiguous scripts
+
+For scripts shared by multiple languages, translit scans for **exclusive characters** — codepoints that appear in exactly one language's alphabet among the profiles we support:
+
+| Script | Exclusive characters | Detected language |
+|---|---|---|
+| Cyrillic | ґ Ґ ї Ї є Є і І | `uk` (Ukrainian) |
+| Cyrillic | ђ Ђ ћ Ћ љ Љ њ Њ џ Џ ј Ј | `sr` (Serbian) |
+| Cyrillic | ө Ө ү Ү | `mn` (Mongolian) |
+| Arabic | پ چ ژ گ | `fa` (Persian) |
+| Latin | ơ Ơ ư Ư | `vi` (Vietnamese) |
+| Latin | İ ı | `tr` (Turkish) |
+| Latin | ß ẞ | `de` (German) |
+
+If **no** exclusive characters are found, the script default is used (Cyrillic → `ru`, Arabic → `ar`, Latin → no override). If exclusive characters from **two different languages** appear in the same text (e.g., Ukrainian ї and Serbian ћ), detection falls back to the script default — this is the fail-safe guarantee.
+
+```python
+# Ukrainian detected by exclusive ї
+transliterate("Київ", lang="auto")   # → uses uk profile
+
+# Persian detected by exclusive پ
+transliterate("پارسی", lang="auto")  # → uses fa profile
+
+# German detected by ß
+transliterate("Straße", lang="auto") # → uses de profile
+
+# No exclusive chars → safe default
+transliterate("Москва", lang="auto") # → uses ru (unchanged)
+```
+
+For scripts that remain ambiguous after discrimination (Devanagari, Han), pass an explicit language code when accuracy matters.
 
 !!! tip
     Use the `LANG_AUTO` constant for type safety:

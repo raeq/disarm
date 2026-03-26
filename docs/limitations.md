@@ -264,6 +264,23 @@ translit is a fast, context-free Unicode text processing toolkit. It is not:
 - **An encoding oracle**: encoding detection is probabilistic and can be wrong, especially on short inputs
 - **A rendering engine**: grapheme cluster boundaries are defined by Unicode specification, not by what any particular font or terminal actually displays
 
+## Language detection limitations
+
+The `lang="auto"` feature uses a two-tier strategy:
+
+1. **Script detection** — identifies the Unicode script (Cyrillic, Arabic, etc.)
+2. **Character discrimination** — for ambiguous scripts, scans for characters exclusive to one language
+
+This works well for languages with distinctive alphabets (Ukrainian, Serbian, Persian, Vietnamese, Turkish, German) but cannot distinguish languages that share identical character sets:
+
+- **Russian vs. Bulgarian** — both use standard Cyrillic without exclusive characters
+- **Hindi vs. Marathi vs. Nepali** — all use Devanagari with the same character inventory
+- **French vs. Spanish vs. Portuguese vs. Italian** — all use Latin with overlapping accented characters
+
+For these cases, pass an explicit language code (`lang="bg"`, `lang="mr"`, `lang="fr"`, etc.).
+
+Character discrimination is also unable to detect a language if the input text happens not to contain any exclusive characters. For example, a short Ukrainian phrase that avoids ґ, ї, є, і will be detected as Russian. Again, use an explicit language code when precision matters.
+
 ## References
 
 1. Sivonen, H. (2020). [chardetng: A Character Encoding Detector for the Encoding Standard](https://hsivonen.fi/chardetng/).

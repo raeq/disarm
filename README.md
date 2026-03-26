@@ -8,14 +8,14 @@ Unicode text infrastructure for Python: transliteration, normalization, and safe
 
 ## Features
 
-- **Transliteration**: Unicode → ASCII for Latin, Cyrillic, Greek, CJK (Chinese pinyin, Korean romanization, Japanese kana), and 64 language-specific profiles
-- **Slugification**: URL-safe slugs with python-slugify parameter compatibility
-- **Filename sanitization**: Cross-platform safe filenames with NFC normalization, path traversal protection, and Windows reserved name handling
-- **Text normalization**: NFC/NFD/NFKC/NFKD, confusable homoglyph detection (TR39), full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), whitespace collapse
-- **Precompiled pipelines**: `security_clean`, `ml_normalize`, `catalog_key`, `display_clean` for common workflows
-- **Grapheme clusters**: Correct user-perceived character counting, splitting, and truncation
-- **Hostname safety**: Mixed-script and homoglyph attack detection
-- **Encoding detection**: Auto-detect and decode byte sequences to UTF-8 (chardetng)
+- **[Transliteration](docs/user-guide/transliteration.md)**: Unicode → ASCII for Latin, Cyrillic, Greek, CJK (Chinese pinyin, Korean romanization, Japanese kana), and [64 language-specific profiles](docs/user-guide/language-support.md)
+- **[Slugification](docs/user-guide/slugification.md)**: URL-safe slugs with [python-slugify parameter compatibility](docs/migration/from-python-slugify.md)
+- **[Filename sanitization](docs/user-guide/filenames.md)**: Cross-platform safe filenames with NFC normalization, path traversal protection, and Windows reserved name handling
+- **[Text normalization](docs/user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, [confusable homoglyph detection](docs/user-guide/confusables.md) (TR39), full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](docs/user-guide/text-cleaning.md)
+- **[Precompiled pipelines](docs/api/pipelines.md)**: `security_clean`, `ml_normalize`, `catalog_key`, `display_clean` for common workflows
+- **[Grapheme clusters](docs/user-guide/graphemes.md)**: Correct user-perceived character counting, splitting, and truncation
+- **[Hostname safety](docs/api/predicates.md#is_safe_hostname)**: Mixed-script and homoglyph attack detection
+- **[Encoding detection](docs/api/encoding.md)**: Auto-detect and decode byte sequences to UTF-8 (chardetng)
 
 All text processing is implemented in Rust with O(1) PHF lookups and exposed to Python via PyO3.
 

@@ -4,7 +4,7 @@
 
 Unicode text infrastructure for Python: transliteration, normalization, and safety analysis, powered by Rust.
 
-**[Documentation](https://translit.readthedocs.io/)** | **[GitHub](https://github.com/raeq/translit)** | **[PyPI](https://pypi.org/project/translit-rs/)**
+**[Documentation](docs/index.md)** | **[API Reference](docs/api/index.md)** | **[PyPI](https://pypi.org/project/translit-rs/)**
 
 ## Features
 

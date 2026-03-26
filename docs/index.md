@@ -85,20 +85,26 @@ pipe("  Héllo\u200b Wörld  ")  # => "hello world"
 
 ---
 
-## Feature overview
+## User Guide
 
+Core concepts and usage for each feature area.
+
+- **[Getting Started](user-guide/getting-started.md)** — Installation, first steps, and basic usage
 - **[Transliteration](user-guide/transliteration.md)** — Unicode → ASCII with 64 language profiles
 - **[Slugification](user-guide/slugification.md)** — URL-safe slug generation, drop-in python-slugify replacement
 - **[Normalization](user-guide/normalization.md)** — NFC / NFD / NFKC / NFKD Unicode normalization
-- **[Confusable detection](user-guide/confusables.md)** — TR39 homoglyph detection and normalization
-- **[Filename sanitization](user-guide/filenames.md)** — Cross-platform safe filenames
-- **[Text cleaning](user-guide/text-cleaning.md)** — Accent stripping, full Unicode case folding (1,557 CaseFolding.txt mappings), whitespace collapse
-- **[Text pipeline](user-guide/pipeline.md)** — Composable, pre-compiled multi-step processing
-- **[Language support](user-guide/language-support.md)** — 64 built-in profiles, extensible via `register_lang()`
+- **[Confusable Detection](user-guide/confusables.md)** — TR39 homoglyph detection and normalization
+- **[Filename Sanitization](user-guide/filenames.md)** — Cross-platform safe filenames
+- **[Text Cleaning](user-guide/text-cleaning.md)** — Accent stripping, case folding, whitespace collapse
+- **[Grapheme Clusters](user-guide/graphemes.md)** — User-perceived character counting, splitting, and truncation
+- **[Text Pipeline](user-guide/pipeline.md)** — Composable, pre-compiled multi-step processing
+- **[Language Support](user-guide/language-support.md)** — 64 built-in profiles, auto-detection, custom profiles
 
 ---
 
-## Guides by role
+## Guides by Role
+
+Task-oriented guides for specific use cases and audiences.
 
 - **[For Data Engineers](data-engineer-guide.md)** — ETL normalization, deduplication, encoding detection, batch processing
 - **[For ML / LLM Pipelines](ml-pipeline-guide.md)** — Text preprocessing, emoji handling, TextPipeline
@@ -106,18 +112,70 @@ pipe("  Héllo\u200b Wörld  ")  # => "hello world"
 - **[For Security Engineers](security-guide.md)** — Homoglyph detection, IDN validation, input canonicalization
 - **[For Librarians & Catalogers](librarian-guide.md)** — Catalog keys, title dedup, sort normalization
 - **[For Scholars & Linguists](scholarly-guide.md)** — ISO 9, script analysis, transliteration profiles
+- **[Docker](docker.md)** — CLI usage via Docker container
 
 ---
 
-## Migrating from legacy libraries
+## API Reference
 
-translit provides parameter-compatible replacements for existing libraries:
+Complete function signatures, parameters, and return types.
 
-- [From Unidecode / text-unidecode](migration/from-unidecode.md)
-- [From python-slugify / awesome-slugify](migration/from-python-slugify.md)
-- [From confusable_homoglyphs](migration/from-confusable-homoglyphs.md)
-- [From pathvalidate](migration/from-pathvalidate.md)
-- [From anyascii](migration/from-anyascii.md)
+- **[Overview](api/index.md)** — API reference index
+- **[Core Transforms](api/transforms.md)** — `transliterate`, `slugify`, `normalize`, `sanitize_filename`, `strip_accents`, `fold_case`, `collapse_whitespace`, `demojize`, `strip_bidi`, batch APIs
+- **[Precompiled Pipelines](api/pipelines.md)** — `security_clean`, `ml_normalize`, `catalog_key`, `display_clean`, `PRESETS`
+- **[Classes](api/classes.md)** — `Text`, `Slugifier`, `UniqueSlugifier`, `TextPipeline`, compatibility aliases
+- **[Predicates](api/predicates.md)** — `detect_scripts`, `is_mixed_script`, `is_confusable`, `is_ascii`, `is_normalized`, `is_safe_hostname`
+- **[Grapheme Clusters](api/graphemes.md)** — `grapheme_len`, `grapheme_split`, `grapheme_truncate`
+- **[Encoding Detection](api/encoding.md)** — `detect_encoding`, `decode_to_utf8`
+- **[Language Profiles](api/language-profiles.md)** — `list_langs`, `register_lang`, `register_replacements`
+- **[Enums & Types](api/enums.md)** — `Script`, `NF`, `EmojiProvider`, type aliases, language constants
+- **[Exceptions](api/exceptions.md)** — `TranslitError`
+
+---
+
+## Reference
+
+- **[Language Reference](reference.md)** — All 64 languages: codes, names, reference texts, and per-language transliteration rule tables
+
+---
+
+## Architecture
+
+Internal design documentation for contributors and advanced users.
+
+- **[Transliteration Engine](architecture/transliteration-engine.md)** — PHF lookup, language table chain, Indic virama handling
+- **[Data Tables](architecture/data-tables.md)** — TSV format, build.rs code generation, compile-time PHF
+- **[Pipeline](architecture/pipeline.md)** — TextPipeline internals, execution order, step bitflags
+- **[Emoji Engine](architecture/emoji-engine.md)** — Emoji detection, provider system, pure-Rust path
+- **[Emoji Plugins](architecture/emoji-plugins.md)** — EmojiProvider protocol, custom providers
+- **[Security](architecture/security.md)** — Confusable detection, hostname validation, bidi stripping
+- **[Performance](architecture/performance.md)** — Optimization strategies, PHF tables, batch amortization
+
+---
+
+## Performance
+
+- **[Performance Overview](performance.md)** — Benchmark methodology, results, and optimization details
+- **[Benchmark Suite](benchmarks.md)** — How to run benchmarks, Criterion and timeit configurations
+
+---
+
+## Migration Guides
+
+Parameter-compatible replacements for existing libraries.
+
+- **[Migration Overview](migration/index.md)** — Feature comparison matrix
+- **[From Unidecode / text-unidecode](migration/from-unidecode.md)** — Drop-in `unidecode()` alias
+- **[From python-slugify / awesome-slugify](migration/from-python-slugify.md)** — Parameter-compatible `slugify()`
+- **[From confusable_homoglyphs](migration/from-confusable-homoglyphs.md)** — Script detection and normalization
+- **[From pathvalidate](migration/from-pathvalidate.md)** — Filename sanitization
+- **[From anyascii](migration/from-anyascii.md)** — Language-aware transliteration
+
+---
+
+## Other
+
+- **[Limitations](limitations.md)** — Known constraints, edge cases, and design trade-offs
 
 ---
 

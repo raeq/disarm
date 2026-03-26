@@ -1193,7 +1193,7 @@ _ALL_LANG_ASCII_SAMPLES: dict[str, tuple[str, str]] = {
     "sa": ("संस्कृतम् जगतः एका प्राचीनतमा भाषा", "Sanskrit"),
     "as": ("অসম ভাৰতৰ উত্তৰ পূৰ্বাঞ্চলৰ এখন ৰাজ্য", "Assamese"),
     # --- Caucasian ---
-    "hy": ("Հայաdelays Հանրապdelays  Հայdelays  երdelays", "Armenian"),
+    "hy": ("Հայաստան Հանրապետություն Հայ երկիր", "Armenian"),
     "ka": ("საქართველო სახელმწიფოა აღმოსავლეთ ევროპაში", "Georgian"),
     # --- South/Southeast Asian ---
     "si": ("ශ්‍රී ලංකා ප්‍රජාතාන්ත්‍රික සමාජවාදී ජනරජය", "Sinhala"),

@@ -1,6 +1,6 @@
 # Testing and Guarantees
 
-How translit's test suite ensures correctness across 64 language profiles, full Unicode coverage, and security-critical operations.
+How translit's test suite ensures correctness across 65 language profiles, full Unicode coverage, and security-critical operations.
 
 ---
 
@@ -17,7 +17,7 @@ How translit's test suite ensures correctness across 64 language profiles, full 
 
 ## Per-Language Reference Tests
 
-Each of the 64 built-in language profiles has dedicated tests verifying:
+Each of the 65 built-in language profiles has dedicated tests verifying:
 
 - **Known transliteration pairs** — reference texts with expected output (e.g., "Москва" → "Moskva" for Russian, "Київ" → "Kyiv" for Ukrainian)
 - **Language override behavior** — `lang="xx"` produces different output from the default table where expected

@@ -50,9 +50,6 @@ The [IndoNLP 2025 shared task](https://arxiv.org/html/2501.05816) on reverse tra
 
 The [South Asian languages survey (2025)](https://arxiv.org/html/2509.11570v1) confirms that corpus coverage and script fidelity remain binding constraints for transliteration of languages with limited digital presence. Scripts with no transliteration mapping in translit (characters produce `[?]`):
 
-- **Cherokee** (U+13A0–U+13FF)
-- **Canadian Aboriginal Syllabics** (U+1400–U+167F)
-- **Mongolian** (U+1800–U+18AF)
 - Most CJK Extension blocks (B through I)
 
 The `register_lang()` API allows users to add custom mappings for these scripts at runtime.
@@ -66,6 +63,36 @@ Transliteration to ASCII is inherently lossy. Multiple source characters map to 
 - Multiple Chinese characters share the same pinyin (e.g., 是/事/式/试 all → `shi`)
 
 Round-tripping (ASCII → original script) is not possible.
+
+### Reverse transliteration is approximate
+
+The `target` parameter enables Latin → native script conversion, but this is inherently lossy due to the many-to-one nature of forward transliteration.
+
+**Many-to-one forward mappings are not invertible.** Multiple source characters map to the same Latin output:
+
+- Russian: both Й and Ы → `Y` forward; reverse always produces Ы
+- Russian: both Э and Е → `E` forward; reverse always produces Е
+- Greek: η and ι both → `i`; reverse cannot distinguish between them
+
+**Empty-string mappings are permanently lost.** Characters that map to empty string in forward transliteration cannot be recovered:
+
+- Russian soft sign Ь and hard sign Ъ → `""` forward
+- Example: `тьма` → `tma` → `тма` (soft sign lost)
+
+**Digraph ambiguity.** Forward `сх` → `skh` but reverse `kh` → `х`; greedy scanning may not match the original segmentation.
+
+**Round-trip example:**
+
+```python
+from translit import transliterate
+
+text = "Тьма"
+fwd = transliterate(text, lang="ru")        # "Tma"
+rev = transliterate(fwd, target="ru")       # "Тма" (soft sign lost)
+fwd2 = transliterate(rev, lang="ru")        # "Tma" (looks same but Ь is gone)
+```
+
+**Guidance:** Reverse transliteration is useful for recovering romanized text written in a standard transliteration scheme, not for lossless round-tripping. For lossless reversible encoding of Cyrillic, use ISO 9:1995 (`strict_iso9=True`), which preserves one-to-one character identity through diacritics.
 
 ## CJK Transliteration
 
@@ -83,7 +110,7 @@ Round-tripping (ASCII → original script) is not possible.
 
 Disambiguation requires word segmentation and sentence-level context, which is outside translit's scope. For applications that need contextual pinyin (e.g., text-to-speech, language learning tools), use a dedicated library such as `pypinyin` (Python) or the `pinyin` crate (Rust).
 
-**No tone marks.** Pinyin output is tone-stripped ASCII. `北京` becomes `bei jing`, not `běi jīng`. This is intentional for the primary use cases (URLs, filenames, slugs) where diacritics are unwanted.
+**Tone marks.** By default, pinyin output is tone-stripped ASCII: `北京` becomes `bei jing`, not `běi jīng`. This is intentional for the primary use cases (URLs, filenames, slugs) where diacritics are unwanted. Pass `tones=True` for diacritical pinyin (`transliterate("北京", tones=True)` → `"běi jīng"`). Toned pinyin coverage includes the ~2,000 most common characters; others fall through to toneless pinyin.
 
 **Coverage is the CJK Unified Ideographs main block only** (U+4E00–U+9FFF, ~20,924 characters). Characters in Extension A (U+3400–U+4DBF), Extension B (U+20000–U+2A6DF), and later extensions are not mapped and will produce `[?]` in replace mode. These extensions contain rare, archaic, or variant characters that appear infrequently in modern text.
 

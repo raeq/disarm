@@ -113,6 +113,7 @@ class Text:
         self,
         *,
         lang: str | None = None,
+        target: str | None = None,
         errors: ErrorMode = "replace",
         replace_with: str = "[?]",
         strict_iso9: bool = False,
@@ -123,6 +124,7 @@ class Text:
             self._t().transliterate(
                 self._value,
                 lang=lang,
+                target=target,
                 errors=errors,
                 replace_with=replace_with,
                 strict_iso9=strict_iso9,

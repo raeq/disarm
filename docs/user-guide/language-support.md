@@ -1,6 +1,6 @@
 # Language Support
 
-translit ships with 64 built-in language profiles that provide language-specific transliteration rules. You can also register custom profiles at runtime.
+translit ships with 65 built-in language profiles that provide language-specific transliteration rules. You can also register custom profiles at runtime.
 
 ## Built-in languages
 
@@ -113,9 +113,12 @@ All 10 Brahmic scripts use virama/mātrā-aware transliteration: consonants carr
 | Code | Language | Notes |
 |---|---|---|
 | `ja` | Japanese | Hiragana/Katakana → Hepburn; Kanji → Chinese pinyin fallback |
+| `ja-kunrei` | Japanese (Kunrei-shiki) | し→si, ち→ti, つ→tu, ふ→hu; use for ISO/TR 11941 |
 | `ko` | Korean | Hangul → Revised Romanization (algorithmic jamo decomposition) |
 | `ru` | Russian | Full Cyrillic → Latin |
 | `zh` | Chinese | Hanzi → toneless pinyin (20,924 characters from Unihan kMandarin) |
+
+> **Toned pinyin**: Pass `tones=True` to `transliterate()` for diacritical pinyin output (e.g., `"běi jīng"` instead of `"bei jing"`). Coverage includes the ~2,000 most common characters.
 
 ### CJK examples
 
@@ -135,6 +138,23 @@ transliterate("ひらがな")           # => "hiragana"
 transliterate("東京タワー")         # => "dong jing tawa-"
 transliterate("東京タワー", lang="ja")  # => "dong jing tawa" (ー dropped)
 ```
+
+## Reverse transliteration
+
+translit can convert romanized Latin text back to native script for selected languages using the `target` parameter:
+
+```python
+from translit import transliterate, reverse_langs
+
+transliterate("Moskva", target="ru")    # → "Москва"
+transliterate("Kyiv", target="uk")      # → "Київ" (approximate)
+transliterate("Athina", target="el")    # → "Αθηνα"
+
+# List supported languages
+reverse_langs()                         # → ["el", "ru", "uk"]
+```
+
+Reverse transliteration uses greedy longest-match scanning to handle digraphs and trigraphs (e.g., `"shch"` → `щ`). See [Limitations](../limitations.md#reverse-transliteration-is-approximate) for round-trip degradation details.
 
 ## Auto-detecting language from script
 
@@ -319,3 +339,20 @@ transliterate("Hello™ World©")  # => "Hello(TM) World(c)"
 ## Norwegian variants
 
 Both `"no"` and `"nb"` (Bokmål) map to the same Norwegian profile. `"nn"` (Nynorsk) also uses the same mappings. Use any of these codes interchangeably.
+
+## Historical and ancient scripts
+
+translit includes transliteration mappings for several historical and ancient writing systems:
+
+| Script | Unicode Block | Example |
+|---|---|---|
+| Runic (Elder/Younger Futhark) | U+16A0–U+16FF | ᚠᚢᚦ → futh |
+| Ogham | U+1680–U+169F | ᚑᚌᚐᚋ → ogam |
+| Gothic | U+10330–U+1034F | 𐌲𐌿𐍄 → gut |
+| Old Persian Cuneiform | U+103A0–U+103D5 | Cuneiform signs → Latin |
+| Linear B Syllabary | U+10000–U+1007F | Syllabic signs → Latin |
+| Cherokee | U+13A0–U+13FF | ᏣᎳᎩ → tsalagi |
+| Canadian Aboriginal Syllabics | U+1400–U+167F | ᐃᓄᒃᑎᑐᑦ → inuktitut |
+| Mongolian | U+1800–U+18AF | Traditional Mongolian script |
+
+These mappings provide approximate romanizations suitable for search indexing and display purposes. They are not intended as scholarly transliteration standards.

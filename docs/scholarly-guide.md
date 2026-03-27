@@ -192,7 +192,7 @@ pipe("Щука")  # → "shhuka"
 
 ## Language-Specific Transliteration
 
-translit ships 64 language profiles. Each profile provides override
+translit ships 65 language profiles. Each profile provides override
 mappings for characters whose standard romanization differs from the
 pan-script defaults.
 
@@ -227,11 +227,12 @@ pan-script defaults.
 | Code | Language  | Coverage                                       |
 |------|----------|------------------------------------------------|
 | `ja` | Japanese  | Hiragana, Katakana, half-width Katakana (Hepburn)|
+| `ja-kunrei` | Japanese (Kunrei) | Kunrei-shiki romanization (し→si, ち→ti, つ→tu) |
 | `zh` | Chinese   | Hanzi → pinyin                                  |
 | `ko` | Korean    | Hangul → romanization                           |
 
-Full list of 64 codes: `am`, `ar`, `as`, `bg`, `bn`, `bo`, `ca`, `cs`, `cy`, `da`, `de`, `dv`, `el`,
-`es`, `et`, `fa`, `fi`, `fr`, `ga`, `gu`, `he`, `hi`, `hr`, `hu`, `hy`, `is`, `it`, `ja`, `jv`, `ka`, `km`, `kn`, `ko`, `lo`, `lt`,
+Full list of 65 codes: `am`, `ar`, `as`, `bg`, `bn`, `bo`, `ca`, `cs`, `cy`, `da`, `de`, `dv`, `el`,
+`es`, `et`, `fa`, `fi`, `fr`, `ga`, `gu`, `he`, `hi`, `hr`, `hu`, `hy`, `is`, `it`, `ja`, `ja-kunrei`, `jv`, `ka`, `km`, `kn`, `ko`, `lo`, `lt`,
 `lv`, `ml`, `mn`, `mr`, `mt`, `my`, `ne`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sa`, `si`, `sk`,
 `sl`, `sq`, `sr`, `sv`, `ta`, `te`, `th`, `tr`, `uk`, `vi`, `zh`.
 
@@ -591,7 +592,7 @@ mappings across these Unicode blocks:
 In addition, 20 language-specific override tables provide national-standard
 romanization when `lang=` is specified.
 
-For a complete per-language breakdown of all 64 profiles — including
+For a complete per-language breakdown of all 65 profiles — including
 transliteration rule tables, reference texts, and test examples — see the
 [Language Reference](reference.md).
 

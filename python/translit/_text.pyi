@@ -34,6 +34,7 @@ class Text:
         self,
         *,
         lang: str | None = None,
+        target: str | None = None,
         errors: ErrorMode = "replace",
         replace_with: str = "[?]",
         strict_iso9: bool = False,

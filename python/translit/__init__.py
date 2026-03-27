@@ -82,6 +82,9 @@ from translit._translit import (
     _register_lang,
     _register_replacements,
     _remove_replacement,
+    # Reverse transliteration
+    _reverse_langs,
+    _reverse_transliterate,
     _sanitize_filename,
     _sanitize_user_input,
     # Precompiled pipelines
@@ -132,10 +135,12 @@ def transliterate(
     text: str,
     *,
     lang: str | None = None,
+    target: str | None = None,
     errors: ErrorMode = "replace",
     replace_with: str = "[?]",
     strict_iso9: bool = False,
     gost7034: bool = False,
+    tones: bool = False,
 ) -> str:
     """Unicode → ASCII transliteration.
 
@@ -145,7 +150,11 @@ def transliterate(
               e.g. "de" (ü→ue), "ja" (kanji→romaji), "zh" (hanzi→pinyin).
               Use "auto" to detect the dominant non-Latin script and select
               the appropriate language automatically.
+              Use "ja-kunrei" for Kunrei-shiki romanization of Japanese kana.
               None uses best-effort default tables.
+        target: Target language code for *reverse* transliteration
+                (romanized Latin → native script). Mutually exclusive with
+                *lang*. Use :func:`reverse_langs` to list supported languages.
         errors: How to handle untransliterable characters.
                 "replace" — substitute with *replace_with*.
                 "ignore" — silently drop.
@@ -161,14 +170,20 @@ def transliterate(
         gost7034: Use GOST R 7.0.34-2014 simplified transliteration for
                   Russian Cyrillic. Mutually exclusive with *strict_iso9*.
                   Key differences from default: х→x, ц→c, щ→shh, й→j.
+        tones: Output toned pinyin (with diacritics) for CJK characters.
+               e.g. "běi jīng" instead of "bei jing". Coverage includes
+               the ~2000 most common characters; others fall through to
+               toneless pinyin.
 
     Returns:
-        ASCII transliteration of the input.
+        ASCII transliteration of the input (or UTF-8 when tones=True).
 
     Raises:
         TranslitError: If an internal Rust error occurs (e.g. invalid
             ``errors`` value passed at runtime).
         ValueError: If both *strict_iso9* and *gost7034* are True.
+        ValueError: If both *lang* and *target* are set.
+        ValueError: If *target* is set with forward-only parameters.
 
     Examples:
         >>> transliterate("café résumé")
@@ -185,9 +200,35 @@ def transliterate(
         'xleb'
         >>> transliterate("Москва", lang="auto")
         'Moskva'
+        >>> transliterate("北京", tones=True)
+        'běi jīng'
+        >>> transliterate("Moskva", target="ru")
+        'Москва'
     """
     if not isinstance(text, str):
         raise TypeError(f"transliterate() expects str, got {type(text).__name__}")
+
+    if target is not None:
+        if lang is not None:
+            raise ValueError("'lang' and 'target' are mutually exclusive")
+        forward_only: dict[str, object] = {}
+        if errors != "replace":
+            forward_only["errors"] = errors
+        if replace_with != "[?]":
+            forward_only["replace_with"] = replace_with
+        if strict_iso9:
+            forward_only["strict_iso9"] = strict_iso9
+        if gost7034:
+            forward_only["gost7034"] = gost7034
+        if tones:
+            forward_only["tones"] = tones
+        if forward_only:
+            names = ", ".join(sorted(forward_only))
+            raise ValueError(
+                f"forward-only parameters ({names}) cannot be used with 'target'"
+            )
+        return _reverse_transliterate(text, lang=target)
+
     # Fast path: pure ASCII needs no transliteration (~30 ns vs ~240 ns PyO3 call).
     if text.isascii():
         return text
@@ -198,6 +239,7 @@ def transliterate(
         replace_with=replace_with,
         strict_iso9=strict_iso9,
         gost7034=gost7034,
+        tones=tones,
     )
 
 
@@ -640,6 +682,7 @@ def transliterate_batch(
     texts: list[str],
     *,
     lang: str | None = None,
+    target: str | None = None,
     errors: ErrorMode = "replace",
     replace_with: str = "[?]",
     strict_iso9: bool = False,
@@ -654,6 +697,9 @@ def transliterate_batch(
     Args:
         texts: List of input Unicode strings.
         lang: Language code for language-specific mappings.
+        target: Target language code for *reverse* transliteration
+                (romanized Latin → native script). Mutually exclusive with
+                *lang*. Use :func:`reverse_langs` to list supported languages.
         errors: How to handle untransliterable characters.
         replace_with: Replacement string when errors="replace".
         strict_iso9: Use ISO 9:1995 scholarly transliteration for Cyrillic.
@@ -666,12 +712,16 @@ def transliterate_batch(
     Raises:
         TranslitError: If an internal Rust error occurs.
         ValueError: If both *strict_iso9* and *gost7034* are True.
+        ValueError: If both *lang* and *target* are set.
+        ValueError: If *target* is set with forward-only parameters.
 
     Examples:
         >>> transliterate_batch(["café", "naïve", "résumé"])
         ['cafe', 'naive', 'resume']
         >>> transliterate_batch(["München", "Zürich"], lang="de")
         ['Muenchen', 'Zuerich']
+        >>> transliterate_batch(["Moskva", "Kyiv"], target="ru")
+        ['Москва', 'Кыив']
 
     Note:
         All input strings and output strings are held in memory
@@ -679,6 +729,26 @@ def transliterate_batch(
         consider chunking to control peak memory usage.
     """
     _validate_batch(texts, "transliterate_batch")
+
+    if target is not None:
+        if lang is not None:
+            raise ValueError("'lang' and 'target' are mutually exclusive")
+        forward_only: dict[str, object] = {}
+        if errors != "replace":
+            forward_only["errors"] = errors
+        if replace_with != "[?]":
+            forward_only["replace_with"] = replace_with
+        if strict_iso9:
+            forward_only["strict_iso9"] = strict_iso9
+        if gost7034:
+            forward_only["gost7034"] = gost7034
+        if forward_only:
+            names = ", ".join(sorted(forward_only))
+            raise ValueError(
+                f"forward-only parameters ({names}) cannot be used with 'target'"
+            )
+        return [_reverse_transliterate(t, lang=target) for t in texts]
+
     return _transliterate_batch(
         texts,
         lang=lang,
@@ -1196,6 +1266,23 @@ def is_safe_hostname(hostname: str) -> tuple[bool, SafeHostnameDetails]:
         'google.com'
     """
     return _is_safe_hostname(hostname)
+
+
+# --- Reverse transliteration ---
+
+
+
+def reverse_langs() -> list[str]:
+    """Return language codes that support reverse transliteration.
+
+    Returns:
+        List of language code strings (e.g., ``["el", "ru", "uk"]``).
+
+    Examples:
+        >>> "ru" in reverse_langs()
+        True
+    """
+    return _reverse_langs()
 
 
 # --- Encoding detection ---
@@ -1928,6 +2015,8 @@ __all__ = [
     # Hostname safety
     "is_safe_hostname",
     "SafeHostnameDetails",
+    # Reverse transliteration
+    "reverse_langs",
     # Encoding detection
     "detect_encoding",
     "decode_to_utf8",

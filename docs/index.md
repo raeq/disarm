@@ -114,7 +114,8 @@ Task-oriented guides for specific use cases and audiences.
 - **[For Librarians & Catalogers](librarian-guide.md)** — Catalog keys, title dedup, sort normalization
 - **[For Scholars & Linguists](scholarly-guide.md)** — ISO 9, script analysis, transliteration profiles
 - **[Policy Templates](policy-templates.md)** — Named institutional presets for libraries, web apps, ML, and more
-- **[Docker](docker.md)** — CLI usage via Docker container
+- **[CLI](cli.md)** — Command-line usage, piping, and shell integration
+- **[Docker](docker.md)** — Run translit via Docker without installing Python
 
 ---
 
@@ -179,6 +180,18 @@ Parameter-compatible replacements for existing libraries.
 ## Other
 
 - **[Limitations](limitations.md)** — Known constraints, edge cases, and design trade-offs
+
+---
+
+## Links
+
+| | |
+|---|---|
+| **Source code** | <https://github.com/raeq/translit> |
+| **Releases** | <https://github.com/raeq/translit/releases> |
+| **PyPI package** | <https://pypi.org/project/translit-rs/> |
+| **Issue tracker** | <https://github.com/raeq/translit/issues> |
+| **Changelog** | <https://github.com/raeq/translit/blob/main/CHANGELOG.md> |
 
 ---
 

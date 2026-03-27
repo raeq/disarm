@@ -224,6 +224,7 @@ remove_accents("café")   # → "cafe"       (alias for strip_accents)
 
 - [User Guide](docs/user-guide/)
 - [API Reference](docs/api/)
+- [CLI](docs/cli.md) — command-line usage, piping, and shell integration
 - [Docker](docs/docker.md) — run translit from a container, no Python install needed
 - [Limitations](docs/limitations.md)
 - [Migration from python-slugify / anyascii / Unidecode](docs/migration/)
@@ -240,6 +241,17 @@ remove_accents("café")   # → "cafe"       (alias for strip_accents)
 ## Architecture
 
 Rust core with compile-time PHF (perfect hash function) tables for O(1) per-character lookup. Exposed to Python via PyO3 with the stable ABI (abi3-py39). The Chinese pinyin table contains 20,924 entries from the Unicode Unihan database; Korean romanization is purely algorithmic (jamo decomposition, ~100 lines of Rust).
+
+## Links
+
+| | |
+|---|---|
+| **Source code** | <https://github.com/raeq/translit> |
+| **Releases** | <https://github.com/raeq/translit/releases> |
+| **PyPI package** | <https://pypi.org/project/translit-rs/> |
+| **Documentation** | <https://translit.readthedocs.io/> |
+| **Issue tracker** | <https://github.com/raeq/translit/issues> |
+| **Changelog** | <https://github.com/raeq/translit/blob/main/CHANGELOG.md> |
 
 ## License
 

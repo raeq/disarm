@@ -96,6 +96,7 @@ nav:
       - From confusable_homoglyphs: migration/from-confusable-homoglyphs.md
       - From pathvalidate: migration/from-pathvalidate.md
       - From anyascii: migration/from-anyascii.md
+  - CLI: cli.md
   - Docker: docker.md
   - Performance: performance.md
   - Benchmarks: benchmarks.md

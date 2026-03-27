@@ -346,13 +346,13 @@ translit includes transliteration mappings for several historical and ancient wr
 
 | Script | Unicode Block | Example |
 |---|---|---|
-| Runic (Elder/Younger Futhark) | U+16A0–U+16FF | ᚠᚢᚦ → futh |
+| Runic (Elder/Younger Futhark) | U+16A0–U+16FF | ᚠᚢᚦᚨᚱᚲ → futhark |
 | Ogham | U+1680–U+169F | ᚑᚌᚐᚋ → ogam |
 | Gothic | U+10330–U+1034F | 𐌲𐌿𐍄 → gut |
-| Old Persian Cuneiform | U+103A0–U+103D5 | Cuneiform signs → Latin |
-| Linear B Syllabary | U+10000–U+1007F | Syllabic signs → Latin |
+| Old Persian Cuneiform | U+103A0–U+103D5 | 𐎠𐎭𐎶 → adama |
+| Linear B Syllabary | U+10000–U+1007F | 𐀀𐀁𐀂 → aei |
 | Cherokee | U+13A0–U+13FF | ᏣᎳᎩ → tsalagi |
-| Canadian Aboriginal Syllabics | U+1400–U+167F | ᐃᓄᒃᑎᑐᑦ → inuktitut |
-| Mongolian | U+1800–U+18AF | Traditional Mongolian script |
+| Canadian Aboriginal Syllabics | U+1400–U+167F | ᐃᓄᒃᑎᑐᑦ → inoktwetwiit |
+| Mongolian | U+1800–U+18AF | ᠮᠣᠩᠭᠣᠯ → monggol |
 
 These mappings provide approximate romanizations suitable for search indexing and display purposes. They are not intended as scholarly transliteration standards.

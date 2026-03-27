@@ -54,6 +54,7 @@ fn bench_transliterate(c: &mut Criterion) {
                     "[?]",
                     false,
                     false,
+                    false,
                 )
             });
         });
@@ -67,6 +68,7 @@ fn bench_transliterate(c: &mut Criterion) {
                 Some("ru"),
                 ErrorMode::Replace,
                 "[?]",
+                false,
                 false,
                 false,
             )

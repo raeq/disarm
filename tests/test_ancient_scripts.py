@@ -1,6 +1,6 @@
 """Tests for ancient and historic script transliteration."""
 
-from translit import transliterate, slugify, detect_scripts, Script
+from translit import Script, detect_scripts, slugify, transliterate
 
 
 class TestRunic:

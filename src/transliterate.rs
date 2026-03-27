@@ -61,10 +61,16 @@ pub fn _transliterate(
         );
     }
     let error_mode = ErrorMode::from_str(errors)?;
-    Ok(
-        transliterate_impl(text, lang, error_mode, replace_with, strict_iso9, gost7034, tones)
-            .into_owned(),
+    Ok(transliterate_impl(
+        text,
+        lang,
+        error_mode,
+        replace_with,
+        strict_iso9,
+        gost7034,
+        tones,
     )
+    .into_owned())
 }
 
 /// Internal transliteration implementation.
@@ -587,8 +593,16 @@ pub fn _transliterate_batch(
     Ok(texts
         .iter()
         .map(|text| {
-            transliterate_impl(text, lang, error_mode, replace_with, strict_iso9, gost7034, tones)
-                .into_owned()
+            transliterate_impl(
+                text,
+                lang,
+                error_mode,
+                replace_with,
+                strict_iso9,
+                gost7034,
+                tones,
+            )
+            .into_owned()
         })
         .collect())
 }
@@ -626,7 +640,15 @@ mod tests {
 
     #[test]
     fn test_ascii_passthrough() {
-        let result = transliterate_impl("hello", None, ErrorMode::Replace, "[?]", false, false, false);
+        let result = transliterate_impl(
+            "hello",
+            None,
+            ErrorMode::Replace,
+            "[?]",
+            false,
+            false,
+            false,
+        );
         assert_eq!(result, "hello");
     }
 

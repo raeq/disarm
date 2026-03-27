@@ -202,9 +202,16 @@ pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — search keys should be pure ASCII where possible)
-    let buf =
-        transliterate::transliterate_impl(&buf, lang, crate::ErrorMode::Preserve, "", false, false, false)
-            .into_owned();
+    let buf = transliterate::transliterate_impl(
+        &buf,
+        lang,
+        crate::ErrorMode::Preserve,
+        "",
+        false,
+        false,
+        false,
+    )
+    .into_owned();
     // 3. Strip accents
     let buf = transliterate::_strip_accents(&buf);
     // 4. Unicode case folding
@@ -228,9 +235,16 @@ pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — sort keys need a consistent script)
-    let buf =
-        transliterate::transliterate_impl(&buf, lang, crate::ErrorMode::Preserve, "", false, false, false)
-            .into_owned();
+    let buf = transliterate::transliterate_impl(
+        &buf,
+        lang,
+        crate::ErrorMode::Preserve,
+        "",
+        false,
+        false,
+        false,
+    )
+    .into_owned();
     // 3. Unicode case folding
     let buf = case_fold::fold_case_impl(&buf);
     // 4. Collapse whitespace + strip control + strip zero-width

@@ -36,51 +36,51 @@ the compiled Rust code is faster across all scripts and input sizes.
 
 | Input | translit | Throughput |
 |---|---|---|
-| ASCII short (11 chars) | **62 ns** | 16.1M ops/s |
-| Latin diacritics (42 chars) | **407 ns** | 2.5M ops/s |
-| Cyrillic (45 chars) | **469 ns** | 2.1M ops/s |
-| CJK (12 chars) | **481 ns** | 2.1M ops/s |
-| Mixed scripts (50 chars) | **453 ns** | 2.2M ops/s |
-| ASCII fast-path | **63 ns** | 15.8M ops/s |
+| ASCII short (11 chars) | **90 ns** | 11.1M ops/s |
+| Latin diacritics (42 chars) | **615 ns** | 1.6M ops/s |
+| Cyrillic (45 chars) | **705 ns** | 1.4M ops/s |
+| CJK (12 chars) | **640 ns** | 1.6M ops/s |
+| Mixed scripts (50 chars) | **650 ns** | 1.5M ops/s |
+| ASCII fast-path | **71 ns** | 14.0M ops/s |
 
-Sustained throughput: **693M chars/sec** (Latin), **196M chars/sec** (Cyrillic),
+Sustained throughput: **450M chars/sec** (Latin), **130M chars/sec** (Cyrillic),
 **92.9B chars/sec** (ASCII passthrough via `isascii()` fast-path).
 
 ### vs. competitors
 
 | Library | Latin (short) | Cyrillic (short) | Mixed (50 chars) |
 |---|---|---|---|
-| **translit** | **407 ns** | **469 ns** | **453 ns** |
+| **translit** | **615 ns** | **705 ns** | **650 ns** |
 | Unidecode | 4.41 µs | 6.49 µs | 4.95 µs |
 | text-unidecode | 1.86 µs | 2.36 µs | 2.13 µs |
 | anyascii | 2.22 µs | 4.00 µs | 2.66 µs |
 
-translit is **10–14× faster** than Unidecode and **4–5× faster** than
-text-unidecode across scripts. Throughput benchmarks show **58× faster**
-than Unidecode on Latin, **27× on Cyrillic**, and **33× on mixed** text
+translit is **7–9× faster** than Unidecode and **3× faster** than
+text-unidecode across scripts. Throughput benchmarks show **38× faster**
+than Unidecode on Latin, **18× on Cyrillic**, and **22× on mixed** text
 at document scale.
 
 ### Rust-level (Criterion microbenchmarks)
 
 | Input | Time | Notes |
 |---|---|---|
-| ASCII short (11 chars) | 2.2 ns | Cow::Borrowed fast-path |
-| ASCII long (120 chars) | 6.2 ns | is_ascii() → immediate return |
-| Latin diacritics (26 chars) | 60.5 ns | Flat BMP array lookup |
-| Cyrillic (23 chars) | 115.7 ns | Flat BMP array lookup |
-| CJK (8 chars) | 116.5 ns | Hanzi→Pinyin PHF dispatch |
-| Mixed scripts (18 chars) | 69.7 ns | Range-based dispatch |
-| Cyrillic with `lang="ru"` | 333.2 ns | Language-specific table |
+| ASCII short (11 chars) | 2.4 ns | Cow::Borrowed fast-path |
+| ASCII long (120 chars) | 5.9 ns | is_ascii() → immediate return |
+| Latin diacritics (26 chars) | 78.4 ns | Flat BMP array lookup |
+| Cyrillic (23 chars) | 169.0 ns | Flat BMP array lookup |
+| CJK (8 chars) | 132.7 ns | Hanzi→Pinyin PHF dispatch |
+| Mixed scripts (18 chars) | 82.9 ns | Range-based dispatch |
+| Cyrillic with `lang="ru"` | 370.4 ns | Language-specific table |
 
 Per-character table lookup latency:
 
 | Character | Time |
 |---|---|
-| Latin é (U+00E9) | 1.3 ns |
-| Cyrillic ж (U+0436) | 1.3 ns |
+| Latin é (U+00E9) | 0.9 ns |
+| Cyrillic ж (U+0436) | 0.9 ns |
 | CJK 北 (U+5317) | 7.5 ns |
-| Hangul 한 (U+D55C) | 2.0 ns |
-| ASCII passthrough | 1.5 ns |
+| Hangul 한 (U+D55C) | 1.3 ns |
+| ASCII passthrough | 1.0 ns |
 
 
 ## Slugification
@@ -89,21 +89,21 @@ Per-character table lookup latency:
 
 | Input | translit | Throughput |
 |---|---|---|
-| Default slugify | **954 ns** | 1.05M slugs/s |
-| With options¹ | **964 ns** | 1.04M slugs/s |
+| Default slugify | **1178 ns** | 849K slugs/s |
+| With options¹ | **1070 ns** | 934K slugs/s |
 
 ¹ `separator='_', max_length=30, stopwords=['the', 'a', 'and']`
 
-Sustained throughput: **1.12M slugs/sec** (basic), **691K ops/sec** (with options).
+Sustained throughput: **849K slugs/sec** (basic), **934K ops/sec** (with options).
 
 ### Rust-level (Criterion)
 
 | Input | Time |
 |---|---|
-| ASCII title (52 chars) | 116.6 ns |
-| Unicode title (mixed) | 159.5 ns |
-| Long text (120 chars) | 199.9 ns |
-| Bounded (max_length=30, word boundary) | 166.5 ns |
+| ASCII title (52 chars) | 113.2 ns |
+| Unicode title (mixed) | 169.9 ns |
+| Long text (120 chars) | 196.3 ns |
+| Bounded (max_length=30, word boundary) | 160.4 ns |
 
 ### vs. python-slugify
 
@@ -171,23 +171,23 @@ combining-mark removal, and NFC recomposition in Rust.
 
 | Input | translit | str.casefold() | Ratio |
 |---|---|---|---|
-| ASCII (11 chars) | 69 ns | — | — |
-| German (Straße) | 156 ns | — | — |
-| Mixed scripts | 236 ns | 82 ns | **2.9× slower** |
+| ASCII (11 chars) | 67 ns | — | — |
+| German (Straße) | 178 ns | — | — |
+| Mixed scripts | 322 ns | 85 ns | **3.8× slower** |
 
 ### Rust-level (Criterion)
 
 | Input | Time |
 |---|---|
-| ASCII short (11 chars) | 15.9 ns |
-| ASCII long (120 chars) | 21.9 ns |
-| Latin diacritics (26 chars) | 81.7 ns |
-| German eszett | 27.5 ns |
-| Greek | 130.8 ns |
-| Mixed scripts | 57.6 ns |
+| ASCII short (11 chars) | 14.6 ns |
+| ASCII long (120 chars) | 20.5 ns |
+| Latin diacritics (26 chars) | 79.5 ns |
+| German eszett | 27.2 ns |
+| Greek | 130.3 ns |
+| Mixed scripts | 56.7 ns |
 
 `str.casefold()` is a CPython C builtin with zero allocation overhead.
-translit's `fold_case()` is within 3× at the Python level, with the gap
+translit's `fold_case()` is within 4× at the Python level, with the gap
 dominated by PyO3 boundary-crossing cost. At the Rust level, `fold_case`
 runs in 16–131 ns depending on input — the PHF lookup itself is fast.
 
@@ -209,7 +209,7 @@ boundary crossing, amortising the per-call overhead across N strings.
 
 | Operation | Batch | Loop | Speedup |
 |---|---|---|---|
-| transliterate | **28.3 µs** | 82.9 µs | **2.9×** |
+| transliterate | **18.1 µs** | 51.5 µs | **2.8×** |
 
 The batch API eliminates PyO3 boundary-crossing overhead per string for
 transliteration. The advantage grows linearly with batch size.
@@ -223,26 +223,26 @@ where PyO3 overhead is a significant fraction of total work.
 
 | Pipeline | Time | Throughput |
 |---|---|---|
-| `security_clean` | **481 ns** | 2.1M ops/s |
-| `ml_normalize` | **954 ns** | 1.0M ops/s |
-| `display_clean` | **129 ns** | 7.8M ops/s |
+| `security_clean` | **504 ns** | 2.0M ops/s |
+| `ml_normalize` | **1208 ns** | 828K ops/s |
+| `display_clean` | **246 ns** | 4.1M ops/s |
 
 
 ## Grapheme operations
 
 | Operation | Time | Throughput |
 |---|---|---|
-| `grapheme_len` (emoji) | 311 ns | 3.2M ops/s |
-| `grapheme_len` (ASCII) | 181 ns | 5.5M ops/s |
+| `grapheme_len` (emoji) | 329 ns | 3.0M ops/s |
+| `grapheme_len` (ASCII) | 244 ns | 4.1M ops/s |
 
 Rust-level (Criterion):
 
 | Operation | Time |
 |---|---|
-| `grapheme_len` (ASCII) | 99.6 ns |
-| `grapheme_len` (emoji) | 258.8 ns |
-| `grapheme_split` (ASCII) | 285.4 ns |
-| `grapheme_split` (emoji) | 516.0 ns |
+| `grapheme_len` (ASCII) | 98.0 ns |
+| `grapheme_len` (emoji) | 252.4 ns |
+| `grapheme_split` (ASCII) | 274.9 ns |
+| `grapheme_split` (emoji) | 510.0 ns |
 
 
 ## Script detection
@@ -251,14 +251,14 @@ Rust-level (Criterion):
 
 | Operation | Time |
 |---|---|
-| `detect_scripts` (ASCII) | 131.2 ns |
-| `detect_scripts` (mixed 3 scripts) | 304.6 ns |
-| `detect_scripts` (Cyrillic pure) | 374.6 ns |
-| `detect_scripts` (CJK pure) | 121.1 ns |
-| `is_mixed_script` (ASCII) | 51.5 ns |
-| `is_mixed_script` (mixed 3 scripts) | 28.2 ns |
-| `is_mixed_script` (Cyrillic pure) | 121.9 ns |
-| `is_mixed_script` (CJK pure) | 46.1 ns |
+| `detect_scripts` (ASCII) | 114.3 ns |
+| `detect_scripts` (mixed 3 scripts) | 292.2 ns |
+| `detect_scripts` (Cyrillic pure) | 368.9 ns |
+| `detect_scripts` (CJK pure) | 120.4 ns |
+| `is_mixed_script` (ASCII) | 37.8 ns |
+| `is_mixed_script` (mixed 3 scripts) | 22.1 ns |
+| `is_mixed_script` (Cyrillic pure) | 119.1 ns |
+| `is_mixed_script` (CJK pure) | 46.9 ns |
 
 
 ## Whitespace collapsing
@@ -267,24 +267,24 @@ Rust-level (Criterion):
 
 | Input | Time |
 |---|---|
-| Messy (full strip) | 75.4 ns |
-| Messy (no strip) | 76.7 ns |
-| Clean passthrough | 30.5 ns |
+| Messy (full strip) | 78.6 ns |
+| Messy (no strip) | 79.2 ns |
+| Clean passthrough | 32.9 ns |
 
 
 ## Summary
 
 | Operation | vs. Competitor | Speedup |
 |---|---|---|
-| Transliteration (Latin, throughput) | Unidecode | **58×** |
-| Transliteration (Cyrillic, throughput) | Unidecode | **27×** |
-| Transliteration (mixed, throughput) | Unidecode | **33×** |
+| Transliteration (Latin, throughput) | Unidecode | **38×** |
+| Transliteration (Cyrillic, throughput) | Unidecode | **18×** |
+| Transliteration (mixed, throughput) | Unidecode | **22×** |
 | Slugification (long) | python-slugify | **24×** |
 | Filename sanitization | pathvalidate | **10–16×** |
 | Accent stripping | Python NFD+filter | **3.8–4.4×** |
 | Normalization (NFC) | unicodedata | slower (consistency tradeoff) |
-| Case folding | str.casefold() | ~2.9× slower |
-| Batch transliterate (100) | Python loop | **2.9×** |
+| Case folding | str.casefold() | ~3.8× slower |
+| Batch transliterate (100) | Python loop | **2.8×** |
 
 translit is faster than every pure-Python competitor for transliteration,
 slugification, filename sanitization, and accent stripping. It is slower
@@ -309,8 +309,8 @@ handling. The array occupies ~512 KB of static data but lives in a memory-mapped
 `.rodata` section that the OS pages in on demand.
 
 This optimization delivered the largest single improvement: Latin long-text
-transliteration went from **34× faster** than Unidecode (with PHF) to **58×
-faster** (with the flat array). Cyrillic improved from **12× to 27×**.
+transliteration went from **34× faster** than Unidecode (with PHF) to **38×
+faster** (with the flat array). Cyrillic improved from **12× to 18×**.
 
 ### 2. Python-side ASCII fast-path
 
@@ -321,7 +321,7 @@ Rust. This makes the common case (already-ASCII text) effectively free:
 
 | Function | With fast-path | Without |
 |---|---|---|
-| `transliterate("hello")` | **62 ns** | 407 ns |
+| `transliterate("hello")` | **71 ns** | 615 ns |
 | `strip_accents("hello")` | **36 ns** | 805 ns |
 
 ### 3. Batch APIs
@@ -329,7 +329,7 @@ Rust. This makes the common case (already-ASCII text) effectively free:
 `transliterate_batch()`, `slugify_batch()`, `normalize_batch()`, and
 `strip_accents_batch()` accept a list of strings and process them in a single
 PyO3 boundary crossing, amortising per-call overhead across N strings. For
-100 mixed-script strings, batch transliteration is **2.9× faster** than
+100 mixed-script strings, batch transliteration is **2.8× faster** than
 calling `transliterate()` in a Python loop.
 
 ### 4. Range-dispatch in lookup_default()

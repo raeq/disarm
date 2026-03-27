@@ -548,11 +548,11 @@ Key numbers for data engineering workloads:
 
 | Operation | Throughput |
 |---|---|
-| Transliterate (Latin) | 693M chars/sec |
-| Transliterate (Cyrillic) | 196M chars/sec |
-| Slugify | 1.12M slugs/sec |
-| Batch transliterate (100 strings) | 2.9× faster than loop |
-| vs. Unidecode | 27–58× faster |
+| Transliterate (Latin) | 450M chars/sec |
+| Transliterate (Cyrillic) | 130M chars/sec |
+| Slugify | 849K slugs/sec |
+| Batch transliterate (100 strings) | 2.8× faster than loop |
+| vs. Unidecode | 18–38× faster |
 | vs. python-slugify | 10–24× faster |
 
 For full benchmark methodology and results, see

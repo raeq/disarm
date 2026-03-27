@@ -23,7 +23,7 @@ The default transliteration table covers U+0080–U+FFFF as a flat `[Option<&'st
 
 The array occupies ~512 KB in the `.rodata` section. The OS pages it in on demand; only the pages containing accessed codepoint ranges are resident in memory.
 
-This replaced a PHF map for BMP lookups and delivered the single largest speedup: Latin transliteration went from 34× faster than Unidecode to 58× faster.
+This replaced a PHF map for BMP lookups and delivered the single largest speedup: Latin transliteration went from 34× faster than Unidecode to 38× faster.
 
 ## Optimization 3: Range-based dispatch
 
@@ -77,6 +77,6 @@ All secondary lookup tables (Hanzi pinyin, confusables, case folding, emoji) use
 Two operations are inherently slower than their CPython C-builtin counterparts:
 
 - **Normalization**: `unicodedata.normalize()` operates on CPython's internal string buffer without copying. translit uses Rust for all normalization (consistency over speed — see Optimization 7).
-- **Case folding**: `str.casefold()` is a CPython C builtin with zero allocation overhead. translit's PHF-based `fold_case()` is within ~3× at the Python level, with the gap dominated by PyO3 boundary-crossing cost rather than algorithmic differences.
+- **Case folding**: `str.casefold()` is a CPython C builtin with zero allocation overhead. translit's PHF-based `fold_case()` is within ~4× at the Python level, with the gap dominated by PyO3 boundary-crossing cost rather than algorithmic differences.
 
-These gaps are acceptable because normalization and case folding are rarely the bottleneck in real workloads — transliteration and slugification dominate processing time, and translit is 10–58× faster for those.
+These gaps are acceptable because normalization and case folding are rarely the bottleneck in real workloads — transliteration and slugification dominate processing time, and translit is 7–38× faster for those.

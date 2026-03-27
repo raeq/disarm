@@ -1,12 +1,14 @@
-"""CLI entrypoint for translit-rs Docker image.
+"""CLI for translit — fast Unicode transliteration, slugification, and text normalization.
 
 Usage:
-    python -m translit transliterate "café résumé"
-    python -m translit slugify "Hello World"
-    python -m translit normalize --form NFKC "ﬁ"
-    python -m translit pipeline --steps "normalize,fold_case,transliterate" "input"
-    python -m translit demojize "Hello 😀"
-    echo "piped input" | python -m translit slugify
+    translit t "café résumé"                        # transliterate
+    translit t --lang de "Ärger"                    # with language
+    translit t --target ru "Moskva"                 # reverse transliteration
+    translit s "Hello World"                        # slugify
+    translit n --form NFKC "ﬁ"                     # normalize
+    translit p --steps "normalize,fold_case" "input" # pipeline
+    translit d "Hello 😀"                           # demojize
+    echo "piped input" | translit t                 # pipe via stdin
 """
 
 from __future__ import annotations
@@ -88,65 +90,97 @@ def cmd_demojize(args: argparse.Namespace) -> None:
     print(result)
 
 
+def _add_transliterate_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+    """Register transliterate subcommand with both long and short names."""
+    for name in ("transliterate", "t"):
+        p = sub.add_parser(name, help="Transliterate Unicode text to ASCII")
+        p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
+        lang_group = p.add_mutually_exclusive_group()
+        lang_group.add_argument("--lang", default=None, help="Language code (e.g. de, ja, zh, auto)")
+        lang_group.add_argument(
+            "--target",
+            default=None,
+            help="Reverse transliteration target script (e.g. ru, uk, el)",
+        )
+        p.add_argument(
+            "--strict-iso9", action="store_true", default=False, help="Use strict ISO 9 transliteration"
+        )
+        p.add_argument(
+            "--gost7034", action="store_true", default=False, help="Use GOST 7.034 transliteration"
+        )
+        p.add_argument("--tones", action="store_true", default=False, help="Include tone marks (Chinese)")
+        p.set_defaults(func=cmd_transliterate)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="translit",
-        description="Fast Unicode transliteration, slugification, and text normalization",
+        description="Fast Unicode transliteration, slugification, and text normalization.",
+        epilog=(
+            "commands:\n"
+            "  transliterate (t)  Transliterate Unicode text to ASCII\n"
+            "  slugify (s)        Generate URL-safe slugs\n"
+            "  normalize (n)      Unicode normalization (NFC/NFD/NFKC/NFKD)\n"
+            "  pipeline (p)       Run a multi-step TextPipeline\n"
+            "  demojize (d)       Expand emoji to text descriptions\n"
+            "\n"
+            "examples:\n"
+            '  translit t "café résumé"             transliterate\n'
+            '  translit t --lang de "Ärger"         German rules\n'
+            '  translit t --target ru "Moskva"      reverse to Cyrillic\n'
+            '  translit s "Hello World"              slugify\n'
+            '  echo "input" | translit t             pipe via stdin'
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # transliterate
-    p = sub.add_parser("transliterate", help="Transliterate Unicode text to ASCII")
-    p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
-    lang_group = p.add_mutually_exclusive_group()
-    lang_group.add_argument("--lang", default=None, help="Language code (e.g. de, ja, zh)")
-    lang_group.add_argument(
-        "--target",
-        default=None,
-        help="Reverse transliteration target script (e.g. ru, uk, el)",
-    )
-    p.add_argument("--strict-iso9", action="store_true", default=False, help="Use strict ISO 9")
-    p.add_argument("--gost7034", action="store_true", default=False, help="Use GOST 7.034")
-    p.add_argument("--tones", action="store_true", default=False, help="Include tone marks")
-    p.set_defaults(func=cmd_transliterate)
+    # transliterate (+ short form "t")
+    _add_transliterate_parser(sub)
 
-    # slugify
-    p = sub.add_parser("slugify", help="Generate URL-safe slugs")
-    p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
-    p.add_argument("--separator", default=None, help="Separator character (default: -)")
-    p.add_argument("--max-length", type=int, default=None, help="Maximum slug length")
-    p.set_defaults(func=cmd_slugify)
+    # slugify (+ short form "s")
+    for name in ("slugify", "s"):
+        p = sub.add_parser(name, help="Generate URL-safe slugs")
+        p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
+        p.add_argument("--lang", default=None, help="Language code (e.g. de, ja)")
+        p.add_argument("--separator", default=None, help="Separator character (default: -)")
+        p.add_argument("--max-length", type=int, default=None, help="Maximum slug length")
+        p.set_defaults(func=cmd_slugify)
 
-    # normalize
-    p = sub.add_parser("normalize", help="Unicode normalization")
-    p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
-    p.add_argument(
-        "--form",
-        default="NFC",
-        choices=["NFC", "NFD", "NFKC", "NFKD"],
-        help="Normalization form (default: NFC)",
-    )
-    p.set_defaults(func=cmd_normalize)
+    # normalize (+ short form "n")
+    for name in ("normalize", "n"):
+        p = sub.add_parser(name, help="Unicode normalization")
+        p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
+        p.add_argument(
+            "--form",
+            default="NFC",
+            choices=["NFC", "NFD", "NFKC", "NFKD"],
+            help="Normalization form (default: NFC)",
+        )
+        p.set_defaults(func=cmd_normalize)
 
-    # pipeline
-    p = sub.add_parser("pipeline", help="Run a TextPipeline with specified steps")
-    p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
-    p.add_argument(
-        "--steps",
-        required=True,
-        help="Comma-separated steps: normalize,transliterate,fold_case,"
-        "collapse_whitespace,strip_accents,confusables,strip_control,"
-        "strip_zero_width,demojize",
-    )
-    p.add_argument("--form", default=None, help="Normalization form for normalize step")
-    p.set_defaults(func=cmd_pipeline)
+    # pipeline (+ short form "p")
+    for name in ("pipeline", "p"):
+        p = sub.add_parser(name, help="Run a TextPipeline with specified steps")
+        p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
+        p.add_argument(
+            "--steps",
+            required=True,
+            help="Comma-separated steps: normalize,transliterate,fold_case,"
+            "collapse_whitespace,strip_accents,confusables,strip_control,"
+            "strip_zero_width,demojize",
+        )
+        p.add_argument("--form", default=None, help="Normalization form for normalize step")
+        p.set_defaults(func=cmd_pipeline)
 
-    # demojize
-    p = sub.add_parser("demojize", help="Expand emoji to text descriptions")
-    p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
-    p.set_defaults(func=cmd_demojize)
+    # demojize (+ short form "d")
+    for name in ("demojize", "d"):
+        p = sub.add_parser(name, help="Expand emoji to text descriptions")
+        p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
+        p.set_defaults(func=cmd_demojize)
 
     args = parser.parse_args()
+
     args.func(args)
 
 

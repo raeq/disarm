@@ -113,6 +113,7 @@ Task-oriented guides for specific use cases and audiences.
 - **[For Security Engineers](security-guide.md)** — Homoglyph detection, IDN validation, input canonicalization
 - **[For Librarians & Catalogers](librarian-guide.md)** — Catalog keys, title dedup, sort normalization
 - **[For Scholars & Linguists](scholarly-guide.md)** — ISO 9, script analysis, transliteration profiles
+- **[Policy Templates](policy-templates.md)** — Named institutional presets for libraries, web apps, ML, and more
 - **[Docker](docker.md)** — CLI usage via Docker container
 
 ---
@@ -123,9 +124,9 @@ Complete function signatures, parameters, and return types.
 
 - **[Overview](api/index.md)** — API reference index
 - **[Core Transforms](api/transforms.md)** — `transliterate`, `slugify`, `normalize`, `sanitize_filename`, `strip_accents`, `strip_zalgo`, `fold_case`, `collapse_whitespace`, `demojize`, `strip_bidi`, batch APIs
-- **[Precompiled Pipelines](api/pipelines.md)** — `security_clean`, `ml_normalize`, `catalog_key`, `display_clean`, `search_key`, `sort_key`, `sanitize_user_input`, `PRESETS`
+- **[Precompiled Pipelines](api/pipelines.md)** — `security_clean`, `ml_normalize`, `catalog_key`, `display_clean`, `search_key`, `sort_key`, `sanitize_user_input`, `PRESETS`, `get_pipeline`, `list_profiles`
 - **[Classes](api/classes.md)** — `Text`, `Slugifier`, `UniqueSlugifier`, `TextPipeline`, compatibility aliases
-- **[Predicates](api/predicates.md)** — `detect_scripts`, `is_mixed_script`, `is_confusable`, `is_ascii`, `is_normalized`, `is_zalgo`, `is_safe_hostname`
+- **[Predicates](api/predicates.md)** — `detect_scripts`, `inspect_auto_lang`, `is_mixed_script`, `is_confusable`, `is_ascii`, `is_normalized`, `is_zalgo`, `is_safe_hostname`
 - **[Grapheme Clusters](api/graphemes.md)** — `grapheme_len`, `grapheme_split`, `grapheme_truncate`
 - **[Encoding Detection](api/encoding.md)** — `detect_encoding`, `decode_to_utf8`
 - **[Language Profiles](api/language-profiles.md)** — `list_langs`, `register_lang`, `register_replacements`
@@ -151,6 +152,7 @@ Internal design documentation for contributors and advanced users.
 - **[Emoji Plugins](architecture/emoji-plugins.md)** — EmojiProvider protocol, custom providers
 - **[Security](architecture/security.md)** — Confusable detection, hostname validation, bidi stripping
 - **[Performance](architecture/performance.md)** — Optimization strategies, PHF tables, batch amortization
+- **[Testing & Guarantees](architecture/testing-guarantees.md)** — Test philosophy, property-based testing, security invariants, CI matrix
 
 ---
 

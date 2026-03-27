@@ -55,6 +55,45 @@ transliterate("хлеб",   strict_iso9=True)       # → "hleb"
 transliterate("цирк",   strict_iso9=True)       # → "cirk"
 ```
 
+### Flag Precedence
+
+The interaction between `lang`, `strict_iso9`, and `gost7034` follows a strict override chain:
+
+```
+script default (e.g. Cyrillic → BGN/PCGN)
+  ↓ overridden by
+lang="xx" (explicit language profile)
+  ↓ overridden by
+strict_iso9=True (ISO 9:1995 scholarly standard)
+  ↓ mutually exclusive with
+gost7034=True (GOST R 7.0.34-2014)
+```
+
+Each level overrides the one above it for any character it covers. Characters not in the higher-level table fall through to the next level down.
+
+#### Warning-worthy combinations
+
+| Combination | Behavior |
+|-------------|----------|
+| `strict_iso9=True` + `gost7034=True` | **Raises `TranslitError`** — mutually exclusive standards |
+| `strip_accents=True` + `strict_iso9=True` | Defeats ISO 9 reversibility — ш→š→s loses the distinction between ш and с |
+| `lang="auto"` + `strict_iso9=True` | Auto-detection picks the language, but ISO 9 overrides its Cyrillic mappings |
+| `lang="de"` + `strict_iso9=True` | ISO 9 only affects Cyrillic — German text is unaffected by this flag |
+
+### Reversibility
+
+Not all transliteration modes are reversible. When reversibility matters (e.g., catalog records, search indices that must round-trip), choose the appropriate mode:
+
+| Mode | Reversible? | Output charset | Notes |
+|------|-------------|----------------|-------|
+| Default (BGN/PCGN) | No (lossy) | ASCII | Multi-char digraphs (sh, kh) lose boundary info |
+| `strict_iso9=True` | Yes (Cyrillic) | UTF-8 + diacritics | ш→š, ч→č preserves each letter's identity |
+| `strict_iso9=True` + `strip_accents` | No (lossy) | ASCII | Flattens ISO 9 diacritics — irreversible |
+| `gost7034=True` | No (lossy) | ASCII | Simplified Russian-only romanization |
+
+!!! warning
+    If you need fully reversible transliteration, use `strict_iso9=True` **without** `strip_accents`. The ASCII-flattened output (where š→s, č→c) is the common scholarly convention when diacritics are unavailable, but it is **not** round-trippable.
+
 ### Interaction with Language Overrides
 
 When `strict_iso9=True`, the ISO 9 table takes absolute priority. Language

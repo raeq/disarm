@@ -2,7 +2,7 @@
 
 import pytest
 
-from translit import Slugifier, TextPipeline, slugify, transliterate
+from translit import Slugifier, TextPipeline, inspect_auto_lang, slugify, transliterate
 
 
 class TestLangAutoDetection:
@@ -159,3 +159,65 @@ class TestLangDiscriminator:
         p = TextPipeline(transliterate=True, lang="auto")
         result = p("Straße")
         assert result.isascii()
+
+
+class TestInspectAutoLang:
+    """inspect_auto_lang() returns detection details."""
+
+    def test_ukrainian_discriminator(self) -> None:
+        result = inspect_auto_lang("Київ")
+        assert result["script"] == "Cyrillic"
+        assert result["chosen_lang"] == "uk"
+        assert result["reason"] == "discriminator"
+        assert "ї" in result["discriminators_hit"]
+
+    def test_russian_script_default(self) -> None:
+        result = inspect_auto_lang("Москва")
+        assert result["script"] == "Cyrillic"
+        assert result["chosen_lang"] == "ru"
+        assert result["reason"] == "script_default"
+        assert result["discriminators_hit"] == []
+
+    def test_thai_unambiguous(self) -> None:
+        result = inspect_auto_lang("ภาษาไทย")
+        assert result["script"] == "Thai"
+        assert result["chosen_lang"] == "th"
+        assert result["reason"] == "unambiguous_script"
+
+    def test_ascii_no_detection(self) -> None:
+        result = inspect_auto_lang("hello")
+        assert result["script"] is None
+        assert result["chosen_lang"] is None
+        assert result["reason"] == "no_detection"
+
+    def test_german_latin_discriminator(self) -> None:
+        result = inspect_auto_lang("Straße")
+        assert result["script"] is None
+        assert result["chosen_lang"] == "de"
+        assert result["reason"] == "latin_discriminator"
+        assert "ß" in result["discriminators_hit"]
+
+    def test_persian_discriminator(self) -> None:
+        result = inspect_auto_lang("پارسی")
+        assert result["script"] == "Arabic"
+        assert result["chosen_lang"] == "fa"
+        assert result["reason"] == "discriminator"
+
+    def test_serbian_discriminator(self) -> None:
+        result = inspect_auto_lang("Београд ћирилица")
+        assert result["chosen_lang"] == "sr"
+        assert result["reason"] == "discriminator"
+
+    def test_empty_string(self) -> None:
+        result = inspect_auto_lang("")
+        assert result["chosen_lang"] is None
+        assert result["reason"] == "no_detection"
+
+    def test_accented_latin_no_detection(self) -> None:
+        result = inspect_auto_lang("café")
+        assert result["chosen_lang"] is None
+        assert result["reason"] == "no_detection"
+
+    def test_result_keys(self) -> None:
+        result = inspect_auto_lang("test")
+        assert set(result.keys()) == {"script", "chosen_lang", "reason", "discriminators_hit"}

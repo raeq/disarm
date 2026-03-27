@@ -152,6 +152,58 @@ count = grapheme_len(normalized)     # => 1 (regardless of original form)
 
 In practice, `grapheme_len` gives the same count for NFC and NFD forms of the same text — the grapheme cluster algorithm handles both. But normalizing first ensures deterministic byte-level results from `grapheme_split` and `grapheme_truncate`.
 
+## Best Practices
+
+### Username validation
+
+Sanitize input first, then enforce a grapheme-aware length limit:
+
+```python
+from translit import sanitize_user_input, grapheme_len, grapheme_truncate
+
+def validate_username(raw: str, max_graphemes: int = 30) -> str:
+    clean = sanitize_user_input(raw)
+    if grapheme_len(clean) > max_graphemes:
+        clean = grapheme_truncate(clean, max_graphemes)
+    return clean
+```
+
+### Post/tweet fields
+
+Use `display_clean` for lightweight sanitization and `grapheme_truncate` for the character limit:
+
+```python
+from translit import display_clean, grapheme_truncate
+
+def prepare_post(raw: str, max_graphemes: int = 280) -> str:
+    clean = display_clean(raw)
+    return grapheme_truncate(clean, max_graphemes)
+```
+
+### Database column truncation
+
+When storing text in a column with a character limit, truncate by grapheme clusters — never by bytes or codepoints, which can split emoji or combining sequences:
+
+```python
+from translit import security_clean, grapheme_truncate
+
+def safe_for_db(raw: str, max_graphemes: int = 255) -> str:
+    clean = security_clean(raw)
+    return grapheme_truncate(clean, max_graphemes)
+```
+
+### ML corpus preparation
+
+Normalize text before truncating to a token-budget-friendly length:
+
+```python
+from translit import ml_normalize, grapheme_truncate
+
+def prepare_for_model(raw: str, max_graphemes: int = 4096) -> str:
+    clean = ml_normalize(raw)
+    return grapheme_truncate(clean, max_graphemes)
+```
+
 ## Limitations
 
 - **Display width is not grapheme count.** East Asian characters (CJK) are typically double-width in monospace fonts, but `grapheme_len` counts them as 1. For terminal column-width calculation, you need a separate width estimation library.

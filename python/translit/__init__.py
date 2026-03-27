@@ -65,6 +65,7 @@ from translit._translit import (
     _grapheme_len,
     _grapheme_split,
     _grapheme_truncate,
+    _inspect_auto_lang,
     _is_ascii,
     _is_confusable,
     _is_mixed_script,
@@ -1312,6 +1313,34 @@ def detect_scripts(text: str) -> list[Script]:
     return result
 
 
+def inspect_auto_lang(text: str) -> dict[str, str | list[str] | None]:
+    """Inspect how ``lang="auto"`` would resolve for the given text.
+
+    Use this to audit or log the detection decision made by the three-stage
+    auto-detection pipeline.
+
+    Args:
+        text: Input string.
+
+    Returns:
+        Dict with keys:
+
+        - ``script``: primary non-Latin script name, or ``None``
+        - ``chosen_lang``: resolved language code, or ``None``
+        - ``reason``: one of ``"unambiguous_script"``,
+          ``"discriminator"``, ``"script_default"``,
+          ``"latin_discriminator"``, ``"no_detection"``
+        - ``discriminators_hit``: list of discriminator characters found
+
+    Examples:
+        >>> inspect_auto_lang("Київ")["chosen_lang"]
+        'uk'
+        >>> inspect_auto_lang("Москва")["reason"]
+        'script_default'
+    """
+    return _inspect_auto_lang(text)
+
+
 def is_mixed_script(text: str) -> bool:
     """True if text contains characters from more than one Unicode script.
 
@@ -1675,6 +1704,90 @@ audit exactly which transforms a preset applies.
 """
 
 
+# --- Policy profiles ---
+
+_POLICY_PROFILES: dict[str, dict] = {
+    "scholarly_cyrillic_iso9": dict(
+        normalize="NFKC",
+        transliterate=True,
+        strict_iso9=True,
+        fold_case=True,
+        collapse_whitespace=True,
+    ),
+    "library_catalog_key_eu": dict(
+        normalize="NFKC",
+        transliterate=True,
+        confusables=True,
+        strip_accents=True,
+        fold_case=True,
+        collapse_whitespace=True,
+    ),
+    "web_input_sanitize": dict(
+        normalize="NFKC",
+        confusables=True,
+        collapse_whitespace=True,
+    ),
+    "ml_corpus_normalize": dict(
+        normalize="NFKC",
+        demojize=True,
+        strip_accents=True,
+        fold_case=True,
+        collapse_whitespace=True,
+    ),
+    "search_index": dict(
+        normalize="NFKC",
+        transliterate=True,
+        strip_accents=True,
+        fold_case=True,
+        collapse_whitespace=True,
+    ),
+}
+
+
+def get_pipeline(profile: str) -> TextPipeline:
+    """Return a TextPipeline configured for a named policy profile.
+
+    Policy profiles are pre-defined parameter sets for common institutional
+    and application workflows.  Each call returns a fresh ``TextPipeline``
+    instance.
+
+    Args:
+        profile: Profile name (see :func:`list_profiles`).
+
+    Returns:
+        A configured ``TextPipeline``.
+
+    Raises:
+        TranslitError: If *profile* is not a known profile name.
+
+    Examples:
+        >>> pipe = get_pipeline("scholarly_cyrillic_iso9")
+        >>> pipe("Москва")  # doctest: +SKIP
+        'moskva'
+    """
+    try:
+        kwargs = _POLICY_PROFILES[profile]
+    except KeyError:
+        avail = ", ".join(sorted(_POLICY_PROFILES))
+        raise TranslitError(
+            f"Unknown profile {profile!r}; available: {avail}"
+        ) from None
+    return TextPipeline(**kwargs)
+
+
+def list_profiles() -> list[str]:
+    """Return sorted names of available policy profiles.
+
+    Returns:
+        Sorted list of profile name strings.
+
+    Examples:
+        >>> "scholarly_cyrillic_iso9" in list_profiles()
+        True
+    """
+    return sorted(_POLICY_PROFILES)
+
+
 # --- Language profiles ---
 
 
@@ -1820,12 +1933,16 @@ __all__ = [
     "decode_to_utf8",
     # Predicates
     "detect_scripts",
+    "inspect_auto_lang",
     "is_mixed_script",
     "is_confusable",
     "is_ascii",
     "is_normalized",
     # Preset metadata
     "PRESETS",
+    # Policy profiles
+    "get_pipeline",
+    "list_profiles",
     # Stateful / builders
     "Text",
     "Slugifier",

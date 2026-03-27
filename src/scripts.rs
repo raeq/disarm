@@ -377,6 +377,16 @@ fn lookup_latin_discriminator(ch: char) -> Option<&'static str> {
 /// answer.  In the worst case it returns `None` and the caller uses the
 /// previous default behaviour.
 fn discriminate_by_chars(text: &str, script: &str) -> Option<&'static str> {
+    discriminate_by_chars_detailed(text, script).map(|(lang, _ch)| lang)
+}
+
+/// Like `discriminate_by_chars` but also returns the discriminator character
+/// that triggered the match.  Used by `_inspect_auto_lang` to provide
+/// audit-level detail.
+fn discriminate_by_chars_detailed(
+    text: &str,
+    script: &str,
+) -> Option<(&'static str, char)> {
     // Cap the scan at 2 000 characters.  If a discriminator character
     // exists in the text it will almost certainly appear in the opening
     // portion — scanning further is pure overhead for long documents.
@@ -389,8 +399,8 @@ fn discriminate_by_chars(text: &str, script: &str) -> Option<&'static str> {
             lookup_discriminator(ch, script)
         };
 
-        if hit.is_some() {
-            return hit; // first hit — bail early
+        if let Some(lang) = hit {
+            return Some((lang, ch));
         }
     }
 
@@ -452,6 +462,82 @@ pub fn resolve_auto_lang(text: &str) -> Option<String> {
             }
         }
     }
+}
+
+/// Inspect how `lang="auto"` would resolve for the given text.
+///
+/// Returns a Python dict with keys:
+///   - `script`: primary non-Latin script name, or `None`
+///   - `chosen_lang`: resolved language code, or `None`
+///   - `reason`: one of `"unambiguous_script"`, `"discriminator"`,
+///     `"script_default"`, `"latin_discriminator"`, `"no_detection"`
+///   - `discriminators_hit`: list of discriminator characters found
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _inspect_auto_lang(py: Python<'_>, text: &str) -> PyResult<PyObject> {
+    use pyo3::types::PyDict;
+
+    // Pass 1: Find primary non-Latin, non-Common script.
+    let mut primary_script: Option<&str> = None;
+    for ch in text.chars() {
+        let script = detect_char_script(ch);
+        if script != "Common" && script != "Inherited" && script != "Latin" {
+            primary_script = Some(script);
+            break;
+        }
+    }
+
+    let (script_out, chosen_lang, reason, discriminators_hit): (
+        Option<&str>,
+        Option<String>,
+        &str,
+        Vec<String>,
+    ) = match primary_script {
+        Some(script) if is_ambiguous_script(script) => {
+            match discriminate_by_chars_detailed(text, script) {
+                Some((lang, ch)) => (
+                    Some(script),
+                    Some(lang.to_owned()),
+                    "discriminator",
+                    vec![ch.to_string()],
+                ),
+                None => (
+                    Some(script),
+                    script_to_lang(script).map(str::to_owned),
+                    "script_default",
+                    vec![],
+                ),
+            }
+        }
+        Some(script) => (
+            Some(script),
+            script_to_lang(script).map(str::to_owned),
+            "unambiguous_script",
+            vec![],
+        ),
+        None => {
+            if text.is_ascii() {
+                (None, None, "no_detection", vec![])
+            } else {
+                match discriminate_by_chars_detailed(text, "Latin") {
+                    Some((lang, ch)) => (
+                        None,
+                        Some(lang.to_owned()),
+                        "latin_discriminator",
+                        vec![ch.to_string()],
+                    ),
+                    None => (None, None, "no_detection", vec![]),
+                }
+            }
+        }
+    };
+
+    let dict = PyDict::new(py);
+    dict.set_item("script", script_out)?;
+    dict.set_item("chosen_lang", chosen_lang)?;
+    dict.set_item("reason", reason)?;
+    dict.set_item("discriminators_hit", discriminators_hit)?;
+    Ok(dict.into_any().unbind())
 }
 
 #[cfg(test)]

@@ -376,6 +376,20 @@ grapheme_truncate("Hi 👩‍👩‍👧‍👦!", 4)            # → "Hi 👩�
 grapheme_len("🇬🇧")                     # → 1 (two regional indicators = 1 grapheme)
 ```
 
+### Combining sanitization with grapheme limits
+
+For user-facing fields with character limits, always sanitize first, then truncate:
+
+```python
+from translit import sanitize_user_input, grapheme_truncate
+
+def clean_display_name(raw: str, max_len: int = 50) -> str:
+    clean = sanitize_user_input(raw)
+    return grapheme_truncate(clean, max_len)
+```
+
+See [Grapheme Best Practices](user-guide/graphemes.md#best-practices) for more recipes.
+
 ---
 
 ## Performance

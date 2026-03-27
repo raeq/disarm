@@ -173,6 +173,68 @@ This means `lang="auto"` is always at least as good as the script default, and o
 
 ---
 
+## Inspecting Detection Results
+
+Use `inspect_auto_lang()` to see exactly how the detection pipeline resolved for a given text. This is useful for logging, auditing, and debugging:
+
+```python
+from translit import inspect_auto_lang
+
+result = inspect_auto_lang("Київ")
+# {
+#     'script': 'Cyrillic',
+#     'chosen_lang': 'uk',
+#     'reason': 'discriminator',
+#     'discriminators_hit': ['ї']
+# }
+
+result = inspect_auto_lang("Москва")
+# {
+#     'script': 'Cyrillic',
+#     'chosen_lang': 'ru',
+#     'reason': 'script_default',
+#     'discriminators_hit': []
+# }
+
+result = inspect_auto_lang("Straße")
+# {
+#     'script': None,
+#     'chosen_lang': 'de',
+#     'reason': 'latin_discriminator',
+#     'discriminators_hit': ['ß']
+# }
+```
+
+### Return value
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `script` | `str | None` | Primary non-Latin script detected, or `None` for Latin/ASCII |
+| `chosen_lang` | `str | None` | Resolved language code, or `None` if no language matched |
+| `reason` | `str` | Detection reason: `"unambiguous_script"`, `"discriminator"`, `"script_default"`, `"latin_discriminator"`, or `"no_detection"` |
+| `discriminators_hit` | `list[str]` | Discriminator characters that triggered the match (empty if none) |
+
+---
+
+## When NOT to Use lang="auto"
+
+`lang="auto"` is a convenience for bulk or unknown-source text. Do **not** use it when:
+
+- **The language is already known** — bibliographic records, catalog entries, and curated datasets should always pass an explicit `lang` code.
+- **Legal or official names** — personal names, place names in legal documents, and citations require the correct language profile. Auto-detection may default to the wrong language for ambiguous scripts.
+- **Short text** — 1-3 character strings rarely contain discriminators and will fall back to the script default, which may not be correct.
+- **Reproducibility matters** — auto-detection depends on text content; the same function with explicit `lang` always produces the same mapping.
+
+```python
+# Do this:
+transliterate("Софія", lang="bg")   # Known to be Bulgarian
+
+# Not this:
+transliterate("Софія", lang="auto")  # Defaults to Russian (no Bulgarian discriminators)
+```
+
+---
+
 ## Integration with Pipelines
 
 `lang="auto"` works with all translit entry points:

@@ -147,3 +147,44 @@ Dict mapping preset function names to their ordered pipeline steps. Each value i
 ```
 
 Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.
+
+---
+
+## Policy Profiles
+
+Named policy profiles provide pre-configured `TextPipeline` instances for common institutional and application workflows.
+
+### get_pipeline
+
+```python
+from translit import get_pipeline
+
+pipe = get_pipeline("scholarly_cyrillic_iso9")
+pipe("Москва")   # → "moskva"
+```
+
+Returns a fresh `TextPipeline` configured for the named profile. Raises `TranslitError` for unknown profiles.
+
+### list_profiles
+
+```python
+from translit import list_profiles
+
+print(list_profiles())
+# ['library_catalog_key_eu', 'ml_corpus_normalize', 'scholarly_cyrillic_iso9',
+#  'search_index', 'web_input_sanitize']
+```
+
+Returns sorted list of available profile names.
+
+### Available profiles
+
+| Profile | Steps | Output |
+|---------|-------|--------|
+| `scholarly_cyrillic_iso9` | NFKC → transliterate (ISO 9) → fold_case → collapse_whitespace | UTF-8 |
+| `library_catalog_key_eu` | NFKC → transliterate → confusables → strip_accents → fold_case → collapse_whitespace | ASCII |
+| `web_input_sanitize` | NFKC → confusables → collapse_whitespace | UTF-8 |
+| `ml_corpus_normalize` | NFKC → demojize → strip_accents → fold_case → collapse_whitespace | ASCII |
+| `search_index` | NFKC → transliterate → strip_accents → fold_case → collapse_whitespace | ASCII |
+
+See [Policy Templates](../policy-templates.md) for detailed usage guidance and institutional recipes.

@@ -634,6 +634,80 @@ It does not address:
 
 ---
 
+## Security Anti-Patterns
+
+### Do not use transliteration output as a uniqueness key
+
+Transliteration is many-to-one. Multiple distinct inputs can produce identical output:
+
+```python
+from translit import transliterate
+
+transliterate("Ö", lang="de")  # → "Oe"
+transliterate("Oe")            # → "Oe"  (already ASCII)
+
+# Both map to the same slug
+from translit import slugify
+slugify("Ärger")               # → "arger"
+slugify("Arger")               # → "arger"
+```
+
+If you need a uniqueness key, store the original text alongside the transliterated form and enforce uniqueness on the original.
+
+### Do not treat confusable-normalized text as a canonical identity
+
+`normalize_confusables()` maps visually similar characters to a common form, but this is a **display safety** tool, not an identity function. Two genuinely different strings (e.g., "ρ" Greek rho and "p" Latin) may normalize to the same output.
+
+```python
+# These are different characters, but normalize to the same thing
+normalize_confusables("ρ")  # → "p"  (Greek rho → Latin p)
+
+# Do NOT use this as a username deduplication key
+# Instead: normalize for display, but enforce uniqueness on the raw input
+```
+
+### Do not assume one function solves all Unicode security
+
+`security_clean()` and `sanitize_user_input()` handle common attack vectors (bidi injection, zero-width chars, confusables, zalgo), but they are **not** a complete security solution. You still need:
+
+- **Input validation** — length limits, allowed character sets, format checks
+- **Output encoding** — HTML escaping, SQL parameterization
+- **Access control** — authentication, authorization, rate limiting
+
+Layer translit's canonicalization with your application's own validation:
+
+```python
+import re
+from translit import security_clean
+
+def validate_username(raw: str) -> str:
+    """Canonicalize + validate a username."""
+    clean = security_clean(raw)
+
+    # Application-level validation AFTER canonicalization
+    if not re.fullmatch(r"[a-zA-Z0-9_.-]{3,30}", clean):
+        raise ValueError("Invalid username")
+
+    return clean
+```
+
+### Recipes for ASCII-subset whitelisting
+
+For high-assurance fields (hostnames, identifiers, API keys), combine canonicalization with strict character whitelisting:
+
+```python
+import re
+from translit import security_clean, grapheme_truncate
+
+def sanitize_identifier(raw: str, max_len: int = 64) -> str:
+    """Strict ASCII identifier from arbitrary Unicode input."""
+    canon = security_clean(raw)
+    ascii_only = re.sub(r"[^a-zA-Z0-9_-]", "", canon)
+    return grapheme_truncate(ascii_only, max_len)
+```
+
+---
+
 ## Performance
 
 All operations are compiled Rust with O(1) PHF (perfect hash function)

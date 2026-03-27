@@ -104,6 +104,7 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(whitespace::_collapse_whitespace, m)?)?;
     m.add_function(wrap_pyfunction!(scripts::_detect_scripts, m)?)?;
     m.add_function(wrap_pyfunction!(scripts::_is_mixed_script, m)?)?;
+    m.add_function(wrap_pyfunction!(scripts::_inspect_auto_lang, m)?)?;
 
     // Batch APIs (single PyO3 boundary crossing for N strings)
     m.add_function(wrap_pyfunction!(transliterate::_transliterate_batch, m)?)?;

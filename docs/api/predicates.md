@@ -8,6 +8,27 @@ Functions that inspect text and return boolean or structured results without mod
 
 ---
 
+## inspect_auto_lang
+
+::: translit.inspect_auto_lang
+
+```python
+from translit import inspect_auto_lang
+
+inspect_auto_lang("Київ")
+# {'script': 'Cyrillic', 'chosen_lang': 'uk', 'reason': 'discriminator', 'discriminators_hit': ['ї']}
+
+inspect_auto_lang("Москва")
+# {'script': 'Cyrillic', 'chosen_lang': 'ru', 'reason': 'script_default', 'discriminators_hit': []}
+
+inspect_auto_lang("hello")
+# {'script': None, 'chosen_lang': None, 'reason': 'no_detection', 'discriminators_hit': []}
+```
+
+See [Language Detection](../user-guide/language-detection.md#inspecting-detection-results) for details.
+
+---
+
 ## is_mixed_script
 
 ::: translit.is_mixed_script

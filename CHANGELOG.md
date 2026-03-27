@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.15] — 2026-03-27
+
+### Added
+- **Reverse transliteration**: `transliterate(text, target="ru")` converts Latin → native
+  script for Russian, Ukrainian, and Greek. PHF tables generated at build time from
+  inverted language TSV data.
+- **Toned pinyin**: `transliterate("北京", tones=True)` returns `"běi jīng"` with tone
+  marks. Toned readings sourced from Unihan `kMandarin` field for all 20,924 CJK
+  Unified Ideographs.
+- **ISO 9:1995 scholarly Cyrillic**: `transliterate(text, strict_iso9=True)` for
+  scholarly romanization. GOST R 7.0.34 variant via `gost7034=True`.
+- **Japanese Kunrei-shiki** (`lang="ja-kunrei"`): alternative romanization profile,
+  bringing total language count to 65.
+- **Ancient scripts**: Coptic, Gothic, Old Italic, Runic, Ogham transliteration tables.
+- **CLI short aliases**: `t` (transliterate), `s` (slugify), `n` (normalize),
+  `p` (pipeline), `d` (demojize) — e.g. `translit t "café"`.
+- **CLI `--target` flag**: `translit t --target ru "Moskva"` for reverse transliteration.
+- **CLI `--tones`, `--strict-iso9`, `--gost7034` flags** for transliterate subcommand.
+- **CLI `--lang` flag** for slugify subcommand.
+- `console_scripts` entry point: `translit` command available after `pip install translit-rs`.
+- `docs/cli.md`: comprehensive CLI documentation with piping, exit codes, examples.
+- Links section in README.md and docs/index.md for RTD ↔ GitHub cross-references.
+
+### Changed
+- `transliterate()` API unified: `reverse_transliterate()` merged into `transliterate()`
+  via `target` parameter. Old function removed.
+- `transliterate_impl` Rust signature now takes 7 arguments (added `tones: bool`).
+- Updated benchmark numbers after `tones` parameter addition (15–46% regression in
+  transliteration hot path due to additional branch; throughput now 450M chars/sec
+  Latin, 130M chars/sec Cyrillic).
+- Performance documentation updated across 4 files to reflect current benchmark results.
+
+### Fixed
+- clippy `format_push_string` lint in `build.rs` — replaced `push_str(&format!())`
+  with `write!()`.
+- clippy `unreadable_literal` in PHF-generated `reverse_translit_phf.rs` — suppressed
+  via inner attribute in `src/reverse.rs`.
+- All 219 integration test call sites updated for 7-argument `transliterate_impl`.
+
 ## [0.1.4] — 2026-03-25
 
 ### Added

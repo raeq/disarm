@@ -238,6 +238,16 @@ remove_accents("café")   # → "cafe"       (alias for strip_accents)
 - [For Librarians & Catalogers](docs/librarian-guide.md) — Catalog keys, title dedup, sort normalization
 - [For Scholars & Linguists](docs/scholarly-guide.md) — ISO 9, script analysis, transliteration profiles
 
+## Formal testing
+
+translit is formally tested with three layers of machine-verifiable assurance beyond conventional unit and property-based tests:
+
+- **Compile-time proofs**: `build.rs` asserts all transliteration table values are ASCII and entry counts match expectations — if any check fails, `cargo build` fails
+- **Exhaustive domain coverage**: Every Hangul syllable (11,172), every BMP codepoint (63,488), every CJK ideograph (20,992), and every Indic script block are tested individually — zero sampling gaps
+- **Formalized invariants**: Seven formally-stated properties (ASCII passthrough, idempotence, determinism, output bounds, etc.) verified by exhaustive enumeration and Hypothesis
+
+See [docs/formal-verification.md](docs/formal-verification.md) for details.
+
 ## Architecture
 
 Rust core with compile-time PHF (perfect hash function) tables for O(1) per-character lookup. Exposed to Python via PyO3 with the stable ABI (abi3-py39). The Chinese pinyin table contains 20,924 entries from the Unicode Unihan database; Korean romanization is purely algorithmic (jamo decomposition, ~100 lines of Rust).

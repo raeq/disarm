@@ -10,7 +10,7 @@
 pub mod case_folding_data;
 mod confusables_data;
 pub mod emoji_data;
-mod hangul;
+pub mod hangul;
 mod hanzi_pinyin;
 mod transliteration;
 

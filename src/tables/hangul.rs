@@ -204,9 +204,41 @@ pub fn romanize_hangul(ch: char) -> Option<String> {
     lookup_compat_jamo(ch).map(std::string::ToString::to_string)
 }
 
+// Compile-time verification: Hangul algorithm constants match Unicode spec.
+// JUNGSEONG_COUNT * JONGSEONG_COUNT = 21 * 28 = 588 (syllables per initial).
+// Total syllables: 19 * 588 = 11,172 (U+AC00–U+D7A3).
+const _: () = assert!(JUNGSEONG_COUNT == 21);
+const _: () = assert!(JONGSEONG_COUNT == 28);
+const _: () = assert!(HANGUL_END - HANGUL_BASE + 1 == 19 * JUNGSEONG_COUNT * JONGSEONG_COUNT);
+const _: () = assert!(COMPAT_JAMO_END - COMPAT_JAMO_BASE + 1 == 51);
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_jamo_array_lengths() {
+        assert_eq!(CHOSEONG.len(), 19, "CHOSEONG must have 19 initial consonants");
+        assert_eq!(JUNGSEONG.len(), 21, "JUNGSEONG must have 21 medial vowels");
+        assert_eq!(JONGSEONG.len(), 28, "JONGSEONG must have 28 final consonants");
+        assert_eq!(COMPAT_JAMO.len(), 51, "COMPAT_JAMO must have 51 entries");
+    }
+
+    #[test]
+    fn test_all_jamo_entries_are_ascii() {
+        for (i, entry) in CHOSEONG.iter().enumerate() {
+            assert!(entry.is_ascii(), "CHOSEONG[{i}] = {entry:?} is not ASCII");
+        }
+        for (i, entry) in JUNGSEONG.iter().enumerate() {
+            assert!(entry.is_ascii(), "JUNGSEONG[{i}] = {entry:?} is not ASCII");
+        }
+        for (i, entry) in JONGSEONG.iter().enumerate() {
+            assert!(entry.is_ascii(), "JONGSEONG[{i}] = {entry:?} is not ASCII");
+        }
+        for (i, entry) in COMPAT_JAMO.iter().enumerate() {
+            assert!(entry.is_ascii(), "COMPAT_JAMO[{i}] = {entry:?} is not ASCII");
+        }
+    }
 
     #[test]
     fn test_hangul_basic() {

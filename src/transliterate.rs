@@ -340,7 +340,7 @@ fn is_indic(ch: char) -> bool {
 
 /// Role of an Indic character for virama/mātrā context handling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum IndicRole {
+pub enum IndicRole {
     /// Not a special Indic role (independent vowel, modifier, digit, etc.)
     None,
     /// Consonant (carries inherent "a" in the transliteration table).
@@ -358,7 +358,7 @@ enum IndicRole {
 /// Sinhala, Tibetan, Myanmar, and Khmer use different offsets and are handled
 /// by dedicated sub-functions.
 #[inline]
-fn indic_char_role(cp: u32) -> IndicRole {
+pub fn indic_char_role(cp: u32) -> IndicRole {
     if (0x0D80..=0x0DFF).contains(&cp) {
         return sinhala_char_role(cp);
     }
@@ -392,7 +392,7 @@ fn indic_char_role(cp: u32) -> IndicRole {
 /// Classify a Sinhala codepoint's role. Sinhala consonants, dependent vowels,
 /// and virama (al-lakuna) occupy different offsets from the other Indic scripts.
 #[inline]
-fn sinhala_char_role(cp: u32) -> IndicRole {
+pub fn sinhala_char_role(cp: u32) -> IndicRole {
     match cp {
         0x0D9A..=0x0DC6 => IndicRole::Consonant,
         0x0DCF..=0x0DDF | 0x0DF2..=0x0DF3 => IndicRole::DependentVowel,
@@ -407,7 +407,7 @@ fn sinhala_char_role(cp: u32) -> IndicRole {
 /// carry an inherent 'a'. Vowel signs (U+0F71–U+0F7D) replace it.
 /// The halanta mark (U+0F84) suppresses it.
 #[inline]
-fn tibetan_char_role(cp: u32) -> IndicRole {
+pub fn tibetan_char_role(cp: u32) -> IndicRole {
     match cp {
         0x0F40..=0x0F69 | 0x0F90..=0x0FBC => IndicRole::Consonant,
         0x0F71..=0x0F7D => IndicRole::DependentVowel,
@@ -422,7 +422,7 @@ fn tibetan_char_role(cp: u32) -> IndicRole {
 /// Dependent vowels (U+102B–U+1035) and medial consonants (U+103B–U+103E) replace it.
 /// Virama (U+1039) and asat (U+103A) suppress it.
 #[inline]
-fn myanmar_char_role(cp: u32) -> IndicRole {
+pub fn myanmar_char_role(cp: u32) -> IndicRole {
     match cp {
         0x1000..=0x1021 => IndicRole::Consonant,
         0x102B..=0x1035 | 0x103B..=0x103E => IndicRole::DependentVowel,
@@ -437,7 +437,7 @@ fn myanmar_char_role(cp: u32) -> IndicRole {
 /// Dependent vowels (U+17B6–U+17C5) replace it.
 /// The coeng mark (U+17D2) stacks consonants (virama equivalent).
 #[inline]
-fn khmer_char_role(cp: u32) -> IndicRole {
+pub fn khmer_char_role(cp: u32) -> IndicRole {
     match cp {
         0x1780..=0x17A2 => IndicRole::Consonant,
         0x17B6..=0x17C5 => IndicRole::DependentVowel,
@@ -449,7 +449,7 @@ fn khmer_char_role(cp: u32) -> IndicRole {
 /// Classify a Balinese codepoint's role. Balinese is a Brahmic abugida with
 /// consonants carrying inherent 'a', dependent vowels, and adeg-adeg (virama).
 #[inline]
-fn balinese_char_role(cp: u32) -> IndicRole {
+pub fn balinese_char_role(cp: u32) -> IndicRole {
     match cp {
         0x1B13..=0x1B33 => IndicRole::Consonant,
         0x1B35..=0x1B43 => IndicRole::DependentVowel,
@@ -461,7 +461,7 @@ fn balinese_char_role(cp: u32) -> IndicRole {
 /// Classify a Javanese codepoint's role. Javanese is a Brahmic abugida with
 /// consonants carrying inherent 'a', dependent vowels, and pangkon (virama).
 #[inline]
-fn javanese_char_role(cp: u32) -> IndicRole {
+pub fn javanese_char_role(cp: u32) -> IndicRole {
     match cp {
         0xA990..=0xA9B2 => IndicRole::Consonant,
         0xA9B4..=0xA9BC => IndicRole::DependentVowel,

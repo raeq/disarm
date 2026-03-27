@@ -25,12 +25,22 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     // --- Hanzi Pinyin ---
-    generate_char_str_map(
-        &data_dir.join("hanzi_pinyin.tsv"),
-        &out_dir.join("hanzi_pinyin_phf.rs"),
-        "HANZI_PINYIN",
-        "pub",
-    );
+    {
+        let entries = read_char_str_tsv(&data_dir.join("hanzi_pinyin.tsv"));
+        assert!(
+            entries.len() >= 20_000,
+            "hanzi_pinyin.tsv: expected ≥20,000 entries, got {}",
+            entries.len()
+        );
+        for (&cp, value) in &entries {
+            assert!(
+                value.is_ascii(),
+                "hanzi_pinyin.tsv: non-ASCII value {value:?} for U+{cp:04X}"
+            );
+        }
+        let code = build_char_str_map(&entries, "HANZI_PINYIN", "pub");
+        fs::write(out_dir.join("hanzi_pinyin_phf.rs"), code).unwrap();
+    }
 
     // --- Hanzi Pinyin (toned) ---
     generate_char_str_map(
@@ -41,12 +51,16 @@ fn main() {
     );
 
     // --- Confusables ---
-    generate_char_str_map(
-        &data_dir.join("confusables.tsv"),
-        &out_dir.join("confusables_phf.rs"),
-        "TO_LATIN",
-        "",
-    );
+    {
+        let entries = read_char_str_tsv(&data_dir.join("confusables.tsv"));
+        assert!(
+            entries.len() >= 1_000,
+            "confusables.tsv: expected ≥1,000 entries, got {}",
+            entries.len()
+        );
+        let code = build_char_str_map(&entries, "TO_LATIN", "");
+        fs::write(out_dir.join("confusables_phf.rs"), code).unwrap();
+    }
 
     // --- Emoji ---
     generate_char_str_map(
@@ -77,12 +91,35 @@ fn main() {
     );
 
     // --- Transliteration: default table (flat BMP array) ---
+    {
+        let default_entries = read_char_str_tsv(&data_dir.join("translit_default.tsv"));
+        assert!(
+            default_entries.len() >= 5_000,
+            "translit_default.tsv: expected ≥5,000 entries, got {}",
+            default_entries.len()
+        );
+        for (&cp, value) in &default_entries {
+            assert!(
+                value.is_ascii(),
+                "translit_default.tsv: non-ASCII value {value:?} for U+{cp:04X}"
+            );
+        }
+    }
     generate_translit_flat_array(
         &data_dir.join("translit_default.tsv"),
         &out_dir.join("translit_default_flat.rs"),
     );
 
     // --- Transliteration: SMP default table (ancient/historic scripts above U+FFFF) ---
+    {
+        let smp_entries = read_char_str_tsv(&data_dir.join("translit_default_smp.tsv"));
+        for (&cp, value) in &smp_entries {
+            assert!(
+                value.is_ascii(),
+                "translit_default_smp.tsv: non-ASCII value {value:?} for U+{cp:04X}"
+            );
+        }
+    }
     generate_char_str_map(
         &data_dir.join("translit_default_smp.tsv"),
         &out_dir.join("translit_default_smp_phf.rs"),
@@ -122,6 +159,12 @@ fn main() {
     for (file_stem, const_name) in &lang_tables {
         let tsv_path = data_dir.join(format!("translit_{file_stem}.tsv"));
         let entries = read_char_str_tsv(&tsv_path);
+        for (&cp, value) in &entries {
+            assert!(
+                value.is_ascii(),
+                "translit_{file_stem}.tsv: non-ASCII value {value:?} for U+{cp:04X}"
+            );
+        }
         all_lang_code.push_str(&build_char_str_map(&entries, const_name, ""));
         all_lang_code.push('\n');
     }

@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-03-27
+
+### Added
+- **Formal testing framework** — three layers of machine-verifiable assurance:
+  - **Compile-time proofs** (`build.rs`): all transliteration table values asserted
+    ASCII-only, entry count sanity checks (Hanzi ≥20k, BMP ≥5k, confusables ≥1k).
+    Build fails if any assertion is violated.
+  - **Exhaustive domain tests** (Rust): 16 tests covering all 11,172 Hangul syllables,
+    full BMP (63,488 codepoints) for ASCII output and idempotence, all 20,992 CJK
+    ideographs, all 51 compatibility jamo, and structural verification of 15 Indic
+    script blocks. Zero sampling gaps.
+  - **Formalized invariant specifications** (Python): 7 formally-stated invariants
+    (I1–I7) verified via exhaustive enumeration and Hypothesis — ASCII passthrough,
+    ASCII output, idempotence, no exceptions, determinism, input size bound, output
+    length bound.
+- **Two-tier test architecture**: formal tests gated behind `#[ignore]` (Rust) and
+  `@pytest.mark.formal` (Python) so they don't slow everyday development. Run before
+  release with `cargo test -- --ignored` and `pytest -m formal`.
+- **CLAUDE.md**: project-level development guide for automated agents — documents
+  build commands, test tiers, and code conventions.
+- `list_scripts()` function for programmatic script discovery.
+- `docs/formal-verification.md`: specification document for formal testing methodology.
+- Comprehensive overhaul of `docs/architecture/testing-guarantees.md` with formal
+  testing differentiator analysis and alternative library comparison.
+
+### Changed
+- `IndicRole` enum and `indic_char_role()` / script-specific char_role functions
+  changed from private to `pub` for integration test access (parent modules remain
+  `#[doc(hidden)]`).
+- `tables::hangul` module changed from `mod` to `pub mod` for integration test access.
+- Hangul const assertions added: `JUNGSEONG_COUNT`, `JONGSEONG_COUNT`, total syllable
+  count, and compatibility jamo range verified at compile time.
+- Total test count: 2,900+ (up from 1,678 in 0.1.5).
+
 ## [0.1.5] — 2026-03-27
 
 ### Added

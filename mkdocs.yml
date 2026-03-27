@@ -91,6 +91,7 @@ nav:
       - Emoji Plugin System: architecture/emoji-plugins.md
       - Testing & Guarantees: architecture/testing-guarantees.md
       - Formal Verification: formal-verification.md
+      - Transliteration Comparison: architecture/transliteration-comparison.md
   - Migration:
       - Why Migrate: migration/index.md
       - From Unidecode: migration/from-unidecode.md

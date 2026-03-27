@@ -155,6 +155,7 @@ Internal design documentation for contributors and advanced users.
 - **[Performance](architecture/performance.md)** — Optimization strategies, PHF tables, batch amortization
 - **[Testing & Guarantees](architecture/testing-guarantees.md)** — Test philosophy, property-based testing, security invariants, CI matrix
 - **[Formal Verification](formal-verification.md)** — Compile-time proofs, exhaustive domain coverage, formalized invariants (I1–I7)
+- **[Transliteration Comparison](architecture/transliteration-comparison.md)** — Character-level diff vs Unidecode and anyascii across all 65 languages
 
 ---
 

@@ -68,7 +68,7 @@ For each language:
 | pa | Punjabi | 14 | 12 | 14 | 14 | 0 | 2 | 10 |
 | sa | Sanskrit | 19 | 18 | 18 | 18 | 0 | 0 | 17 |
 | as | Assamese | 20 | 18 | 19 | 19 | 0 | 1 | 15 |
-| hy | Armenian | 6 | 6 | 6 | 6 | 0 | 0 | 0 |
+| hy | Armenian | 7 | 7 | 7 | 7 | 0 | 0 | 0 |
 | ka | Georgian | 17 | 17 | 17 | 17 | 0 | 0 | 6 |
 | si | Sinhala | 19 | 17 | 17 | 17 | 0 | 0 | 15 |
 | th | Thai | 26 | 23 | 23 | 23 | 0 | 0 | 4 |
@@ -81,7 +81,7 @@ For each language:
 | dv | Dhivehi | 10 | 9 | 9 | 8 | 0 | 0 | 0 |
 | jv | Javanese | 5 | 5 | 0 | 5 | 5 | 0 | 0 |
 | mn | Mongolian | 5 | 5 | 5 | 5 | 0 | 0 | 0 |
-| **TOTAL** | | **716** | **685** | **684** | **692** | **12** | **11** | **326** |
+| **TOTAL** | | **717** | **686** | **685** | **693** | **12** | **11** | **326** |
 
 ## Notable Differences
 
@@ -618,10 +618,10 @@ Coverage: translit maps 5/5 chars, Unidecode maps 0/5. **5** mapped only by tran
 
 ## Key Takeaways
 
-- **Total unique non-ASCII characters tested**: 716
-- **translit coverage**: 685/716 (95.7%)
-- **Unidecode coverage**: 684/716 (95.5%)
-- **anyascii coverage**: 692/716 (96.6%)
+- **Total unique non-ASCII characters tested**: 717
+- **translit coverage**: 686/717 (95.7%)
+- **Unidecode coverage**: 685/717 (95.5%)
+- **anyascii coverage**: 693/717 (96.7%)
 - **Characters mapped only by translit**: 12
 - **Characters mapped only by Unidecode**: 11
 - **Different output (both mapped)**: 326

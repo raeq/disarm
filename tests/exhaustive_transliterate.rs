@@ -7,11 +7,11 @@
 //! All tests are `#[ignore]` by default so they don't slow everyday development.
 //! Run before release with: `cargo test --test exhaustive_transliterate -- --ignored`
 
+use _translit::tables::hangul::{lookup_compat_jamo, romanize_hangul};
 use _translit::transliterate::{
     balinese_char_role, indic_char_role, javanese_char_role, khmer_char_role, myanmar_char_role,
     sinhala_char_role, tibetan_char_role, transliterate_impl, IndicRole,
 };
-use _translit::tables::hangul::{lookup_compat_jamo, romanize_hangul};
 use _translit::ErrorMode;
 
 // ── Hangul syllables (U+AC00–U+D7A3): all 11,172 ──────────────────────
@@ -132,12 +132,10 @@ fn exhaustive_bmp_idempotence() {
         }
         let ch = char::from_u32(cp).unwrap();
         let input = ch.to_string();
-        let once =
-            transliterate_impl(&input, None, ErrorMode::Ignore, "", false, false, false)
-                .into_owned();
-        let twice =
-            transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false, false)
-                .into_owned();
+        let once = transliterate_impl(&input, None, ErrorMode::Ignore, "", false, false, false)
+            .into_owned();
+        let twice = transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false, false)
+            .into_owned();
         if once != twice {
             failures.push(format!("U+{cp:04X}: once={once:?}, twice={twice:?}"));
         }
@@ -371,9 +369,8 @@ fn deterministic_100x_repeat() {
     ];
 
     for input in &inputs {
-        let first =
-            transliterate_impl(input, None, ErrorMode::Ignore, "", false, false, false)
-                .into_owned();
+        let first = transliterate_impl(input, None, ErrorMode::Ignore, "", false, false, false)
+            .into_owned();
         for run in 1..=100 {
             let result =
                 transliterate_impl(input, None, ErrorMode::Ignore, "", false, false, false)

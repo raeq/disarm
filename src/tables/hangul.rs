@@ -218,9 +218,17 @@ mod tests {
 
     #[test]
     fn test_jamo_array_lengths() {
-        assert_eq!(CHOSEONG.len(), 19, "CHOSEONG must have 19 initial consonants");
+        assert_eq!(
+            CHOSEONG.len(),
+            19,
+            "CHOSEONG must have 19 initial consonants"
+        );
         assert_eq!(JUNGSEONG.len(), 21, "JUNGSEONG must have 21 medial vowels");
-        assert_eq!(JONGSEONG.len(), 28, "JONGSEONG must have 28 final consonants");
+        assert_eq!(
+            JONGSEONG.len(),
+            28,
+            "JONGSEONG must have 28 final consonants"
+        );
         assert_eq!(COMPAT_JAMO.len(), 51, "COMPAT_JAMO must have 51 entries");
     }
 
@@ -236,7 +244,10 @@ mod tests {
             assert!(entry.is_ascii(), "JONGSEONG[{i}] = {entry:?} is not ASCII");
         }
         for (i, entry) in COMPAT_JAMO.iter().enumerate() {
-            assert!(entry.is_ascii(), "COMPAT_JAMO[{i}] = {entry:?} is not ASCII");
+            assert!(
+                entry.is_ascii(),
+                "COMPAT_JAMO[{i}] = {entry:?} is not ASCII"
+            );
         }
     }
 

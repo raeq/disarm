@@ -1550,15 +1550,8 @@ fn amharic_sun_word() {
 #[test]
 fn amharic_default_unchanged() {
     // Without am lang, ጸ still maps to default "tse"
-    let result = transliterate::transliterate_impl(
-        "ጸ",
-        None,
-        ErrorMode::Ignore,
-        "",
-        false,
-        false,
-        false,
-    );
+    let result =
+        transliterate::transliterate_impl("ጸ", None, ErrorMode::Ignore, "", false, false, false);
     assert_eq!(&*result, "tse");
 }
 

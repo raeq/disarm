@@ -62,7 +62,9 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
     let table: Option<&phf::Map<char, &'static str>> = match lang {
         "de" => Some(&LANG_DE),
         "no" | "nb" | "nn" | "da" => Some(&LANG_NO), // Danish uses same rules as Norwegian
-        "sv" | "fi" => Some(&LANG_SV),               // Finnish uses same rules as Swedish
+        "sv" => Some(&LANG_SV),
+        // Finnish: ä/ö are independent phonemes, NOT ae/oe variants like in
+        // Swedish/German. Finnish falls through to default table (ä→a, ö→o).
         "is" => Some(&LANG_IS),
         "et" => Some(&LANG_ET),
         "fr" => Some(&LANG_FR),

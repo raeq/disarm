@@ -99,8 +99,9 @@ class TestTransliterate:
     # --- Finnish ---
 
     def test_finnish_lang(self) -> None:
-        assert transliterate("Hämäläinen", lang="fi") == "Haemaelaeinen"
-        assert transliterate("Öljy", lang="fi") == "Oeljy"
+        # Finnish ä/ö are independent phonemes (not ae/oe variants like Swedish)
+        assert transliterate("Hämäläinen", lang="fi") == "Hamalainen"
+        assert transliterate("Öljy", lang="fi") == "Oljy"
 
     # --- Icelandic ---
 
@@ -274,7 +275,7 @@ LANG_SMOKE_TESTS: dict[str, tuple[str, str]] = {
     "el": ("Αθήνα", "Athina"),
     "es": ("¡Hola!", "!Hola!"),
     "et": ("Öö", "Oeoe"),
-    "fi": ("Hämäläinen", "Haemaelaeinen"),
+    "fi": ("Hämäläinen", "Hamalainen"),
     "fr": ("cœur", "coeur"),
     "ga": ("Éire", "Eire"),  # Irish uses default Latin
     "hr": ("Čakovec", "Cakovec"),

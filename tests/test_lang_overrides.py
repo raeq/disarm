@@ -7,7 +7,7 @@ is added, changed, or removed in Rust, a test here must change too — or fail.
 The smoke tests in test_transliterate.py prove each lang dispatch works.
 These tests prove every individual character mapping is correct.
 
-Also tests language aliases (da→NO, fi→SV, nb/nn→NO) to verify the
+Also tests language aliases (da→NO, nb/nn→NO) to verify the
 dispatch table in lookup_lang().
 """
 
@@ -157,7 +157,8 @@ LANG_ALIASES: dict[str, str] = {
     "da": "no",  # Danish uses Norwegian rules
     "nb": "no",  # Bokmål is Norwegian
     "nn": "no",  # Nynorsk is Norwegian
-    "fi": "sv",  # Finnish uses Swedish rules
+    # Finnish intentionally has NO alias — ä/ö are independent phonemes in
+    # Finnish (→a/o via default table), unlike Swedish where they're ae/oe.
 }
 
 
@@ -200,7 +201,7 @@ class TestLangOverridesExhaustive:
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Alias tests: da→no, nb→no, nn→no, fi→sv
+# Alias tests: da→no, nb→no, nn→no
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -220,7 +221,6 @@ class TestLangAliases:
     """Language aliases must produce identical output to their target language.
 
     da, nb, nn → same as no
-    fi → same as sv
     """
 
     @pytest.mark.parametrize(

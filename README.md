@@ -6,6 +6,10 @@ Unicode text infrastructure for Python: transliteration, normalization, and safe
 
 **[Documentation](docs/index.md)** | **[API Reference](docs/api/index.md)** | **[PyPI](https://pypi.org/project/translit-rs/)**
 
+## Demo
+
+**[Try translit in your browser](https://translit-web.pages.dev/)**
+
 ## Features
 
 - **[Transliteration](docs/user-guide/transliteration.md)**: Unicode → ASCII for Latin, Cyrillic, Greek, CJK (Chinese pinyin, Korean romanization, Japanese kana), and [65 language-specific profiles](docs/user-guide/language-support.md)

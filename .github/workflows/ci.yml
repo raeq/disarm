@@ -75,7 +75,7 @@ jobs:
       - name: Type check (mypy)
         run: |
           pip install mypy
-          mypy python/translit/__init__.py --ignore-missing-imports
+          mypy python/translit --ignore-missing-imports
 
   bench:
     name: Benchmarks (compile + smoke test)

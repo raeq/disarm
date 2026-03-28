@@ -178,7 +178,7 @@ class TestEveryLangTransliterates:
     @pytest.fixture()
     def all_langs(self):
         # Filter out test-registered langs from concurrency tests
-        return [l for l in list_langs() if not l.startswith("_")]
+        return [lang for lang in list_langs() if not lang.startswith("_")]
 
     def test_all_langs_have_samples(self, all_langs):
         """Ensure our test sample dict covers every registered language."""

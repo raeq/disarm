@@ -11,7 +11,6 @@ from hypothesis import strategies as st
 
 from translit import reverse_langs, transliterate
 
-
 # ---------------------------------------------------------------------------
 # Strategies
 # ---------------------------------------------------------------------------

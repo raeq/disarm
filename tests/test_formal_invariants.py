@@ -15,8 +15,9 @@ I7: Output Length Bound — len(output) ≤ len(input) * 4 + char_count.
 """
 
 import string
+
 import pytest
-from hypothesis import given, settings, HealthCheck
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 import translit

@@ -1039,7 +1039,7 @@ class TestHebrewTransliteration:
     def test_hebrew_consonants_unpointed(self) -> None:
         """Unpointed Hebrew produces consonant skeleton."""
         assert transliterate("שלום") == "shlvm"
-        assert transliterate("ישראל") == "yshrl"
+        assert transliterate("ישראל") == "yshr'l"
 
     def test_hebrew_final_forms(self) -> None:
         assert transliterate("ך") == "kh"

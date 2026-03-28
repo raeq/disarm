@@ -1,3 +1,6 @@
+# Vietnamese (vi) language-specific overrides
+# Source: NFKD decomposition + Vietnamese orthographic conventions
+
 0110	D
 0111	d
 01A0	O

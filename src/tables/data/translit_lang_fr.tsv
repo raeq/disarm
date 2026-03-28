@@ -1,3 +1,6 @@
+# French (fr) language-specific overrides
+# Convention: French ligature expansion (Œ→OE, œ→oe)
+
 0152	OE
 0153	oe
 00C6	AE

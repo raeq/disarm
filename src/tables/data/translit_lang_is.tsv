@@ -1,2 +1,5 @@
+# Icelandic (is) language-specific overrides
+# Convention: Icelandic orthographic conventions (Æ→Ae, ð→d, þ→th)
+
 00C6	Ae
 00E6	ae

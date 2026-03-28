@@ -1,3 +1,6 @@
+# Norwegian (no) language-specific overrides
+# Convention: Norwegian orthographic conventions (Å→Aa, Ø→Oe, Æ→Ae)
+
 00C5	Aa
 00E5	aa
 00D8	Oe

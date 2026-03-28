@@ -1,3 +1,6 @@
+# German (de) language-specific overrides
+# Convention: standard German umlaut expansion (ä→ae, ö→oe, ü→ue, ß→ss)
+
 00C4	Ae
 00D6	Oe
 00DC	Ue

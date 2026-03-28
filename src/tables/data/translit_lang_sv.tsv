@@ -1,3 +1,6 @@
+# Swedish (sv) language-specific overrides
+# Convention: Swedish orthographic conventions (Ä→Ae, Ö→Oe, Å→Aa)
+
 00C4	Ae
 00E4	ae
 00D6	Oe

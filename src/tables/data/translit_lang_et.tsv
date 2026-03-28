@@ -1,3 +1,6 @@
+# Estonian (et) language-specific overrides
+# Convention: Estonian orthographic conventions (ä→ae, ö→oe, ü→ue, š→sh, ž→zh)
+
 00C4	Ae
 00E4	ae
 00D6	Oe

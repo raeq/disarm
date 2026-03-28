@@ -1,2 +1,5 @@
+# Dutch (nl) language-specific overrides
+# Convention: IJ digraph handling
+
 0132	IJ
 0133	ij

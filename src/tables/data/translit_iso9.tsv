@@ -1,3 +1,7 @@
+# ISO 9:1995 scholarly Cyrillic transliteration
+# International standard for Cyrillic-to-Latin (one-to-one, reversible)
+# Preserves diacritics (not ASCII-only)
+
 0419	J
 0439	j
 042A	

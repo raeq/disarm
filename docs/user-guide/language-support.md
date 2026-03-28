@@ -97,7 +97,7 @@ All 10 Brahmic scripts use virama/mātrā-aware transliteration: consonants carr
 
 | Code | Language | Script | Notes |
 |---|---|---|---|
-| `bo` | Tibetan | Tibetan | Wylie-based transliteration |
+| `bo` | Tibetan | Tibetan | Indic-phonetic romanization (Hunterian-style aspiration markers; not Wylie) |
 
 ### Southeast Asian languages
 

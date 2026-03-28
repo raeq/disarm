@@ -1,3 +1,7 @@
+# Russian (ru) language-specific overrides
+# Standard: BGN/PCGN Russian romanization (1947, revised 1994)
+# Overrides default for: Ё→Yo, Й→Y, Ъ→", Ь→'
+
 0401	Yo
 0451	yo
 0419	Y

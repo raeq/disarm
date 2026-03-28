@@ -1,2 +1,5 @@
+# Spanish (es) language-specific overrides
+# Convention: inverted punctuation marks (¡→!, ¿→?)
+
 00A1	!
 00BF	?

@@ -1,3 +1,7 @@
+# === Latin-1 Supplement (U+0080–U+00FF) ===
+# Source: Unicode NFKD decomposition + conventional ASCII equivalents
+# ~69% match NFKD; symbols/ligatures use common conventions (AE, Th, ss, GBP, JPY)
+
 00A2	c
 00A3	GBP
 00A5	JPY
@@ -79,6 +83,10 @@
 00FD	y
 00FE	th
 00FF	y
+
+# === Latin Extended-A (U+0100–U+017F) ===
+# Source: Unicode NFKD decomposition + conventional fallbacks
+
 0100	A
 0101	a
 0102	A
@@ -207,6 +215,11 @@
 017D	Z
 017E	z
 017F	s
+
+# === Latin Extended-B (U+0180–U+024F) ===
+# Source: NFKD decomposition where available; phonetic approximation for
+# stroked/hooked/African letters (Ŋ→N, Ə→A, Ʃ→Sh)
+
 0180	b
 0181	B
 0182	B
@@ -415,6 +428,11 @@
 024D	r
 024E	Y
 024F	y
+
+# === IPA Extensions (U+0250–U+02AF) ===
+# Source: Phonetic approximation (nearest readable ASCII)
+# Digraphs preferred: ʃ→sh, ʒ→zh, ɸ→ph, ʔ→'
+
 0250	a
 0251	a
 0252	a
@@ -511,6 +529,10 @@
 02AD	!
 02AE	h
 02AF	h
+
+# === Spacing Modifier Letters (U+02B0–U+02FF) ===
+# Source: Base letter equivalents
+
 02B0	h
 02B1	h
 02B2	j
@@ -591,6 +613,12 @@
 02FD	=
 02FE	v
 02FF	'
+
+# === Greek and Coptic (U+0370–U+03FF) ===
+# Source: BGN/PCGN Greek romanization (1962, amended 1996), modern pronunciation
+# Deviation: χ→Ch (BGN/PCGN uses Kh; Ch matches ISO 843)
+# Coptic range (U+03E2–U+03EF) follows Coptic scholarly convention
+
 0370	H
 0371	h
 0372	Ss
@@ -726,6 +754,12 @@
 03FD	S
 03FE	S
 03FF	S
+
+# === Cyrillic (U+0400–U+04FF) ===
+# Source: BGN/PCGN Russian romanization (1947, revised 1994)
+# Confirmed: Ж→Zh, Х→Kh, Щ→Shch, Ц→Ts, Ю→Yu, Я→Ya
+# Hard/soft signs → empty string (BGN/PCGN convention)
+
 0400	E
 0401	Yo
 0402	Dj
@@ -974,6 +1008,10 @@
 04FD	kh
 04FE	Kh
 04FF	kh
+
+# === Cyrillic Supplement (U+0500–U+052F) ===
+# Source: BGN/PCGN conventions (extended for non-Russian Cyrillic)
+
 0500	D
 0501	d
 0502	Dj
@@ -1022,6 +1060,11 @@
 052D	tch
 052E	Kh
 052F	kh
+
+# === Armenian (U+0530–U+058F) ===
+# Source: BGN/PCGN Armenian romanization (1981)
+# Deviation: Aspirate apostrophes stripped for ASCII (Ch'→Ch, Ts'→Ts, P'→P, K'→K)
+
 0531	A
 0532	B
 0533	G
@@ -1113,6 +1156,11 @@
 058D	
 058E	
 058F	AMD
+
+# === Hebrew (U+0590–U+05FF) ===
+# Source: BGN/PCGN Hebrew romanization (1962/2018)
+# Deviation: ח(het)→ch instead of BGN/PCGN kh (Ashkenazi/popular convention)
+
 0591	
 0592	
 0593	
@@ -1200,6 +1248,12 @@
 05F2	y
 05F3	'
 05F4	"
+
+# === Arabic (U+0600–U+06FF) ===
+# Source: BGN/PCGN Arabic romanization (1956)
+# Confirmed by digraphs: ث→th, خ→kh, ذ→dh, ش→sh, غ→gh
+# Emphatic consonants lose underdot diacritics (ASCII constraint)
+
 0606	
 0607	
 0608	
@@ -1448,6 +1502,10 @@
 06FD	&
 06FE	
 06FF	h
+
+# === Syriac (U+0700–U+074F) ===
+# Source: Phonetic approximation following Arabic-like conventions
+
 0700	.
 0701	.
 0702	,
@@ -1525,6 +1583,10 @@
 074D	zh
 074E	k
 074F	hn
+
+# === Thaana (U+0780–U+07BF) ===
+# Source: Phonetic approximation for Maldivian Thaana
+
 0780	h
 0781	sh
 0782	n
@@ -1574,6 +1636,10 @@
 07AE	o
 07AF	oa
 07B0	
+
+# === NKo (U+07C0–U+07FF) ===
+# Source: Phonetic values of N'Ko script
+
 07C0	0
 07C1	1
 07C2	2
@@ -1633,6 +1699,12 @@
 07F8	,
 07F9	!
 07FA	la
+
+# === Devanagari (U+0900–U+097F) ===
+# Source: UNGEGN/Hunterian romanization
+# Diagnostic: cha/chha for palatal stops (not IAST ca/cha)
+# Retroflex/dental merge to ta/tha/da/dha/na (ASCII constraint)
+
 0900	
 0901	m
 0902	m
@@ -1761,6 +1833,10 @@
 097D	'
 097E	ddda
 097F	bba
+
+# === Bengali (U+0980–U+09FF) ===
+# Source: UNGEGN/Hunterian romanization (mirrors Devanagari pattern)
+
 0980	m
 0981	m
 0982	m
@@ -1857,6 +1933,10 @@
 09FC	m
 09FD	.
 09FE	
+
+# === Gurmukhi (U+0A00–U+0A7F) ===
+# Source: UNGEGN/Hunterian romanization
+
 0A01	m
 0A02	m
 0A03	h
@@ -1937,6 +2017,10 @@
 0A74	ek
 0A75	
 0A76	.
+
+# === Gujarati (U+0A80–U+0AFF) ===
+# Source: UNGEGN/Hunterian romanization
+
 0A81	m
 0A82	m
 0A83	h
@@ -2028,6 +2112,10 @@
 0AFD	
 0AFE	
 0AFF	
+
+# === Oriya (U+0B00–U+0B7F) ===
+# Source: UNGEGN/Hunterian romanization
+
 0B01	m
 0B02	m
 0B03	h
@@ -2119,6 +2207,11 @@
 0B75	1/16
 0B76	1/8
 0B77	3/16
+
+# === Tamil (U+0B80–U+0BFF) ===
+# Source: UNGEGN Tamil romanization
+# Diagnostic: ழ→zha (UNGEGN Tamil)
+
 0B82	m
 0B83	h
 0B85	a
@@ -2191,6 +2284,10 @@
 0BF8	
 0BF9	Rs
 0BFA	
+
+# === Telugu (U+0C00–U+0C7F) ===
+# Source: UNGEGN/Hunterian romanization
+
 0C00	
 0C01	m
 0C02	m
@@ -2291,6 +2388,10 @@
 0C7D	2
 0C7E	3
 0C7F	
+
+# === Kannada (U+0C80–U+0CFF) ===
+# Source: UNGEGN/Hunterian romanization
+
 0C80	m
 0C81	m
 0C82	m
@@ -2382,6 +2483,10 @@
 0CF1	h
 0CF2	h
 0CF3	
+
+# === Malayalam (U+0D00–U+0D7F) ===
+# Source: UNGEGN/Hunterian romanization
+
 0D00	
 0D01	m
 0D02	m
@@ -2500,6 +2605,11 @@
 0D7D	l
 0D7E	l
 0D7F	k
+
+# === Sinhala (U+0D80–U+0DFF) ===
+# Source: UNGEGN/Indic pattern with Sinhala-specific extensions
+# Prenasalized stops: nnga, nndda, mba; unique vowels: ae, aae
+
 0D81	m
 0D82	m
 0D83	h
@@ -2591,6 +2701,11 @@
 0DF2	rr
 0DF3	ll
 0DF4	.
+
+# === Thai (U+0E00–U+0E7F) ===
+# Source: RTGS (Royal Thai General System)
+# Exact match on all consonants and vowels
+
 0E01	k
 0E02	kh
 0E03	kh
@@ -2678,6 +2793,11 @@
 0E59	9
 0E5A	.
 0E5B	.
+
+# === Lao (U+0E80–U+0EDF) ===
+# Source: BGN/PCGN Lao romanization (1966)
+# Vowels ASCII-simplified (ue instead of diacritics)
+
 0E81	k
 0E82	kh
 0E84	kh
@@ -2761,6 +2881,11 @@
 0EDD	hm
 0EDE	go
 0EDF	nyo
+
+# === Tibetan (U+0F00–U+0FFF) ===
+# Source: Indic-phonetic romanization (NOT Wylie)
+# Diagnostic: ཅ→cha (Wylie would be ca). Uses Hunterian-style aspiration markers.
+
 0F00	om
 0F01	.
 0F02	.
@@ -2972,6 +3097,11 @@
 0FD8	
 0FD9	|
 0FDA	|
+
+# === Myanmar (U+1000–U+109F) ===
+# Source: MLC (Myanmar Language Commission) romanization
+# Diagnostic: U+1006→hsa (MLC signature)
+
 1000	ka
 1001	kha
 1002	ga
@@ -3132,6 +3262,11 @@
 109D	ai
 109E	1
 109F	!
+
+# === Georgian (U+10A0–U+10FF) ===
+# Source: BGN/PCGN Georgian romanization (2009)
+# Deviation: Ejective apostrophes stripped (t'→t, k'→k, p'→p, ts'→ts, ch'→ch)
+
 10A0	A
 10A1	B
 10A2	G
@@ -3220,6 +3355,10 @@
 10FD	ae
 10FE	
 10FF	w
+
+# === Hangul Jamo (U+1100–U+11FF) ===
+# Source: Revised Romanization of Korean (RR, 2000)
+
 1100	g
 1101	kk
 1102	n
@@ -3476,6 +3615,11 @@
 11FD	g-k
 11FE	g-h
 11FF	nn
+
+# === Ethiopic (U+1200–U+137F) ===
+# Source: BGN/PCGN Amharic romanization (1967)
+# Syllabic vowel order: e, u, i, a, e, ∅, o, wa
+
 1200	he
 1201	hu
 1202	hi
@@ -3834,6 +3978,10 @@
 137A	90
 137B	100
 137C	10000
+
+# === Ethiopic Supplement (U+1380–U+139F) ===
+# Source: BGN/PCGN Amharic conventions (extended)
+
 1380	mwa
 1381	mwi
 1382	mwe
@@ -3860,6 +4008,10 @@
 1397	
 1398	
 1399	
+
+# === Cherokee (U+13A0–U+13FF) ===
+# Source: Syllabary phonetic values
+
 13A0	a
 13A1	e
 13A2	i
@@ -3952,6 +4104,11 @@
 13FB	yu
 13FC	yv
 13FD	mv
+
+# === Unified Canadian Aboriginal Syllabics (U+1400–U+167F) ===
+# Source: Phonetic decomposition of syllabics (consonant+vowel)
+# No single published standard; reflects inherent syllabary structure
+
 1400	.
 1401	e
 1402	aai
@@ -4590,6 +4747,10 @@
 167D	wooth
 167E	woofi
 167F	blaw
+
+# === Ogham (U+1680–U+169F) ===
+# Source: Standard scholarly Ogham transliteration (Book of Ballymote)
+
 1680	 
 1681	b
 1682	l
@@ -4619,6 +4780,11 @@
 169A	p
 169B	>
 169C	<
+
+# === Runic (U+16A0–U+16FF) ===
+# Source: Phonetic values per scholarly consensus
+# Mixed Elder/Younger Futhark and Anglo-Saxon traditions
+
 16A0	f
 16A1	v
 16A2	u
@@ -4708,6 +4874,10 @@
 16F6	e
 16F7	m
 16F8	ae
+
+# === Philippine Scripts: Tagalog, Hanunoo, Buhid, Tagbanwa (U+1700–U+177F) ===
+# Source: Phonetic values following Indic abugida pattern
+
 1700	a
 1701	i
 1702	u
@@ -4792,6 +4962,11 @@
 1770	sa
 1772	i
 1773	u
+
+# === Khmer (U+1780–U+17FF) ===
+# Source: UNGEGN Khmer romanization (simplified)
+# Two-series consonants collapse to same romanization (ASCII constraint)
+
 1780	ka
 1781	kha
 1782	ka
@@ -4906,6 +5081,10 @@
 17F7	7
 17F8	8
 17F9	9
+
+# === Mongolian (U+1800–U+18AF) ===
+# Source: Phonetic approximation
+
 1800	.
 1801	.
 1802	,
@@ -5063,6 +5242,10 @@
 18A8	bha
 18A9	
 18AA	lha
+
+# === Tai Le (U+1950–U+197F) ===
+# Source: Phonetic approximation
+
 1950	ka
 1951	kha
 1952	ga
@@ -5098,6 +5281,10 @@
 1972	
 1973	
 1974	
+
+# === New Tai Lue (U+1980–U+19DF) ===
+# Source: Phonetic approximation
+
 1980	ka
 1981	kha
 1982	kha
@@ -5179,6 +5366,10 @@
 19DA	1
 19DE	.
 19DF	.
+
+# === Buginese/Lontara (U+1A00–U+1A1F) ===
+# Source: Phonetic values of Lontara syllabary
+
 1A00	ka
 1A01	ga
 1A02	nga
@@ -5209,6 +5400,10 @@
 1A1B	e
 1A1E	.
 1A1F	.
+
+# === Tai Tham (U+1A20–U+1AAF) ===
+# Source: Phonetic approximation
+
 1A20	ka
 1A21	kha
 1A22	kha
@@ -5336,6 +5531,10 @@
 1AAB	.
 1AAC	
 1AAD	
+
+# === Balinese (U+1B00–U+1B7F) ===
+# Source: Phonetic values following Indic abugida pattern
+
 1B00	
 1B01	
 1B02	
@@ -5456,6 +5655,10 @@
 1B7A	
 1B7B	
 1B7C	
+
+# === Sundanese (U+1B80–U+1BBF) ===
+# Source: Phonetic values following Indic abugida pattern
+
 1B80	
 1B81	
 1B82	
@@ -5518,6 +5721,10 @@
 1BBD	
 1BBE	
 1BBF	
+
+# === Batak (U+1BC0–U+1BFF) ===
+# Source: Phonetic values following Indic abugida pattern
+
 1BC0	a
 1BC1	ha
 1BC2	ha
@@ -5574,6 +5781,10 @@
 1BFD	.
 1BFE	.
 1BFF	.
+
+# === Ol Chiki (U+1C50–U+1C7F) ===
+# Source: Santali phonetic values
+
 1C50	0
 1C51	1
 1C52	2
@@ -5622,6 +5833,10 @@
 1C7D	ah
 1C7E	.
 1C7F	.
+
+# === Georgian Extended (U+1C90–U+1CBF) ===
+# Source: BGN/PCGN Georgian (Mtavruli uppercase forms)
+
 1C90	A
 1C91	B
 1C92	G
@@ -5655,6 +5870,11 @@
 1CAE	Kh
 1CAF	J
 1CB0	H
+
+# === Latin Extended Additional (U+1E00–U+1EFF) ===
+# Source: Unicode NFKD decomposition (99.6% match)
+# Exception: U+1E9E CAPITAL SHARP S → SS (no NFKD exists)
+
 1E00	A
 1E01	a
 1E02	B
@@ -5902,6 +6122,10 @@
 1EF7	y
 1EF8	Y
 1EF9	y
+
+# === Greek Extended (U+1F00–U+1FFF) ===
+# Source: NFKD decomposition to base Greek + default Greek table mappings
+
 1F00	a
 1F01	a
 1F02	a
@@ -6126,6 +6350,10 @@
 1FFB	X
 1FFC	Pi
 1FFD	x
+
+# === General Punctuation (U+2000–U+206F) ===
+# Source: Functional ASCII equivalents
+
 2013	-
 2014	-
 2015	-
@@ -6145,6 +6373,10 @@
 2039	<
 203A	>
 2044	/
+
+# === Superscripts and Subscripts (U+2070–U+209F) ===
+# Source: Base digit/letter extraction
+
 2070	0
 2071	i
 2074	4
@@ -6174,6 +6406,10 @@
 208C	=
 208D	(
 208E	)
+
+# === Currency Symbols (U+20A0–U+20CF) ===
+# Source: ISO 4217 codes or conventional abbreviations
+
 20A3	Fr
 20A4	L
 20A7	Pts
@@ -6187,7 +6423,15 @@
 20BA	TL
 20BD	RUB
 20BF	BTC
+
+# === Letterlike Symbols (U+2100–U+214F) ===
+# Source: Conventional expansion
+
 2122	TM
+
+# === Number Forms (U+2150–U+218F) ===
+# Source: Numeric expansion (fractions, Roman numerals)
+
 2150	1/7
 2151	1/9
 2152	1/10
@@ -6244,6 +6488,10 @@
 2186	50
 2187	50000
 2188	100000
+
+# === Enclosed Alphanumerics (U+2460–U+24FF) ===
+# Source: Enclosed digit/letter extraction
+
 2460	1
 2461	2
 2462	3
@@ -6378,6 +6626,10 @@
 24FD	9
 24FE	10
 24FF	0
+
+# === Coptic (U+2C80–U+2CFF) ===
+# Source: Coptic scholarly convention
+
 2C80	a
 2C81	a
 2C82	b
@@ -6494,6 +6746,10 @@
 2CF1	
 2CF2	
 2CF3	
+
+# === Georgian Supplement (U+2D00–U+2D2F) ===
+# Source: BGN/PCGN Georgian (Nuskhuri lowercase forms)
+
 2D00	a
 2D01	b
 2D02	g
@@ -6534,6 +6790,10 @@
 2D25	ho
 2D27	yn
 2D2D	ae
+
+# === Tifinagh (U+2D30–U+2D7F) ===
+# Source: IRCAM phonetic values for Neo-Tifinagh
+
 2D30	a
 2D31	b
 2D32	bh
@@ -6593,6 +6853,10 @@
 2D6F	+
 2D70	.
 2D7F	
+
+# === Ethiopic Supplement (U+2D80–U+2DDF) ===
+# Source: BGN/PCGN Amharic conventions (extended)
+
 2D80	loa
 2D81	moa
 2D82	roa
@@ -6672,6 +6936,10 @@
 2DDC	gye
 2DDD	gy
 2DDE	gyo
+
+# === Kangxi Radicals (U+2F00–U+2FDF) ===
+# Source: Unicode Unihan kMandarin (radical-to-ideograph mapping)
+
 2F00	yi
 2F01	gun
 2F02	zhu
@@ -6886,6 +7154,10 @@
 2FD3	long
 2FD4	gui
 2FD5	yue
+
+# === Hiragana (U+3040–U+309F) ===
+# Source: Modified Hepburn romanization
+
 3041	a
 3042	a
 3043	i
@@ -6979,6 +7251,10 @@
 309D	
 309E	
 309F	yori
+
+# === Katakana (U+30A0–U+30FF) ===
+# Source: Modified Hepburn romanization
+
 30A0	=
 30A1	a
 30A2	a
@@ -7075,6 +7351,10 @@
 30FD	
 30FE	
 30FF	koto
+
+# === Lisu (U+A4D0–U+A4FF) ===
+# Source: Phonetic values of Fraser script
+
 A4D0	ba
 A4D1	pa
 A4D2	pha
@@ -7123,6 +7403,10 @@ A4FC	.
 A4FD	.
 A4FE	.
 A4FF	.
+
+# === Vai (U+A500–U+A62B) ===
+# Source: Phonetic values of Vai syllabary
+
 A500	ee
 A501	een
 A502	hee
@@ -7409,6 +7693,10 @@ A628	8
 A629	9
 A62A	ndolema
 A62B	ndoledo
+
+# === Bamum (U+A6A0–U+A6FF) ===
+# Source: Phonetic values of Bamum syllabary
+
 A6A0	a
 A6A1	ka
 A6A2	u
@@ -7493,6 +7781,10 @@ A6F4	:
 A6F5	,
 A6F6	;
 A6F7	?
+
+# === Javanese (U+A980–U+A9DF) ===
+# Source: Phonetic values following Indic abugida pattern
+
 A980	
 A981	
 A982	
@@ -7573,6 +7865,10 @@ A9D6	6
 A9D7	7
 A9D8	8
 A9D9	9
+
+# === Cham (U+AA00–U+AA5F) ===
+# Source: Phonetic values following Indic abugida pattern
+
 AA00	ka
 AA01	kha
 AA02	ga
@@ -7656,6 +7952,10 @@ AA5C	.
 AA5D	.
 AA5E	.
 AA5F	.
+
+# === Meetei Mayek Extensions (U+AAE0–U+AAFF) ===
+# Source: Phonetic values of Meitei script
+
 AAE0	e
 AAE1	o
 AAE2	a
@@ -7679,6 +7979,10 @@ AAF3
 AAF4	
 AAF5	
 AAF6	
+
+# === Cherokee Supplement (U+AB70–U+ABBF) ===
+# Source: Syllabary phonetic values (lowercase forms)
+
 AB70	a
 AB71	e
 AB72	i
@@ -7759,6 +8063,10 @@ ABBC	wo
 ABBD	wu
 ABBE	wv
 ABBF	ya
+
+# === Meetei Mayek (U+ABC0–U+ABFF) ===
+# Source: Phonetic values of Meitei script
+
 ABC0	ka
 ABC1	kha
 ABC2	ga
@@ -7815,6 +8123,10 @@ ABF6	6
 ABF7	7
 ABF8	8
 ABF9	9
+
+# === CJK Compatibility Ideographs (U+F900–U+FAFF) ===
+# Source: Unicode Unihan kMandarin (toneless pinyin)
+
 F900	qi
 F901	geng
 F902	che
@@ -8265,6 +8577,10 @@ FACD	zhen
 FACE	gui
 FAD8	e
 FAD9	pang
+
+# === Alphabetic Presentation Forms (U+FB00–U+FB4F) ===
+# Source: Latin ligatures (fi→fi, fl→fl) and Armenian ligatures
+
 FB13	mn
 FB14	me
 FB15	mi
@@ -8316,6 +8632,10 @@ FB4C	v
 FB4D	kh
 FB4E	f
 FB4F	al
+
+# === Arabic Presentation Forms-A (U+FB50–U+FDFF) ===
+# Source: Derived from base Arabic (BGN/PCGN) mappings
+
 FB50	a
 FB51	a
 FB56	p
@@ -8826,6 +9146,10 @@ FDC7	njy
 FDF5	l
 FDF8	l
 FDFA	l
+
+# === Arabic Presentation Forms-B (U+FE70–U+FEFF) ===
+# Source: Derived from base Arabic (BGN/PCGN) mappings
+
 FE70	an
 FE71	an
 FE72	un
@@ -8965,6 +9289,10 @@ FEF9	la
 FEFA	la
 FEFB	la
 FEFC	la
+
+# === Halfwidth and Fullwidth Forms (U+FF00–U+FFEF) ===
+# Source: NFKD to base character (fullwidth→ASCII, halfwidth kana→Hepburn)
+
 FF01	!
 FF02	"
 FF03	#

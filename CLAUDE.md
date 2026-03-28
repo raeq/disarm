@@ -40,6 +40,18 @@ pytest                                                                      # ti
 pytest -m formal                                                            # tier 2 Python
 ```
 
+## Git Workflow
+
+**All changes go through pull requests.** Direct pushes to `main` are blocked by branch protection.
+
+1. Create a feature branch: `git checkout -b <branch-name>`
+2. Commit your changes on the branch
+3. Push and open a PR: `gh pr create --repo raeq/translit`
+4. Wait for required status checks ("Rust checks passed", "Python checks passed") to go green
+5. Merge the PR
+
+NEVER push directly to `main` — it will be rejected.
+
 ## CI Discipline
 
 IMPORTANT: After completing any task that touches code, run `ruff check python/ tests/` before committing. Fix ALL lint errors immediately — do not dismiss them as pre-existing or out of scope. CI must be green.

@@ -208,9 +208,7 @@ pub fn transliterate_impl<'a>(
 
         if is_mapped {
             let s = mapped.as_deref().unwrap();
-            if is_cjk
-                && prev_class != ScriptClass::None
-                && needs_cjk_space(prev_class, char_class)
+            if is_cjk && prev_class != ScriptClass::None && needs_cjk_space(prev_class, char_class)
             {
                 if let Some(last) = last_appended {
                     if last.is_alphanumeric() {

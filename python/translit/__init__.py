@@ -2122,3 +2122,26 @@ __all__ = [
     # Exception
     "TranslitError",
 ]
+
+# ---------------------------------------------------------------------------
+# Make the module itself callable: import translit; translit("Москва")
+# ---------------------------------------------------------------------------
+
+import sys as _sys
+import types as _types
+
+
+class _CallableModule(_types.ModuleType):
+    """Make ``import translit; translit(...)`` a shorthand for ``transliterate()``."""
+
+    def __call__(self, text: str, **kwargs: Any) -> str:
+        return transliterate(text, **kwargs)
+
+    def __repr__(self) -> str:
+        return f"<module {self.__name__!r} (callable) from {self.__file__!r}>"
+
+
+# Mutate the existing module's __class__ in-place so that __dict__ (and
+# therefore functions' __globals__) stays identical.  This keeps
+# unittest.mock.patch working correctly.
+_sys.modules[__name__].__class__ = _CallableModule

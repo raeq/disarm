@@ -43,6 +43,9 @@ Versions follow [Semantic Versioning](https://semver.org/).
   all Tier 1 and Tier 2 TSV entries (1,310 lines).
 - `cargo-clippy` pre-commit hook mirroring CI `-D warnings` to catch lints
   before push.
+- **Callable module**: `import translit; translit("Москва", lang="auto")` now
+  works as a shorthand for `translit.transliterate(...)`. Uses in-place
+  `__class__` mutation to preserve `unittest.mock.patch` compatibility.
 
 ### Fixed
 - **Finnish transliteration**: removed incorrect alias `fi→sv`. Finnish ä/ö
@@ -54,6 +57,10 @@ Versions follow [Semantic Versioning](https://semver.org/).
   6 to 2.
 - clippy `manual_range_patterns` lint in `buginese_char_role`: collapsed
   `0x1A17 | 0x1A18 | 0x1A19..=0x1A1B` to `0x1A17..=0x1A1B`.
+- **`errors="preserve"` dropping visible characters**: characters with explicit
+  empty-string TSV mappings (e.g. U+060E Arabic Poetic Verse Sign, U+30FC
+  Katakana Prolonged Sound Mark) are now preserved instead of silently dropped
+  when `errors="preserve"` is set.
 
 ### Changed
 - `is_indic()` and `indic_char_role()` expanded to cover all 11 new
@@ -61,6 +68,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - `lookup_lang()`: Finnish no longer dispatches to Swedish override table;
   falls through to default.
 - Icelandic language TSV (`translit_lang_is.tsv`) reduced from 6 to 2 entries.
+- `ml_normalize` preset: switched transliteration from `Preserve` to `Ignore`
+  error mode — ML pipelines need clean ASCII output, not preserved non-ASCII.
 
 ## [0.2.0] — 2026-03-27
 

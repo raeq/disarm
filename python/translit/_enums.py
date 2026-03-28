@@ -175,5 +175,25 @@ LANG_DV: str = "dv"  # Dhivehi (Thaana)
 LANG_JV: str = "jv"  # Javanese
 LANG_MN: str = "mn"  # Mongolian
 
+# Language code constants — New scripts (v0.3.0+)
+LANG_BAN: str = "ban"  # Balinese
+LANG_BAX: str = "bax"  # Bamum
+LANG_BUG: str = "bug"  # Buginese (Lontara)
+LANG_CHR: str = "chr"  # Cherokee
+LANG_CJM: str = "cjm"  # Cham
+LANG_COP: str = "cop"  # Coptic
+LANG_KHB: str = "khb"  # Tai Lue (New Tai Lue script)
+LANG_LIS: str = "lis"  # Lisu (Fraser script)
+LANG_MNI: str = "mni"  # Meitei (Meetei Mayek script)
+LANG_NOD: str = "nod"  # Northern Thai (Tai Tham/Lanna script)
+LANG_NQO: str = "nqo"  # N'Ko
+LANG_SAT: str = "sat"  # Santali (Ol Chiki script)
+LANG_SU: str = "su"    # Sundanese
+LANG_SYR: str = "syr"  # Syriac
+LANG_TDD: str = "tdd"  # Tai Le
+LANG_TL: str = "tl"    # Tagalog
+LANG_TZM: str = "tzm"  # Tamazight/Berber (Tifinagh script)
+LANG_VAI: str = "vai"  # Vai
+
 # Auto-detection
 LANG_AUTO: str = "auto"  # Auto-detect language from script

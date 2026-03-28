@@ -1,6 +1,6 @@
 # Language Support
 
-translit ships with 65 built-in language profiles that provide language-specific transliteration rules. You can also register custom profiles at runtime.
+translit ships with 83 built-in language profiles that provide language-specific transliteration rules. You can also register custom profiles at runtime.
 
 ## Built-in languages
 
@@ -59,11 +59,27 @@ translit ships with 65 built-in language profiles that provide language-specific
 |---|---|---|
 | `fa` | Persian (Farsi) | UNGEGN-based romanization; ث→s, ذ→z, ض→z, ظ→z (Persian pronunciation) |
 
+### Other Middle Eastern languages
+
+| Code | Language | Script | Notes |
+|---|---|---|---|
+| `cop` | Coptic | Coptic | Coptic scholarly romanization |
+| `syr` | Syriac | Syriac | Syriac script transliteration |
+
 ### Ethiopic languages
 
 | Code | Language | Script | Notes |
 |---|---|---|---|
 | `am` | Amharic | Ethiopic | Syllable-based transliteration |
+
+### African languages
+
+| Code | Language | Script | Notes |
+|---|---|---|---|
+| `bax` | Bamum | Bamum | Bamum syllabary transliteration |
+| `nqo` | N'Ko | N'Ko | Manding languages (N'Ko script) |
+| `tzm` | Tamazight (Berber) | Tifinagh | Neo-Tifinagh script transliteration |
+| `vai` | Vai | Vai | Vai syllabary transliteration |
 
 ### Caucasian languages
 
@@ -82,11 +98,13 @@ translit ships with 65 built-in language profiles that provide language-specific
 | `hi` | Hindi | Devanagari | नमस्ते → namaste |
 | `kn` | Kannada | Kannada | ಕನ್ನಡ → kannada |
 | `ml` | Malayalam | Malayalam | മലയാളം → malayalam |
+| `mni` | Meitei | Meetei Mayek | Meetei Mayek script transliteration |
 | `mr` | Marathi | Devanagari | — |
 | `ne` | Nepali | Devanagari | — |
 | `or` | Odia | Odia | ଓଡ଼ିଆ → odia |
 | `pa` | Punjabi | Gurmukhi | ਗੁਰਮੁਖੀ → gurmukhi |
 | `sa` | Sanskrit | Devanagari | — |
+| `sat` | Santali | Ol Chiki | Ol Chiki script transliteration |
 | `si` | Sinhala | Sinhala | සිංහල → simhala |
 | `ta` | Tamil | Tamil | தமிழ் → tamizh |
 | `te` | Telugu | Telugu | తెలుగు → telugu |
@@ -103,10 +121,35 @@ All 10 Brahmic scripts use virama/mātrā-aware transliteration: consonants carr
 
 | Code | Language | Script | Example |
 |---|---|---|---|
+| `ban` | Balinese | Balinese | Balinese script transliteration |
+| `bug` | Buginese | Lontara | Lontara syllabary transliteration |
+| `cjm` | Cham | Cham | Cham script transliteration |
+| `khb` | Tai Lue | New Tai Lue | New Tai Lue script transliteration |
 | `km` | Khmer | Khmer | ភាសាខ្មែរ → phasakhmaer |
 | `lo` | Lao | Lao | ລາວ → lao |
 | `my` | Myanmar (Burmese) | Myanmar | မြန်မာ → mrannma |
+| `nod` | Northern Thai | Tai Tham (Lanna) | Tai Tham script transliteration |
+| `su` | Sundanese | Sundanese | Sundanese script transliteration |
+| `tdd` | Tai Le | Tai Le | Tai Le script transliteration |
 | `th` | Thai | Thai | สวัสดี → sawatdi |
+
+### Philippine languages
+
+| Code | Language | Script | Notes |
+|---|---|---|---|
+| `tl` | Tagalog | Baybayin (Tagalog) | Baybayin script transliteration |
+
+### Americas
+
+| Code | Language | Script | Notes |
+|---|---|---|---|
+| `chr` | Cherokee | Cherokee | Cherokee syllabary transliteration |
+
+### Lisu
+
+| Code | Language | Script | Notes |
+|---|---|---|---|
+| `lis` | Lisu | Fraser script | Fraser/Lisu script transliteration |
 
 ### East Asian & other non-European languages
 

@@ -81,10 +81,16 @@ const BUILTIN_LANGS: &[&str] = &[
     "am",
     "ar",
     "as",
+    "ban", // Balinese
+    "bax", // Bamum
     "bg",
     "bn",
     "bo",
+    "bug", // Buginese (Lontara)
     "ca",
+    "chr", // Cherokee
+    "cjm", // Cham
+    "cop", // Coptic
     "cs",
     "cy",
     "da",
@@ -109,20 +115,25 @@ const BUILTIN_LANGS: &[&str] = &[
     "ja-kunrei",
     "jv",
     "ka",
+    "khb", // Tai Lue (New Tai Lue script)
     "km",
     "kn",
     "ko",
+    "lis", // Lisu (Fraser script)
     "lo",
     "lt",
     "lv",
     "ml",
     "mn",
+    "mni", // Meitei (Meetei Mayek script)
     "mr",
     "mt",
     "my",
     "ne",
     "nl",
     "no",
+    "nod", // Northern Thai (Tai Tham/Lanna script)
+    "nqo", // N'Ko
     "or",
     "pa",
     "pl",
@@ -130,17 +141,24 @@ const BUILTIN_LANGS: &[&str] = &[
     "ro",
     "ru",
     "sa",
+    "sat", // Santali (Ol Chiki script)
     "si",
     "sk",
     "sl",
     "sq",
     "sr",
+    "su", // Sundanese
     "sv",
+    "syr", // Syriac
     "ta",
+    "tdd", // Tai Le
     "te",
     "th",
+    "tl", // Tagalog
     "tr",
+    "tzm", // Tamazight/Berber (Tifinagh script)
     "uk",
+    "vai", // Vai
     "vi",
     "zh",
 ];

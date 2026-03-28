@@ -9,10 +9,16 @@ Complete reference of all 65 built-in language profiles, their transliteration r
 | `am` | Amharic | Ethiopic | African | Yes |
 | `ar` | Arabic | Arabic | Middle Eastern | — |
 | `as` | Assamese | Bengali | Indic | — |
+| `ban` | Balinese | Balinese | Southeast Asian | — |
+| `bax` | Bamum | Bamum | African | — |
 | `bg` | Bulgarian | Cyrillic | European | Yes |
 | `bn` | Bengali | Bengali | Indic | — |
 | `bo` | Tibetan | Tibetan | Central Asian | — |
+| `bug` | Buginese | Lontara | Southeast Asian | — |
 | `ca` | Catalan | Latin | European | Yes |
+| `chr` | Cherokee | Cherokee | Americas | — |
+| `cjm` | Cham | Cham | Southeast Asian | — |
+| `cop` | Coptic | Coptic | Middle Eastern | — |
 | `cs` | Czech | Latin | European | — |
 | `cy` | Welsh | Latin | European | — |
 | `da` | Danish | Latin | European | — |
@@ -36,20 +42,25 @@ Complete reference of all 65 built-in language profiles, their transliteration r
 | `ja` | Japanese | Han/Kana | East Asian | Yes |
 | `jv` | Javanese | Javanese | Southeast Asian | — |
 | `ka` | Georgian | Georgian | Caucasian | — |
+| `khb` | Tai Lue | New Tai Lue | Southeast Asian | — |
 | `km` | Khmer | Khmer | Southeast Asian | — |
 | `kn` | Kannada | Kannada | Indic | — |
 | `ko` | Korean | Hangul | East Asian | — |
+| `lis` | Lisu | Fraser/Lisu | East Asian | — |
 | `lo` | Lao | Lao | Southeast Asian | — |
 | `lt` | Lithuanian | Latin | European | — |
 | `lv` | Latvian | Latin | European | — |
 | `ml` | Malayalam | Malayalam | Indic | — |
 | `mn` | Mongolian | Mongolian | Central Asian | — |
+| `mni` | Meitei | Meetei Mayek | Indic | — |
 | `mr` | Marathi | Devanagari | Indic | — |
 | `mt` | Maltese | Latin | European | — |
 | `my` | Myanmar (Burmese) | Myanmar | Southeast Asian | — |
 | `ne` | Nepali | Devanagari | Indic | — |
 | `nl` | Dutch | Latin | European | Yes |
 | `no` | Norwegian | Latin | European | Yes |
+| `nod` | Northern Thai | Tai Tham | Southeast Asian | — |
+| `nqo` | N'Ko | N'Ko | African | — |
 | `or` | Odia | Odia | Indic | — |
 | `pa` | Punjabi | Gurmukhi | Indic | — |
 | `pl` | Polish | Latin | European | — |
@@ -57,17 +68,24 @@ Complete reference of all 65 built-in language profiles, their transliteration r
 | `ro` | Romanian | Latin | European | — |
 | `ru` | Russian | Cyrillic | European | Yes |
 | `sa` | Sanskrit | Devanagari | Indic | — |
+| `sat` | Santali | Ol Chiki | Indic | — |
 | `si` | Sinhala | Sinhala | South Asian | — |
 | `sk` | Slovak | Latin | European | — |
 | `sl` | Slovenian | Latin | European | — |
 | `sq` | Albanian | Latin | European | — |
 | `sr` | Serbian | Cyrillic | European | Yes |
+| `su` | Sundanese | Sundanese | Southeast Asian | — |
 | `sv` | Swedish | Latin | European | Yes |
+| `syr` | Syriac | Syriac | Middle Eastern | — |
 | `ta` | Tamil | Tamil | Indic | — |
+| `tdd` | Tai Le | Tai Le | Southeast Asian | — |
 | `te` | Telugu | Telugu | Indic | — |
 | `th` | Thai | Thai | Southeast Asian | — |
+| `tl` | Tagalog | Baybayin | Southeast Asian | — |
 | `tr` | Turkish | Latin | European | Yes |
+| `tzm` | Tamazight (Berber) | Tifinagh | African | — |
 | `uk` | Ukrainian | Cyrillic | European | Yes |
+| `vai` | Vai | Vai | African | — |
 | `vi` | Vietnamese | Latin | Southeast Asian | Yes |
 | `zh` | Chinese | Han | East Asian | — |
 

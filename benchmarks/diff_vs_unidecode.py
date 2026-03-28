@@ -303,6 +303,168 @@ def print_detail(reports: list[LangReport]) -> None:
                   f"{len(r.diffs_translit_vs_unidecode) - 50} more")
 
 
+def _print_lang_section(r: LangReport) -> None:
+    """Print a Notable Differences section for a single language."""
+    print(f"### {r.lang} — {r.description}")
+    print()
+    print(f"Block: {r.block_chars} assigned codepoints, "
+          f"{r.total_non_ascii} mapped by at least one library.")
+    print()
+    if r.translit_only > 0 or r.unidecode_only > 0:
+        print(f"Coverage: translit maps "
+              f"{r.translit_mapped}/{r.total_non_ascii}, "
+              f"Unidecode maps "
+              f"{r.unidecode_mapped}/{r.total_non_ascii}. "
+              f"**{r.translit_only}** mapped only by translit, "
+              f"**{r.unidecode_only}** mapped only by Unidecode.")
+        print()
+        if r.translit_only_chars:
+            print("**Mapped only by translit** "
+                  "(Unidecode returns empty/`[?]`):")
+            print()
+            print("| Char | Codepoint | Name | translit |")
+            print("|------|-----------|------|----------|")
+            for d in r.translit_only_chars[:30]:
+                print(f"| {d.char} | U+{d.codepoint:04X} | "
+                      f"{d.name} | `{d.translit_out}` |")
+            if len(r.translit_only_chars) > 30:
+                print(f"| | | *...{len(r.translit_only_chars) - 30} "
+                      f"more* | |")
+            print()
+        if r.unidecode_only_chars:
+            print("**Mapped only by Unidecode** "
+                  "(translit returns empty):")
+            print()
+            print("| Char | Codepoint | Name | Unidecode |")
+            print("|------|-----------|------|-----------|")
+            for d in r.unidecode_only_chars[:30]:
+                print(f"| {d.char} | U+{d.codepoint:04X} | "
+                      f"{d.name} | `{d.unidecode_out}` |")
+            if len(r.unidecode_only_chars) > 30:
+                print(f"| | | *...{len(r.unidecode_only_chars) - 30} "
+                      f"more* | |")
+            print()
+    if r.diffs_translit_vs_unidecode:
+        print("| Char | Codepoint | Name | translit | "
+              "Unidecode | anyascii |")
+        print("|------|-----------|------|----------|"
+              "-----------|----------|")
+        for d in r.diffs_translit_vs_unidecode[:50]:
+            a_col = (f"`{d.anyascii_out}`"
+                     if d.anyascii_out else "\u2014")
+            print(f"| {d.char} | U+{d.codepoint:04X} | {d.name} | "
+                  f"`{d.translit_out}` | `{d.unidecode_out}` | "
+                  f"{a_col} |")
+        if len(r.diffs_translit_vs_unidecode) > 50:
+            remaining = len(r.diffs_translit_vs_unidecode) - 50
+            print(f"| | | *...{remaining} more differences* | "
+                  f"| | |")
+        print()
+
+
+def _print_latin_group(group: list[LangReport]) -> None:
+    """Print a combined section for Latin-block languages with shared stats."""
+    # Use first report for shared stats (all have same block/coverage)
+    ref = group[0]
+    lang_list = ", ".join(f"{r.lang} ({r.description})" for r in group)
+    print(f"### Latin-script languages ({len(group)} languages)")
+    print()
+    print(f"**Languages**: {lang_list}")
+    print()
+    print(f"All {len(group)} languages share the same Unicode blocks "
+          f"(Latin-1 Supplement + Latin Extended-A + Latin Extended-B) "
+          f"with {ref.block_chars} assigned codepoints, "
+          f"{ref.total_non_ascii} mapped by at least one library.")
+    print()
+    if ref.translit_only > 0 or ref.unidecode_only > 0:
+        print(f"Coverage: translit maps "
+              f"{ref.translit_mapped}/{ref.total_non_ascii}, "
+              f"Unidecode maps "
+              f"{ref.unidecode_mapped}/{ref.total_non_ascii}. "
+              f"**{ref.translit_only}** mapped only by translit, "
+              f"**{ref.unidecode_only}** mapped only by Unidecode.")
+        print()
+        if ref.translit_only_chars:
+            print("**Mapped only by translit** "
+                  "(Unidecode returns empty/`[?]`):")
+            print()
+            print("| Char | Codepoint | Name | translit |")
+            print("|------|-----------|------|----------|")
+            for d in ref.translit_only_chars[:30]:
+                print(f"| {d.char} | U+{d.codepoint:04X} | "
+                      f"{d.name} | `{d.translit_out}` |")
+            print()
+
+    # Collect shared diffs (present in all languages) vs per-language diffs
+    # Build a set of codepoints that differ per language (due to lang overrides)
+    all_diff_cps: dict[int, dict[str, CharDiff]] = {}
+    for r in group:
+        for d in r.diffs_translit_vs_unidecode:
+            if d.codepoint not in all_diff_cps:
+                all_diff_cps[d.codepoint] = {}
+            all_diff_cps[d.codepoint][r.lang] = d
+
+    # Shared diffs: same translit output across all languages that have them
+    shared_diffs: list[CharDiff] = []
+    per_lang_diffs: dict[str, list[CharDiff]] = {r.lang: [] for r in group}
+    for cp in sorted(all_diff_cps):
+        langs_with_diff = all_diff_cps[cp]
+        outputs = {d.translit_out for d in langs_with_diff.values()}
+        if len(outputs) == 1 and len(langs_with_diff) == len(group):
+            # All languages produce the same diff — it's shared
+            shared_diffs.append(next(iter(langs_with_diff.values())))
+        else:
+            # Language-specific diff
+            for lang, d in langs_with_diff.items():
+                per_lang_diffs[lang].append(d)
+
+    if shared_diffs:
+        print(f"**Shared differences** (same output across all "
+              f"{len(group)} languages):")
+        print()
+        print("| Char | Codepoint | Name | translit | "
+              "Unidecode | anyascii |")
+        print("|------|-----------|------|----------|"
+              "-----------|----------|")
+        for d in shared_diffs[:50]:
+            a_col = (f"`{d.anyascii_out}`"
+                     if d.anyascii_out else "\u2014")
+            print(f"| {d.char} | U+{d.codepoint:04X} | {d.name} | "
+                  f"`{d.translit_out}` | `{d.unidecode_out}` | "
+                  f"{a_col} |")
+        if len(shared_diffs) > 50:
+            remaining = len(shared_diffs) - 50
+            print(f"| | | *...{remaining} more differences* | "
+                  f"| | |")
+        print()
+
+    # Print per-language diffs only for languages that have unique ones
+    langs_with_unique = [(lang, diffs) for lang, diffs
+                         in per_lang_diffs.items() if diffs]
+    if langs_with_unique:
+        print("**Language-specific differences** "
+              "(due to language override tables):")
+        print()
+        for lang, diffs in sorted(langs_with_unique):
+            desc = LANG_BLOCKS[lang][0]
+            print(f"#### {lang} — {desc}")
+            print()
+            print("| Char | Codepoint | Name | translit | "
+                  "Unidecode | anyascii |")
+            print("|------|-----------|------|----------|"
+                  "-----------|----------|")
+            for d in diffs[:30]:
+                a_col = (f"`{d.anyascii_out}`"
+                         if d.anyascii_out else "\u2014")
+                print(f"| {d.char} | U+{d.codepoint:04X} | {d.name} | "
+                      f"`{d.translit_out}` | `{d.unidecode_out}` | "
+                      f"{a_col} |")
+            if len(diffs) > 30:
+                remaining = len(diffs) - 30
+                print(f"| | | *...{remaining} more* | | | |")
+            print()
+
+
 def print_markdown(reports: list[LangReport]) -> None:
     """Print full markdown report."""
     print("# Transliteration Comparison: translit vs Unidecode vs anyascii")
@@ -369,66 +531,24 @@ def print_markdown(reports: list[LangReport]) -> None:
     print("## Notable Differences")
     print()
 
+    # Group Latin-block languages that share the same blocks and coverage
+    latin_group: list[LangReport] = []
+    other_reports: list[LangReport] = []
     for r in reports:
         if (not r.diffs_translit_vs_unidecode
                 and r.translit_only == 0
                 and r.unidecode_only == 0):
             continue
-        print(f"### {r.lang} — {r.description}")
-        print()
-        print(f"Block: {r.block_chars} assigned codepoints, "
-              f"{r.total_non_ascii} mapped by at least one library.")
-        print()
-        if r.translit_only > 0 or r.unidecode_only > 0:
-            print(f"Coverage: translit maps "
-                  f"{r.translit_mapped}/{r.total_non_ascii}, "
-                  f"Unidecode maps "
-                  f"{r.unidecode_mapped}/{r.total_non_ascii}. "
-                  f"**{r.translit_only}** mapped only by translit, "
-                  f"**{r.unidecode_only}** mapped only by Unidecode.")
-            print()
-            if r.translit_only_chars:
-                print("**Mapped only by translit** "
-                      "(Unidecode returns empty/`[?]`):")
-                print()
-                print("| Char | Codepoint | Name | translit |")
-                print("|------|-----------|------|----------|")
-                for d in r.translit_only_chars[:30]:
-                    print(f"| {d.char} | U+{d.codepoint:04X} | "
-                          f"{d.name} | `{d.translit_out}` |")
-                if len(r.translit_only_chars) > 30:
-                    print(f"| | | *...{len(r.translit_only_chars) - 30} "
-                          f"more* | |")
-                print()
-            if r.unidecode_only_chars:
-                print("**Mapped only by Unidecode** "
-                      "(translit returns empty):")
-                print()
-                print("| Char | Codepoint | Name | Unidecode |")
-                print("|------|-----------|------|-----------|")
-                for d in r.unidecode_only_chars[:30]:
-                    print(f"| {d.char} | U+{d.codepoint:04X} | "
-                          f"{d.name} | `{d.unidecode_out}` |")
-                if len(r.unidecode_only_chars) > 30:
-                    print(f"| | | *...{len(r.unidecode_only_chars) - 30} "
-                          f"more* | |")
-                print()
-        if r.diffs_translit_vs_unidecode:
-            print("| Char | Codepoint | Name | translit | "
-                  "Unidecode | anyascii |")
-            print("|------|-----------|------|----------|"
-                  "-----------|----------|")
-            for d in r.diffs_translit_vs_unidecode[:50]:
-                a_col = (f"`{d.anyascii_out}`"
-                         if d.anyascii_out else "\u2014")
-                print(f"| {d.char} | U+{d.codepoint:04X} | {d.name} | "
-                      f"`{d.translit_out}` | `{d.unidecode_out}` | "
-                      f"{a_col} |")
-            if len(r.diffs_translit_vs_unidecode) > 50:
-                remaining = len(r.diffs_translit_vs_unidecode) - 50
-                print(f"| | | *...{remaining} more differences* | "
-                      f"| | |")
-            print()
+        blocks = LANG_BLOCKS[r.lang][1]
+        if blocks == _LATIN_BLOCKS:
+            latin_group.append(r)
+        else:
+            other_reports.append(r)
+
+    if latin_group:
+        _print_latin_group(latin_group)
+    for r in other_reports:
+        _print_lang_section(r)
 
     print("## Key Takeaways")
     print()

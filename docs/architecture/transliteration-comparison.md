@@ -87,6 +87,120 @@ This approach is deterministic and comprehensive — results do not depend on sa
 
 ## Notable Differences
 
+### Latin-script languages (27 languages)
+
+**Languages**: ca (Catalan), cs (Czech), cy (Welsh), da (Danish), de (German), es (Spanish), et (Estonian), fi (Finnish), fr (French), ga (Irish), hr (Croatian), hu (Hungarian), is (Icelandic), it (Italian), lt (Lithuanian), lv (Latvian), mt (Maltese), nl (Dutch), no (Norwegian), pl (Polish), pt (Portuguese), ro (Romanian), sk (Slovak), sl (Slovenian), sq (Albanian), sv (Swedish), tr (Turkish)
+
+All 27 languages share the same Unicode blocks (Latin-1 Supplement + Latin Extended-A + Latin Extended-B) with 400 assigned codepoints, 400 mapped by at least one library.
+
+Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
+
+**Mapped only by translit** (Unidecode returns empty/`[?]`):
+
+| Char | Codepoint | Name | translit |
+|------|-----------|------|----------|
+| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
+| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
+
+**Shared differences** (same output across all 27 languages):
+
+| Char | Codepoint | Name | translit | Unidecode | anyascii |
+|------|-----------|------|----------|-----------|----------|
+| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
+| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
+| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
+| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
+| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
+| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
+| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
+| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
+| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
+| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
+| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
+| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
+| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
+| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
+| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
+| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
+| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
+| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
+| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
+| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
+| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
+| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
+| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
+| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
+
+**Language-specific differences** (due to language override tables):
+
+#### da — Danish
+
+| Char | Codepoint | Name | translit | Unidecode | anyascii |
+|------|-----------|------|----------|-----------|----------|
+| Å | U+00C5 | LATIN CAPITAL LETTER A WITH RING ABOVE | `Aa` | `A` | `A` |
+| Æ | U+00C6 | LATIN CAPITAL LETTER AE | `Ae` | `AE` | `Ae` |
+| Ø | U+00D8 | LATIN CAPITAL LETTER O WITH STROKE | `Oe` | `O` | `O` |
+| å | U+00E5 | LATIN SMALL LETTER A WITH RING ABOVE | `aa` | `a` | `a` |
+| ø | U+00F8 | LATIN SMALL LETTER O WITH STROKE | `oe` | `o` | `o` |
+
+#### de — German
+
+| Char | Codepoint | Name | translit | Unidecode | anyascii |
+|------|-----------|------|----------|-----------|----------|
+| Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
+| Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
+| Ü | U+00DC | LATIN CAPITAL LETTER U WITH DIAERESIS | `Ue` | `U` | `U` |
+| ä | U+00E4 | LATIN SMALL LETTER A WITH DIAERESIS | `ae` | `a` | `a` |
+| ö | U+00F6 | LATIN SMALL LETTER O WITH DIAERESIS | `oe` | `o` | `o` |
+| ü | U+00FC | LATIN SMALL LETTER U WITH DIAERESIS | `ue` | `u` | `u` |
+
+#### et — Estonian
+
+| Char | Codepoint | Name | translit | Unidecode | anyascii |
+|------|-----------|------|----------|-----------|----------|
+| Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
+| Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
+| Ü | U+00DC | LATIN CAPITAL LETTER U WITH DIAERESIS | `Ue` | `U` | `U` |
+| ä | U+00E4 | LATIN SMALL LETTER A WITH DIAERESIS | `ae` | `a` | `a` |
+| ö | U+00F6 | LATIN SMALL LETTER O WITH DIAERESIS | `oe` | `o` | `o` |
+| ü | U+00FC | LATIN SMALL LETTER U WITH DIAERESIS | `ue` | `u` | `u` |
+
+#### fi — Finnish
+
+| Char | Codepoint | Name | translit | Unidecode | anyascii |
+|------|-----------|------|----------|-----------|----------|
+| Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
+| Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
+| ä | U+00E4 | LATIN SMALL LETTER A WITH DIAERESIS | `ae` | `a` | `a` |
+| ö | U+00F6 | LATIN SMALL LETTER O WITH DIAERESIS | `oe` | `o` | `o` |
+
+#### is — Icelandic
+
+| Char | Codepoint | Name | translit | Unidecode | anyascii |
+|------|-----------|------|----------|-----------|----------|
+| Æ | U+00C6 | LATIN CAPITAL LETTER AE | `Ae` | `AE` | `Ae` |
+| Ð | U+00D0 | LATIN CAPITAL LETTER ETH | `Dh` | `D` | `D` |
+| ð | U+00F0 | LATIN SMALL LETTER ETH | `dh` | `d` | `d` |
+
+#### no — Norwegian
+
+| Char | Codepoint | Name | translit | Unidecode | anyascii |
+|------|-----------|------|----------|-----------|----------|
+| Å | U+00C5 | LATIN CAPITAL LETTER A WITH RING ABOVE | `Aa` | `A` | `A` |
+| Æ | U+00C6 | LATIN CAPITAL LETTER AE | `Ae` | `AE` | `Ae` |
+| Ø | U+00D8 | LATIN CAPITAL LETTER O WITH STROKE | `Oe` | `O` | `O` |
+| å | U+00E5 | LATIN SMALL LETTER A WITH RING ABOVE | `aa` | `a` | `a` |
+| ø | U+00F8 | LATIN SMALL LETTER O WITH STROKE | `oe` | `o` | `o` |
+
+#### sv — Swedish
+
+| Char | Codepoint | Name | translit | Unidecode | anyascii |
+|------|-----------|------|----------|-----------|----------|
+| Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
+| Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
+| ä | U+00E4 | LATIN SMALL LETTER A WITH DIAERESIS | `ae` | `a` | `a` |
+| ö | U+00F6 | LATIN SMALL LETTER O WITH DIAERESIS | `oe` | `o` | `o` |
+
 ### bg — Bulgarian
 
 Block: 304 assigned codepoints, 301 mapped by at least one library.
@@ -195,217 +309,6 @@ Coverage: translit maps 292/301, Unidecode maps 234/301. **65** mapped only by t
 | Ҫ | U+04AA | CYRILLIC CAPITAL LETTER ES WITH DESCENDER | `S` | `S'` | `S` |
 | | | *...28 more differences* | | | |
 
-### ca — Catalan
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### cs — Czech
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### cy — Welsh
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### da — Danish
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| Å | U+00C5 | LATIN CAPITAL LETTER A WITH RING ABOVE | `Aa` | `A` | `A` |
-| Æ | U+00C6 | LATIN CAPITAL LETTER AE | `Ae` | `AE` | `Ae` |
-| Ø | U+00D8 | LATIN CAPITAL LETTER O WITH STROKE | `Oe` | `O` | `O` |
-| å | U+00E5 | LATIN SMALL LETTER A WITH RING ABOVE | `aa` | `a` | `a` |
-| ø | U+00F8 | LATIN SMALL LETTER O WITH STROKE | `oe` | `o` | `o` |
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### de — German
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
-| Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
-| Ü | U+00DC | LATIN CAPITAL LETTER U WITH DIAERESIS | `Ue` | `U` | `U` |
-| ä | U+00E4 | LATIN SMALL LETTER A WITH DIAERESIS | `ae` | `a` | `a` |
-| ö | U+00F6 | LATIN SMALL LETTER O WITH DIAERESIS | `oe` | `o` | `o` |
-| ü | U+00FC | LATIN SMALL LETTER U WITH DIAERESIS | `ue` | `u` | `u` |
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
 ### el — Greek
 
 Block: 135 assigned codepoints, 135 mapped by at least one library.
@@ -482,824 +385,6 @@ Coverage: translit maps 135/135, Unidecode maps 106/135. **29** mapped only by t
 | ϭ | U+03ED | COPTIC SMALL LETTER SHIMA | `c` | `ch` | `c` |
 | Ϯ | U+03EE | COPTIC CAPITAL LETTER DEI | `ti` | `Ti` | `Ti` |
 | ϲ | U+03F2 | GREEK LUNATE SIGMA SYMBOL | `s` | `c` | `s` |
-
-### es — Spanish
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### et — Estonian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
-| Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
-| Ü | U+00DC | LATIN CAPITAL LETTER U WITH DIAERESIS | `Ue` | `U` | `U` |
-| ä | U+00E4 | LATIN SMALL LETTER A WITH DIAERESIS | `ae` | `a` | `a` |
-| ö | U+00F6 | LATIN SMALL LETTER O WITH DIAERESIS | `oe` | `o` | `o` |
-| ü | U+00FC | LATIN SMALL LETTER U WITH DIAERESIS | `ue` | `u` | `u` |
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### fi — Finnish
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
-| Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
-| ä | U+00E4 | LATIN SMALL LETTER A WITH DIAERESIS | `ae` | `a` | `a` |
-| ö | U+00F6 | LATIN SMALL LETTER O WITH DIAERESIS | `oe` | `o` | `o` |
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### fr — French
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### ga — Irish
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### hr — Croatian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### hu — Hungarian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### is — Icelandic
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| Æ | U+00C6 | LATIN CAPITAL LETTER AE | `Ae` | `AE` | `Ae` |
-| Ð | U+00D0 | LATIN CAPITAL LETTER ETH | `Dh` | `D` | `D` |
-| ð | U+00F0 | LATIN SMALL LETTER ETH | `dh` | `d` | `d` |
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### it — Italian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### lt — Lithuanian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### lv — Latvian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### mt — Maltese
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### nl — Dutch
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### no — Norwegian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| Å | U+00C5 | LATIN CAPITAL LETTER A WITH RING ABOVE | `Aa` | `A` | `A` |
-| Æ | U+00C6 | LATIN CAPITAL LETTER AE | `Ae` | `AE` | `Ae` |
-| Ø | U+00D8 | LATIN CAPITAL LETTER O WITH STROKE | `Oe` | `O` | `O` |
-| å | U+00E5 | LATIN SMALL LETTER A WITH RING ABOVE | `aa` | `a` | `a` |
-| ø | U+00F8 | LATIN SMALL LETTER O WITH STROKE | `oe` | `o` | `o` |
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### pl — Polish
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### pt — Portuguese
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### ro — Romanian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### sk — Slovak
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### sl — Slovenian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### sq — Albanian
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
 
 ### sr — Serbian
 
@@ -1410,90 +495,6 @@ Coverage: translit maps 290/301, Unidecode maps 234/301. **65** mapped only by t
 | ҧ | U+04A7 | CYRILLIC SMALL LETTER PE WITH MIDDLE HOOK | `p` | `p'` | `ph` |
 | Ҫ | U+04AA | CYRILLIC CAPITAL LETTER ES WITH DESCENDER | `S` | `S'` | `S` |
 | | | *...28 more differences* | | | |
-
-### sv — Swedish
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
-| Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
-| ä | U+00E4 | LATIN SMALL LETTER A WITH DIAERESIS | `ae` | `a` | `a` |
-| ö | U+00F6 | LATIN SMALL LETTER O WITH DIAERESIS | `oe` | `o` | `o` |
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
-
-### tr — Turkish
-
-Block: 400 assigned codepoints, 400 mapped by at least one library.
-
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
-
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
-
-| Char | Codepoint | Name | translit |
-|------|-----------|------|----------|
-| Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
-| ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
-
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
-|------|-----------|------|----------|-----------|----------|
-| ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
-| Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
-| ŋ | U+014B | LATIN SMALL LETTER ENG | `n` | `ng` | `ng` |
-| Ƅ | U+0184 | LATIN CAPITAL LETTER TONE SIX | `B` | `6` | `6` |
-| ƅ | U+0185 | LATIN SMALL LETTER TONE SIX | `b` | `6` | `6` |
-| Ǝ | U+018E | LATIN CAPITAL LETTER REVERSED E | `D` | `3` | `E` |
-| Ə | U+018F | LATIN CAPITAL LETTER SCHWA | `A` | `@` | `E` |
-| Ɯ | U+019C | LATIN CAPITAL LETTER TURNED M | `M` | `W` | `W` |
-| Ʀ | U+01A6 | LATIN LETTER YR | `R` | `YR` | `R` |
-| Ƨ | U+01A7 | LATIN CAPITAL LETTER TONE TWO | `S` | `2` | `2` |
-| ƨ | U+01A8 | LATIN SMALL LETTER TONE TWO | `s` | `2` | `2` |
-| Ʃ | U+01A9 | LATIN CAPITAL LETTER ESH | `Sh` | `SH` | `Sh` |
-| ƪ | U+01AA | LATIN LETTER REVERSED ESH LOOP | `s` | `sh` | `sh` |
-| Ʊ | U+01B1 | LATIN CAPITAL LETTER UPSILON | `U` | `Y` | `U` |
-| Ʒ | U+01B7 | LATIN CAPITAL LETTER EZH | `Zh` | `ZH` | `Zh` |
-| Ƹ | U+01B8 | LATIN CAPITAL LETTER EZH REVERSED | `Zh` | `ZH` | ``` |
-| ǂ | U+01C2 | LATIN LETTER ALVEOLAR CLICK | `!` | `|=` | `qc` |
-| ǝ | U+01DD | LATIN SMALL LETTER TURNED E | `e` | `@` | `e` |
-| Ǯ | U+01EE | LATIN CAPITAL LETTER EZH WITH CARON | `Zh` | `ZH` | `Zh` |
-| Ƕ | U+01F6 | LATIN CAPITAL LETTER HWAIR | `Hv` | `HV` | `Hw` |
-| Ȝ | U+021C | LATIN CAPITAL LETTER YOGH | `Yh` | `Y` | `Y` |
-| ȝ | U+021D | LATIN SMALL LETTER YOGH | `yh` | `y` | `y` |
-| Ʌ | U+0245 | LATIN CAPITAL LETTER TURNED V | `V` | `^` | `A` |
-| Ɋ | U+024A | LATIN CAPITAL LETTER SMALL Q WITH HOOK TAIL | `Q` | `q` | `Q` |
 
 ### uk — Ukrainian
 

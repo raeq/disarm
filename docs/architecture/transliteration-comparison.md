@@ -54,8 +54,8 @@ This approach is deterministic and comprehensive — results do not depend on sa
 | ja-kunrei | Japanese Kunrei | 189 | 189 | 178 | 181 | 188 | 2 | 5 | 9 |
 | ko | Korean | 11172 | 11172 | 11172 | 11172 | 11172 | 0 | 0 | 3762 |
 | zh | Chinese | 20992 | 20954 | 20924 | 20642 | 20954 | 291 | 9 | 20633 |
-| ar | Arabic | 248 | 219 | 162 | 173 | 208 | 23 | 34 | 78 |
-| fa | Persian | 391 | 329 | 163 | 173 | 318 | 23 | 33 | 83 |
+| ar | Arabic | 248 | 221 | 207 | 173 | 208 | 38 | 4 | 92 |
+| fa | Persian | 391 | 331 | 207 | 173 | 318 | 38 | 4 | 97 |
 | he | Hebrew | 88 | 53 | 46 | 49 | 53 | 1 | 4 | 15 |
 | hi | Hindi | 128 | 127 | 101 | 103 | 123 | 4 | 6 | 68 |
 | bn | Bengali | 96 | 95 | 78 | 87 | 95 | 1 | 10 | 53 |
@@ -83,7 +83,7 @@ This approach is deterministic and comprehensive — results do not depend on sa
 | dv | Dhivehi | 50 | 49 | 48 | 48 | 48 | 0 | 0 | 3 |
 | jv | Javanese | 91 | 90 | 75 | 0 | 90 | 75 | 0 | 0 |
 | mn | Mongolian | 157 | 153 | 146 | 148 | 151 | 5 | 7 | 50 |
-| **TOTAL** | | **49089** | **48819** | **48027** | **47408** | **48761** | **882** | **263** | **26958** |
+| **TOTAL** | | **49089** | **48823** | **48116** | **47408** | **48761** | **912** | **204** | **26986** |
 
 ## Notable Differences
 
@@ -1890,18 +1890,25 @@ Coverage: translit maps 20924/20954, Unidecode maps 20642/20954. **291** mapped 
 
 ### ar — Arabic
 
-Block: 248 assigned codepoints, 219 mapped by at least one library.
+Block: 248 assigned codepoints, 221 mapped by at least one library.
 
-Coverage: translit maps 162/219, Unidecode maps 173/219. **23** mapped only by translit, **34** mapped only by Unidecode.
+Coverage: translit maps 207/221, Unidecode maps 173/221. **38** mapped only by translit, **4** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
 | Char | Codepoint | Name | translit |
 |------|-----------|------|----------|
+| ؉ | U+0609 | ARABIC-INDIC PER MILLE SIGN | `%o` |
+| ؊ | U+060A | ARABIC-INDIC PER TEN THOUSAND SIGN | `%oo` |
+| ؋ | U+060B | AFGHANI SIGN | `Af` |
+| ؍ | U+060D | ARABIC DATE SEPARATOR | `/` |
 | ؖ | U+0616 | ARABIC SMALL HIGH LIGATURE ALEF WITH LAM WITH YEH | `aly` |
 | ؘ | U+0618 | ARABIC SMALL FATHA | `a` |
 | ؙ | U+0619 | ARABIC SMALL DAMMA | `u` |
 | ؚ | U+061A | ARABIC SMALL KASRA | `i` |
+| ؝ | U+061D | ARABIC END OF TEXT MARK | `.` |
+| ؞ | U+061E | ARABIC TRIPLE DOT PUNCTUATION MARK | `...` |
+| ؠ | U+0620 | ARABIC LETTER KASHMIRI YEH | `y` |
 | ء | U+0621 | ARABIC LETTER HAMZA | `'` |
 | إ | U+0625 | ARABIC LETTER ALEF WITH HAMZA BELOW | `a` |
 | ا | U+0627 | ARABIC LETTER ALEF | `a` |
@@ -1910,53 +1917,27 @@ Coverage: translit maps 162/219, Unidecode maps 173/219. **23** mapped only by t
 | ؽ | U+063D | ARABIC LETTER FARSI YEH WITH INVERTED V | `y` |
 | ؾ | U+063E | ARABIC LETTER FARSI YEH WITH TWO DOTS ABOVE | `y` |
 | ؿ | U+063F | ARABIC LETTER FARSI YEH WITH THREE DOTS ABOVE | `y` |
+| ٖ | U+0656 | ARABIC SUBSCRIPT ALEF | `a` |
 | ٗ | U+0657 | ARABIC INVERTED DAMMA | `u` |
+| ٘ | U+0658 | ARABIC MARK NOON GHUNNA | `n` |
 | ٝ | U+065D | ARABIC REVERSED DAMMA | `u` |
 | ٞ | U+065E | ARABIC FATHA WITH TWO DOTS | `a` |
+| ٟ | U+065F | ARABIC WAVY HAMZA BELOW | `'` |
+| ٮ | U+066E | ARABIC LETTER DOTLESS BEH | `b` |
 | ٯ | U+066F | ARABIC LETTER DOTLESS QAF | `q` |
+| ٰ | U+0670 | ARABIC LETTER SUPERSCRIPT ALEF | `a` |
+| ٴ | U+0674 | ARABIC LETTER HIGH HAMZA | `'` |
 | ې | U+06D0 | ARABIC LETTER E | `e` |
-| ۑ | U+06D1 | ARABIC LETTER YEH WITH THREE DOTS BELOW | `y` |
-| ۖ | U+06D6 | ARABIC SMALL HIGH LIGATURE SAD WITH LAM WITH ALEF MAKSURA | `la` |
-| ۗ | U+06D7 | ARABIC SMALL HIGH LIGATURE QAF WITH LAM WITH ALEF MAKSURA | `la` |
-| ۮ | U+06EE | ARABIC LETTER DAL WITH INVERTED V | `d` |
-| ۯ | U+06EF | ARABIC LETTER REH WITH INVERTED V | `r` |
-| ۿ | U+06FF | ARABIC LETTER HEH WITH INVERTED V | `h` |
+| | | *...8 more* | |
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ّ | U+0651 | ARABIC SHADDA | `W` |
-| ٔ | U+0654 | ARABIC HAMZA ABOVE | `'` |
-| ٕ | U+0655 | ARABIC HAMZA BELOW | `'` |
-| ٪ | U+066A | ARABIC PERCENT SIGN | `%` |
-| ٫ | U+066B | ARABIC DECIMAL SEPARATOR | `.` |
-| ٬ | U+066C | ARABIC THOUSANDS SEPARATOR | `,` |
-| ٭ | U+066D | ARABIC FIVE POINTED STAR | `*` |
-| ٷ | U+0677 | ARABIC LETTER U WITH HAMZA ABOVE | `'u` |
-| ٺ | U+067A | ARABIC LETTER TTEHEH | `tth` |
-| ٻ | U+067B | ARABIC LETTER BEEH | `b` |
-| ٿ | U+067F | ARABIC LETTER TEHEH | `th` |
-| ڀ | U+0680 | ARABIC LETTER BEHEH | `bh` |
-| ڃ | U+0683 | ARABIC LETTER NYEH | `ny` |
-| ڄ | U+0684 | ARABIC LETTER DYEH | `dy` |
-| ڇ | U+0687 | ARABIC LETTER TCHEHEH | `cch` |
-| ڌ | U+068C | ARABIC LETTER DAHAL | `dh` |
-| ڍ | U+068D | ARABIC LETTER DDAHAL | `ddh` |
-| ڎ | U+068E | ARABIC LETTER DUL | `d` |
-| ڦ | U+06A6 | ARABIC LETTER PEHEH | `ph` |
-| ڱ | U+06B1 | ARABIC LETTER NGOEH | `N` |
-| ڳ | U+06B3 | ARABIC LETTER GUEH | `G` |
-| ڻ | U+06BB | ARABIC LETTER RNOON | `N` |
-| ۅ | U+06C5 | ARABIC LETTER KIRGHIZ OE | `oe` |
-| ۆ | U+06C6 | ARABIC LETTER OE | `oe` |
-| ۇ | U+06C7 | ARABIC LETTER U | `u` |
-| ۈ | U+06C8 | ARABIC LETTER YU | `yu` |
-| ۉ | U+06C9 | ARABIC LETTER KIRGHIZ YU | `yu` |
-| ۋ | U+06CB | ARABIC LETTER VE | `v` |
-| ۔ | U+06D4 | ARABIC FULL STOP | `.` |
-| ە | U+06D5 | ARABIC LETTER AE | `ae` |
-| | | *...4 more* | |
+| ۞ | U+06DE | ARABIC START OF RUB EL HIZB | `#` |
+| ۩ | U+06E9 | ARABIC PLACE OF SAJDAH | `^` |
+| ۾ | U+06FE | ARABIC SIGN SINDHI POSTPOSITION MEN | `+m` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
@@ -1977,16 +1958,23 @@ Coverage: translit maps 162/219, Unidecode maps 173/219. **23** mapped only by t
 | ٳ | U+0673 | ARABIC LETTER ALEF WITH WAVY HAMZA BELOW | `a` | `'` | `u'` |
 | ٵ | U+0675 | ARABIC LETTER HIGH HAMZA ALEF | `a` | `'` | `a` |
 | ٶ | U+0676 | ARABIC LETTER HIGH HAMZA WAW | `w` | `'w` | `o` |
+| ٷ | U+0677 | ARABIC LETTER U WITH HAMZA ABOVE | `u'` | `'u` | `u` |
 | ٸ | U+0678 | ARABIC LETTER HIGH HAMZA YEH | `y` | `'y` | `i` |
 | ٹ | U+0679 | ARABIC LETTER TTEH | `t` | `tt` | `t` |
+| ٺ | U+067A | ARABIC LETTER TTEHEH | `t` | `tth` | `th` |
 | ٽ | U+067D | ARABIC LETTER TEH WITH THREE DOTS ABOVE DOWNWARDS | `t` | `T` | `t` |
+| ٿ | U+067F | ARABIC LETTER TEHEH | `t` | `th` | `th` |
+| ڀ | U+0680 | ARABIC LETTER BEHEH | `b` | `bh` | `bh` |
 | ځ | U+0681 | ARABIC LETTER HAH WITH HAMZA ABOVE | `h` | `'h` | `dz` |
 | ڂ | U+0682 | ARABIC LETTER HAH WITH TWO DOTS VERTICAL ABOVE | `h` | `H` | `dz` |
 | څ | U+0685 | ARABIC LETTER HAH WITH THREE DOTS ABOVE | `h` | `H` | `ts` |
+| ڇ | U+0687 | ARABIC LETTER TCHEHEH | `ch` | `cch` | `ch` |
 | ڈ | U+0688 | ARABIC LETTER DDAL | `d` | `dd` | `d` |
 | ډ | U+0689 | ARABIC LETTER DAL WITH RING | `d` | `D` | `d` |
 | ڊ | U+068A | ARABIC LETTER DAL WITH DOT BELOW | `d` | `D` | `d` |
 | ڋ | U+068B | ARABIC LETTER DAL WITH DOT BELOW AND SMALL TAH | `d` | `Dt` | `dd` |
+| ڌ | U+068C | ARABIC LETTER DAHAL | `d` | `dh` | `dh` |
+| ڍ | U+068D | ARABIC LETTER DDAHAL | `d` | `ddh` | `dh` |
 | ڏ | U+068F | ARABIC LETTER DAL WITH THREE DOTS ABOVE DOWNWARDS | `d` | `D` | `d` |
 | ڐ | U+0690 | ARABIC LETTER DAL WITH FOUR DOTS ABOVE | `d` | `D` | `d` |
 | ڑ | U+0691 | ARABIC LETTER RREH | `r` | `rr` | `r` |
@@ -2003,29 +1991,29 @@ Coverage: translit maps 162/219, Unidecode maps 173/219. **23** mapped only by t
 | ڜ | U+069C | ARABIC LETTER SEEN WITH THREE DOTS BELOW AND THREE DOTS ABOVE | `s` | `S` | `ch` |
 | ڝ | U+069D | ARABIC LETTER SAD WITH TWO DOTS BELOW | `s` | `S` | `ts` |
 | ڞ | U+069E | ARABIC LETTER SAD WITH THREE DOTS ABOVE | `s` | `S` | `ch` |
-| ڟ | U+069F | ARABIC LETTER TAH WITH THREE DOTS ABOVE | `t` | `T` | `th` |
-| ڠ | U+06A0 | ARABIC LETTER AIN WITH THREE DOTS ABOVE | `'` | `GH` | `ng` |
-| ڡ | U+06A1 | ARABIC LETTER DOTLESS FEH | `f` | `F` | `f` |
-| ڢ | U+06A2 | ARABIC LETTER FEH WITH DOT MOVED BELOW | `f` | `F` | `f` |
-| ڣ | U+06A3 | ARABIC LETTER FEH WITH DOT BELOW | `f` | `F` | `p` |
-| ڧ | U+06A7 | ARABIC LETTER QAF WITH DOT ABOVE | `q` | `Q` | `q` |
-| ڨ | U+06A8 | ARABIC LETTER QAF WITH THREE DOTS ABOVE | `q` | `Q` | `g` |
-| | | *...28 more differences* | | | |
+| | | *...42 more differences* | | | |
 
 ### fa — Persian
 
-Block: 391 assigned codepoints, 329 mapped by at least one library.
+Block: 391 assigned codepoints, 331 mapped by at least one library.
 
-Coverage: translit maps 163/329, Unidecode maps 173/329. **23** mapped only by translit, **33** mapped only by Unidecode.
+Coverage: translit maps 207/331, Unidecode maps 173/331. **38** mapped only by translit, **4** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
 | Char | Codepoint | Name | translit |
 |------|-----------|------|----------|
+| ؉ | U+0609 | ARABIC-INDIC PER MILLE SIGN | `%o` |
+| ؊ | U+060A | ARABIC-INDIC PER TEN THOUSAND SIGN | `%oo` |
+| ؋ | U+060B | AFGHANI SIGN | `Af` |
+| ؍ | U+060D | ARABIC DATE SEPARATOR | `/` |
 | ؖ | U+0616 | ARABIC SMALL HIGH LIGATURE ALEF WITH LAM WITH YEH | `aly` |
 | ؘ | U+0618 | ARABIC SMALL FATHA | `a` |
 | ؙ | U+0619 | ARABIC SMALL DAMMA | `u` |
 | ؚ | U+061A | ARABIC SMALL KASRA | `i` |
+| ؝ | U+061D | ARABIC END OF TEXT MARK | `.` |
+| ؞ | U+061E | ARABIC TRIPLE DOT PUNCTUATION MARK | `...` |
+| ؠ | U+0620 | ARABIC LETTER KASHMIRI YEH | `y` |
 | ء | U+0621 | ARABIC LETTER HAMZA | `'` |
 | إ | U+0625 | ARABIC LETTER ALEF WITH HAMZA BELOW | `e` |
 | ا | U+0627 | ARABIC LETTER ALEF | `a` |
@@ -2034,53 +2022,27 @@ Coverage: translit maps 163/329, Unidecode maps 173/329. **23** mapped only by t
 | ؽ | U+063D | ARABIC LETTER FARSI YEH WITH INVERTED V | `y` |
 | ؾ | U+063E | ARABIC LETTER FARSI YEH WITH TWO DOTS ABOVE | `y` |
 | ؿ | U+063F | ARABIC LETTER FARSI YEH WITH THREE DOTS ABOVE | `y` |
+| ٖ | U+0656 | ARABIC SUBSCRIPT ALEF | `a` |
 | ٗ | U+0657 | ARABIC INVERTED DAMMA | `u` |
+| ٘ | U+0658 | ARABIC MARK NOON GHUNNA | `n` |
 | ٝ | U+065D | ARABIC REVERSED DAMMA | `u` |
 | ٞ | U+065E | ARABIC FATHA WITH TWO DOTS | `a` |
+| ٟ | U+065F | ARABIC WAVY HAMZA BELOW | `'` |
+| ٮ | U+066E | ARABIC LETTER DOTLESS BEH | `b` |
 | ٯ | U+066F | ARABIC LETTER DOTLESS QAF | `q` |
+| ٰ | U+0670 | ARABIC LETTER SUPERSCRIPT ALEF | `a` |
+| ٴ | U+0674 | ARABIC LETTER HIGH HAMZA | `'` |
 | ې | U+06D0 | ARABIC LETTER E | `e` |
-| ۑ | U+06D1 | ARABIC LETTER YEH WITH THREE DOTS BELOW | `y` |
-| ۖ | U+06D6 | ARABIC SMALL HIGH LIGATURE SAD WITH LAM WITH ALEF MAKSURA | `la` |
-| ۗ | U+06D7 | ARABIC SMALL HIGH LIGATURE QAF WITH LAM WITH ALEF MAKSURA | `la` |
-| ۮ | U+06EE | ARABIC LETTER DAL WITH INVERTED V | `d` |
-| ۯ | U+06EF | ARABIC LETTER REH WITH INVERTED V | `r` |
-| ۿ | U+06FF | ARABIC LETTER HEH WITH INVERTED V | `h` |
+| | | *...8 more* | |
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ّ | U+0651 | ARABIC SHADDA | `W` |
-| ٔ | U+0654 | ARABIC HAMZA ABOVE | `'` |
-| ٕ | U+0655 | ARABIC HAMZA BELOW | `'` |
-| ٪ | U+066A | ARABIC PERCENT SIGN | `%` |
-| ٫ | U+066B | ARABIC DECIMAL SEPARATOR | `.` |
-| ٬ | U+066C | ARABIC THOUSANDS SEPARATOR | `,` |
-| ٭ | U+066D | ARABIC FIVE POINTED STAR | `*` |
-| ٷ | U+0677 | ARABIC LETTER U WITH HAMZA ABOVE | `'u` |
-| ٺ | U+067A | ARABIC LETTER TTEHEH | `tth` |
-| ٻ | U+067B | ARABIC LETTER BEEH | `b` |
-| ٿ | U+067F | ARABIC LETTER TEHEH | `th` |
-| ڀ | U+0680 | ARABIC LETTER BEHEH | `bh` |
-| ڃ | U+0683 | ARABIC LETTER NYEH | `ny` |
-| ڄ | U+0684 | ARABIC LETTER DYEH | `dy` |
-| ڇ | U+0687 | ARABIC LETTER TCHEHEH | `cch` |
-| ڌ | U+068C | ARABIC LETTER DAHAL | `dh` |
-| ڍ | U+068D | ARABIC LETTER DDAHAL | `ddh` |
-| ڎ | U+068E | ARABIC LETTER DUL | `d` |
-| ڦ | U+06A6 | ARABIC LETTER PEHEH | `ph` |
-| ڱ | U+06B1 | ARABIC LETTER NGOEH | `N` |
-| ڳ | U+06B3 | ARABIC LETTER GUEH | `G` |
-| ڻ | U+06BB | ARABIC LETTER RNOON | `N` |
-| ۅ | U+06C5 | ARABIC LETTER KIRGHIZ OE | `oe` |
-| ۆ | U+06C6 | ARABIC LETTER OE | `oe` |
-| ۇ | U+06C7 | ARABIC LETTER U | `u` |
-| ۈ | U+06C8 | ARABIC LETTER YU | `yu` |
-| ۉ | U+06C9 | ARABIC LETTER KIRGHIZ YU | `yu` |
-| ۋ | U+06CB | ARABIC LETTER VE | `v` |
-| ە | U+06D5 | ARABIC LETTER AE | `ae` |
 | ۞ | U+06DE | ARABIC START OF RUB EL HIZB | `#` |
-| | | *...3 more* | |
+| ۩ | U+06E9 | ARABIC PLACE OF SAJDAH | `^` |
+| ۾ | U+06FE | ARABIC SIGN SINDHI POSTPOSITION MEN | `+m` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
@@ -2106,16 +2068,23 @@ Coverage: translit maps 163/329, Unidecode maps 173/329. **23** mapped only by t
 | ٳ | U+0673 | ARABIC LETTER ALEF WITH WAVY HAMZA BELOW | `a` | `'` | `u'` |
 | ٵ | U+0675 | ARABIC LETTER HIGH HAMZA ALEF | `a` | `'` | `a` |
 | ٶ | U+0676 | ARABIC LETTER HIGH HAMZA WAW | `w` | `'w` | `o` |
+| ٷ | U+0677 | ARABIC LETTER U WITH HAMZA ABOVE | `u'` | `'u` | `u` |
 | ٸ | U+0678 | ARABIC LETTER HIGH HAMZA YEH | `y` | `'y` | `i` |
 | ٹ | U+0679 | ARABIC LETTER TTEH | `t` | `tt` | `t` |
+| ٺ | U+067A | ARABIC LETTER TTEHEH | `t` | `tth` | `th` |
 | ٽ | U+067D | ARABIC LETTER TEH WITH THREE DOTS ABOVE DOWNWARDS | `t` | `T` | `t` |
+| ٿ | U+067F | ARABIC LETTER TEHEH | `t` | `th` | `th` |
+| ڀ | U+0680 | ARABIC LETTER BEHEH | `b` | `bh` | `bh` |
 | ځ | U+0681 | ARABIC LETTER HAH WITH HAMZA ABOVE | `h` | `'h` | `dz` |
 | ڂ | U+0682 | ARABIC LETTER HAH WITH TWO DOTS VERTICAL ABOVE | `h` | `H` | `dz` |
 | څ | U+0685 | ARABIC LETTER HAH WITH THREE DOTS ABOVE | `h` | `H` | `ts` |
+| ڇ | U+0687 | ARABIC LETTER TCHEHEH | `ch` | `cch` | `ch` |
 | ڈ | U+0688 | ARABIC LETTER DDAL | `d` | `dd` | `d` |
 | ډ | U+0689 | ARABIC LETTER DAL WITH RING | `d` | `D` | `d` |
 | ڊ | U+068A | ARABIC LETTER DAL WITH DOT BELOW | `d` | `D` | `d` |
 | ڋ | U+068B | ARABIC LETTER DAL WITH DOT BELOW AND SMALL TAH | `d` | `Dt` | `dd` |
+| ڌ | U+068C | ARABIC LETTER DAHAL | `d` | `dh` | `dh` |
+| ڍ | U+068D | ARABIC LETTER DDAHAL | `d` | `ddh` | `dh` |
 | ڏ | U+068F | ARABIC LETTER DAL WITH THREE DOTS ABOVE DOWNWARDS | `d` | `D` | `d` |
 | ڐ | U+0690 | ARABIC LETTER DAL WITH FOUR DOTS ABOVE | `d` | `D` | `d` |
 | ڑ | U+0691 | ARABIC LETTER RREH | `r` | `rr` | `r` |
@@ -2127,14 +2096,7 @@ Coverage: translit maps 163/329, Unidecode maps 173/329. **23** mapped only by t
 | ڗ | U+0697 | ARABIC LETTER REH WITH TWO DOTS ABOVE | `r` | `R` | `d` |
 | ژ | U+0698 | ARABIC LETTER JEH | `zh` | `j` | `zh` |
 | ڙ | U+0699 | ARABIC LETTER REH WITH FOUR DOTS ABOVE | `r` | `R` | `r` |
-| ښ | U+069A | ARABIC LETTER SEEN WITH DOT BELOW AND DOT ABOVE | `s` | `S` | `sh` |
-| ڛ | U+069B | ARABIC LETTER SEEN WITH THREE DOTS BELOW | `s` | `S` | `s` |
-| ڜ | U+069C | ARABIC LETTER SEEN WITH THREE DOTS BELOW AND THREE DOTS ABOVE | `s` | `S` | `ch` |
-| ڝ | U+069D | ARABIC LETTER SAD WITH TWO DOTS BELOW | `s` | `S` | `ts` |
-| ڞ | U+069E | ARABIC LETTER SAD WITH THREE DOTS ABOVE | `s` | `S` | `ch` |
-| ڟ | U+069F | ARABIC LETTER TAH WITH THREE DOTS ABOVE | `t` | `T` | `th` |
-| ڠ | U+06A0 | ARABIC LETTER AIN WITH THREE DOTS ABOVE | `'` | `GH` | `ng` |
-| | | *...33 more differences* | | | |
+| | | *...47 more differences* | | | |
 
 ### he — Hebrew
 
@@ -4007,13 +3969,13 @@ Coverage: translit maps 146/153, Unidecode maps 148/153. **5** mapped only by tr
 ## Key Takeaways
 
 - **Total assigned codepoints scanned**: 49089
-- **Mapped by at least one library**: 48819
-- **translit coverage**: 48027/48819 (98.4%)
-- **Unidecode coverage**: 47408/48819 (97.1%)
-- **anyascii coverage**: 48761/48819 (99.9%)
-- **Characters mapped only by translit**: 882
-- **Characters mapped only by Unidecode**: 263
-- **Different output (both mapped)**: 26958
+- **Mapped by at least one library**: 48823
+- **translit coverage**: 48116/48823 (98.6%)
+- **Unidecode coverage**: 47408/48823 (97.1%)
+- **anyascii coverage**: 48761/48823 (99.9%)
+- **Characters mapped only by translit**: 912
+- **Characters mapped only by Unidecode**: 204
+- **Different output (both mapped)**: 26986
 
 ---
 

@@ -52,9 +52,28 @@ pytest -m formal                                                            # ti
 
 NEVER push directly to `main` — it will be rejected.
 
-## CI Discipline
+## Pre-Push Gate (MANDATORY)
 
-IMPORTANT: After completing any task that touches code, run `ruff check python/ tests/` before committing. Fix ALL lint errors immediately — do not dismiss them as pre-existing or out of scope. CI must be green.
+**You MUST run all linters and tests locally and confirm they pass BEFORE pushing any commit.** Do not push first and wait for CI — catch failures locally.
+
+```bash
+# 1. Rust format
+cargo fmt --check
+
+# 2. Python lint
+ruff check python/ tests/
+
+# 3. Type check
+mypy python/translit --ignore-missing-imports
+
+# 4. Python tests (at minimum the two coverage-gate files)
+pytest tests/test_dynamic_coverage.py tests/test_transliterate.py -x -q
+
+# 5. Only after all four pass:
+git push
+```
+
+If any step fails, fix it before pushing. No exceptions.
 
 ## Code Conventions
 

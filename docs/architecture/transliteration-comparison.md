@@ -57,22 +57,22 @@ This approach is deterministic and comprehensive — results do not depend on sa
 | ar | Arabic | 248 | 221 | 207 | 173 | 208 | 38 | 4 | 92 |
 | fa | Persian | 391 | 331 | 207 | 173 | 318 | 38 | 4 | 97 |
 | he | Hebrew | 88 | 53 | 46 | 49 | 53 | 1 | 4 | 15 |
-| hi | Hindi | 128 | 127 | 101 | 103 | 123 | 4 | 6 | 68 |
-| bn | Bengali | 96 | 95 | 78 | 87 | 95 | 1 | 10 | 53 |
-| ta | Tamil | 72 | 71 | 62 | 61 | 71 | 2 | 1 | 36 |
-| te | Telugu | 100 | 99 | 79 | 79 | 99 | 2 | 2 | 53 |
-| gu | Gujarati | 91 | 87 | 79 | 77 | 87 | 4 | 2 | 50 |
-| kn | Kannada | 91 | 90 | 79 | 79 | 90 | 3 | 3 | 52 |
-| ml | Malayalam | 118 | 115 | 90 | 77 | 115 | 14 | 1 | 52 |
-| mr | Marathi | 128 | 127 | 101 | 103 | 123 | 4 | 6 | 68 |
-| ne | Nepali | 128 | 127 | 101 | 103 | 123 | 4 | 6 | 68 |
-| or | Odia | 91 | 90 | 78 | 77 | 89 | 5 | 4 | 49 |
-| pa | Punjabi | 80 | 76 | 70 | 72 | 76 | 2 | 4 | 48 |
-| sa | Sanskrit | 128 | 127 | 101 | 103 | 123 | 4 | 6 | 68 |
-| as | Assamese | 96 | 95 | 78 | 87 | 95 | 1 | 10 | 53 |
+| hi | Hindi | 128 | 127 | 117 | 103 | 123 | 19 | 5 | 68 |
+| bn | Bengali | 96 | 95 | 90 | 87 | 95 | 5 | 2 | 59 |
+| ta | Tamil | 72 | 71 | 63 | 61 | 71 | 3 | 1 | 36 |
+| te | Telugu | 100 | 99 | 92 | 79 | 99 | 15 | 2 | 53 |
+| gu | Gujarati | 91 | 87 | 83 | 77 | 87 | 7 | 1 | 50 |
+| kn | Kannada | 91 | 90 | 85 | 79 | 90 | 8 | 2 | 53 |
+| ml | Malayalam | 118 | 115 | 111 | 77 | 115 | 35 | 1 | 52 |
+| mr | Marathi | 128 | 127 | 117 | 103 | 123 | 19 | 5 | 68 |
+| ne | Nepali | 128 | 127 | 117 | 103 | 123 | 19 | 5 | 68 |
+| or | Odia | 91 | 90 | 86 | 77 | 89 | 12 | 3 | 49 |
+| pa | Punjabi | 80 | 78 | 74 | 72 | 76 | 5 | 3 | 49 |
+| sa | Sanskrit | 128 | 127 | 117 | 103 | 123 | 19 | 5 | 68 |
+| as | Assamese | 96 | 95 | 90 | 87 | 95 | 5 | 2 | 59 |
 | hy | Armenian | 91 | 90 | 86 | 85 | 90 | 3 | 2 | 21 |
 | ka | Georgian | 88 | 88 | 87 | 78 | 88 | 9 | 0 | 27 |
-| si | Sinhala | 91 | 90 | 86 | 79 | 90 | 10 | 3 | 52 |
+| si | Sinhala | 91 | 90 | 90 | 79 | 90 | 11 | 0 | 55 |
 | th | Thai | 87 | 80 | 73 | 80 | 78 | 0 | 7 | 11 |
 | lo | Lao | 83 | 76 | 58 | 58 | 75 | 2 | 2 | 11 |
 | km | Khmer | 114 | 106 | 85 | 94 | 104 | 0 | 9 | 59 |
@@ -83,7 +83,7 @@ This approach is deterministic and comprehensive — results do not depend on sa
 | dv | Dhivehi | 50 | 49 | 48 | 48 | 48 | 0 | 0 | 3 |
 | jv | Javanese | 91 | 90 | 75 | 0 | 90 | 75 | 0 | 0 |
 | mn | Mongolian | 157 | 153 | 149 | 148 | 151 | 5 | 4 | 53 |
-| **TOTAL** | | **49089** | **48823** | **48148** | **47408** | **48761** | **924** | **184** | **27000** |
+| **TOTAL** | | **49089** | **48825** | **48297** | **47408** | **48761** | **1046** | **157** | **27017** |
 
 ## Notable Differences
 
@@ -2141,7 +2141,7 @@ Coverage: translit maps 46/53, Unidecode maps 49/53. **1** mapped only by transl
 
 Block: 128 assigned codepoints, 127 mapped by at least one library.
 
-Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by translit, **6** mapped only by Unidecode.
+Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by translit, **5** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
@@ -2151,13 +2151,27 @@ Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by tr
 | ॕ | U+0955 | DEVANAGARI VOWEL SIGN CANDRA LONG E | `e` |
 | ॖ | U+0956 | DEVANAGARI VOWEL SIGN UE | `u` |
 | ॗ | U+0957 | DEVANAGARI VOWEL SIGN UUE | `u` |
+| ॱ | U+0971 | DEVANAGARI SIGN HIGH SPACING DOT | `.` |
+| ॲ | U+0972 | DEVANAGARI LETTER CANDRA A | `a` |
+| ॳ | U+0973 | DEVANAGARI LETTER OE | `oe` |
+| ॴ | U+0974 | DEVANAGARI LETTER OOE | `ooe` |
+| ॵ | U+0975 | DEVANAGARI LETTER AW | `aw` |
+| ॶ | U+0976 | DEVANAGARI LETTER UE | `ue` |
+| ॷ | U+0977 | DEVANAGARI LETTER UUE | `uue` |
+| ॸ | U+0978 | DEVANAGARI LETTER MARWARI DDA | `dda` |
+| ॹ | U+0979 | DEVANAGARI LETTER ZHA | `zha` |
+| ॺ | U+097A | DEVANAGARI LETTER HEAVY YA | `ya` |
+| ॻ | U+097B | DEVANAGARI LETTER GGA | `gga` |
+| ॼ | U+097C | DEVANAGARI LETTER JJA | `jja` |
+| ॽ | U+097D | DEVANAGARI LETTER GLOTTAL STOP | `'` |
+| ॾ | U+097E | DEVANAGARI LETTER DDDA | `ddda` |
+| ॿ | U+097F | DEVANAGARI LETTER BBA | `bba` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ़ | U+093C | DEVANAGARI SIGN NUKTA | `'` |
-| ऽ | U+093D | DEVANAGARI SIGN AVAGRAHA | `'` |
 | ॑ | U+0951 | DEVANAGARI STRESS SIGN UDATTA | `'` |
 | ॒ | U+0952 | DEVANAGARI STRESS SIGN ANUDATTA | `'` |
 | ॓ | U+0953 | DEVANAGARI GRAVE ACCENT | ``` |
@@ -2221,13 +2235,17 @@ Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by tr
 
 Block: 96 assigned codepoints, 95 mapped by at least one library.
 
-Coverage: translit maps 78/95, Unidecode maps 87/95. **1** mapped only by translit, **10** mapped only by Unidecode.
+Coverage: translit maps 90/95, Unidecode maps 87/95. **5** mapped only by translit, **2** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
 | Char | Codepoint | Name | translit |
 |------|-----------|------|----------|
+| ঀ | U+0980 | BENGALI ANJI | `m` |
+| ঽ | U+09BD | BENGALI SIGN AVAGRAHA | `'` |
 | ৎ | U+09CE | BENGALI LETTER KHANDA TA | `t` |
+| ৼ | U+09FC | BENGALI LETTER VEDIC ANUSVARA | `m` |
+| ৽ | U+09FD | BENGALI ABBREVIATION SIGN | `.` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
@@ -2235,14 +2253,6 @@ Coverage: translit maps 78/95, Unidecode maps 87/95. **1** mapped only by transl
 |------|-----------|------|-----------|
 | ় | U+09BC | BENGALI SIGN NUKTA | `'` |
 | ৗ | U+09D7 | BENGALI AU LENGTH MARK | `+` |
-| ৲ | U+09F2 | BENGALI RUPEE MARK | `Rs` |
-| ৳ | U+09F3 | BENGALI RUPEE SIGN | `Rs` |
-| ৴ | U+09F4 | BENGALI CURRENCY NUMERATOR ONE | `1/` |
-| ৵ | U+09F5 | BENGALI CURRENCY NUMERATOR TWO | `2/` |
-| ৶ | U+09F6 | BENGALI CURRENCY NUMERATOR THREE | `3/` |
-| ৷ | U+09F7 | BENGALI CURRENCY NUMERATOR FOUR | `4/` |
-| ৸ | U+09F8 | BENGALI CURRENCY NUMERATOR ONE LESS THAN THE DENOMINATOR | ` 1 - 1/` |
-| ৹ | U+09F9 | BENGALI CURRENCY DENOMINATOR SIXTEEN | `/16` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
@@ -2296,13 +2306,13 @@ Coverage: translit maps 78/95, Unidecode maps 87/95. **1** mapped only by transl
 | ৠ | U+09E0 | BENGALI LETTER VOCALIC RR | `r` | `RR` | `r` |
 | ৡ | U+09E1 | BENGALI LETTER VOCALIC LL | `l` | `LL` | `l` |
 | ৢ | U+09E2 | BENGALI VOWEL SIGN VOCALIC L | `l` | `L` | `l` |
-| | | *...3 more differences* | | | |
+| | | *...9 more differences* | | | |
 
 ### ta — Tamil
 
 Block: 72 assigned codepoints, 71 mapped by at least one library.
 
-Coverage: translit maps 62/71, Unidecode maps 61/71. **2** mapped only by translit, **1** mapped only by Unidecode.
+Coverage: translit maps 63/71, Unidecode maps 61/71. **3** mapped only by translit, **1** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
@@ -2310,6 +2320,7 @@ Coverage: translit maps 62/71, Unidecode maps 61/71. **2** mapped only by transl
 |------|-----------|------|----------|
 | ஶ | U+0BB6 | TAMIL LETTER SHA | `sha` |
 | ௐ | U+0BD0 | TAMIL OM | `om` |
+| ௹ | U+0BF9 | TAMIL RUPEE SIGN | `Rs` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
@@ -2360,14 +2371,27 @@ Coverage: translit maps 62/71, Unidecode maps 61/71. **2** mapped only by transl
 
 Block: 100 assigned codepoints, 99 mapped by at least one library.
 
-Coverage: translit maps 79/99, Unidecode maps 79/99. **2** mapped only by translit, **2** mapped only by Unidecode.
+Coverage: translit maps 92/99, Unidecode maps 79/99. **15** mapped only by translit, **2** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
 | Char | Codepoint | Name | translit |
 |------|-----------|------|----------|
+| ఴ | U+0C34 | TELUGU LETTER LLLA | `lla` |
+| ఽ | U+0C3D | TELUGU SIGN AVAGRAHA | `'` |
+| ౘ | U+0C58 | TELUGU LETTER TSA | `tsa` |
+| ౙ | U+0C59 | TELUGU LETTER DZA | `dza` |
+| ౚ | U+0C5A | TELUGU LETTER RRRA | `rra` |
+| ౝ | U+0C5D | TELUGU LETTER NAKAARA POLLU | `n` |
 | ౢ | U+0C62 | TELUGU VOWEL SIGN VOCALIC L | `l` |
 | ౣ | U+0C63 | TELUGU VOWEL SIGN VOCALIC LL | `l` |
+| ౸ | U+0C78 | TELUGU FRACTION DIGIT ZERO FOR ODD POWERS OF FOUR | `0` |
+| ౹ | U+0C79 | TELUGU FRACTION DIGIT ONE FOR ODD POWERS OF FOUR | `1` |
+| ౺ | U+0C7A | TELUGU FRACTION DIGIT TWO FOR ODD POWERS OF FOUR | `2` |
+| ౻ | U+0C7B | TELUGU FRACTION DIGIT THREE FOR ODD POWERS OF FOUR | `3` |
+| ౼ | U+0C7C | TELUGU FRACTION DIGIT ONE FOR EVEN POWERS OF FOUR | `1` |
+| ౽ | U+0C7D | TELUGU FRACTION DIGIT TWO FOR EVEN POWERS OF FOUR | `2` |
+| ౾ | U+0C7E | TELUGU FRACTION DIGIT THREE FOR EVEN POWERS OF FOUR | `3` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
@@ -2434,7 +2458,7 @@ Coverage: translit maps 79/99, Unidecode maps 79/99. **2** mapped only by transl
 
 Block: 91 assigned codepoints, 87 mapped by at least one library.
 
-Coverage: translit maps 79/87, Unidecode maps 77/87. **4** mapped only by translit, **2** mapped only by Unidecode.
+Coverage: translit maps 83/87, Unidecode maps 77/87. **7** mapped only by translit, **1** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
@@ -2444,13 +2468,15 @@ Coverage: translit maps 79/87, Unidecode maps 77/87. **4** mapped only by transl
 | ૡ | U+0AE1 | GUJARATI LETTER VOCALIC LL | `l` |
 | ૢ | U+0AE2 | GUJARATI VOWEL SIGN VOCALIC L | `l` |
 | ૣ | U+0AE3 | GUJARATI VOWEL SIGN VOCALIC LL | `l` |
+| ૰ | U+0AF0 | GUJARATI ABBREVIATION SIGN | `.` |
+| ૱ | U+0AF1 | GUJARATI RUPEE SIGN | `Rs` |
+| ૹ | U+0AF9 | GUJARATI LETTER ZHA | `zha` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ઼ | U+0ABC | GUJARATI SIGN NUKTA | `'` |
-| ઽ | U+0ABD | GUJARATI SIGN AVAGRAHA | `'` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
@@ -2509,15 +2535,20 @@ Coverage: translit maps 79/87, Unidecode maps 77/87. **4** mapped only by transl
 
 Block: 91 assigned codepoints, 90 mapped by at least one library.
 
-Coverage: translit maps 79/90, Unidecode maps 79/90. **3** mapped only by translit, **3** mapped only by Unidecode.
+Coverage: translit maps 85/90, Unidecode maps 79/90. **8** mapped only by translit, **2** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
 | Char | Codepoint | Name | translit |
 |------|-----------|------|----------|
+| ಀ | U+0C80 | KANNADA SIGN SPACING CANDRABINDU | `m` |
 | ಁ | U+0C81 | KANNADA SIGN CANDRABINDU | `m` |
+| ಽ | U+0CBD | KANNADA SIGN AVAGRAHA | `'` |
+| ೝ | U+0CDD | KANNADA LETTER NAKAARA POLLU | `n` |
 | ೢ | U+0CE2 | KANNADA VOWEL SIGN VOCALIC L | `l` |
 | ೣ | U+0CE3 | KANNADA VOWEL SIGN VOCALIC LL | `l` |
+| ೱ | U+0CF1 | KANNADA SIGN JIHVAMULIYA | `h` |
+| ೲ | U+0CF2 | KANNADA SIGN UPADHMANIYA | `h` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
@@ -2525,7 +2556,6 @@ Coverage: translit maps 79/90, Unidecode maps 79/90. **3** mapped only by transl
 |------|-----------|------|-----------|
 | ೕ | U+0CD5 | KANNADA LENGTH MARK | `+` |
 | ೖ | U+0CD6 | KANNADA AI LENGTH MARK | `+` |
-| ೞ | U+0CDE | KANNADA LETTER FA | `lll` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
@@ -2579,13 +2609,13 @@ Coverage: translit maps 79/90, Unidecode maps 79/90. **3** mapped only by transl
 | ೄ | U+0CC4 | KANNADA VOWEL SIGN VOCALIC RR | `r` | `RR` | `r` |
 | ೇ | U+0CC7 | KANNADA VOWEL SIGN EE | `e` | `ee` | `e` |
 | ೋ | U+0CCB | KANNADA VOWEL SIGN OO | `o` | `oo` | `o` |
-| | | *...2 more differences* | | | |
+| | | *...3 more differences* | | | |
 
 ### ml — Malayalam
 
 Block: 118 assigned codepoints, 115 mapped by at least one library.
 
-Coverage: translit maps 90/115, Unidecode maps 77/115. **14** mapped only by translit, **1** mapped only by Unidecode.
+Coverage: translit maps 111/115, Unidecode maps 77/115. **35** mapped only by translit, **1** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
@@ -2593,18 +2623,35 @@ Coverage: translit maps 90/115, Unidecode maps 77/115. **14** mapped only by tra
 |------|-----------|------|----------|
 | ഁ | U+0D01 | MALAYALAM SIGN CANDRABINDU | `m` |
 | ഄ | U+0D04 | MALAYALAM LETTER VEDIC ANUSVARA | `a` |
+| ഩ | U+0D29 | MALAYALAM LETTER NNNA | `nna` |
+| ഺ | U+0D3A | MALAYALAM LETTER TTTA | `tta` |
+| ഽ | U+0D3D | MALAYALAM SIGN AVAGRAHA | `'` |
 | ൄ | U+0D44 | MALAYALAM VOWEL SIGN VOCALIC RR | `r` |
+| ൎ | U+0D4E | MALAYALAM LETTER DOT REPH | `r` |
+| ൔ | U+0D54 | MALAYALAM LETTER CHILLU M | `m` |
+| ൕ | U+0D55 | MALAYALAM LETTER CHILLU Y | `y` |
+| ൖ | U+0D56 | MALAYALAM LETTER CHILLU LLL | `l` |
+| ൘ | U+0D58 | MALAYALAM FRACTION ONE ONE-HUNDRED-AND-SIXTIETH | `1/160` |
+| ൙ | U+0D59 | MALAYALAM FRACTION ONE FORTIETH | `1/40` |
+| ൚ | U+0D5A | MALAYALAM FRACTION THREE EIGHTIETHS | `3/80` |
+| ൛ | U+0D5B | MALAYALAM FRACTION ONE TWENTIETH | `1/20` |
+| ൜ | U+0D5C | MALAYALAM FRACTION ONE TENTH | `1/10` |
+| ൝ | U+0D5D | MALAYALAM FRACTION THREE TWENTIETHS | `3/20` |
+| ൞ | U+0D5E | MALAYALAM FRACTION ONE FIFTH | `1/5` |
+| ൟ | U+0D5F | MALAYALAM LETTER ARCHAIC II | `ii` |
 | ൢ | U+0D62 | MALAYALAM VOWEL SIGN VOCALIC L | `l` |
 | ൣ | U+0D63 | MALAYALAM VOWEL SIGN VOCALIC LL | `l` |
 | ൰ | U+0D70 | MALAYALAM NUMBER TEN | `10` |
 | ൱ | U+0D71 | MALAYALAM NUMBER ONE HUNDRED | `100` |
 | ൲ | U+0D72 | MALAYALAM NUMBER ONE THOUSAND | `1000` |
+| ൳ | U+0D73 | MALAYALAM FRACTION ONE QUARTER | `1/4` |
+| ൴ | U+0D74 | MALAYALAM FRACTION ONE HALF | `1/2` |
+| ൵ | U+0D75 | MALAYALAM FRACTION THREE QUARTERS | `3/4` |
+| ൶ | U+0D76 | MALAYALAM FRACTION ONE SIXTEENTH | `1/16` |
+| ൷ | U+0D77 | MALAYALAM FRACTION ONE EIGHTH | `1/8` |
+| ൸ | U+0D78 | MALAYALAM FRACTION THREE SIXTEENTHS | `3/16` |
 | ൺ | U+0D7A | MALAYALAM LETTER CHILLU NN | `n` |
-| ൻ | U+0D7B | MALAYALAM LETTER CHILLU N | `n` |
-| ർ | U+0D7C | MALAYALAM LETTER CHILLU RR | `r` |
-| ൽ | U+0D7D | MALAYALAM LETTER CHILLU L | `l` |
-| ൾ | U+0D7E | MALAYALAM LETTER CHILLU LL | `l` |
-| ൿ | U+0D7F | MALAYALAM LETTER CHILLU K | `k` |
+| | | *...5 more* | |
 
 **Mapped only by Unidecode** (translit returns empty):
 
@@ -2670,7 +2717,7 @@ Coverage: translit maps 90/115, Unidecode maps 77/115. **14** mapped only by tra
 
 Block: 128 assigned codepoints, 127 mapped by at least one library.
 
-Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by translit, **6** mapped only by Unidecode.
+Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by translit, **5** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
@@ -2680,13 +2727,27 @@ Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by tr
 | ॕ | U+0955 | DEVANAGARI VOWEL SIGN CANDRA LONG E | `e` |
 | ॖ | U+0956 | DEVANAGARI VOWEL SIGN UE | `u` |
 | ॗ | U+0957 | DEVANAGARI VOWEL SIGN UUE | `u` |
+| ॱ | U+0971 | DEVANAGARI SIGN HIGH SPACING DOT | `.` |
+| ॲ | U+0972 | DEVANAGARI LETTER CANDRA A | `a` |
+| ॳ | U+0973 | DEVANAGARI LETTER OE | `oe` |
+| ॴ | U+0974 | DEVANAGARI LETTER OOE | `ooe` |
+| ॵ | U+0975 | DEVANAGARI LETTER AW | `aw` |
+| ॶ | U+0976 | DEVANAGARI LETTER UE | `ue` |
+| ॷ | U+0977 | DEVANAGARI LETTER UUE | `uue` |
+| ॸ | U+0978 | DEVANAGARI LETTER MARWARI DDA | `dda` |
+| ॹ | U+0979 | DEVANAGARI LETTER ZHA | `zha` |
+| ॺ | U+097A | DEVANAGARI LETTER HEAVY YA | `ya` |
+| ॻ | U+097B | DEVANAGARI LETTER GGA | `gga` |
+| ॼ | U+097C | DEVANAGARI LETTER JJA | `jja` |
+| ॽ | U+097D | DEVANAGARI LETTER GLOTTAL STOP | `'` |
+| ॾ | U+097E | DEVANAGARI LETTER DDDA | `ddda` |
+| ॿ | U+097F | DEVANAGARI LETTER BBA | `bba` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ़ | U+093C | DEVANAGARI SIGN NUKTA | `'` |
-| ऽ | U+093D | DEVANAGARI SIGN AVAGRAHA | `'` |
 | ॑ | U+0951 | DEVANAGARI STRESS SIGN UDATTA | `'` |
 | ॒ | U+0952 | DEVANAGARI STRESS SIGN ANUDATTA | `'` |
 | ॓ | U+0953 | DEVANAGARI GRAVE ACCENT | ``` |
@@ -2750,7 +2811,7 @@ Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by tr
 
 Block: 128 assigned codepoints, 127 mapped by at least one library.
 
-Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by translit, **6** mapped only by Unidecode.
+Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by translit, **5** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
@@ -2760,13 +2821,27 @@ Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by tr
 | ॕ | U+0955 | DEVANAGARI VOWEL SIGN CANDRA LONG E | `e` |
 | ॖ | U+0956 | DEVANAGARI VOWEL SIGN UE | `u` |
 | ॗ | U+0957 | DEVANAGARI VOWEL SIGN UUE | `u` |
+| ॱ | U+0971 | DEVANAGARI SIGN HIGH SPACING DOT | `.` |
+| ॲ | U+0972 | DEVANAGARI LETTER CANDRA A | `a` |
+| ॳ | U+0973 | DEVANAGARI LETTER OE | `oe` |
+| ॴ | U+0974 | DEVANAGARI LETTER OOE | `ooe` |
+| ॵ | U+0975 | DEVANAGARI LETTER AW | `aw` |
+| ॶ | U+0976 | DEVANAGARI LETTER UE | `ue` |
+| ॷ | U+0977 | DEVANAGARI LETTER UUE | `uue` |
+| ॸ | U+0978 | DEVANAGARI LETTER MARWARI DDA | `dda` |
+| ॹ | U+0979 | DEVANAGARI LETTER ZHA | `zha` |
+| ॺ | U+097A | DEVANAGARI LETTER HEAVY YA | `ya` |
+| ॻ | U+097B | DEVANAGARI LETTER GGA | `gga` |
+| ॼ | U+097C | DEVANAGARI LETTER JJA | `jja` |
+| ॽ | U+097D | DEVANAGARI LETTER GLOTTAL STOP | `'` |
+| ॾ | U+097E | DEVANAGARI LETTER DDDA | `ddda` |
+| ॿ | U+097F | DEVANAGARI LETTER BBA | `bba` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ़ | U+093C | DEVANAGARI SIGN NUKTA | `'` |
-| ऽ | U+093D | DEVANAGARI SIGN AVAGRAHA | `'` |
 | ॑ | U+0951 | DEVANAGARI STRESS SIGN UDATTA | `'` |
 | ॒ | U+0952 | DEVANAGARI STRESS SIGN ANUDATTA | `'` |
 | ॓ | U+0953 | DEVANAGARI GRAVE ACCENT | ``` |
@@ -2830,7 +2905,7 @@ Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by tr
 
 Block: 91 assigned codepoints, 90 mapped by at least one library.
 
-Coverage: translit maps 78/90, Unidecode maps 77/90. **5** mapped only by translit, **4** mapped only by Unidecode.
+Coverage: translit maps 86/90, Unidecode maps 77/90. **12** mapped only by translit, **3** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
@@ -2841,13 +2916,19 @@ Coverage: translit maps 78/90, Unidecode maps 77/90. **5** mapped only by transl
 | ୕ | U+0B55 | ORIYA SIGN OVERLINE | `e` |
 | ୢ | U+0B62 | ORIYA VOWEL SIGN VOCALIC L | `l` |
 | ୣ | U+0B63 | ORIYA VOWEL SIGN VOCALIC LL | `l` |
+| ୱ | U+0B71 | ORIYA LETTER WA | `wa` |
+| ୲ | U+0B72 | ORIYA FRACTION ONE QUARTER | `1/4` |
+| ୳ | U+0B73 | ORIYA FRACTION ONE HALF | `1/2` |
+| ୴ | U+0B74 | ORIYA FRACTION THREE QUARTERS | `3/4` |
+| ୵ | U+0B75 | ORIYA FRACTION ONE SIXTEENTH | `1/16` |
+| ୶ | U+0B76 | ORIYA FRACTION ONE EIGHTH | `1/8` |
+| ୷ | U+0B77 | ORIYA FRACTION THREE SIXTEENTHS | `3/16` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ଼ | U+0B3C | ORIYA SIGN NUKTA | `'` |
-| ଽ | U+0B3D | ORIYA SIGN AVAGRAHA | `'` |
 | ୖ | U+0B56 | ORIYA AI LENGTH MARK | `+` |
 | ୗ | U+0B57 | ORIYA AU LENGTH MARK | `+` |
 
@@ -2905,9 +2986,9 @@ Coverage: translit maps 78/90, Unidecode maps 77/90. **5** mapped only by transl
 
 ### pa — Punjabi
 
-Block: 80 assigned codepoints, 76 mapped by at least one library.
+Block: 80 assigned codepoints, 78 mapped by at least one library.
 
-Coverage: translit maps 70/76, Unidecode maps 72/76. **2** mapped only by translit, **4** mapped only by Unidecode.
+Coverage: translit maps 74/78, Unidecode maps 72/78. **5** mapped only by translit, **3** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
@@ -2915,6 +2996,9 @@ Coverage: translit maps 70/76, Unidecode maps 72/76. **2** mapped only by transl
 |------|-----------|------|----------|
 | ਁ | U+0A01 | GURMUKHI SIGN ADAK BINDI | `m` |
 | ਃ | U+0A03 | GURMUKHI SIGN VISARGA | `h` |
+| ੲ | U+0A72 | GURMUKHI IRI | `iri` |
+| ੳ | U+0A73 | GURMUKHI URA | `ura` |
+| ੶ | U+0A76 | GURMUKHI ABBREVIATION SIGN | `.` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
@@ -2923,7 +3007,6 @@ Coverage: translit maps 70/76, Unidecode maps 72/76. **2** mapped only by transl
 | ਼ | U+0A3C | GURMUKHI SIGN NUKTA | `'` |
 | ੰ | U+0A70 | GURMUKHI TIPPI | `N` |
 | ੱ | U+0A71 | GURMUKHI ADDAK | `H` |
-| ੴ | U+0A74 | GURMUKHI EK ONKAR | `G.E.O.` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
@@ -2975,12 +3058,13 @@ Coverage: translit maps 70/76, Unidecode maps 72/76. **2** mapped only by transl
 | ਜ਼ | U+0A5B | GURMUKHI LETTER ZA | `za` | `z` | `z` |
 | ੜ | U+0A5C | GURMUKHI LETTER RRA | `ra` | `rr` | `r` |
 | ਫ਼ | U+0A5E | GURMUKHI LETTER FA | `fa` | `f` | `ph` |
+| ੴ | U+0A74 | GURMUKHI EK ONKAR | `ek` | `G.E.O.` | `*` |
 
 ### sa — Sanskrit
 
 Block: 128 assigned codepoints, 127 mapped by at least one library.
 
-Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by translit, **6** mapped only by Unidecode.
+Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by translit, **5** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
@@ -2990,13 +3074,27 @@ Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by tr
 | ॕ | U+0955 | DEVANAGARI VOWEL SIGN CANDRA LONG E | `e` |
 | ॖ | U+0956 | DEVANAGARI VOWEL SIGN UE | `u` |
 | ॗ | U+0957 | DEVANAGARI VOWEL SIGN UUE | `u` |
+| ॱ | U+0971 | DEVANAGARI SIGN HIGH SPACING DOT | `.` |
+| ॲ | U+0972 | DEVANAGARI LETTER CANDRA A | `a` |
+| ॳ | U+0973 | DEVANAGARI LETTER OE | `oe` |
+| ॴ | U+0974 | DEVANAGARI LETTER OOE | `ooe` |
+| ॵ | U+0975 | DEVANAGARI LETTER AW | `aw` |
+| ॶ | U+0976 | DEVANAGARI LETTER UE | `ue` |
+| ॷ | U+0977 | DEVANAGARI LETTER UUE | `uue` |
+| ॸ | U+0978 | DEVANAGARI LETTER MARWARI DDA | `dda` |
+| ॹ | U+0979 | DEVANAGARI LETTER ZHA | `zha` |
+| ॺ | U+097A | DEVANAGARI LETTER HEAVY YA | `ya` |
+| ॻ | U+097B | DEVANAGARI LETTER GGA | `gga` |
+| ॼ | U+097C | DEVANAGARI LETTER JJA | `jja` |
+| ॽ | U+097D | DEVANAGARI LETTER GLOTTAL STOP | `'` |
+| ॾ | U+097E | DEVANAGARI LETTER DDDA | `ddda` |
+| ॿ | U+097F | DEVANAGARI LETTER BBA | `bba` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ़ | U+093C | DEVANAGARI SIGN NUKTA | `'` |
-| ऽ | U+093D | DEVANAGARI SIGN AVAGRAHA | `'` |
 | ॑ | U+0951 | DEVANAGARI STRESS SIGN UDATTA | `'` |
 | ॒ | U+0952 | DEVANAGARI STRESS SIGN ANUDATTA | `'` |
 | ॓ | U+0953 | DEVANAGARI GRAVE ACCENT | ``` |
@@ -3060,13 +3158,17 @@ Coverage: translit maps 101/127, Unidecode maps 103/127. **4** mapped only by tr
 
 Block: 96 assigned codepoints, 95 mapped by at least one library.
 
-Coverage: translit maps 78/95, Unidecode maps 87/95. **1** mapped only by translit, **10** mapped only by Unidecode.
+Coverage: translit maps 90/95, Unidecode maps 87/95. **5** mapped only by translit, **2** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
 | Char | Codepoint | Name | translit |
 |------|-----------|------|----------|
+| ঀ | U+0980 | BENGALI ANJI | `m` |
+| ঽ | U+09BD | BENGALI SIGN AVAGRAHA | `'` |
 | ৎ | U+09CE | BENGALI LETTER KHANDA TA | `t` |
+| ৼ | U+09FC | BENGALI LETTER VEDIC ANUSVARA | `m` |
+| ৽ | U+09FD | BENGALI ABBREVIATION SIGN | `.` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
@@ -3074,14 +3176,6 @@ Coverage: translit maps 78/95, Unidecode maps 87/95. **1** mapped only by transl
 |------|-----------|------|-----------|
 | ় | U+09BC | BENGALI SIGN NUKTA | `'` |
 | ৗ | U+09D7 | BENGALI AU LENGTH MARK | `+` |
-| ৲ | U+09F2 | BENGALI RUPEE MARK | `Rs` |
-| ৳ | U+09F3 | BENGALI RUPEE SIGN | `Rs` |
-| ৴ | U+09F4 | BENGALI CURRENCY NUMERATOR ONE | `1/` |
-| ৵ | U+09F5 | BENGALI CURRENCY NUMERATOR TWO | `2/` |
-| ৶ | U+09F6 | BENGALI CURRENCY NUMERATOR THREE | `3/` |
-| ৷ | U+09F7 | BENGALI CURRENCY NUMERATOR FOUR | `4/` |
-| ৸ | U+09F8 | BENGALI CURRENCY NUMERATOR ONE LESS THAN THE DENOMINATOR | ` 1 - 1/` |
-| ৹ | U+09F9 | BENGALI CURRENCY DENOMINATOR SIXTEEN | `/16` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
@@ -3135,7 +3229,7 @@ Coverage: translit maps 78/95, Unidecode maps 87/95. **1** mapped only by transl
 | ৠ | U+09E0 | BENGALI LETTER VOCALIC RR | `r` | `RR` | `r` |
 | ৡ | U+09E1 | BENGALI LETTER VOCALIC LL | `l` | `LL` | `l` |
 | ৢ | U+09E2 | BENGALI VOWEL SIGN VOCALIC L | `l` | `L` | `l` |
-| | | *...3 more differences* | | | |
+| | | *...9 more differences* | | | |
 
 ### hy — Armenian
 
@@ -3236,12 +3330,13 @@ Coverage: translit maps 87/88, Unidecode maps 78/88. **9** mapped only by transl
 
 Block: 91 assigned codepoints, 90 mapped by at least one library.
 
-Coverage: translit maps 86/90, Unidecode maps 79/90. **10** mapped only by translit, **3** mapped only by Unidecode.
+Coverage: translit maps 90/90, Unidecode maps 79/90. **11** mapped only by translit, **0** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
 | Char | Codepoint | Name | translit |
 |------|-----------|------|----------|
+| ඁ | U+0D81 | SINHALA SIGN CANDRABINDU | `m` |
 | ෦ | U+0DE6 | SINHALA LITH DIGIT ZERO | `0` |
 | ෧ | U+0DE7 | SINHALA LITH DIGIT ONE | `1` |
 | ෨ | U+0DE8 | SINHALA LITH DIGIT TWO | `2` |
@@ -3253,20 +3348,14 @@ Coverage: translit maps 86/90, Unidecode maps 79/90. **10** mapped only by trans
 | ෮ | U+0DEE | SINHALA LITH DIGIT EIGHT | `8` |
 | ෯ | U+0DEF | SINHALA LITH DIGIT NINE | `9` |
 
-**Mapped only by Unidecode** (translit returns empty):
-
-| Char | Codepoint | Name | Unidecode |
-|------|-----------|------|-----------|
-| ඍ | U+0D8D | SINHALA LETTER IRUYANNA | `R` |
-| ඐ | U+0D90 | SINHALA LETTER ILUUYANNA | `LL` |
-| ෴ | U+0DF4 | SINHALA PUNCTUATION KUNDDALIYA | ` . ` |
-
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ං | U+0D82 | SINHALA SIGN ANUSVARAYA | `m` | `N` | `m` |
 | ඃ | U+0D83 | SINHALA SIGN VISARGAYA | `h` | `H` | `h` |
+| ඍ | U+0D8D | SINHALA LETTER IRUYANNA | `ri` | `R` | `r` |
 | ඎ | U+0D8E | SINHALA LETTER IRUUYANNA | `r` | `RR` | `r` |
 | ඏ | U+0D8F | SINHALA LETTER ILUYANNA | `rr` | `L` | `l` |
+| ඐ | U+0D90 | SINHALA LETTER ILUUYANNA | `luu` | `LL` | `l` |
 | ක | U+0D9A | SINHALA LETTER ALPAPRAANA KAYANNA | `ka` | `k` | `k` |
 | ඛ | U+0D9B | SINHALA LETTER MAHAAPRAANA KAYANNA | `kha` | `kh` | `kh` |
 | ග | U+0D9C | SINHALA LETTER ALPAPRAANA GAYANNA | `ga` | `g` | `g` |
@@ -3311,9 +3400,7 @@ Coverage: translit maps 86/90, Unidecode maps 79/90. **10** mapped only by trans
 | ා | U+0DCF | SINHALA VOWEL SIGN AELA-PILLA | `a` | `aa` | `a` |
 | ැ | U+0DD0 | SINHALA VOWEL SIGN KETTI AEDA-PILLA | `aa` | `ae` | `ae` |
 | ෑ | U+0DD1 | SINHALA VOWEL SIGN DIGA AEDA-PILLA | `ae` | `aae` | `ae` |
-| ෘ | U+0DD8 | SINHALA VOWEL SIGN GAETTA-PILLA | `r` | `R` | `r` |
-| ෟ | U+0DDF | SINHALA VOWEL SIGN GAYANUKITTA | `l` | `L` | `u` |
-| | | *...2 more differences* | | | |
+| | | *...5 more differences* | | | |
 
 ### th — Thai
 
@@ -3978,13 +4065,13 @@ Coverage: translit maps 149/153, Unidecode maps 148/153. **5** mapped only by tr
 ## Key Takeaways
 
 - **Total assigned codepoints scanned**: 49089
-- **Mapped by at least one library**: 48823
-- **translit coverage**: 48148/48823 (98.6%)
-- **Unidecode coverage**: 47408/48823 (97.1%)
-- **anyascii coverage**: 48761/48823 (99.9%)
-- **Characters mapped only by translit**: 924
-- **Characters mapped only by Unidecode**: 184
-- **Different output (both mapped)**: 27000
+- **Mapped by at least one library**: 48825
+- **translit coverage**: 48297/48825 (98.9%)
+- **Unidecode coverage**: 47408/48825 (97.1%)
+- **anyascii coverage**: 48761/48825 (99.9%)
+- **Characters mapped only by translit**: 1046
+- **Characters mapped only by Unidecode**: 157
+- **Different output (both mapped)**: 27017
 
 ---
 

@@ -53,11 +53,8 @@ LANG_OVERRIDES: dict[str, list[tuple[str, str, str]]] = {
         ("\u00f6", "oe", "ö"),
     ],
     "is": [
-        # Icelandic: Ð→Dh, Þ→Th, Æ→Ae
-        ("\u00d0", "Dh", "Ð"),
-        ("\u00f0", "dh", "ð"),
-        ("\u00de", "Th", "Þ"),
-        ("\u00fe", "th", "þ"),
+        # Icelandic: Æ→Ae (single-letter capitalization).
+        # ð→d, þ→th use default table (ICAO/passport standard).
         ("\u00c6", "Ae", "Æ"),
         ("\u00e6", "ae", "æ"),
     ],
@@ -339,7 +336,7 @@ class TestMappingCounts:
         "de": 7,
         "no": 6,
         "sv": 4,
-        "is": 6,
+        "is": 2,
         "et": 6,
         "fr": 4,
         "es": 2,

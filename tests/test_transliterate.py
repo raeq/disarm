@@ -109,7 +109,7 @@ class TestTransliterate:
         assert transliterate("Ísland", lang="is") == "Island"
         assert transliterate("Reykjavík", lang="is") == "Reykjavik"
         assert transliterate("Þór", lang="is") == "Thor"
-        assert transliterate("Guðmundur", lang="is") == "Gudhmundur"
+        assert transliterate("Guðmundur", lang="is") == "Gudmundur"
 
     # --- Polish ---
 

@@ -529,6 +529,19 @@ mod tests {
             pipeline(PipelineSteps::all(), Some("NFKC"))
         }
 
+        /// Pipeline without confusables — used for idempotency testing.
+        /// Confusables intentionally remaps ASCII characters that
+        /// transliteration produced (e.g. `|` → `l`), so the combined
+        /// pipeline stabilises in one pass but is not idempotent in the
+        /// mathematical sense.  All other steps are individually
+        /// idempotent and their composition must be too.
+        fn idempotent_steps_pipeline() -> _TextPipeline {
+            pipeline(
+                PipelineSteps::all() & !PipelineSteps::CONFUSABLES,
+                Some("NFKC"),
+            )
+        }
+
         proptest! {
             #![proptest_config(ProptestConfig::with_cases(1000))]
 
@@ -553,17 +566,29 @@ mod tests {
                 );
             }
 
-            /// Pipeline is idempotent: processing already-processed text gives
-            /// the same result. This must hold because every step is individually
-            /// idempotent and the composition of idempotent operations in a fixed
-            /// order is idempotent.
+            /// Pipeline (without confusables) is idempotent: processing
+            /// already-processed text gives the same result.
             #[test]
             fn pipeline_all_steps_idempotent(s in "\\PC*") {
-                let p = all_steps_pipeline();
+                let p = idempotent_steps_pipeline();
                 let once = p.process(&s).unwrap();
                 let twice = p.process(&once).unwrap();
                 prop_assert_eq!(&once, &twice,
                     "pipeline is not idempotent on: {:?}", s);
+            }
+
+            /// Full pipeline (including confusables) stabilises in two
+            /// passes: confusables runs before transliterate, so
+            /// transliteration output only passes through confusables on
+            /// the second application.
+            #[test]
+            fn pipeline_all_steps_stabilises(s in "\\PC*") {
+                let p = all_steps_pipeline();
+                let once = p.process(&s).unwrap();
+                let twice = p.process(&once).unwrap();
+                let thrice = p.process(&twice).unwrap();
+                prop_assert_eq!(&twice, &thrice,
+                    "pipeline does not stabilise on: {:?}", s);
             }
 
             /// Empty pipeline is a no-op — output equals input.

@@ -37,7 +37,7 @@ result = anyascii("café")
 anyascii and translit both provide Unicode → ASCII transliteration, but they use different lookup tables. The core Latin-script mappings are very similar, but edge cases may differ. A [detailed character-level comparison](../architecture/transliteration-comparison.md) across all 65 supported languages shows:
 
 - **49,089 codepoints** across all Unicode blocks tested comprehensively (no sampling)
-- **48,297** mapped by translit vs **48,761** by anyascii — anyascii has broader coverage of some extended script blocks, while translit provides language-aware romanization with 65 language profiles and 1,046 characters only translit maps
+- **48,334** mapped by translit vs **48,761** by anyascii — anyascii has broader coverage of some extended script blocks, while translit provides language-aware romanization with 65 language profiles and 1,072 characters only translit maps
 - Most differences are systematic: CJK pinyin casing, Korean romanization, and language-specific national standards
 
 ```python

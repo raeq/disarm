@@ -73,9 +73,9 @@ This approach is deterministic and comprehensive — results do not depend on sa
 | hy | Armenian | 91 | 90 | 86 | 85 | 90 | 3 | 2 | 21 |
 | ka | Georgian | 88 | 88 | 87 | 78 | 88 | 9 | 0 | 27 |
 | si | Sinhala | 91 | 90 | 90 | 79 | 90 | 11 | 0 | 55 |
-| th | Thai | 87 | 80 | 73 | 80 | 78 | 0 | 7 | 11 |
-| lo | Lao | 83 | 76 | 58 | 58 | 75 | 2 | 2 | 11 |
-| km | Khmer | 114 | 106 | 85 | 94 | 104 | 0 | 9 | 59 |
+| th | Thai | 87 | 80 | 78 | 80 | 78 | 0 | 2 | 16 |
+| lo | Lao | 83 | 76 | 75 | 58 | 75 | 18 | 1 | 12 |
+| km | Khmer | 114 | 106 | 100 | 94 | 104 | 10 | 4 | 62 |
 | my | Myanmar | 160 | 141 | 78 | 77 | 139 | 18 | 17 | 42 |
 | bo | Tibetan | 211 | 201 | 138 | 147 | 195 | 8 | 17 | 113 |
 | am | Amharic | 384 | 370 | 370 | 343 | 370 | 27 | 0 | 218 |
@@ -83,7 +83,7 @@ This approach is deterministic and comprehensive — results do not depend on sa
 | dv | Dhivehi | 50 | 49 | 48 | 48 | 48 | 0 | 0 | 3 |
 | jv | Javanese | 91 | 90 | 75 | 0 | 90 | 75 | 0 | 0 |
 | mn | Mongolian | 157 | 153 | 149 | 148 | 151 | 5 | 4 | 53 |
-| **TOTAL** | | **49089** | **48825** | **48297** | **47408** | **48761** | **1046** | **157** | **27017** |
+| **TOTAL** | | **49089** | **48825** | **48334** | **47408** | **48761** | **1072** | **146** | **27026** |
 
 ## Notable Differences
 
@@ -3406,19 +3406,14 @@ Coverage: translit maps 90/90, Unidecode maps 79/90. **11** mapped only by trans
 
 Block: 87 assigned codepoints, 80 mapped by at least one library.
 
-Coverage: translit maps 73/80, Unidecode maps 80/80. **0** mapped only by translit, **7** mapped only by Unidecode.
+Coverage: translit maps 78/80, Unidecode maps 80/80. **0** mapped only by translit, **2** mapped only by Unidecode.
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
-| ฯ | U+0E2F | THAI CHARACTER PAIYANNOI | `~` |
 | ฺ | U+0E3A | THAI CHARACTER PHINTHU | `'` |
-| ๅ | U+0E45 | THAI CHARACTER LAKKHANGYAO | `ao` |
 | ๆ | U+0E46 | THAI CHARACTER MAIYAMOK | `+` |
-| ๏ | U+0E4F | THAI CHARACTER FONGMAN | ` * ` |
-| ๚ | U+0E5A | THAI CHARACTER ANGKHANKHU | ` // ` |
-| ๛ | U+0E5B | THAI CHARACTER KHOMUT | ` /// ` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
@@ -3427,37 +3422,58 @@ Coverage: translit maps 73/80, Unidecode maps 80/80. **0** mapped only by transl
 | ฤ | U+0E24 | THAI CHARACTER RU | `rue` | `R` | `rue` |
 | ฦ | U+0E26 | THAI CHARACTER LU | `lue` | `L` | `lue` |
 | อ | U+0E2D | THAI CHARACTER O ANG | `o` | ``` | `o` |
+| ฯ | U+0E2F | THAI CHARACTER PAIYANNOI | `.` | `~` | `.` |
 | า | U+0E32 | THAI CHARACTER SARA AA | `a` | `aa` | `a` |
 | ี | U+0E35 | THAI CHARACTER SARA II | `i` | `ii` | `i` |
 | ื | U+0E37 | THAI CHARACTER SARA UEE | `ue` | `uue` | `ue` |
 | ู | U+0E39 | THAI CHARACTER SARA UU | `u` | `uu` | `u` |
 | ฿ | U+0E3F | THAI CURRENCY SYMBOL BAHT | `B` | `Bh.` | `B` |
+| ๅ | U+0E45 | THAI CHARACTER LAKKHANGYAO | `a` | `ao` | — |
 | ํ | U+0E4D | THAI CHARACTER NIKHAHIT | `m` | `M` | `m` |
+| ๏ | U+0E4F | THAI CHARACTER FONGMAN | ` ` | ` * ` | `*` |
+| ๚ | U+0E5A | THAI CHARACTER ANGKHANKHU | `.` | ` // ` | `#` |
+| ๛ | U+0E5B | THAI CHARACTER KHOMUT | `.` | ` /// ` | `@` |
 
 ### lo — Lao
 
 Block: 83 assigned codepoints, 76 mapped by at least one library.
 
-Coverage: translit maps 58/76, Unidecode maps 58/76. **2** mapped only by translit, **2** mapped only by Unidecode.
+Coverage: translit maps 75/76, Unidecode maps 58/76. **18** mapped only by translit, **1** mapped only by Unidecode.
 
 **Mapped only by translit** (Unidecode returns empty/`[?]`):
 
 | Char | Codepoint | Name | translit |
 |------|-----------|------|----------|
+| ຆ | U+0E86 | LAO LETTER PALI GHA | `gha` |
+| ຉ | U+0E89 | LAO LETTER PALI CHA | `cha` |
+| ຌ | U+0E8C | LAO LETTER PALI JHA | `jha` |
+| ຎ | U+0E8E | LAO LETTER PALI NYA | `nya` |
+| ຏ | U+0E8F | LAO LETTER PALI TTA | `tta` |
+| ຐ | U+0E90 | LAO LETTER PALI TTHA | `ttha` |
+| ຑ | U+0E91 | LAO LETTER PALI DDA | `dda` |
+| ຒ | U+0E92 | LAO LETTER PALI DDHA | `ddha` |
+| ຓ | U+0E93 | LAO LETTER PALI NNA | `nna` |
+| ຘ | U+0E98 | LAO LETTER PALI DHA | `dha` |
+| ຠ | U+0EA0 | LAO LETTER PALI BHA | `bha` |
+| ຨ | U+0EA8 | LAO LETTER SANSKRIT SHA | `sha` |
+| ຩ | U+0EA9 | LAO LETTER SANSKRIT SSA | `ssa` |
+| ຬ | U+0EAC | LAO LETTER PALI LLA | `lla` |
 | ຮ | U+0EAE | LAO LETTER HO TAM | `h` |
 | ັ | U+0EB1 | LAO VOWEL SIGN MAI KAN | `a` |
+| ໞ | U+0EDE | LAO LETTER KHMU GO | `go` |
+| ໟ | U+0EDF | LAO LETTER KHMU NYO | `nyo` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
-| ຯ | U+0EAF | LAO ELLIPSIS | `~` |
 | ໆ | U+0EC6 | LAO KO LA | `+` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ຕ | U+0E95 | LAO LETTER TO | `t` | `h` | `t` |
 | ອ | U+0EAD | LAO LETTER O | `o` | ``` | — |
+| ຯ | U+0EAF | LAO ELLIPSIS | `...` | `~` | `...` |
 | າ | U+0EB2 | LAO VOWEL SIGN AA | `a` | `aa` | `a` |
 | ີ | U+0EB5 | LAO VOWEL SIGN II | `i` | `ii` | `i` |
 | ຶ | U+0EB6 | LAO VOWEL SIGN Y | `ue` | `y` | `u` |
@@ -3472,7 +3488,22 @@ Coverage: translit maps 58/76, Unidecode maps 58/76. **2** mapped only by transl
 
 Block: 114 assigned codepoints, 106 mapped by at least one library.
 
-Coverage: translit maps 85/106, Unidecode maps 94/106. **0** mapped only by translit, **9** mapped only by Unidecode.
+Coverage: translit maps 100/106, Unidecode maps 94/106. **10** mapped only by translit, **4** mapped only by Unidecode.
+
+**Mapped only by translit** (Unidecode returns empty/`[?]`):
+
+| Char | Codepoint | Name | translit |
+|------|-----------|------|----------|
+| ៰ | U+17F0 | KHMER SYMBOL LEK ATTAK SON | `0` |
+| ៱ | U+17F1 | KHMER SYMBOL LEK ATTAK MUOY | `1` |
+| ៲ | U+17F2 | KHMER SYMBOL LEK ATTAK PII | `2` |
+| ៳ | U+17F3 | KHMER SYMBOL LEK ATTAK BEI | `3` |
+| ៴ | U+17F4 | KHMER SYMBOL LEK ATTAK BUON | `4` |
+| ៵ | U+17F5 | KHMER SYMBOL LEK ATTAK PRAM | `5` |
+| ៶ | U+17F6 | KHMER SYMBOL LEK ATTAK PRAM-MUOY | `6` |
+| ៷ | U+17F7 | KHMER SYMBOL LEK ATTAK PRAM-PII | `7` |
+| ៸ | U+17F8 | KHMER SYMBOL LEK ATTAK PRAM-BEI | `8` |
+| ៹ | U+17F9 | KHMER SYMBOL LEK ATTAK PRAM-BUON | `9` |
 
 **Mapped only by Unidecode** (translit returns empty):
 
@@ -3480,13 +3511,8 @@ Coverage: translit maps 85/106, Unidecode maps 94/106. **0** mapped only by tran
 |------|-----------|------|-----------|
 | ឴ | U+17B4 | KHMER VOWEL INHERENT AQ | `a` |
 | ឵ | U+17B5 | KHMER VOWEL INHERENT AA | `aa` |
-| ំ | U+17C6 | KHMER SIGN NIKAHIT | `M` |
-| ះ | U+17C7 | KHMER SIGN REAHMUK | `H` |
-| ៈ | U+17C8 | KHMER SIGN YUUKALEAPINTU | `a`` |
-| ៌ | U+17CC | KHMER SIGN ROBAT | `r` |
 | ៎ | U+17CE | KHMER SIGN KAKABAT | `!` |
 | ៗ | U+17D7 | KHMER SIGN LEK TOO | `+` |
-| ៜ | U+17DC | KHMER SIGN AVAKRAHASANYA | `'` |
 
 | Char | Codepoint | Name | translit | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
@@ -3540,7 +3566,7 @@ Coverage: translit maps 85/106, Unidecode maps 94/106. **0** mapped only by tran
 | ឹ | U+17B9 | KHMER VOWEL SIGN Y | `o` | `y` | `oe` |
 | ឺ | U+17BA | KHMER VOWEL SIGN YY | `o` | `yy` | `eu` |
 | ូ | U+17BC | KHMER VOWEL SIGN UU | `u` | `uu` | `ou` |
-| | | *...9 more differences* | | | |
+| | | *...12 more differences* | | | |
 
 ### my — Myanmar
 
@@ -4066,12 +4092,12 @@ Coverage: translit maps 149/153, Unidecode maps 148/153. **5** mapped only by tr
 
 - **Total assigned codepoints scanned**: 49089
 - **Mapped by at least one library**: 48825
-- **translit coverage**: 48297/48825 (98.9%)
+- **translit coverage**: 48334/48825 (99.0%)
 - **Unidecode coverage**: 47408/48825 (97.1%)
 - **anyascii coverage**: 48761/48825 (99.9%)
-- **Characters mapped only by translit**: 1046
-- **Characters mapped only by Unidecode**: 157
-- **Different output (both mapped)**: 27017
+- **Characters mapped only by translit**: 1072
+- **Characters mapped only by Unidecode**: 146
+- **Different output (both mapped)**: 27026
 
 ---
 

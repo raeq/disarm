@@ -9,6 +9,14 @@ repos:
         types_or: [rust]
         pass_filenames: false
 
+      - id: cargo-clippy
+        name: cargo clippy
+        description: Lint Rust source files with clippy (mirrors CI -D warnings)
+        language: system
+        entry: cargo clippy --no-default-features -- -D warnings
+        types_or: [rust]
+        pass_filenames: false
+
       - id: ruff-check
         name: ruff check
         description: Lint Python source files with ruff

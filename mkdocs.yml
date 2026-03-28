@@ -74,13 +74,6 @@ nav:
       - Enums & Types: api/enums.md
       - Language Profiles: api/language-profiles.md
       - Exceptions: api/exceptions.md
-  - Guides:
-      - For Web Developers: web-developer-guide.md
-      - For Data Engineers: data-engineer-guide.md
-      - For ML / LLM Pipelines: ml-pipeline-guide.md
-      - For Security Engineers: security-guide.md
-      - For Librarians & Catalogers: librarian-guide.md
-      - For Scholars & Linguists: scholarly-guide.md
   - Architecture:
       - Transliteration Engine: architecture/transliteration-engine.md
       - Data Tables & Caching: architecture/data-tables.md
@@ -90,7 +83,7 @@ nav:
       - Security & Hostnames: architecture/security.md
       - Emoji Plugin System: architecture/emoji-plugins.md
       - Testing & Guarantees: architecture/testing-guarantees.md
-      - Formal Verification: formal-verification.md
+      - Exhaustive Testing: formal-verification.md
       - Transliteration Comparison: architecture/transliteration-comparison.md
   - Migration:
       - Why Migrate: migration/index.md

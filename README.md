@@ -229,22 +229,13 @@ remove_accents("café")   # → "cafe"       (alias for strip_accents)
 - [Limitations](docs/limitations.md)
 - [Migration from python-slugify / anyascii / Unidecode](docs/migration/)
 
-**Guides by role:**
+## Exhaustive testing
 
-- [For Data Engineers](docs/data-engineer-guide.md) — ETL normalization, deduplication, batch processing
-- [For ML / LLM Pipelines](docs/ml-pipeline-guide.md) — Text preprocessing, emoji handling, TextPipeline
-- [For Web Developers](docs/web-developer-guide.md) — URL slugs, filename sanitization, form cleaning
-- [For Security Engineers](docs/security-guide.md) — Homoglyph detection, IDN validation, input canonicalization
-- [For Librarians & Catalogers](docs/librarian-guide.md) — Catalog keys, title dedup, sort normalization
-- [For Scholars & Linguists](docs/scholarly-guide.md) — ISO 9, script analysis, transliteration profiles
+translit is exhaustively tested with three layers of machine-verifiable assurance beyond conventional unit and property-based tests:
 
-## Formal testing
-
-translit is formally tested with three layers of machine-verifiable assurance beyond conventional unit and property-based tests:
-
-- **Compile-time proofs**: `build.rs` asserts all transliteration table values are ASCII and entry counts match expectations — if any check fails, `cargo build` fails
+- **Compile-time assertions**: `build.rs` asserts all transliteration table values are ASCII and entry counts match expectations — if any check fails, `cargo build` fails
 - **Exhaustive domain coverage**: Every Hangul syllable (11,172), every BMP codepoint (63,488), every CJK ideograph (20,992), and every Indic script block are tested individually — zero sampling gaps
-- **Formalized invariants**: Seven formally-stated properties (ASCII passthrough, idempotence, determinism, output bounds, etc.) verified by exhaustive enumeration and Hypothesis
+- **Stated invariants**: Seven stated properties (ASCII passthrough, idempotence, determinism, output bounds, etc.) verified by exhaustive enumeration and Hypothesis
 
 See [docs/formal-verification.md](docs/formal-verification.md) for details.
 

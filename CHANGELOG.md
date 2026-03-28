@@ -292,8 +292,6 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - Compatibility parameter aliases: `replacement_text`/`max_len` on `sanitize_filename()`
   (pathvalidate), `greedy`/`preferred_aliases` on `is_confusable()` (confusable_homoglyphs),
   `delimiters` on `demojize()` (emoji library).
-- Data Engineer persona guide (`docs/data-engineer-guide.md`) — ETL normalization,
-  deduplication, batch processing, pandas/PySpark/Airflow integration patterns.
 - Complete API documentation for 19 previously undocumented exported functions:
   precompiled pipelines, grapheme clusters, encoding detection, `Text` builder,
   `is_safe_hostname`, `demojize`, `strip_bidi`, `EmojiProvider` protocol.

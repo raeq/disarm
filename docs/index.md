@@ -103,16 +103,6 @@ Core concepts and usage for each feature area.
 
 ---
 
-## Guides by Role
-
-Task-oriented guides for specific use cases and audiences.
-
-- **[For Data Engineers](data-engineer-guide.md)** — ETL normalization, deduplication, encoding detection, batch processing
-- **[For ML / LLM Pipelines](ml-pipeline-guide.md)** — Text preprocessing, emoji handling, TextPipeline
-- **[For Web Developers](web-developer-guide.md)** — URL slugs, filename sanitization, form cleaning
-- **[For Security Engineers](security-guide.md)** — Homoglyph detection, IDN validation, input canonicalization
-- **[For Librarians & Catalogers](librarian-guide.md)** — Catalog keys, title dedup, sort normalization
-- **[For Scholars & Linguists](scholarly-guide.md)** — ISO 9, script analysis, transliteration profiles
 - **[Policy Templates](policy-templates.md)** — Named institutional presets for libraries, web apps, ML, and more
 - **[CLI](cli.md)** — Command-line usage, piping, and shell integration
 - **[Docker](docker.md)** — Run translit via Docker without installing Python

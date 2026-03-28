@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Character-level correctness diff: translit vs Unidecode vs anyascii.
 
-For each of the 65 supported languages, iterates over EVERY codepoint in the
+For each of the 83 supported languages, iterates over EVERY codepoint in the
 relevant Unicode block(s) and compares transliteration output across all three
 libraries.  This is deterministic and comprehensive — it tests the full
 character inventory, not a sample.
@@ -488,7 +488,7 @@ def print_markdown(reports: list[LangReport]) -> None:
     """Print full markdown report."""
     print("# Transliteration Comparison: translit vs Unidecode vs anyascii")
     print()
-    print("Comprehensive character-level comparison across all 65 supported "
+    print("Comprehensive character-level comparison across all 83 supported "
           "languages.")
     print("Every assigned codepoint in each language's Unicode block(s) is "
           "tested — no sampling.")

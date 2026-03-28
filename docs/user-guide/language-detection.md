@@ -266,6 +266,6 @@ transliterate("Москва", lang=LANG_AUTO)
 
 ## See Also
 
-- [Language Support](language-support.md) — full list of 65 language profiles and their override rules
+- [Language Support](language-support.md) — full list of 83 language profiles and their override rules
 - [Language Reference](../reference.md) — per-language transliteration tables and reference texts
 - [Limitations](../limitations.md) — known constraints of context-free transliteration

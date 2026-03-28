@@ -55,7 +55,7 @@ pipe("Città di Firenze")   # → "citta di firenze"
 | Steps | NFKC → transliterate → confusables → strip_accents → fold_case → collapse_whitespace |
 | Output charset | ASCII |
 | Reversibility | No (lossy) |
-| Script coverage | All 65 language profiles |
+| Script coverage | All 83 language profiles |
 
 ### web_input_sanitize
 
@@ -107,7 +107,7 @@ pipe("Москва")    # → "moskva"
 | Steps | NFKC → transliterate → strip_accents → fold_case → collapse_whitespace |
 | Output charset | ASCII |
 | Reversibility | No (lossy) |
-| Script coverage | All 65 language profiles |
+| Script coverage | All 83 language profiles |
 
 ---
 

@@ -1,6 +1,6 @@
 # Language Reference
 
-Complete reference of all 65 built-in language profiles, their transliteration rules, and test reference texts.
+Complete reference of all 83 built-in language profiles, their transliteration rules, and test reference texts.
 
 ## Language Table
 

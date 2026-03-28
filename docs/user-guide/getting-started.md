@@ -92,7 +92,7 @@ transliterate("München")              # => "Munchen"
 slugify("Ärger", lang="de")           # => "aerger"
 ```
 
-See [Language Support](language-support.md) for the full list of 65 built-in profiles.
+See [Language Support](language-support.md) for the full list of 83 built-in profiles.
 
 ## Error handling
 

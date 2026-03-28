@@ -54,7 +54,7 @@ transliterate("♠", errors="replace",
 
 ### Transliteration tables
 
-translit uses its own hand-curated transliteration tables. Most common mappings are identical to Unidecode, but some edge cases may differ. A [detailed character-level comparison](../architecture/transliteration-comparison.md) across all 65 supported languages shows:
+translit uses its own hand-curated transliteration tables. Most common mappings are identical to Unidecode, but some edge cases may differ. A [detailed character-level comparison](../architecture/transliteration-comparison.md) across all 83 supported languages shows:
 
 - **49,089 codepoints** across all Unicode blocks tested comprehensively (no sampling)
 - **48,415** mapped by translit vs **47,408** by Unidecode — translit has broader coverage overall, with 1,136 characters only translit maps vs 129 only Unidecode maps

@@ -109,7 +109,7 @@ Exhaustive testing is not formal verification. We are precise about the boundary
 | Area | Why not verified | Mitigation |
 |------|--------------------------|------------|
 | PHF hash correctness | Trusted from `phf_codegen` crate | Functional tests exercise every lookup path |
-| Linguistic accuracy | Transliteration correctness is empirical, not provable by testing alone | Extensive corpus from native speakers; 65 language reference tests |
+| Linguistic accuracy | Transliteration correctness is empirical, not provable by testing alone | Extensive corpus from native speakers; 83 language reference tests |
 | Unicode version drift | New Unicode versions add codepoints | CI tracks Unicode version; unknown chars handled by ErrorMode |
 | Memory safety / UB | Requires Miri (nightly-only) | `unsafe_code = "forbid"` in Cargo.toml — zero unsafe anywhere |
 | Absence of panics | Requires Kani bounded model checking (nightly-only) | Property tests with 1,000+ random inputs; no panics in 2,900+ tests |
@@ -136,7 +136,7 @@ The exhaustive testing layers sit on top of a conventional test suite that is it
 
 ### Per-language reference tests
 
-Each of the 65 built-in language profiles has dedicated tests verifying:
+Each of the 83 built-in language profiles has dedicated tests verifying:
 
 - **Known transliteration pairs** — reference texts with expected output (e.g., "Москва" → "Moskva" for Russian, "Київ" → "Kyiv" for Ukrainian)
 - **Language override behavior** — `lang="xx"` produces different output from the default table where expected

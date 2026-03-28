@@ -22,7 +22,7 @@ chardetng targets encodings historically deployed as browser defaults per the [W
 
 ## Transliteration
 
-For a detailed character-level comparison of translit's transliteration against Unidecode and anyascii across all 65 supported languages, including analysis of systematic difference patterns and intentional design choices, see the [Transliteration Comparison](architecture/transliteration-comparison.md).
+For a detailed character-level comparison of translit's transliteration against Unidecode and anyascii across all 83 supported languages, including analysis of systematic difference patterns and intentional design choices, see the [Transliteration Comparison](architecture/transliteration-comparison.md).
 
 ### Context-free mapping: a fundamental tradeoff
 

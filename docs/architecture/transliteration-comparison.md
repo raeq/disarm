@@ -1,6 +1,6 @@
 # Transliteration Comparison: translit vs Unidecode vs anyascii
 
-Comprehensive character-level comparison across all 65 supported languages.
+Comprehensive character-level comparison across all 83 supported languages.
 Every assigned codepoint in each language's Unicode block(s) is tested — no sampling.
 
 ## Methodology

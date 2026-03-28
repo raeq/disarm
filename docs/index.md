@@ -20,7 +20,7 @@ translit is a single, MIT-licensed Python package that replaces a constellation 
 | **License** | Mixed (GPL, Artistic, MIT) | MIT |
 | **API surface** | 8+ packages, 8+ APIs | One package, one API |
 | **Unicode coverage** | Varies widely | Comprehensive, consistent tables |
-| **Language awareness** | Limited or none | 65 built-in language profiles |
+| **Language awareness** | Limited or none | 83 built-in language profiles |
 | **Type safety** | Partial or missing | Full py.typed + stub coverage |
 
 ---
@@ -96,7 +96,7 @@ pipe("  Héllo\u200b Wörld  ")  # => "hello world"
 Core concepts and usage for each feature area.
 
 - **[Getting Started](user-guide/getting-started.md)** — Installation, first steps, and basic usage
-- **[Transliteration](user-guide/transliteration.md)** — Unicode → ASCII with 65 language profiles, plus reverse (Latin → native script)
+- **[Transliteration](user-guide/transliteration.md)** — Unicode → ASCII with 83 language profiles, plus reverse (Latin → native script)
 - **[Slugification](user-guide/slugification.md)** — URL-safe slug generation, drop-in python-slugify replacement
 - **[Normalization](user-guide/normalization.md)** — NFC / NFD / NFKC / NFKD Unicode normalization
 - **[Confusable Detection](user-guide/confusables.md)** — TR39 homoglyph detection and normalization
@@ -104,7 +104,7 @@ Core concepts and usage for each feature area.
 - **[Text Cleaning](user-guide/text-cleaning.md)** — Accent stripping, case folding, whitespace collapse
 - **[Grapheme Clusters](user-guide/graphemes.md)** — User-perceived character counting, splitting, and truncation
 - **[Text Pipeline](user-guide/pipeline.md)** — Composable, pre-compiled multi-step processing
-- **[Language Support](user-guide/language-support.md)** — 65 built-in profiles, auto-detection, custom profiles
+- **[Language Support](user-guide/language-support.md)** — 83 built-in profiles, auto-detection, custom profiles
 - **[Language Detection](user-guide/language-detection.md)** — How `lang="auto"` works: script identification, character-level discrimination, fail-safe fallbacks
 
 ---
@@ -134,7 +134,7 @@ Complete function signatures, parameters, and return types.
 
 ## Reference
 
-- **[Language Reference](reference.md)** — All 65 languages: codes, names, reference texts, and per-language transliteration rule tables
+- **[Language Reference](reference.md)** — All 83 languages: codes, names, reference texts, and per-language transliteration rule tables
 
 ---
 
@@ -151,7 +151,7 @@ Internal design documentation for contributors and advanced users.
 - **[Performance](architecture/performance.md)** — Optimization strategies, PHF tables, batch amortization
 - **[Testing & Guarantees](architecture/testing-guarantees.md)** — Test philosophy, property-based testing, security invariants, CI matrix
 - **[Exhaustive Testing](formal-verification.md)** — Compile-time assertions, exhaustive domain coverage, stated invariants (I1–I7)
-- **[Transliteration Comparison](architecture/transliteration-comparison.md)** — Character-level diff vs Unidecode and anyascii across all 65 languages
+- **[Transliteration Comparison](architecture/transliteration-comparison.md)** — Character-level diff vs Unidecode and anyascii across all 83 languages
 
 ---
 

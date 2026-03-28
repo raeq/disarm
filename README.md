@@ -12,7 +12,7 @@ Unicode text infrastructure for Python: transliteration, normalization, and safe
 
 ## Features
 
-- **[Transliteration](docs/user-guide/transliteration.md)**: Unicode → ASCII for Latin, Cyrillic, Greek, CJK (Chinese pinyin, Korean romanization, Japanese kana), and [65 language-specific profiles](docs/user-guide/language-support.md)
+- **[Transliteration](docs/user-guide/transliteration.md)**: Unicode → ASCII for Latin, Cyrillic, Greek, CJK (Chinese pinyin, Korean romanization, Japanese kana), and [83 language-specific profiles](docs/user-guide/language-support.md)
 - **[Slugification](docs/user-guide/slugification.md)**: URL-safe slugs with [python-slugify parameter compatibility](docs/migration/from-python-slugify.md)
 - **[Filename sanitization](docs/user-guide/filenames.md)**: Cross-platform safe filenames with NFC normalization, path traversal protection, and Windows reserved name handling
 - **[Text normalization](docs/user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, [confusable homoglyph detection](docs/user-guide/confusables.md) (TR39), full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](docs/user-guide/text-cleaning.md)
@@ -181,7 +181,7 @@ Language-specific profiles (e.g., `lang="de"`) apply **sparse overrides** on top
 
 ## Language profiles
 
-[65 built-in language profiles](docs/user-guide/language-support.md) with ISO 9:1995 scholarly Cyrillic support and 10 Indic scripts:
+[83 built-in language profiles](docs/user-guide/language-support.md) with ISO 9:1995 scholarly Cyrillic support and 10 Indic scripts:
 
 ```python
 from translit import list_langs, transliterate

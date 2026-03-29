@@ -17,14 +17,15 @@ from typing import get_type_hints
 import pytest
 
 import translit
-from translit._enums import (
+from translit import (
     LANG_META,
+    NF,
     SCRIPT_META,
+    EmojiProvider,
     LangMeta,
     Script,
     ScriptMeta,
 )
-from translit._types import NF, EmojiProvider
 
 # ---------------------------------------------------------------------------
 # __all__ completeness

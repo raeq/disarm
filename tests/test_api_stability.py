@@ -236,15 +236,6 @@ def _param_names(fn) -> list[str]:
     return [p for p in sig.parameters if p != "self"]
 
 
-def _param_defaults(fn) -> dict:
-    """Extract parameter defaults from a callable."""
-    sig = inspect.signature(fn)
-    return {
-        name: p.default
-        for name, p in sig.parameters.items()
-        if p.default is not inspect.Parameter.empty and name != "self"
-    }
-
 
 def _param_kinds(fn) -> dict[str, str]:
     """Extract parameter kinds (POSITIONAL_OR_KEYWORD, KEYWORD_ONLY, etc.)."""

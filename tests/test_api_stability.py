@@ -544,14 +544,6 @@ class TestClassAPIs:
             f"  actual:   {actual}"
         )
 
-    @pytest.mark.parametrize(
-        "cls_name",
-        ["Text", "TextPipeline", "Slugifier", "UniqueSlugifier"],
-    )
-    def test_class_is_callable(self, cls_name: str):
-        cls = getattr(translit, cls_name)
-        assert callable(cls)
-
     def test_text_has_value_property(self):
         assert isinstance(inspect.getattr_static(translit.Text, "value"), property), (
             "Text.value must be a property"

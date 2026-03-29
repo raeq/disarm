@@ -31,6 +31,11 @@ TASHKEELA_DIR="Tashkeela-arabic-diacritized-text-utf8-0.3"
 # SHA256 of the downloaded archive (pinned for reproducibility)
 TASHKEELA_ARCHIVE_SHA256="skip"  # TODO: pin after first verified download
 
+# Project Ben Yehuda: Hebrew public domain texts with niqqud
+# https://github.com/projectbenyehuda/public_domain_dump
+BEN_YEHUDA_REPO="https://github.com/projectbenyehuda/public_domain_dump.git"
+BEN_YEHUDA_DIR="ben_yehuda"
+
 # ============================================================================
 # Build parameters — pinned, never changed without bumping checksums
 # ============================================================================
@@ -40,9 +45,15 @@ ARABIC_MAX_BIGRAMS=200000
 ARABIC_DICT="$DICT_DIR/arabic_dict.bin"
 ARABIC_STATS="$DICT_DIR/arabic_dict_stats.json"
 
+HEBREW_MIN_FREQ=3
+HEBREW_MAX_BIGRAMS=200000
+HEBREW_DICT="$DICT_DIR/hebrew_dict.bin"
+HEBREW_STATS="$DICT_DIR/hebrew_dict_stats.json"
+
 # Expected output checksums (updated by running with --update-checksums)
 # These ensure the build is deterministic: same corpus + same params = same output
 ARABIC_DICT_SHA256="84b68b453404d9a663ef222bf280273009c0f8006fd7c8342d4bf07b4b8dfa83"
+HEBREW_DICT_SHA256="57347d264fe2c6afb8c89572a58c1203479e80ba4b52706da3d54fd832e94e49"
 
 # ============================================================================
 # Helpers
@@ -116,6 +127,29 @@ download_tashkeela() {
     log "Tashkeela corpus: $file_count text files"
 }
 
+download_ben_yehuda() {
+    if [[ -d "$CORPUS_DIR/$BEN_YEHUDA_DIR/txt" ]]; then
+        log "Ben Yehuda corpus already present, skipping download"
+        return 0
+    fi
+
+    log "Cloning Project Ben Yehuda from GitHub (shallow)..."
+    if ! command -v git &>/dev/null; then
+        err "git not found."
+    fi
+
+    mkdir -p "$CORPUS_DIR"
+    git clone --depth 1 "$BEN_YEHUDA_REPO" "$CORPUS_DIR/$BEN_YEHUDA_DIR"
+
+    if [[ ! -d "$CORPUS_DIR/$BEN_YEHUDA_DIR/txt" ]]; then
+        err "Ben Yehuda txt/ directory not found after clone. Check $CORPUS_DIR/$BEN_YEHUDA_DIR"
+    fi
+
+    local file_count
+    file_count=$(find "$CORPUS_DIR/$BEN_YEHUDA_DIR/txt" -name "*.txt" -type f | wc -l | tr -d ' ')
+    log "Ben Yehuda corpus: $file_count text files"
+}
+
 # ============================================================================
 # Build
 # ============================================================================
@@ -140,6 +174,26 @@ build_arabic() {
     log "Arabic dictionary: $size bytes, SHA256=$sha"
 }
 
+build_hebrew() {
+    log "Building Hebrew context dictionary..."
+    log "  Corpus: $CORPUS_DIR/$BEN_YEHUDA_DIR/txt"
+    log "  Min frequency: $HEBREW_MIN_FREQ"
+    log "  Max bigrams: $HEBREW_MAX_BIGRAMS"
+
+    python3 "$ROOT/scripts/build_hebrew_dict.py" \
+        "$CORPUS_DIR/$BEN_YEHUDA_DIR/txt" \
+        -o "$HEBREW_DICT" \
+        --min-freq "$HEBREW_MIN_FREQ" \
+        --max-bigrams "$HEBREW_MAX_BIGRAMS" \
+        --json-stats "$HEBREW_STATS"
+
+    local size
+    size=$(wc -c < "$HEBREW_DICT" | tr -d ' ')
+    local sha
+    sha=$(sha256_file "$HEBREW_DICT")
+    log "Hebrew dictionary: $size bytes, SHA256=$sha"
+}
+
 # ============================================================================
 # Main
 # ============================================================================
@@ -153,9 +207,16 @@ case "$cmd" in
         verify_dict "$ARABIC_DICT" "$ARABIC_DICT_SHA256" "Arabic"
         ;;
 
+    hebrew)
+        download_ben_yehuda
+        build_hebrew
+        verify_dict "$HEBREW_DICT" "$HEBREW_DICT_SHA256" "Hebrew"
+        ;;
+
     verify)
         log "Verifying existing dictionaries..."
         verify_dict "$ARABIC_DICT" "$ARABIC_DICT_SHA256" "Arabic"
+        verify_dict "$HEBREW_DICT" "$HEBREW_DICT_SHA256" "Hebrew"
         log "All checksums verified."
         ;;
 
@@ -163,23 +224,32 @@ case "$cmd" in
         log "Computing checksums for existing dictionaries..."
         if [[ -f "$ARABIC_DICT" ]]; then
             sha=$(sha256_file "$ARABIC_DICT")
-            log "Arabic: ARABIC_DICT_SHA256=\"$sha\""
-            log "Update the value in scripts/bootstrap_dicts.sh"
+            log "Arabic:  ARABIC_DICT_SHA256=\"$sha\""
         fi
+        if [[ -f "$HEBREW_DICT" ]]; then
+            sha=$(sha256_file "$HEBREW_DICT")
+            log "Hebrew:  HEBREW_DICT_SHA256=\"$sha\""
+        fi
+        log "Update the values in scripts/bootstrap_dicts.sh"
         ;;
 
     all)
         download_tashkeela
         build_arabic
         verify_dict "$ARABIC_DICT" "$ARABIC_DICT_SHA256" "Arabic"
+
+        download_ben_yehuda
+        build_hebrew
+        verify_dict "$HEBREW_DICT" "$HEBREW_DICT_SHA256" "Hebrew"
+
         log ""
         log "All dictionaries built and verified."
         log "Files:"
-        ls -lh "$ARABIC_DICT" 2>/dev/null || true
+        ls -lh "$ARABIC_DICT" "$HEBREW_DICT" 2>/dev/null || true
         ;;
 
     *)
-        echo "Usage: $0 [arabic|verify|--update-checksums|all]" >&2
+        echo "Usage: $0 [arabic|hebrew|verify|--update-checksums|all]" >&2
         exit 1
         ;;
 esac

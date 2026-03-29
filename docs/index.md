@@ -1,29 +1,31 @@
+<!-- AUTO-GENERATED from README.md + docs/_index_nav.md -->
+<!-- Do not edit directly. Run: bash scripts/generate_docs_index.sh -->
+
 # translit
 
-**Fast Unicode transliteration, slugification, and text normalization — powered by Rust.**
+[![Documentation](https://readthedocs.org/projects/translit/badge/?version=latest)](https://translit.readthedocs.io/en/latest/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/translit/blob/main/LICENSE)
 
-translit is a single, MIT-licensed Python package that replaces a constellation of legacy Unicode text-processing libraries — [Unidecode](https://pypi.org/project/Unidecode/), [text-unidecode](https://pypi.org/project/text-unidecode/), [python-slugify](https://pypi.org/project/python-slugify/), [awesome-slugify](https://pypi.org/project/awesome-slugify/), [anyascii](https://pypi.org/project/anyascii/), [confusable_homoglyphs](https://pypi.org/project/confusable-homoglyphs/), [pathvalidate](https://pypi.org/project/pathvalidate/), and more — with a single, coherent API backed by compiled Rust.
+Unicode text infrastructure for Python: transliteration, normalization, and safety analysis, powered by Rust.
 
----
+**[Documentation](index.md)** | **[API Reference](api/index.md)** | **[PyPI](https://pypi.org/project/translit-rs/)**
 
 ## Demo
 
 **[Try translit in your browser](https://translit-web.pages.dev/)**
 
----
+## Features
 
-## Why translit?
+- **[Transliteration](user-guide/transliteration.md)**: Unicode → ASCII for Latin, Cyrillic, Greek, CJK (Chinese pinyin, Korean romanization, Japanese kana), and [83 language-specific profiles](user-guide/language-support.md)
+- **[Slugification](user-guide/slugification.md)**: URL-safe slugs with [python-slugify parameter compatibility](migration/from-python-slugify.md)
+- **[Filename sanitization](user-guide/filenames.md)**: Cross-platform safe filenames with NFC normalization, path traversal protection, and Windows reserved name handling
+- **[Text normalization](user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, [confusable homoglyph detection](user-guide/confusables.md) (TR39), full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](user-guide/text-cleaning.md)
+- **[Precompiled pipelines](api/pipelines.md)**: `security_clean`, `ml_normalize`, `catalog_key`, `display_clean`, `search_key`, `sort_key`, `sanitize_user_input` for common workflows
+- **[Grapheme clusters](user-guide/graphemes.md)**: Correct user-perceived character counting, splitting, and truncation
+- **[Hostname safety](api/predicates.md#is_safe_hostname)**: Mixed-script and homoglyph attack detection
+- **[Encoding detection](api/encoding.md)**: Auto-detect and decode byte sequences to UTF-8 (chardetng)
+- **[Reverse transliteration](user-guide/language-support.md#reverse-transliteration)**: Latin → native script for Russian, Ukrainian, Greek via `target` parameter
 
-| | Legacy libraries | translit |
-|---|---|---|
-| **Performance** | Pure Python | Rust via PyO3 — [see benchmarks](performance.md) |
-| **License** | Mixed (GPL, Artistic, MIT) | MIT |
-| **API surface** | 8+ packages, 8+ APIs | One package, one API |
-| **Unicode coverage** | Varies widely | Comprehensive, consistent tables |
-| **Language awareness** | Limited or none | 83 built-in language profiles |
-| **Type safety** | Partial or missing | Full py.typed + stub coverage |
-
----
+All text processing is implemented in Rust with O(1) PHF lookups and exposed to Python via PyO3.
 
 ## Installation
 
@@ -31,63 +33,210 @@ translit is a single, MIT-licensed Python package that replaces a constellation 
 pip install translit-rs
 ```
 
-Wheels are available for Linux, macOS, and Windows on Python 3.9+.
+The package installs as `translit-rs` on PyPI but imports as `translit`:
 
----
+```python
+import translit  # not translit_rs
+```
+
+Requires Python 3.9+. Wheels are available for Linux, macOS, and Windows.
 
 ## Quick start
 
-### Transliterate Unicode to ASCII
-
 ```python
-from translit import transliterate
+from translit import transliterate, slugify, sanitize_filename
 
-transliterate("Ünïcödé téxt")       # => "Unicode text"
-transliterate("北京市")              # => "bei jing shi"
-transliterate("Ü", lang="de")       # => "Ue" (German rules)
-transliterate("Москва", lang="auto")  # => "Moskva" (auto-detects Russian)
+# Latin/Cyrillic/Greek
+transliterate("café")          # → "cafe"
+transliterate("Москва")        # → "Moskva"
+transliterate("Ünïcödé")       # → "Unicode"
+
+# Chinese (Hanzi → Pinyin)
+transliterate("北京市")         # → "bei jing shi"
+slugify("北京烤鸭")            # → "bei-jing-kao-ya"
+
+# Korean (Hangul → Revised Romanization)
+transliterate("서울")           # → "seo ul"
+slugify("대한민국")            # → "dae-han-min-gug"
+
+# Japanese (Hiragana/Katakana → Hepburn)
+transliterate("ひらがな")       # → "hiragana"
+transliterate("カタカナ")       # → "katakana"
+
+# Language-specific transliteration
+transliterate("Ärger", lang="de")  # → "Aerger"
+transliterate("Київ", lang="uk")   # → "Kyiv"
+
+# Auto-detect language from script
+transliterate("Москва", lang="auto")  # → "Moskva" (detects Cyrillic → Russian)
+transliterate("ภาษาไทย", lang="auto")  # → Thai transliteration (detects Thai)
+
+# Reverse transliteration (Latin → native script)
+transliterate("Moskva", target="ru")   # → "Москва"
+transliterate("Athina", target="el")   # → "Αθηνα"
+
+# Slugification
+slugify("Hello World!")            # → "hello-world"
+slugify("café au lait")           # → "cafe-au-lait"
+
+# Filename sanitization
+sanitize_filename("my file<>.txt")         # → "my_file.txt"
+sanitize_filename("CON.txt")               # → "_CON.txt"
+sanitize_filename("../../etc/passwd")      # → ".etc_passwd"
 ```
 
-### Generate URL-safe slugs
+## CJK transliteration
+
+Chinese characters are mapped to toneless pinyin from the Unicode Unihan `kMandarin` field, covering the full CJK Unified Ideographs block (U+4E00–U+9FFF, 20,924 characters). Korean Hangul syllables are algorithmically decomposed into jamo and romanized using the Revised Romanization standard (all 11,172 precomposed syllables). Japanese hiragana and katakana use Modified Hepburn; kanji fall back to Chinese pinyin readings.
+
+This is context-free, character-by-character transliteration, the same approach as Unidecode. See [limitations.md](limitations.md) for details on polyphony, phonological rules, and other trade-offs.
+
+## Precompiled pipelines
 
 ```python
-from translit import slugify
+from translit import security_clean, ml_normalize, catalog_key, sanitize_user_input
 
-slugify("My Blog Post!")             # => "my-blog-post"
-slugify("Ärger im Büro", lang="de") # => "aerger-im-buero"
+# Security: NFKC → confusables → strip bidi → collapse whitespace
+security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")  # → "Real text"
+
+# ML/NLP: NFKC → emoji→text → transliterate → strip accents → fold case
+ml_normalize("Café ☕ Ünïcödé")  # → "cafe hot beverage unicode"
+
+# Library catalog: NFKC → transliterate → confusables → strip accents → fold case
+catalog_key("Москва", lang="ru")  # → "moskva"
+catalog_key("ΩMEGA  café")        # → "omega cafe"
+
+# Web input: NFKC → strip zalgo → confusables → strip bidi → collapse whitespace
+sanitize_user_input("p\u0430ypal")  # → "paypal" (homoglyph neutralized)
 ```
 
-### Detect and normalize confusable characters
+## Text builder
 
 ```python
-from translit import is_confusable, normalize_confusables
+from translit import Text
 
-is_confusable("Неllo")              # => True (Cyrillic Н)
-normalize_confusables("Неllo")      # => "Hello"
-```
-
-### Sanitize filenames
-
-```python
-from translit import sanitize_filename
-
-sanitize_filename("my<file>:v2.txt")  # => "my_file_v2.txt"
-```
-
-### Compose a text-cleaning pipeline
-
-```python
-from translit import TextPipeline
-
-pipe = TextPipeline(
-    normalize="NFC",
-    confusables=True,
-    strip_accents=True,
-    fold_case=True,
-    collapse_whitespace=True,
+result = (
+    Text("Ünïcödé Café ☕")
+    .normalize("NFKC")
+    .transliterate()
+    .strip_accents()
+    .fold_case()
+    .value
 )
-pipe("  Héllo\u200b Wörld  ")  # => "hello world"
+# → "unicode cafe hot beverage"
 ```
+
+## Package structure
+
+The API is organized into domain-specific namespaces. All functions are also available at the top level for convenience.
+
+| Namespace | Purpose | Key functions |
+|---|---|---|
+| `translit` | Core transforms | `transliterate`, `slugify`, `Text`, `TextPipeline` |
+| `translit.normalization` | Unicode normalization | `normalize`, `strip_accents`, `fold_case`, `collapse_whitespace` |
+| `translit.security` | Safety analysis | `is_confusable`, `is_mixed_script`, `is_safe_hostname`, `security_clean` |
+| `translit.files` | Filename handling | `sanitize_filename` |
+| `translit.codec` | Byte decoding | `decode_to_utf8`, `detect_encoding` |
+
+```python
+# Namespace imports
+from translit.security import is_confusable, security_clean
+from translit.codec import decode_to_utf8
+from translit.normalization import fold_case
+
+# Top-level imports also work
+from translit import is_confusable, security_clean, decode_to_utf8, fold_case
+```
+
+## Script policies
+
+Transliteration applies different policies depending on the script. This table documents what each script does and which standard it follows.
+
+| Script | Policy | Standard / Source | Example |
+|---|---|---|---|
+| Latin (accented) | Accent stripping | Unicode NFKD decomposition | `é` → `e` |
+| Cyrillic | Phonetic romanization | BGN/PCGN (default), ISO 9:1995 (`strict_iso9=True`), GOST R 7.0.34 (`gost7034=True`) | `Москва` → `Moskva` |
+| Greek | Transliteration | BGN/PCGN romanization | `Αθήνα` → `Athena` |
+| Chinese (Hanzi) | Romanization | Unihan `kMandarin` (toneless pinyin) | `北京` → `bei jing` |
+| Korean (Hangul) | Romanization | Revised Romanization of Korean | `서울` → `seo ul` |
+| Japanese (Kana) | Romanization | Modified Hepburn | `ひらがな` → `hiragana` |
+| Japanese (Kanji) | Romanization | Falls back to Chinese pinyin readings | `東京` → `dong jing` |
+| Arabic | Transliteration | Buckwalter-derived | `مرحبا` → `mrhba` |
+| Hebrew | Transliteration | Common Israeli | `שלום` → `shlvm` |
+| Devanagari | Transliteration | UNGEGN/IAST-derived | `नमस्ते` → `namaste` |
+| Bengali | Transliteration | UNGEGN-derived | `কলকাতা` → `kalakata` |
+| Tamil | Transliteration | UNGEGN-derived | `தமிழ்` → `tamizh` |
+| Telugu | Transliteration | UNGEGN-derived | `తెలుగు` → `telugu` |
+| Gujarati | Transliteration | UNGEGN-derived | `ગુજરાતી` → `gujarati` |
+| Kannada | Transliteration | UNGEGN-derived | `ಕನ್ನಡ` → `kannada` |
+| Malayalam | Transliteration | UNGEGN-derived | `മലയാളം` → `malayalam` |
+| Odia | Transliteration | UNGEGN-derived | `ଓଡିଆ` → `odia` |
+| Sinhala | Transliteration | UNGEGN-derived | `සිංහල` → `simhala` |
+| Gurmukhi | Transliteration | UNGEGN-derived | `ਪੰਜਾਬੀ` → `panjabi` |
+| Thai | Transliteration | RTGS-derived | `สวัสดี` → `sawatdi` |
+| Lao | Transliteration | BGN/PCGN-derived | `ລາວ` → `lao` |
+| Georgian | Transliteration | National romanization | `თბილისი` → `tbilisi` |
+| Armenian | Transliteration | BGN/PCGN | `Երևան` → `Eryevan` |
+
+All transliteration is **context-free and character-by-character**, the same approach as AnyAscii/Unidecode. No linguistic analysis, polyphony handling, or phonological rules. See [limitations.md](limitations.md) for trade-offs.
+
+Language-specific profiles (e.g., `lang="de"`) apply **sparse overrides** on top of the default table. For example, German maps `ü` → `ue` instead of the default `u`.
+
+## Language profiles
+
+[83 built-in language profiles](user-guide/language-support.md) with ISO 9:1995 scholarly Cyrillic support and 10 Indic scripts:
+
+```python
+from translit import list_langs, transliterate
+
+print(list_langs())
+# ['am', 'ar', 'as', 'bg', 'bn', 'bo', 'ca', 'cs', 'cy', 'da', 'de', 'dv', 'el',
+#  'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy',
+#  'is', 'it', 'ja', 'jv', 'ka', 'km', 'kn', 'ko', 'lo', 'lt', 'lv', 'ml', 'mn',
+#  'mr', 'mt', 'my', 'ne', 'nl', 'no', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa',
+#  'si', 'sk', 'sl', 'sq', 'sr', 'sv', 'ta', 'te', 'th', 'tr', 'uk', 'vi', 'zh']
+
+# ISO 9:1995 scholarly transliteration
+transliterate("Юрий", strict_iso9=True)  # → "Jurij"
+```
+
+## Performance
+
+translit is compiled Rust with O(1) compile-time perfect hash tables — no regex, no per-character Python iteration, no runtime data loading.
+
+| Operation | Throughput | vs. legacy |
+|---|---|---|
+| Transliterate (Latin) | 450M chars/sec | **38×** faster than Unidecode |
+| Transliterate (Cyrillic) | 130M chars/sec | **18×** faster than Unidecode |
+| Slugify | 849K slugs/sec | **10–24×** faster than python-slugify |
+| Batch transliterate (100 strings) | 2.8× faster than loop | — |
+
+See [performance.md](performance.md) for full benchmark methodology and results.
+
+## Drop-in replacement
+
+translit provides compatibility aliases for painless migration from existing libraries:
+
+```python
+from translit import unidecode, casefold, remove_accents
+
+unidecode("café")        # → "cafe"       (alias for transliterate)
+casefold("Straße")       # → "strasse"    (alias for fold_case)
+remove_accents("café")   # → "cafe"       (alias for strip_accents)
+```
+
+`sanitize_filename()` also accepts `replacement_text` and `max_len` kwargs for pathvalidate compatibility, and `is_confusable()` accepts `greedy` for confusable_homoglyphs compatibility. See [migration guides](migration/) for details.
+
+## Exhaustive testing
+
+translit is exhaustively tested with three layers of machine-verifiable assurance beyond conventional unit and property-based tests:
+
+- **Compile-time assertions**: `build.rs` asserts all transliteration table values are ASCII and entry counts match expectations — if any check fails, `cargo build` fails
+- **Exhaustive domain coverage**: Every Hangul syllable (11,172), every BMP codepoint (63,488), every CJK ideograph (20,992), and every Indic script block are tested individually — zero sampling gaps
+- **Stated invariants**: Seven stated properties (ASCII passthrough, idempotence, determinism, output bounds, etc.) verified by exhaustive enumeration and Hypothesis
+
+See [formal-verification.md](formal-verification.md) for details.
+
 
 ---
 
@@ -96,7 +245,7 @@ pipe("  Héllo\u200b Wörld  ")  # => "hello world"
 Core concepts and usage for each feature area.
 
 - **[Getting Started](user-guide/getting-started.md)** — Installation, first steps, and basic usage
-- **[Transliteration](user-guide/transliteration.md)** — Unicode → ASCII with 83 language profiles, plus reverse (Latin → native script)
+- **[Transliteration](user-guide/transliteration.md)** — Unicode → ASCII with language profiles, plus reverse (Latin → native script)
 - **[Slugification](user-guide/slugification.md)** — URL-safe slug generation, drop-in python-slugify replacement
 - **[Normalization](user-guide/normalization.md)** — NFC / NFD / NFKC / NFKD Unicode normalization
 - **[Confusable Detection](user-guide/confusables.md)** — TR39 homoglyph detection and normalization
@@ -104,7 +253,7 @@ Core concepts and usage for each feature area.
 - **[Text Cleaning](user-guide/text-cleaning.md)** — Accent stripping, case folding, whitespace collapse
 - **[Grapheme Clusters](user-guide/graphemes.md)** — User-perceived character counting, splitting, and truncation
 - **[Text Pipeline](user-guide/pipeline.md)** — Composable, pre-compiled multi-step processing
-- **[Language Support](user-guide/language-support.md)** — 83 built-in profiles, auto-detection, custom profiles
+- **[Language Support](user-guide/language-support.md)** — Built-in profiles, auto-detection, custom profiles
 - **[Language Detection](user-guide/language-detection.md)** — How `lang="auto"` works: script identification, character-level discrimination, fail-safe fallbacks
 
 ---
@@ -134,7 +283,8 @@ Complete function signatures, parameters, and return types.
 
 ## Reference
 
-- **[Language Reference](reference.md)** — All 83 languages: codes, names, reference texts, and per-language transliteration rule tables
+- **[Language Reference](reference.md)** — All languages: codes, names, reference texts, and per-language transliteration rule tables
+- **[Provenance](provenance.md)** — Standards and sources behind every transliteration mapping
 
 ---
 
@@ -151,11 +301,11 @@ Internal design documentation for contributors and advanced users.
 - **[Performance](architecture/performance.md)** — Optimization strategies, PHF tables, batch amortization
 - **[Testing & Guarantees](architecture/testing-guarantees.md)** — Test philosophy, property-based testing, security invariants, CI matrix
 - **[Exhaustive Testing](formal-verification.md)** — Compile-time assertions, exhaustive domain coverage, stated invariants (I1–I7)
-- **[Transliteration Comparison](architecture/transliteration-comparison.md)** — Character-level diff vs Unidecode and anyascii across all 83 languages
+- **[Transliteration Comparison](architecture/transliteration-comparison.md)** — Character-level diff vs Unidecode and anyascii
 
 ---
 
-## Performance
+## Benchmarks
 
 - **[Performance Overview](performance.md)** — Benchmark methodology, results, and optimization details
 - **[Benchmark Suite](benchmarks.md)** — How to run benchmarks, Criterion and timeit configurations
@@ -178,21 +328,3 @@ Parameter-compatible replacements for existing libraries.
 ## Other
 
 - **[Limitations](limitations.md)** — Known constraints, edge cases, and design trade-offs
-
----
-
-## Links
-
-| | |
-|---|---|
-| **Source code** | <https://github.com/raeq/translit> |
-| **Releases** | <https://github.com/raeq/translit/releases> |
-| **PyPI package** | <https://pypi.org/project/translit-rs/> |
-| **Issue tracker** | <https://github.com/raeq/translit/issues> |
-| **Changelog** | <https://github.com/raeq/translit/blob/main/CHANGELOG.md> |
-
----
-
-## License
-
-translit is released under the [MIT License](https://github.com/raeq/translit/blob/main/LICENSE).

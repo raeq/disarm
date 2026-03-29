@@ -134,17 +134,22 @@ impl _TextPipeline {
 
     /// Return the ordered list of active pipeline steps and their parameters.
     ///
-    /// Order matches `process()`: normalize → confusables → demojize →
-    /// strip_accents → transliterate → fold_case → strip_control →
+    /// Order matches `process()`: normalize → demojize → strip_accents →
+    /// transliterate → confusables → fold_case → strip_control →
     /// strip_zero_width → collapse_whitespace.
+    ///
+    /// Transliterate runs BEFORE confusables so that non-Latin scripts are
+    /// fully romanized before confusable normalization. Running confusables
+    /// first on Cyrillic/Greek text creates mixed-script gibberish because
+    /// only some characters have Latin confusables.
     fn steps(&self) -> Vec<(String, Option<String>)> {
         // Execution order — add new steps here AND in process().
         const STEP_ORDER: &[(PipelineSteps, &str)] = &[
             (PipelineSteps::NORMALIZE, "normalize"),
-            (PipelineSteps::CONFUSABLES, "confusables"),
             (PipelineSteps::DEMOJIZE, "demojize"),
             (PipelineSteps::STRIP_ACCENTS, "strip_accents"),
             (PipelineSteps::TRANSLITERATE, "transliterate"),
+            (PipelineSteps::CONFUSABLES, "confusables"),
             (PipelineSteps::FOLD_CASE, "fold_case"),
             (PipelineSteps::STRIP_CONTROL, "strip_control"),
             (PipelineSteps::STRIP_ZERO_WIDTH, "strip_zero_width"),
@@ -196,22 +201,17 @@ impl _TextPipeline {
             }
         }
 
-        // 2. Confusables (before transliteration — operates on Unicode)
-        if self.steps.contains(PipelineSteps::CONFUSABLES) {
-            buf = Cow::Owned(confusables::_normalize_confusables(&buf, "latin")?);
-        }
-
-        // 3. Demojize (after normalization, before transliteration)
+        // 2. Demojize (after normalization, before transliteration)
         if self.steps.contains(PipelineSteps::DEMOJIZE) {
             buf = Cow::Owned(emoji::demojize_rust(&buf, false));
         }
 
-        // 4. Strip accents (NFD decompose + strip combining marks)
+        // 3. Strip accents (NFD decompose + strip combining marks)
         if self.steps.contains(PipelineSteps::STRIP_ACCENTS) {
             buf = Cow::Owned(transliterate::_strip_accents(&buf));
         }
 
-        // 5. Transliterate (Unicode → ASCII)
+        // 4. Transliterate (Unicode → ASCII)
         if self.steps.contains(PipelineSteps::TRANSLITERATE) {
             buf = Cow::Owned(
                 transliterate::transliterate_impl(
@@ -225,6 +225,12 @@ impl _TextPipeline {
                 )
                 .into_owned(),
             );
+        }
+
+        // 5. Confusables (after transliteration — non-Latin text is now ASCII,
+        //    so confusable normalization operates on Latin-only text)
+        if self.steps.contains(PipelineSteps::CONFUSABLES) {
+            buf = Cow::Owned(confusables::_normalize_confusables(&buf, "latin")?);
         }
 
         // 6. Fold case (after transliteration)

@@ -211,12 +211,12 @@ static SCRIPT_RANGES: &[(u32, u32, &str)] = &[
     (0xAA00, 0xAA5F, "Cham"),
     // Myanmar Extended-A
     (0xAA60, 0xAA7F, "Myanmar"),
+    // Meetei Mayek Extensions
+    (0xAAE0, 0xAAFF, "MeeteiMayek"),
     // Ethiopic Extended-A
     (0xAB00, 0xAB2F, "Ethiopic"),
     // Latin Extended-E
     (0xAB30, 0xAB6F, "Latin"),
-    // Meetei Mayek Extensions
-    (0xAAE0, 0xAAFF, "MeeteiMayek"),
     // Cherokee Supplement
     (0xAB70, 0xABBF, "Cherokee"),
     // Meetei Mayek
@@ -597,6 +597,19 @@ pub fn _inspect_auto_lang(py: Python<'_>, text: &str) -> PyResult<PyObject> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_script_ranges_sorted() {
+        for i in 1..SCRIPT_RANGES.len() {
+            let (prev_start, prev_end, prev_script) = SCRIPT_RANGES[i - 1];
+            let (curr_start, _, _) = SCRIPT_RANGES[i];
+            assert!(
+                curr_start > prev_end,
+                "SCRIPT_RANGES not sorted or overlapping at index {i}: \
+                 ({prev_start:#X}..{prev_end:#X}, {prev_script:?}) vs ({curr_start:#X}..)"
+            );
+        }
+    }
 
     #[test]
     fn test_detect_latin() {

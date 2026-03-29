@@ -93,12 +93,12 @@ def main() -> None:
     _bench("grapheme_len/emoji", lambda: translit.grapheme_len(f"Hello {family}!"))
     _bench("grapheme_len/ascii", lambda: translit.grapheme_len("hello world"))
 
-    # -- Batch vs loop --
-    print("\n--- batch APIs (100 strings) ---")
+    # -- List input vs loop --
+    print("\n--- list input (100 strings) ---")
     batch = [INPUTS["latin_diacritics"]] * 100
     _bench(
-        "transliterate_batch/100",
-        lambda: translit.transliterate_batch(batch),
+        "transliterate(list)/100",
+        lambda: translit.transliterate(batch),
         number=5_000,
     )
     _bench(

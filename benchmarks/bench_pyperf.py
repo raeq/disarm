@@ -432,18 +432,18 @@ def add_strip_accents_benchmarks(runner: pyperf.Runner) -> None:
 
 
 def add_batch_benchmarks(runner: pyperf.Runner) -> None:
-    """Batch APIs: single-call vs loop-of-calls for N strings."""
+    """List input vs loop-of-calls for N strings."""
     import translit
 
     # Build a realistic batch: 100 mixed Latin/Cyrillic strings
     batch_100 = [LATIN_SHORT, CYRILLIC_SHORT, CJK_SHORT, MIXED] * 25
 
-    # --- transliterate_batch vs loop ---
+    # --- transliterate(list) vs loop ---
     runner.timeit(
-        "batch:transliterate_batch:100",
-        "transliterate_batch(texts)",
+        "batch:transliterate(list):100",
+        "transliterate(texts)",
         globals={
-            "transliterate_batch": translit.transliterate_batch,
+            "transliterate": translit.transliterate,
             "texts": batch_100,
         },
     )
@@ -453,11 +453,11 @@ def add_batch_benchmarks(runner: pyperf.Runner) -> None:
         globals={"transliterate": translit.transliterate, "texts": batch_100},
     )
 
-    # --- slugify_batch vs loop ---
+    # --- slugify(list) vs loop ---
     runner.timeit(
-        "batch:slugify_batch:100",
-        "slugify_batch(texts)",
-        globals={"slugify_batch": translit.slugify_batch, "texts": batch_100},
+        "batch:slugify(list):100",
+        "slugify(texts)",
+        globals={"slugify": translit.slugify, "texts": batch_100},
     )
     runner.timeit(
         "batch:slugify_loop:100",

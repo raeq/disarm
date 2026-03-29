@@ -1,0 +1,46 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.rs"
+      - "**.py"
+      - "**.toml"
+      - "benchmarks/**"
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench:
+    name: Benchmarks (smoke test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Criterion benchmarks (short run)
+        run: cargo bench --no-default-features --bench bench_core -- --warm-up-time 1 --measurement-time 2 --sample-size 10
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install maturin
+        run: pip install maturin[patchelf]
+
+      - name: Python quick benchmarks
+        run: |
+          maturin build --out dist
+          pip install dist/*.whl
+          python benchmarks/bench_quick.py

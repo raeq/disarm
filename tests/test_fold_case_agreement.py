@@ -18,11 +18,14 @@ from __future__ import annotations
 
 import unicodedata
 
+import pytest
 from conftest import unicode_text
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from translit import fold_case
+
+pytestmark = pytest.mark.hypothesis
 
 
 def _has_unassigned_chars(text: str) -> bool:

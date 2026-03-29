@@ -9,6 +9,9 @@ from hypothesis import strategies as st
 from translit import fold_case
 from translit._text import Text
 
+pytestmark = pytest.mark.hypothesis
+
+
 # ── ASCII fast path ──────────────────────────────────────────────────
 
 

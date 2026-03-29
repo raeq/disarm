@@ -7,9 +7,13 @@ emoji parsing (via demojize), and transliteration with random Unicode.
 from __future__ import annotations
 
 import hypothesis.strategies as st
+import pytest
 from hypothesis import HealthCheck, given, settings
 
 import translit
+
+pytestmark = pytest.mark.hypothesis
+
 
 # ---------------------------------------------------------------------------
 # Strategies

@@ -6,10 +6,14 @@ transliterate(text, target=...) using Hypothesis.
 
 from __future__ import annotations
 
+import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from translit import reverse_langs, transliterate
+
+pytestmark = pytest.mark.hypothesis
+
 
 # ---------------------------------------------------------------------------
 # Strategies

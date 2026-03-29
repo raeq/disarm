@@ -7,6 +7,7 @@ individual calls.
 
 from __future__ import annotations
 
+import pytest
 from conftest import nf_forms, unicode_text
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -21,6 +22,8 @@ from translit import (
     transliterate,
     transliterate_batch,
 )
+
+pytestmark = pytest.mark.hypothesis
 
 # ---------------------------------------------------------------------------
 # 1. transliterate_batch ↔ transliterate

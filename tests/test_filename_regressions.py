@@ -12,6 +12,8 @@ from hypothesis import strategies as st
 
 from translit import sanitize_filename
 
+pytestmark = pytest.mark.hypothesis
+
 
 class TestWindowsReservedNames:
     """Windows reserved names must be prefixed AND preserve their extension."""

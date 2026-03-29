@@ -7,6 +7,7 @@ the security properties it promises, across the full Unicode input space.
 
 from __future__ import annotations
 
+import pytest
 from conftest import unicode_text
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -16,6 +17,8 @@ from translit import (
     is_normalized,
     security_clean,
 )
+
+pytestmark = pytest.mark.hypothesis
 
 # Bidi override and formatting characters that security_clean must strip
 BIDI_CHARS = frozenset(

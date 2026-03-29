@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from conftest import nf_forms, unicode_text
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
@@ -28,6 +29,8 @@ from translit import (
     strip_accents,
     transliterate,
 )
+
+pytestmark = pytest.mark.hypothesis
 
 # ---------------------------------------------------------------------------
 # 1. Normalization idempotence: normalize(normalize(x, F), F) == normalize(x, F)

@@ -96,6 +96,7 @@ addopts = ["-v", "--tb=short", "-m", "not formal"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "formal: exhaustive formal invariant tests — run before release with 'pytest -m formal'",
+    "hypothesis: property-based / fuzz tests using Hypothesis — expensive, run locally not in CI",
 ]
 
 [tool.mypy]

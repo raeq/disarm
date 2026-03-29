@@ -304,6 +304,51 @@ PERSIAN_VOCAB: list[tuple[str, str, int]] = [
     ("نباید", f"ن{_FA}بای{_FA}د", 3000),
     ("می‌خواهم", f"میخ{_SU}واه{_FA}م", 3000),
     ("می‌توانم", f"میت{_FA}وان{_FA}م", 2500),
+    # --- Indo-European cognates (common Persian words with known pronunciation) ---
+    # Source: borderlessblogger.com Indo-European words in Persian
+    ("دختر", f"د{_DA}خ{_SU}ت{_FA}ر", 4000),  # dokhtar (daughter)
+    ("پسر", f"پ{_KA}س{_FA}ر", 4000),  # pesar (son)
+    ("خرد", f"خ{_KA}ر{_FA}د", 1500),  # kherad (wisdom)
+    ("ستاره", f"س{_KA}تار{_KA}ه", 2000),  # setare (star)
+    ("نو", f"ن{_DA}", 2500),  # no/now (new)
+    ("نام", "نام", 5000),  # nam (name, cognate with English "name")
+    ("مادر", f"ماد{_FA}ر", 5000),  # madar (mother, cognate)
+    ("پدر", f"پ{_KA}د{_FA}ر", 5000),  # pedar (father, cognate)
+    ("برادر", f"ب{_FA}راد{_FA}ر", 3000),  # baradar (brother, cognate)
+    ("دادن", f"داد{_FA}ن", 3000),  # dadan (to give, cognate with Latin "dare")
+    # --- Additional high-frequency words ---
+    ("وقتی", f"و{_FA}ق{_SU}تی", 3000),  # vaqti (when)
+    ("همه", f"ه{_FA}م{_KA}ه", 5000),  # hame (all/everyone)
+    ("همیشه", f"ه{_FA}میش{_KA}ه", 3000),  # hamishe (always)
+    ("هنوز", f"ه{_FA}ن{_DA}ز", 2500),  # hanuz (still/yet)
+    ("هیچ", "هیچ", 3000),  # hich (nothing/no)
+    ("فقط", f"ف{_FA}ق{_FA}ط", 3000),  # faqat (only)
+    ("اما", f"ا{_FA}م{_SH}ا", 4000),  # amma (but)
+    ("اگر", f"ا{_FA}گ{_FA}ر", 4000),  # agar (if)
+    ("وقت", f"و{_FA}ق{_SU}ت", 3000),  # vaqt (time)
+    ("حال", "حال", 3000),  # hal (state/condition)
+    ("جا", "جا", 3000),  # ja (place)
+    ("پول", f"پ{_DA}ل", 2500),  # pul (money)
+    ("آینده", f"آیند{_KA}ه", 2000),  # ayande (future)
+    ("گذشته", f"گ{_DA}ز{_FA}ش{_SU}ت{_KA}ه", 2000),  # gozashte (past)
+    ("حالا", "حالا", 3000),  # hala (now)
+    ("بعد", f"ب{_FA}ع{_SU}د", 3000),  # ba'd (after)
+    ("قبل", f"ق{_FA}ب{_SU}ل", 2500),  # qabl (before)
+    ("زیاد", "زیاد", 3000),  # ziad (much/many)
+    ("کم", f"ک{_FA}م", 3000),  # kam (little/few)
+    ("اول", f"ا{_FA}و{_SU}ل", 2500),  # avval (first)
+    ("آخر", f"آخ{_FA}ر", 2500),  # akhar (last)
+    ("بین", f"ب{_KA}ین", 2000),  # beyn (between)
+    ("پیش", "پیش", 2500),  # pish (before/in front)
+    ("بیرون", f"بیر{_DA}ن", 2000),  # birun (outside)
+    ("داخل", f"داخ{_KA}ل", 2000),  # dakhel (inside)
+    ("بالا", "بالا", 2500),  # bala (up/above)
+    ("پایین", "پایین", 2000),  # payin (down/below)
+    ("سفید", f"س{_KA}فید", 2000),  # sefid (white)
+    ("سیاه", "سیاه", 2000),  # siah (black)
+    ("سبز", f"س{_FA}ب{_SU}ز", 2000),  # sabz (green)
+    ("قرمز", f"ق{_KA}ر{_SU}م{_KA}ز", 1500),  # qermez (red)
+    ("آبی", "آبی", 1500),  # abi (blue)
 ]
 
 

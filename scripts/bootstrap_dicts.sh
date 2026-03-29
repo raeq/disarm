@@ -58,7 +58,7 @@ PERSIAN_STATS="$DICT_DIR/persian_dict_stats.json"
 # These ensure the build is deterministic: same corpus + same params = same output
 ARABIC_DICT_SHA256="84b68b453404d9a663ef222bf280273009c0f8006fd7c8342d4bf07b4b8dfa83"
 HEBREW_DICT_SHA256="57347d264fe2c6afb8c89572a58c1203479e80ba4b52706da3d54fd832e94e49"
-PERSIAN_DICT_SHA256="0aa65a7f93d1bb7ee5d414c70b6e2137561aeb15e2ca8961913dd13661e37458"
+PERSIAN_DICT_SHA256="c310b7af78269af788590b39f8e62666bbad7764be336b7f37ba8b8f9c812bc8"
 
 # ============================================================================
 # Helpers

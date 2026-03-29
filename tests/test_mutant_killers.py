@@ -117,7 +117,7 @@ class TestDefaultParameterValues:
     def test_transliterate_default_errors_is_replace(self):
         """Default errors='replace' maps unknown chars to [?]."""
         result = transliterate("\U0001f600")  # emoji — no transliteration
-        assert "[?]" in result or result.isascii()
+        assert "[?]" in result
 
     def test_transliterate_errors_ignore_drops_unknown(self):
         result = transliterate("\U0001f600", errors="ignore")

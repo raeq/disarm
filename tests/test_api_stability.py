@@ -236,7 +236,6 @@ def _param_names(fn) -> list[str]:
     return [p for p in sig.parameters if p != "self"]
 
 
-
 def _param_kinds(fn) -> dict[str, str]:
     """Extract parameter kinds (POSITIONAL_OR_KEYWORD, KEYWORD_ONLY, etc.)."""
     sig = inspect.signature(fn)

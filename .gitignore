@@ -144,3 +144,8 @@ site/
 
 # ── Plans (local working notes) ──────────────────────
 docs/plans/
+# Context dictionaries (large binary files, built offline)
+data/corpora/
+data/*.bin
+data/*.bin.gz
+data/*_stats.json

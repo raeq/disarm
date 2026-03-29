@@ -59,9 +59,7 @@ class TestTextPipelineRejectsUnsafeOrder:
         pipe = TextPipeline(transliterate=True, confusables=True)
         result = pipe("Москва")
         assert result.isascii()
-        # Must produce the same result as the safe ordering
-        catalog_key("Москва")
-        # catalog_key also normalizes and folds case; compare transliterate→confusables
+        # Must produce the same result as the safe ordering (transliterate→confusables)
         safe = normalize_confusables(transliterate("Москва"))
         assert result == safe
 

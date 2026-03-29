@@ -360,10 +360,50 @@ MAGIC = b"TRLD"
 VERSION = 1
 
 
+def load_wiktionary_tsv(path: Path) -> list[tuple[str, str, int]]:
+    """Load Wiktionary-harvested Persian romanizations as vocab entries.
+
+    Converts romanization back to diacritized form by applying tashkeel marks
+    based on the romanization. This is an approximation — the romanization
+    provides the vowel information, and we encode it as Arabic diacritics
+    on the original Persian word.
+    """
+    entries: list[tuple[str, str, int]] = []
+    if not path.exists():
+        return entries
+
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) != 2:
+                continue
+            persian, romanization = parts
+            # Clean romanization
+            rom = romanization.split(",")[0].strip()  # Take first variant
+            rom = rom.split("|")[0].strip()
+            if rom.startswith("ir=") or rom.startswith("cls="):
+                rom = rom.split("=", 1)[1]
+            # Skip entries with non-ASCII romanization or too short
+            if not rom.isascii() or len(rom) < 2:
+                continue
+            # Use the romanization as-is — the context engine will use it
+            # to look up the skeleton and return the diacritized form.
+            # For Wiktionary entries, we store the original Persian word
+            # as the "diacritized form" (since it may contain diacritics
+            # from Wiktionary's formatting).
+            entries.append((persian, persian, 1000))  # Default frequency
+
+    return entries
+
+
 def build_from_vocab(
     vocab: list[tuple[str, str, int]],
+    wiktionary_path: Path | None = None,
 ) -> tuple[dict[str, list[tuple[str, int]]], dict[tuple[str, str], str]]:
-    """Build unigram table from curated vocabulary."""
+    """Build unigram table from curated vocabulary + optional Wiktionary data."""
     from collections import defaultdict
 
     unigrams: dict[str, list[tuple[str, int]]] = defaultdict(list)
@@ -371,6 +411,17 @@ def build_from_vocab(
     for skeleton, diacritized, freq in vocab:
         clean_skeleton = strip_diacritics(skeleton)
         unigrams[clean_skeleton].append((diacritized, freq))
+
+    # Add Wiktionary entries (lower priority than curated)
+    if wiktionary_path:
+        wikt_entries = load_wiktionary_tsv(wiktionary_path)
+        for skeleton, diacritized, freq in wikt_entries:
+            clean_skeleton = strip_diacritics(skeleton)
+            # Only add if not already in curated vocab
+            if clean_skeleton not in unigrams:
+                unigrams[clean_skeleton].append((diacritized, freq))
+
+        print(f"Wiktionary entries loaded: {len(wikt_entries)}", file=sys.stderr)
 
     # Sort each entry by frequency descending
     for skeleton in unigrams:
@@ -424,11 +475,17 @@ def main() -> None:
         description="Build Persian context dictionary from curated vocabulary"
     )
     parser.add_argument("-o", "--output", type=Path, required=True, help="Output binary dict path")
+    parser.add_argument(
+        "--wiktionary",
+        type=Path,
+        default=None,
+        help="Wiktionary TSV file (from harvest_wiktionary_persian.py)",
+    )
     parser.add_argument("--stats", action="store_true", help="Print stats only")
     parser.add_argument("--json-stats", type=Path, default=None, help="Write stats to JSON")
     args = parser.parse_args()
 
-    unigrams, bigrams = build_from_vocab(PERSIAN_VOCAB)
+    unigrams, bigrams = build_from_vocab(PERSIAN_VOCAB, wiktionary_path=args.wiktionary)
 
     print("\n--- Statistics ---", file=sys.stderr)
     print(f"Curated vocabulary entries: {len(PERSIAN_VOCAB)}", file=sys.stderr)

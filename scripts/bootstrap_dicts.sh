@@ -200,10 +200,23 @@ build_hebrew() {
 }
 
 build_persian() {
-    log "Building Persian context dictionary (curated vocabulary)..."
+    log "Building Persian context dictionary..."
 
+    # Optional: use Wiktionary data if harvested
+    local wikt_flag=""
+    local wikt_path="$CORPUS_DIR/wiktionary_persian.tsv"
+    if [[ -f "$wikt_path" ]]; then
+        log "  Using Wiktionary data: $wikt_path"
+        wikt_flag="--wiktionary $wikt_path"
+    else
+        log "  No Wiktionary data (optional: python scripts/harvest_wiktionary_persian.py -o $wikt_path)"
+        log "  Building from curated vocabulary only"
+    fi
+
+    # shellcheck disable=SC2086
     python3 "$ROOT/scripts/build_persian_dict.py" \
         -o "$PERSIAN_DICT" \
+        $wikt_flag \
         --json-stats "$PERSIAN_STATS"
 
     local size

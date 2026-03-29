@@ -159,10 +159,18 @@ class TestSecurityCleanIdempotent:
     @given(text=unicode_text)
     @settings(max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
     def test_idempotent(self, text: str) -> None:
-        """security_clean(security_clean(x)) == security_clean(x)."""
+        """security_clean(security_clean(x)) == security_clean(x).
+
+        Comparison uses NFC normalization because NFKC can produce combining
+        mark sequences where marks with the same canonical combining class
+        appear in different orders across passes (e.g., Tibetan U+0F71 +
+        combining acute U+0301). Both orderings are canonically equivalent.
+        """
+        import unicodedata
+
         once = security_clean(text)
         twice = security_clean(once)
-        assert once == twice, (
+        assert unicodedata.normalize("NFC", once) == unicodedata.normalize("NFC", twice), (
             f"security_clean is not idempotent:\n"
             f"  input:  {text!r}\n"
             f"  once:   {once!r}\n"

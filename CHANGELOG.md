@@ -5,17 +5,26 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] — 2026-03-29
 
 ### Added
-- **`strip_obfuscation()` preset pipeline**: maximum-strength text deobfuscation.
-  10-step pipeline: NFKC → strip_zalgo(max_marks=0) → strip_bidi → strip_zero_width
-  → demojize → transliterate → confusables → strip_accents → fold_case →
-  collapse_whitespace. Produces clean lowercase ASCII from adversarial user-generated
-  text. Accepts optional `lang=` parameter.
+- **`strip_obfuscation()` preset pipeline**: maximum-strength text deobfuscation
+  using TR39 confusable mapping (visual similarity). Neutralizes homoglyph spoofing,
+  zalgo abuse, invisible character injection, and bidi attacks. Does NOT transliterate
+  — chain with `transliterate()` explicitly if romanization is also needed.
+  Pipeline: NFKC → strip_zalgo(max_marks=0) → confusables → strip_bidi →
+  strip_zero_width → demojize → strip_accents → fold_case → collapse_whitespace.
 - **`lang_info()` and `script_info()` APIs**: return structured metadata (display
   name, script, region) for any language code or script. Backed by `LANG_META` (83
   entries) and `SCRIPT_META` (55 entries) with import-time drift assertions.
+- **18 new language codes**: ban (Balinese), bax (Bamum), bug (Buginese), chr
+  (Cherokee), cjm (Cham), cop (Coptic), khb (Tai Lue), lis (Lisu), mni (Meitei),
+  nod (Northern Thai), nqo (N'Ko), sat (Santali), su (Sundanese), syr (Syriac),
+  tdd (Tai Le), tl (Tagalog), tzm (Tamazight), vai (Vai). Total: 83 languages.
+- **10 new Script enum members**: Bamum, Buginese, Cham, Lisu, MeeteiMayek, OlChiki,
+  Sundanese, Tagalog, TaiTham, Tifinagh. Total: 57 scripts.
+- **Transliteration provenance documentation** (`docs/provenance.md`): per-block
+  audit of which formal romanization standard each Unicode block follows.
 - **API surface stability tests** (`tests/test_api_stability.py`): 133 tests
   locking down function signatures, class methods, enum members, TypedDicts,
   protocol interfaces, and `__all__` exports.
@@ -23,11 +32,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
   targeting forward-only parameter validation, default parameter sensitivity,
   pipeline step tuples, and boundary checks.
 - **Language consistency audit** (`scripts/audit_language_consistency.py`): checks 11
-  registration points for Rust/Python/docs/test alignment.
+  registration points for Rust/Python/docs/test alignment. Wired into pre-push gate.
 - 283 empty-string mappings for combining marks and zero-width characters in
   `translit_default.tsv` — these are now silently stripped instead of producing `[?]`.
+- `docs/index.md` is now generated from `README.md` via `scripts/generate_docs_index.sh`
+  — single source of truth, no more drift.
 
 ### Fixed
+- **`strip_obfuscation()` homoglyph resolution**: used phonetic transliteration
+  (Cyrillic р→r, с→s) instead of TR39 visual confusable mapping (р→p, с→c).
+  Removed transliterate from the pipeline; confusables now handles homoglyphs.
 - **Combining marks produce `[?]`**: `transliterate("n\u0303")` returned `"n[?]"`
   instead of `"n"`. Added empty-string TSV mappings for all Combining Diacritical
   Marks (U+0300–U+036F), Extended (U+1AB0–U+1AFF), Supplement (U+1DC0–U+1DFF),
@@ -40,21 +54,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
   so transliterate runs first (matching `catalog_key` preset).
 - **`demojize()` adjacent emoji concatenation**: `demojize("🔥🔥")` returned
   `"firefire"` instead of `"fire fire"`. Added space padding between adjacent
-  emoji-to-text replacements in both `demojize_impl` and `demojize_rust`.
-- **`security_clean` idempotency test**: comparing NFC-normalized forms instead of
-  raw strings to handle combining mark reorder between Tibetan and Latin marks.
+  emoji-to-text replacements.
+- **SCRIPT_RANGES sort order**: MeeteiMayek Extensions was misplaced, breaking
+  binary search for Ethiopic Extended-A. Added `test_script_ranges_sorted` invariant.
+- **Tibetan incorrectly documented as Wylie**: actual mappings use Indic-phonetic
+  romanization (ཅ→cha, not Wylie's ca).
 
 ### Changed
 - **BREAKING: `transliterate_batch()`, `slugify_batch()`, `normalize_batch()`, and
   `strip_accents_batch()` removed.** The base functions now accept both `str` and
   `list[str]` via `@typing.overload`. Pass a list to get batch processing:
-  `transliterate(["café", "naïve"])` → `["cafe", "naive"]`. The Rust batch path is
-  used automatically — no API change needed for single-string callers.
-- CI excludes Hypothesis/property-based tests (`-m "not formal and not hypothesis"`)
-  for 10× faster runs (~4s vs ~46s). Hypothesis tests are for developer worktrees.
+  `transliterate(["café", "naïve"])` → `["cafe", "naive"]`.
+- **BREAKING: `strip_obfuscation()` no longer transliterates.** Uses TR39 confusables
+  (visual mapping) instead. `lang=` parameter removed. Chain with `transliterate()`
+  explicitly if romanization is also needed.
+- CI restructured: lint/test on PRs only (not push-to-main), hypothesis tests
+  excluded (~4s vs ~46s), CodeQL moved to workflow file with path filtering,
+  benchmarks split to own workflow.
 - Pinned `ruff==0.15.4` in CI and `pyproject.toml` to prevent format drift.
-- `#[ignore]` attributes in Rust exhaustive tests now include reason strings
-  (clippy `ignore_without_reason`).
+- Python 3.9 dropped from release CI matrix (PEP 604 syntax incompatible).
 
 ## [0.3.0] — 2026-03-28
 

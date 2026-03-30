@@ -568,25 +568,29 @@ def normalize_confusables(
 ) -> str:
     """Replace Unicode confusable homoglyphs with target-script equivalents.
 
-    Uses Unicode TR39 confusables table.
+    Uses Unicode TR39 confusables table. Characters without a confusable
+    equivalent in the target script pass through unchanged (visual mapping
+    only, not transliteration).
 
     Args:
         text: Input string potentially containing homoglyphs.
-        target_script: Script to normalize toward. Currently only ``"latin"``
-            is supported; any other value raises ``TranslitError``.
+        target_script: Script to normalize toward. Supported values:
+            ``"latin"`` (default, ~2,063 mappings) and ``"cyrillic"``
+            (~1,369 mappings).
 
     Returns:
         String with confusable characters replaced by target-script equivalents.
 
     Raises:
-        TranslitError: If *target_script* is not ``"latin"``, or if an
-            internal Rust error occurs.
+        TranslitError: If *target_script* is not a supported value.
 
     Examples:
         >>> normalize_confusables("Ηello")  # Greek Η looks like Latin H
         'Hello'
         >>> normalize_confusables("раypal")  # Cyrillic р/а look like Latin p/a
         'paypal'
+        >>> normalize_confusables("paypal", target_script="cyrillic")
+        'раураl'
     """
     if not isinstance(text, str):
         raise TypeError(f"normalize_confusables() expects str, got {type(text).__name__}")

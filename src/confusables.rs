@@ -2,12 +2,14 @@ use pyo3::prelude::*;
 
 use crate::tables;
 
-/// Validate the `target_script` parameter. Currently only `"latin"` is supported.
+/// Validate the `target_script` parameter.
+///
+/// Supported values: `"latin"`, `"cyrillic"`.
 fn validate_target_script(target_script: &str) -> PyResult<()> {
-    if target_script != "latin" {
-        return translit_err!("target_script must be 'latin', got '{target_script}'");
+    match target_script {
+        "latin" | "cyrillic" => Ok(()),
+        _ => translit_err!("target_script must be 'latin' or 'cyrillic', got '{target_script}'"),
     }
-    Ok(())
 }
 
 /// Replace Unicode confusable homoglyphs with target-script equivalents.
@@ -101,10 +103,16 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_target_script_cyrillic_ok() {
+        assert!(validate_target_script("cyrillic").is_ok());
+    }
+
+    #[test]
     fn test_validate_target_script_invalid() {
-        assert!(validate_target_script("cyrillic").is_err());
+        assert!(validate_target_script("greek").is_err());
         assert!(validate_target_script("").is_err());
         assert!(validate_target_script("Latin").is_err()); // case-sensitive
+        assert!(validate_target_script("Cyrillic").is_err()); // case-sensitive
     }
 
     #[test]

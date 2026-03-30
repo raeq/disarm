@@ -2,7 +2,7 @@
 
 Unicode confusables (homoglyphs) are characters from different scripts that look visually identical or very similar. For example, Cyrillic "а" (U+0430) looks like Latin "a" (U+0061). Attackers exploit this for phishing, impersonation, and spoofing.
 
-translit implements Unicode TR39 confusable detection and normalization using a table of ~1,900 non-Latin→Latin mappings auto-generated from the official [Unicode TR39 confusables.txt](https://www.unicode.org/Public/security/latest/confusables.txt) (version 17.0.0). The table covers Cyrillic, Greek, Armenian, Georgian, CJK compatibility, mathematical symbols, fullwidth forms, and other visually confusable characters. Mappings are based on visual similarity, not phonetic equivalence.
+translit implements Unicode TR39 confusable detection and normalization with multi-target script support, auto-generated from the official [Unicode TR39 confusables.txt](https://www.unicode.org/Public/security/latest/confusables.txt) (version 17.0.0). The tables cover Cyrillic, Greek, Armenian, Georgian, CJK compatibility, mathematical symbols, fullwidth forms, and other visually confusable characters. Mappings are based on visual similarity, not phonetic equivalence.
 
 ## Detecting confusables
 
@@ -34,11 +34,24 @@ normalize_confusables("Ηellο")          # => "Hello"
 
 ### Target script
 
-By default, confusables are normalized to Latin. You can specify a different target:
+By default, confusables are normalized to Latin. You can specify a different target script to normalize *towards* that script instead:
 
 ```python
-normalize_confusables("Hello", target_script="latin")  # default
+# Normalize to Latin (default) — non-Latin homoglyphs → Latin
+normalize_confusables("раypal")                            # → "paypal"
+
+# Normalize to Cyrillic — non-Cyrillic homoglyphs → Cyrillic
+normalize_confusables("paypal", target_script="cyrillic")  # → "раураl"
 ```
+
+### Supported target scripts
+
+| Target | Mappings | Description |
+|--------|----------|-------------|
+| `"latin"` (default) | ~2,063 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
+| `"cyrillic"` | ~1,369 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
+
+Characters without a confusable equivalent in the target script pass through unchanged. This is pure visual mapping — not transliteration. Latin `f` has no Cyrillic lookalike, so it stays as `f`.
 
 ## Script detection
 
@@ -165,10 +178,16 @@ Detect domain names that use mixed scripts to impersonate legitimate sites:
 ```python
 from translit import is_mixed_script, normalize_confusables
 
+# Detect Latin homoglyphs in a "Cyrillic" domain
 domain = "аpple.com"  # first "a" is Cyrillic
 if is_mixed_script(domain):
     normalized = normalize_confusables(domain)
     print(f"Suspicious: looks like {normalized}")
+
+# Detect Cyrillic homoglyphs injected into Russian text
+text = "Банк pоссии"  # Latin 'p' and 'o' instead of Cyrillic
+normalized = normalize_confusables(text, target_script="cyrillic")
+# → "Банк россии" (Latin homoglyphs replaced with Cyrillic)
 ```
 
 ### Username validation

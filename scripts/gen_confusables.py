@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Generate confusables_data.rs from Unicode TR39 confusables.txt.
+"""Generate confusable TSV files from Unicode TR39 confusables.txt.
 
-Downloads the latest confusables.txt from unicode.org and produces a PHF
-map of non-Latin → Latin confusable mappings for use in translit's
-homoglyph detection and normalization.
+Downloads the latest confusables.txt from unicode.org and produces TSV files
+for each supported target script. Each TSV maps non-target characters to their
+visual equivalents in the target script.
+
+TR39 maps every confusable character to a single prototype, forming equivalence
+classes. To generate mappings *to* a target script, we:
+  1. Group all characters by their prototype (equivalence class)
+  2. For each class, find the member(s) that belong to the target script
+  3. Map all non-target members to the target-script member
+
+Output files (written to src/tables/data/):
+  confusables_to_latin.tsv    — non-Latin → Latin (~2,063 mappings)
+  confusables_to_cyrillic.tsv — non-Cyrillic → Cyrillic (~19+ mappings)
 
 Usage:
-    python scripts/gen_confusables.py > src/tables/confusables_data.rs
-
-Or with a local file:
+    python scripts/gen_confusables.py
     python scripts/gen_confusables.py --input confusables.txt
 """
 
@@ -16,10 +24,18 @@ from __future__ import annotations
 
 import argparse
 import sys
+import unicodedata
 import urllib.request
+from collections import defaultdict
 from pathlib import Path
 
 CONFUSABLES_URL = "https://www.unicode.org/Public/security/latest/confusables.txt"
+DATA_DIR = Path(__file__).resolve().parent.parent / "src" / "tables" / "data"
+
+
+# ---------------------------------------------------------------------------
+# Codepoint classification
+# ---------------------------------------------------------------------------
 
 
 def is_combining_mark(cp: int) -> bool:
@@ -30,6 +46,19 @@ def is_combining_mark(cp: int) -> bool:
         or (0x1DC0 <= cp <= 0x1DFF)  # Combining Diacritical Marks Supplement
         or (0x20D0 <= cp <= 0x20FF)  # Combining Diacritical Marks for Symbols
         or (0xFE20 <= cp <= 0xFE2F)  # Combining Half Marks
+    )
+
+
+def is_latin(cp: int) -> bool:
+    """True if codepoint is in a Latin block."""
+    return (
+        (0x0041 <= cp <= 0x005A)  # A-Z
+        or (0x0061 <= cp <= 0x007A)  # a-z
+        or (0x00C0 <= cp <= 0x024F)  # Latin Extended-A/B
+        or (0x1E00 <= cp <= 0x1EFF)  # Latin Extended Additional
+        or (0x2C60 <= cp <= 0x2C7F)  # Latin Extended-C
+        or (0xA720 <= cp <= 0xA7FF)  # Latin Extended-D
+        or (0xAB30 <= cp <= 0xAB6F)  # Latin Extended-E
     )
 
 
@@ -46,17 +75,35 @@ def is_latin_or_common(cp: int) -> bool:
     )
 
 
-def is_latin_source(cp: int) -> bool:
-    """True if codepoint is in a Latin block (exclude from source)."""
+def is_cyrillic(cp: int) -> bool:
+    """True if codepoint is in a Cyrillic block."""
     return (
-        (0x0041 <= cp <= 0x005A)  # A-Z
-        or (0x0061 <= cp <= 0x007A)  # a-z
-        or (0x00C0 <= cp <= 0x024F)  # Latin Extended-A/B
-        or (0x1E00 <= cp <= 0x1EFF)  # Latin Extended Additional
-        or (0x2C60 <= cp <= 0x2C7F)  # Latin Extended-C
-        or (0xA720 <= cp <= 0xA7FF)  # Latin Extended-D
-        or (0xAB30 <= cp <= 0xAB6F)  # Latin Extended-E
+        (0x0400 <= cp <= 0x04FF)  # Cyrillic
+        or (0x0500 <= cp <= 0x052F)  # Cyrillic Supplement
+        or (0x2DE0 <= cp <= 0x2DFF)  # Cyrillic Extended-A
+        or (0xA640 <= cp <= 0xA69F)  # Cyrillic Extended-B
     )
+
+
+# ---------------------------------------------------------------------------
+# Target script definitions
+# ---------------------------------------------------------------------------
+
+SCRIPTS = {
+    "latin": {
+        "is_target": is_latin,
+        "is_target_or_common": is_latin_or_common,
+    },
+    "cyrillic": {
+        "is_target": is_cyrillic,
+        "is_target_or_common": lambda cp: is_cyrillic(cp) or is_combining_mark(cp),
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Parsing
+# ---------------------------------------------------------------------------
 
 
 def parse_confusables(text: str) -> list[tuple[int, list[int]]]:
@@ -75,145 +122,234 @@ def parse_confusables(text: str) -> list[tuple[int, list[int]]]:
     return entries
 
 
-def strip_combining(target_cps: list[int]) -> list[int]:
-    """Remove combining marks from target codepoints.
+def build_equivalence_classes(
+    entries: list[tuple[int, list[int]]],
+) -> dict[tuple[int, ...], set[int]]:
+    """Build equivalence classes from TR39 confusables.
 
-    TR39 targets sometimes include combining marks (e.g. η → n̩ where
-    U+0329 is COMBINING VERTICAL LINE BELOW). Since our pipeline strips
-    accents/marks downstream, we drop them here to avoid rejecting
-    otherwise valid Latin targets.
+    TR39 maps each source character to a prototype. Characters sharing the
+    same prototype form an equivalence class. We group all sources by their
+    prototype and also include the prototype itself.
+
+    Returns: {prototype_key: {member_cp, ...}}
     """
+    classes: dict[tuple[int, ...], set[int]] = defaultdict(set)
+    for source_cp, target_cps in entries:
+        key = tuple(target_cps)
+        classes[key].add(source_cp)
+        # If the prototype is a single codepoint, it's also a class member
+        if len(target_cps) == 1:
+            classes[key].add(target_cps[0])
+    return dict(classes)
+
+
+# ---------------------------------------------------------------------------
+# Filtering
+# ---------------------------------------------------------------------------
+
+
+def strip_combining(target_cps: list[int]) -> list[int]:
+    """Remove combining marks from target codepoints."""
     return [cp for cp in target_cps if not is_combining_mark(cp)]
 
 
 def fix_case_mismatch(source_cp: int, target_str: str) -> str:
-    """Ensure uppercase sources map to uppercase Latin targets.
+    """Ensure case consistency between source and target.
 
-    TR39 maps all members of a confusable class to a single prototype.
-    For the {I, l, 1, Ι} class, the prototype is 'l'. But an uppercase
-    non-Latin source (like Greek Ι) should map to 'I' (uppercase Latin),
-    not 'L' (which would be a naive upper() of 'l').
-
-    Special case: prototype 'l' + uppercase source → 'I', because
-    Latin I (not L) is the uppercase member of the l/I/1 class.
-    For all other single lowercase ASCII targets, upper() is correct.
+    If source is uppercase and target is lowercase (or vice versa),
+    adjust the target to match. Special case: the {I, l, 1} class
+    where uppercase should map to I, not L.
     """
-    import unicodedata
-
-    if len(target_str) != 1 or not target_str.isascii() or not target_str.isalpha():
+    if len(target_str) != 1 or not target_str.isalpha():
         return target_str
     source_cat = unicodedata.category(chr(source_cp))
-    if source_cat == "Lu" and target_str.islower():
-        # The {I, l, 1} class: uppercase member is I, not L
+    target_cat = unicodedata.category(target_str)
+    if source_cat == "Lu" and target_cat == "Ll":
         if target_str == "l":
             return "I"
         return target_str.upper()
+    if source_cat == "Ll" and target_cat == "Lu":
+        return target_str.lower()
     return target_str
 
 
-def filter_to_latin(
+def filter_direct(
     entries: list[tuple[int, list[int]]],
+    script_name: str,
 ) -> list[tuple[int, str]]:
-    """Keep only non-Latin source → Latin/ASCII target mappings."""
+    """Direct filtering: keep entries where the TR39 target is in the target script.
+
+    This is the original approach — works well for Latin (where the prototype
+    IS the Latin character) but misses cases where the target script member
+    is a source, not a prototype.
+    """
+    script = SCRIPTS[script_name]
+    is_target = script["is_target"]
+    is_target_or_common = script["is_target_or_common"]
+
     result = []
     for source_cp, target_cps in entries:
-        # Skip Latin→Latin (not useful for confusable detection)
-        if is_latin_source(source_cp):
+        # Skip same-script → same-script
+        if is_target(source_cp):
             continue
-        # Skip digits and basic punctuation as sources
+        # Skip digits as sources
         if 0x0030 <= source_cp <= 0x0039:
             continue
-        # Strip combining marks from target (stripped downstream anyway)
         cleaned_cps = strip_combining(target_cps)
-        # Target must be entirely Latin/Common (after stripping marks)
-        if not all(is_latin_or_common(cp) for cp in cleaned_cps):
+        if not all(is_target_or_common(cp) for cp in cleaned_cps):
             continue
-        # Target must contain at least one visible character
         target_str = "".join(chr(cp) for cp in cleaned_cps)
         if not target_str.strip():
             continue
-        # Fix case: uppercase source should map to uppercase target
         target_str = fix_case_mismatch(source_cp, target_str)
         result.append((source_cp, target_str))
     return result
 
 
-def rust_char_literal(cp: int) -> str:
-    """Format a codepoint as a Rust char literal."""
-    return f"'\\u{{{cp:04X}}}'"
+def filter_via_classes(
+    entries: list[tuple[int, list[int]]],
+    script_name: str,
+) -> list[tuple[int, str]]:
+    """Equivalence-class filtering: for each class, map non-target members
+    to the target-script member.
+
+    This catches cases like Latin A → Cyrillic А, where TR39 maps
+    Cyrillic А → Latin A (prototype). We invert: Latin A → Cyrillic А.
+    """
+    script = SCRIPTS[script_name]
+    is_target = script["is_target"]
+    classes = build_equivalence_classes(entries)
+
+    result_map: dict[int, str] = {}
+
+    for _proto_key, members in classes.items():
+        # Find single-codepoint target-script members in this class
+        target_members_upper: list[int] = []
+        target_members_lower: list[int] = []
+        target_members_other: list[int] = []
+
+        for m in members:
+            if is_target(m):
+                cat = unicodedata.category(chr(m))
+                if cat == "Lu":
+                    target_members_upper.append(m)
+                elif cat == "Ll":
+                    target_members_lower.append(m)
+                else:
+                    target_members_other.append(m)
+
+        if not (target_members_upper or target_members_lower or target_members_other):
+            continue
+
+        # Prefer lowest codepoint (basic block) over extended/supplement
+        target_members_upper.sort()
+        target_members_lower.sort()
+        target_members_other.sort()
+
+        # For each non-target member, map to the appropriate target member
+        for m in members:
+            if is_target(m):
+                continue  # Don't map target→target
+            # Skip digits
+            if 0x0030 <= m <= 0x0039:
+                continue
+
+            source_cat = unicodedata.category(chr(m))
+
+            # Pick the target member with matching case
+            target_cp = None
+            if source_cat == "Lu" and target_members_upper:
+                target_cp = target_members_upper[0]
+            elif source_cat == "Ll" and target_members_lower:
+                target_cp = target_members_lower[0]
+            elif target_members_lower:
+                target_cp = target_members_lower[0]
+            elif target_members_upper:
+                target_cp = target_members_upper[0]
+            elif target_members_other:
+                target_cp = target_members_other[0]
+
+            if target_cp is not None:
+                target_str = chr(target_cp)
+                target_str = fix_case_mismatch(m, target_str)
+                # Only keep if not already mapped (direct takes priority)
+                if m not in result_map:
+                    result_map[m] = target_str
+
+    return list(result_map.items())
 
 
-def rust_str_escape(s: str) -> str:
-    """Escape a string for Rust string literal."""
-    result = []
-    for ch in s:
-        cp = ord(ch)
-        if 0x20 <= cp <= 0x7E and ch != '"' and ch != "\\":
-            result.append(ch)
-        else:
-            result.append(f"\\u{{{cp:04X}}}")
-    return "".join(result)
+def generate_mappings(
+    entries: list[tuple[int, list[int]]],
+    script_name: str,
+) -> list[tuple[int, str]]:
+    """Generate all mappings for a target script.
+
+    For Latin: use direct filtering only (TR39 prototypes are Latin, so
+    direct filtering catches everything).
+
+    For non-Latin targets (Cyrillic, etc.): combine direct filtering with
+    equivalence-class inversion. Direct catches entries where the TR39
+    prototype happens to be in the target script. Class-based catches the
+    common case where the target-script member is a *source* in TR39
+    (e.g. Cyrillic А → Latin A), which we invert to Latin A → Cyrillic А.
+    """
+    # Direct: picks up entries where the prototype IS in the target script
+    direct = filter_direct(entries, script_name)
+
+    if script_name == "latin":
+        # For Latin, direct is sufficient (prototypes are Latin)
+        return direct
+
+    # For non-Latin: also invert equivalence classes
+    direct_map = dict(direct)
+    class_based = filter_via_classes(entries, script_name)
+
+    # Merge: direct takes priority
+    merged = dict(direct_map)
+    for cp, target in class_based:
+        if cp not in merged:
+            merged[cp] = target
+
+    return list(merged.items())
 
 
-def generate_rust(mappings: list[tuple[int, str]], version_line: str) -> str:
-    """Generate the confusables_data.rs file content."""
-    # Sort by codepoint for reproducibility
+# ---------------------------------------------------------------------------
+# TSV output
+# ---------------------------------------------------------------------------
+
+
+def write_tsv(mappings: list[tuple[int, str]], path: Path) -> None:
+    """Write mappings as TSV: HEX_CODEPOINT<tab>value."""
     mappings.sort(key=lambda x: x[0])
+    with open(path, "w", encoding="utf-8") as f:
+        for source_cp, target_str in mappings:
+            escaped = []
+            for ch in target_str:
+                cp = ord(ch)
+                if 0x20 <= cp <= 0x7E and ch != "\\":
+                    escaped.append(ch)
+                else:
+                    escaped.append(f"\\u{{{cp:04X}}}")
+            f.write(f"{source_cp:04X}\t{''.join(escaped)}\n")
 
-    lines = []
-    lines.append("//! Unicode TR39 confusable character mappings (non-Latin → Latin).")
-    lines.append("//!")
-    lines.append("//! Auto-generated from confusables.txt by scripts/gen_confusables.py.")
-    lines.append(f"//! {version_line}")
-    lines.append("//!")
-    lines.append(f"//! Contains {len(mappings)} mappings from non-Latin scripts to Latin")
-    lines.append("//! equivalents. Uses compile-time perfect hash maps (`phf`) for O(1)")
-    lines.append("//! lookups. Covers Cyrillic, Greek, Armenian, Georgian, CJK compatibility,")
-    lines.append("//! mathematical symbols, fullwidth forms, and other confusable characters.")
-    lines.append("//!")
-    lines.append("//! DO NOT EDIT — regenerate with: python scripts/gen_confusables.py")
-    lines.append("")
-    lines.append("use phf::phf_map;")
-    lines.append("")
-    lines.append("/// Non-Latin → Latin confusable mappings (O(1) PHF lookup).")
-    lines.append("///")
-    lines.append("/// Maps visually similar non-Latin characters to their Latin prototypes")
-    lines.append("/// per Unicode Technical Report #39.")
-    lines.append("static TO_LATIN: phf::Map<char, &'static str> = phf_map! {")
 
-    for source_cp, target_str in mappings:
-        source_char = rust_char_literal(source_cp)
-        target_escaped = rust_str_escape(target_str)
-        # Add a comment with character names for readability
-        source_name = chr(source_cp)
-        if len(target_str) == 1:
-            comment = f"// {source_name} → {target_str}"
-        else:
-            comment = f'// {source_name} → "{target_str}"'
-        lines.append(f'    {source_char} => "{target_escaped}", {comment}')
-
-    lines.append("};")
-    lines.append("")
-    lines.append("/// Look up a confusable mapping for a character to the target script.")
-    lines.append("///")
-    lines.append("/// Returns the Latin prototype string if the character is a known")
-    lines.append("/// confusable, or None if it is not.")
-    lines.append("#[inline]")
-    lines.append("pub fn lookup(ch: char, target_script: &str) -> Option<&'static str> {")
-    lines.append('    if target_script != "latin" {')
-    lines.append("        return None;")
-    lines.append("    }")
-    lines.append("")
-    lines.append("    TO_LATIN.get(&ch).copied()")
-    lines.append("}")
-    lines.append("")
-
-    return "\n".join(lines)
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate confusables_data.rs")
+    parser = argparse.ArgumentParser(
+        description="Generate confusable TSV files from TR39 confusables.txt"
+    )
     parser.add_argument("--input", type=Path, help="Local confusables.txt (default: download)")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DATA_DIR,
+        help=f"Output directory for TSV files (default: {DATA_DIR})",
+    )
     args = parser.parse_args()
 
     if args.input:
@@ -223,24 +359,19 @@ def main() -> None:
         with urllib.request.urlopen(CONFUSABLES_URL) as resp:
             text = resp.read().decode("utf-8")
 
-    # Extract version line
-    version_line = ""
-    for line in text.splitlines():
-        if line.startswith("# Version:"):
-            version_line = line.lstrip("# ").strip()
-            break
-
     entries = parse_confusables(text)
-    mappings = filter_to_latin(entries)
+    print(f"Parsed {len(entries)} total entries", file=sys.stderr)
 
-    print(
-        f"Parsed {len(entries)} total entries, "
-        f"filtered to {len(mappings)} non-Latin → Latin mappings",
-        file=sys.stderr,
-    )
+    args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    rust_code = generate_rust(mappings, version_line)
-    print(rust_code)
+    for script_name in SCRIPTS:
+        mappings = generate_mappings(entries, script_name)
+        out_path = args.output_dir / f"confusables_to_{script_name}.tsv"
+        write_tsv(mappings, out_path)
+        print(
+            f"  → {script_name}: {len(mappings)} mappings → {out_path.name}",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":

@@ -96,12 +96,10 @@ Changelog = "https://github.com/raeq/translit/blob/main/CHANGELOG.md"
 python-source = "python"
 module-name = "translit._translit"
 features = ["pyo3/abi3-py39"]
-# Include context dictionary data files in the wheel if they exist.
-# These are built offline via: bash scripts/bootstrap_dicts.sh all
-data = "data"
-include = [
-    { path = "data/*.bin", format = "wheel" },
-]
+# Context dictionary data files (data/*.bin) are loaded at runtime from
+# the filesystem, not embedded in the wheel. They are built offline via:
+#   bash scripts/bootstrap_dicts.sh all
+# and installed separately via pip extras (translit-rs[arabic], etc.).
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

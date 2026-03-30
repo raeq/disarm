@@ -39,14 +39,8 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "src" / "tables" / "data"
 
 
 def is_combining_mark(cp: int) -> bool:
-    """True if codepoint is a Unicode combining mark."""
-    return (
-        (0x0300 <= cp <= 0x036F)  # Combining Diacritical Marks
-        or (0x1AB0 <= cp <= 0x1AFF)  # Combining Diacritical Marks Extended
-        or (0x1DC0 <= cp <= 0x1DFF)  # Combining Diacritical Marks Supplement
-        or (0x20D0 <= cp <= 0x20FF)  # Combining Diacritical Marks for Symbols
-        or (0xFE20 <= cp <= 0xFE2F)  # Combining Half Marks
-    )
+    """True if codepoint is a Unicode combining mark (category M*)."""
+    return unicodedata.category(chr(cp)).startswith("M")
 
 
 def is_latin(cp: int) -> bool:

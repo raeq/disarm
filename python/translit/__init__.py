@@ -590,7 +590,7 @@ def normalize_confusables(
         >>> normalize_confusables("раypal")  # Cyrillic р/а look like Latin p/a
         'paypal'
         >>> normalize_confusables("paypal", target_script="cyrillic")
-        'раураl'
+        'раура\u04cf'
     """
     if not isinstance(text, str):
         raise TypeError(f"normalize_confusables() expects str, got {type(text).__name__}")

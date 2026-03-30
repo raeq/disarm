@@ -406,18 +406,19 @@ fn unescape_rust_str(s: &str) -> String {
             match chars.peek() {
                 Some(&'u') => {
                     chars.next(); // consume 'u'
-                    if chars.peek() == Some(&'{') {
-                        chars.next(); // consume '{'
-                        let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
-                        if let Ok(cp) = u32::from_str_radix(&hex, 16) {
-                            if let Some(c) = char::from_u32(cp) {
-                                out.push(c);
-                            }
-                        }
-                    } else {
-                        out.push('\\');
-                        out.push('u');
-                    }
+                    assert!(
+                        chars.peek() == Some(&'{'),
+                        "Malformed \\u escape in TSV: expected '{{' after \\u"
+                    );
+                    chars.next(); // consume '{'
+                    let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
+                    let cp = u32::from_str_radix(&hex, 16).unwrap_or_else(|e| {
+                        panic!("Invalid hex in \\u{{...}} escape: '{hex}': {e}");
+                    });
+                    let c = char::from_u32(cp).unwrap_or_else(|| {
+                        panic!("Invalid Unicode scalar value: U+{cp:04X}");
+                    });
+                    out.push(c);
                 }
                 Some(&'"') => {
                     chars.next();

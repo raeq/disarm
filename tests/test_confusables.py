@@ -53,7 +53,7 @@ GREEK_TO_LATIN_PAIRS: list[tuple[str, str, str]] = [
     ("\u0395", "E", "Greek Ε → Latin E"),
     ("\u0396", "Z", "Greek Ζ → Latin Z"),
     ("\u0397", "H", "Greek Η → Latin H"),
-    ("\u0399", "l", "Greek Ι → Latin l"),  # TR39: visual similarity (vertical stroke)
+    ("\u0399", "I", "Greek Ι → Latin I"),  # TR39 prototype is l, case-corrected to I
     ("\u039a", "K", "Greek Κ → Latin K"),
     ("\u039c", "M", "Greek Μ → Latin M"),
     ("\u039d", "N", "Greek Ν → Latin N"),

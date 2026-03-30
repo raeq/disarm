@@ -22,8 +22,19 @@ from pathlib import Path
 CONFUSABLES_URL = "https://www.unicode.org/Public/security/latest/confusables.txt"
 
 
+def is_combining_mark(cp: int) -> bool:
+    """True if codepoint is a Unicode combining mark."""
+    return (
+        (0x0300 <= cp <= 0x036F)  # Combining Diacritical Marks
+        or (0x1AB0 <= cp <= 0x1AFF)  # Combining Diacritical Marks Extended
+        or (0x1DC0 <= cp <= 0x1DFF)  # Combining Diacritical Marks Supplement
+        or (0x20D0 <= cp <= 0x20FF)  # Combining Diacritical Marks for Symbols
+        or (0xFE20 <= cp <= 0xFE2F)  # Combining Half Marks
+    )
+
+
 def is_latin_or_common(cp: int) -> bool:
-    """True if codepoint is Latin script or ASCII Common."""
+    """True if codepoint is Latin script, ASCII Common, or combining mark."""
     return (
         (0x0000 <= cp <= 0x007F)  # Basic Latin (ASCII)
         or (0x00C0 <= cp <= 0x024F)  # Latin Extended-A/B
@@ -31,6 +42,7 @@ def is_latin_or_common(cp: int) -> bool:
         or (0x2C60 <= cp <= 0x2C7F)  # Latin Extended-C
         or (0xA720 <= cp <= 0xA7FF)  # Latin Extended-D
         or (0xAB30 <= cp <= 0xAB6F)  # Latin Extended-E
+        or is_combining_mark(cp)  # Combining marks (stripped downstream)
     )
 
 
@@ -63,6 +75,42 @@ def parse_confusables(text: str) -> list[tuple[int, list[int]]]:
     return entries
 
 
+def strip_combining(target_cps: list[int]) -> list[int]:
+    """Remove combining marks from target codepoints.
+
+    TR39 targets sometimes include combining marks (e.g. η → n̩ where
+    U+0329 is COMBINING VERTICAL LINE BELOW). Since our pipeline strips
+    accents/marks downstream, we drop them here to avoid rejecting
+    otherwise valid Latin targets.
+    """
+    return [cp for cp in target_cps if not is_combining_mark(cp)]
+
+
+def fix_case_mismatch(source_cp: int, target_str: str) -> str:
+    """Ensure uppercase sources map to uppercase Latin targets.
+
+    TR39 maps all members of a confusable class to a single prototype.
+    For the {I, l, 1, Ι} class, the prototype is 'l'. But an uppercase
+    non-Latin source (like Greek Ι) should map to 'I' (uppercase Latin),
+    not 'L' (which would be a naive upper() of 'l').
+
+    Special case: prototype 'l' + uppercase source → 'I', because
+    Latin I (not L) is the uppercase member of the l/I/1 class.
+    For all other single lowercase ASCII targets, upper() is correct.
+    """
+    import unicodedata
+
+    if len(target_str) != 1 or not target_str.isascii() or not target_str.isalpha():
+        return target_str
+    source_cat = unicodedata.category(chr(source_cp))
+    if source_cat == "Lu" and target_str.islower():
+        # The {I, l, 1} class: uppercase member is I, not L
+        if target_str == "l":
+            return "I"
+        return target_str.upper()
+    return target_str
+
+
 def filter_to_latin(
     entries: list[tuple[int, list[int]]],
 ) -> list[tuple[int, str]]:
@@ -75,13 +123,17 @@ def filter_to_latin(
         # Skip digits and basic punctuation as sources
         if 0x0030 <= source_cp <= 0x0039:
             continue
-        # Target must be entirely Latin/Common
-        if not all(is_latin_or_common(cp) for cp in target_cps):
+        # Strip combining marks from target (stripped downstream anyway)
+        cleaned_cps = strip_combining(target_cps)
+        # Target must be entirely Latin/Common (after stripping marks)
+        if not all(is_latin_or_common(cp) for cp in cleaned_cps):
             continue
         # Target must contain at least one visible character
-        target_str = "".join(chr(cp) for cp in target_cps)
+        target_str = "".join(chr(cp) for cp in cleaned_cps)
         if not target_str.strip():
             continue
+        # Fix case: uppercase source should map to uppercase target
+        target_str = fix_case_mismatch(source_cp, target_str)
         result.append((source_cp, target_str))
     return result
 

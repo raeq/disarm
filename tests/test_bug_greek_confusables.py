@@ -56,6 +56,32 @@ class TestGreekVisualConfusables:
         result = normalize_confusables("\u039a")
         assert result == "K", f"Greek Κ should map to K (visual), got {result!r}"
 
+    def test_small_eta_maps_to_n(self):
+        # η (U+03B7, Greek Small Eta) — TR39 maps to n̩ (n + combining mark)
+        # After combining mark stripping, should resolve to 'n'
+        result = normalize_confusables("\u03b7")
+        assert result == "n", f"Greek η should map to n (visual), got {result!r}"
+
+    def test_capital_iota_maps_to_I(self):
+        # Ι (U+0399, Greek Capital Iota) — visually identical to Latin I
+        # TR39 maps to l (lowercase L) which is wrong for case-preserving usage
+        result = normalize_confusables("\u0399")
+        assert result == "I", f"Greek Ι should map to I (visual), got {result!r}"
+
+    def test_strip_obfuscation_greek_eta_in_word(self):
+        # η embedded in Latin text should resolve to n
+        from translit import strip_obfuscation
+
+        result = strip_obfuscation("chan\u03b7el")  # "chanηel"
+        assert result == "channel", f"Expected 'channel', got {result!r}"
+
+    def test_strip_obfuscation_greek_iota_in_word(self):
+        # Ι embedded in Latin text should resolve to I
+        from translit import strip_obfuscation
+
+        result = strip_obfuscation("\u0399nstagram")  # "Ιnstagram"
+        assert result == "Instagram", f"Expected 'Instagram', got {result!r}"
+
 
 class TestCyrillicVisualConfusables:
     """Cyrillic letters must map to their visual Latin equivalents."""

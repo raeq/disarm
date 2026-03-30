@@ -3,7 +3,7 @@
 //! Auto-generated from confusables.txt by scripts/gen_confusables.py.
 //! Version: 17.0.0
 //!
-//! Contains ~1904 mappings from non-Latin scripts to Latin
+//! Contains ~2063 mappings from non-Latin scripts to Latin
 //! equivalents. Uses compile-time perfect hash maps (`phf`) for O(1)
 //! lookups. Covers Cyrillic, Greek, Armenian, Georgian, CJK compatibility,
 //! mathematical symbols, fullwidth forms, and other confusable characters.

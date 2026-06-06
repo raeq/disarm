@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
 ## [0.5.0] — 2026-06-06
 
 ### Added
@@ -73,9 +75,12 @@ Versions follow [Semantic Versioning](https://semver.org/).
   workflows (resolves the CodeQL `actions/unpinned-tag` findings) and added
   `.github/dependabot.yml` to keep them current. This hardens the release pipeline,
   which uses PyPI trusted publishing (`id-token: write`).
-- Bumped dev/docs dependencies flagged by Dependabot: Pygments → 2.20.0 (ReDoS in
-  GUID matching) and pytest → 9.0.3 (insecure tmpdir handling). Both are
-  development-only — the package has no runtime dependencies.
+- Bumped dev/docs dependencies flagged by Dependabot:
+  [Pygments → 2.20.0](https://github.com/advisories/GHSA-5239-wwwm-4pmq) and
+  [pytest → 9.0.3](https://github.com/advisories/GHSA-6w46-j5rx-g56g) (the pytest
+  bump applies on Python ≥ 3.10; Python 3.9 stays on pytest 8.4.2, since pytest 9
+  requires ≥ 3.10). Both are development-only — the package has no runtime
+  dependencies.
 
 ### Notes
 - No public API, language registry, or script coverage was removed. All existing

@@ -1,117 +1,75 @@
-"""Bug: Greek confusable mappings use phonetic values instead of TR39 visual.
+"""Regression test: Greek and Cyrillic confusables follow TR39 *visual*
+mappings, distinct from phonetic transliteration.
 
-Greek Ρ (Rho, U+03A1) is visually identical to Latin P, but translit maps
-it to R (phonetic). TR39 confusables.txt maps Ρ→P (visual).
+Greek Ρ (Rho, U+03A1) is visually identical to Latin P, but ``transliterate()``
+maps it to R (phonetic). TR39 ``confusables.txt`` maps Ρ→P (visual), and
+``normalize_confusables()`` follows that visual mapping. These tests guard that
+phonetic-vs-visual distinction — and the ``strip_obfuscation()`` /
+``security_clean()`` flows built on it — focusing on the historically confusing
+characters: the lowercase homoglyphs and the combining-mark / case-corrected
+prototypes locked in by #22. The exhaustive pair table is exercised separately
+in ``test_confusables.py``; this file documents the *intent*.
 
-This affects normalize_confusables(), strip_obfuscation(), and security_clean()
-— all of which should resolve homoglyphs by visual similarity, not phonetics.
+Inputs use ``\\uXXXX`` escapes so the exact codepoint under test is unambiguous
+in source review (the literal glyph appears in the description column).
 """
 
 from __future__ import annotations
 
-from translit import normalize_confusables
+import pytest
+
+from translit import normalize_confusables, strip_obfuscation
 
 
 class TestGreekVisualConfusables:
     """Greek letters must map to their visual Latin equivalents, not phonetic."""
 
-    def test_rho_looks_like_p(self):
-        # Ρ (U+03A1, Greek Capital Rho) looks like Latin P, sounds like R
-        result = normalize_confusables("\u03a1")
-        assert result == "P", f"Greek Ρ should map to P (visual), got {result!r}"
-
-    def test_small_rho_looks_like_p(self):
-        # ρ (U+03C1, Greek Small Rho) — visually similar to p
-        result = normalize_confusables("\u03c1")
-        assert result == "p", f"Greek ρ should map to p (visual), got {result!r}"
-
-    def test_eta_looks_like_h(self):
-        # Η (U+0397, Greek Capital Eta) looks like Latin H, sounds like I (modern)
-        result = normalize_confusables("\u0397")
-        assert result == "H", f"Greek Η should map to H (visual), got {result!r}"
-
-    def test_nu_looks_like_v(self):
-        # ν (U+03BD, Greek Small Nu) looks like Latin v
-        result = normalize_confusables("\u03bd")
-        assert result.lower() == "v", f"Greek ν should map to v (visual), got {result!r}"
-
-    def test_chi_looks_like_x(self):
-        # Χ (U+03A7, Greek Capital Chi) looks like Latin X
-        result = normalize_confusables("\u03a7")
-        assert result == "X", f"Greek Χ should map to X (visual), got {result!r}"
-
-    def test_tau_looks_like_t(self):
-        # Τ (U+03A4, Greek Capital Tau) looks like Latin T
-        result = normalize_confusables("\u03a4")
-        assert result == "T", f"Greek Τ should map to T (visual), got {result!r}"
-
-    def test_omicron_looks_like_o(self):
-        # Ο (U+039F, Greek Capital Omicron) looks like Latin O
-        # This one happens to be both phonetically and visually correct
-        result = normalize_confusables("\u039f")
-        assert result == "O", f"Greek Ο should map to O (visual), got {result!r}"
-
-    def test_kappa_looks_like_k(self):
-        # Κ (U+039A, Greek Capital Kappa) looks like Latin K
-        result = normalize_confusables("\u039a")
-        assert result == "K", f"Greek Κ should map to K (visual), got {result!r}"
-
-    def test_small_eta_maps_to_n(self):
-        # η (U+03B7, Greek Small Eta) — TR39 maps to n̩ (n + combining mark)
-        # After combining mark stripping, should resolve to 'n'
-        result = normalize_confusables("\u03b7")
-        assert result == "n", f"Greek η should map to n (visual), got {result!r}"
-
-    def test_capital_iota_maps_to_I(self):
-        # Ι (U+0399, Greek Capital Iota) — visually identical to Latin I
-        # TR39 maps to l (lowercase L) which is wrong for case-preserving usage
-        result = normalize_confusables("\u0399")
-        assert result == "I", f"Greek Ι should map to I (visual), got {result!r}"
-
-    def test_strip_obfuscation_greek_eta_in_word(self):
-        # η embedded in Latin text should resolve to n
-        from translit import strip_obfuscation
-
-        result = strip_obfuscation("chan\u03b7el")  # "chanηel"
-        assert result == "channel", f"Expected 'channel', got {result!r}"
-
-    def test_strip_obfuscation_greek_iota_in_word(self):
-        # Ι embedded in Latin text should resolve to I
-        from translit import strip_obfuscation
-
-        result = strip_obfuscation("\u0399nstagram")  # "Ιnstagram"
-        assert result == "Instagram", f"Expected 'Instagram', got {result!r}"
+    @pytest.mark.parametrize(
+        ("char", "expected", "note"),
+        [
+            ("\u03a1", "P", "Ρ Capital Rho — looks like P, sounds like R"),
+            ("\u03c1", "p", "ρ Small Rho — looks like p"),
+            ("\u0397", "H", "Η Capital Eta — looks like H, sounds like I (modern)"),
+            ("\u03bd", "v", "ν Small Nu — looks like v"),
+            ("\u03a7", "X", "Χ Capital Chi — looks like X"),
+            ("\u03a4", "T", "Τ Capital Tau — looks like T"),
+            ("\u039f", "O", "Ο Capital Omicron — visual and phonetic agree"),
+            ("\u039a", "K", "Κ Capital Kappa — looks like K"),
+            ("\u03b7", "n", "η Small Eta — TR39 n+combining mark, resolves to n (#22)"),
+            ("\u0399", "I", "Ι Capital Iota — TR39 prototype l, case-corrected to I (#22)"),
+        ],
+    )
+    def test_greek_visual_confusable(self, char: str, expected: str, note: str) -> None:
+        result = normalize_confusables(char)
+        assert result == expected, f"Greek {note}: expected {expected!r}, got {result!r}"
 
 
 class TestCyrillicVisualConfusables:
     """Cyrillic letters must map to their visual Latin equivalents."""
 
-    def test_er_looks_like_p(self):
-        # р (U+0440, Cyrillic Small Er) looks like Latin p, sounds like r
-        result = normalize_confusables("\u0440")
-        assert result == "p", f"Cyrillic р should map to p (visual), got {result!r}"
+    @pytest.mark.parametrize(
+        ("char", "expected", "note"),
+        [
+            ("\u0440", "p", "р Small Er — looks like p, sounds like r"),
+            ("\u0441", "c", "с Small Es — looks like c, sounds like s"),
+            ("\u0412", "B", "В Capital Ve — looks like B, sounds like V"),
+            ("\u0435", "e", "е Small Ie — looks like e"),
+            ("\u0430", "a", "а Small A — looks like a"),
+            ("\u043e", "o", "о Small O — looks like o"),
+        ],
+    )
+    def test_cyrillic_visual_confusable(self, char: str, expected: str, note: str) -> None:
+        result = normalize_confusables(char)
+        assert result == expected, f"Cyrillic {note}: expected {expected!r}, got {result!r}"
 
-    def test_es_looks_like_c(self):
-        # с (U+0441, Cyrillic Small Es) looks like Latin c, sounds like s
-        result = normalize_confusables("\u0441")
-        assert result == "c", f"Cyrillic с should map to c (visual), got {result!r}"
 
-    def test_ve_looks_like_b(self):
-        # В (U+0412, Cyrillic Capital Ve) looks like Latin B, sounds like V
-        result = normalize_confusables("\u0412")
-        assert result == "B", f"Cyrillic В should map to B (visual), got {result!r}"
+class TestVisualConfusablesInPipeline:
+    """The visual mapping must flow through the obfuscation-stripping pipeline."""
 
-    def test_ie_looks_like_e(self):
-        # е (U+0435, Cyrillic Small Ie) looks like Latin e
-        result = normalize_confusables("\u0435")
-        assert result == "e", f"Cyrillic е should map to e (visual), got {result!r}"
+    def test_strip_obfuscation_greek_eta_in_word(self) -> None:
+        # η (U+03B7) embedded in Latin text should resolve to n
+        assert strip_obfuscation("chan\u03b7el") == "channel"
 
-    def test_a_looks_like_a(self):
-        # а (U+0430, Cyrillic Small A) looks like Latin a
-        result = normalize_confusables("\u0430")
-        assert result == "a", f"Cyrillic а should map to a (visual), got {result!r}"
-
-    def test_o_looks_like_o(self):
-        # о (U+043E, Cyrillic Small O) looks like Latin o
-        result = normalize_confusables("\u043e")
-        assert result == "o", f"Cyrillic о should map to o (visual), got {result!r}"
+    def test_strip_obfuscation_greek_iota_in_word(self) -> None:
+        # Ι (U+0399) embedded in Latin text should resolve to I
+        assert strip_obfuscation("\u0399nstagram") == "Instagram"

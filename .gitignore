@@ -148,3 +148,6 @@ docs/plans/
 data/corpora/
 data/*.bin.gz
 data/*_stats.json
+
+# ── Research paper (its own local-only git repo; never part of this repo) ──
+translit-paper/

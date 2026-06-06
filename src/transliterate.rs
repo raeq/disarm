@@ -75,8 +75,9 @@ pub fn _transliterate(
 
 /// Context-aware transliteration using dictionary-based vowel restoration.
 ///
-/// Falls back to context-free transliteration if the dictionary is not loaded
-/// or the word is not in the dictionary.
+/// Returns an error if no context dictionary is loaded for the language.
+/// Individual words that are absent from a loaded dictionary fall back to
+/// context-free transliteration.
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false))]
 pub fn _transliterate_context(
@@ -87,6 +88,11 @@ pub fn _transliterate_context(
     strict_iso9: bool,
     gost7034: bool,
 ) -> PyResult<String> {
+    if strict_iso9 && gost7034 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "strict_iso9 and gost7034 are mutually exclusive",
+        ));
+    }
     if text.len() > MAX_TRANSLITERATE_INPUT_BYTES {
         return translit_err!(
             "input too large ({} bytes); maximum for transliterate() is {} bytes",
@@ -120,15 +126,18 @@ pub fn _transliterate_context(
         });
         Ok(result)
     } else {
-        // Dictionary not loaded — return error telling user to install extras
-        let lang_name = match lang {
-            Some("he") => "Hebrew",
-            Some("fa") => "Arabic/Persian",
-            _ => "Arabic",
+        // Dictionary not loaded — return error telling user to install extras.
+        // Derive the extra name from the language so the hint points at the
+        // right one (Hebrew has its own extra).
+        let (lang_name, extra) = match lang {
+            Some("he") => ("Hebrew", "hebrew"),
+            Some("fa") => ("Arabic/Persian", "arabic"),
+            _ => ("Arabic", "arabic"),
         };
         translit_err!(
-            "Context dictionary for {} not found. Install with: pip install translit-rs[arabic]",
-            lang_name
+            "Context dictionary for {} not found. Install with: pip install translit-rs[{}]",
+            lang_name,
+            extra
         )
     }
 }

@@ -333,3 +333,17 @@ class TestBatchParameterParity:
         # path must too, instead of silently ignoring tones.
         with pytest.raises(ValueError, match=r"forward-only parameters .*tones.* 'target'"):
             transliterate(["Moskva"], target="ru", tones=True)
+
+
+class TestContextParameterValidation:
+    """Context path must enforce the same parameter rules as the plain path."""
+
+    def test_context_rejects_iso9_and_gost_together(self) -> None:
+        # The mutual-exclusion check was missing from the context path, so this
+        # silently returned a result instead of raising (review comment on #18).
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            transliterate("كتب", lang="ar", context=True, strict_iso9=True, gost7034=True)
+
+    def test_context_batch_rejects_iso9_and_gost_together(self) -> None:
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            transliterate(["كتب"], lang="ar", context=True, strict_iso9=True, gost7034=True)

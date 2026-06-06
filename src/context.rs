@@ -323,6 +323,20 @@ static PERSIAN_DATA: &[u8] = include_bytes!("../data/persian_dict.bin");
 #[cfg(feature = "embed-dicts")]
 static HEBREW_DATA: &[u8] = include_bytes!("../data/hebrew_dict.bin");
 
+/// Parse an embedded dictionary, logging (rather than silently dropping via
+/// `.ok()`) a parse error so a corrupt/unsupported embedded dictionary is
+/// diagnosable in embedded/WASM builds — mirroring `load_dict_from_fs`.
+#[cfg(feature = "embed-dicts")]
+fn load_embedded_dict(name: &str, data: &[u8]) -> Option<ContextDict> {
+    match ContextDict::from_bytes(data) {
+        Ok(dict) => Some(dict),
+        Err(e) => {
+            eprintln!("Warning: failed to load embedded {name} dict: {e}");
+            None
+        }
+    }
+}
+
 /// Load a dictionary from the filesystem, checking standard locations.
 #[cfg(not(feature = "embed-dicts"))]
 fn load_dict_from_fs(name: &str) -> Option<ContextDict> {
@@ -351,7 +365,7 @@ pub fn get_arabic_dict() -> Option<&'static ContextDict> {
         .get_or_init(|| {
             #[cfg(feature = "embed-dicts")]
             {
-                ContextDict::from_bytes(ARABIC_DATA).ok()
+                load_embedded_dict("arabic", ARABIC_DATA)
             }
             #[cfg(not(feature = "embed-dicts"))]
             {
@@ -367,7 +381,7 @@ pub fn get_persian_dict() -> Option<&'static ContextDict> {
         .get_or_init(|| {
             #[cfg(feature = "embed-dicts")]
             {
-                ContextDict::from_bytes(PERSIAN_DATA).ok()
+                load_embedded_dict("persian", PERSIAN_DATA)
             }
             #[cfg(not(feature = "embed-dicts"))]
             {
@@ -383,7 +397,7 @@ pub fn get_hebrew_dict() -> Option<&'static ContextDict> {
         .get_or_init(|| {
             #[cfg(feature = "embed-dicts")]
             {
-                ContextDict::from_bytes(HEBREW_DATA).ok()
+                load_embedded_dict("hebrew", HEBREW_DATA)
             }
             #[cfg(not(feature = "embed-dicts"))]
             {

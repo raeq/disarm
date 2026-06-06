@@ -47,7 +47,13 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist
+          # Pin the interpreter to 3.9 so maturin builds a single abi3 wheel
+          # (cp39-abi3). Without this, maturin enumerates every interpreter in
+          # the manylinux container — including CPython 3.8, which is below the
+          # abi3-py39 floor — and emits a version-specific cp38-cp38 x86_64
+          # wheel instead of cp39-abi3 (see issue #26). abi3-py39 wheels are
+          # forward-compatible with all CPython >= 3.9.
+          args: --release --out dist --interpreter 3.9
           manylinux: auto
       - uses: actions/upload-artifact@v7
         with:
@@ -112,6 +118,21 @@ jobs:
           path: dist/
       - name: List built artifacts
         run: ls -lh dist/
+      - name: Verify Linux wheels are abi3 (guard against regression of #26)
+        run: |
+          # abi3 wheels are tagged cp39-abi3; a version-specific CPython Linux
+          # wheel (e.g. cp38-cp38, cp39-cp39) means the abi3 build was bypassed.
+          bad=$(ls dist/ | grep -E 'cp3[0-9]+-cp3[0-9]+.*(manylinux|linux)' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Found version-specific (non-abi3) CPython Linux wheel(s):"
+            echo "$bad"
+            exit 1
+          fi
+          if ! ls dist/ | grep -qE 'cp39-abi3-manylinux.*x86_64'; then
+            echo "::error::Missing expected cp39-abi3 manylinux x86_64 wheel."
+            exit 1
+          fi
+          echo "OK: Linux wheels are abi3 (cp39-abi3), no version-specific CPython wheels."
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

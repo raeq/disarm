@@ -116,7 +116,7 @@ sort_key("Café")                       # => "cafe"
 
 ### Pipeline steps
 
-`NFKC → strip_zalgo → confusables → strip_bidi → collapse_whitespace`
+`NFKC → strip_bidi → strip_zero_width → strip_zalgo → confusables → collapse_whitespace`
 
 ```python
 from translit import sanitize_user_input

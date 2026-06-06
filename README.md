@@ -154,7 +154,7 @@ ml_normalize("Café ☕ Ünïcödé")  # → "cafe hot beverage unicode"
 catalog_key("Москва", lang="ru")  # → "moskva"
 catalog_key("ΩMEGA  café")        # → "omega cafe"
 
-# Web input: NFKC → strip zalgo → confusables → strip bidi → collapse whitespace
+# Web input: NFKC → strip bidi → strip zero-width → strip zalgo → confusables → collapse
 sanitize_user_input("pаypal")  # → "paypal" (Cyrillic а folded to Latin)
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars → clean text

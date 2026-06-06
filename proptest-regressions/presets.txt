@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc dd4d93168a5d35a0b3a1e2b5b1f64972f84a6a0a69d20d399cc09e070e147dee # shrinks to s = "👒"
+cc 00e32bc989c08fc29432d4dcf7e7b80e2827eed32cb9dbc68d8b7cf38251687c # shrinks to s = "\u{301}\u{ad}\u{301}\u{301}"

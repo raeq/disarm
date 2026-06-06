@@ -296,13 +296,17 @@ pub fn _sanitize_user_input(text: &str) -> PyResult<String> {
     check_preset_input(text, "sanitize_user_input")?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
-    // 2. Strip zalgo (cap combining marks at 2 per base character)
-    let buf = zalgo::_strip_zalgo(&buf, 2);
-    // 3. Confusables → Latin (neutralizes cross-script homoglyphs)
-    let buf = confusables::_normalize_confusables(&buf, "latin")?;
-    // 4. Strip bidi overrides, isolates, marks, and soft hyphens
+    // 2. Strip invisibles FIRST (bidi/format + zero-width) so they cannot split
+    //    a run of combining marks; otherwise removing them later would merge two
+    //    short runs into one long run that a second pass would cap differently
+    //    (zalgo-capping would not be idempotent).
     let buf = strip_bidi(&buf);
-    // 5. Collapse whitespace + strip control + strip zero-width
+    let buf = whitespace::strip_zero_width_chars(&buf);
+    // 3. Cap combining marks at 2 per base character (zalgo)
+    let buf = zalgo::_strip_zalgo(&buf, 2);
+    // 4. Confusables → Latin (neutralizes cross-script homoglyphs)
+    let buf = confusables::_normalize_confusables(&buf, "latin")?;
+    // 5. Collapse whitespace + strip control + strip zero-width (final cleanup)
     Ok(whitespace::_collapse_whitespace(&buf, true, true))
 }
 
@@ -323,9 +327,13 @@ pub fn _strip_bidi(text: &str) -> String {
 
 /// Maximum-strength text deobfuscation pipeline.
 ///
-/// Pipeline: NFKC → strip_zalgo(max_marks=0) → normalize_confusables
-///          → strip_bidi → strip_zero_width → demojize → strip_accents
+/// Pipeline: NFKC → strip_zalgo(max_marks=0) → strip_bidi → strip_zero_width
+///          → demojize → normalize_confusables → strip_accents
 ///          → collapse_whitespace
+///
+/// `normalize_confusables` runs *after* `demojize` so typographic punctuation in
+/// emoji names (e.g. the `’` in "woman’s hat") is folded too; otherwise the
+/// output would not be idempotent.
 ///
 /// Strips ALL combining marks, resolves homoglyph spoofing via TR39
 /// confusable mapping (visual similarity), expands emoji to text, removes
@@ -628,6 +636,57 @@ mod tests {
         use super::*;
         use proptest::prelude::*;
 
+        /// Characters the defense pipelines specifically target — bidi/format
+        /// controls, zero-width/invisible chars, zalgo combining marks,
+        /// confusables, and an emoji. Mixed into the generator so the "no bidi
+        /// survives" properties actually exercise these (a plain `\PC*` strategy
+        /// would never produce category-C controls, making them vacuous).
+        const SPECIAL: &[char] = &[
+            // bidi / format controls
+            '\u{200E}',
+            '\u{200F}',
+            '\u{202A}',
+            '\u{202B}',
+            '\u{202C}',
+            '\u{202D}',
+            '\u{202E}',
+            '\u{061C}',
+            '\u{2066}',
+            '\u{2067}',
+            '\u{2068}',
+            '\u{2069}',
+            '\u{00AD}',
+            // zero-width / invisible
+            '\u{200B}',
+            '\u{200C}',
+            '\u{200D}',
+            '\u{2060}',
+            '\u{FEFF}',
+            // zalgo combining marks
+            '\u{0301}',
+            '\u{0300}',
+            '\u{0489}',
+            // confusables (Cyrillic а р с е о) + a fullwidth char + an emoji
+            '\u{0430}',
+            '\u{0440}',
+            '\u{0441}',
+            '\u{0435}',
+            '\u{043E}',
+            '\u{FF41}',
+            '\u{1F452}',
+        ];
+
+        /// Adversarial input: arbitrary scalar values heavily salted with the
+        /// attack characters above.
+        fn adversarial() -> impl Strategy<Value = String> {
+            let special = proptest::sample::select(SPECIAL.to_vec());
+            proptest::collection::vec(
+                prop_oneof![4 => any::<char>(), 3 => special, 2 => prop::char::range('a', 'z')],
+                0..40,
+            )
+            .prop_map(|cs| cs.into_iter().collect())
+        }
+
         /// Compare under NFC: NFKC can reorder combining marks of equal
         /// canonical combining class, which is canonically equivalent.
         fn nfc(s: &str) -> String {
@@ -638,50 +697,50 @@ mod tests {
             #![proptest_config(ProptestConfig::with_cases(1000))]
 
             #[test]
-            fn security_clean_idempotent(s in "\\PC*") {
+            fn security_clean_idempotent(s in adversarial()) {
                 let once = _security_clean(&s).unwrap();
                 let twice = _security_clean(&once).unwrap();
                 prop_assert_eq!(nfc(&once), nfc(&twice));
             }
 
             #[test]
-            fn strip_obfuscation_idempotent(s in "\\PC*") {
+            fn strip_obfuscation_idempotent(s in adversarial()) {
                 let once = _strip_obfuscation(&s).unwrap();
                 let twice = _strip_obfuscation(&once).unwrap();
                 prop_assert_eq!(nfc(&once), nfc(&twice));
             }
 
             #[test]
-            fn sanitize_user_input_idempotent(s in "\\PC*") {
+            fn sanitize_user_input_idempotent(s in adversarial()) {
                 let once = _sanitize_user_input(&s).unwrap();
                 let twice = _sanitize_user_input(&once).unwrap();
                 prop_assert_eq!(nfc(&once), nfc(&twice));
             }
 
             #[test]
-            fn strip_bidi_idempotent(s in "\\PC*") {
+            fn strip_bidi_idempotent(s in adversarial()) {
                 let once = _strip_bidi(&s);
                 prop_assert_eq!(&once, &_strip_bidi(&once));
             }
 
             // No bidi/format control survives a pipeline that strips bidi.
             #[test]
-            fn no_bidi_after_strip_bidi(s in "\\PC*") {
+            fn no_bidi_after_strip_bidi(s in adversarial()) {
                 prop_assert!(!_strip_bidi(&s).chars().any(is_bidi_or_format));
             }
 
             #[test]
-            fn no_bidi_after_security_clean(s in "\\PC*") {
+            fn no_bidi_after_security_clean(s in adversarial()) {
                 prop_assert!(!_security_clean(&s).unwrap().chars().any(is_bidi_or_format));
             }
 
             #[test]
-            fn no_bidi_after_strip_obfuscation(s in "\\PC*") {
+            fn no_bidi_after_strip_obfuscation(s in adversarial()) {
                 prop_assert!(!_strip_obfuscation(&s).unwrap().chars().any(is_bidi_or_format));
             }
 
             #[test]
-            fn no_bidi_after_sanitize_user_input(s in "\\PC*") {
+            fn no_bidi_after_sanitize_user_input(s in adversarial()) {
                 prop_assert!(!_sanitize_user_input(&s).unwrap().chars().any(is_bidi_or_format));
             }
         }

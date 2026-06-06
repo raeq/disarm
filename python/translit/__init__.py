@@ -1087,7 +1087,9 @@ def sanitize_user_input(text: str) -> str:
     common attack vectors: zalgo stacking, homoglyph spoofing, bidi
     overrides, zero-width injections, and control characters.
 
-    Pipeline: ``NFKC → strip_zalgo → confusables → strip_bidi → collapse_whitespace``
+    Pipeline: ``NFKC → strip_bidi → strip_zero_width → strip_zalgo → confusables
+    → collapse_whitespace`` (invisibles are stripped before zalgo-capping so they
+    cannot split combining-mark runs, keeping the output idempotent)
 
     Args:
         text: User-submitted input string.
@@ -1121,8 +1123,10 @@ def strip_obfuscation(text: str) -> str:
     and sentence boundaries are meaningful. Chain with ``fold_case()``
     if lowercasing is also needed.
 
-    Pipeline: ``NFKC → strip_zalgo(max_marks=0) → confusables → strip_bidi
-    → strip_zero_width → demojize → strip_accents → collapse_whitespace``
+    Pipeline: ``NFKC → strip_zalgo(max_marks=0) → strip_bidi → strip_zero_width
+    → demojize → confusables → strip_accents → collapse_whitespace``
+    (confusables runs after demojize so typographic punctuation in emoji names is
+    folded too, keeping the output idempotent)
 
     Args:
         text: Input text (user-generated, adversarial, multilingual).

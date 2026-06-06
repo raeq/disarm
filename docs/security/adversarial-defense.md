@@ -110,8 +110,8 @@ spoofs, multi-character confusables (`rn`→`m`), and Unicode-version skew. See 
 | Goal | Use | Pipeline |
 |---|---|---|
 | Fold confusables in a string (TR39) | `normalize_confusables(text)` | NFKC-free, single pass |
-| Maximum deobfuscation (homoglyph + zalgo + invisible + bidi + emoji) | `strip_obfuscation(text)` | NFKC → strip zalgo → confusables → strip bidi → strip zero-width → demojize → strip accents → collapse |
-| Clean untrusted user input | `sanitize_user_input(text)` | NFKC → strip zalgo → confusables → strip bidi → collapse |
+| Maximum deobfuscation (homoglyph + zalgo + invisible + bidi + emoji) | `strip_obfuscation(text)` | NFKC → strip zalgo → strip bidi → strip zero-width → demojize → confusables → strip accents → collapse |
+| Clean untrusted user input | `sanitize_user_input(text)` | NFKC → strip bidi → strip zero-width → strip zalgo → confusables → collapse |
 | General security cleanup | `security_clean(text)` | NFKC → confusables → strip bidi → collapse |
 | Detect (don't transform) | `is_confusable(text)`, `is_mixed_script(text)` | predicate |
 | Check a domain for IDN spoofing | `is_safe_hostname(host)` | per-label script + confusable analysis |

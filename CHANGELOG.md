@@ -42,11 +42,14 @@ Versions follow [Semantic Versioning](https://semver.org/).
   and a `tests/test_confusable_coverage.py` gate against Unicode-version drift.
 
 ### Fixed
-- **`strip_obfuscation` is now idempotent.** Emoji whose CLDR name contains
-  typographic punctuation (e.g. `👒` → `woman’s hat`, with U+2019 `’`) were not
-  folded because the confusables step ran *before* demojize; a second pass folded
-  `’`→`'`, so the output was not a fixed point. Confusables now runs after demojize.
-  Found by the new property tests.
+- **Defense pipelines are now idempotent** (both bugs found by the new property tests):
+  - `strip_obfuscation`: emoji whose CLDR name contains typographic punctuation
+    (e.g. `👒` → `woman’s hat`, U+2019 `’`) weren't folded because confusables ran
+    *before* demojize; a second pass folded `’`→`'`. Confusables now runs after demojize.
+  - `sanitize_user_input`: an invisible char between combining marks
+    (e.g. soft-hyphen) split a mark-run, so removing it *after* zalgo-capping merged
+    runs that a second pass then capped differently. Bidi/zero-width are now stripped
+    *before* zalgo-capping.
 
 ## [0.5.0] — 2026-06-06
 

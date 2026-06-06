@@ -534,6 +534,7 @@ SCRIPT_META: dict[str, ScriptMeta] = {
         "name": "Canadian Aboriginal Syllabics",
         "default_lang": None,
         "example": "ᐃᓄᒃᑎᑐᑦ",
+        "context_aware": False,
     },
     # Historical
     "Runic": {"name": "Runic", "default_lang": None, "example": "ᚠᚢᚦ", "context_aware": False},

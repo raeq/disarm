@@ -1,6 +1,6 @@
 site_name: translit
 site_url: https://translit.readthedocs.io/
-site_description: Fast Unicode transliteration, slugification, and text normalization — powered by Rust
+site_description: Unicode adversarial-text defense and canonicalization — TR39 confusables, homoglyph/bidi/zalgo stripping, and standards-based transliteration, powered by Rust
 site_author: Richard Quinn
 repo_url: https://github.com/raeq/translit
 repo_name: raeq/translit
@@ -55,10 +55,12 @@ nav:
   - Home: index.md
   - User Guide:
       - Getting Started: user-guide/getting-started.md
+      - Security & Defense:
+          - Adversarial-Text Defense: security/adversarial-defense.md
+          - Confusable Detection: user-guide/confusables.md
       - Transliteration: user-guide/transliteration.md
       - Slugification: user-guide/slugification.md
       - Normalization: user-guide/normalization.md
-      - Confusable Detection: user-guide/confusables.md
       - Filename Sanitization: user-guide/filenames.md
       - Text Cleaning: user-guide/text-cleaning.md
       - Text Pipeline: user-guide/pipeline.md

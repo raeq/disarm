@@ -1,6 +1,8 @@
 # Why Migrate to translit?
 
-translit consolidates 8+ legacy Python Unicode text-processing libraries into a single, fast, MIT-licensed package.
+translit consolidates 8+ legacy Python Unicode text-processing libraries into a single, fast, MIT-licensed package — and, unlike any of them, provides **TR39 adversarial-text defense** as a first-class capability (see [Adversarial-Text Defense](../security/adversarial-defense.md)).
+
+> **If you use `unidecode` (or `ftfy`/`anyascii`) as a security/sanitization step, you should migrate for correctness, not just convenience.** Those tools map confusables *phonetically* and cannot reverse homoglyph attacks; `unidecode` can even degrade results. translit maps *visually* per TR39. See [From Unidecode](from-unidecode.md#unidecode-is-not-a-security-tool).
 
 ## The problem
 
@@ -41,8 +43,9 @@ import translit
 | **Performance** | Pure Python | Rust via PyO3 ([benchmarks](../performance.md)) |
 | **License** | Mixed GPL/Artistic/MIT | MIT |
 | **API** | 8 different APIs | One coherent API |
-| **Language profiles** | 0–5 languages | 64 built-in |
+| **Language profiles** | 0–5 languages | 83 built-in |
 | **Type safety** | Partial | Full py.typed + stubs |
+| **Adversarial defense (TR39)** | None | Built in — visual confusable mapping |
 | **Confusable detection** | Separate package | Built in |
 | **Filename sanitization** | Separate package | Built in |
 | **Unicode version** | Varies (often outdated) | Current |

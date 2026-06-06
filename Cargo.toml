@@ -4,9 +4,9 @@ version = "0.5.0"
 edition = "2021"
 rust-version = "1.80"
 license = "MIT"
-description = "Fast Unicode transliteration (including CJK), slugification, and text normalization"
+description = "Unicode adversarial-text defense and canonicalization: TR39 confusable mapping, homoglyph/bidi/zalgo stripping, and standards-based transliteration"
 repository = "https://github.com/raeq/translit"
-keywords = ["unicode", "transliteration", "slugify", "normalization", "pyo3"]
+keywords = ["unicode-security", "homoglyph", "confusable", "transliteration", "normalization"]
 categories = ["text-processing", "internationalization", "encoding"]
 
 [lib]

@@ -1,6 +1,21 @@
 # Language Support
 
-translit ships with 83 built-in language profiles that provide language-specific transliteration rules. You can also register custom profiles at runtime.
+translit ships with a broad set of built-in language profiles and script mappings.
+You can also register custom profiles at runtime.
+
+## Coverage tiers
+
+Coverage is wide, but the **quality guarantee differs by tier**. Read this before
+choosing a profile for production:
+
+| Tier | Scripts | What you get |
+|---|---|---|
+| **Core** (best-in-class) | Latin, Cyrillic, Greek | Standards-based romanization — BGN/PCGN (default), ISO 9:1995 (`strict_iso9`), GOST R 7.0.34 (`gost7034`) — plus [reverse transliteration](#reverse-transliteration) (ru/uk/el). This is what translit is built to do well. |
+| **Compatibility** (best-effort) | CJK (Chinese/Japanese/Korean), Arabic, Hebrew, Devanagari & other Indic scripts, Thai, Lao | Context-free, character-by-character — the same approach as Unidecode/AnyAscii. For these scripts romanization is fundamentally lossy; this tier exists so translit is a complete drop-in, not because it is best-in-class here. |
+| **Best-effort** | Georgian, Armenian, and a long tail of additional and historical scripts | Context-free coverage so input is never silently dropped. Approximate romanization for search/display, **not** a scholarly standard. |
+
+For **security/defense** (homoglyph, bidi, zalgo, invisible-character handling), do not
+rely on transliteration at all — see [Adversarial-Text Defense](../security/adversarial-defense.md).
 
 ## Built-in languages
 
@@ -401,9 +416,11 @@ transliterate("Hello™ World©")  # => "Hello(TM) World(c)"
 
 Both `"no"` and `"nb"` (Bokmål) map to the same Norwegian profile. `"nn"` (Nynorsk) also uses the same mappings. Use any of these codes interchangeably.
 
-## Historical and ancient scripts
+## Historical and ancient scripts (best-effort tier)
 
-translit includes transliteration mappings for several historical and ancient writing systems:
+These belong to the **best-effort** coverage tier: included so input is never silently
+dropped, not maintained as a focus area. translit includes transliteration mappings for
+several historical and ancient writing systems:
 
 | Script | Unicode Block | Example |
 |---|---|---|

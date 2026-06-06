@@ -16,6 +16,11 @@ from translit import unidecode
 
 The `translit.unidecode()` function is a direct alias for `transliterate()` with default settings. It accepts a single string argument and returns ASCII text.
 
+> **Coverage compatibility, not endorsement.** The alias exists to make migration a
+> one-line change. It is the right tool for romanization (slugs, ASCII keys,
+> search-fold) — but the *wrong* tool for security. See
+> [Unidecode is not a security tool](#unidecode-is-not-a-security-tool) below.
+
 ### Option 2: Use transliterate directly
 
 ```python
@@ -76,6 +81,38 @@ unidecode("北京")       # => "bei jing"
 | License | GPL-2.0 | Artistic-1.0 | MIT |
 
 If your project requires MIT licensing, translit is a safe replacement.
+
+## Unidecode is not a security tool
+
+If you reach for `unidecode` to "sanitize" untrusted text — to strip homoglyphs,
+invisible characters, or other Unicode trickery — switch to translit's defense
+functions, and not just for the speed.
+
+Unidecode (like `anyascii`, `cyrtranslit`, `uroman`) maps confusable characters
+**phonetically**: Cyrillic `р` (U+0440) → Latin `r`, by sound. A homoglyph attacker
+replaces Latin `p` with the identical-looking Cyrillic `р`, so phonetic mapping yields
+`r` — *not* the original `p` — and the attack survives. Worse, on invisible-character
+attacks `unidecode` expands zero-width characters into visible ASCII sequences,
+introducing spurious tokens that can *degrade* downstream model accuracy.
+
+translit maps **visually** per [Unicode TR39](https://www.unicode.org/reports/tr39/)
+(Cyrillic `р` → Latin `p`), which actually reverses the substitution. In a controlled
+benchmark, visual TR39 mapping achieves perfect homoglyph recovery where phonetic tools
+recover roughly half.
+
+```python
+# Wrong tool for defense — phonetic mapping, attack survives
+from translit import unidecode
+unidecode("рroduсt")       # → "rrodust"  (р→r, с→s by sound — the spoof is NOT reversed)
+
+# Right tools — visual TR39 mapping
+from translit import strip_obfuscation, normalize_confusables
+normalize_confusables("рroduсt")   # → "product"
+strip_obfuscation("рroduсt")       # → "product"  (also strips zalgo/bidi/invisible/emoji)
+```
+
+See [Adversarial-Text Defense](../security/adversarial-defense.md) for the full
+evidence and the XMR benchmark.
 
 ## text-unidecode migration
 

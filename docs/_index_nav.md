@@ -6,6 +6,7 @@
 Core concepts and usage for each feature area.
 
 - **[Getting Started](user-guide/getting-started.md)** — Installation, first steps, and basic usage
+- **[Adversarial-Text Defense](security/adversarial-defense.md)** — TR39 visual confusable mapping vs phonetic transliteration, the XMR benchmark, and why it matters
 - **[Transliteration](user-guide/transliteration.md)** — Unicode → ASCII with language profiles, plus reverse (Latin → native script)
 - **[Slugification](user-guide/slugification.md)** — URL-safe slug generation, drop-in python-slugify replacement
 - **[Normalization](user-guide/normalization.md)** — NFC / NFD / NFKC / NFKD Unicode normalization

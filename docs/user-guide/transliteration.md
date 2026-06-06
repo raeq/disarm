@@ -1,6 +1,22 @@
 # Transliteration
 
-Transliteration converts Unicode text to ASCII by replacing each character with its closest ASCII equivalent. translit supports two modes: **context-free** (default) for all 83 languages, and **context-aware** for abjad scripts (Arabic, Persian, Hebrew) where standard writing omits vowels.
+Transliteration converts Unicode text to ASCII by replacing each character with its closest ASCII equivalent.
+
+There are two quality tiers to be aware of (see [Language Support](language-support.md#coverage-tiers) for the full breakdown):
+
+- **Standards-based core (Latin, Cyrillic, Greek).** Best-in-class romanization with
+  named standards — BGN/PCGN by default, ISO 9:1995 (`strict_iso9`), GOST R 7.0.34
+  (`gost7034`) — plus reverse transliteration. This is what translit does well.
+- **Compatibility coverage (CJK, Indic, Arabic, Thai, and others).** Context-free,
+  character-by-character — the same lossy approach as Unidecode/AnyAscii, provided so
+  translit is a complete drop-in. An optional **context-aware** mode for abjad scripts
+  (Arabic, Persian, Hebrew) restores vowels for more readable output, but it is a
+  best-effort readability aid, not a romanization standard.
+
+> Transliteration is **not** a security control. To neutralize homoglyph/bidi/zalgo
+> attacks, use [adversarial-text defense](../security/adversarial-defense.md)
+> (`normalize_confusables` / `strip_obfuscation`), which maps by *appearance* (TR39),
+> not by *sound*.
 
 ## Basic usage
 

@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "translit-rs"
 version = "0.5.0"
-description = "Fast Unicode transliteration (including CJK), slugification, and text normalization — Rust-powered Python library"
+description = "Unicode adversarial-text defense and canonicalization for Python: TR39 confusable mapping, homoglyph/bidi/zalgo/invisible-character stripping, and standards-based transliteration — powered by Rust"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
@@ -14,10 +14,11 @@ authors = [
     { name = "Richard Quinn", email = "quinn.richard@gmail.com" },
 ]
 keywords = [
-    "unicode", "transliteration", "slug", "ascii", "text", "normalization",
-    "CJK", "Chinese", "pinyin", "Japanese", "Korean", "hangul", "romanization",
-    "unidecode", "slugify", "filename", "sanitize",
-    "homoglyph", "confusable", "grapheme", "encoding",
+    "unicode-security", "homoglyph", "confusable", "tr39", "idn",
+    "anti-spoofing", "text-sanitization", "adversarial", "canonicalization",
+    "bidi", "zalgo", "normalization", "security",
+    "transliteration", "slug", "slugify", "unidecode", "romanization",
+    "filename", "sanitize", "grapheme", "encoding", "CJK", "pinyin",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -29,6 +30,7 @@ classifiers = [
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Typing :: Typed",
+    "Topic :: Security",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: 3",

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Repositioning (docs + metadata only — no API or coverage changes).** The project
+  now leads with its differentiated, proven core: **Unicode adversarial-text defense
+  and canonicalization** (TR39 visual confusable mapping), with standards-based
+  Latin/Cyrillic/Greek transliteration as the supporting pillar and CJK/Indic/other
+  scripts framed as best-effort, unidecode-compatible coverage.
+  - Rewrote the package description, keywords, and classifiers (added `Topic :: Security`)
+    across `pyproject.toml`, `Cargo.toml`, and `mkdocs.yml` to surface the security
+    use case for discovery.
+  - Restructured `README.md` / `docs/index.md` to lead with defense; introduced an
+    explicit three-tier coverage model (core / compatibility / best-effort).
+  - Added an Adversarial-Text Defense guide (`docs/security/adversarial-defense.md`)
+    documenting the phonetic-vs-visual distinction, the XMR metric, and benchmark
+    evidence; elevated security to a top-level docs navigation section.
+  - Reframed the Unidecode migration guide: the `unidecode` alias is for romanization
+    compatibility, not security (it cannot reverse homoglyph attacks).
+- Fixed a documentation discrepancy in the built-in language-profile count (was
+  inconsistently reported as 64 in one place; now consistently 83).
+- Corrected several homoglyph code examples in the README/docs whose expected output
+  was wrong (e.g. the leading-character ordering in `strip_obfuscation` examples).
+
+### Notes
+- No public API, language registry, or script coverage was removed. All existing
+  imports, language codes, and the pinned API surface are unchanged.
+
 ## [0.5.0] — 2026-03-30
 
 ### Added

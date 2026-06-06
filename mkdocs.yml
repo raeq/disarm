@@ -1,6 +1,6 @@
 site_name: translit
 site_url: https://translit.readthedocs.io/
-site_description: Unicode adversarial-text defense and canonicalization — TR39 confusables, homoglyph/bidi/zalgo stripping, and standards-based transliteration, powered by Rust
+site_description: Unicode canonicalization and TR39 confusable analysis — building blocks for text-security pipelines plus standards-based transliteration, powered by Rust
 site_author: Richard Quinn
 repo_url: https://github.com/raeq/translit
 repo_name: raeq/translit
@@ -57,6 +57,7 @@ nav:
       - Getting Started: user-guide/getting-started.md
       - Security & Defense:
           - Adversarial-Text Defense: security/adversarial-defense.md
+          - Threat Model: THREAT_MODEL.md
           - Confusable Detection: user-guide/confusables.md
       - Transliteration: user-guide/transliteration.md
       - Slugification: user-guide/slugification.md

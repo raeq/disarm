@@ -2,7 +2,7 @@
 
 [![Documentation](https://readthedocs.org/projects/translit/badge/?version=latest)](https://translit.readthedocs.io/en/latest/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/translit/blob/main/LICENSE)
 
-Unicode adversarial-text defense and canonicalization for Python: TR39 confusable mapping, homoglyph/bidi/zalgo/invisible-character stripping, and standards-based transliteration — powered by Rust.
+Unicode canonicalization and TR39 confusable analysis for Python — building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling) plus standards-based transliteration. Rust-powered.
 
 **[Documentation](docs/index.md)** | **[API Reference](docs/api/index.md)** | **[PyPI](https://pypi.org/project/translit-rs/)**
 
@@ -12,21 +12,23 @@ Unicode adversarial-text defense and canonicalization for Python: TR39 confusabl
 
 ## Why translit
 
-The text-cleaning libraries already in most pipelines — `ftfy`, `unidecode`, `anyascii` — were built for encoding repair and ASCII conversion, **not** adversarial defense. They use *phonetic* transliteration (Cyrillic `р` → Latin `r`), which does not reverse a homoglyph attack and can actively make things worse.
+The text-cleaning libraries already in most pipelines — `ftfy`, `unidecode`, `anyascii` — were built for encoding repair and ASCII conversion. They map confusables *phonetically* (Cyrillic `р` → Latin `r`), which does not reverse a homoglyph substitution.
 
-translit implements *visual* confusable mapping per [Unicode TR39](https://www.unicode.org/reports/tr39/) (Cyrillic `р` → Latin `p`), the mapping that actually neutralizes spoofing. In a controlled benchmark across six Unicode attack types, three downstream tasks, and two model architectures (435,864 observations), visual TR39 mapping achieves **perfect homoglyph recovery** where every phonetic transliterator plateaus at roughly half:
+translit implements *visual* confusable mapping per [Unicode TR39](https://www.unicode.org/reports/tr39/) (Cyrillic `р` → Latin `p`). In a controlled benchmark (six attack types, three downstream tasks, two architectures; 435,864 observations), visual TR39 mapping reached **XMR = 1.000 on the tested TR39 homoglyph pairs** (17 Latin–Cyrillic, 19 Greek), where phonetic transliterators plateaued near half:
 
-| Tool class | Mapping | Homoglyph recovery (XMR) |
+| Tool class | Mapping | Homoglyph XMR (tested TR39 pairs) |
 |---|---|---|
 | `unidecode`, `anyascii`, `cyrtranslit`, `uroman` | phonetic | ~0.49 |
-| **translit** (`strip_obfuscation` / `normalize_confusables`) | **visual (TR39)** | **1.00** |
+| **translit** (`strip_obfuscation` / `normalize_confusables`) | **visual (TR39)** | **1.000** |
 
-`ftfy` is statistically equivalent to doing nothing, and `unidecode` *significantly degrades* classifier accuracy on invisible-character attacks. See **[Adversarial-text defense](docs/security/adversarial-defense.md)** for the full evidence (paper: *"Fire Extinguishers Full of Gasoline"*; XMR metric: [Zenodo 10.5281/zenodo.19323513](https://doi.org/10.5281/zenodo.19323513)).
+`ftfy` was statistically equivalent to no preprocessing; `unidecode` *degraded* accuracy on invisible-character attacks. Details: **[Adversarial-Text Defense](docs/security/adversarial-defense.md)** (paper *"Fire Extinguishers Full of Gasoline"*; XMR metric: [Zenodo 10.5281/zenodo.19323513](https://doi.org/10.5281/zenodo.19323513)).
+
+> **Scope.** translit is a **defense-in-depth layer, not a complete control.** It canonicalizes the confusables it bundles (TR39) and strips the format characters it enumerates; it does not promise to stop any attack class, and the confusable space is far larger than any table. See the **[Threat Model](THREAT_MODEL.md)** for what is and isn't in scope.
 
 ```python
 from translit import strip_obfuscation, normalize_confusables, is_safe_hostname
 
-# Neutralize a homoglyph attack (Cyrillic lookalikes → Latin, via TR39)
+# Fold Cyrillic look-alikes to their Latin prototypes (TR39 visual mapping)
 strip_obfuscation("рroduсt")        # → "product"  (р→p, с→c)
 strip_obfuscation("pаypаl 🔥🔥")     # → "paypal fire fire"  (also strips zalgo/bidi/invisible/emoji)
 
@@ -53,12 +55,12 @@ Requires Python 3.9+. Wheels are available for Linux, macOS, and Windows.
 
 ## Features
 
-- **[Adversarial-text defense](docs/security/adversarial-defense.md)**: TR39 [confusable / homoglyph mapping](docs/user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` deobfuscation pipeline
+- **[Confusable & homoglyph analysis (TR39)](docs/security/adversarial-defense.md)**: visual [confusable mapping](docs/user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` pipeline (defense-in-depth — see the [Threat Model](THREAT_MODEL.md))
 - **[Canonicalization pipelines](docs/api/pipelines.md)**: `security_clean`, `sanitize_user_input`, `catalog_key`, `search_key`, `sort_key`, `display_clean`, `ml_normalize` for common workflows
-- **[Hostname / IDN safety](docs/api/predicates.md#is_safe_hostname)**: mixed-script and homoglyph spoofing detection for domains
+- **[Hostname / IDN analysis](docs/api/predicates.md#is_safe_hostname)**: mixed-script and confusable detection for domains
 - **[Standards-based transliteration](docs/user-guide/transliteration.md)**: best-in-class Latin / Cyrillic / Greek with ISO 9:1995, GOST R 7.0.34, and BGN/PCGN, plus [reverse transliteration](docs/user-guide/language-support.md#reverse-transliteration) (Russian, Ukrainian, Greek)
 - **[Text normalization](docs/user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](docs/user-guide/text-cleaning.md)
-- **[Slugification](docs/user-guide/slugification.md)** & **[filename sanitization](docs/user-guide/filenames.md)**: URL-safe slugs (python-slugify compatible) and cross-platform safe filenames with path-traversal protection
+- **[Slugification](docs/user-guide/slugification.md)** & **[filename sanitization](docs/user-guide/filenames.md)**: URL-safe slugs (python-slugify compatible) and cross-platform safe filenames with path-traversal handling
 - **[Grapheme clusters](docs/user-guide/graphemes.md)**: correct user-perceived character counting, splitting, and truncation
 - **[Encoding detection](docs/api/encoding.md)**: auto-detect and decode byte sequences to UTF-8 (chardetng)
 - **Broad transliteration coverage** for CJK, Indic, and other scripts — a context-free [unidecode-compatible drop-in](#coverage-tiers) (best-effort; see caveats)
@@ -153,7 +155,7 @@ catalog_key("Москва", lang="ru")  # → "moskva"
 catalog_key("ΩMEGA  café")        # → "omega cafe"
 
 # Web input: NFKC → strip zalgo → confusables → strip bidi → collapse whitespace
-sanitize_user_input("pаypal")  # → "paypal" (homoglyph neutralized)
+sanitize_user_input("pаypal")  # → "paypal" (Cyrillic а folded to Latin)
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars → clean text
 strip_obfuscation("рroduсt")       # → "product" (Cyrillic р→p, с→c via TR39)

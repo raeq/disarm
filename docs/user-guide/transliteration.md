@@ -13,7 +13,7 @@ There are two quality tiers to be aware of (see [Language Support](language-supp
   (Arabic, Persian, Hebrew) restores vowels for more readable output, but it is a
   best-effort readability aid, not a romanization standard.
 
-> Transliteration is **not** a security control. To neutralize homoglyph/bidi/zalgo
+> Transliteration is **not** a security control. To handle homoglyph/bidi/zalgo
 > attacks, use [adversarial-text defense](../security/adversarial-defense.md)
 > (`normalize_confusables` / `strip_obfuscation`), which maps by *appearance* (TR39),
 > not by *sound*.

@@ -96,9 +96,10 @@ attacks `unidecode` expands zero-width characters into visible ASCII sequences,
 introducing spurious tokens that can *degrade* downstream model accuracy.
 
 translit maps **visually** per [Unicode TR39](https://www.unicode.org/reports/tr39/)
-(Cyrillic `р` → Latin `p`), which actually reverses the substitution. In a controlled
-benchmark, visual TR39 mapping achieves perfect homoglyph recovery where phonetic tools
-recover roughly half.
+(Cyrillic `р` → Latin `p`), which reverses the substitution **for confusables in the TR39
+table**. In a controlled benchmark, visual TR39 mapping reached XMR = 1.000 on the tested
+TR39 pairs where phonetic tools recovered roughly half. It is a defense-in-depth layer,
+not a complete control — see the [Threat Model](../THREAT_MODEL.md).
 
 ```python
 # Wrong tool for defense — phonetic mapping, attack survives

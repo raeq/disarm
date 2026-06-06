@@ -7,14 +7,23 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- **`strip_obfuscation` is now idempotent.** Emoji whose CLDR name contains
-  typographic punctuation (e.g. `👒` → `woman’s hat`, with U+2019 `’`) were not
-  folded because the confusables step ran *before* demojize; a second pass folded
-  `’`→`'`, so the output was not a fixed point. Confusables now runs after demojize.
-  Found by the new property tests.
+### Changed
+- **External wording: capability, not promise.** Security-relevant features are now
+  described as mechanisms (TR39 confusable *mapping*, bidi/zalgo *stripping*, hostname
+  *analysis*) rather than outcome guarantees. Package descriptions, README, and docs no
+  longer claim to "prevent"/"neutralize" attacks or achieve "perfect" recovery; the XMR
+  benchmark figure is always stated with its tested-pairs scope. Engineering rigor is held
+  to a high internal bar (see below); the external surface promises nothing it cannot
+  measure.
 
 ### Added
+- **`THREAT_MODEL.md`** — defines in-scope mechanisms, explicit out-of-scope items
+  (confusables outside the bundled TR39 table, whole-script and multi-character
+  confusables, Unicode-version skew, semantic attacks, DoS), and a vulnerability-vs-
+  known-limitation policy, grounded in the literature (Holgers 2006, Deng 2020,
+  BitAbuse 2025).
+- `SECURITY.md` rewritten on real footing: supported versions corrected to 0.5.x, triage
+  scope defined, and linked to the threat model.
 - **Security-invariant property tests + fuzzing.** `proptest` invariants in Rust
   (`src/presets.rs`) assert no-panic, idempotence, and "no bidi/format control
   survives" for `strip_obfuscation` / `security_clean` / `sanitize_user_input` /
@@ -31,6 +40,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - Pinned `data/confusables.txt` (UTS#39 17.0.0) as the reproducible, version-
   controlled input for `scripts/gen_confusables.py` (`--download` refreshes it),
   and a `tests/test_confusable_coverage.py` gate against Unicode-version drift.
+
+### Fixed
+- **`strip_obfuscation` is now idempotent.** Emoji whose CLDR name contains
+  typographic punctuation (e.g. `👒` → `woman’s hat`, with U+2019 `’`) were not
+  folded because the confusables step ran *before* demojize; a second pass folded
+  `’`→`'`, so the output was not a fixed point. Confusables now runs after demojize.
+  Found by the new property tests.
 
 ## [0.5.0] — 2026-06-06
 

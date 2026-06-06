@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "translit-rs"
 version = "0.5.0"
-description = "Unicode adversarial-text defense and canonicalization for Python: TR39 confusable mapping, homoglyph/bidi/zalgo/invisible-character stripping, and standards-based transliteration — powered by Rust"
+description = "Unicode canonicalization and TR39 confusable analysis for Python: building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling) plus standards-based transliteration — powered by Rust"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"

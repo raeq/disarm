@@ -1,33 +1,61 @@
 # Security Policy
 
+translit provides **building blocks for adversarial-text defense** — it is a
+defense-in-depth layer, **not a complete control**. Before relying on it in a security
+context, and before reporting a "bypass," please read the
+**[Threat Model](THREAT_MODEL.md)**: it defines precisely what these mechanisms do, what
+is **out of scope by design**, and how we distinguish a **vulnerability** from a **known
+limitation**.
+
 ## Supported versions
 
-Only the latest release on PyPI is actively maintained for security fixes.
+Security fixes are released against the latest `0.5.x` release on PyPI. Older minor
+series are not maintained.
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
+| 0.5.x   | Yes       |
+| < 0.5   | No        |
 
 ## Reporting a vulnerability
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Instead, report them privately via GitHub's
-[Security Advisories](https://github.com/raeq/translit/security/advisories/new)
-feature. We will acknowledge the report within 5 business days and aim to
-publish a fix within 30 days for confirmed issues.
+Report privately via GitHub
+[Security Advisories](https://github.com/raeq/translit/security/advisories/new). We aim to
+acknowledge within **5 business days** and to publish a fix within **30 days** for
+confirmed issues. translit is maintained by a small team — if a deadline is at risk we
+will say so on the advisory thread rather than go silent.
 
 Please include:
-- A description of the vulnerability
-- Steps to reproduce (minimal example)
-- Potential impact assessment
+- A description of the issue
+- A minimal reproduction (input → actual output → expected output)
+- Which documented behavior or invariant you believe is violated
 
-## Scope
+## What we treat as a vulnerability
 
-translit is a pure text-transformation library with no network access, file
-system writes, or code execution. Known security-relevant features include:
+A case where translit fails to do what the [Threat Model](THREAT_MODEL.md) says it does —
+for example a documented invariant failing (`normalize_confusables` emitting a code point
+the bundled table maps to the target; a documented bidi/zero-width code point not stripped;
+an idempotence violation), a panic / memory-safety issue / super-linear blowup, or
+`is_safe_hostname` reporting a label safe despite a condition it claims to detect.
 
-- **Homoglyph detection** — Unicode TR39 confusable character normalization
-- **BIDI attack prevention** — bidirectional override character stripping
-- **Path traversal protection** — `..` sequence collapse in filename sanitization
-- **Encoding detection** — `chardetng` / `encoding_rs` from Mozilla (no arbitrary code)
+A "bypass" that depends on an **out-of-scope** item (most commonly a confusable that is
+simply not in the bundled TR39 data, a whole-script spoof, or a multi-character confusable)
+is a **known limitation, not a vulnerability** — but such reports are still **welcome as
+coverage/enhancement requests**. Expanding the bundled data is how this layer improves.
+
+## Mechanisms (what is security-relevant)
+
+translit is a pure, in-process text-transformation library: no network access, no
+filesystem writes, no code execution, no runtime dependencies. Security-relevant
+mechanisms — described as mechanisms, not guarantees:
+
+- **TR39 confusable mapping** — `normalize_confusables` / `is_confusable` map characters in
+  the bundled Unicode TR39 table to a target script (coverage = that table).
+- **Bidi / zalgo / zero-width stripping** — remove the enumerated control, combining-mark,
+  and invisible code points.
+- **Hostname / IDN analysis** — `is_safe_hostname` flags mixed-script labels and
+  bundled-table confusables (not whole-script spoofs).
+- **Filename sanitization** — `..` / path-separator handling for safer filenames.
+- **Encoding detection** — `chardetng` / `encoding_rs` (Mozilla); no arbitrary code paths.

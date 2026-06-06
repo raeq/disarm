@@ -71,10 +71,10 @@ pipe("  Hello   World  ")   # → "Hello World"
 | Steps | NFKC → confusables → collapse_whitespace |
 | Output charset | UTF-8 (original script preserved) |
 | Reversibility | No (NFKC is lossy for some characters) |
-| Security | Neutralizes confusable homoglyphs |
+| Security | Folds TR39 confusable homoglyphs |
 
 !!! note
-    For full protection against zalgo text and bidi injection, use the `sanitize_user_input()` precompiled pipeline instead — it includes `strip_zalgo` and `strip_bidi` steps that `TextPipeline` does not support.
+    To also handle zalgo text and bidi injection, use the `sanitize_user_input()` precompiled pipeline instead — it includes `strip_zalgo` and `strip_bidi` steps that `TextPipeline` does not support.
 
 ### ml_corpus_normalize
 

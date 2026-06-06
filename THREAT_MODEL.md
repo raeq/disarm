@@ -60,6 +60,9 @@ behavior, not a vulnerability:
   script that visually reads as Latin (e.g. an all-Cyrillic word) is **not mixed-script**
   and may contain no table confusable; `is_safe_hostname` and `is_mixed_script` will not
   flag it. Whole-script confusable detection is not implemented.
+- **Multi-character confusables.** Sequences confusable as a *group* rather than
+  per-character — e.g. `rn` → `m`, `cl` → `d`, `vv` → `w` — are not detected or folded.
+  Mapping is single-code-point only.
 - **Unicode-version skew.** Bundled tables (confusables, CaseFolding, scripts) track a
   specific Unicode version. Code points added in later versions are unmapped until the
   data is updated. The bundled version is recorded in the release.
@@ -89,6 +92,31 @@ document says it does — for example:
 an *Out of scope* item above — most commonly a confusable that is simply not in the bundled
 table. Such reports are nonetheless **welcome as coverage/enhancement requests**:
 expanding the bundled mapping data is exactly how this layer improves.
+
+## Background and evidence
+
+The scope above is grounded in the literature, not asserted:
+
+- **Table-driven normalization is a layer, not a solution.** On *real* phishing text,
+  1:1 confusable-database lookup restores only ~35% of visually-perturbed words, versus
+  ~96% for a context-aware character model (Lee et al., *BitAbuse*, 2025). translit is the
+  fast, deterministic first layer — not the whole defense.
+- **The confusable space is unbounded and mostly outside any standard.** Deng et al.
+  (2020) used deep learning to find 8,000+ homoglyphs. Measured against translit's bundled
+  data: of their ~4,859 *letter* homoglyphs, only ~11% appear in the official TR39
+  `confusables.txt` at all — the rest are novel. A TR39-derived tool **cannot** canonicalize
+  what TR39 does not list. (Their released set is code-points only, so this measures
+  recognition, not target-correctness.)
+- **The dominant real-world threat is the one translit covers well.** Holgers et al.
+  (USENIX 2006) found registered homograph domains are overwhelmingly **single-character,
+  Latin** substitutions (85–88%), with IDN/Unicode a smaller but growing share. translit's
+  single-letter Latin confusable coverage of UTS#39 is complete and gated in CI
+  (`tests/test_confusable_coverage.py`); `is_safe_hostname` addresses the mixed-script/IDN
+  case. Multi-character (`rn`→`m`) and whole-script spoofs remain out of scope (above).
+
+References: Holgers, Watson & Gribble, "Cutting through the Confusion," USENIX 2006 ·
+Deng, Linsky & Wright, "Weaponizing Unicodes with Deep Learning," 2020 (arXiv:2010.04382) ·
+Lee et al., "BitAbuse," 2025 (arXiv:2502.05225) · Unicode UTS#39.
 
 ## Reporting
 

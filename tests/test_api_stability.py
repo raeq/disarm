@@ -34,6 +34,9 @@ from translit import (
 EXPECTED_ALL = {
     # Core transforms
     "transliterate",
+    "dedup_batch",
+    "make_cached_transliterator",
+    "CachedTransliterator",
     "slugify",
     "normalize",
     "normalize_confusables",
@@ -243,6 +246,28 @@ def _param_kinds(fn) -> dict[str, str]:
 CORE_FUNCTION_PARAMS = {
     "transliterate": [
         "text",
+        "lang",
+        "target",
+        "errors",
+        "replace_with",
+        "strict_iso9",
+        "gost7034",
+        "tones",
+        "context",
+    ],
+    "dedup_batch": [
+        "texts",
+        "lang",
+        "target",
+        "errors",
+        "replace_with",
+        "strict_iso9",
+        "gost7034",
+        "tones",
+        "context",
+    ],
+    "make_cached_transliterator": [
+        "maxsize",
         "lang",
         "target",
         "errors",

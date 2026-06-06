@@ -6,7 +6,8 @@ import sys as _sys
 import types as _stdlib_types
 import warnings as _warnings
 from collections.abc import Iterable
-from typing import Any, overload
+from functools import lru_cache, wraps
+from typing import Any, Protocol, cast, overload
 
 from translit._enums import (
     LANG_AM,
@@ -2019,6 +2020,16 @@ def script_info(script: str | Script) -> ScriptMeta:
     return SCRIPT_META[key]
 
 
+# Incremented whenever the global transliteration tables change, so caches built
+# by make_cached_transliterator can detect staleness and self-invalidate.
+_mutation_generation: int = 0
+
+
+def _bump_mutation_generation() -> None:
+    global _mutation_generation
+    _mutation_generation += 1
+
+
 def register_lang(code: str, mappings: dict[str, str]) -> None:
     """Register or override a transliteration mapping for a language code.
 
@@ -2036,6 +2047,7 @@ def register_lang(code: str, mappings: dict[str, str]) -> None:
         'Aerger'
     """
     _register_lang(code, mappings)
+    _bump_mutation_generation()
 
 
 def register_replacements(replacements: dict[str, str]) -> None:
@@ -2053,6 +2065,7 @@ def register_replacements(replacements: dict[str, str]) -> None:
         >>> register_replacements({"©": "(c)", "®": "(r)"})
     """
     _register_replacements(replacements)
+    _bump_mutation_generation()
 
 
 def remove_replacement(key: str) -> bool:
@@ -2071,7 +2084,10 @@ def remove_replacement(key: str) -> bool:
         >>> remove_replacement("©")
         False
     """
-    return _remove_replacement(key)
+    result = _remove_replacement(key)
+    if result:  # only a real removal changes the tables
+        _bump_mutation_generation()
+    return result
 
 
 def clear_replacements() -> None:
@@ -2082,6 +2098,152 @@ def clear_replacements() -> None:
         >>> clear_replacements()
     """
     _clear_replacements()
+    _bump_mutation_generation()
+
+
+# --- Bulk / caching helpers (opt-in) -------------------------------------
+
+
+def dedup_batch(
+    texts: list[str],
+    *,
+    lang: str | None = None,
+    target: str | None = None,
+    errors: ErrorMode = "replace",
+    replace_with: str = "[?]",
+    strict_iso9: bool = False,
+    gost7034: bool = False,
+    tones: bool = False,
+    context: bool = False,
+) -> list[str]:
+    """Transliterate a list, processing each *distinct* value only once.
+
+    Equivalent in result to ``transliterate(texts, ...)`` but each unique input
+    crosses into Rust a single time and the result is mapped back. This is a
+    large win when values repeat — categorical columns such as city, author,
+    publisher, or country — and is **stateless**: it holds no cache, so there is
+    nothing to invalidate and every call reflects the *current* global tables.
+    (Its output still depends on :func:`register_lang` /
+    :func:`register_replacements` like any call — it simply cannot go stale.)
+
+    Unique values are batched in chunks of 100,000 (the batch-size cap), so this
+    also works for unique sets larger than a single ``transliterate`` call allows.
+
+    Args:
+        texts: List of input strings (repeats expected). Order is preserved.
+        lang, target, errors, replace_with, strict_iso9, gost7034, tones,
+            context: Same meaning as :func:`transliterate`; applied to every value.
+
+    Returns:
+        List of transliterations aligned 1:1 with *texts*.
+
+    Examples:
+        >>> dedup_batch(["café", "café", "naïve"])
+        ['cafe', 'cafe', 'naive']
+        >>> dedup_batch([])
+        []
+    """
+    uniq = list(dict.fromkeys(texts))
+    out: list[str] = []
+    for i in range(0, len(uniq), _MAX_BATCH_SIZE):
+        out.extend(
+            transliterate(
+                uniq[i : i + _MAX_BATCH_SIZE],
+                lang=lang,
+                target=target,
+                errors=errors,
+                replace_with=replace_with,
+                strict_iso9=strict_iso9,
+                gost7034=gost7034,
+                tones=tones,
+                context=context,
+            )
+        )
+    mapping = dict(zip(uniq, out))
+    return [mapping[t] for t in texts]
+
+
+class CachedTransliterator(Protocol):
+    """A cached single-string transliterator (the result of
+    :func:`make_cached_transliterator`) that also exposes the underlying
+    ``functools.lru_cache`` controls."""
+
+    def __call__(self, text: str) -> str: ...
+
+    def cache_clear(self) -> None:
+        """Empty the cache."""
+        ...
+
+    def cache_info(self) -> Any:
+        """Return the underlying ``functools.lru_cache`` ``CacheInfo``."""
+        ...
+
+
+def make_cached_transliterator(
+    maxsize: int | None = 4096,
+    *,
+    lang: str | None = None,
+    target: str | None = None,
+    errors: ErrorMode = "replace",
+    replace_with: str = "[?]",
+    strict_iso9: bool = False,
+    gost7034: bool = False,
+    tones: bool = False,
+    context: bool = False,
+) -> CachedTransliterator:
+    """Return an opt-in, LRU-cached single-string transliterator (fixed options).
+
+    The returned callable takes one string and caches its result (bounded by
+    *maxsize*; ``None`` = unbounded). Use it for a long-running process that
+    transliterates many *repeated* single values over time with the same options
+    — i.e. when you do **not** have the full list up front (otherwise prefer
+    :func:`dedup_batch`, which is stateless and faster for bulk).
+
+    The cache **self-invalidates**: the next call after any
+    :func:`register_lang`, :func:`register_replacements`,
+    :func:`remove_replacement`, or :func:`clear_replacements` clears it, so it
+    never serves results that pre-date a table change.
+
+    Transliteration options are fixed at construction time (build one cached
+    transliterator per option set). The underlying ``functools.lru_cache``
+    ``.cache_clear()`` and ``.cache_info()`` are exposed on the returned callable.
+
+    Caching is a win only when inputs repeat; on unique-heavy input it adds
+    overhead with no benefit. It is never enabled by default.
+
+    Examples:
+        >>> t = make_cached_transliterator()
+        >>> t("café"), t("café")
+        ('cafe', 'cafe')
+    """
+
+    @lru_cache(maxsize=maxsize)
+    def _cached(text: str) -> str:
+        return transliterate(
+            text,
+            lang=lang,
+            target=target,
+            errors=errors,
+            replace_with=replace_with,
+            strict_iso9=strict_iso9,
+            gost7034=gost7034,
+            tones=tones,
+            context=context,
+        )
+
+    seen_generation = _mutation_generation
+
+    @wraps(_cached)
+    def cached(text: str) -> str:
+        nonlocal seen_generation
+        if _mutation_generation != seen_generation:
+            _cached.cache_clear()
+            seen_generation = _mutation_generation
+        return _cached(text)
+
+    cached.cache_clear = _cached.cache_clear  # type: ignore[attr-defined]
+    cached.cache_info = _cached.cache_info  # type: ignore[attr-defined]
+    return cast(CachedTransliterator, cached)
 
 
 # --- Compatibility aliases ---
@@ -2105,6 +2267,9 @@ from translit._text import Text  # noqa: E402
 __all__ = [
     # Transforms
     "transliterate",
+    "dedup_batch",
+    "make_cached_transliterator",
+    "CachedTransliterator",
     "slugify",
     "normalize",
     "normalize_confusables",

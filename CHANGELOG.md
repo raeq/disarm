@@ -7,32 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- **Repositioning (docs + metadata only — no API or coverage changes).** The project
-  now leads with its differentiated, proven core: **Unicode adversarial-text defense
-  and canonicalization** (TR39 visual confusable mapping), with standards-based
-  Latin/Cyrillic/Greek transliteration as the supporting pillar and CJK/Indic/other
-  scripts framed as best-effort, unidecode-compatible coverage.
-  - Rewrote the package description, keywords, and classifiers (added `Topic :: Security`)
-    across `pyproject.toml`, `Cargo.toml`, and `mkdocs.yml` to surface the security
-    use case for discovery.
-  - Restructured `README.md` / `docs/index.md` to lead with defense; introduced an
-    explicit three-tier coverage model (core / compatibility / best-effort).
-  - Added an Adversarial-Text Defense guide (`docs/security/adversarial-defense.md`)
-    documenting the phonetic-vs-visual distinction, the XMR metric, and benchmark
-    evidence; elevated security to a top-level docs navigation section.
-  - Reframed the Unidecode migration guide: the `unidecode` alias is for romanization
-    compatibility, not security (it cannot reverse homoglyph attacks).
-- Fixed a documentation discrepancy in the built-in language-profile count (was
-  inconsistently reported as 64 in one place; now consistently 83).
-- Corrected several homoglyph code examples in the README/docs whose expected output
-  was wrong (e.g. the leading-character ordering in `strip_obfuscation` examples).
-
-### Notes
-- No public API, language registry, or script coverage was removed. All existing
-  imports, language codes, and the pinned API surface are unchanged.
-
-## [0.5.0] — 2026-03-30
+## [0.5.0] — 2026-06-06
 
 ### Added
 - **Context-aware transliteration** for abjad scripts (Arabic, Persian, Hebrew).
@@ -65,6 +40,51 @@ Versions follow [Semantic Versioning](https://semver.org/).
   tokenizer, three-tier resolve (bigram → unigram → context-free fallback),
   lazy-loaded global singletons via `OnceLock`.
 - 28 context-aware tests (8 Arabic, 14 Persian, 6 Hebrew).
+
+### Changed
+- **Repositioning (docs + metadata only — no API or coverage changes).** The project
+  now leads with its differentiated, proven core: **Unicode adversarial-text defense
+  and canonicalization** (TR39 visual confusable mapping), with standards-based
+  Latin/Cyrillic/Greek transliteration as the supporting pillar and CJK/Indic/other
+  scripts framed as best-effort, unidecode-compatible coverage.
+  - Rewrote the package description, keywords, and classifiers (added `Topic :: Security`)
+    across `pyproject.toml`, `Cargo.toml`, and `mkdocs.yml` to surface the security
+    use case for discovery.
+  - Restructured `README.md` / `docs/index.md` to lead with defense; introduced an
+    explicit three-tier coverage model (core / compatibility / best-effort).
+  - Added an Adversarial-Text Defense guide (`docs/security/adversarial-defense.md`)
+    documenting the phonetic-vs-visual distinction, the XMR metric, and benchmark
+    evidence; elevated security to a top-level docs navigation section.
+  - Reframed the Unidecode migration guide: the `unidecode` alias is for romanization
+    compatibility, not security (it cannot reverse homoglyph attacks).
+
+### Fixed
+- **Linux x86_64 wheels are now built as `cp39-abi3`** instead of a version-specific
+  `cp38-cp38` wheel. Previously the only published x86_64 Linux wheel targeted CPython
+  3.8, so `pip` fell back to a source build (requiring a Rust toolchain) on Linux
+  x86_64 for Python 3.9+. The publish workflow now pins the build interpreter and
+  guards against the regression. (#26)
+- Documentation: corrected the built-in language-profile count (inconsistently
+  reported as 64 in one place; now consistently 83), and fixed several homoglyph code
+  examples whose expected output was wrong (e.g. leading-character ordering in
+  `strip_obfuscation` examples). All README/doc examples are now verified against the
+  built library.
+
+### Security
+- Pinned all third-party GitHub Actions to commit SHAs across the CI and release
+  workflows (resolves the CodeQL `actions/unpinned-tag` findings) and added
+  `.github/dependabot.yml` to keep them current. This hardens the release pipeline,
+  which uses PyPI trusted publishing (`id-token: write`).
+- Bumped dev/docs dependencies flagged by Dependabot:
+  [Pygments → 2.20.0](https://github.com/advisories/GHSA-5239-wwwm-4pmq) and
+  [pytest → 9.0.3](https://github.com/advisories/GHSA-6w46-j5rx-g56g) (the pytest
+  bump applies on Python ≥ 3.10; Python 3.9 stays on pytest 8.4.2, since pytest 9
+  requires ≥ 3.10). Both are development-only — the package has no runtime
+  dependencies.
+
+### Notes
+- No public API, language registry, or script coverage was removed. All existing
+  imports, language codes, and the pinned API surface are unchanged.
 
 ## [0.4.0] — 2026-03-29
 

@@ -2084,6 +2084,66 @@ def clear_replacements() -> None:
     _clear_replacements()
 
 
+# --- Bulk / caching helpers (opt-in) -------------------------------------
+
+
+def dedup_batch(
+    texts: list[str],
+    *,
+    lang: str | None = None,
+    target: str | None = None,
+    errors: ErrorMode = "replace",
+    replace_with: str = "[?]",
+    strict_iso9: bool = False,
+    gost7034: bool = False,
+    tones: bool = False,
+    context: bool = False,
+) -> list[str]:
+    """Transliterate a list, processing each *distinct* value only once.
+
+    Equivalent in result to ``transliterate(texts, ...)`` but each unique input
+    crosses into Rust a single time and the result is mapped back. This is a
+    large win when values repeat — categorical columns such as city, author,
+    publisher, or country — and is **stateless** (no cache to invalidate, so it
+    is unaffected by :func:`register_lang` / :func:`register_replacements`).
+
+    Unique values are batched in chunks of 100,000 (the batch-size cap), so this
+    also works for unique sets larger than a single ``transliterate`` call allows.
+
+    Args:
+        texts: List of input strings (repeats expected). Order is preserved.
+        lang, target, errors, replace_with, strict_iso9, gost7034, tones,
+            context: Same meaning as :func:`transliterate`; applied to every value.
+
+    Returns:
+        List of transliterations aligned 1:1 with *texts*.
+
+    Examples:
+        >>> dedup_batch(["café", "café", "naïve"])
+        ['cafe', 'cafe', 'naive']
+        >>> dedup_batch([])
+        []
+    """
+    uniq = list(dict.fromkeys(texts))
+    out: list[str] = []
+    for i in range(0, len(uniq), _MAX_BATCH_SIZE):
+        out.extend(
+            transliterate(
+                uniq[i : i + _MAX_BATCH_SIZE],
+                lang=lang,
+                target=target,
+                errors=errors,
+                replace_with=replace_with,
+                strict_iso9=strict_iso9,
+                gost7034=gost7034,
+                tones=tones,
+                context=context,
+            )
+        )
+    mapping = dict(zip(uniq, out))
+    return [mapping[t] for t in texts]
+
+
 # --- Compatibility aliases ---
 
 from translit._compat import (  # noqa: E402, F401  # noqa: E402, F401
@@ -2105,6 +2165,7 @@ from translit._text import Text  # noqa: E402
 __all__ = [
     # Transforms
     "transliterate",
+    "dedup_batch",
     "slugify",
     "normalize",
     "normalize_confusables",

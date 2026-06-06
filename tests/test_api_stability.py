@@ -35,6 +35,7 @@ EXPECTED_ALL = {
     # Core transforms
     "transliterate",
     "dedup_batch",
+    "make_cached_transliterator",
     "slugify",
     "normalize",
     "normalize_confusables",
@@ -255,6 +256,17 @@ CORE_FUNCTION_PARAMS = {
     ],
     "dedup_batch": [
         "texts",
+        "lang",
+        "target",
+        "errors",
+        "replace_with",
+        "strict_iso9",
+        "gost7034",
+        "tones",
+        "context",
+    ],
+    "make_cached_transliterator": [
+        "maxsize",
         "lang",
         "target",
         "errors",

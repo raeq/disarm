@@ -17,6 +17,15 @@ Versions follow [Semantic Versioning](https://semver.org/).
   measure.
 
 ### Added
+- **`dedup_batch(texts, …)`** — transliterate a list, processing each *distinct*
+  value once and mapping back (large win for repeated/categorical data; ~146× on a
+  high-locality column). Stateless — no cache to invalidate; unique values are chunked
+  at the 100k batch cap. (#31)
+- **`make_cached_transliterator(maxsize=…, …)`** — opt-in LRU-cached single-string
+  transliterator with options fixed at construction. **Self-invalidating**: the next
+  call after any `register_lang`/`register_replacements`/`remove_replacement`/
+  `clear_replacements` clears the cache (via an internal table-generation counter), so
+  it never serves stale results. Never enabled by default. (#31)
 - **`THREAT_MODEL.md`** — defines in-scope mechanisms, explicit out-of-scope items
   (confusables outside the bundled TR39 table, whole-script and multi-character
   confusables, Unicode-version skew, semantic attacks, DoS), and a vulnerability-vs-

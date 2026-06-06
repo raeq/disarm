@@ -7,6 +7,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Confusable coverage for intra-Latin homoglyphs of basic ASCII letters**
+  (e.g. `þ→p`, `ſ→f`, `ı→i`, `ƒ→f`, `Ɩ→l`, `ꜱ→s`). The TR39 generator previously
+  skipped all Latin-script sources for the Latin target, dropping ~83 genuine
+  homoglyphs of A–Z/a–z; `normalize_confusables`/`strip_obfuscation` now fold
+  them. Single-letter Latin confusable coverage of UTS#39 is now complete.
+- Pinned `data/confusables.txt` (UTS#39 17.0.0) as the reproducible, version-
+  controlled input for `scripts/gen_confusables.py` (`--download` refreshes it),
+  and a `tests/test_confusable_coverage.py` gate against Unicode-version drift.
+
 ## [0.5.0] — 2026-06-06
 
 ### Added

@@ -31,6 +31,8 @@ from pathlib import Path
 
 CONFUSABLES_URL = "https://www.unicode.org/Public/security/latest/confusables.txt"
 DATA_DIR = Path(__file__).resolve().parent.parent / "src" / "tables" / "data"
+# Pinned, version-controlled source so regeneration is reproducible (see header).
+BUNDLED_CONFUSABLES = Path(__file__).resolve().parent.parent / "data" / "confusables.txt"
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +69,11 @@ def is_latin_or_common(cp: int) -> bool:
         or (0xAB30 <= cp <= 0xAB6F)  # Latin Extended-E
         or is_combining_mark(cp)  # Combining marks (stripped downstream)
     )
+
+
+def is_basic_ascii_letter(cp: int) -> bool:
+    """True if codepoint is a basic ASCII letter A-Z / a-z (already canonical)."""
+    return (0x0041 <= cp <= 0x005A) or (0x0061 <= cp <= 0x007A)
 
 
 def is_cyrillic(cp: int) -> bool:
@@ -273,6 +280,36 @@ def filter_via_classes(
     return list(result_map.items())
 
 
+def filter_latin_homoglyphs(
+    entries: list[tuple[int, list[int]]],
+) -> list[tuple[int, str]]:
+    """Latin-script characters that are confusable with a *basic ASCII* letter.
+
+    ``filter_direct`` skips every Latin-script source for the Latin target
+    (``is_target(source_cp)`` is true), which drops genuine homoglyphs of ASCII
+    letters that happen to live in Latin Extended blocks — e.g. þ→p, ſ→f, ı→i,
+    ƒ→f, Ɩ→l. These must fold for confusable normalization. This pass recovers
+    exactly that case: a non-ASCII Latin-script source whose TR39 prototype is a
+    single basic ASCII letter.
+    """
+    result: dict[int, str] = {}
+    for source_cp, target_cps in entries:
+        if not is_latin(source_cp):
+            continue  # cross-script sources are handled by filter_direct
+        if is_basic_ascii_letter(source_cp):
+            continue  # already canonical
+        if 0x0030 <= source_cp <= 0x0039:
+            continue  # digits
+        cleaned = strip_combining(target_cps)
+        if len(cleaned) != 1 or not is_basic_ascii_letter(cleaned[0]):
+            continue  # prototype must be a single basic ASCII letter
+        target_str = fix_case_mismatch(source_cp, chr(cleaned[0]))
+        if target_str == chr(source_cp):
+            continue  # never self-map
+        result[source_cp] = target_str
+    return list(result.items())
+
+
 def generate_mappings(
     entries: list[tuple[int, list[int]]],
     script_name: str,
@@ -292,8 +329,12 @@ def generate_mappings(
     direct = filter_direct(entries, script_name)
 
     if script_name == "latin":
-        # For Latin, direct is sufficient (prototypes are Latin)
-        return direct
+        # Direct covers cross-script → Latin. Add the intra-Latin homoglyphs of
+        # basic ASCII letters that direct skips (þ→p, ſ→f, ı→i, …); direct wins.
+        merged = dict(direct)
+        for cp, target in filter_latin_homoglyphs(entries):
+            merged.setdefault(cp, target)
+        return list(merged.items())
 
     # For non-Latin: also invert equivalence classes
     direct_map = dict(direct)
@@ -337,7 +378,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate confusable TSV files from TR39 confusables.txt"
     )
-    parser.add_argument("--input", type=Path, help="Local confusables.txt (default: download)")
+    parser.add_argument(
+        "--input", type=Path, help="Local confusables.txt (default: bundled data/confusables.txt)"
+    )
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Fetch the latest confusables.txt from unicode.org instead of the pinned bundled copy",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -348,10 +396,13 @@ def main() -> None:
 
     if args.input:
         text = args.input.read_text(encoding="utf-8")
-    else:
+    elif args.download:
         print("Downloading confusables.txt...", file=sys.stderr)
-        with urllib.request.urlopen(CONFUSABLES_URL) as resp:
+        with urllib.request.urlopen(CONFUSABLES_URL, timeout=30) as resp:  # noqa: S310
             text = resp.read().decode("utf-8")
+    else:
+        print(f"Using bundled {BUNDLED_CONFUSABLES}", file=sys.stderr)
+        text = BUNDLED_CONFUSABLES.read_text(encoding="utf-8")
 
     entries = parse_confusables(text)
     print(f"Parsed {len(entries)} total entries", file=sys.stderr)

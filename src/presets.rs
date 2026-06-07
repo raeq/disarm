@@ -147,11 +147,15 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
 
 /// Library catalog key generation pipeline.
 ///
-/// Pipeline: NFKC → transliterate → confusables → strip_accents → fold_case → collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → transliterate → confusables → strip_accents → fold_case → collapse_whitespace
 ///
 /// Transliteration runs before confusable normalization so that non-Latin
 /// scripts receive correct phonetic romanization (e.g. Cyrillic г→g, not
 /// the visual confusable г→r).
+///
+/// `strip_bidi` runs early (#93) so bidi overrides (U+202E) and soft hyphens
+/// (U+00AD) cannot survive into the key — otherwise two visually-identical
+/// titles produce different keys and dedup/lookup silently misses.
 ///
 /// Produces a canonical deduplication key for bibliographic titles.
 /// Optional ISO 9:1995 transliteration for Cyrillic catalog records.
@@ -161,7 +165,9 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
     crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
-    // 2. Transliterate (always — catalog keys should be pure ASCII where possible;
+    // 2. Strip bidi overrides + soft hyphen + format marks (#93)
+    let buf = strip_bidi(&buf);
+    // 3. Transliterate (always — catalog keys should be pure ASCII where possible;
     //    runs before confusables so that non-Latin scripts are romanized first,
     //    avoiding broken confusable mappings like Cyrillic к → literal \u{0138})
     let buf = transliterate::transliterate_impl(
@@ -174,8 +180,47 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
         false,
     )
     .into_owned();
-    // 3. Confusables → Latin (normalize any remaining cross-script homoglyphs)
+    // 4. Confusables → Latin (normalize any remaining cross-script homoglyphs)
     let buf = confusables::_normalize_confusables(&buf, "latin")?;
+    // 5. Strip accents
+    let buf = transliterate::_strip_accents(&buf);
+    // 6. Unicode case folding
+    let buf = case_fold::fold_case_impl(&buf);
+    // 7. Collapse whitespace + strip control + strip zero-width
+    let buf = whitespace::_collapse_whitespace(&buf, true, true);
+    Ok(buf)
+}
+
+/// Search index key generation pipeline.
+///
+/// Pipeline: NFKC → strip_bidi → transliterate → strip_accents → fold_case → collapse_whitespace
+///
+/// Produces a case-insensitive, accent-insensitive, script-insensitive lookup
+/// key.  Like `catalog_key` but without confusable normalization — lighter and
+/// faster for search indexes where homoglyph attacks are not a concern.
+///
+/// `strip_bidi` runs early (#93) so an invisible char (bidi override, soft
+/// hyphen) embedded in a stored value still produces the same key as the clean
+/// query — otherwise lookups silently miss.
+#[pyfunction]
+#[pyo3(signature = (text, *, lang=None))]
+pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
+    crate::transliterate::validate_lang(lang)?;
+    // 1. NFKC normalization
+    let buf: String = text.nfkc().collect();
+    // 2. Strip bidi overrides + soft hyphen + format marks (#93)
+    let buf = strip_bidi(&buf);
+    // 3. Transliterate (always — search keys should be pure ASCII where possible)
+    let buf = transliterate::transliterate_impl(
+        &buf,
+        lang,
+        crate::ErrorMode::Preserve,
+        "",
+        false,
+        false,
+        false,
+    )
+    .into_owned();
     // 4. Strip accents
     let buf = transliterate::_strip_accents(&buf);
     // 5. Unicode case folding
@@ -185,53 +230,25 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
     Ok(buf)
 }
 
-/// Search index key generation pipeline.
-///
-/// Pipeline: NFKC → transliterate → strip_accents → fold_case → collapse_whitespace
-///
-/// Produces a case-insensitive, accent-insensitive, script-insensitive lookup
-/// key.  Like `catalog_key` but without confusable normalization — lighter and
-/// faster for search indexes where homoglyph attacks are not a concern.
-#[pyfunction]
-#[pyo3(signature = (text, *, lang=None))]
-pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
-    crate::transliterate::validate_lang(lang)?;
-    // 1. NFKC normalization
-    let buf: String = text.nfkc().collect();
-    // 2. Transliterate (always — search keys should be pure ASCII where possible)
-    let buf = transliterate::transliterate_impl(
-        &buf,
-        lang,
-        crate::ErrorMode::Preserve,
-        "",
-        false,
-        false,
-        false,
-    )
-    .into_owned();
-    // 3. Strip accents
-    let buf = transliterate::_strip_accents(&buf);
-    // 4. Unicode case folding
-    let buf = case_fold::fold_case_impl(&buf);
-    // 5. Collapse whitespace + strip control + strip zero-width
-    let buf = whitespace::_collapse_whitespace(&buf, true, true);
-    Ok(buf)
-}
-
 /// Sort key generation pipeline.
 ///
-/// Pipeline: NFKC → transliterate → fold_case → collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → transliterate → fold_case → collapse_whitespace
 ///
 /// Like `search_key` but preserves base accented characters for correct
 /// alphabetical ordering.  "Über" sorts next to "Uber", and "Война и мир"
 /// files under "voyna i mir".
+///
+/// `strip_bidi` runs early (#93) so invisible bidi/format chars cannot perturb
+/// the ordering of otherwise-identical strings.
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None))]
 pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
     crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
-    // 2. Transliterate (always — sort keys need a consistent script)
+    // 2. Strip bidi overrides + soft hyphen + format marks (#93)
+    let buf = strip_bidi(&buf);
+    // 3. Transliterate (always — sort keys need a consistent script)
     let buf = transliterate::transliterate_impl(
         &buf,
         lang,
@@ -242,9 +259,9 @@ pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
         false,
     )
     .into_owned();
-    // 3. Unicode case folding
+    // 4. Unicode case folding
     let buf = case_fold::fold_case_impl(&buf);
-    // 4. Collapse whitespace + strip control + strip zero-width
+    // 5. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::_collapse_whitespace(&buf, true, true);
     Ok(buf)
 }
@@ -541,6 +558,34 @@ mod tests {
             _sort_key("Москва", None).unwrap(),
             _search_key("Москва", None).unwrap()
         );
+    }
+
+    #[test]
+    fn test_key_functions_strip_bidi_and_soft_hyphen() {
+        // #93: a value stored with an invisible bidi/format char must produce
+        // the SAME key as its clean equivalent, or dedup/lookup silently misses.
+        for (stored, clean) in [
+            ("pass\u{00AD}word", "password"), // soft hyphen
+            ("user\u{202E}txt", "usertxt"),   // RLO override
+            ("a\u{200E}b", "ab"),             // LRM
+            ("x\u{061C}y", "xy"),             // Arabic Letter Mark
+        ] {
+            assert_eq!(
+                _search_key(stored, None).unwrap(),
+                _search_key(clean, None).unwrap(),
+                "search_key must collide for {stored:?} vs {clean:?}"
+            );
+            assert_eq!(
+                _catalog_key(stored, None, false).unwrap(),
+                _catalog_key(clean, None, false).unwrap(),
+                "catalog_key must collide for {stored:?} vs {clean:?}"
+            );
+            assert_eq!(
+                _sort_key(stored, None).unwrap(),
+                _sort_key(clean, None).unwrap(),
+                "sort_key must collide for {stored:?} vs {clean:?}"
+            );
+        }
     }
 
     #[test]

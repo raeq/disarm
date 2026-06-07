@@ -5,7 +5,7 @@ Transliteration converts Unicode text to ASCII by replacing each character with 
 There are two quality tiers to be aware of (see [Language Support](language-support.md#coverage-tiers) for the full breakdown):
 
 - **Standards-based core (Latin, Cyrillic, Greek).** Best-in-class romanization with
-  named standards — BGN/PCGN by default, ISO 9:1995 (`strict_iso9`), GOST R 7.0.34
+  named standards — BGN/PCGN by default, ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34
   (`gost7034`) — plus reverse transliteration. This is what translit does well.
 - **Compatibility coverage (CJK, Indic, Arabic, Thai, and others).** Context-free,
   character-by-character — the same lossy approach as Unidecode/AnyAscii, provided so
@@ -244,15 +244,25 @@ The output is never worse than context-free — unknown words simply fall throug
 
 ### Installation
 
-Context dictionaries are shipped separately to keep the core package small:
+Context dictionaries are **not** shipped in the wheel (they are ~37 MB) and are
+not available as pip extras. Build them reproducibly from source corpora, then
+point translit at the output directory via `TRANSLIT_DICT_DIR`:
 
 ```bash
-pip install translit-rs[arabic]   # Arabic + Persian context dictionary
-pip install translit-rs[hebrew]   # Hebrew context dictionary
-pip install translit-rs[context]  # All context dictionaries
+# Build the Arabic/Persian/Hebrew context dictionaries (requires Kaggle creds)
+bash scripts/bootstrap_dicts.sh
+
+# Point translit at the built dictionaries
+export TRANSLIT_DICT_DIR=/absolute/path/to/translit/data
 ```
 
-If `context=True` is used without the dictionary installed, `TranslitError` is raised with installation instructions.
+Alternatively, build translit from source with the `embed-dicts` Cargo feature to
+bake the dictionaries into the extension module.
+
+If `context=True` is used without a dictionary available, `TranslitError` is
+raised with these instructions. (Packaged, pip-installable context dictionaries
+are tracked in [#56](https://github.com/raeq/translit/issues/56) /
+[#60](https://github.com/raeq/translit/issues/60).)
 
 ### Detailed guide
 

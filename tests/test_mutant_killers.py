@@ -317,6 +317,7 @@ class TestPipelineStepTuples:
                 "catalog_key",
                 [
                     ("normalize", "NFKC"),
+                    ("strip_bidi", None),
                     ("transliterate", None),
                     ("confusables", "latin"),
                     ("strip_accents", None),
@@ -335,6 +336,7 @@ class TestPipelineStepTuples:
                 "search_key",
                 [
                     ("normalize", "NFKC"),
+                    ("strip_bidi", None),
                     ("transliterate", None),
                     ("strip_accents", None),
                     ("fold_case", None),
@@ -345,6 +347,7 @@ class TestPipelineStepTuples:
                 "sort_key",
                 [
                     ("normalize", "NFKC"),
+                    ("strip_bidi", None),
                     ("transliterate", None),
                     ("fold_case", None),
                     ("collapse_whitespace", None),

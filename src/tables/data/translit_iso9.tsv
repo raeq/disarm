@@ -1,6 +1,8 @@
-# ISO 9:1995 scholarly Cyrillic transliteration
-# International standard for Cyrillic-to-Latin (one-to-one, reversible)
-# Preserves diacritics (not ASCII-only)
+# Scholarly ASCII Cyrillic transliteration (the `strict_iso9` flag).
+# NOTE: this is NOT the diacritic ISO 9:1995 standard (#94). translit table
+# values are ASCII-only by design (enforced by build.rs), so this emits ASCII
+# digraphs (ж→zh, ч→ch, ш→sh) rather than ISO 9's ž/č/š. It is a consistent,
+# scholarly ASCII scheme — do not rely on it for ISO 9-conformant output.
 
 0419	J
 0439	j

@@ -183,3 +183,85 @@ class TestMalformedUnicodeInput:
         result = translit.transliterate(mixed)
         assert isinstance(result, str)
         assert result.isascii() or any(c.isalpha() for c in result)
+
+
+# ---------------------------------------------------------------------------
+# GIL release: batch APIs run their Rust compute with the GIL released (#70)
+# ---------------------------------------------------------------------------
+
+import os  # noqa: E402
+import time  # noqa: E402
+
+import pytest  # noqa: E402
+
+from translit import normalize, slugify, transliterate  # noqa: E402
+
+# A batch big enough that the Rust compute dominates thread/setup overhead.
+_BIG = ["Москва Αθήνα 北京 café résumé" * 20] * 40_000
+
+
+def _best_of(fn, rounds: int = 5) -> float:
+    best = float("inf")
+    for _ in range(rounds):
+        start = time.perf_counter()
+        fn()
+        best = min(best, time.perf_counter() - start)
+    return best
+
+
+def _concurrent(fn, threads: int, rounds: int = 5) -> float:
+    best = float("inf")
+    for _ in range(rounds):
+        workers = [threading.Thread(target=fn) for _ in range(threads)]
+        start = time.perf_counter()
+        for w in workers:
+            w.start()
+        for w in workers:
+            w.join()
+        best = min(best, time.perf_counter() - start)
+    return best
+
+
+class TestBatchGilReleaseParity:
+    """The GIL release must not change batch results."""
+
+    def test_transliterate_batch_parity(self) -> None:
+        data = ["北京", "café", "Москва", "naïve", "ψυχή"] * 50
+        assert transliterate(data) == [transliterate(x) for x in data]
+
+    def test_normalize_batch_parity(self) -> None:
+        data = ["é", "ño", "café"] * 50
+        assert normalize(data, form="NFKC") == [normalize(x, form="NFKC") for x in data]
+
+    def test_slugify_batch_parity(self) -> None:
+        data = ["Crème Brûlée", "Москва!", "北京 city"] * 50
+        assert slugify(data) == [slugify(x) for x in data]
+
+
+@pytest.mark.skipif(
+    (os.cpu_count() or 1) < 2,
+    reason="parallel speedup needs at least 2 cores",
+)
+class TestBatchReleasesGil:
+    """Two threads must finish a pair of batches faster than serial (#70).
+
+    With the GIL held the whole call, concurrent ≈ serial (~1.0x). With it
+    released, concurrent approaches single-batch time (~2x). The 1.3x threshold
+    sits comfortably above the no-release baseline while tolerating CI noise
+    (best-of-N minimises scheduler jitter).
+    """
+
+    def _assert_parallel(self, fn) -> None:
+        serial = 2 * _best_of(fn)
+        concurrent = _concurrent(fn, threads=2)
+        speedup = serial / concurrent
+        assert speedup > 1.3, (
+            f"no parallelism: serial~{serial:.3f}s vs concurrent {concurrent:.3f}s "
+            f"(speedup {speedup:.2f}x); GIL may not be released"
+        )
+
+    def test_transliterate_releases_gil(self) -> None:
+        self._assert_parallel(lambda: transliterate(_BIG))
+
+    def test_slugify_releases_gil(self) -> None:
+        self._assert_parallel(lambda: slugify(_BIG))

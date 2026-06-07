@@ -63,7 +63,7 @@ pub fn _is_normalized(text: &str, form: &str) -> PyResult<bool> {
 /// Batch normalization: process a list of strings in a single PyO3 boundary crossing.
 #[pyfunction]
 #[pyo3(signature = (texts, *, form="NFC"))]
-pub fn _normalize_batch(texts: Vec<String>, form: &str) -> PyResult<Vec<String>> {
+pub fn _normalize_batch(py: Python<'_>, texts: Vec<String>, form: &str) -> PyResult<Vec<String>> {
     validate_form(form)?;
     if texts.len() > crate::MAX_BATCH_SIZE {
         return translit_err!(
@@ -72,14 +72,17 @@ pub fn _normalize_batch(texts: Vec<String>, form: &str) -> PyResult<Vec<String>>
             crate::MAX_BATCH_SIZE
         );
     }
-    // Apply the validated form to all strings.
-    Ok(match form {
-        "NFC" => texts.iter().map(|t| t.nfc().collect()).collect(),
-        "NFD" => texts.iter().map(|t| t.nfd().collect()).collect(),
-        "NFKC" => texts.iter().map(|t| t.nfkc().collect()).collect(),
-        "NFKD" => texts.iter().map(|t| t.nfkd().collect()).collect(),
+    // Pick the normalizer once (form is validated), then run the pure-Rust loop
+    // with the GIL released (#70): the closure touches no Python objects, so
+    // other Python threads run in parallel during a large batch.
+    let normalize_one: fn(&str) -> String = match form {
+        "NFC" => |t| t.nfc().collect(),
+        "NFD" => |t| t.nfd().collect(),
+        "NFKC" => |t| t.nfkc().collect(),
+        "NFKD" => |t| t.nfkd().collect(),
         _ => unreachable!(),
-    })
+    };
+    Ok(py.allow_threads(move || texts.iter().map(|t| normalize_one(t)).collect()))
 }
 
 #[cfg(test)]

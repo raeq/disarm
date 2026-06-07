@@ -164,14 +164,14 @@ parameter is provided.
 | `translit_lang_tr.tsv` | Turkish convention (İ→I, ı→i) | No |
 | `translit_lang_uk.tsv` | Ukrainian national romanization (2010) | No |
 | `translit_lang_vi.tsv` | Vietnamese NFKD + convention | No |
-| `translit_iso9.tsv` | **ISO 9:1995** (scholarly Cyrillic) | No |
+| `translit_iso9.tsv` | Scholarly ASCII Cyrillic (`strict_iso9`, ISO 9-style) | No |
 | `translit_gost7034.tsv` | **GOST R 7.0.34-2014** (simplified Russian) | Yes |
 
 ## Alternate Cyrillic Tables
 
 | File | Standard |
 |------|----------|
-| `translit_iso9.tsv` | ISO 9:1995 — International standard for Cyrillic-to-Latin transliteration. Preserves diacritics (not ASCII-only). One-to-one reversible mapping |
+| `translit_iso9.tsv` | Scholarly ASCII Cyrillic transliteration (ISO 9-style digraphs; **not** the diacritic ISO 9:1995 standard — values are ASCII-only by design, so not the standard's reversible diacritic mapping). See #94. |
 | `translit_gost7034.tsv` | GOST R 7.0.34-2014 — Russian national standard for simplified transliteration. ASCII-compatible |
 
 ## SMP Table (`translit_default_smp.tsv`)

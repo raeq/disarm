@@ -475,6 +475,7 @@ fn decode_entities(text: &str, decimal: bool, hexadecimal: bool) -> String {
     hexadecimal=true,
 ))]
 pub fn _slugify_batch(
+    py: Python<'_>,
     texts: Vec<String>,
     separator: &str,
     lowercase: bool,
@@ -523,10 +524,15 @@ pub fn _slugify_batch(
     // Pre-build the stopword set once for the entire batch instead of
     // reconstructing it on every call to slugify_impl.
     let stopset: HashSet<String> = config.stopwords.iter().cloned().collect();
-    Ok(texts
-        .iter()
-        .map(|text| slugify_impl_with_stopset(text, &config, Some(&stopset)))
-        .collect())
+    // Pure-Rust loop with the GIL released (#70): `config`/`stopset`/`texts` are
+    // all owned, so the closure touches no Python objects and other Python
+    // threads run in parallel during a large batch.
+    Ok(py.allow_threads(move || {
+        texts
+            .iter()
+            .map(|text| slugify_impl_with_stopset(text, &config, Some(&stopset)))
+            .collect()
+    }))
 }
 
 // --- Stateful classes ---

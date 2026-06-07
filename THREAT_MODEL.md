@@ -74,7 +74,13 @@ behavior, not a vulnerability:
 - **Completeness or "safety" guarantees of any kind.** translit reduces a specific,
   enumerated attack surface. It does not certify that processed text is safe to trust.
 - **Denial of service guarantees.** We aim for linear-time behavior and test for it, but
-  do not guarantee resource bounds for adversarial inputs in all configurations.
+  do not guarantee resource bounds for adversarial inputs in all configurations. As of
+  0.6.0 the library imposes **no input-size cap** on its transforms — bounding untrusted
+  input size is the caller's responsibility (the only remaining limit guards
+  `register_replacements` output amplification). This includes the raw-bytes decode path
+  (`detect_encoding` / `decode_to_utf8`), which has no size bound; it is fuzzed and tested
+  for no-panic and linear behavior on hostile bytes (#78), but a caller accepting
+  arbitrarily large byte buffers must bound them itself.
 - **Linguistic correctness** of transliteration (context-free romanization is lossy for
   CJK/Indic/abjad — that is a quality property, not a security property).
 

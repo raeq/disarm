@@ -10,7 +10,7 @@ choosing a profile for production:
 
 | Tier | Scripts | What you get |
 |---|---|---|
-| **Core** (best-in-class) | Latin, Cyrillic, Greek | Standards-based romanization — BGN/PCGN (default), ISO 9:1995 (`strict_iso9`), GOST R 7.0.34 (`gost7034`) — plus [reverse transliteration](#reverse-transliteration) (ru/uk/el). This is what translit is built to do well. |
+| **Core** (best-in-class) | Latin, Cyrillic, Greek | Standards-based romanization — BGN/PCGN (default), ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34 (`gost7034`) — plus [reverse transliteration](#reverse-transliteration) (ru/uk/el). This is what translit is built to do well. |
 | **Compatibility** (best-effort) | CJK (Chinese/Japanese/Korean), Arabic, Hebrew, Devanagari & other Indic scripts, Thai, Lao | Context-free, character-by-character — the same approach as Unidecode/AnyAscii. For these scripts romanization is fundamentally lossy; this tier exists so translit is a complete drop-in, not because it is best-in-class here. |
 | **Best-effort** | Georgian, Armenian, and a long tail of additional and historical scripts | Context-free coverage so input is never silently dropped. Approximate romanization for search/display, **not** a scholarly standard. |
 

@@ -170,6 +170,11 @@ from translit._types import NF, EmojiProvider, ErrorMode, NormalizationForm, Pla
 _MAX_BATCH_SIZE: int = 100_000
 _MAX_GRAPHEME_SPLIT_INPUT: int = 10 * 1024 * 1024  # 10 MiB
 
+# --- Enum validation (must match Rust-side messages; validated in Python so the
+#     ASCII fast-path cannot silently accept a typo'd value before reaching Rust, #99) ---
+_VALID_ERROR_MODES: tuple[str, ...] = ("replace", "ignore", "preserve")
+_VALID_NORM_FORMS: tuple[str, ...] = ("NFC", "NFD", "NFKC", "NFKD")
+
 
 def _validate_batch(texts: object, func_name: str) -> None:
     """Validate that texts is a list[str] within batch size limits."""
@@ -185,6 +190,60 @@ def _validate_batch(texts: object, func_name: str) -> None:
 
 
 # --- Core transforms ---
+
+
+def _check_transliterate_conflicts(
+    *,
+    lang: str | None,
+    target: str | None,
+    errors: ErrorMode,
+    replace_with: str,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+    context: bool,
+) -> None:
+    """Reject conflicting ``transliterate()`` kwarg combinations (#69).
+
+    A single conflict matrix, applied identically before the str/list dispatch
+    so scalar and batch inputs raise the same error instead of one silently
+    dropping a parameter the other honours.
+
+    ``target`` selects *reverse* transliteration; ``context`` and ``tones`` are
+    *forward-only*, so combining either with ``target`` is an error. ``context``
+    (abjad vowel restoration) has no toned-pinyin output, so ``context`` +
+    ``tones`` is rejected too.
+
+    Also validates the ``errors`` enum up front (#99): the ASCII fast-path returns
+    before reaching Rust, so a typo'd ``errors`` would otherwise silently no-op on
+    ASCII input and only raise later on the first non-ASCII string.
+    """
+    if errors not in _VALID_ERROR_MODES:
+        raise TranslitError(f"errors must be 'replace', 'ignore', or 'preserve', got {errors!r}")
+    if target is not None and lang is not None:
+        raise ValueError("'lang' and 'target' are mutually exclusive")
+    if context and target is not None:
+        raise ValueError("'context' and 'target' are mutually exclusive")
+    if context and tones:
+        raise ValueError(
+            "'tones' cannot be used with 'context' — context-aware "
+            "transliteration does not produce toned pinyin"
+        )
+    if target is not None:
+        forward_only: dict[str, object] = {}
+        if errors != "replace":
+            forward_only["errors"] = errors
+        if replace_with != "[?]":
+            forward_only["replace_with"] = replace_with
+        if strict_iso9:
+            forward_only["strict_iso9"] = strict_iso9
+        if gost7034:
+            forward_only["gost7034"] = gost7034
+        if tones:
+            forward_only["tones"] = tones
+        if forward_only:
+            names = ", ".join(sorted(forward_only))
+            raise ValueError(f"forward-only parameters ({names}) cannot be used with 'target'")
 
 
 @overload
@@ -256,17 +315,27 @@ def transliterate(
                       (``""``) is equivalent to ``errors="ignore"`` — the
                       character is silently dropped. This matches the behaviour
                       of the Unidecode library.
-        strict_iso9: Use ISO 9:1995 scholarly transliteration for Cyrillic.
-                     When True, overrides both default and lang-specific
-                     mappings with the international standard used in
-                     linguistics and library science (e.g. й→j, ю→ju, я→ja).
+        strict_iso9: Use a scholarly **ASCII** Cyrillic transliteration with
+                     consistent 1:1-style overrides (e.g. й→j, ю→ju, я→ja).
+                     NOTE: this is *not* the diacritic ISO 9:1995 standard
+                     (which uses ž, č, š, ŝ, h). translit's tables are ASCII-only
+                     by design, so it emits digraphs (ж→zh, ч→ch, ш→sh) instead
+                     of the standard's diacritics — do not rely on this for
+                     ISO 9-conformant library catalog access points (#94).
         gost7034: Use GOST R 7.0.34-2014 simplified transliteration for
                   Russian Cyrillic. Mutually exclusive with *strict_iso9*.
                   Key differences from default: х→x, ц→c, щ→shh, й→j.
         tones: Output toned pinyin (with diacritics) for CJK characters.
                e.g. "běi jīng" instead of "bei jing". Coverage includes
                the ~2000 most common characters; others fall through to
-               toneless pinyin.
+               toneless pinyin. Forward-only: cannot be combined with *target*
+               or *context*.
+        context: Use dictionary-based vowel restoration for abjad scripts
+                 (Arabic/Persian/Hebrew), producing more readable output than
+                 the context-free tables. Requires the prebuilt context
+                 dictionaries (see ``bootstrap_dicts.sh`` / ``TRANSLIT_DICT_DIR``).
+                 Forward-only: mutually exclusive with *target*, and cannot be
+                 combined with *tones*.
 
     Returns:
         ASCII transliteration of the input. Returns ``str`` when given ``str``,
@@ -277,6 +346,8 @@ def transliterate(
             ``errors`` value passed at runtime).
         ValueError: If both *strict_iso9* and *gost7034* are True.
         ValueError: If both *lang* and *target* are set.
+        ValueError: If *context* and *target* are both set.
+        ValueError: If *context* and *tones* are both set.
         ValueError: If *target* is set with forward-only parameters.
 
     Examples:
@@ -289,6 +360,19 @@ def transliterate(
         >>> transliterate("Moskva", target="ru")
         'Москва'
     """
+    # Resolve conflicting kwargs once, before the str/list dispatch, so scalar
+    # and batch inputs behave identically (#69).
+    _check_transliterate_conflicts(
+        lang=lang,
+        target=target,
+        errors=errors,
+        replace_with=replace_with,
+        strict_iso9=strict_iso9,
+        gost7034=gost7034,
+        tones=tones,
+        context=context,
+    )
+
     # ── Batch path ──
     if isinstance(text, list):
         _validate_batch(text, "transliterate")
@@ -306,22 +390,6 @@ def transliterate(
                 for t in text
             ]
         if target is not None:
-            if lang is not None:
-                raise ValueError("'lang' and 'target' are mutually exclusive")
-            forward_only: dict[str, object] = {}
-            if errors != "replace":
-                forward_only["errors"] = errors
-            if replace_with != "[?]":
-                forward_only["replace_with"] = replace_with
-            if strict_iso9:
-                forward_only["strict_iso9"] = strict_iso9
-            if gost7034:
-                forward_only["gost7034"] = gost7034
-            if tones:
-                forward_only["tones"] = tones
-            if forward_only:
-                names = ", ".join(sorted(forward_only))
-                raise ValueError(f"forward-only parameters ({names}) cannot be used with 'target'")
             return [_reverse_transliterate(t, lang=target) for t in text]
         return _transliterate_batch(
             text,
@@ -338,22 +406,6 @@ def transliterate(
         raise TypeError(f"transliterate() expects str or list[str], got {type(text).__name__}")
 
     if target is not None:
-        if lang is not None:
-            raise ValueError("'lang' and 'target' are mutually exclusive")
-        forward_only_s: dict[str, object] = {}
-        if errors != "replace":
-            forward_only_s["errors"] = errors
-        if replace_with != "[?]":
-            forward_only_s["replace_with"] = replace_with
-        if strict_iso9:
-            forward_only_s["strict_iso9"] = strict_iso9
-        if gost7034:
-            forward_only_s["gost7034"] = gost7034
-        if tones:
-            forward_only_s["tones"] = tones
-        if forward_only_s:
-            names = ", ".join(sorted(forward_only_s))
-            raise ValueError(f"forward-only parameters ({names}) cannot be used with 'target'")
         return _reverse_transliterate(text, lang=target)
 
     # Context-aware path: use dictionary-based vowel restoration for abjad scripts
@@ -445,7 +497,11 @@ def slugify(
     Full pipeline: decode entities → transliterate → lowercase →
     strip non-alphanumeric → collapse separators → apply stopwords/max_length.
 
-    Parameter-compatible with python-slugify.
+    Shares python-slugify's core keyword parameters (``separator``,
+    ``max_length``, ``word_boundary``, ``save_order``, ``stopwords``,
+    ``lowercase``, etc.), so ``slugify(text, ...)`` calls port directly. Note
+    that translit makes every parameter past *text* keyword-only, whereas
+    python-slugify accepts some positionally.
 
     Args:
         text: Input Unicode string.
@@ -472,8 +528,6 @@ def slugify(
 
     Raises:
         TranslitError: If an internal Rust error occurs.
-        NotImplementedError: If ``pretranslate`` is passed as a callable
-            (only dict is supported in the compatibility shim).
 
     Examples:
         >>> slugify("Hello World!")
@@ -562,6 +616,10 @@ def normalize(
         >>> normalize(["e\u0301", "n\u0303o"], form="NFC")
         ['é', 'ño']
     """
+    # Validate the form enum before the ASCII fast-path / batch dispatch (#99):
+    # otherwise a typo'd form silently no-ops on ASCII input.
+    if form not in _VALID_NORM_FORMS:
+        raise TranslitError(f"form must be 'NFC', 'NFD', 'NFKC', or 'NFKD', got {form!r}")
     if isinstance(text, list):
         _validate_batch(text, "normalize")
         return _normalize_batch(text, form=form)
@@ -1044,10 +1102,19 @@ def sort_key(
 ) -> str:
     """Sort key generation pipeline.
 
-    Pipeline: NFKC → transliterate → fold_case → collapse_whitespace
+    Pipeline: NFKC → strip_bidi → transliterate → fold_case → collapse_whitespace
 
-    Like :func:`search_key` but without accent stripping, preserving base
-    accented characters for correct alphabetical ordering.
+    Produces a case-insensitive ASCII key for alphabetical ordering.
+    Transliteration folds accented characters to their ASCII base (``é`` → ``e``,
+    ``ü`` → ``u``), so the result is **accent-folded**, not accent-preserving.
+
+    .. note::
+        In practice this currently produces the same output as
+        :func:`search_key`: ``search_key`` adds an explicit accent-strip pass,
+        but transliteration has already removed accents by that point, so the
+        two keys coincide for typical input. Use whichever name documents intent
+        at the call site. (Distinct accent-preserving ordering is tracked for a
+        future release.)
 
     Args:
         text: Input text to generate a sort key from.
@@ -1802,6 +1869,7 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     ],
     "catalog_key": [
         ("normalize", "NFKC"),
+        ("strip_bidi", None),
         ("transliterate", None),
         ("confusables", "latin"),
         ("strip_accents", None),
@@ -1814,6 +1882,7 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     ],
     "search_key": [
         ("normalize", "NFKC"),
+        ("strip_bidi", None),
         ("transliterate", None),
         ("strip_accents", None),
         ("fold_case", None),
@@ -1821,6 +1890,7 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     ],
     "sort_key": [
         ("normalize", "NFKC"),
+        ("strip_bidi", None),
         ("transliterate", None),
         ("fold_case", None),
         ("collapse_whitespace", None),

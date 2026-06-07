@@ -192,3 +192,86 @@ class TestDecodeToUtf8:
         # Explicit encoding is never affected by min_confidence.
         text, _ = decode_to_utf8(b"hi", "UTF-8", min_confidence=0.9)
         assert text == "hi"
+
+
+class TestAdversarialDecodePath:
+    """No-panic + invariant preservation for hostile raw bytes (#78).
+
+    Per THREAT_MODEL.md, detection *accuracy* on ambiguous bytes is a quality
+    property, not a security one. These assert the security bar: no panic, a
+    valid `str` out, confidence in range, and `had_errors`/`min_confidence`
+    semantics — never a stronger promise.
+    """
+
+    ADVERSARIAL = {
+        "truncated_utf8_lead": b"\xc3",
+        "truncated_3byte_utf8": b"\xe2\x82",
+        "overlong_nul": b"\xc0\x80",
+        "overlong_slash": b"\xe0\x80\xaf",
+        "cesu8_surrogate": b"\xed\xa0\x80",
+        "utf16le_bom": b"\xff\xfe\x41\x00",
+        "utf16be_bom": b"\xfe\xff\x00\x41",
+        "utf8_bom_then_latin1": b"\xef\xbb\xbf\xff",
+        "embedded_nul": b"a\x00b",
+        "c1_controls": b"\x80\x81\x82\x9f",
+        "all_high_bytes": bytes(range(0x80, 0x100)),
+        "invalid_lossy": b"\xc3\x28\xc3\x28",
+        "fe_ff_noise": b"\xfe\xff\xfe\xff",
+    }
+    EDGE = {"empty": b"", "one_ff": b"\xff", "one_nul": b"\x00", "one_ascii": b"A"}
+
+    SUPPORTED_ENCODINGS = [
+        "utf-8",
+        "utf-16",
+        "shift_jis",
+        "euc-jp",
+        "euc-kr",
+        "big5",
+        "gb18030",
+        "windows-1252",
+    ]
+
+    @staticmethod
+    def _assert_invariants(data: bytes) -> None:
+        enc, conf = detect_encoding(data)
+        assert isinstance(enc, str) and enc
+        assert 0.0 <= conf <= 1.0, f"confidence {conf} out of range for {data!r}"
+        s, had_errors = decode_to_utf8(data, min_confidence=0.0)
+        assert isinstance(s, str)
+        assert isinstance(had_errors, bool)
+        # A Rust String cannot hold lone surrogates; assert it explicitly anyway.
+        assert not any(0xD800 <= ord(c) <= 0xDFFF for c in s), f"surrogate leak: {data!r}"
+
+    @pytest.mark.parametrize("name,data", list(ADVERSARIAL.items()) + list(EDGE.items()))
+    def test_auto_detect_no_panic_and_invariants(self, name, data) -> None:
+        self._assert_invariants(data)
+
+    @pytest.mark.parametrize("encoding", SUPPORTED_ENCODINGS)
+    @pytest.mark.parametrize("name,data", list(ADVERSARIAL.items()))
+    def test_explicit_encoding_no_panic(self, encoding, name, data) -> None:
+        # Each explicit encoding must decode hostile bytes to a valid str
+        # without panicking (lossy is fine; that is what had_errors reports).
+        s, had_errors = decode_to_utf8(data, encoding=encoding)
+        assert isinstance(s, str)
+        assert isinstance(had_errors, bool)
+        assert not any(0xD800 <= ord(c) <= 0xDFFF for c in s)
+
+    def test_min_confidence_rejects_low_confidence(self) -> None:
+        from translit import TranslitError
+
+        # An unreachable confidence floor must raise, not silently guess (#66).
+        with pytest.raises(TranslitError, match="confidence"):
+            decode_to_utf8(b"\xff\xfe\x80\x81", min_confidence=1.0)
+
+    def test_unknown_encoding_raises(self) -> None:
+        from translit import TranslitError
+
+        with pytest.raises(TranslitError, match="[Uu]nknown encoding"):
+            decode_to_utf8(b"x", encoding="no-such-encoding")
+
+    def test_large_hostile_input_is_linear(self) -> None:
+        # Guard against super-linear blowup on the decode path: a 1 MiB hostile
+        # buffer must complete quickly and return a str.
+        data = b"\xc3\x28" * 524_288  # 1 MiB of invalid UTF-8
+        s, had_errors = decode_to_utf8(data, encoding="utf-8")
+        assert isinstance(s, str)

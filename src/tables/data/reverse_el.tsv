@@ -30,7 +30,11 @@ P	Π
 R	Ρ
 S	Σ
 T	Τ
+# Upsilon: the forward direction romanizes Υ/ύ as "Y" (incl. in the ου/αυ/ευ
+# diphthongs → OY/AY/EY), so "Y" must reverse to Υ or a literal Latin Y leaks
+# into the Greek output (#82). "U" is also accepted as a secondary convention.
 U	Υ
+Y	Υ
 F	Φ
 
 # Single characters — lowercase
@@ -52,4 +56,5 @@ r	ρ
 s	σ
 t	τ
 u	υ
+y	υ
 f	φ

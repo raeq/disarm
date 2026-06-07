@@ -46,6 +46,13 @@ the compiled Rust code is faster across all scripts and input sizes.
 Sustained throughput: **450M chars/sec** (Latin), **130M chars/sec** (Cyrillic),
 **92.9B chars/sec** (ASCII passthrough via `isascii()` fast-path).
 
+!!! note "Hardware variance"
+    These are from the maintainer's machine. On a commodity 4‑vCPU x86‑64
+    runner the non‑ASCII figures run lower — Cyrillic ~106M chars/sec and
+    slugify ~712K slugs/sec (≈15–18% below) — which is why the README quotes
+    the conservative commodity numbers. All figures are directional and
+    hardware‑dependent; re‑run the benchmark scripts for your environment.
+
 ### vs. competitors
 
 | Library | Latin (short) | Cyrillic (short) | Mixed (50 chars) |
@@ -221,6 +228,32 @@ The advantage grows linearly with list size.
 Pass a list whenever you have multiple strings to process — it is always
 at least as fast as a loop, and measurably faster for short strings where
 PyO3 overhead is a significant fraction of total work.
+
+
+## Concurrency (GIL)
+
+As of 0.6.1 the batch entry points — `transliterate()`, `slugify()`,
+`normalize()`, and `strip_accents()` on `list[str]` input — **release the GIL**
+around their pure-Rust compute loop (the inner work touches no Python objects).
+Multiple Python threads each processing a large batch therefore run their Rust
+work in parallel rather than serialising on the interpreter lock.
+
+Measured (two threads, large batches): concurrent wall-clock ≈ **1.8×** faster
+than running the two batches serially on a multi-core machine — close to the
+ideal 2× for two threads, the remainder being thread setup and the
+GIL-bound input/output marshalling at the call boundary.
+
+Notes and limits:
+
+- **Scalar (single-`str`) calls do not release the GIL.** They are short enough
+  that the release/reacquire overhead would not pay off; batch your work to get
+  parallelism.
+- The **input conversion** (Python `list[str]` → Rust) and **output
+  conversion** (Rust → Python `list[str]`) happen with the GIL held, before and
+  after the released region. Only the transformation itself is parallel, so the
+  speedup approaches but does not reach N× for N threads.
+- This is true OS-thread parallelism via `py.allow_threads`; it does not require
+  the free-threaded (no-GIL) CPython build, though it composes with it.
 
 
 ## Precompiled pipelines

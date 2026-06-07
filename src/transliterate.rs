@@ -255,7 +255,9 @@ pub fn transliterate_impl<'a>(
         );
 
         // Lookup priority:
-        // 1. If strict_iso9: ISO 9 table → default table (lang overrides ignored)
+        // 1. If strict_iso9: scholarly ASCII Cyrillic table (ISO 9-style
+        //    digraphs, NOT the diacritic ISO 9:1995 standard — #94) → default
+        //    table (lang overrides ignored)
         // 2. If gost7034: GOST 7.0.34 table → default table (lang overrides ignored)
         // 3. Otherwise: lang override → default table
         // When tones=true, CJK uses toned pinyin (with diacritics) instead of toneless.
@@ -925,6 +927,7 @@ pub fn _clear_replacements() -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = (texts, *, lang=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false))]
 pub fn _transliterate_batch(
+    py: Python<'_>,
     texts: Vec<String>,
     lang: Option<&str>,
     errors: &str,
@@ -947,36 +950,44 @@ pub fn _transliterate_batch(
     }
     validate_lang(lang)?;
     let error_mode = ErrorMode::from_str(errors)?;
-    texts
-        .iter()
-        .map(|text| -> PyResult<String> {
-            // Global pre-transliteration replacements (no-op unless registered),
-            // applied per item before transliterate_impl — parity with the
-            // scalar path, including the replacement-output amplification bound.
-            let replaced = tables::apply_replacements(text, MAX_REPLACEMENT_OUTPUT_BYTES)
-                .map_err(|size| {
-                    crate::TranslitError::new_err(format!(
-                        "registered replacements expanded the input to {size} bytes, exceeding the {MAX_REPLACEMENT_OUTPUT_BYTES} byte limit"
-                    ))
-                })?;
-            Ok(transliterate_impl(
-                &replaced,
-                lang,
-                error_mode,
-                replace_with,
-                strict_iso9,
-                gost7034,
-                tones,
-            )
-            .into_owned())
-        })
-        .collect()
+    // Own the borrowed args so the compute loop holds no Python-borrowed data,
+    // then run it with the GIL released (#70) — the loop touches no Python
+    // objects (the replacement table is a Rust RwLock), so other Python threads
+    // run in parallel for the duration of a large batch.
+    let lang = lang.map(str::to_owned);
+    let replace_with = replace_with.to_owned();
+    py.allow_threads(move || {
+        texts
+            .iter()
+            .map(|text| -> PyResult<String> {
+                // Global pre-transliteration replacements (no-op unless registered),
+                // applied per item before transliterate_impl — parity with the
+                // scalar path, including the replacement-output amplification bound.
+                let replaced = tables::apply_replacements(text, MAX_REPLACEMENT_OUTPUT_BYTES)
+                    .map_err(|size| {
+                        crate::TranslitError::new_err(format!(
+                            "registered replacements expanded the input to {size} bytes, exceeding the {MAX_REPLACEMENT_OUTPUT_BYTES} byte limit"
+                        ))
+                    })?;
+                Ok(transliterate_impl(
+                    &replaced,
+                    lang.as_deref(),
+                    error_mode,
+                    &replace_with,
+                    strict_iso9,
+                    gost7034,
+                    tones,
+                )
+                .into_owned())
+            })
+            .collect()
+    })
 }
 
 /// Batch accent stripping: process a list of strings in a single PyO3 boundary crossing.
 #[pyfunction]
 #[pyo3(signature = (texts,))]
-pub fn _strip_accents_batch(texts: Vec<String>) -> PyResult<Vec<String>> {
+pub fn _strip_accents_batch(py: Python<'_>, texts: Vec<String>) -> PyResult<Vec<String>> {
     use unicode_normalization::UnicodeNormalization;
     if texts.len() > crate::MAX_BATCH_SIZE {
         return translit_err!(
@@ -985,19 +996,22 @@ pub fn _strip_accents_batch(texts: Vec<String>) -> PyResult<Vec<String>> {
             crate::MAX_BATCH_SIZE
         );
     }
-    Ok(texts
-        .into_iter()
-        .map(|text| {
-            if text.is_ascii() {
-                text // move, no clone — Vec is consumed by into_iter()
-            } else {
-                text.nfd()
-                    .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
-                    .nfc()
-                    .collect()
-            }
-        })
-        .collect())
+    // Pure-Rust loop with the GIL released (#70).
+    Ok(py.allow_threads(move || {
+        texts
+            .into_iter()
+            .map(|text| {
+                if text.is_ascii() {
+                    text // move, no clone — Vec is consumed by into_iter()
+                } else {
+                    text.nfd()
+                        .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
+                        .nfc()
+                        .collect()
+                }
+            })
+            .collect()
+    }))
 }
 
 #[cfg(test)]

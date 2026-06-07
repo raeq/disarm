@@ -272,8 +272,10 @@ fn lookup_hangul_static(ch: char) -> Option<&'static str> {
     }
 }
 
-/// Look up a character in the ISO 9:1995 scholarly table (O(1) PHF).
-/// Returns None if ISO 9 has no override for this character, in which
+/// Look up a character in the scholarly ASCII Cyrillic table (O(1) PHF).
+/// NOTE: this is an ASCII (digraph-based) transliteration, NOT the diacritic
+/// ISO 9:1995 standard — tables are ASCII-only by design (see #94).
+/// Returns None if the table has no override for this character, in which
 /// case the caller should fall through to the default table.
 #[inline]
 pub fn lookup_iso9(ch: char) -> Option<&'static str> {

@@ -26,19 +26,51 @@ from translit._translit import (
 )
 
 
-def unidecode(text: str) -> str:
+def unidecode(text: str, errors: str = "ignore", replace_str: str = "?") -> str:
     """Drop-in replacement for ``from unidecode import unidecode``.
 
-    Equivalent to ``transliterate(text, errors="replace", replace_with="")``.
-    Matches Unidecode's default behavior of silently dropping unknown chars.
+    Mirrors the Unidecode 1.3 signature
+    ``unidecode(string, errors="ignore", replace_str="?")`` (#72), mapping
+    Unidecode's *errors* values onto translit's native error modes:
+
+    - ``"ignore"`` (default) — drop unmapped characters.
+    - ``"replace"`` — substitute each unmapped character with *replace_str*
+      (Unidecode's default is ``"?"``).
+    - ``"preserve"`` — keep unmapped characters verbatim.
+    - ``"strict"`` — raise ``ValueError`` on the first unmapped character
+      (Unidecode raises ``UnidecodeError``; translit has no native strict mode,
+      so a ``ValueError`` carrying the offending character and its index is
+      raised instead).
 
     Examples:
         >>> unidecode("café")
         'cafe'
         >>> unidecode("北亰")
         'bei jing'
+        >>> unidecode("a→b", errors="replace", replace_str="?")
+        'a?b'
     """
-    return transliterate(text, errors="replace", replace_with="")
+    if errors == "ignore":
+        return transliterate(text, errors="ignore")
+    if errors == "replace":
+        return transliterate(text, errors="replace", replace_with=replace_str)
+    if errors == "preserve":
+        return transliterate(text, errors="preserve")
+    if errors == "strict":
+        # translit has no native "raise on unmapped" mode. Preserve unmapped
+        # characters, and if any survive (non-ASCII residue), locate the first
+        # offending character in the *original* string for a faithful message.
+        preserved = transliterate(text, errors="preserve")
+        if preserved.isascii():
+            return preserved
+        for i, ch in enumerate(text):
+            if not transliterate(ch, errors="preserve").isascii():
+                raise ValueError(f"no replacement found for character {ch!r} at index {i}")
+        raise ValueError("no replacement found for an unmapped character")  # pragma: no cover
+    raise ValueError(
+        f"invalid value for errors: {errors!r} "
+        "(expected 'ignore', 'strict', 'replace', or 'preserve')"
+    )
 
 
 # Elasticsearch/Solr terminology

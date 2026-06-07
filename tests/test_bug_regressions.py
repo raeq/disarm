@@ -15,10 +15,14 @@ import pytest
 from translit import (
     Text,
     TextPipeline,
+    catalog_key,
     collapse_whitespace,
     demojize,
+    search_key,
     slugify,
+    sort_key,
     transliterate,
+    unidecode,
 )
 
 # ---------------------------------------------------------------------------
@@ -421,3 +425,217 @@ class TestSealRegistrations:
         )
         r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
         assert r.returncode == 0 and "OK" in r.stdout, f"stdout={r.stdout!r} stderr={r.stderr!r}"
+
+
+class TestKeyFunctionBidiLeak:
+    """search_key/catalog_key/sort_key must strip bidi/soft-hyphen (#93).
+
+    A value stored with an invisible char must produce the same key as its
+    clean equivalent, or dedup/lookup silently misses.
+    """
+
+    INVISIBLE_PAIRS = [
+        ("pass­word", "password"),  # soft hyphen
+        ("user‮txt", "usertxt"),  # RLO override
+        ("a‎b", "ab"),  # LRM
+        ("x؜y", "xy"),  # Arabic Letter Mark
+    ]
+
+    @pytest.mark.parametrize("stored,clean", INVISIBLE_PAIRS)
+    def test_search_key_collides(self, stored, clean):
+        assert search_key(stored) == search_key(clean)
+
+    @pytest.mark.parametrize("stored,clean", INVISIBLE_PAIRS)
+    def test_catalog_key_collides(self, stored, clean):
+        assert catalog_key(stored) == catalog_key(clean)
+
+    @pytest.mark.parametrize("stored,clean", INVISIBLE_PAIRS)
+    def test_sort_key_collides(self, stored, clean):
+        assert sort_key(stored) == sort_key(clean)
+
+
+class TestKwargConflictMatrix:
+    """transliterate() resolves conflicting kwargs identically for str & list (#69)."""
+
+    def test_context_target_mutually_exclusive_both_paths(self):
+        with pytest.raises(ValueError, match="'context' and 'target' are mutually exclusive"):
+            transliterate("x", target="ru", context=True)
+        with pytest.raises(ValueError, match="'context' and 'target' are mutually exclusive"):
+            transliterate(["x"], target="ru", context=True)
+
+    def test_context_tones_rejected_both_paths(self):
+        with pytest.raises(ValueError, match="'tones' cannot be used with 'context'"):
+            transliterate("北京", lang="zh", tones=True, context=True)
+        with pytest.raises(ValueError, match="'tones' cannot be used with 'context'"):
+            transliterate(["北京"], lang="zh", tones=True, context=True)
+
+    def test_lang_target_mutually_exclusive_both_paths(self):
+        with pytest.raises(ValueError, match="'lang' and 'target' are mutually exclusive"):
+            transliterate("x", lang="de", target="ru")
+        with pytest.raises(ValueError, match="'lang' and 'target' are mutually exclusive"):
+            transliterate(["x"], lang="de", target="ru")
+
+
+class TestUnidecodeCompatKwargs:
+    """translit.unidecode mirrors the Unidecode 1.3 errors=/replace_str= API (#72)."""
+
+    def test_ignore_default_drops(self):
+        assert unidecode("a→b") == "ab"
+        assert unidecode("a→b", errors="ignore") == "ab"
+
+    def test_replace_uses_replace_str(self):
+        assert unidecode("a→b", errors="replace") == "a?b"
+        assert unidecode("a→b", errors="replace", replace_str="_") == "a_b"
+
+    def test_preserve_keeps_original(self):
+        assert unidecode("a→b", errors="preserve") == "a→b"
+
+    def test_strict_raises_with_index(self):
+        with pytest.raises(ValueError, match=r"index 1"):
+            unidecode("a→b", errors="strict")
+
+    def test_strict_passes_when_all_mapped(self):
+        assert unidecode("café", errors="strict") == "cafe"
+
+    def test_invalid_errors_value(self):
+        with pytest.raises(ValueError, match="invalid value for errors"):
+            unidecode("x", errors="bogus")
+
+
+class TestGreekReverseNoLatinLeak:
+    """Reverse el must not leave literal Latin letters in Greek output (#82)."""
+
+    def test_canonical_example(self):
+        assert transliterate("psychi", target="el") == "ψυχη"
+
+    @pytest.mark.parametrize("word", ["ψυχή", "ευχαριστώ", "ούζο", "αύριο", "υγεία", "Κύπρος"])
+    def test_no_latin_residue_on_roundtrip(self, word):
+        rev = transliterate(transliterate(word), target="el")
+        assert not any(c.isascii() and c.isalpha() for c in rev), f"{word} -> {rev}"
+
+
+class TestSingleBatchKwargParity:
+    """transliterate(x, **kw) == transliterate([x], **kw)[0] across kwargs (#79)."""
+
+    CORPUS = ["北京", "café", "Москва", "naïve", "ψυχή", "東京", "Köln", "plain"]
+    KWARGS = [
+        {},
+        {"tones": True},
+        {"lang": "zh", "tones": True},
+        {"strict_iso9": True},
+        {"gost7034": True},
+        {"errors": "ignore"},
+        {"errors": "preserve"},
+        {"replace_with": "?"},
+        {"lang": "ru"},
+        {"lang": "de"},
+    ]
+
+    @pytest.mark.parametrize("kw", KWARGS)
+    def test_scalar_batch_parity(self, kw):
+        for s in self.CORPUS:
+            assert transliterate(s, **kw) == transliterate([s], **kw)[0], (s, kw)
+
+    def test_reverse_parity(self):
+        for s in ["Moskva", "psychi", "Kyiv"]:
+            assert transliterate(s, target="ru") == transliterate([s], target="ru")[0]
+
+
+class TestGreekPolytonicCapitals:
+    """Greek Extended polytonic capitals must romanize to the right base (#95).
+
+    The Greek Extended block (U+1F00–U+1FFF) for omicron/upsilon/omega/rho was
+    corrupted to emit X/P/garbage. Fixed to the base romanization, consistent
+    with the monotonic forms (which the engine already handled). Breathing marks
+    are dropped uniformly, matching monotonic/lowercase behaviour.
+    """
+
+    def test_issue_examples_no_wrong_letters(self):
+        assert transliterate("Ὅμηρος") == "Omiros"  # was 'Xmiros'
+        assert transliterate("Ὑγίεια") == "Ygieia"  # was 'Pgieia'
+        assert transliterate("Ἡμέρα") == "Imera"  # was 'Imera' base ok
+        assert transliterate("Όμηρος") == "Omiros"  # monotonic unchanged
+
+    @pytest.mark.parametrize(
+        "ch,base",
+        [
+            ("Ὅ", "O"),
+            ("Ὕ", "Y"),
+            ("Ὥ", "O"),
+            ("Ῥ", "R"),
+            ("Ὦ", "O"),
+            ("Ώ", "O"),
+            ("Ύ", "Y"),
+        ],
+    )
+    def test_capital_base_letter_correct(self, ch, base):
+        out = transliterate(ch)
+        assert out and out[0].upper() == base, f"{ch!r} -> {out!r}, expected base {base}"
+
+    def test_no_xi_pi_leak_for_omicron_upsilon_omega(self):
+        # None of these should produce the X (xi) or P (pi) letters they used to.
+        for ch in "ὌὍὙὛὝὟὨὩὪὫὬὭὮὯ":
+            out = transliterate(ch)
+            assert out.upper() not in ("X", "P"), f"{ch!r} -> {out!r}"
+
+
+class TestEnumValidationBeforeFastPath:
+    """Typo'd form/errors must raise even on ASCII input (#99.3).
+
+    The ASCII fast-path returned before reaching Rust, so a bad enum silently
+    no-opped on ASCII and only raised on the first non-ASCII string.
+    """
+
+    def test_normalize_bad_form_ascii_raises(self):
+        from translit import TranslitError, normalize
+
+        with pytest.raises(TranslitError, match="form must be"):
+            normalize("hello", form="GARBAGE")
+
+    def test_transliterate_bad_errors_ascii_raises(self):
+        from translit import TranslitError
+
+        with pytest.raises(TranslitError, match="errors must be"):
+            transliterate("hello", errors="GARBAGE")
+
+    def test_transliterate_bad_errors_ascii_batch_raises(self):
+        from translit import TranslitError
+
+        with pytest.raises(TranslitError, match="errors must be"):
+            transliterate(["hello"], errors="GARBAGE")
+
+    def test_valid_enums_still_work(self):
+        from translit import normalize
+
+        assert normalize("hello", form="NFC") == "hello"
+        assert transliterate("hello", errors="ignore") == "hello"
+
+
+class TestSlugifyNoPretranslateKwarg:
+    """slugify() never had a pretranslate kwarg; the docstring Raises was stale (#99.2)."""
+
+    def test_pretranslate_rejected(self):
+        with pytest.raises(TypeError, match="pretranslate"):
+            slugify("x", pretranslate=lambda s: s)  # type: ignore[call-arg]
+
+    def test_pretranslate_not_in_docstring(self):
+        assert "pretranslate" not in (slugify.__doc__ or "")
+
+
+class TestSortKeyDocstringHonest:
+    """sort_key folds accents (it doesn't preserve them); docstring must not lie (#99.1)."""
+
+    def test_sort_key_folds_accents(self):
+        from translit import search_key, sort_key
+
+        assert sort_key("naïve") == "naive"
+        assert sort_key("Köln") == "koln"
+        # Documented reality: coincides with search_key for typical input.
+        assert sort_key("naïve") == search_key("naïve")
+
+    def test_docstring_does_not_claim_preservation(self):
+        from translit import sort_key
+
+        doc = sort_key.__doc__ or ""
+        assert "without accent stripping" not in doc
+        assert "accent-folded" in doc

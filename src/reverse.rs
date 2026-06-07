@@ -130,6 +130,25 @@ mod tests {
     }
 
     #[test]
+    fn test_greek_upsilon_no_latin_leak() {
+        // #82: the forward direction romanizes Υ/υ as "Y"/"y" (incl. in the
+        // ου/αυ/ευ diphthongs), so reverse must map those back to Greek instead
+        // of leaving a literal Latin letter in the output.
+        assert_eq!(reverse_transliterate_impl("psychi", "el"), "ψυχη");
+        assert_eq!(reverse_transliterate_impl("oyzo", "el"), "ουζο");
+        assert_eq!(reverse_transliterate_impl("Y", "el"), "Υ");
+        assert_eq!(reverse_transliterate_impl("y", "el"), "υ");
+        // No Latin letter may survive a reverse-to-Greek of forward Greek output.
+        for s in ["psychi", "oyzo", "ayrio", "Kypros"] {
+            let rev = reverse_transliterate_impl(s, "el");
+            assert!(
+                !rev.chars().any(|c| c.is_ascii_alphabetic()),
+                "reverse el leaked a Latin letter: {s:?} -> {rev:?}"
+            );
+        }
+    }
+
+    #[test]
     fn test_supports_reverse() {
         assert!(supports_reverse("ru"));
         assert!(supports_reverse("uk"));

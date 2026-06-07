@@ -44,7 +44,7 @@ For scholarly-grade Hebrew transliteration with full contextual rules (hiriq-yod
 
 ### Competing standards
 
-Even within a single language, multiple romanization standards exist. Russian alone has BGN/PCGN, GOST, ISO 9 (scholarly), passport transliteration, and several informal systems. translit's `lang` parameter selects one standard per language; `strict_iso9=True` provides scholarly Cyrillic transliteration per ISO 9:1995. Users needing a specific standard not offered by the default or `lang` can use `register_lang()` to override.
+Even within a single language, multiple romanization standards exist. Russian alone has BGN/PCGN, GOST, ISO 9 (scholarly), passport transliteration, and several informal systems. translit's `lang` parameter selects one standard per language; `strict_iso9=True` provides a scholarly ASCII Cyrillic transliteration (ISO 9-style digraphs such as ж→zh, ч→ch; **not** the diacritic ISO 9:1995 standard — translit tables are ASCII-only). Users needing a specific standard not offered by the default or `lang` can use `register_lang()` to override.
 
 The [IndoNLP 2025 shared task](https://arxiv.org/html/2501.05816) on reverse transliteration for romanized Indo-Aryan languages highlights an additional dimension: informal romanization (e.g., Hindi in Latin script on social media) follows no standard. Round-tripping from such text is a fundamentally different problem from transliteration.
 
@@ -96,7 +96,7 @@ rev = transliterate(fwd, target="ru")       # "Тма" (soft sign lost)
 fwd2 = transliterate(rev, lang="ru")        # "Tma" (looks same but Ь is gone)
 ```
 
-**Guidance:** Reverse transliteration is useful for recovering romanized text written in a standard transliteration scheme, not for lossless round-tripping. For lossless reversible encoding of Cyrillic, use ISO 9:1995 (`strict_iso9=True`), which preserves one-to-one character identity through diacritics.
+**Guidance:** Reverse transliteration is useful for recovering romanized text written in a standard transliteration scheme, not for lossless round-tripping. Note that `strict_iso9=True` is an ASCII (digraph) scheme, **not** a reversible diacritic standard — digraphs like ж→zh are not uniquely invertible. For recovering native script from romanized Latin, use reverse transliteration (`target=`, ru/uk/el).
 
 ## CJK Transliteration
 

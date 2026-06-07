@@ -83,7 +83,7 @@ translit t --tones "北京"
 ```
 
 `--strict-iso9`
-:   Use strict ISO 9:1995 transliteration for Cyrillic.
+:   Use the scholarly ASCII (ISO 9-style) transliteration for Cyrillic. NOTE: ASCII digraphs (zh/ch/sh), not the diacritic ISO 9:1995 standard.
 
 ```bash
 translit t --strict-iso9 "Юрий"

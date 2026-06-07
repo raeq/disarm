@@ -5,7 +5,7 @@ Usage::
     from translit import Text
 
     result = (Text("  Héllo   Straße  ")
-        .normalize("NFC")
+        .normalize(form="NFC")
         .transliterate(lang="de")
         .fold_case()
         .collapse_whitespace()

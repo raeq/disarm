@@ -2,12 +2,8 @@ use pyo3::prelude::*;
 
 use crate::tables::case_folding_data;
 
-/// Maximum input size for case folding, in bytes.
-///
-/// Unicode case folding can expand a single codepoint into up to three
-/// codepoints (e.g. ß→ss, ﬃ→ffi).  Capping input size bounds worst-case
-/// output size and prevents out-of-memory conditions on adversarial input.
-const MAX_FOLD_INPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
+// translit does not cap input size — bounding untrusted input is the caller's
+// responsibility (case folding is linear time/memory; see #80).
 
 /// Full Unicode case folding per CaseFolding.txt (status C + F).
 ///
@@ -24,13 +20,6 @@ const MAX_FOLD_INPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _fold_case(text: &str) -> PyResult<String> {
-    if text.len() > MAX_FOLD_INPUT_BYTES {
-        return Err(crate::TranslitError::new_err(format!(
-            "input too large ({} bytes); maximum for fold_case() is {} bytes",
-            text.len(),
-            MAX_FOLD_INPUT_BYTES
-        )));
-    }
     Ok(fold_case_impl(text))
 }
 

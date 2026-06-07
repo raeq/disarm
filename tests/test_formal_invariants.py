@@ -147,31 +147,36 @@ class TestI5Deterministic:
                 assert result == first, f"Determinism violated for {text!r}"
 
 
-# ── I6: Input Size Bounded ──────────────────────────────────────────────
+# ── I6: No library-imposed input-size cap (#80) ─────────────────────────
 
 
-class TestI6InputSizeBound:
-    """I6: Inputs exceeding 10 MiB are rejected with TranslitError.
-
-    Note: The Python wrapper has an ASCII fast path (`text.isascii() → return text`)
-    that bypasses the Rust size check. We use non-ASCII input to exercise the
-    Rust-level enforcement.
+class TestI6NoInputSizeCap:
+    """I6: translit imposes no raw input-size limit — bounding untrusted input is
+    the caller's responsibility (every operation is linear time/memory). The only
+    retained size bound is the register_replacements output amplification guard,
+    where a tiny input can expand to an enormous string via a caller-registered
+    replacement value (an amplification the caller's own input check cannot see).
     """
 
-    def test_at_boundary_ascii(self):
-        """10 MiB ASCII input succeeds (Python fast path, no Rust call)."""
-        text = "a" * (10 * 1024 * 1024)
-        result = translit.transliterate(text)
-        assert result == text
+    def test_large_ascii_accepted(self):
+        """>10 MiB ASCII input is accepted unchanged (no cap, fast path)."""
+        text = "a" * (12 * 1024 * 1024)
+        assert translit.transliterate(text) == text
 
-    def test_over_boundary_non_ascii(self):
-        """Non-ASCII input over 10 MiB raises TranslitError.
+    def test_large_non_ascii_accepted(self):
+        """>10 MiB non-ASCII input is accepted (exercises the Rust path)."""
+        text = "\u00e9" * (6 * 1024 * 1024)  # ~12 MiB; e-acute -> e
+        assert translit.transliterate(text) == "e" * (6 * 1024 * 1024)
 
-        Using 'é' (2 bytes UTF-8) × (5 MiB + 1) = 10 MiB + 2 bytes.
-        """
-        text = "\u00e9" * (5 * 1024 * 1024 + 1)
-        with pytest.raises(translit.TranslitError):
-            translit.transliterate(text)
+    def test_replacement_amplification_bounded(self):
+        """The one retained guard: replacement expansion is still bounded."""
+        translit.clear_replacements()
+        translit.register_replacements({"a": "X" * 2_000_000})
+        try:
+            with pytest.raises(translit.TranslitError):
+                translit.transliterate("a" * 10)  # ~20 MB output > 10 MiB cap
+        finally:
+            translit.clear_replacements()
 
 
 # ── I7: Output Length Bounded ───────────────────────────────────────────

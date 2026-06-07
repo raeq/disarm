@@ -6,12 +6,16 @@ use crate::tables;
 use crate::unicode_ranges as ur;
 use crate::ErrorMode;
 
-/// Maximum input size for transliteration, in bytes.
+/// Maximum size, in bytes, of the text produced by the global *replacement
+/// pre-pass* (`register_replacements`).
 ///
-/// Transliteration may expand CJK characters to multi-word ASCII (e.g.
-/// 你→"ni "), so worst-case output can be several times larger than input.
-/// This cap prevents excessive allocation on adversarial input.
-const MAX_TRANSLITERATE_INPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
+/// translit does not cap raw input size — bounding untrusted input is the
+/// caller's responsibility (all operations are linear time/memory; see #80).
+/// This bound is the one exception: registered replacement *values* are
+/// caller-supplied and unbounded, so a tiny input can expand to an enormous
+/// string via a separately-registered value (an amplification a caller's own
+/// input-size check cannot foresee). The pre-pass output is therefore capped.
+const MAX_REPLACEMENT_OUTPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
 
 /// Script class for tracking inter-script word spacing.
 ///
@@ -53,26 +57,19 @@ pub fn _transliterate(
             "strict_iso9 and gost7034 are mutually exclusive",
         ));
     }
-    if text.len() > MAX_TRANSLITERATE_INPUT_BYTES {
-        return translit_err!(
-            "input too large ({} bytes); maximum for transliterate() is {} bytes",
-            text.len(),
-            MAX_TRANSLITERATE_INPUT_BYTES
-        );
-    }
     let error_mode = ErrorMode::from_str(errors)?;
     // Apply global pre-transliteration replacements (no-op unless any are
     // registered). Runs before transliterate_impl — and thus before its ASCII
-    // fast path — so ASCII-keyed replacements take effect too. Re-bounds the
-    // result: replacement values are caller-controlled and can expand the input
-    // past the size cap checked above.
-    let text = match tables::apply_replacements(text, MAX_TRANSLITERATE_INPUT_BYTES) {
+    // fast path — so ASCII-keyed replacements take effect too. The output of the
+    // replacement pre-pass is bounded (amplification guard); raw input size is
+    // not capped (#80).
+    let text = match tables::apply_replacements(text, MAX_REPLACEMENT_OUTPUT_BYTES) {
         Ok(t) => t,
         Err(size) => {
             return translit_err!(
-                "input too large after replacements ({} bytes); maximum for transliterate() is {} bytes",
+                "registered replacements expanded the input to {} bytes, exceeding the {} byte limit",
                 size,
-                MAX_TRANSLITERATE_INPUT_BYTES
+                MAX_REPLACEMENT_OUTPUT_BYTES
             );
         }
     };
@@ -108,24 +105,18 @@ pub fn _transliterate_context(
             "strict_iso9 and gost7034 are mutually exclusive",
         ));
     }
-    if text.len() > MAX_TRANSLITERATE_INPUT_BYTES {
-        return translit_err!(
-            "input too large ({} bytes); maximum for transliterate() is {} bytes",
-            text.len(),
-            MAX_TRANSLITERATE_INPUT_BYTES
-        );
-    }
     let error_mode = ErrorMode::from_str(errors)?;
     // Global pre-transliteration replacements (no-op unless registered), applied
     // before context tokenisation so forward transliteration behaves the same
-    // with and without context=True. Re-bounds the result against the size cap.
-    let text = match tables::apply_replacements(text, MAX_TRANSLITERATE_INPUT_BYTES) {
+    // with and without context=True. Output of the pre-pass is bounded
+    // (amplification guard); raw input size is not capped (#80).
+    let text = match tables::apply_replacements(text, MAX_REPLACEMENT_OUTPUT_BYTES) {
         Ok(t) => t,
         Err(size) => {
             return translit_err!(
-                "input too large after replacements ({} bytes); maximum for transliterate() is {} bytes",
+                "registered replacements expanded the input to {} bytes, exceeding the {} byte limit",
                 size,
-                MAX_TRANSLITERATE_INPUT_BYTES
+                MAX_REPLACEMENT_OUTPUT_BYTES
             );
         }
     };
@@ -863,11 +854,11 @@ pub fn _transliterate_batch(
         .map(|text| -> PyResult<String> {
             // Global pre-transliteration replacements (no-op unless registered),
             // applied per item before transliterate_impl — parity with the
-            // scalar path, including the post-replacement size cap.
-            let replaced = tables::apply_replacements(text, MAX_TRANSLITERATE_INPUT_BYTES)
+            // scalar path, including the replacement-output amplification bound.
+            let replaced = tables::apply_replacements(text, MAX_REPLACEMENT_OUTPUT_BYTES)
                 .map_err(|size| {
                     crate::TranslitError::new_err(format!(
-                        "input too large after replacements ({size} bytes); maximum for transliterate() is {MAX_TRANSLITERATE_INPUT_BYTES} bytes"
+                        "registered replacements expanded the input to {size} bytes, exceeding the {MAX_REPLACEMENT_OUTPUT_BYTES} byte limit"
                     ))
                 })?;
             Ok(transliterate_impl(

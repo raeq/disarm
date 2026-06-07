@@ -44,6 +44,17 @@ results that were keyed on the old (buggy) behaviour, regenerate them:
   `min_confidence=0.0` to restore the old behaviour. (#66)
 
 ### Changed
+- **No library-imposed input-size limit** (#80, #65). The 10 MiB input cap on
+  `transliterate`, `normalize`, `fold_case`, and the preset pipelines has been
+  **removed** — it was paternalistic, inconsistently applied (the ASCII fast
+  path bypassed it; `slugify`/`normalize_confusables`/`strip_zalgo` never had it),
+  and the threat model already disclaims DoS. All operations are linear time and
+  memory; **bounding untrusted input is the caller's responsibility**, documented
+  in the threat model and docstrings. The single retained size guard is the
+  `register_replacements` output amplification bound (a tiny input can expand to
+  an enormous string via a caller-registered value — an amplification a caller's
+  own input check cannot foresee). Backward-compatible: only previously-rejected
+  large inputs now succeed.
 - **External wording: capability, not promise.** Security-relevant features are now
   described as mechanisms (TR39 confusable *mapping*, bidi/zalgo *stripping*, hostname
   *analysis*) rather than outcome guarantees. Package descriptions, README, and docs no

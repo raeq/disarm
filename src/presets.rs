@@ -3,26 +3,10 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::{case_fold, confusables, emoji, transliterate, whitespace, zalgo};
 
-/// Maximum input size for pipeline presets, in bytes.
-///
-/// Pipeline functions compose multiple transforms (NFKC, confusables,
-/// transliteration, etc.), each of which can expand the text.  This cap
-/// bounds worst-case memory usage across the entire pipeline.
-const MAX_PRESET_INPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
-
-/// Validate that preset input does not exceed the size cap.
-#[inline]
-fn check_preset_input(text: &str, fn_name: &str) -> PyResult<()> {
-    if text.len() > MAX_PRESET_INPUT_BYTES {
-        return translit_err!(
-            "input too large ({} bytes); maximum for {}() is {} bytes",
-            text.len(),
-            fn_name,
-            MAX_PRESET_INPUT_BYTES
-        );
-    }
-    Ok(())
-}
+// translit does not cap input size in the pipeline presets — bounding untrusted
+// input is the caller's responsibility (every stage is linear time/memory;
+// see #80). The only retained size guard is the register_replacements output
+// amplification bound in src/transliterate.rs.
 
 /// Strip dangerous bidirectional override and formatting characters
 /// that `collapse_whitespace` does not handle.
@@ -87,7 +71,6 @@ fn is_bidi_or_format(ch: char) -> bool {
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _security_clean(text: &str) -> PyResult<String> {
-    check_preset_input(text, "security_clean")?;
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf: String = text.nfkc().collect();
     // 2. Confusables → Latin (neutralizes cross-script homoglyphs)
@@ -113,7 +96,6 @@ pub fn _security_clean(text: &str) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, emoji_style="cldr"))]
 pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyResult<String> {
-    check_preset_input(text, "ml_normalize")?;
     // Validate emoji_style — only two modes are supported.
     if !matches!(emoji_style, "cldr" | "none") {
         return Err(crate::TranslitError::new_err(format!(
@@ -164,7 +146,6 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, strict_iso9=false))]
 pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResult<String> {
-    check_preset_input(text, "catalog_key")?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — catalog keys should be pure ASCII where possible;
@@ -201,7 +182,6 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None))]
 pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
-    check_preset_input(text, "search_key")?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — search keys should be pure ASCII where possible)
@@ -234,7 +214,6 @@ pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None))]
 pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
-    check_preset_input(text, "sort_key")?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — sort keys need a consistent script)
@@ -266,7 +245,6 @@ pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _display_clean(text: &str) -> PyResult<String> {
-    check_preset_input(text, "display_clean")?;
     // 1. Strip bidi overrides, isolates, marks, and soft hyphens
     let buf = strip_bidi(text);
     // 2. Collapse whitespace + strip control + strip zero-width
@@ -293,7 +271,6 @@ pub fn _display_clean(text: &str) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _sanitize_user_input(text: &str) -> PyResult<String> {
-    check_preset_input(text, "sanitize_user_input")?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Strip invisibles FIRST (bidi/format + zero-width + control) so they
@@ -358,7 +335,6 @@ pub fn _strip_bidi(text: &str) -> String {
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _strip_obfuscation(text: &str) -> PyResult<String> {
-    check_preset_input(text, "strip_obfuscation")?;
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf: String = text.nfkc().collect();
     // 2. Strip ALL combining marks (max_marks=0) — removes zalgo AND accents early

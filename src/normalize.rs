@@ -1,20 +1,8 @@
 use pyo3::prelude::*;
 use unicode_normalization::UnicodeNormalization;
 
-/// Maximum input size for normalization, in bytes.
-///
-/// Unicode NFKD can expand a single codepoint into up to 18 combining
-/// characters in pathological cases (e.g. U+FDFA ﷺ → 18-char Arabic string).
-/// Capping input size limits worst-case expansion.
-const MAX_NORMALIZE_INPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
-
-/// Maximum output size for normalization, in bytes.
-///
-/// Even with the 10 MiB input cap, a maximally expanding NFKD character
-/// (18× expansion) could produce ~180 MiB of output.  This cap ensures the
-/// allocated output stays within an acceptable bound.  The input check alone
-/// is not sufficient because each input byte can expand to many output bytes.
-const MAX_NORMALIZE_OUTPUT_BYTES: usize = 50 * 1024 * 1024; // 50 MiB
+// translit does not cap input or output size — bounding untrusted input is the
+// caller's responsibility (normalization is linear time/memory; see #80).
 
 /// Validate normalization form string. Returns an error for invalid forms.
 #[inline]
@@ -25,44 +13,18 @@ fn validate_form(form: &str) -> PyResult<()> {
     Ok(())
 }
 
-/// Normalise `text` and check that the output does not exceed the output cap.
-///
-/// Collecting first then checking means the peak allocation equals the output
-/// size, which the cap bounds.  The collected string is dropped on error so
-/// the memory is immediately reclaimed.
-#[inline]
-fn normalize_checked(output: String, form: &str) -> PyResult<String> {
-    if output.len() > MAX_NORMALIZE_OUTPUT_BYTES {
-        return translit_err!(
-            "normalize() output too large ({} bytes after {} normalization); \
-             maximum output is {} bytes. Use a smaller input.",
-            output.len(),
-            form,
-            MAX_NORMALIZE_OUTPUT_BYTES
-        );
-    }
-    Ok(output)
-}
-
 /// Unicode normalization (NFC, NFD, NFKC, NFKD).
 #[pyfunction]
 #[pyo3(signature = (text, *, form="NFC"))]
 pub fn _normalize(text: &str, form: &str) -> PyResult<String> {
     validate_form(form)?;
-    if text.len() > MAX_NORMALIZE_INPUT_BYTES {
-        return translit_err!(
-            "input too large ({} bytes); maximum for normalize() is {} bytes",
-            text.len(),
-            MAX_NORMALIZE_INPUT_BYTES
-        );
-    }
-    match form {
-        "NFC" => normalize_checked(text.nfc().collect(), form),
-        "NFD" => normalize_checked(text.nfd().collect(), form),
-        "NFKC" => normalize_checked(text.nfkc().collect(), form),
-        "NFKD" => normalize_checked(text.nfkd().collect(), form),
+    Ok(match form {
+        "NFC" => text.nfc().collect(),
+        "NFD" => text.nfd().collect(),
+        "NFKC" => text.nfkc().collect(),
+        "NFKD" => text.nfkd().collect(),
         _ => unreachable!(),
-    }
+    })
 }
 
 /// Check if text is already in the specified normalization form.
@@ -110,36 +72,14 @@ pub fn _normalize_batch(texts: Vec<String>, form: &str) -> PyResult<Vec<String>>
             crate::MAX_BATCH_SIZE
         );
     }
-    // Validate each string's size before processing any.
-    for t in &texts {
-        if t.len() > MAX_NORMALIZE_INPUT_BYTES {
-            return translit_err!(
-                "input too large ({} bytes); maximum for normalize() is {} bytes",
-                t.len(),
-                MAX_NORMALIZE_INPUT_BYTES
-            );
-        }
-    }
     // Apply the validated form to all strings.
-    match form {
-        "NFC" => texts
-            .iter()
-            .map(|t| normalize_checked(t.nfc().collect(), form))
-            .collect(),
-        "NFD" => texts
-            .iter()
-            .map(|t| normalize_checked(t.nfd().collect(), form))
-            .collect(),
-        "NFKC" => texts
-            .iter()
-            .map(|t| normalize_checked(t.nfkc().collect(), form))
-            .collect(),
-        "NFKD" => texts
-            .iter()
-            .map(|t| normalize_checked(t.nfkd().collect(), form))
-            .collect(),
+    Ok(match form {
+        "NFC" => texts.iter().map(|t| t.nfc().collect()).collect(),
+        "NFD" => texts.iter().map(|t| t.nfd().collect()).collect(),
+        "NFKC" => texts.iter().map(|t| t.nfkc().collect()).collect(),
+        "NFKD" => texts.iter().map(|t| t.nfkd().collect()).collect(),
         _ => unreachable!(),
-    }
+    })
 }
 
 #[cfg(test)]
@@ -154,10 +94,12 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_output_cap_not_triggered_on_normal_input() {
-        // Normal text should never hit the output cap.
-        let text = "Héllo wörld";
-        assert!(_normalize(text, "NFKD").is_ok());
+    fn test_normalize_accepts_input_without_size_cap() {
+        // There is no input/output size cap (#80); normal and large inputs alike
+        // normalize without error.
+        assert!(_normalize("Héllo wörld", "NFKD").is_ok());
+        let large = "é".repeat(2 * 1024 * 1024); // ~4 MiB, formerly cap-relevant
+        assert!(_normalize(&large, "NFKD").is_ok());
     }
 
     mod proptest_properties {

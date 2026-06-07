@@ -42,12 +42,25 @@ This mode uses a **dictionary-based vowel restoration** system to recover the mi
 
 **When to use:** Any application where a human will read the output — display, NLP preprocessing, content moderation, transliteration for non-native readers.
 
-**Requires:** Context dictionaries installed separately:
+**Requires the prebuilt context dictionaries**, which are **not** shipped in the
+PyPI wheel (they are ~37 MB). Context mode is therefore not available from a plain
+`pip install`; build the dictionaries from a source checkout and point
+`TRANSLIT_DICT_DIR` at them:
+
 ```bash
-pip install translit-rs[arabic]   # Arabic + Persian
-pip install translit-rs[hebrew]   # Hebrew
-pip install translit-rs[context]  # All context dictionaries
+git clone https://github.com/raeq/translit && cd translit
+bash scripts/bootstrap_dicts.sh           # builds data/{arabic,persian,hebrew}_dict.bin
+export TRANSLIT_DICT_DIR="$PWD/data"      # transliterate(context=True) now finds them
 ```
+
+The dictionaries are loaded only from `TRANSLIT_DICT_DIR` (or, in a source build,
+the crate's own `data/` directory) — never from a current-working-directory
+relative path, so an attacker who controls the working directory cannot inject a
+substitute dictionary. For a self-contained build, compile the extension with the
+`embed-dicts` Cargo feature.
+
+> Packaging the dictionaries for `pip install` is tracked in
+> [issues #56/#60](https://github.com/raeq/translit/issues/56).
 
 ## How context-aware transliteration works
 

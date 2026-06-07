@@ -28,13 +28,18 @@ DICT_DIR="$ROOT/data"
 TASHKEELA_DATASET="linuxscout/tashkeela"
 TASHKEELA_ARCHIVE="Tashkeela-arabic-diacritized-text-utf8-0.3.tar.bz2"
 TASHKEELA_DIR="Tashkeela-arabic-diacritized-text-utf8-0.3"
-# SHA256 of the downloaded archive (pinned for reproducibility)
-TASHKEELA_ARCHIVE_SHA256="skip"  # TODO: pin after first verified download
+# SHA256 of the downloaded corpus archive, verified before it feeds the builders
+# (#62). "skip" is fail-closed: the build aborts unless ALLOW_UNVERIFIED_CORPUS=1.
+# Pin this to the computed value (the script prints it) on first verified download.
+TASHKEELA_ARCHIVE_SHA256="skip"
 
 # Project Ben Yehuda: Hebrew public domain texts with niqqud
 # https://github.com/projectbenyehuda/public_domain_dump
 BEN_YEHUDA_REPO="https://github.com/projectbenyehuda/public_domain_dump.git"
 BEN_YEHUDA_DIR="ben_yehuda"
+# Pinned commit for reproducibility / supply-chain integrity (#62): a specific
+# commit is fetched rather than an unpinned live HEAD.
+BEN_YEHUDA_COMMIT="5e4277fead7b565f32cc4b352abd3565023a77d8"
 
 # ============================================================================
 # Build parameters — pinned, never changed without bumping checksums
@@ -75,6 +80,32 @@ sha256_file() {
     else
         python3 -c "import hashlib; print(hashlib.sha256(open('$1','rb').read()).hexdigest())"
     fi
+}
+
+# Verify the downloaded corpus archive against its pinned SHA256 (#62) BEFORE it
+# feeds the builders. Fail-closed: an unpinned ("skip") checksum aborts unless
+# ALLOW_UNVERIFIED_CORPUS=1 is set, so the corpus is never silently unverified.
+verify_corpus_archive() {
+    local path="$1"
+    local actual
+    actual=$(sha256_file "$path")
+    if [[ "$TASHKEELA_ARCHIVE_SHA256" == "skip" ]]; then
+        if [[ "${ALLOW_UNVERIFIED_CORPUS:-0}" == "1" ]]; then
+            log "WARNING: Tashkeela archive checksum not pinned; proceeding (ALLOW_UNVERIFIED_CORPUS=1)."
+            log "  Pin it in scripts/bootstrap_dicts.sh: TASHKEELA_ARCHIVE_SHA256=\"$actual\""
+            return 0
+        fi
+        err "Tashkeela corpus archive checksum is not pinned (TASHKEELA_ARCHIVE_SHA256=\"skip\").
+  Computed SHA256: $actual
+  Pin this value in scripts/bootstrap_dicts.sh, or re-run with
+  ALLOW_UNVERIFIED_CORPUS=1 to proceed without verification (not recommended)."
+    fi
+    if [[ "$actual" != "$TASHKEELA_ARCHIVE_SHA256" ]]; then
+        err "Tashkeela archive checksum mismatch!
+  Expected: $TASHKEELA_ARCHIVE_SHA256
+  Actual:   $actual"
+    fi
+    log "Tashkeela archive verified (SHA256 OK)."
 }
 
 verify_dict() {
@@ -119,6 +150,7 @@ download_tashkeela() {
 
     # The download may produce a nested archive
     if [[ -f "$CORPUS_DIR/$TASHKEELA_ARCHIVE" ]]; then
+        verify_corpus_archive "$CORPUS_DIR/$TASHKEELA_ARCHIVE"
         log "Extracting $TASHKEELA_ARCHIVE..."
         tar xjf "$CORPUS_DIR/$TASHKEELA_ARCHIVE" -C "$CORPUS_DIR"
     fi
@@ -143,8 +175,13 @@ download_ben_yehuda() {
         err "git not found."
     fi
 
-    mkdir -p "$CORPUS_DIR"
-    git clone --depth 1 "$BEN_YEHUDA_REPO" "$CORPUS_DIR/$BEN_YEHUDA_DIR"
+    # Shallow fetch of a PINNED commit (not an unpinned HEAD clone) so the Hebrew
+    # corpus is reproducible and not subject to upstream history changes (#62).
+    mkdir -p "$CORPUS_DIR/$BEN_YEHUDA_DIR"
+    git -C "$CORPUS_DIR/$BEN_YEHUDA_DIR" init -q
+    git -C "$CORPUS_DIR/$BEN_YEHUDA_DIR" remote add origin "$BEN_YEHUDA_REPO" 2>/dev/null || true
+    git -C "$CORPUS_DIR/$BEN_YEHUDA_DIR" fetch --depth 1 origin "$BEN_YEHUDA_COMMIT"
+    git -C "$CORPUS_DIR/$BEN_YEHUDA_DIR" checkout -q FETCH_HEAD
 
     if [[ ! -d "$CORPUS_DIR/$BEN_YEHUDA_DIR/txt" ]]; then
         err "Ben Yehuda txt/ directory not found after clone. Check $CORPUS_DIR/$BEN_YEHUDA_DIR"

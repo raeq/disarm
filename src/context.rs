@@ -375,20 +375,46 @@ fn load_embedded_dict(name: &str, data: &[u8]) -> Option<ContextDict> {
     }
 }
 
-/// Load a dictionary from the filesystem, checking standard locations.
+/// Candidate filesystem locations for a context dictionary, in priority order.
+///
+/// Security (#61): dictionaries are **never** loaded from a current-working-
+/// directory-relative path. A process whose CWD an attacker can influence — or
+/// where an attacker can drop `./data/` — could otherwise inject an
+/// attacker-controlled dictionary and silently change transliteration output.
+/// Both returned paths are absolute and not attacker-influenceable:
+///
+/// 1. `$TRANSLIT_DICT_DIR/{name}_dict.bin` — explicit opt-in for installed
+///    wheels. Build the dictionaries with `scripts/bootstrap_dicts.sh` and
+///    point `TRANSLIT_DICT_DIR` at the output directory.
+/// 2. `$CARGO_MANIFEST_DIR/data/{name}_dict.bin` — source/development builds
+///    only; a compile-time absolute path baked into the binary.
+#[cfg(not(feature = "embed-dicts"))]
+fn dict_search_paths(name: &str) -> Vec<std::path::PathBuf> {
+    let mut paths: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(dir) = std::env::var_os("TRANSLIT_DICT_DIR") {
+        paths.push(std::path::Path::new(&dir).join(format!("{name}_dict.bin")));
+    }
+    paths.push(std::path::PathBuf::from(format!(
+        "{}/data/{name}_dict.bin",
+        env!("CARGO_MANIFEST_DIR")
+    )));
+    paths
+}
+
+/// Load a context dictionary from the first existing [`dict_search_paths`]
+/// location; `None` if none is present or the file is malformed.
 #[cfg(not(feature = "embed-dicts"))]
 fn load_dict_from_fs(name: &str) -> Option<ContextDict> {
-    let filename = format!("data/{name}_dict.bin");
-    let paths = [
-        std::path::PathBuf::from(&filename),
-        std::path::PathBuf::from(format!("{}/{}", env!("CARGO_MANIFEST_DIR"), filename)),
-    ];
+    let paths = dict_search_paths(name);
     for path in &paths {
         if let Ok(data) = std::fs::read(path) {
             match ContextDict::from_bytes(&data) {
                 Ok(dict) => return Some(dict),
                 Err(e) => {
-                    eprintln!("Warning: failed to load {name} dict: {e}");
+                    eprintln!(
+                        "Warning: failed to load {name} dict from {}: {e}",
+                        path.display()
+                    );
                     return None;
                 }
             }
@@ -604,5 +630,25 @@ mod tests {
         // Point unigram_offset inside the 24-byte header.
         data[16..20].copy_from_slice(&8u32.to_le_bytes());
         assert!(ContextDict::from_bytes(&data).is_err());
+    }
+
+    #[cfg(not(feature = "embed-dicts"))]
+    #[test]
+    fn test_dict_search_paths_never_cwd_relative() {
+        // #61: dictionaries must never be loaded from a CWD-relative path, which
+        // an attacker who controls the working directory could populate.
+        let paths = dict_search_paths("arabic");
+        // The always-present dev fallback (CARGO_MANIFEST_DIR) must be absolute.
+        let manifest = paths.last().expect("at least the manifest-dir candidate");
+        assert!(
+            manifest.is_absolute(),
+            "dev dict path must be absolute, got {manifest:?}"
+        );
+        // No candidate may be the bare CWD-relative form.
+        let cwd_relative = std::path::Path::new("data/arabic_dict.bin");
+        assert!(
+            !paths.iter().any(|p| p == cwd_relative),
+            "must not probe the CWD-relative data/ path; got {paths:?}"
+        );
     }
 }

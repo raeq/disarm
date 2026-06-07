@@ -76,13 +76,14 @@ docs = [
     "mkdocstrings[python]>=0.30.1",
     "pymdown-extensions>=10.0",
 ]
-# Context dictionaries for transliterate(context=True).
-# These extras are markers — the actual dictionary files are included
-# in the wheel via [tool.maturin] data configuration when present in data/.
-# Build dicts first: bash scripts/bootstrap_dicts.sh all
-arabic = []   # Arabic + Persian context dictionary (data/arabic_dict.bin + persian_dict.bin)
-hebrew = []   # Hebrew context dictionary (data/hebrew_dict.bin)
-context = []  # All context dictionaries
+# NOTE: context-aware transliteration (transliterate(context=True), ar/fa/he) is
+# NOT pip-installable. The dictionaries are large (~37 MB) and are not shipped in
+# the wheel. There used to be empty `arabic`/`hebrew`/`context` extras here; they
+# did nothing (installing them added no dictionaries), so they were removed (#56).
+# To enable context mode: build the dictionaries from a source checkout with
+#   bash scripts/bootstrap_dicts.sh
+# and point the TRANSLIT_DICT_DIR environment variable at the output directory.
+# (Tracked for a proper packaged distribution — see issues #56/#60.)
 
 [project.scripts]
 translit = "translit.__main__:main"
@@ -98,10 +99,10 @@ Changelog = "https://github.com/raeq/translit/blob/main/CHANGELOG.md"
 python-source = "python"
 module-name = "translit._translit"
 features = ["pyo3/abi3-py39"]
-# Context dictionary data files (data/*.bin) are loaded at runtime from
-# the filesystem, not embedded in the wheel. They are built offline via:
-#   bash scripts/bootstrap_dicts.sh all
-# and installed separately via pip extras (translit-rs[arabic], etc.).
+# Context dictionary data files (data/*.bin) are NOT shipped in the wheel. They
+# are built from source via `bash scripts/bootstrap_dicts.sh` and located at
+# runtime via the TRANSLIT_DICT_DIR environment variable (see src/context.rs).
+# For a self-contained build, compile with the `embed-dicts` Cargo feature.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

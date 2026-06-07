@@ -32,6 +32,16 @@ results that were keyed on the old (buggy) behaviour, regenerate them:
   `ı→i`, …) and is idempotent; **`sanitize_user_input`** is idempotent for
   control/invisible characters between combining marks; **`demojize`** no longer
   inserts a stray space after a tab/newline that precedes an emoji.
+- **Context-aware transliteration (`context=True`, ar/fa/he) distribution
+  changed.** The empty `arabic`/`hebrew`/`context` pip extras have been **removed**
+  (they never installed anything). The ~37 MB dictionaries are no longer tracked
+  in git, and are not shipped in the wheel. Context mode now loads dictionaries
+  from `$TRANSLIT_DICT_DIR` (build them with `scripts/bootstrap_dicts.sh`), or use
+  the `embed-dicts` Cargo feature for a self-contained build. A packaged
+  pip-installable distribution is tracked in #56/#60.
+- **`decode_to_utf8` default `min_confidence` changed `0.0` → `0.5`.** Low-confidence
+  encoding guesses are now rejected by default instead of silently accepted; pass
+  `min_confidence=0.0` to restore the old behaviour. (#66)
 
 ### Changed
 - **External wording: capability, not promise.** Security-relevant features are now
@@ -112,6 +122,16 @@ results that were keyed on the old (buggy) behaviour, regenerate them:
   ISO 639-1 *or* 639-3; `normalize()` ASCII fast-path; list single-Rust-call caveats).
 
 ### Security
+- **Context dictionaries are no longer loaded from a CWD-relative path** (#61).
+  `load_dict_from_fs` previously probed `./data/{name}_dict.bin` *first*, so a
+  process whose working directory an attacker influences (or where they can drop
+  `./data/`) could inject a substitute dictionary and silently change ar/fa/he
+  output. Dictionaries now load only from `$TRANSLIT_DICT_DIR` (explicit opt-in)
+  or the crate's own absolute `data/` path in source builds.
+- **Supply-chain: corpus inputs are verified/pinned** (#62). The Tashkeela corpus
+  archive is now checksum-verified before it feeds the builders (fail-closed — an
+  unpinned checksum aborts unless `ALLOW_UNVERIFIED_CORPUS=1`), and the Project
+  Ben Yehuda corpus is fetched at a pinned commit instead of an unpinned live HEAD.
 - **`ContextDict::from_bytes` is fully bounds-checked.** A malformed or truncated
   context dictionary previously caused an out-of-bounds **panic** (the crate is
   `unsafe_code = forbid`, so a panic aborts the process). Every read is now

@@ -155,18 +155,20 @@ pub fn _transliterate_context(
         });
         Ok(result)
     } else {
-        // Dictionary not loaded — return error telling user to install extras.
-        // Derive the extra name from the language so the hint points at the
-        // right one (Hebrew has its own extra).
-        let (lang_name, extra) = match lang {
-            Some("he") => ("Hebrew", "hebrew"),
-            Some("fa") => ("Arabic/Persian", "arabic"),
-            _ => ("Arabic", "arabic"),
+        // Dictionary not loaded — point the user at a remedy that actually works
+        // (#60). Context dictionaries are not shipped in the wheel; build them
+        // and expose them via TRANSLIT_DICT_DIR.
+        let lang_name = match lang {
+            Some("he") => "Hebrew",
+            Some("fa") => "Arabic/Persian",
+            _ => "Arabic",
         };
         translit_err!(
-            "Context dictionary for {} not found. Install with: pip install translit-rs[{}]",
-            lang_name,
-            extra
+            "Context dictionary for {} not found. Context-aware transliteration needs \
+             the prebuilt dictionaries: run `bash scripts/bootstrap_dicts.sh` (from a \
+             source checkout) and set the TRANSLIT_DICT_DIR environment variable to the \
+             output directory. See docs/user-guide/abjad-transliteration.md.",
+            lang_name
         )
     }
 }

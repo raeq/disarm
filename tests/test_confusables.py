@@ -198,3 +198,24 @@ class TestConfusableTableCompleteness:
         # non-Greek scripts are also covered.
         assert is_confusable("\uff21")  # Fullwidth A
         assert is_confusable("\u2160")  # Roman numeral Ⅰ
+
+
+class TestDigitVariantsFoldToDigits:
+    """Compatibility digit variants fold to ASCII digits, not look-alike letters (#89)."""
+
+    def test_math_digits_normalize_to_digits(self):
+        from translit import normalize_confusables
+
+        # All five Mathematical font families: 0/1 must not become O/l.
+        for fam in ["𝟏𝟎", "𝟙𝟘", "𝟣𝟢", "𝟭𝟬", "𝟷𝟶"]:
+            assert normalize_confusables(fam, target_script="latin") == "10"
+
+    def test_strip_obfuscation_preserves_digits(self):
+        from translit import strip_obfuscation
+
+        assert strip_obfuscation("𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗𝟎") == "1234567890"
+
+    def test_math_digits_still_detected_as_confusable(self):
+        from translit import is_confusable
+
+        assert is_confusable("𝟏") is True  # folds to a digit, but still confusable

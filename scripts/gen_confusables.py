@@ -343,6 +343,15 @@ def generate_mappings(
         merged = dict(direct)
         for cp, target in filter_latin_homoglyphs(entries):
             merged.setdefault(cp, target)
+        # A character that IS a digit (its NFKC decomposition is a single ASCII
+        # digit — e.g. the Mathematical Alphanumeric digits 𝟎/𝟏) must fold to
+        # that digit, not to a look-alike letter (𝟎→O, 𝟏→l). TR39 puts 0/1 in
+        # the O/l confusable classes, so the generic logic picks the letter;
+        # override digits here so normalize_confusables keeps numbers numeric (#89).
+        for cp in list(merged):
+            digit = unicodedata.normalize("NFKC", chr(cp))
+            if len(digit) == 1 and "0" <= digit <= "9":
+                merged[cp] = digit
         return list(merged.items())
 
     # For non-Latin: also invert equivalence classes

@@ -126,6 +126,13 @@ results that were keyed on the old (buggy) behaviour, regenerate them:
   language-specific (`he`→`hebrew`). (#18)
 - **`demojize` inserted a stray space** after a tab/newline preceding an emoji
   (`"a\t😀"` → `"a\t grinning face"`); it now checks for any whitespace. (#12)
+- **Compatibility digit variants fold to digits, not letters** (#89). The
+  confusables table mapped Mathematical Alphanumeric digits `𝟎`/`𝟏` (and the
+  other four families, plus superscripts) to the look-alike letters `O`/`l`, so
+  `normalize_confusables("𝟏𝟎")` gave `"lO"` and `strip_obfuscation` corrupted
+  digit runs. The generator now folds any character whose NFKC form is an ASCII
+  digit to that digit. They remain *detected* as confusable (`is_confusable`),
+  but canonicalize to the correct number. (ASCII `0`/`1` were already unaffected.)
 - **NFKC-compatible Latin is recovered instead of dropped to `[?]`** (#81).
   Mathematical Alphanumeric Symbols (`𝕳𝖊𝖑𝖑𝖔 𝟙𝟚𝟛` → `Hello 123`), presentation
   ligatures (`ﬁ`/`ﬂ` → `fi`/`fl`), and superscripts (`x²` → `x2`) now

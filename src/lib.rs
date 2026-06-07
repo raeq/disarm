@@ -98,6 +98,8 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(transliterate::_register_replacements, m)?)?;
     m.add_function(wrap_pyfunction!(transliterate::_remove_replacement, m)?)?;
     m.add_function(wrap_pyfunction!(transliterate::_clear_replacements, m)?)?;
+    m.add_function(wrap_pyfunction!(transliterate::_seal_registrations, m)?)?;
+    m.add_function(wrap_pyfunction!(transliterate::_registrations_sealed, m)?)?;
     m.add_function(wrap_pyfunction!(slugify::_slugify, m)?)?;
     m.add_function(wrap_pyfunction!(normalize::_normalize, m)?)?;
     m.add_function(wrap_pyfunction!(normalize::_is_normalized, m)?)?;
@@ -187,29 +189,11 @@ pub(crate) fn recover_lock<T>(result: std::sync::LockResult<T>) -> T {
     })
 }
 
-/// Recover from a poisoned `RwLock` **write** guard, resetting data.
-///
-/// Unlike `recover_lock()`, this resets the protected data to its `Default`
-/// value after recovering from poison.  This is appropriate for write access
-/// where the data may be in an inconsistent state and continuing with corrupt
-/// data is worse than losing cached registrations.
-pub(crate) fn recover_lock_or_clear<T: Default>(
-    result: std::sync::LockResult<std::sync::RwLockWriteGuard<'_, T>>,
-) -> std::sync::RwLockWriteGuard<'_, T> {
-    match result {
-        Ok(guard) => guard,
-        Err(e) => {
-            eprintln!(
-                "translit: RwLock poisoned (a thread panicked while holding the lock). \
-                 Recovering and clearing data to avoid operating on inconsistent state. \
-                 This is a bug; please report it."
-            );
-            let mut guard = e.into_inner();
-            *guard = T::default();
-            guard
-        }
-    }
-}
+// NOTE: a previous `recover_lock_or_clear` reset the protected table to its
+// default on poison. That silently wiped one caller's registrations when an
+// unrelated thread panicked (#64) — a multi-tenant blast-radius hazard. The
+// registration tables now use `recover_lock` (recover the data as-is; a panic
+// leaves a std collection in a valid-but-unspecified state, never UB).
 
 pyo3::create_exception!(
     translit,

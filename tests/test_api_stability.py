@@ -101,6 +101,8 @@ EXPECTED_ALL = {
     "register_replacements",
     "remove_replacement",
     "clear_replacements",
+    "seal_registrations",
+    "registrations_sealed",
     # Enums, protocols & constants
     "EmojiProvider",
     "NF",

@@ -60,6 +60,24 @@ static GLOBAL_REPLACEMENTS: LazyLock<RwLock<HashMap<String, String>>> =
 /// transliterate call. Kept in sync by every mutator below.
 static HAS_REPLACEMENTS: AtomicBool = AtomicBool::new(false);
 
+/// Once sealed, the registration tables (langs + replacements) are frozen:
+/// further register/remove/clear calls are rejected (#64). This lets an
+/// application configure registrations at startup and then prevent any later
+/// code (a request handler, an imported library) from mutating the
+/// process-global canonicalization that every caller shares. One-way latch.
+static REGISTRATIONS_SEALED: AtomicBool = AtomicBool::new(false);
+
+/// Seal the global registration tables: subsequent register/remove/clear calls
+/// fail. Idempotent and irreversible (by design — sealing is a security latch).
+pub fn seal_registrations() {
+    REGISTRATIONS_SEALED.store(true, Ordering::Release);
+}
+
+/// True if [`seal_registrations`] has been called.
+pub fn registrations_sealed() -> bool {
+    REGISTRATIONS_SEALED.load(Ordering::Acquire)
+}
+
 /// Maximum number of entries allowed in `GLOBAL_REPLACEMENTS`.
 ///
 /// Prevents unbounded memory growth from untrusted callers supplying very
@@ -348,7 +366,7 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
     if !bad_keys.is_empty() {
         return Err(bad_keys);
     }
-    let mut table = crate::recover_lock_or_clear(LANG_TABLES.write());
+    let mut table = crate::recover_lock(LANG_TABLES.write());
     table.insert(code.to_owned(), char_map);
     Ok(())
 }
@@ -369,7 +387,7 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
 /// silently overwritten with the new value.  Use [`clear_replacements`]
 /// to wipe the table, or [`remove_replacement`] to remove a single key.
 pub fn register_replacements(replacements: HashMap<String, String>) -> Result<(), usize> {
-    let mut table = crate::recover_lock_or_clear(GLOBAL_REPLACEMENTS.write());
+    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
     // Compute worst-case size after merge: existing + all-new (ignoring overlap).
     // This is conservative but avoids the cost of set-difference computation.
     let new_keys: usize = replacements
@@ -393,7 +411,7 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
 ///
 /// Returns `true` if the key was present and removed, `false` otherwise.
 pub fn remove_replacement(key: &str) -> bool {
-    let mut table = crate::recover_lock_or_clear(GLOBAL_REPLACEMENTS.write());
+    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
     let removed = table.remove(key).is_some();
     HAS_REPLACEMENTS.store(!table.is_empty(), Ordering::Release);
     removed
@@ -401,7 +419,7 @@ pub fn remove_replacement(key: &str) -> bool {
 
 /// Clear all global pre-transliteration replacements.
 pub fn clear_replacements() {
-    let mut table = crate::recover_lock_or_clear(GLOBAL_REPLACEMENTS.write());
+    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
     table.clear();
     HAS_REPLACEMENTS.store(false, Ordering::Release);
 }

@@ -820,10 +820,38 @@ pub fn _list_langs() -> Vec<String> {
     tables::list_langs()
 }
 
+/// Reject a registration mutation once the tables have been sealed (#64).
+fn check_not_sealed(op: &str) -> PyResult<()> {
+    if tables::registrations_sealed() {
+        return translit_err!(
+            "{op}: registration tables are sealed (seal_registrations() was called); \
+             register/remove/clear are not permitted after sealing"
+        );
+    }
+    Ok(())
+}
+
+/// Seal the global registration tables: subsequent register/remove/clear calls
+/// fail. Irreversible. Call after startup configuration to prevent later code
+/// from mutating the process-global canonicalization every caller shares.
+#[pyfunction]
+#[pyo3(signature = ())]
+pub fn _seal_registrations() {
+    tables::seal_registrations();
+}
+
+/// True if `seal_registrations()` has been called.
+#[pyfunction]
+#[pyo3(signature = ())]
+pub fn _registrations_sealed() -> bool {
+    tables::registrations_sealed()
+}
+
 /// Register or override a transliteration mapping for a language code.
 #[pyfunction]
 #[pyo3(signature = (code, mappings))]
 pub fn _register_lang(code: &str, mappings: HashMap<String, String>) -> PyResult<()> {
+    check_not_sealed("register_lang")?;
     // Guard against unbounded growth of the global language table.
     let current = tables::registered_lang_count();
     if current >= tables::MAX_REGISTERED_LANGS {
@@ -853,6 +881,7 @@ pub fn _register_lang(code: &str, mappings: HashMap<String, String>) -> PyResult
 #[pyfunction]
 #[pyo3(signature = (replacements,))]
 pub fn _register_replacements(replacements: HashMap<String, String>) -> PyResult<()> {
+    check_not_sealed("register_replacements")?;
     tables::register_replacements(replacements).map_err(|projected| {
         pyo3::exceptions::PyValueError::new_err(format!(
             "register_replacements(): table would exceed the maximum of {} entries \
@@ -869,6 +898,7 @@ pub fn _register_replacements(replacements: HashMap<String, String>) -> PyResult
 #[pyfunction]
 #[pyo3(signature = (key,))]
 pub fn _remove_replacement(key: &str) -> PyResult<bool> {
+    check_not_sealed("remove_replacement")?;
     Ok(tables::remove_replacement(key))
 }
 
@@ -876,6 +906,7 @@ pub fn _remove_replacement(key: &str) -> PyResult<bool> {
 #[pyfunction]
 #[pyo3(signature = ())]
 pub fn _clear_replacements() -> PyResult<()> {
+    check_not_sealed("clear_replacements")?;
     tables::clear_replacements();
     Ok(())
 }

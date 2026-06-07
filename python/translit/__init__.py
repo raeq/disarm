@@ -133,12 +133,14 @@ from translit._translit import (
     _normalize_confusables,
     _register_lang,
     _register_replacements,
+    _registrations_sealed,
     _remove_replacement,
     # Reverse transliteration
     _reverse_langs,
     _reverse_transliterate,
     _sanitize_filename,
     _sanitize_user_input,
+    _seal_registrations,
     # Precompiled pipelines
     _search_key,
     _security_clean,
@@ -2052,13 +2054,21 @@ def _bump_mutation_generation() -> None:
 def register_lang(code: str, mappings: dict[str, str]) -> None:
     """Register or override a transliteration mapping for a language code.
 
+    .. warning::
+        This mutates **process-global** state consulted by every
+        ``transliterate``/``slugify``/``catalog_key``/… call in the interpreter.
+        Treat it as startup-only / single-writer configuration: do **not** call
+        it from request-handling or library code in a multi-tenant process, where
+        it would silently alter every other caller's output. Call
+        :func:`seal_registrations` after startup to make further changes raise.
+
     Args:
         code: Language code string (e.g. "xx", "custom").
         mappings: Dict of source→replacement character mappings.
 
     Raises:
-        TranslitError: If the language table lock is poisoned or the
-            mapping cannot be stored.
+        TranslitError: If registrations are sealed, the language table lock is
+            poisoned, or the mapping cannot be stored.
 
     Examples:
         >>> register_lang("xx", {"Ä": "Ae", "ä": "ae", "Ö": "Oe", "ö": "oe"})
@@ -2081,6 +2091,11 @@ def register_replacements(replacements: dict[str, str]) -> None:
     semantics (the longest registered key matching at a position wins, and its
     output is not re-scanned, so replacements never cascade). Keys may be
     multi-character and may be ASCII.
+
+    .. warning::
+        Like :func:`register_lang`, this mutates **process-global** state shared
+        by every caller. Treat it as startup-only / single-writer configuration
+        and call :func:`seal_registrations` afterwards in multi-tenant processes.
 
     Args:
         replacements: Dict of source→replacement string mappings, applied
@@ -2132,6 +2147,33 @@ def clear_replacements() -> None:
     _clear_replacements()
     _has_global_replacements = False
     _bump_mutation_generation()
+
+
+def seal_registrations() -> None:
+    """Freeze the global registration tables (languages + replacements).
+
+    After this is called, :func:`register_lang`, :func:`register_replacements`,
+    :func:`remove_replacement`, and :func:`clear_replacements` raise
+    :class:`TranslitError`. This is a one-way security latch (#64): the
+    registration APIs mutate **process-global** state that every
+    ``transliterate``/``slugify``/``catalog_key``/... call shares, so in a
+    multi-tenant or web context an imported library or request handler could
+    otherwise silently alter everyone's canonicalization. Configure your
+    registrations at startup, then call ``seal_registrations()``.
+
+    Examples:
+        >>> register_lang("xx", {"Ä": "Ae"})
+        >>> seal_registrations()
+        >>> register_lang("yy", {"Ö": "Oe"})  # doctest: +SKIP
+        Traceback (most recent call last):
+        translit.TranslitError: register_lang: registration tables are sealed ...
+    """
+    _seal_registrations()
+
+
+def registrations_sealed() -> bool:
+    """Return True if :func:`seal_registrations` has been called."""
+    return _registrations_sealed()
 
 
 # --- Bulk / caching helpers (opt-in) -------------------------------------
@@ -2368,6 +2410,8 @@ __all__ = [
     "register_replacements",
     "remove_replacement",
     "clear_replacements",
+    "seal_registrations",
+    "registrations_sealed",
     # Enums, protocols & constants
     "EmojiProvider",
     "NF",

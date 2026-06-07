@@ -384,3 +384,40 @@ class TestUnknownLangRaises:
         assert transliterate("Москва", lang="ru") == "Moskva"
         assert transliterate("Москва", lang="auto") == "Moskva"
         assert transliterate("Næss", lang="nb") == transliterate("Næss", lang="no")  # alias
+
+
+class TestSealRegistrations:
+    """seal_registrations() freezes the global registration tables (#64).
+
+    Run in a subprocess: sealing is an irreversible process-global latch, so an
+    in-process test would contaminate the rest of the session.
+    """
+
+    def test_seal_blocks_all_mutators_but_keeps_registrations(self):
+        import subprocess
+        import sys
+
+        code = (
+            "import translit as t\n"
+            "t.register_lang('xx', {'\\u00c4': 'Ae'})\n"
+            "t.register_replacements({'@': '(at)'})\n"
+            "assert not t.registrations_sealed()\n"
+            "t.seal_registrations()\n"
+            "assert t.registrations_sealed()\n"
+            "blocked = 0\n"
+            "for fn, args in [(t.register_lang, ('yy', {})),\n"
+            "                 (t.register_replacements, ({'#': 'h'},)),\n"
+            "                 (t.remove_replacement, ('@',)),\n"
+            "                 (t.clear_replacements, ())]:\n"
+            "    try:\n"
+            "        fn(*args)\n"
+            "    except t.TranslitError:\n"
+            "        blocked += 1\n"
+            "assert blocked == 4, blocked\n"
+            # reads still work after sealing
+            "assert t.transliterate('\\u00c4', lang='xx') == 'Ae'\n"
+            "assert t.transliterate('a@b') == 'a(at)b'\n"
+            "print('OK')\n"
+        )
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert r.returncode == 0 and "OK" in r.stdout, f"stdout={r.stdout!r} stderr={r.stderr!r}"

@@ -154,6 +154,16 @@ results that were keyed on the old (buggy) behaviour, regenerate them:
   ISO 639-1 *or* 639-3; `normalize()` ASCII fast-path; list single-Rust-call caveats).
 
 ### Security
+- **`seal_registrations()` / `registrations_sealed()`** (#64, high). The
+  `register_lang`/`register_replacements` APIs mutate *process-global* tables
+  consulted by every `transliterate`/`slugify`/`catalog_key`/… call, so in a
+  multi-tenant or web process one import or request handler could silently alter
+  everyone's canonicalization. `seal_registrations()` is a one-way latch: after
+  it is called, register/remove/clear raise `TranslitError`. The registration
+  APIs are now documented as startup-only/single-writer. Separately, a poisoned
+  lock no longer **resets** registrations to defaults (a panic in one thread
+  could previously wipe another caller's registered languages) — it now recovers
+  the data as-is.
 - **`is_safe_hostname` now decodes IDN/`xn--` labels** (#63, high). Previously an
   `xn--` ACE label was pure ASCII → single-script → reported **safe**, so the
   on-the-wire form of the IDN homograph attack (a Cyrillic `xn--80ak6aa92e.com`

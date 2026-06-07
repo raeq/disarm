@@ -7,6 +7,7 @@ on:
       - "**.rs"
       - "**.py"
       - "**.toml"
+      - "uv.lock"
       - "benchmarks/**"
 
 concurrency:

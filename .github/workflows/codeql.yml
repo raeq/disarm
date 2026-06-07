@@ -5,7 +5,10 @@ on:
     branches: [main]
     paths:
       - "**.py"
-      - "**.rs"
+      # NB: "**.rs" intentionally omitted — the analysis matrix is
+      # [python, actions] (Rust is covered by clippy in ci.yml), so a Rust-only
+      # change should not trigger this workflow. The weekly schedule still scans
+      # the whole repo.
       - ".github/workflows/**"
   schedule:
     - cron: "0 6 * * 1"  # Weekly scan of default branch (Monday 06:00 UTC)

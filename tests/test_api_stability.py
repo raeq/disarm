@@ -665,9 +665,8 @@ class TestTypedDictStability:
     def test_every_script_meta_entry_has_all_required_keys(self):
         # Guard against an entry omitting a required key (regression: the
         # CanadianAboriginal entry was missing "context_aware", which made
-        # script_info(...)["context_aware"] raise KeyError).
-        from translit._enums import SCRIPT_META
-
+        # script_info(...)["context_aware"] raise KeyError). Uses the public
+        # SCRIPT_META (imported at module level), not the private _enums one.
         required = set(get_type_hints(ScriptMeta).keys())
         for name, meta in SCRIPT_META.items():
             assert set(meta.keys()) == required, (

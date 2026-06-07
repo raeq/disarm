@@ -4,7 +4,7 @@
 # README.md is the single source of truth. This script:
 # 1. Copies README.md content
 # 2. Rewrites relative links: (docs/foo) → (foo)
-# 3. Removes the Documentation section (replaced by the nav appendix)
+# 3. Removes the Architecture, Links, and License sections (already in the nav appendix)
 # 4. Appends the docs site navigation from docs/_index_nav.md
 #
 # Run from the project root:
@@ -26,6 +26,11 @@ if [[ ! -f "$NAV" ]]; then
     exit 1
 fi
 
+# Write to a temp file and move into place atomically, so a mid-pipeline failure
+# (set -euo pipefail) never leaves docs/index.md empty or partially written.
+TMPOUT="$(mktemp "$ROOT/docs/.index.md.XXXXXX")"
+trap 'rm -f "$TMPOUT"' EXIT
+
 {
     echo "<!-- AUTO-GENERATED from README.md + docs/_index_nav.md -->"
     echo "<!-- Do not edit directly. Run: bash scripts/generate_docs_index.sh -->"
@@ -34,15 +39,15 @@ fi
     # Transform README.md:
     # - Strip (docs/ prefix from markdown links → (
     # - Strip docs/ prefix from link text like [docs/foo.md]
-    # - Remove the "## Documentation" section (lines between ## Documentation and next ##)
+    # - Remove the "## Architecture" section (already in nav appendix)
     # - Remove the "## Links" section (already in nav, and URLs are absolute)
-    # - Remove the "## License" line (already in nav)
+    # - Remove the "## License" section, heading and body (already in nav)
+    # Each rule skips from its heading until the next "## " heading.
     sed \
         -e 's|(docs/|(|g' \
         -e 's|\[docs/|\[|g' \
         "$README" \
     | awk '
-        /^## Documentation$/ { skip=1; next }
         /^## Architecture$/  { skip=1; next }
         /^## Links$/         { skip=1; next }
         /^## License$/       { skip=1; next }
@@ -53,6 +58,8 @@ fi
     # Append the docs site navigation
     cat "$NAV"
 
-} > "$OUTPUT"
+} > "$TMPOUT"
+
+mv "$TMPOUT" "$OUTPUT"
 
 echo "Generated $OUTPUT from README.md + docs/_index_nav.md"

@@ -554,7 +554,7 @@ SCRIPT_META: dict[str, ScriptMeta] = {
         "context_aware": False,
     },
     "LinearB": {"name": "Linear B", "default_lang": None, "example": "𐀀𐀁", "context_aware": False},
-    # New scripts (v0.3.0+) — not in Script enum but in SCRIPT_RANGES
+    # Scripts added in v0.3.0+
     "Buginese": {
         "name": "Buginese (Lontara)",
         "default_lang": "bug",

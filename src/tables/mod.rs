@@ -359,6 +359,14 @@ pub fn list_langs() -> Vec<String> {
 ///
 /// After this call returns, all subsequent `lookup_lang()` calls for the
 /// given language code will see the new mappings.
+///
+/// # Seal
+///
+/// This mutator does **not** consult [`REGISTRATIONS_SEALED`].  Seal
+/// enforcement is the **caller's responsibility** — the PyO3 entry points in
+/// `transliterate.rs` call `check_not_sealed` before invoking this function.
+/// Any future direct-Rust API (e.g. the core split planned in #38) must add
+/// the same guard at its own boundary. (#123)
 pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<(), Vec<String>> {
     let mut char_map = HashMap::new();
     let mut bad_keys: Vec<String> = Vec::new();
@@ -394,6 +402,14 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
 /// New entries are merged into the existing table.  Existing keys are
 /// silently overwritten with the new value.  Use [`clear_replacements`]
 /// to wipe the table, or [`remove_replacement`] to remove a single key.
+///
+/// # Seal
+///
+/// This mutator does **not** consult [`REGISTRATIONS_SEALED`].  Seal
+/// enforcement is the **caller's responsibility** — the PyO3 entry points in
+/// `transliterate.rs` call `check_not_sealed` before invoking this function.
+/// Any future direct-Rust API (e.g. the core split planned in #38) must add
+/// the same guard at its own boundary. (#123)
 pub fn register_replacements(replacements: HashMap<String, String>) -> Result<(), usize> {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
     // Compute worst-case size after merge: existing + all-new (ignoring overlap).
@@ -418,6 +434,14 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
 /// Remove a single global pre-transliteration replacement by key.
 ///
 /// Returns `true` if the key was present and removed, `false` otherwise.
+///
+/// # Seal
+///
+/// This mutator does **not** consult [`REGISTRATIONS_SEALED`].  Seal
+/// enforcement is the **caller's responsibility** — the PyO3 entry points in
+/// `transliterate.rs` call `check_not_sealed` before invoking this function.
+/// Any future direct-Rust API (e.g. the core split planned in #38) must add
+/// the same guard at its own boundary. (#123)
 pub fn remove_replacement(key: &str) -> bool {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
     let removed = table.remove(key).is_some();
@@ -426,6 +450,14 @@ pub fn remove_replacement(key: &str) -> bool {
 }
 
 /// Clear all global pre-transliteration replacements.
+///
+/// # Seal
+///
+/// This mutator does **not** consult [`REGISTRATIONS_SEALED`].  Seal
+/// enforcement is the **caller's responsibility** — the PyO3 entry points in
+/// `transliterate.rs` call `check_not_sealed` before invoking this function.
+/// Any future direct-Rust API (e.g. the core split planned in #38) must add
+/// the same guard at its own boundary. (#123)
 pub fn clear_replacements() {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
     table.clear();

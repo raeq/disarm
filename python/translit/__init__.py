@@ -435,6 +435,45 @@ def transliterate(
     )
 
 
+def _build_slug_kwargs(
+    *,
+    separator: str,
+    lowercase: bool,
+    max_length: int,
+    word_boundary: bool,
+    save_order: bool,
+    stopwords: Iterable[str],
+    regex_pattern: str | None,
+    replacements: Iterable[tuple[str, str]],
+    allow_unicode: bool,
+    lang: str | None,
+    entities: bool,
+    decimal: bool,
+    hexadecimal: bool,
+) -> dict[str, object]:
+    """Build the shared kwargs dict forwarded to _slugify/_slugify_batch.
+
+    Mirrors _check_transliterate_conflicts for the slug path: a single
+    canonical kwargs dict eliminates the 2-way duplication in slugify().
+    (#120)
+    """
+    return dict(
+        separator=separator,
+        lowercase=lowercase,
+        max_length=max_length,
+        word_boundary=word_boundary,
+        save_order=save_order,
+        stopwords=stopwords,
+        regex_pattern=regex_pattern,
+        replacements=replacements,
+        allow_unicode=allow_unicode,
+        lang=lang,
+        entities=entities,
+        decimal=decimal,
+        hexadecimal=hexadecimal,
+    )
+
+
 @overload
 def slugify(
     text: str,
@@ -512,8 +551,10 @@ def slugify(
             2–4 bytes each — use :func:`grapheme_truncate` for
             character-aware limiting.
         word_boundary: When truncating via max_length, cut at word boundaries.
-        save_order: Accepted for python-slugify compatibility but has no
-            effect — word order is always preserved.
+        save_order: When ``True``, only leading and trailing stopwords are
+            removed; interior stopwords are kept so relative word order is
+            preserved (python-slugify compatible). When ``False`` (default),
+            all matching stopwords are removed wherever they appear. (#118)
         stopwords: Words to remove from the slug.
         regex_pattern: Custom regex for stripping characters.
         replacements: Pre-transliteration (old, new) substitution pairs.
@@ -543,32 +584,8 @@ def slugify(
     """
     _sw = stopwords if isinstance(stopwords, (tuple, list)) else list(stopwords)
     _rp = replacements if isinstance(replacements, (tuple, list)) else list(replacements)
-
-    if isinstance(text, list):
-        _validate_batch(text, "slugify")
-        return _slugify_batch(
-            text,
-            separator=separator,
-            lowercase=lowercase,
-            max_length=max_length,
-            word_boundary=word_boundary,
-            save_order=save_order,
-            stopwords=_sw,
-            regex_pattern=regex_pattern,
-            replacements=_rp,
-            allow_unicode=allow_unicode,
-            lang=lang,
-            entities=entities,
-            decimal=decimal,
-            hexadecimal=hexadecimal,
-        )
-
-    if not isinstance(text, str):
-        raise TypeError(f"slugify() expects str or list[str], got {type(text).__name__}")
-    if max_length < 0:
-        raise ValueError(f"max_length must be non-negative, got {max_length}")
-    return _slugify(
-        text,
+    # #120: shared kwargs dict avoids repeating 13 keyword arguments twice.
+    _kw = _build_slug_kwargs(
         separator=separator,
         lowercase=lowercase,
         max_length=max_length,
@@ -583,6 +600,16 @@ def slugify(
         decimal=decimal,
         hexadecimal=hexadecimal,
     )
+
+    if isinstance(text, list):
+        _validate_batch(text, "slugify")
+        return _slugify_batch(text, **_kw)  # type: ignore[arg-type]
+
+    if not isinstance(text, str):
+        raise TypeError(f"slugify() expects str or list[str], got {type(text).__name__}")
+    if max_length < 0:
+        raise ValueError(f"max_length must be non-negative, got {max_length}")
+    return _slugify(text, **_kw)  # type: ignore[arg-type]
 
 
 @overload
@@ -1898,10 +1925,14 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("collapse_whitespace", None),
     ],
     "sanitize_user_input": [
+        # #121: order and steps corrected to match actual Rust execution in
+        # presets.rs — bidi/invisible stripping runs FIRST for idempotency.
         ("normalize", "NFKC"),
+        ("strip_bidi", None),
+        ("strip_zero_width", None),
+        ("strip_control", None),
         ("strip_zalgo", None),
         ("confusables", "latin"),
-        ("strip_bidi", None),
         ("collapse_whitespace", None),
     ],
     "strip_obfuscation": [
@@ -2104,9 +2135,11 @@ def script_info(script: str | Script) -> ScriptMeta:
     return SCRIPT_META[key]
 
 
-# Incremented whenever the global transliteration tables change, so caches built
-# by make_cached_transliterator can detect staleness and self-invalidate.
-_mutation_generation: int = 0
+# Incremented whenever the global registration tables (languages or replacements)
+# change, so caches built by make_cached_transliterator can detect staleness and
+# self-invalidate.  Named *registration* to distinguish it from the companion
+# _has_global_replacements gate. (#128: renamed from _mutation_generation)
+_registration_generation: int = 0
 
 # Conservative gate for the pure-ASCII fast path in transliterate(): False means
 # *definitely no* global replacements are registered (so an ASCII string can be
@@ -2118,9 +2151,10 @@ _mutation_generation: int = 0
 _has_global_replacements: bool = False
 
 
-def _bump_mutation_generation() -> None:
-    global _mutation_generation
-    _mutation_generation += 1
+def _bump_registration_generation() -> None:
+    # #128: renamed from _bump_mutation_generation for clarity.
+    global _registration_generation
+    _registration_generation += 1
 
 
 def register_lang(code: str, mappings: dict[str, str]) -> None:
@@ -2148,7 +2182,7 @@ def register_lang(code: str, mappings: dict[str, str]) -> None:
         'Aerger'
     """
     _register_lang(code, mappings)
-    _bump_mutation_generation()
+    _bump_registration_generation()
 
 
 def register_replacements(replacements: dict[str, str]) -> None:
@@ -2183,7 +2217,7 @@ def register_replacements(replacements: dict[str, str]) -> None:
     _register_replacements(replacements)
     if replacements:
         _has_global_replacements = True
-    _bump_mutation_generation()
+    _bump_registration_generation()
 
 
 def remove_replacement(key: str) -> bool:
@@ -2204,7 +2238,7 @@ def remove_replacement(key: str) -> bool:
     """
     result = _remove_replacement(key)
     if result:  # only a real removal changes the tables
-        _bump_mutation_generation()
+        _bump_registration_generation()
     return result
 
 
@@ -2218,7 +2252,7 @@ def clear_replacements() -> None:
     global _has_global_replacements
     _clear_replacements()
     _has_global_replacements = False
-    _bump_mutation_generation()
+    _bump_registration_generation()
 
 
 def seal_registrations() -> None:
@@ -2378,14 +2412,14 @@ def make_cached_transliterator(
             context=context,
         )
 
-    seen_generation = _mutation_generation
+    seen_generation = _registration_generation
 
     @wraps(_cached)
     def cached(text: str) -> str:
         nonlocal seen_generation
-        if _mutation_generation != seen_generation:
+        if _registration_generation != seen_generation:
             _cached.cache_clear()
-            seen_generation = _mutation_generation
+            seen_generation = _registration_generation
         return _cached(text)
 
     cached.cache_clear = _cached.cache_clear  # type: ignore[attr-defined]
@@ -2597,8 +2631,32 @@ __all__ = [
 class _CallableModule(_stdlib_types.ModuleType):
     """Make ``import translit; translit(...)`` a shorthand for ``transliterate()``."""
 
-    def __call__(self, text: str, **kwargs: Any) -> str:
-        return transliterate(text, **kwargs)
+    # #125: explicit parameter list matches transliterate() overloads so that
+    # type-checkers can detect unknown kwargs on _CallableModule-typed variables.
+    def __call__(
+        self,
+        text: str | list[str],
+        *,
+        lang: str | None = None,
+        target: str | None = None,
+        errors: ErrorMode = "replace",
+        replace_with: str = "[?]",
+        strict_iso9: bool = False,
+        gost7034: bool = False,
+        tones: bool = False,
+        context: bool = False,
+    ) -> str | list[str]:
+        return transliterate(
+            text,
+            lang=lang,
+            target=target,
+            errors=errors,
+            replace_with=replace_with,
+            strict_iso9=strict_iso9,
+            gost7034=gost7034,
+            tones=tones,
+            context=context,
+        )
 
     def __repr__(self) -> str:
         return f"<module {self.__name__!r} (callable) from {self.__file__!r}>"

@@ -77,6 +77,8 @@ pub fn _transliterate(
     gost7034: bool,
     tones: bool,
 ) -> PyResult<String> {
+    // #130: Defence-in-depth — the PyO3 boundary check in each entry-point guards
+    // direct Rust callers; Python callers are covered by the same check.
     if strict_iso9 && gost7034 {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "strict_iso9 and gost7034 are mutually exclusive",
@@ -126,6 +128,8 @@ pub fn _transliterate_context(
     strict_iso9: bool,
     gost7034: bool,
 ) -> PyResult<String> {
+    // #130: Defence-in-depth — the PyO3 boundary check in each entry-point guards
+    // direct Rust callers; Python callers are covered by the same check.
     if strict_iso9 && gost7034 {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "strict_iso9 and gost7034 are mutually exclusive",
@@ -149,45 +153,64 @@ pub fn _transliterate_context(
     };
     let text = text.as_ref();
 
-    // Try to get the appropriate context dictionary.
+    // #107: Try to get the appropriate context dictionary, distinguishing
+    // "corrupt" (file present but malformed) from "absent" (not found).
     // Persian: try Persian dict first, fall back to Arabic (shared loanwords).
-    let dict = match lang {
+    let dict_result: Result<Option<&'static crate::context::ContextDict>, &'static str> = match lang
+    {
         Some("he") => crate::context::get_hebrew_dict(),
-        Some("fa") => crate::context::get_persian_dict().or_else(crate::context::get_arabic_dict),
+        Some("fa") => match crate::context::get_persian_dict() {
+            Ok(Some(d)) => Ok(Some(d)),
+            Ok(None) => crate::context::get_arabic_dict(), // absent → try Arabic
+            Err(e) => Err(e),                              // corrupt → propagate
+        },
         _ => crate::context::get_arabic_dict(),
     };
 
-    if let Some(d) = dict {
-        // Use context-aware transliteration
-        let result = crate::context::transliterate_context(text, lang, d, |word, lang| {
-            transliterate_impl(
-                word,
-                lang,
-                error_mode,
-                replace_with,
-                strict_iso9,
-                gost7034,
-                false,
+    let lang_name = match lang {
+        Some("he") => "Hebrew",
+        Some("fa") => "Arabic/Persian",
+        _ => "Arabic",
+    };
+
+    match dict_result {
+        Ok(Some(d)) => {
+            // Use context-aware transliteration
+            let result = crate::context::transliterate_context(text, lang, d, |word, lang| {
+                transliterate_impl(
+                    word,
+                    lang,
+                    error_mode,
+                    replace_with,
+                    strict_iso9,
+                    gost7034,
+                    false,
+                )
+                .into_owned()
+            });
+            Ok(result)
+        }
+        Ok(None) => {
+            // Dictionary not loaded — point the user at a remedy that actually works
+            // (#60). Context dictionaries are not shipped in the wheel; build them
+            // and expose them via TRANSLIT_DICT_DIR.
+            translit_err!(
+                "Context dictionary for {} not found. Context-aware transliteration needs \
+                 the prebuilt dictionaries: run `bash scripts/bootstrap_dicts.sh` (from a \
+                 source checkout) and set the TRANSLIT_DICT_DIR environment variable to the \
+                 output directory. See docs/user-guide/abjad-transliteration.md.",
+                lang_name
             )
-            .into_owned()
-        });
-        Ok(result)
-    } else {
-        // Dictionary not loaded — point the user at a remedy that actually works
-        // (#60). Context dictionaries are not shipped in the wheel; build them
-        // and expose them via TRANSLIT_DICT_DIR.
-        let lang_name = match lang {
-            Some("he") => "Hebrew",
-            Some("fa") => "Arabic/Persian",
-            _ => "Arabic",
-        };
-        translit_err!(
-            "Context dictionary for {} not found. Context-aware transliteration needs \
-             the prebuilt dictionaries: run `bash scripts/bootstrap_dicts.sh` (from a \
-             source checkout) and set the TRANSLIT_DICT_DIR environment variable to the \
-             output directory. See docs/user-guide/abjad-transliteration.md.",
-            lang_name
-        )
+        }
+        Err(corrupt_msg) => {
+            // #107: file was found but is corrupt — different remediation from "not found".
+            translit_err!(
+                "Context dictionary for {} is corrupt and could not be loaded: {}. \
+                 Rebuild it with `bash scripts/bootstrap_dicts.sh` (from a source checkout).",
+                lang_name,
+                corrupt_msg
+            )
+        }
     }
 }
 
@@ -351,17 +374,17 @@ pub fn transliterate_impl<'a>(
             // filter-evasion vector. Only reached for chars with no table
             // mapping, so this is purely additive: a char whose NFKC form is
             // itself falls straight through to the error handler below.
-            // Peek the NFKC iterator without allocating: the overwhelmingly
-            // common case on this path is a char whose NFKC form is itself
-            // (emoji, unmapped CJK, symbols). Collecting into a String there
-            // would add a per-codepoint allocation to the unmapped hot path,
-            // so only allocate when NFKC actually changes the character.
-            let mut nfkc = ch.nfkc();
-            let nfkc_unchanged = matches!((nfkc.next(), nfkc.next()), (Some(c), None) if c == ch);
+            // #110: collect ch.nfkc() once into a String, then derive
+            // nfkc_unchanged by comparing against the original char.  The
+            // previous code iterated twice for changed chars (once to peek,
+            // once to collect), which this eliminates.  One allocation per
+            // unmapped char is acceptable on this path, which is only reached
+            // for chars not in the transliteration tables.
+            let decomposed: String = ch.nfkc().collect();
+            let nfkc_unchanged = decomposed.len() == ch.len_utf8() && decomposed.starts_with(ch);
             let nfkc_recovered = if nfkc_unchanged {
                 false
             } else {
-                let decomposed: String = ch.nfkc().collect();
                 let sub = transliterate_impl(
                     &decomposed,
                     lang,
@@ -413,9 +436,10 @@ pub fn transliterate_impl<'a>(
 /// We sample the first 5 non-ASCII codepoints and use the maximum multiplier
 /// seen, so mixed-script strings like "Hello 北京" pick up the CJK 4×
 /// multiplier rather than defaulting to 1× from the leading Latin characters.
-/// The result is capped at 256 MiB: a larger `with_capacity` hint is never
-/// useful and avoids attempting massive pre-allocations on adversarial input.
-const MAX_CAPACITY_HINT: usize = 256 * 1024 * 1024; // 256 MiB
+/// The result is capped at 8 MiB: the previous 256 MiB cap was 32× too large
+/// (#111). Any output exceeding 8 MiB will reallocate at most once, while
+/// the old value reserved 256 MiB of virtual memory per call on large CJK input.
+const MAX_CAPACITY_HINT: usize = 8 * 1024 * 1024; // 8 MiB (#111)
 
 fn estimate_capacity(text: &str) -> usize {
     let multiplier = text
@@ -938,6 +962,8 @@ pub fn _transliterate_batch(
     gost7034: bool,
     tones: bool,
 ) -> PyResult<Vec<String>> {
+    // #130: Defence-in-depth — the PyO3 boundary check in each entry-point guards
+    // direct Rust callers; Python callers are covered by the same check.
     if strict_iso9 && gost7034 {
         return Err(pyo3::exceptions::PyValueError::new_err(
             "strict_iso9 and gost7034 are mutually exclusive",

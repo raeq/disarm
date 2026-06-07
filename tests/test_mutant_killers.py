@@ -357,9 +357,11 @@ class TestPipelineStepTuples:
                 "sanitize_user_input",
                 [
                     ("normalize", "NFKC"),
+                    ("strip_bidi", None),
+                    ("strip_zero_width", None),
+                    ("strip_control", None),
                     ("strip_zalgo", None),
                     ("confusables", "latin"),
-                    ("strip_bidi", None),
                     ("collapse_whitespace", None),
                 ],
             ),

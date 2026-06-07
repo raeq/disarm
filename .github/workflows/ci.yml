@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 5 * * 1"  # Weekly RustSec advisory scan (Monday 05:00 UTC)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -116,6 +118,22 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+
+
+  # ── Security audit (#105: cargo audit for RustSec advisories) ──
+  # Runs on every PR that touches Cargo.lock/Cargo.toml, and weekly.
+  cargo-audit:
+    name: Cargo audit (RustSec)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+
+      - name: Run cargo audit
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998  # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
 
   # ── Status gates (always run, for branch protection) ────────────

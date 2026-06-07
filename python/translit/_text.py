@@ -29,7 +29,13 @@ if TYPE_CHECKING:
 
 
 def _get_translit():
-    """Lazy-load the translit module once, then cache on the class."""
+    """Lazy-load the translit module once, then cache on the class.
+
+    The import is deferred rather than top-level to avoid a circular dependency:
+    ``translit.__init__`` imports ``Text`` from this module (``translit._text``),
+    so importing ``translit`` at module-load time here would create a circular
+    import.  (#127)
+    """
     return importlib.import_module("translit")
 
 
@@ -118,8 +124,11 @@ class Text:
         replace_with: str = "[?]",
         strict_iso9: bool = False,
         gost7034: bool = False,
+        tones: bool = False,
+        context: bool = False,
     ) -> Text:
         """Unicode → ASCII transliteration."""
+        # #129: tones and context are forwarded to the underlying transliterate()
         return Text(
             self._t().transliterate(
                 self._value,
@@ -129,6 +138,8 @@ class Text:
                 replace_with=replace_with,
                 strict_iso9=strict_iso9,
                 gost7034=gost7034,
+                tones=tones,
+                context=context,
             )
         )
 

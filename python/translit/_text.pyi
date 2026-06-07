@@ -39,6 +39,8 @@ class Text:
         replace_with: str = "[?]",
         strict_iso9: bool = False,
         gost7034: bool = False,
+        tones: bool = False,
+        context: bool = False,
     ) -> Text:
         """Unicode → ASCII transliteration."""
         ...

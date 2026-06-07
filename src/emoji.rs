@@ -9,7 +9,6 @@
 
 use pyo3::prelude::*;
 use pyo3::types::PyList;
-use std::fmt::Write;
 use std::sync::RwLock;
 
 use std::sync::LazyLock;
@@ -33,49 +32,88 @@ pub fn set_provider(provider: Option<PyObject>) {
     *guard = provider;
 }
 
-/// Write a slice of codepoints as an uppercase hex key into `buf`, reusing it.
+// #112: key_buf and sep_positions are now stack-allocated to avoid two heap
+// allocations per emoji-multi-starter character in match_emoji_at.
+const KEY_BUF_CAP: usize = 64; // MAX_EMOJI_SEQ_LEN(9) × 5 hex + 8 '_' = 53 bytes; 64 is safe
+
+/// Write a slice of codepoints as an uppercase hex key into `buf`.
 ///
-/// Clears `buf` before writing.  Using a caller-supplied buffer avoids
-/// repeated allocation inside the O(max_seq_len) candidate loop in
+/// Returns the number of bytes written.  The buffer must be at least
+/// `KEY_BUF_CAP` bytes long.  Using a caller-supplied stack buffer avoids
+/// repeated heap allocation inside the O(max_seq_len) candidate loop in
 /// `match_emoji_at`.
-fn encode_key_into(buf: &mut String, cps: &[char]) {
-    buf.clear();
+fn encode_key_into(buf: &mut [u8; KEY_BUF_CAP], cps: &[char]) -> usize {
+    let mut pos = 0usize;
     for (i, &c) in cps.iter().enumerate() {
         if i > 0 {
-            buf.push('_');
+            buf[pos] = b'_';
+            pos += 1;
         }
-        // write! to a String is infallible (String's fmt::Write impl never errors).
-        let _ = write!(buf, "{:04X}", c as u32);
+        // Format codepoint as uppercase hex (4–6 digits) into the stack buffer.
+        // All emoji codepoints fit in 5 hex digits (max U+10FFFF = 6 digits, but
+        // emoji top out at ~1FAFF), and {:04X} zero-pads to at least 4.
+        let cp = c as u32;
+        // Determine digit count (minimum 4 per the format spec).
+        let digits: u32 = if cp >= 0x10_0000 {
+            6
+        } else if cp >= 0x1_0000 {
+            5
+        } else {
+            4
+        };
+        for d in (0..digits).rev() {
+            let nibble = ((cp >> (d * 4)) & 0xF) as u8;
+            buf[pos] = if nibble < 10 {
+                b'0' + nibble
+            } else {
+                b'A' + nibble - 10
+            };
+            pos += 1;
+        }
     }
+    pos
 }
 
-/// Try to match the longest emoji sequence starting at `chars[pos]`.
-/// Returns (short_name, number_of_chars_consumed) or None.
-fn match_emoji_at(chars: &[char], pos: usize) -> Option<(&'static str, usize)> {
-    let ch = chars[pos];
-    let remaining = chars.len() - pos;
+/// Try to match the longest emoji sequence starting at `window[0]`.
+///
+/// `window` is a fixed-size lookahead slice of up to `MAX_EMOJI_SEQ_LEN`
+/// chars beginning at the current position; `window.len()` equals the number
+/// of chars still available.  Returns `(short_name, chars_consumed)` or
+/// `None`.
+///
+/// # #112 / #113
+/// Stack-only allocations: `key_buf` is a `[u8; KEY_BUF_CAP]` array and
+/// `sep_positions` is a `[usize; MAX_WINDOW]` array — no heap
+/// allocation occurs here regardless of input.
+fn match_emoji_at(window: &[char]) -> Option<(&'static str, usize)> {
+    let ch = window[0];
+    let remaining = window.len();
 
     // Try multi-codepoint sequences first (longest match)
     if tables::is_emoji_multi_starter(ch) {
-        let max_len = tables::max_emoji_seq_len().min(remaining);
+        let max_len = MAX_WINDOW.min(remaining);
+
+        // #112: stack-allocate key buffer (no heap).
         // Build the full key once for max_len, then use pre-computed separator
         // positions for O(1) truncation instead of rfind('_') per iteration.
-        let mut key_buf = String::with_capacity(max_len * 6);
-        encode_key_into(&mut key_buf, &chars[pos..pos + max_len]);
+        let mut key_buf = [0u8; KEY_BUF_CAP];
+        let total_len = encode_key_into(&mut key_buf, &window[..max_len]);
 
-        // Pre-compute positions of '_' separators for O(1) indexed truncation.
+        // #112: stack-allocate sep_positions (at most MAX_WINDOW - 1 entries).
         // sep_positions[i] = byte offset of the (i+1)-th '_' separator.
-        // To get a key for `len` codepoints, truncate at sep_positions[len-1]
-        // (the byte offset just past the last codepoint we want to keep).
-        let sep_positions: Vec<usize> = key_buf
-            .bytes()
-            .enumerate()
-            .filter_map(|(i, b)| if b == b'_' { Some(i) } else { None })
-            .collect();
+        // To get a key for `len` codepoints, truncate at sep_positions[len-1].
+        let mut sep_positions = [0usize; MAX_WINDOW];
+        let mut sep_count = 0usize;
+        for (idx, &b) in key_buf[..total_len].iter().enumerate() {
+            if b == b'_' {
+                sep_positions[sep_count] = idx;
+                sep_count += 1;
+            }
+        }
 
         // Try longest sequences first, truncating the key progressively
         for len in (2..=max_len).rev() {
-            let last = chars[pos + len - 1];
+            let last = window[len - 1];
             // Skip sequences that end with a variation selector or ZWJ
             // (they're incomplete).
             if last == ZWJ || last == VS16 || last == VS15 {
@@ -87,9 +125,13 @@ fn match_emoji_at(chars: &[char], pos: usize) -> Option<(&'static str, usize)> {
             // For `len` codepoints we need `len-1` separators, so truncate at
             // sep_positions[len-1] (the start of the (len+1)-th codepoint's separator).
             let key_slice = if len < max_len {
-                &key_buf[..sep_positions[len - 1]]
+                // SAFETY: sep_positions[len-1] is a valid byte offset within key_buf
+                // (it was recorded from the encoded key), and key_buf contains only
+                // ASCII hex digits and '_', so the slice is valid UTF-8.
+                std::str::from_utf8(&key_buf[..sep_positions[len - 1]])
+                    .expect("key_buf is always ASCII")
             } else {
-                &key_buf
+                std::str::from_utf8(&key_buf[..total_len]).expect("key_buf is always ASCII")
             };
 
             if let Some(name) = tables::lookup_emoji_multi(key_slice) {
@@ -101,12 +143,11 @@ fn match_emoji_at(chars: &[char], pos: usize) -> Option<(&'static str, usize)> {
     // Try single-codepoint lookup
     if let Some(name) = tables::lookup_emoji_single(ch) {
         // Check if followed by variation selector — consume it too
-        let consumed =
-            if pos + 1 < chars.len() && (chars[pos + 1] == VS16 || chars[pos + 1] == VS15) {
-                2
-            } else {
-                1
-            };
+        let consumed = if window.len() > 1 && (window[1] == VS16 || window[1] == VS15) {
+            2
+        } else {
+            1
+        };
         return Some((name, consumed));
     }
 
@@ -127,27 +168,108 @@ fn emit_warning(py: Python<'_>, msg: &str) {
     }
 }
 
+/// Fixed-size sliding window over the character stream.
+///
+/// # #113
+/// Replaces the `Vec<char>` full-input materialisation in `demojize_impl` and
+/// `demojize_rust`.  The buffer holds up to `MAX_EMOJI_SEQ_LEN` chars of
+/// lookahead — the maximum the matching engine ever needs.  Characters are
+/// consumed from the inner iterator one-by-one; advancing the window shifts
+/// buffered chars left and refills from the iterator, requiring no heap
+/// allocation regardless of input length.
+struct CharWindow<'a> {
+    buf: [char; MAX_WINDOW],
+    /// Number of valid chars currently in `buf` (always <= MAX_WINDOW).
+    len: usize,
+    rest: std::str::Chars<'a>,
+}
+
+/// Window capacity = MAX_EMOJI_SEQ_LEN so we always have enough lookahead.
+const MAX_WINDOW: usize = 9; // mirrors MAX_EMOJI_SEQ_LEN = 9
+
+impl<'a> CharWindow<'a> {
+    /// Create a new window, pre-filling the buffer from `chars`.
+    fn new(mut chars: std::str::Chars<'a>) -> Self {
+        let mut buf = ['\0'; MAX_WINDOW];
+        let mut len = 0;
+        while len < MAX_WINDOW {
+            match chars.next() {
+                Some(c) => {
+                    buf[len] = c;
+                    len += 1;
+                }
+                None => break,
+            }
+        }
+        CharWindow {
+            buf,
+            len,
+            rest: chars,
+        }
+    }
+
+    /// The current character (first in the window), or `None` if exhausted.
+    #[inline]
+    fn current(&self) -> Option<char> {
+        if self.len > 0 {
+            Some(self.buf[0])
+        } else {
+            None
+        }
+    }
+
+    /// A slice of all valid chars in the window (up to MAX_WINDOW chars).
+    #[inline]
+    fn as_slice(&self) -> &[char] {
+        &self.buf[..self.len]
+    }
+
+    /// Advance the window by `n` chars (1 <= n <= self.len).
+    ///
+    /// Shifts `buf[n..]` to the front, then refills from the iterator.
+    fn advance(&mut self, n: usize) {
+        debug_assert!(n > 0 && n <= self.len);
+        // Shift remaining buffered chars to the front.
+        self.buf.copy_within(n..self.len, 0);
+        let remaining = self.len - n;
+        // Refill from the iterator.
+        let mut fill = remaining;
+        while fill < MAX_WINDOW {
+            match self.rest.next() {
+                Some(c) => {
+                    self.buf[fill] = c;
+                    fill += 1;
+                }
+                None => break,
+            }
+        }
+        self.len = fill;
+    }
+}
+
 /// Try a Python provider's lookup method.
 ///
 /// Returns `Some((name, chars_consumed))` if the provider recognises the
-/// sequence starting at `chars[pos]`, `None` otherwise.
+/// sequence starting at `window[0]`, `None` otherwise.
 ///
 /// If the provider raises an exception or returns a non-string value, a
 /// Python `UserWarning` is issued via `warnings.warn` and the call falls
 /// through to the built-in CLDR tables.
+///
+/// # #113
+/// Takes the window slice directly instead of `(&[char], pos)` — pos is
+/// always 0 from the window's perspective.
 fn try_python_provider(
     py: Python<'_>,
     provider: &PyObject,
-    chars: &[char],
-    pos: usize,
+    window: &[char],
     max_len: usize,
 ) -> Option<(String, usize)> {
-    let remaining = chars.len() - pos;
-    let try_len = max_len.min(remaining);
+    let try_len = max_len.min(window.len());
 
     // Try longest first
     for len in (1..=try_len).rev() {
-        let seq: Vec<u32> = chars[pos..pos + len].iter().map(|c| *c as u32).collect();
+        let seq: Vec<u32> = window[..len].iter().map(|c| *c as u32).collect();
         let py_seq = PyList::new(py, &seq).ok()?;
 
         let result = match provider.call_method1(py, "lookup", (py_seq,)) {
@@ -178,6 +300,10 @@ fn try_python_provider(
 }
 
 /// Core demojize implementation.
+///
+/// # #113
+/// Uses a `CharWindow` sliding buffer instead of `Vec<char>` to avoid
+/// materialising the full input for non-ASCII text.
 fn demojize_impl(
     py: Python<'_>,
     text: &str,
@@ -191,29 +317,27 @@ fn demojize_impl(
         return text.to_owned();
     }
 
-    let chars: Vec<char> = text.chars().collect();
+    let mut win = CharWindow::new(text.chars());
     let mut result = String::with_capacity(text.len());
-    let mut i = 0;
     let mut last_was_emoji = false;
 
-    while i < chars.len() {
-        let ch = chars[i];
-
+    while let Some(ch) = win.current() {
         // Skip orphaned variation selectors and ZWJ characters
         if ch == VS16 || ch == VS15 || ch == ZWJ {
-            i += 1;
+            win.advance(1);
             continue;
         }
 
         // Try custom Python provider first (if set)
         if let Some(prov) = provider {
             if let Some((name, consumed)) =
-                try_python_provider(py, prov, &chars, i, tables::max_emoji_seq_len())
+                try_python_provider(py, prov, win.as_slice(), tables::max_emoji_seq_len())
             {
                 pad_emoji_replacement(&mut result, &name);
-                i += consumed;
-                while i < chars.len() && is_emoji_modifier(chars[i]) {
-                    i += 1;
+                win.advance(consumed);
+                // Skip trailing modifier codepoints
+                while win.current().is_some_and(is_emoji_modifier) {
+                    win.advance(1);
                 }
                 last_was_emoji = true;
                 continue;
@@ -221,12 +345,12 @@ fn demojize_impl(
         }
 
         // Try built-in emoji tables
-        if let Some((name, consumed)) = match_emoji_at(&chars, i) {
+        if let Some((name, consumed)) = match_emoji_at(win.as_slice()) {
             let replacement = strip_modifier_suffix(name, strip_modifiers);
             pad_emoji_replacement(&mut result, replacement);
-            i += consumed;
-            while i < chars.len() && is_emoji_modifier(chars[i]) {
-                i += 1;
+            win.advance(consumed);
+            while win.current().is_some_and(is_emoji_modifier) {
+                win.advance(1);
             }
             last_was_emoji = true;
             continue;
@@ -239,12 +363,15 @@ fn demojize_impl(
                 ErrorMode::Ignore => {}
                 ErrorMode::Preserve => result.push(ch),
             }
-            i += 1;
-            while i < chars.len() && is_emoji_modifier(chars[i]) {
-                if let ErrorMode::Preserve = error_mode {
-                    result.push(chars[i]);
+            win.advance(1);
+            while let Some(mc) = win.current() {
+                if !is_emoji_modifier(mc) {
+                    break;
                 }
-                i += 1;
+                if let ErrorMode::Preserve = error_mode {
+                    result.push(mc);
+                }
+                win.advance(1);
             }
             last_was_emoji = false;
             continue;
@@ -258,7 +385,7 @@ fn demojize_impl(
         }
         result.push(ch);
         last_was_emoji = false;
-        i += 1;
+        win.advance(1);
     }
 
     result
@@ -393,31 +520,32 @@ fn pad_emoji_replacement(result: &mut String, text: &str) {
 }
 
 /// Pure Rust demojize for use by TextPipeline (no Python provider support).
+///
+/// # #113
+/// Uses a `CharWindow` sliding buffer instead of `Vec<char>` to avoid
+/// materialising the full input for non-ASCII text.
 pub fn demojize_rust(text: &str, strip_modifiers: bool) -> String {
     // Fast path: pure-ASCII text cannot contain emoji.
     if text.is_ascii() {
         return text.to_owned();
     }
 
-    let chars: Vec<char> = text.chars().collect();
+    let mut win = CharWindow::new(text.chars());
     let mut result = String::with_capacity(text.len());
-    let mut i = 0;
     let mut last_was_emoji = false;
 
-    while i < chars.len() {
-        let ch = chars[i];
-
+    while let Some(ch) = win.current() {
         if ch == VS16 || ch == VS15 || ch == ZWJ {
-            i += 1;
+            win.advance(1);
             continue;
         }
 
-        if let Some((name, consumed)) = match_emoji_at(&chars, i) {
+        if let Some((name, consumed)) = match_emoji_at(win.as_slice()) {
             let replacement = strip_modifier_suffix(name, strip_modifiers);
             pad_emoji_replacement(&mut result, replacement);
-            i += consumed;
-            while i < chars.len() && is_emoji_modifier(chars[i]) {
-                i += 1;
+            win.advance(consumed);
+            while win.current().is_some_and(is_emoji_modifier) {
+                win.advance(1);
             }
             last_was_emoji = true;
             continue;
@@ -425,9 +553,9 @@ pub fn demojize_rust(text: &str, strip_modifiers: bool) -> String {
 
         // Unknown emoji — drop it (Ignore mode)
         if is_emoji_codepoint(ch) {
-            i += 1;
-            while i < chars.len() && is_emoji_modifier(chars[i]) {
-                i += 1;
+            win.advance(1);
+            while win.current().is_some_and(is_emoji_modifier) {
+                win.advance(1);
             }
             last_was_emoji = false;
             continue;
@@ -438,7 +566,7 @@ pub fn demojize_rust(text: &str, strip_modifiers: bool) -> String {
         }
         result.push(ch);
         last_was_emoji = false;
-        i += 1;
+        win.advance(1);
     }
 
     result
@@ -450,16 +578,17 @@ mod tests {
 
     #[test]
     fn test_encode_key_single() {
-        let mut buf = String::new();
-        encode_key_into(&mut buf, &['\u{1F600}']);
-        assert_eq!(buf, "1F600");
+        // #112: encode_key_into now writes into a stack [u8; KEY_BUF_CAP].
+        let mut buf = [0u8; KEY_BUF_CAP];
+        let n = encode_key_into(&mut buf, &['\u{1F600}']);
+        assert_eq!(std::str::from_utf8(&buf[..n]).unwrap(), "1F600");
     }
 
     #[test]
     fn test_encode_key_multi() {
-        let mut buf = String::new();
-        encode_key_into(&mut buf, &['\u{1F468}', ZWJ, '\u{1F469}']);
-        assert_eq!(buf, "1F468_200D_1F469");
+        let mut buf = [0u8; KEY_BUF_CAP];
+        let n = encode_key_into(&mut buf, &['\u{1F468}', ZWJ, '\u{1F469}']);
+        assert_eq!(std::str::from_utf8(&buf[..n]).unwrap(), "1F468_200D_1F469");
     }
 
     #[test]
@@ -480,8 +609,9 @@ mod tests {
 
     #[test]
     fn test_match_single_emoji() {
+        // #113: match_emoji_at now takes a window slice (pos=0 is always current).
         let chars: Vec<char> = "😀".chars().collect();
-        let result = match_emoji_at(&chars, 0);
+        let result = match_emoji_at(&chars);
         assert!(result.is_some());
         let (name, consumed) = result.unwrap();
         assert_eq!(name, "grinning face");

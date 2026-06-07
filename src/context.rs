@@ -58,6 +58,12 @@ const TATWEEL: char = '\u{0640}';
 /// Binary dictionary format magic bytes.
 const MAGIC: &[u8; 4] = b"TRLD";
 
+/// Capacity-hint clamp for `ContextDict::from_bytes` (#116): a corrupt header
+/// count must not drive a huge `HashMap` pre-allocation. Using `data.len()` as
+/// the cap over-reserved buckets; 1,000,000 is a generous upper bound for any
+/// real dictionary while still bounding a bogus count (e.g. `u32::MAX`).
+const MAX_DICT_ENTRIES: usize = 1_000_000;
+
 /// Context dictionary with unigram and bigram tables.
 pub struct ContextDict {
     /// Skeleton → list of (diacritized form, frequency), sorted by frequency desc.
@@ -77,7 +83,9 @@ fn read_u16(data: &[u8], pos: usize) -> Result<u16, String> {
     let slice = data
         .get(pos..end)
         .ok_or("unexpected end of dictionary data")?;
-    Ok(u16::from_le_bytes(slice.try_into().unwrap()))
+    Ok(u16::from_le_bytes(
+        slice.try_into().unwrap(), // infallible: slice is exactly 2 bytes (bounds-checked above)
+    ))
 }
 
 /// Read a little-endian u32 at `pos`, bounds-checked (see [`read_u16`]).
@@ -86,7 +94,9 @@ fn read_u32(data: &[u8], pos: usize) -> Result<u32, String> {
     let slice = data
         .get(pos..end)
         .ok_or("unexpected end of dictionary data")?;
-    Ok(u32::from_le_bytes(slice.try_into().unwrap()))
+    Ok(u32::from_le_bytes(
+        slice.try_into().unwrap(), // infallible: slice is exactly 4 bytes (bounds-checked above)
+    ))
 }
 
 /// Read a UTF-8 string of `len` bytes at `pos`, bounds-checked (see [`read_u16`]).
@@ -127,10 +137,7 @@ impl ContextDict {
             return Err("Dictionary section offset overlaps header".into());
         }
 
-        // Capacity hints are clamped to data.len(): a record needs >=1 byte, so
-        // the declared count can never legitimately exceed the buffer size. This
-        // stops a bogus count (e.g. u32::MAX) from triggering a huge allocation.
-        let mut unigrams = HashMap::with_capacity(unigram_count.min(data.len()));
+        let mut unigrams = HashMap::with_capacity(unigram_count.min(MAX_DICT_ENTRIES));
         let mut pos = unigram_offset;
         for _ in 0..unigram_count {
             let skel_len = read_u16(data, pos)? as usize;
@@ -154,9 +161,9 @@ impl ContextDict {
             unigrams.insert(skeleton, forms);
         }
 
-        // Parse bigrams
+        // Parse bigrams (#116: same MAX_DICT_ENTRIES cap as unigrams)
         let mut bigrams: HashMap<String, HashMap<String, String>> =
-            HashMap::with_capacity(bigram_count.min(data.len()));
+            HashMap::with_capacity(bigram_count.min(MAX_DICT_ENTRIES));
         pos = bigram_offset;
         for _ in 0..bigram_count {
             let prev_len = read_u16(data, pos)? as usize;
@@ -254,29 +261,35 @@ pub fn tokenize(text: &str) -> Vec<Token> {
     let mut in_word = false;
 
     for c in text.chars() {
+        // #108: replaced O(N) slice scans with O(1) codepoint range/mask checks.
+        // Arabic diacritics are exactly U+064B–U+0655 plus U+0670 (SUPERSCRIPT ALEF).
+        // Hebrew niqqud are U+05B0–U+05C5 minus U+05BE (MAQAF), U+05C0 (PASEQ), U+05C3 (SOF PASUQ).
+        let is_arabic_diacritic = matches!(c as u32, 0x064B..=0x0655 | 0x0670);
+        let is_hebrew_niqqud =
+            matches!(c as u32, 0x05B0..=0x05C5) && !matches!(c as u32, 0x05BE | 0x05C0 | 0x05C3);
         let is_word_char = is_arabic_char(c)
             || is_hebrew_char(c)
-            || ARABIC_DIACRITICS.contains(&c)
-            || HEBREW_NIQQUD.contains(&c)
+            || is_arabic_diacritic
+            || is_hebrew_niqqud
             || c == TATWEEL;
 
         if is_word_char {
             if !in_word && !current.is_empty() {
+                // #109: mem::take moves the buffer (no clone + separate clear).
                 tokens.push(Token {
-                    text: current.clone(),
+                    text: std::mem::take(&mut current),
                     is_word: false,
                 });
-                current.clear();
             }
             in_word = true;
             current.push(c);
         } else {
             if in_word && !current.is_empty() {
+                // #109: mem::take moves the buffer (no clone + separate clear).
                 tokens.push(Token {
-                    text: current.clone(),
+                    text: std::mem::take(&mut current),
                     is_word: true,
                 });
-                current.clear();
             }
             in_word = false;
             current.push(c);
@@ -307,8 +320,8 @@ pub struct Token {
 /// boundary, so the bigram disambiguation tier fires across adjacent words.
 fn is_context_boundary(text: &str) -> bool {
     text.chars().any(|c| {
-        matches!(c, '\n' | '\r' | '.' | '!' | '?')
-            || matches!(c as u32, 0x061F | 0x06D4) // ؟ Arabic question mark, ۔ Arabic full stop
+        matches!(c, '\n' | '\r' | '.' | '!' | '?') || matches!(c as u32, 0x061F | 0x06D4)
+        // ؟ Arabic question mark, ۔ Arabic full stop
     })
 }
 
@@ -364,9 +377,23 @@ pub fn transliterate_context(
 // Global dictionary singletons (loaded lazily)
 // ---------------------------------------------------------------------------
 
-static ARABIC_DICT: OnceLock<Option<ContextDict>> = OnceLock::new();
-static PERSIAN_DICT: OnceLock<Option<ContextDict>> = OnceLock::new();
-static HEBREW_DICT: OnceLock<Option<ContextDict>> = OnceLock::new();
+/// Outcome of a dictionary load attempt. (#107)
+///
+/// Distinguished so that `_transliterate_context` can surface a "corrupt"
+/// error message that differs from the "not found / run bootstrap_dicts.sh"
+/// message — a corrupt dict requires a different remediation than an absent one.
+pub enum DictState {
+    /// Dictionary loaded successfully.
+    Ok(ContextDict),
+    /// No dictionary file was found in any search path.
+    Absent,
+    /// A file was found but could not be parsed; includes the error message.
+    Corrupt(String),
+}
+
+static ARABIC_DICT: OnceLock<DictState> = OnceLock::new();
+static PERSIAN_DICT: OnceLock<DictState> = OnceLock::new();
+static HEBREW_DICT: OnceLock<DictState> = OnceLock::new();
 
 // With embed-dicts, dictionaries are compiled into the binary.
 // Without it, they're loaded from the filesystem at runtime.
@@ -377,16 +404,18 @@ static PERSIAN_DATA: &[u8] = include_bytes!("../data/persian_dict.bin");
 #[cfg(feature = "embed-dicts")]
 static HEBREW_DATA: &[u8] = include_bytes!("../data/hebrew_dict.bin");
 
-/// Parse an embedded dictionary, logging (rather than silently dropping via
-/// `.ok()`) a parse error so a corrupt/unsupported embedded dictionary is
-/// diagnosable in embedded/WASM builds — mirroring `load_dict_from_fs`.
+/// Parse an embedded dictionary. (#107: returns `DictState` to distinguish
+/// parse errors from absence; #106: routes diagnostics through `emit_warning_stderr`.)
 #[cfg(feature = "embed-dicts")]
-fn load_embedded_dict(name: &str, data: &[u8]) -> Option<ContextDict> {
+fn load_embedded_dict(name: &str, data: &[u8]) -> DictState {
     match ContextDict::from_bytes(data) {
-        Ok(dict) => Some(dict),
+        Ok(dict) => DictState::Ok(dict),
         Err(e) => {
-            eprintln!("Warning: failed to load embedded {name} dict: {e}");
-            None
+            let msg = format!("translit: failed to load embedded {name} dict: {e}");
+            // #106: route through shared helper so Python applications can capture
+            // this diagnostic via warnings/logging.
+            crate::emit_warning_stderr(&msg);
+            DictState::Corrupt(e)
         }
     }
 }
@@ -415,11 +444,14 @@ fn dict_search_paths(name: &str) -> Vec<std::path::PathBuf> {
         if dir.is_absolute() {
             paths.push(dir.join(format!("{name}_dict.bin")));
         } else {
-            eprintln!(
-                "Warning: ignoring relative TRANSLIT_DICT_DIR={:?}; an absolute path is \
+            // #106: route through shared helper so Python applications can capture
+            // this diagnostic via warnings/logging rather than having it go directly
+            // to stderr, invisible to Python's warnings module.
+            crate::emit_warning_stderr(&format!(
+                "translit: ignoring relative TRANSLIT_DICT_DIR={:?}; an absolute path is \
                  required (security #61: no CWD-relative dictionary loading).",
                 dir.display()
-            );
+            ));
         }
     }
     paths.push(std::path::PathBuf::from(format!(
@@ -430,73 +462,101 @@ fn dict_search_paths(name: &str) -> Vec<std::path::PathBuf> {
 }
 
 /// Load a context dictionary from the first existing [`dict_search_paths`]
-/// location; `None` if none is present or the file is malformed.
+/// location. (#107: returns `DictState` to distinguish "file absent" from
+/// "file present but corrupt"; #106: routes diagnostics through `emit_warning_stderr`.)
 #[cfg(not(feature = "embed-dicts"))]
-fn load_dict_from_fs(name: &str) -> Option<ContextDict> {
+fn load_dict_from_fs(name: &str) -> DictState {
     let paths = dict_search_paths(name);
     for path in &paths {
         if let Ok(data) = std::fs::read(path) {
             match ContextDict::from_bytes(&data) {
-                Ok(dict) => return Some(dict),
+                Ok(dict) => return DictState::Ok(dict),
                 Err(e) => {
-                    eprintln!(
-                        "Warning: failed to load {name} dict from {}: {e}",
+                    // File exists but is malformed — a distinct error from "not found".
+                    // #106: route through shared helper so Python applications can capture
+                    // this diagnostic via warnings/logging.
+                    crate::emit_warning_stderr(&format!(
+                        "translit: failed to load {name} dict from {}: {e}",
                         path.display()
-                    );
-                    return None;
+                    ));
+                    return DictState::Corrupt(format!(
+                        "{name} dictionary at {} is corrupt: {e}",
+                        path.display()
+                    ));
                 }
             }
         }
     }
-    None
+    DictState::Absent
 }
 
 /// Try to load the Arabic context dictionary.
-pub fn get_arabic_dict() -> Option<&'static ContextDict> {
-    ARABIC_DICT
-        .get_or_init(|| {
-            #[cfg(feature = "embed-dicts")]
-            {
-                load_embedded_dict("arabic", ARABIC_DATA)
-            }
-            #[cfg(not(feature = "embed-dicts"))]
-            {
-                load_dict_from_fs("arabic")
-            }
-        })
-        .as_ref()
+///
+/// Returns:
+/// - `Ok(Some(dict))` — loaded successfully
+/// - `Ok(None)` — no dictionary file found (run `bootstrap_dicts.sh`)
+/// - `Err(msg)` — file found but corrupt (#107)
+pub fn get_arabic_dict() -> Result<Option<&'static ContextDict>, &'static str> {
+    match ARABIC_DICT.get_or_init(|| {
+        #[cfg(feature = "embed-dicts")]
+        {
+            load_embedded_dict("arabic", ARABIC_DATA)
+        }
+        #[cfg(not(feature = "embed-dicts"))]
+        {
+            load_dict_from_fs("arabic")
+        }
+    }) {
+        DictState::Ok(d) => Ok(Some(d)),
+        DictState::Absent => Ok(None),
+        DictState::Corrupt(msg) => Err(msg.as_str()),
+    }
 }
 
 /// Try to load the Persian context dictionary.
-pub fn get_persian_dict() -> Option<&'static ContextDict> {
-    PERSIAN_DICT
-        .get_or_init(|| {
-            #[cfg(feature = "embed-dicts")]
-            {
-                load_embedded_dict("persian", PERSIAN_DATA)
-            }
-            #[cfg(not(feature = "embed-dicts"))]
-            {
-                load_dict_from_fs("persian")
-            }
-        })
-        .as_ref()
+///
+/// Returns:
+/// - `Ok(Some(dict))` — loaded successfully
+/// - `Ok(None)` — no dictionary file found (run `bootstrap_dicts.sh`)
+/// - `Err(msg)` — file found but corrupt (#107)
+pub fn get_persian_dict() -> Result<Option<&'static ContextDict>, &'static str> {
+    match PERSIAN_DICT.get_or_init(|| {
+        #[cfg(feature = "embed-dicts")]
+        {
+            load_embedded_dict("persian", PERSIAN_DATA)
+        }
+        #[cfg(not(feature = "embed-dicts"))]
+        {
+            load_dict_from_fs("persian")
+        }
+    }) {
+        DictState::Ok(d) => Ok(Some(d)),
+        DictState::Absent => Ok(None),
+        DictState::Corrupt(msg) => Err(msg.as_str()),
+    }
 }
 
 /// Try to load the Hebrew context dictionary.
-pub fn get_hebrew_dict() -> Option<&'static ContextDict> {
-    HEBREW_DICT
-        .get_or_init(|| {
-            #[cfg(feature = "embed-dicts")]
-            {
-                load_embedded_dict("hebrew", HEBREW_DATA)
-            }
-            #[cfg(not(feature = "embed-dicts"))]
-            {
-                load_dict_from_fs("hebrew")
-            }
-        })
-        .as_ref()
+///
+/// Returns:
+/// - `Ok(Some(dict))` — loaded successfully
+/// - `Ok(None)` — no dictionary file found (run `bootstrap_dicts.sh`)
+/// - `Err(msg)` — file found but corrupt (#107)
+pub fn get_hebrew_dict() -> Result<Option<&'static ContextDict>, &'static str> {
+    match HEBREW_DICT.get_or_init(|| {
+        #[cfg(feature = "embed-dicts")]
+        {
+            load_embedded_dict("hebrew", HEBREW_DATA)
+        }
+        #[cfg(not(feature = "embed-dicts"))]
+        {
+            load_dict_from_fs("hebrew")
+        }
+    }) {
+        DictState::Ok(d) => Ok(Some(d)),
+        DictState::Absent => Ok(None),
+        DictState::Corrupt(msg) => Err(msg.as_str()),
+    }
 }
 
 #[cfg(test)]
@@ -582,12 +642,21 @@ mod tests {
 
         // Space between the two words: the bigram tier sees prev="ال" → kutub.
         let out = transliterate_context("ال كتب", None, &dict, |s, _| s.to_string());
-        assert!(out.contains("كُتُب"), "space must preserve bigram context: {out}");
-        assert!(!out.contains("كَتَبَ"), "must not fall back to the unigram: {out}");
+        assert!(
+            out.contains("كُتُب"),
+            "space must preserve bigram context: {out}"
+        );
+        assert!(
+            !out.contains("كَتَبَ"),
+            "must not fall back to the unigram: {out}"
+        );
 
         // A hard boundary (newline) between the words resets context → unigram.
         let out2 = transliterate_context("ال\nكتب", None, &dict, |s, _| s.to_string());
-        assert!(out2.contains("كَتَبَ"), "newline must reset to the unigram: {out2}");
+        assert!(
+            out2.contains("كَتَبَ"),
+            "newline must reset to the unigram: {out2}"
+        );
     }
 
     /// Build a minimal but valid dictionary buffer: one unigram ("ab" → [("AB", 5)])

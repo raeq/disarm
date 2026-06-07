@@ -285,17 +285,18 @@ pub fn _display_clean(text: &str) -> PyResult<String> {
 
 /// Sanitize user-submitted input for web applications.
 ///
-/// Pipeline: NFKC → strip_zalgo → confusables → strip_bidi → collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo
+///           → confusables → collapse_whitespace
 ///
 /// Designed for web developers who want to accept multilingual input in its
 /// original script while preventing malicious abuse:
 /// - **NFKC**: collapses fullwidth bypasses, ligatures, superscripts
+/// - **strip_bidi / zero-width / control**: removes invisibles *first* so they
+///   cannot split a run of combining marks (keeps the zalgo cap idempotent)
 /// - **strip_zalgo**: caps combining marks at 2 per base character, preventing
 ///   stacked diacritical abuse while preserving legitimate diacritics (é, ñ, ệ)
 /// - **confusables**: neutralizes cross-script homoglyph attacks
-/// - **strip_bidi**: removes bidirectional overrides that can visually reorder text
-/// - **collapse_whitespace**: strips control chars, zero-width injections,
-///   normalizes whitespace runs
+/// - **collapse_whitespace**: final whitespace-run normalization
 ///
 /// Unlike `security_clean`, this pipeline strips zalgo text.  Unlike
 /// `catalog_key`/`search_key`, it does *not* transliterate — the original

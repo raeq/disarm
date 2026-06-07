@@ -9,6 +9,15 @@ updates:
       actions:
         patterns: ["*"]
 
+  # Rust dependencies — keep Cargo.lock fresh for RustSec advisory scanning (#105).
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      cargo:
+        patterns: ["*"]
+
   # Python dependencies (dev/docs/test/bench extras; the package has no runtime deps).
   - package-ecosystem: "uv"
     directory: "/"

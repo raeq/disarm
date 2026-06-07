@@ -422,6 +422,8 @@ CLASS_METHODS = {
             "replace_with",
             "strict_iso9",
             "gost7034",
+            "tones",
+            "context",
         ],
         "fold_case": [],
         "collapse_whitespace": ["strip_control", "strip_zero_width"],

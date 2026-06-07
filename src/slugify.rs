@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 use crate::transliterate;
@@ -50,14 +51,10 @@ use crate::utils::floor_char_boundary;
 
 /// Configuration for slug generation, extracted from parameters.
 ///
-/// # Compatibility fields (no-op)
-///
-/// The following fields are accepted for python-slugify API compatibility
-/// but have **no effect** in the current implementation:
-///
-/// - `save_order`: Intended to preserve original word order when applying
-///   stopwords. The current implementation always preserves insertion order.
-#[allow(dead_code)]
+/// All fields are active.  `save_order` controls whether stopword removal is
+/// applied to interior tokens (`false`, default — all matching tokens removed)
+/// or only to leading/trailing tokens (`true` — python-slugify semantics that
+/// preserves relative word order). (#118)
 pub struct SlugConfig {
     pub separator: String,
     pub lowercase: bool,
@@ -91,6 +88,48 @@ impl Default for SlugConfig {
             decimal: true,
             hexadecimal: true,
         }
+    }
+}
+
+impl SlugConfig {
+    /// Build a `SlugConfig` from the 13 parameters shared by all four PyO3
+    /// entrypoints (`_slugify`, `_slugify_batch`, `_Slugifier::new`,
+    /// `_UniqueSlugifier::new`).
+    ///
+    /// Returns `Err(String)` if the regex pattern is invalid, or if `lang`
+    /// fails validation — callers at the PyO3 boundary convert the error to a
+    /// `TranslitError`. (#119)
+    pub fn from_pyargs(
+        separator: &str,
+        lowercase: bool,
+        max_length: usize,
+        word_boundary: bool,
+        save_order: bool,
+        stopwords: Vec<String>,
+        regex_pattern: Option<&str>,
+        replacements: Vec<(String, String)>,
+        allow_unicode: bool,
+        lang: Option<&str>,
+        entities: bool,
+        decimal: bool,
+        hexadecimal: bool,
+    ) -> Result<Self, String> {
+        let compiled_regex = regex_pattern.map(compile_regex).transpose()?;
+        Ok(Self {
+            separator: separator.to_owned(),
+            lowercase,
+            max_length,
+            word_boundary,
+            save_order,
+            stopwords,
+            regex_pattern: compiled_regex,
+            replacements,
+            allow_unicode,
+            lang: lang.map(std::borrow::ToOwned::to_owned),
+            entities,
+            decimal,
+            hexadecimal,
+        })
     }
 }
 
@@ -129,28 +168,24 @@ pub fn _slugify(
     decimal: bool,
     hexadecimal: bool,
 ) -> PyResult<String> {
+    // #119: delegate to SlugConfig::from_pyargs (shared constructor).
     crate::transliterate::validate_lang(lang)?;
-    let compiled_regex = regex_pattern
-        .map(compile_regex)
-        .transpose()
-        .map_err(crate::TranslitError::new_err)?;
-
-    let config = SlugConfig {
-        separator: separator.to_owned(),
+    let config = SlugConfig::from_pyargs(
+        separator,
         lowercase,
         max_length,
         word_boundary,
         save_order,
         stopwords,
-        regex_pattern: compiled_regex,
+        regex_pattern,
         replacements,
         allow_unicode,
-        lang: lang.map(std::borrow::ToOwned::to_owned),
+        lang,
         entities,
         decimal,
         hexadecimal,
-    };
-
+    )
+    .map_err(crate::TranslitError::new_err)?;
     Ok(slugify_impl(text, &config))
 }
 
@@ -173,14 +208,17 @@ pub(crate) fn slugify_impl_with_stopset(
         return String::new();
     }
 
-    let mut value = text.to_owned();
+    // #114: start as Cow::Borrowed(text) — no allocation until a mutating step
+    // actually changes the content, mirroring the pattern used in transliterate_impl.
+    let mut value: Cow<str> = Cow::Borrowed(text);
 
     // Step 1: Apply pre-transliteration replacements (single-pass when possible)
     if !config.replacements.is_empty() {
         if config.replacements.len() == 1 {
             // Common case: single replacement pair — .replace() is optimal.
             let (from, to) = &config.replacements[0];
-            value = value.replace(from.as_str(), to.as_str());
+            let replaced = value.replace(from.as_str(), to.as_str());
+            value = Cow::Owned(replaced);
         } else {
             // Multiple replacement pairs: single-pass scan to avoid N× full-string
             // scans and N allocations from chained .replace() calls.
@@ -205,37 +243,41 @@ pub(crate) fn slugify_impl_with_stopset(
                     i += ch.len_utf8();
                 }
             }
-            value = result;
+            value = Cow::Owned(result);
         }
     }
 
     // Step 2: Decode HTML entities (if enabled)
     if config.entities {
-        value = decode_entities(&value, config.decimal, config.hexadecimal);
+        let decoded = decode_entities(&value, config.decimal, config.hexadecimal);
+        value = Cow::Owned(decoded);
     }
 
     // Step 3: Transliterate (unless allow_unicode)
+    // into_owned() breaks the borrow from value so we can reassign it. (#114)
     if !config.allow_unicode {
-        value = transliterate::transliterate_impl(
-            &value,
-            config.lang.as_deref(),
-            crate::ErrorMode::Ignore,
-            "",
-            false,
-            false,
-            false,
-        )
-        .into_owned();
+        value = Cow::Owned(
+            transliterate::transliterate_impl(
+                &value,
+                config.lang.as_deref(),
+                crate::ErrorMode::Ignore,
+                "",
+                false,
+                false,
+                false,
+            )
+            .into_owned(),
+        );
     }
 
     // Step 4: Lowercase
     if config.lowercase {
-        value = value.to_lowercase();
+        value = Cow::Owned(value.to_lowercase());
     }
 
     // Step 5: Apply custom regex pattern
     if let Some(ref re) = config.regex_pattern {
-        value = re.replace_all(&value, "").to_string();
+        value = Cow::Owned(re.replace_all(&value, "").into_owned());
     }
 
     // Step 6: Replace non-alphanumeric with separator
@@ -272,7 +314,7 @@ pub(crate) fn slugify_impl_with_stopset(
             tmp_stopset = config.stopwords.iter().cloned().collect();
             &tmp_stopset
         };
-        slug = filter_stopwords(&slug, separator, stopset);
+        slug = filter_stopwords(&slug, separator, stopset, config.save_order);
     }
 
     // Step 8: Truncate to max_length (byte-length, char-boundary safe for allow_unicode)
@@ -294,17 +336,50 @@ pub(crate) fn slugify_impl_with_stopset(
 }
 
 /// Remove stopwords from a slug, splitting and rejoining on the separator.
-fn filter_stopwords(slug: &str, separator: &str, stopset: &HashSet<String>) -> String {
-    slug.split(separator)
-        .filter(|w| !stopset.contains(*w))
-        .enumerate()
-        .fold(String::with_capacity(slug.len()), |mut acc, (i, w)| {
-            if i > 0 {
-                acc.push_str(separator);
-            }
-            acc.push_str(w);
-            acc
-        })
+///
+/// When `save_order` is `true`, only leading and trailing stopwords are
+/// removed — interior stopwords are kept so the relative order of
+/// non-stopword tokens is preserved exactly as in the input (matching the
+/// python-slugify semantics for `save_order=True`). (#118)
+fn filter_stopwords(
+    slug: &str,
+    separator: &str,
+    stopset: &HashSet<String>,
+    save_order: bool,
+) -> String {
+    if save_order {
+        // Strip only leading and trailing stopword tokens; preserve interior ones.
+        let words: Vec<&str> = slug.split(separator).collect();
+        let start = words
+            .iter()
+            .position(|w| !stopset.contains(*w))
+            .unwrap_or(words.len());
+        let end = words
+            .iter()
+            .rposition(|w| !stopset.contains(*w))
+            .map_or(0, |i| i + 1);
+        let kept = if start < end { &words[start..end] } else { &[] };
+        kept.iter()
+            .enumerate()
+            .fold(String::with_capacity(slug.len()), |mut acc, (i, w)| {
+                if i > 0 {
+                    acc.push_str(separator);
+                }
+                acc.push_str(w);
+                acc
+            })
+    } else {
+        slug.split(separator)
+            .filter(|w| !stopset.contains(*w))
+            .enumerate()
+            .fold(String::with_capacity(slug.len()), |mut acc, (i, w)| {
+                if i > 0 {
+                    acc.push_str(separator);
+                }
+                acc.push_str(w);
+                acc
+            })
+    }
 }
 
 /// Truncate slug at a word boundary (separator), char-boundary safe.
@@ -498,28 +573,24 @@ pub fn _slugify_batch(
             crate::MAX_BATCH_SIZE
         );
     }
+    // #119: delegate to SlugConfig::from_pyargs (shared constructor).
     crate::transliterate::validate_lang(lang)?;
-
-    let compiled_regex = regex_pattern
-        .map(compile_regex)
-        .transpose()
-        .map_err(crate::TranslitError::new_err)?;
-
-    let config = SlugConfig {
-        separator: separator.to_owned(),
+    let config = SlugConfig::from_pyargs(
+        separator,
         lowercase,
         max_length,
         word_boundary,
         save_order,
         stopwords,
-        regex_pattern: compiled_regex,
+        regex_pattern,
         replacements,
         allow_unicode,
-        lang: lang.map(str::to_owned),
+        lang,
         entities,
         decimal,
         hexadecimal,
-    };
+    )
+    .map_err(crate::TranslitError::new_err)?;
 
     // Pre-build the stopword set once for the entire batch instead of
     // reconstructing it on every call to slugify_impl.
@@ -580,30 +651,25 @@ impl _Slugifier {
         decimal: bool,
         hexadecimal: bool,
     ) -> PyResult<Self> {
-        let compiled_regex = regex_pattern
-            .map(compile_regex)
-            .transpose()
-            .map_err(crate::TranslitError::new_err)?;
-
-        let stopset: HashSet<String> = stopwords.iter().cloned().collect();
-        Ok(Self {
-            config: SlugConfig {
-                separator: separator.to_owned(),
-                lowercase,
-                max_length,
-                word_boundary,
-                save_order,
-                stopwords,
-                regex_pattern: compiled_regex,
-                replacements,
-                allow_unicode,
-                lang: lang.map(std::borrow::ToOwned::to_owned),
-                entities,
-                decimal,
-                hexadecimal,
-            },
-            stopset,
-        })
+        // #119: delegate to SlugConfig::from_pyargs (shared constructor).
+        let config = SlugConfig::from_pyargs(
+            separator,
+            lowercase,
+            max_length,
+            word_boundary,
+            save_order,
+            stopwords,
+            regex_pattern,
+            replacements,
+            allow_unicode,
+            lang,
+            entities,
+            decimal,
+            hexadecimal,
+        )
+        .map_err(crate::TranslitError::new_err)?;
+        let stopset: HashSet<String> = config.stopwords.iter().cloned().collect();
+        Ok(Self { config, stopset })
     }
 
     fn slugify(&self, text: &str) -> String {
@@ -665,6 +731,7 @@ impl _UniqueSlugifier {
         decimal: bool,
         hexadecimal: bool,
     ) -> PyResult<Self> {
+        // #119: delegates to _Slugifier::new which uses SlugConfig::from_pyargs.
         let inner = _Slugifier::new(
             separator,
             lowercase,

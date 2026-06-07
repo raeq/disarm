@@ -89,6 +89,7 @@ _AWESOME_PARAM_RENAMES: dict[str, str] = {
 }
 
 # Parameters that emit deprecation warnings when used.
+# #131: "uids" removed — it is not deprecated, just wrong-class; handled separately below.
 _AWESOME_DEPRECATED_PARAMS: dict[str, str] = {
     "translate": (
         "awesome-slugify's translate parameter is ignored; "
@@ -96,7 +97,6 @@ _AWESOME_DEPRECATED_PARAMS: dict[str, str] = {
         "Use the lang parameter for language-specific transliteration."
     ),
     "fold_abbrs": "awesome-slugify's fold_abbrs is not supported in translit.",
-    "uids": ("The 'uids' parameter is only supported by UniqueSlugify; it is ignored by Slugify."),
 }
 
 
@@ -142,11 +142,26 @@ def _resolve_awesome_params(
                     "awesome-slugify's callable pretranslate is not supported; "
                     "use a dict or translit's replacements parameter instead."
                 )
+        # #131: "uids" is a UniqueSlugify-only param; passing it to Slugify is a
+        # wrong-class error, not a deprecation — emit UserWarning, not DeprecationWarning.
+        elif key == "uids":
+            warnings.warn(
+                "The 'uids' parameter is only supported by UniqueSlugify; it is ignored by Slugify.",
+                UserWarning,
+                stacklevel=3,
+            )
         # Deprecated params
         elif key in _AWESOME_DEPRECATED_PARAMS:
-            # translate/fold_abbrs only warn when they carry a truthy value;
-            # uids always warns (handled by UniqueSlugify, not here).
-            should_warn = key == "uids" or bool(value) if key == "fold_abbrs" else value is not None
+            # #122: rewritten as explicit if/elif/else to avoid operator-precedence
+            # ambiguity in the original ternary expression.
+            # - "translate": warn whenever the value is not None (any value is a misuse)
+            # - "fold_abbrs": warn only when the value is truthy (False/None means no-op)
+            if key == "translate":
+                should_warn = value is not None
+            elif key == "fold_abbrs":
+                should_warn = bool(value)
+            else:
+                should_warn = value is not None
             if should_warn:
                 warnings.warn(
                     _AWESOME_DEPRECATED_PARAMS[key],

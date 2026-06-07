@@ -172,21 +172,53 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// larger datasets should chunk.
 pub(crate) const MAX_BATCH_SIZE: usize = 100_000;
 
-/// Recover from a poisoned `RwLock` or `Mutex` **read** guard.
+/// Recover from a poisoned `RwLock` or `Mutex` guard (read **or** write).
 ///
-/// A poisoned lock means a thread panicked while holding it.  For read
-/// access the data may be stale but is still structurally valid (the write
-/// that panicked was rolled back by the `Drop` impl).  We log a diagnostic
-/// and continue rather than propagating the panic to every subsequent caller.
+/// A poisoned lock means a thread panicked while holding it.  For **read**
+/// guards, the data is structurally valid (no partial write occurred).  For
+/// **write** guards, the data may have been partially modified before the panic;
+/// correctness of the recovered state is the **caller's responsibility** — the
+/// caller must decide whether to continue, reset, or propagate an error.
+/// We log a diagnostic and return the guard rather than propagating the panic
+/// to every subsequent caller. (#126)
 pub(crate) fn recover_lock<T>(result: std::sync::LockResult<T>) -> T {
     result.unwrap_or_else(|e| {
-        eprintln!(
+        // #106: route this diagnostic through Python's warnings module so that
+        // Python applications can capture it via the `warnings`/`logging` APIs.
+        emit_warning_stderr(
             "translit: RwLock poisoned (a thread panicked while holding the lock). \
              Recovering from poisoned state — data may be inconsistent. \
-             This is a bug; please report it."
+             This is a bug; please report it.",
         );
         e.into_inner()
     })
+}
+
+/// Emit a warning to stderr.
+///
+/// Used by `recover_lock` and other non-PyO3 paths where a `Python<'_>` token
+/// is not available. Python-context callers should prefer `emit_py_warning`
+/// (which routes through `warnings.warn`) when a GIL token is at hand.
+pub(crate) fn emit_warning_stderr(msg: &str) {
+    eprintln!("translit warning: {msg}");
+}
+
+/// Emit a Python `UserWarning` via `warnings.warn`, falling back to stderr if
+/// the interpreter is unavailable. (#106)
+///
+/// Prefer this over bare `eprintln!` whenever a `Python<'_>` token is at hand
+/// so that Python applications can capture and redirect diagnostics.
+/// Non-PyO3 callsites (e.g. dict loading, lock recovery) must use
+/// `emit_warning_stderr` instead since they lack a `Python<'_>` token.
+#[allow(dead_code)] // utility for PyO3 callsites in sibling modules
+pub(crate) fn emit_py_warning(py: pyo3::Python<'_>, msg: &str) {
+    if py
+        .import("warnings")
+        .and_then(|w| w.call_method1("warn", (msg,)))
+        .is_err()
+    {
+        emit_warning_stderr(msg);
+    }
 }
 
 // NOTE: a previous `recover_lock_or_clear` reset the protected table to its

@@ -310,13 +310,14 @@ pub fn tokenize(text: &str) -> Vec<Token<'_>> {
 
 /// A token from Arabic/Hebrew text tokenization.
 ///
-/// `text` borrows a contiguous span of the input (#115): tokenization never
-/// rewrites characters, so each token is a slice of the original string. It is a
-/// `Cow` rather than `&str` so callers may substitute an owned form if needed,
-/// but `tokenize` itself allocates nothing per token.
+/// `text` is a `Cow<str>`: [`tokenize`] always returns `Cow::Borrowed` slices of
+/// the input (#115) — tokenization never rewrites characters, so it allocates
+/// nothing per token — but the type also lets callers construct or transform a
+/// `Token` holding `Cow::Owned` text when needed.
 #[derive(Debug, Clone)]
 pub struct Token<'a> {
-    /// The token text (a word or whitespace/punctuation span), borrowed from the input.
+    /// The token text — a word or whitespace/punctuation span. Borrowed from the
+    /// input by [`tokenize`]; may be owned if a caller constructs the token.
     pub text: Cow<'a, str>,
     /// True if this token is a word (Arabic/Hebrew script), false for non-word spans.
     pub is_word: bool,

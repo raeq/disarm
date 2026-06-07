@@ -62,8 +62,10 @@ fixes** — see *Upgrade notes*.
   **#111** lowered `MAX_CAPACITY_HINT` 256 MiB → 8 MiB; **#112/#113** emoji
   matching uses stack buffers + a fixed sliding window (no per-char `Vec`/`String`);
   **#114** slugify uses `Cow` (no eager `to_owned`); **#115** context `tokenize()`
-  returns borrowed (`Cow`) slices of the input — zero per-token allocation;
-  **#116** clamped the `ContextDict` capacity hint.
+  returns borrowed (`Cow`) slices of the input — zero per-token allocation
+  (**Rust API:** the crate-internal `context::Token.text` changed from `String`
+  to `Cow<'_, str>`; no effect on the Python API); **#116** clamped the
+  `ContextDict` capacity hint.
 
 ### Maintenance
 

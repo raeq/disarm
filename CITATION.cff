@@ -1,0 +1,33 @@
+# This CITATION.cff file was generated with cffinit-compatible metadata.
+# Visit https://citation-file-format.github.io/ to learn more.
+# After the first Zenodo release, add the concept DOI under `identifiers`.
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "translit"
+abstract: >-
+  Unicode canonicalization and TR39 confusable analysis: building blocks
+  for text-security pipelines (homoglyph, bidi, zalgo, and invisible-character
+  handling) plus standards-based transliteration to roman script. Implemented
+  in Rust with Python bindings.
+authors:
+  - family-names: "Quinn"
+    given-names: "Richard"
+    email: "quinn.richard@gmail.com"
+version: "0.6.2"
+date-released: "2026-06-08"
+license: MIT
+repository-code: "https://github.com/raeq/translit"
+url: "https://translit.readthedocs.io"
+keywords:
+  - transliteration
+  - romanization
+  - unicode
+  - unicode-security
+  - confusables
+  - homoglyph
+  - canonicalization
+  - normalization
+  - text-processing
+  - rust
+  - python

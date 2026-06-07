@@ -1433,7 +1433,7 @@ def decode_to_utf8(
     data: bytes,
     encoding: str | None = None,
     *,
-    min_confidence: float = 0.5,
+    min_confidence: float = 0.95,
 ) -> tuple[str, bool]:
     """Decode a byte sequence to UTF-8.
 
@@ -1453,10 +1453,12 @@ def decode_to_utf8(
         min_confidence: Minimum acceptable detection confidence (0.0–1.0)
             when auto-detecting. Raises TranslitError if the detected
             confidence is below this threshold. Has no effect when
-            ``encoding`` is provided explicitly. Defaults to ``0.5``
-            (secure-by-default): a low-confidence heuristic guess is rejected
-            rather than silently accepted. Pass ``min_confidence=0.0`` to accept
-            any guess (the pre-0.6.0 behaviour).
+            ``encoding`` is provided explicitly. Defaults to ``0.95``
+            (secure-by-default): the detector only reports ``0.50`` (ambiguous)
+            or ``0.95`` (confident), so a ``0.95`` default rejects the ambiguous
+            guess while accepting a confident one. (The earlier ``0.5`` default
+            was inert — ``0.50 < 0.50`` is false — so it never rejected; #103.)
+            Pass ``min_confidence=0.0`` to accept any guess.
 
     Returns:
         Tuple of (decoded_text, had_errors) where had_errors is True if

@@ -350,11 +350,18 @@ pub fn _demojize(
 /// built-in CLDR tables are consulted as a fallback.
 ///
 /// Pass `None` to reset to the built-in default (latest English CLDR).
+///
+/// Rejected once [`seal_registrations`](crate::tables::seal_registrations) has
+/// been called (#104): swapping the global emoji provider mutates process-global
+/// canonicalization that every caller shares, so it must obey the same seal as
+/// the other registration mutators.
 #[pyfunction]
 #[pyo3(name = "_set_emoji_provider")]
 #[pyo3(signature = (provider=None))]
-pub fn _set_emoji_provider(provider: Option<PyObject>) {
+pub fn _set_emoji_provider(provider: Option<PyObject>) -> PyResult<()> {
+    crate::transliterate::check_not_sealed("set_emoji_provider")?;
     set_provider(provider);
+    Ok(())
 }
 
 /// Strip modifier suffixes (": light skin tone", etc.) from a CLDR short name

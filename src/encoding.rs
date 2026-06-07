@@ -104,8 +104,13 @@ pub fn _detect_encoding(data: &Bound<'_, PyBytes>) -> (String, f64) {
 ///
 /// Supported encodings: all WHATWG encodings (UTF-8, windows-1252,
 /// ISO-8859-1, Shift_JIS, EUC-JP, EUC-KR, Big5, GB18030, etc.).
+// Default min_confidence requires HIGH confidence (#103): chardetng only ever
+// returns CONFIDENCE_LOW (0.50) or CONFIDENCE_HIGH (0.95), so the old 0.5 default
+// was inert (`0.50 < 0.50` is false → an unconfident guess was always accepted).
+// 0.95 rejects the ambiguous guess by default while accepting a confident one;
+// pass min_confidence=0.0 to accept any guess.
 #[pyfunction]
-#[pyo3(signature = (data, encoding=None, min_confidence=0.5))]
+#[pyo3(signature = (data, encoding=None, min_confidence=0.95))]
 pub fn _decode_to_utf8(
     data: &Bound<'_, PyBytes>,
     encoding: Option<&str>,

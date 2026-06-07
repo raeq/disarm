@@ -833,7 +833,9 @@ pub fn _list_langs() -> Vec<String> {
 }
 
 /// Reject a registration mutation once the tables have been sealed (#64).
-fn check_not_sealed(op: &str) -> PyResult<()> {
+/// `pub(crate)` so sibling modules (e.g. the emoji provider setter, #104) can
+/// enforce the same latch.
+pub(crate) fn check_not_sealed(op: &str) -> PyResult<()> {
     if tables::registrations_sealed() {
         return translit_err!(
             "{op}: registration tables are sealed (seal_registrations() was called); \

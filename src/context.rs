@@ -302,6 +302,16 @@ pub struct Token {
     pub is_word: bool,
 }
 
+/// A "hard" boundary that resets bigram context (#101): newlines and
+/// sentence-final punctuation. A plain inter-word space is deliberately *not* a
+/// boundary, so the bigram disambiguation tier fires across adjacent words.
+fn is_context_boundary(text: &str) -> bool {
+    text.chars().any(|c| {
+        matches!(c, '\n' | '\r' | '.' | '!' | '?')
+            || matches!(c as u32, 0x061F | 0x06D4) // ؟ Arabic question mark, ۔ Arabic full stop
+    })
+}
+
 /// Context-aware transliteration: resolve words via dictionary, then
 /// transliterate the diacritized forms using the existing engine.
 pub fn transliterate_context(
@@ -316,9 +326,15 @@ pub fn transliterate_context(
 
     for token in &tokens {
         if !token.is_word {
-            // Non-word (whitespace, punctuation) — pass through
+            // Non-word (whitespace, punctuation) — pass through.
             result.push_str(&token.text);
-            prev_skeleton = None;
+            // #101: a plain inter-word space must NOT clear bigram context, or
+            // the bigram disambiguation tier is unreachable in normal
+            // (space-separated) prose. Only a hard boundary — a newline or
+            // sentence-final punctuation — resets the previous-word context.
+            if is_context_boundary(&token.text) {
+                prev_skeleton = None;
+            }
             continue;
         }
 
@@ -549,6 +565,29 @@ mod tests {
 
         // Unknown word
         assert_eq!(dict.resolve(None, "xyz"), None);
+    }
+
+    #[test]
+    fn test_bigram_fires_across_space() {
+        // #101: bigram disambiguation must fire for normal space-separated prose.
+        // A plain inter-word space must NOT reset the previous-word context.
+        let mut unigrams = HashMap::new();
+        unigrams.insert("كتب".to_string(), vec![("كَتَبَ".to_string(), 100)]); // default: kataba
+        let mut bigrams: HashMap<String, HashMap<String, String>> = HashMap::new();
+        bigrams
+            .entry("ال".to_string())
+            .or_default()
+            .insert("كتب".to_string(), "كُتُب".to_string()); // after "ال" → kutub
+        let dict = ContextDict { unigrams, bigrams };
+
+        // Space between the two words: the bigram tier sees prev="ال" → kutub.
+        let out = transliterate_context("ال كتب", None, &dict, |s, _| s.to_string());
+        assert!(out.contains("كُتُب"), "space must preserve bigram context: {out}");
+        assert!(!out.contains("كَتَبَ"), "must not fall back to the unigram: {out}");
+
+        // A hard boundary (newline) between the words resets context → unigram.
+        let out2 = transliterate_context("ال\nكتب", None, &dict, |s, _| s.to_string());
+        assert!(out2.contains("كَتَبَ"), "newline must reset to the unigram: {out2}");
     }
 
     /// Build a minimal but valid dictionary buffer: one unigram ("ab" → [("AB", 5)])

@@ -722,7 +722,12 @@ impl _UniqueSlugifier {
                 let suffix = format!("{}{counter}", self.inner.config.separator);
                 if suffix.len() >= self.inner.config.max_length {
                     // Suffix alone exceeds max_length — use the suffix truncated.
-                    suffix[..self.inner.config.max_length].clone_into(&mut candidate);
+                    // Truncate on a char boundary (#102): the separator may be
+                    // multibyte, so a raw byte slice can land mid-codepoint and
+                    // panic across the FFI boundary as an uncatchable
+                    // PanicException.
+                    let boundary = floor_char_boundary(&suffix, self.inner.config.max_length);
+                    suffix[..boundary].clone_into(&mut candidate);
                 } else {
                     let avail = self.inner.config.max_length - suffix.len();
                     let boundary = floor_char_boundary(&base, avail);

@@ -639,3 +639,83 @@ class TestSortKeyDocstringHonest:
         doc = sort_key.__doc__ or ""
         assert "without accent stripping" not in doc
         assert "accent-folded" in doc
+
+
+class TestUniqueSlugifyMultibytePanic:
+    """UniqueSlugify must not panic across FFI on a multibyte separator (#102)."""
+
+    def test_multibyte_separator_small_maxlength_no_panic(self):
+        from translit import UniqueSlugify
+
+        # Suffix-truncation branch with a 3-byte separator and small max_length:
+        # previously sliced mid-codepoint → uncatchable PanicException. Now it
+        # produces valid UTF-8 (or raises a catchable TranslitError for an
+        # impossible constraint), but never a BaseException escaping `except`.
+        for ml in (4, 5, 8, 12):
+            us = UniqueSlugify(separator="—", max_length=ml)
+            try:
+                outs = [us("hello world") for _ in range(3)]
+            except Exception:
+                continue  # catchable error is fine; a panic would be a BaseException
+            for o in outs:
+                assert isinstance(o, str)
+                o.encode("utf-8")  # must be valid UTF-8
+
+    def test_impossible_constraint_raises_catchable(self):
+        from translit import TranslitError, UniqueSlugify
+
+        # max_length too small to fit any unique suffix → graceful catchable error,
+        # not a panic.
+        us = UniqueSlugify(separator="—", max_length=2)
+        us("hello")
+        with pytest.raises(TranslitError):
+            for _ in range(3):
+                us("hello")
+
+
+class TestDecodeConfidenceDefault:
+    """decode_to_utf8 default min_confidence actually gates (#103)."""
+
+    def test_default_requires_high_confidence(self):
+        import inspect
+
+        from translit import decode_to_utf8
+
+        # The old 0.5 default was inert (chardetng emits only 0.50/0.95, and
+        # 0.50 < 0.50 is false). The default now requires high confidence.
+        assert inspect.signature(decode_to_utf8).parameters["min_confidence"].default == 0.95
+
+    def test_threshold_above_detection_rejects(self):
+        from translit import TranslitError, decode_to_utf8
+
+        # A threshold above the detected confidence must reject (gate works).
+        with pytest.raises(TranslitError, match="confidence"):
+            decode_to_utf8(b"\xff\xfe\x80\x81", min_confidence=1.0)
+
+    def test_zero_accepts_any(self):
+        from translit import decode_to_utf8
+
+        s, _ = decode_to_utf8(b"\xff\xfe\x80\x81", min_confidence=0.0)
+        assert isinstance(s, str)
+
+
+class TestEmojiProviderSealed:
+    """set_emoji_provider obeys the registration seal (#104)."""
+
+    def test_provider_swap_rejected_after_seal(self):
+        import subprocess
+        import sys
+
+        code = (
+            "import translit as t\n"
+            "class P:\n"
+            "    def lookup(self, e): return 'X'\n"
+            "t.seal_registrations()\n"
+            "try:\n"
+            "    t.set_emoji_provider(P())\n"
+            "    print('NOT_GATED')\n"
+            "except t.TranslitError:\n"
+            "    print('GATED')\n"
+        )
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert "GATED" in r.stdout, f"stdout={r.stdout!r} stderr={r.stderr!r}"

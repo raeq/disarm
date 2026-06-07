@@ -119,6 +119,7 @@ pub fn _sanitize_filename(
     lang: Option<&str>,
     preserve_extension: bool,
 ) -> PyResult<String> {
+    crate::transliterate::validate_lang(lang)?;
     if text.is_empty() {
         return Ok(String::new());
     }

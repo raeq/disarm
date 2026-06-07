@@ -42,6 +42,13 @@ results that were keyed on the old (buggy) behaviour, regenerate them:
 - **`decode_to_utf8` default `min_confidence` changed `0.0` → `0.5`.** Low-confidence
   encoding guesses are now rejected by default instead of silently accepted; pass
   `min_confidence=0.0` to restore the old behaviour. (#66)
+- **Unknown `lang` codes now raise instead of silently falling back** (#68). A
+  typo'd code (`lang="RU"`, `lang="russian"`) used to behave exactly like
+  `lang=None` — quietly-wrong output — while `errors=`/`form=` rejected bad
+  values. `transliterate`, `slugify`, `sanitize_filename`, `catalog_key`,
+  `search_key`, `sort_key`, and `ml_normalize` now raise `TranslitError` listing
+  the valid codes. `"auto"`, the `nb`/`nn`/`da` aliases, and `register_lang()`
+  codes are accepted. (`target=` already validated.)
 
 ### Changed
 - **No library-imposed input-size limit** (#80, #65). The 10 MiB input cap on

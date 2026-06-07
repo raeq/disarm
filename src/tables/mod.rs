@@ -83,6 +83,19 @@ pub fn has_registered_lang(code: &str) -> bool {
     crate::recover_lock(LANG_TABLES.read()).contains_key(code)
 }
 
+/// Accepted BCP-47 language aliases that resolve to a built-in table but are not
+/// listed by `list_langs()` (Norwegian Bokmål/Nynorsk and Danish share the
+/// Norwegian overrides — see `lookup_lang`). Must be kept in sync with the alias
+/// arms there.
+const LANG_ALIASES: &[&str] = &["nb", "nn", "da"];
+
+/// True if `code` is a known language: a built-in profile, an accepted alias, or
+/// a user-registered one. Does not include the special `"auto"` detection mode
+/// (callers handle it).
+pub fn is_valid_lang(code: &str) -> bool {
+    BUILTIN_LANGS.contains(&code) || LANG_ALIASES.contains(&code) || has_registered_lang(code)
+}
+
 /// All built-in language codes, sorted.
 const BUILTIN_LANGS: &[&str] = &[
     "am",

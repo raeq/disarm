@@ -129,6 +129,7 @@ pub fn _slugify(
     decimal: bool,
     hexadecimal: bool,
 ) -> PyResult<String> {
+    crate::transliterate::validate_lang(lang)?;
     let compiled_regex = regex_pattern
         .map(compile_regex)
         .transpose()
@@ -496,6 +497,7 @@ pub fn _slugify_batch(
             crate::MAX_BATCH_SIZE
         );
     }
+    crate::transliterate::validate_lang(lang)?;
 
     let compiled_regex = regex_pattern
         .map(compile_regex)

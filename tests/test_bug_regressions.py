@@ -370,3 +370,17 @@ class TestNFKCCompatibilityFallback:
         from translit import strip_obfuscation
 
         assert strip_obfuscation("𝕳𝖊𝖑𝖑𝖔") == "Hello"  # case preserved
+
+
+class TestUnknownLangRaises:
+    """Unknown lang codes raise instead of silently falling back (#68)."""
+
+    @pytest.mark.parametrize("bad", ["RU", "russian", "zz", "EN"])
+    def test_unknown_lang_raises(self, bad):
+        with pytest.raises((ValueError, Exception), match="unknown language code"):
+            transliterate("Москва", lang=bad)
+
+    def test_valid_and_special_codes_accepted(self):
+        assert transliterate("Москва", lang="ru") == "Moskva"
+        assert transliterate("Москва", lang="auto") == "Moskva"
+        assert transliterate("Næss", lang="nb") == transliterate("Næss", lang="no")  # alias

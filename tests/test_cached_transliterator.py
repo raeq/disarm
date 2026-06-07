@@ -26,12 +26,16 @@ def test_option_binding() -> None:
 
 def test_self_invalidates_on_register_lang() -> None:
     # Leading-underscore code: the dynamic-coverage tests skip test-registered langs.
+    # The code must be registered before use now that unknown lang codes raise
+    # (#68); re-registering it changes the mapping and must invalidate the cache.
+    register_lang("_zzcache", {"ñ": "AAA"})
     t = make_cached_transliterator(lang="_zzcache")
-    before = t("ñ")  # '_zzcache' unregistered -> default
-    register_lang("_zzcache", {"ñ": "NYE"})
+    before = t("ñ")  # "AAA", cached
+    assert before == "AAA"
+    register_lang("_zzcache", {"ñ": "BBB"})  # override -> bumps mutation generation
     after = t("ñ")  # must self-invalidate and recompute
+    assert after == "BBB"
     assert before != after
-    assert after == transliterate("ñ", lang="_zzcache") == "NYE"
 
 
 def test_mutation_clears_cache() -> None:

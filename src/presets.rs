@@ -96,6 +96,7 @@ pub fn _security_clean(text: &str) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, emoji_style="cldr"))]
 pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyResult<String> {
+    crate::transliterate::validate_lang(lang)?;
     // Validate emoji_style — only two modes are supported.
     if !matches!(emoji_style, "cldr" | "none") {
         return Err(crate::TranslitError::new_err(format!(
@@ -146,6 +147,7 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, strict_iso9=false))]
 pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResult<String> {
+    crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — catalog keys should be pure ASCII where possible;
@@ -182,6 +184,7 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None))]
 pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
+    crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — search keys should be pure ASCII where possible)
@@ -214,6 +217,7 @@ pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None))]
 pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
+    crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
     let buf: String = text.nfkc().collect();
     // 2. Transliterate (always — sort keys need a consistent script)

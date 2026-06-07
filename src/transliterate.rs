@@ -18,6 +18,27 @@ use crate::ErrorMode;
 /// input-size check cannot foresee). The pre-pass output is therefore capped.
 const MAX_REPLACEMENT_OUTPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
 
+/// Validate a `lang` argument eagerly (#68).
+///
+/// An unknown code (typo like `"RU"` or `"russian"`) would otherwise silently
+/// fall back to the default tables and produce quietly-wrong output — unlike
+/// `errors=`/`form=`, which reject bad values. Returns an error listing the
+/// valid codes. The special `"auto"` detection mode and any `register_lang()`
+/// additions are accepted.
+pub fn validate_lang(lang: Option<&str>) -> PyResult<()> {
+    if let Some(l) = lang {
+        if l != "auto" && !tables::is_valid_lang(l) {
+            return translit_err!(
+                "unknown language code {:?}; expected one of (plus \"auto\" and any \
+                 register_lang() codes): {}",
+                l,
+                tables::list_langs().join(", ")
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Script class for tracking inter-script word spacing.
 ///
 /// Used to determine whether a space separator should be inserted between
@@ -58,6 +79,7 @@ pub fn _transliterate(
             "strict_iso9 and gost7034 are mutually exclusive",
         ));
     }
+    validate_lang(lang)?;
     let error_mode = ErrorMode::from_str(errors)?;
     // Apply global pre-transliteration replacements (no-op unless any are
     // registered). Runs before transliterate_impl — and thus before its ASCII
@@ -106,6 +128,7 @@ pub fn _transliterate_context(
             "strict_iso9 and gost7034 are mutually exclusive",
         ));
     }
+    validate_lang(lang)?;
     let error_mode = ErrorMode::from_str(errors)?;
     // Global pre-transliteration replacements (no-op unless registered), applied
     // before context tokenisation so forward transliteration behaves the same
@@ -881,6 +904,7 @@ pub fn _transliterate_batch(
             crate::MAX_BATCH_SIZE
         );
     }
+    validate_lang(lang)?;
     let error_mode = ErrorMode::from_str(errors)?;
     texts
         .iter()

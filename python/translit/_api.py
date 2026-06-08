@@ -888,6 +888,17 @@ def set_emoji_provider(provider: EmojiProvider | None = None) -> None:
 
     Pass None to reset to the built-in default (latest English CLDR).
 
+    .. note::
+        **Sequence-length cap (#199).** The provider's ``lookup()`` is offered a
+        look-ahead window of at most **9 codepoints** — the length of the longest
+        built-in CLDR emoji sequence. A provider cannot match a sequence longer
+        than 9 codepoints: the extra codepoints fall through to the built-in
+        tables / per-codepoint handling. This cap is fixed (it sizes a
+        stack-allocated scan window, so widening it would cost every ``demojize``
+        call); design custom mappings to key on ≤ 9 codepoints. Skin-tone and
+        variation-selector modifiers trailing a matched sequence are consumed
+        separately and do not count toward the 9.
+
     Args:
         provider: An object implementing the :class:`EmojiProvider` protocol,
             or None to reset to the built-in default.

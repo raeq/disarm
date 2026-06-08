@@ -54,9 +54,16 @@ class EmojiProvider(Protocol):
     def lookup(self, sequence: list[int]) -> str | None:
         """Look up the text name for an emoji codepoint sequence.
 
+        Called with successively shorter prefixes of the look-ahead window
+        (longest first), so return a name only for an exact match.
+
         Args:
             sequence: List of Unicode codepoints forming the emoji.
                       e.g. [0x1F468, 0x200D, 0x1F469] for a ZWJ sequence.
+                      At most **9 codepoints** are ever offered — the longest
+                      built-in CLDR sequence; sequences longer than 9 codepoints
+                      cannot be matched by a custom provider (#199). See
+                      :func:`~translit.set_emoji_provider`.
 
         Returns:
             The text name to substitute, or None if this provider

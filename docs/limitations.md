@@ -58,6 +58,12 @@ As of v0.3.0, translit added 2,553 codepoints: 11 new Unicode form/extension blo
 
 The `register_lang()` API allows users to add custom mappings for these scripts at runtime.
 
+### Custom `register_lang()` mappings do not apply to ASCII-keyed sources
+
+`register_lang()` is for non-ASCII source characters (e.g. `ä`→`ae`). A mapping keyed on an **ASCII** character — say `register_lang("xx", {"a": "Z"})` — does **not** apply to all-ASCII input: the core takes a fast path that returns all-ASCII text unchanged before consulting any language table, because ASCII is the transliteration *target* and is normally identity. This fast path is a core performance feature and is not gated on registered language profiles.
+
+To remap an ASCII character, use `register_replacements()` instead. Its keys are applied as a left-to-right pre-pass that runs *ahead* of the ASCII fast path, so ASCII keys there do take effect (e.g. `register_replacements({"@": "(at)"})` rewrites `"a@b"`→`"a(at)b"`).
+
 ### Lossy by design
 
 Transliteration to ASCII is inherently lossy. Multiple source characters map to the same ASCII output:

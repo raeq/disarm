@@ -79,8 +79,10 @@ from translit._types import EmojiProvider, ErrorMode, NormalizationForm, Platfor
 _MAX_BATCH_SIZE: int = 100_000
 _MAX_GRAPHEME_SPLIT_INPUT: int = 10 * 1024 * 1024  # 10 MiB
 
-# --- Enum validation (must match Rust-side messages; validated in Python so the
-#     ASCII fast-path cannot silently accept a typo'd value before reaching Rust, #99) ---
+# --- Enum validation (must match Rust-side messages; validated in Python so a
+#     typo'd value raises before reaching Rust — e.g. before normalize()'s ASCII
+#     fast-path could silently accept it, #99. transliterate()'s own fast path was
+#     removed in #197; its errors check below now front-loads the same error.) ---
 _VALID_ERROR_MODES: tuple[str, ...] = ("replace", "ignore", "preserve")
 _VALID_NORM_FORMS: tuple[str, ...] = ("NFC", "NFD", "NFKC", "NFKD")
 
@@ -123,9 +125,12 @@ def _check_transliterate_conflicts(
     (abjad vowel restoration) has no toned-pinyin output, so ``context`` +
     ``tones`` is rejected too.
 
-    Also validates the ``errors`` enum up front (#99): the ASCII fast-path returns
-    before reaching Rust, so a typo'd ``errors`` would otherwise silently no-op on
-    ASCII input and only raise later on the first non-ASCII string.
+    Also validates the ``errors`` enum up front (#99) so a typo'd value raises a
+    clear Python-side error before crossing into Rust, identically for scalar and
+    batch input. (This originally guarded a binding-side ASCII fast path that
+    returned before Rust ever saw the call; that fast path was removed in #197,
+    but front-loading the check keeps the error message and timing uniform across
+    input shapes.)
     """
     if errors not in _VALID_ERROR_MODES:
         raise TranslitError(f"errors must be 'replace', 'ignore', or 'preserve', got {errors!r}")
@@ -328,11 +333,11 @@ def transliterate(
             gost7034=gost7034,
         )
 
-    # Fast path: pure ASCII needs no transliteration (~30 ns vs ~240 ns PyO3
-    # call). Skipped when global replacements may be registered, since an
-    # ASCII-keyed replacement (e.g. "@" -> "(at)") must still be applied in Rust.
-    if text.isascii() and not _has_global_replacements:
-        return text
+    # No Python-side ASCII short-circuit (#197): the Rust core validates `lang`
+    # first and has its own borrowed ASCII fast-path (`Cow::Borrowed`), so every
+    # call goes through it. A binding-side fast-path here skipped that validation
+    # (a typo'd `lang` was silently accepted on ASCII input, re-opening #68) and
+    # duplicated the core's own optimization — a per-binding drift liability.
     return _transliterate(
         text,
         lang=lang,
@@ -1577,18 +1582,8 @@ def script_info(script: str | Script) -> ScriptMeta:
 
 # Incremented whenever the global registration tables (languages or replacements)
 # change, so caches built by make_cached_transliterator can detect staleness and
-# self-invalidate.  Named *registration* to distinguish it from the companion
-# _has_global_replacements gate. (#128: renamed from _mutation_generation)
+# self-invalidate. (#128: renamed from _mutation_generation)
 _registration_generation: int = 0
-
-# Conservative gate for the pure-ASCII fast path in transliterate(): False means
-# *definitely no* global replacements are registered (so an ASCII string can be
-# returned without crossing into Rust); True means there *may* be some, so the
-# call must go through Rust where apply_replacements() runs. clear_replacements()
-# resets it to False; remove_replacement() leaves it True (we can't cheaply tell
-# from Python whether the table is now empty — staying True only costs a Rust
-# round-trip that finds an empty table, never correctness).
-_has_global_replacements: bool = False
 
 
 def _bump_registration_generation() -> None:
@@ -1607,6 +1602,15 @@ def register_lang(code: str, mappings: dict[str, str]) -> None:
         it from request-handling or library code in a multi-tenant process, where
         it would silently alter every other caller's output. Call
         :func:`seal_registrations` after startup to make further changes raise.
+
+    .. note::
+        Mappings keyed on **ASCII** characters do not apply to pure-ASCII input.
+        The core takes a fast path that returns all-ASCII text unchanged before
+        consulting language tables (ASCII is the transliteration *target*, so it
+        is normally identity). Language profiles are meant for non-ASCII source
+        characters (e.g. ``ä``→``ae``). To remap an ASCII character, use
+        :func:`register_replacements` instead — its keys run as a pre-pass that
+        executes ahead of the ASCII fast path and therefore do apply.
 
     Args:
         code: Language code string (e.g. "xx", "custom").
@@ -1653,10 +1657,7 @@ def register_replacements(replacements: dict[str, str]) -> None:
         'hello(tm)'
         >>> clear_replacements()
     """
-    global _has_global_replacements
     _register_replacements(replacements)
-    if replacements:
-        _has_global_replacements = True
     _bump_registration_generation()
 
 
@@ -1689,9 +1690,7 @@ def clear_replacements() -> None:
         >>> register_replacements({"©": "(c)", "®": "(r)"})
         >>> clear_replacements()
     """
-    global _has_global_replacements
     _clear_replacements()
-    _has_global_replacements = False
     _bump_registration_generation()
 
 

@@ -139,32 +139,37 @@ fn main() {
     );
 
     // --- Transliteration: language-specific tables ---
-    let lang_tables = [
-        ("lang_de", "LANG_DE"),
-        ("lang_no", "LANG_NO"),
-        ("lang_sv", "LANG_SV"),
-        ("lang_is", "LANG_IS"),
-        ("lang_et", "LANG_ET"),
-        ("lang_fr", "LANG_FR"),
-        ("lang_es", "LANG_ES"),
-        ("lang_pt", "LANG_PT"),
-        ("lang_it", "LANG_IT"),
-        ("lang_tr", "LANG_TR"),
-        ("lang_nl", "LANG_NL"),
-        ("lang_ca", "LANG_CA"),
-        ("lang_vi", "LANG_VI"),
-        ("lang_el", "LANG_EL"),
-        ("lang_bg", "LANG_BG"),
-        ("lang_uk", "LANG_UK"),
-        ("iso9", "ISO9"),
-        ("gost7034", "GOST7034"),
-        ("lang_ru", "LANG_RU"),
-        ("lang_sr", "LANG_SR"),
-        ("lang_ja", "LANG_JA"),
-        ("lang_ja_kunrei", "LANG_JA_KUNREI"),
-        ("lang_fa", "LANG_FA"),
-        ("lang_am", "LANG_AM"),
-    ];
+    // Auto-discover language override tables by scanning the data dir, so adding a
+    // language is just dropping in a `translit_lang_<code>.tsv` file — no hand-edit of a
+    // hardcoded list that could silently drop a language (#74). The const name is the
+    // file stem upper-cased (`lang_de` → `LANG_DE`), matching the names the dispatch in
+    // `src/tables/transliteration.rs` references. The two romanization *standards*
+    // (iso9, gost7034) are not languages, so they stay explicit.
+    let mut lang_tables: Vec<(String, String)> = Vec::new();
+    for entry in fs::read_dir(data_dir).expect("read src/tables/data") {
+        let name = entry
+            .expect("data dir entry")
+            .file_name()
+            .to_string_lossy()
+            .into_owned();
+        if let Some(code) = name
+            .strip_prefix("translit_lang_")
+            .and_then(|s| s.strip_suffix(".tsv"))
+        {
+            let file_stem = format!("lang_{code}");
+            let const_name = file_stem.to_uppercase();
+            lang_tables.push((file_stem, const_name));
+        }
+    }
+    assert!(
+        lang_tables.len() >= 20,
+        "expected ≥20 translit_lang_*.tsv override tables, found {} — wrong data dir?",
+        lang_tables.len()
+    );
+    lang_tables.push(("iso9".to_string(), "ISO9".to_string()));
+    lang_tables.push(("gost7034".to_string(), "GOST7034".to_string()));
+    // Deterministic order → reproducible generated output.
+    lang_tables.sort();
 
     // Generate each language table to its own file, then combine
     let mut all_lang_code = String::new();
@@ -291,8 +296,7 @@ fn build_char_str_map(entries: &BTreeMap<u32, String>, name: &str, vis: &str) ->
     let formatted: Vec<(char, String)> = entries
         .iter()
         .map(|(&cp, value)| {
-            let ch = char::from_u32(cp)
-                .unwrap_or_else(|| panic!("Invalid codepoint U+{cp:04X}"));
+            let ch = char::from_u32(cp).unwrap_or_else(|| panic!("Invalid codepoint U+{cp:04X}"));
             (ch, format!("\"{}\"", escape_str(value)))
         })
         .collect();

@@ -733,6 +733,50 @@ mod tests {
     }
 
     #[test]
+    fn test_lang_override_tables_are_registered_and_dispatched() {
+        // #74: every translit_lang_*.tsv override table must be (a) registered in
+        // BUILTIN_LANGS and (b) reachable via lookup_lang — so dropping in a new override
+        // file that isn't wired up fails loudly instead of silently doing nothing.
+        // (build.rs auto-discovers the files; this guards the two hand-maintained sides:
+        // the BUILTIN_LANGS list and the lookup_lang dispatch.)
+        let data_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src/tables/data");
+        let mut checked = 0usize;
+        for entry in std::fs::read_dir(data_dir).expect("read data dir") {
+            let fname = entry.unwrap().file_name().into_string().unwrap();
+            let Some(stem) = fname
+                .strip_prefix("translit_lang_")
+                .and_then(|s| s.strip_suffix(".tsv"))
+            else {
+                continue;
+            };
+            let code = stem.replace('_', "-"); // file `lang_ja_kunrei` → code `ja-kunrei`
+            assert!(
+                BUILTIN_LANGS.contains(&code.as_str()),
+                "translit_lang_{stem}.tsv exists but '{code}' is not in BUILTIN_LANGS"
+            );
+            // Reachability: the first override entry must resolve through lookup_lang.
+            let content = std::fs::read_to_string(format!("{data_dir}/{fname}")).unwrap();
+            let first = content
+                .lines()
+                .map(str::trim_start)
+                .find(|l| !l.is_empty() && !l.starts_with('#'))
+                .expect("override file has at least one entry");
+            let hex = first.split('\t').next().unwrap().trim();
+            let cp = u32::from_str_radix(hex, 16).expect("valid hex codepoint");
+            let ch = char::from_u32(cp).expect("valid codepoint");
+            assert!(
+                lookup_lang(&code, ch).is_some(),
+                "lookup_lang(\"{code}\", U+{cp:04X}) is None — translit_lang_{stem}.tsv not dispatched"
+            );
+            checked += 1;
+        }
+        assert!(
+            checked >= 20,
+            "expected ≥20 override tables, checked {checked}"
+        );
+    }
+
+    #[test]
     fn test_list_langs_sorted() {
         let langs = list_langs();
         let mut sorted = langs.clone();

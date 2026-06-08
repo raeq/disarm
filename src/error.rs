@@ -332,6 +332,13 @@ mod tests {
     /// not yet wired into the Python surface).
     #[test]
     fn codes_are_nonempty_snake_case() {
+        // Intentionally invalid pattern: we only need a real `regex::Error`
+        // value to populate the `RegexCompile` sample below. Hoisted to a `let`
+        // so the `#[allow]` can scope the lint (newer stable clippy's
+        // `invalid_regex` flags the literal `"["`; expression-level attributes
+        // are not stable inside the array literal).
+        #[allow(clippy::invalid_regex)]
+        let invalid_regex_err = regex::Regex::new("[").unwrap_err();
         let samples = [
             Error::InvalidErrorMode { got: "x".into() },
             Error::InvalidNormForm { got: "x".into() },
@@ -367,7 +374,7 @@ mod tests {
             },
             Error::RegexTooLong { len: 2, max: 1 },
             Error::RegexCompile {
-                source: regex::Regex::new("[").unwrap_err(),
+                source: invalid_regex_err,
             },
             Error::UniqueSlugAttemptsExceeded {
                 max: 1,

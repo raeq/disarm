@@ -90,12 +90,14 @@ pub(crate) enum Error {
 
     /// Unknown `lang` code (eager validation, #68).
     #[error(
-        "unknown language code {got:?}; expected \"auto\", a BCP-47 alias \
-         (nb, nn, da), or one of: {valid}"
+        "unknown language code {got:?}{suggestion}; expected \"auto\", a BCP-47 \
+         alias (nb, nn, da), or one of: {valid}"
     )]
     UnknownLang {
         /// The offending code (rendered with `{:?}` to match the original).
         got: String,
+        /// Pre-rendered " (did you mean 'xx'?)" hint, or empty (#186).
+        suggestion: String,
         /// Comma-joined list of valid codes.
         valid: String,
     },
@@ -210,10 +212,13 @@ pub(crate) enum Error {
         max: usize,
     },
 
-    /// Caller-supplied regex failed to compile. The flattened `regex::Error`
-    /// text is preserved (cause-chain enrichment is #188).
-    #[error("Invalid regex: {source}")]
+    /// Caller-supplied regex failed to compile. Echoes the offending pattern
+    /// (#186); the `regex::Error` Display carries the position/caret detail.
+    /// Cause-chain enrichment is #188.
+    #[error("invalid regex_pattern {pattern:?}: {source}")]
     RegexCompile {
+        /// The offending pattern, echoed back to the caller.
+        pattern: String,
         /// The underlying regex compile error.
         source: regex::Error,
     },
@@ -245,10 +250,12 @@ pub(crate) enum Error {
     },
 
     /// Explicit encoding label not recognised (`decode_to_utf8`).
-    #[error("Unknown encoding: '{got}'")]
+    #[error("Unknown encoding: '{got}'{suggestion}")]
     UnknownEncoding {
         /// The unrecognised label.
         got: String,
+        /// Pre-rendered " (did you mean 'UTF-8'?)" hint, or empty (#186).
+        suggestion: String,
     },
 
     /// Auto-detected encoding label is not supported (`decode_to_utf8`).
@@ -275,9 +282,9 @@ pub(crate) enum Error {
 
     /// Reverse transliteration not supported for the requested language. Maps to
     /// `UnsupportedError` (#183).
-    #[error("reverse transliteration not supported for lang={lang:?}; available: {available}")]
+    #[error("reverse transliteration not supported for lang '{lang}'; available: {available}")]
     ReverseUnsupportedLang {
-        /// The requested language (rendered with `{:?}`).
+        /// The requested language.
         lang: String,
         /// Comma-joined list of supported languages.
         available: String,
@@ -444,6 +451,7 @@ mod tests {
             Error::InvalidTargetScript { got: "x".into() },
             Error::UnknownLang {
                 got: "x".into(),
+                suggestion: String::new(),
                 valid: "a, b".into(),
             },
             Error::MutuallyExclusiveBare,
@@ -470,6 +478,7 @@ mod tests {
             },
             Error::RegexTooLong { len: 2, max: 1 },
             Error::RegexCompile {
+                pattern: "[".into(),
                 source: invalid_regex_err,
             },
             Error::UniqueSlugAttemptsExceeded {
@@ -481,7 +490,10 @@ mod tests {
                 separator: "-".into(),
                 min_unique_len: 2,
             },
-            Error::UnknownEncoding { got: "x".into() },
+            Error::UnknownEncoding {
+                got: "x".into(),
+                suggestion: String::new(),
+            },
             Error::UnsupportedAutoEncoding { got: "x".into() },
             Error::EncodingConfidenceTooLow {
                 confidence: 0.5,

@@ -52,6 +52,32 @@ pub fn detect_encoding_impl(bytes: &[u8]) -> (String, f64) {
 /// When `encoding` is `None` the encoding is auto-detected. If the
 /// detection confidence is below `min_confidence` an error is returned
 /// so the caller can require a minimum quality threshold.
+/// Common encoding labels offered as "did you mean …?" hints for an unrecognised
+/// label (#186). Not exhaustive — encoding_rs accepts ~220 labels — just the
+/// canonical names a typo is most likely aimed at.
+const COMMON_ENCODING_LABELS: &[&str] = &[
+    "utf-8",
+    "utf-16le",
+    "utf-16be",
+    "windows-1250",
+    "windows-1251",
+    "windows-1252",
+    "windows-1254",
+    "iso-8859-1",
+    "iso-8859-2",
+    "iso-8859-15",
+    "koi8-r",
+    "koi8-u",
+    "shift_jis",
+    "euc-jp",
+    "iso-2022-jp",
+    "euc-kr",
+    "big5",
+    "gbk",
+    "gb18030",
+    "macintosh",
+];
+
 pub fn decode_to_utf8_impl(
     bytes: &[u8],
     encoding: Option<&str>,
@@ -59,8 +85,16 @@ pub fn decode_to_utf8_impl(
 ) -> Result<(String, bool), crate::Error> {
     let enc = if let Some(name) = encoding {
         encoding_rs::Encoding::for_label(name.as_bytes()).ok_or_else(|| {
+            // "did you mean …?" against the common labels (#186); encoding_rs
+            // does not enumerate its ~220 accepted labels, so we hint from the
+            // popular subset a typo most likely targets.
+            let suggestion =
+                crate::utils::closest_match(name, COMMON_ENCODING_LABELS.iter().copied())
+                    .map(|s| format!(" (did you mean '{s}'?)"))
+                    .unwrap_or_default();
             crate::Error::UnknownEncoding {
                 got: name.to_owned(),
+                suggestion,
             }
         })?
     } else {

@@ -43,7 +43,10 @@ fn compile_regex(pattern: &str) -> Result<regex::Regex, crate::Error> {
     regex::RegexBuilder::new(pattern)
         .size_limit(MAX_REGEX_DFA_BYTES)
         .build()
-        .map_err(|e| crate::Error::RegexCompile { source: e })
+        .map_err(|e| crate::Error::RegexCompile {
+            pattern: pattern.to_owned(),
+            source: e,
+        })
 }
 
 use crate::utils::floor_char_boundary;
@@ -1132,7 +1135,9 @@ mod tests {
     fn test_compile_regex_invalid() {
         // Syntactically invalid pattern must return an error regardless of length.
         let err = compile_regex(r"[unclosed").unwrap_err().to_string();
-        assert!(err.contains("Invalid regex"), "unexpected error: {err}");
+        // The error echoes the offending pattern (#186) plus the engine's detail.
+        assert!(err.contains("regex_pattern"), "unexpected error: {err}");
+        assert!(err.contains("[unclosed"), "pattern not echoed: {err}");
     }
 
     mod proptest_properties {

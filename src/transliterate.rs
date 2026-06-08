@@ -31,9 +31,21 @@ pub(crate) fn validate_lang(lang: Option<&str>) -> Result<(), crate::Error> {
             // `list_langs()` already includes any `register_lang()` codes, so
             // we only need to call out the extras it omits: the "auto" mode and
             // the BCP-47 aliases accepted by `is_valid_lang`.
+            let valid = tables::list_langs();
+            // "did you mean …?" hint against the valid codes + accepted aliases (#186).
+            let suggestion = crate::utils::closest_match(
+                l,
+                valid
+                    .iter()
+                    .map(String::as_str)
+                    .chain(["auto", "nb", "nn", "da"]),
+            )
+            .map(|s| format!(" (did you mean '{s}'?)"))
+            .unwrap_or_default();
             return Err(crate::Error::UnknownLang {
                 got: l.to_owned(),
-                valid: tables::list_langs().join(", "),
+                suggestion,
+                valid: valid.join(", "),
             });
         }
     }

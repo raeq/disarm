@@ -739,7 +739,10 @@ mod tests {
         // file that isn't wired up fails loudly instead of silently doing nothing.
         // (build.rs auto-discovers the files; this guards the two hand-maintained sides:
         // the BUILTIN_LANGS list and the lookup_lang dispatch.)
-        let data_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tables/data");
+        let data_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("tables")
+            .join("data");
         let mut checked = 0usize;
         for entry in std::fs::read_dir(&data_dir).expect("read data dir") {
             let fname = entry.unwrap().file_name().into_string().unwrap();

@@ -388,13 +388,17 @@ fn demojize_impl(
                 }
                 win.advance(1);
             }
-            // Parity with the recognized-emoji path (#200): a visible token was
-            // emitted (`replace_with` in Replace, the raw mark in Preserve), so
-            // flag it the same way so a following alphanumeric is separated by a
-            // space — just as a recognized emoji's name would be. Ignore emits
-            // nothing, so it must NOT set the flag (that would inject a spurious
-            // leading space before the next word).
-            last_was_emoji = !matches!(error_mode, ErrorMode::Ignore);
+            // Parity with the recognized-emoji path (#200): flag the position so
+            // a following alphanumeric is separated by a space — but only when a
+            // *visible* token was actually emitted, otherwise we inject a
+            // spurious leading space. Preserve always writes the raw mark;
+            // Replace writes `replace_with`, which may be empty ("drop it");
+            // Ignore writes nothing.
+            last_was_emoji = match error_mode {
+                ErrorMode::Preserve => true,
+                ErrorMode::Replace => !replace_with.is_empty(),
+                ErrorMode::Ignore => false,
+            };
             continue;
         }
 

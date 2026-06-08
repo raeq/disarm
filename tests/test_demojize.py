@@ -203,6 +203,14 @@ class TestUnknownEmojiSpacingParity:
     def test_ignore_adds_no_spurious_space(self) -> None:
         assert demojize(self.UNKNOWN + "abc", errors="ignore") == "abc"
 
+    def test_replace_with_empty_string_adds_no_spurious_space(self) -> None:
+        # replace_with="" means "drop it": nothing visible is emitted, so no
+        # space must be injected before the following word (#200 review).
+        assert demojize(self.UNKNOWN + "abc", errors="replace", replace_with="") == "abc"
+
+    def test_replace_with_nonempty_separates(self) -> None:
+        assert demojize(self.UNKNOWN + "abc", errors="replace", replace_with="X") == "X abc"
+
     def test_matches_recognized_emoji_spacing(self) -> None:
         # Recognized emoji already space before a following alnum; unknown now agrees.
         assert demojize("😀abc") == "grinning face abc"

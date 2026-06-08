@@ -51,9 +51,10 @@ fn truncate_error_text(text: &str) -> Cow<'_, str> {
 /// - **Lowercase first word**, unless it is a proper noun / identifier
 ///   (`UniqueSlugifier`, `register_lang()`, `max_length`, `strict_iso9`).
 /// - **Single quotes** around an echoed string value: `got '{got}'`, not
-///   `{got:?}`. The exceptions are the regex `pattern` and the `register_lang`
-///   bad `keys`, which render *arbitrary* user content with `{:?}` (double
-///   quotes) so embedded quotes stay unambiguous. (The `Untranslatable` char
+///   `{got:?}`. The exceptions are the three caller-controlled arbitrary-content
+///   fields — the regex `pattern`, the `register_lang` bad `keys`, and the
+///   unique-slug `separator` — which use `{:?}` (double quotes) so embedded
+///   quotes or control characters stay unambiguous. (The `Untranslatable` char
 ///   also uses `{:?}`, but `char` Debug already renders single quotes while
 ///   safely escaping control characters.)
 /// - **Names the offending value and a remedy** (valid options, a limit, a
@@ -251,13 +252,13 @@ pub(crate) enum Error {
 
     /// `UniqueSlugifier` `max_length` too small to ever produce a unique slug.
     #[error(
-        "max_length={max_length} is too small to generate a unique slug with separator '{separator}': \
+        "max_length={max_length} is too small to generate a unique slug with separator {separator:?}: \
          need at least {min_unique_len} bytes for the separator plus one counter digit"
     )]
     UniqueSlugMaxLengthTooSmall {
         /// The configured `max_length`.
         max_length: usize,
-        /// The configured separator.
+        /// The configured separator (rendered with `{:?}` — caller-controlled).
         separator: String,
         /// The minimum length required.
         min_unique_len: usize,
@@ -706,7 +707,9 @@ mod tests {
         fn allows_double_quote(e: &Error) -> bool {
             matches!(
                 e,
-                Error::RegexCompile { .. } | Error::RegisterLangBadKeys { .. }
+                Error::RegexCompile { .. }
+                    | Error::RegisterLangBadKeys { .. }
+                    | Error::UniqueSlugMaxLengthTooSmall { .. }
             )
         }
 

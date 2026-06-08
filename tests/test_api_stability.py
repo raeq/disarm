@@ -32,6 +32,8 @@ from translit import (
 # ---------------------------------------------------------------------------
 
 EXPECTED_ALL = {
+    # Metadata
+    "__version__",
     # Core transforms
     "transliterate",
     "dedup_batch",

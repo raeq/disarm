@@ -100,8 +100,9 @@ Because `TranslitError` subclasses `ValueError`, you can also catch it as a
 ## Error messages
 
 Error messages name the offending value and (where applicable) the valid options or
-remedy. They originate in the Rust core — with the `errors=`/`form=` text currently
-mirrored verbatim in the Python wrapper as well (see the note below):
+remedy. Each `errors=` / `form=` / `platform=` value is validated **once, in the Rust
+core** (#185) — the Python wrapper no longer keeps a hand-synced copy — so the message
+text has a single source:
 
 ```text
 form must be 'NFC', 'NFD', 'NFKC', or 'NFKD', got 'INVALID'
@@ -109,7 +110,3 @@ errors must be 'replace', 'ignore', or 'preserve', got 'unknown'
 platform must be 'universal', 'windows', or 'posix', got 'bsd'
 Invalid regex: <details from the regex engine>
 ```
-
-> The `errors=`/`form=` checks are, for now, *also* validated in the Python wrapper with
-> identical text; collapsing that duplication into the core is tracked in
-> [#185](https://github.com/raeq/translit/issues/185).

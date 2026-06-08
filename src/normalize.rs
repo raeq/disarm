@@ -20,6 +20,14 @@ fn validate_form(form: &str) -> Result<(), crate::Error> {
 #[pyo3(signature = (text, *, form="NFC"))]
 pub fn _normalize(text: &str, form: &str) -> PyResult<String> {
     validate_form(form)?;
+    // ASCII is invariant under all four normalization forms (no decomposition,
+    // no composition), so skip the normalizer for pure-ASCII input. This fast
+    // path moved down from the Python wrapper (#185) so that `form` is still
+    // validated above on every call — the wrapper's version sat *before* its own
+    // validation and would have accepted a typo'd form on ASCII input.
+    if text.is_ascii() {
+        return Ok(text.to_owned());
+    }
     Ok(match form {
         "NFC" => text.nfc().collect(),
         "NFD" => text.nfd().collect(),

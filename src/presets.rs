@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pyo3::prelude::*;
 use unicode_normalization::UnicodeNormalization;
 
@@ -7,6 +9,27 @@ use crate::{case_fold, confusables, emoji, transliterate, whitespace, zalgo};
 // input is the caller's responsibility (every stage is linear time/memory;
 // see #80). The only retained size guard is the register_replacements output
 // amplification bound in src/transliterate.rs.
+
+/// NFKC-normalize `text`, skipping the normalization pass for all-ASCII input.
+///
+/// Every ASCII scalar (U+0000–U+007F) is already in NFKC normal form — ASCII has
+/// no compatibility decompositions and no combining marks to compose — so
+/// `nfkc()` is the identity on ASCII (the same property `normalize()`'s ASCII
+/// fast path relies on). Detecting that with one SIMD-friendly `is_ascii()` scan
+/// lets these presets skip the normalizer's per-character state machine **and**
+/// the allocation for the common ASCII case: the ASCII branch borrows the input
+/// (`Cow::Borrowed`, like transliterate()'s fast path) rather than copying it.
+/// Each preset then takes ownership at the first stage that produces a new
+/// `String` (every next step returns one), so the only ASCII allocation is the
+/// one that stage would make anyway. See #198.
+#[inline]
+fn nfkc_normalize(text: &str) -> Cow<'_, str> {
+    if text.is_ascii() {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(text.nfkc().collect())
+    }
+}
 
 /// Strip dangerous bidirectional override and formatting characters
 /// that `collapse_whitespace` does not handle.
@@ -83,7 +106,7 @@ fn is_bidi_or_format(ch: char) -> bool {
 #[pyo3(signature = (text,))]
 pub fn _security_clean(text: &str) -> PyResult<String> {
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
-    let buf: String = text.nfkc().collect();
+    let buf = nfkc_normalize(text);
     // 2. Confusables → Latin (neutralizes cross-script homoglyphs)
     let buf = confusables::_normalize_confusables(&buf, "latin")?;
     // 3. Strip bidi overrides, isolates, marks, and soft hyphens
@@ -115,12 +138,17 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
         }
         .into());
     }
-    // 1. NFKC normalization
-    let mut buf: String = text.nfkc().collect();
-    // 2. Emoji → text (CLDR short names)
-    if emoji_style == "cldr" {
-        buf = emoji::demojize_rust(&buf, false);
-    }
+    // 1. NFKC normalization (borrowed for ASCII; ownership is taken below).
+    let normalized = nfkc_normalize(text);
+    // 2. Emoji → text (CLDR short names). This stage — or `into_owned()` when
+    //    emoji expansion is off — yields the owned `buf` the remaining stages
+    //    mutate in place. For the common ASCII+CLDR path `demojize_rust` borrows
+    //    `normalized`, so the NFKC step adds no allocation of its own.
+    let mut buf = if emoji_style == "cldr" {
+        emoji::demojize_rust(&normalized, false)
+    } else {
+        normalized.into_owned()
+    };
     // 3. Transliterate if lang is set (e.g. "de" for ü→ue, "ja" for kana).
     //    Use Ignore mode: ML pipelines need clean ASCII-ish output, so
     //    characters with no mapping (e.g. katakana ー) should be dropped
@@ -165,7 +193,7 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
 pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResult<String> {
     crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
-    let buf: String = text.nfkc().collect();
+    let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides + soft hyphen + format marks (#93)
     let buf = strip_bidi(&buf);
     // 3. Transliterate (always — catalog keys should be pure ASCII where possible;
@@ -208,7 +236,7 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
 pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
     crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
-    let buf: String = text.nfkc().collect();
+    let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides + soft hyphen + format marks (#93)
     let buf = strip_bidi(&buf);
     // 3. Transliterate (always — search keys should be pure ASCII where possible)
@@ -246,7 +274,7 @@ pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
 pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
     crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
-    let buf: String = text.nfkc().collect();
+    let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides + soft hyphen + format marks (#93)
     let buf = strip_bidi(&buf);
     // 3. Transliterate (always — sort keys need a consistent script)
@@ -306,7 +334,7 @@ pub fn _display_clean(text: &str) -> PyResult<String> {
 #[pyo3(signature = (text,))]
 pub fn _sanitize_user_input(text: &str) -> PyResult<String> {
     // 1. NFKC normalization
-    let buf: String = text.nfkc().collect();
+    let buf = nfkc_normalize(text);
     // 2. Strip invisibles FIRST (bidi/format + zero-width + control) so they
     //    cannot split a run of combining marks; otherwise removing them later
     //    would merge two short runs into one long run that a second pass would
@@ -370,7 +398,7 @@ pub fn _strip_bidi(text: &str) -> String {
 #[pyo3(signature = (text,))]
 pub fn _strip_obfuscation(text: &str) -> PyResult<String> {
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
-    let buf: String = text.nfkc().collect();
+    let buf = nfkc_normalize(text);
     // 2. Strip ALL combining marks (max_marks=0) — removes zalgo AND accents early
     let buf = zalgo::_strip_zalgo(&buf, 0);
     // 3. Strip bidi overrides, isolates, marks, and soft hyphens
@@ -393,6 +421,45 @@ pub fn _strip_obfuscation(text: &str) -> PyResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── nfkc_normalize: ASCII fast path must equal full NFKC (#198) ──
+    // The fast path returns the ASCII input borrowed (no copy); this guards
+    // that the optimization is output-preserving against the reference `nfkc()`
+    // pass across ASCII, fullwidth, ligature, superscript, and combining-mark
+    // inputs.
+    #[test]
+    fn test_nfkc_normalize_matches_reference() {
+        let cases = [
+            "",                   // empty
+            "hello world 123",    // pure ASCII (fast path)
+            "!@#$%^&*()_+-=[]{}", // ASCII punctuation (fast path)
+            "\u{007F}\u{0000}",   // ASCII control bounds (fast path)
+            "Ｆｕｌｌｗｉｄｔｈ", // fullwidth → ASCII (slow path changes it)
+            "ﬁ ﬂ ﬃ",              // ligatures → fi/fl/ffi
+            "x²y³",               // superscripts → x2y3
+            "café e\u{0301}",     // precomposed + combining acute
+            "ⅣⅧ",                 // Roman numerals → IV / VIII
+            "Москва 日本語 αβγ",  // non-ASCII, mostly unchanged by NFKC
+        ];
+        for s in cases {
+            let reference: String = s.nfkc().collect();
+            assert_eq!(
+                nfkc_normalize(s).as_ref(),
+                reference.as_str(),
+                "nfkc_normalize diverged from nfkc() on {s:?}"
+            );
+        }
+    }
+
+    // The ASCII fast path must *borrow* (zero-copy), not allocate; non-ASCII
+    // input must take the owned NFKC path (#198, #202 review).
+    #[test]
+    fn test_nfkc_normalize_borrows_ascii_owns_nonascii() {
+        assert!(matches!(nfkc_normalize("plain ascii"), Cow::Borrowed(_)));
+        assert!(matches!(nfkc_normalize(""), Cow::Borrowed(_)));
+        assert!(matches!(nfkc_normalize("Ｆｕｌｌ"), Cow::Owned(_)));
+        assert!(matches!(nfkc_normalize("café"), Cow::Owned(_)));
+    }
 
     // ── strip_bidi: exhaustive UAX #9 coverage ────────────────
     // Every character in is_bidi_or_format gets its own assertion so

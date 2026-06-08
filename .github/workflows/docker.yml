@@ -83,6 +83,22 @@ jobs:
           VERSION="${VERSION#v}"   # pushed tag is stripped of any leading 'v'
           echo "full=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Pull pushed image for scanning
+        # Trivy checks the local docker daemon before the registry. Pull the
+        # concrete platform (amd64) image here so it has a real image to scan,
+        # instead of failing to resolve the multi-arch manifest list remotely
+        # (MANIFEST_UNKNOWN, #138). Retry to ride out registry propagation lag
+        # right after the push.
+        run: |
+          img="ghcr.io/${{ github.repository }}:${{ steps.tags.outputs.full }}"
+          for attempt in 1 2 3 4 5; do
+            if docker pull "$img"; then exit 0; fi
+            echo "pull failed (attempt ${attempt}/5); waiting for registry propagation..."
+            sleep 10
+          done
+          echo "::error::could not pull ${img} for scanning after 5 attempts"
+          exit 1
+
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:

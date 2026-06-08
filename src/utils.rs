@@ -18,11 +18,11 @@ pub fn floor_char_boundary(s: &str, index: usize) -> usize {
 /// Levenshtein edit distance between two strings (O(a·b) time, O(b) space).
 /// Intended for short inputs such as language or encoding codes.
 pub fn edit_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
+    // Collect only `b` (O(b) working memory); stream `a` char by char.
     let b: Vec<char> = b.chars().collect();
     let mut prev: Vec<usize> = (0..=b.len()).collect();
     let mut curr = vec![0usize; b.len() + 1];
-    for (i, &ca) in a.iter().enumerate() {
+    for (i, ca) in a.chars().enumerate() {
         curr[0] = i + 1;
         for (j, &cb) in b.iter().enumerate() {
             let cost = usize::from(ca != cb);
@@ -49,15 +49,20 @@ pub fn closest_match<'a>(
     for c in candidates {
         let d = edit_distance(&got_lower, &c.to_lowercase());
         if d == 0 {
-            continue; // identical bar case — the caller already rejected `got`
+            continue; // identical apart from case — the caller already rejected `got`
         }
         match best {
             Some((bd, _)) if d >= bd => {}
             _ => best = Some((d, c)),
         }
     }
-    best.filter(|&(d, c)| d <= 2 && d * 2 < got.len().max(c.len()) + 1)
-        .map(|(_, c)| c.to_string())
+    // Guard in the same units as `edit_distance` (chars, not bytes), so the
+    // threshold stays consistent for non-ASCII inputs.
+    best.filter(|&(d, c)| {
+        let max_len = got.chars().count().max(c.chars().count());
+        d <= 2 && d * 2 < max_len + 1
+    })
+    .map(|(_, c)| c.to_string())
 }
 
 #[cfg(test)]
@@ -81,6 +86,15 @@ mod tests {
         assert_eq!(closest_match("de", langs), None); // identical → no hint
         assert_eq!(closest_match("DE", langs), None); // case-insensitive identity
         assert_eq!(closest_match("zzzz", langs), None); // nothing close
+    }
+
+    #[test]
+    fn test_closest_match_guard_is_char_based() {
+        // The length guard counts chars, not bytes (#211 review): a 1-char input
+        // one edit from a 1-char candidate is a complete change → no suggestion,
+        // even though the multi-byte form has a larger byte length.
+        assert_eq!(closest_match("é", ["e", "a"]), None);
+        assert_eq!(edit_distance("café", "cafe"), 1); // counts the é→e as one edit
     }
 
     #[test]

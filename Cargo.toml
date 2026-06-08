@@ -34,6 +34,9 @@ phf_codegen = "0.13"
 
 [dev-dependencies]
 proptest = "1"
+# criterion 0.8 requires Rust 1.86+. The shipped library MSRV stays `rust-version`
+# above (criterion is dev-only — never built by downstream consumers); only running
+# the benches or `cargo test`/`cargo clippy --all-targets` in this repo needs 1.86+.
 criterion = { version = "0.8", features = ["html_reports"] }
 
 [[bench]]

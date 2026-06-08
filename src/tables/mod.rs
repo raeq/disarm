@@ -739,9 +739,9 @@ mod tests {
         // file that isn't wired up fails loudly instead of silently doing nothing.
         // (build.rs auto-discovers the files; this guards the two hand-maintained sides:
         // the BUILTIN_LANGS list and the lookup_lang dispatch.)
-        let data_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/src/tables/data");
+        let data_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tables/data");
         let mut checked = 0usize;
-        for entry in std::fs::read_dir(data_dir).expect("read data dir") {
+        for entry in std::fs::read_dir(&data_dir).expect("read data dir") {
             let fname = entry.unwrap().file_name().into_string().unwrap();
             let Some(stem) = fname
                 .strip_prefix("translit_lang_")
@@ -755,7 +755,7 @@ mod tests {
                 "translit_lang_{stem}.tsv exists but '{code}' is not in BUILTIN_LANGS"
             );
             // Reachability: the first override entry must resolve through lookup_lang.
-            let content = std::fs::read_to_string(format!("{data_dir}/{fname}")).unwrap();
+            let content = std::fs::read_to_string(data_dir.join(&fname)).unwrap();
             let first = content
                 .lines()
                 .map(str::trim_start)

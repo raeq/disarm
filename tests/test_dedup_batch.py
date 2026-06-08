@@ -40,7 +40,7 @@ def test_chunking_over_batch_cap(monkeypatch) -> None:
     # materializing >100k strings.
     import translit
 
-    monkeypatch.setattr(translit, "_MAX_BATCH_SIZE", 3)
+    monkeypatch.setattr(translit._api, "_MAX_BATCH_SIZE", 3)
     data = ["café", "café", "naïve", "Москва", "北京市", "café", "Düsseldorf", "São"]
     # 7 distinct values, cap 3 -> 3 chunks; result must still align 1:1.
     assert dedup_batch(data) == [transliterate(x) for x in data]

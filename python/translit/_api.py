@@ -1219,9 +1219,7 @@ def decode_to_utf8(
         raise InvalidArgumentError(
             f"min_confidence must be between 0.0 and 1.0, got {min_confidence}"
         )
-    return _decode_to_utf8(
-        data, encoding=encoding, min_confidence=min_confidence, strict=strict
-    )
+    return _decode_to_utf8(data, encoding=encoding, min_confidence=min_confidence, strict=strict)
 
 
 # --- Predicates ---

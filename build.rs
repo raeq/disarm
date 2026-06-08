@@ -197,10 +197,15 @@ fn main() {
     for (file_stem, const_name) in &reverse_tables {
         let tsv_path = data_dir.join(format!("{file_stem}.tsv"));
         let entries = read_str_str_tsv(&tsv_path);
+        // phf_codegen 0.13 retains the borrowed value until build(), so the formatted
+        // literals must outlive the builder — collect them first.
+        let formatted: Vec<(&str, String)> = entries
+            .iter()
+            .map(|(key, value)| (key.as_str(), format!("\"{}\"", escape_str(value))))
+            .collect();
         let mut builder = phf_codegen::Map::<&str>::new();
-        for (key, value) in &entries {
-            let v = format!("\"{}\"", escape_str(value));
-            builder.entry(key.as_str(), &v);
+        for (key, v) in &formatted {
+            builder.entry(*key, v);
         }
         write!(
             all_reverse_code,
@@ -281,13 +286,19 @@ fn read_char_set_tsv(path: &Path) -> Vec<u32> {
 
 /// Build a `phf::Map<char, &'static str>` source string.
 fn build_char_str_map(entries: &BTreeMap<u32, String>, name: &str, vis: &str) -> String {
+    // phf_codegen 0.13 retains the borrowed value until build(); keep the formatted
+    // literals alive past the builder by collecting them first.
+    let formatted: Vec<(char, String)> = entries
+        .iter()
+        .map(|(&cp, value)| {
+            let ch = char::from_u32(cp)
+                .unwrap_or_else(|| panic!("Invalid codepoint U+{cp:04X}"));
+            (ch, format!("\"{}\"", escape_str(value)))
+        })
+        .collect();
     let mut builder = phf_codegen::Map::<char>::new();
-    for (&cp, value) in entries {
-        let ch = char::from_u32(cp).unwrap_or_else(|| {
-            panic!("Invalid codepoint U+{cp:04X}");
-        });
-        let val = format!("\"{}\"", escape_str(value));
-        builder.entry(ch, &val);
+    for (ch, val) in &formatted {
+        builder.entry(*ch, val);
     }
     let vis_prefix = if vis.is_empty() {
         String::new()
@@ -313,10 +324,15 @@ fn generate_char_str_map(tsv_path: &Path, out_path: &Path, name: &str, vis: &str
 /// Generate a str→str map file.
 fn generate_str_str_map(tsv_path: &Path, out_path: &Path, name: &str, vis: &str) {
     let entries = read_str_str_tsv(tsv_path);
+    // phf_codegen 0.13 retains the borrowed value until build(); collect the formatted
+    // literals so they outlive the builder.
+    let formatted: Vec<(&str, String)> = entries
+        .iter()
+        .map(|(key, value)| (key.as_str(), format!("\"{}\"", escape_str(value))))
+        .collect();
     let mut builder = phf_codegen::Map::<&str>::new();
-    for (key, value) in &entries {
-        let v = format!("\"{}\"", escape_str(value));
-        builder.entry(key.as_str(), &v);
+    for (key, v) in &formatted {
+        builder.entry(*key, v);
     }
     let vis_prefix = if vis.is_empty() {
         String::new()

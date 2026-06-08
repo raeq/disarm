@@ -6,7 +6,9 @@
 //! These benchmarks measure the pure-Rust implementation functions
 //! directly, without PyO3 boundary-crossing overhead.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
+
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use _translit::case_fold::_fold_case;
 use _translit::grapheme::{_grapheme_len, _grapheme_split};

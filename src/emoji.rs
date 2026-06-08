@@ -186,9 +186,12 @@ struct CharWindow<'a> {
 
 /// Window capacity = MAX_EMOJI_SEQ_LEN so we always have enough lookahead.
 ///
-/// This also caps the look-ahead a custom Python emoji provider can match
-/// (≤ 9 codepoints); see the provider call site and `set_emoji_provider` (#199).
-const MAX_WINDOW: usize = 9; // mirrors MAX_EMOJI_SEQ_LEN = 9
+/// Derived from the single source of truth (`tables::max_emoji_seq_len()`, a
+/// `const fn` over the build-generated `MAX_EMOJI_SEQ_LEN`) rather than a
+/// duplicated literal, so the two cannot drift when the CLDR data updates
+/// (#199 review). This also caps the look-ahead a custom Python emoji provider
+/// can match; see the provider call site and `set_emoji_provider`.
+const MAX_WINDOW: usize = tables::max_emoji_seq_len();
 
 impl<'a> CharWindow<'a> {
     /// Create a new window, pre-filling the buffer from `chars`.

@@ -341,8 +341,10 @@ class TestProviderWindowCap:
                 offered.append(len(sequence))
                 return None
 
-        # A long run of emoji codepoints joined by ZWJ — far longer than 9.
-        text = "‍".join(["\U0001f468"] * 16)
+        # A long run of emoji codepoints joined by ZWJ (U+200D, written as an
+        # explicit escape so the invisible joiner is visible in review) — far
+        # longer than the 9-codepoint window.
+        text = "\u200d".join(["\U0001f468"] * 16)
         demojize(text, provider=RecordingProvider())
         assert offered, "provider was never consulted"
         assert max(offered) <= 9, f"window exceeded the documented 9-codepoint cap: {max(offered)}"

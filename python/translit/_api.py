@@ -86,12 +86,10 @@ from translit._types import EmojiProvider, ErrorMode, NormalizationForm, Platfor
 # defined here (in characters/codepoints, see grapheme_split()).
 _MAX_GRAPHEME_SPLIT_INPUT: int = 10 * 1024 * 1024  # ~10.5M characters (codepoints)
 
-# --- Enum validation (must match Rust-side messages; validated in Python so a
-#     typo'd value raises before reaching Rust — e.g. before normalize()'s ASCII
-#     fast-path could silently accept it, #99. transliterate()'s own fast path was
-#     removed in #197; its errors check below now front-loads the same error.) ---
-_VALID_ERROR_MODES: tuple[str, ...] = ("replace", "ignore", "preserve")
-_VALID_NORM_FORMS: tuple[str, ...] = ("NFC", "NFD", "NFKC", "NFKD")
+# The `errors=` / `form=` enum values are validated once, in the Rust core (#185),
+# which raises InvalidArgumentError with the canonical message. The Python wrapper
+# no longer keeps a hand-synced copy of those sets — that drift hazard scaled per
+# binding. Only *combinations* of otherwise-valid kwargs are checked here (#69).
 
 
 def _validate_batch(texts: object, func_name: str) -> None:
@@ -132,17 +130,10 @@ def _check_transliterate_conflicts(
     (abjad vowel restoration) has no toned-pinyin output, so ``context`` +
     ``tones`` is rejected too.
 
-    Also validates the ``errors`` enum up front (#99) so a typo'd value raises a
-    clear Python-side error before crossing into Rust, identically for scalar and
-    batch input. (This originally guarded a binding-side ASCII fast path that
-    returned before Rust ever saw the call; that fast path was removed in #197,
-    but front-loading the check keeps the error message and timing uniform across
-    input shapes.)
+    The ``errors`` enum value itself is validated by the Rust core (#185), not
+    here — this matrix only rejects contradictory *combinations* of otherwise-
+    valid kwargs.
     """
-    if errors not in _VALID_ERROR_MODES:
-        raise InvalidArgumentError(
-            f"errors must be 'replace', 'ignore', or 'preserve', got {errors!r}"
-        )
     if target is not None and lang is not None:
         raise InvalidArgumentError("'lang' and 'target' are mutually exclusive")
     if context and target is not None:
@@ -612,17 +603,14 @@ def normalize(
         >>> normalize(["e\u0301", "n\u0303o"], form="NFC")
         ['é', 'ño']
     """
-    # Validate the form enum before the ASCII fast-path / batch dispatch (#99):
-    # otherwise a typo'd form silently no-ops on ASCII input.
-    if form not in _VALID_NORM_FORMS:
-        raise InvalidArgumentError(f"form must be 'NFC', 'NFD', 'NFKC', or 'NFKD', got {form!r}")
+    # `form` is validated once in the Rust core (#185), which also has its own
+    # ASCII fast path (ASCII is invariant under all four forms) — so there is no
+    # binding-side form check or ASCII short-circuit left to keep in sync.
     if isinstance(text, list):
         _validate_batch(text, "normalize")
         return _normalize_batch(text, form=form)
     if not isinstance(text, str):
         raise TypeError(f"normalize() expects str or list[str], got {type(text).__name__}")
-    if text.isascii():
-        return text
     return _normalize(text, form=form)
 
 

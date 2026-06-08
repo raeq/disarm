@@ -362,3 +362,25 @@ class TestMlNormalizeEmojiStyle:
         """'CLDR' (wrong case) must raise TranslitError — matching is case-sensitive."""
         with pytest.raises(TranslitError, match="emoji_style"):
             ml_normalize("hello", emoji="CLDR")
+
+
+class TestPresetsMetadataOrder:
+    """#141: PRESETS metadata must reflect the real execution order."""
+
+    def test_strip_obfuscation_confusables_after_demojize(self) -> None:
+        # src/presets.rs::_strip_obfuscation runs confusables AFTER demojize so
+        # typographic punctuation inside emoji names is folded too (idempotency).
+        from translit import PRESETS
+
+        steps = [name for name, _ in PRESETS["strip_obfuscation"]]
+        assert steps.index("confusables") > steps.index("demojize")
+        assert steps == [
+            "normalize",
+            "strip_zalgo",
+            "strip_bidi",
+            "strip_zero_width",
+            "demojize",
+            "confusables",
+            "strip_accents",
+            "collapse_whitespace",
+        ]

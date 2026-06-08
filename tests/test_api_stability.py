@@ -296,6 +296,7 @@ CORE_FUNCTION_PARAMS = {
         "entities",
         "decimal",
         "hexadecimal",
+        "default",
     ],
     "normalize": ["text", "form"],
     "normalize_confusables": ["text", "target_script"],

@@ -400,6 +400,7 @@ def slugify(
     entities: bool = ...,
     decimal: bool = ...,
     hexadecimal: bool = ...,
+    default: str | None = ...,
 ) -> str: ...
 
 
@@ -420,6 +421,7 @@ def slugify(
     entities: bool = ...,
     decimal: bool = ...,
     hexadecimal: bool = ...,
+    default: str | None = ...,
 ) -> list[str]: ...
 
 
@@ -439,6 +441,7 @@ def slugify(
     entities: bool = True,
     decimal: bool = True,
     hexadecimal: bool = True,
+    default: str | None = None,
 ) -> str | list[str]:
     """Generate a URL-safe slug from Unicode text.
 
@@ -472,9 +475,15 @@ def slugify(
         entities: Decode HTML entities before processing.
         decimal: Decode HTML decimal entities (&#123;).
         hexadecimal: Decode HTML hex entities (&#x7B;).
+        default: Fallback when the slug would be empty — i.e. the input has no
+            sluggable characters (emoji, punctuation, or zero-width only). When
+            set, that value is returned **as-is** (it is not re-slugified, so
+            pass a value you know is URL-safe); when ``None`` (the default), the
+            empty string is returned, preserving prior behaviour. Use this to
+            avoid the routing hazard of empty slugs colliding on one URL (#97).
 
     Returns:
-        URL-safe slug string.
+        URL-safe slug string (or ``default`` when it would otherwise be empty).
 
     Raises:
         TranslitError: If an internal Rust error occurs.
@@ -490,6 +499,10 @@ def slugify(
         'big-fox'
         >>> slugify("Very Long Title Here", max_length=10, word_boundary=True)
         'very-long'
+        >>> slugify("🔥🔥🔥")
+        ''
+        >>> slugify("🔥🔥🔥", default="n-a")
+        'n-a'
     """
     _sw = stopwords if isinstance(stopwords, (tuple, list)) else list(stopwords)
     _rp = replacements if isinstance(replacements, (tuple, list)) else list(replacements)
@@ -512,13 +525,19 @@ def slugify(
 
     if isinstance(text, list):
         _validate_batch(text, "slugify")
-        return _slugify_batch(text, **_kw)  # type: ignore[arg-type]
+        result = _slugify_batch(text, **_kw)  # type: ignore[arg-type]
+        if default is not None:
+            return [s if s else default for s in result]
+        return result
 
     if not isinstance(text, str):
         raise TypeError(f"slugify() expects str or list[str], got {type(text).__name__}")
     if max_length < 0:
         raise ValueError(f"max_length must be non-negative, got {max_length}")
-    return _slugify(text, **_kw)  # type: ignore[arg-type]
+    slug = _slugify(text, **_kw)  # type: ignore[arg-type]
+    if default is not None and not slug:
+        return default
+    return slug
 
 
 @overload

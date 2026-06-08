@@ -99,3 +99,28 @@ class TestUniqueSlugifier:
         s = UniqueSlugifier(check=check)
         result = s("Hello World")
         assert result == "hello-world-1"
+
+
+class TestSlugifyDefault:
+    """#97: opt-in `default` fallback when the input has no sluggable characters."""
+
+    def test_default_for_empty_result(self) -> None:
+        # Emoji / punctuation / zero-width otherwise slug to "" (routing hazard).
+        assert slugify("🔥🔥🔥") == ""
+        assert slugify("🔥🔥🔥", default="n-a") == "n-a"
+        assert slugify("...", default="n-a") == "n-a"
+        assert slugify("​", default="n-a") == "n-a"
+
+    def test_default_not_applied_when_nonempty(self) -> None:
+        assert slugify("Hello World", default="n-a") == "hello-world"
+
+    def test_default_none_preserves_empty_string(self) -> None:
+        assert slugify("🔥", default=None) == ""
+        assert slugify("🔥") == ""
+
+    def test_default_returned_verbatim_not_reslugified(self) -> None:
+        assert slugify("...", default="Not Slugged!") == "Not Slugged!"
+
+    def test_default_applies_per_element_in_batch(self) -> None:
+        out = slugify(["Hello World", "🔥", "café"], default="n-a")
+        assert out == ["hello-world", "n-a", "cafe"]

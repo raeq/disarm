@@ -415,10 +415,12 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "strip_obfuscation": [
         ("normalize", "NFKC"),
         ("strip_zalgo", "max_marks=0"),
-        ("confusables", "latin"),
         ("strip_bidi", None),
         ("strip_zero_width", None),
         ("demojize", "cldr"),
+        # confusables runs AFTER demojize (matches src/presets.rs::_strip_obfuscation):
+        # typographic punctuation in emoji names must be folded too, for idempotency (#141).
+        ("confusables", "latin"),
         ("strip_accents", None),
         ("collapse_whitespace", None),
     ],

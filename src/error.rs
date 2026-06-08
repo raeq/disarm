@@ -345,7 +345,23 @@ impl From<Error> for pyo3::PyErr {
     /// assigned a category here, not silently default.
     fn from(err: Error) -> Self {
         let msg = err.to_string();
-        match err {
+
+        // #188: surface the underlying error as a chained `__cause__` for the
+        // variants that wrap one, instead of only flattening it into the message.
+        // Peeked by reference before `err` is consumed by the category match;
+        // attached under the GIL afterwards. Python can't hold the Rust error
+        // type, so the cause carries its rendered text in a `ValueError`.
+        let cause: Option<pyo3::PyErr> = match &err {
+            Error::RegexCompile { source, .. } => {
+                Some(pyo3::exceptions::PyValueError::new_err(source.to_string()))
+            }
+            Error::ContextDictCorrupt { reason, .. } => {
+                Some(pyo3::exceptions::PyValueError::new_err(reason.clone()))
+            }
+            _ => None,
+        };
+
+        let err_py = match err {
             // InvalidArgumentError — a bad argument value or a contradictory
             // combination of arguments.
             Error::InvalidErrorMode { .. }
@@ -380,7 +396,12 @@ impl From<Error> for pyo3::PyErr {
             | Error::ContextDictNotFound { .. }
             | Error::ContextDictCorrupt { .. }
             | Error::EncodingConfidenceTooLow { .. } => crate::TranslitError::new_err(msg),
+        };
+
+        if let Some(cause_err) = cause {
+            pyo3::Python::with_gil(|py| err_py.set_cause(py, Some(cause_err)));
         }
+        err_py
     }
 }
 

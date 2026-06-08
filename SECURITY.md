@@ -32,6 +32,26 @@ Please include:
 - A minimal reproduction (input → actual output → expected output)
 - Which documented behavior or invariant you believe is violated
 
+### What makes a report actionable
+
+translit is maintained by a small team, so a report we can **reproduce in minutes** is
+the difference between a same-week fix and a thread that goes nowhere. A strong report
+has a runnable reproduction (the exact input, the actual output, and the expected
+output) and points at the **specific** documented invariant or mechanism in the
+[Threat Model](THREAT_MODEL.md) that it violates.
+
+AI tools are fine for finding and writing this up — but please **run the reproduction
+yourself before submitting** and confirm it holds against the latest release. A
+speculative "there may be a buffer overflow / use-after-free here" with no reproduction,
+no triggering input, and an author who can't answer follow-up questions is not a report
+we can act on, and we will close it without an extended back-and-forth. This library
+forbids `unsafe` crate-wide and is exhaustively fuzzed and tested for no-panic,
+linear-time behavior, so memory-safety claims in particular need a concrete trigger.
+
+If you're not sure whether your finding is a vulnerability or an out-of-scope
+limitation, that's fine — say so, and lean toward reporting. We would rather triage a
+known limitation than miss a real invariant failure.
+
 ## What we treat as a vulnerability
 
 A case where translit fails to do what the [Threat Model](THREAT_MODEL.md) says it does —

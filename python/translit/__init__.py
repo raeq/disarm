@@ -7,6 +7,8 @@ import types as _stdlib_types
 import warnings as _warnings
 from collections.abc import Iterable
 from functools import lru_cache, wraps
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _dist_version
 from typing import Any, Protocol, cast, overload
 
 from translit._enums import (
@@ -165,6 +167,13 @@ from translit._translit import (
     _UniqueSlugifier,
 )
 from translit._types import NF, EmojiProvider, ErrorMode, NormalizationForm, Platform
+
+# --- Package version (single source of truth: the installed distribution's metadata,
+#     so `translit.__version__` always tracks the wheel the user actually has) ---
+try:
+    __version__ = _dist_version("translit-rs")
+except _PackageNotFoundError:  # pragma: no cover - source checkout without an install
+    __version__ = "0.0.0+unknown"
 
 # --- Resource limits (must match Rust-side constants) ---
 _MAX_BATCH_SIZE: int = 100_000
@@ -2450,6 +2459,8 @@ from translit._text import Text  # noqa: E402
 # --- Public API ---
 
 __all__ = [
+    # Metadata
+    "__version__",
     # Transforms
     "transliterate",
     "dedup_batch",

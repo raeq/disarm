@@ -1,0 +1,37 @@
+name: 💡 Extension idea / new use case
+description: You have a domain or persona we may not have designed for. Tell us how you'd use translit.
+title: "[idea] "
+labels: ["idea", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the kind of issue we most like to receive. translit is a kit of building
+        blocks, and the best features come from real workflows we hadn't pictured. **Half-formed
+        ideas are welcome** — you don't need a finished proposal, and there are no wrong answers
+        here.
+  - type: textarea
+    id: who
+    attributes:
+      label: Who are you / what's the domain?
+      description: >-
+        e.g. "I run IDN checks for a registrar", "I build a content-moderation pipeline",
+        "I'm a librarian cataloging non-Latin titles", "I clean addresses in an ETL job".
+        The more specific, the better we understand the need.
+    validations:
+      required: true
+  - type: textarea
+    id: need
+    attributes:
+      label: What would you want translit to do?
+      description: What does your workflow need that translit doesn't do — or doesn't do conveniently — today?
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: What might it look like? (optional)
+      description: A sketch of the call, pipeline, or output you'd want. No need to get it right.
+      render: python
+    validations:
+      required: false

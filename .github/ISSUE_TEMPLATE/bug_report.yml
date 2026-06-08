@@ -1,0 +1,67 @@
+name: 🐞 Bug report
+description: translit does something wrong, crashes, or violates a documented behavior.
+title: "[bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. A report we can **reproduce in under a minute** gets fixed
+        far faster than one we have to interrogate.
+
+        If this is about a confusable or script translit doesn't *yet* map, that's a
+        **coverage request**, not a bug — please use the **🗺️ Coverage / confusable-gap**
+        form instead. See the [Threat Model](https://github.com/raeq/translit/blob/main/THREAT_MODEL.md)
+        if you're unsure which applies.
+  - type: input
+    id: version
+    attributes:
+      label: translit version
+      description: 'Output of `python -c "import translit; print(translit.__version__)"`'
+      placeholder: "0.6.2"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest self-contained Python snippet that shows the problem. We will run this exactly as pasted.
+      render: python
+      placeholder: |
+        from translit import normalize_confusables
+        print(normalize_confusables("раypal"))
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected output
+      description: What did you expect, and which documented behavior says so?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output
+      description: Paste the exact output, including any full traceback.
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Python version, OS, and how translit was installed.
+      placeholder: "Python 3.12 on macOS 14, installed via `pip install translit-rs`"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I reproduced this on the latest released version.
+          required: true
+        - label: I searched existing issues and this isn't a duplicate.
+          required: true
+        - label: The reproduction above runs as-is — no missing imports or setup.
+          required: true

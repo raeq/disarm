@@ -1,0 +1,56 @@
+name: 🗺️ Coverage / confusable-gap request
+description: A confusable pair, script, or code point translit doesn't yet map. These are welcome.
+title: "[coverage] "
+labels: ["coverage", "enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Expanding the bundled data is exactly how this defense layer improves — thank you for
+        flagging a gap.
+
+        A confusable that simply isn't in the bundled TR39 table is a **known limitation by
+        design**, not a vulnerability (see the
+        [Threat Model](https://github.com/raeq/translit/blob/main/THREAT_MODEL.md)), so it is
+        safe and appropriate to report it here in the open.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What's missing?
+      options:
+        - A confusable / homoglyph pair
+        - A whole script or Unicode block
+        - A language profile
+        - A specific code point
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: The character(s) or script
+      description: >-
+        Give the actual characters AND their Unicode code points (e.g. U+0440 CYRILLIC
+        SMALL LETTER ER), and what you expect them to map to.
+      placeholder: |
+        Input: "ѕсоре"  (U+0455, U+0441, U+043E, U+0440, U+0435)
+        Expected: "scope"
+        Currently: <unchanged / wrong output>
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source / justification (optional but helpful)
+      description: A Unicode reference, a real-world example where you saw this, or why it matters for your use case.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I read the Threat Model and understand this is a coverage request, not a vulnerability report.
+          required: true
+        - label: I included the actual code points, not just the rendered characters.
+          required: true

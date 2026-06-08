@@ -1,0 +1,33 @@
+name: ✨ Feature request
+description: A new capability, API, option, or standard you'd like translit to support.
+title: "[feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Genuine feature requests are always welcome. The clearer the underlying need, the
+        better we can design something that fits. If your idea is more "here's a domain you
+        may not have considered" than a specific API, the **💡 Extension idea / new use case**
+        form is a better fit.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the workflow or pain point. What are you trying to do that translit makes hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would the API or behavior look like? A code sketch of the call you wish worked is ideal.
+      render: python
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds you've tried
+    validations:
+      required: false

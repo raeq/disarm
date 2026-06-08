@@ -28,7 +28,7 @@ static GLOBAL_PROVIDER: LazyLock<RwLock<Option<PyObject>>> = LazyLock::new(|| Rw
 
 /// Register a global Python emoji provider (or None to reset to default).
 pub fn set_provider(provider: Option<PyObject>) {
-    let mut guard = crate::recover_lock(GLOBAL_PROVIDER.write());
+    let mut guard = crate::recover_lock(GLOBAL_PROVIDER.write(), "GLOBAL_PROVIDER");
     *guard = provider;
 }
 
@@ -444,7 +444,7 @@ pub fn _demojize(
     let effective_provider: Option<PyObject> = if provider.is_some() {
         provider
     } else {
-        let guard = crate::recover_lock(GLOBAL_PROVIDER.read());
+        let guard = crate::recover_lock(GLOBAL_PROVIDER.read(), "GLOBAL_PROVIDER");
         guard.as_ref().map(|p| p.clone_ref(py))
     };
 

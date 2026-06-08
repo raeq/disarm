@@ -99,12 +99,12 @@ pub const MAX_REGISTERED_LANGS: usize = 100;
 
 /// Return the number of user-registered language profiles.
 pub fn registered_lang_count() -> usize {
-    crate::recover_lock(LANG_TABLES.read()).len()
+    crate::recover_lock(LANG_TABLES.read(), "LANG_TABLES").len()
 }
 
 /// True if the given language code has been user-registered.
 pub fn has_registered_lang(code: &str) -> bool {
-    crate::recover_lock(LANG_TABLES.read()).contains_key(code)
+    crate::recover_lock(LANG_TABLES.read(), "LANG_TABLES").contains_key(code)
 }
 
 /// Accepted BCP-47 language aliases that resolve to a built-in table but are not
@@ -311,7 +311,7 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<Cow<'static, str>> {
     // Check user-registered language tables under a read lock.
     // We clone the replacement string rather than leaking it, so memory usage
     // is bounded regardless of how many distinct characters are looked up.
-    let table = crate::recover_lock(LANG_TABLES.read());
+    let table = crate::recover_lock(LANG_TABLES.read(), "LANG_TABLES");
     table
         .get(lang)
         .and_then(|char_map| char_map.get(&ch).cloned())
@@ -331,7 +331,7 @@ pub fn list_langs() -> Vec<String> {
     let mut langs: Vec<String> = BUILTIN_LANGS.iter().map(|s| (*s).to_string()).collect();
 
     // Add user-registered languages
-    let table = crate::recover_lock(LANG_TABLES.read());
+    let table = crate::recover_lock(LANG_TABLES.read(), "LANG_TABLES");
     for key in table.keys() {
         if !langs.contains(key) {
             langs.push(key.clone());
@@ -382,7 +382,7 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
     if !bad_keys.is_empty() {
         return Err(bad_keys);
     }
-    let mut table = crate::recover_lock(LANG_TABLES.write());
+    let mut table = crate::recover_lock(LANG_TABLES.write(), "LANG_TABLES");
     table.insert(code.to_owned(), char_map);
     Ok(())
 }
@@ -411,7 +411,7 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
 /// Any future direct-Rust API (e.g. the core split planned in #38) must add
 /// the same guard at its own boundary. (#123)
 pub fn register_replacements(replacements: HashMap<String, String>) -> Result<(), usize> {
-    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
+    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     // Compute worst-case size after merge: existing + all-new (ignoring overlap).
     // This is conservative but avoids the cost of set-difference computation.
     let new_keys: usize = replacements
@@ -443,7 +443,7 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
 /// Any future direct-Rust API (e.g. the core split planned in #38) must add
 /// the same guard at its own boundary. (#123)
 pub fn remove_replacement(key: &str) -> bool {
-    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
+    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     let removed = table.remove(key).is_some();
     HAS_REPLACEMENTS.store(!table.is_empty(), Ordering::Release);
     removed
@@ -459,7 +459,7 @@ pub fn remove_replacement(key: &str) -> bool {
 /// Any future direct-Rust API (e.g. the core split planned in #38) must add
 /// the same guard at its own boundary. (#123)
 pub fn clear_replacements() {
-    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write());
+    let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     table.clear();
     HAS_REPLACEMENTS.store(false, Ordering::Release);
 }
@@ -484,7 +484,7 @@ pub fn apply_replacements(text: &str, max_len: usize) -> Result<Cow<'_, str>, us
     if !HAS_REPLACEMENTS.load(Ordering::Acquire) {
         return Ok(Cow::Borrowed(text));
     }
-    let table = crate::recover_lock(GLOBAL_REPLACEMENTS.read());
+    let table = crate::recover_lock(GLOBAL_REPLACEMENTS.read(), "GLOBAL_REPLACEMENTS");
     if table.is_empty() {
         return Ok(Cow::Borrowed(text));
     }

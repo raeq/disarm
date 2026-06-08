@@ -14,7 +14,7 @@ authors:
   - family-names: "Quinn"
     given-names: "Richard"
     email: "quinn.richard@gmail.com"
-version: "0.6.2"
+version: "0.6.3"
 date-released: "2026-06-08"
 license: MIT
 repository-code: "https://github.com/raeq/translit"

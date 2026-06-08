@@ -10,6 +10,60 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-06-08
+
+A correctness, maintenance, and architecture-foundation release. **No output-affecting
+changes** — every fix is behaviour-preserving and the one new public behaviour
+(`slugify(default=...)`) is opt-in. Headline: a pure-Rust error model is now in place,
+laying the foundation for the multi-language bindings on the roadmap.
+
+### Upgrade notes
+
+- **None output-affecting.** Existing output and every exception type/message are
+  unchanged.
+- New opt-in: `slugify(text, default="…")` returns the fallback when the input has no
+  sluggable characters (emoji / punctuation / zero-width) instead of `""`. `default=None`
+  (the default) preserves the prior empty-string behaviour.
+
+### Added
+
+- `slugify(default=...)` — opt-in fallback for inputs that would otherwise slug to the
+  empty string, closing an empty-slug routing hazard (#97).
+
+### Fixed
+
+- `PRESETS["strip_obfuscation"]` metadata now reflects the real pipeline order
+  (`confusables` runs after `demojize`), matching `src/presets.rs` (#141).
+- Lock-poison recovery now emits a Python `UserWarning` naming the recovered table,
+  instead of a silent stderr line (#117).
+- The release Trivy image scan now finds the pushed image (`docker pull` before scanning),
+  so CVE reports are produced again (#138).
+- `docs/api/exceptions.md` corrected — `TranslitError` inherits from `ValueError` (not
+  `Exception`), and every example message string now matches the real output (#182).
+
+### Changed (internal — behaviour-preserving)
+
+- **Error model (#181, part of #180):** a pure-Rust `Error` enum (`thiserror`) with a
+  stable `code()` per variant and a single `From<Error> for PyErr` boundary; ~35 error
+  sites migrated off in-core `PyErr` construction. Removes the core↔PyO3 coupling and
+  lays the foundation for non-Python bindings. Python exception types and messages are
+  unchanged.
+- **Dependencies:** `phf` / `phf_codegen` 0.11 → 0.13, `criterion` 0.5 → 0.8,
+  `chardetng` 0.1 → 1.0 — each migrated and verified behaviour-preserving (#146, #153,
+  #164).
+- `build.rs` now auto-discovers language override tables — adding a language is just
+  dropping in a `translit_lang_*.tsv` (#74).
+- Generated `.pyi` stubs are now guarded by a stub/binary signature drift-check, which
+  caught and fixed 18 stale stub signatures (#76).
+
+### Maintenance
+
+- Split `python/translit/__init__.py` (2,683 lines) into `_api.py` + `_presets.py` (#73).
+- Split `tests/integration_transliterate.rs` by script family (#75).
+- Process: a required "Conversations resolved" merge gate (#55); a documented
+  dependency-upgrade methodology with Dependabot cooldown + auto-merge
+  (`DEPENDENCY_UPGRADES.md`, `RELEASING.md`).
+
 ## [0.6.2] — 2026-06-07
 
 A correctness, security, performance and maintenance release triaged from a

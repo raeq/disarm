@@ -19,7 +19,7 @@ laying the foundation for the multi-language bindings on the roadmap.
 
 ### Upgrade notes
 
-- **None output-affecting.** Existing output and every exception type/message are
+- **No output-affecting changes.** Existing output and every exception type/message are
   unchanged.
 - New opt-in: `slugify(text, default="…")` returns the fallback when the input has no
   sluggable characters (emoji / punctuation / zero-width) instead of `""`. `default=None`

@@ -97,7 +97,6 @@ nav:
       - From pathvalidate: migration/from-pathvalidate.md
       - From anyascii: migration/from-anyascii.md
   - CLI: cli.md
-  - Docker: docker.md
   - Performance: performance.md
   - Benchmarks: benchmarks.md
   - Limitations: limitations.md

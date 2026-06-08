@@ -1,7 +1,0 @@
-# Trivy ignore file — list CVE IDs (one per line) to suppress from scan results.
-# Only suppress a CVE here if it has been reviewed and accepted as a known risk
-# (e.g. not exploitable in this context, or no fix available upstream).
-# See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#trivyignore
-#
-# Example (remove the leading # to suppress):
-# CVE-2024-12345

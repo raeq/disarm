@@ -10,6 +10,20 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Removed
+
+- **Docker image build/publish** (and the associated Trivy CVE scan, #138). translit is
+  a `pip install`-first library; the multi-arch image build, GHCR upkeep, and the
+  release-only Trivy plumbing were maintenance out of proportion to use. Previously
+  published images (`ghcr.io/raeq/translit:*`) remain as historical artifacts, but no new
+  ones are produced and the CLI is installed via `pip install translit-rs`.
+
+### Note
+
+- The 0.6.3 entry below originally claimed the Trivy image scan was fixed (#138). It was
+  not — the fix did not work on the real release, and the Docker pipeline has now been
+  removed instead (above). That stale claim has been dropped from the 0.6.3 entry.
+
 ## [0.6.3] — 2026-06-08
 
 A correctness, maintenance, and architecture-foundation release. **No output-affecting
@@ -36,8 +50,6 @@ laying the foundation for the multi-language bindings on the roadmap.
   (`confusables` runs after `demojize`), matching `src/presets.rs` (#141).
 - Lock-poison recovery now emits a Python `UserWarning` naming the recovered table,
   instead of a silent stderr line (#117).
-- The release Trivy image scan now finds the pushed image (`docker pull` before scanning),
-  so CVE reports are produced again (#138).
 - `docs/api/exceptions.md` corrected — `TranslitError` inherits from `ValueError` (not
   `Exception`), and every example message string now matches the real output (#182).
 

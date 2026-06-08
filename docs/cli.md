@@ -221,16 +221,3 @@ cat entries.txt | translit t | sort -u
 | 0 | Success |
 | 1 | No input provided (no argument and no stdin) |
 | 2 | Invalid arguments (unknown command, bad option) |
-
-## Docker
-
-The same CLI is available via Docker without installing Python:
-
-```bash
-docker run ghcr.io/raeq/translit t "café"
-# cafe
-
-echo "piped input" | docker run -i ghcr.io/raeq/translit t
-```
-
-See [Docker](docker.md) for setup, image details, and troubleshooting.

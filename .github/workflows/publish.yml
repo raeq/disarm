@@ -137,16 +137,3 @@ jobs:
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1
         with:
           skip-existing: true
-
-  docker:
-    name: Docker
-    needs: [publish]
-    uses: ./.github/workflows/docker.yml
-    with:
-      version: ${{ github.ref_name }}
-    permissions:
-      contents: read
-      packages: write
-      # Required so the called docker.yml can upload the Trivy SARIF (#132): a
-      # reusable workflow can only request permissions its caller grants.
-      security-events: write

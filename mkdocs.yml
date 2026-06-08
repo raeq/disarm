@@ -103,4 +103,5 @@ nav:
   - Limitations: limitations.md
   - Changelog: CHANGELOG.md
   - Contributing: CONTRIBUTING.md
+  - Releasing: RELEASING.md
   - Security: SECURITY.md

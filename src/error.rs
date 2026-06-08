@@ -289,6 +289,15 @@ pub(crate) enum Error {
         /// Comma-joined list of supported languages.
         available: String,
     },
+
+    /// `errors="strict"` hit a character with no transliteration (#184).
+    #[error("no transliteration for {ch:?} (U+{:04X}) at byte offset {byte_offset}", *ch as u32)]
+    Untranslatable {
+        /// The offending character.
+        ch: char,
+        /// Its byte offset in the input.
+        byte_offset: usize,
+    },
 }
 
 impl Error {
@@ -326,6 +335,7 @@ impl Error {
             Error::UnsupportedAutoEncoding { .. } => "unsupported_auto_encoding",
             Error::EncodingConfidenceTooLow { .. } => "encoding_confidence_too_low",
             Error::ReverseUnsupportedLang { .. } => "reverse_unsupported_lang",
+            Error::Untranslatable { .. } => "untranslatable",
         }
     }
 }
@@ -395,7 +405,8 @@ impl From<Error> for pyo3::PyErr {
             Error::Sealed { .. }
             | Error::ContextDictNotFound { .. }
             | Error::ContextDictCorrupt { .. }
-            | Error::EncodingConfidenceTooLow { .. } => crate::TranslitError::new_err(msg),
+            | Error::EncodingConfidenceTooLow { .. }
+            | Error::Untranslatable { .. } => crate::TranslitError::new_err(msg),
         };
 
         if let Some(cause_err) = cause {
@@ -524,6 +535,10 @@ mod tests {
             Error::ReverseUnsupportedLang {
                 lang: "de".into(),
                 available: "ru, uk".into(),
+            },
+            Error::Untranslatable {
+                ch: '😀',
+                byte_offset: 3,
             },
         ];
         for e in &samples {

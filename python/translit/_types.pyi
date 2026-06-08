@@ -6,6 +6,7 @@ import enum
 from typing import Literal, Protocol, runtime_checkable
 
 ErrorMode = Literal["replace", "ignore", "preserve"]
+TransliterateErrorMode = Literal["replace", "ignore", "preserve", "strict"]
 Platform = Literal["universal", "windows", "posix"]
 NormalizationForm = Literal["NFC", "NFD", "NFKC", "NFKD"]
 

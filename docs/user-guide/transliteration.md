@@ -108,6 +108,33 @@ The `errors` parameter controls what happens when a character has no translitera
     # => "text ♠ here"
     ```
 
+=== "strict"
+
+    ```python
+    transliterate("text ♠ here", errors="strict")
+    # => raises TranslitError: no transliteration for '♠' (U+2660) at byte offset 5
+    ```
+
+## Finding untranslatable characters
+
+`errors="strict"` raises on the **first** character that has no transliteration,
+reporting it and its byte offset. It is forward-only (not valid with
+`context=True` or `target=...`).
+
+To inspect **all** of them without raising, use `find_untranslatable`, which
+returns `(character, byte_offset)` pairs — the exact set `transliterate` would
+replace/drop/preserve:
+
+```python
+from translit import find_untranslatable
+
+find_untranslatable("café")          # => []  (fully translatable)
+find_untranslatable("a♠b♣c")         # => [('♠', 1), ('♣', 5)]  (byte offsets)
+```
+
+This is useful for validating input up front, or reporting which characters a
+downstream pipeline will lose.
+
 ## Coverage
 
 ### Latin scripts

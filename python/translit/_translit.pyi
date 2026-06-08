@@ -6,7 +6,12 @@ from collections.abc import Sequence
 
 # Imported from the single source of truth so the stub cannot drift from the
 # authoritative alias definitions in translit._types (#200).
-from translit._types import ErrorMode, NormalizationForm, Platform
+from translit._types import (
+    ErrorMode,
+    NormalizationForm,
+    Platform,
+    TransliterateErrorMode,
+)
 
 # Resource limits exposed by the Rust module (#200).
 _MAX_BATCH_SIZE: int
@@ -92,12 +97,20 @@ def _transliterate(
     text: str,
     *,
     lang: str | None = None,
-    errors: ErrorMode = ...,
+    errors: TransliterateErrorMode = ...,
     replace_with: str = ...,
     strict_iso9: bool = ...,
     gost7034: bool = ...,
     tones: bool = ...,
 ) -> str: ...
+def _find_untranslatable(
+    text: str,
+    *,
+    lang: str | None = None,
+    strict_iso9: bool = ...,
+    gost7034: bool = ...,
+    tones: bool = ...,
+) -> list[tuple[str, int]]: ...
 def _transliterate_context(
     text: str,
     *,
@@ -197,7 +210,7 @@ def _transliterate_batch(
     texts: list[str],
     *,
     lang: str | None = None,
-    errors: ErrorMode = ...,
+    errors: TransliterateErrorMode = ...,
     replace_with: str = ...,
     strict_iso9: bool = ...,
     gost7034: bool = ...,

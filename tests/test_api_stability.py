@@ -36,6 +36,7 @@ EXPECTED_ALL = {
     "__version__",
     # Core transforms
     "transliterate",
+    "find_untranslatable",
     "dedup_batch",
     "make_cached_transliterator",
     "CachedTransliterator",
@@ -261,6 +262,13 @@ CORE_FUNCTION_PARAMS = {
         "gost7034",
         "tones",
         "context",
+    ],
+    "find_untranslatable": [
+        "text",
+        "lang",
+        "strict_iso9",
+        "gost7034",
+        "tones",
     ],
     "dedup_batch": [
         "texts",

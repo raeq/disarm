@@ -19,7 +19,7 @@ from __future__ import annotations
 import warnings
 from typing import Any, Callable
 
-from translit import strip_accents, transliterate
+from translit import find_untranslatable, strip_accents, transliterate
 from translit._translit import (
     InvalidArgumentError,
     UnsupportedError,
@@ -40,9 +40,9 @@ def unidecode(text: str, errors: str = "ignore", replace_str: str = "?") -> str:
       (Unidecode's default is ``"?"``).
     - ``"preserve"`` — keep unmapped characters verbatim.
     - ``"strict"`` — raise ``ValueError`` on the first unmapped character
-      (Unidecode raises ``UnidecodeError``; translit has no native strict mode,
-      so a ``ValueError`` carrying the offending character and its index is
-      raised instead).
+      (Unidecode raises ``UnidecodeError``; this shim raises a ``ValueError``
+      carrying the offending character and its index, to match Unidecode's
+      ValueError-on-strict contract).
 
     Examples:
         >>> unidecode("café")
@@ -59,18 +59,19 @@ def unidecode(text: str, errors: str = "ignore", replace_str: str = "?") -> str:
     if errors == "preserve":
         return transliterate(text, errors="preserve")
     if errors == "strict":
-        # translit has no native "raise on unmapped" mode yet (#184 will add one).
-        # Preserve unmapped characters; if any survive (non-ASCII residue), locate
-        # the first offending character in the *original* string for a faithful
-        # message. These raise bare `ValueError` *deliberately*: unidecode's
-        # strict mode raises ValueError, and this shim mimics unidecode exactly.
-        preserved = transliterate(text, errors="preserve")
-        if preserved.isascii():
-            return preserved
-        for i, ch in enumerate(text):
-            if not transliterate(ch, errors="preserve").isascii():
-                raise ValueError(f"no replacement found for character {ch!r} at index {i}")
-        raise ValueError("no replacement found for an unmapped character")  # pragma: no cover
+        # Retired the old O(n)-per-character re-transliteration hack onto the
+        # native scan (#184). `find_untranslatable` returns each unmapped
+        # character with its byte offset; raise on the first, reporting the
+        # *character* index (Unidecode's contract). The bare `ValueError` is
+        # deliberate — Unidecode's strict mode raises ValueError, and this shim
+        # mimics it exactly (translit's own native strict mode raises a
+        # TranslitError; see transliterate(errors="strict")).
+        untranslatable = find_untranslatable(text)
+        if untranslatable:
+            ch, byte_offset = untranslatable[0]
+            char_index = len(text.encode("utf-8")[:byte_offset].decode("utf-8"))
+            raise ValueError(f"no replacement found for character {ch!r} at index {char_index}")
+        return transliterate(text)
     # Invalid `errors` argument to this shim — a translit-owned error (#183).
     raise InvalidArgumentError(
         f"invalid value for errors: {errors!r} "

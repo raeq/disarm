@@ -35,6 +35,8 @@ from translit._translit import (
     _detect_encoding,
     # Predicates
     _detect_scripts,
+    # Untranslatable scan (#184)
+    _find_untranslatable,
     _fold_case,
     # Grapheme cluster functions
     _grapheme_len,
@@ -77,7 +79,13 @@ from translit._translit import (
     _transliterate_context,
     _UniqueSlugifier,
 )
-from translit._types import EmojiProvider, ErrorMode, NormalizationForm, Platform
+from translit._types import (
+    EmojiProvider,
+    ErrorMode,
+    NormalizationForm,
+    Platform,
+    TransliterateErrorMode,
+)
 
 # --- Resource limits ---
 # _MAX_BATCH_SIZE is imported from the Rust extension above (single source of
@@ -112,7 +120,7 @@ def _check_transliterate_conflicts(
     *,
     lang: str | None,
     target: str | None,
-    errors: ErrorMode,
+    errors: TransliterateErrorMode,
     replace_with: str,
     strict_iso9: bool,
     gost7034: bool,
@@ -143,6 +151,14 @@ def _check_transliterate_conflicts(
             "'tones' cannot be used with 'context' — context-aware "
             "transliteration does not produce toned pinyin"
         )
+    if context and errors == "strict":
+        # errors="strict" (#184) is scoped to the forward context-free engine;
+        # the context (abjad) pipeline restores vowels and has no comparable
+        # per-character untranslatable notion.
+        raise InvalidArgumentError(
+            "errors='strict' cannot be used with 'context' — strict mode is "
+            "only available for context-free transliteration"
+        )
     if target is not None:
         forward_only: dict[str, object] = {}
         if errors != "replace":
@@ -168,7 +184,7 @@ def transliterate(
     *,
     lang: str | None = ...,
     target: str | None = ...,
-    errors: ErrorMode = ...,
+    errors: TransliterateErrorMode = ...,
     replace_with: str = ...,
     strict_iso9: bool = ...,
     gost7034: bool = ...,
@@ -183,7 +199,7 @@ def transliterate(
     *,
     lang: str | None = ...,
     target: str | None = ...,
-    errors: ErrorMode = ...,
+    errors: TransliterateErrorMode = ...,
     replace_with: str = ...,
     strict_iso9: bool = ...,
     gost7034: bool = ...,
@@ -197,7 +213,7 @@ def transliterate(
     *,
     lang: str | None = None,
     target: str | None = None,
-    errors: ErrorMode = "replace",
+    errors: TransliterateErrorMode = "replace",
     replace_with: str = "[?]",
     strict_iso9: bool = False,
     gost7034: bool = False,
@@ -227,6 +243,10 @@ def transliterate(
                 "replace" — substitute with *replace_with*.
                 "ignore" — silently drop.
                 "preserve" — keep the original character.
+                "strict" — raise ``TranslitError`` on the first untranslatable
+                character, reporting it and its byte offset (#184). Forward-only:
+                not supported with ``context=True`` or ``target=...``. Use
+                :func:`find_untranslatable` to get *all* of them without raising.
         replace_with: Replacement string when errors="replace". An empty string
                       (``""``) is equivalent to ``errors="ignore"`` — the
                       character is silently dropped. This matches the behaviour
@@ -298,7 +318,8 @@ def transliterate(
                 _transliterate_context(
                     t,
                     lang=lang,
-                    errors=errors,
+                    # not "strict" here (conflict matrix rejects strict+context, #184)
+                    errors=cast(ErrorMode, errors),
                     replace_with=replace_with,
                     strict_iso9=strict_iso9,
                     gost7034=gost7034,
@@ -329,7 +350,9 @@ def transliterate(
         return _transliterate_context(
             text,
             lang=lang,
-            errors=errors,
+            # errors is provably not "strict" here — _check_transliterate_conflicts
+            # rejects errors="strict" with context=True (#184).
+            errors=cast(ErrorMode, errors),
             replace_with=replace_with,
             strict_iso9=strict_iso9,
             gost7034=gost7034,
@@ -348,6 +371,48 @@ def transliterate(
         strict_iso9=strict_iso9,
         gost7034=gost7034,
         tones=tones,
+    )
+
+
+def find_untranslatable(
+    text: str,
+    *,
+    lang: str | None = None,
+    strict_iso9: bool = False,
+    gost7034: bool = False,
+    tones: bool = False,
+) -> list[tuple[str, int]]:
+    """Find every character in *text* that has no transliteration (#184).
+
+    Returns a list of ``(character, byte_offset)`` pairs, in order of
+    appearance — the exact set that :func:`transliterate` would replace, drop,
+    or preserve (and that ``errors="strict"`` raises on the first of). Pure-ASCII
+    input, or input that fully transliterates, returns an empty list.
+
+    Global :func:`register_replacements` are applied first (so a replaced
+    character is not reported), so the offsets are relative to the
+    post-replacement text.
+
+    Args:
+        text: Input Unicode string.
+        lang: Language code (same meaning as in :func:`transliterate`).
+        strict_iso9: Use the scholarly ASCII Cyrillic table.
+        gost7034: Use GOST R 7.0.34 transliteration.
+        tones: Consider toned-pinyin coverage for CJK characters.
+
+    Returns:
+        List of ``(char, byte_offset)`` for each untranslatable character.
+
+    Examples:
+        >>> find_untranslatable("cafe")
+        []
+        >>> find_untranslatable("a\U0001f600b")  # emoji has no transliteration
+        [('😀', 1)]
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"find_untranslatable() expects str, got {type(text).__name__}")
+    return _find_untranslatable(
+        text, lang=lang, strict_iso9=strict_iso9, gost7034=gost7034, tones=tones
     )
 
 
@@ -1802,7 +1867,7 @@ def dedup_batch(
     *,
     lang: str | None = None,
     target: str | None = None,
-    errors: ErrorMode = "replace",
+    errors: TransliterateErrorMode = "replace",
     replace_with: str = "[?]",
     strict_iso9: bool = False,
     gost7034: bool = False,
@@ -1877,7 +1942,7 @@ def make_cached_transliterator(
     *,
     lang: str | None = None,
     target: str | None = None,
-    errors: ErrorMode = "replace",
+    errors: TransliterateErrorMode = "replace",
     replace_with: str = "[?]",
     strict_iso9: bool = False,
     gost7034: bool = False,

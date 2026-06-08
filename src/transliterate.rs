@@ -75,6 +75,36 @@ enum ScriptClass {
     Other,
 }
 
+/// `errors="strict"` (#184): raise [`crate::Error::Untranslatable`] on the first
+/// character with no transliteration; otherwise return the transliteration
+/// (which is identical under any error mode when nothing is unmapped). `text` is
+/// already post-replacement, so reported offsets are relative to that.
+fn transliterate_strict(
+    text: &str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+) -> Result<String, crate::Error> {
+    if let Some((ch, byte_offset)) =
+        find_untranslatable_impl(text, lang, strict_iso9, gost7034, tones)
+            .into_iter()
+            .next()
+    {
+        return Err(crate::Error::Untranslatable { ch, byte_offset });
+    }
+    Ok(transliterate_impl(
+        text,
+        lang,
+        ErrorMode::Ignore,
+        "",
+        strict_iso9,
+        gost7034,
+        tones,
+    )
+    .into_owned())
+}
+
 /// Core transliteration: Unicode → ASCII.
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false))]
@@ -93,7 +123,8 @@ pub fn _transliterate(
         return Err(crate::Error::MutuallyExclusiveBare.into());
     }
     validate_lang(lang)?;
-    let error_mode = ErrorMode::from_str(errors)?;
+    // `errors` is validated below (after the strict short-circuit, since "strict"
+    // is not an ErrorMode value but a separate mode handled here, #184).
     // Apply global pre-transliteration replacements (no-op unless any are
     // registered). Runs before transliterate_impl — and thus before its ASCII
     // fast path — so ASCII-keyed replacements take effect too. The output of the
@@ -109,6 +140,16 @@ pub fn _transliterate(
             .into());
         }
     };
+    if errors == "strict" {
+        return Ok(transliterate_strict(
+            &text,
+            lang,
+            strict_iso9,
+            gost7034,
+            tones,
+        )?);
+    }
+    let error_mode = ErrorMode::from_str(errors)?;
     Ok(transliterate_impl(
         &text,
         lang,
@@ -119,6 +160,42 @@ pub fn _transliterate(
         tones,
     )
     .into_owned())
+}
+
+/// Find every character in `text` that has no transliteration, as
+/// `(char, byte_offset)` pairs in order (#184). Replacements are applied first
+/// (so offsets are relative to the post-replacement text), matching
+/// `transliterate`. Pure-ASCII input yields an empty list.
+#[pyfunction]
+#[pyo3(signature = (text, *, lang=None, strict_iso9=false, gost7034=false, tones=false))]
+pub fn _find_untranslatable(
+    text: &str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+) -> PyResult<Vec<(char, usize)>> {
+    if strict_iso9 && gost7034 {
+        return Err(crate::Error::MutuallyExclusiveBare.into());
+    }
+    validate_lang(lang)?;
+    let text = match tables::apply_replacements(text, MAX_REPLACEMENT_OUTPUT_BYTES) {
+        Ok(t) => t,
+        Err(size) => {
+            return Err(crate::Error::ReplacementOutputTooLarge {
+                size,
+                max: MAX_REPLACEMENT_OUTPUT_BYTES,
+            }
+            .into());
+        }
+    };
+    Ok(find_untranslatable_impl(
+        &text,
+        lang,
+        strict_iso9,
+        gost7034,
+        tones,
+    ))
 }
 
 /// Context-aware transliteration using dictionary-based vowel restoration.
@@ -229,7 +306,66 @@ pub fn transliterate_impl<'a>(
     gost7034: bool,
     tones: bool,
 ) -> Cow<'a, str> {
-    // Fast path: pure ASCII input needs no transliteration.
+    transliterate_impl_inner(
+        text,
+        lang,
+        error_mode,
+        replace_with,
+        strict_iso9,
+        gost7034,
+        tones,
+        None,
+    )
+}
+
+/// Scan `text` and return every character that has no transliteration —
+/// `(char, byte_offset)` in order of appearance (#184). "No transliteration"
+/// means the character reaches the unmapped branch of the engine: no table
+/// entry (lang override / strict_iso9 / gost7034 / default), and no NFKC
+/// recovery. Because this drives the *same* engine as `transliterate_impl`, the
+/// reported set is exactly what the transform would replace/ignore/preserve, so
+/// it cannot drift. ASCII characters are always translatable (identity).
+pub fn find_untranslatable_impl(
+    text: &str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+) -> Vec<(char, usize)> {
+    let mut out = Vec::new();
+    // The error mode is irrelevant to *which* chars are unmapped; Ignore avoids
+    // building any replacement output we would discard.
+    let _ = transliterate_impl_inner(
+        text,
+        lang,
+        ErrorMode::Ignore,
+        "",
+        strict_iso9,
+        gost7034,
+        tones,
+        Some(&mut out),
+    );
+    out
+}
+
+/// Inner transliteration with an optional unmapped-position collector (#184).
+/// When `untranslatable` is `Some`, every character reaching the unmapped branch
+/// is pushed as `(char, byte_offset)`. All public callers go through
+/// `transliterate_impl` (collector `None`); `find_untranslatable_impl` passes a
+/// vec.
+#[allow(clippy::too_many_arguments)]
+fn transliterate_impl_inner<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    error_mode: ErrorMode,
+    replace_with: &str,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+    mut untranslatable: Option<&mut Vec<(char, usize)>>,
+) -> Cow<'a, str> {
+    // Fast path: pure ASCII input needs no transliteration (and ASCII is always
+    // translatable, so the collector stays empty).
     // `str::is_ascii()` is a single SIMD-friendly scan — sub-nanosecond for
     // short strings, and it lets us skip all per-character work + allocation.
     if text.is_ascii() {
@@ -254,7 +390,7 @@ pub fn transliterate_impl<'a>(
     // virama or dependent vowel must strip that trailing "a" first.
     let mut last_was_indic_consonant = false;
 
-    for ch in text.chars() {
+    for (byte_offset, ch) in text.char_indices() {
         if ch.is_ascii() {
             last_was_indic_consonant = false;
             // Insert space when transitioning from ideograph/Hangul to ASCII alnum
@@ -411,6 +547,11 @@ pub fn transliterate_impl<'a>(
             };
             if nfkc_recovered {
                 continue;
+            }
+            // The character is genuinely untranslatable (no table entry, no NFKC
+            // recovery): this is the single point that defines the set (#184).
+            if let Some(v) = untranslatable.as_mut() {
+                v.push((ch, byte_offset));
             }
             match error_mode {
                 ErrorMode::Replace => {
@@ -975,7 +1116,14 @@ pub fn _transliterate_batch(
         .into());
     }
     validate_lang(lang)?;
-    let error_mode = ErrorMode::from_str(errors)?;
+    // `errors="strict"` (#184) raises on the first untranslatable character of
+    // the first item that has one; otherwise the mode is the parsed ErrorMode.
+    let strict = errors == "strict";
+    let error_mode = if strict {
+        ErrorMode::Ignore
+    } else {
+        ErrorMode::from_str(errors)?
+    };
     // Own the borrowed args so the compute loop holds no Python-borrowed data,
     // then run it with the GIL released (#70) — the loop touches no Python
     // objects (the replacement table is a Rust RwLock), so other Python threads
@@ -996,6 +1144,15 @@ pub fn _transliterate_batch(
                             max: MAX_REPLACEMENT_OUTPUT_BYTES,
                         })
                     })?;
+                if strict {
+                    return Ok(transliterate_strict(
+                        &replaced,
+                        lang.as_deref(),
+                        strict_iso9,
+                        gost7034,
+                        tones,
+                    )?);
+                }
                 Ok(transliterate_impl(
                     &replaced,
                     lang.as_deref(),

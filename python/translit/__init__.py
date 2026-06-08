@@ -24,6 +24,7 @@ from translit._api import (
     demojize,
     detect_encoding,
     detect_scripts,
+    find_untranslatable,
     fold_case,
     grapheme_len,
     grapheme_split,
@@ -203,6 +204,7 @@ __all__ = [
     "__version__",
     # Transforms
     "transliterate",
+    "find_untranslatable",
     "dedup_batch",
     "make_cached_transliterator",
     "CachedTransliterator",

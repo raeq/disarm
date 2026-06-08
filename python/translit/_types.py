@@ -6,6 +6,9 @@ import enum
 from typing import Literal, Protocol, runtime_checkable
 
 ErrorMode = Literal["replace", "ignore", "preserve"]
+# transliterate() additionally accepts "strict" (#184): raise on the first
+# untranslatable character. Other errors= consumers (e.g. demojize) use ErrorMode.
+TransliterateErrorMode = Literal["replace", "ignore", "preserve", "strict"]
 Platform = Literal["universal", "windows", "posix"]
 NormalizationForm = Literal["NFC", "NFD", "NFKC", "NFKD"]
 

@@ -2,11 +2,11 @@ name: Conversations resolved
 
 # Hard, status-check-based gate that a PR has no unresolved review threads (#55).
 # GitHub's "Require conversation resolution before merging" setting only disables the
-# merge button and is bypassable; making this a *required status check* enforces it.
+# merge button and is bypassable; making this a required status check enforces it.
 #
-# The `pull_request_review_thread` event (resolved/unresolved) is what re-runs this when
-# a reviewer resolves a thread — `pull_request_review` / `_review_comment` do NOT fire on
-# resolution, so they would leave a stale red check.
+# Re-runs on the pull_request_review_thread (resolved/unresolved) event — the
+# pull_request_review / _review_comment events do NOT fire on resolution and would leave
+# a stale red check.
 
 on:
   pull_request:
@@ -26,23 +26,15 @@ jobs:
       - name: Fail if any review thread is unresolved
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-          REPO: ${{ github.event.repository.name }}
+          REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
         run: |
-          unresolved=$(gh api graphql -f query='
-            query($owner: String!, $repo: String!, $pr: Int!) {
-              repository(owner: $owner, name: $repo) {
-                pullRequest(number: $pr) {
-                  reviewThreads(first: 100) {
-                    nodes { isResolved }
-                  }
-                }
-              }
-            }' -F owner="$OWNER" -F repo="$REPO" -F pr="$PR" \
-            --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
-          echo "Unresolved review threads: ${unresolved}"
-          if [ "${unresolved}" -gt 0 ]; then
+          owner="${REPO%/*}"
+          name="${REPO#*/}"
+          query='query($owner:String!,$name:String!,$pr:Int!){repository(owner:$owner,name:$name){pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved}}}}}'
+          unresolved=$(gh api graphql -f query="$query" -F owner="$owner" -F name="$name" -F pr="$PR" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
+          echo "Unresolved review threads: ${unresolved:-0}"
+          if [ "${unresolved:-0}" -gt 0 ]; then
             echo "::error::${unresolved} unresolved review thread(s). Resolve every review conversation before merging."
             exit 1
           fi

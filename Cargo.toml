@@ -30,7 +30,7 @@ chardetng = "0.1"
 idna = "1"  # UTS#46 / punycode decoding for is_safe_hostname (#63)
 
 [build-dependencies]
-phf_codegen = "0.11"
+phf_codegen = "0.13"
 
 [dev-dependencies]
 proptest = "1"

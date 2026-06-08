@@ -481,17 +481,25 @@ def slugify(
         decimal: Decode HTML decimal entities (&#123;).
         hexadecimal: Decode HTML hex entities (&#x7B;).
         default: Fallback when the slug would be empty — i.e. the input has no
-            sluggable characters (emoji, punctuation, or zero-width only). When
-            set, that value is returned **as-is** (it is not re-slugified, so
-            pass a value you know is URL-safe); when ``None`` (the default), the
-            empty string is returned, preserving prior behaviour. Use this to
-            avoid the routing hazard of empty slugs colliding on one URL (#97).
+            sluggable characters (emoji, punctuation, or zero-width only). The
+            value is itself run through the same slug pipeline (#193), so it is
+            sanitized to a URL-safe slug and is subject to the same
+            ``max_length`` truncation as normal output; a ``default`` that has no
+            sluggable characters therefore yields the empty string. When ``None``
+            (the default), the empty string is returned, preserving prior
+            behaviour. Use this to avoid the routing hazard of empty slugs
+            colliding on one URL (#97).
 
     Returns:
-        URL-safe slug string (or ``default`` when it would otherwise be empty).
+        URL-safe slug string (or the sanitized ``default`` when it would
+        otherwise be empty). Returns ``list[str]`` when given ``list[str]``.
 
     Raises:
-        TranslitError: If an internal Rust error occurs.
+        ValueError: If ``max_length`` is negative (validated for both scalar and
+            list input, #193).
+        TypeError: If ``text`` is neither ``str`` nor ``list[str]``.
+        TranslitError: If an internal Rust error occurs (e.g. an invalid
+            ``regex_pattern`` or unknown ``lang`` code).
 
     Examples:
         >>> slugify("Hello World!")
@@ -507,6 +515,8 @@ def slugify(
         >>> slugify("🔥🔥🔥")
         ''
         >>> slugify("🔥🔥🔥", default="n-a")
+        'n-a'
+        >>> slugify("🔥", default="N/A")  # default is sanitized, not returned raw
         'n-a'
     """
     _sw = stopwords if isinstance(stopwords, (tuple, list)) else list(stopwords)
@@ -528,20 +538,35 @@ def slugify(
         hexadecimal=hexadecimal,
     )
 
+    # max_length is validated before the str/list dispatch (#193): the batch
+    # path would otherwise fall through to the Rust uint conversion and raise an
+    # uncatchable OverflowError, whereas the scalar path raised ValueError.
+    if max_length < 0:
+        raise ValueError(f"max_length must be non-negative, got {max_length}")
+
+    # Sanitize the empty-slug fallback through the *same* slug pipeline (#193).
+    # `default` is documented as a slug, so a caller-derived value (e.g. a
+    # username or filename) must not smuggle path-traversal or `?#/` into output
+    # that callers assume is URL-safe. Running it through `_kw` also applies
+    # `max_length`, so the length guarantee holds for the fallback too. Computed
+    # once here (not per empty batch element); it may itself be empty if
+    # `default` has no sluggable characters.
+    sanitized_default = (
+        _slugify(default, **_kw) if default is not None else None  # type: ignore[arg-type]
+    )
+
     if isinstance(text, list):
         _validate_batch(text, "slugify")
         result = _slugify_batch(text, **_kw)  # type: ignore[arg-type]
-        if default is not None:
-            return [s if s else default for s in result]
+        if sanitized_default is not None:
+            return [s if s else sanitized_default for s in result]
         return result
 
     if not isinstance(text, str):
         raise TypeError(f"slugify() expects str or list[str], got {type(text).__name__}")
-    if max_length < 0:
-        raise ValueError(f"max_length must be non-negative, got {max_length}")
     slug = _slugify(text, **_kw)  # type: ignore[arg-type]
-    if default is not None and not slug:
-        return default
+    if sanitized_default is not None and not slug:
+        return sanitized_default
     return slug
 
 
@@ -1322,6 +1347,7 @@ class Slugifier:
         entities: bool = True,
         decimal: bool = True,
         hexadecimal: bool = True,
+        default: str | None = None,
     ) -> None:
         self._inner = _Slugifier(
             separator=separator,
@@ -1338,9 +1364,18 @@ class Slugifier:
             decimal=decimal,
             hexadecimal=hexadecimal,
         )
+        # Empty-slug fallback, threaded through the stateful forms too (#193):
+        # the routing hazard #97 fixed on the function form was still present on
+        # the classes, the typical choice for long-lived web handlers. Sanitize
+        # it once here through this slugifier's own config (separator, lang,
+        # max_length, …) so it is URL-safe and length-bounded like real output.
+        self._default: str | None = self._inner.slugify(default) if default is not None else None
 
     def __call__(self, text: str) -> str:
-        return self._inner.slugify(text)
+        slug: str = self._inner.slugify(text)
+        if self._default is not None and not slug:
+            return self._default
+        return slug
 
     def __repr__(self) -> str:
         return f"Slugifier(separator={self._inner.separator!r}, lang={self._inner.lang!r})"
@@ -1377,9 +1412,9 @@ class UniqueSlugifier:
         entities: bool = True,
         decimal: bool = True,
         hexadecimal: bool = True,
+        default: str | None = None,
     ) -> None:
-        self._inner = _UniqueSlugifier(
-            check=check,
+        _cfg = dict(
             separator=separator,
             lowercase=lowercase,
             max_length=max_length,
@@ -1394,8 +1429,27 @@ class UniqueSlugifier:
             decimal=decimal,
             hexadecimal=hexadecimal,
         )
+        self._inner = _UniqueSlugifier(check=check, **_cfg)  # type: ignore[arg-type]
+        # Empty-slug fallback for the stateful unique form (#193). When an input
+        # has no sluggable characters we route to `default` *through the inner
+        # slugifier*, so it is both sanitized (URL-safe, length-bounded) AND made
+        # unique — two unsluggable inputs become e.g. "n-a", "n-a-1" rather than
+        # colliding on one default, the routing hazard #97 addressed.
+        #
+        # Emptiness is detected with a stateless companion (`_probe`) configured
+        # identically: calling the unique `_inner` on the empty input would itself
+        # consume a uniqueness slot and suffix the empty slug to "-1" (truthy),
+        # masking the fallback. The probe sees the raw empty slug without mutating
+        # the unique state, so `_inner` is fed exactly once per call.
+        self._default: str | None = default
+        self._probe: Slugifier | None = (
+            Slugifier(**_cfg) if default is not None else None  # type: ignore[arg-type]
+        )
 
     def __call__(self, text: str) -> str:
+        probe = self._probe
+        if probe is not None and self._default is not None and not probe(text):
+            return self._inner.slugify(self._default)
         return self._inner.slugify(text)
 
     def reset(self) -> None:

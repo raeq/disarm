@@ -184,8 +184,14 @@ class Text:
         entities: bool = True,
         decimal: bool = True,
         hexadecimal: bool = True,
+        default: str | None = None,
     ) -> Text:
-        """Generate a URL-safe slug."""
+        """Generate a URL-safe slug.
+
+        ``default`` is the fallback when the slug would be empty; it is
+        sanitized through the same slug pipeline before being returned (#169,
+        #193). See :func:`translit.slugify`.
+        """
         return Text(
             self._t().slugify(
                 self._value,
@@ -202,6 +208,7 @@ class Text:
                 entities=entities,
                 decimal=decimal,
                 hexadecimal=hexadecimal,
+                default=default,
             )
         )
 

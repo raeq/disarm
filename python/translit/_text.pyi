@@ -71,6 +71,7 @@ class Text:
         entities: bool = True,
         decimal: bool = True,
         hexadecimal: bool = True,
+        default: str | None = None,
     ) -> Text:
         """Generate a URL-safe slug."""
         ...

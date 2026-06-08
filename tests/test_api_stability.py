@@ -444,6 +444,7 @@ CLASS_METHODS = {
             "entities",
             "decimal",
             "hexadecimal",
+            "default",
         ],
         "sanitize_filename": [
             "separator",
@@ -500,6 +501,7 @@ CLASS_METHODS = {
             "entities",
             "decimal",
             "hexadecimal",
+            "default",
         ],
         "__call__": ["text"],
     },
@@ -519,6 +521,7 @@ CLASS_METHODS = {
             "entities",
             "decimal",
             "hexadecimal",
+            "default",
         ],
         "__call__": ["text"],
         "reset": [],

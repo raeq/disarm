@@ -13,13 +13,18 @@ which it relies on for milestone semantics and the yank-on-bad-release path.
 > Stay current by default; let the test suite do the triage; reserve human effort for
 > the upgrades that actually break.
 
-Two failure modes are equally bad and this methodology guards both:
+Three failure modes are equally bad and this methodology guards all of them:
 
 - **Bleeding edge** — adopting a release the day it lands and hitting bugs nobody has
   found yet.
 - **Falling behind** — skipping versions until a four-step jump (e.g. pyo3 0.24 → 0.28)
   turns a cheap, incremental upgrade into one large, risky migration. Subtle changes
   accumulate and later versions assume them.
+- **Bumping without adopting** — taking the new version but continuing to call its
+  deprecated APIs, or ignoring the new capabilities it ships. A deprecation with a
+  removal timeline is a *scheduled* future break; unharvested features are value left on
+  the table. Upgrading means *using the version as intended*, not just satisfying the
+  compiler.
 
 ## Timing — soak, then keep pace
 
@@ -68,6 +73,18 @@ cooldown.
 This is what "minimise manual triage" means in practice: humans spend time only where the
 build actually broke.
 
+### Catching what the auto-lane skips
+
+**Hard deprecations** — anything `#[deprecated]` in code we call — are caught here for
+free: CI runs clippy with `-D warnings`, so a green PR has none, and any that appear fail
+the build and route to the manual lane. **Soft deprecations** (a release note saying "X
+is removed at T, use Y", with no compiler attribute) and **new features** aren't
+compiler-enforced, so a green minor/patch can auto-merge straight past them. These are
+harvested by a **dependency-adoption review at each release's planning** (scope-based,
+never by calendar): skim the changelogs of the deps bumped since the last release for
+removal timelines to preempt and features worth adopting, and file issues. The fast lane
+stays fast; nothing deprecated or beneficial is silently lost.
+
 ## Migration procedure (manual lane)
 
 1. Read the upstream changelog / migration guide; **enumerate the breaking changes that
@@ -79,10 +96,16 @@ build actually broke.
    blind — in #135 the phf_codegen break hid the pyo3 breaks behind it).
 4. Migrate the call sites; keep edits mechanical and reviewable; introduce **no `unsafe`**
    (the crate forbids it).
-5. Verify to the depth in the next section.
-6. Check transitive impact: `Cargo.lock`, the abi3 / Python-version floor, MSRV, no new
+5. **Adopt, don't just bump.** Migrate off every API the new version deprecates or tells
+   you to replace — even if it still compiles — and never silence it with
+   `#[allow(deprecated)]`. Then evaluate the version's **new features** and adopt those
+   that benefit us, filing a follow-up issue when non-trivial. (criterion 0.8: migrate
+   `criterion::black_box` → `std::hint::black_box`; its new throughput reporting was
+   evaluated and deferred to a follow-up.)
+6. Verify to the depth in the next section.
+7. Check transitive impact: `Cargo.lock`, the abi3 / Python-version floor, MSRV, no new
    transitive `unsafe`.
-7. Update `CHANGELOG.md`, and **flag any output-affecting change explicitly** (the 0.6.2
+8. Update `CHANGELOG.md`, and **flag any output-affecting change explicitly** (the 0.6.2
    precedent).
 
 ## Verification depth — scaled to blast radius

@@ -62,6 +62,7 @@ nav:
       - Transliteration: user-guide/transliteration.md
       - Slugification: user-guide/slugification.md
       - Normalization: user-guide/normalization.md
+      - Normalize-First Canonicalization: user-guide/normalize-first.md
       - Filename Sanitization: user-guide/filenames.md
       - Text Cleaning: user-guide/text-cleaning.md
       - Text Pipeline: user-guide/pipeline.md

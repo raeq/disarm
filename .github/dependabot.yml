@@ -1,4 +1,11 @@
 version: 2
+
+# Grouping policy: each group is restricted to `minor` + `patch` updates, so the
+# routine low-risk bumps arrive batched (low noise) while every *major* update is
+# left ungrouped and opens its own individual PR. Majors routinely carry breaking
+# API changes that need a deliberate migration and verification — they must not be
+# bundled with unrelated bumps (see the closed group PR #135, which mixed pyo3,
+# phf, chardetng and criterion majors into one unmergeable PR).
 updates:
   # Keep third-party GitHub Actions (pinned to commit SHAs) up to date.
   - package-ecosystem: "github-actions"
@@ -8,6 +15,9 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
 
   # Rust dependencies — keep Cargo.lock fresh for RustSec advisory scanning (#105).
   - package-ecosystem: "cargo"
@@ -17,6 +27,9 @@ updates:
     groups:
       cargo:
         patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
 
   # Python dependencies (dev/docs/test/bench extras; the package has no runtime deps).
   - package-ecosystem: "uv"
@@ -26,3 +39,6 @@ updates:
     groups:
       uv:
         patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"

@@ -23,9 +23,10 @@ from translit._translit import (
     # Resource limit — read from the Rust single source of truth, never
     # re-declared, to prevent silent drift (#200).
     _MAX_BATCH_SIZE,
+    # Exception hierarchy (#183): base + categorised subclasses
+    InvalidArgumentError,
+    ResourceLimitError,
     SafeHostnameDetails,
-    # Exception
-    TranslitError,
     _clear_replacements,
     _collapse_whitespace,
     _decode_to_utf8,
@@ -98,7 +99,7 @@ def _validate_batch(texts: object, func_name: str) -> None:
     if not isinstance(texts, list):
         raise TypeError(f"{func_name}() expects list[str], got {type(texts).__name__}")
     if len(texts) > _MAX_BATCH_SIZE:
-        raise TranslitError(
+        raise ResourceLimitError(
             f"batch too large ({len(texts)} items); maximum is {_MAX_BATCH_SIZE} items"
         )
     for i, t in enumerate(texts):
@@ -139,13 +140,15 @@ def _check_transliterate_conflicts(
     input shapes.)
     """
     if errors not in _VALID_ERROR_MODES:
-        raise TranslitError(f"errors must be 'replace', 'ignore', or 'preserve', got {errors!r}")
+        raise InvalidArgumentError(
+            f"errors must be 'replace', 'ignore', or 'preserve', got {errors!r}"
+        )
     if target is not None and lang is not None:
-        raise ValueError("'lang' and 'target' are mutually exclusive")
+        raise InvalidArgumentError("'lang' and 'target' are mutually exclusive")
     if context and target is not None:
-        raise ValueError("'context' and 'target' are mutually exclusive")
+        raise InvalidArgumentError("'context' and 'target' are mutually exclusive")
     if context and tones:
-        raise ValueError(
+        raise InvalidArgumentError(
             "'tones' cannot be used with 'context' — context-aware "
             "transliteration does not produce toned pinyin"
         )
@@ -163,7 +166,9 @@ def _check_transliterate_conflicts(
             forward_only["tones"] = tones
         if forward_only:
             names = ", ".join(sorted(forward_only))
-            raise ValueError(f"forward-only parameters ({names}) cannot be used with 'target'")
+            raise InvalidArgumentError(
+                f"forward-only parameters ({names}) cannot be used with 'target'"
+            )
 
 
 @overload
@@ -548,7 +553,7 @@ def slugify(
     # path would otherwise fall through to the Rust uint conversion and raise an
     # uncatchable OverflowError, whereas the scalar path raised ValueError.
     if max_length < 0:
-        raise ValueError(f"max_length must be non-negative, got {max_length}")
+        raise InvalidArgumentError(f"max_length must be non-negative, got {max_length}")
 
     # Sanitize the empty-slug fallback through the *same* slug pipeline (#193).
     # `default` is documented as a slug, so a caller-derived value (e.g. a
@@ -610,7 +615,7 @@ def normalize(
     # Validate the form enum before the ASCII fast-path / batch dispatch (#99):
     # otherwise a typo'd form silently no-ops on ASCII input.
     if form not in _VALID_NORM_FORMS:
-        raise TranslitError(f"form must be 'NFC', 'NFD', 'NFKC', or 'NFKD', got {form!r}")
+        raise InvalidArgumentError(f"form must be 'NFC', 'NFD', 'NFKC', or 'NFKD', got {form!r}")
     if isinstance(text, list):
         _validate_batch(text, "normalize")
         return _normalize_batch(text, form=form)
@@ -716,7 +721,7 @@ def sanitize_filename(
     if max_len is not None:
         max_length = max_len
     if max_length < 0:
-        raise ValueError(f"max_length must be non-negative, got {max_length}")
+        raise InvalidArgumentError(f"max_length must be non-negative, got {max_length}")
     return _sanitize_filename(
         text,
         separator=separator,
@@ -990,7 +995,7 @@ def grapheme_split(text: str) -> list[str]:
     # in characters so the reported unit matches what is measured (#200). (An
     # O(1) codepoint count, rather than encoding the whole string to count bytes.)
     if len(text) > _MAX_GRAPHEME_SPLIT_INPUT:
-        raise TranslitError(
+        raise ResourceLimitError(
             f"input too large ({len(text)} characters); maximum for grapheme_split() "
             f"is {_MAX_GRAPHEME_SPLIT_INPUT} characters"
         )
@@ -1018,7 +1023,7 @@ def grapheme_truncate(text: str, max_graphemes: int) -> str:
         'caf'
     """
     if max_graphemes < 0:
-        raise ValueError(f"max_graphemes must be non-negative, got {max_graphemes}")
+        raise InvalidArgumentError(f"max_graphemes must be non-negative, got {max_graphemes}")
     return _grapheme_truncate(text, max_graphemes)
 
 
@@ -1149,7 +1154,9 @@ def decode_to_utf8(
         False
     """
     if not (0.0 <= min_confidence <= 1.0):
-        raise ValueError(f"min_confidence must be between 0.0 and 1.0, got {min_confidence}")
+        raise InvalidArgumentError(
+            f"min_confidence must be between 0.0 and 1.0, got {min_confidence}"
+        )
     return _decode_to_utf8(data, encoding=encoding, min_confidence=min_confidence)
 
 

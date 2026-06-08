@@ -160,8 +160,18 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(emoji::_demojize, m)?)?;
     m.add_function(wrap_pyfunction!(emoji::_set_emoji_provider, m)?)?;
 
-    // Custom exception
+    // Custom exception hierarchy (#183): TranslitError base + categorised
+    // subclasses. The Error -> PyErr conversion maps each variant to one of these.
     m.add("TranslitError", m.py().get_type::<TranslitError>())?;
+    m.add(
+        "InvalidArgumentError",
+        m.py().get_type::<InvalidArgumentError>(),
+    )?;
+    m.add(
+        "ResourceLimitError",
+        m.py().get_type::<ResourceLimitError>(),
+    )?;
+    m.add("UnsupportedError", m.py().get_type::<UnsupportedError>())?;
 
     // Resource limits exposed so the Python wrapper reads them from this single
     // source instead of re-declaring the literal and risking silent drift (#200).
@@ -253,6 +263,33 @@ pyo3::create_exception!(
     translit,
     TranslitError,
     pyo3::exceptions::PyValueError,
-    "Exception raised by translit for invalid input or internal Rust errors.\n\
-     Exposed to Python as ``translit.TranslitError``, a subclass of ``ValueError``."
+    "Base exception for every error translit raises.\n\
+     Subclass of ``ValueError`` (so existing ``except ValueError`` code keeps\n\
+     working); catch ``TranslitError`` to handle any translit failure. The\n\
+     subclasses below categorise the failure (#183)."
+);
+
+pyo3::create_exception!(
+    translit,
+    InvalidArgumentError,
+    TranslitError,
+    "An argument had an invalid value or a combination of arguments was\n\
+     contradictory (e.g. an unknown ``errors``/``form``/``lang`` value, or two\n\
+     mutually-exclusive flags). Subclass of ``translit.TranslitError``."
+);
+
+pyo3::create_exception!(
+    translit,
+    ResourceLimitError,
+    TranslitError,
+    "A configured resource limit was exceeded (batch size, registration cap,\n\
+     regex length, unique-slug attempts). Subclass of ``translit.TranslitError``."
+);
+
+pyo3::create_exception!(
+    translit,
+    UnsupportedError,
+    TranslitError,
+    "A requested operation is not supported (e.g. reverse transliteration for a\n\
+     language, or auto-detecting an encoding). Subclass of ``translit.TranslitError``."
 );

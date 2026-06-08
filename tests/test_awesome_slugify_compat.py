@@ -64,8 +64,14 @@ class TestSlugifyClass:
     def test_pretranslate_callable_raises(self) -> None:
         import pytest
 
-        with pytest.raises(NotImplementedError, match="callable pretranslate"):
+        from translit import TranslitError, UnsupportedError
+
+        # #183: an unsupported compat feature is now a translit-owned error
+        # (UnsupportedError), catchable via TranslitError, not a bare
+        # NotImplementedError.
+        with pytest.raises(UnsupportedError, match="callable pretranslate"):
             Slugify(pretranslate=lambda x: x)
+        assert issubclass(UnsupportedError, TranslitError)
 
     def test_translate_ignored_warns(self) -> None:
         with warnings.catch_warnings(record=True) as w:

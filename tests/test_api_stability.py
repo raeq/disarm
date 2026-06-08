@@ -122,8 +122,11 @@ EXPECTED_ALL = {
     "slugify_ru",
     "slugify_de",
     "slugify_el",
-    # Exception
+    # Exception hierarchy (#183)
     "TranslitError",
+    "InvalidArgumentError",
+    "ResourceLimitError",
+    "UnsupportedError",
 }
 
 # LANG_* constants: generated from the canonical set

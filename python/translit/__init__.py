@@ -164,7 +164,13 @@ from translit._presets import (
     strip_obfuscation,
     strip_zalgo,
 )
-from translit._translit import SafeHostnameDetails, TranslitError
+from translit._translit import (
+    InvalidArgumentError,
+    ResourceLimitError,
+    SafeHostnameDetails,
+    TranslitError,
+    UnsupportedError,
+)
 from translit._types import NF, EmojiProvider, ErrorMode
 
 # --- Package version (single source of truth: the installed distribution's metadata,
@@ -370,6 +376,9 @@ __all__ = [
     "slugify_el",
     # Exception
     "TranslitError",
+    "InvalidArgumentError",
+    "ResourceLimitError",
+    "UnsupportedError",
 ]
 
 # ---------------------------------------------------------------------------

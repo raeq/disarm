@@ -49,7 +49,16 @@ BUILDER_CLASSES = ("_Slugifier", "_UniqueSlugifier", "_TextPipeline")
 # Opaque/builtin types with no introspectable constructor signature.
 # These have no __text_signature__ and inspect.signature() raises on them,
 # so there is nothing to compare against the stub.
-SKIP = frozenset({"TranslitError", "SafeHostnameDetails"})
+SKIP = frozenset(
+    {
+        # Opaque types with no introspectable constructor signature to compare.
+        "TranslitError",
+        "InvalidArgumentError",  # #183 exception subclasses
+        "ResourceLimitError",
+        "UnsupportedError",
+        "SafeHostnameDetails",
+    }
+)
 
 # Minimum number of symbols the test must check; guards against the comparison
 # silently passing because it inspected nothing (e.g. an import or parse change

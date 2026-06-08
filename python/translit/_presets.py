@@ -11,7 +11,7 @@ from typing import Any
 
 from translit._api import TextPipeline
 from translit._translit import (
-    TranslitError,
+    InvalidArgumentError,
     _catalog_key,
     _display_clean,
     _is_zalgo,
@@ -76,8 +76,8 @@ def ml_normalize(
         Clean, accent-free, lowercased text.
 
     Raises:
-        TranslitError: If *emoji* is not ``"cldr"`` or ``"none"``,
-            or if an internal Rust error occurs.
+        InvalidArgumentError: If *emoji* is not ``"cldr"`` or ``"none"``.
+        TranslitError: If an internal Rust error occurs (base of the above).
 
     Examples:
         >>> ml_normalize("Café RÉSUMÉ")
@@ -487,7 +487,7 @@ def get_pipeline(profile: str) -> TextPipeline:
         A configured ``TextPipeline``.
 
     Raises:
-        TranslitError: If *profile* is not a known profile name.
+        InvalidArgumentError: If *profile* is not a known profile name.
 
     Examples:
         >>> pipe = get_pipeline("scholarly_cyrillic_iso9")
@@ -498,7 +498,7 @@ def get_pipeline(profile: str) -> TextPipeline:
         kwargs = _POLICY_PROFILES[profile]
     except KeyError:
         avail = ", ".join(sorted(_POLICY_PROFILES))
-        raise TranslitError(f"Unknown profile {profile!r}; available: {avail}") from None
+        raise InvalidArgumentError(f"Unknown profile {profile!r}; available: {avail}") from None
     return TextPipeline(**kwargs)
 
 

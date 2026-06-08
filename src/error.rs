@@ -7,11 +7,12 @@
 //!
 //! The PyO3 boundary converts `Error` into a Python exception via
 //! [`From<Error> for pyo3::PyErr`].  That conversion is the **only** place the
-//! core couples to PyO3: it maps each variant to the same Python exception
-//! *type* it was constructed as historically — either `crate::TranslitError`
-//! (most variants) or a bare `pyo3::exceptions::PyValueError` (a deliberately
-//! preserved minority — see the conversion impl).  No message text or exception
-//! type changes; this is a behaviour-preserving restructuring.
+//! core couples to PyO3: it maps each variant into translit's unified exception
+//! hierarchy — the `TranslitError` base or one of its `InvalidArgumentError` /
+//! `ResourceLimitError` / `UnsupportedError` subclasses (#183). Message text is
+//! unchanged from each original construction site; only the exception *type* is
+//! now categorised, so `except TranslitError` catches every variant (it missed
+//! the five formerly-bare-`PyValueError` sites before #183).
 //!
 //! Each variant also exposes a stable machine-readable [`Error::code`] — new
 //! metadata that is not yet surfaced to Python and changes no behaviour.
@@ -99,13 +100,15 @@ pub(crate) enum Error {
         valid: String,
     },
 
-    /// Mutually-exclusive flags, mapped to a bare `PyValueError` (transliterate
-    /// scalar/context/batch entry points, #130).
+    /// Mutually-exclusive flags, raised at the transliterate scalar/context/batch
+    /// entry points (#130). Maps to `InvalidArgumentError` (#183).
     #[error("strict_iso9 and gost7034 are mutually exclusive")]
     MutuallyExclusiveBare,
 
-    /// Mutually-exclusive flags, mapped to `TranslitError` (the `TextPipeline`
-    /// constructor — preserved as it was built historically).
+    /// Mutually-exclusive flags, raised at the `TextPipeline` constructor. Same
+    /// message and `InvalidArgumentError` mapping as `MutuallyExclusiveBare`;
+    /// the two are kept distinct only by construction site (a future cleanup
+    /// could merge them now that the Py-type split they encoded is gone).
     #[error("strict_iso9 and gost7034 are mutually exclusive")]
     MutuallyExclusivePipeline,
 
@@ -139,8 +142,8 @@ pub(crate) enum Error {
         op: String,
     },
 
-    /// `register_lang` would exceed the registered-language cap. Bare
-    /// `PyValueError`.
+    /// `register_lang` would exceed the registered-language cap. Maps to
+    /// `ResourceLimitError` (#183).
     #[error(
         "register_lang(): maximum of {max} registered languages reached; \
          re-registering an existing code is still allowed"
@@ -150,8 +153,8 @@ pub(crate) enum Error {
         max: usize,
     },
 
-    /// `register_lang` mapping keys are not single Unicode characters. Bare
-    /// `PyValueError`.
+    /// `register_lang` mapping keys are not single Unicode characters. Maps to
+    /// `InvalidArgumentError` (#183).
     #[error(
         "register_lang(): mapping keys must be exactly one Unicode character; \
          invalid keys: {keys}"
@@ -161,8 +164,8 @@ pub(crate) enum Error {
         keys: String,
     },
 
-    /// `register_replacements` would exceed the replacements cap. Bare
-    /// `PyValueError`.
+    /// `register_replacements` would exceed the replacements cap. Maps to
+    /// `ResourceLimitError` (#183).
     #[error(
         "register_replacements(): table would exceed the maximum of {max} entries \
          (projected size: {projected}); call clear_replacements() first"
@@ -270,8 +273,8 @@ pub(crate) enum Error {
         guess: String,
     },
 
-    /// Reverse transliteration not supported for the requested language. Bare
-    /// `PyValueError`.
+    /// Reverse transliteration not supported for the requested language. Maps to
+    /// `UnsupportedError` (#183).
     #[error("reverse transliteration not supported for lang={lang:?}; available: {available}")]
     ReverseUnsupportedLang {
         /// The requested language (rendered with `{:?}`).
@@ -321,27 +324,55 @@ impl Error {
 }
 
 impl From<Error> for pyo3::PyErr {
-    /// Convert a core `Error` into the Python exception it was historically
-    /// constructed as.
+    /// Convert a core `Error` into a Python exception from translit's unified
+    /// hierarchy (#183): a [`crate::TranslitError`] base with `InvalidArgumentError`
+    /// / `ResourceLimitError` / `UnsupportedError` subclasses. Every variant maps
+    /// to exactly one of them, so `except TranslitError` catches all of them —
+    /// including the five sites that were previously bare `PyValueError`
+    /// (mutually-exclusive flags, register limits, reverse unsupported lang) and
+    /// silently escaped it. `TranslitError` remains a `ValueError` subclass, so
+    /// existing `except ValueError` code is unaffected. The message is `Display`,
+    /// identical to before at every site.
     ///
-    /// Most variants become [`crate::TranslitError`]. A deliberately preserved
-    /// minority become a bare [`pyo3::exceptions::PyValueError`] — these are the
-    /// sites that were *not* wrapped in `TranslitError` before this refactor
-    /// (#181 is behaviour-preserving; surface unification is #183). The message
-    /// is `Display` (`to_string`), identical to the original at every site.
+    /// The match is exhaustive (no wildcard) on purpose: a new variant must be
+    /// assigned a category here, not silently default.
     fn from(err: Error) -> Self {
-        use pyo3::exceptions::PyValueError;
         let msg = err.to_string();
         match err {
-            // Bare PyValueError sites — preserved exactly, NOT promoted to
-            // TranslitError (see #181 constraints).
-            Error::MutuallyExclusiveBare
-            | Error::RegisterLangLimit { .. }
+            // InvalidArgumentError — a bad argument value or a contradictory
+            // combination of arguments.
+            Error::InvalidErrorMode { .. }
+            | Error::InvalidNormForm { .. }
+            | Error::InvalidPipelineNormForm { .. }
+            | Error::InvalidEmojiStyle { .. }
+            | Error::InvalidPlatform { .. }
+            | Error::InvalidTargetScript { .. }
+            | Error::UnknownLang { .. }
+            | Error::MutuallyExclusiveBare
+            | Error::MutuallyExclusivePipeline
             | Error::RegisterLangBadKeys { .. }
+            | Error::RegexCompile { .. }
+            | Error::UniqueSlugMaxLengthTooSmall { .. }
+            | Error::UnknownEncoding { .. } => crate::InvalidArgumentError::new_err(msg),
+
+            // ResourceLimitError — a configured limit was exceeded.
+            Error::BatchTooLarge { .. }
+            | Error::ReplacementOutputTooLarge { .. }
+            | Error::RegisterLangLimit { .. }
             | Error::RegisterReplacementsLimit { .. }
-            | Error::ReverseUnsupportedLang { .. } => PyValueError::new_err(msg),
-            // Everything else was built as TranslitError.
-            _ => crate::TranslitError::new_err(msg),
+            | Error::RegexTooLong { .. }
+            | Error::UniqueSlugAttemptsExceeded { .. } => crate::ResourceLimitError::new_err(msg),
+
+            // UnsupportedError — a requested feature is unavailable.
+            Error::UnsupportedAutoEncoding { .. } | Error::ReverseUnsupportedLang { .. } => {
+                crate::UnsupportedError::new_err(msg)
+            }
+
+            // Base TranslitError — state / data errors that fit no category above.
+            Error::Sealed { .. }
+            | Error::ContextDictNotFound { .. }
+            | Error::ContextDictCorrupt { .. }
+            | Error::EncodingConfidenceTooLow { .. } => crate::TranslitError::new_err(msg),
         }
     }
 }

@@ -377,12 +377,22 @@ class TestNFKCCompatibilityFallback:
 
 
 class TestUnknownLangRaises:
-    """Unknown lang codes raise instead of silently falling back (#68)."""
+    """Unknown lang codes raise instead of silently falling back (#68, #197)."""
 
     @pytest.mark.parametrize("bad", ["RU", "russian", "zz", "EN"])
     def test_unknown_lang_raises(self, bad):
         with pytest.raises((ValueError, Exception), match="unknown language code"):
             transliterate("Москва", lang=bad)
+
+    @pytest.mark.parametrize("bad", ["RU", "russian", "zz", "EN"])
+    def test_unknown_lang_raises_on_ascii_input(self, bad):
+        # #197: a binding-side pure-ASCII fast path used to return the input
+        # before the core validated `lang`, so a typo'd code was silently
+        # accepted on ASCII text — re-opening #68 for ASCII inputs. Validation
+        # must run regardless of whether the input is ASCII. (The #68 case above
+        # only exercised non-ASCII input, which always reached the core.)
+        with pytest.raises((ValueError, Exception), match="unknown language code"):
+            transliterate("abc", lang=bad)
 
     def test_valid_and_special_codes_accepted(self):
         assert transliterate("Москва", lang="ru") == "Moskva"

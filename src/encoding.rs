@@ -88,11 +88,14 @@ pub fn decode_to_utf8_impl(
     min_confidence: f64,
     strict: bool,
 ) -> Result<(String, bool), crate::Error> {
-    // Validate the [0.0, 1.0] contract here in the core — not in the Python
-    // wrapper — so a native Rust crate user calling this function directly is
-    // held to the same range as any binding. The check is unconditional: an
-    // out-of-range threshold is a caller mistake even when `encoding` is given
-    // and the value goes unused. (NaN is rejected too: `!(0.0..=1.0)` is true.)
+    // Validate the [0.0, 1.0] contract here in the core, not only in the
+    // `_api.py` wrapper: the raw `_decode_to_utf8` PyO3 function is importable
+    // and callable directly, bypassing that wrapper, so a wrapper-only check
+    // would leave it unguarded. The core is the single place every caller
+    // crosses. The check is unconditional — an out-of-range threshold is a
+    // caller mistake even when an explicit `encoding` means it is never used as
+    // a detection threshold. NaN is rejected too: `(0.0..=1.0).contains(&NaN)`
+    // is false, so the negation below is true.
     if !(0.0..=1.0).contains(&min_confidence) {
         return Err(crate::Error::MinConfidenceOutOfRange { min_confidence });
     }
@@ -300,10 +303,11 @@ mod tests {
 
     #[test]
     fn test_decode_min_confidence_out_of_range_rejected() {
-        // The range contract is enforced in the core itself, so a native Rust
-        // caller (no Python binding involved) is held to it. Rejected below 0,
-        // above 1, for NaN, and even when an explicit encoding makes the value
-        // unused — an out-of-range threshold is a caller mistake either way.
+        // The range contract is enforced in decode_to_utf8_impl itself, so it
+        // holds for the raw `_decode_to_utf8` PyO3 entrypoint too — not just the
+        // `_api.py` wrapper. Rejected below 0, above 1, for NaN, and even when an
+        // explicit encoding means the value is never used as a detection
+        // threshold — an out-of-range threshold is a caller mistake either way.
         for bad in [-0.5_f64, 1.5, f64::NAN, -0.000_001, 1.000_001] {
             let auto = decode_to_utf8_impl(b"hi", None, bad, false);
             let explicit = decode_to_utf8_impl(b"hi", Some("UTF-8"), bad, false);

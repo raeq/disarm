@@ -296,9 +296,10 @@ pub(crate) enum Error {
     },
 
     /// `decode_to_utf8` was given a `min_confidence` outside the valid [0.0, 1.0]
-    /// range. Validated in the core so every caller — native Rust crate users
-    /// included, not just the Python binding — is held to the same contract.
-    /// Maps to `InvalidArgumentError`.
+    /// range. Validated in the core (the single source of truth) rather than only
+    /// in the `_api.py` wrapper, so the raw `_decode_to_utf8` PyO3 entrypoint —
+    /// which bypasses that wrapper — is held to the same contract. Maps to
+    /// `InvalidArgumentError`.
     #[error("min_confidence must be between 0.0 and 1.0, got {min_confidence}")]
     MinConfidenceOutOfRange {
         /// The caller-supplied confidence threshold.

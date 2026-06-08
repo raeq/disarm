@@ -1,0 +1,26 @@
+name: Dependabot auto-merge
+
+# Implements the "auto lane" from DEPENDENCY_UPGRADES.md: arm auto-merge on every
+# Dependabot PR. Branch protection (required status checks + the unresolved-review-thread
+# gate) is what actually decides — only green, clean PRs merge. A PR whose CI goes red
+# stays open with auto-merge armed-but-never-fired, which is the signal for a human to
+# pick it up and run the migration procedure (the "manual lane").
+#
+# Uses only the GitHub CLI + GITHUB_TOKEN — no third-party action to pin or maintain.
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+    steps:
+      - name: Arm auto-merge (squash)
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

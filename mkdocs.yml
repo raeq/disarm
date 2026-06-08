@@ -104,4 +104,5 @@ nav:
   - Changelog: CHANGELOG.md
   - Contributing: CONTRIBUTING.md
   - Releasing: RELEASING.md
+  - Dependency upgrades: DEPENDENCY_UPGRADES.md
   - Security: SECURITY.md

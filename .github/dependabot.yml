@@ -1,17 +1,28 @@
 version: 2
 
-# Grouping policy: each group is restricted to `minor` + `patch` updates, so the
-# routine low-risk bumps arrive batched (low noise) while every *major* update is
-# left ungrouped and opens its own individual PR. Majors routinely carry breaking
-# API changes that need a deliberate migration and verification — they must not be
-# bundled with unrelated bumps (see the closed group PR #135, which mixed pyo3,
-# phf, chardetng and criterion majors into one unmergeable PR).
+# Policy (see DEPENDENCY_UPGRADES.md for the full methodology):
+#
+#  * Soak window via `cooldown` — a release is not even proposed until it has aged
+#    (patch 2d / minor 7d / major 14d), so upstream point-fixes land and others surface
+#    regressions first. We are never the beta tester.
+#  * Grouping — each group is restricted to `minor` + `patch`, so routine low-risk bumps
+#    arrive batched (low noise) while every *major* is left ungrouped and opens its own
+#    PR. Majors carry breaking changes that need a deliberate migration and must not be
+#    bundled (see the closed group PR #135, which mixed pyo3, phf, chardetng and criterion
+#    majors into one unmergeable PR).
+#  * Auto-merge — green PRs merge hands-off (.github/workflows/dependabot-auto-merge.yml);
+#    a red PR is the only thing that pulls in a human (the migration procedure).
 updates:
   # Keep third-party GitHub Actions (pinned to commit SHAs) up to date.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 2
     groups:
       actions:
         patterns: ["*"]
@@ -24,6 +35,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 2
     groups:
       cargo:
         patterns: ["*"]
@@ -36,6 +52,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 2
     groups:
       uv:
         patterns: ["*"]

@@ -10,6 +10,8 @@ It complements two neighbouring documents and does not repeat them:
 - [SECURITY.md](SECURITY.md) — how to report a vulnerability privately, and the
   supported-version window.
 - [CHANGELOG.md](CHANGELOG.md) — the per-release record of what actually changed.
+- [DEPENDENCY_UPGRADES.md](DEPENDENCY_UPGRADES.md) — the repeatable methodology for
+  keeping dependencies current (soak windows, auto/manual lanes, verification depth).
 
 ## Versioning
 

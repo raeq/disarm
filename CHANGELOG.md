@@ -3,7 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versions follow [Semantic Versioning](https://semver.org/).
+Version numbers use the `MAJOR.MINOR.PATCH` shape but follow translit's own
+[release policy](RELEASING.md) — patch = fixes/cleanups/docs, minor = features
+or major refactors, and the major component denotes **support status**, not API
+compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 

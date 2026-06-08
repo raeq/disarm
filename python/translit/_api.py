@@ -1193,19 +1193,22 @@ def decode_to_utf8(
     Args:
         data: Raw byte sequence to decode.
         encoding: Encoding name (e.g. "windows-1252"). None to auto-detect.
-        min_confidence: Minimum acceptable detection confidence (0.0–1.0)
-            when auto-detecting; raises TranslitError if the detected confidence
-            is below it. Has no effect when ``encoding`` is provided explicitly.
-            Defaults to ``0.95`` (secure-by-default).
+        min_confidence: Confidence threshold (0.0–1.0) applied when
+            auto-detecting; raises TranslitError if the detected confidence is
+            below it. When ``encoding`` is given explicitly the confidence gate
+            is bypassed (nothing is detected), but the value is still
+            range-validated — an out-of-range ``min_confidence`` raises
+            regardless (#217). Defaults to ``0.95``.
 
             **Effectively a binary knob (#194).** Since the chardetng 1.0
             migration (#164) the detector reports a fixed ``0.95`` for every
             successful detection, so ``min_confidence`` cannot grade detection
-            quality — it only *accepts every guess* (any value ``<= 0.95``,
-            including the ``0.95`` default) or *rejects auto-detection entirely*
-            (any value ``> 0.95``, e.g. ``1.0``). To require high-quality input,
-            pass the encoding explicitly rather than relying on this threshold.
-            Pass ``0.0`` to be explicit about accepting any guess.
+            quality: any value ``<= 0.95`` (including the ``0.95`` default)
+            accepts every guess, and any value ``> 0.95`` (e.g. ``1.0``) rejects
+            auto-detection outright. The default therefore does **not** reject
+            low-quality detections — to require high-quality input, pass the
+            encoding explicitly rather than relying on this threshold. Pass
+            ``0.0`` to be explicit about accepting any guess.
         strict: When ``True``, raise :class:`TranslitError` instead of silently
             returning ``had_errors=True`` if the input contains byte sequences
             that decode to the U+FFFD replacement character (#189). Use this to

@@ -86,11 +86,11 @@ class _TextPipeline:
 def _transliterate(
     text: str,
     *,
-    lang: str | None,
-    errors: ErrorMode,
-    replace_with: str,
-    strict_iso9: bool,
-    gost7034: bool,
+    lang: str | None = None,
+    errors: ErrorMode = ...,
+    replace_with: str = ...,
+    strict_iso9: bool = ...,
+    gost7034: bool = ...,
     tones: bool = ...,
 ) -> str: ...
 def _transliterate_context(
@@ -105,63 +105,63 @@ def _transliterate_context(
 def _slugify(
     text: str,
     *,
-    separator: str,
-    lowercase: bool,
-    max_length: int,
-    word_boundary: bool,
-    save_order: bool,
-    stopwords: Sequence[str],
-    regex_pattern: str | None,
-    replacements: Sequence[tuple[str, str]],
-    allow_unicode: bool,
-    lang: str | None,
-    entities: bool,
-    decimal: bool,
-    hexadecimal: bool,
+    separator: str = "-",
+    lowercase: bool = True,
+    max_length: int = 0,
+    word_boundary: bool = False,
+    save_order: bool = False,
+    stopwords: Sequence[str] = ...,
+    regex_pattern: str | None = None,
+    replacements: Sequence[tuple[str, str]] = ...,
+    allow_unicode: bool = False,
+    lang: str | None = None,
+    entities: bool = True,
+    decimal: bool = True,
+    hexadecimal: bool = True,
 ) -> str: ...
-def _normalize(text: str, form: NormalizationForm) -> str: ...
-def _normalize_confusables(text: str, *, target_script: str) -> str: ...
+def _normalize(text: str, *, form: NormalizationForm = ...) -> str: ...
+def _normalize_confusables(text: str, *, target_script: str = ...) -> str: ...
 def _sanitize_filename(
     text: str,
     *,
-    separator: str,
-    max_length: int,
-    platform: Platform,
-    lang: str | None,
-    preserve_extension: bool,
+    separator: str = "_",
+    max_length: int = 255,
+    platform: Platform = ...,
+    lang: str | None = None,
+    preserve_extension: bool = True,
 ) -> str: ...
 def _strip_accents(text: str) -> str: ...
 def _fold_case(text: str) -> str: ...
 def _collapse_whitespace(
     text: str,
     *,
-    strip_control: bool,
-    strip_zero_width: bool,
+    strip_control: bool = True,
+    strip_zero_width: bool = True,
 ) -> str: ...
 def _demojize(
     text: str,
     *,
-    strip_modifiers: bool,
-    errors: ErrorMode,
-    replace_with: str,
-    provider: object | None,
+    strip_modifiers: bool = False,
+    errors: ErrorMode = ...,
+    replace_with: str = ...,
+    provider: object | None = None,
 ) -> str: ...
 def _security_clean(text: str) -> str: ...
 def _ml_normalize(
     text: str,
     *,
-    lang: str | None,
-    emoji_style: str,
+    lang: str | None = None,
+    emoji_style: str = ...,
 ) -> str: ...
 def _catalog_key(
     text: str,
     *,
-    lang: str | None,
-    strict_iso9: bool,
+    lang: str | None = None,
+    strict_iso9: bool = False,
 ) -> str: ...
 def _display_clean(text: str) -> str: ...
-def _search_key(text: str, *, lang: str | None) -> str: ...
-def _sort_key(text: str, *, lang: str | None) -> str: ...
+def _search_key(text: str, *, lang: str | None = None) -> str: ...
+def _sort_key(text: str, *, lang: str | None = None) -> str: ...
 def _strip_bidi(text: str) -> str: ...
 def _sanitize_user_input(text: str) -> str: ...
 def _strip_obfuscation(text: str) -> str: ...
@@ -173,14 +173,14 @@ def _grapheme_truncate(text: str, max_graphemes: int) -> str: ...
 def _is_safe_hostname(hostname: str) -> tuple[bool, SafeHostnameDetails]: ...
 def _detect_encoding(data: bytes) -> tuple[str, float]: ...
 def _decode_to_utf8(
-    data: bytes, *, encoding: str | None, min_confidence: float = 0.95
+    data: bytes, encoding: str | None = None, min_confidence: float = 0.95
 ) -> tuple[str, bool]: ...
 def _detect_scripts(text: str) -> list[str]: ...
 def _is_mixed_script(text: str) -> bool: ...
 def _inspect_auto_lang(text: str) -> dict[str, object]: ...
-def _is_confusable(text: str, *, target_script: str) -> bool: ...
+def _is_confusable(text: str, *, target_script: str = ...) -> bool: ...
 def _is_ascii(text: str) -> bool: ...
-def _is_normalized(text: str, *, form: NormalizationForm) -> bool: ...
+def _is_normalized(text: str, *, form: NormalizationForm = ...) -> bool: ...
 def _list_langs() -> list[str]: ...
 def _register_lang(code: str, mappings: dict[str, str]) -> None: ...
 def _register_replacements(replacements: dict[str, str]) -> None: ...
@@ -191,32 +191,32 @@ def _registrations_sealed() -> bool: ...
 def _transliterate_batch(
     texts: list[str],
     *,
-    lang: str | None,
-    errors: ErrorMode,
-    replace_with: str,
-    strict_iso9: bool,
-    gost7034: bool,
+    lang: str | None = None,
+    errors: ErrorMode = ...,
+    replace_with: str = ...,
+    strict_iso9: bool = ...,
+    gost7034: bool = ...,
     tones: bool = ...,
 ) -> list[str]: ...
 def _slugify_batch(
     texts: list[str],
     *,
-    separator: str,
-    lowercase: bool,
-    max_length: int,
-    word_boundary: bool,
-    save_order: bool,
-    stopwords: Sequence[str],
-    regex_pattern: str | None,
-    replacements: Sequence[tuple[str, str]],
-    allow_unicode: bool,
-    lang: str | None,
-    entities: bool,
-    decimal: bool,
-    hexadecimal: bool,
+    separator: str = "-",
+    lowercase: bool = True,
+    max_length: int = 0,
+    word_boundary: bool = False,
+    save_order: bool = False,
+    stopwords: Sequence[str] = ...,
+    regex_pattern: str | None = None,
+    replacements: Sequence[tuple[str, str]] = ...,
+    allow_unicode: bool = False,
+    lang: str | None = None,
+    entities: bool = True,
+    decimal: bool = True,
+    hexadecimal: bool = True,
 ) -> list[str]: ...
-def _normalize_batch(texts: list[str], *, form: NormalizationForm) -> list[str]: ...
+def _normalize_batch(texts: list[str], *, form: NormalizationForm = ...) -> list[str]: ...
 def _strip_accents_batch(texts: list[str]) -> list[str]: ...
-def _set_emoji_provider(provider: object | None) -> None: ...
+def _set_emoji_provider(provider: object | None = None) -> None: ...
 def _reverse_transliterate(text: str, *, lang: str) -> str: ...
 def _reverse_langs() -> list[str]: ...

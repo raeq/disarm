@@ -328,6 +328,47 @@ class TestCustomProvider:
             set_emoji_provider(None)
 
 
+class TestProviderWindowCap:
+    """#199: a custom provider's lookup() is offered at most 9 codepoints (the
+    longest built-in CLDR sequence). This is a documented contract — pin it so
+    the cap cannot silently change."""
+
+    def test_provider_never_offered_more_than_9_codepoints(self) -> None:
+        offered: list[int] = []
+
+        class RecordingProvider:
+            def lookup(self, sequence: list[int]) -> str | None:
+                offered.append(len(sequence))
+                return None
+
+        # A long run of emoji codepoints joined by ZWJ (U+200D, written as an
+        # explicit escape so the invisible joiner is visible in review) — far
+        # longer than the 9-codepoint window.
+        text = "\u200d".join(["\U0001f468"] * 16)
+        demojize(text, provider=RecordingProvider())
+        assert offered, "provider was never consulted"
+        assert max(offered) <= 9, f"window exceeded the documented 9-codepoint cap: {max(offered)}"
+
+    def test_provider_matches_at_the_cap_boundary(self) -> None:
+        # A provider mapping a sequence of exactly 9 codepoints is honored;
+        # a 10-codepoint claim never fires because it is never offered.
+        nine = [0x1F468] + [0x200D, 0x1F468] * 4  # 9 codepoints
+        ten = nine + [0x200D]  # 10 — provider would map this, but never sees it
+
+        class CapProvider:
+            def lookup(self, sequence: list[int]) -> str | None:
+                if sequence == nine:
+                    return "NINE"
+                if sequence == ten:
+                    return "TEN"
+                return None
+
+        text9 = "".join(chr(c) for c in nine)
+        assert "NINE" in demojize(text9, provider=CapProvider())
+        text10 = "".join(chr(c) for c in ten)
+        assert "TEN" not in demojize(text10, provider=CapProvider())
+
+
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------

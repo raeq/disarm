@@ -579,8 +579,11 @@ pub fn is_emoji_multi_starter(ch: char) -> bool {
 }
 
 /// Maximum length of any multi-codepoint emoji sequence.
+///
+/// `const fn` so it can seed compile-time constants (e.g. `emoji::MAX_WINDOW`)
+/// from this single source of truth rather than a duplicated literal.
 #[inline]
-pub fn max_emoji_seq_len() -> usize {
+pub const fn max_emoji_seq_len() -> usize {
     emoji_data::MAX_EMOJI_SEQ_LEN
 }
 

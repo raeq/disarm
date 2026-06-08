@@ -185,7 +185,13 @@ struct CharWindow<'a> {
 }
 
 /// Window capacity = MAX_EMOJI_SEQ_LEN so we always have enough lookahead.
-const MAX_WINDOW: usize = 9; // mirrors MAX_EMOJI_SEQ_LEN = 9
+///
+/// Derived from the single source of truth (`tables::max_emoji_seq_len()`, a
+/// `const fn` over the build-generated `MAX_EMOJI_SEQ_LEN`) rather than a
+/// duplicated literal, so the two cannot drift when the CLDR data updates
+/// (#199 review). This also caps the look-ahead a custom Python emoji provider
+/// can match; see the provider call site and `set_emoji_provider`.
+const MAX_WINDOW: usize = tables::max_emoji_seq_len();
 
 impl<'a> CharWindow<'a> {
     /// Create a new window, pre-filling the buffer from `chars`.
@@ -328,7 +334,16 @@ fn demojize_impl(
             continue;
         }
 
-        // Try custom Python provider first (if set)
+        // Try custom Python provider first (if set).
+        //
+        // The window fed to the provider is `win.as_slice()`, capped at
+        // `MAX_WINDOW` (9) chars by `CharWindow`'s stack buffer, so a custom
+        // provider can only ever match sequences up to 9 codepoints — the
+        // longest built-in CLDR sequence (`max_emoji_seq_len()`). Longer
+        // provider-supported sequences are silently unmatchable; this cap is
+        // documented on `set_emoji_provider` / `EmojiProvider.lookup` (#199).
+        // Widening it would enlarge the per-position scan window for every
+        // demojize call, so it is intentionally fixed.
         if let Some(prov) = provider {
             if let Some((name, consumed)) =
                 try_python_provider(py, prov, win.as_slice(), tables::max_emoji_seq_len())

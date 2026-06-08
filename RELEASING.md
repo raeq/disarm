@@ -104,13 +104,12 @@ see [SECURITY.md](SECURITY.md).
 
 ### Per-registry mechanism
 
-translit ships to several ecosystems; the "yank" verb differs in each. Current artifacts
-are PyPI and the Docker image; the rest arrive with the `0.8` `translit-core` bindings.
+translit ships to several ecosystems; the "yank" verb differs in each. The current
+artifact is PyPI; the rest arrive with the `0.8` `translit-core` bindings.
 
 | Artifact | Mechanism | Destructive? | Notes |
 |----------|-----------|--------------|-------|
 | **PyPI** (`translit-rs`) | Yank (PEP 592), with a reason | No — reversible | pip skips it unless someone pins `==`. Never use "Delete release". |
-| **Docker image** | Push fixed image, move `latest`, deprecate the bad tag | Tag delete possible | Pairs with the image-scan (Trivy) gate. |
 | **crates.io** | `cargo yank --version X` (`--undo` to reverse) | No | Existing `Cargo.lock` still resolves; new dependents blocked. |
 | **npm** | `npm deprecate pkg@X "msg"` | No | `unpublish` is only allowed <72h or with no dependents — do not rely on it. |
 | **Go** (`pkg.go.dev`) | `retract` directive in `go.mod`, shipped in the next tag | No | The module proxy is immutable; you retract by releasing forward. |

@@ -23,7 +23,6 @@ Core concepts and usage for each feature area.
 
 - **[Policy Templates](policy-templates.md)** — Named institutional presets for libraries, web apps, ML, and more
 - **[CLI](cli.md)** — Command-line usage, piping, and shell integration
-- **[Docker](docker.md)** — Run translit via Docker without installing Python
 
 ---
 

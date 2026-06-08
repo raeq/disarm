@@ -109,6 +109,43 @@ Decode HTML entities and numeric character references:
 slugify("&amp; test &#38;")           # => "test"
 ```
 
+### default
+
+Fallback returned when the input has no sluggable characters (emoji,
+punctuation, or zero-width only) and would otherwise slug to the empty string —
+avoiding the routing hazard of multiple distinct inputs collapsing onto one
+empty-slug URL:
+
+```python
+slugify("🔥🔥🔥")                    # => ""
+slugify("🔥🔥🔥", default="n-a")     # => "n-a"
+```
+
+The fallback is **sanitized through the same slug pipeline** before being
+returned, so a caller-derived default (a username, a filename) cannot inject
+path-traversal or URL metacharacters into output that is assumed URL-safe. It is
+also subject to the same `max_length`:
+
+```python
+slugify("🔥", default="../../etc/passwd")          # => "etc-passwd"
+slugify("🔥", default="a/b?c#d")                    # => "a-b-c-d"
+slugify("🔥", default="this-is-long", max_length=5) # => "this"
+```
+
+A `default` that is itself unsluggable sanitizes to `""`.
+
+`default` is available on every entry point — `slugify()`, `Slugifier`,
+`UniqueSlugifier`, and `Text.slugify`. On `UniqueSlugifier` the fallback is made
+unique like any other slug:
+
+```python
+from translit import UniqueSlugifier
+
+u = UniqueSlugifier(default="n-a")
+u("🔥")   # => "n-a"
+u("🔥")   # => "n-a-1"
+```
+
 ## Reusable slugifiers
 
 ### Slugifier

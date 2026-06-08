@@ -23,18 +23,21 @@ pyo3 = { version = "0.24.1", features = ["abi3-py39"] }
 regex = "1"
 bitflags = "2"
 unicode-normalization = "0.1"
-phf = "0.11"
+phf = "0.13"
 unicode-segmentation = "1"
 encoding_rs = "0.8"
 chardetng = "0.1"
 idna = "1"  # UTS#46 / punycode decoding for is_safe_hostname (#63)
 
 [build-dependencies]
-phf_codegen = "0.11"
+phf_codegen = "0.13"
 
 [dev-dependencies]
 proptest = "1"
-criterion = { version = "0.5", features = ["html_reports"] }
+# criterion 0.8 requires Rust 1.86+. The shipped library MSRV stays `rust-version`
+# above (criterion is dev-only — never built by downstream consumers); only running
+# the benches or `cargo test`/`cargo clippy --all-targets` in this repo needs 1.86+.
+criterion = { version = "0.8", features = ["html_reports"] }
 
 [[bench]]
 name = "bench_core"

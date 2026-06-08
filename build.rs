@@ -139,32 +139,37 @@ fn main() {
     );
 
     // --- Transliteration: language-specific tables ---
-    let lang_tables = [
-        ("lang_de", "LANG_DE"),
-        ("lang_no", "LANG_NO"),
-        ("lang_sv", "LANG_SV"),
-        ("lang_is", "LANG_IS"),
-        ("lang_et", "LANG_ET"),
-        ("lang_fr", "LANG_FR"),
-        ("lang_es", "LANG_ES"),
-        ("lang_pt", "LANG_PT"),
-        ("lang_it", "LANG_IT"),
-        ("lang_tr", "LANG_TR"),
-        ("lang_nl", "LANG_NL"),
-        ("lang_ca", "LANG_CA"),
-        ("lang_vi", "LANG_VI"),
-        ("lang_el", "LANG_EL"),
-        ("lang_bg", "LANG_BG"),
-        ("lang_uk", "LANG_UK"),
-        ("iso9", "ISO9"),
-        ("gost7034", "GOST7034"),
-        ("lang_ru", "LANG_RU"),
-        ("lang_sr", "LANG_SR"),
-        ("lang_ja", "LANG_JA"),
-        ("lang_ja_kunrei", "LANG_JA_KUNREI"),
-        ("lang_fa", "LANG_FA"),
-        ("lang_am", "LANG_AM"),
-    ];
+    // Auto-discover language override tables by scanning the data dir, so adding a
+    // language is just dropping in a `translit_lang_<code>.tsv` file — no hand-edit of a
+    // hardcoded list that could silently drop a language (#74). The const name is the
+    // file stem upper-cased (`lang_de` → `LANG_DE`), matching the names the dispatch in
+    // `src/tables/transliteration.rs` references. The two romanization *standards*
+    // (iso9, gost7034) are not languages, so they stay explicit.
+    let mut lang_tables: Vec<(String, String)> = Vec::new();
+    for entry in fs::read_dir(data_dir).expect("read src/tables/data") {
+        let name = entry
+            .expect("data dir entry")
+            .file_name()
+            .to_string_lossy()
+            .into_owned();
+        if let Some(code) = name
+            .strip_prefix("translit_lang_")
+            .and_then(|s| s.strip_suffix(".tsv"))
+        {
+            let file_stem = format!("lang_{code}");
+            let const_name = file_stem.to_uppercase();
+            lang_tables.push((file_stem, const_name));
+        }
+    }
+    assert!(
+        lang_tables.len() >= 20,
+        "expected ≥20 translit_lang_*.tsv override tables, found {} — wrong data dir?",
+        lang_tables.len()
+    );
+    lang_tables.push(("iso9".to_string(), "ISO9".to_string()));
+    lang_tables.push(("gost7034".to_string(), "GOST7034".to_string()));
+    // Deterministic order → reproducible generated output.
+    lang_tables.sort();
 
     // Generate each language table to its own file, then combine
     let mut all_lang_code = String::new();
@@ -197,10 +202,15 @@ fn main() {
     for (file_stem, const_name) in &reverse_tables {
         let tsv_path = data_dir.join(format!("{file_stem}.tsv"));
         let entries = read_str_str_tsv(&tsv_path);
+        // phf_codegen 0.13 retains the borrowed value until build(), so the formatted
+        // literals must outlive the builder — collect them first.
+        let formatted: Vec<(&str, String)> = entries
+            .iter()
+            .map(|(key, value)| (key.as_str(), format!("\"{}\"", escape_str(value))))
+            .collect();
         let mut builder = phf_codegen::Map::<&str>::new();
-        for (key, value) in &entries {
-            let v = format!("\"{}\"", escape_str(value));
-            builder.entry(key.as_str(), &v);
+        for (key, v) in &formatted {
+            builder.entry(*key, v);
         }
         write!(
             all_reverse_code,
@@ -281,13 +291,18 @@ fn read_char_set_tsv(path: &Path) -> Vec<u32> {
 
 /// Build a `phf::Map<char, &'static str>` source string.
 fn build_char_str_map(entries: &BTreeMap<u32, String>, name: &str, vis: &str) -> String {
+    // phf_codegen 0.13 retains the borrowed value until build(); keep the formatted
+    // literals alive past the builder by collecting them first.
+    let formatted: Vec<(char, String)> = entries
+        .iter()
+        .map(|(&cp, value)| {
+            let ch = char::from_u32(cp).unwrap_or_else(|| panic!("Invalid codepoint U+{cp:04X}"));
+            (ch, format!("\"{}\"", escape_str(value)))
+        })
+        .collect();
     let mut builder = phf_codegen::Map::<char>::new();
-    for (&cp, value) in entries {
-        let ch = char::from_u32(cp).unwrap_or_else(|| {
-            panic!("Invalid codepoint U+{cp:04X}");
-        });
-        let val = format!("\"{}\"", escape_str(value));
-        builder.entry(ch, &val);
+    for (ch, val) in &formatted {
+        builder.entry(*ch, val);
     }
     let vis_prefix = if vis.is_empty() {
         String::new()
@@ -313,10 +328,15 @@ fn generate_char_str_map(tsv_path: &Path, out_path: &Path, name: &str, vis: &str
 /// Generate a str→str map file.
 fn generate_str_str_map(tsv_path: &Path, out_path: &Path, name: &str, vis: &str) {
     let entries = read_str_str_tsv(tsv_path);
+    // phf_codegen 0.13 retains the borrowed value until build(); collect the formatted
+    // literals so they outlive the builder.
+    let formatted: Vec<(&str, String)> = entries
+        .iter()
+        .map(|(key, value)| (key.as_str(), format!("\"{}\"", escape_str(value))))
+        .collect();
     let mut builder = phf_codegen::Map::<&str>::new();
-    for (key, value) in &entries {
-        let v = format!("\"{}\"", escape_str(value));
-        builder.entry(key.as_str(), &v);
+    for (key, v) in &formatted {
+        builder.entry(*key, v);
     }
     let vis_prefix = if vis.is_empty() {
         String::new()

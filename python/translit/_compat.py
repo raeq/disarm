@@ -21,6 +21,8 @@ from typing import Any, Callable
 
 from translit import strip_accents, transliterate
 from translit._translit import (
+    InvalidArgumentError,
+    UnsupportedError,
     _Slugifier,
     _UniqueSlugifier,
 )
@@ -57,9 +59,11 @@ def unidecode(text: str, errors: str = "ignore", replace_str: str = "?") -> str:
     if errors == "preserve":
         return transliterate(text, errors="preserve")
     if errors == "strict":
-        # translit has no native "raise on unmapped" mode. Preserve unmapped
-        # characters, and if any survive (non-ASCII residue), locate the first
-        # offending character in the *original* string for a faithful message.
+        # translit has no native "raise on unmapped" mode yet (#184 will add one).
+        # Preserve unmapped characters; if any survive (non-ASCII residue), locate
+        # the first offending character in the *original* string for a faithful
+        # message. These raise bare `ValueError` *deliberately*: unidecode's
+        # strict mode raises ValueError, and this shim mimics unidecode exactly.
         preserved = transliterate(text, errors="preserve")
         if preserved.isascii():
             return preserved
@@ -67,7 +71,8 @@ def unidecode(text: str, errors: str = "ignore", replace_str: str = "?") -> str:
             if not transliterate(ch, errors="preserve").isascii():
                 raise ValueError(f"no replacement found for character {ch!r} at index {i}")
         raise ValueError("no replacement found for an unmapped character")  # pragma: no cover
-    raise ValueError(
+    # Invalid `errors` argument to this shim — a translit-owned error (#183).
+    raise InvalidArgumentError(
         f"invalid value for errors: {errors!r} "
         "(expected 'ignore', 'strict', 'replace', or 'preserve')"
     )
@@ -138,7 +143,7 @@ def _resolve_awesome_params(
             if isinstance(value, dict):
                 result["replacements"] = tuple(value.items())
             elif callable(value):
-                raise NotImplementedError(
+                raise UnsupportedError(
                     "awesome-slugify's callable pretranslate is not supported; "
                     "use a dict or translit's replacements parameter instead."
                 )

@@ -2,17 +2,16 @@
 //!
 //! `Error` is the single internal error enum constructed by the pure-Rust
 //! helper functions.  It carries the structured fields needed to render each
-//! message, and its `Display` impl (via `thiserror`) reproduces **byte-for-byte**
-//! the message text that each call site produced before this refactor (#181).
+//! message via its `Display` impl (`thiserror`). All messages follow one house
+//! style (see [`Error`]), enforced by `messages_follow_house_style` (#187).
 //!
 //! The PyO3 boundary converts `Error` into a Python exception via
 //! [`From<Error> for pyo3::PyErr`].  That conversion is the **only** place the
 //! core couples to PyO3: it maps each variant into translit's unified exception
 //! hierarchy — the `TranslitError` base or one of its `InvalidArgumentError` /
-//! `ResourceLimitError` / `UnsupportedError` subclasses (#183). Message text is
-//! unchanged from each original construction site; only the exception *type* is
-//! now categorised, so `except TranslitError` catches every variant (it missed
-//! the five formerly-bare-`PyValueError` sites before #183).
+//! `ResourceLimitError` / `UnsupportedError` subclasses (#183), so
+//! `except TranslitError` catches every variant (it missed the five
+//! formerly-bare-`PyValueError` sites before #183).
 //!
 //! Each variant also exposes a stable machine-readable [`Error::code`] — new
 //! metadata that is not yet surfaced to Python and changes no behaviour.
@@ -41,9 +40,25 @@ fn truncate_error_text(text: &str) -> Cow<'_, str> {
 
 /// Internal error type for the translit core.
 ///
-/// One variant per distinct error currently constructed across the core. The
-/// `#[error(...)]` Display text is verbatim-identical to the pre-refactor
-/// message at each site.
+/// One variant per distinct error currently constructed across the core.
+///
+/// ## Message style (#187)
+///
+/// Every `#[error(...)]` message follows one policy, enforced by
+/// `messages_follow_house_style` below:
+/// - **No prefix.** The exception *type* already identifies translit, so messages
+///   carry no `translit:` prefix.
+/// - **Lowercase first word**, unless it is a proper noun / identifier
+///   (`UniqueSlugifier`, `register_lang()`, `max_length`, `strict_iso9`).
+/// - **Single quotes** around an echoed string value: `got '{got}'`, not
+///   `{got:?}`. The exceptions are the three caller-controlled arbitrary-content
+///   fields — the regex `pattern`, the `register_lang` bad `keys`, and the
+///   unique-slug `separator` — which use `{:?}` (double quotes) so embedded
+///   quotes or control characters stay unambiguous. (The `Untranslatable` char
+///   also uses `{:?}`, but `char` Debug already renders single quotes while
+///   safely escaping control characters.)
+/// - **Names the offending value and a remedy** (valid options, a limit, a
+///   command, or a flag to pass) wherever one applies.
 #[derive(Debug, Error)]
 pub(crate) enum Error {
     /// Invalid `errors=` mode string (`ErrorMode::from_str`).
@@ -90,7 +105,7 @@ pub(crate) enum Error {
 
     /// Unknown `lang` code (eager validation, #68).
     #[error(
-        "unknown language code {got:?}{suggestion}; expected \"auto\", a BCP-47 \
+        "unknown language code '{got}'{suggestion}; expected 'auto', a BCP-47 \
          alias (nb, nn, da), or one of: {valid}"
     )]
     UnknownLang {
@@ -181,10 +196,10 @@ pub(crate) enum Error {
 
     /// No context dictionary found for the language.
     #[error(
-        "Context dictionary for {lang} not found. Context-aware transliteration needs \
+        "context dictionary for {lang} not found; context-aware transliteration needs \
          the prebuilt dictionaries: run `bash scripts/bootstrap_dicts.sh` (from a \
          source checkout) and set the TRANSLIT_DICT_DIR environment variable to the \
-         output directory. See docs/user-guide/abjad-transliteration.md."
+         output directory (see docs/user-guide/abjad-transliteration.md)"
     )]
     ContextDictNotFound {
         /// Human-readable language name (e.g. "Arabic").
@@ -193,8 +208,8 @@ pub(crate) enum Error {
 
     /// Context dictionary found but corrupt (#107).
     #[error(
-        "Context dictionary for {lang} is corrupt and could not be loaded: {reason}. \
-         Rebuild it with `bash scripts/bootstrap_dicts.sh` (from a source checkout)."
+        "context dictionary for {lang} is corrupt and could not be loaded: {reason}; \
+         rebuild it with `bash scripts/bootstrap_dicts.sh` (from a source checkout)"
     )]
     ContextDictCorrupt {
         /// Human-readable language name (e.g. "Arabic").
@@ -243,14 +258,14 @@ pub(crate) enum Error {
     UniqueSlugMaxLengthTooSmall {
         /// The configured `max_length`.
         max_length: usize,
-        /// The configured separator (rendered with `{:?}`).
+        /// The configured separator (rendered with `{:?}` — caller-controlled).
         separator: String,
         /// The minimum length required.
         min_unique_len: usize,
     },
 
     /// Explicit encoding label not recognised (`decode_to_utf8`).
-    #[error("Unknown encoding: '{got}'{suggestion}")]
+    #[error("unknown encoding: '{got}'{suggestion}")]
     UnknownEncoding {
         /// The unrecognised label.
         got: String,
@@ -259,7 +274,7 @@ pub(crate) enum Error {
     },
 
     /// Auto-detected encoding label is not supported (`decode_to_utf8`).
-    #[error("Auto-detected encoding '{got}' is not supported")]
+    #[error("auto-detected encoding '{got}' is not supported")]
     UnsupportedAutoEncoding {
         /// The detected-but-unsupported label.
         got: String,
@@ -267,9 +282,9 @@ pub(crate) enum Error {
 
     /// Auto-detection confidence below the caller's threshold.
     #[error(
-        "Encoding detection confidence {confidence:.2} is below the required \
-         minimum {min_confidence:.2} (best guess: '{guess}'). \
-         Provide an explicit encoding instead."
+        "encoding detection confidence {confidence:.2} is below the required \
+         minimum {min_confidence:.2} (best guess: '{guess}'); \
+         provide an explicit encoding instead"
     )]
     EncodingConfidenceTooLow {
         /// The detection confidence.
@@ -563,6 +578,192 @@ mod tests {
             assert!(
                 code.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'),
                 "code {code:?} is not lower snake_case"
+            );
+        }
+    }
+
+    /// Every message follows the house style (#187): non-empty, lowercase-first
+    /// (bar identifiers), single-quoted values, and echoes the offending value.
+    #[test]
+    fn messages_follow_house_style() {
+        // Lowercase so it doesn't trip the lowercase-first check when a message
+        // (e.g. Sealed) begins with the echoed value itself.
+        const MARKER: &str = "zzvaluezz";
+        #[allow(clippy::invalid_regex)]
+        let regex_err = regex::Regex::new("[").unwrap_err();
+        // (sample, does the message echo MARKER?)
+        let samples: Vec<(Error, bool)> = vec![
+            (Error::InvalidErrorMode { got: MARKER.into() }, true),
+            (Error::InvalidNormForm { got: MARKER.into() }, true),
+            (Error::InvalidPipelineNormForm { got: MARKER.into() }, true),
+            (Error::InvalidEmojiStyle { got: MARKER.into() }, true),
+            (Error::InvalidPlatform { got: MARKER.into() }, true),
+            (Error::InvalidTargetScript { got: MARKER.into() }, true),
+            (
+                Error::UnknownLang {
+                    got: MARKER.into(),
+                    suggestion: String::new(),
+                    valid: "a, b".into(),
+                },
+                true,
+            ),
+            (Error::MutuallyExclusiveBare, false),
+            (Error::MutuallyExclusivePipeline, false),
+            (Error::BatchTooLarge { len: 2, max: 1 }, false),
+            (Error::ReplacementOutputTooLarge { size: 2, max: 1 }, false),
+            (Error::Sealed { op: MARKER.into() }, true),
+            (Error::RegisterLangLimit { max: 1 }, false),
+            // keys are rendered with {:?} (arbitrary content) — a double-quote exception.
+            (
+                Error::RegisterLangBadKeys {
+                    keys: format!("{MARKER:?}"),
+                },
+                true,
+            ),
+            (
+                Error::RegisterReplacementsLimit {
+                    max: 1,
+                    projected: 2,
+                },
+                false,
+            ),
+            (
+                Error::ContextDictNotFound {
+                    lang: MARKER.into(),
+                },
+                true,
+            ),
+            (
+                Error::ContextDictCorrupt {
+                    lang: MARKER.into(),
+                    reason: "bad".into(),
+                },
+                true,
+            ),
+            (Error::RegexTooLong { len: 2, max: 1 }, false),
+            (
+                Error::RegexCompile {
+                    pattern: MARKER.into(),
+                    source: regex_err,
+                },
+                true,
+            ),
+            (
+                Error::UniqueSlugAttemptsExceeded {
+                    max: 1,
+                    text: MARKER.into(),
+                },
+                true,
+            ),
+            (
+                Error::UniqueSlugMaxLengthTooSmall {
+                    max_length: 1,
+                    separator: MARKER.into(),
+                    min_unique_len: 2,
+                },
+                true,
+            ),
+            (
+                Error::UnknownEncoding {
+                    got: MARKER.into(),
+                    suggestion: String::new(),
+                },
+                true,
+            ),
+            (Error::UnsupportedAutoEncoding { got: MARKER.into() }, true),
+            (
+                Error::EncodingConfidenceTooLow {
+                    confidence: 0.5,
+                    min_confidence: 0.9,
+                    guess: MARKER.into(),
+                },
+                true,
+            ),
+            (
+                Error::ReverseUnsupportedLang {
+                    lang: MARKER.into(),
+                    available: "ru".into(),
+                },
+                true,
+            ),
+            (
+                Error::Untranslatable {
+                    ch: '😀',
+                    byte_offset: 3,
+                },
+                false,
+            ),
+            (
+                Error::LossyDecode {
+                    encoding: MARKER.into(),
+                },
+                true,
+            ),
+        ];
+
+        // Identifiers permitted to begin a message with an uppercase letter.
+        const ALLOWED_UPPERCASE: &[&str] = &["UniqueSlugifier"];
+        // Variants that render arbitrary user content with `{:?}` (double quotes).
+        fn allows_double_quote(e: &Error) -> bool {
+            matches!(
+                e,
+                Error::RegexCompile { .. }
+                    | Error::RegisterLangBadKeys { .. }
+                    | Error::UniqueSlugMaxLengthTooSmall { .. }
+            )
+        }
+
+        for (err, echoes_marker) in &samples {
+            let msg = err.to_string();
+            let code = err.code();
+            assert!(!msg.is_empty(), "empty message for {code}");
+
+            let first = msg.chars().next().unwrap();
+            let upper_ok = ALLOWED_UPPERCASE.iter().any(|p| msg.starts_with(p));
+            assert!(
+                !first.is_alphabetic() || first.is_lowercase() || upper_ok,
+                "{code}: message should start lowercase (or a known identifier): {msg:?}"
+            );
+
+            if !allows_double_quote(err) {
+                assert!(
+                    !msg.contains('"'),
+                    "{code}: use single quotes, not double quotes: {msg:?}"
+                );
+            }
+
+            if *echoes_marker {
+                assert!(
+                    msg.contains(MARKER),
+                    "{code}: message must echo the offending value: {msg:?}"
+                );
+            }
+        }
+    }
+
+    /// The "invalid argument value" family must always guide the caller to the
+    /// valid set (#187): the message names the expected options or a remedy.
+    #[test]
+    fn invalid_value_messages_offer_a_remedy() {
+        let samples = [
+            Error::InvalidErrorMode { got: "x".into() },
+            Error::InvalidNormForm { got: "x".into() },
+            Error::InvalidPipelineNormForm { got: "x".into() },
+            Error::InvalidEmojiStyle { got: "x".into() },
+            Error::InvalidPlatform { got: "x".into() },
+            Error::InvalidTargetScript { got: "x".into() },
+            Error::UnknownLang {
+                got: "x".into(),
+                suggestion: String::new(),
+                valid: "a, b".into(),
+            },
+        ];
+        for e in &samples {
+            let msg = e.to_string();
+            assert!(
+                msg.contains("must be") || msg.contains("expected") || msg.contains("one of"),
+                "{}: should name the valid options: {msg:?}",
+                e.code()
             );
         }
     }

@@ -6,6 +6,7 @@ translit includes built-in confusable detection that replaces [confusable_homogl
 
 ### Mixed-script detection
 
+<!--- skip: next -->
 ```python
 # Before
 from confusable_homoglyphs import confusables
@@ -13,11 +14,12 @@ result = confusables.is_mixed_script("Неllo")  # detailed dict
 
 # After
 from translit import is_mixed_script
-result = is_mixed_script("Неllo")  # => True
+result = is_mixed_script("Неllo")  # True
 ```
 
 ### Confusable detection
 
+<!--- skip: next -->
 ```python
 # Before
 from confusable_homoglyphs import confusables
@@ -25,7 +27,7 @@ result = confusables.is_confusable("Неllo", greedy=True)  # detailed list of d
 
 # After — greedy and preferred_aliases are accepted (with deprecation warning)
 from translit import is_confusable
-result = is_confusable("Неllo")  # => True
+result = is_confusable("Неllo")  # True
 result = is_confusable("Неllo", greedy=True)  # accepted, warns
 ```
 
@@ -36,7 +38,7 @@ result = is_confusable("Неllo", greedy=True)  # accepted, warns
 
 # translit adds this capability
 from translit import normalize_confusables
-normalize_confusables("Неllo")  # => "Hello"
+assert normalize_confusables("Неllo") == 'Hello'
 ```
 
 ## API comparison
@@ -57,16 +59,17 @@ confusable_homoglyphs returns detailed structured data (dicts with character inf
 
 ### Script detection
 
+<!--- skip: next -->
 ```python
 # confusable_homoglyphs
 from confusable_homoglyphs import confusables
 confusables.is_mixed_script("Неllo")
-# => {'mixed': True, 'scripts': ['Cyrillic', 'Latin']}
+# {'mixed': True, 'scripts': ['Cyrillic', 'Latin']}
 
 # translit — separate functions
 from translit import is_mixed_script, detect_scripts
-is_mixed_script("Неllo")    # => True
-detect_scripts("Неllo")     # => [Script.CYRILLIC, Script.LATIN]
+is_mixed_script("Неllo")    # True
+detect_scripts("Неllo")     # [Script.CYRILLIC, Script.LATIN]
 ```
 
 ## New features in translit

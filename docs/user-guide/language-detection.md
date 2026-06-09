@@ -18,7 +18,7 @@ from translit import transliterate
 # Stage 1: Cyrillic detected → ambiguous script
 # Stage 2: ї found → Ukrainian discriminator hit
 # Stage 3: returns "uk"
-transliterate("Київ", lang="auto")   # → "Kyiv" (Ukrainian profile)
+assert transliterate("Київ", lang="auto") == 'Kyiv'
 ```
 
 ---
@@ -28,11 +28,11 @@ transliterate("Київ", lang="auto")   # → "Kyiv" (Ukrainian profile)
 translit classifies each character by its Unicode script property using a static table of 42 scripts with binary search lookup. The first non-Latin, non-Common, non-Inherited character determines the **primary script**.
 
 ```python
-from translit import detect_scripts
+from translit import detect_scripts, Script
 
-detect_scripts("Москва")      # → [Script.CYRILLIC]
-detect_scripts("東京タワー")   # → [Script.HAN, Script.KATAKANA]
-detect_scripts("Hello World")  # → [Script.LATIN]
+assert detect_scripts("Москва") == [Script.CYRILLIC]
+assert detect_scripts("東京タワー") == [Script.HAN, Script.KATAKANA]
+assert detect_scripts("Hello World") == [Script.LATIN]
 ```
 
 For Latin-only text, no language override is applied (stage 2 may still detect Latin discriminators like Vietnamese or Turkish characters).
@@ -120,22 +120,22 @@ Key properties:
 from translit import transliterate
 
 # Ukrainian: ї is exclusive to Ukrainian Cyrillic
-transliterate("Київ", lang="auto")          # → "Kyiv"
+assert transliterate("Київ", lang="auto") == 'Kyiv'
 
 # Serbian: ћ is exclusive to Serbian Cyrillic
-transliterate("Београд", lang="auto")       # → "Beograd"
+assert transliterate("Београд", lang="auto") == 'Beograd'
 
 # Persian: پ is exclusive to Persian Arabic
-transliterate("پارسی", lang="auto")         # → "parsy"
+assert transliterate("پارسی", lang="auto") == 'parsy'
 
 # Vietnamese: ơ is exclusive to Vietnamese Latin
-transliterate("Hà Nội", lang="auto")        # → uses vi profile
+assert transliterate("Hà Nội", lang="auto") == 'Ha Noi'
 
 # German: ß is exclusive to German Latin
-transliterate("Straße", lang="auto")        # → "Strasse" (de: ß→ss)
+assert transliterate("Straße", lang="auto") == 'Strasse'
 
 # No discriminator: Москва has no exclusive chars
-transliterate("Москва", lang="auto")        # → "Moskva" (default ru)
+assert transliterate("Москва", lang="auto") == 'Moskva'
 ```
 
 ---
@@ -239,6 +239,7 @@ transliterate("Софія", lang="auto")  # Defaults to Russian (no Bulgarian di
 
 `lang="auto"` works with all translit entry points:
 
+<!--- skip: next -->
 ```python
 from translit import (
     transliterate, slugify, catalog_key, search_key, sort_key,

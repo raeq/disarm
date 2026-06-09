@@ -4,6 +4,7 @@ translit's `slugify()` is parameter-compatible with [python-slugify](https://pyp
 
 ## Quick migration
 
+<!--- skip: next -->
 ```python
 # Before
 from slugify import slugify
@@ -15,12 +16,14 @@ from translit import slugify
 All parameters are supported with identical names and defaults:
 
 ```python
+from translit import slugify
+
 # These work identically in both libraries
-slugify("Hello, World!")
-slugify("My Post", separator="_")
-slugify("Long Title", max_length=10, word_boundary=True)
-slugify("the big fox", stopwords=["the"])
-slugify("C++ Code", replacements=[("C++", "cpp")])
+assert slugify("Hello, World!") == 'hello-world'
+assert slugify("My Post", separator="_") == 'my_post'
+assert slugify("Long Title", max_length=10, word_boundary=True) == 'long-title'
+assert slugify("the big fox", stopwords=["the"]) == 'big-fox'
+assert slugify("C++ Code", replacements=[("C++", "cpp")]) == 'cpp-code'
 ```
 
 ## Parameter compatibility
@@ -50,7 +53,7 @@ slugify("C++ Code", replacements=[("C++", "cpp")])
 from translit import slugify
 
 # python-slugify can't do this
-slugify("Ärger im Büro", lang="de")  # => "aerger-im-buero"
+assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
 ```
 
 ### Reusable slugifiers
@@ -63,8 +66,8 @@ slug = Slugifier(lang="de", separator="_")
 
 # Unique slug generation
 unique = UniqueSlugifier()
-unique("My Post")  # => "my-post"
-unique("My Post")  # => "my-post-1"
+assert unique("My Post") == 'my-post'
+assert unique("My Post") == 'my-post-1'
 ```
 
 ## awesome-slugify migration
@@ -73,6 +76,7 @@ unique("My Post")  # => "my-post-1"
 
 ### Drop-in replacement (no code changes needed)
 
+<!--- skip: next -->
 ```python
 # Before
 from slugify import slugify, Slugify, UniqueSlugify
@@ -81,11 +85,11 @@ from slugify import slugify, Slugify, UniqueSlugify
 from translit import Slugify, UniqueSlugify
 
 custom = Slugify(to_lower=True)
-custom("Hello World")  # => "hello-world"
+custom("Hello World")  # "hello-world"
 
 unique = UniqueSlugify()
-unique("My Post")   # => "My-Post"
-unique("My Post")   # => "My-Post-1"
+unique("My Post")   # "My-Post"
+unique("My Post")   # "My-Post-1"
 ```
 
 ### awesome-slugify parameter compatibility
@@ -116,13 +120,14 @@ my_slugify.max_length = 200
 my_slugify.separator = "_"
 my_slugify.pretranslate = {"©": "c", "®": "r"}
 
-my_slugify("Hello © World")  # => "hello_c_world"
+assert my_slugify("Hello © World") == 'hello_c_world'
 ```
 
 ### Preconfigured instances
 
 awesome-slugify ships preconfigured instances. translit provides equivalent drop-in replacements:
 
+<!--- skip: next -->
 ```python
 # awesome-slugify                    # translit equivalent
 from slugify import slugify_url      from translit import slugify_url
@@ -150,11 +155,11 @@ If you prefer translit's native API (which offers more features), use `Slugifier
 from translit import Slugifier, UniqueSlugifier
 
 custom = Slugifier(lowercase=True, lang="de")
-custom("Ärger im Büro")  # => "aerger-im-buero"
+assert custom("Ärger im Büro") == 'aerger-im-buero'
 
 unique = UniqueSlugifier()
-unique("My Post")  # => "my-post"
-unique("My Post")  # => "my-post-1"
+assert unique("My Post") == 'my-post'
+assert unique("My Post") == 'my-post-1'
 ```
 
 ### What's different

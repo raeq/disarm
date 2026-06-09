@@ -102,8 +102,8 @@ ASCII-normalised index without losing its semantics.
 from translit import get_pipeline
 
 ingest = get_pipeline("rag_ingest")
-# NFKC → strip bidi → strip accents → transliterate → strip control/zero-width
-# → collapse whitespace
+# NFKC → strip bidi → strip accents → transliterate →
+# strip control/zero-width → collapse whitespace
 assert ingest("Café déjà vu") == "Cafe deja vu"
 assert ingest("Привет, мир!") == "Privet, mir!"
 ```

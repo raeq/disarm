@@ -11,7 +11,7 @@ The same visible text can have multiple Unicode representations:
 a = "\u00e9"       # U+00E9 (precomposed)
 b = "\u0065\u0301" # U+0065 U+0301 (decomposed: e + combining acute)
 
-a == b        # => False (without normalization!)
+assert (a == b) == False
 ```
 
 Normalization resolves this by converting to a canonical form.
@@ -31,17 +31,17 @@ Normalization resolves this by converting to a canonical form.
 from translit import normalize
 
 # NFC: compose into single codepoints
-normalize("e\u0301")                  # => "é" (U+00E9)
+assert normalize("e\u0301") == 'é'
 
 # NFD: decompose into base + combining marks
-normalize("é", form="NFD")           # => "e\u0301"
+assert normalize("é", form="NFD") == 'é'
 
 # NFKC: compatibility + compose
-normalize("ﬁnance", form="NFKC")     # => "finance"
-normalize("2²", form="NFKC")         # => "22"
+assert normalize("ﬁnance", form="NFKC") == 'finance'
+assert normalize("2²", form="NFKC") == '22'
 
 # NFKD: compatibility + decompose
-normalize("ﬁ", form="NFKD")          # => "fi"
+assert normalize("ﬁ", form="NFKD") == 'fi'
 ```
 
 ## Checking normalization
@@ -51,10 +51,10 @@ Test whether a string is already in a given form without performing the full nor
 ```python
 from translit import is_normalized
 
-is_normalized("hello")                # => True (ASCII is always NFC)
-is_normalized("é", form="NFC")       # => True (precomposed)
-is_normalized("é", form="NFD")       # => False
-is_normalized("e\u0301", form="NFD") # => True (decomposed)
+assert is_normalized("hello") == True
+assert is_normalized("é", form="NFC") == True
+assert is_normalized("é", form="NFD") == False
+assert is_normalized("e\u0301", form="NFD") == True
 ```
 
 ## The NF enum
@@ -64,7 +64,7 @@ For programmatic use, the `NF` enum provides the four forms:
 ```python
 from translit import NF, normalize
 
-normalize("ﬁ", form=NF.KC.value)     # => "fi"
+assert normalize("ﬁ", form=NF.KC.value) == 'fi'
 ```
 
 | Member | Value |

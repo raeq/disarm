@@ -7,9 +7,9 @@ translit generates URL-safe slugs from Unicode text. The `slugify()` function is
 ```python
 from translit import slugify
 
-slugify("Hello, World!")                # => "hello-world"
-slugify("My Blog Post — Draft #3")     # => "my-blog-post-draft-3"
-slugify("Ünïcödé Téxt")                # => "unicode-text"
+assert slugify("Hello, World!") == 'hello-world'
+assert slugify("My Blog Post — Draft #3") == 'my-blog-post-draft-3'
+assert slugify("Ünïcödé Téxt") == 'unicode-text'
 ```
 
 ## Parameters
@@ -19,8 +19,8 @@ slugify("Ünïcödé Téxt")                # => "unicode-text"
 The character used between words (default: `"-"`):
 
 ```python
-slugify("hello world", separator="_")   # => "hello_world"
-slugify("hello world", separator=".")   # => "hello.world"
+assert slugify("hello world", separator="_") == 'hello_world'
+assert slugify("hello world", separator=".") == 'hello.world'
 ```
 
 ### lowercase
@@ -28,7 +28,7 @@ slugify("hello world", separator=".")   # => "hello.world"
 Whether to lowercase the output (default: `True`):
 
 ```python
-slugify("Hello World", lowercase=False) # => "Hello-World"
+assert slugify("Hello World", lowercase=False) == 'Hello-World'
 ```
 
 ### max_length
@@ -36,8 +36,7 @@ slugify("Hello World", lowercase=False) # => "Hello-World"
 Truncate the slug to a maximum length (default: `0` = unlimited):
 
 ```python
-slugify("a very long title here", max_length=10)
-# => "a-very-lon"
+assert slugify("a very long title here", max_length=10) == 'a-very-lon'
 ```
 
 ### word_boundary
@@ -45,8 +44,7 @@ slugify("a very long title here", max_length=10)
 When combined with `max_length`, truncate at word boundaries:
 
 ```python
-slugify("a very long title here", max_length=10, word_boundary=True)
-# => "a-very"
+assert slugify("a very long title here", max_length=10, word_boundary=True) == 'a-very'
 ```
 
 ### stopwords
@@ -54,8 +52,7 @@ slugify("a very long title here", max_length=10, word_boundary=True)
 Words to remove from the slug:
 
 ```python
-slugify("the quick brown fox", stopwords=["the", "brown"])
-# => "quick-fox"
+assert slugify("the quick brown fox", stopwords=["the", "brown"]) == 'quick-fox'
 ```
 
 ### regex_pattern
@@ -63,8 +60,7 @@ slugify("the quick brown fox", stopwords=["the", "brown"])
 Custom regex pattern for allowed characters:
 
 ```python
-slugify("hello 123 world", regex_pattern=r"[^a-z]+")
-# => "helloworld"
+assert slugify("hello 123 world", regex_pattern=r"[^a-z]+") == 'helloworld'
 ```
 
 ### replacements
@@ -72,8 +68,7 @@ slugify("hello 123 world", regex_pattern=r"[^a-z]+")
 Pre-transliteration string replacements:
 
 ```python
-slugify("C++ Programming", replacements=[("C++", "cpp")])
-# => "cpp-programming"
+assert slugify("C++ Programming", replacements=[("C++", "cpp")]) == 'cpp-programming'
 ```
 
 ### allow_unicode
@@ -81,8 +76,7 @@ slugify("C++ Programming", replacements=[("C++", "cpp")])
 Keep non-ASCII characters in the slug:
 
 ```python
-slugify("日本語テスト", allow_unicode=True)
-# => "日本語テスト"
+assert slugify("日本語テスト", allow_unicode=True) == '日本語テスト'
 ```
 
 ### lang
@@ -90,15 +84,14 @@ slugify("日本語テスト", allow_unicode=True)
 Language profile for transliteration:
 
 ```python
-slugify("Ärger im Büro", lang="de")
-# => "aerger-im-buero"
+assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
 ```
 
 Use `lang="auto"` to auto-detect the language from the script:
 
 ```python
-slugify("Москва", lang="auto")     # => "moskva" (detects Cyrillic → Russian)
-slugify("ภาษาไทย", lang="auto")    # => Thai slug (detects Thai)
+assert slugify("Москва", lang="auto") == 'moskva'
+assert slugify("ภาษาไทย", lang="auto") == 'phasaaithy'
 ```
 
 ### entities, decimal, hexadecimal
@@ -106,7 +99,7 @@ slugify("ภาษาไทย", lang="auto")    # => Thai slug (detects Thai)
 Decode HTML entities and numeric character references:
 
 ```python
-slugify("&amp; test &#38;")           # => "test"
+assert slugify("&amp; test &#38;") == 'test'
 ```
 
 ### default
@@ -117,8 +110,8 @@ avoiding the routing hazard of multiple distinct inputs collapsing onto one
 empty-slug URL:
 
 ```python
-slugify("🔥🔥🔥")                    # => ""
-slugify("🔥🔥🔥", default="n-a")     # => "n-a"
+assert slugify("\U0001f525\U0001f525\U0001f525") == ''
+assert slugify("\U0001f525\U0001f525\U0001f525", default="n-a") == 'n-a'
 ```
 
 The fallback is **sanitized through the same slug pipeline** before being
@@ -127,9 +120,9 @@ path-traversal or URL metacharacters into output that is assumed URL-safe. It is
 also subject to the same `max_length`:
 
 ```python
-slugify("🔥", default="../../etc/passwd")          # => "etc-passwd"
-slugify("🔥", default="a/b?c#d")                    # => "a-b-c-d"
-slugify("🔥", default="this-is-long", max_length=5) # => "this"
+assert slugify("\U0001f525", default="../../etc/passwd") == 'etc-passwd'
+assert slugify("\U0001f525", default="a/b?c#d") == 'a-b-c-d'
+assert slugify("\U0001f525", default="this-is-long", max_length=5) == 'this'
 ```
 
 A `default` that is itself unsluggable sanitizes to `""`.
@@ -142,8 +135,8 @@ unique like any other slug:
 from translit import UniqueSlugifier
 
 u = UniqueSlugifier(default="n-a")
-u("🔥")   # => "n-a"
-u("🔥")   # => "n-a-1"
+assert u("\U0001f525") == 'n-a'
+assert u("\U0001f525") == 'n-a-1'
 ```
 
 ## Reusable slugifiers
@@ -156,8 +149,8 @@ Pre-configure a slugifier for repeated use:
 from translit import Slugifier
 
 slug = Slugifier(separator="_", lang="de", max_length=50)
-slug("Ärger im Büro")     # => "aerger_im_buero"
-slug("Über den Wolken")   # => "ueber_den_wolken"
+assert slug("Ärger im Büro") == 'aerger_im_buero'
+assert slug("Über den Wolken") == 'ueber_den_wolken'
 ```
 
 ### UniqueSlugifier
@@ -168,18 +161,19 @@ Track previously generated slugs and append numeric suffixes for uniqueness:
 from translit import UniqueSlugifier
 
 unique = UniqueSlugifier()
-unique("My Post")   # => "my-post"
-unique("My Post")   # => "my-post-1"
-unique("My Post")   # => "my-post-2"
+assert unique("My Post") == 'my-post'
+assert unique("My Post") == 'my-post-1'
+assert unique("My Post") == 'my-post-2'
 
 unique.reset()      # clear history
-unique("My Post")   # => "my-post"
+assert unique("My Post") == 'my-post'
 ```
 
 #### External uniqueness check
 
 Pass a callback for database-backed uniqueness:
 
+<!--- skip: next -->
 ```python
 def check_db(slug: str) -> bool:
     """Return True if slug already exists."""

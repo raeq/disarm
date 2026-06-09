@@ -162,6 +162,7 @@ Defined in `translit._types`:
 
 ### ErrorMode
 
+<!--- skip: next -->
 ```python
 ErrorMode = Literal["replace", "ignore", "preserve"]
 ```
@@ -176,6 +177,7 @@ Controls behavior when a character has no transliteration mapping.
 
 ### Platform
 
+<!--- skip: next -->
 ```python
 Platform = Literal["universal", "posix", "windows"]
 ```
@@ -184,6 +186,7 @@ Target platform for filename sanitization rules.
 
 ### NormalizationForm
 
+<!--- skip: next -->
 ```python
 NormalizationForm = Literal["NFC", "NFD", "NFKC", "NFKD"]
 ```
@@ -243,8 +246,16 @@ from translit import LANG_DE, LANG_FR, LANG_ES  # etc.
 ```python
 from translit import list_langs, list_scripts
 
-list_langs()    # → ["am", "ar", "as", "bg", "bn", ...]
-list_scripts()  # → ["Arabic", "Armenian", "Balinese", ...]
+langs = list_langs()
+# 80+ language codes, alphabetically sorted (a representative sample):
+assert {"de", "ru", "ja", "zh", "ar", "uk", "el", "hi"} <= set(langs)
+assert langs == sorted(langs)
+assert len(langs) >= 80
+scripts = list_scripts()
+# 55+ script names, alphabetically sorted (a representative sample):
+assert {"Latin", "Cyrillic", "Greek", "Han", "Arabic", "Hebrew"} <= set(scripts)
+assert scripts == sorted(scripts)
+assert len(scripts) >= 55
 ```
 
 | Function | Returns |

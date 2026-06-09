@@ -23,9 +23,9 @@ There are two quality tiers to be aware of (see [Language Support](language-supp
 ```python
 from translit import transliterate
 
-transliterate("café")                # => "cafe"
-transliterate("naïve")               # => "naive"
-transliterate("Москва")             # => "Moskva"
+assert transliterate("café") == 'cafe'
+assert transliterate("naïve") == 'naive'
+assert transliterate("Москва") == 'Moskva'
 ```
 
 ## Language profiles
@@ -34,24 +34,19 @@ When a `lang` parameter is provided, language-specific mapping overrides apply b
 
 ```python
 # German
-transliterate("Ärger über Ölförderung", lang="de")
-# => "Aerger ueber Oelfoerderung"
+assert transliterate("Ärger über Ölförderung", lang="de") == 'Aerger ueber Oelfoerderung'
 
 # Without lang — default mapping
-transliterate("Ärger über Ölförderung")
-# => "Arger uber Olforderung"
+assert transliterate("Ärger über Ölförderung") == 'Arger uber Olforderung'
 
 # Norwegian
-transliterate("Ål i Ørsta", lang="no")
-# => "Aal i Oersta"
+assert transliterate("Ål i Ørsta", lang="no") == 'Aal i Oersta'
 
 # Swedish
-transliterate("Malmö Ängby", lang="sv")
-# => "Malmoe Aengby"
+assert transliterate("Malmö Ängby", lang="sv") == 'Malmoe Aengby'
 
 # Turkish
-transliterate("İstanbul çağı", lang="tr")
-# => "Istanbul cagi"
+assert transliterate("İstanbul çağı", lang="tr") == 'Istanbul cagi'
 ```
 
 ### Auto-detecting the language
@@ -59,10 +54,10 @@ transliterate("İstanbul çağı", lang="tr")
 When the source language is unknown, `lang="auto"` detects the dominant non-Latin script and selects the appropriate language profile automatically:
 
 ```python
-transliterate("Москва", lang="auto")          # => "Moskva" (Cyrillic → Russian)
-transliterate("ภาษาไทย", lang="auto")          # => Thai transliteration
-transliterate("café", lang="auto")             # => "cafe" (Latin-only → default table)
-transliterate("Hello Москва", lang="auto")     # => "Hello Moskva" (first non-Latin script wins)
+assert transliterate("Москва", lang="auto") == 'Moskva'
+assert transliterate("ภาษาไทย", lang="auto") == 'phasaaithy'
+assert transliterate("café", lang="auto") == 'cafe'
+assert transliterate("Hello Москва", lang="auto") == 'Hello Moskva'
 ```
 
 For ambiguous scripts like Cyrillic (shared by Russian, Ukrainian, Bulgarian, etc.), auto-detection uses a default (Russian for Cyrillic). Pass an explicit code when the language is known.
@@ -84,35 +79,31 @@ The `errors` parameter controls what happens when a character has no translitera
 === "replace (default)"
 
     ```python
-    transliterate("text ♠ here", errors="replace")
-    # => "text [?] here"
+    assert transliterate("text ♠ here", errors="replace") == 'text [?] here'
 
-    transliterate("text ♠ here", errors="replace", replace_with="")
-    # => "text  here"
+    assert transliterate("text ♠ here", errors="replace", replace_with="") == 'text  here'
 
-    transliterate("text ♠ here", errors="replace", replace_with="?")
-    # => "text ? here"
+    assert transliterate("text ♠ here", errors="replace", replace_with="?") == 'text ? here'
     ```
 
 === "ignore"
 
     ```python
-    transliterate("text ♠ here", errors="ignore")
-    # => "text  here"
+    assert transliterate("text ♠ here", errors="ignore") == 'text  here'
     ```
 
 === "preserve"
 
     ```python
-    transliterate("text ♠ here", errors="preserve")
-    # => "text ♠ here"
+    assert transliterate("text ♠ here", errors="preserve") == 'text ♠ here'
     ```
 
 === "strict"
 
+<!--- skip: next -->
     ```python
     transliterate("text ♠ here", errors="strict")
-    # => raises TranslitError: no transliteration for '♠' (U+2660) at byte offset 5
+    # raises TranslitError: no transliteration for '♠' (U+2660) at byte offset 5
     ```
 
 ## Finding untranslatable characters
@@ -128,8 +119,8 @@ replace/drop/preserve:
 ```python
 from translit import find_untranslatable
 
-find_untranslatable("café")          # => []  (fully translatable)
-find_untranslatable("a♠b♣c")         # => [('♠', 1), ('♣', 5)]  (byte offsets)
+assert find_untranslatable("café") == []
+assert find_untranslatable("a♠b♣c") == [('♠', 1), ('♣', 5)]
 ```
 
 This is useful for validating input up front, or reporting which characters a
@@ -158,25 +149,27 @@ Full coverage of:
 Chinese characters are mapped to toneless pinyin from the Unicode Unihan database:
 
 ```python
-transliterate("北京市")       # → "bei jing shi"
-transliterate("中国人民")     # → "zhong guo ren min"
-slugify("北京烤鸭")          # → "bei-jing-kao-ya"
+from translit import slugify
+
+assert transliterate("北京市") == 'bei jing shi'
+assert transliterate("中国人民") == 'zhong guo ren min'
+assert slugify("北京烤鸭") == 'bei-jing-kao-ya'
 ```
 
 Korean Hangul syllables are decomposed algorithmically into jamo components and romanized using the Revised Romanization standard:
 
 ```python
-transliterate("서울")         # → "seo ul"
-transliterate("대한민국")     # → "dae han min gug"
-slugify("대한민국")          # → "dae-han-min-gug"
+assert transliterate("서울") == 'seo ul'
+assert transliterate("대한민국") == 'dae han min gug'
+assert slugify("대한민국") == 'dae-han-min-gug'
 ```
 
 Japanese hiragana and katakana use Modified Hepburn romanization. Kanji (shared with Chinese) fall back to Chinese pinyin readings:
 
 ```python
-transliterate("ひらがな")     # → "hiragana"
-transliterate("カタカナ")     # → "katakana"
-transliterate("東京タワー")   # → "dong jing tawa-"
+assert transliterate("ひらがな") == 'hiragana'
+assert transliterate("カタカナ") == 'katakana'
+assert transliterate("東京タワー") == 'dong jing tawa-'
 ```
 
 See [Limitations](../limitations.md) for details on context-free mapping trade-offs.
@@ -189,14 +182,14 @@ The `target` parameter converts romanized Latin text **back** to a native script
 from translit import transliterate, reverse_langs
 
 # Latin → Cyrillic
-transliterate("Moskva", target="ru")     # → "Москва"
-transliterate("Kyiv", target="uk")       # → "Київ" (approximate)
+assert transliterate("Moskva", target="ru") == 'Москва'
+assert transliterate("Kyiv", target="uk") == 'Кїв'
 
 # Latin → Greek
-transliterate("Athina", target="el")     # → "Αθηνα"
+assert transliterate("Athina", target="el") == 'Αθηνα'
 
 # List supported target languages
-reverse_langs()                          # → ["el", "ru", "uk"]
+assert reverse_langs() == ['el', 'ru', 'uk']
 ```
 
 The `target` parameter is **mutually exclusive** with `lang` — you are either going forward (Unicode → ASCII via `lang`) or backward (Latin → native via `target`), not both. Forward-only parameters (`errors`, `replace_with`, `strict_iso9`, `gost7034`, `tones`) raise `ValueError` when used with `target`.
@@ -221,7 +214,7 @@ Reverse transliteration uses greedy longest-match scanning to handle digraphs an
 ```python
 from translit import unidecode
 
-unidecode("café")  # => "cafe"
+assert unidecode("café") == 'cafe'
 ```
 
 See [Migrating from Unidecode](../migration/from-unidecode.md) for details.
@@ -235,9 +228,9 @@ translit operates in two transliteration modes depending on the `context` parame
 Every character is mapped independently to its ASCII equivalent using a lookup table. No dictionary, no context, no ambiguity resolution. This is the standard approach used by all transliteration libraries (Unidecode, anyascii, text-unidecode).
 
 ```python
-transliterate("Москва")       # → "Moskva"     (Cyrillic — works well)
-transliterate("كتب العربية")   # → "ktb al'rbyh" (Arabic — consonant skeleton)
-transliterate("שלום", lang="he")  # → "shlvm"   (Hebrew — consonant skeleton)
+assert transliterate("Москва") == 'Moskva'
+assert transliterate("كتب العربية") == "ktb al'rbyh"
+assert transliterate("שלום", lang="he") == 'shlvm'
 ```
 
 Context-free transliteration works well for scripts that write vowels explicitly (Latin, Cyrillic, Greek, Devanagari, Thai, etc.). It produces poor results for **abjad scripts** (Arabic, Persian, Hebrew) where vowels are omitted in standard writing.
@@ -246,10 +239,11 @@ Context-free transliteration works well for scripts that write vowels explicitly
 
 For abjad scripts, pass `context=True` to enable dictionary-based vowel restoration. The system looks up each word in a diacritized dictionary, recovers the missing vowels, and then transliterates the fully-pointed form:
 
+<!--- skip: next -->
 ```python
-transliterate("كتب العربية", context=True)              # → "kataba al'arabiyahi"
-transliterate("کتاب فارسی", lang="fa", context=True)     # → "ketab farsy"
-transliterate("שלום", lang="he", context=True)           # → "shalvom"
+transliterate("كتب العربية", context=True)              # "kataba al'arabiyahi"
+transliterate("کتاب فارسی", lang="fa", context=True)     # "ketab farsy"
+transliterate("שלום", lang="he", context=True)           # "shalvom"
 ```
 
 Context-aware mode uses a three-tier fallback:

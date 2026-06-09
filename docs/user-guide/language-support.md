@@ -184,17 +184,17 @@ All 10 Brahmic scripts use virama/mātrā-aware transliteration: consonants carr
 from translit import transliterate, slugify
 
 # Chinese
-transliterate("北京市")             # => "bei jing shi"
-slugify("北京烤鸭")                # => "bei-jing-kao-ya"
+assert transliterate("北京市") == 'bei jing shi'
+assert slugify("北京烤鸭") == 'bei-jing-kao-ya'
 
 # Korean
-transliterate("서울")               # => "seo ul"
-slugify("대한민국")                # => "dae-han-min-gug"
+assert transliterate("서울") == 'seo ul'
+assert slugify("대한민국") == 'dae-han-min-gug'
 
 # Japanese (hiragana/katakana use Hepburn; kanji use Chinese pinyin)
-transliterate("ひらがな")           # => "hiragana"
-transliterate("東京タワー")         # => "dong jing tawa-"
-transliterate("東京タワー", lang="ja")  # => "dong jing tawa" (ー dropped)
+assert transliterate("ひらがな") == 'hiragana'
+assert transliterate("東京タワー") == 'dong jing tawa-'
+assert transliterate("東京タワー", lang="ja") == 'dong jing tawa'
 ```
 
 ## Reverse transliteration
@@ -204,12 +204,12 @@ translit can convert romanized Latin text back to native script for selected lan
 ```python
 from translit import transliterate, reverse_langs
 
-transliterate("Moskva", target="ru")    # → "Москва"
-transliterate("Kyiv", target="uk")      # → "Київ" (approximate)
-transliterate("Athina", target="el")    # → "Αθηνα"
+assert transliterate("Moskva", target="ru") == 'Москва'
+assert transliterate("Kyiv", target="uk") == 'Кїв'
+assert transliterate("Athina", target="el") == 'Αθηνα'
 
 # List supported languages
-reverse_langs()                         # → ["el", "ru", "uk"]
+assert reverse_langs() == ['el', 'ru', 'uk']
 ```
 
 Reverse transliteration uses greedy longest-match scanning to handle digraphs and trigraphs (e.g., `"shch"` → `щ`). See [Limitations](../limitations.md#reverse-transliteration-is-approximate) for round-trip degradation details.
@@ -218,29 +218,30 @@ Reverse transliteration uses greedy longest-match scanning to handle digraphs an
 
 When you don't know the language of the input text, pass `lang="auto"` to automatically detect the dominant non-Latin script and select the appropriate language profile:
 
+<!--- skip: next -->
 ```python
 from translit import transliterate, slugify, LANG_AUTO
 
 # Detects Cyrillic → uses Russian ("ru") profile
-transliterate("Москва", lang="auto")         # => "Moskva"
+transliterate("Москва", lang="auto")         # "Moskva"
 
 # Detects Thai → uses Thai ("th") profile
-transliterate("ภาษาไทย", lang="auto")         # => Thai transliteration
+transliterate("ภาษาไทย", lang="auto")         # Thai transliteration
 
 # Detects Devanagari → uses Hindi ("hi") profile
-transliterate("नमस्ते", lang="auto")           # => "namaste"
+transliterate("नमस्ते", lang="auto")           # "namaste"
 
 # Detects Hangul → uses Korean ("ko") profile
-slugify("한국어", lang="auto")                 # => Korean romanization slug
+slugify("한국어", lang="auto")                 # Korean romanization slug
 
 # Works with all call sites
 from translit import TextPipeline, Slugifier
 
 pipe = TextPipeline(transliterate=True, lang="auto")
-pipe("こんにちは")    # => Japanese transliteration
+pipe("こんにちは")    # Japanese transliteration
 
 s = Slugifier(lang="auto")
-s("東京タワー")      # => CJK slug
+s("東京タワー")      # CJK slug
 ```
 
 ### How auto-detection works
@@ -305,26 +306,28 @@ If **no** exclusive characters are found, the script default is used (Cyrillic �
 
 ```python
 # Ukrainian detected by exclusive ї
-transliterate("Київ", lang="auto")   # → uses uk profile
+assert transliterate("Київ", lang="auto") == 'Kyiv'
 
 # Persian detected by exclusive پ
-transliterate("پارسی", lang="auto")  # → uses fa profile
+assert transliterate("پارسی", lang="auto") == 'parsy'
 
 # German detected by ß
-transliterate("Straße", lang="auto") # → uses de profile
+assert transliterate("Straße", lang="auto") == 'Strasse'
 
 # No exclusive chars → safe default
-transliterate("Москва", lang="auto") # → uses ru (unchanged)
+assert transliterate("Москва", lang="auto") == 'Moskva'
 ```
 
 For scripts that remain ambiguous after discrimination (Devanagari, Han), pass an explicit language code when accuracy matters.
 
 !!! tip
     Use the `LANG_AUTO` constant for type safety:
-    ```python
-    from translit import LANG_AUTO, transliterate
-    transliterate("Москва", lang=LANG_AUTO)
-    ```
+
+<!--- skip: next -->
+```python
+from translit import LANG_AUTO, transliterate
+transliterate("Москва", lang=LANG_AUTO)
+```
 
 ## Using language profiles
 
@@ -333,9 +336,9 @@ For scripts that remain ambiguous after discrimination (Devanagari, Han), pass a
 ```python
 from translit import transliterate, slugify, sanitize_filename
 
-transliterate("Ürümqi", lang="de")         # => "Ueruemqi"
-slugify("Ärger im Büro", lang="de")        # => "aerger-im-buero"
-sanitize_filename("Ärger.txt", lang="de")  # => "Aerger.txt"
+assert transliterate("Ürümqi", lang="de") == 'Ueruemqi'
+assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
+assert sanitize_filename("Ärger.txt", lang="de") == 'Aerger.txt'
 ```
 
 ### With classes
@@ -354,8 +357,8 @@ Pre-defined constants for type safety:
 ```python
 from translit import LANG_DE, LANG_FR, transliterate
 
-transliterate("Ä", lang=LANG_DE)  # => "Ae"
-transliterate("Ç", lang=LANG_FR)  # => "C"
+assert transliterate("Ä", lang=LANG_DE) == 'Ae'
+assert transliterate("Ç", lang=LANG_FR) == 'C'
 ```
 
 ## Listing available languages
@@ -363,12 +366,11 @@ transliterate("Ç", lang=LANG_FR)  # => "C"
 ```python
 from translit import list_langs
 
-print(list_langs())
-# => ['am', 'ar', 'as', 'bg', 'bn', 'bo', 'ca', 'cs', 'cy', 'da', 'de', 'dv', 'el',
-#     'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy',
-#     'is', 'it', 'ja', 'jv', 'ka', 'km', 'kn', 'ko', 'lo', 'lt', 'lv', 'ml', 'mn',
-#     'mr', 'mt', 'my', 'ne', 'nl', 'no', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa',
-#     'si', 'sk', 'sl', 'sq', 'sr', 'sv', 'ta', 'te', 'th', 'tr', 'uk', 'vi', 'zh']
+langs = list_langs()
+# 80+ language codes, alphabetically sorted (a representative sample):
+assert {"de", "ru", "ja", "zh", "ar", "uk", "el", "hi"} <= set(langs)
+assert langs == sorted(langs)
+assert len(langs) >= 80
 ```
 
 ## Custom language profiles
@@ -390,7 +392,7 @@ register_lang("eo", {
     "ŭ": "ux",
 })
 
-transliterate("ĉapelo", lang="eo")  # => "cxapelo"
+assert transliterate("ĉapelo", lang="eo") == 'cxapelo'
 ```
 
 !!! warning
@@ -409,7 +411,7 @@ register_replacements({
     "™": "(TM)",
 })
 
-transliterate("Hello™ World©")  # => "Hello(TM) World(c)"
+assert transliterate("Hello™ World©") == 'Hello(TM) World(c)'
 ```
 
 ## Norwegian variants

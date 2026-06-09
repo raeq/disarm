@@ -157,8 +157,8 @@ jobs:
       - name: Anti-rot doc-claim lint (#156)
         run: python3 scripts/check_doc_claims.py
 
-      - name: Run cookbook doc-tests
-        run: pytest docs/ -q
+      - name: Run cookbook doc-tests (per-file isolated)
+        run: python3 scripts/run_doc_tests.py
 
 
   # ── Security audit (#105: cargo audit for RustSec advisories) ──

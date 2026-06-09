@@ -25,22 +25,32 @@ from pathlib import Path
 CLAIM_ARROW = re.compile(r"#\s*(?:=>|→)\s")
 
 
+#: An opening/closing code fence: 3+ backticks, then an optional info string.
+_FENCE = re.compile(r"^(`{3,})(.*)$")
+
+
 def offenders_in(path: Path) -> list[tuple[int, str]]:
-    """Return (line_number, line) for every claim-arrow inside a python block."""
+    """Return (line_number, line) for every claim-arrow inside a python block.
+
+    Fence length is tracked (``` vs ````) so a shorter nested fence inside a
+    longer one — e.g. a ```python sample inside a ````markdown recipe template —
+    is treated as content and does not prematurely close the outer block.
+    """
     found: list[tuple[int, str]] = []
-    in_fence = False
+    fence_len = 0  # 0 = not in a fence; otherwise the opening backtick count
     lang: str | None = None
     for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        stripped = line.strip()
-        if stripped.startswith("```"):
-            if not in_fence:
-                in_fence = True
-                lang = stripped.strip("`").strip()
-            else:
-                in_fence = False
-                lang = None
-            continue
-        if in_fence and lang == "python" and CLAIM_ARROW.search(line):
+        m = _FENCE.match(line.strip())
+        if m:
+            ticks, info = len(m.group(1)), m.group(2).strip()
+            if fence_len == 0:
+                fence_len, lang = ticks, (info or None)
+                continue
+            if ticks >= fence_len and not info:
+                fence_len, lang = 0, None
+                continue
+            # A nested/shorter fence inside an open block: content, not a close.
+        if fence_len and lang == "python" and CLAIM_ARROW.search(line):
             found.append((lineno, line.strip()))
     return found
 

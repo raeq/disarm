@@ -366,11 +366,7 @@ assert transliterate("Ç", lang=LANG_FR) == 'C'
 ```python
 from translit import list_langs
 
-langs = list_langs()
-# 80+ language codes, alphabetically sorted (a representative sample):
-assert {"de", "ru", "ja", "zh", "ar", "uk", "el", "hi"} <= set(langs)
-assert langs == sorted(langs)
-assert len(langs) >= 80
+assert list_langs() == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
 ```
 
 ## Custom language profiles

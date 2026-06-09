@@ -23,13 +23,13 @@ import translit
 
 
 def _reset_global_state(namespace: dict) -> None:
-    """Reset process-global registries between documents.
+    """Clear user-registered replacements before/after each document.
 
-    Doc examples may register user replacements; resetting before and after each
-    page keeps doc-test results independent of execution order. (Registered
-    languages are process-global and not reversible, so the ``list_langs()`` /
-    ``list_scripts()`` examples assert membership and ordering rather than an
-    exact list.)
+    Defensive hygiene for in-process runs. Full cross-page isolation (needed
+    because ``register_lang`` is process-global and not reversible) is provided
+    by running each page in its own subprocess — see ``scripts/run_doc_tests.py``,
+    which is the doc-test gate. That isolation is what lets the ``list_langs()`` /
+    ``list_scripts()`` pages assert their exact documented output.
     """
     translit.clear_replacements()
 

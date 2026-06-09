@@ -164,8 +164,14 @@ Run the doc-tests locally (they need the `[test]` extra, which pulls in Sybil):
 
 ```bash
 pip install -e ".[test]"
-pytest docs/                          # or: pytest docs/user-guide/filenames.md
+python scripts/run_doc_tests.py       # all pages, each in its own process
+pytest docs/user-guide/filenames.md   # a single page
 ```
+
+The runner executes each page in a **separate process**. Some documented APIs
+mutate process-global state (`register_lang` is not reversible), so running every
+page in one process would let one page's registration leak into another and break
+exact-output examples. `pytest docs/` (one process) is therefore not the gate.
 
 **Recipe template.** Assert outputs; never decorate them with `# =>`:
 

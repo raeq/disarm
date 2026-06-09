@@ -246,16 +246,8 @@ from translit import LANG_DE, LANG_FR, LANG_ES  # etc.
 ```python
 from translit import list_langs, list_scripts
 
-langs = list_langs()
-# 80+ language codes, alphabetically sorted (a representative sample):
-assert {"de", "ru", "ja", "zh", "ar", "uk", "el", "hi"} <= set(langs)
-assert langs == sorted(langs)
-assert len(langs) >= 80
-scripts = list_scripts()
-# 55+ script names, alphabetically sorted (a representative sample):
-assert {"Latin", "Cyrillic", "Greek", "Han", "Arabic", "Hebrew"} <= set(scripts)
-assert scripts == sorted(scripts)
-assert len(scripts) >= 55
+assert list_langs() == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
+assert list_scripts() == ['Arabic', 'Armenian', 'Balinese', 'Bamum', 'Bengali', 'Buginese', 'CanadianAboriginal', 'Cham', 'Cherokee', 'Common', 'Coptic', 'Cuneiform', 'Cyrillic', 'Devanagari', 'Ethiopic', 'Georgian', 'Gothic', 'Greek', 'Gujarati', 'Gurmukhi', 'Han', 'Hangul', 'Hebrew', 'Hiragana', 'Inherited', 'Javanese', 'Kannada', 'Katakana', 'Khmer', 'Lao', 'Latin', 'LinearB', 'Lisu', 'Malayalam', 'MeeteiMayek', 'Mongolian', 'Myanmar', 'NKo', 'NewTaiLue', 'Ogham', 'OlChiki', 'OldPersian', 'Oriya', 'Runic', 'Sinhala', 'Sundanese', 'Syriac', 'Tagalog', 'TaiLe', 'TaiTham', 'Tamil', 'Telugu', 'Thaana', 'Thai', 'Tibetan', 'Tifinagh', 'Vai']
 ```
 
 | Function | Returns |

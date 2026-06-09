@@ -114,12 +114,14 @@ fn collapse_dot_sequences(text: &str) -> String {
 pub fn _sanitize_filename(
     text: &str,
     separator: &str,
-    max_length: usize,
+    max_length: i64,
     platform: &str,
     lang: Option<&str>,
     preserve_extension: bool,
 ) -> PyResult<String> {
     crate::transliterate::validate_lang(lang)?;
+    // #231: validate the non-negative contract in the core, not the binding.
+    let max_length = crate::error::checked_max_length(max_length)?;
     if text.is_empty() {
         return Ok(String::new());
     }
@@ -537,7 +539,7 @@ mod tests {
             ) {
                 let input = format!("{stem}.{ext}");
                 let expected_ext = format!(".{ext}");
-                let result = _sanitize_filename(&input, "_", max_length, "universal", None, true).unwrap();
+                let result = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, true).unwrap();
                 prop_assert!(result.len() <= max_length, "exceeds max_length {max_length}: {result}");
                 // Extension must be preserved unless ext itself is >= max_length
                 if expected_ext.len() < max_length {
@@ -556,7 +558,7 @@ mod tests {
                 max_length in 1usize..50,
             ) {
                 let input = format!("{stem}.{ext}");
-                let result = _sanitize_filename(&input, "_", max_length, "universal", None, false).unwrap();
+                let result = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, false).unwrap();
                 prop_assert!(result.len() <= max_length, "exceeds max_length {max_length}: {result}");
             }
 
@@ -569,7 +571,7 @@ mod tests {
                 max_length in 6usize..50,
             ) {
                 let input = format!("{name}{ext}");
-                let result = _sanitize_filename(&input, "_", max_length, "universal", None, true).unwrap();
+                let result = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, true).unwrap();
                 prop_assert!(result.len() <= max_length, "exceeds max_length {max_length}: {result}");
                 // If there's room for the extension, it must be preserved
                 if ext.len() < max_length {
@@ -593,7 +595,7 @@ mod tests {
                 max_length in 1usize..30,
                 preserve_ext in proptest::bool::ANY,
             ) {
-                let result = _sanitize_filename(&input, "_", max_length, "universal", None, preserve_ext).unwrap();
+                let result = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, preserve_ext).unwrap();
                 if !result.is_empty() {
                     let stem = match result.find('.') {
                         Some(pos) => &result[..pos],
@@ -615,7 +617,7 @@ mod tests {
                 max_length in 1usize..50,
                 preserve_ext in proptest::bool::ANY,
             ) {
-                if let Ok(result) = _sanitize_filename(&input, "_", max_length, "universal", None, preserve_ext) {
+                if let Ok(result) = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, preserve_ext) {
                     prop_assert!(
                         result.len() <= max_length,
                         "exceeds max_length {max_length} for input '{input}': got '{result}' (len={})",

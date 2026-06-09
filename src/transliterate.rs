@@ -162,6 +162,108 @@ pub fn _transliterate(
     .into_owned())
 }
 
+/// Validate the *combination* of `transliterate()` keyword arguments (#231).
+///
+/// The semantic conflict matrix lives in the core (the single source of truth)
+/// rather than only in the `python/translit/_api.py` wrapper, so a second
+/// binding enforces the identical contract by calling this one function.
+///
+/// `target` selects *reverse* transliteration; `context` and `tones` are
+/// *forward-only*. The individual `errors` enum value and the `strict_iso9`/
+/// `gost7034` exclusivity are validated by the per-operation entrypoints; this
+/// function only rejects contradictory *combinations* of otherwise-valid kwargs.
+///
+/// The default sentinels for `errors` (`"replace"`) and `replace_with`
+/// (`"[?]"`) are the documented public-API defaults — a value other than the
+/// default means the caller set a forward-only parameter explicitly.
+#[pyfunction]
+#[pyo3(signature = (
+    *,
+    lang=None,
+    target=None,
+    errors="replace",
+    replace_with="[?]",
+    strict_iso9=false,
+    gost7034=false,
+    tones=false,
+    context=false,
+))]
+pub fn _validate_transliterate_args(
+    lang: Option<&str>,
+    target: Option<&str>,
+    errors: &str,
+    replace_with: &str,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+    context: bool,
+) -> PyResult<()> {
+    validate_transliterate_args(
+        lang,
+        target,
+        errors,
+        replace_with,
+        strict_iso9,
+        gost7034,
+        tones,
+        context,
+    )?;
+    Ok(())
+}
+
+/// Pure-Rust core of [`_validate_transliterate_args`], returning the core
+/// [`crate::Error`] so it is unit-testable without a Python interpreter (#231).
+pub(crate) fn validate_transliterate_args(
+    lang: Option<&str>,
+    target: Option<&str>,
+    errors: &str,
+    replace_with: &str,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+    context: bool,
+) -> Result<(), crate::Error> {
+    if target.is_some() && lang.is_some() {
+        return Err(crate::Error::LangTargetExclusive);
+    }
+    if context && target.is_some() {
+        return Err(crate::Error::ContextTargetExclusive);
+    }
+    if context && tones {
+        return Err(crate::Error::TonesWithContext);
+    }
+    if context && errors == "strict" {
+        return Err(crate::Error::StrictWithContext);
+    }
+    if target.is_some() {
+        // Collect any forward-only parameter set to a non-default value. Sorted
+        // so the rendered list is deterministic (matches the former Python order).
+        let mut forward_only: Vec<&str> = Vec::new();
+        if errors != "replace" {
+            forward_only.push("errors");
+        }
+        if replace_with != "[?]" {
+            forward_only.push("replace_with");
+        }
+        if strict_iso9 {
+            forward_only.push("strict_iso9");
+        }
+        if gost7034 {
+            forward_only.push("gost7034");
+        }
+        if tones {
+            forward_only.push("tones");
+        }
+        if !forward_only.is_empty() {
+            forward_only.sort_unstable();
+            return Err(crate::Error::ForwardOnlyWithTarget {
+                names: forward_only.join(", "),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// Find every character in `text` that has no transliteration, as
 /// `(char, byte_offset)` pairs in order (#184). Replacements are applied first
 /// (so offsets are relative to the post-replacement text), matching
@@ -1201,6 +1303,122 @@ pub fn _strip_accents_batch(py: Python<'_>, texts: Vec<String>) -> PyResult<Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // #231: the conflict matrix now lives in the core. These exercise the pure
+    // validator so the contract holds regardless of the (Python) binding, and
+    // without needing an initialized Python interpreter in the test build.
+    fn validate(
+        lang: Option<&str>,
+        target: Option<&str>,
+        errors: &str,
+        replace_with: &str,
+        strict_iso9: bool,
+        gost7034: bool,
+        tones: bool,
+        context: bool,
+    ) -> Result<(), crate::Error> {
+        validate_transliterate_args(
+            lang,
+            target,
+            errors,
+            replace_with,
+            strict_iso9,
+            gost7034,
+            tones,
+            context,
+        )
+    }
+
+    fn err_msg(r: Result<(), crate::Error>) -> String {
+        r.unwrap_err().to_string()
+    }
+
+    #[test]
+    fn validate_accepts_defaults() {
+        assert!(validate(None, None, "replace", "[?]", false, false, false, false).is_ok());
+        assert!(validate(
+            Some("ru"),
+            None,
+            "replace",
+            "[?]",
+            false,
+            false,
+            false,
+            false
+        )
+        .is_ok());
+        // target= with every forward-only param at its default is fine.
+        assert!(validate(
+            None,
+            Some("ru"),
+            "replace",
+            "[?]",
+            false,
+            false,
+            false,
+            false
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_lang_and_target() {
+        let r = validate(
+            Some("ru"),
+            Some("ru"),
+            "replace",
+            "[?]",
+            false,
+            false,
+            false,
+            false,
+        );
+        assert!(err_msg(r).contains("'lang' and 'target' are mutually exclusive"));
+    }
+
+    #[test]
+    fn validate_rejects_context_with_target() {
+        let r = validate(
+            None,
+            Some("ar"),
+            "replace",
+            "[?]",
+            false,
+            false,
+            false,
+            true,
+        );
+        assert!(err_msg(r).contains("'context' and 'target' are mutually exclusive"));
+    }
+
+    #[test]
+    fn validate_rejects_tones_with_context() {
+        let r = validate(None, None, "replace", "[?]", false, false, true, true);
+        assert!(err_msg(r).contains("'tones' cannot be used with 'context'"));
+    }
+
+    #[test]
+    fn validate_rejects_strict_with_context() {
+        let r = validate(None, None, "strict", "[?]", false, false, false, true);
+        assert!(err_msg(r).contains("errors='strict' cannot be used with 'context'"));
+    }
+
+    #[test]
+    fn validate_rejects_forward_only_with_target_sorted() {
+        // tones + gost7034 + errors set alongside target: names rendered sorted.
+        let r = validate(None, Some("ru"), "ignore", "[?]", false, true, true, false);
+        let msg = err_msg(r);
+        assert!(msg.contains(
+            "forward-only parameters (errors, gost7034, tones) cannot be used with 'target'"
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_replace_with_override_with_target() {
+        let r = validate(None, Some("ru"), "replace", "X", false, false, false, false);
+        assert!(err_msg(r)
+            .contains("forward-only parameters (replace_with) cannot be used with 'target'"));
+    }
 
     #[test]
     fn test_ascii_passthrough() {

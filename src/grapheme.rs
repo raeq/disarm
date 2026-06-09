@@ -45,7 +45,16 @@ pub fn _grapheme_split(text: &str) -> Vec<String> {
 /// If the text is already within the limit, it is returned unchanged.
 #[pyfunction]
 #[pyo3(signature = (text, max_graphemes))]
-pub fn _grapheme_truncate(text: &str, max_graphemes: usize) -> String {
+pub fn _grapheme_truncate(text: &str, max_graphemes: i64) -> PyResult<String> {
+    // #231: validate the non-negative contract in the core, not the binding.
+    let max_graphemes = crate::error::checked_max_graphemes(max_graphemes)?;
+    Ok(truncate_to_graphemes(text, max_graphemes))
+}
+
+/// Truncate `text` to at most `max_graphemes` clusters. The validated core of
+/// [`_grapheme_truncate`], split out so callers with a known-good `usize`
+/// (tests, internal callers) skip the boundary conversion.
+pub(crate) fn truncate_to_graphemes(text: &str, max_graphemes: usize) -> String {
     let mut result = String::with_capacity(text.len());
     for (count, g) in clusters(text).enumerate() {
         if count >= max_graphemes {
@@ -108,26 +117,36 @@ mod tests {
 
     #[test]
     fn test_grapheme_truncate_basic() {
-        assert_eq!(_grapheme_truncate("hello world", 5), "hello");
+        assert_eq!(truncate_to_graphemes("hello world", 5), "hello");
     }
 
     #[test]
     fn test_grapheme_truncate_emoji() {
         let family = "👩\u{200D}👩\u{200D}👧\u{200D}👦 family";
-        let truncated = _grapheme_truncate(family, 1);
+        let truncated = truncate_to_graphemes(family, 1);
         assert_eq!(truncated, "👩\u{200D}👩\u{200D}👧\u{200D}👦");
     }
 
     #[test]
     fn test_grapheme_truncate_nfd() {
         let text = "cafe\u{0301}s"; // 5 graphemes: c, a, f, e+accent, s
-        let truncated = _grapheme_truncate(text, 4);
+        let truncated = truncate_to_graphemes(text, 4);
         assert_eq!(truncated, "cafe\u{0301}"); // keeps the combining accent with e
     }
 
     #[test]
     fn test_grapheme_truncate_within_limit() {
-        assert_eq!(_grapheme_truncate("hi", 10), "hi");
+        assert_eq!(truncate_to_graphemes("hi", 10), "hi");
+    }
+
+    #[test]
+    fn test_grapheme_truncate_rejects_negative() {
+        // #231: the non-negative contract is enforced in the core.
+        let err = crate::error::checked_max_graphemes(-1).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("max_graphemes must be non-negative, got -1"));
+        assert_eq!(crate::error::checked_max_graphemes(0).unwrap(), 0);
     }
 
     mod proptest_properties {
@@ -156,14 +175,14 @@ mod tests {
             /// grapheme_truncate never exceeds the requested count.
             #[test]
             fn truncate_respects_limit(s in "\\PC*", n in 0..200usize) {
-                let result = _grapheme_truncate(&s, n);
+                let result = truncate_to_graphemes(&s, n);
                 prop_assert!(_grapheme_len(&result) <= n);
             }
 
             /// grapheme_truncate returns a byte-prefix of the original.
             #[test]
             fn truncate_is_prefix(s in "\\PC*", n in 0..200usize) {
-                let result = _grapheme_truncate(&s, n);
+                let result = truncate_to_graphemes(&s, n);
                 prop_assert!(s.starts_with(&result));
             }
 
@@ -171,7 +190,7 @@ mod tests {
             #[test]
             fn truncate_at_full_length_is_identity(s in "\\PC*") {
                 let len = _grapheme_len(&s);
-                let result = _grapheme_truncate(&s, len);
+                let result = truncate_to_graphemes(&s, len);
                 prop_assert_eq!(&result, &s);
             }
         }

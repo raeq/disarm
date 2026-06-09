@@ -165,7 +165,7 @@ pub fn _slugify(
     text: &str,
     separator: &str,
     lowercase: bool,
-    max_length: usize,
+    max_length: i64,
     word_boundary: bool,
     save_order: bool,
     stopwords: Vec<String>,
@@ -179,6 +179,8 @@ pub fn _slugify(
 ) -> PyResult<String> {
     // #119: delegate to SlugConfig::from_pyargs (shared constructor).
     crate::transliterate::validate_lang(lang)?;
+    // #231: validate the non-negative contract in the core, not the binding.
+    let max_length = crate::error::checked_max_length(max_length)?;
     let config = SlugConfig::from_pyargs(
         separator,
         lowercase,
@@ -568,7 +570,7 @@ pub fn _slugify_batch(
     texts: Vec<String>,
     separator: &str,
     lowercase: bool,
-    max_length: usize,
+    max_length: i64,
     word_boundary: bool,
     save_order: bool,
     stopwords: Vec<String>,
@@ -589,6 +591,8 @@ pub fn _slugify_batch(
     }
     // #119: delegate to SlugConfig::from_pyargs (shared constructor).
     crate::transliterate::validate_lang(lang)?;
+    // #231: validate the non-negative contract in the core, not the binding.
+    let max_length = crate::error::checked_max_length(max_length)?;
     let config = SlugConfig::from_pyargs(
         separator,
         lowercase,
@@ -909,6 +913,19 @@ mod tests {
         // Without safe_chars, dots/dashes collapse to the separator as before.
         let config = default_config();
         assert_eq!(slugify_impl("My Report.pdf", &config), "my-report-pdf");
+    }
+
+    #[test]
+    fn test_slugify_rejects_negative_max_length() {
+        // #231: the non-negative contract is enforced in the core, raising
+        // InvalidArgumentError rather than a PyO3 OverflowError. The signed
+        // entrypoints route through this shared helper.
+        let err = crate::error::checked_max_length(-1).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("max_length must be non-negative, got -1"));
+        assert_eq!(crate::error::checked_max_length(0).unwrap(), 0);
+        assert_eq!(crate::error::checked_max_length(255).unwrap(), 255);
     }
 
     #[test]

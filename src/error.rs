@@ -335,6 +335,51 @@ pub(crate) enum Error {
         /// The encoding that was decoded from.
         encoding: String,
     },
+
+    /// `transliterate()`: `lang` (forward) and `target` (reverse) both set (#231).
+    #[error("'lang' and 'target' are mutually exclusive")]
+    LangTargetExclusive,
+
+    /// `transliterate()`: `context` (forward-only) and `target` (reverse) both set (#231).
+    #[error("'context' and 'target' are mutually exclusive")]
+    ContextTargetExclusive,
+
+    /// `transliterate()`: `tones` combined with `context` (#231).
+    #[error(
+        "'tones' cannot be used with 'context' — context-aware \
+         transliteration does not produce toned pinyin"
+    )]
+    TonesWithContext,
+
+    /// `transliterate()`: `errors="strict"` combined with `context` (#231).
+    #[error(
+        "errors='strict' cannot be used with 'context' — strict mode is \
+         only available for context-free transliteration"
+    )]
+    StrictWithContext,
+
+    /// `transliterate()`: forward-only parameters supplied alongside `target` (#231).
+    #[error("forward-only parameters ({names}) cannot be used with 'target'")]
+    ForwardOnlyWithTarget {
+        /// Comma-joined, sorted list of the offending parameter names.
+        names: String,
+    },
+
+    /// Negative `max_length` (slugify / sanitize_filename). The PyO3 entrypoints
+    /// accept a signed integer and validate here so the raw functions are held to
+    /// the same contract as the `_api.py` wrapper (#231).
+    #[error("max_length must be non-negative, got {got}")]
+    NegativeMaxLength {
+        /// The offending value.
+        got: i64,
+    },
+
+    /// Negative `max_graphemes` (grapheme_truncate) (#231).
+    #[error("max_graphemes must be non-negative, got {got}")]
+    NegativeMaxGraphemes {
+        /// The offending value.
+        got: i64,
+    },
 }
 
 impl Error {
@@ -375,8 +420,32 @@ impl Error {
             Error::ReverseUnsupportedLang { .. } => "reverse_unsupported_lang",
             Error::Untranslatable { .. } => "untranslatable",
             Error::LossyDecode { .. } => "lossy_decode",
+            Error::LangTargetExclusive => "lang_target_exclusive",
+            Error::ContextTargetExclusive => "context_target_exclusive",
+            Error::TonesWithContext => "tones_with_context",
+            Error::StrictWithContext => "strict_with_context",
+            Error::ForwardOnlyWithTarget { .. } => "forward_only_with_target",
+            Error::NegativeMaxLength { .. } => "negative_max_length",
+            Error::NegativeMaxGraphemes { .. } => "negative_max_graphemes",
         }
     }
+}
+
+/// Convert a caller-supplied signed `max_length` to `usize`, rejecting negatives
+/// in the core (#231).
+///
+/// The PyO3 entrypoints accept a *signed* integer so a negative value raises
+/// translit's `InvalidArgumentError` (the documented contract) instead of
+/// PyO3's `OverflowError` from a silent unsigned conversion. On 64-bit targets
+/// the only `try_from` failure is a negative value.
+pub(crate) fn checked_max_length(value: i64) -> Result<usize, Error> {
+    usize::try_from(value).map_err(|_| Error::NegativeMaxLength { got: value })
+}
+
+/// Convert a caller-supplied signed `max_graphemes` to `usize`, rejecting
+/// negatives in the core (#231). See [`checked_max_length`].
+pub(crate) fn checked_max_graphemes(value: i64) -> Result<usize, Error> {
+    usize::try_from(value).map_err(|_| Error::NegativeMaxGraphemes { got: value })
 }
 
 impl From<Error> for pyo3::PyErr {
@@ -426,7 +495,14 @@ impl From<Error> for pyo3::PyErr {
             | Error::RegexCompile { .. }
             | Error::UniqueSlugMaxLengthTooSmall { .. }
             | Error::UnknownEncoding { .. }
-            | Error::MinConfidenceOutOfRange { .. } => crate::InvalidArgumentError::new_err(msg),
+            | Error::MinConfidenceOutOfRange { .. }
+            | Error::LangTargetExclusive
+            | Error::ContextTargetExclusive
+            | Error::TonesWithContext
+            | Error::StrictWithContext
+            | Error::ForwardOnlyWithTarget { .. }
+            | Error::NegativeMaxLength { .. }
+            | Error::NegativeMaxGraphemes { .. } => crate::InvalidArgumentError::new_err(msg),
 
             // ResourceLimitError — a configured limit was exceeded.
             Error::BatchTooLarge { .. }

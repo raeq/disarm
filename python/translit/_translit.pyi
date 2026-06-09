@@ -107,6 +107,17 @@ def _transliterate(
     gost7034: bool = ...,
     tones: bool = ...,
 ) -> str: ...
+def _validate_transliterate_args(
+    *,
+    lang: str | None = None,
+    target: str | None = None,
+    errors: TransliterateErrorMode = ...,
+    replace_with: str = ...,
+    strict_iso9: bool = ...,
+    gost7034: bool = ...,
+    tones: bool = ...,
+    context: bool = ...,
+) -> None: ...
 def _find_untranslatable(
     text: str,
     *,

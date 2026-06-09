@@ -47,7 +47,9 @@ maintainer-run.
 - **Recovery** (labeled corpora, e.g. BitAbuse):
   - **XMR / exact-match recovery** — `strip_obfuscation(perturbed) == strip_obfuscation(clean)`.
   - **line-exact recovery** — `strip_obfuscation(perturbed) == clean`.
-  - **word-level recovery** — multiset word overlap with the clean text.
+  - **word-level recovery** — multiset word overlap with the *canonicalized*
+    clean text (`strip_obfuscation(clean)`), consistent with how XMR compares
+    both sides.
 - **Canonicalization stats** (all corpora): % of perturbation-bearing rows and
   % of non-ASCII codepoints folded by `strip_obfuscation`.
 - **Miss-mining**: the non-ASCII codepoints that *survive* the defense, split

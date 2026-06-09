@@ -43,7 +43,9 @@ class CorpusAdapter(Protocol):
 def _download(url: str, dest: Path) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     if not dest.exists():
-        with urlopen(url) as resp, open(dest, "wb") as out:  # noqa: S310 (trusted dataset URLs)
+        # Explicit timeout so a stalled host can't hang the harness indefinitely
+        # (matches scripts/gen_confusables.py).
+        with urlopen(url, timeout=30) as resp, open(dest, "wb") as out:  # noqa: S310 (trusted dataset URLs)
             out.write(resp.read())
     return dest
 

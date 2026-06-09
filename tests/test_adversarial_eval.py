@@ -47,6 +47,17 @@ def test_labeled_recovery_on_confusable_pairs() -> None:
     assert res.rows_with_nonascii == 1
 
 
+def test_word_recovery_uses_canonicalized_clean() -> None:
+    # Regression for PR #225 review: word-level recovery compares the recovered
+    # text against the *canonicalized* clean (strip_obfuscation(clean)), to stay
+    # consistent with XMR. Here the clean side itself carries a Cyrillic 'а'; both
+    # sides canonicalize to "paypal", so recovery is 1.0 (it would be 0.0 against
+    # the raw clean "pаypal").
+    res = evaluate([Record(text="paypal", clean="pаypal")], corpus="t", labeled=True, processes=1)
+    assert res.word_recovery == 1.0
+    assert res.xmr == 1.0
+
+
 def test_unlabeled_skips_recovery_metrics() -> None:
     res = evaluate([Record(text="hello world")], corpus="t", labeled=False, processes=1)
     assert res.xmr is None and res.word_recovery is None and res.line_exact is None
@@ -65,3 +76,16 @@ def test_miss_mining_accounts_every_surviving_codepoint() -> None:
         assert cp in sources
     for cp in res.missed_novel:
         assert cp not in sources
+
+
+def test_miss_mining_counts_every_occurrence_not_distinct() -> None:
+    # Regression for PR #225 review: misses are reported as "occurrences" and
+    # must reconcile with nonascii_after, so a codepoint repeated within a row is
+    # counted once per occurrence — not once per row. '█' (U+2588) survives
+    # strip_obfuscation and is a UTS#39 source.
+    res = evaluate([Record(text="a█b█c")], corpus="t", labeled=False, processes=1)
+    assert res.nonascii_after == 2  # two '█'
+    total_missed = sum(res.missed_principled.values()) + sum(res.missed_novel.values())
+    assert total_missed == res.nonascii_after  # every occurrence counted
+    combined = res.missed_principled + res.missed_novel
+    assert combined[ord("█")] == 2  # repeated char counted twice, not deduped to 1

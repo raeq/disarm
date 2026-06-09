@@ -146,12 +146,14 @@ def _score_chunk(chunk: list[tuple[str, str | None]]) -> _Partial:
             p.rows_with_nonascii += 1
         p.nonascii_before += len(before)
         p.nonascii_after += len(after)
-        for ch in set(after):
+        # Count every occurrence (not distinct-per-row) so the miss totals
+        # reconcile with nonascii_after and "occurrences" in the report is honest.
+        for ch, count in Counter(after).items():
             cp = ord(ch)
             if cp in sources:
-                p.missed_principled[cp] += 1
+                p.missed_principled[cp] += count
             else:
-                p.missed_novel[cp] += 1
+                p.missed_novel[cp] += count
         if clean is not None:
             p.labeled_rows += 1
             clean_canon = strip_obfuscation(clean)

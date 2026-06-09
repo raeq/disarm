@@ -8,18 +8,18 @@ _translit 0.6.3; `strip_obfuscation`. Numbers reflect the current version and ma
 
 ## Miss-mining (non-ASCII codepoints surviving the defense)
 
-- **principled** (in UTS#39, addressable — feed to #40): **6** distinct, 7 occurrences
-- **novel** (not in UTS#39, out of scope): **22** distinct, 46 occurrences
+- **principled** (in UTS#39, addressable — feed to #40): **6** distinct, 121 occurrences
+- **novel** (not in UTS#39, out of scope): **22** distinct, 442 occurrences
 
 Top principled (addressable) misses:
 
 | codepoint | char | occurrences |
 |---|---|---|
-| U+0B9C | `ஜ` | 2 |
-| U+2588 | `█` | 1 |
-| U+2590 | `▐` | 1 |
-| U+250F | `┏` | 1 |
-| U+2503 | `┃` | 1 |
-| U+2501 | `━` | 1 |
+| U+2503 | `┃` | 42 |
+| U+2501 | `━` | 26 |
+| U+2588 | `█` | 19 |
+| U+250F | `┏` | 16 |
+| U+2590 | `▐` | 10 |
+| U+0B9C | `ஜ` | 8 |
 
 > Guardrail: these are **observations**, not optimization targets. Principled misses are candidates to verify and upstream via #40 — never silent table edits.

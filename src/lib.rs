@@ -82,6 +82,8 @@ pub mod unicode_ranges;
 #[doc(hidden)]
 pub mod whitespace;
 #[doc(hidden)]
+pub mod width;
+#[doc(hidden)]
 pub mod zalgo;
 
 /// Internal Rust module. Not part of the public Python API.
@@ -144,6 +146,8 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(grapheme::_grapheme_len, m)?)?;
     m.add_function(wrap_pyfunction!(grapheme::_grapheme_split, m)?)?;
     m.add_function(wrap_pyfunction!(grapheme::_grapheme_truncate, m)?)?;
+    m.add_function(wrap_pyfunction!(width::_terminal_width, m)?)?;
+    m.add_function(wrap_pyfunction!(width::_grapheme_width, m)?)?;
 
     // Hostname safety
     m.add_function(wrap_pyfunction!(hostname::_is_safe_hostname, m)?)?;

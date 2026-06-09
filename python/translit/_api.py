@@ -42,6 +42,7 @@ from translit._translit import (
     _grapheme_len,
     _grapheme_split,
     _grapheme_truncate,
+    _grapheme_width,
     _inspect_auto_lang,
     _is_ascii,
     _is_confusable,
@@ -71,6 +72,7 @@ from translit._translit import (
     _slugify_batch,
     _strip_accents,
     _strip_accents_batch,
+    _terminal_width,
     _TextPipeline,
     # Core transforms (Rust implementations)
     _transliterate,
@@ -1078,6 +1080,56 @@ def grapheme_truncate(text: str, max_graphemes: int) -> str:
     if max_graphemes < 0:
         raise InvalidArgumentError(f"max_graphemes must be non-negative, got {max_graphemes}")
     return _grapheme_truncate(text, max_graphemes)
+
+
+def terminal_width(text: str, *, ambiguous_wide: bool = False) -> int:
+    """Total terminal column width of ``text``, summed over grapheme clusters.
+
+    Measures **terminal cells** (UAX #11 East Asian Width per UAX #29 cluster),
+    not pixels or font metrics. Wide/fullwidth characters and emoji-presented
+    clusters are 2 columns; combining marks, controls, and zero-width characters
+    are 0. Tabs are **not** expanded and newlines are not modelled — layout that
+    depends on tab stops or wrapping is the caller's responsibility.
+
+    Args:
+        text: Input string.
+        ambiguous_wide: Treat East Asian *Ambiguous* characters as 2 columns
+            (for legacy double-width CJK terminals). Default ``False`` (1 column),
+            matching modern UTF-8 terminals.
+
+    Returns:
+        Non-negative column count.
+
+    Examples:
+        >>> terminal_width("hello")
+        5
+        >>> terminal_width("世界")  # two wide CJK characters
+        4
+        >>> terminal_width("a😀")  # ASCII + emoji (2 cells)
+        3
+    """
+    return _terminal_width(text, ambiguous_wide=ambiguous_wide)
+
+
+def grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int:
+    """Column width of a single grapheme cluster (see :func:`terminal_width`).
+
+    Args:
+        cluster: A grapheme cluster (or any short string; width is summed).
+        ambiguous_wide: Treat East Asian *Ambiguous* characters as 2 columns.
+
+    Returns:
+        Non-negative column count.
+
+    Examples:
+        >>> grapheme_width("A")
+        1
+        >>> grapheme_width("世")
+        2
+        >>> grapheme_width("👨‍👩‍👧‍👦")  # ZWJ family emoji = 1 cluster, 2 cells
+        2
+    """
+    return _grapheme_width(cluster, ambiguous_wide=ambiguous_wide)
 
 
 # --- Hostname safety ---

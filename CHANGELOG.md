@@ -10,6 +10,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Added
+
+- **`terminal_width` / `grapheme_width`** (#224): measure terminal **column**
+  width per grapheme cluster (UAX #11 East Asian Width). Wide/fullwidth and
+  emoji-presented clusters are 2 columns; combining marks, controls, and
+  zero-width characters are 0. East Asian Ambiguous characters are 1 column by
+  default, or 2 with `ambiguous_wide=True` (legacy double-width CJK terminals).
+  Width data is generated at build time from the pinned UCD (no runtime data, no
+  unsafe). This measures cells, not pixels; tabs are not expanded.
+
 ### Fixed
 
 - **`slugify_filename` / `Slugify(safe_chars=...)`** restored safe characters at the wrong

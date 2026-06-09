@@ -1,6 +1,15 @@
 use pyo3::prelude::*;
 use unicode_segmentation::UnicodeSegmentation;
 
+/// Iterate the extended grapheme clusters (UAX #29) of `text`.
+///
+/// The single in-crate choke point for grapheme segmentation: every other
+/// grapheme/width operation goes through this, so swapping the segmenter (the
+/// in-house UAX #29 implementation tracked in #226) touches only this function.
+pub(crate) fn clusters(text: &str) -> impl Iterator<Item = &str> {
+    text.graphemes(true)
+}
+
 /// Count the number of user-perceived characters (extended grapheme clusters).
 ///
 /// This is the correct answer to "how many characters does the user see?"
@@ -14,7 +23,7 @@ use unicode_segmentation::UnicodeSegmentation;
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _grapheme_len(text: &str) -> usize {
-    text.graphemes(true).count()
+    clusters(text).count()
 }
 
 /// Split text into a list of extended grapheme clusters.
@@ -24,9 +33,7 @@ pub fn _grapheme_len(text: &str) -> usize {
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _grapheme_split(text: &str) -> Vec<String> {
-    text.graphemes(true)
-        .map(std::borrow::ToOwned::to_owned)
-        .collect()
+    clusters(text).map(std::borrow::ToOwned::to_owned).collect()
 }
 
 /// Truncate text to at most `max_graphemes` user-perceived characters.
@@ -40,7 +47,7 @@ pub fn _grapheme_split(text: &str) -> Vec<String> {
 #[pyo3(signature = (text, max_graphemes))]
 pub fn _grapheme_truncate(text: &str, max_graphemes: usize) -> String {
     let mut result = String::with_capacity(text.len());
-    for (count, g) in text.graphemes(true).enumerate() {
+    for (count, g) in clusters(text).enumerate() {
         if count >= max_graphemes {
             break;
         }

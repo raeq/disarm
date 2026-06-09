@@ -205,9 +205,43 @@ def prepare_for_model(raw: str, max_graphemes: int = 4096) -> str:
     return grapheme_truncate(clean, max_graphemes)
 ```
 
+## Terminal column width
+
+`grapheme_len` counts clusters; it does **not** tell you how many terminal
+columns text occupies (a CJK character is one cluster but two columns). Use
+`terminal_width` and `grapheme_width` for that — measured per grapheme cluster
+over [UAX #11 East Asian Width](https://www.unicode.org/reports/tr11/):
+
+```python
+from translit import terminal_width, grapheme_width
+
+assert terminal_width("hello") == 5
+assert terminal_width("世界") == 4  # wide CJK: 2 columns each
+assert terminal_width("café") == 4  # NFD: the combining acute is 0 columns
+assert terminal_width("a😀") == 3  # emoji cluster occupies 2 columns
+assert grapheme_width("👨‍👩‍👧‍👦") == 2  # one ZWJ cluster, 2 columns
+```
+
+East Asian **Ambiguous** characters are 1 column by default (matching modern
+UTF-8 terminals); pass `ambiguous_wide=True` for legacy double-width CJK
+terminals:
+
+```python
+assert terminal_width("¡") == 1
+assert terminal_width("¡", ambiguous_wide=True) == 2
+```
+
+This measures **terminal cells**, not pixels or font metrics. Tabs are not
+expanded and newlines are not modelled — layout that depends on tab stops or
+wrapping is the caller's responsibility. Emoji-ZWJ and ambiguous widths are
+inherently terminal-dependent; translit's policy is fixed (ambiguous = 1 unless
+`ambiguous_wide`, and an emoji-presented cluster = 2).
+
 ## Limitations
 
-- **Display width is not grapheme count.** East Asian characters (CJK) are typically double-width in monospace fonts, but `grapheme_len` counts them as 1. For terminal column-width calculation, you need a separate width estimation library.
+- **Display width is terminal cells, not pixels.** `terminal_width` /
+  `grapheme_width` report monospace **column** counts (UAX #11), not font-metric
+  or pixel widths, which depend on the rendering stack.
 - **Newer emoji sequences.** The `unicode-segmentation` crate's tables must be updated to correctly segment newly standardized ZWJ emoji sequences. Between updates, a brand-new emoji may be split across multiple clusters.
 - **Rendering varies.** "User-perceived character" is ultimately a rendering question. Not all systems agree on cluster boundaries, particularly for complex emoji. See [Limitations](../limitations.md#grapheme-cluster-segmentation) for details.
 

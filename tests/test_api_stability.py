@@ -66,6 +66,8 @@ EXPECTED_ALL = {
     "grapheme_len",
     "grapheme_split",
     "grapheme_truncate",
+    "grapheme_width",
+    "terminal_width",
     # Hostname safety
     "is_safe_hostname",
     "SafeHostnameDetails",
@@ -350,6 +352,8 @@ CORE_FUNCTION_PARAMS = {
     "grapheme_len": ["text"],
     "grapheme_split": ["text"],
     "grapheme_truncate": ["text", "max_graphemes"],
+    "grapheme_width": ["cluster", "ambiguous_wide"],
+    "terminal_width": ["text", "ambiguous_wide"],
     # Hostname
     "is_safe_hostname": ["hostname"],
     # Reverse

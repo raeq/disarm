@@ -224,6 +224,79 @@ fn main() {
     fs::write(&reverse_out, all_reverse_code).unwrap_or_else(|e| {
         panic!("Failed to write {}: {e}", reverse_out.display());
     });
+
+    // --- Terminal-width tables (#224): sorted, binary-searched range tables ---
+    generate_width_ranges(
+        &data_dir.join("char_width.tsv"),
+        &out_dir.join("char_width_ranges.rs"),
+    );
+    generate_range_set(
+        &data_dir.join("emoji_presentation.tsv"),
+        &out_dir.join("emoji_presentation_ranges.rs"),
+        "EMOJI_PRESENTATION_RANGES",
+    );
+}
+
+/// Generate `WIDTH_RANGES: &[(u32, u32, u8)]` from `char_width.tsv`.
+/// Class encoding: 0 = zero-width, 2 = wide, 3 = ambiguous. Narrow (1) is the
+/// default for code points not present in the table.
+fn generate_width_ranges(tsv_path: &Path, out_path: &Path) {
+    let content = fs::read_to_string(tsv_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", tsv_path.display()));
+    let mut rows: Vec<(u32, u32, u8)> = Vec::new();
+    for line in content.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let mut it = t.split('\t');
+        let start = parse_hex(it.next().unwrap_or(""), tsv_path);
+        let end = parse_hex(it.next().unwrap_or(""), tsv_path);
+        let class = match it.next().unwrap_or("").trim() {
+            "Z" => 0u8,
+            "W" => 2,
+            "A" => 3,
+            other => panic!("bad width class {other:?} in {}", tsv_path.display()),
+        };
+        rows.push((start, end, class));
+    }
+    rows.sort_unstable();
+    let mut code = String::from("static WIDTH_RANGES: &[(u32, u32, u8)] = &[\n");
+    for (s, e, c) in &rows {
+        writeln!(code, "    ({s}, {e}, {c}),").unwrap();
+    }
+    code.push_str("];\n");
+    fs::write(out_path, code).unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));
+}
+
+/// Generate `NAME: &[(u32, u32)]` (sorted inclusive ranges) from a 2-column TSV.
+fn generate_range_set(tsv_path: &Path, out_path: &Path, name: &str) {
+    let content = fs::read_to_string(tsv_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", tsv_path.display()));
+    let mut rows: Vec<(u32, u32)> = Vec::new();
+    for line in content.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let mut it = t.split('\t');
+        let start = parse_hex(it.next().unwrap_or(""), tsv_path);
+        let end = parse_hex(it.next().unwrap_or(""), tsv_path);
+        rows.push((start, end));
+    }
+    rows.sort_unstable();
+    let mut code = format!("static {name}: &[(u32, u32)] = &[\n");
+    for (s, e) in &rows {
+        writeln!(code, "    ({s}, {e}),").unwrap();
+    }
+    code.push_str("];\n");
+    fs::write(out_path, code).unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));
+}
+
+/// Parse an uppercase hex code point, panicking with file context on error.
+fn parse_hex(hex: &str, path: &Path) -> u32 {
+    u32::from_str_radix(hex.trim(), 16)
+        .unwrap_or_else(|e| panic!("Bad hex '{hex}' in {}: {e}", path.display()))
 }
 
 // ─── Data readers ────────────────────────────────────────────────────

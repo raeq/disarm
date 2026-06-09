@@ -29,6 +29,7 @@ from translit._api import (
     grapheme_len,
     grapheme_split,
     grapheme_truncate,
+    grapheme_width,
     inspect_auto_lang,
     is_ascii,
     is_confusable,
@@ -54,6 +55,7 @@ from translit._api import (
     set_emoji_provider,
     slugify,
     strip_accents,
+    terminal_width,
     transliterate,
 )
 
@@ -234,6 +236,8 @@ __all__ = [
     "grapheme_len",
     "grapheme_split",
     "grapheme_truncate",
+    "grapheme_width",
+    "terminal_width",
     # Hostname safety
     "is_safe_hostname",
     "SafeHostnameDetails",

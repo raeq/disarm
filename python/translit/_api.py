@@ -1290,9 +1290,7 @@ def inspect_auto_lang(text: str) -> dict[str, str | list[str] | None]:
 
         - ``script``: primary non-Latin script name, or ``None``
         - ``chosen_lang``: resolved language code, or ``None``
-        - ``reason``: one of ``"unambiguous_script"``,
-          ``"discriminator"``, ``"script_default"``,
-          ``"latin_discriminator"``, ``"no_detection"``
+        - ``reason``: one of ``"unambiguous_script"``, ``"discriminator"``, ``"script_default"``, ``"latin_discriminator"``, ``"no_detection"``
         - ``discriminators_hit``: list of discriminator characters found
 
     Examples:

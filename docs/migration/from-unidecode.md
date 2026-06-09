@@ -2,10 +2,16 @@
 
 translit provides a drop-in replacement for both [Unidecode](https://pypi.org/project/Unidecode/) and [text-unidecode](https://pypi.org/project/text-unidecode/).
 
+> **Already wrapping `unidecode` in a pipeline?** Most hand-rolled
+> `unidecode(...)` pipelines (slugs, filenames, search keys, URL-encoding) have a
+> single-call translit equivalent. See [Unidecode → translit
+> recipes](unidecode-recipes.md) for the pattern-by-pattern mapping.
+
 ## Quick migration
 
 ### Option 1: Drop-in alias
 
+<!--- skip: next -->
 ```python
 # Before
 from unidecode import unidecode
@@ -23,6 +29,7 @@ The `translit.unidecode()` function is a direct alias for `transliterate()` with
 
 ### Option 2: Use transliterate directly
 
+<!--- skip: next -->
 ```python
 # Before
 from unidecode import unidecode
@@ -36,14 +43,16 @@ result = transliterate("café")
 `transliterate()` provides additional features not available in Unidecode:
 
 ```python
+from translit import transliterate
+
 # Language-specific transliteration
-transliterate("München", lang="de")          # => "Muenchen"
+assert transliterate("München", lang="de") == 'Muenchen'
 
 # Error handling modes
-transliterate("♠", errors="ignore")          # => ""
-transliterate("♠", errors="preserve")        # => "♠"
-transliterate("♠", errors="replace",
-              replace_with="?")              # => "?"
+assert transliterate("♠", errors="ignore") == ''
+assert transliterate("♠", errors="preserve") == '♠'
+assert transliterate("♠", errors="replace",
+              replace_with="?") == '?'
 ```
 
 ## API comparison
@@ -66,9 +75,11 @@ translit uses its own hand-curated transliteration tables. Most common mappings 
 - Most differences are systematic: CJK pinyin casing (~20K), Korean romanization (~3.7K), inherent vowel handling in Brahmic scripts, and language-specific national standards
 
 ```python
+from translit import unidecode
+
 # Identical in both
-unidecode("café")       # => "cafe"
-unidecode("北京")       # => "bei jing"
+assert unidecode("café") == 'cafe'
+assert unidecode("北京") == 'bei jing'
 
 # May differ for obscure characters
 # translit aims for more linguistically accurate results
@@ -104,12 +115,12 @@ not a complete control — see the [Threat Model](../THREAT_MODEL.md).
 ```python
 # Wrong tool for defense — phonetic mapping, attack survives
 from translit import unidecode
-unidecode("рroduсt")       # → "rrodust"  (р→r, с→s by sound — the spoof is NOT reversed)
+assert unidecode("рroduсt") == 'rrodust'
 
 # Right tools — visual TR39 mapping
 from translit import strip_obfuscation, normalize_confusables
-normalize_confusables("рroduсt")   # → "product"
-strip_obfuscation("рroduсt")       # → "product"  (also strips zalgo/bidi/invisible/emoji)
+assert normalize_confusables("рroduсt") == 'product'
+assert strip_obfuscation("рroduсt") == 'product'
 ```
 
 See [Adversarial-Text Defense](../security/adversarial-defense.md) for the full
@@ -119,6 +130,7 @@ evidence and the XMR benchmark.
 
 text-unidecode has the same API as Unidecode. The migration is identical:
 
+<!--- skip: next -->
 ```python
 # Before
 from text_unidecode import unidecode

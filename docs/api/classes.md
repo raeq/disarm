@@ -13,13 +13,14 @@ from translit import Text
 
 result = (
     Text("Ünïcödé Café ☕")
-    .normalize("NFKC")
+    .normalize(form="NFKC")
+    .demojize()
     .transliterate()
     .strip_accents()
     .fold_case()
     .value
 )
-# => "unicode cafe hot beverage"
+assert result == "unicode cafe hot beverage"
 ```
 
 Each transform method returns a **new** `Text` instance (immutable semantics, matching Python `str`). Predicates return their native type (`bool`, `list`) and do not chain.
@@ -63,9 +64,11 @@ All core transforms are available as methods:
 Use `.value` or `str()` to extract the underlying string:
 
 ```python
+from translit import Text
+
 text = Text("café").strip_accents()
-text.value   # => "cafe"
-str(text)    # => "cafe"
+assert text.value == "cafe"
+assert str(text) == "cafe"
 ```
 
 `Text` supports `==`, `hash()`, `len()`, and `bool()` — comparing against the underlying string value.
@@ -82,12 +85,12 @@ str(text)    # => "cafe"
 from translit import Slugifier
 
 slug = Slugifier(separator="_", lang="de", max_length=50)
-slug("Ärger im Büro")     # => "aerger_im_buero"
-slug("Über den Wolken")   # => "ueber_den_wolken"
+assert slug("Ärger im Büro") == 'aerger_im_buero'
+assert slug("Über den Wolken") == 'ueber_den_wolken'
 
 # Auto-detect language from script
 auto_slug = Slugifier(lang="auto")
-auto_slug("Москва")       # => "moskva" (detects Cyrillic → Russian)
+assert auto_slug("Москва") == 'moskva'
 ```
 
 Accepts all the same parameters as `slugify()`. Construct once, call many times.
@@ -104,16 +107,17 @@ Accepts all the same parameters as `slugify()`. Construct once, call many times.
 from translit import UniqueSlugifier
 
 unique = UniqueSlugifier()
-unique("My Post")   # => "my-post"
-unique("My Post")   # => "my-post-1"
-unique("My Post")   # => "my-post-2"
+assert unique("My Post") == 'my-post'
+assert unique("My Post") == 'my-post-1'
+assert unique("My Post") == 'my-post-2'
 
 unique.reset()      # clear seen slugs
-unique("My Post")   # => "my-post"
+assert unique("My Post") == 'my-post'
 ```
 
 ### External uniqueness check
 
+<!--- skip: next -->
 ```python
 def exists_in_db(slug: str) -> bool:
     return db.slugs.filter(slug=slug).exists()
@@ -142,7 +146,7 @@ pipe = TextPipeline(
     collapse_whitespace=True,
 )
 
-pipe("  Héllo Wörld  ")  # => "hello world"
+assert pipe("  Héllo Wörld  ") == 'hello world'
 ```
 
 ### Execution order
@@ -172,14 +176,14 @@ from translit import Slugify
 
 # Same API as awesome-slugify
 custom = Slugify(to_lower=True)
-custom("Hello World")  # => "hello-world"
+assert custom("Hello World") == 'hello-world'
 
 # Attribute-style configuration (awesome-slugify pattern)
 s = Slugify()
 s.to_lower = True
 s.stop_words = ("the", "a")
 s.max_length = 200
-s("The Big Fox")  # => "big-fox"
+assert s("The Big Fox") == 'big-fox'
 ```
 
 Accepts both awesome-slugify parameter names (`to_lower`, `stop_words`, `safe_chars`, `capitalize`, `pretranslate`) and native translit names (`lowercase`, `stopwords`, `replacements`).
@@ -196,11 +200,11 @@ Defaults to `to_lower=False` (matching awesome-slugify). For python-slugify comp
 from translit import UniqueSlugify
 
 unique = UniqueSlugify(to_lower=True)
-unique("My Post")   # => "my-post"
-unique("My Post")   # => "my-post-1"
+assert unique("My Post") == 'my-post'
+assert unique("My Post") == 'my-post-1'
 
 unique.reset()
-unique("My Post")   # => "my-post"
+assert unique("My Post") == 'my-post'
 ```
 
 Extends `Slugify` with uniqueness tracking. Accepts `uids` and `unique_check` parameters from awesome-slugify.
@@ -221,7 +225,7 @@ from translit import (
     slugify_el,        # Greek transliteration
 )
 
-slugify_url("The Big Fox")        # => "big-fox"
-slugify_de("Ärger im Büro")       # => "Aerger-im-Buero"
-slugify_filename("My Report.pdf") # => "My_Report.pdf"
+assert slugify_url("The Big Fox") == 'big-fox'
+assert slugify_de("Ärger im Büro") == 'Aerger-im-Buero'
+assert slugify_filename("My Report.pdf") == 'My_Report.pdf'
 ```

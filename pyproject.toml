@@ -56,6 +56,7 @@ test = [
     "pytest-cov>=5.0",
     "hypothesis>=6.100",
     "mypy>=1.10",
+    "sybil>=6",  # executable cookbook doc-tests (#154)
 ]
 dev = [
     "translit-rs[test]",
@@ -105,6 +106,10 @@ features = ["pyo3/abi3-py39"]
 # For a self-contained build, compile with the `embed-dicts` Cargo feature.
 
 [tool.pytest.ini_options]
+# Cookbook doc-tests live under docs/ and run as a separate invocation
+# (`pytest docs/`, see CONTRIBUTING.md). They are deliberately NOT in testpaths:
+# docs/conftest.py would otherwise shadow tests/conftest.py, which the suite
+# imports shared fixtures from via `from conftest import ...`.
 testpaths = ["tests"]
 addopts = ["-v", "--tb=short", "-m", "not formal"]
 markers = [

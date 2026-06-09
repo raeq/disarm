@@ -2,22 +2,20 @@
 
 `sanitize_filename()` converts arbitrary Unicode strings into safe filenames that work across operating systems. It handles transliteration, illegal character removal, reserved name detection, and length truncation.
 
+!!! note "These examples are executed in CI"
+    Every `python` block on this page runs against the shipped wheel and its
+    asserted outputs are checked, so the results below cannot silently rot
+    (see #154). Each `assert` is the guaranteed return value.
+
 ## Basic usage
 
 ```python
 from translit import sanitize_filename
 
-sanitize_filename("my<file>:v2.txt")
-# => "my_file_v2.txt"
-
-sanitize_filename("café résumé.pdf")
-# => "cafe_resume.pdf"
-
-sanitize_filename("../../../etc/passwd")
-# => "_.etcpasswd"
-
-sanitize_filename("CON.txt")
-# => "_CON.txt"  (Windows reserved name)
+assert sanitize_filename("my<file>:v2.txt") == "my_file_v2.txt"
+assert sanitize_filename("café résumé.pdf") == "cafe_resume.pdf"
+assert sanitize_filename("../../../etc/passwd") == "_.etcpasswd"
+assert sanitize_filename("CON.txt") == "_CON.txt"  # Windows reserved name
 ```
 
 ## Parameters
@@ -27,8 +25,7 @@ sanitize_filename("CON.txt")
 Character used to replace illegal characters (default: `"_"`):
 
 ```python
-sanitize_filename("hello:world", separator="-")
-# => "hello-world"
+assert sanitize_filename("hello:world", separator="-") == "hello-world"
 ```
 
 ### max_length
@@ -36,15 +33,13 @@ sanitize_filename("hello:world", separator="-")
 Maximum filename length in bytes (default: `255`):
 
 ```python
-sanitize_filename("a" * 300)
-# => "aaa...aaa" (truncated to 255)
+assert len(sanitize_filename("a" * 300)) == 255
 ```
 
 When `preserve_extension=True`, the extension is counted toward the limit and preserved:
 
 ```python
-sanitize_filename("a" * 300 + ".pdf", max_length=20)
-# => "aaaaaaaaaaaaaaaa.pdf"
+assert sanitize_filename("a" * 300 + ".pdf", max_length=20) == "aaaaaaaaaaaaaaaa.pdf"
 ```
 
 ### platform
@@ -53,16 +48,13 @@ Target platform for sanitization rules:
 
 ```python
 # Universal (default) — safe on all platforms
-sanitize_filename("my:file?.txt", platform="universal")
-# => "my_file.txt"
+assert sanitize_filename("my:file?.txt", platform="universal") == "my_file.txt"
 
 # POSIX — only / and NUL are illegal
-sanitize_filename("my:file?.txt", platform="posix")
-# => "my:file?.txt"
+assert sanitize_filename("my:file?.txt", platform="posix") == "my:file?.txt"
 
 # Windows — additionally forbids < > : " | ? * and reserved names
-sanitize_filename("CON.txt", platform="windows")
-# => "_CON.txt"
+assert sanitize_filename("CON.txt", platform="windows") == "_CON.txt"
 ```
 
 | Platform | Illegal characters | Reserved names |
@@ -76,11 +68,11 @@ sanitize_filename("CON.txt", platform="windows")
 Language profile for transliteration of non-ASCII characters:
 
 ```python
-sanitize_filename("Ärger.txt", lang="de")
-# => "Aerger.txt"
+# German profile expands umlauts (ä → ae)
+assert sanitize_filename("Ärger.txt", lang="de") == "Aerger.txt"
 
-sanitize_filename("Ärger.txt")
-# => "Arger.txt"
+# Default profile strips the diaeresis (ä → a)
+assert sanitize_filename("Ärger.txt") == "Arger.txt"
 ```
 
 ### preserve_extension
@@ -88,11 +80,8 @@ sanitize_filename("Ärger.txt")
 Whether to preserve the file extension during truncation (default: `True`):
 
 ```python
-sanitize_filename("long_name.pdf", max_length=12, preserve_extension=True)
-# => "long_nam.pdf"
-
-sanitize_filename("long_name.pdf", max_length=12, preserve_extension=False)
-# => "long_name.pd"
+assert sanitize_filename("long_name.pdf", max_length=12, preserve_extension=True) == "long_nam.pdf"
+assert sanitize_filename("long_name.pdf", max_length=12, preserve_extension=False) == "long_name.pd"
 ```
 
 ## Pipeline

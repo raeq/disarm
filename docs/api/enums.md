@@ -162,6 +162,7 @@ Defined in `translit._types`:
 
 ### ErrorMode
 
+<!--- skip: next -->
 ```python
 ErrorMode = Literal["replace", "ignore", "preserve"]
 ```
@@ -176,6 +177,7 @@ Controls behavior when a character has no transliteration mapping.
 
 ### Platform
 
+<!--- skip: next -->
 ```python
 Platform = Literal["universal", "posix", "windows"]
 ```
@@ -184,6 +186,7 @@ Target platform for filename sanitization rules.
 
 ### NormalizationForm
 
+<!--- skip: next -->
 ```python
 NormalizationForm = Literal["NFC", "NFD", "NFKC", "NFKD"]
 ```
@@ -243,8 +246,8 @@ from translit import LANG_DE, LANG_FR, LANG_ES  # etc.
 ```python
 from translit import list_langs, list_scripts
 
-list_langs()    # → ["am", "ar", "as", "bg", "bn", ...]
-list_scripts()  # → ["Arabic", "Armenian", "Balinese", ...]
+assert list_langs() == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
+assert list_scripts() == ['Arabic', 'Armenian', 'Balinese', 'Bamum', 'Bengali', 'Buginese', 'CanadianAboriginal', 'Cham', 'Cherokee', 'Common', 'Coptic', 'Cuneiform', 'Cyrillic', 'Devanagari', 'Ethiopic', 'Georgian', 'Gothic', 'Greek', 'Gujarati', 'Gurmukhi', 'Han', 'Hangul', 'Hebrew', 'Hiragana', 'Inherited', 'Javanese', 'Kannada', 'Katakana', 'Khmer', 'Lao', 'Latin', 'LinearB', 'Lisu', 'Malayalam', 'MeeteiMayek', 'Mongolian', 'Myanmar', 'NKo', 'NewTaiLue', 'Ogham', 'OlChiki', 'OldPersian', 'Oriya', 'Runic', 'Sinhala', 'Sundanese', 'Syriac', 'Tagalog', 'TaiLe', 'TaiTham', 'Tamil', 'Telugu', 'Thaana', 'Thai', 'Tibetan', 'Tifinagh', 'Vai']
 ```
 
 | Function | Returns |

@@ -8,17 +8,17 @@ translit provides three functions for working with **extended grapheme clusters*
 
 ```python
 text = "café"            # 4 characters, right?
-len(text)                # => 4 ✓ (precomposed é = 1 codepoint)
+assert len(text) == 4
 
 # But with decomposed é (e + combining acute accent):
 import unicodedata
 text_nfd = unicodedata.normalize("NFD", "café")
-len(text_nfd)            # => 5 ✗ (e + ◌́ counted separately)
+assert len(text_nfd) == 5
 
 # Emoji are worse:
-len("👨‍👩‍👧‍👦")               # => 7 (4 person codepoints + 3 ZWJ joiners)
-len("🇬🇧")               # => 2 (two regional indicator symbols)
-len("👋🏽")               # => 2 (wave + skin tone modifier)
+assert len("👨‍👩‍👧‍👦") == 7
+assert len("🇬🇧") == 2
+assert len("👋🏽") == 2
 ```
 
 Python's `len()` counts **codepoints**, not **user-perceived characters**. For correct character counting, splitting, and truncation, you need grapheme cluster segmentation.
@@ -32,18 +32,18 @@ Count the number of user-perceived characters:
 ```python
 from translit import grapheme_len
 
-grapheme_len("café")                 # => 4
-grapheme_len("cafe\u0301")           # => 4 (NFD: e + combining accent = 1 grapheme)
+assert grapheme_len("café") == 4
+assert grapheme_len("cafe\u0301") == 4
 
 # Emoji
-grapheme_len("👨‍👩‍👧‍👦")                    # => 1 (family ZWJ sequence)
-grapheme_len("🇬🇧")                    # => 1 (flag = 2 regional indicators = 1 grapheme)
-grapheme_len("👋🏽")                    # => 1 (hand + skin tone modifier)
-grapheme_len("🏳️‍🌈")                    # => 1 (rainbow flag)
+assert grapheme_len("👨‍👩‍👧‍👦") == 1
+assert grapheme_len("🇬🇧") == 1
+assert grapheme_len("👋🏽") == 1
+assert grapheme_len("🏳️‍🌈") == 1
 
 # Complex scripts
-grapheme_len("\u1100\u1161\u11A8")   # => 1 (Hangul jamo sequence = 1 syllable)
-grapheme_len("नमस्ते")                # => 4 (Devanagari with conjuncts)
+assert grapheme_len("\u1100\u1161\u11A8") == 1
+assert grapheme_len("नमस्ते") == 3
 ```
 
 ### grapheme_split
@@ -53,12 +53,12 @@ Split text into individual grapheme clusters:
 ```python
 from translit import grapheme_split
 
-grapheme_split("café")               # => ['c', 'a', 'f', 'é']
-grapheme_split("cafe\u0301")         # => ['c', 'a', 'f', 'é']  (combining accent stays with e)
+assert grapheme_split("café") == ['c', 'a', 'f', 'é']
+assert grapheme_split("cafe\u0301") == ['c', 'a', 'f', 'é']
 
-grapheme_split("👨‍👩‍👧‍👦!")               # => ['👨‍👩‍👧‍👦', '!']
-grapheme_split("🇫🇷🇬🇧")               # => ['🇫🇷', '🇬🇧']  (two flags, not four indicators)
-grapheme_split("Hi 👋🏽")              # => ['H', 'i', ' ', '👋🏽']
+assert grapheme_split("👨‍👩‍👧‍👦!") == ['👨\u200d👩\u200d👧\u200d👦', '!']
+assert grapheme_split("🇫🇷🇬🇧") == ['🇫🇷', '🇬🇧']
+assert grapheme_split("Hi 👋🏽") == ['H', 'i', ' ', '👋🏽']
 ```
 
 !!! note
@@ -71,14 +71,14 @@ Truncate text to a maximum number of grapheme clusters without splitting any clu
 ```python
 from translit import grapheme_truncate
 
-grapheme_truncate("Hello World", 5)  # => "Hello"
-grapheme_truncate("café", 3)         # => "caf"
-grapheme_truncate("cafe\u0301s", 4)  # => "café"  (combining accent stays with the e)
+assert grapheme_truncate("Hello World", 5) == 'Hello'
+assert grapheme_truncate("café", 3) == 'caf'
+assert grapheme_truncate("cafe\u0301s", 4) == 'café'
 
 # Emoji are never split
-grapheme_truncate("👨‍👩‍👧‍👦🎉", 1)         # => "👨‍👩‍👧‍👦"  (family emoji = 1 grapheme)
-grapheme_truncate("Hi 👩‍👩‍👧‍👦!", 4)        # => "Hi 👩‍👩‍👧‍👦"  (family counts as 1)
-grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2)        # => "🇬🇧🇫🇷"  (two flags)
+assert grapheme_truncate("👨‍👩‍👧‍👦🎉", 1) == '👨\u200d👩\u200d👧\u200d👦'
+assert grapheme_truncate("Hi 👩‍👩‍👧‍👦!", 4) == 'Hi 👩\u200d👩\u200d👧\u200d👦'
+assert grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2) == '🇬🇧🇫🇷'
 ```
 
 Unlike byte-level slicing (`text[:n]`) or codepoint-level slicing, `grapheme_truncate` never produces corrupted output — no broken emoji, no orphaned combining marks, no split Hangul syllables.
@@ -93,11 +93,11 @@ from translit import Text
 t = Text("Hello 👨‍👩‍👧‍👦!")
 
 # Predicates (non-chaining)
-t.grapheme_len()                     # => 8
-t.grapheme_split()                   # => ['H', 'e', 'l', 'l', 'o', ' ', '👨‍👩‍👧‍👦', '!']
+assert t.grapheme_len() == 8
+assert t.grapheme_split() == ['H', 'e', 'l', 'l', 'o', ' ', '👨\u200d👩\u200d👧\u200d👦', '!']
 
 # Transform (chaining)
-t.grapheme_truncate(7).value         # => "Hello 👨‍👩‍👧‍👦"
+assert t.grapheme_truncate(7).value == 'Hello 👨\u200d👩\u200d👧\u200d👦'
 ```
 
 ## When to Use Grapheme Functions
@@ -147,7 +147,8 @@ from translit import normalize, grapheme_len
 
 text = "é"  # might be NFC or NFD depending on source
 normalized = normalize(text, form="NFC")
-count = grapheme_len(normalized)     # => 1 (regardless of original form)
+count = grapheme_len(normalized)
+assert count == 1
 ```
 
 In practice, `grapheme_len` gives the same count for NFC and NFD forms of the same text — the grapheme cluster algorithm handles both. But normalizing first ensures deterministic byte-level results from `grapheme_split` and `grapheme_truncate`.

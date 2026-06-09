@@ -12,12 +12,7 @@ Functions for querying and extending transliteration language profiles.
 from translit import list_langs
 
 langs = list_langs()
-print(langs)
-# => ['am', 'ar', 'as', 'bg', 'bn', 'bo', 'ca', 'cs', 'cy', 'da', 'de', 'dv', 'el',
-#     'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy',
-#     'is', 'it', 'ja', 'jv', 'ka', 'km', 'kn', 'ko', 'lo', 'lt', 'lv', 'ml', 'mn',
-#     'mr', 'mt', 'my', 'ne', 'nl', 'no', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa',
-#     'si', 'sk', 'sl', 'sq', 'sr', 'sv', 'ta', 'te', 'th', 'tr', 'uk', 'vi', 'zh']
+assert langs == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
 ```
 
 Returns both built-in and user-registered language codes, sorted alphabetically.
@@ -41,7 +36,7 @@ register_lang("eo", {
     "ĵ": "jx", "ŝ": "sx", "ŭ": "ux",
 })
 
-transliterate("ĉapelo", lang="eo")  # => "cxapelo"
+assert transliterate("ĉapelo", lang="eo") == 'cxapelo'
 
 # Verify registration
 from translit import list_langs
@@ -68,7 +63,7 @@ register_replacements({
     "™": "(TM)",
 })
 
-transliterate("Hello™ World©")  # => "Hello(TM) World(c)"
+assert transliterate("Hello™ World©") == 'Hello(TM) World(c)'
 ```
 
 Replacements are applied as a pre-processing step before the character-by-character transliteration lookup. They are global and persist for the process lifetime.
@@ -85,11 +80,11 @@ Replacements are applied as a pre-processing step before the character-by-charac
 from translit import register_replacements, remove_replacement, transliterate
 
 register_replacements({"©": "(c)", "®": "(R)"})
-transliterate("©®")  # => "(c)(R)"
+assert transliterate("©®") == '(c)(R)'
 
-remove_replacement("©")  # => True  (was registered)
-remove_replacement("©")  # => False (already removed)
-transliterate("©®")      # => "(R)" — only ® replacement remains
+assert remove_replacement("©") == True
+assert remove_replacement("©") == False
+assert transliterate("©®") == '(c)(R)'
 ```
 
 ---
@@ -104,10 +99,10 @@ transliterate("©®")      # => "(R)" — only ® replacement remains
 from translit import register_replacements, clear_replacements, transliterate
 
 register_replacements({"©": "(c)", "®": "(R)"})
-transliterate("©®")  # => "(c)(R)"
+assert transliterate("©®") == '(c)(R)'
 
 clear_replacements()
-transliterate("©®")  # => "(c)(R)" is gone — falls back to default table
+assert transliterate("©®") == '(c)(R)'
 ```
 
 !!! note

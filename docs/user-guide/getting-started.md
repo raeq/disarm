@@ -23,19 +23,19 @@ No Rust toolchain is needed for installation — the compiled extension is inclu
 import translit
 
 # Transliterate Unicode to ASCII
-translit.transliterate("café")          # => "cafe"
+assert translit.transliterate("café") == 'cafe'
 
 # Generate URL slugs
-translit.slugify("Hello, World!")       # => "hello-world"
+assert translit.slugify("Hello, World!") == 'hello-world'
 
 # Normalize Unicode
-translit.normalize("é", form="NFC")    # => "é" (single codepoint)
+assert translit.normalize("é", form="NFC") == 'é'
 
 # Detect mixed scripts
-translit.is_mixed_script("Неllo")      # => True
+assert translit.is_mixed_script("Неllo") == True
 
 # Sanitize filenames
-translit.sanitize_filename("my:file<2>.txt")  # => "my_file_2.txt"
+assert translit.sanitize_filename("my:file<2>.txt") == 'my_file_2.txt'
 ```
 
 ## Core concepts
@@ -83,13 +83,13 @@ Many functions accept a `lang` parameter for language-specific behavior:
 from translit import transliterate, slugify
 
 # German: ü → ue
-transliterate("München", lang="de")   # => "Muenchen"
+assert transliterate("München", lang="de") == 'Muenchen'
 
 # Default: ü → u
-transliterate("München")              # => "Munchen"
+assert transliterate("München") == 'Munchen'
 
 # Slugify with language rules
-slugify("Ärger", lang="de")           # => "aerger"
+assert slugify("Ärger", lang="de") == 'aerger'
 ```
 
 See [Language Support](language-support.md) for the full list of 83 built-in profiles.
@@ -104,7 +104,7 @@ from translit import normalize, TranslitError
 try:
     normalize("text", form="INVALID")
 except TranslitError as e:
-    print(e)  # => "Invalid normalization form: INVALID"
+    print(e)  # "Invalid normalization form: INVALID"
 ```
 
 ## Next steps

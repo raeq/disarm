@@ -4,6 +4,7 @@ translit's `transliterate()` replaces [anyascii](https://pypi.org/project/anyasc
 
 ## Quick migration
 
+<!--- skip: next -->
 ```python
 # Before
 from anyascii import anyascii
@@ -41,13 +42,15 @@ anyascii and translit both provide Unicode → ASCII transliteration, but they u
 - Most differences are systematic: CJK pinyin casing, Korean romanization, and language-specific national standards
 
 ```python
+from translit import transliterate
+
 # Common cases — identical
-anyascii("café")    # => "cafe"
-transliterate("café")  # => "cafe"
+assert anyascii("café") == 'cafe'
+assert transliterate("café") == 'cafe'
 
 # CJK — may differ in romanization style
 anyascii("北京")       # romanization varies
-transliterate("北京")  # => "bei jing"
+assert transliterate("北京") == 'bei jing'
 ```
 
 ### Language awareness
@@ -58,8 +61,8 @@ anyascii has no language parameter. translit provides 83 language-specific profi
 from translit import transliterate
 
 # anyascii can't do this
-transliterate("München", lang="de")  # => "Muenchen"
-transliterate("Malmö", lang="sv")    # => "Malmoe"
+assert transliterate("München", lang="de") == 'Muenchen'
+assert transliterate("Malmö", lang="sv") == 'Malmoe'
 ```
 
 ### Error handling
@@ -69,9 +72,9 @@ anyascii silently drops characters with no mapping. translit gives you control:
 ```python
 from translit import transliterate
 
-transliterate("♠", errors="replace", replace_with="?")  # => "?"
-transliterate("♠", errors="ignore")                      # => ""
-transliterate("♠", errors="preserve")                    # => "♠"
+assert transliterate("♠", errors="replace", replace_with="?") == '?'
+assert transliterate("♠", errors="ignore") == ''
+assert transliterate("♠", errors="preserve") == '♠'
 ```
 
 ## New features in translit

@@ -13,8 +13,8 @@ Ready-to-use multi-step text processing pipelines. Each is a single compiled Rus
 ```python
 from translit import security_clean
 
-security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")   # => "Real text"
-security_clean("Ηello Ꮤorld")    # => "Hello World"  (Greek Η + Cherokee Ꮤ → Latin)
+assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
+assert security_clean("Ηello Ꮤorld") == 'Hello World'
 ```
 
 ---
@@ -30,9 +30,9 @@ security_clean("Ηello Ꮤorld")    # => "Hello World"  (Greek Η + Cherokee Ꮤ
 ```python
 from translit import ml_normalize
 
-ml_normalize("Café RÉSUMÉ")         # => "cafe resume"
-ml_normalize("München", lang="de")  # => "muenchen"
-ml_normalize("I ❤️ Python 🐍")      # => "i red heart python snake"
+assert ml_normalize("Café RÉSUMÉ") == 'cafe resume'
+assert ml_normalize("München", lang="de") == 'muenchen'
+assert ml_normalize("I ❤️ Python 🐍") == 'i red heart python snake'
 ```
 
 ---
@@ -48,10 +48,10 @@ ml_normalize("I ❤️ Python 🐍")      # => "i red heart python snake"
 ```python
 from translit import catalog_key
 
-catalog_key("  Café  RÉSUMÉ  ")       # => "cafe resume"
-catalog_key("Москва", lang="ru")      # => "moskva"
-catalog_key("Москва", lang="auto")    # => "moskva" (auto-detects Russian)
-catalog_key("Müller", lang="de")      # => "mueller"
+assert catalog_key("  Café  RÉSUMÉ  ") == 'cafe resume'
+assert catalog_key("Москва", lang="ru") == 'moskva'
+assert catalog_key("Москва", lang="auto") == 'moskva'
+assert catalog_key("Müller", lang="de") == 'mueller'
 ```
 
 ---
@@ -67,9 +67,9 @@ catalog_key("Müller", lang="de")      # => "mueller"
 ```python
 from translit import display_clean
 
-display_clean("hello\x00world\u200b!")  # => "helloworld!"
-display_clean("  spaced   out  ")       # => "spaced out"
-display_clean("admin\u202Euser")        # => "adminuser" (bidi override stripped)
+assert display_clean("hello\x00world\u200b!") == 'helloworld!'
+assert display_clean("  spaced   out  ") == 'spaced out'
+assert display_clean("admin\u202Euser") == 'adminuser'
 ```
 
 ---
@@ -85,9 +85,9 @@ display_clean("admin\u202Euser")        # => "adminuser" (bidi override stripped
 ```python
 from translit import search_key
 
-search_key("Café RÉSUMÉ")              # => "cafe resume"
-search_key("Москва", lang="ru")        # => "moskva"
-search_key("ΩMEGA", lang="auto")       # => "omega"
+assert search_key("Café RÉSUMÉ") == 'cafe resume'
+assert search_key("Москва", lang="ru") == 'moskva'
+assert search_key("ΩMEGA", lang="auto") == 'omega'
 ```
 
 ---
@@ -103,9 +103,9 @@ search_key("ΩMEGA", lang="auto")       # => "omega"
 ```python
 from translit import sort_key
 
-sort_key("Über", lang="de")            # => "ueber"
-sort_key("Война и мир", lang="ru")     # => "voyna i mir"
-sort_key("Café")                       # => "cafe"
+assert sort_key("Über", lang="de") == 'ueber'
+assert sort_key("Война и мир", lang="ru") == 'voyna i mir'
+assert sort_key("Café") == 'cafe'
 ```
 
 ---
@@ -121,9 +121,9 @@ sort_key("Café")                       # => "cafe"
 ```python
 from translit import sanitize_user_input
 
-sanitize_user_input("Hello, world!")        # => "Hello, world!"
-sanitize_user_input("p\u0430ypal")          # => "paypal" (Cyrillic а → Latin a)
-sanitize_user_input("admin\u202Euser")      # => "adminuser" (bidi override stripped)
+assert sanitize_user_input("Hello, world!") == 'Hello, world!'
+assert sanitize_user_input("p\u0430ypal") == 'paypal'
+assert sanitize_user_input("admin\u202Euser") == 'adminuser'
 ```
 
 Unlike `security_clean`, this pipeline also strips zalgo text (excessive combining mark stacking). Unlike `catalog_key`/`search_key`, it does **not** transliterate — the original script is preserved.
@@ -139,11 +139,8 @@ from translit import PRESETS
 Dict mapping preset function names to their ordered pipeline steps. Each value is a list of `(step_name, parameter)` tuples in execution order.
 
 ```python
->>> from translit import PRESETS
->>> PRESETS["security_clean"]
-[('normalize', 'NFKC'), ('confusables', 'latin'), ('strip_bidi', None), ('collapse_whitespace', None)]
->>> PRESETS["sanitize_user_input"]
-[('normalize', 'NFKC'), ('strip_zalgo', None), ('confusables', 'latin'), ('strip_bidi', None), ('collapse_whitespace', None)]
+assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('confusables', 'latin'), ('strip_bidi', None), ('collapse_whitespace', None)]
+assert PRESETS["sanitize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None)]
 ```
 
 Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.
@@ -160,7 +157,7 @@ Named policy profiles provide pre-configured `TextPipeline` instances for common
 from translit import get_pipeline
 
 pipe = get_pipeline("scholarly_cyrillic_iso9")
-pipe("Москва")   # → "moskva"
+assert pipe("Москва") == 'moskva'
 ```
 
 Returns a fresh `TextPipeline` configured for the named profile. Raises `TranslitError` for unknown profiles.

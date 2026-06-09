@@ -57,6 +57,7 @@ Requires Python 3.9+. Wheels are available for Linux, macOS, and Windows.
 
 - **[Confusable & homoglyph analysis (TR39)](docs/security/adversarial-defense.md)**: visual [confusable mapping](docs/user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` pipeline (defense-in-depth — see the [Threat Model](THREAT_MODEL.md))
 - **[Canonicalization pipelines](docs/api/pipelines.md)**: `security_clean`, `sanitize_user_input`, `catalog_key`, `search_key`, `sort_key`, `display_clean`, `ml_normalize` for common workflows
+- **[LLM / RAG pipelines](docs/user-guide/llm-pipelines.md)**: guardrail matching (`llm_guardrail`) and ingestion (`rag_ingest`) profiles — deterministic deobfuscation and ASCII-index normalisation for LLM stacks
 - **[Hostname / IDN analysis](docs/api/predicates.md#is_safe_hostname)**: mixed-script and confusable detection for domains
 - **[Standards-based transliteration](docs/user-guide/transliteration.md)**: best-in-class Latin / Cyrillic / Greek with ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34, and BGN/PCGN, plus [reverse transliteration](docs/user-guide/language-support.md#reverse-transliteration) (Russian, Ukrainian, Greek)
 - **[Text normalization](docs/user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](docs/user-guide/text-cleaning.md)

@@ -104,6 +104,7 @@ impl EmojiProvider for Emoji15Provider {
 
 **File-based plugins** (escape hatch). A generic provider loads annotations from a compact binary format at runtime. This serves researchers who need custom annotations, proprietary emoji sets, or languages not covered by a compiled plugin.
 
+<!--- skip: next -->
 ```python
 from translit.emoji import FileProvider
 
@@ -116,6 +117,7 @@ The binary format is a simple sequence-to-string map serialised with MessagePack
 
 On the Python side, providers are registered with the core and selected per-call or globally:
 
+<!--- skip: next -->
 ```python
 import translit
 from translit_emoji_15 import Emoji15Provider
@@ -138,6 +140,7 @@ On the Rust side, the global provider is stored behind a `RwLock<Arc<dyn EmojiPr
 
 For mixed-era corpora, providers can be stacked in fallback order:
 
+<!--- skip: next -->
 ```python
 from translit.emoji import ChainProvider
 
@@ -171,13 +174,15 @@ This ordering is deliberate. Emoji expansion runs after normalization because so
 ### Text Builder
 
 ```python
+from translit import Text
+
 result = (Text("Hello 🌍!")
     .normalize(form="NFC")
     .demojize()
     .transliterate()
     .fold_case()
     .value)
-# => "hello globe showing europe-africa!"
+assert result == "hello globe showing europe-africa!"
 ```
 
 ### TextPipeline
@@ -185,14 +190,15 @@ result = (Text("Hello 🌍!")
 `TextPipeline` gains a `demojize` boolean parameter, consistent with the existing flags (`transliterate`, `confusables`, `strip_accents`, `fold_case`, `collapse_whitespace`). The pipeline uses the global provider and the `lang` already configured on the pipeline.
 
 ```python
+from translit import TextPipeline
+
 pipe = TextPipeline(
     normalize="NFC",
     demojize=True,
     transliterate=True,
     fold_case=True,
 )
-pipe("Hello 🌍!")
-# => "hello globe showing europe-africa!"
+assert pipe("Hello 🌍!") == "hello globe showing europe-africa!"
 ```
 
 The corresponding bitflag is added to `PipelineSteps`:
@@ -210,12 +216,12 @@ When `demojize(lang="de")` is called, the provider must supply German-language a
 `demojize()` always returns the bare CLDR short name as plain text. There is no `format` parameter — wrapping output in colons, brackets, or other delimiters is trivial in Python and composable with existing translit transforms:
 
 ```python
-demojize("I love 😂")
-# => "I love face with tears of joy"
+from translit import demojize, Text
+
+assert demojize("I love 😂") == "I love face with tears of joy"
 
 # Slack-style tokens — compose with slugify
-Text("😂").demojize().slugify(separator="_").value
-# => "face_with_tears_of_joy"
+assert Text("😂").demojize().slugify(separator="_").value == "face_with_tears_of_joy"
 ```
 
 ## Data Sourcing

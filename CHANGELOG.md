@@ -10,6 +10,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`slugify_filename` / `Slugify(safe_chars=...)`** restored safe characters at the wrong
+  positions, so `slugify_filename("My Report.pdf")` returned `"My.Report_pdf"` instead of
+  the awesome-slugify-correct `"My_Report.pdf"` — the safe `.` was swapped onto the
+  space's separator. Safe characters are now preserved at their true positions by
+  protecting them through the pipeline and restoring them, matching awesome-slugify. The
+  previous test only covered a dot-free input, so the bug was uncaught; regression tests
+  now cover filenames with extensions. Surfaced by the executable-doc-examples work (#156).
+
 ### Security
 
 - The RustSec advisory audit (`cargo-audit`) now **blocks merge** via the required "Rust

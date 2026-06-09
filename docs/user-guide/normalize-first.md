@@ -37,9 +37,7 @@ pipe = TextPipeline(
     collapse_whitespace=True,
 )
 
-[name for name, _param in pipe.steps]
-# ['normalize', 'confusables', 'fold_case',
-#  'strip_control', 'strip_zero_width', 'collapse_whitespace']
+assert [name for name, _param in pipe.steps] == ['normalize', 'confusables', 'fold_case', 'strip_control', 'strip_zero_width', 'collapse_whitespace']
 ```
 
 The order a pipeline **reports** (`pipe.steps`) is, by construction, the order it
@@ -61,7 +59,7 @@ normalize_parts = lambda s, f: "".join(
 )
 
 s = "क्ष"  # Devanagari conjunct: KA + virama + SSA
-normalize_whole(s, "NFC") == normalize_parts(s, "NFC")   # => True
+assert normalize_whole(s, "NFC") == normalize_parts(s, "NFC")
 ```
 
 In plain terms: normalization never orphans a combining mark, never splits an
@@ -92,11 +90,11 @@ raw = "pаypаl"                     # contains Cyrillic а (U+0430)
 # so the script check sees canonical input, never a disguised bypass.
 s = translit.normalize(raw, form="NFKC")
 
-translit.is_mixed_script(s)        # => True  (flag it)
+assert translit.is_mixed_script(s) == True
 
 pure = translit.normalize_confusables(s, target_script="latin")
-pure                               # => 'paypal'
-translit.is_mixed_script(pure)     # => False (now single-script)
+assert pure == 'paypal'
+assert translit.is_mixed_script(pure) == False
 ```
 
 - **Flag** with `is_mixed_script` when you only need to *reject* suspicious input
@@ -120,17 +118,19 @@ would need:
 ```python
 import translit
 
-translit.normalize("⁵", form="NFC")   # '⁵'  superscript five — preserved
-translit.normalize("⁵", form="NFKC")  # '5'  folded to ASCII — unrecoverable
+assert translit.normalize("⁵", form="NFC") == '⁵'    # superscript five — preserved
+assert translit.normalize("⁵", form="NFKC") == '5'   # folded to ASCII — unrecoverable
 ```
 
 An NFC-first canonicalization keeps the door open to a clean round-trip:
 
 ```python
 native = "Москва"
-canonical = translit.normalize(native, form="NFC")     # canonical, lossless
-romanized = translit.transliterate(canonical, lang="ru")  # 'Moskva'
-back = translit.transliterate(romanized, target="ru")     # 'Москва'  — round-trips
+canonical = translit.normalize(native, form="NFC")        # canonical, lossless
+romanized = translit.transliterate(canonical, lang="ru")
+assert romanized == 'Moskva'
+back = translit.transliterate(romanized, target="ru")
+assert back == 'Москва'                                   # round-trips
 ```
 
 For the reversible direction, also avoid the steps that erase recoverable

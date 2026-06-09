@@ -6,6 +6,8 @@ instances can serve as drop-in replacements for awesome-slugify.
 
 import warnings
 
+import pytest
+
 from translit import (
     Slugify,
     UniqueSlugify,
@@ -202,7 +204,7 @@ class TestPreconfiguredInstances:
 
     def test_slugify_filename_underscore(self) -> None:
         result = slugify_filename("Hello World")
-        assert "_" in result or result == "Hello_World"
+        assert result == "Hello_World"
 
     def test_slugify_filename_max_length(self) -> None:
         long_text = "x" * 300
@@ -224,6 +226,79 @@ class TestPreconfiguredInstances:
     def test_slugify_el_greek(self) -> None:
         result = slugify_el("Αθήνα")
         assert result.isascii() or len(result) > 0
+
+
+class TestSafeCharsRestoration:
+    """Regression: ``safe_chars`` must be preserved at their TRUE positions.
+
+    Previously ``slugify_filename("My Report.pdf")`` returned ``"My.Report_pdf"``
+    — the safe ``.`` was greedily restored onto the space's separator, swapping
+    the roles of the separator and the safe char. The old test only exercised a
+    dot-free input, so the bug went uncaught. All expected values below were
+    verified directly against awesome-slugify (the library these classes are a
+    drop-in for).
+    """
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("My Report.pdf", "My_Report.pdf"),
+            ("hello world.txt", "hello_world.txt"),
+            ("a b.c.d.pdf", "a_b.c.d.pdf"),
+            ("résumé final.docx", "resume_final.docx"),
+            ("report-v2.pdf", "report-v2.pdf"),
+            # safe char adjacent to a word separator keeps both
+            ("a .b", "a_.b"),
+            ("My  Report .PDF", "My_Report_.PDF"),
+            # leading / trailing safe chars are preserved
+            (".pdf", ".pdf"),
+            ("trailing.", "trailing."),
+        ],
+    )
+    def test_slugify_filename_positions(self, text: str, expected: str) -> None:
+        assert slugify_filename(text) == expected
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("My Report.pdf", "My-Report.pdf"),
+            ("a .b", "a-.b"),
+            ("v1.2.3 build", "v1.2.3-build"),
+        ],
+    )
+    def test_custom_separator_with_safe_dot(self, text: str, expected: str) -> None:
+        assert Slugify(separator="-", safe_chars=".")(text) == expected
+
+    def test_safe_chars_via_call_override(self) -> None:
+        # safe_chars passed per-call (override path), not just on the instance
+        assert Slugify(separator="_")("My Report.pdf", safe_chars=".") == "My_Report.pdf"
+
+    def test_max_length_bounds_restored_result(self) -> None:
+        # max_length must bound the RESTORED result, not the longer marker form
+        result = Slugify(separator="_", safe_chars=".", max_length=10)("hello world.txt")
+        assert len(result) <= 10
+
+    def test_unique_slugify_safe_chars_no_marker_debris(self) -> None:
+        # UniqueSlugify must not let its inner truncate a safe-char placeholder
+        # mid-marker (would leak "zqx..." debris) — the inner runs without
+        # max_length and the restored result is bounded afterwards.
+        u = UniqueSlugify(separator="_", safe_chars="-.", max_length=12)
+        for result in (u("alpha beta.gamma.delta"), u("epsilon zeta.eta")):
+            assert "zqx" not in result  # no placeholder debris
+            assert len(result) <= 12
+
+    def test_unique_slugify_safe_chars_uniqueness(self) -> None:
+        # With room for the suffix, uniqueness is still enforced on the
+        # safe-char path (no max_length truncation eating the suffix).
+        u = UniqueSlugify(separator="_", safe_chars="-.")
+        first = u("My Report.pdf")
+        second = u("My Report.pdf")
+        assert first == "My_Report.pdf"
+        assert second != first  # suffixed
+
+    def test_unique_slugify_safe_chars_preserves_extension(self) -> None:
+        u = UniqueSlugify(separator="_", safe_chars="-.")
+        assert u("My Report.pdf") == "My_Report.pdf"
 
 
 # ---------------------------------------------------------------------------

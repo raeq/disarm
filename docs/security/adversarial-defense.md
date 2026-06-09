@@ -119,8 +119,8 @@ spoofs, multi-character confusables (`rn`→`m`), and Unicode-version skew. See 
 ```python
 from translit import strip_obfuscation, normalize_confusables, is_safe_hostname
 
-strip_obfuscation("рroduсt")        # → "product"   (Cyrillic р→p, с→c via TR39)
-normalize_confusables("раypal")      # → "paypal"
+assert strip_obfuscation("рroduсt") == 'product'
+assert normalize_confusables("раypal") == 'paypal'
 
 safe, details = is_safe_hostname("аpple.com")   # leading Cyrillic а
 # safe is False; details.mixed_script and details.has_confusables explain why

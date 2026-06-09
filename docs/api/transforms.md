@@ -77,11 +77,11 @@ Caps the number of combining marks per base character, preserving legitimate dia
 ```python
 from translit import strip_zalgo
 
-strip_zalgo("café")           # => "café"  (1 mark — preserved)
-strip_zalgo("Việt Nam")       # => "Việt Nam"  (2 marks — preserved)
+assert strip_zalgo("café") == 'café'
+assert strip_zalgo("Việt Nam") == 'Việt Nam'
 
 # Strip all combining marks (like strip_accents)
-strip_zalgo("café", max_marks=0)  # => "cafe"
+assert strip_zalgo("café", max_marks=0) == 'cafe'
 ```
 
 ---
@@ -97,11 +97,9 @@ from translit import transliterate, slugify
 
 titles = ["café résumé", "Straße nach München", "Москва"]
 
-transliterate(titles)
-# => ["cafe resume", "Strasse nach Munchen", "Moskva"]
+assert transliterate(titles) == ['cafe resume', 'Strasse nach Munchen', 'Moskva']
 
-slugify(titles, lang="de")
-# => ["cafe-resume", "strasse-nach-muenchen", "moskva"]
+assert slugify(titles, lang="de") == ['cafe-resume', 'strasse-nach-muenchen', 'moskva']
 ```
 
 For large datasets, passing a list is significantly faster than calling the function in a Python loop. See [Performance](../performance.md) for benchmarks.
@@ -120,7 +118,7 @@ The following aliases are provided for migration convenience:
 ```python
 from translit import unidecode, casefold, remove_accents
 
-unidecode("café")        # => "cafe"
-casefold("Straße")       # => "strasse"
-remove_accents("café")   # => "cafe"
+assert unidecode("café") == 'cafe'
+assert casefold("Straße") == 'strasse'
+assert remove_accents("café") == 'cafe'
 ```

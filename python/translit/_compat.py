@@ -288,14 +288,11 @@ class Slugify:
             )
         self._dirty = True
 
-    def _apply_post_processing(
-        self, text: str, result: str, capitalize: bool, safe_chars: str
-    ) -> str:
-        """Apply safe-char restoration and capitalization after slugification."""
-        if safe_chars:
-            result = _restore_safe_chars(text, result, safe_chars, self._separator_val)
+    @staticmethod
+    def _capitalize_first(result: str, capitalize: bool) -> str:
+        """Capitalize the first character, awesome-slugify style."""
         if capitalize and result:
-            result = result[0].upper() + result[1:]
+            return result[0].upper() + result[1:]
         return result
 
     def __call__(self, text: str, **kwargs: Any) -> str:
@@ -305,14 +302,30 @@ class Slugify:
             cap: bool = bool(override.pop("_capitalize", self._capitalize))
             safe: str = str(override.pop("_safe_chars", self._safe_chars))
             merged.update(override)
-            inner = _Slugifier(**merged)
-            result: str = str(inner.slugify(text))
+            kw = merged
         else:
             cap = self._capitalize
             safe = self._safe_chars
+            kw = self._kwargs
+
+        result: str
+        if safe:
+            # Preserve safe_chars at their true positions: protect them through
+            # slugification, then restore (awesome-slugify treats safe_chars as
+            # word characters, not separators). Slugify without max_length so the
+            # bound applies to the restored result, not the longer marker form.
+            separator = str(kw.get("separator", "-"))
+            max_length = int(kw.get("max_length", 0))
+            slugifier = _Slugifier(**{**kw, "max_length": 0})
+            result = _slugify_with_safe_chars(
+                slugifier.slugify, text, safe, separator, truncate_to=max_length
+            )
+        elif kwargs:
+            result = str(_Slugifier(**kw).slugify(text))
+        else:
             result = str(self._ensure_inner().slugify(text))
 
-        return self._apply_post_processing(text, result, cap, safe)
+        return self._capitalize_first(result, cap)
 
     def __repr__(self) -> str:
         return f"Slugify(separator={self._separator_val!r}, to_lower={self._to_lower!r})"
@@ -361,11 +374,30 @@ class UniqueSlugify(Slugify):
 
             check = _check_not_in_uids
 
-        self._unique_inner: _UniqueSlugifier = _UniqueSlugifier(check=check, **self._kwargs)
+        # When safe_chars is set, the safe-char path protects them with
+        # placeholders before slugifying; `max_length` must NOT be applied by the
+        # inner slugifier (it could truncate a placeholder mid-marker). Build the
+        # inner without it and let the safe-char helper bound the restored result
+        # via `truncate_to`. safe_chars is fixed per instance for UniqueSlugify
+        # (per-call kwargs are not honored), so the non-safe path is unused here.
+        inner_kwargs = dict(self._kwargs)
+        if self._safe_chars:
+            inner_kwargs["max_length"] = 0
+        self._unique_inner: _UniqueSlugifier = _UniqueSlugifier(check=check, **inner_kwargs)
 
     def __call__(self, text: str, **kwargs: Any) -> str:
-        result: str = str(self._unique_inner.slugify(text))
-        return self._apply_post_processing(text, result, self._capitalize, self._safe_chars)
+        if self._safe_chars:
+            separator = str(self._kwargs.get("separator", "-"))
+            result: str = _slugify_with_safe_chars(
+                self._unique_inner.slugify,
+                text,
+                self._safe_chars,
+                separator,
+                truncate_to=self._max_length_val,
+            )
+        else:
+            result = str(self._unique_inner.slugify(text))
+        return self._capitalize_first(result, self._capitalize)
 
     def reset(self) -> None:
         """Clear the internal set of seen slugs."""
@@ -375,64 +407,54 @@ class UniqueSlugify(Slugify):
         return "UniqueSlugify()"
 
 
-def _find_next_safe_char(original: str, safe_set: frozenset[str], start: int) -> int:
-    """Return the index of the next safe char in original from start, or -1."""
-    for i in range(start, len(original)):
-        if original[i] in safe_set:
-            return i
-    return -1
+def _safe_marker(index: int, text: str) -> str:
+    """A collision-free, slug-stable placeholder for a safe character.
 
-
-def _restore_safe_chars(original: str, slug: str, safe_chars: str, separator: str) -> str:
-    """Best-effort restoration of safe_chars that were stripped during slugification.
-
-    awesome-slugify preserves characters listed in safe_chars through the
-    slugification pipeline. Since translit's Rust core doesn't have this concept,
-    we approximate it by replacing separator sequences that correspond to safe
-    char positions in the original text.
-
-    Args:
-        original: The original input text before slugification.
-        slug: The slugified result.
-        safe_chars: Characters to restore (e.g. ".-").
-        separator: The slug separator (e.g. "-").
-
-    This is an approximation — it handles the common cases (e.g. preserving dots
-    in filenames, dashes in version strings) but may not match awesome-slugify
-    exactly for all edge cases.
+    Markers are lowercase ASCII (case-fold invariant) and contain only word
+    characters, so they survive slugification unchanged and unsplit. A leading
+    ``z`` is prepended until the marker does not occur in ``text``.
     """
-    safe_set = frozenset(safe_chars)
-    # Quick check: if no safe chars appear in original, nothing to restore
-    if not safe_set.intersection(original):
-        return slug
-    # With an empty separator, there are no separator sequences to match
-    # against safe chars — restoration is not possible.
-    if not separator:
-        return slug
+    suffix = chr(ord("a") + index) if index < 26 else f"x{index}x"
+    marker = f"zqx{suffix}qzx"
+    while marker in text:
+        marker = "z" + marker
+    return marker
 
-    # Walk original and slug in parallel: when the slug has a separator
-    # where the original had a safe char, restore the safe char.
-    parts: list[str] = []
-    sep_len = len(separator)
-    original_pos = 0
-    slug_pos = 0
 
-    while slug_pos < len(slug):
-        # Check if we're at a separator in the slug
-        if slug[slug_pos : slug_pos + sep_len] == separator:
-            safe_idx = _find_next_safe_char(original, safe_set, original_pos)
-            if safe_idx >= 0:
-                parts.append(original[safe_idx])
-                original_pos = safe_idx + 1
-            else:
-                parts.append(separator)
-            slug_pos += sep_len
-        else:
-            parts.append(slug[slug_pos])
-            original_pos += 1
-            slug_pos += 1
+def _slugify_with_safe_chars(
+    slugify_fn: Callable[[str], str],
+    text: str,
+    safe_chars: str,
+    separator: str,
+    truncate_to: int = 0,
+) -> str:
+    """Slugify while preserving ``safe_chars`` at their original positions.
 
-    return "".join(parts)
+    awesome-slugify treats ``safe_chars`` as word characters: they pass through
+    the pipeline and belong to the adjacent token rather than acting as
+    separators. translit's Rust core has no such concept, so we protect each
+    safe character with a word-character placeholder, slugify, then restore.
+
+    ``slugify_fn`` must NOT apply ``max_length`` itself (the placeholders are
+    longer than the characters they stand in for); pass ``truncate_to`` to bound
+    the final, restored result instead.
+    """
+    present = [c for c in dict.fromkeys(safe_chars) if c in text]
+    if not present:
+        result = slugify_fn(text)
+    else:
+        mapping: dict[str, str] = {}
+        protected = text
+        for i, char in enumerate(present):
+            marker = _safe_marker(i, text)
+            mapping[marker] = char
+            protected = protected.replace(char, marker)
+        result = slugify_fn(protected)
+        for marker, char in mapping.items():
+            result = result.replace(marker, char)
+    if truncate_to and len(result) > truncate_to:
+        result = result[:truncate_to].rstrip(separator)
+    return result
 
 
 # ---------------------------------------------------------------------------

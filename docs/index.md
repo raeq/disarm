@@ -32,10 +32,10 @@ translit implements *visual* confusable mapping per [Unicode TR39](https://www.u
 from translit import strip_obfuscation, normalize_confusables, is_safe_hostname
 
 # Fold Cyrillic look-alikes to their Latin prototypes (TR39 visual mapping)
-strip_obfuscation("рroduсt")        # → "product"  (р→p, с→c)
-strip_obfuscation("pаypаl 🔥🔥")     # → "paypal fire fire"  (also strips zalgo/bidi/invisible/emoji)
+assert strip_obfuscation("рroduсt") == 'product'
+assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
 
-normalize_confusables("раypal")      # → "paypal"   (mixed Cyrillic skeleton → Latin)
+assert normalize_confusables("раypal") == 'paypal'
 
 # IDN / hostname spoofing check
 safe, details = is_safe_hostname("аpple.com")   # leading Cyrillic а
@@ -80,15 +80,15 @@ from translit import (
     security_clean, sanitize_user_input,
 )
 
-is_confusable("аpple")             # → True  (contains Cyrillic а)
-normalize_confusables("раypal")  # → "paypal"
+assert is_confusable("аpple") == True
+assert normalize_confusables("раypal") == 'paypal'
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars, bidi, emoji → clean text
-strip_obfuscation("рroduсt")  # → "product"   (does NOT transliterate; chain transliterate() if needed)
+assert strip_obfuscation("рroduсt") == 'product'
 
 # Pipelines
-security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")            # → "Real text"   (NFKC → confusables → strip bidi → collapse ws)
-sanitize_user_input("pаypal")      # → "paypal"      (NFKC → strip zalgo → confusables → strip bidi → collapse ws)
+assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
+assert sanitize_user_input("pаypal") == 'paypal'
 ```
 
 ### Transliteration (standards-based core)
@@ -96,36 +96,36 @@ sanitize_user_input("pаypal")      # → "paypal"      (NFKC → strip zalgo �
 ```python
 from translit import transliterate, slugify
 
-transliterate("café")                      # → "cafe"
-transliterate("Москва")                    # → "Moskva"     (Cyrillic, BGN/PCGN)
-transliterate("Αθήνα")                     # → "Athina"     (Greek, BGN/PCGN)
+assert transliterate("café") == 'cafe'
+assert transliterate("Москва") == 'Moskva'
+assert transliterate("Αθήνα") == 'Athina'
 
 # Named standards (Latin / Cyrillic / Greek)
-transliterate("Юрий", strict_iso9=True)    # → "Jurij"      (ISO 9-style ASCII)
-transliterate("Москва", gost7034=True)     # → "Moskva"     (GOST R 7.0.34)
+assert transliterate("Юрий", strict_iso9=True) == 'Jurij'
+assert transliterate("Москва", gost7034=True) == 'Moskva'
 
 # Language profiles (sparse overrides on top of the default table)
-transliterate("Ärger", lang="de")          # → "Aerger"
-transliterate("Київ", lang="uk")           # → "Kyiv"
+assert transliterate("Ärger", lang="de") == 'Aerger'
+assert transliterate("Київ", lang="uk") == 'Kyiv'
 
 # Auto-detect language from script
-transliterate("Москва", lang="auto")       # → "Moskva"     (detects Cyrillic → Russian)
+assert transliterate("Москва", lang="auto") == 'Moskva'
 
 # Reverse transliteration (Latin → native script): Russian, Ukrainian, Greek
-transliterate("Moskva", target="ru")       # → "Москва"
-transliterate("Athina", target="el")       # → "Αθηνα"
+assert transliterate("Moskva", target="ru") == 'Москва'
+assert transliterate("Athina", target="el") == 'Αθηνα'
 
 # Slugs & filenames
-slugify("café au lait")                    # → "cafe-au-lait"
+assert slugify("café au lait") == 'cafe-au-lait'
 ```
 
 ### Compatibility coverage (CJK and other scripts)
 
 ```python
 # Context-free, character-by-character — best-effort, unidecode-parity (see caveats below)
-transliterate("北京市")                     # → "bei jing shi"   (Chinese, toneless pinyin)
-transliterate("서울")                       # → "seo ul"         (Korean, Revised Romanization)
-transliterate("ひらがな")                   # → "hiragana"       (Japanese, Hepburn)
+assert transliterate("北京市") == 'bei jing shi'
+assert transliterate("서울") == 'seo ul'
+assert transliterate("ひらがな") == 'hiragana'
 ```
 
 ## Coverage tiers
@@ -148,21 +148,21 @@ translit transliterates a very wide range of scripts, but the **quality guarante
 from translit import security_clean, ml_normalize, catalog_key, sanitize_user_input, strip_obfuscation
 
 # Security: NFKC → confusables → strip bidi → collapse whitespace
-security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")  # → "Real text"
+assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
 
 # ML/NLP: NFKC → emoji→text → transliterate → strip accents → fold case
-ml_normalize("Café ☕ Ünïcödé")  # → "cafe hot beverage unicode"
+assert ml_normalize("Café ☕ Ünïcödé") == 'cafe hot beverage unicode'
 
 # Library catalog: NFKC → transliterate → confusables → strip accents → fold case
-catalog_key("Москва", lang="ru")  # → "moskva"
-catalog_key("ΩMEGA  café")        # → "omega cafe"
+assert catalog_key("Москва", lang="ru") == 'moskva'
+assert catalog_key("ΩMEGA  café") == 'omega cafe'
 
 # Web input: NFKC → strip bidi → strip zero-width → strip zalgo → confusables → collapse
-sanitize_user_input("pаypal")  # → "paypal" (Cyrillic а folded to Latin)
+assert sanitize_user_input("pаypal") == 'paypal'
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars → clean text
-strip_obfuscation("рroduсt")       # → "product" (Cyrillic р→p, с→c via TR39)
-strip_obfuscation("pаypаl 🔥🔥")  # → "paypal fire fire"
+assert strip_obfuscation("рroduсt") == 'product'
+assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
 # Note: does NOT transliterate — chain with transliterate() if needed
 ```
 
@@ -180,7 +180,7 @@ result = (
     .fold_case()
     .value
 )
-# → "unicode cafe hot beverage"
+assert result == 'unicode cafe hot beverage'
 ```
 
 ## Package structure
@@ -242,9 +242,9 @@ translit provides compatibility aliases for painless migration from existing lib
 ```python
 from translit import unidecode, casefold, remove_accents
 
-unidecode("café")        # → "cafe"       (alias for transliterate)
-casefold("Straße")       # → "strasse"    (alias for fold_case)
-remove_accents("café")   # → "cafe"       (alias for strip_accents)
+assert unidecode("café") == 'cafe'
+assert casefold("Straße") == 'strasse'
+assert remove_accents("café") == 'cafe'
 ```
 
 `sanitize_filename()` also accepts `replacement_text` and `max_len` kwargs for pathvalidate compatibility, and `is_confusable()` accepts `greedy` for confusable_homoglyphs compatibility. See [migration guides](migration/index.md) for details.

@@ -9,11 +9,11 @@ Remove diacritical marks while preserving base characters:
 ```python
 from translit import strip_accents
 
-strip_accents("café")       # => "cafe"
-strip_accents("naïve")      # => "naive"
-strip_accents("résumé")     # => "resume"
-strip_accents("Ångström")   # => "Angstrom"
-strip_accents("São Paulo")  # => "Sao Paulo"
+assert strip_accents("café") == 'cafe'
+assert strip_accents("naïve") == 'naive'
+assert strip_accents("résumé") == 'resume'
+assert strip_accents("Ångström") == 'Angstrom'
+assert strip_accents("São Paulo") == 'Sao Paulo'
 ```
 
 ### How it works
@@ -33,8 +33,8 @@ Remove excessive combining marks (zalgo text abuse) while preserving legitimate 
 from translit import strip_zalgo, is_zalgo
 
 # Legitimate diacritics are preserved
-strip_zalgo("café")          # => "café"   (1 mark — kept)
-strip_zalgo("Việt Nam")      # => "Việt Nam"  (2 marks — kept)
+assert strip_zalgo("café") == 'café'
+assert strip_zalgo("Việt Nam") == 'Việt Nam'
 
 # Zalgo stacking is stripped to max_marks (default: 2)
 is_zalgo("café")             # False
@@ -58,21 +58,21 @@ Full Unicode case folding per CaseFolding.txt (Unicode 16.0) — a more thorough
 from translit import fold_case
 
 # Latin
-fold_case("HELLO")          # => "hello" (same as .lower())
-fold_case("Straße")         # => "strasse" (ß → ss)
-fold_case("İstanbul")       # => "i̇stanbul" (Turkish İ → i + combining dot)
-fold_case("ﬁnance")         # => "finance" (ligature ﬁ → fi)
-fold_case("ﬂight")          # => "flight" (ligature ﬂ → fl)
+assert fold_case("HELLO") == 'hello'
+assert fold_case("Straße") == 'strasse'
+assert fold_case("İstanbul") == 'i̇stanbul'
+assert fold_case("ﬁnance") == 'finance'
+assert fold_case("ﬂight") == 'flight'
 
 # Greek variant forms
-fold_case("ϐ ϑ ϕ ϖ ϰ ϱ")   # => "β θ φ π κ ρ"
-fold_case("ς")              # => "σ" (final sigma → standard sigma)
+assert fold_case("ϐ ϑ ϕ ϖ ϰ ϱ") == 'β θ φ π κ ρ'
+assert fold_case("ς") == 'σ'
 
 # Scripts that .lower() misses entirely
-fold_case("\u00B5")         # => "μ" (micro sign → Greek mu)
-fold_case("\u017F")         # => "s" (long s → s)
-fold_case("\u1C90")         # => "ა" (Georgian Mtavruli → Mkhedruli)
-fold_case("\U0001E900")     # => "𞤢" (Adlam capital → small)
+assert fold_case("\u00B5") == 'μ'
+assert fold_case("\u017F") == 's'
+assert fold_case("\u1C90") == 'ა'
+assert fold_case("\U0001E900") == '𞤢'
 ```
 
 ### When to use fold_case vs .lower()
@@ -95,15 +95,12 @@ Normalize all Unicode whitespace variants to single ASCII spaces:
 from translit import collapse_whitespace
 
 # Collapse runs of whitespace
-collapse_whitespace("hello   world")
-# => "hello world"
+assert collapse_whitespace("hello   world") == 'hello world'
 
 # Normalize Unicode whitespace variants
-collapse_whitespace("hello\u00a0world")   # non-breaking space
-# => "hello world"
+assert collapse_whitespace("hello\u00a0world") == 'hello world'
 
-collapse_whitespace("hello\u2003world")   # em space
-# => "hello world"
+assert collapse_whitespace("hello\u2003world") == 'hello world'
 ```
 
 ### Control characters
@@ -111,12 +108,10 @@ collapse_whitespace("hello\u2003world")   # em space
 By default, control characters (U+0000–U+001F, U+007F–U+009F) are stripped:
 
 ```python
-collapse_whitespace("hello\x00world")
-# => "helloworld"
+assert collapse_whitespace("hello\x00world") == 'helloworld'
 
 # Keep control characters
-collapse_whitespace("hello\x00world", strip_control=False)
-# => "hello\x00world"
+assert collapse_whitespace("hello\x00world", strip_control=False) == 'hello\x00world'
 ```
 
 ### Zero-width characters
@@ -124,15 +119,12 @@ collapse_whitespace("hello\x00world", strip_control=False)
 By default, zero-width characters are stripped:
 
 ```python
-collapse_whitespace("hello\u200bworld")  # zero-width space
-# => "helloworld"
+assert collapse_whitespace("hello\u200bworld") == 'helloworld'
 
-collapse_whitespace("hello\ufeffworld")  # BOM / zero-width no-break space
-# => "helloworld"
+assert collapse_whitespace("hello\ufeffworld") == 'helloworld'
 
 # Keep zero-width characters
-collapse_whitespace("hello\u200bworld", strip_zero_width=False)
-# => "hello\u200bworld"
+assert collapse_whitespace("hello\u200bworld", strip_zero_width=False) == 'hello\u200bworld'
 ```
 
 Zero-width characters handled:

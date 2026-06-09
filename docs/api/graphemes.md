@@ -9,10 +9,10 @@ Functions for working with user-perceived characters (extended grapheme clusters
 ```python
 from translit import grapheme_len
 
-grapheme_len("café")                 # => 4
-grapheme_len("👨‍👩‍👧‍👦")                    # => 1 (family emoji = 1 cluster)
-grapheme_len("🇫🇷")                    # => 1 (flag = 1 cluster, but len() = 2)
-grapheme_len("é")                    # => 1 (even if NFD: e + combining acute)
+assert grapheme_len("café") == 4
+assert grapheme_len("👨‍👩‍👧‍👦") == 1
+assert grapheme_len("🇫🇷") == 1
+assert grapheme_len("é") == 1
 ```
 
 ---
@@ -24,8 +24,8 @@ grapheme_len("é")                    # => 1 (even if NFD: e + combining acute)
 ```python
 from translit import grapheme_split
 
-grapheme_split("café")               # => ['c', 'a', 'f', 'é']
-grapheme_split("👨‍👩‍👧‍👦!")               # => ['👨‍👩‍👧‍👦', '!']
+assert grapheme_split("café") == ['c', 'a', 'f', 'é']
+assert grapheme_split("👨‍👩‍👧‍👦!") == ['👨\u200d👩\u200d👧\u200d👦', '!']
 ```
 
 !!! note
@@ -40,9 +40,9 @@ grapheme_split("👨‍👩‍👧‍👦!")               # => ['👨‍👩‍
 ```python
 from translit import grapheme_truncate
 
-grapheme_truncate("Hello World", 5)  # => "Hello"
-grapheme_truncate("café", 3)         # => "caf"
-grapheme_truncate("👨‍👩‍👧‍👦🎉", 1)         # => "👨‍👩‍👧‍👦" (never splits a cluster)
+assert grapheme_truncate("Hello World", 5) == 'Hello'
+assert grapheme_truncate("café", 3) == 'caf'
+assert grapheme_truncate("👨‍👩‍👧‍👦🎉", 1) == '👨\u200d👩\u200d👧\u200d👦'
 ```
 
 Unlike byte-level or codepoint-level truncation, `grapheme_truncate` never splits a grapheme cluster, which would corrupt emoji, combining sequences, or Hangul syllables.

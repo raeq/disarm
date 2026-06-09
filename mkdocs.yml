@@ -66,6 +66,8 @@ nav:
       - Filename Sanitization: user-guide/filenames.md
       - Text Cleaning: user-guide/text-cleaning.md
       - Text Pipeline: user-guide/pipeline.md
+      - LLM Pipelines: user-guide/llm-pipelines.md
+      - Tokenizer Preprocessing: user-guide/tokenizer-preprocessing.md
       - Language Support: user-guide/language-support.md
       - Abjad Scripts (Arabic, Persian, Hebrew): user-guide/abjad-transliteration.md
   - API Reference:
@@ -93,6 +95,7 @@ nav:
   - Migration:
       - Why Migrate: migration/index.md
       - From Unidecode: migration/from-unidecode.md
+      - "Unidecode → translit Recipes": migration/unidecode-recipes.md
       - From python-slugify: migration/from-python-slugify.md
       - From confusable_homoglyphs: migration/from-confusable-homoglyphs.md
       - From pathvalidate: migration/from-pathvalidate.md

@@ -10,12 +10,12 @@ translit implements Unicode TR39 confusable detection and normalization with mul
 from translit import is_confusable, is_mixed_script
 
 # Cyrillic Н looks like Latin H
-is_confusable("Неllo")              # => True
-is_mixed_script("Неllo")            # => True
+assert is_confusable("Неllo") == True
+assert is_mixed_script("Неllo") == True
 
 # Pure Latin — no confusables
-is_confusable("Hello")              # => False
-is_mixed_script("Hello")            # => False
+assert is_confusable("Hello") == False
+assert is_mixed_script("Hello") == False
 ```
 
 ## Normalizing confusables
@@ -26,10 +26,10 @@ Replace confusable characters with their target-script equivalents:
 from translit import normalize_confusables
 
 # Cyrillic а, е, о → Latin a, e, o
-normalize_confusables("Неllo Wоrld")    # => "Hello World"
+assert normalize_confusables("Неllo Wоrld") == 'Hello World'
 
 # Greek omicron → Latin o
-normalize_confusables("Ηellο")          # => "Hello"
+assert normalize_confusables("Ηellο") == 'Hello'
 ```
 
 ### Target script
@@ -38,10 +38,10 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
 ```python
 # Normalize to Latin (default) — non-Latin homoglyphs → Latin
-normalize_confusables("раypal")                            # → "paypal"
+assert normalize_confusables("раypal") == 'paypal'
 
 # Normalize to Cyrillic — non-Cyrillic homoglyphs → Cyrillic
-normalize_confusables("paypal", target_script="cyrillic")  # → "раураl"
+assert normalize_confusables("paypal", target_script="cyrillic") == 'раураӏ'
 ```
 
 ### Supported target scripts
@@ -61,10 +61,10 @@ Identify which Unicode scripts are present in a string:
 from translit import detect_scripts, Script
 
 scripts = detect_scripts("Hello Мир")
-# => [Script.LATIN, Script.CYRILLIC]
+assert scripts == [Script.LATIN, Script.CYRILLIC]
 
 scripts = detect_scripts("東京 Tokyo")
-# => [Script.HAN, Script.LATIN]
+assert scripts == [Script.HAN, Script.LATIN]
 ```
 
 ### The Script enum
@@ -187,7 +187,7 @@ if is_mixed_script(domain):
 # Detect Cyrillic homoglyphs injected into Russian text
 text = "Банк pоссии"  # Latin 'p' and 'o' instead of Cyrillic
 normalized = normalize_confusables(text, target_script="cyrillic")
-# → "Банк россии" (Latin homoglyphs replaced with Cyrillic)
+assert normalized == 'Банк россии'
 ```
 
 ### Username validation

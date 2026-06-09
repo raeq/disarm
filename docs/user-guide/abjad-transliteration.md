@@ -21,9 +21,10 @@ Standard character-by-character transliteration — the approach used by Unideco
 ### Context-free (default)
 
 ```python
-transliterate("كتب العربية")              # → "ktb al'rbyh"
-transliterate("שלום", lang="he")           # → "shlvm"
-transliterate("کتاب فارسی", lang="fa")     # → "ktab farsy"
+from translit import transliterate
+assert transliterate("كتب العربية") == "ktb al'rbyh"
+assert transliterate("שלום", lang="he") == "shlvm"
+assert transliterate("کتاب فارسی", lang="fa") == "ktab farsy"
 ```
 
 This is the same approach as every other transliteration library. Each character maps to a fixed ASCII equivalent via a lookup table. No context, no dictionary, no ambiguity resolution. Fast (O(1) per character), deterministic, and produces the same output as Unidecode for these scripts.
@@ -32,10 +33,12 @@ This is the same approach as every other transliteration library. Each character
 
 ### Context-aware (`context=True`)
 
+<!--- skip: next -->
 ```python
-transliterate("كتب العربية", context=True)              # → "kataba al'arabiyahi"
-transliterate("שלום", lang="he", context=True)           # → "shalvom"
-transliterate("کتاب فارسی", lang="fa", context=True)     # → "ketab farsy"
+# Requires context dictionaries (see bootstrap_dicts.sh and TRANSLIT_DICT_DIR)
+transliterate("كتب العربية", context=True)              # "kataba al'arabiyahi"
+transliterate("שלום", lang="he", context=True)           # "shalvom"
+transliterate("کتاب فارسی", lang="fa", context=True)     # "ketab farsy"
 ```
 
 This mode uses a **dictionary-based vowel restoration** system to recover the missing vowels before transliterating. The result is readable romanized text rather than a consonant skeleton.
@@ -108,10 +111,13 @@ The Arabic dictionary covers 99%+ of newspaper vocabulary. The bigram table reso
 
 ```python
 # Without context
-transliterate("السلام عليكم")        # → "alslam 'lykm"
+assert transliterate("السلام عليكم") == "alslam 'lykm"
+```
 
-# With context — vowels restored, readable
-transliterate("السلام عليكم", context=True)  # → "alsalaamu 'alaykum"
+<!--- skip: next -->
+```python
+# With context — vowels restored, readable (requires context dictionaries)
+transliterate("السلام عليكم", context=True)  # "alsalaamu 'alaykum"
 ```
 
 ### What it cannot do
@@ -153,10 +159,13 @@ Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian ra
 
 ```python
 # Without context
-transliterate("کتاب فارسی", lang="fa")              # → "ktab farsy"
+assert transliterate("کتاب فارسی", lang="fa") == "ktab farsy"
+```
 
-# With context — vowels from curated dictionary
-transliterate("کتاب فارسی", lang="fa", context=True) # → "ketab farsy"
+<!--- skip: next -->
+```python
+# With context — vowels from curated dictionary (requires context dictionaries)
+transliterate("کتاب فارسی", lang="fa", context=True) # "ketab farsy"
 ```
 
 For words not in the curated vocabulary, the system falls back to the Arabic context dictionary. Since approximately 40% of Persian vocabulary is Arabic-origin, many loanwords benefit from the Arabic dictionary automatically.
@@ -181,10 +190,13 @@ The Hebrew dictionary is built from [Project Ben Yehuda](https://github.com/proj
 
 ```python
 # Without context
-transliterate("שלום", lang="he")              # → "shlvm"
+assert transliterate("שלום", lang="he") == "shlvm"
+```
 
-# With context — niqqud restored from dictionary
-transliterate("שלום", lang="he", context=True) # → "shalvom"
+<!--- skip: next -->
+```python
+# With context — niqqud restored from dictionary (requires context dictionaries)
+transliterate("שלום", lang="he", context=True) # "shalvom"
 ```
 
 ### Differences from Arabic

@@ -29,7 +29,7 @@ other minor things**. A point release never introduces a new capability.
 
 Two-component. The bucket for **new capabilities or major internal refactorings** — for
 example, the extraction of a pure-Rust `translit-core` and its other-language bindings
-is the `0.8` release.
+is the `0.9` release.
 
 Documentation that a feature **requires** ships **with** that feature, in the same minor
 release — it is never split out into a separate point release. (Standalone documentation

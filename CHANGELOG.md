@@ -10,46 +10,119 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-10
+
+A feature and architecture release. Headlines: a **unified, catchable exception
+hierarchy**; **terminal column-width** measurement (`terminal_width` /
+`grapheme_width`); native **`errors="strict"`** transliteration; LLM/RAG
+guardrail **pipeline presets**; and a substantial **push of validation and
+configuration logic down into the Rust core**, so the upcoming multi-language
+bindings inherit one behaviour instead of reimplementing it. Most changes are
+behaviour-preserving; the exceptions are called out under Upgrade notes.
+
+### Upgrade notes
+
+- **Exceptions now form a hierarchy.** Every library error subclasses
+  `TranslitError`, with `InvalidArgumentError`, `ResourceLimitError`, and
+  `UnsupportedError` beneath it. `TranslitError` remains a `ValueError`
+  subclass, so existing `except ValueError` keeps working. Several error
+  **message strings were enriched/standardised** (#186, #187) — code matching
+  exact message text may need updating; code matching exception *types* is
+  unaffected.
+- **`lang=` is validated even for ASCII input** (#197). A binding-side ASCII
+  fast path previously skipped language validation, so
+  `transliterate("abc", lang="zz")` silently returned the input; it now raises
+  `InvalidArgumentError`, matching how non-ASCII input always behaved.
+- **`slugify_filename` / `Slugify(safe_chars=…)` output corrected** (see Fixed):
+  `slugify_filename("My Report.pdf")` now returns `"My_Report.pdf"`, not
+  `"My.Report_pdf"`. Output for inputs that use `safe_chars` may change.
+- **New modes:** `errors="strict"` for `transliterate` (#184) and
+  `decode_to_utf8(strict=True)` (#189).
+
 ### Added
 
-- **`terminal_width` / `grapheme_width`** (#224): measure terminal **column**
-  width per grapheme cluster (UAX #11 East Asian Width). Wide/fullwidth and
+- **`terminal_width` / `grapheme_width`** (#224): terminal **column** width per
+  grapheme cluster (UAX #11 East Asian Width). Wide/fullwidth and
   emoji-presented clusters are 2 columns; combining marks, controls, and
-  zero-width characters are 0. East Asian Ambiguous characters are 1 column by
-  default, or 2 with `ambiguous_wide=True` (legacy double-width CJK terminals).
-  Width data is generated at build time from the pinned UCD (no runtime data, no
-  unsafe). This measures cells, not pixels; tabs are not expanded.
+  zero-width characters are 0. Ambiguous characters are 1 by default, or 2 with
+  `ambiguous_wide=True`. Width data is generated at build time from the pinned
+  UCD (no runtime data, no `unsafe`). Measures cells, not pixels; tabs are not
+  expanded.
+- **`errors="strict"` + `find_untranslatable`** (#184): strict transliteration
+  raises on the first untranslatable character (reporting it and its byte
+  offset); `find_untranslatable` returns all of them without raising.
+- **Guardrail pipeline presets** (#139): `TextPipeline` gains `strip_bidi` and
+  `strip_zalgo` steps and the `llm_guardrail` / `rag_ingest` named profiles for
+  LLM/RAG input sanitisation.
+- **`get_pipeline` / `list_profiles`** (#229): the named policy-profile registry
+  now lives in the Rust core; the Python helpers are thin wrappers over it.
+- **`decode_to_utf8(strict=True)`** (#189): raise on lossy/replacement decoding
+  instead of silently substituting U+FFFD.
+
+### Changed
+
+- **Unified exception hierarchy** (#183): the Python error surface is a
+  `TranslitError` base with categorised subclasses; sites that previously raised
+  bare `ValueError` are unified (foundation laid in 0.6.3 via #181).
+- **Validation moved into the Rust core** (#185, #217, #229, #230, #231): enum
+  validation, the `transliterate()` argument-conflict matrix, non-negative
+  `max_length` / `max_graphemes` checks, `safe_chars`, and `min_confidence`
+  range-checking now live in the core, so other bindings enforce the identical
+  contract without reimplementing it. The Python layer keeps only type guards.
+- **Actionable error messages** (#186, #187): weak messages now name the
+  offending value, list valid options, and suggest a "did you mean…?" where
+  applicable; message style is standardised across the surface.
+- **Error cause chains** (#188): wrapped errors surface the underlying cause via
+  `__cause__` rather than flattening it into the message.
+- **`TextPipeline` step ordering** (#174) is derived from a single source of
+  truth, removing drift between configuration and execution order.
+- **All-ASCII preset fast path** (#198): presets skip the NFKC pass for pure-ASCII
+  input (behaviour-preserving).
 
 ### Fixed
 
-- **`slugify_filename` / `Slugify(safe_chars=...)`** restored safe characters at the wrong
-  positions, so `slugify_filename("My Report.pdf")` returned `"My.Report_pdf"` instead of
-  the awesome-slugify-correct `"My_Report.pdf"` — the safe `.` was swapped onto the
-  space's separator. Safe characters are now preserved at their true positions by
-  protecting them through the pipeline and restoring them, matching awesome-slugify. The
-  previous test only covered a dot-free input, so the bug was uncaught; regression tests
-  now cover filenames with extensions. Surfaced by the executable-doc-examples work (#156).
+- **`slugify_filename` / `Slugify(safe_chars=…)`** preserved safe characters at
+  the wrong positions — `slugify_filename("My Report.pdf")` returned
+  `"My.Report_pdf"` instead of the awesome-slugify-correct `"My_Report.pdf"`.
+  `safe_chars` are now handled natively in the Rust core: kept verbatim and
+  treated as word characters so they hold their position (#156, #230). The prior
+  test only covered a dot-free input, so the bug was uncaught; regression tests
+  now cover filenames with extensions, multiple dots, and `UniqueSlugify` +
+  `max_length`.
+- **`slugify(default=…)`** is now sanitised through the same slug pipeline (so a
+  caller-supplied fallback cannot smuggle path-traversal or URL metacharacters
+  into output documented as URL-safe), threads through the stateful `Slugifier` /
+  `UniqueSlugifier` forms, and a negative `max_length` now raises a catchable
+  `InvalidArgumentError` on both the scalar and batch paths instead of an
+  uncatchable `OverflowError` (#193, #169).
+- **Low-severity hardening bundle** (#200): eight small robustness fixes
+  (bounds, overflow, and edge-case handling) gathered into one pass.
 
 ### Security
 
-- The RustSec advisory audit (`cargo-audit`) now **blocks merge** via the required "Rust
-  checks passed" gate, on every PR (an advisory can land on a dependency without a code
-  change here). It previously ran but was not in the gate (#195). The Trivy-image half of
-  #195 is moot — the Docker pipeline is removed (below).
+- The RustSec advisory audit (`cargo-audit`) now **blocks merge** via the
+  required "Rust checks passed" gate on every PR — an advisory can land on a
+  dependency without any code change here (#195).
 
 ### Removed
 
-- **Docker image build/publish** (and the associated Trivy CVE scan, #138). translit is
-  a `pip install`-first library; the multi-arch image build, GHCR upkeep, and the
-  release-only Trivy plumbing were maintenance out of proportion to use. Previously
-  published images (`ghcr.io/raeq/translit:*`) remain as historical artifacts, but no new
-  ones are produced and the CLI is installed via `pip install translit-rs`.
+- **Docker image build/publish** and its Trivy CVE scan (#138). translit is a
+  `pip install`-first library; previously published images remain as historical
+  artifacts, but no new ones are produced. Install the CLI via
+  `pip install translit-rs`.
 
-### Note
+### Documentation
 
-- The 0.6.3 entry below originally claimed the Trivy image scan was fixed (#138). It was
-  not — the fix did not work on the real release, and the Docker pipeline has now been
-  removed instead (above). That stale claim has been dropped from the 0.6.3 entry.
+- **Executable cookbook** (#154, #91, #140, #156, #172): a Sybil doc-test harness
+  with a CI gate, unidecode→translit migration recipes, an "LLM pipelines" page,
+  a tokenizer-preprocessing page, and an anti-rot lint that turned 307 decorative
+  `# =>` claims into checked assertions.
+- **normalize-first canonicalisation recipe** (#174) and a **formal-verification
+  assurance taxonomy** (#223 — proof-by-exhaustion / structural / property-tested,
+  tagging each I1–I7 invariant), plus grapheme-integrity property tests (#174).
+- The project adopted the **Developer Certificate of Origin** (#165); all commits
+  are signed off. The custom-emoji-provider 9-codepoint window cap is now
+  documented (#199).
 
 ## [0.6.3] — 2026-06-08
 

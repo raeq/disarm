@@ -111,6 +111,11 @@ features = ["pyo3/abi3-py39"]
 # docs/conftest.py would otherwise shadow tests/conftest.py, which the suite
 # imports shared fixtures from via `from conftest import ...`.
 testpaths = ["tests"]
+# Put the repo root on sys.path so tests can import the out-of-CI `benchmarks`
+# package (e.g. tests/test_adversarial_eval.py). Needed when translit is
+# installed from a wheel rather than editable — as in CI — where the repo root
+# is not otherwise importable.
+pythonpath = ["."]
 addopts = ["-v", "--tb=short", "-m", "not formal"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

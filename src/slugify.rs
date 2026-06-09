@@ -71,6 +71,10 @@ pub struct SlugConfig {
     pub entities: bool,
     pub decimal: bool,
     pub hexadecimal: bool,
+    /// Characters preserved through slugification instead of becoming the
+    /// separator (awesome-slugify `safe_chars`). They act as word characters,
+    /// so they keep their position (e.g. `.`/`-` in filenames). (#230)
+    pub safe_chars: String,
 }
 
 impl Default for SlugConfig {
@@ -89,6 +93,7 @@ impl Default for SlugConfig {
             entities: true,
             decimal: true,
             hexadecimal: true,
+            safe_chars: String::new(),
         }
     }
 }
@@ -130,6 +135,9 @@ impl SlugConfig {
             entities,
             decimal,
             hexadecimal,
+            // safe_chars is not a free-function slugify() option; the awesome-slugify
+            // compat classes set it on the returned config (#230).
+            safe_chars: String::new(),
         })
     }
 }
@@ -157,7 +165,7 @@ pub fn _slugify(
     text: &str,
     separator: &str,
     lowercase: bool,
-    max_length: usize,
+    max_length: i64,
     word_boundary: bool,
     save_order: bool,
     stopwords: Vec<String>,
@@ -171,6 +179,8 @@ pub fn _slugify(
 ) -> PyResult<String> {
     // #119: delegate to SlugConfig::from_pyargs (shared constructor).
     crate::transliterate::validate_lang(lang)?;
+    // #231: validate the non-negative contract in the core, not the binding.
+    let max_length = crate::error::checked_max_length(max_length)?;
     let config = SlugConfig::from_pyargs(
         separator,
         lowercase,
@@ -287,7 +297,12 @@ pub(crate) fn slugify_impl_with_stopset(
     let mut prev_was_sep = true; // avoid leading separator
 
     for ch in value.chars() {
-        if ch.is_alphanumeric() || (config.allow_unicode && !ch.is_ascii() && !ch.is_whitespace()) {
+        if ch.is_alphanumeric()
+            || (config.allow_unicode && !ch.is_ascii() && !ch.is_whitespace())
+            || config.safe_chars.contains(ch)
+        {
+            // safe_chars are kept verbatim and treated as word characters, so a
+            // separator is not inserted around them (awesome-slugify semantics, #230).
             slug.push(ch);
             prev_was_sep = false;
         } else if !prev_was_sep && !separator.is_empty() {
@@ -555,7 +570,7 @@ pub fn _slugify_batch(
     texts: Vec<String>,
     separator: &str,
     lowercase: bool,
-    max_length: usize,
+    max_length: i64,
     word_boundary: bool,
     save_order: bool,
     stopwords: Vec<String>,
@@ -576,6 +591,8 @@ pub fn _slugify_batch(
     }
     // #119: delegate to SlugConfig::from_pyargs (shared constructor).
     crate::transliterate::validate_lang(lang)?;
+    // #231: validate the non-negative contract in the core, not the binding.
+    let max_length = crate::error::checked_max_length(max_length)?;
     let config = SlugConfig::from_pyargs(
         separator,
         lowercase,
@@ -636,11 +653,12 @@ impl _Slugifier {
         entities=true,
         decimal=true,
         hexadecimal=true,
+        safe_chars="",
     ))]
     fn new(
         separator: &str,
         lowercase: bool,
-        max_length: usize,
+        max_length: i64,
         word_boundary: bool,
         save_order: bool,
         stopwords: Vec<String>,
@@ -651,9 +669,13 @@ impl _Slugifier {
         entities: bool,
         decimal: bool,
         hexadecimal: bool,
+        safe_chars: &str,
     ) -> PyResult<Self> {
+        // #231: validate the non-negative contract in the core, consistent with
+        // the free `_slugify` / `_slugify_batch` entrypoints.
+        let max_length = crate::error::checked_max_length(max_length)?;
         // #119: delegate to SlugConfig::from_pyargs (shared constructor).
-        let config = SlugConfig::from_pyargs(
+        let mut config = SlugConfig::from_pyargs(
             separator,
             lowercase,
             max_length,
@@ -669,6 +691,8 @@ impl _Slugifier {
             hexadecimal,
         )
         .map_err(pyo3::PyErr::from)?;
+        // #230: safe_chars is native to the core now (no Python marker logic).
+        safe_chars.clone_into(&mut config.safe_chars);
         let stopset: HashSet<String> = config.stopwords.iter().cloned().collect();
         Ok(Self { config, stopset })
     }
@@ -715,12 +739,13 @@ impl _UniqueSlugifier {
         entities=true,
         decimal=true,
         hexadecimal=true,
+        safe_chars="",
     ))]
     fn new(
         check: Option<PyObject>,
         separator: &str,
         lowercase: bool,
-        max_length: usize,
+        max_length: i64,
         word_boundary: bool,
         save_order: bool,
         stopwords: Vec<String>,
@@ -731,7 +756,9 @@ impl _UniqueSlugifier {
         entities: bool,
         decimal: bool,
         hexadecimal: bool,
+        safe_chars: &str,
     ) -> PyResult<Self> {
+        // #231: the non-negative check is delegated to _Slugifier::new (signed param).
         // #119: delegates to _Slugifier::new which uses SlugConfig::from_pyargs.
         let inner = _Slugifier::new(
             separator,
@@ -747,6 +774,7 @@ impl _UniqueSlugifier {
             entities,
             decimal,
             hexadecimal,
+            safe_chars,
         )?;
         Ok(Self {
             inner,
@@ -849,6 +877,7 @@ mod tests {
             entities: true,
             decimal: true,
             hexadecimal: true,
+            safe_chars: String::new(),
         }
     }
 
@@ -869,6 +898,38 @@ mod tests {
         let mut config = default_config();
         config.separator = "_".to_owned();
         assert_eq!(slugify_impl("hello world", &config), "hello_world");
+    }
+
+    #[test]
+    fn test_safe_chars_preserved_in_place() {
+        // #230: safe_chars are kept verbatim and act as word characters, so they
+        // keep their position instead of collapsing into the separator.
+        let mut config = default_config();
+        config.lowercase = false;
+        config.separator = "_".to_owned();
+        config.safe_chars = "-.".to_owned();
+        assert_eq!(slugify_impl("My Report.pdf", &config), "My_Report.pdf");
+        assert_eq!(slugify_impl("Foo-Bar Baz.txt", &config), "Foo-Bar_Baz.txt");
+    }
+
+    #[test]
+    fn test_safe_chars_empty_is_default_behavior() {
+        // Without safe_chars, dots/dashes collapse to the separator as before.
+        let config = default_config();
+        assert_eq!(slugify_impl("My Report.pdf", &config), "my-report-pdf");
+    }
+
+    #[test]
+    fn test_slugify_rejects_negative_max_length() {
+        // #231: the non-negative contract is enforced in the core, raising
+        // InvalidArgumentError rather than a PyO3 OverflowError. The signed
+        // entrypoints route through this shared helper.
+        let err = crate::error::checked_max_length(-1).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("max_length must be non-negative, got -1"));
+        assert_eq!(crate::error::checked_max_length(0).unwrap(), 0);
+        assert_eq!(crate::error::checked_max_length(255).unwrap(), 255);
     }
 
     #[test]

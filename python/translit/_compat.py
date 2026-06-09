@@ -114,7 +114,7 @@ def _resolve_awesome_params(
     Accepted awesome-slugify params and their translit mappings:
         to_lower     -> lowercase
         stop_words   -> stopwords  (coerced to tuple)
-        safe_chars   -> _safe_chars  (post-processing, not passed to Rust)
+        safe_chars   -> safe_chars  (native core param since #230)
         capitalize   -> _capitalize  (post-processing flag)
         pretranslate -> replacements  (if dict; callable raises NotImplementedError)
         translate    -> (ignored with DeprecationWarning)
@@ -133,10 +133,11 @@ def _resolve_awesome_params(
         # Coerced rename
         elif key == "stop_words":
             result["stopwords"] = tuple(value) if not isinstance(value, tuple) else value
-        # Post-processing flags (not passed to Rust)
+        # safe_chars is a native core param now (#230): characters kept verbatim
+        # and treated as word characters, handled in the Rust slugifier directly.
         elif key == "safe_chars":
-            if value:
-                result["_safe_chars"] = value
+            result["safe_chars"] = value
+        # Post-processing flag (not passed to Rust)
         elif key == "capitalize":
             capitalize = value
         # Complex transform
@@ -203,7 +204,6 @@ class Slugify:
             kwargs.setdefault("lowercase", False)
         resolved = _resolve_awesome_params(kwargs)
         self._capitalize: bool = resolved.pop("_capitalize", False)
-        self._safe_chars: str = resolved.pop("_safe_chars", "")
 
         # Expose awesome-slugify style attribute access
         self._to_lower: bool = bool(resolved.get("lowercase", False))
@@ -266,11 +266,12 @@ class Slugify:
 
     @property
     def safe_chars(self) -> str:
-        return self._safe_chars
+        return str(self._kwargs.get("safe_chars", ""))
 
     @safe_chars.setter
     def safe_chars(self, value: str) -> None:
-        self._safe_chars = value
+        self._kwargs["safe_chars"] = value
+        self._dirty = True
 
     @property
     def pretranslate(self) -> tuple[tuple[str, str], ...] | None:
@@ -300,29 +301,10 @@ class Slugify:
             merged = {**self._kwargs}
             override = _resolve_awesome_params(kwargs)
             cap: bool = bool(override.pop("_capitalize", self._capitalize))
-            safe: str = str(override.pop("_safe_chars", self._safe_chars))
             merged.update(override)
-            kw = merged
+            result = str(_Slugifier(**merged).slugify(text))
         else:
             cap = self._capitalize
-            safe = self._safe_chars
-            kw = self._kwargs
-
-        result: str
-        if safe:
-            # Preserve safe_chars at their true positions: protect them through
-            # slugification, then restore (awesome-slugify treats safe_chars as
-            # word characters, not separators). Slugify without max_length so the
-            # bound applies to the restored result, not the longer marker form.
-            separator = str(kw.get("separator", "-"))
-            max_length = int(kw.get("max_length", 0))
-            slugifier = _Slugifier(**{**kw, "max_length": 0})
-            result = _slugify_with_safe_chars(
-                slugifier.slugify, text, safe, separator, truncate_to=max_length
-            )
-        elif kwargs:
-            result = str(_Slugifier(**kw).slugify(text))
-        else:
             result = str(self._ensure_inner().slugify(text))
 
         return self._capitalize_first(result, cap)
@@ -374,29 +356,12 @@ class UniqueSlugify(Slugify):
 
             check = _check_not_in_uids
 
-        # When safe_chars is set, the safe-char path protects them with
-        # placeholders before slugifying; `max_length` must NOT be applied by the
-        # inner slugifier (it could truncate a placeholder mid-marker). Build the
-        # inner without it and let the safe-char helper bound the restored result
-        # via `truncate_to`. safe_chars is fixed per instance for UniqueSlugify
-        # (per-call kwargs are not honored), so the non-safe path is unused here.
-        inner_kwargs = dict(self._kwargs)
-        if self._safe_chars:
-            inner_kwargs["max_length"] = 0
-        self._unique_inner: _UniqueSlugifier = _UniqueSlugifier(check=check, **inner_kwargs)
+        # safe_chars (incl. its max_length interaction) is handled natively by the
+        # Rust core now (#230), so the inner slugifier needs no special setup.
+        self._unique_inner: _UniqueSlugifier = _UniqueSlugifier(check=check, **self._kwargs)
 
     def __call__(self, text: str, **kwargs: Any) -> str:
-        if self._safe_chars:
-            separator = str(self._kwargs.get("separator", "-"))
-            result: str = _slugify_with_safe_chars(
-                self._unique_inner.slugify,
-                text,
-                self._safe_chars,
-                separator,
-                truncate_to=self._max_length_val,
-            )
-        else:
-            result = str(self._unique_inner.slugify(text))
+        result = str(self._unique_inner.slugify(text))
         return self._capitalize_first(result, self._capitalize)
 
     def reset(self) -> None:
@@ -405,56 +370,6 @@ class UniqueSlugify(Slugify):
 
     def __repr__(self) -> str:
         return "UniqueSlugify()"
-
-
-def _safe_marker(index: int, text: str) -> str:
-    """A collision-free, slug-stable placeholder for a safe character.
-
-    Markers are lowercase ASCII (case-fold invariant) and contain only word
-    characters, so they survive slugification unchanged and unsplit. A leading
-    ``z`` is prepended until the marker does not occur in ``text``.
-    """
-    suffix = chr(ord("a") + index) if index < 26 else f"x{index}x"
-    marker = f"zqx{suffix}qzx"
-    while marker in text:
-        marker = "z" + marker
-    return marker
-
-
-def _slugify_with_safe_chars(
-    slugify_fn: Callable[[str], str],
-    text: str,
-    safe_chars: str,
-    separator: str,
-    truncate_to: int = 0,
-) -> str:
-    """Slugify while preserving ``safe_chars`` at their original positions.
-
-    awesome-slugify treats ``safe_chars`` as word characters: they pass through
-    the pipeline and belong to the adjacent token rather than acting as
-    separators. translit's Rust core has no such concept, so we protect each
-    safe character with a word-character placeholder, slugify, then restore.
-
-    ``slugify_fn`` must NOT apply ``max_length`` itself (the placeholders are
-    longer than the characters they stand in for); pass ``truncate_to`` to bound
-    the final, restored result instead.
-    """
-    present = [c for c in dict.fromkeys(safe_chars) if c in text]
-    if not present:
-        result = slugify_fn(text)
-    else:
-        mapping: dict[str, str] = {}
-        protected = text
-        for i, char in enumerate(present):
-            marker = _safe_marker(i, text)
-            mapping[marker] = char
-            protected = protected.replace(char, marker)
-        result = slugify_fn(protected)
-        for marker, char in mapping.items():
-            result = result.replace(marker, char)
-    if truncate_to and len(result) > truncate_to:
-        result = result[:truncate_to].rstrip(separator)
-    return result
 
 
 # ---------------------------------------------------------------------------

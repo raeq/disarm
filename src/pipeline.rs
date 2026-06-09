@@ -311,6 +311,149 @@ impl _TextPipeline {
     }
 }
 
+// ── Named policy profiles (#229) ──────────────────────────────────────────
+//
+// The single source of truth for the named profiles that `get_pipeline` builds.
+// Previously this registry lived in Python (`_presets.py::_POLICY_PROFILES`),
+// duplicating pipeline knowledge that only the Rust core executes; defining it
+// here means every binding shares one definition (#179).
+
+/// A named profile's `_TextPipeline` configuration. Field names and defaults
+/// mirror `_TextPipeline::new`.
+#[derive(Default)]
+struct ProfileSpec {
+    normalize: Option<&'static str>,
+    transliterate: bool,
+    strict_iso9: bool,
+    confusables: bool,
+    strip_accents: bool,
+    fold_case: bool,
+    collapse_whitespace: bool,
+    strip_control: Option<bool>,
+    strip_zero_width: Option<bool>,
+    demojize: bool,
+    strip_bidi: bool,
+    strip_zalgo: Option<i64>,
+}
+
+impl ProfileSpec {
+    fn build(&self) -> PyResult<_TextPipeline> {
+        _TextPipeline::new(
+            self.normalize,
+            self.transliterate,
+            None, // lang
+            self.strict_iso9,
+            false, // gost7034
+            self.confusables,
+            self.strip_accents,
+            self.fold_case,
+            self.collapse_whitespace,
+            self.strip_control,
+            self.strip_zero_width,
+            self.demojize,
+            self.strip_bidi,
+            self.strip_zalgo,
+        )
+    }
+}
+
+/// Profile names, sorted (matches the previous `list_profiles()` ordering).
+const PROFILE_NAMES: &[&str] = &[
+    "library_catalog_key_eu",
+    "llm_guardrail",
+    "ml_corpus_normalize",
+    "rag_ingest",
+    "scholarly_cyrillic_iso9",
+    "search_index",
+    "web_input_sanitize",
+];
+
+fn profile_spec(name: &str) -> Option<ProfileSpec> {
+    Some(match name {
+        "scholarly_cyrillic_iso9" => ProfileSpec {
+            normalize: Some("NFKC"),
+            transliterate: true,
+            strict_iso9: true,
+            fold_case: true,
+            collapse_whitespace: true,
+            ..ProfileSpec::default()
+        },
+        "library_catalog_key_eu" => ProfileSpec {
+            normalize: Some("NFKC"),
+            transliterate: true,
+            confusables: true,
+            strip_accents: true,
+            fold_case: true,
+            collapse_whitespace: true,
+            ..ProfileSpec::default()
+        },
+        "web_input_sanitize" => ProfileSpec {
+            normalize: Some("NFKC"),
+            confusables: true,
+            collapse_whitespace: true,
+            ..ProfileSpec::default()
+        },
+        "ml_corpus_normalize" => ProfileSpec {
+            normalize: Some("NFKC"),
+            demojize: true,
+            strip_accents: true,
+            fold_case: true,
+            collapse_whitespace: true,
+            ..ProfileSpec::default()
+        },
+        "search_index" => ProfileSpec {
+            normalize: Some("NFKC"),
+            transliterate: true,
+            strip_accents: true,
+            fold_case: true,
+            collapse_whitespace: true,
+            ..ProfileSpec::default()
+        },
+        "llm_guardrail" => ProfileSpec {
+            normalize: Some("NFKC"),
+            strip_zalgo: Some(0),
+            strip_bidi: true,
+            strip_zero_width: Some(true),
+            strip_control: Some(true),
+            demojize: true,
+            confusables: true,
+            strip_accents: true,
+            fold_case: true,
+            collapse_whitespace: true,
+            ..ProfileSpec::default()
+        },
+        "rag_ingest" => ProfileSpec {
+            normalize: Some("NFKC"),
+            strip_bidi: true,
+            strip_control: Some(true),
+            strip_zero_width: Some(true),
+            transliterate: true,
+            strip_accents: true,
+            collapse_whitespace: true,
+            ..ProfileSpec::default()
+        },
+        _ => return None,
+    })
+}
+
+/// Build the `_TextPipeline` for a named policy profile (`get_pipeline`).
+#[pyfunction]
+pub fn _get_pipeline(profile: &str) -> PyResult<_TextPipeline> {
+    match profile_spec(profile) {
+        Some(spec) => spec.build(),
+        None => Err(crate::InvalidArgumentError::new_err(format!(
+            "Unknown profile {profile:?}; available: {}",
+            PROFILE_NAMES.join(", ")
+        ))),
+    }
+}
+
+/// Sorted names of the available named policy profiles (`list_profiles`).
+#[pyfunction]
+pub fn _list_profiles() -> Vec<String> {
+    PROFILE_NAMES.iter().map(|s| (*s).to_owned()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -93,6 +93,10 @@ pub mod zalgo;
 fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Core transforms
     m.add_function(wrap_pyfunction!(transliterate::_transliterate, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        transliterate::_validate_transliterate_args,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(transliterate::_find_untranslatable, m)?)?;
     m.add_function(wrap_pyfunction!(transliterate::_transliterate_context, m)?)?;
     m.add_function(wrap_pyfunction!(transliterate::_strip_accents, m)?)?;
@@ -126,6 +130,8 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<slugify::_Slugifier>()?;
     m.add_class::<slugify::_UniqueSlugifier>()?;
     m.add_class::<pipeline::_TextPipeline>()?;
+    m.add_function(wrap_pyfunction!(pipeline::_get_pipeline, m)?)?;
+    m.add_function(wrap_pyfunction!(pipeline::_list_profiles, m)?)?;
 
     // Precompiled pipelines
     m.add_function(wrap_pyfunction!(presets::_security_clean, m)?)?;

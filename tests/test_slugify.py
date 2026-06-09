@@ -173,6 +173,17 @@ class TestSlugifyBatchMaxLengthGuard:
         with pytest.raises(ValueError, match="max_length must be non-negative"):
             slugify(["hello"], max_length=-1)
 
+    def test_stateful_slugify_negative_max_length_raises_value_error(self) -> None:
+        # #231 consistency: the stateful classes route through the same core
+        # non-negative check, so a negative max_length raises a catchable
+        # InvalidArgumentError, not a PyO3 OverflowError.
+        from translit import Slugify, UniqueSlugify
+
+        with pytest.raises(ValueError, match="max_length must be non-negative"):
+            Slugify(max_length=-1)
+        with pytest.raises(ValueError, match="max_length must be non-negative"):
+            UniqueSlugify(max_length=-1)
+
 
 class TestStatefulDefault:
     """#193 part 2 / #169: `default` threads through the class/stateful forms,

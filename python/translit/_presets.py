@@ -7,14 +7,13 @@ backend) into ready-made canonicalization pipelines.  Re-exported from the
 
 from __future__ import annotations
 
-from typing import Any
-
 from translit._api import TextPipeline
 from translit._translit import (
-    InvalidArgumentError,
     _catalog_key,
     _display_clean,
+    _get_pipeline,
     _is_zalgo,
+    _list_profiles,
     _ml_normalize,
     _sanitize_user_input,
     _search_key,
@@ -434,64 +433,10 @@ audit exactly which transforms a preset applies.
 
 
 # --- Policy profiles ---
-
-_POLICY_PROFILES: dict[str, dict[str, Any]] = {
-    "scholarly_cyrillic_iso9": dict(
-        normalize="NFKC",
-        transliterate=True,
-        strict_iso9=True,
-        fold_case=True,
-        collapse_whitespace=True,
-    ),
-    "library_catalog_key_eu": dict(
-        normalize="NFKC",
-        transliterate=True,
-        confusables=True,
-        strip_accents=True,
-        fold_case=True,
-        collapse_whitespace=True,
-    ),
-    "web_input_sanitize": dict(
-        normalize="NFKC",
-        confusables=True,
-        collapse_whitespace=True,
-    ),
-    "ml_corpus_normalize": dict(
-        normalize="NFKC",
-        demojize=True,
-        strip_accents=True,
-        fold_case=True,
-        collapse_whitespace=True,
-    ),
-    "search_index": dict(
-        normalize="NFKC",
-        transliterate=True,
-        strip_accents=True,
-        fold_case=True,
-        collapse_whitespace=True,
-    ),
-    "llm_guardrail": dict(
-        normalize="NFKC",
-        strip_zalgo=0,
-        strip_bidi=True,
-        strip_zero_width=True,
-        strip_control=True,
-        demojize=True,
-        confusables=True,
-        strip_accents=True,
-        fold_case=True,
-        collapse_whitespace=True,
-    ),
-    "rag_ingest": dict(
-        normalize="NFKC",
-        strip_bidi=True,
-        strip_control=True,
-        strip_zero_width=True,
-        transliterate=True,
-        strip_accents=True,
-        collapse_whitespace=True,
-    ),
-}
+#
+# The profile registry (names + step configuration) lives in the Rust core
+# (`src/pipeline.rs`), the single source of truth, so every binding shares one
+# definition and the Python side cannot drift from what Rust executes (#229).
 
 
 def get_pipeline(profile: str) -> TextPipeline:
@@ -515,12 +460,7 @@ def get_pipeline(profile: str) -> TextPipeline:
         >>> pipe("Москва")  # doctest: +SKIP
         'moskva'
     """
-    try:
-        kwargs = _POLICY_PROFILES[profile]
-    except KeyError:
-        avail = ", ".join(sorted(_POLICY_PROFILES))
-        raise InvalidArgumentError(f"Unknown profile {profile!r}; available: {avail}") from None
-    return TextPipeline(**kwargs)
+    return TextPipeline._from_inner(_get_pipeline(profile))
 
 
 def list_profiles() -> list[str]:
@@ -533,4 +473,4 @@ def list_profiles() -> list[str]:
         >>> "scholarly_cyrillic_iso9" in list_profiles()
         True
     """
-    return sorted(_POLICY_PROFILES)
+    return _list_profiles()

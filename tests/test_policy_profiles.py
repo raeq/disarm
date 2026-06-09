@@ -80,3 +80,33 @@ class TestProfileBehavior:
         result = pipe("München")
         assert result.isascii()
         assert result.islower()
+
+
+class TestProfileStepsLock:
+    """Pin the exact step lists of the key profiles so the core registry (#229)
+    cannot silently change. Steps are reported in execution order (STEP_ORDER)."""
+
+    def test_llm_guardrail_steps(self):
+        assert get_pipeline("llm_guardrail").steps == [
+            ("normalize", "NFKC"),
+            ("strip_zalgo", "0"),
+            ("strip_bidi", None),
+            ("demojize", None),
+            ("strip_accents", None),
+            ("confusables", "latin"),
+            ("fold_case", None),
+            ("strip_control", None),
+            ("strip_zero_width", None),
+            ("collapse_whitespace", None),
+        ]
+
+    def test_rag_ingest_steps(self):
+        assert get_pipeline("rag_ingest").steps == [
+            ("normalize", "NFKC"),
+            ("strip_bidi", None),
+            ("strip_accents", None),
+            ("transliterate", None),
+            ("strip_control", None),
+            ("strip_zero_width", None),
+            ("collapse_whitespace", None),
+        ]

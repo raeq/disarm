@@ -24,7 +24,6 @@ from translit._translit import (
     # re-declared, to prevent silent drift (#200).
     _MAX_BATCH_SIZE,
     # Exception hierarchy (#183): base + categorised subclasses
-    InvalidArgumentError,
     ResourceLimitError,
     SafeHostnameDetails,
     _clear_replacements,
@@ -80,6 +79,8 @@ from translit._translit import (
     _transliterate_batch,
     _transliterate_context,
     _UniqueSlugifier,
+    # Semantic argument-combination validation (single source of truth, #231)
+    _validate_transliterate_args,
 )
 from translit._types import (
     EmojiProvider,
@@ -116,68 +117,6 @@ def _validate_batch(texts: object, func_name: str) -> None:
 
 
 # --- Core transforms ---
-
-
-def _check_transliterate_conflicts(
-    *,
-    lang: str | None,
-    target: str | None,
-    errors: TransliterateErrorMode,
-    replace_with: str,
-    strict_iso9: bool,
-    gost7034: bool,
-    tones: bool,
-    context: bool,
-) -> None:
-    """Reject conflicting ``transliterate()`` kwarg combinations (#69).
-
-    A single conflict matrix, applied identically before the str/list dispatch
-    so scalar and batch inputs raise the same error instead of one silently
-    dropping a parameter the other honours.
-
-    ``target`` selects *reverse* transliteration; ``context`` and ``tones`` are
-    *forward-only*, so combining either with ``target`` is an error. ``context``
-    (abjad vowel restoration) has no toned-pinyin output, so ``context`` +
-    ``tones`` is rejected too.
-
-    The ``errors`` enum value itself is validated by the Rust core (#185), not
-    here — this matrix only rejects contradictory *combinations* of otherwise-
-    valid kwargs.
-    """
-    if target is not None and lang is not None:
-        raise InvalidArgumentError("'lang' and 'target' are mutually exclusive")
-    if context and target is not None:
-        raise InvalidArgumentError("'context' and 'target' are mutually exclusive")
-    if context and tones:
-        raise InvalidArgumentError(
-            "'tones' cannot be used with 'context' — context-aware "
-            "transliteration does not produce toned pinyin"
-        )
-    if context and errors == "strict":
-        # errors="strict" (#184) is scoped to the forward context-free engine;
-        # the context (abjad) pipeline restores vowels and has no comparable
-        # per-character untranslatable notion.
-        raise InvalidArgumentError(
-            "errors='strict' cannot be used with 'context' — strict mode is "
-            "only available for context-free transliteration"
-        )
-    if target is not None:
-        forward_only: dict[str, object] = {}
-        if errors != "replace":
-            forward_only["errors"] = errors
-        if replace_with != "[?]":
-            forward_only["replace_with"] = replace_with
-        if strict_iso9:
-            forward_only["strict_iso9"] = strict_iso9
-        if gost7034:
-            forward_only["gost7034"] = gost7034
-        if tones:
-            forward_only["tones"] = tones
-        if forward_only:
-            names = ", ".join(sorted(forward_only))
-            raise InvalidArgumentError(
-                f"forward-only parameters ({names}) cannot be used with 'target'"
-            )
 
 
 @overload
@@ -299,8 +238,9 @@ def transliterate(
         'Москва'
     """
     # Resolve conflicting kwargs once, before the str/list dispatch, so scalar
-    # and batch inputs behave identically (#69).
-    _check_transliterate_conflicts(
+    # and batch inputs behave identically (#69). The conflict matrix lives in
+    # the Rust core (single source of truth, #231); this is a thin call into it.
+    _validate_transliterate_args(
         lang=lang,
         target=target,
         errors=errors,
@@ -607,11 +547,10 @@ def slugify(
         hexadecimal=hexadecimal,
     )
 
-    # max_length is validated before the str/list dispatch (#193): the batch
-    # path would otherwise fall through to the Rust uint conversion and raise an
-    # uncatchable OverflowError, whereas the scalar path raised ValueError.
-    if max_length < 0:
-        raise InvalidArgumentError(f"max_length must be non-negative, got {max_length}")
+    # max_length's non-negative contract is enforced by the Rust core (#231):
+    # both the scalar (`_slugify`) and batch (`_slugify_batch`) entrypoints accept
+    # a signed integer and raise InvalidArgumentError, so the two paths behave
+    # identically without a duplicate Python check.
 
     # Sanitize the empty-slug fallback through the *same* slug pipeline (#193).
     # `default` is documented as a slug, so a caller-derived value (e.g. a
@@ -775,8 +714,7 @@ def sanitize_filename(
     # pathvalidate compatibility: max_len → max_length
     if max_len is not None:
         max_length = max_len
-    if max_length < 0:
-        raise InvalidArgumentError(f"max_length must be non-negative, got {max_length}")
+    # max_length's non-negative contract is enforced by the Rust core (#231).
     return _sanitize_filename(
         text,
         separator=separator,
@@ -1077,8 +1015,7 @@ def grapheme_truncate(text: str, max_graphemes: int) -> str:
         >>> grapheme_truncate("café", 3)
         'caf'
     """
-    if max_graphemes < 0:
-        raise InvalidArgumentError(f"max_graphemes must be non-negative, got {max_graphemes}")
+    # max_graphemes's non-negative contract is enforced by the Rust core (#231).
     return _grapheme_truncate(text, max_graphemes)
 
 
@@ -1662,6 +1599,13 @@ class TextPipeline:
             strip_bidi=strip_bidi,
             strip_zalgo=strip_zalgo,
         )
+
+    @classmethod
+    def _from_inner(cls, inner: _TextPipeline) -> TextPipeline:
+        """Wrap a core-built `_TextPipeline` (used by `get_pipeline`)."""
+        self = cls.__new__(cls)
+        self._inner = inner
+        return self
 
     def __call__(self, text: str) -> str:
         return self._inner.process(text)

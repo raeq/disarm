@@ -151,6 +151,58 @@ mkdocs serve              # local preview at http://127.0.0.1:8000
 mkdocs build              # build static site to site/
 ```
 
+## Doc-test recipes
+
+Cookbook examples are **executed in CI** against the shipped wheel — a wrong or
+broken snippet turns the suite red (#154). This kills "recipe rot": output
+claims that are wrong at authoring time, or that silently break when the API
+moves. The harness is [Sybil](https://sybil.readthedocs.io/); it runs every
+fenced `python` block in an allowlisted page and checks any `assert` it
+contains.
+
+Run the doc-tests locally (they need the `[test]` extra, which pulls in Sybil):
+
+```bash
+pip install -e ".[test]"
+pytest docs/                          # or: pytest docs/user-guide/filenames.md
+```
+
+**Recipe template.** Assert outputs; never decorate them with `# =>`:
+
+````markdown
+```python
+from translit import sanitize_filename
+
+assert sanitize_filename("café.txt") == "cafe.txt"
+```
+````
+
+Rules:
+
+- **Assert, don't comment.** `assert f(x) == "y"` is checked; `f(x)  # => "y"`
+  is not. The `# =>` pattern is what we are removing (#156).
+- **Public API only.** Reaching into internals (`translit._...`) in a published
+  example is itself a doc bug — the example must exercise what users can call.
+- **One namespace per page.** Blocks share state top-to-bottom, so import once
+  and reuse the binding in later blocks.
+- **Hide setup** that would clutter the prose in an invisible block — it runs
+  but does not render:
+
+  ```markdown
+  <!--- invisible-code-block: python
+  tmp = make_fixture()
+  -->
+  ```
+
+- **Skip** a block that is intentionally not runnable (e.g. pseudo-code or a
+  shell transcript mislabelled `python`) with `<!--- skip: next -->`.
+
+**Enabling a page.** A page is executed only once it is on the allowlist in
+[`docs/conftest.py`](docs/conftest.py) (`EXECUTED_RECIPES`). Convert its
+examples to asserts, add the path, and confirm `pytest docs/` is green. This is
+a deliberate ratchet: un-converted pages stay visibly unguarded until their
+claims are asserted.
+
 ## Submitting changes
 
 All changes go through pull requests; direct pushes to `main` are blocked by branch

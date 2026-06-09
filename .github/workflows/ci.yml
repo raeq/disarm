@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
@@ -36,6 +37,11 @@ jobs:
               - '**.rs'
               - '**.toml'
               - '**.tsv'
+              - '.github/workflows/**'
+            docs:
+              - 'docs/**'
+              - 'mkdocs.yml'
+              - '**.md'
               - '.github/workflows/**'
 
 
@@ -120,6 +126,38 @@ jobs:
           path: coverage.xml
 
 
+  # ── Cookbook doc-tests (#154: executable, asserted recipes) ─────
+  # Runs on code OR docs changes: a doc example can break from a prose edit
+  # or from an API change. Executes the allowlisted recipes in docs/conftest.py
+  # against the built wheel, so a wrong/broken example turns CI red.
+  doc-tests:
+    name: Doc tests (Sybil)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
+
+      - name: Install maturin
+        run: pip install maturin[patchelf]
+
+      - name: Build wheel and install
+        run: |
+          maturin build --out dist
+          pip install dist/*.whl
+          pip install ".[test]"
+
+      - name: Run cookbook doc-tests
+        run: pytest docs/ -q
+
+
   # ── Security audit (#105: cargo audit for RustSec advisories) ──
   # Runs on every PR and weekly. Cargo.lock is not committed (it is .gitignored
   # for this library), so generate it before auditing.
@@ -176,16 +214,27 @@ jobs:
   python-ok:
     name: Python checks passed
     if: always()
-    needs: [changes, lint, test]
+    needs: [changes, lint, test, doc-tests]
     runs-on: ubuntu-latest
     steps:
       - run: |
           CODE="${{ needs.changes.outputs.code }}"
+          DOCS="${{ needs.changes.outputs.docs }}"
           LINT="${{ needs.lint.result }}"
           TEST="${{ needs.test.result }}"
+          DOCTESTS="${{ needs['doc-tests'].result }}"
+
+          # Cookbook doc-tests run on code OR docs changes (#154); a doc example
+          # can break from either. Block merge if they ran and did not pass.
+          if [[ "$CODE" == "true" || "$DOCS" == "true" ]]; then
+            if [[ "$DOCTESTS" != "success" ]]; then
+              echo "doc-tests ($DOCTESTS) failed"
+              exit 1
+            fi
+          fi
 
           if [[ "$CODE" != "true" ]]; then
-            echo "No code changes — skipping checks"
+            echo "No code changes — skipping lint/test checks"
             exit 0
           fi
 

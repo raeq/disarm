@@ -105,12 +105,22 @@ pub fn grapheme_width_opts(cluster: &str, ambiguous_wide: bool) -> usize {
         }
     }
     let is_keycap_base = matches!(base, '0'..='9' | '#' | '*');
-    if !has_vs15 && (has_vs16 || base_emoji || (has_keycap && is_keycap_base)) {
+    // A6: VS15 forces text presentation. For an emoji base that is one text glyph
+    // (1 column) even when the base is East-Asian-Wide; a stray VS15 on a
+    // non-emoji base is ignored and the base's own width applies.
+    if has_vs15 {
+        return if base_emoji {
+            1
+        } else {
+            resolve(base_class, ambiguous_wide)
+        };
+    }
+    if has_vs16 || base_emoji || (has_keycap && is_keycap_base) {
         return 2;
     }
 
-    // Non-emoji (or VS15-forced text): the base scalar determines the cell width;
-    // combining / default-ignorable scalars in the cluster contribute 0.
+    // Non-emoji: the base scalar determines the cell width; combining /
+    // default-ignorable scalars in the cluster contribute 0.
     resolve(base_class, ambiguous_wide)
 }
 
@@ -189,6 +199,10 @@ mod tests {
         assert_eq!(grapheme_width("😀"), 2); // Emoji_Presentation base
         assert_eq!(grapheme_width("☺\u{FE0F}"), 2); // VS16 → emoji
         assert_eq!(grapheme_width("☺\u{FE0E}"), 1); // VS15 → text, width 1
+                                                    // VS15 forces text presentation to 1 even for an East-Asian-Wide emoji
+                                                    // base (⌚ U+231A is Emoji_Presentation AND EAW=Wide). (#224 review)
+        assert_eq!(grapheme_width("⌚\u{FE0E}"), 1);
+        assert_eq!(grapheme_width("⌚"), 2); // no selector → emoji width 2
         assert_eq!(grapheme_width("🇫🇷"), 2); // regional-indicator flag
         assert_eq!(grapheme_width("1\u{FE0F}\u{20E3}"), 2); // keycap
         assert_eq!(grapheme_width("👨‍👩‍👧‍👦"), 2); // ZWJ family

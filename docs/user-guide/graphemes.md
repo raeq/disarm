@@ -217,7 +217,7 @@ from translit import terminal_width, grapheme_width
 
 assert terminal_width("hello") == 5
 assert terminal_width("世界") == 4  # wide CJK: 2 columns each
-assert terminal_width("café") == 4  # NFD: the combining acute is 0 columns
+assert terminal_width("cafe\u0301") == 4  # NFD: "e" + combining acute (U+0301, 0 columns)
 assert terminal_width("a😀") == 3  # emoji cluster occupies 2 columns
 assert grapheme_width("👨‍👩‍👧‍👦") == 2  # one ZWJ cluster, 2 columns
 ```

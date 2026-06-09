@@ -118,6 +118,14 @@ def test_differential_vs_wcwidth() -> None:
     table over-widens a symbol. Anything else is a real bug.
     """
     wcwidth = pytest.importorskip("wcwidth").wcwidth
+    # Default_Ignorable_Code_Point from the authoritative UCD (independent of
+    # translit's own generated table) so a wrongly-zeroed printable char is caught.
+    from scripts.gen_width_data import _fetch, _parse_property
+
+    dcp = _fetch("DerivedCoreProperties.txt")
+    default_ignorable = _parse_property(dcp, "Default_Ignorable_Code_Point")
+    grapheme_extend = _parse_property(dcp, "Grapheme_Extend")
+    zero_props = default_ignorable | grapheme_extend
     emoji_pres = _load_emoji_presentation()
     undocumented: list[tuple[str, int, int, str, str]] = []
     for cp in range(0x110000):
@@ -131,9 +139,13 @@ def test_differential_vs_wcwidth() -> None:
         cat = unicodedata.category(c)
         eaw = unicodedata.east_asian_width(c)
         allowed = (
-            (ww == -1 and tw == 0)  # A7: controls report 0, not -1
-            or (cat in ("Cc", "Cf") and tw == 0)  # A4/A5: control/format zeroed
-            or tw == 0  # other default-ignorable / combining we zero
+            # A4/A5: only documented zero-width classes may be 0 — controls (Cc),
+            # format (Cf), combining marks (Mn/Me), conjoining Hangul Jamo, and
+            # default-ignorable code points. A printable char reported 0 is a bug.
+            (
+                tw == 0
+                and (cat in ("Cc", "Cf", "Mn", "Me") or 0x1160 <= cp <= 0x11FF or cp in zero_props)
+            )
             or (cp in emoji_pres and tw == 2)  # A6: emoji presentation widened
             or cat == "Mc"  # A4: spacing marks not zeroed (width follows EAW)
             or (eaw not in ("W", "F") and tw == 1)  # follow UCD EAW; wcwidth over-wide

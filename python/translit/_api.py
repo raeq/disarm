@@ -1114,8 +1114,13 @@ def terminal_width(text: str, *, ambiguous_wide: bool = False) -> int:
 def grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int:
     """Column width of a single grapheme cluster (see :func:`terminal_width`).
 
+    This measures one grapheme cluster — the base character's column width, with
+    combining/zero-width scalars contributing 0, or 2 for an emoji-presented
+    cluster. It does **not** segment or sum multiple clusters; use
+    :func:`terminal_width` for arbitrary strings.
+
     Args:
-        cluster: A grapheme cluster (or any short string; width is summed).
+        cluster: A single grapheme cluster.
         ambiguous_wide: Treat East Asian *Ambiguous* characters as 2 columns.
 
     Returns:

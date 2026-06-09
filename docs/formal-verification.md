@@ -1,24 +1,48 @@
 # Exhaustive Testing & Compile-Time Assurance
 
-translit goes beyond conventional unit and property-based testing with three layers of machine-verifiable assurance: **compile-time assertions**, **exhaustive domain coverage**, and **stated invariant specifications**.
+translit's assurance is described using the methodology of the technical note
+*Provably Lossless Reversible Transliteration: A Formal Specification and an
+Exhaustive-Verification Methodology* ([DOI 10.5281/zenodo.20613272](https://doi.org/10.5281/zenodo.20613272)).
+Its central idea is to **separate what is proven from what is only tested**, and
+to tag every guarantee with the *strength* of assurance behind it.
+
+!!! warning "Scope: the shipping transforms are lossy, not reversible"
+    The paper specifies a *reversible mode* (its requirements R1–R7). translit
+    does **not** ship that mode — its transforms are **lossy by design**: ASCII
+    output (I2) and idempotence (I3) are canonicalization properties that
+    *preclude* reversibility. This page adopts the paper's verified-vs-tested
+    language to describe the **existing** testing; it makes **no** claim that
+    `transliterate` (or any shipping transform) is reversible.
 
 ---
 
-## Overview
+## Three strengths of assurance
 
-"Exhaustively tested" for translit means:
+Every guarantee below is tagged with one of these:
 
-1. **Compile-time guarantees** — Data integrity assertions that fail the build if violated
-2. **Exhaustive domain testing** — Every element in bounded Unicode domains is tested (not sampled)
-3. **Stated invariants** — Seven properties stated as specifications and verified by exhaustive enumeration or property-based testing
+- **(a) Proof by exhaustion.** Enumerate *every* element of a finite domain and
+  check a decidable predicate. This is a constructive proof over that domain, not
+  a sample — it leaves zero untested inputs (e.g. all 11,172 Hangul syllables,
+  the full BMP, all CJK ideographs).
+- **(b) Structural proof.** An argument over the *structure* of the computation
+  that reaches properties quantifying over unbounded strings (e.g. "the output of
+  a character-wise map that emits ASCII for every character is ASCII for every
+  string"). Exhaustion cannot reach these because the input set is infinite.
+- **(c) Property-based testing.** Randomized/fuzz testing (Hypothesis, proptest)
+  of unbounded-input properties not reduced to (a) or (b). It is sound but
+  **incomplete** evidence — label it **"tested, not proven."**
 
-This is stronger than property-based testing alone because exhaustive tests leave *zero untested inputs* within their domain.
+The shipping library rests on **(a)** and **(c)**, with **(b)** used only where a
+finite per-character result lifts structurally to all strings (I2's ASCII output).
+The paper's structural proofs of *reversibility / unique decodability* describe
+its reversible mode and are **out of scope** here.
 
 ---
 
-## Compile-Time Guarantees (build.rs)
+## Compile-Time Guarantees (build.rs) — (a) exhaustion at build time
 
-The build script verifies data integrity before compilation succeeds:
+The build script enumerates the generated tables and fails the build if a
+decidable predicate does not hold for every entry:
 
 | Assertion | Scope | What it proves |
 |-----------|-------|---------------|
@@ -30,80 +54,104 @@ The build script verifies data integrity before compilation succeeds:
 | Default BMP table count ≥ 5,000 | BMP translations | Default table not truncated |
 | Hanzi pinyin count ≥ 20,000 | CJK mappings | Pinyin table not truncated |
 
-Additionally, `src/tables/hangul.rs` contains const assertions:
-- `JUNGSEONG_COUNT == 21`, `JONGSEONG_COUNT == 28` (Unicode spec constants)
-- Total Hangul syllable count = `19 × 21 × 28 = 11,172`
-- Compatibility jamo range = 51 entries
-
-**If any assertion fails, `cargo build` fails.** No runtime overhead.
+`src/tables/hangul.rs` adds const assertions: `JUNGSEONG_COUNT == 21`,
+`JONGSEONG_COUNT == 28`, total Hangul = `19 × 21 × 28 = 11,172`, compatibility
+jamo = 51. **If any assertion fails, `cargo build` fails.** No runtime overhead.
 
 ---
 
-## Exhaustive Domain Coverage
+## Exhaustive Domain Coverage — (a) proof by exhaustion
+
+Each property below is checked for **every** element of a finite domain, so it is
+proven over that domain.
 
 ### Hangul Syllables (11,172 characters)
 
-Every precomposed Hangul syllable (U+AC00–U+D7A3) is tested:
-- `romanize_hangul()` returns `Some` (no unmapped syllables)
-- Output is pure ASCII and non-empty
-- Decomposition indices are in bounds: `cho < 19`, `jung < 21`, `jong < 28`
-- Round-trip: `cho * 21 * 28 + jung * 28 + jong == syllable_index`
+Every precomposed syllable (U+AC00–U+D7A3): `romanize_hangul()` returns `Some`,
+output is pure ASCII and non-empty, decomposition indices are in bounds
+(`cho < 19`, `jung < 21`, `jong < 28`), and the index identity
+`cho·21·28 + jung·28 + jong == syllable_index` holds. (This identity is the
+Hangul *decomposition arithmetic* — it is **not** a transliteration-reversibility
+claim.)
 
 ### Compatibility Jamo (51 characters)
 
-Every standalone jamo (U+3131–U+3163):
-- `lookup_compat_jamo()` returns `Some`
-- Output is pure ASCII
+Every standalone jamo (U+3131–U+3163): `lookup_compat_jamo()` returns `Some` and
+output is pure ASCII.
 
 ### Full BMP — ASCII Output (63,488 characters)
 
-Every non-surrogate codepoint U+0080–U+FFFF with `ErrorMode::Ignore`:
-- Output is pure ASCII (proves invariant I2 exhaustively for the BMP)
+Every non-surrogate codepoint U+0080–U+FFFF with `ErrorMode::Ignore` yields pure
+ASCII — proves **I2** over the BMP by exhaustion.
 
 ### Full BMP — Idempotence (63,488 characters)
 
-Every non-surrogate codepoint U+0080–U+FFFF:
-- `transliterate(transliterate(ch)) == transliterate(ch)` (proves I3 exhaustively)
+Every non-surrogate codepoint U+0080–U+FFFF: `transliterate(transliterate(ch)) ==
+transliterate(ch)` — proves **I3** over the BMP by exhaustion.
 
 ### CJK Unified Ideographs (20,992 characters)
 
-Every character U+4E00–U+9FFF:
-- Output is ASCII and non-empty (every ideograph has a pinyin mapping)
+Every character U+4E00–U+9FFF maps to non-empty ASCII (every ideograph has a
+pinyin mapping).
 
-### Indic Block Structure (9 core + 4 extended scripts)
+### Indic Block Structure (15 scripts)
 
-For each Brahmic script block, structural properties are verified exhaustively:
-- Virama at expected offset classified as `IndicRole::Virama`
-- Full consonant range returns `IndicRole::Consonant`
-- Full dependent vowel range returns `IndicRole::DependentVowel`
-
-Scripts covered: Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam, Sinhala, Tibetan, Myanmar, Khmer, Balinese, Javanese.
-
----
-
-## Stated Invariants (I1–I7)
-
-| ID | Invariant | Statement | Verification |
-|----|-----------|-----------|-------------|
-| I1 | ASCII Passthrough | `∀s: s.is_ascii() → transliterate(s) = s` | Exhaustive (all 128 ASCII) + Hypothesis |
-| I2 | ASCII Output | `∀s: transliterate(s, errors='ignore').is_ascii()` | Exhaustive BMP (Rust) + Hypothesis 1000 (Python, incl. SMP) |
-| I3 | Idempotence | `∀s: f(f(s)) = f(s)` where `f = transliterate(·, errors='ignore')` | Exhaustive BMP (Rust) + Hypothesis 500 (Python) |
-| I4 | No Exceptions | `∀s ∈ UTF-8, |s| ≤ 10MiB: transliterate(s) does not throw` | Hypothesis 1000 + edge cases |
-| I5 | Deterministic | `∀s, n>0: transliterate(s) called n times → same result` | 100× repeat on 10 mixed-script inputs |
-| I6 | Input Size Bounded | `∀s: |s| > 10MiB → TranslitError` | Boundary test at 10 MiB / 10 MiB + 1 |
-| I7 | Output Length Bounded | `∀s: |f(s)| ≤ |s|_bytes × 4 + |s|_chars` | Hypothesis 1000 |
+For each Brahmic block, structural roles are checked exhaustively over the block:
+virama at the expected offset is `IndicRole::Virama`, the full consonant range is
+`Consonant`, the full dependent-vowel range is `DependentVowel`. Scripts:
+Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada,
+Malayalam, Sinhala, Tibetan, Myanmar, Khmer, Balinese, Javanese.
 
 ---
 
-## Property-Based Testing Coverage
+## Stated Invariants (I1–I7) — the lossy-normalizer specification
 
-In addition to exhaustive tests, translit uses:
+I1–I7 are the invariants of translit's **lossy normalizer**. Two of them — **I2
+(ASCII output)** and **I3 (idempotence)** — are *canonicalization* properties:
+they say the transform collapses input toward a canonical ASCII form, which is
+precisely why the transform is **not** reversible. None of I1–I7 asserts
+reversibility.
 
-- **proptest** (Rust): Property tests in `tests/integration_transliterate.rs`
-- **Hypothesis** (Python): 79KB of property tests in `tests/test_hypothesis.py` covering transliteration, slugification, normalization, confusables, and more
-- **Fuzz testing**: `tests/test_fuzz.py` with random Unicode generation
+Each invariant is tagged with the strongest assurance that discharges it:
 
-Total test count: 2,256+ tests across Rust and Python.
+| ID | Invariant | Statement | Assurance |
+|----|-----------|-----------|-----------|
+| I1 | ASCII Passthrough | `∀s: s.is_ascii() → transliterate(s) = s` | **(a)** exhaustion over the 128 ASCII chars + **(c)** property-tested at string level |
+| I2 | ASCII Output | `∀s: transliterate(s, errors='ignore').is_ascii()` | **(a)** exhaustion over the BMP + **(b)** structural (concatenation of ASCII is ASCII); **(c)** tested for SMP |
+| I3 | Idempotence | `∀s: f(f(s)) = f(s)`, `f = transliterate(·, errors='ignore')` | **(a)** exhaustion over the BMP + **(c)** property-tested (Python) |
+| I4 | No Exceptions | `∀s ∈ UTF-8, |s| ≤ 10 MiB: transliterate(s) does not throw` | **(c)** property-tested (Hypothesis + edge cases) |
+| I5 | Deterministic | `∀s, n>0: n calls of transliterate(s) → identical result` | **(c)** property-tested (100× over mixed-script inputs) |
+| I6 | Input Size Bounded | `∀s: |s| > 10 MiB → TranslitError` | **(b)** structural guard (explicit length check), confirmed by a boundary test |
+| I7 | Output Length Bounded | `∀s: |f(s)| ≤ |s|_bytes × 4 + |s|_chars` | **(c)** property-tested (Hypothesis) |
+
+**Proven vs tested at a glance.** I1–I3 are *proven* over their finite domains
+(exhaustion, with a structural lift for I2); I2 above the BMP and I4, I5, I7 are
+*tested, not proven* (unbounded inputs); I6 is a structural guard confirmed by a
+boundary test.
+
+---
+
+## Reversibility is out of scope
+
+translit deliberately ships a **lossy** transform. The paper's reversible mode
+(R1–R7) — and the *structural* proofs of round-trip identity and unique
+decodability it carries — apply to a **specified reversible encoding**, which
+translit does not implement. The exhaustive and structural results above are
+about canonicalization (I1–I7); none of them imply that `transliterate` can be
+inverted. Do not read "exhaustively verified" as "reversible."
+
+---
+
+## Property-Based Testing — (c) tested, not proven
+
+- **proptest** (Rust): property tests in `tests/integration_transliterate.rs`.
+- **Hypothesis** (Python): property tests in `tests/test_hypothesis.py` across
+  transliteration, slugification, normalization, and confusables.
+- **Fuzz testing**: random Unicode generation across the input space.
+
+These run across the three test tiers (deterministic CI, Hypothesis, and the
+formal/exhaustive pre-release tier) — thousands of tests across Rust and Python.
+They are sound but incomplete: evidence, not proof.
 
 ---
 
@@ -111,16 +159,27 @@ Total test count: 2,256+ tests across Rust and Python.
 
 | Area | Why not verified | Mitigation |
 |------|-----------------|------------|
-| PHF hash correctness | Trusted from `phf_codegen` crate (widely used, well-tested) | Functional tests exercise every lookup path |
-| Linguistic accuracy | Transliteration correctness is empirical, not provable by testing alone | Extensive test corpus from native speakers; regression tests |
-| Unicode version drift | New Unicode versions may add codepoints | CI tracks Unicode version; new chars fall through to ErrorMode |
-| Memory safety (UB) | Requires Miri (nightly only) | `unsafe_code = "forbid"` in Cargo.toml; no unsafe anywhere |
+| PHF hash correctness | Trusted from `phf_codegen` (widely used) | Functional tests exercise every lookup path |
+| Linguistic accuracy | Correctness is empirical, not provable by testing | Native-speaker corpus; regression tests; see [#173] quality benchmark |
+| Unicode version drift | New Unicode versions add codepoints | CI tracks the Unicode version; new chars fall through to `ErrorMode` |
+| Memory safety (UB) | Requires Miri (nightly only) | `unsafe_code = "forbid"`; no unsafe anywhere |
+
+[#173]: https://github.com/raeq/translit/issues/173
 
 ---
 
 ## Future: Nightly CI Extensions
 
-When nightly Rust is available in CI:
+- **Kani** bounded model checking — would add machine-checked *structural* proofs
+  (absence of panics, overflow, out-of-bounds) for `indic_char_role`,
+  `romanize_hangul`, and the decomposition arithmetic.
+- **Miri** UB detection — run the suite under Miri to detect undefined behavior.
 
-- **Kani** bounded model checking: Would add a form of formal verification — proving absence of panics, overflow, and out-of-bounds for `indic_char_role`, `romanize_hangul`, and decomposition arithmetic
-- **Miri** UB detection: Run the full test suite under Miri to detect undefined behavior, use-after-free, and data races
+---
+
+## Reference
+
+- *Provably Lossless Reversible Transliteration: A Formal Specification and an
+  Exhaustive-Verification Methodology.* [DOI 10.5281/zenodo.20613272](https://doi.org/10.5281/zenodo.20613272).
+  This page adopts its verified-vs-tested methodology to describe translit's
+  existing, **lossy** testing — not its reversible-mode requirements.

@@ -8,7 +8,7 @@
 
 use std::hint::black_box;
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 use _translit::case_fold::_fold_case;
 use _translit::grapheme::{_grapheme_len, _grapheme_split};
@@ -32,6 +32,17 @@ const MIXED_SCRIPT: &str = "Hello Мир 世界 café";
 const EMOJI_TEXT: &str = "Hello 👨‍👩‍👧‍👦 World 🌍🎉";
 const WHITESPACE_MESSY: &str = "  hello   \t  world  \n  foo  \u{200B}  bar  \u{2060}  ";
 
+/// Throughput for a string-keyed benchmark: characters (the primary, meaningful
+/// unit here) and bytes, so criterion 0.8 reports both chars/sec and bytes/sec
+/// (#162). Elements are chars rather than bytes because the transforms are
+/// codepoint-oriented.
+fn text_throughput(text: &str) -> Throughput {
+    Throughput::ElementsAndBytes {
+        elements: text.chars().count() as u64,
+        bytes: text.len() as u64,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Transliteration benchmarks
 // ---------------------------------------------------------------------------
@@ -47,6 +58,7 @@ fn bench_transliterate(c: &mut Criterion) {
         ("cjk", CJK),
         ("mixed_script", MIXED_SCRIPT),
     ] {
+        group.throughput(text_throughput(input));
         group.bench_with_input(BenchmarkId::new("default", name), input, |b, text| {
             b.iter(|| {
                 transliterate_impl(
@@ -63,6 +75,7 @@ fn bench_transliterate(c: &mut Criterion) {
     }
 
     // Language-specific transliteration
+    group.throughput(text_throughput(CYRILLIC));
     group.bench_function("cyrillic_lang_ru", |b| {
         b.iter(|| {
             transliterate_impl(
@@ -124,6 +137,7 @@ fn bench_slugify(c: &mut Criterion) {
         ("unicode_title", "Héllo Wörld Straße München"),
         ("long_text", "The Quick Brown Fox Jumps Over The Lazy Dog And Then Some More Words To Make It Long Enough"),
     ] {
+        group.throughput(text_throughput(input));
         group.bench_with_input(BenchmarkId::new("default", name), input, |b, text| {
             b.iter(|| slugify_impl(black_box(text), &default_config));
         });
@@ -135,13 +149,10 @@ fn bench_slugify(c: &mut Criterion) {
         word_boundary: true,
         ..SlugConfig::default()
     };
+    let bounded_input = "The Quick Brown Fox Jumps Over The Lazy Dog";
+    group.throughput(text_throughput(bounded_input));
     group.bench_function("bounded_30_word_boundary", |b| {
-        b.iter(|| {
-            slugify_impl(
-                black_box("The Quick Brown Fox Jumps Over The Lazy Dog"),
-                &bounded_config,
-            )
-        });
+        b.iter(|| slugify_impl(black_box(bounded_input), &bounded_config));
     });
 
     group.finish();
@@ -162,6 +173,7 @@ fn bench_fold_case(c: &mut Criterion) {
         ("greek", "ΣΟΦΙΑ ΕΛΛΗΝΙΚΑ"),
         ("mixed", "Hello Мир WORLD Straße"),
     ] {
+        group.throughput(text_throughput(input));
         group.bench_with_input(BenchmarkId::new("fold", name), input, |b, text| {
             b.iter(|| _fold_case(black_box(text)));
         });
@@ -177,6 +189,7 @@ fn bench_fold_case(c: &mut Criterion) {
 fn bench_whitespace(c: &mut Criterion) {
     let mut group = c.benchmark_group("whitespace");
 
+    group.throughput(text_throughput(WHITESPACE_MESSY));
     group.bench_function("messy_full_strip", |b| {
         b.iter(|| _collapse_whitespace(black_box(WHITESPACE_MESSY), true, true));
     });
@@ -185,6 +198,7 @@ fn bench_whitespace(c: &mut Criterion) {
         b.iter(|| _collapse_whitespace(black_box(WHITESPACE_MESSY), false, false));
     });
 
+    group.throughput(text_throughput("hello world"));
     group.bench_function("clean_passthrough", |b| {
         b.iter(|| _collapse_whitespace(black_box("hello world"), true, true));
     });
@@ -205,6 +219,7 @@ fn bench_scripts(c: &mut Criterion) {
         ("cyrillic_pure", CYRILLIC),
         ("cjk_pure", CJK),
     ] {
+        group.throughput(text_throughput(input));
         group.bench_with_input(BenchmarkId::new("detect", name), input, |b, text| {
             b.iter(|| _detect_scripts(black_box(text)));
         });
@@ -224,18 +239,22 @@ fn bench_scripts(c: &mut Criterion) {
 fn bench_grapheme(c: &mut Criterion) {
     let mut group = c.benchmark_group("grapheme");
 
+    group.throughput(text_throughput(ASCII_SHORT));
     group.bench_function("len_ascii", |b| {
         b.iter(|| _grapheme_len(black_box(ASCII_SHORT)));
     });
 
+    group.throughput(text_throughput(EMOJI_TEXT));
     group.bench_function("len_emoji", |b| {
         b.iter(|| _grapheme_len(black_box(EMOJI_TEXT)));
     });
 
+    group.throughput(text_throughput(ASCII_SHORT));
     group.bench_function("split_ascii", |b| {
         b.iter(|| _grapheme_split(black_box(ASCII_SHORT)));
     });
 
+    group.throughput(text_throughput(EMOJI_TEXT));
     group.bench_function("split_emoji", |b| {
         b.iter(|| _grapheme_split(black_box(EMOJI_TEXT)));
     });

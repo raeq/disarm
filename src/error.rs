@@ -599,6 +599,18 @@ mod tests {
     /// (bar identifiers), single-quoted values, and echoes the offending value.
     #[test]
     fn messages_follow_house_style() {
+        // Identifiers permitted to begin a message with an uppercase letter.
+        const ALLOWED_UPPERCASE: &[&str] = &["UniqueSlugifier"];
+        // Variants that render arbitrary user content with `{:?}` (double quotes).
+        fn allows_double_quote(e: &Error) -> bool {
+            matches!(
+                e,
+                Error::RegexCompile { .. }
+                    | Error::RegisterLangBadKeys { .. }
+                    | Error::UniqueSlugMaxLengthTooSmall { .. }
+            )
+        }
+
         // Lowercase so it doesn't trip the lowercase-first check when a message
         // (e.g. Sealed) begins with the echoed value itself.
         const MARKER: &str = "zzvaluezz";
@@ -719,18 +731,6 @@ mod tests {
                 true,
             ),
         ];
-
-        // Identifiers permitted to begin a message with an uppercase letter.
-        const ALLOWED_UPPERCASE: &[&str] = &["UniqueSlugifier"];
-        // Variants that render arbitrary user content with `{:?}` (double quotes).
-        fn allows_double_quote(e: &Error) -> bool {
-            matches!(
-                e,
-                Error::RegexCompile { .. }
-                    | Error::RegisterLangBadKeys { .. }
-                    | Error::UniqueSlugMaxLengthTooSmall { .. }
-            )
-        }
 
         for (err, echoes_marker) in &samples {
             let msg = err.to_string();

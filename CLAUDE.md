@@ -165,3 +165,7 @@ same parameters = same binary = same SHA256. No manual edits to dictionary files
 - TSV data lives in `src/tables/data/` — build.rs generates PHF tables from it
 - `unsafe_code = "forbid"` — no unsafe anywhere
 - All transliteration table values must be ASCII (enforced by build.rs at compile time)
+- **Boy Scout / broken-windows rule:** if you touch an area and find something
+  broken or sub-standard (incl. lints that only fire under `cargo clippy
+  --all-targets`), fix it in the same change rather than stepping around it. See
+  CONTRIBUTING.md → "Leave it better than you found it".

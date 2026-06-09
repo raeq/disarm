@@ -63,7 +63,8 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Rust clippy
-        run: cargo clippy --no-default-features -- -D warnings
+        # --all-targets so test and bench code is linted too (it rots otherwise).
+        run: cargo clippy --all-targets --no-default-features -- -D warnings
 
       - uses: actions/setup-python@v6
         with:

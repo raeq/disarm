@@ -29,6 +29,17 @@ We'd love your help, especially with:
 If you're not sure whether an idea fits, open an issue and ask. We would rather
 discuss a half-formed idea than have you not raise it.
 
+## Leave it better than you found it
+
+This project follows the **Boy Scout rule** and the **broken-windows** principle:
+if you touch an area and notice something broken, stale, or sub-standard — a lint
+that only fires under `--all-targets`, a stale doc claim, a flaky test, a
+misleading comment — **fix it as part of your change**, even if you didn't cause
+it. Broken windows accumulate fast: one tolerated defect signals that defects are
+acceptable, and quality erodes. A small, in-scope cleanup alongside your work is
+always welcome (call it out in the PR description so reviewers can see what's
+incidental). When a fix is too large to fold in, open an issue so it isn't lost.
+
 ## Reporting bugs and requesting features
 
 Please use the [issue forms](https://github.com/raeq/translit/issues/new/choose) — they

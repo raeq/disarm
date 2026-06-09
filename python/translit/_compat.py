@@ -374,13 +374,26 @@ class UniqueSlugify(Slugify):
 
             check = _check_not_in_uids
 
-        self._unique_inner: _UniqueSlugifier = _UniqueSlugifier(check=check, **self._kwargs)
+        # When safe_chars is set, the safe-char path protects them with
+        # placeholders before slugifying; `max_length` must NOT be applied by the
+        # inner slugifier (it could truncate a placeholder mid-marker). Build the
+        # inner without it and let the safe-char helper bound the restored result
+        # via `truncate_to`. safe_chars is fixed per instance for UniqueSlugify
+        # (per-call kwargs are not honored), so the non-safe path is unused here.
+        inner_kwargs = dict(self._kwargs)
+        if self._safe_chars:
+            inner_kwargs["max_length"] = 0
+        self._unique_inner: _UniqueSlugifier = _UniqueSlugifier(check=check, **inner_kwargs)
 
     def __call__(self, text: str, **kwargs: Any) -> str:
         if self._safe_chars:
             separator = str(self._kwargs.get("separator", "-"))
             result: str = _slugify_with_safe_chars(
-                self._unique_inner.slugify, text, self._safe_chars, separator
+                self._unique_inner.slugify,
+                text,
+                self._safe_chars,
+                separator,
+                truncate_to=self._max_length_val,
             )
         else:
             result = str(self._unique_inner.slugify(text))

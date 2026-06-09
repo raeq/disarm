@@ -278,6 +278,28 @@ class TestSafeCharsRestoration:
         result = Slugify(separator="_", safe_chars=".", max_length=10)("hello world.txt")
         assert len(result) <= 10
 
+    def test_unique_slugify_safe_chars_no_marker_debris(self) -> None:
+        # UniqueSlugify must not let its inner truncate a safe-char placeholder
+        # mid-marker (would leak "zqx..." debris) — the inner runs without
+        # max_length and the restored result is bounded afterwards.
+        u = UniqueSlugify(separator="_", safe_chars="-.", max_length=12)
+        for result in (u("alpha beta.gamma.delta"), u("epsilon zeta.eta")):
+            assert "zqx" not in result  # no placeholder debris
+            assert len(result) <= 12
+
+    def test_unique_slugify_safe_chars_uniqueness(self) -> None:
+        # With room for the suffix, uniqueness is still enforced on the
+        # safe-char path (no max_length truncation eating the suffix).
+        u = UniqueSlugify(separator="_", safe_chars="-.")
+        first = u("My Report.pdf")
+        second = u("My Report.pdf")
+        assert first == "My_Report.pdf"
+        assert second != first  # suffixed
+
+    def test_unique_slugify_safe_chars_preserves_extension(self) -> None:
+        u = UniqueSlugify(separator="_", safe_chars="-.")
+        assert u("My Report.pdf") == "My_Report.pdf"
+
 
 # ---------------------------------------------------------------------------
 # Import compatibility

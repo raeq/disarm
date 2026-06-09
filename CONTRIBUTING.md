@@ -209,6 +209,37 @@ asserts, add the path, and confirm `pytest docs/` is green. This is a deliberate
 ratchet: un-converted pages stay visibly unguarded until their claims are
 asserted.
 
+## Sign your work — Developer Certificate of Origin
+
+By submitting a contribution, you agree it is licensed under the project's
+[MIT License](https://github.com/raeq/translit/blob/main/LICENSE) (inbound =
+outbound). translit does **not** require a CLA.
+
+We do use the [Developer Certificate of Origin](https://github.com/raeq/translit/blob/main/DCO) (DCO 1.1): a per-commit
+attestation that you wrote the code, or otherwise have the right to submit it
+under the project's license. Certify it by adding a `Signed-off-by` trailer to
+**every** commit:
+
+```
+Signed-off-by: Jane Developer <jane@example.com>
+```
+
+Git adds it for you with the `-s` flag:
+
+```bash
+git commit -s -m "Your message"
+```
+
+The name and email in the sign-off **must match the commit author**. To sign off
+a series of existing commits, rebase with `--signoff`:
+
+```bash
+git rebase --signoff main
+```
+
+A **"DCO sign-off"** status check flags any PR whose commits are not signed off;
+it is a required check on `main`.
+
 ## Submitting changes
 
 All changes go through pull requests; direct pushes to `main` are blocked by branch
@@ -218,9 +249,10 @@ protection.
 2. Make your change **with a test** — ideally one that fails before the change and
    passes after.
 3. Run Tier 1 locally (tests + linters) and confirm it's green.
-4. Open a pull request describing **what** changed and **why**. Link any related issue.
-5. Wait for the required status checks — **"Rust checks passed"** and **"Python checks
-   passed"** — to go green.
+4. **Sign off** your commits (`git commit -s`) — see [Sign your work](#sign-your-work--developer-certificate-of-origin) above.
+5. Open a pull request describing **what** changed and **why**. Link any related issue.
+6. Wait for the required status checks — **"Rust checks passed"**, **"Python checks
+   passed"**, and **"DCO sign-off"** — to go green.
 
 A PR that arrives with a passing CI run and a focused test is the easiest kind to
 review and merge. Thank you for contributing.

@@ -80,3 +80,8 @@ type_complexity = "allow"
 lto = true
 codegen-units = 1
 strip = true
+
+[[bench]]
+name = "bench_personas"
+path = "benchmarks/bench_personas.rs"
+harness = false

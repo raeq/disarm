@@ -60,6 +60,18 @@ static GLOBAL_REPLACEMENTS: LazyLock<RwLock<HashMap<String, String>>> =
 /// transliterate call. Kept in sync by every mutator below.
 static HAS_REPLACEMENTS: AtomicBool = AtomicBool::new(false);
 
+/// Fast "are any user language tables registered?" flag, mirroring
+/// [`HAS_REPLACEMENTS`]. The built-in language override maps are *tiny*
+/// (1–26 entries), so for real text nearly every character misses the override
+/// map and falls through to the user-registered check. Without this gate that
+/// check acquires `LANG_TABLES.read()` **per character** even when no language
+/// has ever been registered (the overwhelmingly common case). A single Acquire
+/// load lets the per-char path skip the lock entirely (#235 item 1); the
+/// Acquire pairs with the Release store in [`register_lang`] so a reader that
+/// observes `true` also observes the inserted entries.
+/// Kept in sync by [`register_lang`] (the only `LANG_TABLES` mutator).
+static HAS_REGISTERED_LANGS: AtomicBool = AtomicBool::new(false);
+
 /// Once sealed, the registration tables (langs + replacements) are frozen so an
 /// application can configure registrations at startup and then prevent any later
 /// code (a request handler, an imported library) from mutating the
@@ -117,7 +129,12 @@ const LANG_ALIASES: &[&str] = &["nb", "nn", "da"];
 /// a user-registered one. Does not include the special `"auto"` detection mode
 /// (callers handle it).
 pub fn is_valid_lang(code: &str) -> bool {
-    BUILTIN_LANGS.contains(&code) || LANG_ALIASES.contains(&code) || has_registered_lang(code)
+    // `BUILTIN_LANGS` is sorted (guarded by `builtin_langs_is_sorted`), so
+    // binary-search it: O(log n) vs the former O(n) linear scan over 85 entries
+    // (#235 item 10). `LANG_ALIASES` is tiny (3 entries) — linear is fine there.
+    BUILTIN_LANGS.binary_search(&code).is_ok()
+        || LANG_ALIASES.contains(&code)
+        || has_registered_lang(code)
 }
 
 /// All built-in language codes, sorted.
@@ -307,10 +324,29 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<Cow<'static, str>> {
     if let Some(result) = transliteration::lookup_lang(lang, ch) {
         return Some(Cow::Borrowed(result));
     }
+    lookup_registered(lang, ch)
+}
 
-    // Check user-registered language tables under a read lock.
-    // We clone the replacement string rather than leaking it, so memory usage
-    // is bounded regardless of how many distinct characters are looked up.
+/// Resolve a language code to its built-in PHF override map, once, before the
+/// per-character loop (#235 item 1). The hot path then probes the returned map
+/// directly and only falls back to [`lookup_registered`] on a miss.
+#[inline]
+pub fn resolve_lang_map(lang: &str) -> Option<&'static phf::Map<char, &'static str>> {
+    transliteration::resolve_lang_map(lang)
+}
+
+/// Look up `ch` in the user-registered table for `lang`, if any.
+///
+/// Gated behind [`HAS_REGISTERED_LANGS`]: when no language has been registered
+/// (the common case) this is a single Acquire atomic load and **never** touches
+/// `LANG_TABLES.read()`, so the per-character hot path pays no lock. When a
+/// language *is* registered the string is cloned (not leaked), so memory stays
+/// bounded regardless of how many distinct characters are looked up.
+#[inline]
+pub fn lookup_registered(lang: &str, ch: char) -> Option<Cow<'static, str>> {
+    if !HAS_REGISTERED_LANGS.load(Ordering::Acquire) {
+        return None;
+    }
     let table = crate::recover_lock(LANG_TABLES.read(), "LANG_TABLES");
     table
         .get(lang)
@@ -396,6 +432,9 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
     }
     let mut table = crate::recover_lock(LANG_TABLES.write(), "LANG_TABLES");
     table.insert(code.to_owned(), char_map);
+    // Release so a reader's Acquire load that observes `true` also observes the
+    // insert above (same configure-then-use contract as `HAS_REPLACEMENTS`).
+    HAS_REGISTERED_LANGS.store(!table.is_empty(), Ordering::Release);
     Ok(())
 }
 

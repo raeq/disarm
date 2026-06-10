@@ -74,25 +74,18 @@ pub fn strip_zero_width_chars(text: &str) -> String {
 /// invisible math operators (U+2061–2064) which render identically to
 /// zero-width characters and can be abused for text spoofing.
 pub(crate) fn is_zero_width(ch: char) -> bool {
-    matches!(
-        ch,
-        // ── Zero-width spaces / joiners ─────────────────
-        '\u{200B}'   // ZWSP  Zero-Width Space
-        | '\u{200C}' // ZWNJ  Zero-Width Non-Joiner
-        | '\u{200D}' // ZWJ   Zero-Width Joiner
-        | '\u{FEFF}' // BOM   Byte Order Mark / Zero-Width No-Break Space
-        // ── Word joiners ────────────────────────────────
-        | '\u{2060}' // WJ    Word Joiner
-        | '\u{180E}' // MVS   Mongolian Vowel Separator
-        // ── Invisible math operators (General_Category=Cf) ──
-        // Added in Unicode 3.2; render as zero-width in all contexts
-        // outside mathematical typesetting. Frequently found in
-        // copy-pasted text from equation editors.
-        | '\u{2061}' // Function Application
-        | '\u{2062}' // Invisible Times
-        | '\u{2063}' // Invisible Separator
-        | '\u{2064}' // Invisible Plus
-    )
+    // The ten code points form two consecutive runs plus two singletons, so a
+    // pair of `wrapping_sub` range checks (predicated, no per-arm branch)
+    // replaces the scattered compare chain (#235 item 9). Equivalent to the
+    // former `matches!`; guarded by `test_strip_all_zero_width_chars`.
+    //
+    // Runs: ZWSP/ZWNJ/ZWJ (U+200B–U+200D); WJ + invisible math operators
+    // U+2061–U+2064 (General_Category=Cf, render zero-width outside math
+    // typesetting) which sit contiguously at U+2060–U+2064.
+    // Singletons: BOM / ZW no-break space (U+FEFF), Mongolian Vowel Separator
+    // (U+180E).
+    let cp = ch as u32;
+    cp.wrapping_sub(0x200B) <= 2 || cp.wrapping_sub(0x2060) <= 4 || cp == 0xFEFF || cp == 0x180E
 }
 
 #[cfg(test)]

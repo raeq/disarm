@@ -55,10 +55,14 @@ pub fn lookup_gost7034(ch: char) -> Option<&'static str> {
     GOST7034.get(&ch).copied()
 }
 
-/// Look up a character in a language-specific PHF map.
-/// Returns None if the language has no override for this character.
+/// Resolve a language code to its built-in PHF override map, once.
+///
+/// Hoisting this ~24-arm `match lang` out of the per-character loop (#235 item 1)
+/// lets the hot path probe the resolved map directly (`map.get(&ch)`) instead of
+/// re-running the match for every character. Returns `None` for languages with
+/// no built-in overrides (they fall through to the default table).
 #[inline]
-pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
+pub fn resolve_lang_map(lang: &str) -> Option<&'static phf::Map<char, &'static str>> {
     let table: Option<&phf::Map<char, &'static str>> = match lang {
         "de" => Some(&LANG_DE),
         // Norwegian Bokmål (nb) and Nynorsk (nn) are aliases for Norwegian (no).
@@ -95,6 +99,12 @@ pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
         // that are called from lookup_default() in mod.rs
         _ => None,
     };
+    table
+}
 
-    table.and_then(|t| t.get(&ch).copied())
+/// Look up a character in a language-specific PHF map.
+/// Returns None if the language has no override for this character.
+#[inline]
+pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
+    resolve_lang_map(lang).and_then(|t| t.get(&ch).copied())
 }

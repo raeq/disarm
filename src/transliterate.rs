@@ -452,7 +452,7 @@ fn transliterate_impl_inner<'a>(
     strict_iso9: bool,
     gost7034: bool,
     tones: bool,
-    mut untranslatable: Option<&mut Vec<(char, usize)>>,
+    untranslatable: Option<&mut Vec<(char, usize)>>,
 ) -> Cow<'a, str> {
     // Fast path: pure ASCII input needs no transliteration (and ASCII is always
     // translatable, so the collector stays empty).
@@ -471,6 +471,133 @@ fn transliterate_impl_inner<'a>(
         lang
     };
 
+    // #235 item 1+3: resolve the per-call lookup ONCE and dispatch into a
+    // monomorphized loop. The built-in language override map is resolved a
+    // single time (not via a ~24-arm `match lang` per character) and the
+    // user-registered tables are consulted (behind the `HAS_REGISTERED_LANGS`
+    // gate, so the common case never locks) only on a miss. Building the
+    // mode-specific `lookup` closure *before* the loop lets `transliterate_run`
+    // monomorphize into one tight loop per mode instead of re-testing the
+    // loop-invariant strict/gost/lang branches for every character.
+    //
+    // Lookup priority within each closure:
+    // 1. strict_iso9: scholarly ASCII Cyrillic table (ISO 9-style digraphs, NOT
+    //    the diacritic ISO 9:1995 standard — #94) → default table.
+    // 2. gost7034: GOST 7.0.34 table → default table.
+    // 3. otherwise: built-in lang override → user-registered → default table.
+    // `tones=true` selects toned pinyin in the default table.
+    if strict_iso9 {
+        transliterate_run(
+            text,
+            |ch| {
+                tables::lookup_iso9(ch)
+                    .map(Cow::Borrowed)
+                    .or_else(|| default_lookup(ch, tones))
+            },
+            error_mode,
+            replace_with,
+            lang,
+            strict_iso9,
+            gost7034,
+            tones,
+            untranslatable,
+        )
+    } else if gost7034 {
+        transliterate_run(
+            text,
+            |ch| {
+                tables::lookup_gost7034(ch)
+                    .map(Cow::Borrowed)
+                    .or_else(|| default_lookup(ch, tones))
+            },
+            error_mode,
+            replace_with,
+            lang,
+            strict_iso9,
+            gost7034,
+            tones,
+            untranslatable,
+        )
+    } else {
+        let builtin_lang_map = lang.and_then(tables::resolve_lang_map);
+        transliterate_run(
+            text,
+            |ch| {
+                builtin_lang_map
+                    .and_then(|m| m.get(&ch).copied().map(Cow::Borrowed))
+                    .or_else(|| lang.and_then(|l| tables::lookup_registered(l, ch)))
+                    .or_else(|| default_lookup(ch, tones))
+            },
+            error_mode,
+            replace_with,
+            lang,
+            strict_iso9,
+            gost7034,
+            tones,
+            untranslatable,
+        )
+    }
+}
+
+/// Default-table lookup, honouring the `tones` flag (toned vs toneless pinyin).
+#[inline]
+fn default_lookup(ch: char, tones: bool) -> Option<Cow<'static, str>> {
+    if tones {
+        tables::lookup_default_toned(ch).map(Cow::Borrowed)
+    } else {
+        tables::lookup_default(ch).map(Cow::Borrowed)
+    }
+}
+
+/// Index of the first non-ASCII byte in `bytes`, or `bytes.len()` if all ASCII.
+///
+/// Scans eight bytes at a time, testing the high bit of each lane in one
+/// `u64 & 0x8080…` (the technique `str::is_ascii` uses), then refines to the
+/// exact byte (#235 item 4). Lets the transliteration loop find ASCII-run
+/// boundaries far faster than a byte-by-byte check on the common ASCII-heavy
+/// mixed-script input.
+#[inline]
+fn first_non_ascii(bytes: &[u8]) -> usize {
+    const CHUNK: usize = 8;
+    const HIGH_BITS: u64 = 0x8080_8080_8080_8080;
+    let n = bytes.len();
+    let mut i = 0;
+    while i + CHUNK <= n {
+        let word = u64::from_ne_bytes(
+            bytes[i..i + CHUNK]
+                .try_into()
+                .expect("slice is exactly CHUNK bytes"),
+        );
+        if word & HIGH_BITS != 0 {
+            break; // a non-ASCII byte lives in this chunk; pinpoint it below
+        }
+        i += CHUNK;
+    }
+    while i < n && bytes[i] < 0x80 {
+        i += 1;
+    }
+    i
+}
+
+/// The per-character transliteration loop, generic over the resolved per-call
+/// `lookup` so LLVM emits one tight, branch-lean loop per lookup mode (#235
+/// item 3). `lookup` returns the primary mapping for a character (mode-specific
+/// table, falling back to the default table), or `None` if unmapped.
+#[allow(clippy::too_many_arguments)]
+fn transliterate_run<'a, F>(
+    text: &'a str,
+    lookup: F,
+    error_mode: ErrorMode,
+    replace_with: &str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+    mut untranslatable: Option<&mut Vec<(char, usize)>>,
+) -> Cow<'a, str>
+where
+    F: Fn(char) -> Option<Cow<'static, str>>,
+{
     let mut result = String::with_capacity(estimate_capacity(text));
     let mut prev_class = ScriptClass::None;
     // Track last char appended to `result` — avoids O(n) `result.chars().last()` scan.
@@ -480,12 +607,24 @@ fn transliterate_impl_inner<'a>(
     // virama or dependent vowel must strip that trailing "a" first.
     let mut last_was_indic_consonant = false;
 
-    for (byte_offset, ch) in text.char_indices() {
-        if ch.is_ascii() {
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+    while i < len {
+        // #235 item 4: bulk-skip ASCII runs. Scan word-at-a-time to the next
+        // non-ASCII byte and copy the whole run with one `push_str` (memcpy)
+        // instead of a per-character push + capacity check. The ideograph/
+        // Hangul → ASCII-alnum spacing rule only depends on the run's *first*
+        // character, so it is applied once at the run boundary; every later
+        // character in the run has `prev_class == Latin` and never inserts a
+        // space.
+        if bytes[i] < 0x80 {
+            let run_end = i + first_non_ascii(&bytes[i..]);
+            let run = &text[i..run_end];
             last_was_indic_consonant = false;
-            // Insert space when transitioning from ideograph/Hangul to ASCII alnum
+            let first = bytes[i] as char;
             if matches!(prev_class, ScriptClass::Ideograph | ScriptClass::Hangul)
-                && ch.is_alphanumeric()
+                && first.is_ascii_alphanumeric()
             {
                 if let Some(last) = last_appended {
                     if last.is_alphanumeric() {
@@ -493,11 +632,22 @@ fn transliterate_impl_inner<'a>(
                     }
                 }
             }
-            result.push(ch);
-            last_appended = Some(ch);
+            result.push_str(run);
+            // `run` is non-empty and all ASCII, so its last byte is its last char.
+            last_appended = Some(bytes[run_end - 1] as char);
             prev_class = ScriptClass::Latin;
+            i = run_end;
             continue;
         }
+
+        // Non-ASCII: decode one scalar and advance `i` immediately, so the
+        // mid-body `continue` on NFKC recovery cannot skip the increment.
+        let ch = text[i..]
+            .chars()
+            .next()
+            .expect("i is at a char boundary inside the string");
+        let byte_offset = i;
+        i += ch.len_utf8();
 
         let char_class = classify_char(ch);
         let is_cjk = matches!(
@@ -505,33 +655,7 @@ fn transliterate_impl_inner<'a>(
             ScriptClass::Ideograph | ScriptClass::Hangul | ScriptClass::Kana
         );
 
-        // Lookup priority:
-        // 1. If strict_iso9: scholarly ASCII Cyrillic table (ISO 9-style
-        //    digraphs, NOT the diacritic ISO 9:1995 standard — #94) → default
-        //    table (lang overrides ignored)
-        // 2. If gost7034: GOST 7.0.34 table → default table (lang overrides ignored)
-        // 3. Otherwise: lang override → default table
-        // When tones=true, CJK uses toned pinyin (with diacritics) instead of toneless.
-        let default_lookup = |c: char| -> Option<Cow<'static, str>> {
-            if tones {
-                tables::lookup_default_toned(c).map(Cow::Borrowed)
-            } else {
-                tables::lookup_default(c).map(Cow::Borrowed)
-            }
-        };
-
-        let mut mapped: Option<Cow<'static, str>> = if strict_iso9 {
-            tables::lookup_iso9(ch)
-                .map(Cow::Borrowed)
-                .or_else(|| default_lookup(ch))
-        } else if gost7034 {
-            tables::lookup_gost7034(ch)
-                .map(Cow::Borrowed)
-                .or_else(|| default_lookup(ch))
-        } else {
-            lang.and_then(|l| tables::lookup_lang(l, ch))
-                .or_else(|| default_lookup(ch))
-        };
+        let mut mapped: Option<Cow<'static, str>> = lookup(ch);
 
         // Indic virama/mātrā handling: strip the inherent "a" from the
         // previous consonant when followed by virama or a dependent vowel
@@ -599,70 +723,120 @@ fn transliterate_impl_inner<'a>(
             }
             prev_class = char_class;
         } else {
-            // #81: before the error fallback, try NFKC compatibility
-            // decomposition. Mathematical Alphanumerics (𝕳→H) and presentation
-            // ligatures (ﬁ→fi) are pure-Latin content NFKC folds to ASCII —
-            // both unidecode and anyascii recover them, and they are a real
-            // filter-evasion vector. Only reached for chars with no table
-            // mapping, so this is purely additive: a char whose NFKC form is
-            // itself falls straight through to the error handler below.
-            // #110: collect ch.nfkc() once into a String, then derive
-            // nfkc_unchanged by comparing against the original char.  The
-            // previous code iterated twice for changed chars (once to peek,
-            // once to collect), which this eliminates.  One allocation per
-            // unmapped char is acceptable on this path, which is only reached
-            // for chars not in the transliteration tables.
-            let decomposed: String = ch.nfkc().collect();
-            let nfkc_unchanged = decomposed.len() == ch.len_utf8() && decomposed.starts_with(ch);
-            let nfkc_recovered = if nfkc_unchanged {
-                false
-            } else {
-                let sub = transliterate_impl(
-                    &decomposed,
-                    lang,
-                    error_mode,
-                    replace_with,
-                    strict_iso9,
-                    gost7034,
-                    tones,
-                );
-                if sub.is_empty() {
-                    false
-                } else {
-                    result.push_str(&sub);
-                    last_appended = sub.chars().next_back();
-                    prev_class = ScriptClass::Latin;
-                    true
-                }
-            };
-            if nfkc_recovered {
-                continue;
-            }
-            // The character is genuinely untranslatable (no table entry, no NFKC
-            // recovery): this is the single point that defines the set (#184).
-            if let Some(v) = untranslatable.as_mut() {
-                v.push((ch, byte_offset));
-            }
-            match error_mode {
-                ErrorMode::Replace => {
-                    // An empty replace_with is intentionally equivalent to
-                    // ErrorMode::Ignore — the char is silently dropped.
-                    // This matches Unidecode's default behaviour and is
-                    // used by the unidecode() compat shim.
-                    result.push_str(replace_with);
-                    last_appended = replace_with.chars().next_back();
-                }
-                ErrorMode::Ignore => {}
-                ErrorMode::Preserve => {
-                    result.push(ch);
-                    last_appended = Some(ch);
-                }
-            }
-            prev_class = ScriptClass::Other;
+            // Cold path (#235 item 5): NFKC recovery + error handling are rare
+            // relative to the mapped path, so they live in a `#[cold]`/
+            // `#[inline(never)]` helper to keep the common loop body in the µop
+            // cache.
+            handle_unmapped(
+                ch,
+                byte_offset,
+                &mut result,
+                &mut last_appended,
+                &mut prev_class,
+                untranslatable.as_deref_mut(),
+                lang,
+                error_mode,
+                replace_with,
+                strict_iso9,
+                gost7034,
+                tones,
+            );
         }
     }
 
     Cow::Owned(result)
+}
+
+/// Handle a character with no table mapping: attempt NFKC compatibility
+/// recovery, otherwise apply the error mode. Split out and marked `#[cold]` so
+/// the hot mapped path stays tight (#235 item 5).
+#[cold]
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn handle_unmapped(
+    ch: char,
+    byte_offset: usize,
+    result: &mut String,
+    last_appended: &mut Option<char>,
+    prev_class: &mut ScriptClass,
+    mut untranslatable: Option<&mut Vec<(char, usize)>>,
+    lang: Option<&str>,
+    error_mode: ErrorMode,
+    replace_with: &str,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+) {
+    // #81: before the error fallback, try NFKC compatibility decomposition.
+    // Mathematical Alphanumerics (𝕳→H) and presentation ligatures (ﬁ→fi) are
+    // pure-Latin content NFKC folds to ASCII — both unidecode and anyascii
+    // recover them, and they are a real filter-evasion vector. A char whose NFKC
+    // form is itself falls straight through to the error handler below.
+    //
+    // #235 item 6: single-scalar NFKC is bounded (≤18 scalars, U+FDFA), so encode
+    // it into a small stack buffer instead of allocating a heap `String` per
+    // unmapped char. The heap fallback only triggers on the Unicode-impossible
+    // case of the expansion overflowing the buffer.
+    const NFKC_STACK_BYTES: usize = 80; // ≥ 18 scalars × 4 bytes
+    let mut buf = [0u8; NFKC_STACK_BYTES];
+    let mut blen = 0usize;
+    let mut overflow = false;
+    for d in ch.nfkc() {
+        if blen + d.len_utf8() > buf.len() {
+            overflow = true;
+            break;
+        }
+        blen += d.encode_utf8(&mut buf[blen..]).len();
+    }
+    let heap: String;
+    let decomposed: &str = if overflow {
+        heap = ch.nfkc().collect();
+        heap.as_str()
+    } else {
+        std::str::from_utf8(&buf[..blen]).expect("nfkc output is valid utf8")
+    };
+
+    // #110: derive nfkc_unchanged by comparing the decomposition against the
+    // original char, avoiding a second decomposition pass.
+    let nfkc_unchanged = decomposed.len() == ch.len_utf8() && decomposed.starts_with(ch);
+    if !nfkc_unchanged {
+        let sub = transliterate_impl(
+            decomposed,
+            lang,
+            error_mode,
+            replace_with,
+            strict_iso9,
+            gost7034,
+            tones,
+        );
+        if !sub.is_empty() {
+            result.push_str(&sub);
+            *last_appended = sub.chars().next_back();
+            *prev_class = ScriptClass::Latin;
+            return;
+        }
+    }
+
+    // The character is genuinely untranslatable (no table entry, no NFKC
+    // recovery): this is the single point that defines the set (#184).
+    if let Some(v) = untranslatable.as_mut() {
+        v.push((ch, byte_offset));
+    }
+    match error_mode {
+        ErrorMode::Replace => {
+            // An empty replace_with is intentionally equivalent to
+            // ErrorMode::Ignore — the char is silently dropped. This matches
+            // Unidecode's default behaviour and is used by the unidecode() shim.
+            result.push_str(replace_with);
+            *last_appended = replace_with.chars().next_back();
+        }
+        ErrorMode::Ignore => {}
+        ErrorMode::Preserve => {
+            result.push(ch);
+            *last_appended = Some(ch);
+        }
+    }
+    *prev_class = ScriptClass::Other;
 }
 
 /// Estimate the output buffer capacity based on a sample of the input.
@@ -678,29 +852,196 @@ fn transliterate_impl_inner<'a>(
 /// the old value reserved 256 MiB of virtual memory per call on large CJK input.
 const MAX_CAPACITY_HINT: usize = 8 * 1024 * 1024; // 8 MiB (#111)
 
+/// Number of leading characters sampled to estimate output expansion.
+///
+/// Bounds the scan so a multi-megabyte input is not walked end-to-end just to
+/// size a buffer (#235 item 8): the old `filter(!is_ascii).take(5)` traversed
+/// the *entire* string whenever it held fewer than five non-ASCII characters.
+const CAPACITY_SAMPLE_CHARS: usize = 256;
+/// Extra output bytes reserved per expanding (CJK/Hangul) input byte: each such
+/// character romanizes to a multi-letter syllable plus a separator (~4× total).
+const CJK_EXTRA_BYTES_PER_BYTE: usize = 3;
+
 fn estimate_capacity(text: &str) -> usize {
-    let multiplier = text
-        .chars()
-        .filter(|c| !c.is_ascii())
-        .take(5)
-        .fold(1usize, |max_m, c| {
-            let cp = c as u32;
-            let m = if ur::CJK_CAPACITY_RANGE.contains(&cp)
-                || ur::HANGUL_SYLLABLES.contains(&cp)
-                || ur::CJK_COMPAT.contains(&cp)
-            {
-                4
-            } else {
-                1
-            };
-            max_m.max(m)
-        });
-    text.len().saturating_mul(multiplier).min(MAX_CAPACITY_HINT)
+    // Sample a bounded prefix and measure what fraction of it is CJK/Hangul,
+    // which expand ~4× to pinyin/romaji syllables; everything else is ~1:1.
+    // We then weight the reservation by that *sampled fraction* rather than
+    // applying 4× to the whole length, so "Hello 北京" followed by megabytes of
+    // ASCII no longer reserves 4× the input (#235 item 8). Capacity-only — an
+    // under-estimate just costs at most one reallocation, never wrong output.
+    let mut sampled = 0usize;
+    let mut expanding = 0usize;
+    for c in text.chars().take(CAPACITY_SAMPLE_CHARS) {
+        sampled += 1;
+        let cp = c as u32;
+        if ur::CJK_CAPACITY_RANGE.contains(&cp)
+            || ur::HANGUL_SYLLABLES.contains(&cp)
+            || ur::CJK_COMPAT.contains(&cp)
+        {
+            expanding += 1;
+        }
+    }
+    if expanding == 0 {
+        return text.len().min(MAX_CAPACITY_HINT);
+    }
+    // extra ≈ len × (expanding/sampled) × 3. Pure-CJK input still reserves ~4×
+    // (expanding == sampled); sparse CJK reserves close to 1×.
+    let extra = text
+        .len()
+        .saturating_mul(CJK_EXTRA_BYTES_PER_BYTE)
+        .saturating_mul(expanding)
+        / sampled.max(1);
+    text.len().saturating_add(extra).min(MAX_CAPACITY_HINT)
 }
 
+/// Lowest / highest code point any `classify_char` script range covers
+/// (`INDIC.start()` … `KATAKANA_HALFWIDTH.end()`). A code point outside
+/// `[CLASSIFY_LO, CLASSIFY_HI]` is `Other` with no table probe — one comparison
+/// pair replaces the whole range-check tree for the common Latin-supplement,
+/// punctuation, and SMP input that dominates real text (#235 item 2).
+const CLASSIFY_LO: u32 = *ur::INDIC.start();
+const CLASSIFY_HI: u32 = *ur::KATAKANA_HALFWIDTH.end();
+
+/// Per-256-codepoint-block script class, indexed by `cp >> 8`. A block that
+/// holds more than one class (e.g. 0x30xx: Kana + Hangul-compat-jamo;
+/// 0xFFxx: half-width Kana + Other) is `Mixed` and defers to the range chain.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum BlockClass {
+    Other,
+    Ideograph,
+    Hangul,
+    Kana,
+    Indic,
+    Mixed,
+}
+
+const fn in_r(cp: u32, r: &std::ops::RangeInclusive<u32>) -> bool {
+    cp >= *r.start() && cp <= *r.end()
+}
+
+/// `classify_char`, as a `const fn` over a raw code point, so [`BLOCK_CLASS`] is
+/// generated at compile time from the **same** range constants the runtime
+/// chain (`is_cjk_ideograph` … `is_indic`) uses. The two therefore cannot drift;
+/// the exhaustive `classify_char_matches_slow` test enforces it regardless.
+const fn class_of_cp_const(cp: u32) -> BlockClass {
+    if in_r(cp, &ur::CJK_UNIFIED) || in_r(cp, &ur::CJK_EXT_A) || in_r(cp, &ur::CJK_COMPAT) {
+        BlockClass::Ideograph
+    } else if in_r(cp, &ur::HANGUL_SYLLABLES) || in_r(cp, &ur::HANGUL_COMPAT_JAMO) {
+        BlockClass::Hangul
+    } else if in_r(cp, &ur::HIRAGANA)
+        || in_r(cp, &ur::KATAKANA)
+        || in_r(cp, &ur::KATAKANA_HALFWIDTH)
+    {
+        BlockClass::Kana
+    } else if in_r(cp, &ur::INDIC)
+        || in_r(cp, &ur::TIBETAN)
+        || in_r(cp, &ur::MYANMAR)
+        || in_r(cp, &ur::KHMER)
+        || in_r(cp, &ur::BALINESE)
+        || in_r(cp, &ur::JAVANESE)
+        || in_r(cp, &ur::SUNDANESE)
+        || in_r(cp, &ur::TAI_THAM)
+        || in_r(cp, &ur::CHAM)
+        || in_r(cp, &ur::BATAK)
+        || in_r(cp, &ur::BUGINESE)
+        || in_r(cp, &ur::TAGALOG)
+        || in_r(cp, &ur::HANUNOO)
+        || in_r(cp, &ur::BUHID)
+        || in_r(cp, &ur::TAGBANWA)
+        || in_r(cp, &ur::MEETEI_MAYEK)
+        || in_r(cp, &ur::MEETEI_MAYEK_EXT)
+    {
+        BlockClass::Indic
+    } else {
+        BlockClass::Other
+    }
+}
+
+const BLOCK_CLASS: [BlockClass; 256] = {
+    let mut t = [BlockClass::Other; 256];
+    let mut b = 0usize;
+    while b < 256 {
+        let base = (b as u32) << 8;
+        let first = class_of_cp_const(base);
+        let mut off = 1u32;
+        let mut mixed = false;
+        while off < 256 {
+            if class_of_cp_const(base | off) as u8 != first as u8 {
+                mixed = true;
+                break;
+            }
+            off += 1;
+        }
+        t[b] = if mixed { BlockClass::Mixed } else { first };
+        b += 1;
+    }
+    t
+};
+
+/// Guardrail (#235 item 2): every classified range lies within
+/// `[CLASSIFY_LO, CLASSIFY_HI]`, so the early-exit cannot drop a classified
+/// code point. Adding a script range outside the bound (e.g. SMP Brahmi
+/// U+11000) fails an assertion and breaks the build instead of silently
+/// misclassifying. New ranges in `class_of_cp_const` must add a line here.
+const _: () = {
+    macro_rules! within {
+        ($r:expr) => {
+            assert!(*$r.start() >= CLASSIFY_LO && *$r.end() <= CLASSIFY_HI);
+        };
+    }
+    within!(ur::CJK_UNIFIED);
+    within!(ur::CJK_EXT_A);
+    within!(ur::CJK_COMPAT);
+    within!(ur::HANGUL_SYLLABLES);
+    within!(ur::HANGUL_COMPAT_JAMO);
+    within!(ur::HIRAGANA);
+    within!(ur::KATAKANA);
+    within!(ur::KATAKANA_HALFWIDTH);
+    within!(ur::INDIC);
+    within!(ur::TIBETAN);
+    within!(ur::MYANMAR);
+    within!(ur::KHMER);
+    within!(ur::BALINESE);
+    within!(ur::JAVANESE);
+    within!(ur::SUNDANESE);
+    within!(ur::TAI_THAM);
+    within!(ur::CHAM);
+    within!(ur::BATAK);
+    within!(ur::BUGINESE);
+    within!(ur::TAGALOG);
+    within!(ur::HANUNOO);
+    within!(ur::BUHID);
+    within!(ur::TAGBANWA);
+    within!(ur::MEETEI_MAYEK);
+    within!(ur::MEETEI_MAYEK_EXT);
+};
+
 /// Classify a non-ASCII character into a script class for spacing decisions.
+///
+/// One data-dependent `BLOCK_CLASS` load replaces the up-to-25 chained range
+/// checks for the ~99% of input whose block is uniform; only the handful of
+/// `Mixed` blocks fall through to [`classify_char_slow`] (#235 item 2).
 #[inline]
 fn classify_char(ch: char) -> ScriptClass {
+    let cp = ch as u32;
+    if !(CLASSIFY_LO..=CLASSIFY_HI).contains(&cp) {
+        return ScriptClass::Other;
+    }
+    match BLOCK_CLASS[(cp >> 8) as usize] {
+        BlockClass::Ideograph => ScriptClass::Ideograph,
+        BlockClass::Hangul => ScriptClass::Hangul,
+        BlockClass::Kana => ScriptClass::Kana,
+        BlockClass::Indic => ScriptClass::Indic,
+        BlockClass::Other => ScriptClass::Other,
+        BlockClass::Mixed => classify_char_slow(ch),
+    }
+}
+
+/// The original per-range classification chain, used for `Mixed` blocks and as
+/// the reference oracle for the exhaustive equivalence test.
+#[inline]
+fn classify_char_slow(ch: char) -> ScriptClass {
     if is_cjk_ideograph(ch) {
         ScriptClass::Ideograph
     } else if is_hangul(ch) {
@@ -790,14 +1131,45 @@ pub enum IndicRole {
     Virama,
 }
 
-/// Classify a Brahmic codepoint's role based on its offset within the script block.
+/// Classify a Brahmic codepoint's role for virama/mātrā context handling.
 ///
-/// All core Indic scripts share a common structural layout at consistent Unicode
-/// offsets (modulo 0x80), so a single function handles the 9 core scripts.
-/// Sinhala, Tibetan, Myanmar, and Khmer use different offsets and are handled
-/// by dedicated sub-functions.
+/// Dispatches on the `cp >> 8` block byte (#235 item 2 addition): the common
+/// scripts — Devanagari…Malayalam (the shared core layout), Tibetan, Myanmar,
+/// Javanese, Meetei Mayek — resolve in one jump instead of walking the rare
+/// scripts first via the old ordered `if` chain. Blocks shared by more than one
+/// script (0x0D Malayalam+Sinhala, 0x17 Khmer+Philippine, 0x1A Buginese+Tai Tham,
+/// 0x1B Balinese+Sundanese+Batak, 0xAA Cham+Meetei-Ext) keep the chain. Output
+/// is identical to the chain for every code point, enforced exhaustively by
+/// `indic_role_matches_chain`.
 #[inline]
 pub fn indic_char_role(cp: u32) -> IndicRole {
+    match cp >> 8 {
+        0x09..=0x0C => core_indic_role(cp),
+        0x0F => tibetan_char_role(cp),
+        0x10 => myanmar_char_role(cp),
+        0xA9 => javanese_char_role(cp),
+        0xAB => meetei_mayek_char_role(cp),
+        _ => indic_char_role_chain(cp),
+    }
+}
+
+/// Role by offset within the shared core Indic layout (Devanagari…Malayalam,
+/// U+0900–U+0D7F), where consonants, mātrās, and virama sit at consistent
+/// offsets modulo 0x80.
+#[inline]
+fn core_indic_role(cp: u32) -> IndicRole {
+    match cp & 0x7F {
+        0x15..=0x39 | 0x58..=0x5F => IndicRole::Consonant,
+        0x3E..=0x4C => IndicRole::DependentVowel,
+        0x4D => IndicRole::Virama,
+        _ => IndicRole::None,
+    }
+}
+
+/// The original ordered range chain. Retained as the fallback for `Mixed`/shared
+/// blocks and as the reference oracle for the exhaustive equivalence test.
+#[inline]
+fn indic_char_role_chain(cp: u32) -> IndicRole {
     if (0x0D80..=0x0DFF).contains(&cp) {
         return sinhala_char_role(cp);
     }
@@ -849,13 +1221,7 @@ pub fn indic_char_role(cp: u32) -> IndicRole {
     if !(0x0900..=0x0D7F).contains(&cp) {
         return IndicRole::None;
     }
-    let offset = cp & 0x7F;
-    match offset {
-        0x15..=0x39 | 0x58..=0x5F => IndicRole::Consonant,
-        0x3E..=0x4C => IndicRole::DependentVowel,
-        0x4D => IndicRole::Virama,
-        _ => IndicRole::None,
-    }
+    core_indic_role(cp)
 }
 
 /// Classify a Sinhala codepoint's role. Sinhala consonants, dependent vowels,
@@ -1285,6 +1651,35 @@ pub fn _strip_accents_batch(py: Python<'_>, texts: Vec<String>) -> PyResult<Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #235 item 2 — the `BLOCK_CLASS` early-exit/table path must agree with the
+    /// original per-range chain for **every** scalar value. Exhaustive over the
+    /// whole Unicode scalar space; the block table cannot misclassify silently.
+    #[test]
+    fn classify_char_matches_slow() {
+        for cp in 0u32..=0x10_FFFF {
+            if let Some(ch) = char::from_u32(cp) {
+                assert_eq!(
+                    classify_char(ch),
+                    classify_char_slow(ch),
+                    "classify_char disagrees with chain at U+{cp:04X}"
+                );
+            }
+        }
+    }
+
+    /// #235 item 2 (Indic addition) — the block-dispatch `indic_char_role` must
+    /// agree with the original ordered chain for every scalar value.
+    #[test]
+    fn indic_role_matches_chain() {
+        for cp in 0u32..=0x10_FFFF {
+            assert_eq!(
+                indic_char_role(cp),
+                indic_char_role_chain(cp),
+                "indic_char_role disagrees with chain at U+{cp:04X}"
+            );
+        }
+    }
 
     // #231: the conflict matrix now lives in the core. These exercise the pure
     // validator so the contract holds regardless of the (Python) binding, and

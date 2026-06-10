@@ -425,15 +425,16 @@ fn lookup_latin_discriminator(ch: char) -> Option<&'static str> {
 
 /// Scan text for discriminator characters exclusive to a particular language.
 ///
-/// Returns `Some(lang)` only if **exactly one** language's discriminators
-/// are found.  Returns `None` if:
-/// - no discriminator characters appear (→ fall back to script default)
-/// - discriminators for two different languages appear (→ conflict; fail-safe
-///   fall back to script default)
+/// Returns the language of the **first** discriminator character found in scan
+/// order (#253), or `None` if no discriminator appears (→ fall back to the
+/// script default). The scan stops at the first hit; it does not look ahead for
+/// a competing discriminator, so on the rare input mixing two languages'
+/// discriminators the first one in the text wins (a documented heuristic, not a
+/// conflict-resolution guarantee — see `test_discriminate_first_hit_wins`).
 ///
-/// This is the core fail-safe guarantee: the function never returns a wrong
-/// answer.  In the worst case it returns `None` and the caller uses the
-/// previous default behaviour.
+/// Because every discriminator is *exclusive* to its language within the script,
+/// a hit can only **upgrade** the result from the script default to a more
+/// specific profile of the same script — it never selects a wrong-script answer.
 fn discriminate_by_chars(text: &str, script: &str) -> Option<&'static str> {
     discriminate_by_chars_detailed(text, script).map(|(lang, _ch)| lang)
 }
@@ -469,15 +470,17 @@ fn discriminate_by_chars_detailed(text: &str, script: &str) -> Option<(&'static 
 ///
 /// 1. **Script detection:** find the primary non-Latin script (unchanged from before).
 /// 2. **Discriminator refinement:** for ambiguous scripts (Cyrillic, Arabic), scan
-///    for characters exclusive to one language.  If exactly one language's exclusive
-///    characters appear, return that language.  If none or multiple appear, fall back
-///    to the script default.
+///    for characters exclusive to one language and return the language of the
+///    **first** such character (#253). If none appears, fall back to the script
+///    default. (The scan does not arbitrate between competing discriminators — on
+///    rare two-language input the first one in scan order wins.)
 /// 3. **Latin fallback:** if the text contains only Latin characters, try Latin-script
 ///    discriminators (Vietnamese ơ/ư, Turkish İ/ı, German ß).
 ///
 /// **Fail-safe guarantee:** discriminators can only *upgrade* the result (from a
-/// generic script default to a specific language).  They never *downgrade* — if
-/// anything is uncertain, the previous default behaviour is preserved.
+/// generic script default to a more specific language of the same script).  They
+/// never select a wrong-script answer; absent any discriminator, the script
+/// default is preserved.
 ///
 /// Returns the default language code for that script, or `None` if the text
 /// contains only Latin/Common/Inherited characters (or is empty) and no Latin

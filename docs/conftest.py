@@ -41,6 +41,7 @@ def _reset_global_state(namespace: dict) -> None:
 # keeps un-converted pages visibly unguarded. Paths are relative to docs/.
 EXECUTED_RECIPES = [
     "index.md",
+    "performance.md",
     "policy-templates.md",
     "api/classes.md",
     "api/enums.md",

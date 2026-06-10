@@ -1,450 +1,424 @@
 # Performance
 
-translit is implemented in Rust and exposed to Python via PyO3. This page
-documents measured performance characteristics against the pure-Python
-libraries that translit replaces.
-
-All numbers on this page were produced by
-[pyperf](https://pyperf.readthedocs.io/) — a rigorous Python benchmarking
-framework that handles warmup, calibration, and statistical analysis
-automatically. Raw results are reproducible with the script in
-`benchmarks/bench_pyperf.py`.
-
-## Test environment
-
-| Detail | Value |
-|---|---|
-| **Tooling** | Criterion.rs 0.5 (Rust), timeit (Python quick), pyperf 2.10 (Python rigorous) |
-| **Python** | 3.10 (CPython) |
-| **Build** | `maturin develop --release` (optimised profile) |
-
-!!! note
-    Numbers will differ on your hardware. Clone the repo and run
-    `python benchmarks/bench_pyperf.py -o results.json` to get results for your
-    environment. Always benchmark against a release build
-    (`maturin develop --release`).
-
-
-## Transliteration
-
-The core value proposition. translit's `transliterate()` does more work per
-character than the pure-Python alternatives — flat-array BMP lookups across 60
-language tables, CJK decomposition, and script-transition spacing — yet
-the compiled Rust code is faster across all scripts and input sizes.
-
-### Python-level (end-to-end)
-
-| Input | translit | Throughput |
-|---|---|---|
-| ASCII short (11 chars) | **90 ns** | 11.1M ops/s |
-| Latin diacritics (42 chars) | **615 ns** | 1.6M ops/s |
-| Cyrillic (45 chars) | **705 ns** | 1.4M ops/s |
-| CJK (12 chars) | **640 ns** | 1.6M ops/s |
-| Mixed scripts (50 chars) | **650 ns** | 1.5M ops/s |
-| ASCII fast-path | **71 ns** | 14.0M ops/s |
-
-Sustained throughput: **450M chars/sec** (Latin), **130M chars/sec** (Cyrillic),
-**92.9B chars/sec** (ASCII passthrough via `isascii()` fast-path).
-
-!!! note "Hardware variance"
-    These are from the maintainer's machine. On a commodity 4‑vCPU x86‑64
-    runner the non‑ASCII figures run lower — Cyrillic ~106M chars/sec and
-    slugify ~712K slugs/sec (≈15–18% below) — which is why the README quotes
-    the conservative commodity numbers. All figures are directional and
-    hardware‑dependent; re‑run the benchmark scripts for your environment.
-
-### vs. competitors
-
-| Library | Latin (short) | Cyrillic (short) | Mixed (50 chars) |
-|---|---|---|---|
-| **translit** | **615 ns** | **705 ns** | **650 ns** |
-| Unidecode | 4.41 µs | 6.49 µs | 4.95 µs |
-| text-unidecode | 1.86 µs | 2.36 µs | 2.13 µs |
-| anyascii | 2.22 µs | 4.00 µs | 2.66 µs |
-
-translit is **7–9× faster** than Unidecode and **3× faster** than
-text-unidecode across scripts. Throughput benchmarks show **38× faster**
-than Unidecode on Latin, **18× on Cyrillic**, and **22× on mixed** text
-at document scale.
-
-### Rust-level (Criterion microbenchmarks)
-
-| Input | Time | Notes |
-|---|---|---|
-| ASCII short (11 chars) | 2.4 ns | Cow::Borrowed fast-path |
-| ASCII long (120 chars) | 5.9 ns | is_ascii() → immediate return |
-| Latin diacritics (26 chars) | 78.4 ns | Flat BMP array lookup |
-| Cyrillic (23 chars) | 169.0 ns | Flat BMP array lookup |
-| CJK (8 chars) | 132.7 ns | Hanzi→Pinyin PHF dispatch |
-| Mixed scripts (18 chars) | 82.9 ns | Range-based dispatch |
-| Cyrillic with `lang="ru"` | 370.4 ns | Language-specific table |
-
-Per-character table lookup latency:
-
-| Character | Time |
-|---|---|
-| Latin é (U+00E9) | 0.9 ns |
-| Cyrillic ж (U+0436) | 0.9 ns |
-| CJK 北 (U+5317) | 7.5 ns |
-| Hangul 한 (U+D55C) | 1.3 ns |
-| ASCII passthrough | 1.0 ns |
-
-
-## Slugification
-
-### Python-level
-
-| Input | translit | Throughput |
-|---|---|---|
-| Default slugify | **1178 ns** | 849K slugs/s |
-| With options¹ | **1070 ns** | 934K slugs/s |
-
-¹ `separator='_', max_length=30, stopwords=['the', 'a', 'and']`
-
-Sustained throughput: **849K slugs/sec** (basic), **934K ops/sec** (with options).
-
-### Rust-level (Criterion)
-
-| Input | Time |
-|---|---|
-| ASCII title (52 chars) | 113.2 ns |
-| Unicode title (mixed) | 169.9 ns |
-| Long text (120 chars) | 196.3 ns |
-| Bounded (max_length=30, word boundary) | 160.4 ns |
-
-### vs. python-slugify
-
-| Input | translit | python-slugify | Speedup |
-|---|---|---|---|
-| Short title (52 chars) | **0.95 µs** | 9.88 µs | **10.4×** |
-| Long title (148 chars) | **0.96 µs** | 22.7 µs | **23.6×** |
-
-translit's slugify is **10–24× faster** than python-slugify across all
-tested workloads, with the advantage growing on longer input.
-
-
-## Filename sanitization
-
-`translit.sanitize_filename()` vs `pathvalidate.sanitize_filename()`:
-
-| Input | translit | pathvalidate | Speedup |
-|---|---|---|---|
-| Simple (`my<file>:name?.txt`) | **0.80 µs** | 13.0 µs | **16.3×** |
-| Unicode (café + brackets) | **1.30 µs** | 13.5 µs | **10.4×** |
-| Adversarial (`../../etc/passwd`) | **0.85 µs** | 12.7 µs | **14.9×** |
-
-translit is **10–16× faster** for filename sanitization. It also includes
-transliteration, dot-sequence collapsing, and extension sanitisation that
-pathvalidate does not — see the
-[security fixes](https://github.com/raeq/translit/commit/4769499) found by
-property-based testing.
-
-
-## Normalization
-
-`translit.normalize()` uses the Rust `unicode-normalization` crate
-(Unicode 16.0) for all non-ASCII inputs — pure-ASCII single strings take a
-Python `isascii()` fast-path and return unchanged without entering Rust (ASCII
-is invariant under all four normalization forms), while non-ASCII strings and
-all list inputs are normalized in Rust. This ensures
-consistent results across all code paths and avoids Unicode version
-mismatches between CPython's `unicodedata` (Unicode 15.1) and the Rust
-crate.
-
-`unicodedata.normalize()` is a CPython C extension that operates directly
-on Python's internal string representation with zero-copy fast-path
-semantics, so it is faster for single-string calls. The tradeoff is
-correctness: using a single Unicode version throughout eliminates subtle
-bugs where different code paths produce different results for codepoints
-assigned between Unicode versions.
-
-
-## Accent stripping
-
-`translit.strip_accents()` vs a pure-Python NFD + category filter:
-
-| Input | translit | Python NFD | Speedup |
-|---|---|---|---|
-| Short (42 chars) | **0.81 µs** | 3.11 µs | **3.8×** |
-| Long (~1.7 KB) | **21.7 µs** | 96.1 µs | **4.4×** |
-
-translit's `strip_accents()` is **3.8–4.4× faster** than the common
-Python NFD+filter approach, even though translit performs NFD decomposition,
-combining-mark removal, and NFC recomposition in Rust.
-
-
-## Case folding
-
-`translit.fold_case()` vs `str.casefold()` (CPython C builtin):
-
-### Python-level
-
-| Input | translit | str.casefold() | Ratio |
-|---|---|---|---|
-| ASCII (11 chars) | 67 ns | — | — |
-| German (Straße) | 178 ns | — | — |
-| Mixed scripts | 322 ns | 85 ns | **3.8× slower** |
-
-### Rust-level (Criterion)
-
-| Input | Time |
-|---|---|
-| ASCII short (11 chars) | 14.6 ns |
-| ASCII long (120 chars) | 20.5 ns |
-| Latin diacritics (26 chars) | 79.5 ns |
-| German eszett | 27.2 ns |
-| Greek | 130.3 ns |
-| Mixed scripts | 56.7 ns |
-
-`str.casefold()` is a CPython C builtin with zero allocation overhead.
-translit's `fold_case()` is within 4× at the Python level, with the gap
-dominated by PyO3 boundary-crossing cost. At the Rust level, `fold_case`
-runs in 16–131 ns depending on input — the PHF lookup itself is fast.
-
-Both implementations use the full Unicode CaseFolding.txt (status C + F,
-1,557 mappings). translit uses a compile-time PHF table generated from
-Unicode 16.0 data covering Latin, Greek (including variant forms), Cyrillic,
-Armenian, Georgian Mtavruli, Cherokee, Adlam, Deseret, Osage, Warang Citi,
-fullwidth Latin, and all Latin ligature expansions. Pure-ASCII strings take
-a branchless fast path that skips the PHF entirely.
-
-
-## List input (batch processing)
-
-`transliterate()`, `slugify()`, `normalize()`, and `strip_accents()` accept
-a `list[str]` in addition to a single `str`. When a list is passed, all
-strings are processed in a single PyO3 boundary crossing, amortising the
-per-call overhead across N strings.
-
-100 mixed-script strings (Latin, Cyrillic, CJK, mixed):
-
-| Operation | List | Loop | Speedup |
-|---|---|---|---|
-| transliterate | **18.1 µs** | 51.5 µs | **2.8×** |
-
-Passing a list eliminates PyO3 boundary-crossing overhead per string.
-The advantage grows linearly with list size.
-
-Pass a list whenever you have multiple strings to process — it is always
-at least as fast as a loop, and measurably faster for short strings where
-PyO3 overhead is a significant fraction of total work.
-
-
-## Concurrency (GIL)
-
-As of 0.6.1 the batch entry points — `transliterate()`, `slugify()`,
-`normalize()`, and `strip_accents()` on `list[str]` input — **release the GIL**
-around their pure-Rust compute loop (the inner work touches no Python objects).
-Multiple Python threads each processing a large batch therefore run their Rust
-work in parallel rather than serialising on the interpreter lock.
-
-Measured (two threads, large batches): concurrent wall-clock ≈ **1.8×** faster
-than running the two batches serially on a multi-core machine — close to the
-ideal 2× for two threads, the remainder being thread setup and the
-GIL-bound input/output marshalling at the call boundary.
-
-Notes and limits:
-
-- **Scalar (single-`str`) calls do not release the GIL.** They are short enough
-  that the release/reacquire overhead would not pay off; batch your work to get
-  parallelism.
-- The **input conversion** (Python `list[str]` → Rust) and **output
-  conversion** (Rust → Python `list[str]`) happen with the GIL held, before and
-  after the released region. Only the transformation itself is parallel, so the
-  speedup approaches but does not reach N× for N threads.
-- This is true OS-thread parallelism via `py.allow_threads`; it does not require
-  the free-threaded (no-GIL) CPython build, though it composes with it.
-
-
-## Precompiled pipelines
-
-| Pipeline | Time | Throughput |
-|---|---|---|
-| `security_clean` | **504 ns** | 2.0M ops/s |
-| `ml_normalize` | **1208 ns** | 828K ops/s |
-| `display_clean` | **246 ns** | 4.1M ops/s |
-
-
-## Grapheme operations
-
-| Operation | Time | Throughput |
-|---|---|---|
-| `grapheme_len` (emoji) | 329 ns | 3.0M ops/s |
-| `grapheme_len` (ASCII) | 244 ns | 4.1M ops/s |
-
-Rust-level (Criterion):
-
-| Operation | Time |
-|---|---|
-| `grapheme_len` (ASCII) | 98.0 ns |
-| `grapheme_len` (emoji) | 252.4 ns |
-| `grapheme_split` (ASCII) | 274.9 ns |
-| `grapheme_split` (emoji) | 510.0 ns |
-
-
-## Script detection
-
-Rust-level (Criterion):
-
-| Operation | Time |
-|---|---|
-| `detect_scripts` (ASCII) | 114.3 ns |
-| `detect_scripts` (mixed 3 scripts) | 292.2 ns |
-| `detect_scripts` (Cyrillic pure) | 368.9 ns |
-| `detect_scripts` (CJK pure) | 120.4 ns |
-| `is_mixed_script` (ASCII) | 37.8 ns |
-| `is_mixed_script` (mixed 3 scripts) | 22.1 ns |
-| `is_mixed_script` (Cyrillic pure) | 119.1 ns |
-| `is_mixed_script` (CJK pure) | 46.9 ns |
-
-
-## Whitespace collapsing
-
-Rust-level (Criterion):
-
-| Input | Time |
-|---|---|
-| Messy (full strip) | 78.6 ns |
-| Messy (no strip) | 79.2 ns |
-| Clean passthrough | 32.9 ns |
-
-
-## Summary
-
-| Operation | vs. Competitor | Speedup |
-|---|---|---|
-| Transliteration (Latin, throughput) | Unidecode | **38×** |
-| Transliteration (Cyrillic, throughput) | Unidecode | **18×** |
-| Transliteration (mixed, throughput) | Unidecode | **22×** |
-| Slugification (long) | python-slugify | **24×** |
-| Filename sanitization | pathvalidate | **10–16×** |
-| Accent stripping | Python NFD+filter | **3.8–4.4×** |
-| Normalization (NFC) | unicodedata | slower (consistency tradeoff) |
-| Case folding | str.casefold() | ~3.8× slower |
-| Batch transliterate (100) | Python loop | **2.8×** |
-
-translit is faster than every pure-Python competitor for transliteration,
-slugification, filename sanitization, and accent stripping. It is slower
-only for normalization and case folding, where it competes against CPython
-C builtins that operate on Python's internal string representation with
-zero-copy semantics.
-
-
-## Optimization techniques
-
-translit achieves these numbers through five complementary optimizations in the
-Rust core and the Python bindings.
-
-### 1. Flat BMP array (default transliteration table)
-
-The default Unicode→ASCII transliteration table covers codepoints U+0080–U+FFFF
-(the Basic Multilingual Plane above ASCII). Rather than hash each codepoint
-through a PHF map, the build script emits a flat
-`[Option<&'static str>; 65408]` array indexed by `(codepoint - 0x80)`. Lookups
-are a single bounds check and array dereference — no hashing, no collision
-handling. The array occupies ~512 KB of static data but lives in a memory-mapped
-`.rodata` section that the OS pages in on demand.
-
-This optimization delivered the largest single improvement: Latin long-text
-transliteration went from **34× faster** than Unidecode (with PHF) to **38×
-faster** (with the flat array). Cyrillic improved from **12× to 18×**.
-
-### 2. Python-side ASCII fast-path
-
-`transliterate()`, `strip_accents()`, and `normalize()` now check
-`text.isascii()` (~30–50 ns CPython C call) before crossing the PyO3 boundary
-(~400–800 ns). Pure-ASCII strings are returned immediately without entering
-Rust. This makes the common case (already-ASCII text) effectively free:
-
-| Function | With fast-path | Without |
-|---|---|---|
-| `transliterate("hello")` | **71 ns** | 615 ns |
-| `strip_accents("hello")` | **36 ns** | 805 ns |
-
-### 3. List input (batch processing)
-
-`transliterate()`, `slugify()`, `normalize()`, and `strip_accents()` accept
-a `list[str]` and process all strings in a single PyO3 boundary crossing,
-amortising per-call overhead across N strings. For 100 mixed-script strings,
-`transliterate(list_of_100)` is **2.8× faster** than calling
-`transliterate(s)` in a Python loop.
-
-### 4. Range-dispatch in lookup_default()
-
-Before consulting the general transliteration table, `lookup_default()`
-dispatches by codepoint range: CJK Unified Ideographs (U+3400–U+9FFF,
-U+F900–U+FAFF) go directly to the Hanzi→Pinyin table; Hangul syllables
-(U+AC00–U+D7AF) and compatibility jamo (U+3131–U+3163) go directly to the
-algorithmic romanizer. This avoids probing the 65K-entry flat array for scripts
-that have dedicated, higher-quality tables.
-
-### 5. Consistent Rust-native normalization
-
-`translit.normalize()` uses the Rust `unicode-normalization` crate for all
-non-ASCII inputs (pure-ASCII single strings short-circuit in Python via
-`isascii()`). While CPython's `unicodedata.normalize()` is faster for standalone calls
-(it operates directly on Python's internal string buffer with zero-copy
-semantics), using Rust throughout ensures Unicode version consistency: all
-calls use the same Unicode 16.0 tables regardless of whether you pass a
-single string or a list. The Rust implementation is used by all code paths —
-single strings, list input, and precompiled pipelines (`security_clean`, `ml_normalize`,
-`catalog_key`, `TextPipeline`).
-
-### 6. Full Unicode case folding via PHF
-
-`fold_case()` uses a compile-time PHF table generated from all 1,557 status-C
-and status-F entries in Unicode 16.0 CaseFolding.txt, replacing the previous
-8-entry hand-coded match + `to_lowercase()` fallback. The three-tier dispatch:
-
-1. **Pure-ASCII fast path**: `text.is_ascii()` → `to_ascii_lowercase()` with no
-   PHF probe.
-2. **Per-character ASCII check**: inline `ch.to_ascii_lowercase()` for A–Z — no
-   table lookup.
-3. **PHF lookup**: O(1) for all 1,557 Unicode case folding mappings.
-4. **Identity fallback**: characters not in the table map to themselves — no
-   `to_lowercase()` iterator allocation.
-
-This covers 175 characters where `char::to_lowercase()` gives incorrect results
-for case folding (µ→μ, ſ→s, ς→σ, Greek variant forms, etc.) and all 104
-multi-character expansions (ß→ss, İ→i̇, ﬁ→fi, Armenian և→եւ, etc.).
-
-
-## Running benchmarks
-
-```bash
-# Install dependencies
-pip install pyperf Unidecode text-unidecode anyascii python-slugify pathvalidate
-
-# Build in release mode (critical for accurate results)
-maturin develop --release
-
-# Full rigorous run (~15 min)
-python benchmarks/bench_pyperf.py -o results.json
-
-# Quick sanity check (~5 min)
-python benchmarks/bench_pyperf.py --fast -o results.json
-
-# View results
-python -m pyperf stats results.json
-
-# Compare two runs (e.g. before/after optimisation)
-python -m pyperf compare_to baseline.json improved.json
+This page exists for the skeptical reader who wants to know whether translit's
+performance numbers are real. Every claim here is one of three things:
+
+1. **A relative claim** (translit is *N×* faster than library *X*) — asserted as
+   an executed inequality with a deliberately loose floor, so the doc-test
+   proves *category and direction* on any CI hardware without flaking. The
+   precise published figure links to its recorded measurement.
+2. **An absolute number** (ns/call, chars/sec) — never asserted (it is
+   hardware-dependent), only published *with its full environment fingerprint*
+   and labelled non-comparable across machines.
+3. **A correctness claim** — asserted directly.
+
+The executable blocks on this page run in CI (Sybil, #154). If a comparator
+library is not installed in the docs environment, its block **skips loudly** —
+it never passes silently.
+
+## Credit
+
+translit measures itself against [Unidecode](https://pypi.org/project/Unidecode/)
+and its lineage — Sean M. Burke's original Perl `Text::Unidecode` and Tomaž
+Šolc's Python port — along with
+[text-unidecode](https://pypi.org/project/text-unidecode/),
+[anyascii](https://pypi.org/project/anyascii/),
+[python-slugify](https://pypi.org/project/python-slugify/), and
+[pathvalidate](https://pypi.org/project/pathvalidate/). These projects built the
+transliteration category and carried the industry for two decades. They are
+reference points, not targets. Where translit is faster, it is faster while
+doing a deliberately *different* and larger job (see
+[Different scope, more work](#different-scope-more-work)); where a comparator's
+context-free design is the right tool, that is a feature of its design, not a
+deficiency. Nothing on this page is a criticism of the libraries it measures
+against.
+
+## The two regimes
+
+translit has two distinct performance stories, and conflating them is the most
+common way to misread a transliteration benchmark:
+
+- **Per-call (latency) regime** — one short field per call (a name, a title, a
+  single record). Here the dominant cost is the Python→Rust boundary crossing,
+  not the per-character work. translit crosses that boundary exactly once and
+  returns already-ASCII input as the original `str` object (#284, #277).
+- **Per-character (throughput) regime** — documents from a few hundred bytes to
+  a couple of megabytes. Here the dominant cost is the per-character table
+  lookup, and translit's compile-time flat-array tables (no hashing on lookup)
+  do the work in Rust.
+
+A short-string ratio and a throughput ratio measure different things; neither
+number can be substituted for the other, and this page keeps them separate.
+
+## Measurement policy
+
+The defence of these numbers *is* the methodology, so it is stated up front:
+
+- **Ratios are the durable claim; absolutes are presentation.** Only ratios are
+  asserted in CI. Absolute ns/char-per-sec figures are published with a full
+  hardware fingerprint and explicitly marked non-comparable across machines.
+- **Margin policy for the executed floors.** Where this page's prose cites,
+  say, "~15–21× faster short-string", the in-page assertion checks a far looser
+  floor (for example `ratio > 4`). The gap is deliberate: a loose floor proves
+  the *direction and order of magnitude* on unknown, possibly loaded CI hardware
+  without ever flaking, while the precise figure is backed by a recorded
+  measurement. Always round our own numbers **down** and comparators' numbers
+  **up**; never the reverse.
+- **Interleaved measurement.** Each executed block times translit and the
+  comparator back-to-back, repeatedly, and takes the **median** of the
+  per-round ratios. Transient scheduler noise hits both sides and cancels in the
+  ratio.
+- **Pinned, hash-locked comparators.** CI installs the exact comparator versions
+  in [`requirements/bench.txt`](https://github.com/raeq/translit/blob/main/requirements/bench.txt)
+  (`--require-hashes`). The published absolute figures are bucketed by CPU
+  microarchitecture and recorded on the `perf-results` branch with the
+  fingerprint below.
+- **ftfy is never a transliterate-axis comparator.** ftfy is a mojibake
+  *repairer/normaliser*, not a transliterator; it never appears in a
+  transliterate ratio.
+
+```python
+# Shared setup for the executed blocks below. One namespace runs top-to-bottom.
+import time
+import statistics
+
+from translit import transliterate, slugify, sanitize_filename
+
+
+def _timed(fn, arg, inner):
+    """Wall-clock seconds for `inner` calls of fn(arg)."""
+    start = time.perf_counter()
+    for _ in range(inner):
+        fn(arg)
+    return time.perf_counter() - start
+
+
+def speed_ratio(translit_fn, other_fn, arg, inner=4000, reps=5):
+    """Median interleaved (other / translit) time ratio: >1 means translit is faster.
+
+    Timing a whole batch of `inner` calls per span amortises perf_counter
+    overhead to ~0; interleaving translit and the comparator per round and
+    taking the median across `reps` rounds cancels transient load. The constant
+    perf_counter overhead that remains is added to both sides, which only
+    *deflates* the ratio — so the floors asserted below are conservative.
+    """
+    ratios = []
+    for _ in range(reps):
+        t = _timed(translit_fn, arg, inner)
+        o = _timed(other_fn, arg, inner)
+        ratios.append(o / t)
+    return statistics.median(ratios)
 ```
 
-The benchmark script (`benchmarks/bench_pyperf.py`) covers transliteration,
-slugification, normalisation, filename sanitisation, accent stripping, and
-case folding across multiple input sizes and scripts.
+## Different scope, more work
 
+Before any speed claim: translit's `transliterate()` is not doing the same job
+as a context-free transliterator. On every call it also consults the language
+override tables, applies the requested error-handling mode, checks the
+replacement registry, and (optionally) runs script detection. The output
+reflects that extra work — and it is asserted here, not asserted-by-arrow:
 
-## Methodology
+```python
+# Language-specific romanisation (the default table alone does not do this).
+assert transliterate("Ärger", lang="de") == "Aerger"   # German ä -> ae
+assert transliterate("Київ", lang="uk") == "Kyiv"      # Ukrainian romanisation
+assert transliterate("Київ") == "Kiyiv"                # default differs from uk
 
-- **Framework**: [pyperf](https://pyperf.readthedocs.io/) with automatic
-  calibration of loop count, warmup, and run count.
-- **Statistical model**: Each benchmark reports mean ± standard deviation
-  across multiple process invocations (not just in-process loops), reducing
-  the impact of GC, JIT warmup, and OS scheduling.
-- **Reproducibility**: Run `python -m pyperf system tune` before benchmarking
-  for lowest-variance results. The `--fast` flag trades statistical
-  confidence for speed during development.
-- **Input selection**: Short inputs (12–52 chars) represent per-record
-  processing; long inputs (0.8–1.7 KB) represent document/batch processing.
+# Error-handling modes are part of the per-call contract.
+assert transliterate("AB", errors="ignore") == "AB"
+assert transliterate("AB", errors="replace") == "A[?]B"
+try:
+    transliterate("AB", errors="strict")
+    raise AssertionError("strict mode should have raised")
+except Exception as exc:
+    assert type(exc).__name__ == "TranslitError"
+```
+
+A context-free library produces one fixed output; translit's per-call price buys
+language tables, error modes, and a replacement registry. That is the "different
+scope" the speed numbers should be read against — not a like-for-like race.
+
+## Transliteration vs Unidecode
+
+### Per-call (short strings)
+
+The per-call regime: short mixed-script fields, the common case for
+record-by-record processing. The published figure is **~15–21× faster than
+Unidecode** across scripts (Latin highest, Cyrillic lowest); the assertion uses
+a loose floor.
+
+```python
+try:
+    from unidecode import unidecode
+except ImportError:                       # docs env without the pinned comparator
+    import pytest
+    pytest.skip("Unidecode not installed; see requirements/bench.txt")
+
+short = "Ärger café Москва Ελληνικά"     # mixed Latin diacritics, Cyrillic, Greek
+ratio = speed_ratio(transliterate, unidecode, short)
+# Published: ~15-21x short-string. Loose floor proves direction without flaking.
+assert ratio > 4, f"expected translit clearly faster short-string, got {ratio:.1f}x"
+```
+
+### Throughput (document scale)
+
+The per-character regime: a multi-kilobyte document processed in one call.
+Published figure is **~38× faster than Unidecode on Latin** at document scale
+(and **~15× on Cyrillic**).
+
+```python
+try:
+    from unidecode import unidecode   # re-import: each block is self-contained,
+except ImportError:                   # so a skipped earlier block never strands us
+    import pytest
+    pytest.skip("Unidecode not installed; see requirements/bench.txt")
+
+document = ("Schöne Grüße aus München. Café au lait. "
+            "Здравствуйте, мир. Ελληνικά κείμενα. ") * 40   # ~3 KB, mixed
+ratio = speed_ratio(transliterate, unidecode, document, inner=400, reps=5)
+# Published: ~38x Latin / ~15x Cyrillic at document scale. Loose floor here.
+assert ratio > 6, f"expected translit far faster at document scale, got {ratio:.1f}x"
+```
+
+### Unidecode's own benchmark
+
+translit also wins **all four cells of Unidecode's own benchmark** — the
+cross-product of Unidecode's two API entry points
+(`unidecode_expect_ascii`, `unidecode_expect_nonascii`) and its two sample
+inputs. The clean-room replication is in
+[`benchmarks/bench_unidecode_own.py`](https://github.com/raeq/translit/blob/main/benchmarks/bench_unidecode_own.py)
+(the GPL benchmark file itself is not copied — only the methodology). The sweep
+below was recorded in
+[PR #284](https://github.com/raeq/translit/pull/284) and
+[PR #281](https://github.com/raeq/translit/pull/281) on an AMD EPYC 7763 CI
+bucket (the fields you would record for your own run are described under
+[Absolute numbers](#absolute-numbers-illustrative-and-fingerprinted)):
+
+| Cell | Ratio (Unidecode time / translit time) |
+|---|---|
+| `expect_ascii` / ASCII input | **1.43×** (71.0 ns vs 101.2 ns) |
+| `expect_ascii` / non-ASCII input | **9.71×** |
+| `expect_nonascii` / ASCII input | **22.67×** |
+| `expect_nonascii` / non-ASCII input | **6.66×** |
+
+The narrowest cell (1.43×) is Unidecode's strongest case — pure-ASCII text
+through its ASCII-optimised entry point — and translit still wins it via the
+return-original-object fast path. These are recorded absolutes; they are *not*
+asserted in CI (the four-cell pass/fail is checked by the benchmark script, not
+by this page). Re-run them with `python benchmarks/bench_unidecode_own.py`.
+
+## ASCII passthrough
+
+Already-ASCII input still crosses into Rust once (`transliterate()` does not
+short-circuit on the Python side — the validation and the borrowed fast path
+live in Rust); Rust then returns the input as the *same* Python `str` object via
+a borrowed `Cow`, with no copy and no allocation (#277 lever 4, #284). The
+object-identity property is asserted directly:
+
+```python
+s = "plain ascii text 12345"
+assert transliterate(s) is s            # same object, not just an equal copy
+```
+
+## Slugification vs python-slugify
+
+Published figure is **~10–24× faster than python-slugify**, the advantage
+growing with input length.
+
+```python
+try:
+    from slugify import slugify as py_slugify
+except ImportError:
+    import pytest
+    pytest.skip("python-slugify not installed; see requirements/bench.txt")
+
+title = "Hello, World! Crème Brûlée & Café — a Long-ish Title for Slugging"
+ratio = speed_ratio(slugify, py_slugify, title)
+assert ratio > 3, f"expected translit slugify clearly faster, got {ratio:.1f}x"
+# Both produce an ASCII slug; translit also transliterates the accented words.
+assert slugify("Crème Brûlée") == "creme-brulee"
+```
+
+## Filename sanitisation vs pathvalidate
+
+Published figure is **~10–16× faster than pathvalidate**, while also
+transliterating, collapsing dot-sequences, and sanitising extensions.
+
+```python
+try:
+    from pathvalidate import sanitize_filename as pv_sanitize
+except ImportError:
+    import pytest
+    pytest.skip("pathvalidate not installed; see requirements/bench.txt")
+
+name = "my<illegal>:name?.txt"
+ratio = speed_ratio(sanitize_filename, pv_sanitize, name)
+assert ratio > 3, f"expected translit sanitize_filename clearly faster, got {ratio:.1f}x"
+assert sanitize_filename(name) == "my_illegal_name.txt"
+```
+
+## Batch API
+
+`transliterate()`, `slugify()`, `normalize()`, and `strip_accents()` accept a
+`list[str]` and process the whole list in a single boundary crossing that
+releases the GIL around the Rust compute loop. Its results are identical to a
+loop, which is asserted; its *value* is not a raw in-process speedup:
+
+```python
+items = ["Café", "Москва", "Ελληνικά", "naïve", "Straße"] * 20   # 100 strings
+assert transliterate(items) == [transliterate(x) for x in items]
+```
+
+An honest note on the in-process case: the batch advantage over a Python loop is
+proportional to how expensive the boundary crossing is *relative to the work
+done*. Once the single-crossing optimisation (#284) brought a scalar call down
+to roughly 70 ns, an in-process batch of short strings is at rough parity with —
+and on a fast single core can be marginally slower than — a plain Python loop,
+because the list snapshot and chunking have their own cost. The batch API's
+durable advantages are therefore (1) the **single GIL-released crossing**, which
+lets multiple threads transliterate large batches in true parallel (see
+[Why it is fast](#why-it-is-fast-internals)), and (2) not re-paying per-call
+setup on platforms or interpreters where the boundary crossing is comparatively
+expensive. Reach for it for thread-parallel and high-volume work, not as a
+guaranteed speedup on a single core.
+
+## Where translit is slower
+
+Visible admission of losses is the strongest defence against cherry-picking, so
+this section is deliberate and not buried.
+
+- **NFC/NFKC normalisation vs `unicodedata.normalize`.** CPython's
+  `unicodedata` is a C extension operating directly on Python's internal string
+  buffer with zero-copy fast paths. For a single string it is **faster** than
+  translit, which crosses into Rust. translit's `normalize()` exists for
+  *consistency*, not speed: it uses one Unicode version (16.0) across every code
+  path — single string, list, and pipelines — so results never differ between
+  CPython's bundled Unicode version and the Rust crate's. That consistency is
+  the deliberate tradeoff.
+- **Case folding vs `str.casefold()`.** `str.casefold()` is a zero-allocation C
+  builtin; translit's `fold_case()` is within a small factor at the Python level
+  and is dominated by the boundary-crossing cost, not the fold itself. Use
+  `str.casefold()` when you only need CPython's Unicode version and a single
+  string.
+
+These losses are real and against C builtins that translit cannot and does not
+try to beat. The functional behaviour is still asserted:
+
+```python
+from translit import fold_case, strip_accents
+assert fold_case("Straße") == "strasse"           # full Unicode case folding
+assert strip_accents("café résumé") == "cafe resume"
+```
+
+## Absolute numbers (illustrative and fingerprinted)
+
+Absolute figures are **not comparable across hardware** and are never asserted.
+They are meaningful only alongside the environment that produced them. A full
+fingerprint — CPU microarchitecture, CPython version and build, the exact
+comparator versions, rustc version, git commit, and date — is emitted by:
+
+```bash
+python scripts/perf_fingerprint.py --json
+```
+
+The short-string figures below were recorded in
+[PR #284](https://github.com/raeq/translit/pull/284) and
+[PR #281](https://github.com/raeq/translit/pull/281) on an AMD EPYC 7763 CI
+bucket (CPython 3.12, pinned comparators from `requirements/bench.txt`,
+median-of-7 interleaved). They are reproduced here to illustrate the per-call
+regime; **your numbers will differ**, and the only durable claims are the ratios
+asserted earlier on this page.
+
+| Input (per call) | vs Unidecode |
+|---|---|
+| Latin diacritics (~70–85 chars) | **~21×** |
+| Mixed scripts | **~17×** |
+| Greek | **~15×** |
+| Cyrillic | **~15×** |
+| ASCII passthrough (~71 ns) | returns original object |
+
+Document-scale throughput (same bucket): **~450M chars/sec** Latin
+(**~38×** Unidecode), **~106M chars/sec** Cyrillic (**~15×**), slugify
+**~712K slugs/sec** (**~10–24×** python-slugify). These match the figures quoted
+in the project README; both derive from the same recorded measurements. To
+record a fresh, fully fingerprinted run, execute the `benchmarks/` scripts on a
+tuned machine and append the `perf_fingerprint.py --json` record alongside the
+results.
+
+## Why it is fast (internals)
+
+The speed comes from data layout decided at compile time and a single, cheap
+boundary crossing — not from cutting memory-safety corners
+(`unsafe_code = "forbid"` is enforced crate-wide):
+
+- **Flat BMP array, no hashing on lookup.** The default Unicode→ASCII table for
+  U+0080–U+FFFF is emitted by `build.rs` as a compile-time two-level page-table +
+  interned-blob structure indexed by codepoint; a lookup is a bounds check and a
+  couple of array reads, never a hash probe. It lives in `.rodata` and is paged
+  in on demand (`src/tables/mod.rs`, `build.rs`).
+- **Zero runtime data loading.** Every table — transliteration, confusables,
+  emoji, case folding, Hangul — is generated at build time into the binary.
+  There is no startup parse and no data file to ship.
+- **One Python→Rust crossing with Rust-side defaults.** The keyword defaults are
+  resolved in Rust, so a call crosses the FFI boundary exactly once (#284).
+- **Borrowed `Cow` return.** Already-ASCII input returns the original `str`
+  object via a borrowed `Cow`, with no allocation (#277 lever 4).
+- **Zero-copy UTF-8 extraction.** Input is read with `PyUnicode_AsUTF8AndSize`
+  on the abi3-py310 floor — no intermediate copy (#277 lever 1).
+- **Atomic no-replacements flag.** The common case (no registered replacements)
+  is a single atomic load (`Ordering::Acquire`, paired with the `Release` store
+  in the mutators), skipping the replacement-registry lock entirely
+  (`src/tables/mod.rs`).
+- **GIL released across batch loops.** List inputs release the GIL around the
+  pure-Rust compute loop, so multiple Python threads run their Rust work in
+  parallel (#70).
+- **Range-dispatch before the table.** CJK and Hangul ranges dispatch directly
+  to their dedicated romanisers, skipping a probe of the general table
+  (`src/transliterate.rs`).
+
+## Integrity checklist
+
+What this page does to keep its numbers honest:
+
+- Comparator versions are pinned and hash-locked
+  (`requirements/bench.txt`, installed with `--require-hashes`).
+- Measurement is interleaved; noise cancels in the ratio; medians are reported.
+- Published absolutes are bucketed by CPU microarchitecture and recorded on the
+  public `perf-results` branch with a full fingerprint.
+- Our numbers are rounded down; comparators' numbers are rounded up.
+- Executed assertions use loose floors with the margin policy stated above.
+- Reproduction is one install + one command (below).
+
+What this page does **not** claim:
+
+- No cross-hardware absolute comparisons. A ns figure on one machine says
+  nothing about another.
+- No "fastest possible" claim. translit is faster than the pure-Python
+  comparators measured here, for the workloads measured here — nothing broader.
+- No claims about workloads not measured on this page.
+- No transliterate-axis comparison against ftfy (it is a normaliser).
+
+## Reproducing these numbers
+
+```bash
+# Install translit with the pinned, hash-locked comparator set
+pip install translit[bench]
+
+# Short-string ratios (interleaved, median-of-7), per script
+python benchmarks/bench_ratio.py
+
+# Unidecode's own four-cell benchmark
+python benchmarks/bench_unidecode_own.py
+
+# Document-scale throughput vs Unidecode/text-unidecode/anyascii
+python benchmarks/bench_vs_unidecode.py
+
+# Record the environment fingerprint your numbers belong to
+python scripts/perf_fingerprint.py --json
+```
+
+The executed blocks on this page are run in CI by the Sybil doc-test harness
+(#154); the `benchmarks/` scripts produce the recorded figures that the prose
+cites. To regenerate this page's recorded absolutes, run the benchmarks on a
+tuned machine (`python -m pyperf system tune` on Linux) and append the
+fingerprinted record to the `perf-results` branch.

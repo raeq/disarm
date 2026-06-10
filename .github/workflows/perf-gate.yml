@@ -169,6 +169,11 @@ jobs:
           python benchmarks/bench_ratio.py | tee ratio.txt
           python benchmarks/bench_ratio.py --json > ratios.json
 
+      - name: Unidecode's own benchmark — four-cell head-to-head (#281, flag-only)
+        run: |
+          python benchmarks/bench_unidecode_own.py | tee unidecode_own.txt
+          python benchmarks/bench_unidecode_own.py --json > unidecode_own.json
+
       - name: Wall-clock PR vs merge-base (V13, flag-only)
         env:
           PYO3_PYTHON: python3
@@ -198,6 +203,8 @@ jobs:
             fingerprint.json
             ratios.json
             ratio.txt
+            unidecode_own.json
+            unidecode_own.txt
             wallclock.txt
             target/perf-stat/summary.txt
           if-no-files-found: ignore

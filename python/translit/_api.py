@@ -256,6 +256,11 @@ def transliterate(
     # Resolve conflicting kwargs once, before the str/list dispatch, so scalar
     # and batch inputs behave identically (#69). The conflict matrix lives in
     # the Rust core (single source of truth, #231); this is a thin call into it.
+    #
+    # contract: this validation MUST run before any dispatch below. The
+    # `cast(ErrorMode, errors)` calls on the context paths are sound *only*
+    # because this call has already rejected the strict+context combination
+    # (#184); reordering or skipping it would make those casts unsound.
     _validate_transliterate_args(
         lang=lang,
         target=target,
@@ -1043,8 +1048,10 @@ def terminal_width(text: str, *, ambiguous_wide: bool = False) -> int:
     Measures **terminal cells** (UAX #11 East Asian Width per UAX #29 cluster),
     not pixels or font metrics. Wide/fullwidth characters and emoji-presented
     clusters are 2 columns; combining marks, controls, and zero-width characters
-    are 0. Tabs are **not** expanded and newlines are not modelled — layout that
-    depends on tab stops or wrapping is the caller's responsibility.
+    are 0 — including tab (U+0009) and other C0/C1 control characters, which each
+    contribute **0 columns** (they are not expanded to tab stops). Newlines are
+    not modelled either; layout that depends on tab stops or wrapping is the
+    caller's responsibility.
 
     Args:
         text: Input string.
@@ -1069,10 +1076,19 @@ def terminal_width(text: str, *, ambiguous_wide: bool = False) -> int:
 def grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int:
     """Column width of a single grapheme cluster (see :func:`terminal_width`).
 
-    This measures one grapheme cluster — the base character's column width, with
-    combining/zero-width scalars contributing 0, or 2 for an emoji-presented
-    cluster. It does **not** segment or sum multiple clusters; use
-    :func:`terminal_width` for arbitrary strings.
+    Pass a single grapheme cluster. The width is that of the **first scalar**
+    (the base): 0 for a combining/zero-width base, 2 for a wide or
+    emoji-presentation base, otherwise 1. Trailing scalars are then inspected for
+    presentation selectors that adjust this — a variation selector U+FE0F (or a
+    keycap ``U+20E3`` on a ``0``–``9``/``#``/``*`` base) forces emoji
+    presentation (width 2), and U+FE0E forces text presentation (width 1 for an
+    emoji base).
+
+    It does **not** segment or sum grapheme clusters. If ``cluster`` contains
+    more than the leading cluster, the extra scalars are *not* added to the
+    width — but they are not blindly discarded either: a trailing presentation
+    selector or keycap anywhere in the argument still affects the result per the
+    rule above. For arbitrary (multi-cluster) strings use :func:`terminal_width`.
 
     Args:
         cluster: A single grapheme cluster.
@@ -1573,6 +1589,11 @@ class TextPipeline:
     excessive combining marks (``strip_zalgo=max_marks``), and ``strip_bidi``
     removes bidirectional override/format characters. Both run right after
     ``normalize`` and before ``demojize``.
+
+    This constructor takes individual step flags only; there is **no**
+    ``preset=`` argument. To obtain a pre-configured pipeline for a named policy
+    profile (e.g. ``scholarly_cyrillic_iso9``), call :func:`get_pipeline`
+    instead — it returns a ready-to-use ``TextPipeline``.
 
     Examples:
         >>> pipe = TextPipeline(normalize="NFC", fold_case=True, collapse_whitespace=True)

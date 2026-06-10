@@ -429,6 +429,19 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
 Each key is a preset function name; each value is a list of
 ``(step_name, parameter)`` tuples in execution order.  Use this to
 audit exactly which transforms a preset applies.
+
+This is one of **two distinct registries** and is easy to confuse with the
+other:
+
+* ``PRESETS`` (this dict) — *preset* pipelines: fixed, ordered sequences of
+  cleaning/normalization steps exposed as the ``security_clean``,
+  ``ml_normalize``, ``sanitize_user_input`` … helpers. Defined here, in Python.
+* Policy *profiles* (see :func:`list_profiles` / :func:`get_pipeline`) —
+  parameter sets for transliteration workflows (e.g.
+  ``scholarly_cyrillic_iso9``). Defined in the Rust core (``src/pipeline.rs``).
+
+A name from one registry is **not** valid in the other: pass profile names to
+:func:`get_pipeline`, and use the keys here to look up preset step lists.
 """
 
 
@@ -464,7 +477,13 @@ def get_pipeline(profile: str) -> TextPipeline:
 
 
 def list_profiles() -> list[str]:
-    """Return sorted names of available policy profiles.
+    """Return sorted names of available policy *profiles*.
+
+    Policy profiles (consumed by :func:`get_pipeline`) are distinct from the
+    *preset* pipelines in :data:`PRESETS`: profiles are transliteration
+    parameter sets defined in the Rust core, whereas presets are fixed cleaning
+    step-lists defined in Python. A profile name is not a valid preset name and
+    vice versa.
 
     Returns:
         Sorted list of profile name strings.

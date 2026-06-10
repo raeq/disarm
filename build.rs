@@ -95,6 +95,15 @@ fn main() {
         "EMOJI_SINGLE",
         "pub",
     );
+    // Production matcher (#242 item 4): compact code-point trie.
+    generate_emoji_trie(
+        &data_dir.join("emoji_multi.tsv"),
+        &out_dir.join("emoji_multi_trie.rs"),
+        "EMOJI_MULTI_TRIE",
+    );
+    // The hex-key PHF is retained as the test-only equivalence oracle (it is
+    // `#[cfg(test)]`-gated at the include site, so it is not in the shipped
+    // binary — that is the table-size win).
     generate_str_str_map(
         &data_dir.join("emoji_multi.tsv"),
         &out_dir.join("emoji_multi_phf.rs"),
@@ -498,6 +507,130 @@ fn generate_str_str_map(tsv_path: &Path, out_path: &Path, name: &str, vis: &str)
         panic!("Failed to create {}: {e}", out_path.display());
     }));
     file.write_all(code.as_bytes()).unwrap();
+}
+
+/// Generate a flattened codepoint trie for the multi-codepoint emoji sequences
+/// (#242 item 4). Each `HEX_HEX_…` key in `emoji_multi.tsv` is parsed into a
+/// code-point sequence and inserted into a trie; the matcher then walks one
+/// forward path per input position with no per-probe hex-key construction, and
+/// the table shrinks (codepoint edges vs fat hex-underscore string keys —
+/// subsuming the cluster-C item-5 finding).
+///
+/// Emits, for `name = EMOJI_MULTI_TRIE`: `<name>_EDGE_START: [u32; nodes + 1]`
+/// (node `i`'s edges are `[EDGE_START[i], EDGE_START[i + 1])`), `<name>_EDGE_CP`
+/// (edge code points, **sorted** within each node), `<name>_EDGE_TARGET` (child
+/// node id per edge), `<name>_NODE_VALUE` (value index into VALUES, or `u32::MAX`
+/// for a non-terminal node), and `<name>_VALUES: [&str; …]` (deduped names).
+/// Node 0 is the root.
+fn generate_emoji_trie(tsv_path: &Path, out_path: &Path, name: &str) {
+    struct Node {
+        edges: BTreeMap<u32, usize>,
+        value: Option<usize>,
+    }
+    fn emit_u32(out: &mut String, arr: &[u32], decl: &str) {
+        out.push_str(decl);
+        for (i, v) in arr.iter().enumerate() {
+            if i % 16 == 0 {
+                out.push_str("\n    ");
+            }
+            write!(out, "{v},").unwrap();
+        }
+        out.push_str("\n];\n");
+    }
+
+    let entries = read_str_str_tsv(tsv_path);
+    let mut nodes: Vec<Node> = vec![Node {
+        edges: BTreeMap::new(),
+        value: None,
+    }];
+    let mut value_of: BTreeMap<String, usize> = BTreeMap::new();
+    let mut values: Vec<String> = Vec::new();
+
+    for (key, emoji_name) in &entries {
+        let mut node = 0usize;
+        for hex in key.split('_') {
+            let cp = u32::from_str_radix(hex, 16).unwrap_or_else(|_| {
+                panic!("emoji_multi.tsv: bad hex code point {hex:?} in {key:?}")
+            });
+            node = if let Some(&child) = nodes[node].edges.get(&cp) {
+                child
+            } else {
+                let child = nodes.len();
+                nodes.push(Node {
+                    edges: BTreeMap::new(),
+                    value: None,
+                });
+                nodes[node].edges.insert(cp, child);
+                child
+            };
+        }
+        let vidx = *value_of.entry(emoji_name.clone()).or_insert_with(|| {
+            values.push(emoji_name.clone());
+            values.len() - 1
+        });
+        nodes[node].value = Some(vidx);
+    }
+
+    // Flatten (BTreeMap iterates edges in sorted code-point order).
+    let mut edge_start: Vec<u32> = Vec::with_capacity(nodes.len() + 1);
+    let mut edge_cp: Vec<u32> = Vec::new();
+    let mut edge_target: Vec<u32> = Vec::new();
+    let mut node_value: Vec<u32> = Vec::with_capacity(nodes.len());
+    for node in &nodes {
+        edge_start.push(u32::try_from(edge_cp.len()).expect("edge count fits u32"));
+        for (&cp, &child) in &node.edges {
+            edge_cp.push(cp);
+            edge_target.push(u32::try_from(child).expect("node id fits u32"));
+        }
+        node_value.push(node.value.map_or(u32::MAX, |v| {
+            u32::try_from(v).expect("value index fits u32")
+        }));
+    }
+    edge_start.push(u32::try_from(edge_cp.len()).expect("edge count fits u32"));
+
+    let mut out = String::with_capacity(edge_cp.len() * 8 + values.len() * 16);
+    emit_u32(
+        &mut out,
+        &edge_start,
+        &format!(
+            "pub static {name}_EDGE_START: [u32; {}] = [",
+            edge_start.len()
+        ),
+    );
+    emit_u32(
+        &mut out,
+        &edge_cp,
+        &format!("pub static {name}_EDGE_CP: [u32; {}] = [", edge_cp.len()),
+    );
+    emit_u32(
+        &mut out,
+        &edge_target,
+        &format!(
+            "pub static {name}_EDGE_TARGET: [u32; {}] = [",
+            edge_target.len()
+        ),
+    );
+    emit_u32(
+        &mut out,
+        &node_value,
+        &format!(
+            "pub static {name}_NODE_VALUE: [u32; {}] = [",
+            node_value.len()
+        ),
+    );
+    writeln!(
+        out,
+        "pub static {name}_VALUES: [&str; {}] = [",
+        values.len()
+    )
+    .unwrap();
+    for v in &values {
+        writeln!(out, "    \"{}\",", escape_str(v)).unwrap();
+    }
+    out.push_str("];\n");
+
+    fs::write(out_path, out)
+        .unwrap_or_else(|e| panic!("Failed to write {}: {e}", out_path.display()));
 }
 
 /// Generate a char set file.

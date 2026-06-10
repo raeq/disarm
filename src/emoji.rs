@@ -32,8 +32,12 @@ pub fn set_provider(provider: Option<PyObject>) {
     *guard = provider;
 }
 
-// #112: key_buf and sep_positions are now stack-allocated to avoid two heap
-// allocations per emoji-multi-starter character in match_emoji_at.
+// #112: key_buf and sep_positions were stack-allocated to avoid two heap
+// allocations per emoji-multi-starter character in the former hex-key matcher.
+// #242 item 4: the production matcher now walks the code-point trie
+// (`tables::match_emoji_sequence`), so the hex-key encoder is retained
+// **test-only** as the reference oracle (`match_emoji_at_reference`).
+#[cfg(test)]
 const KEY_BUF_CAP: usize = 64; // MAX_EMOJI_SEQ_LEN(9) × 5 hex + 8 '_' = 53 bytes; 64 is safe
 
 /// Write a slice of codepoints as an uppercase hex key into `buf`.
@@ -41,7 +45,8 @@ const KEY_BUF_CAP: usize = 64; // MAX_EMOJI_SEQ_LEN(9) × 5 hex + 8 '_' = 53 byt
 /// Returns the number of bytes written.  The buffer must be at least
 /// `KEY_BUF_CAP` bytes long.  Using a caller-supplied stack buffer avoids
 /// repeated heap allocation inside the O(max_seq_len) candidate loop in
-/// `match_emoji_at`.
+/// `match_emoji_at_reference`.
+#[cfg(test)]
 fn encode_key_into(buf: &mut [u8; KEY_BUF_CAP], cps: &[char]) -> usize {
     let mut pos = 0usize;
     for (i, &c) in cps.iter().enumerate() {
@@ -87,21 +92,44 @@ fn encode_key_into(buf: &mut [u8; KEY_BUF_CAP], cps: &[char]) -> usize {
 /// allocation occurs here regardless of input.
 fn match_emoji_at(window: &[char]) -> Option<(&'static str, usize)> {
     let ch = window[0];
+
+    // Try multi-codepoint sequences first (longest match).  #242 item 4: walk
+    // the code-point trie directly — no per-length hex-key construction.
+    if tables::is_emoji_multi_starter(ch) {
+        if let Some(hit) = tables::match_emoji_sequence(window) {
+            return Some(hit);
+        }
+    }
+
+    // Try single-codepoint lookup
+    if let Some(name) = tables::lookup_emoji_single(ch) {
+        // Check if followed by variation selector — consume it too
+        let consumed = if window.len() > 1 && (window[1] == VS16 || window[1] == VS15) {
+            2
+        } else {
+            1
+        };
+        return Some((name, consumed));
+    }
+
+    None
+}
+
+/// Reference matcher (the pre-#242-item-4 hex-key PHF probe), retained
+/// **test-only** as the equivalence oracle for [`match_emoji_at`].
+/// `emoji_trie_matches_reference` asserts the two agree on every emoji
+/// sequence; keeping this here documents the behaviour the trie replicates.
+#[cfg(test)]
+fn match_emoji_at_reference(window: &[char]) -> Option<(&'static str, usize)> {
+    let ch = window[0];
     let remaining = window.len();
 
-    // Try multi-codepoint sequences first (longest match)
     if tables::is_emoji_multi_starter(ch) {
         let max_len = MAX_WINDOW.min(remaining);
 
-        // #112: stack-allocate key buffer (no heap).
-        // Build the full key once for max_len, then use pre-computed separator
-        // positions for O(1) truncation instead of rfind('_') per iteration.
         let mut key_buf = [0u8; KEY_BUF_CAP];
         let total_len = encode_key_into(&mut key_buf, &window[..max_len]);
 
-        // #112: stack-allocate sep_positions (at most MAX_WINDOW - 1 entries).
-        // sep_positions[i] = byte offset of the (i+1)-th '_' separator.
-        // To get a key for `len` codepoints, truncate at sep_positions[len-1].
         let mut sep_positions = [0usize; MAX_WINDOW];
         let mut sep_count = 0usize;
         for (idx, &b) in key_buf[..total_len].iter().enumerate() {
@@ -111,27 +139,13 @@ fn match_emoji_at(window: &[char]) -> Option<(&'static str, usize)> {
             }
         }
 
-        // Try longest sequences first, truncating the key progressively
         for len in (2..=max_len).rev() {
             let last = window[len - 1];
-            // Skip sequences that end with a variation selector or ZWJ
-            // (they're incomplete).
             if last == ZWJ || last == VS16 || last == VS15 {
                 continue;
             }
 
-            // Truncate key to `len` codepoints using the separator index.
-            // sep_positions has max_len-1 entries (one per separator between codepoints).
-            // For `len` codepoints we need `len-1` separators, so truncate at
-            // sep_positions[len-1] (the start of the (len+1)-th codepoint's separator).
             let key_slice = if len < max_len {
-                // SAFETY: sep_positions[len-1] is a valid byte offset within key_buf
-                // (it was recorded from the encoded key), and key_buf contains only
-                // ASCII hex digits and '_', so the slice is valid UTF-8.
-                // key_buf holds only ASCII hex digits and '_' by construction;
-                // degrade to an empty (non-matching) key rather than unwind a
-                // panic toward the FFI boundary if that invariant is ever broken
-                // by a future edit (#251 H4.3).
                 std::str::from_utf8(&key_buf[..sep_positions[len - 1]]).unwrap_or("")
             } else {
                 std::str::from_utf8(&key_buf[..total_len]).unwrap_or("")
@@ -143,9 +157,7 @@ fn match_emoji_at(window: &[char]) -> Option<(&'static str, usize)> {
         }
     }
 
-    // Try single-codepoint lookup
     if let Some(name) = tables::lookup_emoji_single(ch) {
-        // Check if followed by variation selector — consume it too
         let consumed = if window.len() > 1 && (window[1] == VS16 || window[1] == VS15) {
             2
         } else {
@@ -614,6 +626,55 @@ mod tests {
         let mut buf = [0u8; KEY_BUF_CAP];
         let n = encode_key_into(&mut buf, &['\u{1F468}', ZWJ, '\u{1F469}']);
         assert_eq!(std::str::from_utf8(&buf[..n]).unwrap(), "1F468_200D_1F469");
+    }
+
+    /// Decode an `EMOJI_MULTI` hex-underscore key into its code-point sequence.
+    fn key_to_chars(key: &str) -> Vec<char> {
+        key.split('_')
+            .map(|h| char::from_u32(u32::from_str_radix(h, 16).unwrap()).unwrap())
+            .collect()
+    }
+
+    /// #242 item 4: the production trie matcher must be byte-identical to the
+    /// retained hex-key PHF reference on every multi-codepoint sequence — and
+    /// on windows that overrun a sequence (extra trailing char) or chain two
+    /// sequences, which exercise the longest-match/terminal-skip boundaries.
+    #[test]
+    fn emoji_trie_matches_reference() {
+        let keys: Vec<&str> = crate::tables::emoji_data::EMOJI_MULTI
+            .keys()
+            .copied()
+            .collect();
+        assert!(keys.len() > 2000, "expected the full multi-emoji table");
+
+        for key in &keys {
+            let seq = key_to_chars(key);
+
+            // Exact sequence.
+            assert_eq!(
+                match_emoji_at(&seq),
+                match_emoji_at_reference(&seq),
+                "trie/reference disagree on key {key}"
+            );
+
+            // Sequence + a non-emoji char (longest match must stop at the seq).
+            let mut padded = seq.clone();
+            padded.push('x');
+            assert_eq!(
+                match_emoji_at(&padded),
+                match_emoji_at_reference(&padded),
+                "trie/reference disagree on padded key {key}"
+            );
+
+            // Sequence chained with another sequence (overrun beyond a terminal).
+            let mut chained = seq.clone();
+            chained.extend(key_to_chars(keys[0]));
+            assert_eq!(
+                match_emoji_at(&chained),
+                match_emoji_at_reference(&chained),
+                "trie/reference disagree on chained key {key}"
+            );
+        }
     }
 
     #[test]

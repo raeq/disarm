@@ -7,8 +7,17 @@
 // Single-codepoint emoji to short name (1727 entries).
 include!(concat!(env!("OUT_DIR"), "/emoji_single_phf.rs"));
 
-// Multi-codepoint emoji sequences to short name (2553 entries).
-// Key format: codepoints as uppercase hex separated by underscores.
+// Multi-codepoint emoji sequences (2553 entries) as a compact code-point trie
+// (#242 item 4): the production matcher walks `EMOJI_MULTI_TRIE_*` directly,
+// with no per-probe hex-key construction and a smaller table than the former
+// hex-string PHF.
+include!(concat!(env!("OUT_DIR"), "/emoji_multi_trie.rs"));
+
+// The former hex-key PHF, retained **test-only** as the equivalence oracle for
+// the trie (`emoji_trie_matches_phf` / `match_emoji_at` agreement). Gating the
+// include behind `#[cfg(test)]` keeps it out of the shipped binary — the
+// table-size win.
+#[cfg(test)]
 include!(concat!(env!("OUT_DIR"), "/emoji_multi_phf.rs"));
 
 // Codepoints that can begin a multi-codepoint emoji sequence (188 entries).

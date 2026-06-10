@@ -745,11 +745,54 @@ pub fn lookup_emoji_single(ch: char) -> Option<&'static str> {
     emoji_data::EMOJI_SINGLE.get(&ch).copied()
 }
 
-/// Look up a multi-codepoint emoji sequence (O(1) PHF).
-/// The key is the codepoint sequence encoded as uppercase hex separated by underscores.
-#[inline]
+/// Look up a multi-codepoint emoji sequence by its hex-underscore key (O(1) PHF).
+/// **Test-only**: the production matcher walks the code-point trie
+/// (`match_emoji_sequence`); this is retained as the equivalence oracle (#242
+/// item 4), so the PHF is excluded from the shipped binary.
+#[cfg(test)]
 pub fn lookup_emoji_multi(key: &str) -> Option<&'static str> {
     emoji_data::EMOJI_MULTI.get(key).copied()
+}
+
+/// Walk the multi-codepoint emoji trie (#242 item 4) for the longest sequence
+/// starting at `window[0]`, returning `(name, codepoints_consumed)`.
+///
+/// Byte-identical to the former per-length hex-key PHF probe (verified by
+/// `emoji_trie_matches_phf` against [`lookup_emoji_multi`]). A sequence is a
+/// match only at a terminal node of length ≥ 2 whose **last** code point is not
+/// ZWJ/VS-15/VS-16 — replicating the original "skip incomplete sequences" rule
+/// (a trailing variation selector or ZWJ is a presentation/joiner mark handled
+/// by the surrounding loop, not part of the matched sequence).
+pub fn match_emoji_sequence(window: &[char]) -> Option<(&'static str, usize)> {
+    use emoji_data::{
+        EMOJI_MULTI_TRIE_EDGE_CP as EDGE_CP, EMOJI_MULTI_TRIE_EDGE_START as EDGE_START,
+        EMOJI_MULTI_TRIE_EDGE_TARGET as EDGE_TARGET, EMOJI_MULTI_TRIE_NODE_VALUE as NODE_VALUE,
+        EMOJI_MULTI_TRIE_VALUES as VALUES,
+    };
+    const ZWJ: u32 = 0x200D;
+    const VS15: u32 = 0xFE0E;
+    const VS16: u32 = 0xFE0F;
+
+    let mut node = 0usize;
+    let mut best: Option<(&'static str, usize)> = None;
+    for (i, &c) in window.iter().enumerate() {
+        let cp = c as u32;
+        let start = EDGE_START[node] as usize;
+        let end = EDGE_START[node + 1] as usize;
+        match EDGE_CP[start..end].binary_search(&cp) {
+            Ok(idx) => node = EDGE_TARGET[start + idx] as usize,
+            Err(_) => break,
+        }
+        // len = i + 1 (≥ 2 for any real sequence); skip a terminal whose last
+        // code point is a trailing ZWJ/VS — those never end a complete key.
+        if i >= 1 && cp != ZWJ && cp != VS15 && cp != VS16 {
+            let vidx = NODE_VALUE[node];
+            if vidx != u32::MAX {
+                best = Some((VALUES[vidx as usize], i + 1));
+            }
+        }
+    }
+    best
 }
 
 /// Check if a codepoint can start a multi-codepoint emoji sequence.

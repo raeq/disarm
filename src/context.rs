@@ -11,7 +11,6 @@
 //! 3. Context-free: existing character-by-character transliteration
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::sync::OnceLock;
 
 /// Tatweel (kashida) — decorative elongation in Arabic.
@@ -24,14 +23,61 @@ const MAGIC: &[u8; 4] = b"TRLD";
 // in `crate::limits` (#256).
 use crate::limits::MAX_DICT_ENTRIES;
 
-/// Context dictionary with unigram and bigram tables.
+/// A `(offset, len)` slice into the backing dictionary bytes. `u32` is ample:
+/// dictionaries are a few MB and the on-disk format already uses `u32` offsets.
+#[derive(Clone, Copy)]
+struct Span {
+    off: u32,
+    len: u32,
+}
+
+/// One unigram: its consonant skeleton and its single best (most frequent)
+/// diacritized form. Entries are sorted by skeleton bytes for binary search.
+#[derive(Clone, Copy)]
+struct UniEntry {
+    skel: Span,
+    form: Span,
+}
+
+/// One bigram entry within a previous-word group: the current-word skeleton and
+/// the diacritized form to use. Sorted by `curr` bytes within the group.
+#[derive(Clone, Copy)]
+struct BiEntry {
+    curr: Span,
+    form: Span,
+}
+
+/// A previous-word group: every bigram entry sharing this `prev` skeleton
+/// occupies the contiguous `[start, start + len)` range of `bi_entries`. Groups
+/// are sorted by `prev` bytes. This nesting preserves the cheap two-step
+/// prev → curr lookup — `resolve` probes with borrowed `&str` keys and never
+/// allocates an owned `(prev, curr)` tuple per token (#238 guardrail).
+#[derive(Clone, Copy)]
+struct BiGroup {
+    prev: Span,
+    start: u32,
+    len: u32,
+}
+
+/// Context dictionary backed directly by the raw `.bin` bytes (#238).
+///
+/// The dictionary strings live exactly **once** — in `data` (borrowed `'static`
+/// from the embedded `.rodata` table, or owned from a filesystem read). The
+/// lookup indices below hold only `(offset, len)` spans into `data`, so no
+/// skeleton or form is duplicated on the heap. Resident cost is the file size
+/// plus the fixed-size index vectors, replacing the former nested
+/// `HashMap<String, …>` that copied every string a second time (the 2×→1×
+/// residency win). Lookup is binary search (`O(log n)`) instead of hashing
+/// (`O(1)`) — an accepted trade for this opt-in context path.
 pub struct ContextDict {
-    /// Skeleton → list of (diacritized form, frequency), sorted by frequency desc.
-    unigrams: HashMap<String, Vec<(String, u32)>>,
-    /// prev_skeleton → (curr_skeleton → best diacritized form). Nested so that
-    /// `resolve` can look up with `&str` keys and avoid allocating an owned
-    /// `(String, String)` tuple on every token in the hot path.
-    bigrams: HashMap<String, HashMap<String, String>>,
+    /// The whole dictionary file: borrowed `'static` (embedded) or owned (fs).
+    data: Cow<'static, [u8]>,
+    /// Unigram entries, sorted by skeleton bytes.
+    unigrams: Vec<UniEntry>,
+    /// Bigram previous-word groups, sorted by `prev` bytes.
+    bi_groups: Vec<BiGroup>,
+    /// Bigram entries, partitioned by `BiGroup` range and sorted by `curr` within each.
+    bi_entries: Vec<BiEntry>,
 }
 
 /// Read a little-endian u16 at `pos`, returning an error rather than panicking
@@ -59,36 +105,72 @@ fn read_u32(data: &[u8], pos: usize) -> Result<u32, String> {
     ))
 }
 
-/// Read a UTF-8 string of `len` bytes at `pos`, bounds-checked (see [`read_u16`]).
-fn read_str(data: &[u8], pos: usize, len: usize) -> Result<String, String> {
+/// Validate that `data[pos..pos + len]` is in bounds and valid UTF-8, returning
+/// its span (offset + length) — no allocation. Bounds-checked like [`read_u16`];
+/// errors (never panics) on a truncated or non-UTF-8 region. The span's bytes
+/// stay valid for the lifetime of `data`, which the [`ContextDict`] owns.
+fn read_str_span(data: &[u8], pos: usize, len: usize) -> Result<Span, String> {
     let end = pos.checked_add(len).ok_or("dictionary offset overflow")?;
     let slice = data
         .get(pos..end)
         .ok_or("unexpected end of dictionary data")?;
-    String::from_utf8(slice.to_vec()).map_err(|e| e.to_string())
+    std::str::from_utf8(slice).map_err(|e| e.to_string())?;
+    Ok(Span {
+        off: u32::try_from(pos).map_err(|_| "dictionary offset exceeds u32".to_string())?,
+        len: u32::try_from(len).map_err(|_| "string length exceeds u32".to_string())?,
+    })
 }
 
 impl ContextDict {
-    /// Load a context dictionary from the binary format produced by
-    /// `scripts/build_arabic_dict.py`.
+    /// Load a context dictionary from a borrowed buffer, copying it once into an
+    /// owned backing store. Used by tests and any caller without `'static` data;
+    /// the dictionary strings still live exactly once (inside the copy).
     ///
     /// Every read is bounds-checked: a truncated or malformed buffer yields an
     /// `Err` instead of an out-of-bounds panic.
     pub fn from_bytes(data: &[u8]) -> Result<Self, String> {
-        if data.len() < 24 {
+        Self::build(Cow::Owned(data.to_vec()))
+    }
+
+    /// Load a context dictionary directly from `'static` bytes (the embedded
+    /// `.rodata` table). True zero-copy — the bytes are borrowed, never copied.
+    pub fn from_static(data: &'static [u8]) -> Result<Self, String> {
+        Self::build(Cow::Borrowed(data))
+    }
+
+    /// Load a context dictionary taking ownership of a buffer (e.g. a filesystem
+    /// read), reusing it as the backing store without an extra copy.
+    pub fn from_owned(data: Vec<u8>) -> Result<Self, String> {
+        Self::build(Cow::Owned(data))
+    }
+
+    /// Build the zero-copy index over `data` (#238): parse the binary format
+    /// produced by `scripts/build_*_dict.py` once, recording `(offset, len)`
+    /// spans into `data` rather than copying strings onto the heap. The index
+    /// vectors are sorted so `resolve` can binary-search them.
+    fn build(data: Cow<'static, [u8]>) -> Result<Self, String> {
+        // A bigram record before grouping: parsed flat, then sorted into groups.
+        struct RawBi {
+            prev: Span,
+            curr: Span,
+            form: Span,
+        }
+
+        let bytes: &[u8] = &data;
+        if bytes.len() < 24 {
             return Err("Dictionary too small".into());
         }
-        if &data[0..4] != MAGIC {
+        if &bytes[0..4] != MAGIC {
             return Err("Invalid dictionary magic".into());
         }
-        let version = read_u32(data, 4)?;
+        let version = read_u32(bytes, 4)?;
         if version != 1 {
             return Err(format!("Unsupported dictionary version: {version}"));
         }
-        let unigram_count = read_u32(data, 8)? as usize;
-        let bigram_count = read_u32(data, 12)? as usize;
-        let unigram_offset = read_u32(data, 16)? as usize;
-        let bigram_offset = read_u32(data, 20)? as usize;
+        let unigram_count = read_u32(bytes, 8)? as usize;
+        let bigram_count = read_u32(bytes, 12)? as usize;
+        let unigram_offset = read_u32(bytes, 16)? as usize;
+        let bigram_offset = read_u32(bytes, 20)? as usize;
         // Section offsets must point past the 24-byte header. Reads are already
         // bounds-checked (no panic), but rejecting offsets that start inside the
         // header avoids silently returning Ok(...) for a clearly malformed
@@ -97,87 +179,169 @@ impl ContextDict {
             return Err("Dictionary section offset overlaps header".into());
         }
 
-        let mut unigrams = HashMap::with_capacity(unigram_count.min(MAX_DICT_ENTRIES));
+        // Borrow the span's bytes for ordering comparisons. Spans are produced by
+        // `read_str_span` against this same `bytes`, so the range is always valid.
+        let span_bytes = |s: Span| &bytes[s.off as usize..s.off as usize + s.len as usize];
+
+        // --- Unigrams: skeleton -> best (first, most-frequent) form span ---
+        // The pre-reservation is capped by the entry-count limit (#116/#200), not
+        // by `data.len()`, so a corrupt header cannot drive a huge allocation.
+        let mut unigrams: Vec<UniEntry> = Vec::with_capacity(unigram_count.min(MAX_DICT_ENTRIES));
         let mut pos = unigram_offset;
         for _ in 0..unigram_count {
-            let skel_len = read_u16(data, pos)? as usize;
+            let skel_len = read_u16(bytes, pos)? as usize;
             pos += 2;
-            let skeleton = read_str(data, pos, skel_len)?;
+            let skel = read_str_span(bytes, pos, skel_len)?;
             pos += skel_len;
 
-            let num_forms = read_u16(data, pos)? as usize;
+            let num_forms = read_u16(bytes, pos)? as usize;
             pos += 2;
 
-            // Cap the pre-reservation by the entry-count limit (#200), consistent
-            // with the unigram/bigram HashMaps above — not by `data.len()`, which
-            // is a byte count and lets a corrupt header over-reserve before the
-            // per-form read below fails. (`num_forms` is a u16, so this is the
-            // bound that actually applies once the type can no longer cap it.)
-            let mut forms = Vec::with_capacity(num_forms.min(MAX_DICT_ENTRIES));
-            for _ in 0..num_forms {
-                let form_len = read_u16(data, pos)? as usize;
+            let mut best: Option<Span> = None;
+            for i in 0..num_forms {
+                let form_len = read_u16(bytes, pos)? as usize;
                 pos += 2;
-                let form = read_str(data, pos, form_len)?;
+                let form = read_str_span(bytes, pos, form_len)?;
                 pos += form_len;
-                let freq = read_u32(data, pos)?;
+                let _freq = read_u32(bytes, pos)?;
                 pos += 4;
-                forms.push((form, freq));
+                // Forms are stored most-frequent-first, and `resolve` only ever
+                // wants the best one, so keep just the first and skip the rest.
+                if i == 0 {
+                    best = Some(form);
+                }
             }
-            unigrams.insert(skeleton, forms);
+            // A unigram with zero forms yields nothing resolvable — omit it.
+            if let Some(form) = best {
+                unigrams.push(UniEntry { skel, form });
+            }
         }
 
-        // Parse bigrams (#116: same MAX_DICT_ENTRIES cap as unigrams)
-        let mut bigrams: HashMap<String, HashMap<String, String>> =
-            HashMap::with_capacity(bigram_count.min(MAX_DICT_ENTRIES));
+        // --- Bigrams: flat (prev, curr, form), parsed then sorted and grouped ---
+        let mut raw: Vec<RawBi> = Vec::with_capacity(bigram_count.min(MAX_DICT_ENTRIES));
         pos = bigram_offset;
         for _ in 0..bigram_count {
-            let prev_len = read_u16(data, pos)? as usize;
+            let prev_len = read_u16(bytes, pos)? as usize;
             pos += 2;
-            let prev = read_str(data, pos, prev_len)?;
+            let prev = read_str_span(bytes, pos, prev_len)?;
             pos += prev_len;
 
-            let curr_len = read_u16(data, pos)? as usize;
+            let curr_len = read_u16(bytes, pos)? as usize;
             pos += 2;
-            let curr = read_str(data, pos, curr_len)?;
+            let curr = read_str_span(bytes, pos, curr_len)?;
             pos += curr_len;
 
-            let form_len = read_u16(data, pos)? as usize;
+            let form_len = read_u16(bytes, pos)? as usize;
             pos += 2;
-            let form = read_str(data, pos, form_len)?;
+            let form = read_str_span(bytes, pos, form_len)?;
             pos += form_len;
 
-            bigrams.entry(prev).or_default().insert(curr, form);
+            raw.push(RawBi { prev, curr, form });
         }
 
-        Ok(ContextDict { unigrams, bigrams })
+        // Sort unigrams by skeleton bytes (UTF-8 byte order == code-point order,
+        // so byte comparison is a valid total order for binary search). Dedup any
+        // duplicate skeletons — the builders emit unique keys, so this only makes
+        // a malformed dict deterministic rather than changing real behaviour.
+        unigrams.sort_by(|a, b| span_bytes(a.skel).cmp(span_bytes(b.skel)));
+        unigrams.dedup_by(|a, b| span_bytes(a.skel) == span_bytes(b.skel));
+
+        // Sort bigrams by (prev, curr) bytes, then partition into prev-groups.
+        raw.sort_by(|a, b| {
+            span_bytes(a.prev)
+                .cmp(span_bytes(b.prev))
+                .then_with(|| span_bytes(a.curr).cmp(span_bytes(b.curr)))
+        });
+        raw.dedup_by(|a, b| {
+            span_bytes(a.prev) == span_bytes(b.prev) && span_bytes(a.curr) == span_bytes(b.curr)
+        });
+
+        let mut bi_entries: Vec<BiEntry> = Vec::with_capacity(raw.len());
+        let mut bi_groups: Vec<BiGroup> = Vec::new();
+        let mut i = 0usize;
+        while i < raw.len() {
+            let prev = raw[i].prev;
+            let start = bi_entries.len();
+            let mut j = i;
+            while j < raw.len() && span_bytes(raw[j].prev) == span_bytes(prev) {
+                bi_entries.push(BiEntry {
+                    curr: raw[j].curr,
+                    form: raw[j].form,
+                });
+                j += 1;
+            }
+            bi_groups.push(BiGroup {
+                prev,
+                start: u32::try_from(start).map_err(|_| "bigram index exceeds u32".to_string())?,
+                len: u32::try_from(bi_entries.len() - start)
+                    .map_err(|_| "bigram group exceeds u32".to_string())?,
+            });
+            i = j;
+        }
+
+        Ok(ContextDict {
+            data,
+            unigrams,
+            bi_groups,
+            bi_entries,
+        })
+    }
+
+    /// Bytes of a span. Spans are bounds-validated at build time against this
+    /// same `data`, which is immutable thereafter, so the index never panics.
+    #[inline]
+    fn span_slice(&self, span: Span) -> &[u8] {
+        &self.data[span.off as usize..span.off as usize + span.len as usize]
+    }
+
+    /// The span as `&str`. UTF-8 was validated at build time; re-validate cheaply
+    /// and fall back to `""` rather than risk a panic if that invariant is ever
+    /// broken by a future change.
+    #[inline]
+    fn span_str(&self, span: Span) -> &str {
+        std::str::from_utf8(self.span_slice(span)).unwrap_or("")
     }
 
     /// Resolve a word using bigram context, then unigram fallback.
     ///
-    /// Returns the best diacritized form, or None if not in dictionary.
+    /// Returns the best diacritized form, or `None` if not in the dictionary.
+    /// Comparisons are on raw bytes (UTF-8 byte order matches the sort order), so
+    /// the binary searches never re-validate UTF-8; only the matched form is
+    /// decoded to `&str` once, on the way out.
     pub fn resolve(&self, prev_skeleton: Option<&str>, curr_skeleton: &str) -> Option<&str> {
-        // Tier 1: bigram lookup (borrowed &str keys — no per-token allocation)
+        let curr = curr_skeleton.as_bytes();
+
+        // Tier 1: bigram lookup — two-step prev -> curr, both borrowed &str keys,
+        // no per-token owned-key allocation (#238 guardrail preserved).
         if let Some(prev) = prev_skeleton {
-            if let Some(form) = self.bigrams.get(prev).and_then(|m| m.get(curr_skeleton)) {
-                return Some(form.as_str());
+            let prev_bytes = prev.as_bytes();
+            if let Ok(gi) = self
+                .bi_groups
+                .binary_search_by(|g| self.span_slice(g.prev).cmp(prev_bytes))
+            {
+                let g = self.bi_groups[gi];
+                let entries = &self.bi_entries[g.start as usize..(g.start + g.len) as usize];
+                if let Ok(ei) = entries.binary_search_by(|e| self.span_slice(e.curr).cmp(curr)) {
+                    return Some(self.span_str(entries[ei].form));
+                }
             }
         }
 
-        // Tier 2: unigram lookup (most frequent form)
-        if let Some(forms) = self.unigrams.get(curr_skeleton) {
-            if let Some((form, _)) = forms.first() {
-                return Some(form.as_str());
-            }
+        // Tier 2: unigram lookup (most frequent form).
+        if let Ok(ui) = self
+            .unigrams
+            .binary_search_by(|e| self.span_slice(e.skel).cmp(curr))
+        {
+            return Some(self.span_str(self.unigrams[ui].form));
         }
 
-        // Tier 3: not in dictionary — caller uses context-free transliteration
+        // Tier 3: not in dictionary — caller uses context-free transliteration.
         None
     }
 
-    /// Return dictionary statistics: (unigram count, total bigram count).
+    /// Return dictionary statistics: (unigram count, total bigram entry count).
     pub fn stats(&self) -> (usize, usize) {
-        let bigram_count = self.bigrams.values().map(HashMap::len).sum();
-        (self.unigrams.len(), bigram_count)
+        (self.unigrams.len(), self.bi_entries.len())
     }
 }
 
@@ -388,8 +552,9 @@ static HEBREW_DATA: &[u8] = include_bytes!("../data/hebrew_dict.bin");
 /// Parse an embedded dictionary. (#107: returns `DictState` to distinguish
 /// parse errors from absence; #106: routes diagnostics through `emit_warning_stderr`.)
 #[cfg(feature = "embed-dicts")]
-fn load_embedded_dict(name: &str, data: &[u8]) -> DictState {
-    match ContextDict::from_bytes(data) {
+fn load_embedded_dict(name: &str, data: &'static [u8]) -> DictState {
+    // Zero-copy: borrow the embedded `.rodata` bytes directly (#238).
+    match ContextDict::from_static(data) {
         Ok(dict) => DictState::Ok(dict),
         Err(e) => {
             let msg = format!("translit: failed to load embedded {name} dict: {e}");
@@ -450,7 +615,8 @@ fn load_dict_from_fs(name: &str) -> DictState {
     let paths = dict_search_paths(name);
     for path in &paths {
         if let Ok(data) = std::fs::read(path) {
-            match ContextDict::from_bytes(&data) {
+            // Reuse the read buffer as the backing store — no extra copy (#238).
+            match ContextDict::from_owned(data) {
                 Ok(dict) => return DictState::Ok(dict),
                 Err(e) => {
                     // File exists but is malformed — a distinct error from "not found".
@@ -579,24 +745,56 @@ mod tests {
         assert!(tokens.len() >= 3);
     }
 
+    /// Serialize unigrams (`skeleton -> [(form, freq)]`) and bigrams
+    /// (`(prev, curr, form)`) into the on-disk binary format, exercising the real
+    /// `from_bytes` zero-copy build path (#238) instead of constructing the
+    /// private index directly.
+    fn build_dict_bytes(
+        unigrams: &[(&str, &[(&str, u32)])],
+        bigrams: &[(&str, &str, &str)],
+    ) -> Vec<u8> {
+        let mut uni = Vec::new();
+        for (skel, forms) in unigrams {
+            uni.extend_from_slice(&(skel.len() as u16).to_le_bytes());
+            uni.extend_from_slice(skel.as_bytes());
+            uni.extend_from_slice(&(forms.len() as u16).to_le_bytes());
+            for (form, freq) in *forms {
+                uni.extend_from_slice(&(form.len() as u16).to_le_bytes());
+                uni.extend_from_slice(form.as_bytes());
+                uni.extend_from_slice(&freq.to_le_bytes());
+            }
+        }
+        let mut bi = Vec::new();
+        for (prev, curr, form) in bigrams {
+            bi.extend_from_slice(&(prev.len() as u16).to_le_bytes());
+            bi.extend_from_slice(prev.as_bytes());
+            bi.extend_from_slice(&(curr.len() as u16).to_le_bytes());
+            bi.extend_from_slice(curr.as_bytes());
+            bi.extend_from_slice(&(form.len() as u16).to_le_bytes());
+            bi.extend_from_slice(form.as_bytes());
+        }
+        let unigram_offset = 24u32;
+        let bigram_offset = 24 + uni.len() as u32;
+        let mut data = Vec::new();
+        data.extend_from_slice(MAGIC);
+        data.extend_from_slice(&1u32.to_le_bytes()); // version
+        data.extend_from_slice(&(unigrams.len() as u32).to_le_bytes());
+        data.extend_from_slice(&(bigrams.len() as u32).to_le_bytes());
+        data.extend_from_slice(&unigram_offset.to_le_bytes());
+        data.extend_from_slice(&bigram_offset.to_le_bytes());
+        data.extend_from_slice(&uni);
+        data.extend_from_slice(&bi);
+        data
+    }
+
     #[test]
     fn test_context_dict_resolve() {
-        let mut unigrams = HashMap::new();
-        unigrams.insert(
-            "كتب".to_string(),
-            vec![
-                ("كَتَبَ".to_string(), 100), // kataba (most frequent)
-                ("كُتُب".to_string(), 80),  // kutub
-            ],
+        // كتب → [kataba (most frequent), kutub]; bigram (ال, كتب) → kutub.
+        let bytes = build_dict_bytes(
+            &[("كتب", &[("كَتَبَ", 100), ("كُتُب", 80)])],
+            &[("ال", "كتب", "كُتُب")],
         );
-
-        let mut bigrams: HashMap<String, HashMap<String, String>> = HashMap::new();
-        bigrams.entry("ال".to_string()).or_default().insert(
-            "كتب".to_string(),
-            "كُتُب".to_string(), // after article → kutub (books)
-        );
-
-        let dict = ContextDict { unigrams, bigrams };
+        let dict = ContextDict::from_bytes(&bytes).expect("valid dict should parse");
 
         // Unigram: most frequent
         assert_eq!(dict.resolve(None, "كتب"), Some("كَتَبَ"));
@@ -612,14 +810,11 @@ mod tests {
     fn test_bigram_fires_across_space() {
         // #101: bigram disambiguation must fire for normal space-separated prose.
         // A plain inter-word space must NOT reset the previous-word context.
-        let mut unigrams = HashMap::new();
-        unigrams.insert("كتب".to_string(), vec![("كَتَبَ".to_string(), 100)]); // default: kataba
-        let mut bigrams: HashMap<String, HashMap<String, String>> = HashMap::new();
-        bigrams
-            .entry("ال".to_string())
-            .or_default()
-            .insert("كتب".to_string(), "كُتُب".to_string()); // after "ال" → kutub
-        let dict = ContextDict { unigrams, bigrams };
+        let bytes = build_dict_bytes(
+            &[("كتب", &[("كَتَبَ", 100)])], // default: kataba
+            &[("ال", "كتب", "كُتُب")],     // after "ال" → kutub
+        );
+        let dict = ContextDict::from_bytes(&bytes).expect("valid dict should parse");
 
         // Space between the two words: the bigram tier sees prev="ال" → kutub.
         let out = transliterate_context("ال كتب", None, &dict, |s, _| s.to_string());
@@ -640,38 +835,54 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_resolve_many_entries_binary_search() {
+        // #238: feed entries in NON-sorted input order across multiple skeletons
+        // and multiple prev-groups, so the build must sort them and `resolve`
+        // must binary-search correctly — not just hit a single-entry index.
+        let bytes = build_dict_bytes(
+            &[
+                // skeletons deliberately out of sorted order
+                ("dog", &[("DOG", 9)]),
+                ("ant", &[("ANT", 7)]),
+                ("cat", &[("CAT-best", 5), ("CAT-alt", 4)]),
+                ("bee", &[("BEE", 3)]),
+            ],
+            &[
+                // two prev-groups ("the", "a"), entries out of order within/among
+                ("the", "dog", "the-DOG"),
+                ("a", "cat", "a-CAT"),
+                ("the", "ant", "the-ANT"),
+                ("the", "cat", "the-CAT"),
+            ],
+        );
+        let dict = ContextDict::from_bytes(&bytes).expect("valid dict should parse");
+
+        // Unigram tier: every skeleton resolves to its best (first) form.
+        assert_eq!(dict.resolve(None, "ant"), Some("ANT"));
+        assert_eq!(dict.resolve(None, "bee"), Some("BEE"));
+        assert_eq!(dict.resolve(None, "cat"), Some("CAT-best"));
+        assert_eq!(dict.resolve(None, "dog"), Some("DOG"));
+        assert_eq!(dict.resolve(None, "zzz"), None);
+
+        // Bigram tier: two-step prev → curr across both groups.
+        assert_eq!(dict.resolve(Some("the"), "dog"), Some("the-DOG"));
+        assert_eq!(dict.resolve(Some("the"), "ant"), Some("the-ANT"));
+        assert_eq!(dict.resolve(Some("the"), "cat"), Some("the-CAT"));
+        assert_eq!(dict.resolve(Some("a"), "cat"), Some("a-CAT"));
+        // Bigram miss falls through to the unigram form.
+        assert_eq!(dict.resolve(Some("the"), "bee"), Some("BEE"));
+        // Unknown prev → unigram tier.
+        assert_eq!(dict.resolve(Some("nope"), "cat"), Some("CAT-best"));
+
+        // (4 unigrams, 4 bigram entries.)
+        assert_eq!(dict.stats(), (4, 4));
+    }
+
     /// Build a minimal but valid dictionary buffer: one unigram ("ab" → [("AB", 5)])
     /// and one bigram (("ab", "cd") → "X").
     fn build_valid_dict() -> Vec<u8> {
-        let mut unigram_section = Vec::new();
-        unigram_section.extend_from_slice(&2u16.to_le_bytes()); // skel_len
-        unigram_section.extend_from_slice(b"ab");
-        unigram_section.extend_from_slice(&1u16.to_le_bytes()); // num_forms
-        unigram_section.extend_from_slice(&2u16.to_le_bytes()); // form_len
-        unigram_section.extend_from_slice(b"AB");
-        unigram_section.extend_from_slice(&5u32.to_le_bytes()); // freq
-
-        let mut bigram_section = Vec::new();
-        bigram_section.extend_from_slice(&2u16.to_le_bytes()); // prev_len
-        bigram_section.extend_from_slice(b"ab");
-        bigram_section.extend_from_slice(&2u16.to_le_bytes()); // curr_len
-        bigram_section.extend_from_slice(b"cd");
-        bigram_section.extend_from_slice(&1u16.to_le_bytes()); // form_len
-        bigram_section.extend_from_slice(b"X");
-
-        let unigram_offset = 24u32;
-        let bigram_offset = 24 + unigram_section.len() as u32;
-
-        let mut data = Vec::new();
-        data.extend_from_slice(MAGIC);
-        data.extend_from_slice(&1u32.to_le_bytes()); // version
-        data.extend_from_slice(&1u32.to_le_bytes()); // unigram_count
-        data.extend_from_slice(&1u32.to_le_bytes()); // bigram_count
-        data.extend_from_slice(&unigram_offset.to_le_bytes());
-        data.extend_from_slice(&bigram_offset.to_le_bytes());
-        data.extend_from_slice(&unigram_section);
-        data.extend_from_slice(&bigram_section);
-        data
+        build_dict_bytes(&[("ab", &[("AB", 5)])], &[("ab", "cd", "X")])
     }
 
     #[test]

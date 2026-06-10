@@ -45,12 +45,12 @@ pub fn reverse_langs() -> Vec<String> {
 /// falling back to shorter keys, and finally passing through unmatched
 /// characters verbatim.
 ///
-/// **Case sensitivity (#255):** lookups are exact-case. Multigraph keys exist
-/// only in their documented casings (e.g. `Shch`/`shch` for щ), so an unusual
-/// all-caps romanization like `SHCH` has no entry and decomposes character by
-/// character instead of recovering the trigraph. A case-insensitive fallback is
-/// deferred to the Aho-Corasick matcher rewrite in #252, which replaces this
-/// scan wholesale — adding the fallback here first would just be reworked there.
+/// **Case sensitivity (#255 C4):** multigraph keys exist only in their
+/// documented casings (e.g. `Shch`/`shch` for щ). When an exact-case lookup
+/// misses and the candidate is an all-uppercase ASCII multigraph (e.g. `SHCH`),
+/// the matcher retries with the lowercase key and re-uppercases the native
+/// result — so an all-caps romanization recovers the trigraph (Щ) rather than
+/// decomposing character by character.
 pub fn reverse_transliterate_impl(text: &str, lang: &str) -> String {
     let bytes = text.as_bytes();
     let len = bytes.len();
@@ -72,6 +72,17 @@ pub fn reverse_transliterate_impl(text: &str, lang: &str) -> String {
                     i += key_len;
                     matched = true;
                     break;
+                }
+                // #255 C4: an all-uppercase ASCII multigraph (e.g. "SHCH") has no
+                // cased entry — only `Shch`/`shch` exist. Retry the lowercase key
+                // and re-uppercase the native result so the trigraph is recovered.
+                if key_len > 1 && candidate.bytes().all(|b| b.is_ascii_uppercase()) {
+                    if let Some(native) = reverse_lookup(&candidate.to_ascii_lowercase(), lang) {
+                        result.push_str(&native.to_uppercase());
+                        i += key_len;
+                        matched = true;
+                        break;
+                    }
                 }
             }
         }

@@ -188,4 +188,25 @@ Returns sorted list of available profile names.
 
 `llm_guardrail` hardens text against prompt-injection and homoglyph/zalgo/bidi obfuscation before it reaches an LLM (digits are never remapped to letters). `rag_ingest` canonicalizes documents for retrieval pipelines while preserving case.
 
+!!! note "Homoglyph handling: `rag_ingest` romanizes, it does not visually-fold (#258)"
+    The two guardrail profiles canonicalize homoglyphs differently, and the
+    distinction matters for spoof resistance:
+
+    - **`llm_guardrail`** runs `confusables` *without* `transliterate`, so a
+      Cyrillic look-alike of "paypal" (`раураl`) is **visually folded** to
+      `paypal` — it collides with the real Latin term (good for "treat the spoof
+      as the word it imitates").
+    - **`rag_ingest`** runs `transliterate`, which **phonetically romanizes** the
+      same input to `raural` — a *distinct* key, so the spoof does not
+      impersonate the real term, and legitimate non-Latin text still romanizes
+      for retrieval (`Москва → Moskva`).
+
+    These are deliberate trade-offs of the fixed step order (transliterate runs
+    before confusables; running confusables first would mangle legitimate
+    Cyrillic/Greek into mixed-script gibberish). Adding `confusables` to
+    `rag_ingest` would be a no-op — transliterate has already consumed the
+    non-Latin characters. **If you need homoglyph spoofs folded onto the term
+    they imitate, use `llm_guardrail` (or a dedicated `confusables` pass), not
+    `rag_ingest`.**
+
 See [Policy Templates](../policy-templates.md) for detailed usage guidance and institutional recipes.

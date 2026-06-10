@@ -422,6 +422,15 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             collapse_whitespace: true,
             ..ProfileSpec::default()
         },
+        // rag_ingest canonicalizes by phonetic *romanization* (transliterate),
+        // NOT visual homoglyph folding (#258). Because STEP_ORDER runs
+        // transliterate before confusables (#174), adding `confusables` here
+        // would be a no-op — transliterate has already consumed the non-Latin
+        // characters (a Cyrillic look-alike of "paypal" romanizes to "raural", a
+        // distinct key, rather than folding to "paypal"). That is intentional: it
+        // romanizes legitimate non-Latin for retrieval (Москва → Moskva) without
+        // mangling it into mixed-script gibberish. For homoglyph-spoof folding
+        // (fold the spoof onto the term it imitates) use `llm_guardrail`.
         "rag_ingest" => ProfileSpec {
             normalize: Some("NFKC"),
             strip_bidi: true,

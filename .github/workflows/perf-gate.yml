@@ -1,0 +1,152 @@
+name: Perf gate
+
+# #234 CI signal model. Runner image + Python are pinned (gate V9) so the
+# deterministic gate is reproducible and ratios bucket by a stable environment.
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "benchmarks/**"
+      - "examples/**"
+      - "Cargo.toml"
+      - "build.rs"
+      - "requirements/bench.txt"
+      - ".github/workflows/perf-gate.yml"
+
+concurrency:
+  group: perf-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  IAI_RUNNER_VERSION: "0.16.1"
+  # The gate metric and threshold (V10/V11): estimated cycles, directional —
+  # fails only on a regression beyond this percentage vs the merge-base baseline.
+  CYCLES_LIMIT: "EstimatedCycles=5%"
+
+jobs:
+  # ── Hard, deterministic, directional gate (V10–V12) ──────────────────────
+  iai-gate:
+    name: iai estimated-cycles gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # need the merge-base and both code versions (V12)
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12" # pinned interpreter (V9)
+
+      - name: Install Valgrind + iai-callgrind-runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+          cargo install iai-callgrind-runner --version "${IAI_RUNNER_VERSION}" --locked
+
+      - name: Run the deterministic gate
+        env:
+          PYO3_PYTHON: python3
+        run: |
+          set -euo pipefail
+          BASE="$(git merge-base origin/${{ github.base_ref }} HEAD)"
+          echo "merge-base: $BASE"
+          # Gate metric = estimated cycles (cache-sim), built twice with the same
+          # rustc; compared directionally vs the merge-base baseline.
+          if git cat-file -e "$BASE:benchmarks/bench_iai.rs" 2>/dev/null \
+             && git cat-file -e "$BASE:Cargo.toml" 2>/dev/null \
+             && git show "$BASE:Cargo.toml" | grep -q 'name = "bench_iai"'; then
+            echo "::group::baseline (merge-base)"
+            git checkout --detach "$BASE"
+            cargo bench --no-default-features --bench bench_iai -- --save-baseline=base
+            git checkout -
+            echo "::endgroup::"
+            echo "::group::PR vs baseline (fail on >${CYCLES_LIMIT} regression)"
+            cargo bench --no-default-features --bench bench_iai -- \
+              --baseline=base --callgrind-limits="${CYCLES_LIMIT}"
+            echo "::endgroup::"
+          else
+            echo "::notice::bench_iai is not present on the merge-base — bootstrap run."
+            echo "Establishing the gate: running the bench once to confirm it executes."
+            echo "The directional comparison goes live on the next PR (once bench_iai is on the base)."
+            cargo bench --no-default-features --bench bench_iai -- --save-baseline=pr
+          fi
+
+  # ── Informational signals (V13–V15, V3, V5, V19) — never blocks the PR ───
+  perf-signals:
+    name: perf signals (flag-only)
+    runs-on: ubuntu-24.04
+    continue-on-error: true # flag, do not fail the PR (V13/V14)
+    permissions:
+      contents: write # append to the perf-results branch (V19)
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Build the release workload + wheel
+        env:
+          PYO3_PYTHON: python3
+        run: |
+          cargo build --release --no-default-features --example perf_workload
+          pip install maturin[patchelf]
+          maturin build --release --out dist
+          pip install dist/*.whl
+
+      - name: Install pinned comparators (hash-locked, V7/V8)
+        run: pip install --require-hashes -r requirements/bench.txt
+
+      - name: Emit fingerprint (V5/V6)
+        env:
+          PERF_WORKLOAD_BIN: target/release/examples/perf_workload
+        run: |
+          python scripts/perf_fingerprint.py --json | tee fingerprint.json
+          echo "--- summary ---"
+          python scripts/perf_fingerprint.py | sed -n '1,6p'
+
+      - name: Comparator ratio — transliterate axis (V14, flag-only)
+        run: python benchmarks/bench_vs_unidecode.py | tee ratio.txt
+
+      - name: Short-string per-call — report only (V15)
+        run: cargo bench --no-default-features --bench bench_core -- --warm-up-time 1 --measurement-time 2 --sample-size 10 || true
+
+      - name: Hardware counters (V3, Linux)
+        run: |
+          scripts/perf_stat.sh || echo "::warning::perf_stat unavailable on this runner (no perf events)"
+          cat target/perf-stat/summary.txt 2>/dev/null || true
+
+      - name: Upload signals as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-signals
+          path: |
+            fingerprint.json
+            ratio.txt
+            target/perf-stat/summary.txt
+          if-no-files-found: ignore
+
+      - name: Append fingerprint to perf-results (V19, best-effort)
+        run: |
+          set -e
+          git fetch origin perf-results
+          git worktree add /tmp/pr perf-results
+          cat fingerprint.json >> /tmp/pr/measurements.jsonl
+          echo "" >> /tmp/pr/measurements.jsonl
+          cd /tmp/pr
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add measurements.jsonl
+          git commit -s -m "perf-results: append measurement (PR #${{ github.event.pull_request.number }}, ${GITHUB_SHA})"
+          git push origin perf-results

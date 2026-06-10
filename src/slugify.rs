@@ -86,6 +86,61 @@ fn compile_regex_cached(pattern: &str) -> Result<regex::Regex, crate::Error> {
 
 use crate::utils::floor_char_boundary;
 
+/// A compiled **first-match** replacement automaton for the slugify
+/// pre-transliteration replacements (#242 item 2). Unlike the global longest
+/// match table, this step's semantics are *first registered pair wins at each
+/// position* (the original scan tried pairs in list order), so the automaton is
+/// built with `MatchKind::LeftmostFirst` — which, at a tie, prefers the pattern
+/// added earliest, reproducing that order exactly. Output is checked
+/// byte-for-byte against the reference scan by `slug_automaton_matches_scan`.
+struct SlugReplacementAutomaton {
+    ac: aho_corasick::AhoCorasick,
+    /// `values[pattern_id]` is the replacement for the pair at that position.
+    values: Vec<String>,
+}
+
+/// Build a `LeftmostFirst` automaton from the replacement pairs, preserving list
+/// order (so pattern ids — and the tie-break priority — match the original
+/// per-position first-match scan). Empty `from` keys are skipped (the former
+/// scan would have spun on them). Returns `None` when fewer than two non-empty
+/// pairs remain (the single-pair case keeps `str::replace`).
+fn build_slug_replacement_automaton(
+    pairs: &[(String, String)],
+) -> Option<SlugReplacementAutomaton> {
+    let mut patterns: Vec<&str> = Vec::with_capacity(pairs.len());
+    let mut values: Vec<String> = Vec::with_capacity(pairs.len());
+    for (from, to) in pairs {
+        if from.is_empty() {
+            continue;
+        }
+        patterns.push(from.as_str());
+        values.push(to.clone());
+    }
+    if patterns.len() < 2 {
+        return None;
+    }
+    let ac = aho_corasick::AhoCorasick::builder()
+        .match_kind(aho_corasick::MatchKind::LeftmostFirst)
+        .build(&patterns)
+        .expect("slug replacement keys are valid aho-corasick patterns");
+    Some(SlugReplacementAutomaton { ac, values })
+}
+
+/// Apply a prebuilt first-match replacement automaton to `text`, writing into a
+/// freshly allocated buffer (#242 item 2). Byte-identical to the former
+/// per-position list-order scan.
+fn slug_replace_with_automaton(text: &str, automaton: &SlugReplacementAutomaton) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut last = 0;
+    for mat in automaton.ac.find_iter(text) {
+        result.push_str(&text[last..mat.start()]);
+        result.push_str(&automaton.values[mat.pattern().as_usize()]);
+        last = mat.end();
+    }
+    result.push_str(&text[last..]);
+    result
+}
+
 /// Configuration for slug generation, extracted from parameters.
 ///
 /// All fields are active.  `save_order` controls whether stopword removal is
@@ -265,9 +320,16 @@ pub(crate) fn slugify_impl_with_stopset(
             let (from, to) = &config.replacements[0];
             let replaced = value.replace(from.as_str(), to.as_str());
             value = Cow::Owned(replaced);
+        } else if let Some(automaton) = build_slug_replacement_automaton(&config.replacements) {
+            // Multiple pairs (#242 item 2): first-match via an aho-corasick
+            // automaton — O(n + pattern bytes) total instead of the O(n·pairs)
+            // per-position scan below. (Built per call; the build is O(pattern
+            // bytes), still asymptotically better than the scan.)
+            value = Cow::Owned(slug_replace_with_automaton(&value, &automaton));
         } else {
-            // Multiple replacement pairs: single-pass scan to avoid N× full-string
-            // scans and N allocations from chained .replace() calls.
+            // Fallback for the degenerate case the automaton declines (fewer than
+            // two non-empty `from` keys): the original per-position first-match
+            // scan, preserving its exact behaviour (incl. empty-key handling).
             let mut result = String::with_capacity(value.len());
             let mut i = 0;
             let value_bytes = value.as_bytes();
@@ -1020,6 +1082,65 @@ mod tests {
     fn test_empty_input() {
         let config = default_config();
         assert_eq!(slugify_impl("", &config), "");
+    }
+
+    #[test]
+    fn slug_automaton_matches_scan() {
+        // #242 item 2: the LeftmostFirst automaton must be byte-identical to the
+        // original per-position first-match-by-order scan — including the
+        // order-sensitive cases where an earlier, shorter pair must win over a
+        // later, longer one.
+        fn scan(text: &str, pairs: &[(String, String)]) -> String {
+            let mut result = String::with_capacity(text.len());
+            let mut i = 0;
+            let b = text.as_bytes();
+            while i < text.len() {
+                let mut matched = false;
+                for (from, to) in pairs {
+                    if !from.is_empty() && b[i..].starts_with(from.as_bytes()) {
+                        result.push_str(to);
+                        i += from.len();
+                        matched = true;
+                        break;
+                    }
+                }
+                if !matched {
+                    let ch = text[i..].chars().next().unwrap();
+                    result.push(ch);
+                    i += ch.len_utf8();
+                }
+            }
+            result
+        }
+        let pair = |a: &str, b: &str| (a.to_owned(), b.to_owned());
+        let lists = [
+            vec![pair("ab", "X"), pair("a", "Y")], // longer pair listed first → wins
+            vec![pair("a", "Y"), pair("ab", "X")], // shorter pair listed first → wins (order!)
+            vec![pair("the", "T"), pair("he", "H")],
+            vec![pair("&", "and"), pair("@", "at"), pair("%", "pct")],
+            vec![pair("\u{5317}", "N"), pair("\u{5317}\u{4eac}", "BJ")], // 北 first → 北 wins
+        ];
+        let inputs = [
+            "",
+            "abc",
+            "ab",
+            "abab",
+            "the heat",
+            "a&b@c%d",
+            "\u{5317}\u{4eac}\u{5e02}",
+            "no-op",
+            "aaa",
+        ];
+        for pairs in &lists {
+            let automaton = build_slug_replacement_automaton(pairs);
+            for inp in inputs {
+                let reference = scan(inp, pairs);
+                let got = automaton
+                    .as_ref()
+                    .map_or_else(|| scan(inp, pairs), |a| slug_replace_with_automaton(inp, a));
+                assert_eq!(got, reference, "slug automaton != scan for input {inp:?}");
+            }
+        }
     }
 
     #[test]

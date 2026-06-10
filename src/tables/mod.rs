@@ -77,6 +77,49 @@ static LANG_TABLES: LazyLock<RwLock<HashMap<String, HashMap<char, String>>>> =
 static GLOBAL_REPLACEMENTS: LazyLock<RwLock<HashMap<String, String>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+/// A compiled longest-match replacement automaton plus the replacement value for
+/// each pattern id (#242 item 1). `find_iter` with `LeftmostLongest` reproduces
+/// the former O(n·distinct-key-lengths) [`replace_longest_match`] scan in O(n)
+/// with no per-position hash probing, advancing past each match (so output is
+/// never rescanned), which is exactly the documented semantics.
+struct ReplacementAutomaton {
+    ac: aho_corasick::AhoCorasick,
+    /// `values[pattern_id]` is the replacement for the key registered as that id.
+    values: Vec<String>,
+}
+
+/// The longest-match automaton for [`GLOBAL_REPLACEMENTS`], rebuilt by every
+/// mutator while it holds the table write lock so the two never diverge. `None`
+/// when the table is empty. Read (only) by [`apply_replacements`].
+static GLOBAL_REPLACEMENTS_AC: LazyLock<RwLock<Option<ReplacementAutomaton>>> =
+    LazyLock::new(|| RwLock::new(None));
+
+/// Build a `LeftmostLongest` replacement automaton from `map`, or `None` if the
+/// map has no non-empty keys. Patterns are sorted for a deterministic,
+/// reproducible build (length, not order, decides longest-match).
+fn build_replacement_automaton(map: &HashMap<String, String>) -> Option<ReplacementAutomaton> {
+    let mut keys: Vec<&String> = map.keys().filter(|k| !k.is_empty()).collect();
+    keys.sort();
+    if keys.is_empty() {
+        return None;
+    }
+    let ac = aho_corasick::AhoCorasick::builder()
+        .match_kind(aho_corasick::MatchKind::LeftmostLongest)
+        .build(keys.iter().map(|k| k.as_str()))
+        .expect("replacement keys are valid aho-corasick patterns");
+    let values = keys.iter().map(|k| map[*k].clone()).collect();
+    Some(ReplacementAutomaton { ac, values })
+}
+
+/// Rebuild [`GLOBAL_REPLACEMENTS_AC`] from `map`. Call while holding the
+/// `GLOBAL_REPLACEMENTS` write lock (the consistent lock order: table then
+/// automaton) so the automaton stays in sync with the table.
+fn rebuild_replacement_automaton(map: &HashMap<String, String>) {
+    let built = build_replacement_automaton(map);
+    let mut slot = crate::recover_lock(GLOBAL_REPLACEMENTS_AC.write(), "GLOBAL_REPLACEMENTS_AC");
+    *slot = built;
+}
+
 /// Fast "is the replacement table non-empty?" flag. Lets `apply_replacements`
 /// short-circuit with a single relaxed atomic load on the (overwhelmingly
 /// common) no-replacements-registered path, avoiding an `RwLock` read on every
@@ -518,6 +561,9 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
         return Err(projected);
     }
     table.extend(replacements);
+    // Rebuild the longest-match automaton (#242 item 1) while still holding the
+    // table write lock, so the automaton and table never diverge.
+    rebuild_replacement_automaton(&table);
     // Release so a reader's Acquire load that observes `true` also observes the
     // table mutation above. (Note: this does not make register-concurrent-with-
     // transliterate fully ordered — a reader may still observe a stale `false`
@@ -540,6 +586,7 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
 pub fn remove_replacement(key: &str) -> bool {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     let removed = table.remove(key).is_some();
+    rebuild_replacement_automaton(&table);
     HAS_REPLACEMENTS.store(!table.is_empty(), Ordering::Release);
     removed
 }
@@ -556,6 +603,7 @@ pub fn remove_replacement(key: &str) -> bool {
 pub fn clear_replacements() {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     table.clear();
+    rebuild_replacement_automaton(&table);
     HAS_REPLACEMENTS.store(false, Ordering::Release);
 }
 
@@ -579,20 +627,57 @@ pub fn apply_replacements(text: &str, max_len: usize) -> Result<Cow<'_, str>, us
     if !HAS_REPLACEMENTS.load(Ordering::Acquire) {
         return Ok(Cow::Borrowed(text));
     }
-    let table = crate::recover_lock(GLOBAL_REPLACEMENTS.read(), "GLOBAL_REPLACEMENTS");
-    if table.is_empty() {
-        return Ok(Cow::Borrowed(text));
+    // #242 item 1: O(n) longest-match via the prebuilt automaton instead of the
+    // former per-position length scan. The automaton is rebuilt with the table.
+    let guard = crate::recover_lock(GLOBAL_REPLACEMENTS_AC.read(), "GLOBAL_REPLACEMENTS_AC");
+    match guard.as_ref() {
+        Some(automaton) => replace_with_automaton(text, automaton, max_len),
+        None => Ok(Cow::Borrowed(text)),
     }
-    replace_longest_match(text, &table, max_len)
 }
 
-/// Pure longest-match substring replacement: the algorithm behind
-/// [`apply_replacements`], with the table passed in so it can be unit-tested
-/// without touching global state.
-///
-/// The output buffer is allocated lazily on the first match, so a string with
-/// no matching key is returned borrowed with **zero allocation**. Returns
-/// `Err(size)` once the output would exceed `max_len` bytes.
+/// Apply a prebuilt longest-match [`ReplacementAutomaton`] to `text` (#242 item
+/// 1). Output is byte-identical to [`replace_longest_match`] (enforced by
+/// `automaton_matches_longest_scan`): `LeftmostLongest` `find_iter` yields the
+/// non-overlapping longest match at each position and advances past it, so the
+/// replacement output is never rescanned. Allocates lazily on the first match
+/// (no match → borrowed, zero allocation); `Err(size)` once it would exceed
+/// `max_len`.
+fn replace_with_automaton<'a>(
+    text: &'a str,
+    automaton: &ReplacementAutomaton,
+    max_len: usize,
+) -> Result<Cow<'a, str>, usize> {
+    let mut out: Option<String> = None;
+    let mut last = 0;
+    for mat in automaton.ac.find_iter(text) {
+        let buf = out.get_or_insert_with(|| String::with_capacity(text.len()));
+        buf.push_str(&text[last..mat.start()]);
+        buf.push_str(&automaton.values[mat.pattern().as_usize()]);
+        if buf.len() > max_len {
+            return Err(buf.len());
+        }
+        last = mat.end();
+    }
+    match out {
+        Some(mut buf) => {
+            buf.push_str(&text[last..]);
+            if buf.len() > max_len {
+                return Err(buf.len());
+            }
+            Ok(Cow::Owned(buf))
+        }
+        None => Ok(Cow::Borrowed(text)),
+    }
+}
+
+/// Pure longest-match substring replacement — the former algorithm behind
+/// [`apply_replacements`], retained as the **reference oracle** that the
+/// `aho-corasick` automaton (#242 item 1) is checked byte-for-byte against
+/// (`automaton_matches_longest_scan`). The output buffer is allocated lazily on
+/// the first match (no match → borrowed, zero allocation); `Err(size)` once the
+/// output would exceed `max_len` bytes.
+#[cfg(test)]
 fn replace_longest_match<'a>(
     text: &'a str,
     table: &HashMap<String, String>,
@@ -724,6 +809,59 @@ mod tests {
     // Convenience: run replace_longest_match with no size limit and unwrap.
     fn rlm<'a>(text: &'a str, t: &HashMap<String, String>) -> Cow<'a, str> {
         replace_longest_match(text, t, usize::MAX).expect("no size limit")
+    }
+
+    #[test]
+    fn automaton_matches_longest_scan() {
+        // #242 item 1: the aho-corasick LeftmostLongest automaton must produce
+        // byte-identical output to the reference longest-match scan across a
+        // range of tables (overlapping prefixes, no-cascade, zero-len key,
+        // multibyte) and inputs — including the size-cap behaviour.
+        let tables = [
+            tbl(&[("ab", "X"), ("abc", "Y")]),
+            tbl(&[("a", "b"), ("b", "c")]),
+            tbl(&[("@", "(at)"), ("\u{3a9}", "OMEGA")]),
+            tbl(&[("aa", "1"), ("a", "2"), ("aaa", "3")]),
+            tbl(&[("", "skip"), ("x", "Y")]),
+            tbl(&[("\u{5317}\u{4eac}", "beijing"), ("\u{5317}", "north")]),
+            tbl(&[("the", "T"), ("he", "H"), ("t", "_")]),
+        ];
+        let inputs = [
+            "",
+            "abcd",
+            "abx",
+            "aaaa",
+            "aaaaa",
+            "ab",
+            "x\u{5317}\u{4eac}y\u{5317}z",
+            "the theatre",
+            "@a@",
+            "\u{3a9}\u{3a9}",
+            "no match here",
+            "aaabaaa",
+            "ababab",
+        ];
+        for t in &tables {
+            let automaton = build_replacement_automaton(t);
+            for inp in inputs {
+                let reference = replace_longest_match(inp, t, usize::MAX).expect("oracle");
+                let got = match automaton.as_ref() {
+                    Some(a) => replace_with_automaton(inp, a, usize::MAX).expect("automaton"),
+                    None => Cow::Borrowed(inp),
+                };
+                assert_eq!(got, reference, "automaton != scan for input {inp:?}");
+                // The size cap must also agree (Ok/Err and the reported size).
+                assert_eq!(
+                    automaton
+                        .as_ref()
+                        .map_or(Ok(Cow::Borrowed(inp)), |a| replace_with_automaton(
+                            inp, a, 4
+                        )),
+                    replace_longest_match(inp, t, 4),
+                    "size-cap disagreement for input {inp:?}"
+                );
+            }
+        }
     }
 
     #[test]

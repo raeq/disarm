@@ -21,6 +21,10 @@ embed-dicts = []
 [dependencies]
 pyo3 = { version = "0.24.1", features = ["abi3-py310"] }
 regex = "1"
+# Already a transitive dependency via `regex`; promoted to a direct dependency
+# for the LeftmostLongest/LeftmostFirst replacement automata (#242 cluster H
+# items 1-2). No new supply-chain surface.
+aho-corasick = "1"
 bitflags = "2"
 unicode-normalization = "0.1"
 phf = "0.13"

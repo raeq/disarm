@@ -13,7 +13,7 @@ Pre-built wheels are available for:
 - **Linux** (x86_64, aarch64) — manylinux
 - **macOS** (x86_64, arm64) — universal2
 - **Windows** (x86_64)
-- **Python 3.9–3.14+** (abi3 stable ABI)
+- **Python 3.10–3.14+** (abi3 stable ABI)
 
 No Rust toolchain is needed for installation — the compiled extension is included in the wheel.
 

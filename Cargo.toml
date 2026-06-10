@@ -19,7 +19,7 @@ extension-module = ["pyo3/extension-module"]
 embed-dicts = []
 
 [dependencies]
-pyo3 = { version = "0.24.1", features = ["abi3-py39"] }
+pyo3 = { version = "0.24.1", features = ["abi3-py310"] }
 regex = "1"
 bitflags = "2"
 unicode-normalization = "0.1"

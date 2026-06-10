@@ -164,7 +164,7 @@ Every push and pull request runs the full test suite across:
 | Axis | Values |
 |------|--------|
 | **OS** | Ubuntu, macOS, Windows |
-| **Python** | 3.9, 3.10, 3.11, 3.12, 3.13, 3.14 |
+| **Python** | 3.10, 3.11, 3.12, 3.13, 3.14 |
 | **Rust checks** | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test` |
 | **Python checks** | pytest, ruff lint, mypy strict mode, doctest |
 

@@ -54,7 +54,7 @@ The package installs as `translit-rs` on PyPI but imports as `translit`:
 import translit  # not translit_rs
 ```
 
-Requires Python 3.9+. Wheels are available for Linux, macOS, and Windows.
+Requires Python 3.10+. Wheels are available for Linux, macOS, and Windows.
 
 ## Features
 

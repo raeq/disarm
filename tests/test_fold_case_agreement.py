@@ -98,7 +98,7 @@ class TestFoldCaseRustPythonAgreement:
             f"  rust:   {rust_result!r}\n"
             f"  python: {python_result!r}\n"
             f"  diff codepoints: "
-            f"{[(i, r, p) for i, (r, p) in enumerate(zip(rust_result, python_result)) if r != p]}"
+            f"{[(i, r, p) for i, (r, p) in enumerate(zip(rust_result, python_result, strict=False)) if r != p]}"
         )
 
     @given(text=non_ascii_text)

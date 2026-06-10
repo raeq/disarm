@@ -25,9 +25,24 @@ include!(concat!(env!("OUT_DIR"), "/confusables_to_cyrillic_phf.rs"));
 /// Supported target scripts: `"latin"`, `"cyrillic"`.
 #[inline]
 pub fn lookup(ch: char, target_script: &str) -> Option<&'static str> {
+    resolve_map(target_script).and_then(|m| m.get(&ch).copied())
+}
+
+/// Resolve a `target_script` to its confusables PHF map, once.
+///
+/// Lets callers hoist the `match target_script` out of a per-character loop
+/// (#236 / #233 review item) and probe the resolved map directly. Returns
+/// `None` for an unknown script.
+///
+/// Note: there is intentionally **no** ASCII fast path built on top of this —
+/// the latin table maps ASCII source code points (e.g. U+007C `|`→`l`,
+/// U+0022 `"`→`''`, U+0060 `` ` ``→`'`), so ASCII input is *not* identity even
+/// for `target="latin"`.
+#[inline]
+pub fn resolve_map(target_script: &str) -> Option<&'static phf::Map<char, &'static str>> {
     match target_script {
-        "latin" => TO_LATIN.get(&ch).copied(),
-        "cyrillic" => TO_CYRILLIC.get(&ch).copied(),
+        "latin" => Some(&TO_LATIN),
+        "cyrillic" => Some(&TO_CYRILLIC),
         _ => None,
     }
 }

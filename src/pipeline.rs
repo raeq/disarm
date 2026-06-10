@@ -263,18 +263,26 @@ impl _TextPipeline {
         } else if step == PipelineSteps::STRIP_ACCENTS {
             Cow::Owned(transliterate::_strip_accents(&buf))
         } else if step == PipelineSteps::TRANSLITERATE {
-            Cow::Owned(
-                transliterate::transliterate_impl(
-                    &buf,
-                    self.lang.as_deref(),
-                    crate::ErrorMode::Ignore,
-                    "",
-                    self.strict_iso9,
-                    self.gost7034,
-                    false,
-                )
-                .into_owned(),
-            )
+            // #236 item 5: only reallocate when transliterate actually changed
+            // the text. On a borrowed (ASCII / no-op) result, pass `buf` through
+            // unchanged instead of `into_owned()`-cloning it. Extract owned-ness
+            // first so the borrow of `buf` ends before we move it.
+            let owned = match transliterate::transliterate_impl(
+                &buf,
+                self.lang.as_deref(),
+                crate::ErrorMode::Ignore,
+                "",
+                self.strict_iso9,
+                self.gost7034,
+                false,
+            ) {
+                Cow::Borrowed(_) => None,
+                Cow::Owned(s) => Some(s),
+            };
+            match owned {
+                Some(s) => Cow::Owned(s),
+                None => buf,
+            }
         } else if step == PipelineSteps::CONFUSABLES {
             Cow::Owned(confusables::_normalize_confusables(&buf, "latin")?)
         } else if step == PipelineSteps::FOLD_CASE {

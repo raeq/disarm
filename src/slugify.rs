@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::{LazyLock, RwLock};
 
 use crate::transliterate;
 
@@ -47,6 +48,40 @@ fn compile_regex(pattern: &str) -> Result<regex::Regex, crate::Error> {
             pattern: pattern.to_owned(),
             source: e,
         })
+}
+
+/// Maximum number of distinct compiled patterns held in [`REGEX_CACHE`].
+const REGEX_CACHE_MAX: usize = 32;
+
+/// Bounded cache of compiled `regex_pattern`s, keyed by the pattern string.
+///
+/// The free `slugify()` function recompiles its `regex_pattern` on every call
+/// (`from_pyargs` → `compile_regex`), which is a per-call latency cliff that
+/// throughput benchmarks never surface (#236 / #233 review item). `regex::Regex`
+/// is internally `Arc`-backed, so a cache hit returns a cheap clone instead of
+/// rebuilding the DFA. Bounded to [`REGEX_CACHE_MAX`] entries; the table is
+/// cleared wholesale when full (patterns are few and reused, so a true LRU is
+/// not worth its cost). `_Slugifier` already amortizes compilation by holding
+/// one `SlugConfig`, so only the free function and batch paths benefit here.
+static REGEX_CACHE: LazyLock<RwLock<HashMap<String, regex::Regex>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// Compile `pattern`, reusing a cached `regex::Regex` when the same pattern was
+/// compiled before. Errors are never cached. See [`REGEX_CACHE`].
+fn compile_regex_cached(pattern: &str) -> Result<regex::Regex, crate::Error> {
+    // Fast path: a read lock and a cheap Arc clone on a hit.
+    if let Some(re) = crate::recover_lock(REGEX_CACHE.read(), "REGEX_CACHE").get(pattern) {
+        return Ok(re.clone());
+    }
+    // Miss: compile outside the write lock (validation + DFA build can be slow).
+    let re = compile_regex(pattern)?;
+    let mut cache = crate::recover_lock(REGEX_CACHE.write(), "REGEX_CACHE");
+    // Bound growth: clear when full rather than evicting one entry (cheap, rare).
+    if cache.len() >= REGEX_CACHE_MAX && !cache.contains_key(pattern) {
+        cache.clear();
+    }
+    cache.insert(pattern.to_owned(), re.clone());
+    Ok(re)
 }
 
 use crate::utils::floor_char_boundary;
@@ -120,7 +155,7 @@ impl SlugConfig {
         decimal: bool,
         hexadecimal: bool,
     ) -> Result<Self, crate::Error> {
-        let compiled_regex = regex_pattern.map(compile_regex).transpose()?;
+        let compiled_regex = regex_pattern.map(compile_regex_cached).transpose()?;
         Ok(Self {
             separator: separator.to_owned(),
             lowercase,
@@ -259,31 +294,57 @@ pub(crate) fn slugify_impl_with_stopset(
     }
 
     // Step 2: Decode HTML entities (if enabled)
+    // #236 item 1: pass `value` through unchanged when there are no entities to
+    // decode (decode_entities borrows in that case). Extract owned-ness first so
+    // the borrow of `value` ends before we reassign it.
     if config.entities {
-        let decoded = decode_entities(&value, config.decimal, config.hexadecimal);
-        value = Cow::Owned(decoded);
+        let owned = match decode_entities(&value, config.decimal, config.hexadecimal) {
+            Cow::Borrowed(_) => None,
+            Cow::Owned(s) => Some(s),
+        };
+        if let Some(s) = owned {
+            value = Cow::Owned(s);
+        }
     }
 
     // Step 3: Transliterate (unless allow_unicode)
-    // into_owned() breaks the borrow from value so we can reassign it. (#114)
+    // #236 item 3: only reallocate when transliterate changed the text. ASCII
+    // input returns Cow::Borrowed, so the former unconditional into_owned()
+    // allocated on every plain-ASCII slug. Extract owned-ness first so the
+    // borrow of `value` ends before we reassign it (#114).
     if !config.allow_unicode {
-        value = Cow::Owned(
-            transliterate::transliterate_impl(
-                &value,
-                config.lang.as_deref(),
-                crate::ErrorMode::Ignore,
-                "",
-                false,
-                false,
-                false,
-            )
-            .into_owned(),
-        );
+        let owned = match transliterate::transliterate_impl(
+            &value,
+            config.lang.as_deref(),
+            crate::ErrorMode::Ignore,
+            "",
+            false,
+            false,
+            false,
+        ) {
+            Cow::Borrowed(_) => None,
+            Cow::Owned(s) => Some(s),
+        };
+        if let Some(s) = owned {
+            value = Cow::Owned(s);
+        }
     }
 
     // Step 4: Lowercase
     if config.lowercase {
-        value = Cow::Owned(value.to_lowercase());
+        if config.allow_unicode {
+            // Full Unicode lowercasing is required when non-ASCII is preserved.
+            value = Cow::Owned(value.to_lowercase());
+        } else {
+            // #236 item 4: after transliteration (ErrorMode::Ignore) the value is
+            // ASCII, so ASCII-lowercase in place — and skip the allocation
+            // entirely when it is already lowercase.
+            if value.bytes().any(|b| b.is_ascii_uppercase()) {
+                let mut s = value.into_owned();
+                s.make_ascii_lowercase();
+                value = Cow::Owned(s);
+            }
+        }
     }
 
     // Step 5: Apply custom regex pattern
@@ -486,27 +547,31 @@ fn decode_numeric_entity_skip(bytes: &[u8], pos: usize) -> usize {
 ///
 /// Replaces the previous two-pass approach (5× `.replace()` + numeric scan)
 /// with one scan and one output buffer.
-fn decode_entities(text: &str, decimal: bool, hexadecimal: bool) -> String {
-    // Fast path: no ampersand means no entities to decode.
-    if !text.contains('&') {
-        return text.to_owned();
-    }
+fn decode_entities(text: &str, decimal: bool, hexadecimal: bool) -> Cow<'_, str> {
+    // Fast path (#236 item 1): no ampersand means no entities — borrow the input
+    // unchanged, no allocation.
+    let Some(first) = text.find('&') else {
+        return Cow::Borrowed(text);
+    };
 
     let mut result = String::with_capacity(text.len());
+    // Bulk-copy the entity-free prefix in one memcpy.
+    result.push_str(&text[..first]);
     let bytes = text.as_bytes();
     let len = bytes.len();
-    let mut i = 0;
+    let mut i = first;
     // Reusable buffer for numeric entity digits (avoids per-entity allocation).
     let mut num_buf = String::with_capacity(MAX_ENTITY_DIGITS);
 
     while i < len {
         if bytes[i] != b'&' {
-            // Advance by full UTF-8 character, not by byte.
-            // bytes[i] as char would corrupt multi-byte characters (é, ü, 中, etc.)
-            // by treating each continuation byte as a separate Latin-1 codepoint.
-            let ch = text[i..].chars().next().expect("non-empty slice");
-            result.push(ch);
-            i += ch.len_utf8();
+            // #236 item 2: bulk-copy the whole run up to the next '&' in one
+            // `push_str` (memcpy) instead of decoding and pushing per character.
+            // The run is a valid UTF-8 sub-slice (it starts and ends on '&'
+            // boundaries, both ASCII), so no multi-byte char is split.
+            let rel = text[i..].find('&').unwrap_or(len - i);
+            result.push_str(&text[i..i + rel]);
+            i += rel;
             continue;
         }
 
@@ -548,7 +613,7 @@ fn decode_entities(text: &str, decimal: bool, hexadecimal: bool) -> String {
         }
     }
 
-    result
+    Cow::Owned(result)
 }
 
 /// Batch slugification: process a list of strings in a single PyO3 boundary crossing.

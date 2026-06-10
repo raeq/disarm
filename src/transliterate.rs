@@ -1439,6 +1439,12 @@ fn is_kana(ch: char) -> bool {
 pub fn _strip_accents(text: &str) -> String {
     use unicode_normalization::UnicodeNormalization;
 
+    // ASCII has no combining marks, so NFD→strip→NFC is the identity — skip the
+    // normalization passes entirely (#236 item 6, matching `_strip_accents_batch`).
+    if text.is_ascii() {
+        return text.to_owned();
+    }
+
     text.nfd()
         .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
         .nfc()

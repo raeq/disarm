@@ -5,27 +5,12 @@ use std::sync::{LazyLock, RwLock};
 
 use crate::transliterate;
 
-/// Maximum iterations for unique slug generation before giving up.
-/// Prevents infinite loops when all candidates are rejected.
-const MAX_UNIQUE_ATTEMPTS: u64 = 10_000;
+// Resource limits are centralized in `crate::limits` (#256).
+use crate::limits::{MAX_REGEX_DFA_BYTES, MAX_REGEX_PATTERN_BYTES, MAX_UNIQUE_ATTEMPTS};
 
 /// Maximum digit count for numeric HTML entity parsing.
 /// Prevents unbounded string accumulation on malformed input.
 const MAX_ENTITY_DIGITS: usize = 10;
-
-/// Maximum byte length of a caller-supplied regex pattern.
-/// Prevents adversarial patterns from consuming excessive compile time or
-/// memory. The regex crate guards against catastrophic backtracking at
-/// match time, but compilation of an enormous pattern is also bounded here.
-const MAX_REGEX_PATTERN_BYTES: usize = 512;
-
-/// Maximum compiled DFA size for caller-supplied regex patterns, in bytes.
-///
-/// The `regex` crate uses finite automata (no catastrophic backtracking at
-/// match time), but compiling a large pattern can consume substantial memory
-/// and CPU.  This cap bounds both compile-time allocation and CPU for
-/// adversarial patterns that would otherwise produce a very large DFA.
-const MAX_REGEX_DFA_BYTES: usize = 1_048_576; // 1 MiB
 
 /// Validate and compile a caller-supplied regex pattern after enforcing a size cap.
 ///

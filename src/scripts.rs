@@ -443,12 +443,11 @@ fn discriminate_by_chars(text: &str, script: &str) -> Option<&'static str> {
 /// that triggered the match.  Used by `_inspect_auto_lang` to provide
 /// audit-level detail.
 fn discriminate_by_chars_detailed(text: &str, script: &str) -> Option<(&'static str, char)> {
-    // Cap the scan at 2 000 characters.  If a discriminator character
-    // exists in the text it will almost certainly appear in the opening
-    // portion — scanning further is pure overhead for long documents.
-    const SCAN_LIMIT: usize = 2_000;
-
-    for ch in text.chars().take(SCAN_LIMIT) {
+    // Cap the scan at `SCAN_LIMIT` characters (centralized in `crate::limits`,
+    // #256).  If a discriminator character exists in the text it will almost
+    // certainly appear in the opening portion — scanning further is pure
+    // overhead for long documents.
+    for ch in text.chars().take(crate::limits::SCAN_LIMIT) {
         let hit = if script == "Latin" {
             lookup_latin_discriminator(ch)
         } else {

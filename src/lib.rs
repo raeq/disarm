@@ -60,6 +60,8 @@ pub mod filename;
 pub mod grapheme;
 mod hostname;
 #[doc(hidden)]
+pub mod limits;
+#[doc(hidden)]
 pub mod normalize;
 mod pipeline;
 #[doc(hidden)]

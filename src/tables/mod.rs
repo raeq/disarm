@@ -29,13 +29,18 @@ const HANGUL_SYLLABLE_COUNT: usize = 11_172;
 /// Pre-computed romanizations for all 11,172 precomposed Hangul syllables,
 /// packed into a single contiguous blob with an offset array (#237 item 3).
 ///
-/// The previous `OnceLock<Vec<String>>` held 11,172 *separate* small `String`
-/// allocations (~700 KB heap incl. per-`String` slop) plus a pointer-chase per
-/// lookup. This packs them into **one** `String` blob + **one** `[u32]` offset
-/// array — two allocations instead of 11,173, contiguous in memory (so adjacent
-/// syllables share cache lines), and a flat indexed slice per lookup. The
-/// returned `&'static str` slices borrow from this `OnceLock` storage, which
-/// lives for the process lifetime, so no `Box::leak`.
+/// The previous `OnceLock<Vec<String>>` *retained* 11,172 separate small
+/// `String` allocations (~700 KB heap incl. per-`String` slop), held for the
+/// process lifetime, plus a pointer-chase per lookup. This packs them into
+/// **one** `String` blob + **one** `[u32]` offset array — so the **retained**
+/// heap is two allocations instead of 11,173, contiguous in memory (adjacent
+/// syllables share cache lines), with a flat indexed slice per lookup.
+/// (Construction still calls `romanize_hangul` per syllable, which allocates a
+/// transient `String` that is dropped immediately after it is copied into the
+/// blob; the win is the retained footprint and locality, not the one-time
+/// construction allocations.) The returned `&'static str` slices borrow from
+/// this `OnceLock` storage, which lives for the process lifetime, so no
+/// `Box::leak`.
 struct HangulRomanizations {
     /// All romanizations concatenated, in syllable order.
     blob: String,

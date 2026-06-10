@@ -332,18 +332,21 @@ pub(crate) fn slugify_impl_with_stopset(
 
     // Step 4: Lowercase
     if config.lowercase {
-        if config.allow_unicode {
-            // Full Unicode lowercasing is required when non-ASCII is preserved.
-            value = Cow::Owned(value.to_lowercase());
-        } else {
-            // #236 item 4: after transliteration (ErrorMode::Ignore) the value is
-            // ASCII, so ASCII-lowercase in place — and skip the allocation
-            // entirely when it is already lowercase.
+        // #236 item 4: ASCII-lowercase in place (skipping the allocation when
+        // already lowercase) only when the value is wholly ASCII. Built-in
+        // transliteration tables emit ASCII (build.rs enforces it), but
+        // `allow_unicode` preserves the original script AND `register_lang()`
+        // can register custom profiles with non-ASCII values — both can leave
+        // non-ASCII here, which needs full Unicode lowercasing to match the
+        // previous behaviour (caught in review of #280).
+        if value.is_ascii() {
             if value.bytes().any(|b| b.is_ascii_uppercase()) {
                 let mut s = value.into_owned();
                 s.make_ascii_lowercase();
                 value = Cow::Owned(s);
             }
+        } else {
+            value = Cow::Owned(value.to_lowercase());
         }
     }
 

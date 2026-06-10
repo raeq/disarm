@@ -6,7 +6,23 @@ and regex_pattern behavior.
 
 from __future__ import annotations
 
-from translit import slugify
+from translit import register_lang, slugify
+
+
+class TestCustomLangNonAsciiLowercase:
+    """Regression (#280 review): the slugify lowercase step's ASCII fast path
+    must not skip Unicode lowercasing when a ``register_lang()`` profile emits
+    non-ASCII output (built-in tables are ASCII; custom ones need not be)."""
+
+    def test_custom_lang_non_ascii_value_is_lowercased(self) -> None:
+        # Non-ASCII key → non-ASCII uppercase value (ASCII keys bypass
+        # transliteration via the ASCII fast path, so the key must be non-ASCII).
+        register_lang("slugtest_psi_reg", {"Ω": "Ψ"})  # Ω → Ψ
+        # !allow_unicode: the custom map emits Ψ (alphanumeric, survives the
+        # separator step); the lowercase step must fold it to ψ, not leave Ψ.
+        result = slugify("Ω", lang="slugtest_psi_reg")
+        assert result == "ψ", repr(result)  # ψ
+        assert result == result.lower()
 
 
 class TestHtmlEntityDecoding:

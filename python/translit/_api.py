@@ -10,7 +10,7 @@ from __future__ import annotations
 import warnings as _warnings
 from collections.abc import Iterable
 from functools import lru_cache, wraps
-from typing import Any, Protocol, cast, overload
+from typing import TYPE_CHECKING, Any, Protocol, cast, overload
 
 from translit._enums import (
     LANG_META,
@@ -66,6 +66,7 @@ from translit._translit import (
     _seal_registrations,
     # Emoji provider
     _set_emoji_provider,
+    _set_transliterate_fallback,
     # Stateful
     _Slugifier,
     _slugify,
@@ -79,6 +80,7 @@ from translit._translit import (
     # Batch APIs (single PyO3 boundary crossing for N strings)
     _transliterate_batch,
     _transliterate_context,
+    _transliterate_entry,
     _UniqueSlugifier,
     # Semantic argument-combination validation (single source of truth, #231)
     _validate_transliterate_args,
@@ -136,7 +138,7 @@ def _validate_batch(texts: object, func_name: str) -> None:
 
 
 @overload
-def transliterate(
+def _transliterate_dispatch(
     text: str,
     *,
     lang: str | None = ...,
@@ -151,7 +153,7 @@ def transliterate(
 
 
 @overload
-def transliterate(
+def _transliterate_dispatch(
     text: list[str],
     *,
     lang: str | None = ...,
@@ -165,7 +167,7 @@ def transliterate(
 ) -> list[str]: ...
 
 
-def transliterate(
+def _transliterate_dispatch(
     text: str | list[str],
     *,
     lang: str | None = None,
@@ -341,6 +343,21 @@ def transliterate(
     # duplicated the core's own optimization — a per-binding drift liability.
     # Positional call into the private binding (#277) — see batch path note.
     return _transliterate(text, lang, errors, replace_with, strict_iso9, gost7034, tones)
+
+
+# ── #277 Phase B: single-crossing public entry point ──
+# At runtime `transliterate` is the Rust fastcall entry: the common shape
+# (exact str, forward, no context) runs with ONE Python→native call and
+# Rust-side keyword defaults (zero extraction cost on bare calls). Every other
+# shape (list batch, str subclass, target=, context=True, type errors)
+# delegates back to _transliterate_dispatch above, which is unchanged.
+# Type checkers see the overloaded Python signature as the source of truth;
+# mypy treats the `else` branch as unreachable under TYPE_CHECKING.
+_set_transliterate_fallback(_transliterate_dispatch)
+if TYPE_CHECKING:
+    transliterate = _transliterate_dispatch
+else:
+    transliterate = _transliterate_entry
 
 
 def find_untranslatable(

@@ -181,9 +181,12 @@ cross-product of Unidecode's two API entry points
 (`unidecode_expect_ascii`, `unidecode_expect_nonascii`) and its two sample
 inputs. The clean-room replication is in
 [`benchmarks/bench_unidecode_own.py`](https://github.com/raeq/translit/blob/main/benchmarks/bench_unidecode_own.py)
-(the GPL benchmark file itself is not copied — only the methodology). The recorded
-sweep, on the CI bucket fingerprinted [below](#absolute-numbers-fingerprinted),
-was:
+(the GPL benchmark file itself is not copied — only the methodology). The sweep
+below was recorded in
+[PR #284](https://github.com/raeq/translit/pull/284) and
+[PR #281](https://github.com/raeq/translit/pull/281) on an AMD EPYC 7763 CI
+bucket (the fields you would record for your own run are described under
+[Absolute numbers](#absolute-numbers-illustrative-and-fingerprinted)):
 
 | Cell | Ratio (Unidecode time / translit time) |
 |---|---|
@@ -196,13 +199,15 @@ The narrowest cell (1.43×) is Unidecode's strongest case — pure-ASCII text
 through its ASCII-optimised entry point — and translit still wins it via the
 return-original-object fast path. These are recorded absolutes; they are *not*
 asserted in CI (the four-cell pass/fail is checked by the benchmark script, not
-by this page).
+by this page). Re-run them with `python benchmarks/bench_unidecode_own.py`.
 
 ## ASCII passthrough
 
-Already-ASCII input never enters Rust and is returned as the *same* Python
-object — no copy, no allocation (#277 lever 4). This is a correctness property,
-so it is asserted directly:
+Already-ASCII input still crosses into Rust once (`transliterate()` does not
+short-circuit on the Python side — the validation and the borrowed fast path
+live in Rust); Rust then returns the input as the *same* Python `str` object via
+a borrowed `Cow`, with no copy and no allocation (#277 lever 4, #284). The
+object-identity property is asserted directly:
 
 ```python
 s = "plain ascii text 12345"
@@ -299,34 +304,40 @@ assert fold_case("Straße") == "strasse"           # full Unicode case folding
 assert strip_accents("café résumé") == "cafe resume"
 ```
 
-## Absolute numbers (fingerprinted)
+## Absolute numbers (illustrative and fingerprinted)
 
 Absolute figures are **not comparable across hardware** and are never asserted.
-They are published with the full environment fingerprint that produced them and
-recorded on the `perf-results` branch. Reproduce the fingerprint for your own
-machine with:
+They are meaningful only alongside the environment that produced them. A full
+fingerprint — CPU microarchitecture, CPython version and build, the exact
+comparator versions, rustc version, git commit, and date — is emitted by:
 
 ```bash
 python scripts/perf_fingerprint.py --json
 ```
 
-The recorded short-string figures below are from the CI reference bucket
-(AMD EPYC 7763, CPython 3.12, pinned comparators from `requirements/bench.txt`,
-median-of-7 interleaved). They illustrate the per-call regime; your numbers will
-differ.
+The short-string figures below were recorded in
+[PR #284](https://github.com/raeq/translit/pull/284) and
+[PR #281](https://github.com/raeq/translit/pull/281) on an AMD EPYC 7763 CI
+bucket (CPython 3.12, pinned comparators from `requirements/bench.txt`,
+median-of-7 interleaved). They are reproduced here to illustrate the per-call
+regime; **your numbers will differ**, and the only durable claims are the ratios
+asserted earlier on this page.
 
-| Input (per call) | translit | vs Unidecode |
-|---|---|---|
-| Latin diacritics (~70–85 chars) | recorded | **~21×** |
-| Mixed scripts | recorded | **~17×** |
-| Greek | recorded | **~15×** |
-| Cyrillic | recorded | **~15×** |
-| ASCII passthrough | **~71 ns** | returns original object |
+| Input (per call) | vs Unidecode |
+|---|---|
+| Latin diacritics (~70–85 chars) | **~21×** |
+| Mixed scripts | **~17×** |
+| Greek | **~15×** |
+| Cyrillic | **~15×** |
+| ASCII passthrough (~71 ns) | returns original object |
 
 Document-scale throughput (same bucket): **~450M chars/sec** Latin
 (**~38×** Unidecode), **~106M chars/sec** Cyrillic (**~15×**), slugify
 **~712K slugs/sec** (**~10–24×** python-slugify). These match the figures quoted
-in the project README; both derive from the same recorded measurements.
+in the project README; both derive from the same recorded measurements. To
+record a fresh, fully fingerprinted run, execute the `benchmarks/` scripts on a
+tuned machine and append the `perf_fingerprint.py --json` record alongside the
+results.
 
 ## Why it is fast (internals)
 
@@ -349,8 +360,9 @@ boundary crossing — not from cutting memory-safety corners
 - **Zero-copy UTF-8 extraction.** Input is read with `PyUnicode_AsUTF8AndSize`
   on the abi3-py310 floor — no intermediate copy (#277 lever 1).
 - **Atomic no-replacements flag.** The common case (no registered replacements)
-  is a single relaxed atomic load, skipping the replacement-registry lock
-  entirely (`src/tables/mod.rs`).
+  is a single atomic load (`Ordering::Acquire`, paired with the `Release` store
+  in the mutators), skipping the replacement-registry lock entirely
+  (`src/tables/mod.rs`).
 - **GIL released across batch loops.** List inputs release the GIL around the
   pure-Rust compute loop, so multiple Python threads run their Rust work in
   parallel (#70).

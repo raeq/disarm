@@ -96,6 +96,12 @@ class TestSlugify:
         assert r.returncode == 0
         assert len(r.stdout.strip()) <= 5
 
+    def test_lang_flag(self):
+        # #250 C3: --lang must be honored (German ä→ae), not silently ignored.
+        r = run_cli("s", "--lang", "de", "Ärger")
+        assert r.returncode == 0
+        assert r.stdout.strip() == "aerger"
+
 
 class TestNormalize:
     def test_nfc(self):
@@ -129,6 +135,19 @@ class TestPipeline:
         r = run_cli("p", "--steps", "bogus_step", "text")
         assert r.returncode != 0
         assert "unknown" in r.stderr.lower()
+
+    def test_strip_bidi_step(self):
+        # #250 C6: strip_bidi was supported by TextPipeline but unreachable.
+        r = run_cli("p", "--steps", "strip_bidi", "a‮b")  # RLO override
+        assert r.returncode == 0
+        assert "‮" not in r.stdout
+        assert r.stdout.strip() == "ab"
+
+    def test_strip_zalgo_step(self):
+        # #250 C6: strip_zalgo takes --zalgo-max-marks (default 0 = strip all).
+        r = run_cli("p", "--steps", "strip_zalgo", "--zalgo-max-marks", "0", "a\u0301\u0301\u0301")
+        assert r.returncode == 0
+        assert r.stdout.strip() == "a"
 
 
 class TestDemojize:
@@ -202,6 +221,14 @@ class TestErrors:
     def test_unsupported_reverse_target(self):
         r = run_cli("t", "--target", "de", "hello")
         assert r.returncode != 0
+
+    def test_api_error_is_clean_not_traceback(self):
+        # #250 C7: an API error (here an unknown --lang, now fail-closed by #257)
+        # prints "Error: ..." + exit 1, not a raw Python traceback.
+        r = run_cli("s", "--lang", "zzz", "hello")
+        assert r.returncode == 1
+        assert r.stderr.startswith("Error:")
+        assert "Traceback" not in r.stderr
 
 
 # ---------------------------------------------------------------------------

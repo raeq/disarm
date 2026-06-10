@@ -72,6 +72,14 @@ class TestSlugifier:
         assert "Slugifier" in r
         assert "_" in r
 
+    def test_unknown_lang_raises(self) -> None:
+        # #257: the stateful constructor must fail-closed on an unknown lang,
+        # like the free slugify(), not silently fall back to the default.
+        with pytest.raises(ValueError, match="unknown language code"):
+            Slugifier(lang="zzz")
+        # A valid lang still constructs and applies its rules.
+        assert Slugifier(lang="de")("Ärger") == "aerger"
+
 
 class TestUniqueSlugifier:
     """Tests for the UniqueSlugifier class."""
@@ -101,6 +109,11 @@ class TestUniqueSlugifier:
         s = UniqueSlugifier(check=check)
         result = s("Hello World")
         assert result == "hello-world-1"
+
+    def test_unknown_lang_raises(self) -> None:
+        # #257: delegates to the same core constructor, so it inherits the check.
+        with pytest.raises(ValueError, match="unknown language code"):
+            UniqueSlugifier(lang="qqq")
 
 
 class TestSlugifyDefault:
@@ -183,6 +196,35 @@ class TestSlugifyBatchMaxLengthGuard:
             Slugify(max_length=-1)
         with pytest.raises(ValueError, match="max_length must be non-negative"):
             UniqueSlugify(max_length=-1)
+
+
+class TestMaxBoundOverflowGuard:
+    """#255: a max bound larger than the Rust i64 boundary must raise a catchable
+    InvalidArgumentError (a ValueError), not a bare PyO3 OverflowError that
+    escapes the TranslitError hierarchy. The mirror of the negative guard, one
+    bound up — for the free functions that cross into i64."""
+
+    HUGE = 2**63  # one past i64::MAX
+
+    def test_slugify_scalar(self) -> None:
+        with pytest.raises(ValueError, match="too large"):
+            slugify("hello", max_length=self.HUGE)
+
+    def test_slugify_batch(self) -> None:
+        with pytest.raises(ValueError, match="too large"):
+            slugify(["hello"], max_length=self.HUGE)
+
+    def test_grapheme_truncate(self) -> None:
+        from translit import grapheme_truncate
+
+        with pytest.raises(ValueError, match="too large"):
+            grapheme_truncate("hello", self.HUGE)
+
+    def test_sanitize_filename(self) -> None:
+        from translit import sanitize_filename
+
+        with pytest.raises(ValueError, match="too large"):
+            sanitize_filename("hello", max_length=self.HUGE)
 
 
 class TestStatefulDefault:

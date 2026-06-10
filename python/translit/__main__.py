@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from translit import TextPipeline, demojize, normalize, slugify, transliterate
+from translit import TextPipeline, TranslitError, demojize, normalize, slugify, transliterate
 
 
 def _read_input(args_text: list[str]) -> str:
@@ -45,6 +45,8 @@ def cmd_transliterate(args: argparse.Namespace) -> None:
 def cmd_slugify(args: argparse.Namespace) -> None:
     text = _read_input(args.text)
     kwargs: dict[str, object] = {}
+    if args.lang is not None:  # #250 C3: the subparser declared --lang but it was ignored
+        kwargs["lang"] = args.lang
     if args.separator is not None:
         kwargs["separator"] = args.separator
     if args.max_length is not None:
@@ -66,6 +68,9 @@ def cmd_pipeline(args: argparse.Namespace) -> None:
     for step in steps:
         if step == "normalize":
             kwargs["normalize"] = args.form or "NFC"
+        elif step == "strip_zalgo":
+            # #250 C6: strip_zalgo takes a value (max combining marks per base char).
+            kwargs["strip_zalgo"] = args.zalgo_max_marks
         elif step in (
             "transliterate",
             "fold_case",
@@ -75,6 +80,7 @@ def cmd_pipeline(args: argparse.Namespace) -> None:
             "strip_control",
             "strip_zero_width",
             "demojize",
+            "strip_bidi",  # #250 C6: was supported by TextPipeline but unreachable from the CLI
         ):
             kwargs[step] = True
         else:
@@ -175,9 +181,15 @@ def main() -> None:
             required=True,
             help="Comma-separated steps: normalize,transliterate,fold_case,"
             "collapse_whitespace,strip_accents,confusables,strip_control,"
-            "strip_zero_width,demojize",
+            "strip_zero_width,demojize,strip_bidi,strip_zalgo",
         )
         p.add_argument("--form", default=None, help="Normalization form for normalize step")
+        p.add_argument(
+            "--zalgo-max-marks",
+            type=int,
+            default=0,
+            help="Max combining marks per base char for the strip_zalgo step (default: 0)",
+        )
         p.set_defaults(func=cmd_pipeline)
 
     # demojize (+ short form "d")
@@ -188,7 +200,14 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    args.func(args)
+    try:
+        args.func(args)
+    except (TranslitError, ValueError) as exc:
+        # #250 C7: surface API errors (bad --lang/--form, contradictory flags) as
+        # a clean message + non-zero exit instead of a traceback, matching the
+        # handling already used for unknown steps / missing input.
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

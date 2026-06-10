@@ -24,6 +24,7 @@ from translit._translit import (
     # re-declared, to prevent silent drift (#200).
     _MAX_BATCH_SIZE,
     # Exception hierarchy (#183): base + categorised subclasses
+    InvalidArgumentError,
     ResourceLimitError,
     SafeHostnameDetails,
     _clear_replacements,
@@ -101,6 +102,21 @@ _MAX_GRAPHEME_SPLIT_INPUT: int = 10 * 1024 * 1024  # ~10.5M characters (codepoin
 # which raises InvalidArgumentError with the canonical message. The Python wrapper
 # no longer keeps a hand-synced copy of those sets — that drift hazard scaled per
 # binding. Only *combinations* of otherwise-valid kwargs are checked here (#69).
+
+
+# Upper bound of the Rust `i64` that `max_length`/`max_graphemes` cross into.
+# A larger value can't reach the core — PyO3 raises a bare `OverflowError` at
+# extraction, outside the TranslitError hierarchy — so reject it here as
+# InvalidArgumentError, consistently with the core's negative-value check (#255).
+# This is the one bound the core provably cannot enforce (the value never arrives).
+_MAX_I64: int = 2**63 - 1
+
+
+def _checked_i64_max(value: int, name: str) -> int:
+    """Reject a max-bound too large for the Rust i64 boundary (#255)."""
+    if value > _MAX_I64:
+        raise InvalidArgumentError(f"{name} too large: {value} exceeds the maximum {_MAX_I64}")
+    return value
 
 
 def _validate_batch(texts: object, func_name: str) -> None:
@@ -383,7 +399,9 @@ def _build_slug_kwargs(
     return dict(
         separator=separator,
         lowercase=lowercase,
-        max_length=max_length,
+        # #255: reject a max_length too large for the i64 boundary here (the one
+        # bound the core can't see); negatives are still validated in the core.
+        max_length=_checked_i64_max(max_length, "max_length"),
         word_boundary=word_boundary,
         save_order=save_order,
         stopwords=stopwords,
@@ -718,7 +736,7 @@ def sanitize_filename(
     return _sanitize_filename(
         text,
         separator=separator,
-        max_length=max_length,
+        max_length=_checked_i64_max(max_length, "max_length"),  # #255
         platform=platform,
         lang=lang,
         preserve_extension=preserve_extension,
@@ -1016,7 +1034,7 @@ def grapheme_truncate(text: str, max_graphemes: int) -> str:
         'caf'
     """
     # max_graphemes's non-negative contract is enforced by the Rust core (#231).
-    return _grapheme_truncate(text, max_graphemes)
+    return _grapheme_truncate(text, _checked_i64_max(max_graphemes, "max_graphemes"))  # #255
 
 
 def terminal_width(text: str, *, ambiguous_wide: bool = False) -> int:

@@ -44,6 +44,13 @@ pub fn reverse_langs() -> Vec<String> {
 /// tries the longest possible key first (up to MAX_KEY_LEN characters),
 /// falling back to shorter keys, and finally passing through unmatched
 /// characters verbatim.
+///
+/// **Case sensitivity (#255):** lookups are exact-case. Multigraph keys exist
+/// only in their documented casings (e.g. `Shch`/`shch` for щ), so an unusual
+/// all-caps romanization like `SHCH` has no entry and decomposes character by
+/// character instead of recovering the trigraph. A case-insensitive fallback is
+/// deferred to the Aho-Corasick matcher rewrite in #252, which replaces this
+/// scan wholesale — adding the fallback here first would just be reworked there.
 pub fn reverse_transliterate_impl(text: &str, lang: &str) -> String {
     let bytes = text.as_bytes();
     let len = bytes.len();

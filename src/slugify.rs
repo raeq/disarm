@@ -671,6 +671,12 @@ impl _Slugifier {
         hexadecimal: bool,
         safe_chars: &str,
     ) -> PyResult<Self> {
+        // #257: validate `lang` in the constructor too. The stateful classes are
+        // a first-class entrypoint (the typical long-lived web-handler form), so
+        // they must fail-closed on an unknown lang exactly like the free
+        // `_slugify` / `_slugify_batch` — not silently fall back to the default
+        // transliterator.
+        crate::transliterate::validate_lang(lang)?;
         // #231: validate the non-negative contract in the core, consistent with
         // the free `_slugify` / `_slugify_batch` entrypoints.
         let max_length = crate::error::checked_max_length(max_length)?;

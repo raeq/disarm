@@ -4,7 +4,7 @@ Usage::
 
     from translit.security import is_confusable, is_mixed_script, is_safe_hostname
 
-    is_confusable("paypal.com", "pаypal.com")  # True (Cyrillic 'a')
+    is_confusable("pаypal")                     # True (contains Cyrillic 'а')
     is_mixed_script("pаypal")                   # True
     safe, details = is_safe_hostname("example.com")
 """

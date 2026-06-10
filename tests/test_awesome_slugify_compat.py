@@ -175,6 +175,24 @@ class TestUniqueSlugifyClass:
         result = u("hello world")
         assert result[0].isupper()
 
+    def test_property_mutation_takes_effect(self) -> None:
+        # #249: a property set after construction must affect output, exactly as
+        # it does for Slugify. Previously UniqueSlugify built its inner slugifier
+        # once and never rebuilt it, so setters were silently ignored. Distinct
+        # inputs avoid the uniqueness suffix masking the assertions.
+        u = UniqueSlugify()
+        assert u("alpha one") == "alpha-one"
+        u.separator = "_"
+        assert u("bravo two") == "bravo_two"
+        u.to_lower = True
+        assert u("Charlie Three") == "charlie_three"
+
+    def test_max_length_mutation_takes_effect(self) -> None:
+        # #249: max_length set after construction must apply.
+        u = UniqueSlugify()
+        u.max_length = 5
+        assert len(u("hello world foo bar")) <= 5
+
     def test_repr(self) -> None:
         assert "UniqueSlugify" in repr(UniqueSlugify())
 

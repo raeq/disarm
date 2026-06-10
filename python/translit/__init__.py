@@ -174,7 +174,7 @@ from translit._translit import (
     TranslitError,
     UnsupportedError,
 )
-from translit._types import NF, EmojiProvider, ErrorMode
+from translit._types import NF, EmojiProvider, TransliterateErrorMode
 
 # --- Package version (single source of truth: the installed distribution's metadata,
 #     so `translit.__version__` always tracks the wheel the user actually has) ---
@@ -185,7 +185,7 @@ except _PackageNotFoundError:  # pragma: no cover - source checkout without an i
 
 # --- Compatibility aliases ---
 
-from translit._compat import (  # noqa: E402, F401  # noqa: E402, F401
+from translit._compat import (  # noqa: E402, F401
     Slugify,
     UniqueSlugify,
     ascii_fold,
@@ -403,7 +403,7 @@ class _CallableModule(_stdlib_types.ModuleType):
         *,
         lang: str | None = None,
         target: str | None = None,
-        errors: ErrorMode = "replace",
+        errors: TransliterateErrorMode = "replace",
         replace_with: str = "[?]",
         strict_iso9: bool = False,
         gost7034: bool = False,

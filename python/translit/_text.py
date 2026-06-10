@@ -25,7 +25,13 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from translit._enums import Script
-    from translit._types import EmojiProvider, ErrorMode, NormalizationForm, Platform
+    from translit._types import (
+        EmojiProvider,
+        ErrorMode,
+        NormalizationForm,
+        Platform,
+        TransliterateErrorMode,
+    )
 
 
 def _get_translit():
@@ -120,7 +126,7 @@ class Text:
         *,
         lang: str | None = None,
         target: str | None = None,
-        errors: ErrorMode = "replace",
+        errors: TransliterateErrorMode = "replace",
         replace_with: str = "[?]",
         strict_iso9: bool = False,
         gost7034: bool = False,

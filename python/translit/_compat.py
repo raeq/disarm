@@ -358,15 +358,25 @@ class UniqueSlugify(Slugify):
 
         # safe_chars (incl. its max_length interaction) is handled natively by the
         # Rust core now (#230), so the inner slugifier needs no special setup.
+        self._check: Callable[[str], bool] | None = check
         self._unique_inner: _UniqueSlugifier = _UniqueSlugifier(check=check, **self._kwargs)
 
+    def _ensure_unique_inner(self) -> _UniqueSlugifier:
+        # Mirror Slugify._ensure_inner (#249): a property setter marks the config
+        # dirty; rebuild so mutations made after construction actually take effect
+        # (previously the inner slugifier was built once and never refreshed).
+        if self._dirty:
+            self._unique_inner = _UniqueSlugifier(check=self._check, **self._kwargs)
+            self._dirty = False
+        return self._unique_inner
+
     def __call__(self, text: str, **kwargs: Any) -> str:
-        result = str(self._unique_inner.slugify(text))
+        result = str(self._ensure_unique_inner().slugify(text))
         return self._capitalize_first(result, self._capitalize)
 
     def reset(self) -> None:
         """Clear the internal set of seen slugs."""
-        self._unique_inner.reset()
+        self._ensure_unique_inner().reset()
 
     def __repr__(self) -> str:
         return "UniqueSlugify()"

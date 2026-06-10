@@ -365,7 +365,7 @@ pub fn list_langs() -> Vec<String> {
 ///
 /// # Seal
 ///
-/// This mutator does **not** consult [`REGISTRATIONS_SEALED`].  Seal
+/// This mutator does **not** consult `REGISTRATIONS_SEALED`.  Seal
 /// enforcement is the **caller's responsibility** — the PyO3 entry points in
 /// `transliterate.rs` call `check_not_sealed` before invoking this function.
 /// Any future direct-Rust API (e.g. the core split planned in #38) must add
@@ -417,7 +417,7 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
 ///
 /// # Seal
 ///
-/// This mutator does **not** consult [`REGISTRATIONS_SEALED`].  Seal
+/// This mutator does **not** consult `REGISTRATIONS_SEALED`.  Seal
 /// enforcement is the **caller's responsibility** — the PyO3 entry points in
 /// `transliterate.rs` call `check_not_sealed` before invoking this function.
 /// Any future direct-Rust API (e.g. the core split planned in #38) must add
@@ -458,7 +458,7 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
 ///
 /// # Seal
 ///
-/// This mutator does **not** consult [`REGISTRATIONS_SEALED`].  Seal
+/// This mutator does **not** consult `REGISTRATIONS_SEALED`.  Seal
 /// enforcement is the **caller's responsibility** — the PyO3 entry points in
 /// `transliterate.rs` call `check_not_sealed` before invoking this function.
 /// Any future direct-Rust API (e.g. the core split planned in #38) must add
@@ -474,7 +474,7 @@ pub fn remove_replacement(key: &str) -> bool {
 ///
 /// # Seal
 ///
-/// This mutator does **not** consult [`REGISTRATIONS_SEALED`].  Seal
+/// This mutator does **not** consult `REGISTRATIONS_SEALED`.  Seal
 /// enforcement is the **caller's responsibility** — the PyO3 entry points in
 /// `transliterate.rs` call `check_not_sealed` before invoking this function.
 /// Any future direct-Rust API (e.g. the core split planned in #38) must add

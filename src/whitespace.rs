@@ -59,9 +59,9 @@ pub fn strip_control_chars(text: &str) -> String {
 
 /// Strip zero-width and invisible characters from text.
 pub fn strip_zero_width_chars(text: &str) -> String {
-    // Every zero-width code point is ≥ U+180E, so pure-ASCII input is unchanged.
-    // Skip the filter+collect (and its allocation) on the common ASCII case.
-    // (#252 O6.2 — `is_zero_width` has no ASCII members.)
+    // `is_zero_width` matches no ASCII code point, so pure-ASCII input is
+    // returned unchanged — skip the filter+collect (and its allocation) on the
+    // common ASCII case (#252 O6.2). Premise guarded by `is_zero_width_has_no_ascii`.
     if text.is_ascii() {
         return text.to_owned();
     }
@@ -134,6 +134,18 @@ mod tests {
         );
         // Verify count: 10 zero-width characters
         assert_eq!(all_zw.chars().count(), 10);
+    }
+
+    #[test]
+    fn is_zero_width_has_no_ascii() {
+        // strip_zero_width_chars's ASCII fast path is correct only because no
+        // ASCII code point is zero-width (#252 O6.2). Guard that premise.
+        for c in 0u8..0x80 {
+            assert!(
+                !is_zero_width(c as char),
+                "ASCII {c:#04x} must not be zero-width"
+            );
+        }
     }
 
     #[test]

@@ -2,16 +2,18 @@ name: Perf gate
 
 # #234 CI signal model. Runner image + Python are pinned (gate V9) so the
 # deterministic gate is reproducible and ratios bucket by a stable environment.
+#
+# IMPORTANT (required-check safety): "iai estimated-cycles gate" is a *required*
+# status check on `main`. A required check must report a conclusion on EVERY PR,
+# so this workflow must NOT use an `on.pull_request.paths` filter — a filtered
+# workflow simply never runs for non-matching PRs, leaving the required check
+# stuck at "Expected" and blocking the merge forever. Instead the workflow runs
+# on every PR; a `changes` job detects whether perf-relevant files were touched,
+# and the gate's expensive steps are guarded on that. When nothing perf-relevant
+# changed, the gate job still runs and reports success (a cheap shim), so the
+# required check is satisfied without doing the work.
 on:
   pull_request:
-    paths:
-      - "src/**"
-      - "benchmarks/**"
-      - "examples/**"
-      - "Cargo.toml"
-      - "build.rs"
-      - "requirements/bench.txt"
-      - ".github/workflows/perf-gate.yml"
 
 concurrency:
   group: perf-gate-${{ github.ref }}
@@ -28,29 +30,68 @@ env:
   CYCLES_LIMIT: "EstimatedCycles=5%"
 
 jobs:
-  # ── Hard, deterministic, directional gate (V10–V12) ──────────────────────
-  iai-gate:
-    name: iai estimated-cycles gate
+  # ── Did this PR touch anything the perf gate cares about? ────────────────
+  changes:
+    name: detect perf-relevant changes
     runs-on: ubuntu-24.04
+    outputs:
+      perf: ${{ steps.f.outputs.perf }}
     steps:
       - uses: actions/checkout@v6
         with:
+          fetch-depth: 0
+      - id: f
+        run: |
+          base="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          if git diff --name-only "$base" HEAD \
+             | grep -qE '^(src/|benchmarks/|examples/|Cargo\.toml$|build\.rs$|requirements/bench\.txt$|\.github/workflows/perf-gate\.yml$)'; then
+            echo "perf=true" >> "$GITHUB_OUTPUT"
+            echo "Perf-relevant files changed → gate will run."
+          else
+            echo "perf=false" >> "$GITHUB_OUTPUT"
+            echo "No perf-relevant files changed → gate is a no-op shim."
+          fi
+
+  # ── Hard, deterministic, directional gate (V10–V12) ──────────────────────
+  # Runs on every PR so the required check always reports. The expensive steps
+  # are guarded on `changes.perf`; on a non-perf PR only the notice runs and the
+  # job reports success (do NOT add a job-level `if:` — a skipped required job is
+  # treated as missing, not satisfied, and would re-introduce the merge block).
+  iai-gate:
+    name: iai estimated-cycles gate
+    needs: changes
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Applicability
+        run: |
+          if [ "${{ needs.changes.outputs.perf }}" = "true" ]; then
+            echo "Perf-relevant changes — running the estimated-cycles gate."
+          else
+            echo "::notice::No perf-relevant changes — gate trivially satisfied (required-check shim)."
+          fi
+
+      - uses: actions/checkout@v6
+        if: needs.changes.outputs.perf == 'true'
+        with:
           fetch-depth: 0 # need the merge-base and both code versions (V12)
-
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        if: needs.changes.outputs.perf == 'true'
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-
+        if: needs.changes.outputs.perf == 'true'
       - uses: actions/setup-python@v6
+        if: needs.changes.outputs.perf == 'true'
         with:
           python-version: "3.12" # pinned interpreter (V9)
 
       - name: Install Valgrind + iai-callgrind-runner
+        if: needs.changes.outputs.perf == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y valgrind
           cargo install iai-callgrind-runner --version "${IAI_RUNNER_VERSION}" --locked
 
       - name: Run the deterministic gate
+        if: needs.changes.outputs.perf == 'true'
         env:
           PYO3_PYTHON: python3
         run: |
@@ -74,13 +115,15 @@ jobs:
           else
             echo "::notice::bench_iai is not present on the merge-base — bootstrap run."
             echo "Establishing the gate: running the bench once to confirm it executes."
-            echo "The directional comparison goes live on the next PR (once bench_iai is on the base)."
             cargo bench --no-default-features --bench bench_iai -- --save-baseline=pr
           fi
 
   # ── Informational signals (V13–V15, V3, V5, V19) — never blocks the PR ───
+  # NOT a required check, so a clean job-level skip on non-perf PRs is fine.
   perf-signals:
     name: perf signals (flag-only)
+    needs: changes
+    if: needs.changes.outputs.perf == 'true'
     runs-on: ubuntu-24.04
     continue-on-error: true # flag, do not fail the PR (V13/V14)
     permissions:

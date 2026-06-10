@@ -162,18 +162,11 @@ pub fn registrations_sealed() -> bool {
     REGISTRATIONS_SEALED.load(Ordering::Acquire)
 }
 
-/// Maximum number of entries allowed in `GLOBAL_REPLACEMENTS`.
-///
-/// Prevents unbounded memory growth from untrusted callers supplying very
-/// large replacement tables.
-pub const MAX_REPLACEMENTS: usize = 10_000;
-
-/// Maximum number of user-registered language profiles.
-///
-/// Prevents unbounded memory growth from untrusted callers repeatedly
-/// registering new language codes.  Re-registering an existing code
-/// (overwrite) does not count toward this limit.
-pub const MAX_REGISTERED_LANGS: usize = 100;
+// Resource limits live in `crate::limits` (#256); re-exported here so the
+// long-standing `tables::MAX_REPLACEMENTS` / `tables::MAX_REGISTERED_LANGS`
+// paths used by the registration enforcement (and the public Rust API) keep
+// resolving to the single canonical definition.
+pub use crate::limits::{MAX_REGISTERED_LANGS, MAX_REPLACEMENTS};
 
 /// Return the number of user-registered language profiles.
 pub fn registered_lang_count() -> usize {

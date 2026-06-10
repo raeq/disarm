@@ -10,16 +10,8 @@ use crate::tables;
 use crate::unicode_ranges as ur;
 use crate::ErrorMode;
 
-/// Maximum size, in bytes, of the text produced by the global *replacement
-/// pre-pass* (`register_replacements`).
-///
-/// translit does not cap raw input size — bounding untrusted input is the
-/// caller's responsibility (all operations are linear time/memory; see #80).
-/// This bound is the one exception: registered replacement *values* are
-/// caller-supplied and unbounded, so a tiny input can expand to an enormous
-/// string via a separately-registered value (an amplification a caller's own
-/// input-size check cannot foresee). The pre-pass output is therefore capped.
-const MAX_REPLACEMENT_OUTPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
+// Resource limits are centralized in `crate::limits` (#256).
+use crate::limits::{MAX_CAPACITY_HINT, MAX_REPLACEMENT_OUTPUT_BYTES};
 
 /// Apply the global replacement pre-pass under the output-size bound, mapping an
 /// amplification overflow to the canonical `Error::ReplacementOutputTooLarge`.
@@ -976,19 +968,6 @@ fn handle_unmapped(
     *prev_class = ScriptClass::Other;
     true // genuinely untranslatable
 }
-
-/// Estimate the output buffer capacity based on a sample of the input.
-///
-/// For Latin/Cyrillic/Arabic, a 1:1 ratio is typical.
-/// For CJK, each ideograph expands to a multi-letter pinyin/romaji syllable
-/// plus a space separator — typically 3–5× the UTF-8 byte length.
-/// We sample the first 5 non-ASCII codepoints and use the maximum multiplier
-/// seen, so mixed-script strings like "Hello 北京" pick up the CJK 4×
-/// multiplier rather than defaulting to 1× from the leading Latin characters.
-/// The result is capped at 8 MiB: the previous 256 MiB cap was 32× too large
-/// (#111). Any output exceeding 8 MiB will reallocate at most once, while
-/// the old value reserved 256 MiB of virtual memory per call on large CJK input.
-const MAX_CAPACITY_HINT: usize = 8 * 1024 * 1024; // 8 MiB (#111)
 
 /// Number of leading characters sampled to estimate output expansion.
 ///

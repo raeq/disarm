@@ -20,11 +20,9 @@ const TATWEEL: char = '\u{0640}';
 /// Binary dictionary format magic bytes.
 const MAGIC: &[u8; 4] = b"TRLD";
 
-/// Capacity-hint clamp for `ContextDict::from_bytes` (#116): a corrupt header
-/// count must not drive a huge `HashMap` pre-allocation. Using `data.len()` as
-/// the cap over-reserved buckets; 1,000,000 is a generous upper bound for any
-/// real dictionary while still bounding a bogus count (e.g. `u32::MAX`).
-const MAX_DICT_ENTRIES: usize = 1_000_000;
+// `MAX_DICT_ENTRIES` (the `from_bytes` capacity-hint clamp, #116) is centralized
+// in `crate::limits` (#256).
+use crate::limits::MAX_DICT_ENTRIES;
 
 /// Context dictionary with unigram and bigram tables.
 pub struct ContextDict {

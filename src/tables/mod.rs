@@ -362,6 +362,16 @@ pub fn lookup_confusable(ch: char, target_script: &str) -> Option<&'static str> 
     confusables_data::lookup(ch, target_script)
 }
 
+/// Resolve a `target_script` to its confusables PHF map, once, so a per-char
+/// loop can probe the map directly instead of re-dispatching `target_script`
+/// every character (#236 / #233 review item).
+#[inline]
+pub fn resolve_confusable_map(
+    target_script: &str,
+) -> Option<&'static phf::Map<char, &'static str>> {
+    confusables_data::resolve_map(target_script)
+}
+
 /// Return all available language codes.
 pub fn list_langs() -> Vec<String> {
     let mut langs: Vec<String> = BUILTIN_LANGS.iter().map(|s| (*s).to_string()).collect();

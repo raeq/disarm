@@ -253,6 +253,16 @@ def transliterate(
         >>> transliterate("Moskva", target="ru")
         'Москва'
     """
+    # Hot path (#277 lever 4): scalar str, no reverse/context dispatch. The
+    # conflict-matrix validation below is a provable no-op when `target` and
+    # `context` are both absent (every branch requires one of them), and every
+    # remaining check (lang, errors, strict_iso9 × gost7034) runs inside
+    # `_transliterate` itself (#130) — so jumping straight to the binding is
+    # behavior-identical. `type(text) is str` (not isinstance) keeps str
+    # subclasses on the general path below, which handles them as before.
+    if type(text) is str and target is None and not context:
+        return _transliterate(text, lang, errors, replace_with, strict_iso9, gost7034, tones)
+
     # Resolve conflicting kwargs once, before the str/list dispatch, so scalar
     # and batch inputs behave identically (#69). The conflict matrix lives in
     # the Rust core (single source of truth, #231); this is a thin call into it.
@@ -1988,7 +1998,10 @@ def dedup_batch(
                 context=context,
             )
         )
-    mapping = dict(zip(uniq, out))
+    # strict=True (3.10+): lengths are equal by construction — every uniq chunk
+    # round-trips through transliterate(); a mismatch would mean a dropped or
+    # duplicated batch item and should fail loudly, not silently mis-map.
+    mapping = dict(zip(uniq, out, strict=True))
     return [mapping[t] for t in texts]
 
 

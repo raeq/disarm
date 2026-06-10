@@ -47,13 +47,13 @@ jobs:
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1
         with:
           target: ${{ matrix.target }}
-          # Pin the interpreter to 3.9 so maturin builds a single abi3 wheel
-          # (cp39-abi3). Without this, maturin enumerates every interpreter in
-          # the manylinux container — including CPython 3.8, which is below the
-          # abi3-py39 floor — and emits a version-specific cp38-cp38 x86_64
-          # wheel instead of cp39-abi3 (see issue #26). abi3-py39 wheels are
-          # forward-compatible with all CPython >= 3.9.
-          args: --release --out dist --interpreter 3.9
+          # Pin the interpreter to 3.10 so maturin builds a single abi3 wheel
+          # (cp310-abi3). Without this, maturin enumerates every interpreter in
+          # the manylinux container — including interpreters below the
+          # abi3-py310 floor — and emits version-specific wheels instead of
+          # cp310-abi3 (see issue #26). abi3-py310 wheels are forward-compatible
+          # with all CPython >= 3.10 (#277 lever 1: fastcall + AsUTF8AndSize).
+          args: --release --out dist --interpreter 3.10
           manylinux: auto
       - uses: actions/upload-artifact@v7
         with:

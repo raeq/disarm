@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use pyo3::types::PyString;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use unicode_normalization::UnicodeNormalization;
@@ -121,23 +122,31 @@ fn transliterate_strict(
 }
 
 /// Core transliteration: Unicode → ASCII.
+///
+/// #277 lever 4: takes the Python string object itself (not an extracted
+/// `&str`) so the no-op case can return the *original object* with an incref
+/// instead of allocating a copy. `to_str()` is zero-copy for compact ASCII
+/// strings on the abi3-py310 floor (`PyUnicode_AsUTF8AndSize`, cached on the
+/// object by CPython).
 #[pyfunction]
 #[pyo3(signature = (text, lang=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false))]
-pub fn _transliterate(
-    text: &str,
+pub fn _transliterate<'py>(
+    text: &Bound<'py, PyString>,
     lang: Option<&str>,
     errors: &str,
     replace_with: &str,
     strict_iso9: bool,
     gost7034: bool,
     tones: bool,
-) -> PyResult<String> {
+) -> PyResult<Bound<'py, PyString>> {
     // #130: Defence-in-depth — the PyO3 boundary check in each entry-point guards
     // direct Rust callers; Python callers are covered by the same check.
     if strict_iso9 && gost7034 {
         return Err(crate::Error::MutuallyExclusiveBare.into());
     }
     validate_lang(lang)?;
+    let py = text.py();
+    let s = text.to_str()?;
     // `errors` is validated below (after the strict short-circuit, since "strict"
     // is not an ErrorMode value but a separate mode handled here, #184).
     // Apply global pre-transliteration replacements (no-op unless any are
@@ -145,27 +154,32 @@ pub fn _transliterate(
     // fast path — so ASCII-keyed replacements take effect too. The output of the
     // replacement pre-pass is bounded (amplification guard); raw input size is
     // not capped (#80).
-    let text = apply_replacements_bounded(text)?;
+    let replaced = apply_replacements_bounded(s)?;
     if errors == "strict" {
-        return Ok(transliterate_strict(
-            &text,
-            lang,
-            strict_iso9,
-            gost7034,
-            tones,
-        )?);
+        return Ok(PyString::new(
+            py,
+            &transliterate_strict(&replaced, lang, strict_iso9, gost7034, tones)?,
+        ));
     }
     let error_mode = ErrorMode::from_str(errors)?;
-    Ok(transliterate_impl(
-        &text,
+    let out = transliterate_impl(
+        &replaced,
         lang,
         error_mode,
         replace_with,
         strict_iso9,
         gost7034,
         tones,
-    )
-    .into_owned())
+    );
+    // #277 lever 4: both pre-pass and engine returned `Cow::Borrowed`, which is
+    // their documented "output is byte-identical to input" contract (the engine
+    // borrows only for pure-ASCII input; the pre-pass borrows only when no
+    // replacement fired). Returning the original object is then observationally
+    // identical for an immutable `str` — and zero-alloc.
+    match (&replaced, &out) {
+        (Cow::Borrowed(_), Cow::Borrowed(_)) => Ok(text.clone()),
+        _ => Ok(PyString::new(py, &out)),
+    }
 }
 
 /// Validate the *combination* of `transliterate()` keyword arguments (#231).

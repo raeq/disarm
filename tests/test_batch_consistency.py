@@ -163,3 +163,27 @@ class TestStripAccentsBatchConsistency:
 
     def test_empty_batch(self) -> None:
         assert strip_accents([]) == []
+
+
+class TestChunkBoundary:
+    """#239: batch APIs extract/process in chunks of 64. Inputs spanning many
+    chunks (and the exact boundary) must still equal the single-call results,
+    and a non-str item must raise the same TypeError (just after some compute)."""
+
+    @pytest.mark.parametrize("n", [1, 63, 64, 65, 128, 200])
+    def test_transliterate_across_chunks(self, n: int) -> None:
+        texts = [f"café {i} Москва 北京 Seoul 서울" for i in range(n)]
+        assert transliterate(texts) == [transliterate(t) for t in texts]
+
+    @pytest.mark.parametrize("n", [1, 64, 65, 200])
+    def test_slugify_across_chunks(self, n: int) -> None:
+        texts = [f"Héllo World {i} Москва" for i in range(n)]
+        assert slugify(texts) == [slugify(t) for t in texts]
+
+    def test_non_str_item_raises_typeerror(self) -> None:
+        # A non-str item still raises TypeError (the all-or-raise contract holds;
+        # only the timing — after some compute — changed).
+        with pytest.raises(TypeError):
+            transliterate(["ok"] * 70 + [123] + ["ok"])
+        with pytest.raises(TypeError):
+            slugify(["ok"] * 70 + [None] + ["ok"])

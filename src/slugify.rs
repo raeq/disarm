@@ -640,7 +640,7 @@ fn decode_entities(text: &str, decimal: bool, hexadecimal: bool) -> Cow<'_, str>
 ))]
 pub fn _slugify_batch(
     py: Python<'_>,
-    texts: Vec<String>,
+    texts: &Bound<'_, pyo3::types::PyList>,
     separator: &str,
     lowercase: bool,
     max_length: i64,
@@ -655,9 +655,10 @@ pub fn _slugify_batch(
     decimal: bool,
     hexadecimal: bool,
 ) -> PyResult<Vec<String>> {
-    if texts.len() > crate::MAX_BATCH_SIZE {
+    let len = texts.len();
+    if len > crate::MAX_BATCH_SIZE {
         return Err(crate::Error::BatchTooLarge {
-            len: texts.len(),
+            len,
             max: crate::MAX_BATCH_SIZE,
         }
         .into());
@@ -686,15 +687,30 @@ pub fn _slugify_batch(
     // Pre-build the stopword set once for the entire batch instead of
     // reconstructing it on every call to slugify_impl.
     let stopset: HashSet<String> = config.stopwords.iter().cloned().collect();
-    // Pure-Rust loop with the GIL released (#70): `config`/`stopset`/`texts` are
-    // all owned, so the closure touches no Python objects and other Python
-    // threads run in parallel during a large batch.
-    Ok(py.allow_threads(move || {
-        texts
-            .iter()
-            .map(|text| slugify_impl_with_stopset(text, &config, Some(&stopset)))
-            .collect()
-    }))
+
+    // #239: extract and slugify in chunks so peak Rust-side residency is one
+    // chunk of input copies (≈ N + chunk) rather than a full Rust copy of every
+    // input up front (≈ 2N). Each chunk is extracted with the GIL held, then
+    // slugified with the GIL released (#70) — the compute loop touches no Python
+    // objects. A non-str item raises the same TypeError, just after some compute.
+    let mut out: Vec<String> = Vec::with_capacity(len);
+    let mut start = 0;
+    while start < len {
+        let end = (start + crate::BATCH_CHUNK_SIZE).min(len);
+        let mut chunk: Vec<String> = Vec::with_capacity(end - start);
+        for i in start..end {
+            chunk.push(texts.get_item(i)?.extract::<String>()?);
+        }
+        let processed: Vec<String> = py.allow_threads(|| {
+            chunk
+                .iter()
+                .map(|text| slugify_impl_with_stopset(text, &config, Some(&stopset)))
+                .collect()
+        });
+        out.extend(processed);
+        start = end;
+    }
+    Ok(out)
 }
 
 // --- Stateful classes ---

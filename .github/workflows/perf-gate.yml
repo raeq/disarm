@@ -14,6 +14,11 @@ name: Perf gate
 # required check is satisfied without doing the work.
 on:
   pull_request:
+    # Scope to `main` only: the "iai estimated-cycles gate" required check lives
+    # on `main`'s branch protection, so PRs to other bases aren't subject to it
+    # and don't need the run. (No `paths:` filter — see the header note: a
+    # required check must report on every PR targeting main.)
+    branches: [main]
 
 concurrency:
   group: perf-gate-${{ github.ref }}

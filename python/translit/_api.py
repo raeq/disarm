@@ -10,7 +10,7 @@ from __future__ import annotations
 import warnings as _warnings
 from collections.abc import Iterable
 from functools import lru_cache, wraps
-from typing import Any, Protocol, cast, overload
+from typing import TYPE_CHECKING, Any, Protocol, cast, overload
 
 from translit._enums import (
     LANG_META,
@@ -66,6 +66,7 @@ from translit._translit import (
     _seal_registrations,
     # Emoji provider
     _set_emoji_provider,
+    _set_transliterate_fallback,
     # Stateful
     _Slugifier,
     _slugify,
@@ -79,6 +80,7 @@ from translit._translit import (
     # Batch APIs (single PyO3 boundary crossing for N strings)
     _transliterate_batch,
     _transliterate_context,
+    _transliterate_entry,
     _UniqueSlugifier,
     # Semantic argument-combination validation (single source of truth, #231)
     _validate_transliterate_args,
@@ -136,7 +138,7 @@ def _validate_batch(texts: object, func_name: str) -> None:
 
 
 @overload
-def transliterate(
+def _transliterate_dispatch(
     text: str,
     *,
     lang: str | None = ...,
@@ -151,7 +153,7 @@ def transliterate(
 
 
 @overload
-def transliterate(
+def _transliterate_dispatch(
     text: list[str],
     *,
     lang: str | None = ...,
@@ -165,7 +167,7 @@ def transliterate(
 ) -> list[str]: ...
 
 
-def transliterate(
+def _transliterate_dispatch(
     text: str | list[str],
     *,
     lang: str | None = None,
@@ -253,6 +255,16 @@ def transliterate(
         >>> transliterate("Moskva", target="ru")
         'Москва'
     """
+    # Hot path (#277 lever 4): scalar str, no reverse/context dispatch. The
+    # conflict-matrix validation below is a provable no-op when `target` and
+    # `context` are both absent (every branch requires one of them), and every
+    # remaining check (lang, errors, strict_iso9 × gost7034) runs inside
+    # `_transliterate` itself (#130) — so jumping straight to the binding is
+    # behavior-identical. `type(text) is str` (not isinstance) keeps str
+    # subclasses on the general path below, which handles them as before.
+    if type(text) is str and target is None and not context:
+        return _transliterate(text, lang, errors, replace_with, strict_iso9, gost7034, tones)
+
     # Resolve conflicting kwargs once, before the str/list dispatch, so scalar
     # and batch inputs behave identically (#69). The conflict matrix lives in
     # the Rust core (single source of truth, #231); this is a thin call into it.
@@ -331,6 +343,21 @@ def transliterate(
     # duplicated the core's own optimization — a per-binding drift liability.
     # Positional call into the private binding (#277) — see batch path note.
     return _transliterate(text, lang, errors, replace_with, strict_iso9, gost7034, tones)
+
+
+# ── #277 Phase B: single-crossing public entry point ──
+# At runtime `transliterate` is the Rust fastcall entry: the common shape
+# (exact str, forward, no context) runs with ONE Python→native call and
+# Rust-side keyword defaults (zero extraction cost on bare calls). Every other
+# shape (list batch, str subclass, target=, context=True, type errors)
+# delegates back to _transliterate_dispatch above, which is unchanged.
+# Type checkers see the overloaded Python signature as the source of truth;
+# mypy treats the `else` branch as unreachable under TYPE_CHECKING.
+_set_transliterate_fallback(_transliterate_dispatch)
+if TYPE_CHECKING:
+    transliterate = _transliterate_dispatch
+else:
+    transliterate = _transliterate_entry
 
 
 def find_untranslatable(
@@ -1988,7 +2015,10 @@ def dedup_batch(
                 context=context,
             )
         )
-    mapping = dict(zip(uniq, out))
+    # strict=True (3.10+): lengths are equal by construction — every uniq chunk
+    # round-trips through transliterate(); a mismatch would mean a dropped or
+    # duplicated batch item and should fail loudly, not silently mis-map.
+    mapping = dict(zip(uniq, out, strict=True))
     return [mapping[t] for t in texts]
 
 

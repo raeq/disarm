@@ -17,7 +17,8 @@ Provides:
 from __future__ import annotations
 
 import warnings
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from translit import find_untranslatable, strip_accents, transliterate
 from translit._translit import (

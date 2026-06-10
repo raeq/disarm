@@ -73,7 +73,7 @@ that genuinely drains a small project.
 ## Prerequisites
 
 - Rust stable toolchain (>= 1.70): `rustup update stable`
-- Python 3.9+
+- Python 3.10+
 - `maturin` for building the Python extension: `pip install maturin[patchelf]`
 
 ## Development setup

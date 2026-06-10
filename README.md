@@ -51,7 +51,7 @@ The package installs as `translit-rs` on PyPI but imports as `translit`:
 import translit  # not translit_rs
 ```
 
-Requires Python 3.9+. Wheels are available for Linux, macOS, and Windows.
+Requires Python 3.10+. Wheels are available for Linux, macOS, and Windows.
 
 ## Features
 
@@ -228,6 +228,14 @@ See [Language support](docs/user-guide/language-support.md) for the full registr
 
 translit is compiled Rust with O(1) compile-time perfect hash tables — no regex, no per-character Python iteration, no runtime data loading. Speed is a supporting benefit, not the headline; correctness and defense come first.
 
+Performance is measured in two regimes, because they stress different things.
+**Long text** (documents, batch pipelines) is dominated by per-character cost;
+**short strings** (per-record processing — names, titles, slugs, one field at a
+time) are dominated by fixed per-call overhead. translit is fast in both, and
+quotes them separately so neither number overstates the other.
+
+**Long text — document-scale throughput:**
+
 | Operation | Throughput | vs. legacy |
 |---|---|---|
 | Transliterate (Latin) | ~450M chars/sec | **~38×** faster than Unidecode |
@@ -235,11 +243,29 @@ translit is compiled Rust with O(1) compile-time perfect hash tables — no rege
 | Slugify | ~712K slugs/sec | **~10–24×** faster than python-slugify |
 | Batch transliterate (100 strings) | ~2.8× faster than loop | — |
 
-Figures are throughput on a commodity 4‑vCPU x86‑64 Linux runner (min‑of‑N
-`perf_counter`); they are hardware‑dependent and directional, not guarantees.
-Latin and batch numbers are conservative (both exceed the figure above on that
-hardware). See [docs/performance.md](docs/performance.md) for full benchmark
-methodology and results.
+**Short strings — per-call, ~70–85 character inputs:**
+
+| Input | vs. Unidecode |
+|---|---|
+| Latin | **~21×** |
+| Mixed scripts | **~17×** |
+| Cyrillic / Greek | **~15×** |
+
+A `transliterate()` call crosses the Python→Rust boundary exactly once, and
+already-ASCII input returns the original `str` object in roughly 70 ns with
+zero allocation. translit also wins all four cells of [Unidecode's own
+benchmark](benchmarks/bench_unidecode_own.py) — a faithful replication of the
+original, re-measured continuously in CI — from ~1.4× on Unidecode's strongest
+case (ASCII passthrough) to ~23×. That bar is worth clearing precisely because
+Unidecode has carried this workload for two decades; it remains the reference
+point this library measures itself against.
+
+Throughput figures are from a commodity 4‑vCPU x86‑64 Linux runner (min‑of‑N
+`perf_counter`); per-call figures are interleaved ratios against pinned
+comparator versions on CI runners, median-of-7, bucketed by CPU
+microarchitecture. All are hardware‑dependent and directional, not guarantees.
+See [docs/performance.md](docs/performance.md) for full benchmark methodology
+and results.
 
 ## Drop-in replacement
 

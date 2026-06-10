@@ -245,7 +245,7 @@ class TestListComprehensions:
     def test_zip_original_and_transliterated(self) -> None:
         """zip() original and transliterated forms."""
         originals = ["München", "Москва", "Αθήνα"]
-        pairs = list(zip(originals, [transliterate(o) for o in originals]))
+        pairs = list(zip(originals, [transliterate(o) for o in originals], strict=True))
         assert pairs[0] == ("München", "Munchen")
         assert pairs[1] == ("Москва", "Moskva")
 

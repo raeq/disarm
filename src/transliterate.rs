@@ -1,6 +1,9 @@
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyString};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::{LazyLock, RwLock};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::tables;
@@ -127,23 +130,31 @@ fn transliterate_strict(
 }
 
 /// Core transliteration: Unicode → ASCII.
+///
+/// #277 lever 4: takes the Python string object itself (not an extracted
+/// `&str`) so the no-op case can return the *original object* with an incref
+/// instead of allocating a copy. `to_str()` is zero-copy for compact ASCII
+/// strings on the abi3-py310 floor (`PyUnicode_AsUTF8AndSize`, cached on the
+/// object by CPython).
 #[pyfunction]
 #[pyo3(signature = (text, lang=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false))]
-pub fn _transliterate(
-    text: &str,
+pub fn _transliterate<'py>(
+    text: &Bound<'py, PyString>,
     lang: Option<&str>,
     errors: &str,
     replace_with: &str,
     strict_iso9: bool,
     gost7034: bool,
     tones: bool,
-) -> PyResult<String> {
+) -> PyResult<Bound<'py, PyString>> {
     // #130: Defence-in-depth — the PyO3 boundary check in each entry-point guards
     // direct Rust callers; Python callers are covered by the same check.
     if strict_iso9 && gost7034 {
         return Err(crate::Error::MutuallyExclusiveBare.into());
     }
     validate_lang(lang)?;
+    let py = text.py();
+    let s = text.to_str()?;
     // `errors` is validated below (after the strict short-circuit, since "strict"
     // is not an ErrorMode value but a separate mode handled here, #184).
     // Apply global pre-transliteration replacements (no-op unless any are
@@ -151,27 +162,129 @@ pub fn _transliterate(
     // fast path — so ASCII-keyed replacements take effect too. The output of the
     // replacement pre-pass is bounded (amplification guard); raw input size is
     // not capped (#80).
-    let text = apply_replacements_bounded(text)?;
+    let replaced = apply_replacements_bounded(s)?;
     if errors == "strict" {
-        return Ok(transliterate_strict(
-            &text,
-            lang,
-            strict_iso9,
-            gost7034,
-            tones,
-        )?);
+        return Ok(PyString::new(
+            py,
+            &transliterate_strict(&replaced, lang, strict_iso9, gost7034, tones)?,
+        ));
     }
     let error_mode = ErrorMode::from_str(errors)?;
-    Ok(transliterate_impl(
-        &text,
+    let out = transliterate_impl(
+        &replaced,
         lang,
         error_mode,
         replace_with,
         strict_iso9,
         gost7034,
         tones,
-    )
-    .into_owned())
+    );
+    // #277 lever 4: both pre-pass and engine returned `Cow::Borrowed`, which is
+    // their documented "output is byte-identical to input" contract (the engine
+    // borrows only for pure-ASCII input; the pre-pass borrows only when no
+    // replacement fired). Returning the original object is then observationally
+    // identical for an immutable `str` — and zero-alloc.
+    match (&replaced, &out) {
+        (Cow::Borrowed(_), Cow::Borrowed(_)) => Ok(text.clone()),
+        _ => Ok(PyString::new(py, &out)),
+    }
+}
+
+/// Python-side dispatcher for the shapes the fast entry point does not handle
+/// (lists, str subclasses, reverse `target=`, `context=True`, type errors).
+///
+/// Registered once at `translit` package import by `_set_transliterate_fallback`.
+/// An `RwLock<Option<…>>` (not a set-once cell) so `importlib.reload(translit)`
+/// re-registers cleanly instead of erroring or calling a stale dispatcher.
+static TRANSLITERATE_FALLBACK: LazyLock<RwLock<Option<Py<PyAny>>>> =
+    LazyLock::new(|| RwLock::new(None));
+
+/// Register the Python dispatcher `_transliterate_entry` delegates to (#277
+/// Phase B). Called from `python/translit/_api.py` at package import.
+#[pyfunction]
+pub fn _set_transliterate_fallback(f: Bound<'_, PyAny>) -> PyResult<()> {
+    if !f.is_callable() {
+        return Err(PyRuntimeError::new_err(
+            "transliterate fallback must be callable",
+        ));
+    }
+    let mut slot = crate::recover_lock(TRANSLITERATE_FALLBACK.write(), "TRANSLITERATE_FALLBACK");
+    *slot = Some(f.unbind());
+    Ok(())
+}
+
+/// Single-crossing public `transliterate()` entry point (#277 Phase B).
+///
+/// Bound directly to `translit.transliterate` at runtime: the common shape —
+/// an exact `str` with no reverse/context dispatch — runs entirely in Rust
+/// with **one** Python→native call. A bare `transliterate(text)` extracts only
+/// `text`; every keyword default is a Rust-side constant with zero per-call
+/// extraction cost. All other shapes (list batch, str subclass, `target=`,
+/// `context=True`, wrong types) delegate to the registered Python dispatcher,
+/// which implements them exactly as before.
+///
+/// Unicode → ASCII transliteration. See the package documentation for the
+/// full argument reference; semantics are identical to the Python dispatcher
+/// (`translit._api._transliterate_dispatch`), which type checkers see as the
+/// signature source of truth.
+#[pyfunction]
+#[pyo3(
+    signature = (text, *, lang=None, target=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false, context=false),
+    text_signature = "(text, *, lang=None, target=None, errors='replace', replace_with='[?]', strict_iso9=False, gost7034=False, tones=False, context=False)"
+)]
+#[allow(clippy::too_many_arguments)]
+pub fn _transliterate_entry<'py>(
+    text: &Bound<'py, PyAny>,
+    lang: Option<&str>,
+    target: Option<&str>,
+    errors: &str,
+    replace_with: &str,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+    context: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    // Fast path: exact `str` (subclasses keep their legacy general-path
+    // handling), forward direction, no context engine. The conflict-matrix
+    // validation is a provable no-op without `target`/`context` (#231); all
+    // remaining validation (lang, errors, strict_iso9 × gost7034) runs inside
+    // `_transliterate` itself (#130).
+    if target.is_none() && !context {
+        if let Ok(s) = text.downcast_exact::<PyString>() {
+            return Ok(_transliterate(
+                s,
+                lang,
+                errors,
+                replace_with,
+                strict_iso9,
+                gost7034,
+                tones,
+            )?
+            .into_any());
+        }
+    }
+    // Everything else: delegate to the Python dispatcher.
+    let py = text.py();
+    let fallback = {
+        let slot = crate::recover_lock(TRANSLITERATE_FALLBACK.read(), "TRANSLITERATE_FALLBACK");
+        slot.as_ref().map(|f| f.clone_ref(py))
+    };
+    let Some(fallback) = fallback else {
+        return Err(PyRuntimeError::new_err(
+            "translit internal error: transliterate dispatcher not registered — \
+             import the `translit` package rather than `translit._translit` directly",
+        ));
+    };
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("lang", lang)?;
+    kwargs.set_item("target", target)?;
+    kwargs.set_item("errors", errors)?;
+    kwargs.set_item("replace_with", replace_with)?;
+    kwargs.set_item("strict_iso9", strict_iso9)?;
+    kwargs.set_item("gost7034", gost7034)?;
+    kwargs.set_item("tones", tones)?;
+    kwargs.set_item("context", context)?;
+    fallback.bind(py).call((text,), Some(&kwargs))
 }
 
 /// Validate the *combination* of `transliterate()` keyword arguments (#231).

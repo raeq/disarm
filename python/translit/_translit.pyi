@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 # Imported from the single source of truth so the stub cannot drift from the
 # authoritative alias definitions in translit._types (#200).
@@ -134,6 +135,19 @@ def _transliterate_context(
     strict_iso9: bool = ...,
     gost7034: bool = ...,
 ) -> str: ...
+def _set_transliterate_fallback(f: Callable[..., Any]) -> None: ...
+def _transliterate_entry(
+    text: Any,
+    *,
+    lang: str | None = None,
+    target: str | None = None,
+    errors: ErrorMode = ...,
+    replace_with: str = ...,
+    strict_iso9: bool = ...,
+    gost7034: bool = ...,
+    tones: bool = ...,
+    context: bool = ...,
+) -> Any: ...
 def _slugify(
     text: str,
     *,

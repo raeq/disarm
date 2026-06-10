@@ -1076,12 +1076,19 @@ def terminal_width(text: str, *, ambiguous_wide: bool = False) -> int:
 def grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int:
     """Column width of a single grapheme cluster (see :func:`terminal_width`).
 
-    This measures one grapheme cluster — the base character's column width, with
-    combining/zero-width scalars contributing 0, or 2 for an emoji-presented
-    cluster. It does **not** segment or sum: if ``cluster`` happens to contain
-    more than one grapheme cluster, only the width of the **first** cluster is
-    returned and the remainder is silently ignored. Pass a single cluster, or use
-    :func:`terminal_width` to measure arbitrary (multi-cluster) strings.
+    Pass a single grapheme cluster. The width is that of the **first scalar**
+    (the base): 0 for a combining/zero-width base, 2 for a wide or
+    emoji-presentation base, otherwise 1. Trailing scalars are then inspected for
+    presentation selectors that adjust this — a variation selector U+FE0F (or a
+    keycap ``U+20E3`` on a ``0``–``9``/``#``/``*`` base) forces emoji
+    presentation (width 2), and U+FE0E forces text presentation (width 1 for an
+    emoji base).
+
+    It does **not** segment or sum grapheme clusters. If ``cluster`` contains
+    more than the leading cluster, the extra scalars are *not* added to the
+    width — but they are not blindly discarded either: a trailing presentation
+    selector or keycap anywhere in the argument still affects the result per the
+    rule above. For arbitrary (multi-cluster) strings use :func:`terminal_width`.
 
     Args:
         cluster: A single grapheme cluster.

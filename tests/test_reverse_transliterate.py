@@ -50,6 +50,31 @@ class TestReverseRussian:
         assert "П" in result or "п" in result  # at least some conversion
 
 
+class TestReverseAllCapsMultigraph:
+    """#255 C4: all-caps romanizations of multigraphs (no cased table entry —
+    only Shch/shch etc.) recover the native form by falling back to the
+    lowercase key and re-uppercasing, instead of decomposing char-by-char."""
+
+    def test_trigraph_all_caps(self):
+        assert transliterate("SHCH", target="ru") == "Щ"
+
+    def test_digraphs_all_caps(self):
+        assert transliterate("SH", target="ru") == "Ш"
+        assert transliterate("ZH", target="ru") == "Ж"
+        assert transliterate("CH", target="ru") == "Ч"
+        assert transliterate("YU", target="ru") == "Ю"
+
+    def test_all_caps_word(self):
+        assert transliterate("MOSKVA", target="ru") == "МОСКВА"
+
+    def test_title_and_lower_unchanged(self):
+        # The fix must not disturb the cased entries that already worked.
+        assert transliterate("Shch", target="ru") == "Щ"
+        assert transliterate("shch", target="ru") == "щ"
+        assert transliterate("Moskva", target="ru") == "Москва"
+        assert transliterate("moskva", target="ru") == "москва"
+
+
 class TestReverseUkrainian:
     def test_basic_word(self):
         result = transliterate("Kyiv", target="uk")

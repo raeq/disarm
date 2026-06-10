@@ -198,6 +198,12 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// larger datasets should chunk.
 pub(crate) const MAX_BATCH_SIZE: usize = 100_000;
 
+/// Number of inputs extracted from the Python list and processed per chunk in
+/// the batch entry points (#239). Bounds peak Rust-side input residency to one
+/// chunk rather than the whole batch, while keeping the GIL-release/compute
+/// ratio favourable (the GIL is released once per chunk).
+pub(crate) const BATCH_CHUNK_SIZE: usize = 64;
+
 /// Recover from a poisoned `RwLock` or `Mutex` guard (read **or** write).
 ///
 /// A poisoned lock means a thread panicked while holding it.  For **read**

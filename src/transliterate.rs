@@ -101,14 +101,15 @@ fn transliterate_strict(
     gost7034: bool,
     tones: bool,
 ) -> Result<String, crate::Error> {
-    if let Some((ch, byte_offset)) =
-        find_untranslatable_impl(text, lang, strict_iso9, gost7034, tones)
-            .into_iter()
-            .next()
-    {
-        return Err(crate::Error::Untranslatable { ch, byte_offset });
-    }
-    Ok(transliterate_impl(
+    // #240: single pass with early exit. The former implementation ran the
+    // engine twice — once via `find_untranslatable_impl` (which materialised the
+    // *complete* Vec of every unmapped char just to read the first) and again to
+    // transliterate — so O(u) space and 2× time. Here one pass builds the result
+    // while collecting the FIRST untranslatable character and stopping there
+    // (`stop_on_first`): on success `result` IS the transliteration (no second
+    // pass); on the first offender the partial result is abandoned and reported.
+    let mut first: Vec<(char, usize)> = Vec::new();
+    let result = transliterate_impl_inner(
         text,
         lang,
         ErrorMode::Ignore,
@@ -116,8 +117,13 @@ fn transliterate_strict(
         strict_iso9,
         gost7034,
         tones,
-    )
-    .into_owned())
+        Some(&mut first),
+        true, // stop at the first untranslatable character
+    );
+    if let Some((ch, byte_offset)) = first.into_iter().next() {
+        return Err(crate::Error::Untranslatable { ch, byte_offset });
+    }
+    Ok(result.into_owned())
 }
 
 /// Core transliteration: Unicode → ASCII.
@@ -405,6 +411,7 @@ pub fn transliterate_impl<'a>(
         gost7034,
         tones,
         None,
+        false, // not strict — translate the whole input
     )
 }
 
@@ -434,6 +441,7 @@ pub fn find_untranslatable_impl(
         gost7034,
         tones,
         Some(&mut out),
+        false, // collect *all* untranslatable characters, not just the first
     );
     out
 }
@@ -453,6 +461,7 @@ fn transliterate_impl_inner<'a>(
     gost7034: bool,
     tones: bool,
     untranslatable: Option<&mut Vec<(char, usize)>>,
+    stop_on_first: bool,
 ) -> Cow<'a, str> {
     // Fast path: pure ASCII input needs no transliteration (and ASCII is always
     // translatable, so the collector stays empty).
@@ -501,6 +510,7 @@ fn transliterate_impl_inner<'a>(
             gost7034,
             tones,
             untranslatable,
+            stop_on_first,
         )
     } else if gost7034 {
         transliterate_run(
@@ -517,6 +527,7 @@ fn transliterate_impl_inner<'a>(
             gost7034,
             tones,
             untranslatable,
+            stop_on_first,
         )
     } else {
         let builtin_lang_map = lang.and_then(tables::resolve_lang_map);
@@ -535,6 +546,7 @@ fn transliterate_impl_inner<'a>(
             gost7034,
             tones,
             untranslatable,
+            stop_on_first,
         )
     }
 }
@@ -594,6 +606,7 @@ fn transliterate_run<'a, F>(
     gost7034: bool,
     tones: bool,
     mut untranslatable: Option<&mut Vec<(char, usize)>>,
+    stop_on_first: bool,
 ) -> Cow<'a, str>
 where
     F: Fn(char) -> Option<Cow<'static, str>>,
@@ -727,7 +740,7 @@ where
             // relative to the mapped path, so they live in a `#[cold]`/
             // `#[inline(never)]` helper to keep the common loop body in the µop
             // cache.
-            handle_unmapped(
+            let genuinely_untranslatable = handle_unmapped(
                 ch,
                 byte_offset,
                 &mut result,
@@ -741,6 +754,12 @@ where
                 gost7034,
                 tones,
             );
+            // #240: strict mode stops at the first untranslatable character —
+            // single pass, O(1) extra space. The partial `result` is discarded
+            // by the caller (it returns an error in that case).
+            if stop_on_first && genuinely_untranslatable {
+                break;
+            }
         }
     }
 
@@ -750,6 +769,11 @@ where
 /// Handle a character with no table mapping: attempt NFKC compatibility
 /// recovery, otherwise apply the error mode. Split out and marked `#[cold]` so
 /// the hot mapped path stays tight (#235 item 5).
+///
+/// Returns `true` when the character is **genuinely untranslatable** (no table
+/// entry and no NFKC recovery — the single point that defines the untranslatable
+/// set, #184), `false` when NFKC recovery handled it. The caller uses this to
+/// early-exit the strict single-pass on the first offender (#240).
 #[cold]
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
@@ -766,7 +790,7 @@ fn handle_unmapped(
     strict_iso9: bool,
     gost7034: bool,
     tones: bool,
-) {
+) -> bool {
     // #81: before the error fallback, try NFKC compatibility decomposition.
     // Mathematical Alphanumerics (𝕳→H) and presentation ligatures (ﬁ→fi) are
     // pure-Latin content NFKC folds to ASCII — both unidecode and anyascii
@@ -813,7 +837,7 @@ fn handle_unmapped(
             result.push_str(&sub);
             *last_appended = sub.chars().next_back();
             *prev_class = ScriptClass::Latin;
-            return;
+            return false; // NFKC-recovered → translatable
         }
     }
 
@@ -837,6 +861,7 @@ fn handle_unmapped(
         }
     }
     *prev_class = ScriptClass::Other;
+    true // genuinely untranslatable
 }
 
 /// Estimate the output buffer capacity based on a sample of the input.
@@ -1568,7 +1593,7 @@ pub fn _clear_replacements() -> PyResult<()> {
 #[pyo3(signature = (texts, lang=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false))]
 pub fn _transliterate_batch(
     py: Python<'_>,
-    texts: Vec<String>,
+    texts: &Bound<'_, pyo3::types::PyList>,
     lang: Option<&str>,
     errors: &str,
     replace_with: &str,
@@ -1581,9 +1606,18 @@ pub fn _transliterate_batch(
     if strict_iso9 && gost7034 {
         return Err(crate::Error::MutuallyExclusiveBare.into());
     }
-    if texts.len() > crate::MAX_BATCH_SIZE {
+    // Snapshot the element references into an immutable tuple up front (one
+    // GIL-held, O(N) reference copy — not a copy of the string contents). The
+    // former `Vec<String>` extraction was atomic under the GIL; chunked
+    // extraction releases the GIL between chunks, so without this snapshot a
+    // concurrent thread could mutate the input list mid-call and later chunks
+    // would observe the change (or raise IndexError). Python strings are
+    // immutable, so the snapshot's element values are stable (#239 review).
+    let texts = texts.to_tuple();
+    let len = texts.len();
+    if len > crate::MAX_BATCH_SIZE {
         return Err(crate::Error::BatchTooLarge {
-            len: texts.len(),
+            len,
             max: crate::MAX_BATCH_SIZE,
         }
         .into());
@@ -1597,42 +1631,61 @@ pub fn _transliterate_batch(
     } else {
         ErrorMode::from_str(errors)?
     };
-    // Own the borrowed args so the compute loop holds no Python-borrowed data,
-    // then run it with the GIL released (#70) — the loop touches no Python
-    // objects (the replacement table is a Rust RwLock), so other Python threads
-    // run in parallel for the duration of a large batch.
+    // Own the borrowed args so the compute loop holds no Python-borrowed data.
     let lang = lang.map(str::to_owned);
     let replace_with = replace_with.to_owned();
-    py.allow_threads(move || {
-        texts
-            .iter()
-            .map(|text| -> PyResult<String> {
-                // Global pre-transliteration replacements (no-op unless registered),
-                // applied per item before transliterate_impl — parity with the
-                // scalar path, including the replacement-output amplification bound.
-                let replaced = apply_replacements_bounded(text)?;
-                if strict {
-                    return Ok(transliterate_strict(
+
+    // #239: extract Rust `String` copies from the snapshot and transliterate in
+    // chunks, so peak Rust-side string residency is one chunk rather than a full
+    // copy of every input up front (the former `Vec<String>` boundary held all N
+    // at once). Each chunk is extracted with the GIL held, then transliterated
+    // with the GIL released (#70) — the compute loop touches no Python objects,
+    // so other Python threads run during it. All-or-raise is preserved (the
+    // partial `out` is dropped on error); a non-str element raises TypeError
+    // (the public wrapper's `_validate_batch` already rejects those up front).
+    let mut out: Vec<String> = Vec::with_capacity(len);
+    let mut start = 0;
+    while start < len {
+        let end = (start + crate::BATCH_CHUNK_SIZE).min(len);
+        let mut chunk: Vec<String> = Vec::with_capacity(end - start);
+        for i in start..end {
+            chunk.push(texts.get_item(i)?.extract::<String>()?);
+        }
+        let processed: Vec<String> = py.allow_threads(|| -> PyResult<Vec<String>> {
+            chunk
+                .iter()
+                .map(|text| -> PyResult<String> {
+                    // Global pre-transliteration replacements (no-op unless
+                    // registered), applied per item before transliterate_impl —
+                    // parity with the scalar path, including the replacement-output
+                    // amplification bound.
+                    let replaced = apply_replacements_bounded(text)?;
+                    if strict {
+                        return Ok(transliterate_strict(
+                            &replaced,
+                            lang.as_deref(),
+                            strict_iso9,
+                            gost7034,
+                            tones,
+                        )?);
+                    }
+                    Ok(transliterate_impl(
                         &replaced,
                         lang.as_deref(),
+                        error_mode,
+                        &replace_with,
                         strict_iso9,
                         gost7034,
                         tones,
-                    )?);
-                }
-                Ok(transliterate_impl(
-                    &replaced,
-                    lang.as_deref(),
-                    error_mode,
-                    &replace_with,
-                    strict_iso9,
-                    gost7034,
-                    tones,
-                )
-                .into_owned())
-            })
-            .collect()
-    })
+                    )
+                    .into_owned())
+                })
+                .collect()
+        })?;
+        out.extend(processed);
+        start = end;
+    }
+    Ok(out)
 }
 
 /// Batch accent stripping: process a list of strings in a single PyO3 boundary crossing.
@@ -1668,6 +1721,67 @@ pub fn _strip_accents_batch(py: Python<'_>, texts: Vec<String>) -> PyResult<Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #240 — the single-pass strict transliteration must (a) succeed with the
+    /// Ignore-mode output when everything is translatable, and (b) error on the
+    /// exact first untranslatable character that `find_untranslatable_impl`
+    /// reports, never running the engine twice.
+    #[test]
+    fn strict_single_pass_matches_reference() {
+        // All-translatable input: strict succeeds with the normal output.
+        assert_eq!(
+            transliterate_strict("café Москва", None, false, false, false).unwrap(),
+            transliterate_impl(
+                "café Москва",
+                None,
+                ErrorMode::Ignore,
+                "",
+                false,
+                false,
+                false
+            )
+            .into_owned()
+        );
+
+        // Inputs containing untranslatable characters: whatever
+        // `find_untranslatable_impl` reports first, strict must report identically
+        // (same char and byte offset), and agree on the translatable case. U+E000
+        // is in the Private Use Area — guaranteed to have no transliteration and
+        // no NFKC recovery, ever — so the error branch is definitely exercised
+        // (U+1F980 also reaches it: the emoji tables drive `demojize`, not
+        // `transliterate`).
+        let mut hit_error_branch = false;
+        for s in [
+            "a\u{E000}b\u{E000}",
+            "café\u{E000}",
+            "\u{1F980}x",
+            "abc",
+            "Привет",
+        ] {
+            let reference = find_untranslatable_impl(s, None, false, false, false)
+                .into_iter()
+                .next();
+            match (
+                transliterate_strict(s, None, false, false, false),
+                reference,
+            ) {
+                (Err(crate::Error::Untranslatable { ch, byte_offset }), Some((ech, eoff))) => {
+                    assert_eq!(
+                        (ch, byte_offset),
+                        (ech, eoff),
+                        "strict first-untranslatable mismatch for {s:?}"
+                    );
+                    hit_error_branch = true;
+                }
+                (Ok(_), None) => {} // both agree the whole input is translatable
+                (got, exp) => panic!("strict/reference disagree for {s:?}: {got:?} vs {exp:?}"),
+            }
+        }
+        assert!(
+            hit_error_branch,
+            "test never exercised the strict Error::Untranslatable branch"
+        );
+    }
 
     /// #235 item 2 — the `BLOCK_CLASS` early-exit/table path must agree with the
     /// original per-range chain for **every** scalar value. Exhaustive over the

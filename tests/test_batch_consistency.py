@@ -163,3 +163,29 @@ class TestStripAccentsBatchConsistency:
 
     def test_empty_batch(self) -> None:
         assert strip_accents([]) == []
+
+
+class TestChunkBoundary:
+    """#239: batch APIs extract/process in chunks of 64. Inputs spanning many
+    chunks (and the exact boundary) must still equal the single-call results,
+    and a non-str item must raise TypeError (the all-or-raise contract)."""
+
+    @pytest.mark.parametrize("n", [1, 63, 64, 65, 128, 200])
+    def test_transliterate_across_chunks(self, n: int) -> None:
+        texts = [f"café {i} Москва 北京 Seoul 서울" for i in range(n)]
+        assert transliterate(texts) == [transliterate(t) for t in texts]
+
+    @pytest.mark.parametrize("n", [1, 64, 65, 200])
+    def test_slugify_across_chunks(self, n: int) -> None:
+        texts = [f"Héllo World {i} Москва" for i in range(n)]
+        assert slugify(texts) == [slugify(t) for t in texts]
+
+    def test_non_str_item_raises_typeerror(self) -> None:
+        # A non-str item raises TypeError and yields no partial results — the
+        # all-or-raise contract. (The public wrappers' _validate_batch rejects
+        # non-str elements up front, so this is observable regardless of the
+        # Rust binding's chunked extraction.)
+        with pytest.raises(TypeError):
+            transliterate(["ok"] * 70 + [123] + ["ok"])
+        with pytest.raises(TypeError):
+            slugify(["ok"] * 70 + [None] + ["ok"])

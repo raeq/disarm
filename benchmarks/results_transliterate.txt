@@ -1,3 +1,0 @@
-Latin diacritics: 0.234s, 255,938,210 chars/sec
-Cyrillic: 0.665s, 67,656,036 chars/sec
-ASCII passthrough: 0.001s, 31,301,625,864 chars/sec

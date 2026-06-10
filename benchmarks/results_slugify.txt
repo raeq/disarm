@@ -1,2 +1,0 @@
-Basic slugify: 2.107s, 474,547 slugs/sec
-Slugify with options: 0.031s, 317,924 ops/sec

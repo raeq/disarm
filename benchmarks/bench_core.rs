@@ -11,6 +11,7 @@ use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 use _translit::case_fold::_fold_case;
+use _translit::confusables::_normalize_confusables;
 use _translit::grapheme::{_grapheme_len, _grapheme_split};
 use _translit::scripts::{_detect_scripts, _is_mixed_script};
 use _translit::slugify::{slugify_impl, SlugConfig};
@@ -263,6 +264,32 @@ fn bench_grapheme(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
+// Confusable normalization benchmarks (#252 — previously no coverage)
+// ---------------------------------------------------------------------------
+
+fn bench_confusables(c: &mut Criterion) {
+    let mut group = c.benchmark_group("confusables");
+
+    // ASCII is the common case in the web/RAG/catalog profiles. NOTE: this is
+    // NOT a no-op — translit's table maps a few ASCII sources (e.g. `|`→`l`), so
+    // an "is_ascii fast path" would be incorrect (#252 O6.1, rejected).
+    let ascii = "The quick brown fox jumps over the lazy dog. ".repeat(8);
+    group.throughput(text_throughput(&ascii));
+    group.bench_function("ascii_doc", |b| {
+        b.iter(|| _normalize_confusables(black_box(&ascii), black_box("latin")).unwrap());
+    });
+
+    // Cyrillic/Greek homoglyphs — the fold actually fires here.
+    let homoglyph = "Москва раураl Ελλάδα gооgle ".repeat(8);
+    group.throughput(text_throughput(&homoglyph));
+    group.bench_function("homoglyph_doc", |b| {
+        b.iter(|| _normalize_confusables(black_box(&homoglyph), black_box("latin")).unwrap());
+    });
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
 // Criterion groups
 // ---------------------------------------------------------------------------
 
@@ -275,5 +302,6 @@ criterion_group!(
     bench_whitespace,
     bench_scripts,
     bench_grapheme,
+    bench_confusables,
 );
 criterion_main!(benches);

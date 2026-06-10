@@ -296,10 +296,15 @@ pub(crate) fn slugify_impl_with_stopset(
     let mut slug = String::with_capacity(value.len());
     let mut prev_was_sep = true; // avoid leading separator
 
+    // Precompute safe_chars membership once: `String::contains(char)` is an O(k)
+    // substring scan, so the per-char check was O(n·k) for any non-empty
+    // safe_chars (#252 O5.1). Empty safe_chars → empty set, no allocation.
+    let safe_set: HashSet<char> = config.safe_chars.chars().collect();
+
     for ch in value.chars() {
         if ch.is_alphanumeric()
             || (config.allow_unicode && !ch.is_ascii() && !ch.is_whitespace())
-            || config.safe_chars.contains(ch)
+            || safe_set.contains(&ch)
         {
             // safe_chars are kept verbatim and treated as word characters, so a
             // separator is not inserted around them (awesome-slugify semantics, #230).

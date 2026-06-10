@@ -330,10 +330,13 @@ pub fn lookup_confusable(ch: char, target_script: &str) -> Option<&'static str> 
 pub fn list_langs() -> Vec<String> {
     let mut langs: Vec<String> = BUILTIN_LANGS.iter().map(|s| (*s).to_string()).collect();
 
-    // Add user-registered languages
+    // Add user-registered languages. Registered keys are unique (HashMap), so a
+    // key can only collide with a builtin — BUILTIN_LANGS is sorted (guarded by
+    // `builtin_langs_is_sorted`), so binary-search it: O(log n) per key, no
+    // per-call allocation, vs the former O(builtins) linear scan (#252 O5.5).
     let table = crate::recover_lock(LANG_TABLES.read(), "LANG_TABLES");
     for key in table.keys() {
-        if !langs.contains(key) {
+        if BUILTIN_LANGS.binary_search(&key.as_str()).is_err() {
             langs.push(key.clone());
         }
     }
@@ -608,6 +611,17 @@ pub const fn max_emoji_seq_len() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn builtin_langs_is_sorted() {
+        // list_langs() binary-searches BUILTIN_LANGS (#252 O5.5); guard that it
+        // stays sorted and unique so a future unsorted insertion can't silently
+        // break the search.
+        assert!(
+            BUILTIN_LANGS.windows(2).all(|w| w[0] < w[1]),
+            "BUILTIN_LANGS must be sorted and unique for binary_search"
+        );
+    }
 
     fn tbl(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs

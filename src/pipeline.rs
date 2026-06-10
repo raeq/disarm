@@ -234,8 +234,11 @@ impl _TextPipeline {
         // instead of allocating a fresh String per step. `cur` holds the current
         // text; each step writes its output into `scratch` (reusing its
         // capacity), then we swap — recycling `cur`'s old allocation into
-        // `scratch` for the next step. Peak stays at two buffers; allocator
-        // traffic drops from O(active steps) to O(1).
+        // `scratch` for the next step. The number of live/reused buffers is O(1)
+        // (two) regardless of step count; a buffer may still *grow* (realloc)
+        // when a step's output exceeds its current capacity (e.g. demojize or
+        // case-fold expansions), but once both buffers reach the largest
+        // intermediate size, later steps reuse them with no further allocation.
         let mut cur = text.to_owned();
         let mut scratch = String::new();
         for (flag, _name) in STEP_ORDER {

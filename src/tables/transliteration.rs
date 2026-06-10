@@ -32,8 +32,20 @@ include!(concat!(env!("OUT_DIR"), "/translit_langs_phf.rs"));
 pub fn lookup(ch: char) -> Option<&'static str> {
     let cp = ch as u32;
     if (0x80..0x10000).contains(&cp) {
-        // BMP: direct array index, no hashing
-        DEFAULT_BMP[(cp - 0x80) as usize]
+        // BMP: two-level page trie (#237 item 1), two indexed loads, no hashing.
+        // `PAGES[cp >> 8]` is the base of this page's 256 cells in `ENTRIES`
+        // (unpopulated pages alias the shared empty page at base 0). A cell of
+        // `u32::MAX` is None; otherwise `(offset << 8) | len` slices the blob,
+        // with `len == 0` yielding `Some("")` (drop the char).
+        let base = DEFAULT_BMP_PAGES[(cp >> 8) as usize] as usize;
+        let cell = DEFAULT_BMP_ENTRIES[base + (cp & 0xFF) as usize];
+        if cell == u32::MAX {
+            None
+        } else {
+            let off = (cell >> 8) as usize;
+            let len = (cell & 0xFF) as usize;
+            Some(&DEFAULT_BMP_BLOB[off..off + len])
+        }
     } else if cp >= 0x10000 {
         // SMP: ancient/historic scripts — PHF lookup
         DEFAULT_SMP.get(&ch).copied()

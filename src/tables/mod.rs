@@ -23,25 +23,48 @@ use std::sync::LazyLock;
 
 use crate::unicode_ranges as ur;
 
-/// Pre-computed romanizations for all 11,172 precomposed Hangul syllables
-/// (U+AC00–U+D7A3).  Indexed by `codepoint - 0xAC00`.
-///
-/// Using a `OnceCell<Vec<String>>` (initialised on first access) avoids
-/// `Box::leak` entirely: the returned `&'static str` slices borrow directly
-/// from this static storage, which lives for the lifetime of the process.
-static HANGUL_ROMANIZATIONS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+/// Number of precomposed Hangul syllables (U+AC00–U+D7A3).
+const HANGUL_SYLLABLE_COUNT: usize = 11_172;
 
-/// Return a `'static` reference to the pre-computed Hangul romanization table.
-fn hangul_romanizations() -> &'static Vec<String> {
+/// Pre-computed romanizations for all 11,172 precomposed Hangul syllables,
+/// packed into a single contiguous blob with an offset array (#237 item 3).
+///
+/// The previous `OnceLock<Vec<String>>` *retained* 11,172 separate small
+/// `String` allocations (~700 KB heap incl. per-`String` slop), held for the
+/// process lifetime, plus a pointer-chase per lookup. This packs them into
+/// **one** `String` blob + **one** `[u32]` offset array — so the **retained**
+/// heap is two allocations instead of 11,173, contiguous in memory (adjacent
+/// syllables share cache lines), with a flat indexed slice per lookup.
+/// (Construction still calls `romanize_hangul` per syllable, which allocates a
+/// transient `String` that is dropped immediately after it is copied into the
+/// blob; the win is the retained footprint and locality, not the one-time
+/// construction allocations.) The returned `&'static str` slices borrow from
+/// this `OnceLock` storage, which lives for the process lifetime, so no
+/// `Box::leak`.
+struct HangulRomanizations {
+    /// All romanizations concatenated, in syllable order.
+    blob: String,
+    /// `HANGUL_SYLLABLE_COUNT + 1` offsets: syllable `i`'s romanization is
+    /// `blob[offsets[i]..offsets[i + 1]]`.
+    offsets: Vec<u32>,
+}
+
+static HANGUL_ROMANIZATIONS: std::sync::OnceLock<HangulRomanizations> = std::sync::OnceLock::new();
+
+/// Return a `'static` reference to the packed Hangul romanization table.
+fn hangul_romanizations() -> &'static HangulRomanizations {
     HANGUL_ROMANIZATIONS.get_or_init(|| {
-        // 0xAC00 = Hangul base, 0xD7A3 = last precomposed syllable (11172 entries).
-        (0u32..11_172)
-            .map(|i| {
-                let ch =
-                    char::from_u32(0xAC00 + i).expect("all Hangul syllable codepoints are valid");
-                hangul::romanize_hangul(ch).unwrap_or_default()
-            })
-            .collect()
+        // Average romanization is ~6–7 ASCII bytes; reserve generously once.
+        let mut blob = String::with_capacity(HANGUL_SYLLABLE_COUNT * 7);
+        let mut offsets = Vec::with_capacity(HANGUL_SYLLABLE_COUNT + 1);
+        offsets.push(0u32);
+        // 0xAC00 = Hangul base, 0xD7A3 = last precomposed syllable.
+        for i in 0..HANGUL_SYLLABLE_COUNT as u32 {
+            let ch = char::from_u32(0xAC00 + i).expect("all Hangul syllable codepoints are valid");
+            blob.push_str(&hangul::romanize_hangul(ch).unwrap_or_default());
+            offsets.push(u32::try_from(blob.len()).expect("Hangul blob fits in u32"));
+        }
+        HangulRomanizations { blob, offsets }
     })
 }
 
@@ -278,12 +301,14 @@ fn lookup_hangul_static(ch: char) -> Option<&'static str> {
 
     if (0xAC00..=0xD7A3).contains(&code) {
         let idx = (code - 0xAC00) as usize;
-        // `hangul_romanizations()` returns `&'static Vec<String>` (OnceCell).
-        // `.get(idx)` is used instead of direct indexing so that an unexpected
-        // out-of-bounds (e.g. after a future range-check refactor) returns
-        // `None` rather than panicking.
-        let roms: &'static Vec<String> = hangul_romanizations();
-        roms.get(idx).map(String::as_str)
+        // Flat indexed slice into the packed blob (#237 item 3). `offsets` has
+        // `HANGUL_SYLLABLE_COUNT + 1` entries, so `idx` and `idx + 1` are always
+        // in bounds for a valid syllable; `get`s keep an unexpected future
+        // out-of-bounds returning `None` rather than panicking.
+        let table = hangul_romanizations();
+        let start = *table.offsets.get(idx)? as usize;
+        let end = *table.offsets.get(idx + 1)? as usize;
+        table.blob.get(start..end)
     } else {
         hangul::lookup_compat_jamo(ch)
     }
@@ -660,6 +685,23 @@ pub const fn max_emoji_seq_len() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn packed_hangul_matches_romanize_hangul() {
+        // #237 item 3: the packed blob + offset lookup must return exactly what
+        // the arithmetic `romanize_hangul` produces, for every one of the 11,172
+        // precomposed syllables (and the offsets must stay in bounds).
+        for i in 0..HANGUL_SYLLABLE_COUNT as u32 {
+            let ch = char::from_u32(0xAC00 + i).unwrap();
+            let expected = hangul::romanize_hangul(ch).unwrap();
+            assert_eq!(
+                lookup_hangul_static(ch),
+                Some(expected.as_str()),
+                "packed Hangul lookup diverged at U+{:04X}",
+                0xAC00 + i
+            );
+        }
+    }
 
     #[test]
     fn builtin_langs_is_sorted() {

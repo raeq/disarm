@@ -46,6 +46,40 @@ fn strip_bidi(text: &str) -> String {
     text.chars().filter(|&ch| !is_bidi_or_format(ch)).collect()
 }
 
+/// Make text safe to use as a path component (#248).
+///
+/// The security presets must *guarantee* path-safe output: confusable folding
+/// can synthesise a separator from a homoglyph (e.g. U+2044 FRACTION SLASH →
+/// `/`, U+2215 DIVISION SLASH → `/`, U+2025 TWO DOT LEADER → `..`), and a caller
+/// using a preset literally named to *sanitize* untrusted input may reasonably
+/// treat the result as safe. Replace ASCII path separators with `_` (matching
+/// `sanitize_filename`'s default separator) and collapse runs of `.` so no `..`
+/// traversal token survives. With no `/` or `\` left, `../`-style traversal is
+/// impossible regardless of dots. Idempotent.
+fn neutralize_path_separators(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut prev_dot = false;
+    for ch in text.chars() {
+        match ch {
+            '/' | '\\' => {
+                out.push('_');
+                prev_dot = false;
+            }
+            '.' => {
+                if !prev_dot {
+                    out.push('.');
+                }
+                prev_dot = true;
+            }
+            other => {
+                out.push(other);
+                prev_dot = false;
+            }
+        }
+    }
+    out
+}
+
 #[inline]
 fn is_bidi_or_format(ch: char) -> bool {
     // ── Soft hyphen ─────────────────────────────────────
@@ -111,8 +145,12 @@ pub fn _security_clean(text: &str) -> PyResult<String> {
     let buf = confusables::_normalize_confusables(&buf, "latin")?;
     // 3. Strip bidi overrides, isolates, marks, and soft hyphens
     let buf = strip_bidi(&buf);
-    // 4. Collapse whitespace + strip control + strip zero-width (final cleanup)
-    Ok(whitespace::_collapse_whitespace(&buf, true, true))
+    // 4. Collapse whitespace + strip control + strip zero-width
+    let buf = whitespace::_collapse_whitespace(&buf, true, true);
+    // 5. Path-safety guarantee (#248): never emit a synthesised '/', '\', or
+    //    '..' traversal (a confusable like U+2044 must not become an actionable
+    //    separator in security-preset output).
+    Ok(neutralize_path_separators(&buf))
 }
 
 /// ML/NLP text normalization pipeline.
@@ -350,8 +388,12 @@ pub fn _sanitize_user_input(text: &str) -> PyResult<String> {
     let buf = zalgo::_strip_zalgo(&buf, 2);
     // 4. Confusables → Latin (neutralizes cross-script homoglyphs)
     let buf = confusables::_normalize_confusables(&buf, "latin")?;
-    // 5. Collapse whitespace + strip control + strip zero-width (final cleanup)
-    Ok(whitespace::_collapse_whitespace(&buf, true, true))
+    // 5. Collapse whitespace + strip control + strip zero-width
+    let buf = whitespace::_collapse_whitespace(&buf, true, true);
+    // 6. Path-safety guarantee (#248): the output of a function named to
+    //    *sanitize* untrusted input must be safe to use as a path component —
+    //    no synthesised '/', '\', or '..' traversal.
+    Ok(neutralize_path_separators(&buf))
 }
 
 // ---------------------------------------------------------------------------
@@ -421,6 +463,34 @@ pub fn _strip_obfuscation(text: &str) -> PyResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── neutralize_path_separators: path-safety guarantee for security presets (#248) ──
+    #[test]
+    fn test_neutralize_path_separators() {
+        // Separators (whatever their origin) become '_'.
+        assert_eq!(neutralize_path_separators("etc/passwd"), "etc_passwd");
+        assert_eq!(neutralize_path_separators("a\\b"), "a_b");
+        // No '/' or '\' survives, so '../'-style traversal is impossible; dot
+        // runs collapse so no `..` token remains either.
+        assert_eq!(neutralize_path_separators("../../etc"), "._._etc");
+        assert_eq!(neutralize_path_separators("a..b"), "a.b");
+        // Single dots and benign text are preserved.
+        assert_eq!(neutralize_path_separators("file.tar.gz"), "file.tar.gz");
+        assert_eq!(neutralize_path_separators("hello world"), "hello world");
+        assert!(!neutralize_path_separators("x⁄y/z\\w").contains(['/', '\\']));
+    }
+
+    #[test]
+    fn test_neutralize_path_separators_idempotent() {
+        for s in ["etc/passwd", "../../x", "a..b/c\\d", "plain text"] {
+            let once = neutralize_path_separators(s);
+            assert_eq!(
+                neutralize_path_separators(&once),
+                once,
+                "not idempotent: {s:?}"
+            );
+        }
+    }
 
     // ── nfkc_normalize: ASCII fast path must equal full NFKC (#198) ──
     // The fast path returns the ASCII input borrowed (no copy); this guards

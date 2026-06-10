@@ -7,6 +7,7 @@ from translit import (
     catalog_key,
     display_clean,
     ml_normalize,
+    sanitize_user_input,
     security_clean,
     strip_bidi,
 )
@@ -97,6 +98,48 @@ class TestSecurityClean:
         # Cyrillic homoglyph + ZWSP + bidi override + soft hyphen
         result = security_clean("\u0440\u0430y\u200bp\u202ea\u00adl")
         assert result == "paypal"
+
+
+# ===== path-safety guarantee (#248) =====
+
+
+class TestPathSafety:
+    """The security presets must never emit a synthesised path separator or
+    `..` traversal \u2014 a confusable like U+2044 FRACTION SLASH must not become an
+    actionable '/' in the output of a function named to *sanitize* input."""
+
+    @pytest.mark.parametrize("preset", [sanitize_user_input, security_clean])
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "etc\u2044passwd",  # U+2044 FRACTION SLASH (folds to '/')
+            "a\u2215b",  # U+2215 DIVISION SLASH
+            "x\ua4fa\u2044bin",  # U+A4FA (\u2192 '..') + fraction slash
+            "\u2025\u2025/etc",  # U+2025 TWO DOT LEADER (\u2192 '..') + real slash
+            "../../etc/passwd",  # plain ASCII traversal
+            "a\\b\\c",  # backslash separators
+        ],
+    )
+    def test_no_synthesised_separators(self, preset, raw: str) -> None:
+        out = preset(raw)
+        assert "/" not in out, f"{preset.__name__}({raw!r}) -> {out!r} contains '/'"
+        assert "\\" not in out, f"{preset.__name__}({raw!r}) -> {out!r} contains '\\'"
+        assert ".." not in out, f"{preset.__name__}({raw!r}) -> {out!r} contains '..'"
+
+    def test_specific_smuggling_vectors(self) -> None:
+        # The exact vectors reported in #248.
+        assert sanitize_user_input("etc\u2044passwd") == "etc_passwd"
+        assert security_clean("a\u2215b") == "a_b"
+
+    def test_homoglyph_folding_still_works(self) -> None:
+        # Path-safety must not regress the homoglyph neutralisation.
+        assert sanitize_user_input("p\u0430ypal") == "paypal"
+        assert security_clean("p\u0430ypal") == "paypal"
+
+    def test_idempotent(self) -> None:
+        for preset in (sanitize_user_input, security_clean):
+            once = preset("etc\u2044../passwd")
+            assert preset(once) == once
 
 
 # ===== ml_normalize =====

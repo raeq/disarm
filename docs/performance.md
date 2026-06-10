@@ -167,6 +167,12 @@ Published figure is **~38× faster than Unidecode on Latin** at document scale
 (and **~15× on Cyrillic**).
 
 ```python
+try:
+    from unidecode import unidecode   # re-import: each block is self-contained,
+except ImportError:                   # so a skipped earlier block never strands us
+    import pytest
+    pytest.skip("Unidecode not installed; see requirements/bench.txt")
+
 document = ("Schöne Grüße aus München. Café au lait. "
             "Здравствуйте, мир. Ελληνικά κείμενα. ") * 40   # ~3 KB, mixed
 ratio = speed_ratio(transliterate, unidecode, document, inner=400, reps=5)

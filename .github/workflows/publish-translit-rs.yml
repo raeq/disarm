@@ -1,0 +1,44 @@
+name: Publish translit-rs deprecation shim
+
+# One-shot, manually-triggered publish of the `translit-rs` deprecation shim
+# (packaging/translit-rs-deprecation) to PyPI via OIDC trusted publishing.
+#
+# `translit-rs` was renamed to `disarm` (#264); `translit-rs 0.8.1` was the final
+# functional release. This ships `translit-rs 0.8.2` — a thin shim that depends on
+# `disarm` and re-exports it — so the PyPI page redirects users and existing
+# `import translit` keeps working (with a DeprecationWarning).
+#
+# Prereq (one-time, PyPI side): add a Trusted Publisher to the *translit-rs*
+# project — owner `raeq`, repo `disarm`, workflow `publish-translit-rs.yml`,
+# environment `pypi`. (The old translit-rs publisher pointed at `raeq/translit`
+# and stopped matching when the repo was renamed.)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish translit-rs 0.8.2
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read   # job-level perms replace workflow-level; checkout needs this
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build packaging/translit-rs-deprecation --outdir dist
+      - name: List artifacts
+        run: ls -lh dist/
+      - name: Publish to PyPI (translit-rs)
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1
+        with:
+          skip-existing: true

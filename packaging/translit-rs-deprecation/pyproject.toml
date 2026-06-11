@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "translit-rs"
+version = "0.8.2"
+description = "DEPRECATED — renamed to 'disarm'. Run: pip install disarm"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Richard Quinn", email = "quinn.richard@gmail.com" }]
+keywords = ["deprecated", "renamed", "disarm", "transliteration", "unicode-security"]
+classifiers = [
+    "Development Status :: 7 - Inactive",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+# Installing translit-rs now pulls in the real package and redirects imports.
+dependencies = ["disarm>=0.9.0,<1"]
+
+[project.urls]
+Homepage = "https://disarm.dev"
+Documentation = "https://docs.disarm.dev"
+Repository = "https://github.com/raeq/disarm"
+Changelog = "https://github.com/raeq/disarm/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["translit"]

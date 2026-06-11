@@ -36,9 +36,12 @@ pub(crate) fn new_ascii_pystring<'py>(
         // Empty: CPython returns the shared empty singleton from
         // PyUnicode_New — its buffer must never be written. Non-ASCII:
         // outside this constructor's contract (non-ASCII replace_with).
-        return Ok(PyString::new(py, std::str::from_utf8(bytes).map_err(|_| {
-            PyMemoryError::new_err("internal: non-UTF-8 transliteration output")
-        })?));
+        return Ok(PyString::new(
+            py,
+            std::str::from_utf8(bytes).map_err(|_| {
+                PyMemoryError::new_err("internal: non-UTF-8 transliteration output")
+            })?,
+        ));
     }
     // SAFETY: PyUnicode_New(len, 0x7F) allocates a compact-ASCII object with
     // a (len + 1)-byte data buffer; PyUnicode_DATA points at it. We fill
@@ -47,8 +50,9 @@ pub(crate) fn new_ascii_pystring<'py>(
     unsafe {
         let obj = ffi::PyUnicode_New(bytes.len() as ffi::Py_ssize_t, 0x7F);
         if obj.is_null() {
-            return Err(PyErr::take(py)
-                .unwrap_or_else(|| PyMemoryError::new_err("PyUnicode_New failed")));
+            return Err(
+                PyErr::take(py).unwrap_or_else(|| PyMemoryError::new_err("PyUnicode_New failed"))
+            );
         }
         let data = ffi::PyUnicode_DATA(obj).cast::<u8>();
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len());

@@ -87,8 +87,8 @@ normalize_confusables("раypal")  # → "paypal"
 strip_obfuscation("рroduсt")  # → "product"   (does NOT transliterate; chain transliterate() if needed)
 
 # Pipelines
-security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")            # → "Real text"   (NFKC → confusables → strip bidi → collapse ws)
-normalize_user_input("pаypal")      # → "paypal"  (NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse ws)
+security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")            # → "Real text"   (NFKC → confusables → strip bidi → collapse ws → path-safety)
+normalize_user_input("pаypal")      # → "paypal"  (NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse ws → path-safety)
 ```
 
 ### Transliteration (standards-based core)
@@ -147,7 +147,7 @@ disarm transliterates a very wide range of scripts, but the **quality guarantee 
 ```python
 from disarm import security_clean, ml_normalize, catalog_key, normalize_user_input, strip_obfuscation
 
-# Security: NFKC → confusables → strip bidi → collapse whitespace
+# Security: NFKC → confusables → strip bidi → collapse whitespace → path-safety
 security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")  # → "Real text"
 
 # ML/NLP: NFKC → emoji→text → transliterate → strip accents → fold case
@@ -157,7 +157,7 @@ ml_normalize("Café ☕ Ünïcödé")  # → "cafe hot beverage unicode"
 catalog_key("Москва", lang="ru")  # → "moskva"
 catalog_key("ΩMEGA  café")        # → "omega cafe"
 
-# Web input: NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse
+# Web input: NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse → path-safety
 normalize_user_input("pаypal")  # → "paypal" (Cyrillic а folded to Latin)
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars → clean text

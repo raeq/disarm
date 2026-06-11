@@ -134,7 +134,7 @@ fn is_bidi_or_format(ch: char) -> bool {
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace
+/// Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace → (path-separator neutralization)
 ///
 /// Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
 /// zero-width injections and control chars, and removes dangerous bidi
@@ -366,7 +366,7 @@ pub fn _display_clean(text: &str) -> PyResult<String> {
 /// `THREAT_MODEL.md`).
 ///
 /// Pipeline: NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo
-///           → confusables → collapse_whitespace
+///           → confusables → collapse_whitespace → (path-separator neutralization)
 ///
 /// Accepts multilingual input in its original script while neutralizing
 /// Unicode-level abuse:

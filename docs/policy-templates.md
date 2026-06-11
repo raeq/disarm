@@ -117,7 +117,7 @@ Policy profiles use `TextPipeline` (Python-configurable steps). For maximum perf
 
 | Need | Use |
 |------|-----|
-| Security-critical input normalization | `normalize_user_input()` |
+| Unicode input normalization | `normalize_user_input()` |
 | Catalog/bibliography keys | `catalog_key()` |
 | Search index keys | `search_key()` |
 | Sort-friendly keys | `sort_key()` |

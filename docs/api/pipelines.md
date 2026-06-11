@@ -8,7 +8,7 @@ Ready-to-use multi-step text processing pipelines. Each is a single compiled Rus
 
 ### Pipeline steps
 
-`NFKC → confusables → strip bidi/format → collapse_whitespace`
+`NFKC → confusables → strip bidi/format → collapse_whitespace → (path-separator neutralization)`
 
 ```python
 from disarm import security_clean
@@ -116,7 +116,7 @@ assert sort_key("Café") == 'cafe'
 
 ### Pipeline steps
 
-`NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo → confusables → collapse_whitespace`
+`NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo → confusables → collapse_whitespace → (path-separator neutralization)`
 
 ```python
 from disarm import normalize_user_input

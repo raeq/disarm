@@ -196,7 +196,7 @@ jobs:
           cat target/perf-stat/summary.txt 2>/dev/null || true
 
       - name: Upload signals as artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-signals
           path: |

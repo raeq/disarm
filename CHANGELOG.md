@@ -18,6 +18,10 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed (breaking)
 
+- **Renamed policy profile `web_input_sanitize` → `normalize_web_input`.** Follows the `sanitize_user_input → normalize_user_input` rename: "sanitize" wrongly implied output/injection safety, and was especially misleading here because this profile is *lighter* than `normalize_user_input()` (NFKC + confusables only; no bidi/zero-width/control/zalgo stripping). Use `get_pipeline("normalize_web_input")`. No alias is kept.
+
+### Changed (breaking)
+
 - **Renamed `sanitize_user_input()` → `normalize_user_input()`.** The old name implied output sanitization (injection safety); this preset performs *input Unicode normalization* only and is not an XSS/SQL defense (see Threat Model). The `PRESETS` registry key changes to match (`"normalize_user_input"`). No alias is kept — update call sites directly.
 
 ## [0.9.0] — 2026-06-11

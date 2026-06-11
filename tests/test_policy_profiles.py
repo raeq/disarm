@@ -20,7 +20,7 @@ class TestListProfiles:
         profiles = list_profiles()
         assert "scholarly_cyrillic_iso9" in profiles
         assert "library_catalog_key_eu" in profiles
-        assert "web_input_sanitize" in profiles
+        assert "normalize_web_input" in profiles
         assert "ml_corpus_normalize" in profiles
         assert "search_index" in profiles
 
@@ -65,8 +65,8 @@ class TestProfileBehavior:
         assert result.isascii()
         assert "muenchen" in result or "munchen" in result
 
-    def test_web_input_sanitize(self):
-        pipe = get_pipeline("web_input_sanitize")
+    def test_normalize_web_input(self):
+        pipe = get_pipeline("normalize_web_input")
         result = pipe("  Hello   World  ")
         assert result == "Hello World"
 

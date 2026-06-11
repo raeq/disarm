@@ -169,7 +169,7 @@ from disarm import list_profiles
 
 print(list_profiles())
 # ['library_catalog_key_eu', 'llm_guardrail', 'ml_corpus_normalize',
-#  'rag_ingest', 'scholarly_cyrillic_iso9', 'search_index', 'web_input_sanitize']
+#  'normalize_web_input', 'rag_ingest', 'scholarly_cyrillic_iso9', 'search_index']
 ```
 
 Returns sorted list of available profile names.
@@ -180,7 +180,7 @@ Returns sorted list of available profile names.
 |---------|-------|--------|
 | `scholarly_cyrillic_iso9` | NFKC → transliterate (ISO 9) → fold_case → collapse_whitespace | UTF-8 |
 | `library_catalog_key_eu` | NFKC → transliterate → confusables → strip_accents → fold_case → collapse_whitespace | ASCII |
-| `web_input_sanitize` | NFKC → confusables → collapse_whitespace | UTF-8 |
+| `normalize_web_input` | NFKC → confusables → collapse_whitespace | UTF-8 |
 | `ml_corpus_normalize` | NFKC → demojize → strip_accents → fold_case → collapse_whitespace | ASCII |
 | `search_index` | NFKC → transliterate → strip_accents → fold_case → collapse_whitespace | ASCII |
 | `llm_guardrail` | NFKC → strip_zalgo(0) → strip_bidi → demojize → strip_accents → confusables → fold_case → strip_control → strip_zero_width → collapse_whitespace | UTF-8 |

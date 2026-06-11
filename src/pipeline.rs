@@ -398,10 +398,10 @@ const PROFILE_NAMES: &[&str] = &[
     "library_catalog_key_eu",
     "llm_guardrail",
     "ml_corpus_normalize",
+    "normalize_web_input",
     "rag_ingest",
     "scholarly_cyrillic_iso9",
     "search_index",
-    "web_input_sanitize",
 ];
 
 fn profile_spec(name: &str) -> Option<ProfileSpec> {
@@ -423,7 +423,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             collapse_whitespace: true,
             ..ProfileSpec::default()
         },
-        "web_input_sanitize" => ProfileSpec {
+        "normalize_web_input" => ProfileSpec {
             normalize: Some("NFKC"),
             confusables: true,
             collapse_whitespace: true,

@@ -57,12 +57,12 @@ assert pipe("Città di Firenze") == 'citta di firenze'
 | Reversibility | No (lossy) |
 | Script coverage | All 83 language profiles |
 
-### web_input_sanitize
+### normalize_web_input
 
-**Use case:** Web form input cleaning, comment sanitization, display-safe text.
+**Use case:** Lightweight Unicode normalization of web form input (NFKC + confusable-folding). This is *input* normalization, **not** output sanitization — it performs no escaping and is not an XSS/HTML/SQL defense (see [Threat Model](../THREAT_MODEL.md)). It is intentionally lighter than `normalize_user_input()` (no bidi/zero-width/control/zalgo stripping); use that function for adversarial input.
 
 ```python
-pipe = get_pipeline("web_input_sanitize")
+pipe = get_pipeline("normalize_web_input")
 assert pipe("  Hello   World  ") == 'Hello World'
 ```
 
@@ -71,7 +71,7 @@ assert pipe("  Hello   World  ") == 'Hello World'
 | Steps | NFKC → confusables → collapse_whitespace |
 | Output charset | UTF-8 (original script preserved) |
 | Reversibility | No (NFKC is lossy for some characters) |
-| Security | Folds TR39 confusable homoglyphs |
+| Confusables | Folds TR39 confusable homoglyphs (not an output/injection defense) |
 
 !!! note
     To also handle zalgo text and bidi injection, use the `normalize_user_input()` precompiled pipeline instead — it includes `strip_zalgo` and `strip_bidi` steps that `TextPipeline` does not support.

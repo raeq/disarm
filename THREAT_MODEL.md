@@ -16,6 +16,17 @@ class of attack is fully neutralized.
 disarm is a pure, in-process text-transformation library: no network access, no
 filesystem writes, no code execution, no runtime dependencies.
 
+**disarm is an *input-normalization* layer, not an *output sanitizer*.** It neutralizes
+character-level Unicode manipulation; it does **not** make text safe to emit into any
+execution or markup context. It performs no HTML/attribute/JS/URL/CSS escaping, no SQL or
+shell quoting, and does not strip or encode `<`, `>`, `&`, `"`, `'`. Defending those sinks
+is **context-dependent output encoding** — the same byte is safe in one context and
+dangerous in another — which can only be done correctly at the point of output, where the
+sink is known. Use your framework's auto-escaping (e.g. templating autoescape, JSX),
+a dedicated HTML sanitizer (e.g. DOMPurify) for rich HTML, and parameterized queries for
+SQL. disarm runs *before* those, as the Unicode layer they do not cover; it never replaces
+them. See the XSS / injection and metacharacter-unmasking items under *Out of scope*.
+
 ## Assets and actors
 
 - **Asset:** the integrity of text as it enters a downstream system (classifier,
@@ -71,6 +82,23 @@ behavior, not a vulnerability:
   data is updated. The bundled version is recorded in the release.
 - **Semantic / meaning-level attacks.** Prompt injection, social engineering, or any
   attack that does not depend on character-level visual/format manipulation.
+- **Injection attacks — XSS, HTML, SQL, shell, template, header.** disarm does **not**
+  escape, encode, quote, or strip the metacharacters these attacks use. Pure-ASCII payloads
+  such as `<script>alert(1)</script>` or `' OR 1=1 --` pass through every transform
+  **unchanged** (every Unicode transform is a no-op on ASCII). Preventing injection is the
+  job of context-appropriate output encoding at the sink, not of input normalization;
+  disarm is not, and cannot be, a substitute. A preset named `sanitize_user_input` performs
+  Unicode hygiene only — the name predates this clarification; treat its output as
+  normalized, **not** as injection-safe.
+- **Metacharacter unmasking via NFKC (important).** NFKC normalization — step 1 of
+  `security_clean` and `sanitize_user_input` — maps fullwidth and compatibility lookalikes
+  to their ASCII originals **by design** (that is how fullwidth-bypass evasion is collapsed):
+  `＜script＞` (U+FF1C…U+FF1E) → `<script>`, `＆`→`&`, `＂`→`"`, `／`→`/`. A consequence is
+  that disarm's output can contain *live* ASCII metacharacters that the input had only in a
+  masked, non-actionable form. This is correct normalization, **not** a vulnerability — but
+  it means disarm output is, if anything, **more** important to context-encode on the way
+  out, never less. Do not treat normalized text as closer to injection-safe than the raw
+  input; it is not.
 - **Completeness or "safety" guarantees of any kind.** disarm reduces a specific,
   enumerated attack surface. It does not certify that processed text is safe to trust.
 - **Denial of service guarantees.** We aim for linear-time behavior and test for it, but

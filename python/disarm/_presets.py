@@ -36,11 +36,21 @@ def security_clean(text: str) -> str:
     dangerous bidi overrides and soft hyphens, then normalizes whitespace
     (collapsing runs, stripping control chars and zero-width injections).
 
+    .. warning::
+       Canonicalizes Unicode for *comparison*; it is **not** an output
+       sanitizer and provides no XSS/HTML/SQL/injection protection. The NFKC
+       step maps fullwidth lookalikes to live ASCII metacharacters by design
+       (``＜`` → ``<``), so the output may be *more* important to context-encode
+       on the way out, not less. Encode at the sink; never emit this result
+       into markup or a query unescaped.
+
     Args:
         text: Input string (user-submitted, network-received, etc.).
 
     Returns:
-        Canonicalized string safe for security-sensitive comparisons.
+        A canonicalized string suitable for security-sensitive *comparison*
+        (e.g. against a denylist). **Not** safe to emit unescaped into any
+        execution or markup context — see warning above.
 
     Examples:
         >>> security_clean("Ηello Ꮤorld")  # Greek Η + Cherokee Ꮤ → Latin
@@ -130,11 +140,18 @@ def display_clean(text: str) -> str:
     malicious content), soft hyphens, control characters, and zero-width
     injections, then collapses runs of whitespace to single spaces.
 
+    .. warning::
+       "Display-safe" means *visual* hygiene (no bidi reordering, no invisible
+       injections) — **not** markup-safe. This does no HTML escaping and does
+       not strip ``<``, ``>``, ``&``. When rendering into HTML, still escape at
+       the template/output layer; disarm is not an XSS defense.
+
     Args:
         text: Input string (user-submitted content).
 
     Returns:
-        Cleaned string safe for display rendering.
+        A visually cleaned string. **Escape it at the output layer** before
+        rendering into HTML or any other markup context (see warning above).
 
     Examples:
         >>> display_clean("hello\\x00world\\u200b!")
@@ -241,10 +258,20 @@ def strip_bidi(text: str) -> str:
 
 
 def sanitize_user_input(text: str) -> str:
-    """Sanitize user-submitted input for web applications.
+    """Unicode hygiene for user-submitted input — **not** an injection defense.
+
+    .. warning::
+       This normalizes Unicode; it does **not** make text safe to emit into
+       HTML, JS, URLs, SQL, or shells. It performs no escaping and does not
+       strip ``<``, ``>``, ``&`` — ``<script>alert(1)</script>`` passes through
+       unchanged, and the NFKC step can *surface* ASCII metacharacters from
+       fullwidth lookalikes (``＜script＞`` → ``<script>``). This is **not** XSS
+       or injection protection: encode at the output sink (framework
+       auto-escaping, DOMPurify, parameterized queries). Run this *before* that
+       encoder, never instead of it. The name predates this clarification.
 
     Preserves the original script (no transliteration) while neutralizing
-    common attack vectors: zalgo stacking, homoglyph spoofing, bidi
+    Unicode-level attack vectors: zalgo stacking, homoglyph spoofing, bidi
     overrides, zero-width injections, and control characters.
 
     Pipeline: ``NFKC → strip_bidi → strip_zero_width → strip_zalgo → confusables
@@ -255,7 +282,8 @@ def sanitize_user_input(text: str) -> str:
         text: User-submitted input string.
 
     Returns:
-        Sanitized string safe for storage and display.
+        A Unicode-normalized string. Safe for storage/comparison; **encode it
+        before emitting into any markup or query context** (see warning above).
 
     Examples:
         >>> sanitize_user_input("Hello, world!")
@@ -274,6 +302,10 @@ def strip_obfuscation(text: str) -> str:
     Neutralizes homoglyph spoofing, zalgo abuse, invisible character
     injection, and bidi attacks. Uses TR39 confusable mapping (visual
     similarity) — Cyrillic р→p, с→c, В→B — not phonetic transliteration.
+
+    **Not an output sanitizer.** Resolves *Unicode* obfuscation only; performs
+    no HTML/JS/SQL escaping and does not strip ``<``, ``>``, ``&``. Encode at
+    the output sink — this is not XSS or injection protection.
 
     **Does not transliterate.** Non-Latin scripts that have no Latin
     confusable equivalent pass through unchanged. Chain with

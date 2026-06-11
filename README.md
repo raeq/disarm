@@ -24,6 +24,8 @@ disarm implements *visual* confusable mapping per [Unicode TR39](https://www.uni
 `ftfy` was statistically equivalent to no preprocessing; `unidecode` *degraded* accuracy on invisible-character attacks. Details: **[Adversarial-Text Defense](docs/security/adversarial-defense.md)** (paper *"Fire Extinguishers Full of Gasoline"*; XMR metric: [Zenodo 10.5281/zenodo.19323513](https://doi.org/10.5281/zenodo.19323513)).
 
 > **Scope.** disarm is a **defense-in-depth layer, not a complete control.** It canonicalizes the confusables it bundles (TR39) and strips the format characters it enumerates; it does not promise to stop any attack class, and the confusable space is far larger than any table. See the **[Threat Model](THREAT_MODEL.md)** for what is and isn't in scope.
+>
+> **Not an output sanitizer.** disarm normalizes *input*; it does **not** make text safe to emit into HTML, JS, URLs, SQL, or shells. It performs no escaping and does not strip `<`, `>`, `&` — `<script>alert(1)</script>` passes through unchanged, and NFKC normalization can even *surface* ASCII metacharacters from fullwidth lookalikes (`＜script＞` → `<script>`). disarm is **not** an XSS or injection defense and never replaces one: encode at the output sink (framework auto-escaping, DOMPurify, parameterized queries). Run disarm *before* those, as the Unicode layer they don't cover.
 
 ```python
 from disarm import strip_obfuscation, normalize_confusables, is_safe_hostname

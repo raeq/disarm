@@ -47,8 +47,10 @@ pub(crate) fn new_ascii_pystring<'py>(
     // a (len + 1)-byte data buffer; PyUnicode_DATA points at it. We fill
     // exactly `len` bytes and write the NUL terminator CPython expects at
     // data[len]. The object is fresh and uniquely owned — no aliasing.
+    let len = ffi::Py_ssize_t::try_from(bytes.len())
+        .map_err(|_| PyMemoryError::new_err("string length exceeds Py_ssize_t"))?;
     unsafe {
-        let obj = ffi::PyUnicode_New(bytes.len() as ffi::Py_ssize_t, 0x7F);
+        let obj = ffi::PyUnicode_New(len, 0x7F);
         if obj.is_null() {
             return Err(
                 PyErr::take(py).unwrap_or_else(|| PyMemoryError::new_err("PyUnicode_New failed"))

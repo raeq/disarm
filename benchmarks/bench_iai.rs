@@ -17,9 +17,9 @@
 
 use std::hint::black_box;
 
-use _translit::slugify::{slugify_impl, SlugConfig};
-use _translit::transliterate::transliterate_impl;
-use _translit::ErrorMode;
+use _disarm::slugify::{slugify_impl, SlugConfig};
+use _disarm::transliterate::transliterate_impl;
+use _disarm::ErrorMode;
 
 use iai_callgrind::{
     library_benchmark, library_benchmark_group, main, Callgrind, LibraryBenchmarkConfig,

@@ -1,11 +1,11 @@
 # Slugification
 
-translit generates URL-safe slugs from Unicode text. The `slugify()` function is parameter-compatible with [python-slugify](https://pypi.org/project/python-slugify/), so migration requires only changing the import.
+disarm generates URL-safe slugs from Unicode text. The `slugify()` function is parameter-compatible with [python-slugify](https://pypi.org/project/python-slugify/), so migration requires only changing the import.
 
 ## Basic usage
 
 ```python
-from translit import slugify
+from disarm import slugify
 
 assert slugify("Hello, World!") == 'hello-world'
 assert slugify("My Blog Post — Draft #3") == 'my-blog-post-draft-3'
@@ -132,7 +132,7 @@ A `default` that is itself unsluggable sanitizes to `""`.
 unique like any other slug:
 
 ```python
-from translit import UniqueSlugifier
+from disarm import UniqueSlugifier
 
 u = UniqueSlugifier(default="n-a")
 assert u("\U0001f525") == 'n-a'
@@ -146,7 +146,7 @@ assert u("\U0001f525") == 'n-a-1'
 Pre-configure a slugifier for repeated use:
 
 ```python
-from translit import Slugifier
+from disarm import Slugifier
 
 slug = Slugifier(separator="_", lang="de", max_length=50)
 assert slug("Ärger im Büro") == 'aerger_im_buero'
@@ -158,7 +158,7 @@ assert slug("Über den Wolken") == 'ueber_den_wolken'
 Track previously generated slugs and append numeric suffixes for uniqueness:
 
 ```python
-from translit import UniqueSlugifier
+from disarm import UniqueSlugifier
 
 unique = UniqueSlugifier()
 assert unique("My Post") == 'my-post'

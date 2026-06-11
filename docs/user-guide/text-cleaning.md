@@ -1,13 +1,13 @@
 # Text Cleaning
 
-translit provides three low-level text cleaning functions that operate on individual aspects of Unicode text. These are building blocks — for multi-step cleaning, see [TextPipeline](pipeline.md).
+disarm provides three low-level text cleaning functions that operate on individual aspects of Unicode text. These are building blocks — for multi-step cleaning, see [TextPipeline](pipeline.md).
 
 ## strip_accents
 
 Remove diacritical marks while preserving base characters:
 
 ```python
-from translit import strip_accents
+from disarm import strip_accents
 
 assert strip_accents("café") == 'cafe'
 assert strip_accents("naïve") == 'naive'
@@ -30,7 +30,7 @@ assert strip_accents("São Paulo") == 'Sao Paulo'
 Remove excessive combining marks (zalgo text abuse) while preserving legitimate diacritics:
 
 ```python
-from translit import strip_zalgo, is_zalgo
+from disarm import strip_zalgo, is_zalgo
 
 # Legitimate diacritics are preserved
 assert strip_zalgo("café") == 'café'
@@ -55,7 +55,7 @@ Use `strip_zalgo()` when you want to preserve legitimate diacritics in multiling
 Full Unicode case folding per CaseFolding.txt (Unicode 16.0) — a more thorough alternative to `.lower()`. Backed by a compile-time PHF table containing all 1,557 status-C and status-F mappings:
 
 ```python
-from translit import fold_case
+from disarm import fold_case
 
 # Latin
 assert fold_case("HELLO") == 'hello'
@@ -92,7 +92,7 @@ Use `fold_case()` when you need case-insensitive comparison that handles the ful
 Normalize all Unicode whitespace variants to single ASCII spaces:
 
 ```python
-from translit import collapse_whitespace
+from disarm import collapse_whitespace
 
 # Collapse runs of whitespace
 assert collapse_whitespace("hello   world") == 'hello world'

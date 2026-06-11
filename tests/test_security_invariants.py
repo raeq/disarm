@@ -12,7 +12,7 @@ from conftest import unicode_text
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from translit import (
+from disarm import (
     is_confusable,
     is_normalized,
     sanitize_user_input,

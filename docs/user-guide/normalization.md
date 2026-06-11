@@ -1,6 +1,6 @@
 # Normalization
 
-Unicode normalization ensures that equivalent sequences of characters are represented identically. translit provides fast normalization using the Rust `unicode-normalization` crate.
+Unicode normalization ensures that equivalent sequences of characters are represented identically. disarm provides fast normalization using the Rust `unicode-normalization` crate.
 
 ## Why normalize?
 
@@ -28,7 +28,7 @@ Normalization resolves this by converting to a canonical form.
 ## Basic usage
 
 ```python
-from translit import normalize
+from disarm import normalize
 
 # NFC: compose into single codepoints
 assert normalize("e\u0301") == 'é'
@@ -49,7 +49,7 @@ assert normalize("ﬁ", form="NFKD") == 'fi'
 Test whether a string is already in a given form without performing the full normalization:
 
 ```python
-from translit import is_normalized
+from disarm import is_normalized
 
 assert is_normalized("hello") == True
 assert is_normalized("é", form="NFC") == True
@@ -62,7 +62,7 @@ assert is_normalized("e\u0301", form="NFD") == True
 For programmatic use, the `NF` enum provides the four forms:
 
 ```python
-from translit import NF, normalize
+from disarm import NF, normalize
 
 assert normalize("ﬁ", form=NF.KC.value) == 'fi'
 ```

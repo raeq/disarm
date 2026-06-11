@@ -1,17 +1,17 @@
 blank_issues_enabled: false
 contact_links:
   - name: 🔒 Security vulnerability (private disclosure)
-    url: https://github.com/raeq/translit/security/advisories/new
+    url: https://github.com/raeq/disarm/security/advisories/new
     about: >-
       Please do NOT open a public issue for a suspected vulnerability. Report it
       privately via GitHub Security Advisories. Read the Threat Model first to
       check whether your finding is a documented-invariant failure (a vulnerability)
       or an out-of-scope limitation (in which case use the coverage-gap form).
   - name: 🧭 Threat Model — what is in / out of scope
-    url: https://github.com/raeq/translit/blob/main/THREAT_MODEL.md
+    url: https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md
     about: >-
       Before reporting a confusable "bypass," check here. A confusable that simply
       isn't in the bundled TR39 table is a known limitation by design, not a bug.
   - name: 📖 Documentation
-    url: https://translit.readthedocs.io/
+    url: https://docs.disarm.dev/
     about: API reference and user guides — many "is this a bug?" questions are answered here.

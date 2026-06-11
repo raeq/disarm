@@ -5,7 +5,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::{case_fold, confusables, emoji, transliterate, whitespace, zalgo};
 
-// translit does not cap input size in the pipeline presets — bounding untrusted
+// disarm does not cap input size in the pipeline presets — bounding untrusted
 // input is the caller's responsibility (every stage is linear time/memory;
 // see #80). The only retained size guard is the register_replacements output
 // amplification bound in src/transliterate.rs.
@@ -172,7 +172,7 @@ pub fn _security_clean(text: &str) -> PyResult<String> {
 /// # Parameters
 /// - `emoji_style`: `"cldr"` — expand emoji to CLDR short names (default).
 ///                  `"none"` — leave emoji characters as-is.
-///                  Any other value raises `TranslitError`.
+///                  Any other value raises `DisarmError`.
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, emoji_style="cldr"))]
 pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyResult<String> {

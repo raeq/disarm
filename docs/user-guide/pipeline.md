@@ -1,13 +1,13 @@
 # Text Processing
 
-translit offers two ways to compose multiple transforms: the fluent `Text` builder for readability and one-off processing, and `TextPipeline` for high-throughput batch use.
+disarm offers two ways to compose multiple transforms: the fluent `Text` builder for readability and one-off processing, and `TextPipeline` for high-throughput batch use.
 
 ## Text builder (recommended)
 
 Wrap a string in `Text`, chain methods, extract with `.value` or `str()`. Each method returns a new `Text` — immutable, like Python `str`.
 
 ```python
-from translit import Text
+from disarm import Text
 
 result = (Text("  Héllo   Straße  ")
     .normalize(form="NFC")
@@ -65,7 +65,7 @@ All 8 standalone transform functions are available as chainable methods:
 Predicates return their native type and do not chain:
 
 ```python
-from translit import Script
+from disarm import Script
 
 t = Text("hello мир")
 assert t.is_mixed_script() == True
@@ -94,7 +94,7 @@ Use this when processing large datasets where the same transform chain applies t
 
 <!--- skip: next -->
 ```python
-from translit import TextPipeline
+from disarm import TextPipeline
 
 pipe = TextPipeline(
     normalize="NFC",

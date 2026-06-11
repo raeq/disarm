@@ -1,4 +1,4 @@
-# Fuzzing translit's security transforms
+# Fuzzing disarm's security transforms
 
 Coverage-guided fuzzing of the defense pipelines with
 [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz) / libFuzzer. These run

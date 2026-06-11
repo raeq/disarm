@@ -1,6 +1,6 @@
-# Releasing translit
+# Releasing disarm
 
-This document is the authoritative policy for **how translit is versioned** and **what
+This document is the authoritative policy for **how disarm is versioned** and **what
 we do when a release turns out to be bad**. It is written for maintainers, but it is
 public on purpose: downstream users should be able to predict exactly what a version
 number means and what happens if a release has to be pulled.
@@ -15,7 +15,7 @@ It complements two neighbouring documents and does not repeat them:
 
 ## Versioning
 
-translit version numbers use the familiar `MAJOR.MINOR.PATCH` shape, but the **major**
+disarm version numbers use the familiar `MAJOR.MINOR.PATCH` shape, but the **major**
 component does **not** carry the plain Semantic Versioning "incompatible API change"
 meaning. We borrow the shape, not the major-version semantics. Within the `0.x` series
 that we expect to occupy for a long time, the rules are:
@@ -28,8 +28,9 @@ other minor things**. A point release never introduces a new capability.
 ### Minor / feature release — `0.6`, `0.7`, `0.8` (a future `0.22`, `0.37`)
 
 Two-component. The bucket for **new capabilities or major internal refactorings** — for
-example, the extraction of a pure-Rust `translit-core` and its other-language bindings
-is the `0.9` release.
+example, the extraction of the pure-Rust core — published canonically as the `disarm`
+crate on crates.io (not `disarm-core`) — and its other-language bindings is the `0.10`
+release. (The `0.9` release is the `translit` → `disarm` rename; #264.)
 
 Documentation that a feature **requires** ships **with** that feature, in the same minor
 release — it is never split out into a separate point release. (Standalone documentation
@@ -62,7 +63,7 @@ will not install. This section defines exactly what we do.
 
 ### The core principle: you cannot un-ship
 
-Every registry translit targets is **immutable or near-immutable** — once a version is
+Every registry disarm targets is **immutable or near-immutable** — once a version is
 published, you can essentially never take it back cleanly. Deleting it is the *wrong*
 tool: it breaks everyone who pinned that version, and on PyPI, crates.io, RubyGems, and
 Maven Central you **still cannot reuse the version number** afterward, so you gain
@@ -94,9 +95,9 @@ release, and **announced**. Three rules follow:
 
 ### When we publish a security advisory (GHSA)
 
-We open a [GitHub Security Advisory](https://github.com/raeq/translit/security/advisories)
+We open a [GitHub Security Advisory](https://github.com/raeq/disarm/security/advisories)
 **only** when the issue is **trivially exploitable by an unauthenticated attacker
-remotely** — that is, through untrusted text input, which is translit's exact use case
+remotely** — that is, through untrusted text input, which is disarm's exact use case
 (cleaning untrusted text). A bug that requires local access or credentials is still
 yanked and fixed forward, but it does not warrant a GHSA. A CVE flows from the GHSA when
 one is opened; link it from the yank reason. For private reporting of suspected issues,
@@ -104,12 +105,13 @@ see [SECURITY.md](SECURITY.md).
 
 ### Per-registry mechanism
 
-translit ships to several ecosystems; the "yank" verb differs in each. The current
-artifact is PyPI; the rest arrive with the `0.8` `translit-core` bindings.
+disarm ships to several ecosystems; the "yank" verb differs in each. The current
+artifact is PyPI; the rest arrive with the `0.10` pure-Rust core (`disarm` on crates.io)
+and its bindings.
 
 | Artifact | Mechanism | Destructive? | Notes |
 |----------|-----------|--------------|-------|
-| **PyPI** (`translit-rs`) | Yank (PEP 592), with a reason | No — reversible | pip skips it unless someone pins `==`. Never use "Delete release". |
+| **PyPI** (`disarm`) | Yank (PEP 592), with a reason | No — reversible | pip skips it unless someone pins `==`. Never use "Delete release". |
 | **crates.io** | `cargo yank --version X` (`--undo` to reverse) | No | Existing `Cargo.lock` still resolves; new dependents blocked. |
 | **npm** | `npm deprecate pkg@X "msg"` | No | `unpublish` is only allowed <72h or with no dependents — do not rely on it. |
 | **Go** (`pkg.go.dev`) | `retract` directive in `go.mod`, shipped in the next tag | No | The module proxy is immutable; you retract by releasing forward. |

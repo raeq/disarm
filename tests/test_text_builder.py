@@ -1,7 +1,7 @@
 """Tests for the fluent Text builder API."""
 
-from translit import Text
-from translit._enums import Script
+from disarm import Text
+from disarm._enums import Script
 
 
 class TestTextConstruction:

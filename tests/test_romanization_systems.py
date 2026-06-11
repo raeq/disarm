@@ -1,6 +1,6 @@
 """Tests for A3 (multiple romanization systems) and A4 (toned pinyin)."""
 
-from translit import transliterate
+from disarm import transliterate
 
 
 class TestKunreiShiki:
@@ -39,7 +39,7 @@ class TestKunreiShiki:
         assert transliterate("な", lang="ja-kunrei") == "na"
 
     def test_kunrei_in_list_langs(self):
-        from translit import list_langs
+        from disarm import list_langs
 
         assert "ja-kunrei" in list_langs()
 

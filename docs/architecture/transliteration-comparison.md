@@ -1,4 +1,4 @@
-# Transliteration Comparison: translit vs Unidecode vs anyascii
+# Transliteration Comparison: disarm vs Unidecode vs anyascii
 
 Comprehensive character-level comparison across all 83 supported languages.
 Every assigned codepoint in each language's Unicode block(s) is tested — no sampling.
@@ -16,7 +16,7 @@ This approach is deterministic and comprehensive — results do not depend on sa
 
 ## Summary
 
-| Lang | Description | Block chars | Mapped | translit | Unidecode | anyascii | translit-only | Unidecode-only | Output diffs |
+| Lang | Description | Block chars | Mapped | disarm | Unidecode | anyascii | disarm-only | Unidecode-only | Output diffs |
 |------|-------------|------------|--------|----------|-----------|----------|---------------|----------------|-------------|
 | bg | Bulgarian | 304 | 301 | 292 | 234 | 301 | 65 | 7 | 78 |
 | ca | Catalan | 400 | 400 | 400 | 398 | 400 | 2 | 0 | 24 |
@@ -111,18 +111,18 @@ This approach is deterministic and comprehensive — results do not depend on sa
 
 All 27 languages share the same Unicode blocks (Latin-1 Supplement + Latin Extended-A + Latin Extended-B) with 400 assigned codepoints, 400 mapped by at least one library.
 
-Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 400/400, Unidecode maps 398/400. **2** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
 | ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
 
 **Shared differences** (same output across all 27 languages):
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
 | Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
@@ -153,7 +153,7 @@ Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by tr
 
 #### da — Danish
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Å | U+00C5 | LATIN CAPITAL LETTER A WITH RING ABOVE | `Aa` | `A` | `A` |
 | Æ | U+00C6 | LATIN CAPITAL LETTER AE | `Ae` | `AE` | `Ae` |
@@ -163,7 +163,7 @@ Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by tr
 
 #### de — German
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
 | Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
@@ -174,7 +174,7 @@ Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by tr
 
 #### et — Estonian
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
 | Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
@@ -185,13 +185,13 @@ Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by tr
 
 #### is — Icelandic
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Æ | U+00C6 | LATIN CAPITAL LETTER AE | `Ae` | `AE` | `Ae` |
 
 #### no — Norwegian
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Å | U+00C5 | LATIN CAPITAL LETTER A WITH RING ABOVE | `Aa` | `A` | `A` |
 | Æ | U+00C6 | LATIN CAPITAL LETTER AE | `Ae` | `AE` | `Ae` |
@@ -201,7 +201,7 @@ Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by tr
 
 #### sv — Swedish
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Ä | U+00C4 | LATIN CAPITAL LETTER A WITH DIAERESIS | `Ae` | `A` | `A` |
 | Ö | U+00D6 | LATIN CAPITAL LETTER O WITH DIAERESIS | `Oe` | `O` | `O` |
@@ -212,11 +212,11 @@ Coverage: translit maps 400/400, Unidecode maps 398/400. **2** mapped only by tr
 
 Block: 304 assigned codepoints, 301 mapped by at least one library.
 
-Coverage: translit maps 292/301, Unidecode maps 234/301. **65** mapped only by translit, **7** mapped only by Unidecode.
+Coverage: disarm maps 292/301, Unidecode maps 234/301. **65** mapped only by disarm, **7** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | Ҋ | U+048A | CYRILLIC CAPITAL LETTER SHORT I WITH TAIL | `Y` |
 | ҋ | U+048B | CYRILLIC SMALL LETTER SHORT I WITH TAIL | `y` |
@@ -250,7 +250,7 @@ Coverage: translit maps 292/301, Unidecode maps 234/301. **65** mapped only by t
 | Ԍ | U+050C | CYRILLIC CAPITAL LETTER KOMI SJE | `Sj` |
 | | | *...35 more* | |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -262,7 +262,7 @@ Coverage: translit maps 292/301, Unidecode maps 234/301. **65** mapped only by t
 | Ҍ | U+048C | CYRILLIC CAPITAL LETTER SEMISOFT SIGN | `"` |
 | ҍ | U+048D | CYRILLIC SMALL LETTER SEMISOFT SIGN | `"` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Ѐ | U+0400 | CYRILLIC CAPITAL LETTER IE WITH GRAVE | `E` | `Ie` | `E` |
 | Ё | U+0401 | CYRILLIC CAPITAL LETTER IO | `Yo` | `Io` | `E` |
@@ -320,11 +320,11 @@ Coverage: translit maps 292/301, Unidecode maps 234/301. **65** mapped only by t
 
 Block: 135 assigned codepoints, 135 mapped by at least one library.
 
-Coverage: translit maps 135/135, Unidecode maps 106/135. **29** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 135/135, Unidecode maps 106/135. **29** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | Ͱ | U+0370 | GREEK CAPITAL LETTER HETA | `H` |
 | ͱ | U+0371 | GREEK SMALL LETTER HETA | `h` |
@@ -356,7 +356,7 @@ Coverage: translit maps 135/135, Unidecode maps 106/135. **29** mapped only by t
 | Ͼ | U+03FE | GREEK CAPITAL DOTTED LUNATE SIGMA SYMBOL | `S` |
 | Ͽ | U+03FF | GREEK CAPITAL REVERSED DOTTED LUNATE SIGMA SYMBOL | `S` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | · | U+0387 | GREEK ANO TELEIA | `.` | `;` | `;` |
 | Ή | U+0389 | GREEK CAPITAL LETTER ETA WITH TONOS | `I` | `E` | `I` |
@@ -397,11 +397,11 @@ Coverage: translit maps 135/135, Unidecode maps 106/135. **29** mapped only by t
 
 Block: 304 assigned codepoints, 301 mapped by at least one library.
 
-Coverage: translit maps 290/301, Unidecode maps 234/301. **65** mapped only by translit, **9** mapped only by Unidecode.
+Coverage: disarm maps 290/301, Unidecode maps 234/301. **65** mapped only by disarm, **9** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | Ҋ | U+048A | CYRILLIC CAPITAL LETTER SHORT I WITH TAIL | `Y` |
 | ҋ | U+048B | CYRILLIC SMALL LETTER SHORT I WITH TAIL | `y` |
@@ -435,7 +435,7 @@ Coverage: translit maps 290/301, Unidecode maps 234/301. **65** mapped only by t
 | Ԍ | U+050C | CYRILLIC CAPITAL LETTER KOMI SJE | `Sj` |
 | | | *...35 more* | |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -449,7 +449,7 @@ Coverage: translit maps 290/301, Unidecode maps 234/301. **65** mapped only by t
 | Ҍ | U+048C | CYRILLIC CAPITAL LETTER SEMISOFT SIGN | `"` |
 | ҍ | U+048D | CYRILLIC SMALL LETTER SEMISOFT SIGN | `"` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Ѐ | U+0400 | CYRILLIC CAPITAL LETTER IE WITH GRAVE | `E` | `Ie` | `E` |
 | Ё | U+0401 | CYRILLIC CAPITAL LETTER IO | `Yo` | `Io` | `E` |
@@ -507,11 +507,11 @@ Coverage: translit maps 290/301, Unidecode maps 234/301. **65** mapped only by t
 
 Block: 304 assigned codepoints, 301 mapped by at least one library.
 
-Coverage: translit maps 292/301, Unidecode maps 234/301. **65** mapped only by translit, **7** mapped only by Unidecode.
+Coverage: disarm maps 292/301, Unidecode maps 234/301. **65** mapped only by disarm, **7** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | Ҋ | U+048A | CYRILLIC CAPITAL LETTER SHORT I WITH TAIL | `Y` |
 | ҋ | U+048B | CYRILLIC SMALL LETTER SHORT I WITH TAIL | `y` |
@@ -545,7 +545,7 @@ Coverage: translit maps 292/301, Unidecode maps 234/301. **65** mapped only by t
 | Ԍ | U+050C | CYRILLIC CAPITAL LETTER KOMI SJE | `Sj` |
 | | | *...35 more* | |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -557,7 +557,7 @@ Coverage: translit maps 292/301, Unidecode maps 234/301. **65** mapped only by t
 | Ҍ | U+048C | CYRILLIC CAPITAL LETTER SEMISOFT SIGN | `"` |
 | ҍ | U+048D | CYRILLIC SMALL LETTER SEMISOFT SIGN | `"` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Ѐ | U+0400 | CYRILLIC CAPITAL LETTER IE WITH GRAVE | `E` | `Ie` | `E` |
 | Ё | U+0401 | CYRILLIC CAPITAL LETTER IO | `Yo` | `Io` | `E` |
@@ -615,16 +615,16 @@ Coverage: translit maps 292/301, Unidecode maps 234/301. **65** mapped only by t
 
 Block: 656 assigned codepoints, 656 mapped by at least one library.
 
-Coverage: translit maps 647/656, Unidecode maps 645/656. **2** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 647/656, Unidecode maps 645/656. **2** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | Ɂ | U+0241 | LATIN CAPITAL LETTER GLOTTAL STOP | `'` |
 | ɂ | U+0242 | LATIN SMALL LETTER GLOTTAL STOP | `'` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ŉ | U+0149 | LATIN SMALL LETTER N PRECEDED BY APOSTROPHE | `n` | `'n` | `'n` |
 | Ŋ | U+014A | LATIN CAPITAL LETTER ENG | `N` | `NG` | `Ng` |
@@ -656,18 +656,18 @@ Coverage: translit maps 647/656, Unidecode maps 645/656. **2** mapped only by tr
 
 Block: 248 assigned codepoints, 248 mapped by at least one library.
 
-Coverage: translit maps 237/248, Unidecode maps 240/248. **4** mapped only by translit, **7** mapped only by Unidecode.
+Coverage: disarm maps 237/248, Unidecode maps 240/248. **4** mapped only by disarm, **7** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ゕ | U+3095 | HIRAGANA LETTER SMALL KA | `ka` |
 | ゖ | U+3096 | HIRAGANA LETTER SMALL KE | `ke` |
 | ゟ | U+309F | HIRAGANA DIGRAPH YORI | `yori` |
 | ヿ | U+30FF | KATAKANA DIGRAPH KOTO | `koto` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -679,7 +679,7 @@ Coverage: translit maps 237/248, Unidecode maps 240/248. **4** mapped only by tr
 | ﾞ | U+FF9E | HALFWIDTH KATAKANA VOICED SOUND MARK | `:` |
 | ﾟ | U+FF9F | HALFWIDTH KATAKANA SEMI-VOICED SOUND MARK | `;` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | じ | U+3058 | HIRAGANA LETTER ZI | `ji` | `zi` | `ji` |
 | ふ | U+3075 | HIRAGANA LETTER HU | `fu` | `hu` | `fu` |
@@ -698,18 +698,18 @@ Coverage: translit maps 237/248, Unidecode maps 240/248. **4** mapped only by tr
 
 Block: 189 assigned codepoints, 189 mapped by at least one library.
 
-Coverage: translit maps 181/189, Unidecode maps 181/189. **4** mapped only by translit, **4** mapped only by Unidecode.
+Coverage: disarm maps 181/189, Unidecode maps 181/189. **4** mapped only by disarm, **4** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ゕ | U+3095 | HIRAGANA LETTER SMALL KA | `ka` |
 | ゖ | U+3096 | HIRAGANA LETTER SMALL KE | `ke` |
 | ゟ | U+309F | HIRAGANA DIGRAPH YORI | `yori` |
 | ヿ | U+30FF | KATAKANA DIGRAPH KOTO | `koto` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -718,7 +718,7 @@ Coverage: translit maps 181/189, Unidecode maps 181/189. **4** mapped only by tr
 | ヽ | U+30FD | KATAKANA ITERATION MARK | `"` |
 | ヾ | U+30FE | KATAKANA VOICED ITERATION MARK | `"` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | し | U+3057 | HIRAGANA LETTER SI | `si` | `shi` | `shi` |
 | ち | U+3061 | HIRAGANA LETTER TI | `ti` | `chi` | `chi` |
@@ -734,7 +734,7 @@ Coverage: translit maps 181/189, Unidecode maps 181/189. **4** mapped only by tr
 
 Block: 11172 assigned codepoints, 11172 mapped by at least one library.
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | 갂 | U+AC02 | HANGUL SYLLABLE GAGG | `gakk` | `gagg` | `Gakk` |
 | 갗 | U+AC17 | HANGUL SYLLABLE GAC | `gach` | `gac` | `Gach` |
@@ -792,11 +792,11 @@ Block: 11172 assigned codepoints, 11172 mapped by at least one library.
 
 Block: 20992 assigned codepoints, 20954 mapped by at least one library.
 
-Coverage: translit maps 20924/20954, Unidecode maps 20642/20954. **291** mapped only by translit, **9** mapped only by Unidecode.
+Coverage: disarm maps 20924/20954, Unidecode maps 20642/20954. **291** mapped only by disarm, **9** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | 丆 | U+4E06 | CJK UNIFIED IDEOGRAPH-4E06 | `han` |
 | 乊 | U+4E4A | CJK UNIFIED IDEOGRAPH-4E4A | `yi` |
@@ -830,7 +830,7 @@ Coverage: translit maps 20924/20954, Unidecode maps 20642/20954. **291** mapped 
 | 囕 | U+56D5 | CJK UNIFIED IDEOGRAPH-56D5 | `lan` |
 | | | *...261 more* | |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -844,7 +844,7 @@ Coverage: translit maps 20924/20954, Unidecode maps 20642/20954. **291** mapped 
 | 瓼 | U+74FC | CJK UNIFIED IDEOGRAPH-74FC | `Sarake ` |
 | 甅 | U+7505 | CJK UNIFIED IDEOGRAPH-7505 | `Senchigura ` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | 一 | U+4E00 | CJK UNIFIED IDEOGRAPH-4E00 | `yi` | `Yi ` | `Yi` |
 | 丁 | U+4E01 | CJK UNIFIED IDEOGRAPH-4E01 | `ding` | `Ding ` | `Ding` |
@@ -902,11 +902,11 @@ Coverage: translit maps 20924/20954, Unidecode maps 20642/20954. **291** mapped 
 
 Block: 248 assigned codepoints, 221 mapped by at least one library.
 
-Coverage: translit maps 207/221, Unidecode maps 173/221. **38** mapped only by translit, **4** mapped only by Unidecode.
+Coverage: disarm maps 207/221, Unidecode maps 173/221. **38** mapped only by disarm, **4** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ؉ | U+0609 | ARABIC-INDIC PER MILLE SIGN | `%o` |
 | ؊ | U+060A | ARABIC-INDIC PER TEN THOUSAND SIGN | `%oo` |
@@ -940,7 +940,7 @@ Coverage: translit maps 207/221, Unidecode maps 173/221. **38** mapped only by t
 | ې | U+06D0 | ARABIC LETTER E | `e` |
 | | | *...8 more* | |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -949,7 +949,7 @@ Coverage: translit maps 207/221, Unidecode maps 173/221. **38** mapped only by t
 | ۩ | U+06E9 | ARABIC PLACE OF SAJDAH | `^` |
 | ۾ | U+06FE | ARABIC SIGN SINDHI POSTPOSITION MEN | `+m` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | أ | U+0623 | ARABIC LETTER ALEF WITH HAMZA ABOVE | `a` | `'` | `'` |
 | ؤ | U+0624 | ARABIC LETTER WAW WITH HAMZA ABOVE | `'` | `w'` | `u'` |
@@ -1007,11 +1007,11 @@ Coverage: translit maps 207/221, Unidecode maps 173/221. **38** mapped only by t
 
 Block: 391 assigned codepoints, 331 mapped by at least one library.
 
-Coverage: translit maps 207/331, Unidecode maps 173/331. **38** mapped only by translit, **4** mapped only by Unidecode.
+Coverage: disarm maps 207/331, Unidecode maps 173/331. **38** mapped only by disarm, **4** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ؉ | U+0609 | ARABIC-INDIC PER MILLE SIGN | `%o` |
 | ؊ | U+060A | ARABIC-INDIC PER TEN THOUSAND SIGN | `%oo` |
@@ -1045,7 +1045,7 @@ Coverage: translit maps 207/331, Unidecode maps 173/331. **38** mapped only by t
 | ې | U+06D0 | ARABIC LETTER E | `e` |
 | | | *...8 more* | |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -1054,7 +1054,7 @@ Coverage: translit maps 207/331, Unidecode maps 173/331. **38** mapped only by t
 | ۩ | U+06E9 | ARABIC PLACE OF SAJDAH | `^` |
 | ۾ | U+06FE | ARABIC SIGN SINDHI POSTPOSITION MEN | `+m` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | أ | U+0623 | ARABIC LETTER ALEF WITH HAMZA ABOVE | `a` | `'` | `'` |
 | ؤ | U+0624 | ARABIC LETTER WAW WITH HAMZA ABOVE | `'` | `w'` | `u'` |
@@ -1112,15 +1112,15 @@ Coverage: translit maps 207/331, Unidecode maps 173/331. **38** mapped only by t
 
 Block: 88 assigned codepoints, 53 mapped by at least one library.
 
-Coverage: translit maps 46/53, Unidecode maps 49/53. **1** mapped only by translit, **4** mapped only by Unidecode.
+Coverage: disarm maps 46/53, Unidecode maps 49/53. **1** mapped only by disarm, **4** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ְ | U+05B0 | HEBREW POINT SHEVA | `e` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -1129,7 +1129,7 @@ Coverage: translit maps 46/53, Unidecode maps 49/53. **1** mapped only by transl
 | ע | U+05E2 | HEBREW LETTER AYIN | ``` |
 | ׯ | U+05EF | HEBREW YOD TRIANGLE | `YYY` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | א | U+05D0 | HEBREW LETTER ALEF | `'` | `A` | `'` |
 | ב | U+05D1 | HEBREW LETTER BET | `v` | `b` | `v` |
@@ -1151,11 +1151,11 @@ Coverage: translit maps 46/53, Unidecode maps 49/53. **1** mapped only by transl
 
 Block: 128 assigned codepoints, 127 mapped by at least one library.
 
-Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by translit, **5** mapped only by Unidecode.
+Coverage: disarm maps 117/127, Unidecode maps 103/127. **19** mapped only by disarm, **5** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ऄ | U+0904 | DEVANAGARI LETTER SHORT A | `a` |
 | ॕ | U+0955 | DEVANAGARI VOWEL SIGN CANDRA LONG E | `e` |
@@ -1177,7 +1177,7 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 | ॾ | U+097E | DEVANAGARI LETTER DDDA | `ddda` |
 | ॿ | U+097F | DEVANAGARI LETTER BBA | `bba` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -1187,7 +1187,7 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 | ॓ | U+0953 | DEVANAGARI GRAVE ACCENT | ``` |
 | ॔ | U+0954 | DEVANAGARI ACUTE ACCENT | `'` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ँ | U+0901 | DEVANAGARI SIGN CANDRABINDU | `m` | `N` | `m` |
 | ं | U+0902 | DEVANAGARI SIGN ANUSVARA | `m` | `N` | `m` |
@@ -1245,11 +1245,11 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 
 Block: 96 assigned codepoints, 95 mapped by at least one library.
 
-Coverage: translit maps 90/95, Unidecode maps 87/95. **5** mapped only by translit, **2** mapped only by Unidecode.
+Coverage: disarm maps 90/95, Unidecode maps 87/95. **5** mapped only by disarm, **2** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ঀ | U+0980 | BENGALI ANJI | `m` |
 | ঽ | U+09BD | BENGALI SIGN AVAGRAHA | `'` |
@@ -1257,14 +1257,14 @@ Coverage: translit maps 90/95, Unidecode maps 87/95. **5** mapped only by transl
 | ৼ | U+09FC | BENGALI LETTER VEDIC ANUSVARA | `m` |
 | ৽ | U+09FD | BENGALI ABBREVIATION SIGN | `.` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ় | U+09BC | BENGALI SIGN NUKTA | `'` |
 | ৗ | U+09D7 | BENGALI AU LENGTH MARK | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ঁ | U+0981 | BENGALI SIGN CANDRABINDU | `m` | `N` | `m` |
 | ং | U+0982 | BENGALI SIGN ANUSVARA | `m` | `N` | `m` |
@@ -1322,23 +1322,23 @@ Coverage: translit maps 90/95, Unidecode maps 87/95. **5** mapped only by transl
 
 Block: 72 assigned codepoints, 71 mapped by at least one library.
 
-Coverage: translit maps 63/71, Unidecode maps 61/71. **3** mapped only by translit, **1** mapped only by Unidecode.
+Coverage: disarm maps 63/71, Unidecode maps 61/71. **3** mapped only by disarm, **1** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ஶ | U+0BB6 | TAMIL LETTER SHA | `sha` |
 | ௐ | U+0BD0 | TAMIL OM | `om` |
 | ௹ | U+0BF9 | TAMIL RUPEE SIGN | `Rs` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ௗ | U+0BD7 | TAMIL AU LENGTH MARK | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ஂ | U+0B82 | TAMIL SIGN ANUSVARA | `m` | `N` | `m` |
 | ஃ | U+0B83 | TAMIL SIGN VISARGA | `h` | `H` | `k` |
@@ -1381,11 +1381,11 @@ Coverage: translit maps 63/71, Unidecode maps 61/71. **3** mapped only by transl
 
 Block: 100 assigned codepoints, 99 mapped by at least one library.
 
-Coverage: translit maps 92/99, Unidecode maps 79/99. **15** mapped only by translit, **2** mapped only by Unidecode.
+Coverage: disarm maps 92/99, Unidecode maps 79/99. **15** mapped only by disarm, **2** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ఴ | U+0C34 | TELUGU LETTER LLLA | `lla` |
 | ఽ | U+0C3D | TELUGU SIGN AVAGRAHA | `'` |
@@ -1403,14 +1403,14 @@ Coverage: translit maps 92/99, Unidecode maps 79/99. **15** mapped only by trans
 | ౽ | U+0C7D | TELUGU FRACTION DIGIT TWO FOR EVEN POWERS OF FOUR | `2` |
 | ౾ | U+0C7E | TELUGU FRACTION DIGIT THREE FOR EVEN POWERS OF FOUR | `3` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ౕ | U+0C55 | TELUGU LENGTH MARK | `+` |
 | ౖ | U+0C56 | TELUGU AI LENGTH MARK | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ఁ | U+0C01 | TELUGU SIGN CANDRABINDU | `m` | `N` | `n` |
 | ం | U+0C02 | TELUGU SIGN ANUSVARA | `m` | `N` | `m` |
@@ -1468,11 +1468,11 @@ Coverage: translit maps 92/99, Unidecode maps 79/99. **15** mapped only by trans
 
 Block: 91 assigned codepoints, 87 mapped by at least one library.
 
-Coverage: translit maps 83/87, Unidecode maps 77/87. **7** mapped only by translit, **1** mapped only by Unidecode.
+Coverage: disarm maps 83/87, Unidecode maps 77/87. **7** mapped only by disarm, **1** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ઌ | U+0A8C | GUJARATI LETTER VOCALIC L | `l` |
 | ૡ | U+0AE1 | GUJARATI LETTER VOCALIC LL | `l` |
@@ -1482,13 +1482,13 @@ Coverage: translit maps 83/87, Unidecode maps 77/87. **7** mapped only by transl
 | ૱ | U+0AF1 | GUJARATI RUPEE SIGN | `Rs` |
 | ૹ | U+0AF9 | GUJARATI LETTER ZHA | `zha` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ઼ | U+0ABC | GUJARATI SIGN NUKTA | `'` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ઁ | U+0A81 | GUJARATI SIGN CANDRABINDU | `m` | `N` | `m` |
 | ં | U+0A82 | GUJARATI SIGN ANUSVARA | `m` | `N` | `m` |
@@ -1545,11 +1545,11 @@ Coverage: translit maps 83/87, Unidecode maps 77/87. **7** mapped only by transl
 
 Block: 91 assigned codepoints, 90 mapped by at least one library.
 
-Coverage: translit maps 85/90, Unidecode maps 79/90. **8** mapped only by translit, **2** mapped only by Unidecode.
+Coverage: disarm maps 85/90, Unidecode maps 79/90. **8** mapped only by disarm, **2** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ಀ | U+0C80 | KANNADA SIGN SPACING CANDRABINDU | `m` |
 | ಁ | U+0C81 | KANNADA SIGN CANDRABINDU | `m` |
@@ -1560,14 +1560,14 @@ Coverage: translit maps 85/90, Unidecode maps 79/90. **8** mapped only by transl
 | ೱ | U+0CF1 | KANNADA SIGN JIHVAMULIYA | `h` |
 | ೲ | U+0CF2 | KANNADA SIGN UPADHMANIYA | `h` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ೕ | U+0CD5 | KANNADA LENGTH MARK | `+` |
 | ೖ | U+0CD6 | KANNADA AI LENGTH MARK | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ಂ | U+0C82 | KANNADA SIGN ANUSVARA | `m` | `N` | `m` |
 | ಃ | U+0C83 | KANNADA SIGN VISARGA | `h` | `H` | `h` |
@@ -1625,11 +1625,11 @@ Coverage: translit maps 85/90, Unidecode maps 79/90. **8** mapped only by transl
 
 Block: 118 assigned codepoints, 115 mapped by at least one library.
 
-Coverage: translit maps 111/115, Unidecode maps 77/115. **35** mapped only by translit, **1** mapped only by Unidecode.
+Coverage: disarm maps 111/115, Unidecode maps 77/115. **35** mapped only by disarm, **1** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ഁ | U+0D01 | MALAYALAM SIGN CANDRABINDU | `m` |
 | ഄ | U+0D04 | MALAYALAM LETTER VEDIC ANUSVARA | `a` |
@@ -1663,13 +1663,13 @@ Coverage: translit maps 111/115, Unidecode maps 77/115. **35** mapped only by tr
 | ൺ | U+0D7A | MALAYALAM LETTER CHILLU NN | `n` |
 | | | *...5 more* | |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ൗ | U+0D57 | MALAYALAM AU LENGTH MARK | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ം | U+0D02 | MALAYALAM SIGN ANUSVARA | `m` | `N` | `m` |
 | ഃ | U+0D03 | MALAYALAM SIGN VISARGA | `h` | `H` | `h` |
@@ -1727,11 +1727,11 @@ Coverage: translit maps 111/115, Unidecode maps 77/115. **35** mapped only by tr
 
 Block: 128 assigned codepoints, 127 mapped by at least one library.
 
-Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by translit, **5** mapped only by Unidecode.
+Coverage: disarm maps 117/127, Unidecode maps 103/127. **19** mapped only by disarm, **5** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ऄ | U+0904 | DEVANAGARI LETTER SHORT A | `a` |
 | ॕ | U+0955 | DEVANAGARI VOWEL SIGN CANDRA LONG E | `e` |
@@ -1753,7 +1753,7 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 | ॾ | U+097E | DEVANAGARI LETTER DDDA | `ddda` |
 | ॿ | U+097F | DEVANAGARI LETTER BBA | `bba` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -1763,7 +1763,7 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 | ॓ | U+0953 | DEVANAGARI GRAVE ACCENT | ``` |
 | ॔ | U+0954 | DEVANAGARI ACUTE ACCENT | `'` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ँ | U+0901 | DEVANAGARI SIGN CANDRABINDU | `m` | `N` | `m` |
 | ं | U+0902 | DEVANAGARI SIGN ANUSVARA | `m` | `N` | `m` |
@@ -1821,11 +1821,11 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 
 Block: 128 assigned codepoints, 127 mapped by at least one library.
 
-Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by translit, **5** mapped only by Unidecode.
+Coverage: disarm maps 117/127, Unidecode maps 103/127. **19** mapped only by disarm, **5** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ऄ | U+0904 | DEVANAGARI LETTER SHORT A | `a` |
 | ॕ | U+0955 | DEVANAGARI VOWEL SIGN CANDRA LONG E | `e` |
@@ -1847,7 +1847,7 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 | ॾ | U+097E | DEVANAGARI LETTER DDDA | `ddda` |
 | ॿ | U+097F | DEVANAGARI LETTER BBA | `bba` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -1857,7 +1857,7 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 | ॓ | U+0953 | DEVANAGARI GRAVE ACCENT | ``` |
 | ॔ | U+0954 | DEVANAGARI ACUTE ACCENT | `'` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ँ | U+0901 | DEVANAGARI SIGN CANDRABINDU | `m` | `N` | `m` |
 | ं | U+0902 | DEVANAGARI SIGN ANUSVARA | `m` | `N` | `m` |
@@ -1915,11 +1915,11 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 
 Block: 91 assigned codepoints, 90 mapped by at least one library.
 
-Coverage: translit maps 86/90, Unidecode maps 77/90. **12** mapped only by translit, **3** mapped only by Unidecode.
+Coverage: disarm maps 86/90, Unidecode maps 77/90. **12** mapped only by disarm, **3** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ଵ | U+0B35 | ORIYA LETTER VA | `va` |
 | ୄ | U+0B44 | ORIYA VOWEL SIGN VOCALIC RR | `r` |
@@ -1934,7 +1934,7 @@ Coverage: translit maps 86/90, Unidecode maps 77/90. **12** mapped only by trans
 | ୶ | U+0B76 | ORIYA FRACTION ONE EIGHTH | `1/8` |
 | ୷ | U+0B77 | ORIYA FRACTION THREE SIXTEENTHS | `3/16` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -1942,7 +1942,7 @@ Coverage: translit maps 86/90, Unidecode maps 77/90. **12** mapped only by trans
 | ୖ | U+0B56 | ORIYA AI LENGTH MARK | `+` |
 | ୗ | U+0B57 | ORIYA AU LENGTH MARK | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ଁ | U+0B01 | ORIYA SIGN CANDRABINDU | `m` | `N` | `m` |
 | ଂ | U+0B02 | ORIYA SIGN ANUSVARA | `m` | `N` | `m` |
@@ -1998,11 +1998,11 @@ Coverage: translit maps 86/90, Unidecode maps 77/90. **12** mapped only by trans
 
 Block: 80 assigned codepoints, 78 mapped by at least one library.
 
-Coverage: translit maps 74/78, Unidecode maps 72/78. **5** mapped only by translit, **3** mapped only by Unidecode.
+Coverage: disarm maps 74/78, Unidecode maps 72/78. **5** mapped only by disarm, **3** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ਁ | U+0A01 | GURMUKHI SIGN ADAK BINDI | `m` |
 | ਃ | U+0A03 | GURMUKHI SIGN VISARGA | `h` |
@@ -2010,7 +2010,7 @@ Coverage: translit maps 74/78, Unidecode maps 72/78. **5** mapped only by transl
 | ੳ | U+0A73 | GURMUKHI URA | `ura` |
 | ੶ | U+0A76 | GURMUKHI ABBREVIATION SIGN | `.` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -2018,7 +2018,7 @@ Coverage: translit maps 74/78, Unidecode maps 72/78. **5** mapped only by transl
 | ੰ | U+0A70 | GURMUKHI TIPPI | `N` |
 | ੱ | U+0A71 | GURMUKHI ADDAK | `H` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ਂ | U+0A02 | GURMUKHI SIGN BINDI | `m` | `N` | `m` |
 | ਈ | U+0A08 | GURMUKHI LETTER II | `i` | `ii` | `i` |
@@ -2074,11 +2074,11 @@ Coverage: translit maps 74/78, Unidecode maps 72/78. **5** mapped only by transl
 
 Block: 128 assigned codepoints, 127 mapped by at least one library.
 
-Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by translit, **5** mapped only by Unidecode.
+Coverage: disarm maps 117/127, Unidecode maps 103/127. **19** mapped only by disarm, **5** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ऄ | U+0904 | DEVANAGARI LETTER SHORT A | `a` |
 | ॕ | U+0955 | DEVANAGARI VOWEL SIGN CANDRA LONG E | `e` |
@@ -2100,7 +2100,7 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 | ॾ | U+097E | DEVANAGARI LETTER DDDA | `ddda` |
 | ॿ | U+097F | DEVANAGARI LETTER BBA | `bba` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -2110,7 +2110,7 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 | ॓ | U+0953 | DEVANAGARI GRAVE ACCENT | ``` |
 | ॔ | U+0954 | DEVANAGARI ACUTE ACCENT | `'` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ँ | U+0901 | DEVANAGARI SIGN CANDRABINDU | `m` | `N` | `m` |
 | ं | U+0902 | DEVANAGARI SIGN ANUSVARA | `m` | `N` | `m` |
@@ -2168,11 +2168,11 @@ Coverage: translit maps 117/127, Unidecode maps 103/127. **19** mapped only by t
 
 Block: 96 assigned codepoints, 95 mapped by at least one library.
 
-Coverage: translit maps 90/95, Unidecode maps 87/95. **5** mapped only by translit, **2** mapped only by Unidecode.
+Coverage: disarm maps 90/95, Unidecode maps 87/95. **5** mapped only by disarm, **2** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ঀ | U+0980 | BENGALI ANJI | `m` |
 | ঽ | U+09BD | BENGALI SIGN AVAGRAHA | `'` |
@@ -2180,14 +2180,14 @@ Coverage: translit maps 90/95, Unidecode maps 87/95. **5** mapped only by transl
 | ৼ | U+09FC | BENGALI LETTER VEDIC ANUSVARA | `m` |
 | ৽ | U+09FD | BENGALI ABBREVIATION SIGN | `.` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ় | U+09BC | BENGALI SIGN NUKTA | `'` |
 | ৗ | U+09D7 | BENGALI AU LENGTH MARK | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ঁ | U+0981 | BENGALI SIGN CANDRABINDU | `m` | `N` | `m` |
 | ং | U+0982 | BENGALI SIGN ANUSVARA | `m` | `N` | `m` |
@@ -2245,24 +2245,24 @@ Coverage: translit maps 90/95, Unidecode maps 87/95. **5** mapped only by transl
 
 Block: 91 assigned codepoints, 90 mapped by at least one library.
 
-Coverage: translit maps 86/90, Unidecode maps 85/90. **3** mapped only by translit, **2** mapped only by Unidecode.
+Coverage: disarm maps 86/90, Unidecode maps 85/90. **3** mapped only by disarm, **2** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ՠ | U+0560 | ARMENIAN SMALL LETTER TURNED AYB | `a` |
 | ֈ | U+0588 | ARMENIAN SMALL LETTER YI WITH STROKE | `yi` |
 | ֏ | U+058F | ARMENIAN DRAM SIGN | `AMD` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ՛ | U+055B | ARMENIAN EMPHASIS MARK | `/` |
 | ՟ | U+055F | ARMENIAN ABBREVIATION MARK | `.` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Ը | U+0538 | ARMENIAN CAPITAL LETTER ET | `Y` | `E` | `Y` |
 | Թ | U+0539 | ARMENIAN CAPITAL LETTER TO | `T` | `T`` | `T'` |
@@ -2290,11 +2290,11 @@ Coverage: translit maps 86/90, Unidecode maps 85/90. **3** mapped only by transl
 
 Block: 88 assigned codepoints, 88 mapped by at least one library.
 
-Coverage: translit maps 87/88, Unidecode maps 78/88. **9** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 87/88, Unidecode maps 78/88. **9** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | Ⴧ | U+10C7 | GEORGIAN CAPITAL LETTER YN | `Yn` |
 | Ⴭ | U+10CD | GEORGIAN CAPITAL LETTER AEN | `Ae` |
@@ -2306,7 +2306,7 @@ Coverage: translit maps 87/88, Unidecode maps 78/88. **9** mapped only by transl
 | ჽ | U+10FD | GEORGIAN LETTER AEN | `ae` |
 | ჿ | U+10FF | GEORGIAN LETTER LABIAL SIGN | `w` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Ⴇ | U+10A7 | GEORGIAN CAPITAL LETTER TAN | `T` | `T`` | `T` |
 | Ⴔ | U+10B4 | GEORGIAN CAPITAL LETTER PHAR | `P` | `P`` | `P` |
@@ -2340,11 +2340,11 @@ Coverage: translit maps 87/88, Unidecode maps 78/88. **9** mapped only by transl
 
 Block: 91 assigned codepoints, 90 mapped by at least one library.
 
-Coverage: translit maps 90/90, Unidecode maps 79/90. **11** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 90/90, Unidecode maps 79/90. **11** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ඁ | U+0D81 | SINHALA SIGN CANDRABINDU | `m` |
 | ෦ | U+0DE6 | SINHALA LITH DIGIT ZERO | `0` |
@@ -2358,7 +2358,7 @@ Coverage: translit maps 90/90, Unidecode maps 79/90. **11** mapped only by trans
 | ෮ | U+0DEE | SINHALA LITH DIGIT EIGHT | `8` |
 | ෯ | U+0DEF | SINHALA LITH DIGIT NINE | `9` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ං | U+0D82 | SINHALA SIGN ANUSVARAYA | `m` | `N` | `m` |
 | ඃ | U+0D83 | SINHALA SIGN VISARGAYA | `h` | `H` | `h` |
@@ -2416,16 +2416,16 @@ Coverage: translit maps 90/90, Unidecode maps 79/90. **11** mapped only by trans
 
 Block: 87 assigned codepoints, 80 mapped by at least one library.
 
-Coverage: translit maps 78/80, Unidecode maps 80/80. **0** mapped only by translit, **2** mapped only by Unidecode.
+Coverage: disarm maps 78/80, Unidecode maps 80/80. **0** mapped only by disarm, **2** mapped only by Unidecode.
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ฺ | U+0E3A | THAI CHARACTER PHINTHU | `'` |
 | ๆ | U+0E46 | THAI CHARACTER MAIYAMOK | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | จ | U+0E08 | THAI CHARACTER CHO CHAN | `ch` | `cch` | `ch` |
 | ซ | U+0E0B | THAI CHARACTER SO SO | `s` | `ch` | `s` |
@@ -2448,11 +2448,11 @@ Coverage: translit maps 78/80, Unidecode maps 80/80. **0** mapped only by transl
 
 Block: 83 assigned codepoints, 76 mapped by at least one library.
 
-Coverage: translit maps 75/76, Unidecode maps 58/76. **18** mapped only by translit, **1** mapped only by Unidecode.
+Coverage: disarm maps 75/76, Unidecode maps 58/76. **18** mapped only by disarm, **1** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ຆ | U+0E86 | LAO LETTER PALI GHA | `gha` |
 | ຉ | U+0E89 | LAO LETTER PALI CHA | `cha` |
@@ -2473,13 +2473,13 @@ Coverage: translit maps 75/76, Unidecode maps 58/76. **18** mapped only by trans
 | ໞ | U+0EDE | LAO LETTER KHMU GO | `go` |
 | ໟ | U+0EDF | LAO LETTER KHMU NYO | `nyo` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
 | ໆ | U+0EC6 | LAO KO LA | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ຕ | U+0E95 | LAO LETTER TO | `t` | `h` | `t` |
 | ອ | U+0EAD | LAO LETTER O | `o` | ``` | — |
@@ -2498,11 +2498,11 @@ Coverage: translit maps 75/76, Unidecode maps 58/76. **18** mapped only by trans
 
 Block: 114 assigned codepoints, 106 mapped by at least one library.
 
-Coverage: translit maps 100/106, Unidecode maps 94/106. **10** mapped only by translit, **4** mapped only by Unidecode.
+Coverage: disarm maps 100/106, Unidecode maps 94/106. **10** mapped only by disarm, **4** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ៰ | U+17F0 | KHMER SYMBOL LEK ATTAK SON | `0` |
 | ៱ | U+17F1 | KHMER SYMBOL LEK ATTAK MUOY | `1` |
@@ -2515,7 +2515,7 @@ Coverage: translit maps 100/106, Unidecode maps 94/106. **10** mapped only by tr
 | ៸ | U+17F8 | KHMER SYMBOL LEK ATTAK PRAM-BEI | `8` |
 | ៹ | U+17F9 | KHMER SYMBOL LEK ATTAK PRAM-BUON | `9` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -2524,7 +2524,7 @@ Coverage: translit maps 100/106, Unidecode maps 94/106. **10** mapped only by tr
 | ៎ | U+17CE | KHMER SIGN KAKABAT | `!` |
 | ៗ | U+17D7 | KHMER SIGN LEK TOO | `+` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ក | U+1780 | KHMER LETTER KA | `ka` | `k` | `k` |
 | ខ | U+1781 | KHMER LETTER KHA | `kha` | `kh` | `kh` |
@@ -2582,11 +2582,11 @@ Coverage: translit maps 100/106, Unidecode maps 94/106. **10** mapped only by tr
 
 Block: 160 assigned codepoints, 141 mapped by at least one library.
 
-Coverage: translit maps 136/141, Unidecode maps 77/141. **64** mapped only by translit, **5** mapped only by Unidecode.
+Coverage: disarm maps 136/141, Unidecode maps 77/141. **64** mapped only by disarm, **5** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ဢ | U+1022 | MYANMAR LETTER SHAN A | `a` |
 | ဨ | U+1028 | MYANMAR LETTER MON E | `e` |
@@ -2620,7 +2620,7 @@ Coverage: translit maps 136/141, Unidecode maps 77/141. **64** mapped only by tr
 | ၳ | U+1073 | MYANMAR VOWEL SIGN KAYAH U | `u` |
 | | | *...34 more* | |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -2630,7 +2630,7 @@ Coverage: translit maps 136/141, Unidecode maps 77/141. **64** mapped only by tr
 | ၎ | U+104E | MYANMAR SYMBOL AFOREMENTIONED | `l*` |
 | ၏ | U+104F | MYANMAR SYMBOL GENITIVE | `e*` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | က | U+1000 | MYANMAR LETTER KA | `ka` | `k` | `k` |
 | ခ | U+1001 | MYANMAR LETTER KHA | `kha` | `kh` | `kh` |
@@ -2688,11 +2688,11 @@ Coverage: translit maps 136/141, Unidecode maps 77/141. **64** mapped only by tr
 
 Block: 211 assigned codepoints, 201 mapped by at least one library.
 
-Coverage: translit maps 155/201, Unidecode maps 147/201. **22** mapped only by translit, **14** mapped only by Unidecode.
+Coverage: disarm maps 155/201, Unidecode maps 147/201. **22** mapped only by disarm, **14** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ༁ | U+0F01 | TIBETAN MARK GTER YIG MGO TRUNCATED A | `.` |
 | ༂ | U+0F02 | TIBETAN MARK GTER YIG MGO -UM RNAM BCAD MA | `.` |
@@ -2717,7 +2717,7 @@ Coverage: translit maps 155/201, Unidecode maps 147/201. **22** mapped only by t
 | ࿙ | U+0FD9 | TIBETAN MARK LEADING MCHAN RTAGS | `|` |
 | ࿚ | U+0FDA | TIBETAN MARK TRAILING MCHAN RTAGS | `|` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -2736,7 +2736,7 @@ Coverage: translit maps 155/201, Unidecode maps 147/201. **22** mapped only by t
 | ࿂ | U+0FC2 | TIBETAN CANTILLATION SIGN CANG TE-U | ` \o\ ` |
 | ࿃ | U+0FC3 | TIBETAN CANTILLATION SIGN SBUB -CHAL | ` (O) ` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ༀ | U+0F00 | TIBETAN SYLLABLE OM | `om` | `AUM` | `Om` |
 | ༈ | U+0F08 | TIBETAN MARK SBRUL SHAD | `;` | ` // ` | `!` |
@@ -2794,11 +2794,11 @@ Coverage: translit maps 155/201, Unidecode maps 147/201. **22** mapped only by t
 
 Block: 384 assigned codepoints, 370 mapped by at least one library.
 
-Coverage: translit maps 370/370, Unidecode maps 343/370. **27** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 370/370, Unidecode maps 343/370. **27** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ሇ | U+1207 | ETHIOPIC SYLLABLE HOA | `hwa` |
 | ቇ | U+1247 | ETHIOPIC SYLLABLE QOA | `qwa` |
@@ -2828,7 +2828,7 @@ Coverage: translit maps 370/370, Unidecode maps 343/370. **27** mapped only by t
 | ᎎ | U+138E | ETHIOPIC SYLLABLE PWEE | `pwe` |
 | ᎏ | U+138F | ETHIOPIC SYLLABLE PWE | `pwe` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ሀ | U+1200 | ETHIOPIC SYLLABLE HA | `he` | `ha` | `ha` |
 | ሃ | U+1203 | ETHIOPIC SYLLABLE HAA | `ha` | `haa` | `ha` |
@@ -2886,11 +2886,11 @@ Coverage: translit maps 370/370, Unidecode maps 343/370. **27** mapped only by t
 
 Block: 304 assigned codepoints, 301 mapped by at least one library.
 
-Coverage: translit maps 294/301, Unidecode maps 234/301. **65** mapped only by translit, **5** mapped only by Unidecode.
+Coverage: disarm maps 294/301, Unidecode maps 234/301. **65** mapped only by disarm, **5** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | Ҋ | U+048A | CYRILLIC CAPITAL LETTER SHORT I WITH TAIL | `Y` |
 | ҋ | U+048B | CYRILLIC SMALL LETTER SHORT I WITH TAIL | `y` |
@@ -2924,7 +2924,7 @@ Coverage: translit maps 294/301, Unidecode maps 234/301. **65** mapped only by t
 | Ԍ | U+050C | CYRILLIC CAPITAL LETTER KOMI SJE | `Sj` |
 | | | *...35 more* | |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -2934,7 +2934,7 @@ Coverage: translit maps 294/301, Unidecode maps 234/301. **65** mapped only by t
 | Ҍ | U+048C | CYRILLIC CAPITAL LETTER SEMISOFT SIGN | `"` |
 | ҍ | U+048D | CYRILLIC SMALL LETTER SEMISOFT SIGN | `"` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | Ѐ | U+0400 | CYRILLIC CAPITAL LETTER IE WITH GRAVE | `E` | `Ie` | `E` |
 | Ё | U+0401 | CYRILLIC CAPITAL LETTER IO | `Yo` | `Io` | `E` |
@@ -2992,7 +2992,7 @@ Coverage: translit maps 294/301, Unidecode maps 234/301. **65** mapped only by t
 
 Block: 50 assigned codepoints, 49 mapped by at least one library.
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ޅ | U+0785 | THAANA LETTER LHAVIYANI | `lh` | `L` | `lh` |
 | ޏ | U+078F | THAANA LETTER GNAVIYANI | `gn` | `ny` | `gn` |
@@ -3002,11 +3002,11 @@ Block: 50 assigned codepoints, 49 mapped by at least one library.
 
 Block: 91 assigned codepoints, 90 mapped by at least one library.
 
-Coverage: translit maps 75/90, Unidecode maps 0/90. **75** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 75/90, Unidecode maps 0/90. **75** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ꦄ | U+A984 | JAVANESE LETTER A | `a` |
 | ꦅ | U+A985 | JAVANESE LETTER I KAWI | `aa` |
@@ -3044,11 +3044,11 @@ Coverage: translit maps 75/90, Unidecode maps 0/90. **75** mapped only by transl
 
 Block: 157 assigned codepoints, 153 mapped by at least one library.
 
-Coverage: translit maps 149/153, Unidecode maps 148/153. **5** mapped only by translit, **4** mapped only by Unidecode.
+Coverage: disarm maps 149/153, Unidecode maps 148/153. **5** mapped only by disarm, **4** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᠆ | U+1806 | MONGOLIAN TODO SOFT HYPHEN | `-` |
 | ᠊ | U+180A | MONGOLIAN NIRUGU | `-` |
@@ -3056,7 +3056,7 @@ Coverage: translit maps 149/153, Unidecode maps 148/153. **5** mapped only by tr
 | ᢀ | U+1880 | MONGOLIAN LETTER ALI GALI ANUSVARA ONE | `m` |
 | ᢪ | U+18AA | MONGOLIAN LETTER MANCHU ALI GALI LHA | `lha` |
 
-**Mapped only by Unidecode** (translit returns empty):
+**Mapped only by Unidecode** (disarm returns empty):
 
 | Char | Codepoint | Name | Unidecode |
 |------|-----------|------|-----------|
@@ -3065,7 +3065,7 @@ Coverage: translit maps 149/153, Unidecode maps 148/153. **5** mapped only by tr
 | ᢆ | U+1886 | MONGOLIAN LETTER ALI GALI THREE BALUDA | ` 333 ` |
 | ᢩ | U+18A9 | MONGOLIAN LETTER ALI GALI DAGALGA | `'` |
 
-| Char | Codepoint | Name | translit | Unidecode | anyascii |
+| Char | Codepoint | Name | disarm | Unidecode | anyascii |
 |------|-----------|------|----------|-----------|----------|
 | ᠀ | U+1800 | MONGOLIAN BIRGA | `.` | ` @ ` | `@` |
 | ᠁ | U+1801 | MONGOLIAN ELLIPSIS | `.` | ` ... ` | `...` |
@@ -3123,11 +3123,11 @@ Coverage: translit maps 149/153, Unidecode maps 148/153. **5** mapped only by tr
 
 Block: 64 assigned codepoints, 63 mapped by at least one library.
 
-Coverage: translit maps 48/63, Unidecode maps 0/63. **48** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 48/63, Unidecode maps 0/63. **48** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᮃ | U+1B83 | SUNDANESE LETTER A | `a` |
 | ᮄ | U+1B84 | SUNDANESE LETTER I | `i` |
@@ -3165,11 +3165,11 @@ Coverage: translit maps 48/63, Unidecode maps 0/63. **48** mapped only by transl
 
 Block: 127 assigned codepoints, 119 mapped by at least one library.
 
-Coverage: translit maps 103/119, Unidecode maps 0/119. **103** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 103/119, Unidecode maps 0/119. **103** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᨠ | U+1A20 | TAI THAM LETTER HIGH KA | `ka` |
 | ᨡ | U+1A21 | TAI THAM LETTER HIGH KHA | `kha` |
@@ -3207,11 +3207,11 @@ Coverage: translit maps 103/119, Unidecode maps 0/119. **103** mapped only by tr
 
 Block: 83 assigned codepoints, 83 mapped by at least one library.
 
-Coverage: translit maps 78/83, Unidecode maps 0/83. **78** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 78/83, Unidecode maps 0/83. **78** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ꨀ | U+AA00 | CHAM LETTER A | `ka` |
 | ꨁ | U+AA01 | CHAM LETTER I | `kha` |
@@ -3249,11 +3249,11 @@ Coverage: translit maps 78/83, Unidecode maps 0/83. **78** mapped only by transl
 
 Block: 56 assigned codepoints, 54 mapped by at least one library.
 
-Coverage: translit maps 50/54, Unidecode maps 0/54. **50** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 50/54, Unidecode maps 0/54. **50** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᯀ | U+1BC0 | BATAK LETTER A | `a` |
 | ᯁ | U+1BC1 | BATAK LETTER SIMALUNGUN A | `ha` |
@@ -3291,11 +3291,11 @@ Coverage: translit maps 50/54, Unidecode maps 0/54. **50** mapped only by transl
 
 Block: 30 assigned codepoints, 30 mapped by at least one library.
 
-Coverage: translit maps 30/30, Unidecode maps 0/30. **30** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 30/30, Unidecode maps 0/30. **30** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᨀ | U+1A00 | BUGINESE LETTER KA | `ka` |
 | ᨁ | U+1A01 | BUGINESE LETTER GA | `ga` |
@@ -3332,11 +3332,11 @@ Coverage: translit maps 30/30, Unidecode maps 0/30. **30** mapped only by transl
 
 Block: 23 assigned codepoints, 21 mapped by at least one library.
 
-Coverage: translit maps 21/21, Unidecode maps 0/21. **21** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 21/21, Unidecode maps 0/21. **21** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᜀ | U+1700 | TAGALOG LETTER A | `a` |
 | ᜁ | U+1701 | TAGALOG LETTER I | `i` |
@@ -3364,11 +3364,11 @@ Coverage: translit maps 21/21, Unidecode maps 0/21. **21** mapped only by transl
 
 Block: 23 assigned codepoints, 22 mapped by at least one library.
 
-Coverage: translit maps 22/22, Unidecode maps 0/22. **22** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 22/22, Unidecode maps 0/22. **22** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᜠ | U+1720 | HANUNOO LETTER A | `a` |
 | ᜡ | U+1721 | HANUNOO LETTER I | `i` |
@@ -3397,11 +3397,11 @@ Coverage: translit maps 22/22, Unidecode maps 0/22. **22** mapped only by transl
 
 Block: 20 assigned codepoints, 20 mapped by at least one library.
 
-Coverage: translit maps 20/20, Unidecode maps 0/20. **20** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 20/20, Unidecode maps 0/20. **20** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᝀ | U+1740 | BUHID LETTER A | `a` |
 | ᝁ | U+1741 | BUHID LETTER I | `i` |
@@ -3428,11 +3428,11 @@ Coverage: translit maps 20/20, Unidecode maps 0/20. **20** mapped only by transl
 
 Block: 18 assigned codepoints, 18 mapped by at least one library.
 
-Coverage: translit maps 18/18, Unidecode maps 0/18. **18** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 18/18, Unidecode maps 0/18. **18** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᝠ | U+1760 | TAGBANWA LETTER A | `a` |
 | ᝡ | U+1761 | TAGBANWA LETTER I | `i` |
@@ -3457,11 +3457,11 @@ Coverage: translit maps 18/18, Unidecode maps 0/18. **18** mapped only by transl
 
 Block: 79 assigned codepoints, 76 mapped by at least one library.
 
-Coverage: translit maps 73/76, Unidecode maps 0/76. **73** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 73/76, Unidecode maps 0/76. **73** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ꯀ | U+ABC0 | MEETEI MAYEK LETTER KOK | `ka` |
 | ꯁ | U+ABC1 | MEETEI MAYEK LETTER SAM | `kha` |
@@ -3499,11 +3499,11 @@ Coverage: translit maps 73/76, Unidecode maps 0/76. **73** mapped only by transl
 
 Block: 59 assigned codepoints, 58 mapped by at least one library.
 
-Coverage: translit maps 58/58, Unidecode maps 0/58. **58** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 58/58, Unidecode maps 0/58. **58** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ⴰ | U+2D30 | TIFINAGH LETTER YA | `a` |
 | ⴱ | U+2D31 | TIFINAGH LETTER YAB | `b` |
@@ -3541,11 +3541,11 @@ Coverage: translit maps 58/58, Unidecode maps 0/58. **58** mapped only by transl
 
 Block: 48 assigned codepoints, 48 mapped by at least one library.
 
-Coverage: translit maps 48/48, Unidecode maps 0/48. **48** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 48/48, Unidecode maps 0/48. **48** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ꓐ | U+A4D0 | LISU LETTER BA | `ba` |
 | ꓑ | U+A4D1 | LISU LETTER PA | `pa` |
@@ -3583,11 +3583,11 @@ Coverage: translit maps 48/48, Unidecode maps 0/48. **48** mapped only by transl
 
 Block: 48 assigned codepoints, 45 mapped by at least one library.
 
-Coverage: translit maps 43/45, Unidecode maps 0/45. **43** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 43/45, Unidecode maps 0/45. **43** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᱐ | U+1C50 | OL CHIKI DIGIT ZERO | `0` |
 | ᱑ | U+1C51 | OL CHIKI DIGIT ONE | `1` |
@@ -3625,11 +3625,11 @@ Coverage: translit maps 43/45, Unidecode maps 0/45. **43** mapped only by transl
 
 Block: 88 assigned codepoints, 87 mapped by at least one library.
 
-Coverage: translit maps 83/87, Unidecode maps 0/87. **83** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 83/87, Unidecode maps 0/87. **83** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ꚠ | U+A6A0 | BAMUM LETTER A | `a` |
 | ꚡ | U+A6A1 | BAMUM LETTER KA | `ka` |
@@ -3667,11 +3667,11 @@ Coverage: translit maps 83/87, Unidecode maps 0/87. **83** mapped only by transl
 
 Block: 124 assigned codepoints, 114 mapped by at least one library.
 
-Coverage: translit maps 93/114, Unidecode maps 0/114. **93** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 93/114, Unidecode maps 0/114. **93** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ᬅ | U+1B05 | BALINESE LETTER AKARA | `a` |
 | ᬆ | U+1B06 | BALINESE LETTER AKARA TEDUNG | `aa` |
@@ -3709,11 +3709,11 @@ Coverage: translit maps 93/114, Unidecode maps 0/114. **93** mapped only by tran
 
 Block: 62 assigned codepoints, 54 mapped by at least one library.
 
-Coverage: translit maps 50/54, Unidecode maps 0/54. **50** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 50/54, Unidecode maps 0/54. **50** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ߀ | U+07C0 | NKO DIGIT ZERO | `0` |
 | ߁ | U+07C1 | NKO DIGIT ONE | `1` |
@@ -3751,11 +3751,11 @@ Coverage: translit maps 50/54, Unidecode maps 0/54. **50** mapped only by transl
 
 Block: 300 assigned codepoints, 299 mapped by at least one library.
 
-Coverage: translit maps 286/299, Unidecode maps 0/299. **286** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 286/299, Unidecode maps 0/299. **286** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | ꔀ | U+A500 | VAI SYLLABLE EE | `ee` |
 | ꔁ | U+A501 | VAI SYLLABLE EEN | `een` |
@@ -3793,11 +3793,11 @@ Coverage: translit maps 286/299, Unidecode maps 0/299. **286** mapped only by tr
 
 Block: 123 assigned codepoints, 121 mapped by at least one library.
 
-Coverage: translit maps 102/121, Unidecode maps 0/121. **102** mapped only by translit, **0** mapped only by Unidecode.
+Coverage: disarm maps 102/121, Unidecode maps 0/121. **102** mapped only by disarm, **0** mapped only by Unidecode.
 
-**Mapped only by translit** (Unidecode returns empty/`[?]`):
+**Mapped only by disarm** (Unidecode returns empty/`[?]`):
 
-| Char | Codepoint | Name | translit |
+| Char | Codepoint | Name | disarm |
 |------|-----------|------|----------|
 | Ⲁ | U+2C80 | COPTIC CAPITAL LETTER ALFA | `a` |
 | ⲁ | U+2C81 | COPTIC SMALL LETTER ALFA | `a` |
@@ -3835,10 +3835,10 @@ Coverage: translit maps 102/121, Unidecode maps 0/121. **102** mapped only by tr
 
 - **Total assigned codepoints scanned**: 50464
 - **Mapped by at least one library**: 50157
-- **translit coverage**: 49641/50157 (99.0%)
+- **disarm coverage**: 49641/50157 (99.0%)
 - **Unidecode coverage**: 47408/50157 (94.5%)
 - **anyascii coverage**: 50085/50157 (99.9%)
-- **Characters mapped only by translit**: 2362
+- **Characters mapped only by disarm**: 2362
 - **Characters mapped only by Unidecode**: 129
 - **Different output (both mapped)**: 27034
 

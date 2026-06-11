@@ -1,4 +1,4 @@
-"""Type stubs for translit._enums."""
+"""Type stubs for disarm._enums."""
 
 import enum
 from typing import TypedDict

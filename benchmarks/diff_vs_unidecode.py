@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Character-level correctness diff: translit vs Unidecode vs anyascii.
+"""Character-level correctness diff: disarm vs Unidecode vs anyascii.
 
 For each of the 83 supported languages, iterates over EVERY codepoint in the
 relevant Unicode block(s) and compares transliteration output across all three
@@ -26,7 +26,7 @@ import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-import translit as tr
+import disarm as tr
 
 try:
     from unidecode import unidecode
@@ -287,7 +287,7 @@ def print_summary(reports: list[LangReport]) -> None:
     """Print summary table to stdout."""
     print(
         f"{'Lang':<12} {'Description':<16} {'Block':>5} {'Mapped':>6} "
-        f"{'translit':>8} {'Unidec':>6} {'anyasc':>6} "
+        f"{'disarm':>8} {'Unidec':>6} {'anyasc':>6} "
         f"{'t-only':>6} {'u-only':>6} {'diffs':>5}"
     )
     print("-" * 100)
@@ -303,7 +303,7 @@ def print_summary(reports: list[LangReport]) -> None:
         )
         totals["block"] += r.block_chars
         totals["mapped"] += r.total_non_ascii
-        totals["translit"] += r.translit_mapped
+        totals["disarm"] += r.translit_mapped
         totals["unidecode"] += r.unidecode_mapped
         totals["anyascii"] += r.anyascii_mapped
         totals["t_only"] += r.translit_only
@@ -314,7 +314,7 @@ def print_summary(reports: list[LangReport]) -> None:
     print(
         f"{'TOTAL':<12} {'':<16} {totals['block']:>5} "
         f"{totals['mapped']:>6} "
-        f"{totals['translit']:>8} {totals['unidecode']:>6} {totals['anyascii']:>6} "
+        f"{totals['disarm']:>8} {totals['unidecode']:>6} {totals['anyascii']:>6} "
         f"{totals['t_only']:>6} {totals['u_only']:>6} {totals['diffs']:>5}"
     )
 
@@ -331,7 +331,7 @@ def print_detail(reports: list[LangReport]) -> None:
         for d in r.diffs_translit_vs_unidecode[:50]:
             print(
                 f"  {d.char} U+{d.codepoint:04X} {d.name:<40} "
-                f"translit={d.translit_out!r:<12} unidecode={d.unidecode_out!r:<12}"
+                f"disarm={d.translit_out!r:<12} unidecode={d.unidecode_out!r:<12}"
                 + (f" anyascii={d.anyascii_out!r}" if d.anyascii_out is not None else "")
             )
         if len(r.diffs_translit_vs_unidecode) > 50:
@@ -349,18 +349,18 @@ def _print_lang_section(r: LangReport) -> None:
     print()
     if r.translit_only > 0 or r.unidecode_only > 0:
         print(
-            f"Coverage: translit maps "
+            f"Coverage: disarm maps "
             f"{r.translit_mapped}/{r.total_non_ascii}, "
             f"Unidecode maps "
             f"{r.unidecode_mapped}/{r.total_non_ascii}. "
-            f"**{r.translit_only}** mapped only by translit, "
+            f"**{r.translit_only}** mapped only by disarm, "
             f"**{r.unidecode_only}** mapped only by Unidecode."
         )
         print()
         if r.translit_only_chars:
-            print("**Mapped only by translit** (Unidecode returns empty/`[?]`):")
+            print("**Mapped only by disarm** (Unidecode returns empty/`[?]`):")
             print()
-            print("| Char | Codepoint | Name | translit |")
+            print("| Char | Codepoint | Name | disarm |")
             print("|------|-----------|------|----------|")
             for d in r.translit_only_chars[:30]:
                 print(f"| {d.char} | U+{d.codepoint:04X} | {d.name} | `{d.translit_out}` |")
@@ -368,7 +368,7 @@ def _print_lang_section(r: LangReport) -> None:
                 print(f"| | | *...{len(r.translit_only_chars) - 30} more* | |")
             print()
         if r.unidecode_only_chars:
-            print("**Mapped only by Unidecode** (translit returns empty):")
+            print("**Mapped only by Unidecode** (disarm returns empty):")
             print()
             print("| Char | Codepoint | Name | Unidecode |")
             print("|------|-----------|------|-----------|")
@@ -378,7 +378,7 @@ def _print_lang_section(r: LangReport) -> None:
                 print(f"| | | *...{len(r.unidecode_only_chars) - 30} more* | |")
             print()
     if r.diffs_translit_vs_unidecode:
-        print("| Char | Codepoint | Name | translit | Unidecode | anyascii |")
+        print("| Char | Codepoint | Name | disarm | Unidecode | anyascii |")
         print("|------|-----------|------|----------|-----------|----------|")
         for d in r.diffs_translit_vs_unidecode[:50]:
             a_col = f"`{d.anyascii_out}`" if d.anyascii_out else "\u2014"
@@ -411,18 +411,18 @@ def _print_latin_group(group: list[LangReport]) -> None:
     print()
     if ref.translit_only > 0 or ref.unidecode_only > 0:
         print(
-            f"Coverage: translit maps "
+            f"Coverage: disarm maps "
             f"{ref.translit_mapped}/{ref.total_non_ascii}, "
             f"Unidecode maps "
             f"{ref.unidecode_mapped}/{ref.total_non_ascii}. "
-            f"**{ref.translit_only}** mapped only by translit, "
+            f"**{ref.translit_only}** mapped only by disarm, "
             f"**{ref.unidecode_only}** mapped only by Unidecode."
         )
         print()
         if ref.translit_only_chars:
-            print("**Mapped only by translit** (Unidecode returns empty/`[?]`):")
+            print("**Mapped only by disarm** (Unidecode returns empty/`[?]`):")
             print()
-            print("| Char | Codepoint | Name | translit |")
+            print("| Char | Codepoint | Name | disarm |")
             print("|------|-----------|------|----------|")
             for d in ref.translit_only_chars[:30]:
                 print(f"| {d.char} | U+{d.codepoint:04X} | {d.name} | `{d.translit_out}` |")
@@ -437,7 +437,7 @@ def _print_latin_group(group: list[LangReport]) -> None:
                 all_diff_cps[d.codepoint] = {}
             all_diff_cps[d.codepoint][r.lang] = d
 
-    # Shared diffs: same translit output across all languages that have them
+    # Shared diffs: same disarm output across all languages that have them
     shared_diffs: list[CharDiff] = []
     per_lang_diffs: dict[str, list[CharDiff]] = {r.lang: [] for r in group}
     for cp in sorted(all_diff_cps):
@@ -454,7 +454,7 @@ def _print_latin_group(group: list[LangReport]) -> None:
     if shared_diffs:
         print(f"**Shared differences** (same output across all {len(group)} languages):")
         print()
-        print("| Char | Codepoint | Name | translit | Unidecode | anyascii |")
+        print("| Char | Codepoint | Name | disarm | Unidecode | anyascii |")
         print("|------|-----------|------|----------|-----------|----------|")
         for d in shared_diffs[:50]:
             a_col = f"`{d.anyascii_out}`" if d.anyascii_out else "\u2014"
@@ -477,7 +477,7 @@ def _print_latin_group(group: list[LangReport]) -> None:
             desc = LANG_BLOCKS[lang][0]
             print(f"#### {lang} — {desc}")
             print()
-            print("| Char | Codepoint | Name | translit | Unidecode | anyascii |")
+            print("| Char | Codepoint | Name | disarm | Unidecode | anyascii |")
             print("|------|-----------|------|----------|-----------|----------|")
             for d in diffs[:30]:
                 a_col = f"`{d.anyascii_out}`" if d.anyascii_out else "\u2014"
@@ -494,7 +494,7 @@ def _print_latin_group(group: list[LangReport]) -> None:
 
 def print_markdown(reports: list[LangReport]) -> None:
     """Print full markdown report."""
-    print("# Transliteration Comparison: translit vs Unidecode vs anyascii")
+    print("# Transliteration Comparison: disarm vs Unidecode vs anyascii")
     print()
     print("Comprehensive character-level comparison across all 83 supported languages.")
     print("Every assigned codepoint in each language's Unicode block(s) is tested — no sampling.")
@@ -519,8 +519,8 @@ def print_markdown(reports: list[LangReport]) -> None:
     print("## Summary")
     print()
     print(
-        "| Lang | Description | Block chars | Mapped | translit | "
-        "Unidecode | anyascii | translit-only | Unidecode-only | "
+        "| Lang | Description | Block chars | Mapped | disarm | "
+        "Unidecode | anyascii | disarm-only | Unidecode-only | "
         "Output diffs |"
     )
     print(
@@ -541,20 +541,20 @@ def print_markdown(reports: list[LangReport]) -> None:
         )
         totals["block"] += r.block_chars
         totals["mapped"] += r.total_non_ascii
-        totals["translit"] += r.translit_mapped
+        totals["disarm"] += r.translit_mapped
         totals["unidecode"] += r.unidecode_mapped
         totals["anyascii"] += r.anyascii_mapped
         totals["t_only"] += r.translit_only
         totals["u_only"] += r.unidecode_only
         totals["diffs"] += diffs
 
-    pct_t = 100 * totals["translit"] / max(totals["mapped"], 1)
+    pct_t = 100 * totals["disarm"] / max(totals["mapped"], 1)
     pct_u = 100 * totals["unidecode"] / max(totals["mapped"], 1)
     pct_a = 100 * totals["anyascii"] / max(totals["mapped"], 1)
     print(
         f"| **TOTAL** | | **{totals['block']}** | "
         f"**{totals['mapped']}** | "
-        f"**{totals['translit']}** | **{totals['unidecode']}** | "
+        f"**{totals['disarm']}** | **{totals['unidecode']}** | "
         f"**{totals['anyascii']}** | "
         f"**{totals['t_only']}** | **{totals['u_only']}** | "
         f"**{totals['diffs']}** |"
@@ -586,10 +586,10 @@ def print_markdown(reports: list[LangReport]) -> None:
     print()
     print(f"- **Total assigned codepoints scanned**: {totals['block']}")
     print(f"- **Mapped by at least one library**: {totals['mapped']}")
-    print(f"- **translit coverage**: {totals['translit']}/{totals['mapped']} ({pct_t:.1f}%)")
+    print(f"- **disarm coverage**: {totals['disarm']}/{totals['mapped']} ({pct_t:.1f}%)")
     print(f"- **Unidecode coverage**: {totals['unidecode']}/{totals['mapped']} ({pct_u:.1f}%)")
     print(f"- **anyascii coverage**: {totals['anyascii']}/{totals['mapped']} ({pct_a:.1f}%)")
-    print(f"- **Characters mapped only by translit**: {totals['t_only']}")
+    print(f"- **Characters mapped only by disarm**: {totals['t_only']}")
     print(f"- **Characters mapped only by Unidecode**: {totals['u_only']}")
     print(f"- **Different output (both mapped)**: {totals['diffs']}")
     print()

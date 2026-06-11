@@ -2,12 +2,12 @@
 
 Unicode confusables (homoglyphs) are characters from different scripts that look visually identical or very similar. For example, Cyrillic "а" (U+0430) looks like Latin "a" (U+0061). Attackers exploit this for phishing, impersonation, and spoofing.
 
-translit implements Unicode TR39 confusable detection and normalization with multi-target script support, auto-generated from the official [Unicode TR39 confusables.txt](https://www.unicode.org/Public/security/latest/confusables.txt) (version 17.0.0). The tables cover Cyrillic, Greek, Armenian, Georgian, CJK compatibility, mathematical symbols, fullwidth forms, and other visually confusable characters. Mappings are based on visual similarity, not phonetic equivalence.
+disarm implements Unicode TR39 confusable detection and normalization with multi-target script support, auto-generated from the official [Unicode TR39 confusables.txt](https://www.unicode.org/Public/security/latest/confusables.txt) (version 17.0.0). The tables cover Cyrillic, Greek, Armenian, Georgian, CJK compatibility, mathematical symbols, fullwidth forms, and other visually confusable characters. Mappings are based on visual similarity, not phonetic equivalence.
 
 ## Detecting confusables
 
 ```python
-from translit import is_confusable, is_mixed_script
+from disarm import is_confusable, is_mixed_script
 
 # Cyrillic Н looks like Latin H
 assert is_confusable("Неllo") == True
@@ -23,7 +23,7 @@ assert is_mixed_script("Hello") == False
 Replace confusable characters with their target-script equivalents:
 
 ```python
-from translit import normalize_confusables
+from disarm import normalize_confusables
 
 # Cyrillic а, е, о → Latin a, e, o
 assert normalize_confusables("Неllo Wоrld") == 'Hello World'
@@ -58,7 +58,7 @@ Characters without a confusable equivalent in the target script pass through unc
 Identify which Unicode scripts are present in a string:
 
 ```python
-from translit import detect_scripts, Script
+from disarm import detect_scripts, Script
 
 scripts = detect_scripts("Hello Мир")
 assert scripts == [Script.LATIN, Script.CYRILLIC]
@@ -69,7 +69,7 @@ assert scripts == [Script.HAN, Script.LATIN]
 
 ### The Script enum
 
-`Script` enumerates the 39 Unicode scripts translit recognizes:
+`Script` enumerates the 39 Unicode scripts disarm recognizes:
 
 **Major world scripts:**
 
@@ -176,7 +176,7 @@ assert scripts == [Script.HAN, Script.LATIN]
 Detect domain names that use mixed scripts to impersonate legitimate sites:
 
 ```python
-from translit import is_mixed_script, normalize_confusables
+from disarm import is_mixed_script, normalize_confusables
 
 # Detect Latin homoglyphs in a "Cyrillic" domain
 domain = "аpple.com"  # first "a" is Cyrillic
@@ -195,7 +195,7 @@ assert normalized == 'Банк россии'
 Ensure usernames don't contain confusable characters:
 
 ```python
-from translit import is_confusable
+from disarm import is_confusable
 
 def validate_username(name: str) -> bool:
     if is_confusable(name):
@@ -208,7 +208,7 @@ def validate_username(name: str) -> bool:
 Normalize confusables before indexing for search:
 
 ```python
-from translit import TextPipeline
+from disarm import TextPipeline
 
 index_pipeline = TextPipeline(
     normalize="NFKC",

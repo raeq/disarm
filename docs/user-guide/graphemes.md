@@ -2,7 +2,7 @@
 
 Unicode text is more complex than it appears. A single user-perceived "character" can be composed of multiple Unicode codepoints — combining accents, emoji modifiers, ZWJ sequences, regional indicator pairs, and Hangul jamo all create situations where Python's `len()` gives a misleading count.
 
-translit provides three functions for working with **extended grapheme clusters** as defined by [UAX #29](https://www.unicode.org/reports/tr29/), giving correct results where `len()` overcounts.
+disarm provides three functions for working with **extended grapheme clusters** as defined by [UAX #29](https://www.unicode.org/reports/tr29/), giving correct results where `len()` overcounts.
 
 ## The Problem
 
@@ -30,7 +30,7 @@ Python's `len()` counts **codepoints**, not **user-perceived characters**. For c
 Count the number of user-perceived characters:
 
 ```python
-from translit import grapheme_len
+from disarm import grapheme_len
 
 assert grapheme_len("café") == 4
 assert grapheme_len("cafe\u0301") == 4
@@ -51,7 +51,7 @@ assert grapheme_len("नमस्ते") == 3
 Split text into individual grapheme clusters:
 
 ```python
-from translit import grapheme_split
+from disarm import grapheme_split
 
 assert grapheme_split("café") == ['c', 'a', 'f', 'é']
 assert grapheme_split("cafe\u0301") == ['c', 'a', 'f', 'é']
@@ -62,14 +62,14 @@ assert grapheme_split("Hi 👋🏽") == ['H', 'i', ' ', '👋🏽']
 ```
 
 !!! note
-    Input is limited to 10 MB to prevent excessive memory allocation. Raises `TranslitError` for larger inputs.
+    Input is limited to 10 MB to prevent excessive memory allocation. Raises `DisarmError` for larger inputs.
 
 ### grapheme_truncate
 
 Truncate text to a maximum number of grapheme clusters without splitting any cluster:
 
 ```python
-from translit import grapheme_truncate
+from disarm import grapheme_truncate
 
 assert grapheme_truncate("Hello World", 5) == 'Hello'
 assert grapheme_truncate("café", 3) == 'caf'
@@ -88,7 +88,7 @@ Unlike byte-level slicing (`text[:n]`) or codepoint-level slicing, `grapheme_tru
 All grapheme functions are also available on the `Text` builder:
 
 ```python
-from translit import Text
+from disarm import Text
 
 t = Text("Hello 👨‍👩‍👧‍👦!")
 
@@ -143,7 +143,7 @@ A comparison showing how different counting methods diverge:
 Grapheme cluster boundaries can differ between NFC and NFD forms of the same text. For consistent results, normalize before counting:
 
 ```python
-from translit import normalize, grapheme_len
+from disarm import normalize, grapheme_len
 
 text = "é"  # might be NFC or NFD depending on source
 normalized = normalize(text, form="NFC")
@@ -160,7 +160,7 @@ In practice, `grapheme_len` gives the same count for NFC and NFD forms of the sa
 Sanitize input first, then enforce a grapheme-aware length limit:
 
 ```python
-from translit import sanitize_user_input, grapheme_len, grapheme_truncate
+from disarm import sanitize_user_input, grapheme_len, grapheme_truncate
 
 def validate_username(raw: str, max_graphemes: int = 30) -> str:
     clean = sanitize_user_input(raw)
@@ -174,7 +174,7 @@ def validate_username(raw: str, max_graphemes: int = 30) -> str:
 Use `display_clean` for lightweight sanitization and `grapheme_truncate` for the character limit:
 
 ```python
-from translit import display_clean, grapheme_truncate
+from disarm import display_clean, grapheme_truncate
 
 def prepare_post(raw: str, max_graphemes: int = 280) -> str:
     clean = display_clean(raw)
@@ -186,7 +186,7 @@ def prepare_post(raw: str, max_graphemes: int = 280) -> str:
 When storing text in a column with a character limit, truncate by grapheme clusters — never by bytes or codepoints, which can split emoji or combining sequences:
 
 ```python
-from translit import security_clean, grapheme_truncate
+from disarm import security_clean, grapheme_truncate
 
 def safe_for_db(raw: str, max_graphemes: int = 255) -> str:
     clean = security_clean(raw)
@@ -198,7 +198,7 @@ def safe_for_db(raw: str, max_graphemes: int = 255) -> str:
 Normalize text before truncating to a token-budget-friendly length:
 
 ```python
-from translit import ml_normalize, grapheme_truncate
+from disarm import ml_normalize, grapheme_truncate
 
 def prepare_for_model(raw: str, max_graphemes: int = 4096) -> str:
     clean = ml_normalize(raw)
@@ -213,7 +213,7 @@ columns text occupies (a CJK character is one cluster but two columns). Use
 over [UAX #11 East Asian Width](https://www.unicode.org/reports/tr11/):
 
 ```python
-from translit import terminal_width, grapheme_width
+from disarm import terminal_width, grapheme_width
 
 assert terminal_width("hello") == 5
 assert terminal_width("世界") == 4  # wide CJK: 2 columns each
@@ -234,7 +234,7 @@ assert terminal_width("¡", ambiguous_wide=True) == 2
 This measures **terminal cells**, not pixels or font metrics. Tabs are not
 expanded and newlines are not modelled — layout that depends on tab stops or
 wrapping is the caller's responsibility. Emoji-ZWJ and ambiguous widths are
-inherently terminal-dependent; translit's policy is fixed (ambiguous = 1 unless
+inherently terminal-dependent; disarm's policy is fixed (ambiguous = 1 unless
 `ambiguous_wide`, and an emoji-presented cluster = 2).
 
 ## Limitations

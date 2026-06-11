@@ -39,7 +39,7 @@ Complete function signatures, parameters, and return types.
 - **[Encoding Detection](api/encoding.md)** — `detect_encoding`, `decode_to_utf8`
 - **[Language Profiles](api/language-profiles.md)** — `list_langs`, `register_lang`, `register_replacements`
 - **[Enums & Types](api/enums.md)** — `Script`, `NF`, `EmojiProvider`, type aliases, language constants
-- **[Exceptions](api/exceptions.md)** — `TranslitError`
+- **[Exceptions](api/exceptions.md)** — `DisarmError`
 
 ---
 

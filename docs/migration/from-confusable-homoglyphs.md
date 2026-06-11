@@ -1,6 +1,6 @@
 # Migrating from confusable_homoglyphs
 
-translit includes built-in confusable detection that replaces [confusable_homoglyphs](https://pypi.org/project/confusable-homoglyphs/).
+disarm includes built-in confusable detection that replaces [confusable_homoglyphs](https://pypi.org/project/confusable-homoglyphs/).
 
 ## Quick migration
 
@@ -13,7 +13,7 @@ from confusable_homoglyphs import confusables
 result = confusables.is_mixed_script("Неllo")  # detailed dict
 
 # After
-from translit import is_mixed_script
+from disarm import is_mixed_script
 result = is_mixed_script("Неllo")  # True
 ```
 
@@ -26,7 +26,7 @@ from confusable_homoglyphs import confusables
 result = confusables.is_confusable("Неllo", greedy=True)  # detailed list of dicts
 
 # After — greedy and preferred_aliases are accepted (with deprecation warning)
-from translit import is_confusable
+from disarm import is_confusable
 result = is_confusable("Неllo")  # True
 result = is_confusable("Неllo", greedy=True)  # accepted, warns
 ```
@@ -36,14 +36,14 @@ result = is_confusable("Неllo", greedy=True)  # accepted, warns
 ```python
 # confusable_homoglyphs has no normalization function
 
-# translit adds this capability
-from translit import normalize_confusables
+# disarm adds this capability
+from disarm import normalize_confusables
 assert normalize_confusables("Неllo") == 'Hello'
 ```
 
 ## API comparison
 
-| confusable_homoglyphs | translit | Notes |
+| confusable_homoglyphs | disarm | Notes |
 |---|---|---|
 | `confusables.is_mixed_script(s)` | `is_mixed_script(s)` | Returns `bool` instead of dict |
 | `confusables.is_confusable(s)` | `is_confusable(s)` | Returns `bool` instead of list |
@@ -55,7 +55,7 @@ assert normalize_confusables("Неllo") == 'Hello'
 
 ### Return types
 
-confusable_homoglyphs returns detailed structured data (dicts with character info, aliases, script names). translit returns simple booleans for detection and strings for normalization. If you need the detailed per-character breakdown, you'll need to keep confusable_homoglyphs.
+confusable_homoglyphs returns detailed structured data (dicts with character info, aliases, script names). disarm returns simple booleans for detection and strings for normalization. If you need the detailed per-character breakdown, you'll need to keep confusable_homoglyphs.
 
 ### Script detection
 
@@ -66,13 +66,13 @@ from confusable_homoglyphs import confusables
 confusables.is_mixed_script("Неllo")
 # {'mixed': True, 'scripts': ['Cyrillic', 'Latin']}
 
-# translit — separate functions
-from translit import is_mixed_script, detect_scripts
+# disarm — separate functions
+from disarm import is_mixed_script, detect_scripts
 is_mixed_script("Неllo")    # True
 detect_scripts("Неllo")     # [Script.CYRILLIC, Script.LATIN]
 ```
 
-## New features in translit
+## New features in disarm
 
 - `normalize_confusables()` — actually replace confusables, not just detect them
 - `detect_scripts()` — returns `Script` enum values

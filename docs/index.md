@@ -1,35 +1,35 @@
 <!-- AUTO-GENERATED from README.md + docs/_index_nav.md -->
 <!-- Do not edit directly. Run: bash scripts/generate_docs_index.sh -->
 
-# translit
+# disarm
 
-[![Documentation](https://readthedocs.org/projects/translit/badge/?version=latest)](https://translit.readthedocs.io/en/latest/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/translit/blob/main/LICENSE)
+[![Documentation](https://readthedocs.org/projects/disarm/badge/?version=latest)](https://docs.disarm.dev/en/latest/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/disarm/blob/main/LICENSE)
 
 Unicode canonicalization and TR39 confusable analysis for Python — building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling) plus standards-based transliteration. Rust-powered.
 
-**[Documentation](index.md)** | **[API Reference](api/index.md)** | **[PyPI](https://pypi.org/project/translit-rs/)**
+**[Documentation](index.md)** | **[API Reference](api/index.md)** | **[PyPI](https://pypi.org/project/disarm/)**
 
 ## Demo
 
-**[Try translit in your browser](https://translit-web.pages.dev/)**
+**[Try disarm in your browser](https://disarm-web.pages.dev/)**
 
-## Why translit
+## Why disarm
 
 The text-cleaning libraries already in most pipelines — `ftfy`, `unidecode`, `anyascii` — were built for encoding repair and ASCII conversion. They map confusables *phonetically* (Cyrillic `р` → Latin `r`), which does not reverse a homoglyph substitution.
 
-translit implements *visual* confusable mapping per [Unicode TR39](https://www.unicode.org/reports/tr39/) (Cyrillic `р` → Latin `p`). In a controlled benchmark (six attack types, three downstream tasks, two architectures; 435,864 observations), visual TR39 mapping reached **XMR = 1.000 on the tested TR39 homoglyph pairs** (17 Latin–Cyrillic, 19 Greek), where phonetic transliterators plateaued near half:
+disarm implements *visual* confusable mapping per [Unicode TR39](https://www.unicode.org/reports/tr39/) (Cyrillic `р` → Latin `p`). In a controlled benchmark (six attack types, three downstream tasks, two architectures; 435,864 observations), visual TR39 mapping reached **XMR = 1.000 on the tested TR39 homoglyph pairs** (17 Latin–Cyrillic, 19 Greek), where phonetic transliterators plateaued near half:
 
 | Tool class | Mapping | Homoglyph XMR (tested TR39 pairs) |
 |---|---|---|
 | `unidecode`, `anyascii`, `cyrtranslit`, `uroman` | phonetic | ~0.49 |
-| **translit** (`strip_obfuscation` / `normalize_confusables`) | **visual (TR39)** | **1.000** |
+| **disarm** (`strip_obfuscation` / `normalize_confusables`) | **visual (TR39)** | **1.000** |
 
 `ftfy` was statistically equivalent to no preprocessing; `unidecode` *degraded* accuracy on invisible-character attacks. Details: **[Adversarial-Text Defense](security/adversarial-defense.md)** (paper *"Fire Extinguishers Full of Gasoline"*; XMR metric: [Zenodo 10.5281/zenodo.19323513](https://doi.org/10.5281/zenodo.19323513)).
 
-> **Scope.** translit is a **defense-in-depth layer, not a complete control.** It canonicalizes the confusables it bundles (TR39) and strips the format characters it enumerates; it does not promise to stop any attack class, and the confusable space is far larger than any table. See the **[Threat Model](THREAT_MODEL.md)** for what is and isn't in scope.
+> **Scope.** disarm is a **defense-in-depth layer, not a complete control.** It canonicalizes the confusables it bundles (TR39) and strips the format characters it enumerates; it does not promise to stop any attack class, and the confusable space is far larger than any table. See the **[Threat Model](THREAT_MODEL.md)** for what is and isn't in scope.
 
 ```python
-from translit import strip_obfuscation, normalize_confusables, is_safe_hostname
+from disarm import strip_obfuscation, normalize_confusables, is_safe_hostname
 
 # Fold Cyrillic look-alikes to their Latin prototypes (TR39 visual mapping)
 assert strip_obfuscation("рroduсt") == 'product'
@@ -45,13 +45,13 @@ safe, details = is_safe_hostname("аpple.com")   # leading Cyrillic а
 ## Installation
 
 ```bash
-pip install translit-rs
+pip install disarm
 ```
 
-The package installs as `translit-rs` on PyPI but imports as `translit`:
+Install and import use the same name, `disarm`:
 
 ```python
-import translit  # not translit_rs
+import disarm
 ```
 
 Requires Python 3.10+. Wheels are available for Linux, macOS, and Windows.
@@ -75,7 +75,7 @@ All text processing is implemented in Rust with O(1) PHF lookups and exposed to 
 ### Defense & canonicalization
 
 ```python
-from translit import (
+from disarm import (
     is_confusable, normalize_confusables, strip_obfuscation,
     security_clean, sanitize_user_input,
 )
@@ -94,7 +94,7 @@ assert sanitize_user_input("pаypal") == 'paypal'
 ### Transliteration (standards-based core)
 
 ```python
-from translit import transliterate, slugify
+from disarm import transliterate, slugify
 
 assert transliterate("café") == 'cafe'
 assert transliterate("Москва") == 'Moskva'
@@ -130,7 +130,7 @@ assert transliterate("ひらがな") == 'hiragana'
 
 ## Coverage tiers
 
-translit transliterates a very wide range of scripts, but the **quality guarantee differs by tier**. Lead with the core; treat the rest as compatibility coverage.
+disarm transliterates a very wide range of scripts, but the **quality guarantee differs by tier**. Lead with the core; treat the rest as compatibility coverage.
 
 | Tier | Scripts | Policy | Standard |
 |---|---|---|---|
@@ -138,14 +138,14 @@ translit transliterates a very wide range of scripts, but the **quality guarante
 | **Compatibility** (best-effort) | CJK (Chinese / Japanese / Korean), Arabic, Hebrew, Devanagari & 9 other Indic scripts, Thai, Lao | Context-free, character-by-character — same approach as Unidecode/AnyAscii | Unihan `kMandarin`, Revised Romanization, Hepburn, UNGEGN/IAST-derived, RTGS-derived |
 | **Best-effort** | Georgian, Armenian, and a long tail of additional scripts | Context-free coverage so input is never silently dropped | see [Language support](user-guide/language-support.md) |
 
-**Compatibility-tier transliteration is context-free and character-by-character** — no linguistic analysis, polyphony handling, or phonological rules. For CJK/Arabic/Indic this is fundamentally lossy and no better than Unidecode; it exists so translit is a complete drop-in, not because it is best-in-class there. See [limitations.md](limitations.md) for trade-offs and the [full per-script policy table](user-guide/language-support.md).
+**Compatibility-tier transliteration is context-free and character-by-character** — no linguistic analysis, polyphony handling, or phonological rules. For CJK/Arabic/Indic this is fundamentally lossy and no better than Unidecode; it exists so disarm is a complete drop-in, not because it is best-in-class there. See [limitations.md](limitations.md) for trade-offs and the [full per-script policy table](user-guide/language-support.md).
 
 > **Context-aware abjad (Arabic, Persian, Hebrew):** an optional dictionary-backed mode (`transliterate(text, context=True)`) restores vowels for more readable output. It is a best-effort *readability aid*, not a romanization standard. See [Abjad scripts](user-guide/abjad-transliteration.md).
 
 ## Precompiled pipelines
 
 ```python
-from translit import security_clean, ml_normalize, catalog_key, sanitize_user_input, strip_obfuscation
+from disarm import security_clean, ml_normalize, catalog_key, sanitize_user_input, strip_obfuscation
 
 # Security: NFKC → confusables → strip bidi → collapse whitespace
 assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
@@ -169,7 +169,7 @@ assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
 ## Text builder
 
 ```python
-from translit import Text
+from disarm import Text
 
 result = (
     Text("Ünïcödé Café ☕")
@@ -189,20 +189,20 @@ The API is organized into domain-specific namespaces. All functions are also ava
 
 | Namespace | Purpose | Key functions |
 |---|---|---|
-| `translit.security` | Defense & safety analysis | `normalize_confusables`, `is_confusable`, `is_mixed_script`, `is_safe_hostname`, `strip_bidi`, `security_clean` |
-| `translit` | Core transforms | `transliterate`, `slugify`, `strip_obfuscation`, `Text`, `TextPipeline` |
-| `translit.normalization` | Unicode normalization | `normalize`, `strip_accents`, `fold_case`, `collapse_whitespace` |
-| `translit.files` | Filename handling | `sanitize_filename` |
-| `translit.codec` | Byte decoding | `decode_to_utf8`, `detect_encoding` |
+| `disarm.security` | Defense & safety analysis | `normalize_confusables`, `is_confusable`, `is_mixed_script`, `is_safe_hostname`, `strip_bidi`, `security_clean` |
+| `disarm` | Core transforms | `transliterate`, `slugify`, `strip_obfuscation`, `Text`, `TextPipeline` |
+| `disarm.normalization` | Unicode normalization | `normalize`, `strip_accents`, `fold_case`, `collapse_whitespace` |
+| `disarm.files` | Filename handling | `sanitize_filename` |
+| `disarm.codec` | Byte decoding | `decode_to_utf8`, `detect_encoding` |
 
 ```python
 # Namespace imports
-from translit.security import is_confusable, security_clean
-from translit.codec import decode_to_utf8
-from translit.normalization import fold_case
+from disarm.security import is_confusable, security_clean
+from disarm.codec import decode_to_utf8
+from disarm.normalization import fold_case
 
 # Top-level imports also work
-from translit import is_confusable, security_clean, decode_to_utf8, fold_case
+from disarm import is_confusable, security_clean, decode_to_utf8, fold_case
 ```
 
 ## Language profiles
@@ -210,7 +210,7 @@ from translit import is_confusable, security_clean, decode_to_utf8, fold_case
 Built-in language profiles span the core and compatibility tiers, with scholarly ASCII Cyrillic support (`strict_iso9`; ISO 9-style digraphs, not the diacritic standard). Profiles apply **sparse overrides** on top of the default table (e.g. German maps `ü` → `ue` instead of the default `u`).
 
 ```python
-from translit import list_langs, transliterate
+from disarm import list_langs, transliterate
 
 print(list_langs())
 # ['am', 'ar', 'as', 'bg', 'bn', 'bo', 'ca', 'cs', 'cy', 'da', 'de', 'dv', 'el',
@@ -224,7 +224,7 @@ See [Language support](user-guide/language-support.md) for the full registry, pe
 
 ## Performance
 
-translit is compiled Rust with O(1) compile-time perfect hash tables — no regex, no per-character Python iteration, no runtime data loading. Speed is a supporting benefit, not the headline; correctness and defense come first.
+disarm is compiled Rust with O(1) compile-time perfect hash tables — no regex, no per-character Python iteration, no runtime data loading. Speed is a supporting benefit, not the headline; correctness and defense come first.
 
 | Operation | Throughput | vs. legacy |
 |---|---|---|
@@ -237,10 +237,10 @@ See [performance.md](performance.md) for full benchmark methodology and results.
 
 ## Drop-in replacement
 
-translit provides compatibility aliases for painless migration from existing libraries:
+disarm provides compatibility aliases for painless migration from existing libraries:
 
 ```python
-from translit import unidecode, casefold, remove_accents
+from disarm import unidecode, casefold, remove_accents
 
 assert unidecode("café") == 'cafe'
 assert casefold("Straße") == 'strasse'
@@ -253,7 +253,7 @@ assert remove_accents("café") == 'cafe'
 
 ## Exhaustive testing
 
-translit is exhaustively tested with three layers of machine-verifiable assurance beyond conventional unit and property-based tests:
+disarm is exhaustively tested with three layers of machine-verifiable assurance beyond conventional unit and property-based tests:
 
 - **Compile-time assertions**: `build.rs` asserts all transliteration table values are ASCII and entry counts match expectations — if any check fails, `cargo build` fails
 - **Exhaustive domain coverage**: Every Hangul syllable (11,172), every BMP codepoint (63,488), every CJK ideograph (20,992), and every Indic script block are tested individually — zero sampling gaps
@@ -302,7 +302,7 @@ Complete function signatures, parameters, and return types.
 - **[Encoding Detection](api/encoding.md)** — `detect_encoding`, `decode_to_utf8`
 - **[Language Profiles](api/language-profiles.md)** — `list_langs`, `register_lang`, `register_replacements`
 - **[Enums & Types](api/enums.md)** — `Script`, `NF`, `EmojiProvider`, type aliases, language constants
-- **[Exceptions](api/exceptions.md)** — `TranslitError`
+- **[Exceptions](api/exceptions.md)** — `DisarmError`
 
 ---
 

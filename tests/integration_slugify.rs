@@ -1,6 +1,6 @@
 //! Integration tests for slugification.
 
-use _translit::slugify::{slugify_impl, SlugConfig};
+use _disarm::slugify::{slugify_impl, SlugConfig};
 
 #[test]
 fn basic_slugify() {

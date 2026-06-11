@@ -1,6 +1,6 @@
 //! Fast Unicode transliteration, slugification, and text normalization — Rust core.
 //!
-//! All public access goes through the Python package `translit`.
+//! All public access goes through the Python package `disarm`.
 //! Rust-internal modules are marked `#[doc(hidden)]` and not part of the public API.
 
 use pyo3::prelude::*;
@@ -89,10 +89,10 @@ pub mod width;
 pub mod zalgo;
 
 /// Internal Rust module. Not part of the public Python API.
-/// All public access goes through python/translit/__init__.py.
+/// All public access goes through python/disarm/__init__.py.
 #[pymodule]
-#[pyo3(name = "_translit")]
-fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pyo3(name = "_disarm")]
+fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Core transforms
     m.add_function(wrap_pyfunction!(transliterate::_transliterate, m)?)?;
     m.add_function(wrap_pyfunction!(transliterate::_transliterate_entry, m)?)?;
@@ -178,9 +178,9 @@ fn _translit(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(emoji::_demojize, m)?)?;
     m.add_function(wrap_pyfunction!(emoji::_set_emoji_provider, m)?)?;
 
-    // Custom exception hierarchy (#183): TranslitError base + categorised
+    // Custom exception hierarchy (#183): DisarmError base + categorised
     // subclasses. The Error -> PyErr conversion maps each variant to one of these.
-    m.add("TranslitError", m.py().get_type::<TranslitError>())?;
+    m.add("DisarmError", m.py().get_type::<DisarmError>())?;
     m.add(
         "InvalidArgumentError",
         m.py().get_type::<InvalidArgumentError>(),
@@ -227,7 +227,7 @@ pub(crate) fn recover_lock<T>(result: std::sync::LockResult<T>, table_name: &str
         // that Python applications can capture it via the `warnings`/`logging`
         // APIs, falling back to stderr.
         let msg = format!(
-            "translit: lock for `{table_name}` poisoned (a thread panicked while holding the \
+            "disarm: lock for `{table_name}` poisoned (a thread panicked while holding the \
              lock). Recovering from poisoned state — data may be inconsistent. This is a bug; \
              please report it."
         );
@@ -253,8 +253,8 @@ pub(crate) fn recover_lock<T>(result: std::sync::LockResult<T>, table_name: &str
 /// is not available. Python-context callers should prefer `emit_py_warning`
 /// (which routes through `warnings.warn`) when a GIL token is at hand.
 pub(crate) fn emit_warning_stderr(msg: &str) {
-    // Callers already prefix their messages with "translit: ..."; emit as-is to
-    // avoid a double "translit warning: translit: ..." prefix (review on #106).
+    // Callers already prefix their messages with "disarm: ..."; emit as-is to
+    // avoid a double "disarm warning: disarm: ..." prefix (review on #106).
     eprintln!("{msg}");
 }
 
@@ -284,36 +284,36 @@ pub(crate) fn emit_py_warning(py: pyo3::Python<'_>, msg: &str) {
 // leaves a std collection in a valid-but-unspecified state, never UB).
 
 pyo3::create_exception!(
-    translit,
-    TranslitError,
+    disarm,
+    DisarmError,
     pyo3::exceptions::PyValueError,
-    "Base exception for every error translit raises.\n\
+    "Base exception for every error disarm raises.\n\
      Subclass of ``ValueError`` (so existing ``except ValueError`` code keeps\n\
-     working); catch ``TranslitError`` to handle any translit failure. The\n\
+     working); catch ``DisarmError`` to handle any disarm failure. The\n\
      subclasses below categorise the failure (#183)."
 );
 
 pyo3::create_exception!(
-    translit,
+    disarm,
     InvalidArgumentError,
-    TranslitError,
+    DisarmError,
     "An argument had an invalid value or a combination of arguments was\n\
      contradictory (e.g. an unknown ``errors``/``form``/``lang`` value, or two\n\
-     mutually-exclusive flags). Subclass of ``translit.TranslitError``."
+     mutually-exclusive flags). Subclass of ``disarm.DisarmError``."
 );
 
 pyo3::create_exception!(
-    translit,
+    disarm,
     ResourceLimitError,
-    TranslitError,
+    DisarmError,
     "A configured resource limit was exceeded (batch size, registration cap,\n\
-     regex length, unique-slug attempts). Subclass of ``translit.TranslitError``."
+     regex length, unique-slug attempts). Subclass of ``disarm.DisarmError``."
 );
 
 pyo3::create_exception!(
-    translit,
+    disarm,
     UnsupportedError,
-    TranslitError,
+    DisarmError,
     "A requested operation is not supported (e.g. reverse transliteration for a\n\
-     language, or auto-detecting an encoding). Subclass of ``translit.TranslitError``."
+     language, or auto-detecting an encoding). Subclass of ``disarm.DisarmError``."
 );

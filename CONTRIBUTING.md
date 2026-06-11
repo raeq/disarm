@@ -1,6 +1,6 @@
-# Contributing to translit
+# Contributing to disarm
 
-Thank you for your interest in contributing! translit is maintained by a small
+Thank you for your interest in contributing! disarm is maintained by a small
 team, and thoughtful contributions are genuinely welcome. This guide explains what
 we're looking for, how the project is built and tested, and how to get a change
 merged.
@@ -9,16 +9,16 @@ merged.
 
 We'd love your help, especially with:
 
-- **Domain-specific extensions and new use cases.** translit is a kit of canonicalization
+- **Domain-specific extensions and new use cases.** disarm is a kit of canonicalization
   and transliteration building blocks. If you work in a domain we haven't designed
   for — a library catalog, a moderation pipeline, an IDN registrar check, a search
-  index, a data-cleaning ETL step, a linguistics workflow — and translit *almost* does
+  index, a data-cleaning ETL step, a linguistics workflow — and disarm *almost* does
   what you need, tell us. The most valuable feature requests come from real workflows
   we hadn't pictured. Use the **💡 Extension idea / new use case** issue form.
 - **Language profiles.** Profiles apply sparse overrides on top of the default table
   (e.g. German `ü` → `ue`). Adding or refining a profile for a language you know well
   is a high-value, self-contained contribution. See
-  [Language support](https://translit.readthedocs.io/user-guide/language-support.html).
+  [Language support](https://docs.disarm.dev/user-guide/language-support.html).
 - **Coverage requests.** A confusable pair, a script, or a code point we don't yet map
   is a *known limitation* (see the [Threat Model](THREAT_MODEL.md)), not a vulnerability —
   but it is exactly how this layer improves. Use the **🗺️ Coverage / confusable-gap**
@@ -42,7 +42,7 @@ incidental). When a fix is too large to fold in, open an issue so it isn't lost.
 
 ## Reporting bugs and requesting features
 
-Please use the [issue forms](https://github.com/raeq/translit/issues/new/choose) — they
+Please use the [issue forms](https://github.com/raeq/disarm/issues/new/choose) — they
 ask for the few things we need to act on a report (a version, a minimal reproduction,
 expected vs. actual output). A report we can reproduce in under a minute gets fixed far
 faster than one we have to interrogate.
@@ -79,8 +79,8 @@ that genuinely drains a small project.
 ## Development setup
 
 ```bash
-git clone https://github.com/raeq/translit.git
-cd translit
+git clone https://github.com/raeq/disarm.git
+cd disarm
 python -m venv .venv && source .venv/bin/activate
 maturin develop          # build Rust extension in-place
 pip install -e ".[dev]"  # installs test + dev dependencies
@@ -151,7 +151,7 @@ cargo clippy --no-default-features -- -D warnings
 # Python
 ruff check .
 ruff format --check .
-mypy python/translit --ignore-missing-imports
+mypy python/disarm --ignore-missing-imports
 ```
 
 ## Building documentation
@@ -188,7 +188,7 @@ exact-output examples. `pytest docs/` (one process) is therefore not the gate.
 
 ````markdown
 ```python
-from translit import sanitize_filename
+from disarm import sanitize_filename
 
 assert sanitize_filename("café.txt") == "cafe.txt"
 ```
@@ -198,7 +198,7 @@ Rules:
 
 - **Assert, don't comment.** `assert f(x) == "y"` is checked; `f(x)  # => "y"`
   is not. The `# =>` pattern is what we are removing (#156).
-- **Public API only.** Reaching into internals (`translit._...`) in a published
+- **Public API only.** Reaching into internals (`disarm._...`) in a published
   example is itself a doc bug — the example must exercise what users can call.
 - **One namespace per page.** Blocks share state top-to-bottom, so import once
   and reuse the binding in later blocks.
@@ -223,10 +223,10 @@ asserted.
 ## Sign your work — Developer Certificate of Origin
 
 By submitting a contribution, you agree it is licensed under the project's
-[MIT License](https://github.com/raeq/translit/blob/main/LICENSE) (inbound =
-outbound). translit does **not** require a CLA.
+[MIT License](https://github.com/raeq/disarm/blob/main/LICENSE) (inbound =
+outbound). disarm does **not** require a CLA.
 
-We do use the [Developer Certificate of Origin](https://github.com/raeq/translit/blob/main/DCO) (DCO 1.1): a per-commit
+We do use the [Developer Certificate of Origin](https://github.com/raeq/disarm/blob/main/DCO) (DCO 1.1): a per-commit
 attestation that you wrote the code, or otherwise have the right to submit it
 under the project's license. Certify it by adding a `Signed-off-by` trailer to
 **every** commit:

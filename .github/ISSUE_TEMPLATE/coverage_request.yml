@@ -1,5 +1,5 @@
 name: 🗺️ Coverage / confusable-gap request
-description: A confusable pair, script, or code point translit doesn't yet map. These are welcome.
+description: A confusable pair, script, or code point disarm doesn't yet map. These are welcome.
 title: "[coverage] "
 labels: ["coverage", "enhancement", "needs-triage"]
 body:
@@ -11,7 +11,7 @@ body:
 
         A confusable that simply isn't in the bundled TR39 table is a **known limitation by
         design**, not a vulnerability (see the
-        [Threat Model](https://github.com/raeq/translit/blob/main/THREAT_MODEL.md)), so it is
+        [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)), so it is
         safe and appropriate to report it here in the open.
   - type: dropdown
     id: kind

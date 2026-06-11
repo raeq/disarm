@@ -1,4 +1,4 @@
-"""Tests for the translit CLI interface.
+"""Tests for the disarm CLI interface.
 
 Exercises all subcommands, short aliases, flags, stdin piping,
 error handling, and malformed/malicious input.
@@ -14,10 +14,10 @@ import sys
 def run_cli(
     *args: str, input_text: str | None = None, timeout: float = 10
 ) -> subprocess.CompletedProcess[str]:
-    """Run the translit CLI and return the result."""
+    """Run the disarm CLI and return the result."""
     env = {**os.environ, "PYTHONUTF8": "1"}
     return subprocess.run(
-        [sys.executable, "-m", "translit", *args],
+        [sys.executable, "-m", "disarm", *args],
         input=input_text,
         capture_output=True,
         text=True,

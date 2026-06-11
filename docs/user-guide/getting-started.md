@@ -2,10 +2,10 @@
 
 ## Installation
 
-Install translit from PyPI:
+Install disarm from PyPI:
 
 ```bash
-pip install translit-rs
+pip install disarm
 ```
 
 Pre-built wheels are available for:
@@ -20,22 +20,22 @@ No Rust toolchain is needed for installation — the compiled extension is inclu
 ## Basic usage
 
 ```python
-import translit
+import disarm
 
 # Transliterate Unicode to ASCII
-assert translit.transliterate("café") == 'cafe'
+assert disarm.transliterate("café") == 'cafe'
 
 # Generate URL slugs
-assert translit.slugify("Hello, World!") == 'hello-world'
+assert disarm.slugify("Hello, World!") == 'hello-world'
 
 # Normalize Unicode
-assert translit.normalize("é", form="NFC") == 'é'
+assert disarm.normalize("é", form="NFC") == 'é'
 
 # Detect mixed scripts
-assert translit.is_mixed_script("Неllo") == True
+assert disarm.is_mixed_script("Неllo") == True
 
 # Sanitize filenames
-assert translit.sanitize_filename("my:file<2>.txt") == 'my_file_2.txt'
+assert disarm.sanitize_filename("my:file<2>.txt") == 'my_file_2.txt'
 ```
 
 ## Core concepts
@@ -80,7 +80,7 @@ Predicates return `True` or `False` without transforming the input.
 Many functions accept a `lang` parameter for language-specific behavior:
 
 ```python
-from translit import transliterate, slugify
+from disarm import transliterate, slugify
 
 # German: ü → ue
 assert transliterate("München", lang="de") == 'Muenchen'
@@ -96,14 +96,14 @@ See [Language Support](language-support.md) for the full list of 83 built-in pro
 
 ## Error handling
 
-All translit functions raise `TranslitError` on invalid arguments:
+All disarm functions raise `DisarmError` on invalid arguments:
 
 ```python
-from translit import normalize, TranslitError
+from disarm import normalize, DisarmError
 
 try:
     normalize("text", form="INVALID")
-except TranslitError as e:
+except DisarmError as e:
     print(e)  # "Invalid normalization form: INVALID"
 ```
 

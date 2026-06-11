@@ -1,10 +1,10 @@
 # Architecture: Transliteration Engine
 
-How translit converts Unicode text to ASCII, character by character.
+How disarm converts Unicode text to ASCII, character by character.
 
 ## Design goals
 
-The transliteration engine converts arbitrary Unicode strings to ASCII equivalents suitable for URLs, filenames, search indices, and cross-lingual display. The core tradeoff is speed vs. linguistic accuracy: translit chooses O(1) per-character lookup with no sentence context, sacrificing disambiguation of polyphonic characters (see [Limitations](../limitations.md)) for predictable, high-throughput output.
+The transliteration engine converts arbitrary Unicode strings to ASCII equivalents suitable for URLs, filenames, search indices, and cross-lingual display. The core tradeoff is speed vs. linguistic accuracy: disarm chooses O(1) per-character lookup with no sentence context, sacrificing disambiguation of polyphonic characters (see [Limitations](../limitations.md)) for predictable, high-throughput output.
 
 ## Cow return type
 

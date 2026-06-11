@@ -1,6 +1,6 @@
 # Abjad Script Transliteration
 
-translit provides two transliteration modes for abjad scripts — Arabic, Persian (Farsi), and Hebrew — where standard writing omits most vowels.
+disarm provides two transliteration modes for abjad scripts — Arabic, Persian (Farsi), and Hebrew — where standard writing omits most vowels.
 
 ## The problem with abjad scripts
 
@@ -14,14 +14,14 @@ This means a single written word can represent multiple spoken words:
 | درس | d-r-s | **dars** (lesson), **darrasa** (he taught), **durūs** (lessons) |
 | علم | ʿ-l-m | **ʿilm** (knowledge), **ʿalam** (flag), **ʿallama** (he taught) |
 
-Standard character-by-character transliteration — the approach used by Unidecode, anyascii, and translit's default mode — can only produce the consonant skeleton: `ktb`, `drs`, `'lm`. This is unreadable to anyone who doesn't already know the word.
+Standard character-by-character transliteration — the approach used by Unidecode, anyascii, and disarm's default mode — can only produce the consonant skeleton: `ktb`, `drs`, `'lm`. This is unreadable to anyone who doesn't already know the word.
 
 ## Two modes
 
 ### Context-free (default)
 
 ```python
-from translit import transliterate
+from disarm import transliterate
 assert transliterate("كتب العربية") == "ktb al'rbyh"
 assert transliterate("שלום", lang="he") == "shlvm"
 assert transliterate("کتاب فارسی", lang="fa") == "ktab farsy"
@@ -35,7 +35,7 @@ This is the same approach as every other transliteration library. Each character
 
 <!--- skip: next -->
 ```python
-# Requires context dictionaries (see bootstrap_dicts.sh and TRANSLIT_DICT_DIR)
+# Requires context dictionaries (see bootstrap_dicts.sh and DISARM_DICT_DIR)
 transliterate("كتب العربية", context=True)              # "kataba al'arabiyahi"
 transliterate("שלום", lang="he", context=True)           # "shalvom"
 transliterate("کتاب فارسی", lang="fa", context=True)     # "ketab farsy"
@@ -48,22 +48,22 @@ This mode uses a **dictionary-based vowel restoration** system to recover the mi
 **Requires the prebuilt context dictionaries**, which are **not** shipped in the
 PyPI wheel (they are ~37 MB). Context mode is therefore not available from a plain
 `pip install`; build the dictionaries from a source checkout and point
-`TRANSLIT_DICT_DIR` at them:
+`DISARM_DICT_DIR` at them:
 
 ```bash
-git clone https://github.com/raeq/translit && cd translit
+git clone https://github.com/raeq/disarm && cd disarm
 bash scripts/bootstrap_dicts.sh           # builds data/{arabic,persian,hebrew}_dict.bin
-export TRANSLIT_DICT_DIR="$PWD/data"      # transliterate(context=True) now finds them
+export DISARM_DICT_DIR="$PWD/data"      # transliterate(context=True) now finds them
 ```
 
-The dictionaries are loaded only from `TRANSLIT_DICT_DIR` (or, in a source build,
+The dictionaries are loaded only from `DISARM_DICT_DIR` (or, in a source build,
 the crate's own `data/` directory) — never from a current-working-directory
 relative path, so an attacker who controls the working directory cannot inject a
 substitute dictionary. For a self-contained build, compile the extension with the
 `embed-dicts` Cargo feature.
 
 > Packaging the dictionaries for `pip install` is tracked in
-> [issues #56/#60](https://github.com/raeq/translit/issues/56).
+> [issues #56/#60](https://github.com/raeq/disarm/issues/56).
 
 ## How context-aware transliteration works
 
@@ -97,7 +97,7 @@ Dictionaries are built reproducibly from source corpora via `scripts/bootstrap_d
 
 ### How it differs from other systems
 
-| Feature | translit (context-free) | translit (context-aware) | Buckwalter | ALA-LC / Library of Congress |
+| Feature | disarm (context-free) | disarm (context-aware) | Buckwalter | ALA-LC / Library of Congress |
 |---|---|---|---|---|
 | Vowels | Omitted (consonant skeleton) | Restored from dictionary | Omitted | Required in source |
 | Emphatics | Merged with plain (ص→s, ط→t) | Same | Distinct single chars (S, T) | Underdots (ṣ, ṭ) |
@@ -139,7 +139,7 @@ transliterate("السلام عليكم", context=True)  # "alsalaamu 'alaykum"
 3. **Waw is v, not w**: و is pronounced /v/ in Persian (consonant position), not /w/ as in Arabic.
 4. **The ezafe**: A connecting vowel (-e after consonants, -ye after vowels) links nouns to their modifiers. Written as a kasra or with ه‌ی but often unmarked.
 
-### How translit handles Persian
+### How disarm handles Persian
 
 The `lang="fa"` profile overrides 51 character mappings from the Arabic default:
 
@@ -155,7 +155,7 @@ The `lang="fa"` profile overrides 51 character mappings from the Arabic default:
 
 ### Context-aware Persian
 
-Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian rarely uses diacritics even in formal text. translit addresses this with a **curated vocabulary** of 266 common words with diacritics applied following BGN/PCGN pronunciation rules:
+Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian rarely uses diacritics even in formal text. disarm addresses this with a **curated vocabulary** of 266 common words with diacritics applied following BGN/PCGN pronunciation rules:
 
 ```python
 # Without context
@@ -234,14 +234,14 @@ bash scripts/bootstrap_dicts.sh verify
 
 The bootstrap script pins all parameters (corpus source, min-frequency threshold, max bigram count) and expected output checksums. Changing any parameter requires updating the checksum — making all dictionary changes visible and auditable.
 
-## How translit differs from other approaches
+## How disarm differs from other approaches
 
 | Approach | Used by | Strengths | Weaknesses |
 |---|---|---|---|
-| **Character-by-character** | Unidecode, anyascii, translit (default) | Fast, deterministic, no data dependency | Consonant skeletons for abjad scripts |
-| **Dictionary + bigram** | **translit (context=True)** | Readable output, no ML dependency, fast | Dictionary size, no sentence-level context |
+| **Character-by-character** | Unidecode, anyascii, disarm (default) | Fast, deterministic, no data dependency | Consonant skeletons for abjad scripts |
+| **Dictionary + bigram** | **disarm (context=True)** | Readable output, no ML dependency, fast | Dictionary size, no sentence-level context |
 | **Neural diacritization** | libtashkeel, Rababa, Mishkal | Handles unknown words, sentence context | Requires ONNX runtime (~15MB+), slower, non-deterministic |
 | **Rule-based morphology** | Buckwalter Analyzer, MADAMIRA | Linguistically precise | Complex, language-specific, slow |
 | **Human transcription** | ALA-LC, scholarly publications | Perfect accuracy | Not automatable |
 
-translit's dictionary+bigram approach occupies the middle ground: substantially better than character-by-character for human-readable output, without the weight and complexity of neural or morphological systems. The three-tier fallback ensures graceful degradation — the output is never worse than the default mode.
+disarm's dictionary+bigram approach occupies the middle ground: substantially better than character-by-character for human-readable output, without the weight and complexity of neural or morphological systems. The three-tier fallback ensures graceful degradation — the output is never worse than the default mode.

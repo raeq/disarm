@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from translit import transliterate
+from disarm import transliterate
 
 # ─── Complete PHF override tables, extracted from transliteration.rs ─────
 #

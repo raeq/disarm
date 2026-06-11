@@ -7,7 +7,7 @@ Japanese: Hiragana/Katakana already supported; Kanji falls back to Chinese readi
 
 from __future__ import annotations
 
-from translit import slugify, transliterate
+from disarm import slugify, transliterate
 
 # ---------------------------------------------------------------------------
 # Chinese (Hanzi → Pinyin)

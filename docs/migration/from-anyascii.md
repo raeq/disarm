@@ -1,6 +1,6 @@
 # Migrating from anyascii
 
-translit's `transliterate()` replaces [anyascii](https://pypi.org/project/anyascii/) for Unicode-to-ASCII conversion.
+disarm's `transliterate()` replaces [anyascii](https://pypi.org/project/anyascii/) for Unicode-to-ASCII conversion.
 
 ## Quick migration
 
@@ -11,20 +11,20 @@ from anyascii import anyascii
 result = anyascii("café")
 
 # After
-from translit import transliterate
+from disarm import transliterate
 result = transliterate("café")
 ```
 
 Or use the compatibility alias:
 
 ```python
-from translit import unidecode as anyascii
+from disarm import unidecode as anyascii
 result = anyascii("café")
 ```
 
 ## API comparison
 
-| anyascii | translit | Notes |
+| anyascii | disarm | Notes |
 |---|---|---|
 | `anyascii(s)` | `transliterate(s)` | |
 | — | `transliterate(s, lang="de")` | **New**: language profiles |
@@ -35,14 +35,14 @@ result = anyascii("café")
 
 ### Transliteration approach
 
-anyascii and translit both provide Unicode → ASCII transliteration, but they use different lookup tables. The core Latin-script mappings are very similar, but edge cases may differ. A [detailed character-level comparison](../architecture/transliteration-comparison.md) across all 83 supported languages shows:
+anyascii and disarm both provide Unicode → ASCII transliteration, but they use different lookup tables. The core Latin-script mappings are very similar, but edge cases may differ. A [detailed character-level comparison](../architecture/transliteration-comparison.md) across all 83 supported languages shows:
 
 - **49,089 codepoints** across all Unicode blocks tested comprehensively (no sampling)
-- **48,415** mapped by translit vs **48,761** by anyascii — anyascii has broader coverage of some extended script blocks, while translit provides language-aware romanization with 83 language profiles and 1,136 characters only translit maps
+- **48,415** mapped by disarm vs **48,761** by anyascii — anyascii has broader coverage of some extended script blocks, while disarm provides language-aware romanization with 83 language profiles and 1,136 characters only disarm maps
 - Most differences are systematic: CJK pinyin casing, Korean romanization, and language-specific national standards
 
 ```python
-from translit import transliterate
+from disarm import transliterate
 
 # Common cases — identical
 assert anyascii("café") == 'cafe'
@@ -55,10 +55,10 @@ assert transliterate("北京") == 'bei jing'
 
 ### Language awareness
 
-anyascii has no language parameter. translit provides 83 language-specific profiles:
+anyascii has no language parameter. disarm provides 83 language-specific profiles:
 
 ```python
-from translit import transliterate
+from disarm import transliterate
 
 # anyascii can't do this
 assert transliterate("München", lang="de") == 'Muenchen'
@@ -67,19 +67,19 @@ assert transliterate("Malmö", lang="sv") == 'Malmoe'
 
 ### Error handling
 
-anyascii silently drops characters with no mapping. translit gives you control:
+anyascii silently drops characters with no mapping. disarm gives you control:
 
 ```python
-from translit import transliterate
+from disarm import transliterate
 
 assert transliterate("♠", errors="replace", replace_with="?") == '?'
 assert transliterate("♠", errors="ignore") == ''
 assert transliterate("♠", errors="preserve") == '♠'
 ```
 
-## New features in translit
+## New features in disarm
 
-Beyond basic transliteration, translit also provides:
+Beyond basic transliteration, disarm also provides:
 
 - `slugify()` — URL slug generation
 - `sanitize_filename()` — OS-safe filenames

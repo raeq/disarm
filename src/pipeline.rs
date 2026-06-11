@@ -654,7 +654,7 @@ mod tests {
         let mut all = pipeline(PipelineSteps::all(), Some("NFKC"));
         all.lang = Some("ru".to_owned());
 
-        let mut translit = pipeline(
+        let mut disarm = pipeline(
             PipelineSteps::NORMALIZE
                 | PipelineSteps::TRANSLITERATE
                 | PipelineSteps::STRIP_ACCENTS
@@ -662,7 +662,7 @@ mod tests {
                 | PipelineSteps::COLLAPSE_WS,
             Some("NFKC"),
         );
-        translit.lang = Some("ru".to_owned());
+        disarm.lang = Some("ru".to_owned());
 
         let security = pipeline(
             PipelineSteps::NORMALIZE
@@ -674,7 +674,7 @@ mod tests {
 
         let empty = pipeline(PipelineSteps::empty(), None);
 
-        for p in [&all, &translit, &security, &empty] {
+        for p in [&all, &disarm, &security, &empty] {
             for input in inputs {
                 assert_eq!(
                     p.process(input).unwrap(),

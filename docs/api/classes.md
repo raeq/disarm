@@ -4,12 +4,12 @@ Stateful objects and builders for repeated or specialized text processing.
 
 ## Text
 
-::: translit.Text
+::: disarm.Text
 
 ### Usage
 
 ```python
-from translit import Text
+from disarm import Text
 
 result = (
     Text("Ünïcödé Café ☕")
@@ -64,7 +64,7 @@ All core transforms are available as methods:
 Use `.value` or `str()` to extract the underlying string:
 
 ```python
-from translit import Text
+from disarm import Text
 
 text = Text("café").strip_accents()
 assert text.value == "cafe"
@@ -77,12 +77,12 @@ assert str(text) == "cafe"
 
 ## Slugifier
 
-::: translit.Slugifier
+::: disarm.Slugifier
 
 ### Usage
 
 ```python
-from translit import Slugifier
+from disarm import Slugifier
 
 slug = Slugifier(separator="_", lang="de", max_length=50)
 assert slug("Ärger im Büro") == 'aerger_im_buero'
@@ -99,12 +99,12 @@ Accepts all the same parameters as `slugify()`. Construct once, call many times.
 
 ## UniqueSlugifier
 
-::: translit.UniqueSlugifier
+::: disarm.UniqueSlugifier
 
 ### Usage
 
 ```python
-from translit import UniqueSlugifier
+from disarm import UniqueSlugifier
 
 unique = UniqueSlugifier()
 assert unique("My Post") == 'my-post'
@@ -131,12 +131,12 @@ The `check` callback is called for each candidate slug. If it returns `True`, th
 
 ## TextPipeline
 
-::: translit.TextPipeline
+::: disarm.TextPipeline
 
 ### Usage
 
 ```python
-from translit import TextPipeline
+from disarm import TextPipeline
 
 pipe = TextPipeline(
     normalize="NFC",
@@ -163,16 +163,16 @@ The pipeline is pre-compiled at construction. Enabled steps are stored as a bitf
 
 ## Compatibility aliases (awesome-slugify)
 
-These classes provide drop-in replacements for awesome-slugify's `Slugify` and `UniqueSlugify`. They accept awesome-slugify's parameter names and map them to native translit parameters.
+These classes provide drop-in replacements for awesome-slugify's `Slugify` and `UniqueSlugify`. They accept awesome-slugify's parameter names and map them to native disarm parameters.
 
 See the [migration guide](../migration/from-python-slugify.md#awesome-slugify-migration) for full details.
 
 ### Slugify
 
-::: translit.Slugify
+::: disarm.Slugify
 
 ```python
-from translit import Slugify
+from disarm import Slugify
 
 # Same API as awesome-slugify
 custom = Slugify(to_lower=True)
@@ -186,7 +186,7 @@ s.max_length = 200
 assert s("The Big Fox") == 'big-fox'
 ```
 
-Accepts both awesome-slugify parameter names (`to_lower`, `stop_words`, `safe_chars`, `capitalize`, `pretranslate`) and native translit names (`lowercase`, `stopwords`, `replacements`).
+Accepts both awesome-slugify parameter names (`to_lower`, `stop_words`, `safe_chars`, `capitalize`, `pretranslate`) and native disarm names (`lowercase`, `stopwords`, `replacements`).
 
 Defaults to `to_lower=False` (matching awesome-slugify). For python-slugify compatibility (which defaults to `lowercase=True`), use the native `Slugifier` class or the `slugify()` function.
 
@@ -194,10 +194,10 @@ Defaults to `to_lower=False` (matching awesome-slugify). For python-slugify comp
 
 ### UniqueSlugify
 
-::: translit.UniqueSlugify
+::: disarm.UniqueSlugify
 
 ```python
-from translit import UniqueSlugify
+from disarm import UniqueSlugify
 
 unique = UniqueSlugify(to_lower=True)
 assert unique("My Post") == 'my-post'
@@ -216,7 +216,7 @@ Extends `Slugify` with uniqueness tracking. Accepts `uids` and `unique_check` pa
 Drop-in replacements for awesome-slugify's preconfigured slugifiers:
 
 ```python
-from translit import (
+from disarm import (
     slugify_url,       # lowercase, strips articles, max 200 chars
     slugify_filename,  # underscore separator, preserves -., max 255 chars
     slugify_unicode,   # keeps non-ASCII letters

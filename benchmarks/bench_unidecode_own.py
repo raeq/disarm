@@ -5,11 +5,11 @@ Clean-room replication of the four timeit cells published in Unidecode's
 ``benchmark.py`` (avian2/unidecode). The GPL-2.0 file itself is NOT copied or
 ported; only the published *methodology* is replicated — per-call timing of
 ``unidecode_expect_ascii`` / ``unidecode_expect_nonascii`` on a 12-char ASCII
-string and a 12-char non-ASCII string. translit runs the identical inputs
-through ``translit.transliterate``, interleaved per rep so runner noise
+string and a 12-char non-ASCII string. disarm runs the identical inputs
+through ``disarm.transliterate``, interleaved per rep so runner noise
 cancels in the ratio (same model as bench_ratio.py, V14).
 
-A cell is "won" when the median ratio (comparator seconds / translit seconds)
+A cell is "won" when the median ratio (comparator seconds / disarm seconds)
 is > 1.0. The headline claim "beats Unidecode on its own benchmark" requires
 winning all four cells (#281). Until #277 levers 1 and 4 land, the
 ``expect_ascii/ascii`` cell is expected to report LOSS — that is signal, not
@@ -32,7 +32,7 @@ import sys
 from collections.abc import Callable
 from time import perf_counter
 
-import translit
+import disarm
 
 # The two inputs published in Unidecode's benchmark.py (12 chars each).
 INPUTS: dict[str, str] = {
@@ -75,8 +75,8 @@ def _time(fn: Callable[[str], str], objs: list[str]) -> float:
 
 
 def measure() -> dict[str, dict[str, float | bool]]:
-    """Median comparator/translit ratio per cell, interleaved per rep."""
-    translit_fn: Callable[[str], str] = translit.transliterate
+    """Median comparator/disarm ratio per cell, interleaved per rep."""
+    translit_fn: Callable[[str], str] = disarm.transliterate
     cells: dict[str, dict[str, float | bool]] = {}
     for variant, cmp_fn in _comparators().items():
         for label, text in INPUTS.items():
@@ -115,7 +115,7 @@ def main(argv: list[str]) -> int:
             )
         )
         return 0
-    print(f"{'cell':28s}{'translit':>12s}{'unidecode':>12s}{'ratio':>9s}  result")
+    print(f"{'cell':28s}{'disarm':>12s}{'unidecode':>12s}{'ratio':>9s}  result")
     for name, c in cells.items():
         verdict = "WIN" if c["won"] else "LOSS"
         print(

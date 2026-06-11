@@ -1,6 +1,6 @@
 # Dependency upgrades
 
-This is the authoritative, repeatable methodology for keeping translit's dependencies
+This is the authoritative, repeatable methodology for keeping disarm's dependencies
 current. It exists so that dependency work is **never ad-hoc**: every update is
 classified, soaked, decided, and verified to a depth proportional to its blast radius —
 and the routine majority happens with **no manual triage at all**.
@@ -46,7 +46,7 @@ don't skip versions and don't let updates pile up. The anti-drift rule:
 > is **taken**, **folded** into related work, or **skipped with a written reason** — never
 > silently ignored.
 
-(Example of "folded": the pyo3 0.28 migration is folded into the translit-core extraction
+(Example of "folded": the pyo3 0.28 migration is folded into the pure-Rust core extraction
 at 0.8 — #147 — rather than migrating the PyO3 boundary twice.)
 
 ## Two lanes — the test suite is the triage

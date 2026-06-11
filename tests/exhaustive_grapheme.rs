@@ -1,4 +1,4 @@
-//! Exhaustive grapheme-integrity tests for translit (issue #174, tier 3).
+//! Exhaustive grapheme-integrity tests for disarm (issue #174, tier 3).
 //!
 //! Core invariant (empirically validated: 800k+ adversarial checks, zero
 //! counterexamples): Unicode normalization respects grapheme-cluster
@@ -17,15 +17,15 @@
 //! `tests/exhaustive_transliterate.rs`. Run before release with:
 //! `cargo test --no-default-features --test exhaustive_grapheme -- --ignored`
 //!
-//! Normalization entry point: we call `_translit::normalize::_normalize`, the
-//! SAME `#[pyfunction]` translit ships. Although it is annotated `#[pyfunction]`
+//! Normalization entry point: we call `_disarm::normalize::_normalize`, the
+//! SAME `#[pyfunction]` disarm ships. Although it is annotated `#[pyfunction]`
 //! its signature is `fn(text: &str, form: &str) -> PyResult<String>` — it takes
 //! no `Python<'_>` token and touches no Python objects, so it is callable
 //! directly from a plain `#[test]` with NO GIL. (The module's own unit tests in
 //! `src/normalize.rs` do exactly this.) Calling it directly guarantees we
 //! exercise the identical code path that ships to users.
 
-use _translit::normalize::_normalize;
+use _disarm::normalize::_normalize;
 use unicode_segmentation::UnicodeSegmentation;
 
 const FORMS: [&str; 4] = ["NFC", "NFD", "NFKC", "NFKD"];

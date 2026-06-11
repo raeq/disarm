@@ -1,4 +1,4 @@
-"""Tests for translit.TextPipeline.
+"""Tests for disarm.TextPipeline.
 
 Covers individual steps, common combinations, ordering guarantees,
 and parametric pairwise coverage of the 7 boolean/option flags.
@@ -10,7 +10,7 @@ import itertools
 
 import pytest
 
-from translit import PRESETS, TextPipeline
+from disarm import PRESETS, TextPipeline
 
 
 class TestTextPipelineBasic:

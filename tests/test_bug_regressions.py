@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from translit import (
+from disarm import (
     Text,
     TextPipeline,
     catalog_key,
@@ -371,7 +371,7 @@ class TestNFKCCompatibilityFallback:
 
     def test_strip_obfuscation_folds_fancy_text(self):
         # Anti-obfuscation: "fancy text" math alphanumerics must fold, not survive.
-        from translit import strip_obfuscation
+        from disarm import strip_obfuscation
 
         assert strip_obfuscation("𝕳𝖊𝖑𝖑𝖔") == "Hello"  # case preserved
 
@@ -412,7 +412,7 @@ class TestSealRegistrations:
         import sys
 
         code = (
-            "import translit as t\n"
+            "import disarm as t\n"
             "t.register_lang('xx', {'\\u00c4': 'Ae'})\n"
             "t.register_replacements({'@': '(at)'})\n"
             "assert not t.registrations_sealed()\n"
@@ -425,7 +425,7 @@ class TestSealRegistrations:
             "                 (t.clear_replacements, ())]:\n"
             "    try:\n"
             "        fn(*args)\n"
-            "    except t.TranslitError:\n"
+            "    except t.DisarmError:\n"
             "        blocked += 1\n"
             "assert blocked == 4, blocked\n"
             # reads still work after sealing
@@ -487,7 +487,7 @@ class TestKwargConflictMatrix:
 
 
 class TestUnidecodeCompatKwargs:
-    """translit.unidecode mirrors the Unidecode 1.3 errors=/replace_str= API (#72)."""
+    """disarm.unidecode mirrors the Unidecode 1.3 errors=/replace_str= API (#72)."""
 
     def test_ignore_default_drops(self):
         assert unidecode("a→b") == "ab"
@@ -597,25 +597,25 @@ class TestEnumValidationBeforeFastPath:
     """
 
     def test_normalize_bad_form_ascii_raises(self):
-        from translit import TranslitError, normalize
+        from disarm import DisarmError, normalize
 
-        with pytest.raises(TranslitError, match="form must be"):
+        with pytest.raises(DisarmError, match="form must be"):
             normalize("hello", form="GARBAGE")
 
     def test_transliterate_bad_errors_ascii_raises(self):
-        from translit import TranslitError
+        from disarm import DisarmError
 
-        with pytest.raises(TranslitError, match="errors must be"):
+        with pytest.raises(DisarmError, match="errors must be"):
             transliterate("hello", errors="GARBAGE")
 
     def test_transliterate_bad_errors_ascii_batch_raises(self):
-        from translit import TranslitError
+        from disarm import DisarmError
 
-        with pytest.raises(TranslitError, match="errors must be"):
+        with pytest.raises(DisarmError, match="errors must be"):
             transliterate(["hello"], errors="GARBAGE")
 
     def test_valid_enums_still_work(self):
-        from translit import normalize
+        from disarm import normalize
 
         assert normalize("hello", form="NFC") == "hello"
         assert transliterate("hello", errors="ignore") == "hello"
@@ -636,7 +636,7 @@ class TestSortKeyDocstringHonest:
     """sort_key folds accents (it doesn't preserve them); docstring must not lie (#99.1)."""
 
     def test_sort_key_folds_accents(self):
-        from translit import search_key, sort_key
+        from disarm import search_key, sort_key
 
         assert sort_key("naïve") == "naive"
         assert sort_key("Köln") == "koln"
@@ -644,7 +644,7 @@ class TestSortKeyDocstringHonest:
         assert sort_key("naïve") == search_key("naïve")
 
     def test_docstring_does_not_claim_preservation(self):
-        from translit import sort_key
+        from disarm import sort_key
 
         doc = sort_key.__doc__ or ""
         assert "without accent stripping" not in doc
@@ -655,11 +655,11 @@ class TestUniqueSlugifyMultibytePanic:
     """UniqueSlugify must not panic across FFI on a multibyte separator (#102)."""
 
     def test_multibyte_separator_small_maxlength_no_panic(self):
-        from translit import UniqueSlugify
+        from disarm import UniqueSlugify
 
         # Suffix-truncation branch with a 3-byte separator and small max_length:
         # previously sliced mid-codepoint → uncatchable PanicException. Now it
-        # produces valid UTF-8 (or raises a catchable TranslitError for an
+        # produces valid UTF-8 (or raises a catchable DisarmError for an
         # impossible constraint), but never a BaseException escaping `except`.
         for ml in (4, 5, 8, 12):
             us = UniqueSlugify(separator="—", max_length=ml)
@@ -672,13 +672,13 @@ class TestUniqueSlugifyMultibytePanic:
                 o.encode("utf-8")  # must be valid UTF-8
 
     def test_impossible_constraint_raises_catchable(self):
-        from translit import TranslitError, UniqueSlugify
+        from disarm import DisarmError, UniqueSlugify
 
         # max_length too small to fit any unique suffix → graceful catchable error,
         # not a panic.
         us = UniqueSlugify(separator="—", max_length=2)
         us("hello")
-        with pytest.raises(TranslitError):
+        with pytest.raises(DisarmError):
             for _ in range(3):
                 us("hello")
 
@@ -689,21 +689,21 @@ class TestDecodeConfidenceDefault:
     def test_default_requires_high_confidence(self):
         import inspect
 
-        from translit import decode_to_utf8
+        from disarm import decode_to_utf8
 
         # The old 0.5 default was inert (chardetng emits only 0.50/0.95, and
         # 0.50 < 0.50 is false). The default now requires high confidence.
         assert inspect.signature(decode_to_utf8).parameters["min_confidence"].default == 0.95
 
     def test_threshold_above_detection_rejects(self):
-        from translit import TranslitError, decode_to_utf8
+        from disarm import DisarmError, decode_to_utf8
 
         # A threshold above the detected confidence must reject (gate works).
-        with pytest.raises(TranslitError, match="confidence"):
+        with pytest.raises(DisarmError, match="confidence"):
             decode_to_utf8(b"\xff\xfe\x80\x81", min_confidence=1.0)
 
     def test_zero_accepts_any(self):
-        from translit import decode_to_utf8
+        from disarm import decode_to_utf8
 
         s, _ = decode_to_utf8(b"\xff\xfe\x80\x81", min_confidence=0.0)
         assert isinstance(s, str)
@@ -717,14 +717,14 @@ class TestEmojiProviderSealed:
         import sys
 
         code = (
-            "import translit as t\n"
+            "import disarm as t\n"
             "class P:\n"
             "    def lookup(self, e): return 'X'\n"
             "t.seal_registrations()\n"
             "try:\n"
             "    t.set_emoji_provider(P())\n"
             "    print('NOT_GATED')\n"
-            "except t.TranslitError:\n"
+            "except t.DisarmError:\n"
             "    print('GATED')\n"
         )
         r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

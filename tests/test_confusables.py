@@ -11,14 +11,14 @@ Tests cover:
 
 import pytest
 
-from translit import (
-    TranslitError,
+from disarm import (
+    DisarmError,
     detect_scripts,
     is_confusable,
     is_mixed_script,
     normalize_confusables,
 )
-from translit._enums import Script
+from disarm._enums import Script
 
 # ─── Full confusable pair tables (mirrors confusables_data.rs) ──────────
 
@@ -104,8 +104,8 @@ class TestNormalizeConfusables:
         assert normalize_confusables(text) == text
 
     def test_unsupported_target_raises(self) -> None:
-        """Unsupported target_script values raise TranslitError."""
-        with pytest.raises(TranslitError, match="target_script must be"):
+        """Unsupported target_script values raise DisarmError."""
+        with pytest.raises(DisarmError, match="target_script must be"):
             normalize_confusables("hello", target_script="greek")
 
     def test_cyrillic_target_basic(self) -> None:
@@ -204,19 +204,19 @@ class TestDigitVariantsFoldToDigits:
     """Compatibility digit variants fold to ASCII digits, not look-alike letters (#89)."""
 
     def test_math_digits_normalize_to_digits(self):
-        from translit import normalize_confusables
+        from disarm import normalize_confusables
 
         # All five Mathematical font families: 0/1 must not become O/l.
         for fam in ["𝟏𝟎", "𝟙𝟘", "𝟣𝟢", "𝟭𝟬", "𝟷𝟶"]:
             assert normalize_confusables(fam, target_script="latin") == "10"
 
     def test_strip_obfuscation_preserves_digits(self):
-        from translit import strip_obfuscation
+        from disarm import strip_obfuscation
 
         assert strip_obfuscation("𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗𝟎") == "1234567890"
 
     def test_math_digits_still_detected_as_confusable(self):
-        from translit import is_confusable
+        from disarm import is_confusable
 
         assert is_confusable("𝟏") is True  # folds to a digit, but still confusable
 
@@ -229,7 +229,7 @@ class TestNFKCConfusablesComposition:
     def test_long_s_resolves_via_nfkc_in_presets(self):
         import unicodedata
 
-        from translit import catalog_key, security_clean
+        from disarm import catalog_key, security_clean
 
         # ſ (U+017F): NFKC→s, but the TR39 confusable target is 'f'. In the preset
         # pipeline NFKC runs first, so it must become 's', never 'f'.
@@ -245,7 +245,7 @@ class TestNFKCConfusablesComposition:
         # would fail this test.
         import unicodedata
 
-        from translit import normalize_confusables
+        from disarm import normalize_confusables
 
         remapped = {}
         for cp in range(0x20, 0x10000):

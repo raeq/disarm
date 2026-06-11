@@ -4,78 +4,78 @@ Functions that transform text. All are pure functions — they never mutate the 
 
 ## transliterate
 
-::: translit.transliterate
+::: disarm.transliterate
 
 ---
 
 ## slugify
 
-::: translit.slugify
+::: disarm.slugify
 
 ---
 
 ## normalize
 
-::: translit.normalize
+::: disarm.normalize
 
 ---
 
 ## normalize_confusables
 
-::: translit.normalize_confusables
+::: disarm.normalize_confusables
 
 ---
 
 ## sanitize_filename
 
-::: translit.sanitize_filename
+::: disarm.sanitize_filename
 
 ---
 
 ## strip_accents
 
-::: translit.strip_accents
+::: disarm.strip_accents
 
 ---
 
 ## fold_case
 
-::: translit.fold_case
+::: disarm.fold_case
 
 ---
 
 ## collapse_whitespace
 
-::: translit.collapse_whitespace
+::: disarm.collapse_whitespace
 
 ---
 
 ## demojize
 
-::: translit.demojize
+::: disarm.demojize
 
 ---
 
 ## set_emoji_provider
 
-::: translit.set_emoji_provider
+::: disarm.set_emoji_provider
 
 ---
 
 ## strip_bidi
 
-::: translit.strip_bidi
+::: disarm.strip_bidi
 
 ---
 
 ## strip_zalgo
 
-::: translit.strip_zalgo
+::: disarm.strip_zalgo
 
 Caps the number of combining marks per base character, preserving legitimate diacritics (é, ñ, ệ) while removing zalgo stacking abuse.
 
 ```python
-from translit import strip_zalgo
+from disarm import strip_zalgo
 
 assert strip_zalgo("café") == 'café'
 assert strip_zalgo("Việt Nam") == 'Việt Nam'
@@ -93,7 +93,7 @@ assert strip_zalgo("café", max_marks=0) == 'cafe'
 Two `transliterate` modes are the exception and instead process a list item by item: reverse transliteration (`target=...`) and context-aware transliteration (`context=True`).
 
 ```python
-from translit import transliterate, slugify
+from disarm import transliterate, slugify
 
 titles = ["café résumé", "Straße nach München", "Москва"]
 
@@ -116,7 +116,7 @@ The following aliases are provided for migration convenience:
 | `remove_accents` | `strip_accents` | sklearn / ML ecosystems |
 
 ```python
-from translit import unidecode, casefold, remove_accents
+from disarm import unidecode, casefold, remove_accents
 
 assert unidecode("café") == 'cafe'
 assert casefold("Straße") == 'strasse'

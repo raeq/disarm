@@ -8,7 +8,7 @@
 //! The one cross-language limit, [`crate::MAX_BATCH_SIZE`] (re-exported to
 //! Python as `_MAX_BATCH_SIZE`, #200), stays in `lib.rs` because it must be
 //! kept consistent with the binding. The lone Python-only limit,
-//! `_MAX_GRAPHEME_SPLIT_INPUT` (`python/translit/_api.py`), has no Rust
+//! `_MAX_GRAPHEME_SPLIT_INPUT` (`python/disarm/_api.py`), has no Rust
 //! counterpart by design (it bounds a binding-side grapheme split) and is
 //! tracked there.
 
@@ -45,7 +45,7 @@ pub const MAX_REGEX_DFA_BYTES: usize = 1_048_576; // 1 MiB
 
 /// Maximum output size, in bytes, of the global replacement pre-pass.
 ///
-/// translit does not cap raw input size — bounding untrusted input is the
+/// disarm does not cap raw input size — bounding untrusted input is the
 /// caller's responsibility (all operations are linear time/memory; see #80).
 /// This bound is the one exception: registered replacement *values* are
 /// caller-supplied and unbounded, so a tiny input can expand to an enormous

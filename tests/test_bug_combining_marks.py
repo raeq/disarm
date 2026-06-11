@@ -8,7 +8,7 @@ for the combining mark component.
 
 from __future__ import annotations
 
-from translit import transliterate
+from disarm import transliterate
 
 
 class TestCombiningMarksNotReplaced:

@@ -4,10 +4,10 @@ Functions for detecting and converting byte sequences to UTF-8. Uses the chardet
 
 ## detect_encoding
 
-::: translit.detect_encoding
+::: disarm.detect_encoding
 
 ```python
-from translit import detect_encoding
+from disarm import detect_encoding
 
 enc, confidence = detect_encoding(b"Hello World")
 # enc = "UTF-8", confidence = 0.95
@@ -27,10 +27,10 @@ enc, confidence = detect_encoding("café".encode("windows-1252"))
 
 ## decode_to_utf8
 
-::: translit.decode_to_utf8
+::: disarm.decode_to_utf8
 
 ```python
-from translit import decode_to_utf8
+from disarm import decode_to_utf8
 
 # Explicit encoding
 text, had_errors = decode_to_utf8(b"caf\xe9", "windows-1252")
@@ -43,7 +43,7 @@ text, had_errors = decode_to_utf8(raw_bytes)
 # any value > 0.95 refuses auto-detection outright (use 1.0 to require an
 # explicit encoding); any value <= 0.95 (the 0.95 default) accepts every guess.
 text, had_errors = decode_to_utf8(raw_bytes, min_confidence=1.0)
-# Raises TranslitError: detection's fixed 0.95 is below the required 1.0
+# Raises DisarmError: detection's fixed 0.95 is below the required 1.0
 ```
 
 `had_errors=False` is not a fidelity guarantee — windows-1252 and other single-byte encodings map every byte to a codepoint without inserting U+FFFD, so a wrong-encoding decode yields mojibake with `had_errors=False`. Pass `strict=True` to raise on U+FFFD insertion, but prefer explicit encoding metadata for critical data.

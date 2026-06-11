@@ -1,14 +1,14 @@
 """Precompiled pipeline presets and named policy profiles.
 
-These compose the public transforms in :mod:`translit._api` (and the Rust
+These compose the public transforms in :mod:`disarm._api` (and the Rust
 backend) into ready-made canonicalization pipelines.  Re-exported from the
-``translit`` package root.
+``disarm`` package root.
 """
 
 from __future__ import annotations
 
-from translit._api import TextPipeline
-from translit._translit import (
+from disarm._api import TextPipeline
+from disarm._disarm import (
     _catalog_key,
     _display_clean,
     _get_pipeline,
@@ -76,7 +76,7 @@ def ml_normalize(
 
     Raises:
         InvalidArgumentError: If *emoji* is not ``"cldr"`` or ``"none"``.
-        TranslitError: If an internal Rust error occurs (base of the above).
+        DisarmError: If an internal Rust error occurs (base of the above).
 
     Examples:
         >>> ml_normalize("Café RÉSUMÉ")
@@ -109,7 +109,7 @@ def catalog_key(
         Canonical deduplication key string.
 
     Raises:
-        TranslitError: If an internal Rust error occurs.
+        DisarmError: If an internal Rust error occurs.
 
     Examples:
         >>> catalog_key("  Café  RÉSUMÉ  ")

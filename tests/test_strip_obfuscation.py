@@ -8,7 +8,7 @@ NFKC → strip_zalgo(max_marks=0) → strip_bidi → strip_zero_width
 
 from __future__ import annotations
 
-from translit import strip_obfuscation
+from disarm import strip_obfuscation
 
 
 class TestStripObfuscationBasic:

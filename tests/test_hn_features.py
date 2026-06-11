@@ -3,8 +3,8 @@ hostname safety, NFC in filenames, and encoding detection."""
 
 import pytest
 
-from translit import (
-    TranslitError,
+from disarm import (
+    DisarmError,
     decode_to_utf8,
     detect_encoding,
     grapheme_len,
@@ -252,7 +252,7 @@ class TestDecodeToUtf8:
         assert text == "hello world"
 
     def test_unknown_encoding_raises(self) -> None:
-        with pytest.raises(TranslitError):
+        with pytest.raises(DisarmError):
             decode_to_utf8(b"test", encoding="FAKE-999")
 
     def test_lossy_decode(self) -> None:

@@ -3,7 +3,7 @@
 ## Script
 
 ```python
-from translit import Script
+from disarm import Script
 ```
 
 Enum of Unicode script identifiers returned by `detect_scripts()`.
@@ -118,7 +118,7 @@ Enum of Unicode script identifiers returned by `detect_scripts()`.
 ## NF
 
 ```python
-from translit import NF
+from disarm import NF
 ```
 
 Enum of Unicode normalization forms.
@@ -133,7 +133,7 @@ Enum of Unicode normalization forms.
 ## EmojiProvider
 
 ```python
-from translit import EmojiProvider
+from disarm import EmojiProvider
 ```
 
 Protocol for custom emoji name providers. Implement this to supply your own emoji-to-text mappings for `demojize()` and `set_emoji_provider()`.
@@ -144,7 +144,7 @@ class FrenchEmoji:
         table = {(0x1F600,): "visage souriant"}
         return table.get(tuple(sequence))
 
-from translit import demojize
+from disarm import demojize
 demojize("hello 😀", provider=FrenchEmoji())
 ```
 
@@ -158,7 +158,7 @@ The `sequence` argument is a list of Unicode codepoints forming the emoji (e.g.,
 
 ## Type aliases
 
-Defined in `translit._types`:
+Defined in `disarm._types`:
 
 ### ErrorMode
 
@@ -198,7 +198,7 @@ Unicode normalization form identifier.
 Pre-defined string constants for language codes:
 
 ```python
-from translit import LANG_DE, LANG_FR, LANG_ES  # etc.
+from disarm import LANG_DE, LANG_FR, LANG_ES  # etc.
 ```
 
 ### European
@@ -244,7 +244,7 @@ from translit import LANG_DE, LANG_FR, LANG_ES  # etc.
 ## Introspection
 
 ```python
-from translit import list_langs, list_scripts
+from disarm import list_langs, list_scripts
 
 assert list_langs() == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
 assert list_scripts() == ['Arabic', 'Armenian', 'Balinese', 'Bamum', 'Bengali', 'Buginese', 'CanadianAboriginal', 'Cham', 'Cherokee', 'Common', 'Coptic', 'Cuneiform', 'Cyrillic', 'Devanagari', 'Ethiopic', 'Georgian', 'Gothic', 'Greek', 'Gujarati', 'Gurmukhi', 'Han', 'Hangul', 'Hebrew', 'Hiragana', 'Inherited', 'Javanese', 'Kannada', 'Katakana', 'Khmer', 'Lao', 'Latin', 'LinearB', 'Lisu', 'Malayalam', 'MeeteiMayek', 'Mongolian', 'Myanmar', 'NKo', 'NewTaiLue', 'Ogham', 'OlChiki', 'OldPersian', 'Oriya', 'Runic', 'Sinhala', 'Sundanese', 'Syriac', 'Tagalog', 'TaiLe', 'TaiTham', 'Tamil', 'Telugu', 'Thaana', 'Thai', 'Tibetan', 'Tifinagh', 'Vai']

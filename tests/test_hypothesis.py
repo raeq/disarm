@@ -1,4 +1,4 @@
-"""Property-based tests for translit using Hypothesis.
+"""Property-based tests for disarm using Hypothesis.
 
 These tests verify fundamental invariants of Unicode text processing
 operations that hold across the entire input space, not just selected
@@ -14,7 +14,7 @@ from conftest import nf_forms, unicode_text
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from translit import (
+from disarm import (
     UniqueSlugifier,
     collapse_whitespace,
     fold_case,

@@ -4,12 +4,12 @@ Functions for querying and extending transliteration language profiles.
 
 ## list_langs
 
-::: translit.list_langs
+::: disarm.list_langs
 
 ### Example
 
 ```python
-from translit import list_langs
+from disarm import list_langs
 
 langs = list_langs()
 assert langs == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
@@ -24,12 +24,12 @@ Returns both built-in and user-registered language codes, sorted alphabetically.
 
 ## register_lang
 
-::: translit.register_lang
+::: disarm.register_lang
 
 ### Example
 
 ```python
-from translit import register_lang, transliterate
+from disarm import register_lang, transliterate
 
 register_lang("eo", {
     "ĉ": "cx", "ĝ": "gx", "ĥ": "hx",
@@ -39,7 +39,7 @@ register_lang("eo", {
 assert transliterate("ĉapelo", lang="eo") == 'cxapelo'
 
 # Verify registration
-from translit import list_langs
+from disarm import list_langs
 assert "eo" in list_langs()
 ```
 
@@ -50,12 +50,12 @@ assert "eo" in list_langs()
 
 ## register_replacements
 
-::: translit.register_replacements
+::: disarm.register_replacements
 
 ### Example
 
 ```python
-from translit import register_replacements, transliterate
+from disarm import register_replacements, transliterate
 
 register_replacements({
     "©": "(c)",
@@ -72,12 +72,12 @@ Replacements are applied as a pre-processing step before the character-by-charac
 
 ## remove_replacement
 
-::: translit.remove_replacement
+::: disarm.remove_replacement
 
 ### Example
 
 ```python
-from translit import register_replacements, remove_replacement, transliterate
+from disarm import register_replacements, remove_replacement, transliterate
 
 register_replacements({"©": "(c)", "®": "(R)"})
 assert transliterate("©®") == '(c)(R)'
@@ -91,12 +91,12 @@ assert transliterate("©®") == '(c)(R)'
 
 ## clear_replacements
 
-::: translit.clear_replacements
+::: disarm.clear_replacements
 
 ### Example
 
 ```python
-from translit import register_replacements, clear_replacements, transliterate
+from disarm import register_replacements, clear_replacements, transliterate
 
 register_replacements({"©": "(c)", "®": "(R)"})
 assert transliterate("©®") == '(c)(R)'

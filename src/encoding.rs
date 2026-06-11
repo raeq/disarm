@@ -168,7 +168,7 @@ pub fn _detect_encoding(data: &Bound<'_, PyBytes>) -> (String, f64) {
 ///
 /// If encoding is None, uses detect_encoding to guess the encoding.
 /// min_confidence (0.0–1.0) sets the minimum acceptable detection confidence
-/// when auto-detecting; raises TranslitError if the threshold is not met.
+/// when auto-detecting; raises DisarmError if the threshold is not met.
 ///
 /// Supported encodings: all WHATWG encodings (UTF-8, windows-1252,
 /// ISO-8859-1, Shift_JIS, EUC-JP, EUC-KR, Big5, GB18030, etc.).

@@ -14,7 +14,7 @@ The fix is twofold:
 
 from __future__ import annotations
 
-from translit import (
+from disarm import (
     TextPipeline,
     catalog_key,
     normalize_confusables,

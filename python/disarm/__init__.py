@@ -1,4 +1,4 @@
-"""translit: Fast Unicode transliteration, slugification, and text normalization."""
+"""disarm: Fast Unicode transliteration, slugification, and text normalization."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ import types as _stdlib_types
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _dist_version
 
-# The public transform functions and stateful classes live in translit._api;
-# the precompiled pipeline presets live in translit._presets. They are imported
+# The public transform functions and stateful classes live in disarm._api;
+# the precompiled pipeline presets live in disarm._presets. They are imported
 # explicitly (not via ``import *``) so every name in ``__all__`` is an explicit
 # re-export under ``mypy --strict`` (no_implicit_reexport).
-from translit._api import (
+from disarm._api import (
     CachedTransliterator,
     Slugifier,
     TextPipeline,
@@ -58,11 +58,18 @@ from translit._api import (
     terminal_width,
     transliterate,
 )
+from disarm._disarm import (
+    DisarmError,
+    InvalidArgumentError,
+    ResourceLimitError,
+    SafeHostnameDetails,
+    UnsupportedError,
+)
 
 # Enums, type aliases, protocols and the exception are re-exported from their
 # source modules explicitly so that, under ``mypy --strict``
 # (no_implicit_reexport), every name in ``__all__`` is an explicit re-export.
-from translit._enums import (
+from disarm._enums import (
     LANG_AM,
     LANG_AR,
     LANG_AS,
@@ -151,7 +158,7 @@ from translit._enums import (
     Script,
     ScriptMeta,
 )
-from translit._presets import (
+from disarm._presets import (
     PRESETS,
     catalog_key,
     display_clean,
@@ -167,25 +174,18 @@ from translit._presets import (
     strip_obfuscation,
     strip_zalgo,
 )
-from translit._translit import (
-    InvalidArgumentError,
-    ResourceLimitError,
-    SafeHostnameDetails,
-    TranslitError,
-    UnsupportedError,
-)
-from translit._types import NF, EmojiProvider, TransliterateErrorMode
+from disarm._types import NF, EmojiProvider, TransliterateErrorMode
 
 # --- Package version (single source of truth: the installed distribution's metadata,
-#     so `translit.__version__` always tracks the wheel the user actually has) ---
+#     so `disarm.__version__` always tracks the wheel the user actually has) ---
 try:
-    __version__ = _dist_version("translit-rs")
+    __version__ = _dist_version("disarm")
 except _PackageNotFoundError:  # pragma: no cover - source checkout without an install
     __version__ = "0.0.0+unknown"
 
 # --- Compatibility aliases ---
 
-from translit._compat import (  # noqa: E402, F401
+from disarm._compat import (  # noqa: E402, F401
     Slugify,
     UniqueSlugify,
     ascii_fold,
@@ -197,7 +197,7 @@ from translit._compat import (  # noqa: E402, F401
     slugify_url,
     unidecode,
 )
-from translit._text import Text  # noqa: E402
+from disarm._text import Text  # noqa: E402
 
 # --- Public API ---
 
@@ -381,19 +381,19 @@ __all__ = [
     "slugify_de",
     "slugify_el",
     # Exception
-    "TranslitError",
+    "DisarmError",
     "InvalidArgumentError",
     "ResourceLimitError",
     "UnsupportedError",
 ]
 
 # ---------------------------------------------------------------------------
-# Make the module itself callable: import translit; translit("Москва")
+# Make the module itself callable: import disarm; disarm("Москва")
 # ---------------------------------------------------------------------------
 
 
 class _CallableModule(_stdlib_types.ModuleType):
-    """Make ``import translit; translit(...)`` a shorthand for ``transliterate()``."""
+    """Make ``import disarm; disarm(...)`` a shorthand for ``transliterate()``."""
 
     # #125: explicit parameter list matches transliterate() overloads so that
     # type-checkers can detect unknown kwargs on _CallableModule-typed variables.

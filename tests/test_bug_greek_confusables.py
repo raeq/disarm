@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from translit import normalize_confusables, strip_obfuscation
+from disarm import normalize_confusables, strip_obfuscation
 
 
 class TestGreekVisualConfusables:

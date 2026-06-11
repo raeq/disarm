@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from translit import (
+from disarm import (
     clear_replacements,
     register_replacements,
     remove_replacement,

@@ -1,8 +1,8 @@
-"""Fluent text-processing builder for translit.
+"""Fluent text-processing builder for disarm.
 
 Usage::
 
-    from translit import Text
+    from disarm import Text
 
     result = (Text("  Héllo   Straße  ")
         .normalize(form="NFC")
@@ -24,8 +24,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from translit._enums import Script
-    from translit._types import (
+    from disarm._enums import Script
+    from disarm._types import (
         EmojiProvider,
         ErrorMode,
         NormalizationForm,
@@ -35,14 +35,14 @@ if TYPE_CHECKING:
 
 
 def _get_translit():
-    """Lazy-load the translit module once, then cache on the class.
+    """Lazy-load the disarm module once, then cache on the class.
 
     The import is deferred rather than top-level to avoid a circular dependency:
-    ``translit.__init__`` imports ``Text`` from this module (``translit._text``),
-    so importing ``translit`` at module-load time here would create a circular
+    ``disarm.__init__`` imports ``Text`` from this module (``disarm._text``),
+    so importing ``disarm`` at module-load time here would create a circular
     import.  (#127)
     """
-    return importlib.import_module("translit")
+    return importlib.import_module("disarm")
 
 
 class Text:
@@ -52,7 +52,7 @@ class Text:
     or ``str()``.
 
     Examples:
-        >>> from translit import Text
+        >>> from disarm import Text
         >>> Text("Straße").fold_case().value
         'strasse'
         >>> Text("  hello   world  ").collapse_whitespace().value
@@ -196,7 +196,7 @@ class Text:
 
         ``default`` is the fallback when the slug would be empty; it is
         sanitized through the same slug pipeline before being returned (#169,
-        #193). See :func:`translit.slugify`.
+        #193). See :func:`disarm.slugify`.
         """
         return Text(
             self._t().slugify(

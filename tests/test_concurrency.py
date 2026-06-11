@@ -9,17 +9,17 @@ from __future__ import annotations
 
 import threading
 
-import translit
+import disarm
 
 
 def _transliterate_many(lang: str | None, texts: list[str], results: list[str]) -> None:
     for text in texts:
-        results.append(translit.transliterate(text, lang=lang))
+        results.append(disarm.transliterate(text, lang=lang))
 
 
 def _register_and_lookup(code: str, mapping: dict[str, str], char: str, out: list[str]) -> None:
-    translit.register_lang(code, mapping)
-    result = translit.transliterate(char, lang=code)
+    disarm.register_lang(code, mapping)
+    result = disarm.transliterate(char, lang=code)
     out.append(result)
 
 
@@ -99,11 +99,11 @@ class TestConcurrentLangRegistration:
         def reader() -> None:
             # Keep reading until the writer finishes
             for _ in range(100):
-                read_results.append(translit.transliterate("café"))
+                read_results.append(disarm.transliterate("café"))
             write_done.wait(timeout=5.0)
 
         def writer() -> None:
-            translit.register_lang("_conc_writer_test", {"ß": "ss"})
+            disarm.register_lang("_conc_writer_test", {"ß": "ss"})
             write_done.set()
 
         t_reader = threading.Thread(target=reader)
@@ -122,65 +122,65 @@ class TestMalformedUnicodeInput:
     """Transliteration with edge-case Unicode inputs."""
 
     def test_empty_string(self) -> None:
-        assert translit.transliterate("") == ""
+        assert disarm.transliterate("") == ""
 
     def test_lone_combining_mark(self) -> None:
         # Combining acute accent without a base character
-        result = translit.transliterate("\u0301")
+        result = disarm.transliterate("\u0301")
         assert isinstance(result, str)
 
     def test_zero_width_characters(self) -> None:
         # Zero-width non-joiner, zero-width joiner, zero-width space
         for zwc in ["\u200c", "\u200d", "\u200b"]:
-            result = translit.transliterate(zwc)
+            result = disarm.transliterate(zwc)
             assert isinstance(result, str)
 
     def test_bidi_override_characters(self) -> None:
         # Right-to-left override, left-to-right override
         for bidi in ["\u202e", "\u202d"]:
-            result = translit.transliterate(bidi)
+            result = disarm.transliterate(bidi)
             assert isinstance(result, str)
 
     def test_null_character(self) -> None:
-        result = translit.transliterate("a\x00b")
+        result = disarm.transliterate("a\x00b")
         assert isinstance(result, str)
 
     def test_private_use_area(self) -> None:
         # Private Use Area codepoints have no defined transliteration
-        result = translit.transliterate("\ue000\uf8ff", errors="ignore")
+        result = disarm.transliterate("\ue000\uf8ff", errors="ignore")
         assert isinstance(result, str)
 
     def test_surrogate_range_as_replacement(self) -> None:
         # Python str cannot contain lone surrogates; test near-surrogate edge
         near_surrogate = "\ud7ff"  # just below surrogate range
-        result = translit.transliterate(near_surrogate, errors="replace")
+        result = disarm.transliterate(near_surrogate, errors="replace")
         assert isinstance(result, str)
 
     def test_noncharacters(self) -> None:
         # Unicode noncharacters (U+FFFE, U+FFFF)
         for nc in ["\ufffe", "\uffff"]:
-            result = translit.transliterate(nc, errors="preserve")
+            result = disarm.transliterate(nc, errors="preserve")
             assert isinstance(result, str)
 
     def test_high_plane_cjk_extension_b(self) -> None:
         # CJK Extension B (U+20000) — not in default tables, should use error mode
         ch = "\U00020000"
-        result = translit.transliterate(ch, errors="ignore")
+        result = disarm.transliterate(ch, errors="ignore")
         assert result == ""
-        result_preserve = translit.transliterate(ch, errors="preserve")
+        result_preserve = disarm.transliterate(ch, errors="preserve")
         assert result_preserve == ch
 
     def test_very_long_cjk_string(self) -> None:
         # Stress the CJK capacity estimation path
         long_cjk = "北京" * 500
-        result = translit.transliterate(long_cjk)
+        result = disarm.transliterate(long_cjk)
         assert "bei" in result
         assert "jing" in result
 
     def test_mixed_scripts_all_at_once(self) -> None:
         # Latin + Cyrillic + CJK + Hangul + Arabic in one string
         mixed = "Hello Москва 北京 서울 مرحبا"
-        result = translit.transliterate(mixed)
+        result = disarm.transliterate(mixed)
         assert isinstance(result, str)
         assert result.isascii() or any(c.isalpha() for c in result)
 
@@ -194,7 +194,7 @@ import time  # noqa: E402
 
 import pytest  # noqa: E402
 
-from translit import normalize, slugify, transliterate  # noqa: E402
+from disarm import normalize, slugify, transliterate  # noqa: E402
 
 # A batch big enough that the Rust compute dominates thread/setup overhead.
 _BIG = ["Москва Αθήνα 北京 café résumé" * 20] * 40_000

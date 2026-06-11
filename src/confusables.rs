@@ -25,7 +25,7 @@ fn validate_target_script(target_script: &str) -> Result<(), crate::Error> {
 /// See: <https://paultendo.github.io/posts/unicode-confusables-nfkc-conflict/>
 ///
 /// # Valid `target_script` values
-/// Currently only `"latin"` is supported. Any other value raises `TranslitError`.
+/// Currently only `"latin"` is supported. Any other value raises `DisarmError`.
 #[pyfunction]
 #[pyo3(signature = (text, *, target_script="latin"))]
 pub fn _normalize_confusables(text: &str, target_script: &str) -> PyResult<String> {
@@ -65,7 +65,7 @@ pub fn normalize_confusables_into(
 /// True if text contains any characters confusable with target-script characters.
 ///
 /// # Valid `target_script` values
-/// Currently only `"latin"` is supported. Any other value raises `TranslitError`.
+/// Currently only `"latin"` is supported. Any other value raises `DisarmError`.
 #[pyfunction]
 #[pyo3(signature = (text, *, target_script="latin"))]
 pub fn _is_confusable(text: &str, target_script: &str) -> PyResult<bool> {

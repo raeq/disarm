@@ -1,4 +1,4 @@
-"""Fuzz tests using Hypothesis for translit edge cases.
+"""Fuzz tests using Hypothesis for disarm edge cases.
 
 Targets: entity decoder (via slugify), encoding detection/decoding,
 emoji parsing (via demojize), and transliteration with random Unicode.
@@ -10,7 +10,7 @@ import hypothesis.strategies as st
 import pytest
 from hypothesis import HealthCheck, given, settings
 
-import translit
+import disarm
 
 pytestmark = pytest.mark.hypothesis
 
@@ -52,19 +52,19 @@ class TestTransliterateFuzz:
     @given(text=full_unicode)
     @settings(max_examples=500, suppress_health_check=[HealthCheck.too_slow])
     def test_never_panics(self, text: str) -> None:
-        result = translit.transliterate(text)
+        result = disarm.transliterate(text)
         assert isinstance(result, str)
 
     @given(text=full_unicode)
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_errors_ignore_never_panics(self, text: str) -> None:
-        result = translit.transliterate(text, errors="ignore")
+        result = disarm.transliterate(text, errors="ignore")
         assert isinstance(result, str)
 
     @given(text=full_unicode)
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_errors_preserve_never_panics(self, text: str) -> None:
-        result = translit.transliterate(text, errors="preserve")
+        result = disarm.transliterate(text, errors="preserve")
         assert isinstance(result, str)
 
 
@@ -79,13 +79,13 @@ class TestSlugifyFuzz:
     @given(text=full_unicode)
     @settings(max_examples=500, suppress_health_check=[HealthCheck.too_slow])
     def test_never_panics(self, text: str) -> None:
-        result = translit.slugify(text)
+        result = disarm.slugify(text)
         assert isinstance(result, str)
 
     @given(text=html_entity_text)
     @settings(max_examples=300, suppress_health_check=[HealthCheck.too_slow])
     def test_entity_patterns(self, text: str) -> None:
-        result = translit.slugify(text, entities=True, decimal=True, hexadecimal=True)
+        result = disarm.slugify(text, entities=True, decimal=True, hexadecimal=True)
         assert isinstance(result, str)
 
     @given(
@@ -95,7 +95,7 @@ class TestSlugifyFuzz:
     )
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_with_options(self, text: str, sep: str, max_len: int) -> None:
-        result = translit.slugify(text, separator=sep, max_length=max_len)
+        result = disarm.slugify(text, separator=sep, max_length=max_len)
         assert isinstance(result, str)
         if max_len > 0:
             assert len(result) <= max_len
@@ -112,7 +112,7 @@ class TestEncodingFuzz:
     @given(data=random_bytes)
     @settings(max_examples=500, suppress_health_check=[HealthCheck.too_slow])
     def test_detect_never_panics(self, data: bytes) -> None:
-        enc, conf = translit.detect_encoding(data)
+        enc, conf = disarm.detect_encoding(data)
         assert isinstance(enc, str)
         assert isinstance(conf, float)
         assert 0.0 <= conf <= 1.0
@@ -120,7 +120,7 @@ class TestEncodingFuzz:
     @given(data=random_bytes)
     @settings(max_examples=300, suppress_health_check=[HealthCheck.too_slow])
     def test_decode_auto_never_panics(self, data: bytes) -> None:
-        text, had_errors = translit.decode_to_utf8(data)
+        text, had_errors = disarm.decode_to_utf8(data)
         assert isinstance(text, str)
         assert isinstance(had_errors, bool)
 
@@ -141,7 +141,7 @@ class TestEncodingFuzz:
     )
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_decode_with_encoding_never_panics(self, data: bytes, encoding: str) -> None:
-        text, had_errors = translit.decode_to_utf8(data, encoding=encoding)
+        text, had_errors = disarm.decode_to_utf8(data, encoding=encoding)
         assert isinstance(text, str)
         assert isinstance(had_errors, bool)
 
@@ -157,13 +157,13 @@ class TestDemojizeFuzz:
     @given(text=full_unicode)
     @settings(max_examples=300, suppress_health_check=[HealthCheck.too_slow])
     def test_never_panics(self, text: str) -> None:
-        result = translit.demojize(text)
+        result = disarm.demojize(text)
         assert isinstance(result, str)
 
     @given(text=full_unicode)
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_strip_modifiers_never_panics(self, text: str) -> None:
-        result = translit.demojize(text, strip_modifiers=True)
+        result = disarm.demojize(text, strip_modifiers=True)
         assert isinstance(result, str)
 
 
@@ -178,19 +178,19 @@ class TestPipelineFuzz:
     @given(text=full_unicode)
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_security_clean_never_panics(self, text: str) -> None:
-        result = translit.security_clean(text)
+        result = disarm.security_clean(text)
         assert isinstance(result, str)
 
     @given(text=full_unicode)
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_ml_normalize_never_panics(self, text: str) -> None:
-        result = translit.ml_normalize(text)
+        result = disarm.ml_normalize(text)
         assert isinstance(result, str)
 
     @given(text=full_unicode)
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_display_clean_never_panics(self, text: str) -> None:
-        result = translit.display_clean(text)
+        result = disarm.display_clean(text)
         assert isinstance(result, str)
 
 
@@ -205,7 +205,7 @@ class TestFilenameFuzz:
     @given(text=full_unicode)
     @settings(max_examples=300, suppress_health_check=[HealthCheck.too_slow])
     def test_never_panics(self, text: str) -> None:
-        result = translit.sanitize_filename(text)
+        result = disarm.sanitize_filename(text)
         assert isinstance(result, str)
         # Must not contain path separators
         assert "/" not in result
@@ -225,14 +225,14 @@ class TestGraphemeFuzz:
     @given(text=full_unicode)
     @settings(max_examples=300, suppress_health_check=[HealthCheck.too_slow])
     def test_grapheme_len_never_panics(self, text: str) -> None:
-        n = translit.grapheme_len(text)
+        n = disarm.grapheme_len(text)
         assert isinstance(n, int)
         assert n >= 0
 
     @given(text=full_unicode)
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_grapheme_split_never_panics(self, text: str) -> None:
-        parts = translit.grapheme_split(text)
+        parts = disarm.grapheme_split(text)
         assert isinstance(parts, list)
         # Rejoin must equal original
         assert "".join(parts) == text
@@ -240,6 +240,6 @@ class TestGraphemeFuzz:
     @given(text=full_unicode, n=st.integers(min_value=0, max_value=100))
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_grapheme_truncate_never_panics(self, text: str, n: int) -> None:
-        result = translit.grapheme_truncate(text, n)
+        result = disarm.grapheme_truncate(text, n)
         assert isinstance(result, str)
-        assert translit.grapheme_len(result) <= n
+        assert disarm.grapheme_len(result) <= n

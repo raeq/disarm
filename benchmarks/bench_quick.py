@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quick stdlib-only timing benchmarks for translit.
+"""Quick stdlib-only timing benchmarks for disarm.
 
 No external dependencies required (uses timeit from stdlib).
 For rigorous benchmarks with statistical analysis, use bench_pyperf.py.
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import timeit
 
-import translit
+import disarm
 
 # ---------------------------------------------------------------------------
 # Input corpus
@@ -37,7 +37,7 @@ def _bench(label: str, func, *, number: int = 50_000) -> None:
 
 def main() -> None:
     print("=" * 78)
-    print("translit quick benchmarks (timeit, 50k iterations)")
+    print("disarm quick benchmarks (timeit, 50k iterations)")
     print("=" * 78)
 
     # -- Transliteration --
@@ -45,20 +45,20 @@ def main() -> None:
     for name, text in INPUTS.items():
         if name == "slug_title":
             continue
-        _bench(f"transliterate/{name}", lambda t=text: translit.transliterate(t))
+        _bench(f"transliterate/{name}", lambda t=text: disarm.transliterate(t))
 
     # ASCII fast path
     _bench(
         "transliterate/ascii_fast_path",
-        lambda: translit.transliterate("pure ascii text no accents"),
+        lambda: disarm.transliterate("pure ascii text no accents"),
     )
 
     # -- Slugify --
     print("\n--- slugify ---")
-    _bench("slugify/default", lambda: translit.slugify(INPUTS["slug_title"]))
+    _bench("slugify/default", lambda: disarm.slugify(INPUTS["slug_title"]))
     _bench(
         "slugify/with_options",
-        lambda: translit.slugify(
+        lambda: disarm.slugify(
             INPUTS["slug_title"],
             separator="_",
             max_length=30,
@@ -73,37 +73,37 @@ def main() -> None:
         ("german", "GROSSE STRAßE"),
         ("mixed", "Hello Мир WORLD Straße"),
     ]:
-        _bench(f"fold_case/{name}", lambda t=text: translit.fold_case(t))
+        _bench(f"fold_case/{name}", lambda t=text: disarm.fold_case(t))
 
     # -- fold_case vs str.casefold --
     print("\n--- fold_case vs str.casefold() ---")
     text = "CAFÉ RÉSUMÉ NAÏVE ÅNGSTRÖM"
-    _bench("fold_case/translit", lambda: translit.fold_case(text))
+    _bench("fold_case/disarm", lambda: disarm.fold_case(text))
     _bench("fold_case/str.casefold()", lambda: text.casefold())
 
     # -- Precompiled pipelines --
     print("\n--- precompiled pipelines ---")
-    _bench("security_clean", lambda: translit.security_clean("Ηello Ꮤorld\u200b"))
-    _bench("ml_normalize", lambda: translit.ml_normalize("Café RÉSUMÉ"))
-    _bench("display_clean", lambda: translit.display_clean("hello\x00  world\u200b"))
+    _bench("security_clean", lambda: disarm.security_clean("Ηello Ꮤorld\u200b"))
+    _bench("ml_normalize", lambda: disarm.ml_normalize("Café RÉSUMÉ"))
+    _bench("display_clean", lambda: disarm.display_clean("hello\x00  world\u200b"))
 
     # -- Grapheme --
     print("\n--- grapheme ---")
     family = "\U0001f469\u200d\U0001f469\u200d\U0001f467\u200d\U0001f466"
-    _bench("grapheme_len/emoji", lambda: translit.grapheme_len(f"Hello {family}!"))
-    _bench("grapheme_len/ascii", lambda: translit.grapheme_len("hello world"))
+    _bench("grapheme_len/emoji", lambda: disarm.grapheme_len(f"Hello {family}!"))
+    _bench("grapheme_len/ascii", lambda: disarm.grapheme_len("hello world"))
 
     # -- List input vs loop --
     print("\n--- list input (100 strings) ---")
     batch = [INPUTS["latin_diacritics"]] * 100
     _bench(
         "transliterate(list)/100",
-        lambda: translit.transliterate(batch),
+        lambda: disarm.transliterate(batch),
         number=5_000,
     )
     _bench(
         "transliterate_loop/100",
-        lambda: [translit.transliterate(t) for t in batch],
+        lambda: [disarm.transliterate(t) for t in batch],
         number=5_000,
     )
 

@@ -18,10 +18,10 @@
 
 use std::hint::black_box;
 
-use _translit::case_fold::_fold_case;
-use _translit::slugify::{slugify_impl, SlugConfig};
-use _translit::transliterate::{_strip_accents, find_untranslatable_impl, transliterate_impl};
-use _translit::ErrorMode;
+use _disarm::case_fold::_fold_case;
+use _disarm::slugify::{slugify_impl, SlugConfig};
+use _disarm::transliterate::{_strip_accents, find_untranslatable_impl, transliterate_impl};
+use _disarm::ErrorMode;
 
 #[path = "../benchmarks/persona_corpus.rs"]
 mod persona_corpus;
@@ -46,7 +46,7 @@ fn print_fingerprint() {
     // All values are ASCII (hex digest, semver, arch/os consts) — no JSON
     // escaping needed.
     println!(
-        "{{\"corpus_digest\":\"{}\",\"translit_version\":\"{}\",\
+        "{{\"corpus_digest\":\"{}\",\"disarm_version\":\"{}\",\
          \"build_arch\":\"{}\",\"build_os\":\"{}\",\
          \"pointer_width_bits\":{},\"build_profile\":\"{}\"}}",
         persona_corpus::corpus_digest(),

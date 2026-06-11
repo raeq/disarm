@@ -5,7 +5,7 @@ claims, not just "a number." The governing rule (see issue #234, read body +
 thread as one unit): an absolute measurement `T(machine, version)` is confounded
 by *both* arguments, so **absolute timings never transfer across machines** —
 they are valid only same-machine, same-session, pre/post. The cross-run unit is
-a **ratio** (translit vs a pinned comparator, or PR vs merge-base), measured in
+a **ratio** (disarm vs a pinned comparator, or PR vs merge-base), measured in
 one session, and even then comparable only **within an identical fingerprint
 bucket** (same corpus, microarch, interpreter). Nothing absolute is ever
 committed; measurements live on the orphan `perf-results` branch keyed by the
@@ -33,8 +33,8 @@ numbers are FFI-dominated and must never gate a core cluster.
 | Signal | Metric | Scale | Validity | Role |
 |---|---|---|---|---|
 | iai-callgrind (`--cache-sim`) | **estimated cycles** | doc-scale subset | deterministic; machine-independent *within an ISA* | **hard gate** — may fail a PR (V10) |
-| translit(PR) vs translit(merge-base), interleaved one session | wall-clock | doc-scale | first-order noise-cancel; no comparator HW-sensitivity | **primary regression signal — flag only** (V13) |
-| translit vs pinned comparators, interleaved | wall-clock ratio | doc-scale, bucketed by microarch + CPython | cross-arch "claim" | **informational — flag only** (V14) |
+| disarm(PR) vs disarm(merge-base), interleaved one session | wall-clock | doc-scale | first-order noise-cancel; no comparator HW-sensitivity | **primary regression signal — flag only** (V13) |
+| disarm vs pinned comparators, interleaved | wall-clock ratio | doc-scale, bucketed by microarch + CPython | cross-arch "claim" | **informational — flag only** (V14) |
 | short-string per-call | wall-clock | short | FFI-dominated | **report-only; never a gate** (V15) |
 
 - The hard gate is **directional**: it fails only on regression beyond

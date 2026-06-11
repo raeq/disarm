@@ -6,7 +6,7 @@ because no separator is inserted between adjacent emoji-to-text replacements.
 
 from __future__ import annotations
 
-from translit import demojize, ml_normalize
+from disarm import demojize, ml_normalize
 
 
 class TestAdjacentEmojiSpacing:

@@ -1,6 +1,6 @@
 # Adversarial-text robustness — youtube-spam
 
-_translit 0.6.3; `strip_obfuscation`. Numbers reflect the current version and may differ from the historical baseline in the README as coverage grows._
+_disarm 0.6.3; `strip_obfuscation`. Numbers reflect the current version and may differ from the historical baseline in the README as coverage grows._
 
 - rows evaluated: **1956**
 - perturbation-bearing rows (contain non-ASCII): **80.8%** (1580/1956)

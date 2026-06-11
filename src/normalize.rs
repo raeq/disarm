@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use unicode_normalization::UnicodeNormalization;
 
-// translit does not cap input or output size — bounding untrusted input is the
+// disarm does not cap input or output size — bounding untrusted input is the
 // caller's responsibility (normalization is linear time/memory; see #80).
 
 /// Validate normalization form string. Returns an error for invalid forms.

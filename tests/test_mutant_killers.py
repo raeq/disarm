@@ -1,7 +1,7 @@
 """Tests targeting mutation testing survivors.
 
 These tests exist to kill mutants that survived the mutation testing run
-(mutmut on python/translit/__init__.py). Each test class targets a specific
+(mutmut on python/disarm/__init__.py). Each test class targets a specific
 category of survivor. Written to be run quarterly alongside mutmut.
 
 Categories covered:
@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import pytest
 
-import translit
-from translit import (
+import disarm
+from disarm import (
     PRESETS,
     TextPipeline,
     catalog_key,
@@ -572,12 +572,12 @@ class TestBoundaryChecks:
     def test_is_zalgo_threshold_exact(self):
         # 3 marks = exactly at default threshold
         text = "a\u0300\u0301\u0302"
-        result = translit.is_zalgo(text, threshold=3)
+        result = disarm.is_zalgo(text, threshold=3)
         assert isinstance(result, bool)
 
     def test_is_zalgo_below_threshold(self):
         text = "a\u0300\u0301"  # 2 marks
-        assert not translit.is_zalgo(text, threshold=3)
+        assert not disarm.is_zalgo(text, threshold=3)
 
     # -- Type validation (negative cases) --
 

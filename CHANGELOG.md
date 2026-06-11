@@ -3,12 +3,39 @@
 All notable changes to this project will be documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Version numbers use the `MAJOR.MINOR.PATCH` shape but follow translit's own
+Version numbers use the `MAJOR.MINOR.PATCH` shape but follow disarm's own
 [release policy](RELEASING.md) — patch = fixes/cleanups/docs, minor = features
 or major refactors, and the major component denotes **support status**, not API
 compatibility (see [RELEASING.md](RELEASING.md)).
 
+> **Project renamed `translit` → `disarm` (#264).** Historical entries below
+> predate the rename and refer to the old identity (`translit-rs` on PyPI, the
+> `translit` import package, the `_translit` native module); they are left
+> unchanged because they were accurate for their release. Entries from this
+> point on use the `disarm` identity.
+
 ## [Unreleased]
+
+### Changed
+
+- **Renamed the project from `translit` to `disarm`** (#264). This unifies the
+  distribution and import names under a single `disarm`:
+  - PyPI distribution `translit-rs` → `disarm`; `import translit` → `import disarm`.
+  - Native module `translit._translit` → `disarm._disarm`; crate `translit` → `disarm`.
+  - Console script `translit` → `disarm`.
+  - **Breaking:** the public base exception `TranslitError` → `DisarmError`
+    (the subclasses `InvalidArgumentError` / `ResourceLimitError` /
+    `UnsupportedError` keep their names). `DisarmError` remains a `ValueError`
+    subclass, so `except ValueError` keeps working.
+  - **Breaking:** the context-dictionary environment variable
+    `TRANSLIT_DICT_DIR` → `DISARM_DICT_DIR`.
+  - Canonical URLs moved to `https://disarm.dev` / `https://docs.disarm.dev`;
+    the repository moved to `https://github.com/raeq/disarm`.
+
+### Fixed
+
+- `uv.lock` now declares `requires-python = ">=3.10"`, matching `pyproject.toml`
+  (it had drifted to `>=3.9` after the 3.10 floor landed in #277).
 
 ## [0.8.1] — 2026-06-11
 

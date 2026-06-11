@@ -1,16 +1,18 @@
 [package]
-name = "translit"
+name = "disarm"
 version = "0.8.1"
 edition = "2021"
 rust-version = "1.80"
 license = "MIT"
 description = "Unicode canonicalization and TR39 confusable analysis: building blocks for text-security pipelines (homoglyph/bidi/zalgo handling) plus standards-based transliteration"
-repository = "https://github.com/raeq/translit"
+repository = "https://github.com/raeq/disarm"
+homepage = "https://disarm.dev"
+documentation = "https://docs.disarm.dev"
 keywords = ["unicode-security", "homoglyph", "confusable", "transliteration", "normalization"]
 categories = ["text-processing", "internationalization", "encoding"]
 
 [lib]
-name = "_translit"
+name = "_disarm"
 crate-type = ["cdylib", "lib"]
 
 [features]

@@ -2,7 +2,7 @@
 
 import pytest
 
-from translit import Slugifier, TextPipeline, inspect_auto_lang, slugify, transliterate
+from disarm import Slugifier, TextPipeline, inspect_auto_lang, slugify, transliterate
 
 
 class TestLangAutoDetection:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Transliterate-axis comparator ratio (#234 gate V14) — interleaved, median-of-reps.
 
-The cross-run-valid signal is a **ratio** of translit to a pinned comparator,
+The cross-run-valid signal is a **ratio** of disarm to a pinned comparator,
 measured **interleaved in one session** so both share the same instantaneous
 runner noise (which then cancels to first order). We take the **median** over
 several reps to shed outliers, and the result is only meaningful **bucketed by
@@ -24,7 +24,7 @@ import sys
 from collections.abc import Callable
 from time import perf_counter
 
-import translit
+import disarm
 
 # Comparators on the transliterate axis (NOT ftfy — V16). Imported lazily so a
 # missing optional comparator (e.g. uroman absent on <3.10) degrades to a skip.
@@ -83,13 +83,13 @@ def _time(fn: Callable[[str], str], objs: list[str]) -> float:
 
 
 def measure() -> dict[str, dict[str, float]]:
-    """Median translit/comparator throughput ratio per input, interleaved per rep."""
-    translit_fn: Callable[[str], str] = translit.transliterate
+    """Median disarm/comparator throughput ratio per input, interleaved per rep."""
+    translit_fn: Callable[[str], str] = disarm.transliterate
     comparators = {name: fn for name, src in _COMPARATORS.items() if (fn := _load(src))}
 
     out: dict[str, dict[str, float]] = {}
     for label, text in INPUTS.items():
-        # Per rep: time translit and each comparator back-to-back (interleaved),
+        # Per rep: time disarm and each comparator back-to-back (interleaved),
         # so a load spike hits both and cancels in the ratio.
         per_cmp: dict[str, list[float]] = {name: [] for name in comparators}
         for _ in range(REPS):
@@ -98,7 +98,7 @@ def measure() -> dict[str, dict[str, float]]:
             t_translit = _time(translit_fn, _fresh_copies(text))
             for name, fn in comparators.items():
                 t_cmp = _time(fn, _fresh_copies(text))
-                # ratio = how many x faster translit is than the comparator
+                # ratio = how many x faster disarm is than the comparator
                 per_cmp[name].append(t_cmp / t_translit if t_translit > 0 else float("nan"))
         out[label] = {name: round(statistics.median(rs), 3) for name, rs in per_cmp.items() if rs}
     return out
@@ -119,9 +119,7 @@ def main(argv: list[str]) -> int:
         print("no comparators installed — nothing to compare")
         return 0
     header = f"{'input':10s}" + "".join(f"{c:>16s}" for c in comparators)
-    print(
-        f"translit speed-up vs comparator (median of {REPS} interleaved reps; >1 = translit faster)"
-    )
+    print(f"disarm speed-up vs comparator (median of {REPS} interleaved reps; >1 = disarm faster)")
     print(header)
     print("-" * len(header))
     for label, row in ratios.items():

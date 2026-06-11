@@ -1,17 +1,17 @@
-# translit as a tokenizer preprocessing front-end
+# disarm as a tokenizer preprocessing front-end
 
 English-centric subword tokenizers over-fragment non-Latin scripts: the same
 sentence costs far more tokens in Hindi or Thai than in English, which raises
 inference cost and latency and produces uneven quality across languages. A fast,
 deterministic, dependency-free normalizer in front of the tokenizer is a cheap
-lever on that problem — and that is exactly the class of transform translit
+lever on that problem — and that is exactly the class of transform disarm
 already ships (`ml_normalize`, `transliterate`, normalization).
 
-This page positions translit for that **tokenizer-efficiency** use case and is
+This page positions disarm for that **tokenizer-efficiency** use case and is
 honest about where it helps and where it does not. For the guardrail-matching and
-RAG-ingestion recipes, see [Using translit in LLM pipelines](llm-pipelines.md);
+RAG-ingestion recipes, see [Using disarm in LLM pipelines](llm-pipelines.md);
 this page is the deterministic-preprocessing / token-fertility companion to it
-(both build on the [LLM pre-processing survey](https://github.com/raeq/translit/issues/133)).
+(both build on the [LLM pre-processing survey](https://github.com/raeq/disarm/issues/133)).
 Every snippet is [executed and asserted in CI](../CONTRIBUTING.md#doc-test-recipes).
 
 ## Why token fertility matters
@@ -27,7 +27,7 @@ cost, fairness, and cross-lingual transfer:
 
 ## Two deterministic levers
 
-translit offers two complementary front-end transforms. Both are O(1) PHF
+disarm offers two complementary front-end transforms. Both are O(1) PHF
 lookups with ASCII-or-script-stable output and no runtime dependencies.
 
 **Normalize, keep the script.** `ml_normalize` applies NFKC, folds emoji to
@@ -35,7 +35,7 @@ words, strips accents and case, and collapses whitespace — without romanizing,
 the script is preserved:
 
 ```python
-from translit import ml_normalize
+from disarm import ml_normalize
 
 assert ml_normalize("CAFÉ") == "cafe"
 assert ml_normalize("Привет") == "привет"        # stays Cyrillic, normalized
@@ -47,7 +47,7 @@ non-Latin scripts to a shared Latin representation, which tends to tokenize into
 fewer, pretrained-shared subwords:
 
 ```python
-from translit import transliterate, get_pipeline
+from disarm import transliterate, get_pipeline
 
 assert transliterate("नमस्ते") == "namaste"
 assert transliterate("Привет, мир") == "Privet, mir"
@@ -56,19 +56,19 @@ assert get_pipeline("rag_ingest")("Привет, мир!") == "Privet, mir!"
 
 Pick the lever by path: romanize for an index/matching path; keep the script when
 the text goes to a multilingual model that reads it natively (see
-[when NOT to use translit](llm-pipelines.md#which-path-and-when-not-to-use-translit)).
+[when NOT to use disarm](llm-pipelines.md#which-path-and-when-not-to-use-disarm)).
 
 ## Measuring fertility
 
 The metric is tokens-per-word (or per-character) before vs after the transform,
-across scripts and tokenizers. translit has no tokenizer dependency, so a
+across scripts and tokenizers. disarm has no tokenizer dependency, so a
 measurement wires in whichever tokenizer you target:
 
 <!--- skip: next -->
 ```python
 # Sketch (requires the external tokenizer; not run in CI):
 import tiktoken
-from translit import transliterate
+from disarm import transliterate
 
 enc = tiktoken.get_encoding("o200k_base")          # GPT-4o
 text = "नमस्ते दुनिया"
@@ -90,7 +90,7 @@ Romanization is not a free win, and fertility is not the whole story:
   ("Tokyo Tower") romanizes via pinyin, not Japanese:
 
   ```python
-  from translit import transliterate
+  from disarm import transliterate
 
   assert transliterate("東京タワー") == "dong jing tawa-"
   ```
@@ -106,10 +106,10 @@ Romanization is not a free win, and fertility is not the whole story:
   front-end entirely; it is a lever for subword tokenizers, not a universal one.
 
 Downstream-quality numbers (CER/WER and abjad indicators) are tracked by the
-quality-benchmark capstone, [#173](https://github.com/raeq/translit/issues/173).
+quality-benchmark capstone, [#173](https://github.com/raeq/disarm/issues/173).
 
 ## See also
 
-- [Using translit in LLM pipelines](llm-pipelines.md) — guardrail and RAG recipes, and which path to choose.
-- [Research: Transliteration for LLM Pre-Processing](https://github.com/raeq/translit/issues/133) and [#172](https://github.com/raeq/translit/issues/172) — the survey and positioning issue.
+- [Using disarm in LLM pipelines](llm-pipelines.md) — guardrail and RAG recipes, and which path to choose.
+- [Research: Transliteration for LLM Pre-Processing](https://github.com/raeq/disarm/issues/133) and [#172](https://github.com/raeq/disarm/issues/172) — the survey and positioning issue.
 - [Precompiled Pipelines](../api/pipelines.md), [Limitations](../limitations.md).

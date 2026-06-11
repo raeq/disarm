@@ -1,4 +1,4 @@
-"""Type stubs for the _translit Rust extension module (PyO3)."""
+"""Type stubs for the _disarm Rust extension module (PyO3)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 # Imported from the single source of truth so the stub cannot drift from the
-# authoritative alias definitions in translit._types (#200).
-from translit._types import (
+# authoritative alias definitions in disarm._types (#200).
+from disarm._types import (
     ErrorMode,
     NormalizationForm,
     Platform,
@@ -17,10 +17,10 @@ from translit._types import (
 # Resource limits exposed by the Rust module (#200).
 _MAX_BATCH_SIZE: int
 
-class TranslitError(ValueError): ...
-class InvalidArgumentError(TranslitError): ...
-class ResourceLimitError(TranslitError): ...
-class UnsupportedError(TranslitError): ...
+class DisarmError(ValueError): ...
+class InvalidArgumentError(DisarmError): ...
+class ResourceLimitError(DisarmError): ...
+class UnsupportedError(DisarmError): ...
 
 class SafeHostnameDetails:
     safe: bool

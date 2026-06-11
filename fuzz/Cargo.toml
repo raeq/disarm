@@ -1,5 +1,5 @@
 [package]
-name = "translit-fuzz"
+name = "disarm-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -12,7 +12,7 @@ libfuzzer-sys = "0.4"
 unicode-normalization = "0.1"
 
 # Pure-Rust build of the core (no PyO3 extension-module linkage).
-[dependencies.translit]
+[dependencies.disarm]
 path = ".."
 default-features = false
 

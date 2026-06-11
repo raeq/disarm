@@ -1,10 +1,10 @@
-"""Type stubs for translit._compat (awesome-slugify compatibility layer)."""
+"""Type stubs for disarm._compat (awesome-slugify compatibility layer)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from translit._types import ErrorMode as ErrorMode
+from disarm._types import ErrorMode as ErrorMode
 
 def unidecode(text: str) -> str: ...
 

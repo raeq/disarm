@@ -1,5 +1,5 @@
 name: ✨ Feature request
-description: A new capability, API, option, or standard you'd like translit to support.
+description: A new capability, API, option, or standard you'd like disarm to support.
 title: "[feature] "
 labels: ["enhancement", "needs-triage"]
 body:
@@ -14,7 +14,7 @@ body:
     id: problem
     attributes:
       label: What problem would this solve?
-      description: Describe the workflow or pain point. What are you trying to do that translit makes hard today?
+      description: Describe the workflow or pain point. What are you trying to do that disarm makes hard today?
     validations:
       required: true
   - type: textarea

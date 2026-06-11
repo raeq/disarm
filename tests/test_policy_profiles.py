@@ -2,9 +2,9 @@
 
 import pytest
 
-from translit import (
+from disarm import (
+    DisarmError,
     TextPipeline,
-    TranslitError,
     get_pipeline,
     list_profiles,
 )
@@ -31,7 +31,7 @@ class TestGetPipeline:
         assert isinstance(pipe, TextPipeline)
 
     def test_unknown_profile_raises(self):
-        with pytest.raises(TranslitError, match="Unknown profile"):
+        with pytest.raises(DisarmError, match="Unknown profile"):
             get_pipeline("nonexistent_profile")
 
     def test_each_profile_creates_valid_pipeline(self):

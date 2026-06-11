@@ -1,7 +1,7 @@
 """Sybil doc-test harness for the cookbook (#154).
 
 Every fenced ``python`` block in the Markdown files under ``docs/`` is executed
-against the **installed** ``translit`` wheel, and any ``assert`` it contains is
+against the **installed** ``disarm`` wheel, and any ``assert`` it contains is
 checked. This is what keeps published recipes from rotting: a wrong claim or a
 broken snippet turns the test suite red, gated alongside the existing tiers.
 
@@ -19,7 +19,7 @@ from __future__ import annotations
 from sybil import Sybil
 from sybil.parsers.markdown import PythonCodeBlockParser, SkipParser
 
-import translit
+import disarm
 
 
 def _reset_global_state(namespace: dict) -> None:
@@ -31,7 +31,7 @@ def _reset_global_state(namespace: dict) -> None:
     which is the doc-test gate. That isolation is what lets the ``list_langs()`` /
     ``list_scripts()`` pages assert their exact documented output.
     """
-    translit.clear_replacements()
+    disarm.clear_replacements()
 
 
 # Allowlist of converted recipes whose ``python`` blocks are executed and

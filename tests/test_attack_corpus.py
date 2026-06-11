@@ -2,7 +2,7 @@
 
 This vendors compact generators for the Boucher et al. / *Fire Extinguishers*
 attack taxonomy (homoglyph, zalgo, invisible, bidi, combined) and asserts
-translit's defense pipelines recover the clean form, using the paper's
+disarm's defense pipelines recover the clean form, using the paper's
 Exact Match Recovery (XMR) idea: for a defense pipeline ``P`` and a clean
 string ``t``, ``P(attack(t)) == P(t)``.
 
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from translit import sanitize_user_input, security_clean, strip_obfuscation
+from disarm import sanitize_user_input, security_clean, strip_obfuscation
 
 # Clean ASCII targets an attacker would spoof.
 CORPUS = [
@@ -129,7 +129,7 @@ def test_pipeline_recovers_clean_word(defense, attack_name: str) -> None:
 def test_homoglyph_pairs_are_all_in_bundled_table() -> None:
     """Guard: every homoglyph in this corpus must actually be a bundled
     confusable, else the corpus silently stops testing recovery."""
-    from translit import normalize_confusables
+    from disarm import normalize_confusables
 
     not_folded = [
         (latin, conf)

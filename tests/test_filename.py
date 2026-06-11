@@ -1,8 +1,8 @@
-"""Tests for translit.sanitize_filename."""
+"""Tests for disarm.sanitize_filename."""
 
 import pytest
 
-from translit import TranslitError, sanitize_filename
+from disarm import DisarmError, sanitize_filename
 
 
 class TestSanitizeFilename:
@@ -47,5 +47,5 @@ class TestSanitizeFilename:
         assert result  # Should produce something valid
 
     def test_invalid_platform(self) -> None:
-        with pytest.raises(TranslitError):
+        with pytest.raises(DisarmError):
             sanitize_filename("test.txt", platform="invalid")  # type: ignore[arg-type]

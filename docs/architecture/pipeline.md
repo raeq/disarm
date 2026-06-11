@@ -1,10 +1,10 @@
 # Architecture: TextPipeline
 
-How translit composes multiple transforms into a single, fixed-order pipeline.
+How disarm composes multiple transforms into a single, fixed-order pipeline.
 
 ## Two composition models
 
-translit offers two ways to compose transforms:
+disarm offers two ways to compose transforms:
 
 1. **`Text` builder** (recommended for interactive use): fluent method chaining where the user controls step ordering. Each method call executes immediately and returns a new `Text` instance.
 2. **`TextPipeline`** (recommended for batch/server use): a pre-compiled pipeline configured at construction time, with a fixed execution order optimized for correctness.
@@ -62,7 +62,7 @@ This makes `TextPipeline` safe to share across threads (it implements `Send` via
 ## Intended use pattern
 
 ```python
-from translit import TextPipeline
+from disarm import TextPipeline
 
 pipe = TextPipeline(
     normalize="NFC",

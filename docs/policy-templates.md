@@ -7,7 +7,7 @@ Pre-built configurations for common institutional and application workflows. Eac
 ## Using Policy Profiles
 
 ```python
-from translit import get_pipeline, list_profiles
+from disarm import get_pipeline, list_profiles
 
 # See all available profiles
 print(list_profiles())
@@ -133,7 +133,7 @@ Policy profiles are best for **custom workflows** where you need the flexibility
 Organizations can define their own profiles by constructing `TextPipeline` directly:
 
 ```python
-from translit import TextPipeline
+from disarm import TextPipeline
 
 # Government/legal: strict ASCII, no transliteration (preserve originals)
 legal_clean = TextPipeline(

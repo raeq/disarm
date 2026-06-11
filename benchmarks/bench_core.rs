@@ -1,4 +1,4 @@
-//! Criterion benchmarks for translit core transforms.
+//! Criterion benchmarks for disarm core transforms.
 #![allow(missing_docs)] // Benchmark harness code does not require documentation.
 //!
 //! Run with: `cargo bench --no-default-features`
@@ -10,15 +10,15 @@ use std::hint::black_box;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
-use _translit::case_fold::_fold_case;
-use _translit::confusables::_normalize_confusables;
-use _translit::grapheme::{_grapheme_len, _grapheme_split};
-use _translit::scripts::{_detect_scripts, _is_mixed_script};
-use _translit::slugify::{slugify_impl, SlugConfig};
-use _translit::tables::lookup_default;
-use _translit::transliterate::transliterate_impl;
-use _translit::whitespace::_collapse_whitespace;
-use _translit::ErrorMode;
+use _disarm::case_fold::_fold_case;
+use _disarm::confusables::_normalize_confusables;
+use _disarm::grapheme::{_grapheme_len, _grapheme_split};
+use _disarm::scripts::{_detect_scripts, _is_mixed_script};
+use _disarm::slugify::{slugify_impl, SlugConfig};
+use _disarm::tables::lookup_default;
+use _disarm::transliterate::transliterate_impl;
+use _disarm::whitespace::_collapse_whitespace;
+use _disarm::ErrorMode;
 
 // ---------------------------------------------------------------------------
 // Input corpus
@@ -271,7 +271,7 @@ fn bench_confusables(c: &mut Criterion) {
     let mut group = c.benchmark_group("confusables");
 
     // ASCII is the common case in the web/RAG/catalog profiles. NOTE: this is
-    // NOT a no-op — translit's table maps a few ASCII sources (e.g. `|`→`l`), so
+    // NOT a no-op — disarm's table maps a few ASCII sources (e.g. `|`→`l`), so
     // an "is_ascii fast path" would be incorrect (#252 O6.1, rejected).
     let ascii = "The quick brown fox jumps over the lazy dog. ".repeat(8);
     group.throughput(text_throughput(&ascii));

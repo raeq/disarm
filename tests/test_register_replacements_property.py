@@ -10,7 +10,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from translit import clear_replacements, register_replacements, transliterate
+from disarm import clear_replacements, register_replacements, transliterate
 
 pytestmark = pytest.mark.hypothesis
 

@@ -283,9 +283,9 @@ fn try_python_provider(
             Ok(r) => r,
             Err(e) => {
                 // #251: route through the single warning helper with a uniform
-                // `translit:` prefix so all diagnostics share one log-grep token.
+                // `disarm:` prefix so all diagnostics share one log-grep token.
                 let msg = format!(
-                    "translit: EmojiProvider.lookup() raised an exception and will be ignored: {e}"
+                    "disarm: EmojiProvider.lookup() raised an exception and will be ignored: {e}"
                 );
                 crate::emit_py_warning(py, &msg);
                 return None;
@@ -297,7 +297,7 @@ fn try_python_provider(
                 Ok(name) => return Some((name, len)),
                 Err(e) => {
                     let msg = format!(
-                        "translit: EmojiProvider.lookup() returned a non-string value \
+                        "disarm: EmojiProvider.lookup() returned a non-string value \
                          and will be ignored: {e}"
                     );
                     crate::emit_py_warning(py, &msg);

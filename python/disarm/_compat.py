@@ -11,7 +11,7 @@ Provides:
     The awesome-slugify compatibility layer (``Slugify``, ``UniqueSlugify``, and
     the ``slugify_*`` pre-configured instances) emits ``DeprecationWarning`` for
     unsupported parameters.  These aliases are planned for removal in v1.0.
-    Migrate to :func:`translit.slugify` directly.
+    Migrate to :func:`disarm.slugify` directly.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ import warnings
 from collections.abc import Callable
 from typing import Any
 
-from translit import find_untranslatable, strip_accents, transliterate
-from translit._translit import (
+from disarm import find_untranslatable, strip_accents, transliterate
+from disarm._disarm import (
     InvalidArgumentError,
     UnsupportedError,
     _Slugifier,
@@ -34,7 +34,7 @@ def unidecode(text: str, errors: str = "ignore", replace_str: str = "?") -> str:
 
     Mirrors the Unidecode 1.3 signature
     ``unidecode(string, errors="ignore", replace_str="?")`` (#72), mapping
-    Unidecode's *errors* values onto translit's native error modes:
+    Unidecode's *errors* values onto disarm's native error modes:
 
     - ``"ignore"`` (default) — drop unmapped characters.
     - ``"replace"`` — substitute each unmapped character with *replace_str*
@@ -65,15 +65,15 @@ def unidecode(text: str, errors: str = "ignore", replace_str: str = "?") -> str:
         # character with its byte offset; raise on the first, reporting the
         # *character* index (Unidecode's contract). The bare `ValueError` is
         # deliberate — Unidecode's strict mode raises ValueError, and this shim
-        # mimics it exactly (translit's own native strict mode raises a
-        # TranslitError; see transliterate(errors="strict")).
+        # mimics it exactly (disarm's own native strict mode raises a
+        # DisarmError; see transliterate(errors="strict")).
         untranslatable = find_untranslatable(text)
         if untranslatable:
             ch, byte_offset = untranslatable[0]
             char_index = len(text.encode("utf-8")[:byte_offset].decode("utf-8"))
             raise ValueError(f"no replacement found for character {ch!r} at index {char_index}")
         return transliterate(text)
-    # Invalid `errors` argument to this shim — a translit-owned error (#183).
+    # Invalid `errors` argument to this shim — a disarm-owned error (#183).
     raise InvalidArgumentError(
         f"invalid value for errors: {errors!r} "
         "(expected 'ignore', 'strict', 'replace', or 'preserve')"
@@ -89,7 +89,7 @@ ascii_fold = strip_accents
 # ---------------------------------------------------------------------------
 
 
-# Simple renames: awesome-slugify name → translit name.
+# Simple renames: awesome-slugify name → disarm name.
 _AWESOME_PARAM_RENAMES: dict[str, str] = {
     "to_lower": "lowercase",
     "unique_check": "check",
@@ -100,19 +100,19 @@ _AWESOME_PARAM_RENAMES: dict[str, str] = {
 _AWESOME_DEPRECATED_PARAMS: dict[str, str] = {
     "translate": (
         "awesome-slugify's translate parameter is ignored; "
-        "translit always uses its built-in transliteration engine. "
+        "disarm always uses its built-in transliteration engine. "
         "Use the lang parameter for language-specific transliteration."
     ),
-    "fold_abbrs": "awesome-slugify's fold_abbrs is not supported in translit.",
+    "fold_abbrs": "awesome-slugify's fold_abbrs is not supported in disarm.",
 }
 
 
 def _resolve_awesome_params(
     kwargs: dict[str, Any],
 ) -> dict[str, Any]:
-    """Map awesome-slugify parameter names to translit equivalents.
+    """Map awesome-slugify parameter names to disarm equivalents.
 
-    Accepted awesome-slugify params and their translit mappings:
+    Accepted awesome-slugify params and their disarm mappings:
         to_lower     -> lowercase
         stop_words   -> stopwords  (coerced to tuple)
         safe_chars   -> safe_chars  (native core param since #230)
@@ -122,7 +122,7 @@ def _resolve_awesome_params(
         fold_abbrs   -> (ignored with DeprecationWarning)
         unique_check -> check
 
-    Returns a dict of translit-native kwargs plus a '_capitalize' key.
+    Returns a dict of disarm-native kwargs plus a '_capitalize' key.
     """
     result: dict[str, Any] = {}
     capitalize = False
@@ -148,7 +148,7 @@ def _resolve_awesome_params(
             elif callable(value):
                 raise UnsupportedError(
                     "awesome-slugify's callable pretranslate is not supported; "
-                    "use a dict or translit's replacements parameter instead."
+                    "use a dict or disarm's replacements parameter instead."
                 )
         # #131: "uids" is a UniqueSlugify-only param; passing it to Slugify is a
         # wrong-class error, not a deprecation — emit UserWarning, not DeprecationWarning.
@@ -177,7 +177,7 @@ def _resolve_awesome_params(
                     stacklevel=3,
                 )
         else:
-            # Pass through native translit params unchanged
+            # Pass through native disarm params unchanged
             result[key] = value
 
     result["_capitalize"] = capitalize
@@ -188,11 +188,11 @@ class Slugify:
     """awesome-slugify-compatible ``Slugify`` class.
 
     Accepts both awesome-slugify parameter names (``to_lower``, ``stop_words``,
-    ``safe_chars``, ``capitalize``, ``pretranslate``) and native translit names.
+    ``safe_chars``, ``capitalize``, ``pretranslate``) and native disarm names.
 
     Usage::
 
-        from translit import Slugify
+        from disarm import Slugify
         custom = Slugify(to_lower=True)
         custom("Hello World")  # => "hello-world"
 
@@ -322,7 +322,7 @@ class UniqueSlugify(Slugify):
 
     Usage::
 
-        from translit import UniqueSlugify
+        from disarm import UniqueSlugify
         unique = UniqueSlugify()
         unique("My Post")   # => "My-Post"
         unique("My Post")   # => "My-Post-1"

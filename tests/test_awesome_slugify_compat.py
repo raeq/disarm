@@ -1,6 +1,6 @@
 """Tests for awesome-slugify compatibility aliases.
 
-Verifies that translit's Slugify/UniqueSlugify classes and preconfigured
+Verifies that disarm's Slugify/UniqueSlugify classes and preconfigured
 instances can serve as drop-in replacements for awesome-slugify.
 """
 
@@ -8,7 +8,7 @@ import warnings
 
 import pytest
 
-from translit import (
+from disarm import (
     Slugify,
     UniqueSlugify,
     slugify_de,
@@ -66,14 +66,14 @@ class TestSlugifyClass:
     def test_pretranslate_callable_raises(self) -> None:
         import pytest
 
-        from translit import TranslitError, UnsupportedError
+        from disarm import DisarmError, UnsupportedError
 
-        # #183: an unsupported compat feature is now a translit-owned error
-        # (UnsupportedError), catchable via TranslitError, not a bare
+        # #183: an unsupported compat feature is now a disarm-owned error
+        # (UnsupportedError), catchable via DisarmError, not a bare
         # NotImplementedError.
         with pytest.raises(UnsupportedError, match="callable pretranslate"):
             Slugify(pretranslate=lambda x: x)
-        assert issubclass(UnsupportedError, TranslitError)
+        assert issubclass(UnsupportedError, DisarmError)
 
     def test_translate_ignored_warns(self) -> None:
         with warnings.catch_warnings(record=True) as w:
@@ -328,12 +328,12 @@ class TestImportCompat:
     """Verify the import path mirrors awesome-slugify."""
 
     def test_import_slugify_class(self) -> None:
-        from translit import Slugify as S
+        from disarm import Slugify as S
 
         assert S is Slugify
 
     def test_import_unique_slugify(self) -> None:
-        from translit import UniqueSlugify as U
+        from disarm import UniqueSlugify as U
 
         assert U is UniqueSlugify
 

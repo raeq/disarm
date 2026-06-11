@@ -23,7 +23,7 @@ from conftest import unicode_text
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from translit import fold_case
+from disarm import fold_case
 
 pytestmark = pytest.mark.hypothesis
 

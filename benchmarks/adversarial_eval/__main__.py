@@ -18,14 +18,14 @@ def _fmt_pct(value: float | None) -> str:
 
 
 def render_markdown(res: EvalResult, limit: int | None) -> str:
-    import translit
+    import disarm
 
     principled = sum(res.missed_principled.values())
     novel = sum(res.missed_novel.values())
     lines = [
         f"# Adversarial-text robustness — {res.corpus}",
         "",
-        f"_translit {getattr(translit, '__version__', '?')}; `strip_obfuscation`. "
+        f"_disarm {getattr(disarm, '__version__', '?')}; `strip_obfuscation`. "
         "Numbers reflect the current version and may differ from the historical "
         "baseline in the README as coverage grows._",
         "",

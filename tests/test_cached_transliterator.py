@@ -3,7 +3,7 @@ self-invalidation when the global tables change."""
 
 from __future__ import annotations
 
-from translit import (
+from disarm import (
     clear_replacements,
     make_cached_transliterator,
     register_lang,

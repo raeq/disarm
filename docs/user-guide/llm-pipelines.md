@@ -1,14 +1,14 @@
-# Using translit in LLM pipelines
+# Using disarm in LLM pipelines
 
-The LLM ecosystem rebuilds translit's functionality ad hoc — LiteLLM ships a
+The LLM ecosystem rebuilds disarm's functionality ad hoc — LiteLLM ships a
 hand-written normaliser, Haystack has `ascii_only`, every tokenizer wrapper has
 its own accent-stripping. The
-[survey behind this page](https://github.com/raeq/translit/issues/133) found the
+[survey behind this page](https://github.com/raeq/disarm/issues/133) found the
 functionality gap is small; the **documentation** gap is the whole problem.
 `normalize_confusables()` is usually presented as a transliteration utility, when
 for this audience it is a **guardrail primitive**.
 
-This page frames translit's existing transforms for two LLM jobs — **guardrail
+This page frames disarm's existing transforms for two LLM jobs — **guardrail
 matching** (filtering untrusted input) and **ingestion** (normalising content for
 ASCII indexes) — and is explicit about which path each recipe belongs to. Every
 snippet is [executed and asserted in CI](../CONTRIBUTING.md#doc-test-recipes).
@@ -16,19 +16,19 @@ snippet is [executed and asserted in CI](../CONTRIBUTING.md#doc-test-recipes).
 !!! warning "Two paths, do not cross them"
     The guardrail path *folds confusables* to defeat homoglyph spoofing. Run it
     on legitimate non-Latin text and it **corrupts** that text (see
-    [Which path?](#which-path-and-when-not-to-use-translit)). The ingestion path
+    [Which path?](#which-path-and-when-not-to-use-disarm)). The ingestion path
     *romanises* and must not be used to rewrite a prompt the model already
     handles. Pick the path on purpose.
 
 ## The NFKC-first convention
 
 Matching frameworks normalise before they compare, because an attacker controls
-the *encoding* of a string, not just its letters. translit's defense functions
+the *encoding* of a string, not just its letters. disarm's defense functions
 follow the same convention — NFKC is their first step — so they are safe to call
 on raw, untrusted input:
 
 ```python
-from translit import strip_obfuscation
+from disarm import strip_obfuscation
 
 # Fullwidth letters (NFKC-folded) and zero-width joiners (stripped):
 assert strip_obfuscation("Ｈｅｌｌｏ") == "Hello"
@@ -44,13 +44,13 @@ For filtering untrusted input — denylist checks, prompt-injection screening,
 policy matching — the primitives are `strip_obfuscation()` (full deobfuscation)
 and `normalize_confusables()` (TR39 visual fold only).
 
-The key difference from a LiteLLM-style hand-rolled normaliser is what translit
+The key difference from a LiteLLM-style hand-rolled normaliser is what disarm
 **refuses** to do: it does not apply leet/digit remapping. Digit remapping
 corrupts the numeric text that pervades an LLM stack — model names, versions,
 quantities — so `4`, `0`, `1` are left alone:
 
 ```python
-from translit import normalize_confusables
+from disarm import normalize_confusables
 
 # Identifiers and version numbers survive untouched:
 assert normalize_confusables("gpt-4o") == "gpt-4o"
@@ -67,7 +67,7 @@ What TR39 covers instead of leet tables is *visual* confusability: a Cyrillic
 **Recipe — guardrail matching key:**
 
 ```python
-from translit import get_pipeline
+from disarm import get_pipeline
 
 guardrail = get_pipeline("llm_guardrail")
 # NFKC → strip zalgo/bidi → demojize → strip accents → confusables →
@@ -84,7 +84,7 @@ The other common pattern is `NFKD` + `encode("ascii", "ignore")` (Haystack's
 text — an ASCII index built that way simply loses the document:
 
 ```python
-from translit import transliterate
+from disarm import transliterate
 
 passage = "Привет мир"
 # ascii-ignore throws the whole passage away:
@@ -99,7 +99,7 @@ ASCII-normalised index without losing its semantics.
 **Recipe — ingestion / RAG index normalisation:**
 
 ```python
-from translit import get_pipeline
+from disarm import get_pipeline
 
 ingest = get_pipeline("rag_ingest")
 # NFKC → strip bidi → strip accents → transliterate →
@@ -115,7 +115,7 @@ If you want one function, compose the two paths and keep transliteration
 about to send to a model that reads the original script fine:
 
 ```python
-from translit import get_pipeline
+from disarm import get_pipeline
 
 def prepare_for_llm(text, *, romanize=False):
     """Normalize untrusted text for an LLM index / matching path.
@@ -131,13 +131,13 @@ assert prepare_for_llm("pаypаl") == "paypal"            # guardrail
 assert prepare_for_llm("Москва", romanize=True) == "Moskva"      # ingestion
 ```
 
-## Which path, and when NOT to use translit
+## Which path, and when NOT to use disarm
 
 Being explicit about the path is what earns credibility with this audience —
 the wrong path actively destroys signal:
 
 ```python
-from translit import get_pipeline
+from disarm import get_pipeline
 
 # WRONG: the guardrail fold mangles legitimate Cyrillic — its confusable step
 # partially rewrites real letters, producing garbage:
@@ -147,21 +147,21 @@ assert get_pipeline("llm_guardrail")("Москва") == "mocĸвa"
 assert get_pipeline("rag_ingest")("Москва") == "Moskva"
 ```
 
-Do **not** reach for translit when:
+Do **not** reach for disarm when:
 
 - **The text goes straight to a multilingual model.** Modern tokenizers already
   NFC/NFKC-normalise, and the model handles native script better than any
   romanisation. Transliterating the prompt throws away signal.
-- **You only need encoding repair.** That is `ftfy`'s job, not translit's.
+- **You only need encoding repair.** That is `ftfy`'s job, not disarm's.
 - **You need lossless round-tripping.** Compatibility-tier romanisation (CJK,
   Indic) is lossy; see [Limitations](../limitations.md).
 
-Use translit on the **guardrail** path (match untrusted input against policy)
+Use disarm on the **guardrail** path (match untrusted input against policy)
 and the **ingestion** path (build an ASCII-normalised index) — not on the
 generation path.
 
 ## See also
 
-- [Research: Transliteration for LLM Pre-Processing](https://github.com/raeq/translit/issues/133) — the underlying survey.
+- [Research: Transliteration for LLM Pre-Processing](https://github.com/raeq/disarm/issues/133) — the underlying survey.
 - [Precompiled Pipelines](../api/pipelines.md) — every named profile and its steps.
 - [Confusable Detection](confusables.md), [Adversarial-Text Defense](../security/adversarial-defense.md).

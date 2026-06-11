@@ -1,4 +1,4 @@
-"""Type stubs for translit._types."""
+"""Type stubs for disarm._types."""
 
 from __future__ import annotations
 

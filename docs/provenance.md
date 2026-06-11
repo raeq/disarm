@@ -1,13 +1,13 @@
 # Transliteration Provenance
 
 This document records the formal standard or source behind every Unicode block
-in translit's transliteration tables. Its purpose is traceability: for any
+in disarm's transliteration tables. Its purpose is traceability: for any
 character→ASCII mapping, a reader should be able to identify which published
 romanization system it follows and where to verify it.
 
 ## Methodology
 
-Provenance was determined by comparing translit's actual per-character mappings
+Provenance was determined by comparing disarm's actual per-character mappings
 against published romanization tables. Diagnostic characters — those where
 competing standards diverge — were used to identify the source unambiguously.
 

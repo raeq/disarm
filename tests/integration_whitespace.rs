@@ -1,6 +1,6 @@
 //! Integration tests for whitespace, control char, and zero-width stripping.
 
-use _translit::whitespace;
+use _disarm::whitespace;
 
 #[test]
 fn collapse_basic() {

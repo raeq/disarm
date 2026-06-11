@@ -1,4 +1,4 @@
-//! Pure-Rust error type for the translit core.
+//! Pure-Rust error type for the disarm core.
 //!
 //! `Error` is the single internal error enum constructed by the pure-Rust
 //! helper functions.  It carries the structured fields needed to render each
@@ -7,10 +7,10 @@
 //!
 //! The PyO3 boundary converts `Error` into a Python exception via
 //! [`From<Error> for pyo3::PyErr`].  That conversion is the **only** place the
-//! core couples to PyO3: it maps each variant into translit's unified exception
-//! hierarchy — the `TranslitError` base or one of its `InvalidArgumentError` /
+//! core couples to PyO3: it maps each variant into disarm's unified exception
+//! hierarchy — the `DisarmError` base or one of its `InvalidArgumentError` /
 //! `ResourceLimitError` / `UnsupportedError` subclasses (#183), so
-//! `except TranslitError` catches every variant (it missed the five
+//! `except DisarmError` catches every variant (it missed the five
 //! formerly-bare-`PyValueError` sites before #183).
 //!
 //! Each variant also exposes a stable machine-readable [`Error::code`] — new
@@ -38,7 +38,7 @@ fn truncate_error_text(text: &str) -> Cow<'_, str> {
     Cow::Owned(format!("{}…", &text[..end]))
 }
 
-/// Internal error type for the translit core.
+/// Internal error type for the disarm core.
 ///
 /// One variant per distinct error currently constructed across the core.
 ///
@@ -46,8 +46,8 @@ fn truncate_error_text(text: &str) -> Cow<'_, str> {
 ///
 /// Every `#[error(...)]` message follows one policy, enforced by
 /// `messages_follow_house_style` below:
-/// - **No prefix.** The exception *type* already identifies translit, so messages
-///   carry no `translit:` prefix.
+/// - **No prefix.** The exception *type* already identifies disarm, so messages
+///   carry no `disarm:` prefix.
 /// - **Lowercase first word**, unless it is a proper noun / identifier
 ///   (`UniqueSlugifier`, `register_lang()`, `max_length`, `strict_iso9`).
 /// - **Single quotes** around an echoed string value: `got '{got}'`, not
@@ -198,7 +198,7 @@ pub(crate) enum Error {
     #[error(
         "context dictionary for {lang} not found; context-aware transliteration needs \
          the prebuilt dictionaries: run `bash scripts/bootstrap_dicts.sh` (from a \
-         source checkout) and set the TRANSLIT_DICT_DIR environment variable to the \
+         source checkout) and set the DISARM_DICT_DIR environment variable to the \
          output directory (see docs/user-guide/abjad-transliteration.md)"
     )]
     ContextDictNotFound {
@@ -435,7 +435,7 @@ impl Error {
 /// in the core (#231).
 ///
 /// The PyO3 entrypoints accept a *signed* integer so a negative value raises
-/// translit's `InvalidArgumentError` (the documented contract) instead of
+/// disarm's `InvalidArgumentError` (the documented contract) instead of
 /// PyO3's `OverflowError` from a silent unsigned conversion. On 64-bit targets
 /// the only `try_from` failure is a negative value.
 pub(crate) fn checked_max_length(value: i64) -> Result<usize, Error> {
@@ -449,13 +449,13 @@ pub(crate) fn checked_max_graphemes(value: i64) -> Result<usize, Error> {
 }
 
 impl From<Error> for pyo3::PyErr {
-    /// Convert a core `Error` into a Python exception from translit's unified
-    /// hierarchy (#183): a [`crate::TranslitError`] base with `InvalidArgumentError`
+    /// Convert a core `Error` into a Python exception from disarm's unified
+    /// hierarchy (#183): a [`crate::DisarmError`] base with `InvalidArgumentError`
     /// / `ResourceLimitError` / `UnsupportedError` subclasses. Every variant maps
-    /// to exactly one of them, so `except TranslitError` catches all of them —
+    /// to exactly one of them, so `except DisarmError` catches all of them —
     /// including the five sites that were previously bare `PyValueError`
     /// (mutually-exclusive flags, register limits, reverse unsupported lang) and
-    /// silently escaped it. `TranslitError` remains a `ValueError` subclass, so
+    /// silently escaped it. `DisarmError` remains a `ValueError` subclass, so
     /// existing `except ValueError` code is unaffected. The message is `Display`,
     /// identical to before at every site.
     ///
@@ -517,13 +517,13 @@ impl From<Error> for pyo3::PyErr {
                 crate::UnsupportedError::new_err(msg)
             }
 
-            // Base TranslitError — state / data errors that fit no category above.
+            // Base DisarmError — state / data errors that fit no category above.
             Error::Sealed { .. }
             | Error::ContextDictNotFound { .. }
             | Error::ContextDictCorrupt { .. }
             | Error::EncodingConfidenceTooLow { .. }
             | Error::Untranslatable { .. }
-            | Error::LossyDecode { .. } => crate::TranslitError::new_err(msg),
+            | Error::LossyDecode { .. } => crate::DisarmError::new_err(msg),
         };
 
         if let Some(cause_err) = cause {

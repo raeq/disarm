@@ -1,7 +1,7 @@
 """Drift detection between the Rust PyO3 extension and its hand-written stub.
 
-The compiled extension ``translit._translit`` and the hand-written type stub
-``python/translit/_translit.pyi`` can silently diverge: a Rust signature change
+The compiled extension ``disarm._disarm`` and the hand-written type stub
+``python/disarm/_disarm.pyi`` can silently diverge: a Rust signature change
 (param added/removed/renamed/reordered, default added/removed, or a
 positional-vs-keyword change) is invisible to ``mypy`` because mypy compares
 source against the *stub*, never against the *binary*.
@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-import translit._translit as ext
+import disarm._disarm as ext
 
 # --------------------------------------------------------------------------- #
 # Parameter model
@@ -52,7 +52,7 @@ BUILDER_CLASSES = ("_Slugifier", "_UniqueSlugifier", "_TextPipeline")
 SKIP = frozenset(
     {
         # Opaque types with no introspectable constructor signature to compare.
-        "TranslitError",
+        "DisarmError",
         "InvalidArgumentError",  # #183 exception subclasses
         "ResourceLimitError",
         "UnsupportedError",
@@ -65,7 +65,7 @@ SKIP = frozenset(
 # that empties one side).
 MIN_COVERED = 40
 
-STUB_PATH = Path(__file__).resolve().parents[1] / "python" / "translit" / "_translit.pyi"
+STUB_PATH = Path(__file__).resolve().parents[1] / "python" / "disarm" / "_disarm.pyi"
 
 
 def _params_from_inspect(sig: inspect.Signature) -> list[tuple[str, str, bool]]:
@@ -189,13 +189,13 @@ def test_stub_matches_binary_signature(name: str) -> None:
         sig = inspect.signature(obj)
     except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
         pytest.fail(
-            f"{name!r} is exported by translit._translit but has no "
+            f"{name!r} is exported by disarm._disarm but has no "
             f"introspectable signature ({exc!r}). If it is a genuinely opaque "
             f"builtin type, add it to SKIP; otherwise the binary is broken."
         )
 
     assert name in _STUB_PARAMS, (
-        f"{name!r} is exported by translit._translit but has no corresponding "
+        f"{name!r} is exported by disarm._disarm but has no corresponding "
         f"top-level def (or builder __init__) in {STUB_PATH.name}. "
         f"Add a stub entry for it."
     )

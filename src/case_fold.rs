@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 
 use crate::tables::case_folding_data;
 
-// translit does not cap input size — bounding untrusted input is the caller's
+// disarm does not cap input size — bounding untrusted input is the caller's
 // responsibility (case folding is linear time/memory; see #80).
 
 /// Full Unicode case folding per CaseFolding.txt (status C + F).

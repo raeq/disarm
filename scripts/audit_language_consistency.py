@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit language/script registration consistency across the translit codebase.
+"""Audit language/script registration consistency across the disarm codebase.
 
 Checks that every language in BUILTIN_LANGS is fully registered in all required
 files: Rust source, Python enums/stubs/exports, docs, and tests.
@@ -59,13 +59,13 @@ def load_enum_constants(path: Path) -> set[str]:
 
 def load_init_imports() -> set[str]:
     """Extract LANG_XX names from __init__.py imports."""
-    text = (ROOT / "python" / "translit" / "__init__.py").read_text()
+    text = (ROOT / "python" / "disarm" / "__init__.py").read_text()
     return {m for m in re.findall(r"^\s+(LANG_\w+),?$", text, re.MULTILINE)}
 
 
 def load_init_all() -> set[str]:
     """Extract LANG_XX names from __all__ in __init__.py."""
-    text = (ROOT / "python" / "translit" / "__init__.py").read_text()
+    text = (ROOT / "python" / "disarm" / "__init__.py").read_text()
     m = re.search(r"__all__\s*=\s*\[(.+?)\]", text, re.DOTALL)
     if not m:
         sys.exit("ERROR: Could not find __all__ in __init__.py")
@@ -126,8 +126,8 @@ def main() -> int:
     langs = load_builtin_langs()
     script_to_lang = load_script_to_lang()
     script_ranges = load_script_ranges()
-    enum_constants = load_enum_constants(ROOT / "python" / "translit" / "_enums.py")
-    stub_constants = load_enum_constants(ROOT / "python" / "translit" / "_enums.pyi")
+    enum_constants = load_enum_constants(ROOT / "python" / "disarm" / "_enums.py")
+    stub_constants = load_enum_constants(ROOT / "python" / "disarm" / "_enums.pyi")
     init_imports = load_init_imports()
     init_all = load_init_all()
     ref_texts = load_reference_texts()

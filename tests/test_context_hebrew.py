@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from translit import transliterate
+from disarm import transliterate
 
 
 def _has_hebrew_dict() -> bool:

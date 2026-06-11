@@ -4,16 +4,16 @@ Functions that inspect text and return boolean or structured results without mod
 
 ## detect_scripts
 
-::: translit.detect_scripts
+::: disarm.detect_scripts
 
 ---
 
 ## inspect_auto_lang
 
-::: translit.inspect_auto_lang
+::: disarm.inspect_auto_lang
 
 ```python
-from translit import inspect_auto_lang
+from disarm import inspect_auto_lang
 
 inspect_auto_lang("Київ")
 # {'script': 'Cyrillic', 'chosen_lang': 'uk', 'reason': 'discriminator', 'discriminators_hit': ['ї']}
@@ -31,34 +31,34 @@ See [Language Detection](../user-guide/language-detection.md#inspecting-detectio
 
 ## is_mixed_script
 
-::: translit.is_mixed_script
+::: disarm.is_mixed_script
 
 ---
 
 ## is_confusable
 
-::: translit.is_confusable
+::: disarm.is_confusable
 
 ---
 
 ## is_ascii
 
-::: translit.is_ascii
+::: disarm.is_ascii
 
 ---
 
 ## is_normalized
 
-::: translit.is_normalized
+::: disarm.is_normalized
 
 ---
 
 ## is_zalgo
 
-::: translit.is_zalgo
+::: disarm.is_zalgo
 
 ```python
-from translit import is_zalgo
+from disarm import is_zalgo
 
 is_zalgo("café")          # False (1 combining mark — normal)
 is_zalgo("Việt Nam")      # False (2 combining marks — normal)
@@ -70,7 +70,7 @@ is_zalgo("a" + "\u0300" * 20)  # True
 
 ## is_safe_hostname
 
-::: translit.is_safe_hostname
+::: disarm.is_safe_hostname
 
 ### SafeHostnameDetails
 
@@ -85,7 +85,7 @@ The second element of the tuple returned by `is_safe_hostname()`:
 | `canonical` | `str` | Latin-normalized form of the hostname |
 
 ```python
-from translit import is_safe_hostname
+from disarm import is_safe_hostname
 
 safe, details = is_safe_hostname("google.com")
 # safe = True, details.canonical = "google.com"

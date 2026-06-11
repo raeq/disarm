@@ -5,7 +5,7 @@ import time
 
 def bench_slugify_basic():
     """Benchmark: Basic slug generation."""
-    from translit import slugify
+    from disarm import slugify
 
     titles = [
         "Hello World, This is a Test!",
@@ -27,7 +27,7 @@ def bench_slugify_basic():
 
 def bench_slugify_with_options():
     """Benchmark: Slug generation with all options."""
-    from translit import slugify
+    from disarm import slugify
 
     text = "The Quick Brown Fox & Friends: A Story! (Part 2)"
 

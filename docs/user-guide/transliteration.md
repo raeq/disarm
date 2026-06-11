@@ -6,10 +6,10 @@ There are two quality tiers to be aware of (see [Language Support](language-supp
 
 - **Standards-based core (Latin, Cyrillic, Greek).** Best-in-class romanization with
   named standards — BGN/PCGN by default, ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34
-  (`gost7034`) — plus reverse transliteration. This is what translit does well.
+  (`gost7034`) — plus reverse transliteration. This is what disarm does well.
 - **Compatibility coverage (CJK, Indic, Arabic, Thai, and others).** Context-free,
   character-by-character — the same lossy approach as Unidecode/AnyAscii, provided so
-  translit is a complete drop-in. An optional **context-aware** mode for abjad scripts
+  disarm is a complete drop-in. An optional **context-aware** mode for abjad scripts
   (Arabic, Persian, Hebrew) restores vowels for more readable output, but it is a
   best-effort readability aid, not a romanization standard.
 
@@ -21,7 +21,7 @@ There are two quality tiers to be aware of (see [Language Support](language-supp
 ## Basic usage
 
 ```python
-from translit import transliterate
+from disarm import transliterate
 
 assert transliterate("café") == 'cafe'
 assert transliterate("naïve") == 'naive'
@@ -103,7 +103,7 @@ The `errors` parameter controls what happens when a character has no translitera
 <!--- skip: next -->
     ```python
     transliterate("text ♠ here", errors="strict")
-    # raises TranslitError: no transliteration for '♠' (U+2660) at byte offset 5
+    # raises DisarmError: no transliteration for '♠' (U+2660) at byte offset 5
     ```
 
 ## Finding untranslatable characters
@@ -117,7 +117,7 @@ returns `(character, byte_offset)` pairs — the exact set `transliterate` would
 replace/drop/preserve:
 
 ```python
-from translit import find_untranslatable
+from disarm import find_untranslatable
 
 assert find_untranslatable("café") == []
 assert find_untranslatable("a♠b♣c") == [('♠', 1), ('♣', 5)]
@@ -149,7 +149,7 @@ Full coverage of:
 Chinese characters are mapped to toneless pinyin from the Unicode Unihan database:
 
 ```python
-from translit import slugify
+from disarm import slugify
 
 assert transliterate("北京市") == 'bei jing shi'
 assert transliterate("中国人民") == 'zhong guo ren min'
@@ -179,7 +179,7 @@ See [Limitations](../limitations.md) for details on context-free mapping trade-o
 The `target` parameter converts romanized Latin text **back** to a native script:
 
 ```python
-from translit import transliterate, reverse_langs
+from disarm import transliterate, reverse_langs
 
 # Latin → Cyrillic
 assert transliterate("Moskva", target="ru") == 'Москва'
@@ -209,10 +209,10 @@ Reverse transliteration uses greedy longest-match scanning to handle digraphs an
 
 ## Drop-in replacement
 
-`translit.unidecode()` is a direct alias for `transliterate()` with default settings:
+`disarm.unidecode()` is a direct alias for `transliterate()` with default settings:
 
 ```python
-from translit import unidecode
+from disarm import unidecode
 
 assert unidecode("café") == 'cafe'
 ```
@@ -221,7 +221,7 @@ See [Migrating from Unidecode](../migration/from-unidecode.md) for details.
 
 ## Context-free vs context-aware
 
-translit operates in two transliteration modes depending on the `context` parameter.
+disarm operates in two transliteration modes depending on the `context` parameter.
 
 ### Context-free (default)
 
@@ -267,24 +267,24 @@ The output is never worse than context-free — unknown words simply fall throug
 
 Context dictionaries are **not** shipped in the wheel (they are ~37 MB) and are
 not available as pip extras. Build them reproducibly from source corpora, then
-point translit at the output directory via `TRANSLIT_DICT_DIR`:
+point disarm at the output directory via `DISARM_DICT_DIR`:
 
 ```bash
 # Build the Arabic/Persian/Hebrew context dictionaries (requires Kaggle creds)
 bash scripts/bootstrap_dicts.sh
 
-# Point translit at the built dictionaries
-export TRANSLIT_DICT_DIR=/absolute/path/to/translit/data
+# Point disarm at the built dictionaries
+export DISARM_DICT_DIR=/absolute/path/to/disarm/data
 ```
 
-Alternatively, build translit from source with the `embed-dicts` Cargo feature to
+Alternatively, build disarm from source with the `embed-dicts` Cargo feature to
 bake the dictionaries into the extension module.
 
-If `context=True` is used without a dictionary available, `TranslitError` is
+If `context=True` is used without a dictionary available, `DisarmError` is
 raised with these instructions. (Packaged, pip-installable context dictionaries
-are tracked in [#56](https://github.com/raeq/translit/issues/56) /
-[#60](https://github.com/raeq/translit/issues/60).)
+are tracked in [#56](https://github.com/raeq/disarm/issues/56) /
+[#60](https://github.com/raeq/disarm/issues/60).)
 
 ### Detailed guide
 
-For a comprehensive discussion of how context-aware transliteration works for each language — including the standards used, how translit differs from other systems, and specific limitations — see **[Abjad Script Transliteration](abjad-transliteration.md)**.
+For a comprehensive discussion of how context-aware transliteration works for each language — including the standards used, how disarm differs from other systems, and specific limitations — see **[Abjad Script Transliteration](abjad-transliteration.md)**.

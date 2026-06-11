@@ -13,8 +13,8 @@ path. They do NOT require any mocking.
 import pytest
 from conftest import SCRIPT_SAMPLES
 
-from translit import detect_scripts, is_mixed_script
-from translit._enums import Script
+from disarm import detect_scripts, is_mixed_script
+from disarm._enums import Script
 
 # ═══════════════════════════════════════════════════════════════════
 # Layer 1: Per-script detection — every enum member must be detected
@@ -306,7 +306,7 @@ class TestUnknownScriptWarning:
         from unittest.mock import patch
 
         # Mock _detect_scripts to return a name not in the Script enum
-        with patch("translit._api._detect_scripts", return_value=["Latin", "Martian"]):
+        with patch("disarm._api._detect_scripts", return_value=["Latin", "Martian"]):
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 result = detect_scripts("hello")

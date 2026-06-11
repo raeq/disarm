@@ -166,7 +166,7 @@ def process_corpus(
 #   prev_len (2 bytes) + prev (UTF-8) + curr_len (2 bytes) + curr (UTF-8)
 #   + form_len (2 bytes) + form (UTF-8)
 
-MAGIC = b"TRLD"  # translit dictionary
+MAGIC = b"TRLD"  # TRLD v1 on-disk format magic — unchanged across the translit->disarm rename (binary-compat with existing dict files)
 VERSION = 1
 
 

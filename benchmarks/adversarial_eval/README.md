@@ -1,6 +1,6 @@
 # Adversarial-text robustness evaluation harness (#49)
 
-A reusable benchmark that measures how translit's defense transform
+A reusable benchmark that measures how disarm's defense transform
 (`strip_obfuscation`) behaves on **real-world** spam/phishing corpora — turning
 scattered datasets into one principled, repeatable evaluation.
 
@@ -55,7 +55,7 @@ maintainer-run.
 - **Miss-mining**: the non-ASCII codepoints that *survive* the defense, split
   into **principled** (present in UTS#39 `data/confusables.txt` — addressable,
   candidates for #40) vs **novel** (not in UTS#39 — out of scope). The split uses
-  the full UTS#39 source set, not translit's bundled subset, so a char that is in
+  the full UTS#39 source set, not disarm's bundled subset, so a char that is in
   the standard but not yet mapped counts as an addressable miss, not novel.
 
 ## Baseline (BitAbuse, established prior to this harness)
@@ -66,5 +66,5 @@ maintainer-run.
   distinct are in UTS#39 (addressable) and ~363 distinct are novel/Viper-synthetic
   (out of scope).
 
-Findings feed [#40](https://github.com/raeq/translit/issues/40) (real-attacker
+Findings feed [#40](https://github.com/raeq/disarm/issues/40) (real-attacker
 confusables to verify and upstream) — not silent table edits.

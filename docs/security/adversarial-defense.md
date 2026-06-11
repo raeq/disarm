@@ -8,10 +8,10 @@ content moderation, and corrupt downstream text processing — with no visible c
 
 The standard advice is "sanitize your input." But *which* sanitization? Most pipelines
 reach for the text-cleaning libraries they already have — `ftfy`, `unidecode`,
-`anyascii` — which were built for encoding repair and ASCII conversion. translit provides
+`anyascii` — which were built for encoding repair and ASCII conversion. disarm provides
 the *visual* mapping they miss — as a **defense-in-depth layer, not a complete control.**
 
-> **Scope.** translit canonicalizes the confusables it bundles (TR39) and strips the
+> **Scope.** disarm canonicalizes the confusables it bundles (TR39) and strips the
 > format characters it enumerates. It does **not** promise to stop any attack class, and
 > the confusable space is far larger than any table. See the
 > [Threat Model](../THREAT_MODEL.md) and *[Coverage and limits](#coverage-and-limits)* below.
@@ -32,7 +32,7 @@ An attacker who swaps Latin `p` for the identical-looking Cyrillic `р` is explo
 substitution. `unidecode`, `anyascii`, `cyrtranslit`, and `uroman` all map
 phonetically, so they cannot.
 
-translit implements TR39 visual confusable mapping. Use
+disarm implements TR39 visual confusable mapping. Use
 [`normalize_confusables`](../user-guide/confusables.md) and `strip_obfuscation` for
 defense; use [`transliterate`](../user-guide/transliteration.md) only when you want
 phonetic romanization (e.g. building a readable slug), never as a security control.
@@ -48,7 +48,7 @@ Unicode normalization baselines across six attack types, three downstream tasks
 
 - **Phonetic tools plateau; visual mapping recovers the tested pairs.** On homoglyph
   attacks, phonetic transliterators recover roughly half of inputs (XMR ≈ 0.49), while
-  TR39 visual mapping (translit-rs) reached **XMR = 1.000 on the tested TR39 pairs**
+  TR39 visual mapping (disarm) reached **XMR = 1.000 on the tested TR39 pairs**
   (17 Latin–Cyrillic, 19 Greek). That is coverage of those pairs — not a guarantee
   against arbitrary homoglyphs (see *[Coverage and limits](#coverage-and-limits)*).
 - **`ftfy` is equivalent to doing nothing** (TOST equivalence, δ = 0.05, across all
@@ -59,7 +59,7 @@ Unicode normalization baselines across six attack types, three downstream tasks
 - **Plain Unicode normalization is not a defense.** NFC, NFKC, NFKD, and casefold
   provide zero defense against homoglyphs and negligible defense against the rest.
 - **Preserve case.** A case-preserving pipeline fully restores downstream accuracy;
-  a case-folding variant costs 3.4 pp on cased models. translit's defense pipelines
+  a case-folding variant costs 3.4 pp on cased models. disarm's defense pipelines
   preserve case by design (only `ml_normalize` folds case, deliberately).
 - **Direction matters.** Normalize confusables *toward the text's dominant script*.
   For Cyrillic-native text, normalizing toward Latin reduces a Cyrillic-native model to
@@ -87,19 +87,19 @@ conservative upper bound on failure rate.
 The XMR results above measure the *tested TR39 pairs*. Real coverage is bounded by the
 bundled data and by what normalization can do at all:
 
-- **Single-letter Latin confusables: complete.** translit folds 100% of UTS#39
+- **Single-letter Latin confusables: complete.** disarm folds 100% of UTS#39
   single-codepoint confusables whose prototype is a basic Latin letter (gated by
   `tests/test_confusable_coverage.py`). This is the dominant real-world case — registered
   homograph domains are overwhelmingly single-character Latin substitutions
   ([Holgers et al., USENIX 2006](https://www.gribble.org/papers/usenix06_homograph.pdf)).
 - **The confusable space is unbounded.** [Deng et al. (2020)](https://arxiv.org/abs/2010.04382)
-  found 8,000+ homoglyphs with deep learning; measured against translit's bundled data,
+  found 8,000+ homoglyphs with deep learning; measured against disarm's bundled data,
   ~89% of their *letter* homoglyphs are **not in TR39 at all**. A TR39-derived tool cannot
   canonicalize what TR39 does not list.
 - **Normalization alone is a partial defense on real text.** On real phishing,
   table-driven confusable lookup restores only ~35% of perturbed words, vs ~96% for a
   context-aware model ([Lee et al., *BitAbuse*, 2025](https://arxiv.org/abs/2502.05225)).
-  Use translit as the fast, deterministic first layer — not the whole pipeline.
+  Use disarm as the fast, deterministic first layer — not the whole pipeline.
 
 Out of scope by design (not bugs): confusables outside the bundled table, whole-script
 spoofs, multi-character confusables (`rn`→`m`), and Unicode-version skew. See the full
@@ -117,7 +117,7 @@ spoofs, multi-character confusables (`rn`→`m`), and Unicode-version skew. See 
 | Check a domain for IDN spoofing | `is_safe_hostname(host)` | per-label script + confusable analysis |
 
 ```python
-from translit import strip_obfuscation, normalize_confusables, is_safe_hostname
+from disarm import strip_obfuscation, normalize_confusables, is_safe_hostname
 
 assert strip_obfuscation("рroduсt") == 'product'
 assert normalize_confusables("раypal") == 'paypal'

@@ -2,14 +2,14 @@
 
 Usage::
 
-    from translit.security import is_confusable, is_mixed_script, is_safe_hostname
+    from disarm.security import is_confusable, is_mixed_script, is_safe_hostname
 
     is_confusable("pаypal")                     # True (contains Cyrillic 'а')
     is_mixed_script("pаypal")                   # True
     safe, details = is_safe_hostname("example.com")
 """
 
-from translit import (
+from disarm import (
     SafeHostnameDetails,
     detect_scripts,
     is_confusable,
@@ -19,7 +19,7 @@ from translit import (
     security_clean,
     strip_bidi,
 )
-from translit._enums import Script
+from disarm._enums import Script
 
 __all__ = [
     "SafeHostnameDetails",

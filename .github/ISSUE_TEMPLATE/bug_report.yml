@@ -1,5 +1,5 @@
 name: 🐞 Bug report
-description: translit does something wrong, crashes, or violates a documented behavior.
+description: disarm does something wrong, crashes, or violates a documented behavior.
 title: "[bug] "
 labels: ["bug", "needs-triage"]
 body:
@@ -9,15 +9,15 @@ body:
         Thanks for filing a bug. A report we can **reproduce in under a minute** gets fixed
         far faster than one we have to interrogate.
 
-        If this is about a confusable or script translit doesn't *yet* map, that's a
+        If this is about a confusable or script disarm doesn't *yet* map, that's a
         **coverage request**, not a bug — please use the **🗺️ Coverage / confusable-gap**
-        form instead. See the [Threat Model](https://github.com/raeq/translit/blob/main/THREAT_MODEL.md)
+        form instead. See the [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)
         if you're unsure which applies.
   - type: input
     id: version
     attributes:
-      label: translit version
-      description: 'Output of `python -c "import translit; print(translit.__version__)"`'
+      label: disarm version
+      description: 'Output of `python -c "import disarm; print(disarm.__version__)"`'
       placeholder: "0.6.2"
     validations:
       required: true
@@ -28,7 +28,7 @@ body:
       description: The smallest self-contained Python snippet that shows the problem. We will run this exactly as pasted.
       render: python
       placeholder: |
-        from translit import normalize_confusables
+        from disarm import normalize_confusables
         print(normalize_confusables("раypal"))
     validations:
       required: true
@@ -50,8 +50,8 @@ body:
     id: env
     attributes:
       label: Environment
-      description: Python version, OS, and how translit was installed.
-      placeholder: "Python 3.12 on macOS 14, installed via `pip install translit-rs`"
+      description: Python version, OS, and how disarm was installed.
+      placeholder: "Python 3.12 on macOS 14, installed via `pip install disarm`"
     validations:
       required: true
   - type: checkboxes

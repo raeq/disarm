@@ -1,4 +1,4 @@
-"""Type aliases and protocols for translit API parameters."""
+"""Type aliases and protocols for disarm API parameters."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class NF(enum.Enum):
     """Unicode normalization form constants.
 
     Provides an enum alternative to the string literals accepted by
-    :func:`~translit.normalize` and :func:`~translit.is_normalized`.
+    :func:`~disarm.normalize` and :func:`~disarm.is_normalized`.
 
     Members:
         C: Canonical Composition (NFC).
@@ -27,7 +27,7 @@ class NF(enum.Enum):
 
     Example::
 
-        from translit import NF, normalize
+        from disarm import NF, normalize
         normalize("ﬁ", form=NF.KC.value)  # => "fi"
     """
 
@@ -42,7 +42,7 @@ class EmojiProvider(Protocol):
     """Protocol for custom emoji name providers.
 
     Implement this protocol to supply your own emoji-to-text mappings
-    for :func:`~translit.demojize` and :func:`~translit.set_emoji_provider`.
+    for :func:`~disarm.demojize` and :func:`~disarm.set_emoji_provider`.
 
     Example::
 
@@ -66,7 +66,7 @@ class EmojiProvider(Protocol):
                       At most **9 codepoints** are ever offered — the longest
                       built-in CLDR sequence; sequences longer than 9 codepoints
                       cannot be matched by a custom provider (#199). See
-                      :func:`~translit.set_emoji_provider`.
+                      :func:`~disarm.set_emoji_provider`.
 
         Returns:
             The text name to substitute, or None if this provider

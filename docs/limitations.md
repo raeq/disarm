@@ -1,6 +1,6 @@
 # Known Limitations
 
-This document covers the known limitations of translit's transliteration, encoding detection, normalization, confusable handling, and text segmentation. Understanding these boundaries helps you choose the right tool and set expectations for edge cases.
+This document covers the known limitations of disarm's transliteration, encoding detection, normalization, confusable handling, and text segmentation. Understanding these boundaries helps you choose the right tool and set expectations for edge cases.
 
 Where possible, each section references the academic and technical literature that establishes or quantifies the limitation.
 
@@ -8,7 +8,7 @@ Where possible, each section references the academic and technical literature th
 
 ### Detection is inherently probabilistic
 
-Automatic encoding detection cannot be deterministic. A given byte sequence may be valid under multiple encodings simultaneously, and no algorithm can recover the original encoding without external metadata. translit's `detect_encoding` wraps [chardetng](https://hsivonen.fi/chardetng/), Firefox's production encoding detector.
+Automatic encoding detection cannot be deterministic. A given byte sequence may be valid under multiple encodings simultaneously, and no algorithm can recover the original encoding without external metadata. disarm's `detect_encoding` wraps [chardetng](https://hsivonen.fi/chardetng/), Firefox's production encoding detector.
 
 Sivonen's analysis of chardetng shows document-length accuracy exceeds 98% for most language/encoding pairs, but title-length detection (roughly 5-20 bytes of non-ASCII content) is substantially weaker. Lithuanian drops to 48% and Latvian to 61% on short inputs due to overlapping character repertoires in windows-1257 and ISO-8859-4. GBK short-input accuracy is deliberately traded for binary size (88% vs Google's ced at 95%).
 
@@ -22,29 +22,29 @@ chardetng targets encodings historically deployed as browser defaults per the [W
 
 ## Transliteration
 
-For a detailed character-level comparison of translit's transliteration against Unidecode and anyascii across all 83 supported languages, including analysis of systematic difference patterns and intentional design choices, see the [Transliteration Comparison](architecture/transliteration-comparison.md).
+For a detailed character-level comparison of disarm's transliteration against Unidecode and anyascii across all 83 supported languages, including analysis of systematic difference patterns and intentional design choices, see the [Transliteration Comparison](architecture/transliteration-comparison.md).
 
 ### Context-free mapping: a fundamental tradeoff
 
-All of translit's transliteration is strictly character-by-character with no context awareness. The survey by [Jaf et al. (2025)](https://www.researchgate.net/publication/392346405_Advances_in_machine_transliteration_methods_limitations_challenges_applications_and_future_directions) identifies the core problem: there is no one-to-one phoneme-to-grapheme correspondence between scripts. Sounds present in one language may not exist in another, and a single source grapheme may map to 0, 1, or multiple target characters.
+All of disarm's transliteration is strictly character-by-character with no context awareness. The survey by [Jaf et al. (2025)](https://www.researchgate.net/publication/392346405_Advances_in_machine_transliteration_methods_limitations_challenges_applications_and_future_directions) identifies the core problem: there is no one-to-one phoneme-to-grapheme correspondence between scripts. Sounds present in one language may not exist in another, and a single source grapheme may map to 0, 1, or multiple target characters.
 
 This is the same approach taken by Python's Unidecode, text-unidecode, anyascii, and similar libraries. The benefit is O(1) per-character lookup with no runtime dependencies. The cost is that disambiguation requiring sentence-level context is impossible.
 
 ### Missing diacritics and short vowels
 
-Arabic, Hebrew, and Urdu romanization is heavily context-dependent without vowel pointing. [Jaf et al. (2021)](https://onlinelibrary.wiley.com/doi/10.1155/2021/7152935) demonstrate this specifically for Ottoman Turkish script, where character-level mapping produces poor results for scripts with suppressed vowels. translit's Arabic transliteration is best-effort and does not recover unwritten short vowels.
+Arabic, Hebrew, and Urdu romanization is heavily context-dependent without vowel pointing. [Jaf et al. (2021)](https://onlinelibrary.wiley.com/doi/10.1155/2021/7152935) demonstrate this specifically for Ottoman Turkish script, where character-level mapping produces poor results for scripts with suppressed vowels. disarm's Arabic transliteration is best-effort and does not recover unwritten short vowels.
 
 ### Hebrew matres lectionis and contextual vowels
 
 Hebrew uses *matres lectionis* — consonant letters (yod, vav, he) that function as vowel markers in certain positions. For example, vav with a dagesh (שׁוּרֶק *shureq*) represents /u/, and ḥolam followed by vav (חוֹלָם מָלֵא) represents /o/. These multi-character sequences require lookahead to distinguish from their consonantal uses.
 
-translit's character-by-character engine maps each codepoint independently, so it cannot detect these contextual patterns. Pointed Hebrew text (with nikkud vowel marks) will produce the correct vowel from the nikkud itself, but the accompanying mater lectionis consonant will also appear in the output (e.g., an extra "y" or "v"). Unpointed Hebrew produces a consonant skeleton only.
+disarm's character-by-character engine maps each codepoint independently, so it cannot detect these contextual patterns. Pointed Hebrew text (with nikkud vowel marks) will produce the correct vowel from the nikkud itself, but the accompanying mater lectionis consonant will also appear in the output (e.g., an extra "y" or "v"). Unpointed Hebrew produces a consonant skeleton only.
 
 For scholarly-grade Hebrew transliteration with full contextual rules (hiriq-yod, shureq, qamats-he, dagesh forte doubling), use a dedicated Hebrew transliterator such as [hebrew-transliteration](https://github.com/charlesLoder/hebrew-transliteration).
 
 ### Competing standards
 
-Even within a single language, multiple romanization standards exist. Russian alone has BGN/PCGN, GOST, ISO 9 (scholarly), passport transliteration, and several informal systems. translit's `lang` parameter selects one standard per language; `strict_iso9=True` provides a scholarly ASCII Cyrillic transliteration (ISO 9-style digraphs such as ж→zh, ч→ch; **not** the diacritic ISO 9:1995 standard — translit tables are ASCII-only). Users needing a specific standard not offered by the default or `lang` can use `register_lang()` to override.
+Even within a single language, multiple romanization standards exist. Russian alone has BGN/PCGN, GOST, ISO 9 (scholarly), passport transliteration, and several informal systems. disarm's `lang` parameter selects one standard per language; `strict_iso9=True` provides a scholarly ASCII Cyrillic transliteration (ISO 9-style digraphs such as ж→zh, ч→ch; **not** the diacritic ISO 9:1995 standard — disarm tables are ASCII-only). Users needing a specific standard not offered by the default or `lang` can use `register_lang()` to override.
 
 The [IndoNLP 2025 shared task](https://arxiv.org/html/2501.05816) on reverse transliteration for romanized Indo-Aryan languages highlights an additional dimension: informal romanization (e.g., Hindi in Latin script on social media) follows no standard. Round-tripping from such text is a fundamentally different problem from transliteration.
 
@@ -52,7 +52,7 @@ The [IndoNLP 2025 shared task](https://arxiv.org/html/2501.05816) on reverse tra
 
 The [South Asian languages survey (2025)](https://arxiv.org/html/2509.11570v1) confirms that corpus coverage and script fidelity remain binding constraints for transliteration of languages with limited digital presence.
 
-As of v0.3.0, translit added 2,553 codepoints: 11 new Unicode form/extension blocks (fullwidth, IPA, Greek Extended, Kangxi Radicals, CJK Compatibility Ideographs, etc.), gap-filled 7 partially-covered scripts, and added 14 new scripts — 10 abugida (Sundanese, Tai Tham, Cham, Batak, Buginese, Tagalog, Hanunoo, Buhid, Tagbanwa, Meetei Mayek) and 4 alphabetic/syllabic (Tifinagh, Lisu, Ol Chiki, Bamum). Scripts that still have no transliteration mapping (characters produce `[?]`):
+As of v0.3.0, disarm added 2,553 codepoints: 11 new Unicode form/extension blocks (fullwidth, IPA, Greek Extended, Kangxi Radicals, CJK Compatibility Ideographs, etc.), gap-filled 7 partially-covered scripts, and added 14 new scripts — 10 abugida (Sundanese, Tai Tham, Cham, Batak, Buginese, Tagalog, Hanunoo, Buhid, Tagbanwa, Meetei Mayek) and 4 alphabetic/syllabic (Tifinagh, Lisu, Ol Chiki, Bamum). Scripts that still have no transliteration mapping (characters produce `[?]`):
 
 - Most CJK Extension blocks (B through I)
 
@@ -94,7 +94,7 @@ The `target` parameter enables Latin → native script conversion, but this is i
 **Round-trip example:**
 
 ```python
-from translit import transliterate
+from disarm import transliterate
 
 text = "Тьма"
 fwd = transliterate(text, lang="ru")        # "Tma"
@@ -118,17 +118,17 @@ fwd2 = transliterate(rev, lang="ru")        # "Tma" (looks same but Ь is gone)
 | 还        | hai       | hái (still), huán (to return) |
 | 得        | de        | de (particle), dé (obtain), děi (must) |
 
-Disambiguation requires word segmentation and sentence-level context, which is outside translit's scope. For applications that need contextual pinyin (e.g., text-to-speech, language learning tools), use a dedicated library such as `pypinyin` (Python) or the `pinyin` crate (Rust).
+Disambiguation requires word segmentation and sentence-level context, which is outside disarm's scope. For applications that need contextual pinyin (e.g., text-to-speech, language learning tools), use a dedicated library such as `pypinyin` (Python) or the `pinyin` crate (Rust).
 
 **Tone marks.** By default, pinyin output is tone-stripped ASCII: `北京` becomes `bei jing`, not `běi jīng`. This is intentional for the primary use cases (URLs, filenames, slugs) where diacritics are unwanted. Pass `tones=True` for diacritical pinyin (`transliterate("北京", tones=True)` → `"běi jīng"`). Toned pinyin coverage includes the ~2,000 most common characters; others fall through to toneless pinyin.
 
 **Coverage is the CJK Unified Ideographs main block only** (U+4E00–U+9FFF, ~20,924 characters). Characters in Extension A (U+3400–U+4DBF), Extension B (U+20000–U+2A6DF), and later extensions are not mapped and will produce `[?]` in replace mode. These extensions contain rare, archaic, or variant characters that appear infrequently in modern text.
 
-**Word boundaries are character-level.** Each character gets a space-separated pinyin syllable: `北京烤鸭` → `bei jing kao ya`. Chinese does not use spaces between words, and translit does not perform word segmentation. The slugifier handles this well (`bei-jing-kao-ya`), but the raw transliteration output may look unusual to native speakers who would expect `Beijing kǎoyā`.
+**Word boundaries are character-level.** Each character gets a space-separated pinyin syllable: `北京烤鸭` → `bei jing kao ya`. Chinese does not use spaces between words, and disarm does not perform word segmentation. The slugifier handles this well (`bei-jing-kao-ya`), but the raw transliteration output may look unusual to native speakers who would expect `Beijing kǎoyā`.
 
 ### Korean (Hangul → Revised Romanization)
 
-**No inter-syllable phonological rules.** Korean pronunciation changes based on adjacent syllables (연음법칙 liaison, 경음화 tensification, 비음화 nasalization, etc.). translit performs syllable-by-syllable decomposition without these rules:
+**No inter-syllable phonological rules.** Korean pronunciation changes based on adjacent syllables (연음법칙 liaison, 경음화 tensification, 비음화 nasalization, etc.). disarm performs syllable-by-syllable decomposition without these rules:
 
 | Word   | Our output   | Correct pronunciation |
 |--------|-------------|----------------------|
@@ -138,11 +138,11 @@ Disambiguation requires word segmentation and sentence-level context, which is o
 
 For URL slugs and filenames, the character-level output is adequate. For linguistic or phonetic applications, use a Korean morphological analyzer.
 
-**Revised Romanization only.** translit implements the South Korean government's Revised Romanization (RR, 2000). McCune-Reischauer, Yale, and other romanization systems are not available. RR is the most widely used system internationally and is the ISO/TR 11941 recommendation.
+**Revised Romanization only.** disarm implements the South Korean government's Revised Romanization (RR, 2000). McCune-Reischauer, Yale, and other romanization systems are not available. RR is the most widely used system internationally and is the ISO/TR 11941 recommendation.
 
 ### Japanese (Kanji)
 
-**Kanji falls back to Chinese pinyin readings.** Japanese kanji share Unicode codepoints with Chinese Han characters. Since translit's Hanzi table is Chinese-based:
+**Kanji falls back to Chinese pinyin readings.** Japanese kanji share Unicode codepoints with Chinese Han characters. Since disarm's Hanzi table is Chinese-based:
 
 | Character | Our output | Japanese reading |
 |-----------|-----------|-----------------|
@@ -152,7 +152,7 @@ For URL slugs and filenames, the character-level output is adequate. For linguis
 
 Hiragana and katakana transliteration (Modified Hepburn) is correct and complete. Only kanji readings are affected by this limitation.
 
-For correct Japanese kanji readings, a morphological dictionary (e.g., MeCab, kuromoji) is required. This is fundamentally different from character-by-character mapping and is outside translit's design.
+For correct Japanese kanji readings, a morphological dictionary (e.g., MeCab, kuromoji) is required. This is fundamentally different from character-by-character mapping and is outside disarm's design.
 
 ## Unicode Normalization
 
@@ -162,7 +162,7 @@ For correct Japanese kanji readings, a morphological dictionary (e.g., MeCab, ku
 
 The [WG21 paper P2729R0](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2729r0.html) documents a real-world case where OS X normalized Unicode filenames via NFD while file-sharing software did not recognize the altered filenames as equivalent to the originals, leading to data loss. Resolving such mismatches is non-trivial precisely because normalization is one-way for compatibility variants.
 
-**translit implication**: `ml_normalize` uses NFKC deliberately — compatibility decomposition is desired for NLP pipelines. Users should understand that NFKC is destructive and not appropriate when typographic distinctions must be preserved.
+**disarm implication**: `ml_normalize` uses NFKC deliberately — compatibility decomposition is desired for NLP pipelines. Users should understand that NFKC is destructive and not appropriate when typographic distinctions must be preserved.
 
 ### Normalization is language-sensitive
 
@@ -200,7 +200,7 @@ The foundational problem is established in the [Unicode Technical Report #39](ht
 
 The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/54) proposes ML-based detection using hash functions but notes the fundamental difficulty: the confusable space grows combinatorially with string length.
 
-**translit implication**: `normalize_confusables()`, `is_confusable()`, and `is_safe_hostname()` use the TR39 confusables table, which is the standard mitigation. However, confusable detection is necessarily conservative. Legitimate multilingual text (e.g., a Russian name in an otherwise English sentence) will trigger warnings. False positives are an inherent tradeoff of any confusable detection system.
+**disarm implication**: `normalize_confusables()`, `is_confusable()`, and `is_safe_hostname()` use the TR39 confusables table, which is the standard mitigation. However, confusable detection is necessarily conservative. Legitimate multilingual text (e.g., a Russian name in an otherwise English sentence) will trigger warnings. False positives are an inherent tradeoff of any confusable detection system.
 
 ### Mixed-script detection is heuristic
 
@@ -214,7 +214,7 @@ The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/
 
 Beyond source code, bidi overrides can disguise malicious filenames. The sequence `invoice[RLO]fdp.exe` renders visually as `invoiceexe.pdf` in many text renderers.
 
-**translit implication**: `strip_bidi()` and the `security_clean()` pipeline strip these characters. This is the correct mitigation for user-submitted content destined for display. Soft hyphens (U+00AD), which can enable text-reordering attacks in some renderers, are also stripped.
+**disarm implication**: `strip_bidi()` and the `security_clean()` pipeline strip these characters. This is the correct mitigation for user-submitted content destined for display. Soft hyphens (U+00AD), which can enable text-reordering attacks in some renderers, are also stripped.
 
 ### Stripping is destructive for legitimate bidi text
 
@@ -228,7 +228,7 @@ Arabic, Hebrew, and other right-to-left scripts legitimately use bidi formatting
 
 [Hashimoto's terminal emulator analysis](https://mitchellh.com/writing/grapheme-clusters-in-terminals) demonstrates that virtually all terminal emulators get this wrong for complex emoji, rendering ZWJ family sequences as multiple characters rather than one.
 
-**translit implication**: `grapheme_len()`, `grapheme_split()`, and `grapheme_truncate()` use the `unicode-segmentation` crate implementing UAX #29 extended grapheme clusters. This is the correct implementation for the specification, but "user-perceived character" is ultimately a rendering question and not all systems agree on cluster boundaries — particularly for newer emoji sequences.
+**disarm implication**: `grapheme_len()`, `grapheme_split()`, and `grapheme_truncate()` use the `unicode-segmentation` crate implementing UAX #29 extended grapheme clusters. This is the correct implementation for the specification, but "user-perceived character" is ultimately a rendering question and not all systems agree on cluster boundaries — particularly for newer emoji sequences.
 
 ### Emoji tables require version updates
 
@@ -290,9 +290,9 @@ Because `build.rs` output is cached by Cargo, incremental rebuilds that only tou
 
 Adding new PHF tables requires adding a TSV file to `src/tables/data/` and a corresponding `generate_*` call in `build.rs`. This does not increase incremental compile times for source-only changes.
 
-## What translit Is Not
+## What disarm Is Not
 
-translit is a fast, context-free Unicode text processing toolkit. It is not:
+disarm is a fast, context-free Unicode text processing toolkit. It is not:
 
 - **A transliteration standard implementation**: it approximates multiple standards pragmatically rather than implementing any single standard perfectly
 - **A natural language processing library**: it has no word segmentation, morphological analysis, or language detection

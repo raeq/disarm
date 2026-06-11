@@ -2,14 +2,14 @@
 
 Usage::
 
-    from translit.normalization import normalize, strip_accents, fold_case
+    from disarm.normalization import normalize, strip_accents, fold_case
 
     normalize("cafe\u0301", form="NFC")  # 'caf\u00e9'  (composed form)
     strip_accents("cafe\u0301")           # 'cafe'
     fold_case("Strasse")                 # 'strasse'
 """
 
-from translit import (
+from disarm import (
     collapse_whitespace,
     fold_case,
     is_normalized,

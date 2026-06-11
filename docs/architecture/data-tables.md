@@ -1,6 +1,6 @@
 # Architecture: Data Tables, PHF & Caching
 
-How translit stores, generates, and caches its Unicode lookup tables.
+How disarm stores, generates, and caches its Unicode lookup tables.
 
 ## Build-time PHF generation
 

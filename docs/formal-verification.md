@@ -1,13 +1,13 @@
 # Exhaustive Testing & Compile-Time Assurance
 
-translit's assurance is described using the methodology of the technical note
+disarm's assurance is described using the methodology of the technical note
 *Provably Lossless Reversible Transliteration: A Formal Specification and an
 Exhaustive-Verification Methodology* ([DOI 10.5281/zenodo.20613272](https://doi.org/10.5281/zenodo.20613272)).
 Its central idea is to **separate what is proven from what is only tested**, and
 to tag every guarantee with the *strength* of assurance behind it.
 
 !!! warning "Scope: the shipping transforms are lossy, not reversible"
-    The paper specifies a *reversible mode* (its requirements R1–R7). translit
+    The paper specifies a *reversible mode* (its requirements R1–R7). disarm
     does **not** ship that mode — its transforms are **lossy by design**: ASCII
     output (I2) and idempotence (I3) are canonicalization properties that
     *preclude* reversibility. This page adopts the paper's verified-vs-tested
@@ -106,7 +106,7 @@ Malayalam, Sinhala, Tibetan, Myanmar, Khmer, Balinese, Javanese.
 
 ## Stated Invariants (I1–I7) — the lossy-normalizer specification
 
-I1–I7 are the invariants of translit's **lossy normalizer**. Two of them — **I2
+I1–I7 are the invariants of disarm's **lossy normalizer**. Two of them — **I2
 (ASCII output)** and **I3 (idempotence)** — are *canonicalization* properties:
 they say the transform collapses input toward a canonical ASCII form, which is
 precisely why the transform is **not** reversible. None of I1–I7 asserts
@@ -121,7 +121,7 @@ Each invariant is tagged with the strongest assurance that discharges it:
 | I3 | Idempotence | `∀s: f(f(s)) = f(s)`, `f = transliterate(·, errors='ignore')` | **(a)** exhaustion over the BMP + **(c)** property-tested (Python) |
 | I4 | No Exceptions | `∀s ∈ UTF-8, |s| ≤ 10 MiB: transliterate(s) does not throw` | **(c)** property-tested (Hypothesis + edge cases) |
 | I5 | Deterministic | `∀s, n>0: n calls of transliterate(s) → identical result` | **(c)** property-tested (100× over mixed-script inputs) |
-| I6 | Input Size Bounded | `∀s: |s| > 10 MiB → TranslitError` | **(b)** structural guard (explicit length check), confirmed by a boundary test |
+| I6 | Input Size Bounded | `∀s: |s| > 10 MiB → DisarmError` | **(b)** structural guard (explicit length check), confirmed by a boundary test |
 | I7 | Output Length Bounded | `∀s: |f(s)| ≤ |s|_bytes × 4 + |s|_chars` | **(c)** property-tested (Hypothesis) |
 
 **Proven vs tested at a glance.** I1–I3 are *proven* over their finite domains
@@ -133,10 +133,10 @@ boundary test.
 
 ## Reversibility is out of scope
 
-translit deliberately ships a **lossy** transform. The paper's reversible mode
+disarm deliberately ships a **lossy** transform. The paper's reversible mode
 (R1–R7) — and the *structural* proofs of round-trip identity and unique
 decodability it carries — apply to a **specified reversible encoding**, which
-translit does not implement. The exhaustive and structural results above are
+disarm does not implement. The exhaustive and structural results above are
 about canonicalization (I1–I7); none of them imply that `transliterate` can be
 inverted. Do not read "exhaustively verified" as "reversible."
 
@@ -164,7 +164,7 @@ They are sound but incomplete: evidence, not proof.
 | Unicode version drift | New Unicode versions add codepoints | CI tracks the Unicode version; new chars fall through to `ErrorMode` |
 | Memory safety (UB) | Requires Miri (nightly only) | `unsafe_code = "forbid"`; no unsafe anywhere |
 
-[#173]: https://github.com/raeq/translit/issues/173
+[#173]: https://github.com/raeq/disarm/issues/173
 
 ---
 
@@ -181,5 +181,5 @@ They are sound but incomplete: evidence, not proof.
 
 - *Provably Lossless Reversible Transliteration: A Formal Specification and an
   Exhaustive-Verification Methodology.* [DOI 10.5281/zenodo.20613272](https://doi.org/10.5281/zenodo.20613272).
-  This page adopts its verified-vs-tested methodology to describe translit's
+  This page adopts its verified-vs-tested methodology to describe disarm's
   existing, **lossy** testing — not its reversible-mode requirements.

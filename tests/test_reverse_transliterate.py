@@ -2,7 +2,7 @@
 
 import pytest
 
-from translit import reverse_langs, transliterate
+from disarm import reverse_langs, transliterate
 
 
 class TestReverseLangs:

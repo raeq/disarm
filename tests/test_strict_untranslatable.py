@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-import translit
-from translit import InvalidArgumentError, TranslitError, find_untranslatable, transliterate
+import disarm
+from disarm import DisarmError, InvalidArgumentError, find_untranslatable, transliterate
 
 
 class TestFindUntranslatable:
@@ -39,7 +39,7 @@ class TestStrictMode:
         assert transliterate("café", errors="strict") == "cafe"
 
     def test_raises_on_first_untranslatable(self) -> None:
-        with pytest.raises(TranslitError) as exc:
+        with pytest.raises(DisarmError) as exc:
             transliterate("a\U0001f600b", errors="strict")
         msg = str(exc.value)
         assert "😀" in msg
@@ -47,7 +47,7 @@ class TestStrictMode:
 
     def test_strict_on_batch(self) -> None:
         # Raises on the first item that has an untranslatable char.
-        with pytest.raises(TranslitError):
+        with pytest.raises(DisarmError):
             transliterate(["ok", "a\U0001f600b"], errors="strict")
 
     def test_strict_batch_all_translatable(self) -> None:
@@ -68,8 +68,8 @@ class TestUnidecodeStrictRetirement:
     now backed by find_untranslatable instead of the O(n) re-transliterate hack."""
 
     def test_strict_success(self) -> None:
-        assert translit.unidecode("café", errors="strict") == "cafe"
+        assert disarm.unidecode("café", errors="strict") == "cafe"
 
     def test_strict_raises_value_error_with_char_index(self) -> None:
         with pytest.raises(ValueError, match=r"at index 1"):
-            translit.unidecode("a\U0001f600b", errors="strict")
+            disarm.unidecode("a\U0001f600b", errors="strict")

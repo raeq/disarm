@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from translit import (
+from disarm import (
     Text,
     TextPipeline,
     demojize,

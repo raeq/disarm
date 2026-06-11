@@ -1,4 +1,4 @@
-"""Head-to-head benchmark: translit vs Unidecode / text-unidecode / anyascii.
+"""Head-to-head benchmark: disarm vs Unidecode / text-unidecode / anyascii.
 
 Benchmarks transliteration throughput across all major script families using
 natural-language Wikipedia text (~2–4 KB each, no synthetic repetition).
@@ -447,11 +447,11 @@ def main():
     libraries: dict[str, callable] = {}
 
     try:
-        from translit import transliterate
+        from disarm import transliterate
 
-        libraries["translit"] = transliterate
+        libraries["disarm"] = transliterate
     except ImportError:
-        print("translit not installed, skipping")
+        print("disarm not installed, skipping")
 
     try:
         from unidecode import unidecode
@@ -510,10 +510,10 @@ def main():
             row = f"  {label:20s} {len(text):>5d}"
             for name in lib_names:
                 row += f"  {results[name]:>12,.0f}/s"
-            if len(lib_names) >= 2 and "translit" in results:
+            if len(lib_names) >= 2 and "disarm" in results:
                 second = lib_names[1]
                 if results[second] > 0:
-                    ratio = results["translit"] / results[second]
+                    ratio = results["disarm"] / results[second]
                     row += f"  {ratio:>6.1f}x"
             print(row)
             all_results.append((label, len(text), results))

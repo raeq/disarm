@@ -4,21 +4,21 @@
 
 Most Unicode text libraries rely on *example-based testing*: a developer writes a handful of input/output pairs, runs them in CI, and calls it done. Example-based tests verify the *specific cases the developer thought of*. They say nothing about the rest.
 
-translit combines three techniques that are uncommon in this space: compile-time data integrity assertions, exhaustive domain coverage, and stated invariant specifications. We are not aware of another transliteration or slugification library that publishes all three, though we haven't audited every library in every language.
+disarm combines three techniques that are uncommon in this space: compile-time data integrity assertions, exhaustive domain coverage, and stated invariant specifications. We are not aware of another transliteration or slugification library that publishes all three, though we haven't audited every library in every language.
 
 ---
 
 ## What "exhaustively tested" means
 
-Testing rigor is a spectrum between conventional tests and full formal verification (mathematical proofs of correctness). translit operates at the strongest level achievable without nightly-only tools:
+Testing rigor is a spectrum between conventional tests and full formal verification (mathematical proofs of correctness). disarm operates at the strongest level achievable without nightly-only tools:
 
 | Level | What it proves | Who does this |
 |-------|---------------|---------------|
 | **Example-based tests** | Specific inputs produce expected outputs | Everyone |
 | **Property-based tests** | Random inputs satisfy stated properties (statistical confidence) | ~5% of open-source projects |
-| **Exhaustive domain tests** | *Every* element in a bounded domain satisfies stated properties (certainty) | translit |
-| **Compile-time assertions** | Data integrity invariants that fail the build if violated (zero runtime cost) | translit |
-| **Stated invariant specs** | Properties stated as specifications with verification method documented | translit |
+| **Exhaustive domain tests** | *Every* element in a bounded domain satisfies stated properties (certainty) | disarm |
+| **Compile-time assertions** | Data integrity invariants that fail the build if violated (zero runtime cost) | disarm |
+| **Stated invariant specs** | Properties stated as specifications with verification method documented | disarm |
 | **Bounded model checking** | Machine-checked proofs of absence of panics, overflow, UB | Future (requires nightly Rust) |
 
 The gap between property-based testing and exhaustive testing is the difference between "we checked 1,000 random Hangul syllables" and "we checked all 11,172 Hangul syllables." The former gives statistical confidence. The latter gives certainty.
@@ -37,9 +37,9 @@ The gap between property-based testing and exhaustive testing is the difference 
 | [confusable_homoglyphs](https://pypi.org/project/confusable-homoglyphs/) | Python | ~20 example tests | None |
 | [pathvalidate](https://pypi.org/project/pathvalidate/) | Python | Example + parametrize | None |
 | [unidecode (Rust)](https://crates.io/crates/unidecode) | Rust | ~10 example tests | None |
-| **translit** | **Rust + Python** | **2,900+ tests** | **Compile-time assertions, exhaustive domain, stated invariants** |
+| **disarm** | **Rust + Python** | **2,900+ tests** | **Compile-time assertions, exhaustive domain, stated invariants** |
 
-These libraries are mature and widely used. The test counts above are approximate (based on public repos at time of writing) and may not reflect internal or downstream test suites. The point is not that they are poorly tested — example-based testing is the norm — but that translit's approach is different in kind.
+These libraries are mature and widely used. The test counts above are approximate (based on public repos at time of writing) and may not reflect internal or downstream test suites. The point is not that they are poorly tested — example-based testing is the norm — but that disarm's approach is different in kind.
 
 ---
 
@@ -93,7 +93,7 @@ Seven properties are stated as specifications, each with a documented verificati
 | I3 | Idempotence | ∀s: f(f(s)) = f(s) | Exhaustive BMP (Rust) + Hypothesis 500 |
 | I4 | No Exceptions | ∀s ∈ UTF-8, \|s\| ≤ 10 MiB: f(s) does not throw | Hypothesis 1,000 + explicit edge cases |
 | I5 | Deterministic | ∀s, n>0: f(s) called n times → same result | 100× repeat on 10 mixed-script inputs |
-| I6 | Input Size Bounded | ∀s: \|s\| > 10 MiB → TranslitError | Boundary test at limit |
+| I6 | Input Size Bounded | ∀s: \|s\| > 10 MiB → DisarmError | Boundary test at limit |
 | I7 | Output Length Bounded | ∀s: \|f(s)\| ≤ \|s\|\_bytes × 4 + \|s\|\_chars | Hypothesis 1,000 |
 
 Each invariant is a test class with a docstring stating the property. The verification method combines exhaustive enumeration (where the domain is bounded) with Hypothesis property-based testing (where it is not).

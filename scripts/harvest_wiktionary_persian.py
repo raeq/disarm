@@ -26,7 +26,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-UA = "translit-dict-builder/0.5 (https://github.com/raeq/translit)"
+UA = "disarm-dict-builder/0.5 (https://github.com/raeq/disarm)"
 API = "https://en.wiktionary.org/w/api.php"
 
 

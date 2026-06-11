@@ -1,6 +1,6 @@
-"""Idiomatic Python integration tests for the translit API.
+"""Idiomatic Python integration tests for the disarm API.
 
-These tests demonstrate (not merely prove) how translit composes with
+These tests demonstrate (not merely prove) how disarm composes with
 standard Python patterns: lambdas, generators, list/dict comprehensions,
 map/filter/sorted, functools, and itertools. Each test is a self-contained
 usage example that a Python developer can read as documentation.
@@ -10,7 +10,7 @@ from collections.abc import Iterable, Iterator
 from functools import partial, reduce
 from typing import Any, Literal, cast
 
-from translit import (
+from disarm import (
     Slugifier,
     Text,
     TextPipeline,
@@ -102,7 +102,7 @@ class TestLambdaComposition:
 
 
 class TestGeneratorIntegration:
-    """Generators producing and consuming translit transforms lazily."""
+    """Generators producing and consuming disarm transforms lazily."""
 
     def test_transliterate_generator(self) -> None:
         """Generator that yields transliterated strings lazily."""

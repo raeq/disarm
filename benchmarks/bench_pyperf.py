@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comprehensive pyperf benchmarks for translit vs competitor libraries.
+"""Comprehensive pyperf benchmarks for disarm vs competitor libraries.
 
 Usage
 -----
@@ -79,76 +79,76 @@ NORM_LONG = "Ça fait déjà longtemps" * 20
 
 
 def add_transliteration_benchmarks(runner: pyperf.Runner) -> None:
-    """Transliteration: translit vs Unidecode, text-unidecode, anyascii."""
+    """Transliteration: disarm vs Unidecode, text-unidecode, anyascii."""
 
-    # -- translit --
+    # -- disarm --
     runner.timeit(
-        "translit:translit:latin_short",
+        "disarm:disarm:latin_short",
         "transliterate(text)",
         globals={
-            "transliterate": __import__("translit").transliterate,
+            "transliterate": __import__("disarm").transliterate,
             "text": LATIN_SHORT,
         },
     )
     runner.timeit(
-        "translit:translit:latin_long",
+        "disarm:disarm:latin_long",
         "transliterate(text)",
         globals={
-            "transliterate": __import__("translit").transliterate,
+            "transliterate": __import__("disarm").transliterate,
             "text": LATIN_LONG,
         },
     )
     runner.timeit(
-        "translit:translit:cyrillic_short",
+        "disarm:disarm:cyrillic_short",
         "transliterate(text)",
         globals={
-            "transliterate": __import__("translit").transliterate,
+            "transliterate": __import__("disarm").transliterate,
             "text": CYRILLIC_SHORT,
         },
     )
     runner.timeit(
-        "translit:translit:cyrillic_long",
+        "disarm:disarm:cyrillic_long",
         "transliterate(text)",
         globals={
-            "transliterate": __import__("translit").transliterate,
+            "transliterate": __import__("disarm").transliterate,
             "text": CYRILLIC_LONG,
         },
     )
     runner.timeit(
-        "translit:translit:cjk_short",
+        "disarm:disarm:cjk_short",
         "transliterate(text)",
         globals={
-            "transliterate": __import__("translit").transliterate,
+            "transliterate": __import__("disarm").transliterate,
             "text": CJK_SHORT,
         },
     )
     runner.timeit(
-        "translit:translit:cjk_long",
+        "disarm:disarm:cjk_long",
         "transliterate(text)",
         globals={
-            "transliterate": __import__("translit").transliterate,
+            "transliterate": __import__("disarm").transliterate,
             "text": CJK_LONG,
         },
     )
     runner.timeit(
-        "translit:translit:mixed",
+        "disarm:disarm:mixed",
         "transliterate(text)",
-        globals={"transliterate": __import__("translit").transliterate, "text": MIXED},
+        globals={"transliterate": __import__("disarm").transliterate, "text": MIXED},
     )
 
     # -- Unidecode --
     runner.timeit(
-        "translit:Unidecode:latin_short",
+        "disarm:Unidecode:latin_short",
         "unidecode(text)",
         globals={"unidecode": __import__("unidecode").unidecode, "text": LATIN_SHORT},
     )
     runner.timeit(
-        "translit:Unidecode:latin_long",
+        "disarm:Unidecode:latin_long",
         "unidecode(text)",
         globals={"unidecode": __import__("unidecode").unidecode, "text": LATIN_LONG},
     )
     runner.timeit(
-        "translit:Unidecode:cyrillic_short",
+        "disarm:Unidecode:cyrillic_short",
         "unidecode(text)",
         globals={
             "unidecode": __import__("unidecode").unidecode,
@@ -156,29 +156,29 @@ def add_transliteration_benchmarks(runner: pyperf.Runner) -> None:
         },
     )
     runner.timeit(
-        "translit:Unidecode:cyrillic_long",
+        "disarm:Unidecode:cyrillic_long",
         "unidecode(text)",
         globals={"unidecode": __import__("unidecode").unidecode, "text": CYRILLIC_LONG},
     )
     runner.timeit(
-        "translit:Unidecode:cjk_short",
+        "disarm:Unidecode:cjk_short",
         "unidecode(text)",
         globals={"unidecode": __import__("unidecode").unidecode, "text": CJK_SHORT},
     )
     runner.timeit(
-        "translit:Unidecode:cjk_long",
+        "disarm:Unidecode:cjk_long",
         "unidecode(text)",
         globals={"unidecode": __import__("unidecode").unidecode, "text": CJK_LONG},
     )
     runner.timeit(
-        "translit:Unidecode:mixed",
+        "disarm:Unidecode:mixed",
         "unidecode(text)",
         globals={"unidecode": __import__("unidecode").unidecode, "text": MIXED},
     )
 
     # -- text-unidecode --
     runner.timeit(
-        "translit:text_unidecode:latin_short",
+        "disarm:text_unidecode:latin_short",
         "unidecode(text)",
         globals={
             "unidecode": __import__("text_unidecode").unidecode,
@@ -186,7 +186,7 @@ def add_transliteration_benchmarks(runner: pyperf.Runner) -> None:
         },
     )
     runner.timeit(
-        "translit:text_unidecode:latin_long",
+        "disarm:text_unidecode:latin_long",
         "unidecode(text)",
         globals={
             "unidecode": __import__("text_unidecode").unidecode,
@@ -194,7 +194,7 @@ def add_transliteration_benchmarks(runner: pyperf.Runner) -> None:
         },
     )
     runner.timeit(
-        "translit:text_unidecode:cyrillic_short",
+        "disarm:text_unidecode:cyrillic_short",
         "unidecode(text)",
         globals={
             "unidecode": __import__("text_unidecode").unidecode,
@@ -202,7 +202,7 @@ def add_transliteration_benchmarks(runner: pyperf.Runner) -> None:
         },
     )
     runner.timeit(
-        "translit:text_unidecode:cyrillic_long",
+        "disarm:text_unidecode:cyrillic_long",
         "unidecode(text)",
         globals={
             "unidecode": __import__("text_unidecode").unidecode,
@@ -210,7 +210,7 @@ def add_transliteration_benchmarks(runner: pyperf.Runner) -> None:
         },
     )
     runner.timeit(
-        "translit:text_unidecode:cjk_short",
+        "disarm:text_unidecode:cjk_short",
         "unidecode(text)",
         globals={
             "unidecode": __import__("text_unidecode").unidecode,
@@ -218,72 +218,72 @@ def add_transliteration_benchmarks(runner: pyperf.Runner) -> None:
         },
     )
     runner.timeit(
-        "translit:text_unidecode:cjk_long",
+        "disarm:text_unidecode:cjk_long",
         "unidecode(text)",
         globals={"unidecode": __import__("text_unidecode").unidecode, "text": CJK_LONG},
     )
     runner.timeit(
-        "translit:text_unidecode:mixed",
+        "disarm:text_unidecode:mixed",
         "unidecode(text)",
         globals={"unidecode": __import__("text_unidecode").unidecode, "text": MIXED},
     )
 
     # -- anyascii --
     runner.timeit(
-        "translit:anyascii:latin_short",
+        "disarm:anyascii:latin_short",
         "anyascii(text)",
         globals={"anyascii": __import__("anyascii").anyascii, "text": LATIN_SHORT},
     )
     runner.timeit(
-        "translit:anyascii:latin_long",
+        "disarm:anyascii:latin_long",
         "anyascii(text)",
         globals={"anyascii": __import__("anyascii").anyascii, "text": LATIN_LONG},
     )
     runner.timeit(
-        "translit:anyascii:cyrillic_short",
+        "disarm:anyascii:cyrillic_short",
         "anyascii(text)",
         globals={"anyascii": __import__("anyascii").anyascii, "text": CYRILLIC_SHORT},
     )
     runner.timeit(
-        "translit:anyascii:cyrillic_long",
+        "disarm:anyascii:cyrillic_long",
         "anyascii(text)",
         globals={"anyascii": __import__("anyascii").anyascii, "text": CYRILLIC_LONG},
     )
     runner.timeit(
-        "translit:anyascii:cjk_short",
+        "disarm:anyascii:cjk_short",
         "anyascii(text)",
         globals={"anyascii": __import__("anyascii").anyascii, "text": CJK_SHORT},
     )
     runner.timeit(
-        "translit:anyascii:cjk_long",
+        "disarm:anyascii:cjk_long",
         "anyascii(text)",
         globals={"anyascii": __import__("anyascii").anyascii, "text": CJK_LONG},
     )
     runner.timeit(
-        "translit:anyascii:mixed",
+        "disarm:anyascii:mixed",
         "anyascii(text)",
         globals={"anyascii": __import__("anyascii").anyascii, "text": MIXED},
     )
 
 
 def add_slugify_benchmarks(runner: pyperf.Runner) -> None:
-    """Slugification: translit vs python-slugify."""
+    """Slugification: disarm vs python-slugify."""
 
-    # -- translit --
+    # -- disarm --
     runner.timeit(
-        "slugify:translit:short",
+        "slugify:disarm:short",
         "slugify(text)",
-        globals={"slugify": __import__("translit").slugify, "text": SLUG_INPUT},
+        globals={"slugify": __import__("disarm").slugify, "text": SLUG_INPUT},
     )
     runner.timeit(
-        "slugify:translit:long",
+        "slugify:disarm:long",
         "slugify(text)",
-        globals={"slugify": __import__("translit").slugify, "text": SLUG_LONG},
+        globals={"slugify": __import__("disarm").slugify, "text": SLUG_LONG},
     )
     runner.timeit(
-        "slugify:translit:options",
+        "slugify:disarm:options",
         "slugify(text, separator='_', max_length=30, stopwords=['the', 'a', 'and'])",
-        globals={"slugify": __import__("translit").slugify, "text": SLUG_LONG},
+        globals={"slugify": __import__("disarm").slugify, "text": SLUG_LONG},
     )
 
     # -- python-slugify --
@@ -307,23 +307,23 @@ def add_slugify_benchmarks(runner: pyperf.Runner) -> None:
 
 
 def add_normalize_benchmarks(runner: pyperf.Runner) -> None:
-    """Normalization: translit vs unicodedata (stdlib C extension)."""
+    """Normalization: disarm vs unicodedata (stdlib C extension)."""
     import unicodedata
 
     runner.timeit(
-        "normalize:translit:nfc_short",
+        "normalize:disarm:nfc_short",
         "normalize(text, form='NFC')",
-        globals={"normalize": __import__("translit").normalize, "text": NORM_INPUT},
+        globals={"normalize": __import__("disarm").normalize, "text": NORM_INPUT},
     )
     runner.timeit(
-        "normalize:translit:nfc_long",
+        "normalize:disarm:nfc_long",
         "normalize(text, form='NFC')",
-        globals={"normalize": __import__("translit").normalize, "text": NORM_LONG},
+        globals={"normalize": __import__("disarm").normalize, "text": NORM_LONG},
     )
     runner.timeit(
-        "normalize:translit:nfkc_short",
+        "normalize:disarm:nfkc_short",
         "normalize(text, form='NFKC')",
-        globals={"normalize": __import__("translit").normalize, "text": NORM_INPUT},
+        globals={"normalize": __import__("disarm").normalize, "text": NORM_INPUT},
     )
 
     runner.timeit(
@@ -344,30 +344,30 @@ def add_normalize_benchmarks(runner: pyperf.Runner) -> None:
 
 
 def add_filename_benchmarks(runner: pyperf.Runner) -> None:
-    """Filename sanitization: translit vs pathvalidate."""
+    """Filename sanitization: disarm vs pathvalidate."""
     from pathvalidate import sanitize_filename as pv_sanitize
 
     runner.timeit(
-        "filename:translit:simple",
+        "filename:disarm:simple",
         "sanitize(text, platform='universal')",
         globals={
-            "sanitize": __import__("translit").sanitize_filename,
+            "sanitize": __import__("disarm").sanitize_filename,
             "text": FILENAME_SIMPLE,
         },
     )
     runner.timeit(
-        "filename:translit:unicode",
+        "filename:disarm:unicode",
         "sanitize(text, platform='universal')",
         globals={
-            "sanitize": __import__("translit").sanitize_filename,
+            "sanitize": __import__("disarm").sanitize_filename,
             "text": FILENAME_UNICODE,
         },
     )
     runner.timeit(
-        "filename:translit:adversarial",
+        "filename:disarm:adversarial",
         "sanitize(text, platform='universal')",
         globals={
-            "sanitize": __import__("translit").sanitize_filename,
+            "sanitize": __import__("disarm").sanitize_filename,
             "text": FILENAME_ADVERSARIAL,
         },
     )
@@ -390,7 +390,7 @@ def add_filename_benchmarks(runner: pyperf.Runner) -> None:
 
 
 def add_strip_accents_benchmarks(runner: pyperf.Runner) -> None:
-    """Accent stripping: translit (Rust) vs unicodedata-based Python approach."""
+    """Accent stripping: disarm (Rust) vs unicodedata-based Python approach."""
 
     # Common pure-Python accent stripping implementation
     setup = (
@@ -401,18 +401,18 @@ def add_strip_accents_benchmarks(runner: pyperf.Runner) -> None:
     )
 
     runner.timeit(
-        "strip_accents:translit:short",
+        "strip_accents:disarm:short",
         "strip_accents(text)",
         globals={
-            "strip_accents": __import__("translit").strip_accents,
+            "strip_accents": __import__("disarm").strip_accents,
             "text": LATIN_SHORT,
         },
     )
     runner.timeit(
-        "strip_accents:translit:long",
+        "strip_accents:disarm:long",
         "strip_accents(text)",
         globals={
-            "strip_accents": __import__("translit").strip_accents,
+            "strip_accents": __import__("disarm").strip_accents,
             "text": LATIN_LONG,
         },
     )
@@ -433,7 +433,7 @@ def add_strip_accents_benchmarks(runner: pyperf.Runner) -> None:
 
 def add_list_input_benchmarks(runner: pyperf.Runner) -> None:
     """List input vs loop-of-calls for N strings."""
-    import translit
+    import disarm
 
     # Build a realistic batch: 100 mixed Latin/Cyrillic strings
     batch_100 = [LATIN_SHORT, CYRILLIC_SHORT, CJK_SHORT, MIXED] * 25
@@ -443,26 +443,26 @@ def add_list_input_benchmarks(runner: pyperf.Runner) -> None:
         "batch:transliterate_list:100",
         "transliterate(texts)",
         globals={
-            "transliterate": translit.transliterate,
+            "transliterate": disarm.transliterate,
             "texts": batch_100,
         },
     )
     runner.timeit(
         "batch:transliterate_loop:100",
         "[transliterate(t) for t in texts]",
-        globals={"transliterate": translit.transliterate, "texts": batch_100},
+        globals={"transliterate": disarm.transliterate, "texts": batch_100},
     )
 
     # --- slugify(list) vs loop ---
     runner.timeit(
         "batch:slugify_list:100",
         "slugify(texts)",
-        globals={"slugify": translit.slugify, "texts": batch_100},
+        globals={"slugify": disarm.slugify, "texts": batch_100},
     )
     runner.timeit(
         "batch:slugify_loop:100",
         "[slugify(t) for t in texts]",
-        globals={"slugify": translit.slugify, "texts": batch_100},
+        globals={"slugify": disarm.slugify, "texts": batch_100},
     )
 
     # --- Unidecode loop baseline for comparison ---
@@ -474,17 +474,17 @@ def add_list_input_benchmarks(runner: pyperf.Runner) -> None:
 
 
 def add_fold_case_benchmarks(runner: pyperf.Runner) -> None:
-    """Case folding: translit vs str.casefold()."""
+    """Case folding: disarm vs str.casefold()."""
 
     runner.timeit(
-        "fold_case:translit:short",
+        "fold_case:disarm:short",
         "fold_case(text)",
-        globals={"fold_case": __import__("translit").fold_case, "text": LATIN_SHORT},
+        globals={"fold_case": __import__("disarm").fold_case, "text": LATIN_SHORT},
     )
     runner.timeit(
-        "fold_case:translit:long",
+        "fold_case:disarm:long",
         "fold_case(text)",
-        globals={"fold_case": __import__("translit").fold_case, "text": LATIN_LONG},
+        globals={"fold_case": __import__("disarm").fold_case, "text": LATIN_LONG},
     )
 
     runner.timeit(

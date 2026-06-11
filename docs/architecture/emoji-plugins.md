@@ -1,6 +1,6 @@
 # Architecture: Emoji Plugin System
 
-This document describes the architecture for emoji-to-text expansion in translit. The design adds a `demojize()` transform that converts emoji sequences to textual descriptions, integrated into the existing `Text` builder and `TextPipeline`. Emoji data is supplied through a plugin system that allows runtime selection of emoji version, language, and data source.
+This document describes the architecture for emoji-to-text expansion in disarm. The design adds a `demojize()` transform that converts emoji sequences to textual descriptions, integrated into the existing `Text` builder and `TextPipeline`. Emoji data is supplied through a plugin system that allows runtime selection of emoji version, language, and data source.
 
 ## Problem
 
@@ -12,7 +12,7 @@ NLP corpora are archival. A researcher analysing 2016 tweets needs Emoji 3.0 ann
 
 Three rules govern the split between core and plugins:
 
-1. **Core owns the matching engine.** The algorithm that scans text for multi-codepoint emoji sequences (ZWJ joins, skin tone modifiers, flag pairs, keycap sequences) lives in the `translit` core crate. Plugins never implement scanning logic.
+1. **Core owns the matching engine.** The algorithm that scans text for multi-codepoint emoji sequences (ZWJ joins, skin tone modifiers, flag pairs, keycap sequences) lives in the `disarm` core crate. Plugins never implement scanning logic.
 
 2. **Plugins supply data only.** A plugin is a mapping from emoji codepoint sequences to textual descriptions. It implements a trait, registers itself, and the core engine calls into it during scanning. Plugins carry no processing logic beyond returning strings.
 
@@ -74,12 +74,12 @@ Each plugin is a separate Rust crate with a PyO3 wrapper, published as an indepe
 
 | Package | Contents | Typical Size |
 |---|---|---|
-| `translit` | Core engine + latest English CLDR (default) | ~2 MB |
-| `translit-emoji-15` | Emoji 15.1 (2023) CLDR annotations | ~400 KB |
-| `translit-emoji-14` | Emoji 14.0 (2021) CLDR annotations | ~350 KB |
-| `translit-emoji-12` | Emoji 12.0 (2019) CLDR annotations | ~300 KB |
-| `translit-emoji-legacy` | Pre-standard platform emoji (carriers, early Android/Samsung) | ~200 KB |
-| `translit-emoji-multilingual` | CLDR annotations for 20+ languages, latest version | ~3 MB |
+| `disarm` | Core engine + latest English CLDR (default) | ~2 MB |
+| `disarm-emoji-15` | Emoji 15.1 (2023) CLDR annotations | ~400 KB |
+| `disarm-emoji-14` | Emoji 14.0 (2021) CLDR annotations | ~350 KB |
+| `disarm-emoji-12` | Emoji 12.0 (2019) CLDR annotations | ~300 KB |
+| `disarm-emoji-legacy` | Pre-standard platform emoji (carriers, early Android/Samsung) | ~200 KB |
+| `disarm-emoji-multilingual` | CLDR annotations for 20+ languages, latest version | ~3 MB |
 
 Each versioned plugin covers the complete emoji set defined by that Unicode Emoji version, including sequences that were later removed or redefined. This is critical for historical corpus analysis: the Emoji 12.0 plugin knows about emoji as they existed in 2019, not as they exist today.
 
@@ -90,7 +90,7 @@ Two plugin types are supported:
 **Compiled plugins** (primary path). The plugin crate compiles CLDR data into a PHF map at build time. Zero runtime cost, no file I/O, no data directory to manage. This is the default for versioned release plugins.
 
 ```rust
-// In crate translit-emoji-15
+// In crate disarm-emoji-15
 pub struct Emoji15Provider;
 
 impl EmojiProvider for Emoji15Provider {
@@ -106,12 +106,12 @@ impl EmojiProvider for Emoji15Provider {
 
 <!--- skip: next -->
 ```python
-from translit.emoji import FileProvider
+from disarm.emoji import FileProvider
 
 provider = FileProvider("/path/to/custom-emoji-data.bin")
 ```
 
-The binary format is a simple sequence-to-string map serialised with MessagePack or FlatBuffers. A CLI tool (`translit-emoji-pack`) converts CLDR XML to this format.
+The binary format is a simple sequence-to-string map serialised with MessagePack or FlatBuffers. A CLI tool (`disarm-emoji-pack`) converts CLDR XML to this format.
 
 ### Registration and Selection
 
@@ -119,19 +119,19 @@ On the Python side, providers are registered with the core and selected per-call
 
 <!--- skip: next -->
 ```python
-import translit
-from translit_emoji_15 import Emoji15Provider
-from translit_emoji_12 import Emoji12Provider
+import disarm
+from disarm_emoji_15 import Emoji15Provider
+from disarm_emoji_12 import Emoji12Provider
 
 # Per-call: pass a provider explicitly
 Text("I love 😂").demojize(provider=Emoji15Provider())
 
 # Global: set a session-wide default
-translit.set_emoji_provider(Emoji12Provider())
+disarm.set_emoji_provider(Emoji12Provider())
 Text("I love 😂").demojize()  # uses Emoji 12.0
 
 # Reset to built-in default
-translit.set_emoji_provider(None)
+disarm.set_emoji_provider(None)
 ```
 
 On the Rust side, the global provider is stored behind a `RwLock<Arc<dyn EmojiProvider>>`, matching the existing pattern used by `LANG_TABLES` in `src/tables/mod.rs`. Per-call providers bypass the global entirely.
@@ -142,7 +142,7 @@ For mixed-era corpora, providers can be stacked in fallback order:
 
 <!--- skip: next -->
 ```python
-from translit.emoji import ChainProvider
+from disarm.emoji import ChainProvider
 
 provider = ChainProvider([
     Emoji16Provider(),    # Try newest first
@@ -174,7 +174,7 @@ This ordering is deliberate. Emoji expansion runs after normalization because so
 ### Text Builder
 
 ```python
-from translit import Text
+from disarm import Text
 
 result = (Text("Hello 🌍!")
     .normalize(form="NFC")
@@ -190,7 +190,7 @@ assert result == "hello globe showing europe-africa!"
 `TextPipeline` gains a `demojize` boolean parameter, consistent with the existing flags (`transliterate`, `confusables`, `strip_accents`, `fold_case`, `collapse_whitespace`). The pipeline uses the global provider and the `lang` already configured on the pipeline.
 
 ```python
-from translit import TextPipeline
+from disarm import TextPipeline
 
 pipe = TextPipeline(
     normalize="NFC",
@@ -213,10 +213,10 @@ When `demojize(lang="de")` is called, the provider must supply German-language a
 
 ## Output
 
-`demojize()` always returns the bare CLDR short name as plain text. There is no `format` parameter — wrapping output in colons, brackets, or other delimiters is trivial in Python and composable with existing translit transforms:
+`demojize()` always returns the bare CLDR short name as plain text. There is no `format` parameter — wrapping output in colons, brackets, or other delimiters is trivial in Python and composable with existing disarm transforms:
 
 ```python
-from translit import demojize, Text
+from disarm import demojize, Text
 
 assert demojize("I love 😂") == "I love face with tears of joy"
 
@@ -247,7 +247,7 @@ CLDR data is released under the Unicode License, which is compatible with MIT.
 
 ## What This Architecture Does NOT Cover
 
-- **Emojize** (text→emoji conversion). This is the inverse operation and is out of scope. translit is a text normalization library; its transforms are lossy by design.
-- **Emoji rendering or display.** translit operates on codepoint sequences, not glyphs.
+- **Emojize** (text→emoji conversion). This is the inverse operation and is out of scope. disarm is a text normalization library; its transforms are lossy by design.
+- **Emoji rendering or display.** disarm operates on codepoint sequences, not glyphs.
 - **Sentiment analysis.** Mapping emoji to sentiment scores is an NLP task, not a transliteration task. Plugins provide textual descriptions only.
 - **Platform-specific rendering differences.** The 🔫 codepoint maps to "water pistol" in current CLDR regardless of how it rendered on a specific platform in 2015. Historical rendering metadata is not in scope.

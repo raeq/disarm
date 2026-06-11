@@ -1,6 +1,6 @@
 """Adversarial-text robustness evaluation harness (#49).
 
-A reusable, out-of-CI benchmark that measures how translit's defense transforms
+A reusable, out-of-CI benchmark that measures how disarm's defense transforms
 (``strip_obfuscation``) behave on real-world spam/phishing corpora. It pulls
 large external datasets over the network, so it is **not** part of the test gate
 — run it on demand (see ``README.md``).

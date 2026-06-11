@@ -1,4 +1,4 @@
-"""Tests for translit encoding detection and decoding.
+"""Tests for disarm encoding detection and decoding.
 
 Covers UTF-8, UTF-16, Windows-1252, ISO-8859-1, Shift_JIS, EUC-JP,
 EUC-KR, Big5, GB18030, and edge cases.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from translit import decode_to_utf8, detect_encoding
+from disarm import decode_to_utf8, detect_encoding
 
 
 class TestDetectEncoding:
@@ -183,9 +183,9 @@ class TestDecodeToUtf8:
 
     def test_min_confidence_high_threshold_rejects(self) -> None:
         # detect_encoding returns at most 0.95; threshold of 1.0 always rejects.
-        from translit import TranslitError
+        from disarm import DisarmError
 
-        with pytest.raises(TranslitError, match="below the required minimum"):
+        with pytest.raises(DisarmError, match="below the required minimum"):
             decode_to_utf8(b"hi", min_confidence=1.0)
 
     def test_min_confidence_high_threshold_explicit_encoding_ok(self) -> None:
@@ -257,16 +257,16 @@ class TestAdversarialDecodePath:
         assert not any(0xD800 <= ord(c) <= 0xDFFF for c in s)
 
     def test_min_confidence_rejects_low_confidence(self) -> None:
-        from translit import TranslitError
+        from disarm import DisarmError
 
         # An unreachable confidence floor must raise, not silently guess (#66).
-        with pytest.raises(TranslitError, match="confidence"):
+        with pytest.raises(DisarmError, match="confidence"):
             decode_to_utf8(b"\xff\xfe\x80\x81", min_confidence=1.0)
 
     def test_unknown_encoding_raises(self) -> None:
-        from translit import TranslitError
+        from disarm import DisarmError
 
-        with pytest.raises(TranslitError, match="[Uu]nknown encoding"):
+        with pytest.raises(DisarmError, match="[Uu]nknown encoding"):
             decode_to_utf8(b"x", encoding="no-such-encoding")
 
     def test_large_hostile_input_is_linear(self) -> None:
@@ -283,9 +283,9 @@ class TestStrictDecode:
 
     def test_strict_raises_on_lossy(self) -> None:
         # 0xE9 is an invalid standalone byte in UTF-8 (not a BOM).
-        from translit import TranslitError
+        from disarm import DisarmError
 
-        with pytest.raises(TranslitError) as exc:
+        with pytest.raises(DisarmError) as exc:
             decode_to_utf8(b"caf\xe9", "utf-8", strict=True)
         # The contract: the error names the encoding it decoded from.
         assert "decoding as 'UTF-8'" in str(exc.value)

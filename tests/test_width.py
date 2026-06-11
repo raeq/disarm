@@ -13,7 +13,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from translit import grapheme_len, grapheme_width, terminal_width
+from disarm import grapheme_len, grapheme_width, terminal_width
 
 # --- Golden vectors (A2–A6) -------------------------------------------------
 
@@ -112,14 +112,14 @@ def test_differential_vs_wcwidth() -> None:
     """Every divergence from wcwidth must be explained by a UCD property.
 
     wcwidth is an independent value oracle; unicodedata classifies whether a
-    divergence is one of translit's documented policies — controls/format
+    divergence is one of disarm's documented policies — controls/format
     zeroed (A4/A5), emoji-presented widened (A6), isolated spacing marks kept
-    narrow (A4), or translit following UCD East Asian Width where wcwidth's own
+    narrow (A4), or disarm following UCD East Asian Width where wcwidth's own
     table over-widens a symbol. Anything else is a real bug.
     """
     wcwidth = pytest.importorskip("wcwidth").wcwidth
     # Default_Ignorable_Code_Point from the authoritative UCD (independent of
-    # translit's own generated table) so a wrongly-zeroed printable char is caught.
+    # disarm's own generated table) so a wrongly-zeroed printable char is caught.
     from scripts.gen_width_data import _fetch, _parse_property
 
     dcp = _fetch("DerivedCoreProperties.txt")

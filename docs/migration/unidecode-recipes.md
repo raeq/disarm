@@ -1,10 +1,10 @@
-# Unidecode → translit recipes
+# Unidecode → disarm recipes
 
-A [survey of 58 real projects](https://github.com/raeq/translit/issues/88)
+A [survey of 58 real projects](https://github.com/raeq/disarm/issues/88)
 (beets, saleor, investpy, python-slugify, django-autoslug, …) found that
 `unidecode` is almost never the last step. It sits inside a hand-rolled
 normalisation pipeline — lowercase, strip, collapse, re-encode — and **every one
-of those pipelines already has a single-call equivalent in translit**. The gap
+of those pipelines already has a single-call equivalent in disarm**. The gap
 is discoverability, not capability.
 
 This page maps each observed pattern to its one-liner. The "after" snippets are
@@ -16,12 +16,12 @@ hand-rolled code and are not executed.
     A hand-rolled pipeline bakes in an **ordering** decision — does `.lower()`
     run before or after transliteration? Get it wrong and `№5` slugs to `No5`
     instead of `no5` (see [the ordering footgun](#the-ordering-footgun)). The
-    translit helper encapsulates the correct order so you never have to make
+    disarm helper encapsulates the correct order so you never have to make
     that call.
 
 ## At a glance
 
-| Hand-rolled with `unidecode` | translit one-liner |
+| Hand-rolled with `unidecode` | disarm one-liner |
 |---|---|
 | `re.sub(r"\W+", "-", unidecode(t).lower().strip())` | `slugify(t)` |
 | `unidecode(name).replace(os.sep, "_")` | `sanitize_filename(name, platform=...)` |
@@ -43,7 +43,7 @@ def slug(t):
 
 ```python
 # After
-from translit import slugify
+from disarm import slugify
 
 assert slugify("Café del Mar!!") == "cafe-del-mar"
 assert slugify("Хлеб с маслом") == "khleb-s-maslom"
@@ -66,7 +66,7 @@ safe = unidecode("Naïve/Résumé.txt").replace(os.sep, "_")
 
 ```python
 # After
-from translit import sanitize_filename
+from disarm import sanitize_filename
 
 assert sanitize_filename("Naïve/Résumé.txt") == "Naive_Resume.txt"
 ```
@@ -88,7 +88,7 @@ raw = unidecode("Café").encode("ascii")
 
 ```python
 # After
-from translit import transliterate
+from disarm import transliterate
 
 assert transliterate("Café").encode("ascii") == b"Cafe"
 ```
@@ -109,7 +109,7 @@ key = unidecode("Café del Mar".lower().strip())
 
 ```python
 # After — pick the helper that documents intent
-from translit import search_key, catalog_key, sort_key
+from disarm import search_key, catalog_key, sort_key
 
 # For typical text the three coincide — use the name that fits the call site:
 assert search_key("  Café  RÉSUMÉ  ") == "cafe resume"
@@ -155,7 +155,7 @@ q = quote(unidecode("Café del Mar"))
 ```python
 # After
 from urllib.parse import quote
-from translit import transliterate, slugify
+from disarm import transliterate, slugify
 
 assert quote(transliterate("Café del Mar")) == "Cafe%20del%20Mar"
 # For a clean URL path segment, prefer a slug:
@@ -170,13 +170,13 @@ numero sign `№` expands to `No` — a capital `N` that a prior `.lower()` cann
 see:
 
 ```python
-from translit import transliterate, search_key
+from disarm import transliterate, search_key
 
 # Lowercasing BEFORE transliteration misses the introduced capital:
 assert transliterate("№5".lower()) == "No5"     # wrong — stray capital N
 # Lowercasing AFTER transliteration is correct:
 assert transliterate("№5").lower() == "no5"
-# The translit helpers fold case after transliterating, so they get it right:
+# The disarm helpers fold case after transliterating, so they get it right:
 assert search_key("№5") == "no5"
 ```
 

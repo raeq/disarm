@@ -1,8 +1,8 @@
-"""Tests for translit.transliterate and related functions."""
+"""Tests for disarm.transliterate and related functions."""
 
 import pytest
 
-from translit import TranslitError, is_ascii, list_langs, strip_accents, transliterate
+from disarm import DisarmError, is_ascii, list_langs, strip_accents, transliterate
 
 
 class TestTransliterate:
@@ -49,7 +49,7 @@ class TestTransliterate:
         assert "\U00020000" in result
 
     def test_invalid_errors_mode(self) -> None:
-        with pytest.raises(TranslitError):
+        with pytest.raises(DisarmError):
             transliterate("café", errors="explode")  # type: ignore[arg-type]
 
     def test_mixed_ascii_unicode(self) -> None:
@@ -1120,7 +1120,7 @@ class TestReplaceWithEmpty:
 
     def test_unidecode_compat_uses_replace_with_empty(self) -> None:
         """The unidecode() shim uses replace_with='' — result must match errors='ignore'."""
-        from translit._compat import unidecode
+        from disarm._compat import unidecode
 
         text = "café★résumé"
         compat = unidecode(text)

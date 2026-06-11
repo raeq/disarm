@@ -153,7 +153,7 @@ data/*.bin.gz
 data/*_stats.json
 
 # ── Research paper (its own local-only git repo; never part of this repo) ──
-translit-paper/
+disarm-paper/
 
 # ── Performance: zero committed absolute baselines (#234, gate V17) ──
 # Wall-clock/throughput numbers are machine-specific and must never become a
@@ -161,3 +161,6 @@ translit-paper/
 # branch keyed by fingerprint, never in the source tree. (target/criterion and
 # target/perf-stat are already covered by /target/ above.)
 benchmarks/results_*.txt
+
+# Nested academic paper repo (separate git repo, not part of the package)
+/translit-paper/

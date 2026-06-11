@@ -6,8 +6,8 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from translit import fold_case
-from translit._text import Text
+from disarm import fold_case
+from disarm._text import Text
 
 # ── ASCII fast path ──────────────────────────────────────────────────
 

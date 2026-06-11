@@ -10,7 +10,7 @@ import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from translit import reverse_langs, transliterate
+from disarm import reverse_langs, transliterate
 
 pytestmark = pytest.mark.hypothesis
 

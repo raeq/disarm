@@ -1,6 +1,6 @@
 # Language Support
 
-translit ships with a broad set of built-in language profiles and script mappings.
+disarm ships with a broad set of built-in language profiles and script mappings.
 You can also register custom profiles at runtime.
 
 ## Coverage tiers
@@ -10,8 +10,8 @@ choosing a profile for production:
 
 | Tier | Scripts | What you get |
 |---|---|---|
-| **Core** (best-in-class) | Latin, Cyrillic, Greek | Standards-based romanization — BGN/PCGN (default), ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34 (`gost7034`) — plus [reverse transliteration](#reverse-transliteration) (ru/uk/el). This is what translit is built to do well. |
-| **Compatibility** (best-effort) | CJK (Chinese/Japanese/Korean), Arabic, Hebrew, Devanagari & other Indic scripts, Thai, Lao | Context-free, character-by-character — the same approach as Unidecode/AnyAscii. For these scripts romanization is fundamentally lossy; this tier exists so translit is a complete drop-in, not because it is best-in-class here. |
+| **Core** (best-in-class) | Latin, Cyrillic, Greek | Standards-based romanization — BGN/PCGN (default), ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34 (`gost7034`) — plus [reverse transliteration](#reverse-transliteration) (ru/uk/el). This is what disarm is built to do well. |
+| **Compatibility** (best-effort) | CJK (Chinese/Japanese/Korean), Arabic, Hebrew, Devanagari & other Indic scripts, Thai, Lao | Context-free, character-by-character — the same approach as Unidecode/AnyAscii. For these scripts romanization is fundamentally lossy; this tier exists so disarm is a complete drop-in, not because it is best-in-class here. |
 | **Best-effort** | Georgian, Armenian, and a long tail of additional and historical scripts | Context-free coverage so input is never silently dropped. Approximate romanization for search/display, **not** a scholarly standard. |
 
 For **security/defense** (homoglyph, bidi, zalgo, invisible-character handling), do not
@@ -181,7 +181,7 @@ All 10 Brahmic scripts use virama/mātrā-aware transliteration: consonants carr
 ### CJK examples
 
 ```python
-from translit import transliterate, slugify
+from disarm import transliterate, slugify
 
 # Chinese
 assert transliterate("北京市") == 'bei jing shi'
@@ -199,10 +199,10 @@ assert transliterate("東京タワー", lang="ja") == 'dong jing tawa'
 
 ## Reverse transliteration
 
-translit can convert romanized Latin text back to native script for selected languages using the `target` parameter:
+disarm can convert romanized Latin text back to native script for selected languages using the `target` parameter:
 
 ```python
-from translit import transliterate, reverse_langs
+from disarm import transliterate, reverse_langs
 
 assert transliterate("Moskva", target="ru") == 'Москва'
 assert transliterate("Kyiv", target="uk") == 'Кїв'
@@ -220,7 +220,7 @@ When you don't know the language of the input text, pass `lang="auto"` to automa
 
 <!--- skip: next -->
 ```python
-from translit import transliterate, slugify, LANG_AUTO
+from disarm import transliterate, slugify, LANG_AUTO
 
 # Detects Cyrillic → uses Russian ("ru") profile
 transliterate("Москва", lang="auto")         # "Moskva"
@@ -235,7 +235,7 @@ transliterate("नमस्ते", lang="auto")           # "namaste"
 slugify("한국어", lang="auto")                 # Korean romanization slug
 
 # Works with all call sites
-from translit import TextPipeline, Slugifier
+from disarm import TextPipeline, Slugifier
 
 pipe = TextPipeline(transliterate=True, lang="auto")
 pipe("こんにちは")    # Japanese transliteration
@@ -290,7 +290,7 @@ For **unambiguous scripts** (one script = one language), detection is immediate:
 
 ### Character-level discrimination for ambiguous scripts
 
-For scripts shared by multiple languages, translit scans for **exclusive characters** — codepoints that appear in exactly one language's alphabet among the profiles we support:
+For scripts shared by multiple languages, disarm scans for **exclusive characters** — codepoints that appear in exactly one language's alphabet among the profiles we support:
 
 | Script | Exclusive characters | Detected language |
 |---|---|---|
@@ -325,7 +325,7 @@ For scripts that remain ambiguous after discrimination (Devanagari, Han), pass a
 
 <!--- skip: next -->
 ```python
-from translit import LANG_AUTO, transliterate
+from disarm import LANG_AUTO, transliterate
 transliterate("Москва", lang=LANG_AUTO)
 ```
 
@@ -334,7 +334,7 @@ transliterate("Москва", lang=LANG_AUTO)
 ### With functions
 
 ```python
-from translit import transliterate, slugify, sanitize_filename
+from disarm import transliterate, slugify, sanitize_filename
 
 assert transliterate("Ürümqi", lang="de") == 'Ueruemqi'
 assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
@@ -344,7 +344,7 @@ assert sanitize_filename("Ärger.txt", lang="de") == 'Aerger.txt'
 ### With classes
 
 ```python
-from translit import Slugifier, TextPipeline
+from disarm import Slugifier, TextPipeline
 
 slug = Slugifier(lang="de", separator="_")
 pipe = TextPipeline(transliterate=True, lang="fr")
@@ -355,7 +355,7 @@ pipe = TextPipeline(transliterate=True, lang="fr")
 Pre-defined constants for type safety:
 
 ```python
-from translit import LANG_DE, LANG_FR, transliterate
+from disarm import LANG_DE, LANG_FR, transliterate
 
 assert transliterate("Ä", lang=LANG_DE) == 'Ae'
 assert transliterate("Ç", lang=LANG_FR) == 'C'
@@ -364,7 +364,7 @@ assert transliterate("Ç", lang=LANG_FR) == 'C'
 ## Listing available languages
 
 ```python
-from translit import list_langs
+from disarm import list_langs
 
 assert list_langs() == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
 ```
@@ -376,7 +376,7 @@ assert list_langs() == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug',
 Register a new language profile or override an existing one:
 
 ```python
-from translit import register_lang, transliterate
+from disarm import register_lang, transliterate
 
 # Register Esperanto
 register_lang("eo", {
@@ -399,7 +399,7 @@ assert transliterate("ĉapelo", lang="eo") == 'cxapelo'
 Register global pre-transliteration string replacements:
 
 ```python
-from translit import register_replacements, transliterate
+from disarm import register_replacements, transliterate
 
 register_replacements({
     "©": "(c)",
@@ -417,7 +417,7 @@ Both `"no"` and `"nb"` (Bokmål) map to the same Norwegian profile. `"nn"` (Nyno
 ## Historical and ancient scripts (best-effort tier)
 
 These belong to the **best-effort** coverage tier: included so input is never silently
-dropped, not maintained as a focus area. translit includes transliteration mappings for
+dropped, not maintained as a focus area. disarm includes transliteration mappings for
 several historical and ancient writing systems:
 
 | Script | Unicode Block | Example |

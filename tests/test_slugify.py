@@ -1,8 +1,8 @@
-"""Tests for translit.slugify and Slugifier classes."""
+"""Tests for disarm.slugify and Slugifier classes."""
 
 import pytest
 
-from translit import Slugifier, Text, UniqueSlugifier, slugify
+from disarm import Slugifier, Text, UniqueSlugifier, slugify
 
 
 class TestSlugify:
@@ -190,7 +190,7 @@ class TestSlugifyBatchMaxLengthGuard:
         # #231 consistency: the stateful classes route through the same core
         # non-negative check, so a negative max_length raises a catchable
         # InvalidArgumentError, not a PyO3 OverflowError.
-        from translit import Slugify, UniqueSlugify
+        from disarm import Slugify, UniqueSlugify
 
         with pytest.raises(ValueError, match="max_length must be non-negative"):
             Slugify(max_length=-1)
@@ -201,7 +201,7 @@ class TestSlugifyBatchMaxLengthGuard:
 class TestMaxBoundOverflowGuard:
     """#255: a max bound larger than the Rust i64 boundary must raise a catchable
     InvalidArgumentError (a ValueError), not a bare PyO3 OverflowError that
-    escapes the TranslitError hierarchy. The mirror of the negative guard, one
+    escapes the DisarmError hierarchy. The mirror of the negative guard, one
     bound up — for the free functions that cross into i64."""
 
     HUGE = 2**63  # one past i64::MAX
@@ -215,13 +215,13 @@ class TestMaxBoundOverflowGuard:
             slugify(["hello"], max_length=self.HUGE)
 
     def test_grapheme_truncate(self) -> None:
-        from translit import grapheme_truncate
+        from disarm import grapheme_truncate
 
         with pytest.raises(ValueError, match="too large"):
             grapheme_truncate("hello", self.HUGE)
 
     def test_sanitize_filename(self) -> None:
-        from translit import sanitize_filename
+        from disarm import sanitize_filename
 
         with pytest.raises(ValueError, match="too large"):
             sanitize_filename("hello", max_length=self.HUGE)

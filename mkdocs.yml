@@ -1,13 +1,13 @@
-site_name: translit
-site_url: https://translit.readthedocs.io/
+site_name: disarm
+site_url: https://docs.disarm.dev/
 site_description: Unicode canonicalization and TR39 confusable analysis — building blocks for text-security pipelines plus standards-based transliteration, powered by Rust
 site_author: Richard Quinn
-repo_url: https://github.com/raeq/translit
-repo_name: raeq/translit
+repo_url: https://github.com/raeq/disarm
+repo_name: raeq/disarm
 edit_uri: edit/main/docs/
 use_directory_urls: false
 
-copyright: "&copy; 2026 the <a href='https://github.com/raeq/translit/graphs/contributors'>translit team</a>."
+copyright: "&copy; 2026 the <a href='https://github.com/raeq/disarm/graphs/contributors'>disarm team</a>."
 
 theme:
   name: readthedocs
@@ -95,7 +95,7 @@ nav:
   - Migration:
       - Why Migrate: migration/index.md
       - From Unidecode: migration/from-unidecode.md
-      - "Unidecode → translit Recipes": migration/unidecode-recipes.md
+      - "Unidecode → disarm Recipes": migration/unidecode-recipes.md
       - From python-slugify: migration/from-python-slugify.md
       - From confusable_homoglyphs: migration/from-confusable-homoglyphs.md
       - From pathvalidate: migration/from-pathvalidate.md

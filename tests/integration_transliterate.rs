@@ -11,8 +11,8 @@
 
 mod common;
 
-use _translit::transliterate;
-use _translit::ErrorMode;
+use _disarm::transliterate;
+use _disarm::ErrorMode;
 use common::*;
 use proptest::prelude::*;
 

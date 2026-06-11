@@ -1,38 +1,38 @@
 # Exceptions
 
-translit raises a small, unified exception hierarchy. Catch **`TranslitError`** to
-handle any translit failure; catch a subclass to react to a specific category.
+disarm raises a small, unified exception hierarchy. Catch **`DisarmError`** to
+handle any disarm failure; catch a subclass to react to a specific category.
 
 ```text
 ValueError                     (Python built-in)
-└── TranslitError              base — catch this for "any translit error"
+└── DisarmError              base — catch this for "any disarm error"
     ├── InvalidArgumentError   a bad argument value, or contradictory arguments
     ├── ResourceLimitError     a configured limit was exceeded
     └── UnsupportedError       a requested operation is not supported
 ```
 
 ```python
-from translit import (
-    TranslitError,
+from disarm import (
+    DisarmError,
     InvalidArgumentError,
     ResourceLimitError,
     UnsupportedError,
 )
 ```
 
-`TranslitError` inherits from Python's built-in **`ValueError`**, so existing
+`DisarmError` inherits from Python's built-in **`ValueError`**, so existing
 `except ValueError` code keeps working unchanged. As of
-[#183](https://github.com/raeq/translit/issues/183), **every error raised by
-translit's native API** is a `TranslitError` (or a subclass) — including the
+[#183](https://github.com/raeq/disarm/issues/183), **every error raised by
+disarm's native API** is a `DisarmError` (or a subclass) — including the
 mutually-exclusive-flag checks, registration limits, and the unsupported
 reverse-transliteration language, which were previously bare `ValueError`s that
-`except TranslitError` silently missed.
+`except DisarmError` silently missed.
 
 > **One deliberate exception:** the `unidecode()` compatibility shim's
-> `errors="strict"` mode raises a bare `ValueError` (not a `TranslitError`), to
-> match the behaviour of the `unidecode` package it replaces. translit's own
+> `errors="strict"` mode raises a bare `ValueError` (not a `DisarmError`), to
+> match the behaviour of the `unidecode` package it replaces. disarm's own
 > native strict mode (tracked in
-> [#184](https://github.com/raeq/translit/issues/184)) will raise a `TranslitError`.
+> [#184](https://github.com/raeq/disarm/issues/184)) will raise a `DisarmError`.
 
 ## The categories
 
@@ -59,33 +59,33 @@ A configured resource limit was exceeded.
 A requested operation is not supported.
 
 - Reverse transliteration for a language that has no reverse table (`target=`).
-- Auto-detecting an encoding whose detected label translit does not support
-  (`detect_encoding` / `decode_to_utf8` resolves a charset translit cannot decode).
+- Auto-detecting an encoding whose detected label disarm does not support
+  (`detect_encoding` / `decode_to_utf8` resolves a charset disarm cannot decode).
   The separate *low-confidence* case — auto-detection that cannot commit to any
-  label — raises the base `TranslitError` (see below), not `UnsupportedError`.
+  label — raises the base `DisarmError` (see below), not `UnsupportedError`.
 
-### `TranslitError` (base, directly)
+### `DisarmError` (base, directly)
 State and data conditions that fit no category above: registrations sealed,
 a missing/corrupt context dictionary, encoding-detection confidence too low.
 
 ## `TypeError` is *not* part of the hierarchy
 
 Passing an argument of the wrong **type** (e.g. an `int` where a `str` is expected)
-raises a plain `TypeError`, by design — that is a programming error, not a translit
+raises a plain `TypeError`, by design — that is a programming error, not a disarm
 domain error, and Python convention is to surface it as `TypeError`. If you want to
-catch both translit domain errors and wrong-type errors, catch
-`(TranslitError, TypeError)`.
+catch both disarm domain errors and wrong-type errors, catch
+`(DisarmError, TypeError)`.
 
 ## Examples
 
 ```python
-from translit import transliterate, normalize, TranslitError, InvalidArgumentError
+from disarm import transliterate, normalize, DisarmError, InvalidArgumentError
 
-# Catch any translit error
+# Catch any disarm error
 try:
     normalize("text", form="INVALID")
-except TranslitError as e:
-    print(f"translit error: {e}")
+except DisarmError as e:
+    print(f"disarm error: {e}")
 
 # React to a specific category
 try:
@@ -94,7 +94,7 @@ except InvalidArgumentError:
     print("contradictory arguments")
 ```
 
-Because `TranslitError` subclasses `ValueError`, you can also catch it as a
+Because `DisarmError` subclasses `ValueError`, you can also catch it as a
 `ValueError`, or via a broader `Exception` handler.
 
 ## Error messages

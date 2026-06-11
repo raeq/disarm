@@ -12,7 +12,7 @@ from conftest import nf_forms, unicode_text
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from translit import (
+from disarm import (
     normalize,
     slugify,
     strip_accents,

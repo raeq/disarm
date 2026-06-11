@@ -1,6 +1,6 @@
 # Architecture: Performance
 
-The optimization strategies that make translit 10–53× faster than pure-Python alternatives.
+The optimization strategies that make disarm 10–53× faster than pure-Python alternatives.
 
 ## The PyO3 boundary problem
 
@@ -75,11 +75,11 @@ different results for codepoints assigned between Unicode versions.
 
 All secondary lookup tables (Hanzi pinyin, confusables, case folding, emoji) use compile-time perfect hash functions via `phf_codegen`. PHF provides O(1) lookup with no runtime allocation, no collision handling, and deterministic performance. The tables are generated at build time by `build.rs` and embedded as static data.
 
-## What translit does NOT optimize
+## What disarm does NOT optimize
 
 Two operations are inherently slower than their CPython C-builtin counterparts:
 
-- **Normalization**: `unicodedata.normalize()` operates on CPython's internal string buffer without copying. translit uses Rust for all normalization (consistency over speed — see Optimization 7).
-- **Case folding**: `str.casefold()` is a CPython C builtin with zero allocation overhead. translit's PHF-based `fold_case()` is within ~4× at the Python level, with the gap dominated by PyO3 boundary-crossing cost rather than algorithmic differences.
+- **Normalization**: `unicodedata.normalize()` operates on CPython's internal string buffer without copying. disarm uses Rust for all normalization (consistency over speed — see Optimization 7).
+- **Case folding**: `str.casefold()` is a CPython C builtin with zero allocation overhead. disarm's PHF-based `fold_case()` is within ~4× at the Python level, with the gap dominated by PyO3 boundary-crossing cost rather than algorithmic differences.
 
-These gaps are acceptable because normalization and case folding are rarely the bottleneck in real workloads — transliteration and slugification dominate processing time, and translit is 7–38× faster for those.
+These gaps are acceptable because normalization and case folding are rarely the bottleneck in real workloads — transliteration and slugification dominate processing time, and disarm is 7–38× faster for those.

@@ -1,14 +1,14 @@
-"""CLI for translit — fast Unicode transliteration, slugification, and text normalization.
+"""CLI for disarm — fast Unicode transliteration, slugification, and text normalization.
 
 Usage:
-    translit t "café résumé"                        # transliterate
-    translit t --lang de "Ärger"                    # with language
-    translit t --target ru "Moskva"                 # reverse transliteration
-    translit s "Hello World"                        # slugify
-    translit n --form NFKC "ﬁ"                     # normalize
-    translit p --steps "normalize,fold_case" "input" # pipeline
-    translit d "Hello 😀"                           # demojize
-    echo "piped input" | translit t                 # pipe via stdin
+    disarm t "café résumé"                        # transliterate
+    disarm t --lang de "Ärger"                    # with language
+    disarm t --target ru "Moskva"                 # reverse transliteration
+    disarm s "Hello World"                        # slugify
+    disarm n --form NFKC "ﬁ"                     # normalize
+    disarm p --steps "normalize,fold_case" "input" # pipeline
+    disarm d "Hello 😀"                           # demojize
+    echo "piped input" | disarm t                 # pipe via stdin
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from translit import TextPipeline, TranslitError, demojize, normalize, slugify, transliterate
+from disarm import DisarmError, TextPipeline, demojize, normalize, slugify, transliterate
 
 
 def _read_input(args_text: list[str]) -> str:
@@ -127,7 +127,7 @@ def _add_transliterate_parser(sub: argparse._SubParsersAction) -> None:  # type:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="translit",
+        prog="disarm",
         description="Fast Unicode transliteration, slugification, and text normalization.",
         epilog=(
             "commands:\n"
@@ -138,11 +138,11 @@ def main() -> None:
             "  demojize (d)       Expand emoji to text descriptions\n"
             "\n"
             "examples:\n"
-            '  translit t "café résumé"             transliterate\n'
-            '  translit t --lang de "Ärger"         German rules\n'
-            '  translit t --target ru "Moskva"      reverse to Cyrillic\n'
-            '  translit s "Hello World"              slugify\n'
-            '  echo "input" | translit t             pipe via stdin'
+            '  disarm t "café résumé"             transliterate\n'
+            '  disarm t --lang de "Ärger"         German rules\n'
+            '  disarm t --target ru "Moskva"      reverse to Cyrillic\n'
+            '  disarm s "Hello World"              slugify\n'
+            '  echo "input" | disarm t             pipe via stdin'
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -202,7 +202,7 @@ def main() -> None:
 
     try:
         args.func(args)
-    except (TranslitError, ValueError) as exc:
+    except (DisarmError, ValueError) as exc:
         # #250 C7: surface API errors (bad --lang/--form, contradictory flags) as
         # a clean message + non-zero exit instead of a traceback, matching the
         # handling already used for unknown steps / missing input.

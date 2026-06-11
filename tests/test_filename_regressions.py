@@ -10,7 +10,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from translit import sanitize_filename
+from disarm import sanitize_filename
 
 
 class TestWindowsReservedNames:

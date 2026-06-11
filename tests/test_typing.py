@@ -1,4 +1,4 @@
-"""Verify that translit's type stubs satisfy mypy and pyright.
+"""Verify that disarm's type stubs satisfy mypy and pyright.
 
 These tests shell out to mypy --strict and verify that valid usage
 passes and invalid usage is rejected.
@@ -29,7 +29,7 @@ class TestMypy:
     def test_transliterate_types(self) -> None:
         result = _check_mypy(
             textwrap.dedent("""\
-            from translit import transliterate
+            from disarm import transliterate
             x: str = transliterate("café")
             y: str = transliterate("München", lang="de", errors="preserve")
         """)
@@ -39,7 +39,7 @@ class TestMypy:
     def test_slugify_types(self) -> None:
         result = _check_mypy(
             textwrap.dedent("""\
-            from translit import slugify
+            from disarm import slugify
             x: str = slugify("Hello World", separator="_", max_length=50)
         """)
         )
@@ -48,7 +48,7 @@ class TestMypy:
     def test_bad_literal_rejected(self) -> None:
         result = _check_mypy(
             textwrap.dedent("""\
-            from translit import transliterate
+            from disarm import transliterate
             transliterate("test", errors="explode")  # should fail
         """)
         )
@@ -57,7 +57,7 @@ class TestMypy:
     def test_script_enum(self) -> None:
         result = _check_mypy(
             textwrap.dedent("""\
-            from translit import detect_scripts, Script
+            from disarm import detect_scripts, Script
             scripts: list[Script] = detect_scripts("Hello мир")
             assert Script.LATIN in scripts
         """)
@@ -67,7 +67,7 @@ class TestMypy:
     def test_pipeline_callable(self) -> None:
         result = _check_mypy(
             textwrap.dedent("""\
-            from translit import TextPipeline
+            from disarm import TextPipeline
             pipe = TextPipeline(normalize="NFKC", transliterate=True)
             result: str = pipe("Hello")
         """)
@@ -77,7 +77,7 @@ class TestMypy:
     def test_unique_slugifier_callback(self) -> None:
         result = _check_mypy(
             textwrap.dedent("""\
-            from translit import UniqueSlugifier
+            from disarm import UniqueSlugifier
             def exists_in_db(slug: str) -> bool:
                 return False
             s = UniqueSlugifier(check=exists_in_db)

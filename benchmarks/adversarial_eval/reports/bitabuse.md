@@ -1,6 +1,6 @@
 # Adversarial-text robustness — bitabuse
 
-_translit 0.6.3; `strip_obfuscation`. Numbers reflect the current version and may differ from the historical baseline in the README as coverage grows._
+_disarm 0.6.3; `strip_obfuscation`. Numbers reflect the current version and may differ from the historical baseline in the README as coverage grows._
 
 - rows evaluated: **325580**
 - perturbation-bearing rows (contain non-ASCII): **99.9%** (325361/325580)

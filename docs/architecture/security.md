@@ -1,6 +1,6 @@
 # Architecture: Security & Hostname Validation
 
-How translit defends against Unicode-based attacks in hostnames, filenames, and user-supplied text.
+How disarm defends against Unicode-based attacks in hostnames, filenames, and user-supplied text.
 
 ## Threat model
 
@@ -22,7 +22,7 @@ Unicode introduces attack surfaces that don't exist in ASCII-only systems:
 4. **Confusable detection**: each label is checked via `is_confusable()`, which probes the TR39 confusable table for characters that map to different Latin equivalents.
 5. **Canonical form generation**: `normalize_confusables()` produces a Latin-canonical form that reveals what the hostname "looks like" to a Latin-script reader.
 
-The function returns both a boolean safety verdict and a `SafeHostnameDetails` object with full diagnostic information (detected scripts, mixed-script flag, confusable flag, canonical form). This allows callers to implement their own policy on top of translit's detection.
+The function returns both a boolean safety verdict and a `SafeHostnameDetails` object with full diagnostic information (detected scripts, mixed-script flag, confusable flag, canonical form). This allows callers to implement their own policy on top of disarm's detection.
 
 **Design tradeoff**: the check is deliberately conservative. A fully-Cyrillic domain like `яндекс.ру` is not flagged as unsafe (it's not mixed-script), but a domain with even one Cyrillic character mixed into an otherwise-Latin label is flagged. False positives are preferred over false negatives in this security context.
 

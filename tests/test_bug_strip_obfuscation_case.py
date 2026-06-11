@@ -8,7 +8,7 @@ Callers who want lowercased output chain fold_case() explicitly.
 
 from __future__ import annotations
 
-from translit import strip_obfuscation
+from disarm import strip_obfuscation
 
 
 class TestStripObfuscationPreservesCase:

@@ -80,7 +80,7 @@ jobs:
         run: ruff format --check .
 
       - name: Type check (mypy)
-        run: mypy python/translit --ignore-missing-imports
+        run: mypy python/disarm --ignore-missing-imports
 
 
   # ── Test (Linux only, code changes only) ────────────────────────
@@ -113,12 +113,12 @@ jobs:
           pip install pytest-cov
 
       - name: Run tests
-        run: pytest tests/ --ignore=tests/test_typing.py -m "not formal and not hypothesis" -q --tb=short --cov=translit --cov-report=xml --cov-report=term-missing
+        run: pytest tests/ --ignore=tests/test_typing.py -m "not formal and not hypothesis" -q --tb=short --cov=disarm --cov-report=xml --cov-report=term-missing
 
       - name: Run doctests
         run: |
-          TRANSLIT_DIR=$(python -c "import translit, os; print(os.path.dirname(translit.__file__))")
-          pytest --doctest-modules "$TRANSLIT_DIR/__init__.py" "$TRANSLIT_DIR/_compat.py" -q
+          DISARM_DIR=$(python -c "import disarm, os; print(os.path.dirname(disarm.__file__))")
+          pytest --doctest-modules "$DISARM_DIR/__init__.py" "$DISARM_DIR/_compat.py" -q
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7

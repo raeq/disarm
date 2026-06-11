@@ -1,6 +1,6 @@
 # Migrating from python-slugify
 
-translit's `slugify()` is parameter-compatible with [python-slugify](https://pypi.org/project/python-slugify/). In most cases, migration requires only changing the import.
+disarm's `slugify()` is parameter-compatible with [python-slugify](https://pypi.org/project/python-slugify/). In most cases, migration requires only changing the import.
 
 ## Quick migration
 
@@ -10,13 +10,13 @@ translit's `slugify()` is parameter-compatible with [python-slugify](https://pyp
 from slugify import slugify
 
 # After
-from translit import slugify
+from disarm import slugify
 ```
 
 All parameters are supported with identical names and defaults:
 
 ```python
-from translit import slugify
+from disarm import slugify
 
 # These work identically in both libraries
 assert slugify("Hello, World!") == 'hello-world'
@@ -28,7 +28,7 @@ assert slugify("C++ Code", replacements=[("C++", "cpp")]) == 'cpp-code'
 
 ## Parameter compatibility
 
-| Parameter | python-slugify | translit | Notes |
+| Parameter | python-slugify | disarm | Notes |
 |---|---|---|---|
 | `text` | ✓ | ✓ | |
 | `separator` | `"-"` | `"-"` | |
@@ -43,14 +43,14 @@ assert slugify("C++ Code", replacements=[("C++", "cpp")]) == 'cpp-code'
 | `entities` | `True` | `True` | |
 | `decimal` | `True` | `True` | |
 | `hexadecimal` | `True` | `True` | |
-| `lang` | ✗ | ✓ | **New** in translit |
+| `lang` | ✗ | ✓ | **New** in disarm |
 
-## New features in translit
+## New features in disarm
 
 ### Language-aware slugification
 
 ```python
-from translit import slugify
+from disarm import slugify
 
 # python-slugify can't do this
 assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
@@ -59,7 +59,7 @@ assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
 ### Reusable slugifiers
 
 ```python
-from translit import Slugifier, UniqueSlugifier
+from disarm import Slugifier, UniqueSlugifier
 
 # Pre-configured slugifier
 slug = Slugifier(lang="de", separator="_")
@@ -72,7 +72,7 @@ assert unique("My Post") == 'my-post-1'
 
 ## awesome-slugify migration
 
-[awesome-slugify](https://pypi.org/project/awesome-slugify/) users can migrate with zero code changes — translit provides drop-in `Slugify` and `UniqueSlugify` classes that accept awesome-slugify's parameter names.
+[awesome-slugify](https://pypi.org/project/awesome-slugify/) users can migrate with zero code changes — disarm provides drop-in `Slugify` and `UniqueSlugify` classes that accept awesome-slugify's parameter names.
 
 ### Drop-in replacement (no code changes needed)
 
@@ -82,7 +82,7 @@ assert unique("My Post") == 'my-post-1'
 from slugify import slugify, Slugify, UniqueSlugify
 
 # After — same class names, same parameter names
-from translit import Slugify, UniqueSlugify
+from disarm import Slugify, UniqueSlugify
 
 custom = Slugify(to_lower=True)
 custom("Hello World")  # "hello-world"
@@ -94,7 +94,7 @@ unique("My Post")   # "My-Post-1"
 
 ### awesome-slugify parameter compatibility
 
-| awesome-slugify | translit `Slugify` | Notes |
+| awesome-slugify | disarm `Slugify` | Notes |
 |---|---|---|
 | `to_lower` | ✓ (maps to `lowercase`) | Both names accepted |
 | `separator` | ✓ | Identical |
@@ -103,15 +103,15 @@ unique("My Post")   # "My-Post-1"
 | `safe_chars` | ✓ (best-effort) | Approximated via post-processing |
 | `capitalize` | ✓ | Uppercases first letter of result |
 | `pretranslate` | ✓ (dict only) | Maps to `replacements`; callable form not supported |
-| `translate` | ⚠ ignored | translit uses built-in engine; use `lang` instead |
+| `translate` | ⚠ ignored | disarm uses built-in engine; use `lang` instead |
 | `fold_abbrs` | ⚠ ignored | Deprecated warning issued |
 
 ### awesome-slugify attribute-style configuration
 
-awesome-slugify allows setting properties after construction. translit supports this:
+awesome-slugify allows setting properties after construction. disarm supports this:
 
 ```python
-from translit import Slugify
+from disarm import Slugify
 
 my_slugify = Slugify()
 my_slugify.to_lower = True
@@ -125,17 +125,17 @@ assert my_slugify("Hello © World") == 'hello_c_world'
 
 ### Preconfigured instances
 
-awesome-slugify ships preconfigured instances. translit provides equivalent drop-in replacements:
+awesome-slugify ships preconfigured instances. disarm provides equivalent drop-in replacements:
 
 <!--- skip: next -->
 ```python
-# awesome-slugify                    # translit equivalent
-from slugify import slugify_url      from translit import slugify_url
-from slugify import slugify_filename from translit import slugify_filename
-from slugify import slugify_unicode  from translit import slugify_unicode
-from slugify import slugify_ru       from translit import slugify_ru
-from slugify import slugify_de       from translit import slugify_de
-from slugify import slugify_el       from translit import slugify_el
+# awesome-slugify                    # disarm equivalent
+from slugify import slugify_url      from disarm import slugify_url
+from slugify import slugify_filename from disarm import slugify_filename
+from slugify import slugify_unicode  from disarm import slugify_unicode
+from slugify import slugify_ru       from disarm import slugify_ru
+from slugify import slugify_de       from disarm import slugify_de
+from slugify import slugify_el       from disarm import slugify_el
 ```
 
 | Instance | Configuration |
@@ -147,12 +147,12 @@ from slugify import slugify_el       from translit import slugify_el
 | `slugify_de` | German transliteration via `lang="de"` (ä→ae, ö→oe, ü→ue) |
 | `slugify_el` | Greek transliteration via `lang="el"` |
 
-### Native translit classes
+### Native disarm classes
 
-If you prefer translit's native API (which offers more features), use `Slugifier` and `UniqueSlugifier`:
+If you prefer disarm's native API (which offers more features), use `Slugifier` and `UniqueSlugifier`:
 
 ```python
-from translit import Slugifier, UniqueSlugifier
+from disarm import Slugifier, UniqueSlugifier
 
 custom = Slugifier(lowercase=True, lang="de")
 assert custom("Ärger im Büro") == 'aerger-im-buero'
@@ -164,7 +164,7 @@ assert unique("My Post") == 'my-post-1'
 
 ### What's different
 
-- **`translate` parameter**: awesome-slugify lets you swap in a custom transliteration function. translit always uses its built-in Rust transliteration engine, which is faster and covers more scripts. Use the `lang` parameter for language-specific rules.
-- **`pretranslate` callables**: awesome-slugify accepts both dicts and callables for `pretranslate`. translit only accepts dicts (mapped to `replacements`). Callable pretranslate triggers a deprecation warning.
-- **`safe_chars`**: awesome-slugify preserves these characters through the pipeline. translit approximates this with best-effort post-processing. For precise control, use `regex_pattern` instead.
-- **Default `to_lower`**: awesome-slugify defaults to `to_lower=False`; the translit `Slugify` class matches this for compatibility. Note that translit's native `slugify()` function and `Slugifier` class default to `lowercase=True` (matching python-slugify).
+- **`translate` parameter**: awesome-slugify lets you swap in a custom transliteration function. disarm always uses its built-in Rust transliteration engine, which is faster and covers more scripts. Use the `lang` parameter for language-specific rules.
+- **`pretranslate` callables**: awesome-slugify accepts both dicts and callables for `pretranslate`. disarm only accepts dicts (mapped to `replacements`). Callable pretranslate triggers a deprecation warning.
+- **`safe_chars`**: awesome-slugify preserves these characters through the pipeline. disarm approximates this with best-effort post-processing. For precise control, use `regex_pattern` instead.
+- **Default `to_lower`**: awesome-slugify defaults to `to_lower=False`; the disarm `Slugify` class matches this for compatibility. Note that disarm's native `slugify()` function and `Slugifier` class default to `lowercase=True` (matching python-slugify).

@@ -1,9 +1,9 @@
-"""Type stubs for translit.Text fluent builder."""
+"""Type stubs for disarm.Text fluent builder."""
 
 from collections.abc import Iterable
 
-from translit._enums import Script
-from translit._types import EmojiProvider, ErrorMode, NormalizationForm, Platform
+from disarm._enums import Script
+from disarm._types import EmojiProvider, ErrorMode, NormalizationForm, Platform
 
 class Text:
     """Immutable wrapper for fluent Unicode text processing."""

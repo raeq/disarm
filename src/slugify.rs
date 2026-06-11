@@ -17,7 +17,7 @@ const MAX_ENTITY_DIGITS: usize = 10;
 /// Returns `Err(crate::Error)` if the pattern exceeds `MAX_REGEX_PATTERN_BYTES`,
 /// if the compiled DFA would exceed `MAX_REGEX_DFA_BYTES`, or if
 /// `regex::RegexBuilder` rejects it for any other reason.
-/// Callers at the PyO3 boundary convert the error to a `TranslitError` via the
+/// Callers at the PyO3 boundary convert the error to a `DisarmError` via the
 /// `From<Error> for PyErr` boundary impl (#181).
 fn compile_regex(pattern: &str) -> Result<regex::Regex, crate::Error> {
     if pattern.len() > MAX_REGEX_PATTERN_BYTES {
@@ -179,7 +179,7 @@ impl SlugConfig {
     /// `_UniqueSlugifier::new`).
     ///
     /// Returns `Err(crate::Error)` if the regex pattern is invalid — callers at
-    /// the PyO3 boundary convert the error to a `TranslitError`. (#119)
+    /// the PyO3 boundary convert the error to a `DisarmError`. (#119)
     pub(crate) fn from_pyargs(
         separator: &str,
         lowercase: bool,

@@ -4,14 +4,14 @@ Ready-to-use multi-step text processing pipelines. Each is a single compiled Rus
 
 ## security_clean
 
-::: translit.security_clean
+::: disarm.security_clean
 
 ### Pipeline steps
 
 `NFKC → confusables → strip bidi/format → collapse_whitespace`
 
 ```python
-from translit import security_clean
+from disarm import security_clean
 
 assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
 assert security_clean("Ηello Ꮤorld") == 'Hello World'
@@ -21,14 +21,14 @@ assert security_clean("Ηello Ꮤorld") == 'Hello World'
 
 ## ml_normalize
 
-::: translit.ml_normalize
+::: disarm.ml_normalize
 
 ### Pipeline steps
 
 `NFKC → emoji→text → [transliterate] → strip_accents → fold_case → collapse_whitespace`
 
 ```python
-from translit import ml_normalize
+from disarm import ml_normalize
 
 assert ml_normalize("Café RÉSUMÉ") == 'cafe resume'
 assert ml_normalize("München", lang="de") == 'muenchen'
@@ -39,14 +39,14 @@ assert ml_normalize("I ❤️ Python 🐍") == 'i red heart python snake'
 
 ## catalog_key
 
-::: translit.catalog_key
+::: disarm.catalog_key
 
 ### Pipeline steps
 
 `NFKC → transliterate → confusables → strip_accents → fold_case → collapse_whitespace`
 
 ```python
-from translit import catalog_key
+from disarm import catalog_key
 
 assert catalog_key("  Café  RÉSUMÉ  ") == 'cafe resume'
 assert catalog_key("Москва", lang="ru") == 'moskva'
@@ -58,14 +58,14 @@ assert catalog_key("Müller", lang="de") == 'mueller'
 
 ## display_clean
 
-::: translit.display_clean
+::: disarm.display_clean
 
 ### Pipeline steps
 
 `strip_bidi` → `strip_control` → `strip_zero_width` → `collapse_whitespace`
 
 ```python
-from translit import display_clean
+from disarm import display_clean
 
 assert display_clean("hello\x00world\u200b!") == 'helloworld!'
 assert display_clean("  spaced   out  ") == 'spaced out'
@@ -76,14 +76,14 @@ assert display_clean("admin\u202Euser") == 'adminuser'
 
 ## search_key
 
-::: translit.search_key
+::: disarm.search_key
 
 ### Pipeline steps
 
 `NFKC → transliterate → strip_accents → fold_case → collapse_whitespace`
 
 ```python
-from translit import search_key
+from disarm import search_key
 
 assert search_key("Café RÉSUMÉ") == 'cafe resume'
 assert search_key("Москва", lang="ru") == 'moskva'
@@ -94,14 +94,14 @@ assert search_key("ΩMEGA", lang="auto") == 'omega'
 
 ## sort_key
 
-::: translit.sort_key
+::: disarm.sort_key
 
 ### Pipeline steps
 
 `NFKC → transliterate → fold_case → collapse_whitespace`
 
 ```python
-from translit import sort_key
+from disarm import sort_key
 
 assert sort_key("Über", lang="de") == 'ueber'
 assert sort_key("Война и мир", lang="ru") == 'voyna i mir'
@@ -112,14 +112,14 @@ assert sort_key("Café") == 'cafe'
 
 ## sanitize_user_input
 
-::: translit.sanitize_user_input
+::: disarm.sanitize_user_input
 
 ### Pipeline steps
 
 `NFKC → strip_bidi → strip_zero_width → strip_zalgo → confusables → collapse_whitespace`
 
 ```python
-from translit import sanitize_user_input
+from disarm import sanitize_user_input
 
 assert sanitize_user_input("Hello, world!") == 'Hello, world!'
 assert sanitize_user_input("p\u0430ypal") == 'paypal'
@@ -133,7 +133,7 @@ Unlike `security_clean`, this pipeline also strips zalgo text (excessive combini
 ## PRESETS
 
 ```python
-from translit import PRESETS
+from disarm import PRESETS
 ```
 
 Dict mapping preset function names to their ordered pipeline steps. Each value is a list of `(step_name, parameter)` tuples in execution order.
@@ -154,18 +154,18 @@ Named policy profiles provide pre-configured `TextPipeline` instances for common
 ### get_pipeline
 
 ```python
-from translit import get_pipeline
+from disarm import get_pipeline
 
 pipe = get_pipeline("scholarly_cyrillic_iso9")
 assert pipe("Москва") == 'moskva'
 ```
 
-Returns a fresh `TextPipeline` configured for the named profile. Raises `TranslitError` for unknown profiles.
+Returns a fresh `TextPipeline` configured for the named profile. Raises `DisarmError` for unknown profiles.
 
 ### list_profiles
 
 ```python
-from translit import list_profiles
+from disarm import list_profiles
 
 print(list_profiles())
 # ['library_catalog_key_eu', 'llm_guardrail', 'ml_corpus_normalize',

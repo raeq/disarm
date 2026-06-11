@@ -1,8 +1,8 @@
-# Why Migrate to translit?
+# Why Migrate to disarm?
 
-translit consolidates 8+ legacy Python Unicode text-processing libraries into a single, fast, MIT-licensed package — and, unlike any of them, provides **TR39 confusable analysis** as a first-class capability, a building block for [adversarial-text defense](../security/adversarial-defense.md).
+disarm consolidates 8+ legacy Python Unicode text-processing libraries into a single, fast, MIT-licensed package — and, unlike any of them, provides **TR39 confusable analysis** as a first-class capability, a building block for [adversarial-text defense](../security/adversarial-defense.md).
 
-> **If you use `unidecode` (or `ftfy`/`anyascii`) as a security/sanitization step, you should migrate for correctness, not just convenience.** Those tools map confusables *phonetically* and cannot reverse homoglyph attacks; `unidecode` can even degrade results. translit maps *visually* per TR39. See [From Unidecode](from-unidecode.md#unidecode-is-not-a-security-tool).
+> **If you use `unidecode` (or `ftfy`/`anyascii`) as a security/sanitization step, you should migrate for correctness, not just convenience.** Those tools map confusables *phonetically* and cannot reverse homoglyph attacks; `unidecode` can even degrade results. disarm maps *visually* per TR39. See [From Unidecode](from-unidecode.md#unidecode-is-not-a-security-tool).
 
 ## The problem
 
@@ -23,7 +23,7 @@ That's 8 transitive dependencies, 4 different licenses (including GPL), and 8 di
 
 ## The solution
 
-translit replaces all of them with one import:
+disarm replaces all of them with one import:
 
 ```python
 # Before: 8 imports
@@ -33,12 +33,12 @@ from confusable_homoglyphs import confusables
 import pathvalidate
 
 # After: 1 import
-import translit
+import disarm
 ```
 
 ## Comparison
 
-| Feature | Legacy | translit |
+| Feature | Legacy | disarm |
 |---|---|---|
 | **Performance** | Pure Python | Rust via PyO3 ([benchmarks](../performance.md)) |
 | **License** | Mixed GPL/Artistic/MIT | MIT |

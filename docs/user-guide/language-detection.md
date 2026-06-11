@@ -1,10 +1,10 @@
 # Language Detection
 
-How translit's `lang="auto"` detection works, from script identification through character-level discrimination to fail-safe fallbacks.
+How disarm's `lang="auto"` detection works, from script identification through character-level discrimination to fail-safe fallbacks.
 
 ## Overview
 
-When `lang="auto"` is passed to `transliterate()`, `slugify()`, `catalog_key()`, or any other function that accepts a `lang` parameter, translit runs a three-stage detection pipeline:
+When `lang="auto"` is passed to `transliterate()`, `slugify()`, `catalog_key()`, or any other function that accepts a `lang` parameter, disarm runs a three-stage detection pipeline:
 
 1. **Script identification** — find the dominant non-Latin, non-Common script
 2. **Character-level discrimination** — scan for exclusive characters that uniquely identify a language within ambiguous scripts
@@ -13,7 +13,7 @@ When `lang="auto"` is passed to `transliterate()`, `slugify()`, `catalog_key()`,
 The entire pipeline is deterministic, O(n), and fail-safe: if detection is uncertain, it falls back to the safe default rather than guessing.
 
 ```python
-from translit import transliterate
+from disarm import transliterate
 
 # Stage 1: Cyrillic detected → ambiguous script
 # Stage 2: ї found → Ukrainian discriminator hit
@@ -25,10 +25,10 @@ assert transliterate("Київ", lang="auto") == 'Kyiv'
 
 ## Stage 1: Script Identification
 
-translit classifies each character by its Unicode script property using a static table of 42 scripts with binary search lookup. The first non-Latin, non-Common, non-Inherited character determines the **primary script**.
+disarm classifies each character by its Unicode script property using a static table of 42 scripts with binary search lookup. The first non-Latin, non-Common, non-Inherited character determines the **primary script**.
 
 ```python
-from translit import detect_scripts, Script
+from disarm import detect_scripts, Script
 
 assert detect_scripts("Москва") == [Script.CYRILLIC]
 assert detect_scripts("東京タワー") == [Script.HAN, Script.KATAKANA]
@@ -39,7 +39,7 @@ For Latin-only text, no language override is applied (stage 2 may still detect L
 
 ### Unambiguous scripts
 
-Many scripts map to exactly one language in translit's profile set. Detection is immediate with no further analysis needed:
+Many scripts map to exactly one language in disarm's profile set. Detection is immediate with no further analysis needed:
 
 | Script | Language | Code |
 |---|---|---|
@@ -71,7 +71,7 @@ For these scripts, `lang="auto"` is equivalent to passing the explicit code.
 
 ### Ambiguous scripts
 
-Three scripts are shared by multiple languages in translit's profile set:
+Three scripts are shared by multiple languages in disarm's profile set:
 
 | Script | Languages | Default |
 |---|---|---|
@@ -85,7 +85,7 @@ These proceed to stage 2.
 
 ## Stage 2: Character-Level Discrimination
 
-For ambiguous scripts, translit scans up to the first **2,000 characters** looking for **exclusive characters** — codepoints that appear in exactly one language's alphabet among all supported profiles for that script.
+For ambiguous scripts, disarm scans up to the first **2,000 characters** looking for **exclusive characters** — codepoints that appear in exactly one language's alphabet among all supported profiles for that script.
 
 ### Discriminator table
 
@@ -117,7 +117,7 @@ Key properties:
 ### Examples
 
 ```python
-from translit import transliterate
+from disarm import transliterate
 
 # Ukrainian: ї is exclusive to Ukrainian Cyrillic
 assert transliterate("Київ", lang="auto") == 'Kyiv'
@@ -178,7 +178,7 @@ This means `lang="auto"` is always at least as good as the script default, and o
 Use `inspect_auto_lang()` to see exactly how the detection pipeline resolved for a given text. This is useful for logging, auditing, and debugging:
 
 ```python
-from translit import inspect_auto_lang
+from disarm import inspect_auto_lang
 
 result = inspect_auto_lang("Київ")
 # {
@@ -237,11 +237,11 @@ transliterate("Софія", lang="auto")  # Defaults to Russian (no Bulgarian di
 
 ## Integration with Pipelines
 
-`lang="auto"` works with all translit entry points:
+`lang="auto"` works with all disarm entry points:
 
 <!--- skip: next -->
 ```python
-from translit import (
+from disarm import (
     transliterate, slugify, catalog_key, search_key, sort_key,
     TextPipeline, Slugifier, Text, LANG_AUTO,
 )

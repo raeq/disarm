@@ -6,7 +6,7 @@ and regex_pattern behavior.
 
 from __future__ import annotations
 
-from translit import slugify
+from disarm import slugify
 
 
 class TestHtmlEntityDecoding:
@@ -106,7 +106,7 @@ class TestUniqueSlugifierAmortized:
     must not change output: same suffix sequence, uniqueness, check-path, reset."""
 
     def test_bulk_duplicates_unique_and_sequenced(self) -> None:
-        from translit import UniqueSlugifier
+        from disarm import UniqueSlugifier
 
         u = UniqueSlugifier()
         out = [u("Hello World") for _ in range(3000)]
@@ -116,14 +116,14 @@ class TestUniqueSlugifierAmortized:
         assert out[2999] == "hello-world-2999"
 
     def test_interleaved_bases(self) -> None:
-        from translit import UniqueSlugifier
+        from disarm import UniqueSlugifier
 
         u = UniqueSlugifier()
         got = [u("a"), u("b"), u("a"), u("b"), u("a")]
         assert got == ["a", "b", "a-1", "b-1", "a-2"]
 
     def test_check_callback_path_unchanged(self) -> None:
-        from translit import UniqueSlugifier
+        from disarm import UniqueSlugifier
 
         seen: set[str] = set()
         u = UniqueSlugifier(check=lambda s: s in seen)
@@ -134,7 +134,7 @@ class TestUniqueSlugifierAmortized:
         assert seen == {"x", "x-1", "x-2", "x-3", "x-4"}
 
     def test_reset_clears_hint(self) -> None:
-        from translit import UniqueSlugifier
+        from disarm import UniqueSlugifier
 
         u = UniqueSlugifier()
         assert u("Hello World") == "hello-world"

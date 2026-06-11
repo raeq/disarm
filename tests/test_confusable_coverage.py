@@ -1,6 +1,6 @@
 """Coverage gate against the official Unicode UTS#39 confusables.
 
-translit's confusable table is generated from the pinned ``data/confusables.txt``.
+disarm's confusable table is generated from the pinned ``data/confusables.txt``.
 This test asserts that every single-codepoint confusable whose official prototype
 is a single basic Latin letter (A-Z / a-z) is actually neutralized by
 ``normalize_confusables(..., target_script="latin")``.
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pathlib
 
-from translit import normalize_confusables
+from disarm import normalize_confusables
 
 CONFUSABLES = pathlib.Path(__file__).resolve().parent.parent / "data" / "confusables.txt"
 _ASCII_LETTERS = set(range(0x41, 0x5B)) | set(range(0x61, 0x7B))

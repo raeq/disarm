@@ -1,6 +1,6 @@
 """Tests for compatibility aliases (drop-in replacement)."""
 
-from translit import ascii_fold, unidecode
+from disarm import ascii_fold, unidecode
 
 
 class TestUnidecode:

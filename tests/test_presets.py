@@ -2,8 +2,8 @@
 
 import pytest
 
-from translit import (
-    TranslitError,
+from disarm import (
+    DisarmError,
     catalog_key,
     display_clean,
     ml_normalize,
@@ -146,7 +146,7 @@ class TestPathSafety:
 
 
 class TestMlNormalize:
-    """Tests for ml_normalize(): NFKC → emoji→text → [translit] → strip_accents → fold_case → collapse_ws."""
+    """Tests for ml_normalize(): NFKC → emoji→text → [disarm] → strip_accents → fold_case → collapse_ws."""
 
     def test_basic_accent_strip(self) -> None:
         """Accented text normalized: café → cafe."""
@@ -203,7 +203,7 @@ class TestMlNormalize:
 
 
 class TestCatalogKey:
-    """Tests for catalog_key(): NFKC → confusables → [translit] → strip_accents → fold_case → collapse_ws."""
+    """Tests for catalog_key(): NFKC → confusables → [disarm] → strip_accents → fold_case → collapse_ws."""
 
     def test_case_insensitive(self) -> None:
         """Same title in different cases produces same key."""
@@ -375,7 +375,7 @@ class TestStripBidi:
 
 
 class TestMlNormalizeEmojiStyle:
-    """Regression: fix #4 — invalid emoji_style must raise TranslitError, not silently no-op.
+    """Regression: fix #4 — invalid emoji_style must raise DisarmError, not silently no-op.
 
     Before the fix, any unknown emoji_style value silently skipped emoji expansion
     with no indication of the error.
@@ -392,18 +392,18 @@ class TestMlNormalizeEmojiStyle:
         assert "\U0001f600" in result
 
     def test_invalid_emoji_style_raises(self) -> None:
-        """Any value other than 'cldr' or 'none' must raise TranslitError."""
-        with pytest.raises(TranslitError, match="emoji_style"):
+        """Any value other than 'cldr' or 'none' must raise DisarmError."""
+        with pytest.raises(DisarmError, match="emoji_style"):
             ml_normalize("hello", emoji="emoji15")
 
     def test_invalid_emoji_style_empty_string_raises(self) -> None:
-        """Empty string is not a valid emoji_style — must raise TranslitError."""
-        with pytest.raises(TranslitError, match="emoji_style"):
+        """Empty string is not a valid emoji_style — must raise DisarmError."""
+        with pytest.raises(DisarmError, match="emoji_style"):
             ml_normalize("hello", emoji="")
 
     def test_invalid_emoji_style_uppercase_raises(self) -> None:
-        """'CLDR' (wrong case) must raise TranslitError — matching is case-sensitive."""
-        with pytest.raises(TranslitError, match="emoji_style"):
+        """'CLDR' (wrong case) must raise DisarmError — matching is case-sensitive."""
+        with pytest.raises(DisarmError, match="emoji_style"):
             ml_normalize("hello", emoji="CLDR")
 
 
@@ -413,7 +413,7 @@ class TestPresetsMetadataOrder:
     def test_strip_obfuscation_confusables_after_demojize(self) -> None:
         # src/presets.rs::_strip_obfuscation runs confusables AFTER demojize so
         # typographic punctuation inside emoji names is folded too (idempotency).
-        from translit import PRESETS
+        from disarm import PRESETS
 
         steps = [name for name, _ in PRESETS["strip_obfuscation"]]
         assert steps.index("confusables") > steps.index("demojize")

@@ -1,8 +1,8 @@
 """Public API: transform functions, stateful classes, and registration helpers.
 
 This module holds the implementation of every public name re-exported from the
-``translit`` package root (see ``translit/__init__.py``).  The precompiled
-pipeline presets live in ``translit._presets``.
+``disarm`` package root (see ``disarm/__init__.py``).  The precompiled
+pipeline presets live in ``disarm._presets``.
 """
 
 from __future__ import annotations
@@ -12,14 +12,7 @@ from collections.abc import Iterable
 from functools import lru_cache, wraps
 from typing import TYPE_CHECKING, Any, Protocol, cast, overload
 
-from translit._enums import (
-    LANG_META,
-    SCRIPT_META,
-    LangMeta,
-    Script,
-    ScriptMeta,
-)
-from translit._translit import (
+from disarm._disarm import (
     # Resource limit — read from the Rust single source of truth, never
     # re-declared, to prevent silent drift (#200).
     _MAX_BATCH_SIZE,
@@ -85,7 +78,14 @@ from translit._translit import (
     # Semantic argument-combination validation (single source of truth, #231)
     _validate_transliterate_args,
 )
-from translit._types import (
+from disarm._enums import (
+    LANG_META,
+    SCRIPT_META,
+    LangMeta,
+    Script,
+    ScriptMeta,
+)
+from disarm._types import (
     EmojiProvider,
     ErrorMode,
     NormalizationForm,
@@ -108,7 +108,7 @@ _MAX_GRAPHEME_SPLIT_INPUT: int = 10 * 1024 * 1024  # ~10.5M characters (codepoin
 
 # Upper bound of the Rust `i64` that `max_length`/`max_graphemes` cross into.
 # A larger value can't reach the core — PyO3 raises a bare `OverflowError` at
-# extraction, outside the TranslitError hierarchy — so reject it here as
+# extraction, outside the DisarmError hierarchy — so reject it here as
 # InvalidArgumentError, consistently with the core's negative-value check (#255).
 # This is the one bound the core provably cannot enforce (the value never arrives).
 _MAX_I64: int = 2**63 - 1
@@ -202,7 +202,7 @@ def _transliterate_dispatch(
                 "replace" — substitute with *replace_with*.
                 "ignore" — silently drop.
                 "preserve" — keep the original character.
-                "strict" — raise ``TranslitError`` on the first untranslatable
+                "strict" — raise ``DisarmError`` on the first untranslatable
                 character, reporting it and its byte offset (#184). Forward-only:
                 not supported with ``context=True`` or ``target=...``. Use
                 :func:`find_untranslatable` to get *all* of them without raising.
@@ -213,7 +213,7 @@ def _transliterate_dispatch(
         strict_iso9: Use a scholarly **ASCII** Cyrillic transliteration with
                      consistent 1:1-style overrides (e.g. й→j, ю→ju, я→ja).
                      NOTE: this is *not* the diacritic ISO 9:1995 standard
-                     (which uses ž, č, š, ŝ, h). translit's tables are ASCII-only
+                     (which uses ž, č, š, ŝ, h). disarm's tables are ASCII-only
                      by design, so it emits digraphs (ж→zh, ч→ch, ш→sh) instead
                      of the standard's diacritics — do not rely on this for
                      ISO 9-conformant library catalog access points (#94).
@@ -228,7 +228,7 @@ def _transliterate_dispatch(
         context: Use dictionary-based vowel restoration for abjad scripts
                  (Arabic/Persian/Hebrew), producing more readable output than
                  the context-free tables. Requires the prebuilt context
-                 dictionaries (see ``bootstrap_dicts.sh`` / ``TRANSLIT_DICT_DIR``).
+                 dictionaries (see ``bootstrap_dicts.sh`` / ``DISARM_DICT_DIR``).
                  Forward-only: mutually exclusive with *target*, and cannot be
                  combined with *tones*.
 
@@ -237,7 +237,7 @@ def _transliterate_dispatch(
         ``list[str]`` when given ``list[str]``.
 
     Raises:
-        TranslitError: If an internal Rust error occurs (e.g. invalid
+        DisarmError: If an internal Rust error occurs (e.g. invalid
             ``errors`` value passed at runtime).
         ValueError: If both *strict_iso9* and *gost7034* are True.
         ValueError: If both *lang* and *target* are set.
@@ -511,7 +511,7 @@ def slugify(
     Shares python-slugify's core keyword parameters (``separator``,
     ``max_length``, ``word_boundary``, ``save_order``, ``stopwords``,
     ``lowercase``, etc.), so ``slugify(text, ...)`` calls port directly. Note
-    that translit makes every parameter past *text* keyword-only, whereas
+    that disarm makes every parameter past *text* keyword-only, whereas
     python-slugify accepts some positionally.
 
     Args:
@@ -553,7 +553,7 @@ def slugify(
         ValueError: If ``max_length`` is negative (validated for both scalar and
             list input, #193).
         TypeError: If ``text`` is neither ``str`` nor ``list[str]``.
-        TranslitError: If an internal Rust error occurs (e.g. an invalid
+        DisarmError: If an internal Rust error occurs (e.g. an invalid
             ``regex_pattern`` or unknown ``lang`` code).
 
     Examples:
@@ -687,7 +687,7 @@ def normalize_confusables(
         String with confusable characters replaced by target-script equivalents.
 
     Raises:
-        TranslitError: If *target_script* is not a supported value.
+        DisarmError: If *target_script* is not a supported value.
 
     Examples:
         >>> normalize_confusables("Ηello")  # Greek Η looks like Latin H
@@ -742,7 +742,7 @@ def sanitize_filename(
         Safe filename string.
 
     Raises:
-        TranslitError: If an internal Rust error occurs.
+        DisarmError: If an internal Rust error occurs.
 
     Examples:
         >>> sanitize_filename("My Report (final).pdf")
@@ -918,7 +918,7 @@ def demojize(
             Overrides the global provider for this call.
             None uses the global provider or the built-in default.
         delimiters: ``emoji`` library compatibility — ignored with a
-            ``DeprecationWarning``. translit always outputs bare CLDR
+            ``DeprecationWarning``. disarm always outputs bare CLDR
             short names without delimiters; wrap the result yourself if
             you need delimiters (e.g. ``f":{name}:"``).
 
@@ -926,7 +926,7 @@ def demojize(
         Text with emoji replaced by their descriptions.
 
     Raises:
-        TranslitError: If an internal Rust error occurs.
+        DisarmError: If an internal Rust error occurs.
 
     Warns:
         UserWarning: If the provider raises an exception or returns a
@@ -941,8 +941,8 @@ def demojize(
         raise TypeError(f"demojize() expects str, got {type(text).__name__}")
     if delimiters is not None:
         _warnings.warn(
-            "The 'delimiters' parameter is not supported by translit.demojize(); "
-            "translit always outputs bare CLDR short names. "
+            "The 'delimiters' parameter is not supported by disarm.demojize(); "
+            "disarm always outputs bare CLDR short names. "
             "Wrap the result yourself if you need delimiters.",
             DeprecationWarning,
             stacklevel=2,
@@ -1210,7 +1210,7 @@ def detect_encoding(data: bytes) -> tuple[str, float]:
         Tuple of (encoding_name, confidence) where confidence is 0.0–1.0.
 
     Raises:
-        TranslitError: If the byte sequence cannot be analyzed.
+        DisarmError: If the byte sequence cannot be analyzed.
 
     Examples:
         >>> enc, conf = detect_encoding(b"Hello World")
@@ -1249,7 +1249,7 @@ def decode_to_utf8(
         data: Raw byte sequence to decode.
         encoding: Encoding name (e.g. "windows-1252"). None to auto-detect.
         min_confidence: Confidence threshold (0.0–1.0) applied when
-            auto-detecting; raises TranslitError if the detected confidence is
+            auto-detecting; raises DisarmError if the detected confidence is
             below it. When ``encoding`` is given explicitly the confidence gate
             is bypassed (nothing is detected), but the value is still
             range-validated — an out-of-range ``min_confidence`` raises
@@ -1264,7 +1264,7 @@ def decode_to_utf8(
             low-quality detections — to require high-quality input, pass the
             encoding explicitly rather than relying on this threshold. Pass
             ``0.0`` to be explicit about accepting any guess.
-        strict: When ``True``, raise :class:`TranslitError` instead of silently
+        strict: When ``True``, raise :class:`DisarmError` instead of silently
             returning ``had_errors=True`` if the input contains byte sequences
             that decode to the U+FFFD replacement character (#189). Use this to
             turn lossy decodes — a common silent-data-loss source — into a hard
@@ -1277,7 +1277,7 @@ def decode_to_utf8(
         element is always ``False`` (any error raises instead).
 
     Raises:
-        TranslitError: If the encoding name is unknown, decoding fails,
+        DisarmError: If the encoding name is unknown, decoding fails,
             auto-detection confidence is below min_confidence, or
             ``strict=True`` and the decode was lossy.
 
@@ -1325,7 +1325,7 @@ def detect_scripts(text: str) -> list[Script]:
         else:
             _warnings.warn(
                 f"Rust detected script {name!r} which is not in the Script enum; "
-                f"upgrade translit or report this as a bug",
+                f"upgrade disarm or report this as a bug",
                 stacklevel=2,
             )
     return result
@@ -1389,18 +1389,18 @@ def is_confusable(
     Args:
         text: Input string.
         target_script: Script to check confusability against. Currently only
-            ``"latin"`` is supported; any other value raises ``TranslitError``.
+            ``"latin"`` is supported; any other value raises ``DisarmError``.
         greedy: ``confusable_homoglyphs`` compatibility — ignored with a
-            ``DeprecationWarning``. translit always checks all characters.
+            ``DeprecationWarning``. disarm always checks all characters.
         preferred_aliases: ``confusable_homoglyphs`` compatibility — ignored
-            with a ``DeprecationWarning``. translit uses its own script
+            with a ``DeprecationWarning``. disarm uses its own script
             detection engine.
 
     Returns:
         True if any confusable homoglyphs are present.
 
     Raises:
-        TranslitError: If *target_script* is not ``"latin"``.
+        DisarmError: If *target_script* is not ``"latin"``.
 
     Examples:
         >>> is_confusable("pаypal")  # Cyrillic а looks like Latin a
@@ -1410,15 +1410,15 @@ def is_confusable(
     """
     if greedy is not None:
         _warnings.warn(
-            "The 'greedy' parameter is not supported by translit.is_confusable(); "
-            "translit always checks all characters.",
+            "The 'greedy' parameter is not supported by disarm.is_confusable(); "
+            "disarm always checks all characters.",
             DeprecationWarning,
             stacklevel=2,
         )
     if preferred_aliases is not None:
         _warnings.warn(
             "The 'preferred_aliases' parameter is not supported by "
-            "translit.is_confusable(); translit uses its own script detection.",
+            "disarm.is_confusable(); disarm uses its own script detection.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -1727,7 +1727,7 @@ def list_langs() -> list[str]:
         Sorted list of language code strings (e.g. ["ar", "bg", "de", ...]).
 
     Raises:
-        TranslitError: If the language table lock is poisoned.
+        DisarmError: If the language table lock is poisoned.
 
     Examples:
         >>> "de" in list_langs()
@@ -1853,7 +1853,7 @@ def register_lang(code: str, mappings: dict[str, str]) -> None:
         mappings: Dict of source→replacement character mappings.
 
     Raises:
-        TranslitError: If registrations are sealed, the language table lock is
+        DisarmError: If registrations are sealed, the language table lock is
             poisoned, or the mapping cannot be stored.
 
     Examples:
@@ -1935,7 +1935,7 @@ def seal_registrations() -> None:
 
     After this is called, :func:`register_lang`, :func:`register_replacements`,
     :func:`remove_replacement`, and :func:`clear_replacements` raise
-    :class:`TranslitError`. This is a one-way security latch (#64): the
+    :class:`DisarmError`. This is a one-way security latch (#64): the
     registration APIs mutate **process-global** state that every
     ``transliterate``/``slugify``/``catalog_key``/... call shares, so in a
     multi-tenant or web context an imported library or request handler could
@@ -1947,7 +1947,7 @@ def seal_registrations() -> None:
         >>> seal_registrations()  # doctest: +SKIP
         >>> register_lang("yy", {"Ö": "Oe"})  # doctest: +SKIP
         Traceback (most recent call last):
-        translit.TranslitError: register_lang: registration tables are sealed ...
+        disarm.DisarmError: register_lang: registration tables are sealed ...
 
     Note: the example is ``+SKIP``-ped because sealing is a one-way,
     process-global latch — executing it in the doctest run would seal the shared

@@ -1,24 +1,24 @@
 # Command-Line Interface
 
-translit provides a command-line tool for transliteration, slugification, normalization, and text processing. It reads from arguments or stdin and writes to stdout, making it composable with other Unix tools.
+disarm provides a command-line tool for transliteration, slugification, normalization, and text processing. It reads from arguments or stdin and writes to stdout, making it composable with other Unix tools.
 
 ## Installation
 
 ```bash
-pip install translit-rs
+pip install disarm
 ```
 
-After installation, the `translit` command is available:
+After installation, the `disarm` command is available:
 
 ```bash
-translit t "café"
+disarm t "café"
 # cafe
 ```
 
 You can also run it as a Python module:
 
 ```bash
-python -m translit t "café"
+python -m disarm t "café"
 ```
 
 ## Commands
@@ -40,13 +40,13 @@ Every command has a short alias for faster typing in pipelines.
 Convert Unicode text to ASCII using language-aware transliteration tables.
 
 ```bash
-translit t "café résumé"
+disarm t "café résumé"
 # cafe resume
 
-translit t "Москва"
+disarm t "Москва"
 # Moskva
 
-translit t "北京市"
+disarm t "北京市"
 # bei jing shi
 ```
 
@@ -56,10 +56,10 @@ translit t "北京市"
 :   Apply language-specific transliteration rules. Use `auto` for script-based detection.
 
 ```bash
-translit t --lang de "Ärger über Ölförderung"
+disarm t --lang de "Ärger über Ölförderung"
 # Aerger ueber Oelfoerderung
 
-translit t --lang auto "Москва"
+disarm t --lang auto "Москва"
 # Moskva
 ```
 
@@ -67,10 +67,10 @@ translit t --lang auto "Москва"
 :   Reverse transliteration — convert romanized Latin text back to a native script. Mutually exclusive with `--lang`.
 
 ```bash
-translit t --target ru "Moskva"
+disarm t --target ru "Moskva"
 # Москва
 
-translit t --target el "Athina"
+disarm t --target el "Athina"
 # Αθηνα
 ```
 
@@ -78,7 +78,7 @@ translit t --target el "Athina"
 :   Include tone marks in Chinese pinyin output.
 
 ```bash
-translit t --tones "北京"
+disarm t --tones "北京"
 # běi jīng
 ```
 
@@ -86,7 +86,7 @@ translit t --tones "北京"
 :   Use the scholarly ASCII (ISO 9-style) transliteration for Cyrillic. NOTE: ASCII digraphs (zh/ch/sh), not the diacritic ISO 9:1995 standard.
 
 ```bash
-translit t --strict-iso9 "Юрий"
+disarm t --strict-iso9 "Юрий"
 # Ûrij
 ```
 
@@ -100,13 +100,13 @@ translit t --strict-iso9 "Юрий"
 Generate URL-safe slugs from Unicode text.
 
 ```bash
-translit s "Hello, World!"
+disarm s "Hello, World!"
 # hello-world
 
-translit s "Ärger im Büro"
+disarm s "Ärger im Büro"
 # arger-im-buro
 
-translit s --lang de "Ärger im Büro"
+disarm s --lang de "Ärger im Büro"
 # aerger-im-buero
 ```
 
@@ -119,7 +119,7 @@ translit s --lang de "Ärger im Büro"
 :   Separator character (default: `-`).
 
 ```bash
-translit s --separator "_" "Hello World"
+disarm s --separator "_" "Hello World"
 # hello_world
 ```
 
@@ -127,7 +127,7 @@ translit s --separator "_" "Hello World"
 :   Maximum slug length.
 
 ```bash
-translit s --max-length 10 "A very long blog post title"
+disarm s --max-length 10 "A very long blog post title"
 # a-very-lon
 ```
 
@@ -138,13 +138,13 @@ translit s --max-length 10 "A very long blog post title"
 Apply Unicode normalization.
 
 ```bash
-translit n "café"
+disarm n "café"
 # café  (NFC — composed form, the default)
 
-translit n --form NFKC "ﬁ"
+disarm n --form NFKC "ﬁ"
 # fi
 
-translit n --form NFD "é"
+disarm n --form NFD "é"
 # é  (two codepoints: e + combining acute accent)
 ```
 
@@ -160,10 +160,10 @@ translit n --form NFD "é"
 Run multiple processing steps in a single pass.
 
 ```bash
-translit p --steps "normalize,fold_case,transliterate" "Héllo WÖRLD"
+disarm p --steps "normalize,fold_case,transliterate" "Héllo WÖRLD"
 # hello world
 
-translit p --steps "normalize,strip_accents,fold_case" "Café Résumé"
+disarm p --steps "normalize,strip_accents,fold_case" "Café Résumé"
 # cafe resume
 ```
 
@@ -184,7 +184,7 @@ Available steps: `normalize`, `transliterate`, `fold_case`, `collapse_whitespace
 Expand emoji to their text descriptions.
 
 ```bash
-translit d "Hello 😀 World 🌍"
+disarm d "Hello 😀 World 🌍"
 # Hello grinning face World globe showing Europe-Africa
 ```
 
@@ -192,26 +192,26 @@ translit d "Hello 😀 World 🌍"
 
 ## Piping and stdin
 
-All commands accept input from stdin when no positional argument is given. This makes translit composable with other tools:
+All commands accept input from stdin when no positional argument is given. This makes disarm composable with other tools:
 
 ```bash
 # Process a file
-cat names.txt | translit t
+cat names.txt | disarm t
 
 # Chain with other commands
-echo "Ünïcödé Tëxt" | translit t
+echo "Ünïcödé Tëxt" | disarm t
 # Unicode Text
 
 # Slugify each line of a file
 while IFS= read -r line; do
-    echo "$line" | translit s
+    echo "$line" | disarm s
 done < titles.txt
 
 # Use with xargs
-cat words.txt | xargs -I{} translit t "{}"
+cat words.txt | xargs -I{} disarm t "{}"
 
 # Combine with sort/uniq for deduplication
-cat entries.txt | translit t | sort -u
+cat entries.txt | disarm t | sort -u
 ```
 
 ## Exit codes

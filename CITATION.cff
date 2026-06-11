@@ -4,7 +4,7 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata from this file."
 type: software
-title: "translit"
+title: "disarm"
 abstract: >-
   Unicode canonicalization and TR39 confusable analysis: building blocks
   for text-security pipelines (homoglyph, bidi, zalgo, and invisible-character
@@ -17,8 +17,8 @@ authors:
 version: "0.6.3"
 date-released: "2026-06-08"
 license: MIT
-repository-code: "https://github.com/raeq/translit"
-url: "https://translit.readthedocs.io"
+repository-code: "https://github.com/raeq/disarm"
+url: "https://docs.disarm.dev"
 keywords:
   - transliteration
   - romanization

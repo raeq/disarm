@@ -25,15 +25,15 @@ import unicodedata
 
 import pytest
 
-import translit
+import disarm
 
 FORMS = ("NFC", "NFD", "NFKC", "NFKD")
 
 
 def boundary_preserved(s: str, form: str) -> bool:
     """normalize(whole) equals the join of per-cluster normalizations."""
-    whole = translit.normalize(s, form=form)
-    parts = "".join(translit.normalize(g, form=form) for g in translit.grapheme_split(s))
+    whole = disarm.normalize(s, form=form)
+    parts = "".join(disarm.normalize(g, form=form) for g in disarm.grapheme_split(s))
     return whole == parts
 
 
@@ -66,10 +66,8 @@ class TestGraphemeBoundaryPreservation:
     def test_normalization_preserves_grapheme_boundaries_curated(self) -> None:
         for s in CURATED:
             for form in FORMS:
-                whole = translit.normalize(s, form=form)
-                parts = "".join(
-                    translit.normalize(g, form=form) for g in translit.grapheme_split(s)
-                )
+                whole = disarm.normalize(s, form=form)
+                parts = "".join(disarm.normalize(g, form=form) for g in disarm.grapheme_split(s))
                 assert whole == parts, (
                     f"boundary violation for {s!r} under {form}: whole={whole!r} parts={parts!r}"
                 )
@@ -82,12 +80,12 @@ class TestGraphemeBoundaryPreservation:
         # the per-cluster join still equals normalize(whole). We assert both the
         # expansion AND that the boundary invariant continues to hold for it.
         ligature = "ﬁ"  # ﬁ
-        assert translit.grapheme_split(ligature) == [
+        assert disarm.grapheme_split(ligature) == [
             ligature
         ]  # the ligature is a single grapheme cluster on input
-        assert translit.normalize(ligature, form="NFKC") == "fi"
+        assert disarm.normalize(ligature, form="NFKC") == "fi"
         # "fi" is two grapheme clusters out — count changed, by design.
-        assert translit.grapheme_split("fi") == ["f", "i"]
+        assert disarm.grapheme_split("fi") == ["f", "i"]
         # Boundary invariant still holds for every form, including NFKC/NFKD.
         for form in FORMS:
             assert boundary_preserved(ligature, form)
@@ -105,7 +103,7 @@ class TestGraphemeBoundaryPreservation:
         ]
         for s in based:
             for form in FORMS:
-                out = translit.normalize(s, form=form)
+                out = disarm.normalize(s, form=form)
                 assert out, f"empty normalization of {s!r} under {form}"
                 assert unicodedata.combining(out[0]) == 0, (
                     f"{form} orphaned a combining mark to the front of {s!r}: out={out!r}"

@@ -9,7 +9,7 @@ Key differences from default BGN/PCGN-based transliteration:
   х → h (not kh)     ц → c (not ts)      ё → jo (not yo)
 """
 
-from translit import Text, TextPipeline, transliterate
+from disarm import Text, TextPipeline, transliterate
 
 
 class TestISO9CoreMappings:

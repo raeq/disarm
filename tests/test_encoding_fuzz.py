@@ -18,7 +18,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from translit import TranslitError, decode_to_utf8, detect_encoding
+from disarm import DisarmError, decode_to_utf8, detect_encoding
 
 pytestmark = pytest.mark.hypothesis
 
@@ -69,16 +69,16 @@ def test_decode_explicit_encoding_never_panics(data: bytes, encoding: str) -> No
     # Valid threshold domain is [0.0, 1.0]; exclude NaN/inf explicitly. (Bounded
     # st.floats already defaults allow_nan/allow_infinity to False, but being
     # explicit keeps the test's domain correct and version-independent — a NaN
-    # would raise ValueError, not the TranslitError this property expects.)
+    # would raise ValueError, not the DisarmError this property expects.)
     mc=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
 )
 def test_min_confidence_gate_is_total(data: bytes, mc: float) -> None:
     # For any byte sequence and any threshold, the auto path either returns a
-    # valid (str, bool) or raises TranslitError on the confidence gate — never
+    # valid (str, bool) or raises DisarmError on the confidence gate — never
     # anything else, never a panic.
     try:
         s, had_errors = decode_to_utf8(data, min_confidence=mc)
-    except TranslitError:
+    except DisarmError:
         return
     _assert_valid_str(s)
     assert isinstance(had_errors, bool)

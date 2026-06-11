@@ -2,7 +2,7 @@
 
 Put Unicode normalization at the **front** of every text pipeline, run the
 remaining steps in a fixed, grapheme-correct order, and decide up front whether
-your output needs to be **reversible** or **script-pure**. translit turns these
+your output needs to be **reversible** or **script-pure**. disarm turns these
 from tribal knowledge into guarantees: pipeline step order is single-source and
 invariant-checked, and normalization provably never splits a grapheme cluster.
 
@@ -28,7 +28,7 @@ later step operates on stable input.
 final whitespace cleanup last:
 
 ```python
-from translit import TextPipeline
+from disarm import TextPipeline
 
 pipe = TextPipeline(
     fold_case=True,           # passed first…
@@ -51,11 +51,11 @@ Normalization **respects grapheme-cluster boundaries**. For every form
 (NFC/NFD/NFKC/NFKD):
 
 ```python
-import translit
+import disarm
 
-normalize_whole = lambda s, f: translit.normalize(s, form=f)
+normalize_whole = lambda s, f: disarm.normalize(s, form=f)
 normalize_parts = lambda s, f: "".join(
-    translit.normalize(g, form=f) for g in translit.grapheme_split(s)
+    disarm.normalize(g, form=f) for g in disarm.grapheme_split(s)
 )
 
 s = "क्ष"  # Devanagari conjunct: KA + virama + SSA
@@ -82,19 +82,19 @@ Detect it with `is_mixed_script`, and fold it to a single script with
 `normalize_confusables`:
 
 ```python
-import translit
+import disarm
 
 raw = "pаypаl"                     # contains Cyrillic а (U+0430)
 
 # Normalize first — NFKC folds compatibility variants (fullwidth, ligatures)
 # so the script check sees canonical input, never a disguised bypass.
-s = translit.normalize(raw, form="NFKC")
+s = disarm.normalize(raw, form="NFKC")
 
-assert translit.is_mixed_script(s) == True
+assert disarm.is_mixed_script(s) == True
 
-pure = translit.normalize_confusables(s, target_script="latin")
+pure = disarm.normalize_confusables(s, target_script="latin")
 assert pure == 'paypal'
-assert translit.is_mixed_script(pure) == False
+assert disarm.is_mixed_script(pure) == False
 ```
 
 - **Flag** with `is_mixed_script` when you only need to *reject* suspicious input
@@ -108,7 +108,7 @@ canonical input.
 
 ## Recipe — reversibility-preserving canonicalization (use NFC, not NFKC)
 
-If you may need to convert text **back** to its native script later — translit
+If you may need to convert text **back** to its native script later — disarm
 supports reverse transliteration for Greek, Russian, and Ukrainian via
 `transliterate(text, target=lang)` — canonicalize with **NFC**, never NFKC.
 
@@ -116,20 +116,20 @@ NFKC's compatibility folding is **lossy** and destroys the information a reversa
 would need:
 
 ```python
-import translit
+import disarm
 
-assert translit.normalize("⁵", form="NFC") == '⁵'    # superscript five — preserved
-assert translit.normalize("⁵", form="NFKC") == '5'   # folded to ASCII — unrecoverable
+assert disarm.normalize("⁵", form="NFC") == '⁵'    # superscript five — preserved
+assert disarm.normalize("⁵", form="NFKC") == '5'   # folded to ASCII — unrecoverable
 ```
 
 An NFC-first canonicalization keeps the door open to a clean round-trip:
 
 ```python
 native = "Москва"
-canonical = translit.normalize(native, form="NFC")        # canonical, lossless
-romanized = translit.transliterate(canonical, lang="ru")
+canonical = disarm.normalize(native, form="NFC")        # canonical, lossless
+romanized = disarm.transliterate(canonical, lang="ru")
 assert romanized == 'Moskva'
-back = translit.transliterate(romanized, target="ru")
+back = disarm.transliterate(romanized, target="ru")
 assert back == 'Москва'                                   # round-trips
 ```
 

@@ -1,12 +1,12 @@
 name: 💡 Extension idea / new use case
-description: You have a domain or persona we may not have designed for. Tell us how you'd use translit.
+description: You have a domain or persona we may not have designed for. Tell us how you'd use disarm.
 title: "[idea] "
 labels: ["idea", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        This is the kind of issue we most like to receive. translit is a kit of building
+        This is the kind of issue we most like to receive. disarm is a kit of building
         blocks, and the best features come from real workflows we hadn't pictured. **Half-formed
         ideas are welcome** — you don't need a finished proposal, and there are no wrong answers
         here.
@@ -23,8 +23,8 @@ body:
   - type: textarea
     id: need
     attributes:
-      label: What would you want translit to do?
-      description: What does your workflow need that translit doesn't do — or doesn't do conveniently — today?
+      label: What would you want disarm to do?
+      description: What does your workflow need that disarm doesn't do — or doesn't do conveniently — today?
     validations:
       required: true
   - type: textarea

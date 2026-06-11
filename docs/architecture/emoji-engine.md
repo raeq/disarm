@@ -1,6 +1,6 @@
 # Architecture: Emoji Engine
 
-How translit converts emoji sequences to text descriptions.
+How disarm converts emoji sequences to text descriptions.
 
 ## Problem space
 
@@ -40,7 +40,7 @@ The Python provider's `lookup(sequence: list[int]) -> str | None` method receive
 
 ## Error handling
 
-Codepoints in emoji ranges (`is_emoji_codepoint`) that don't match any table entry are handled by the same three-mode system as transliteration: `"replace"` (substitute a placeholder), `"ignore"` (drop silently), or `"preserve"` (keep the raw codepoint). This covers future emoji added in newer Unicode versions that aren't yet in translit's data files.
+Codepoints in emoji ranges (`is_emoji_codepoint`) that don't match any table entry are handled by the same three-mode system as transliteration: `"replace"` (substitute a placeholder), `"ignore"` (drop silently), or `"preserve"` (keep the raw codepoint). This covers future emoji added in newer Unicode versions that aren't yet in disarm's data files.
 
 ## Pure-Rust path
 

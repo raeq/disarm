@@ -1,8 +1,8 @@
-"""Tests for translit.normalize and is_normalized."""
+"""Tests for disarm.normalize and is_normalized."""
 
 import pytest
 
-from translit import is_normalized, normalize
+from disarm import is_normalized, normalize
 
 
 class TestNormalize:

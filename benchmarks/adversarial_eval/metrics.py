@@ -6,11 +6,11 @@ Where clean ground truth exists (BitAbuse), report **XMR / exact recovery** and
 non-ASCII codepoints that survive ``strip_obfuscation``, split into
 
 * **principled** — present as a source in UTS#39 ``confusables.txt`` (addressable;
-  a coverage gap translit could close, to be verified/upstreamed per #40), and
+  a coverage gap disarm could close, to be verified/upstreamed per #40), and
 * **novel** — not in UTS#39 (out of scope, e.g. Viper-synthetic perturbations).
 
 The split uses the *full* UTS#39 source set (``data/confusables.txt``), not just
-translit's bundled table, so a char already in the standard but not yet mapped is
+disarm's bundled table, so a char already in the standard but not yet mapped is
 correctly counted as an addressable miss rather than novel.
 
 The scan is **parallelized with multiprocessing**: records are streamed into
@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from multiprocessing import Pool
 from pathlib import Path
 
-from translit import strip_obfuscation
+from disarm import strip_obfuscation
 
 from .corpora import Record
 

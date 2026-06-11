@@ -557,7 +557,7 @@ fn load_embedded_dict(name: &str, data: &'static [u8]) -> DictState {
     match ContextDict::from_static(data) {
         Ok(dict) => DictState::Ok(dict),
         Err(e) => {
-            let msg = format!("translit: failed to load embedded {name} dict: {e}");
+            let msg = format!("disarm: failed to load embedded {name} dict: {e}");
             // #106: route through shared helper so Python applications can capture
             // this diagnostic via warnings/logging.
             crate::emit_warning_stderr(&msg);
@@ -574,10 +574,10 @@ fn load_embedded_dict(name: &str, data: &'static [u8]) -> DictState {
 /// attacker-controlled dictionary and silently change transliteration output.
 /// Both returned paths are absolute and not attacker-influenceable:
 ///
-/// 1. `$TRANSLIT_DICT_DIR/{name}_dict.bin` — explicit opt-in for installed
+/// 1. `$DISARM_DICT_DIR/{name}_dict.bin` — explicit opt-in for installed
 ///    wheels. Build the dictionaries with `scripts/bootstrap_dicts.sh` and
-///    point `TRANSLIT_DICT_DIR` at the output directory. **A relative
-///    `TRANSLIT_DICT_DIR` is rejected** (warn + ignore): a relative value would
+///    point `DISARM_DICT_DIR` at the output directory. **A relative
+///    `DISARM_DICT_DIR` is rejected** (warn + ignore): a relative value would
 ///    reintroduce exactly the CWD-relative dictionary loading #61 removed, just
 ///    via the env var. The directory must be an absolute path.
 /// 2. `$CARGO_MANIFEST_DIR/data/{name}_dict.bin` — source/development builds
@@ -585,7 +585,7 @@ fn load_embedded_dict(name: &str, data: &'static [u8]) -> DictState {
 #[cfg(not(feature = "embed-dicts"))]
 fn dict_search_paths(name: &str) -> Vec<std::path::PathBuf> {
     let mut paths: Vec<std::path::PathBuf> = Vec::new();
-    if let Some(dir) = std::env::var_os("TRANSLIT_DICT_DIR") {
+    if let Some(dir) = std::env::var_os("DISARM_DICT_DIR") {
         let dir = std::path::Path::new(&dir);
         if dir.is_absolute() {
             paths.push(dir.join(format!("{name}_dict.bin")));
@@ -594,7 +594,7 @@ fn dict_search_paths(name: &str) -> Vec<std::path::PathBuf> {
             // this diagnostic via warnings/logging rather than having it go directly
             // to stderr, invisible to Python's warnings module.
             crate::emit_warning_stderr(&format!(
-                "translit: ignoring relative TRANSLIT_DICT_DIR={:?}; an absolute path is \
+                "disarm: ignoring relative DISARM_DICT_DIR={:?}; an absolute path is \
                  required (security #61: no CWD-relative dictionary loading).",
                 dir.display()
             ));
@@ -623,7 +623,7 @@ fn load_dict_from_fs(name: &str) -> DictState {
                     // #106: route through shared helper so Python applications can capture
                     // this diagnostic via warnings/logging.
                     crate::emit_warning_stderr(&format!(
-                        "translit: failed to load {name} dict from {}: {e}",
+                        "disarm: failed to load {name} dict from {}: {e}",
                         path.display()
                     ));
                     return DictState::Corrupt(format!(
@@ -963,7 +963,7 @@ mod tests {
             "must not probe the CWD-relative data/ path; got {paths:?}"
         );
         // Stronger invariant: *every* candidate is absolute. A relative
-        // TRANSLIT_DICT_DIR is rejected at the source, so no env value can
+        // DISARM_DICT_DIR is rejected at the source, so no env value can
         // smuggle in a CWD-relative candidate.
         assert!(
             paths.iter().all(|p| p.is_absolute()),

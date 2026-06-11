@@ -10,7 +10,7 @@
 ## Basic usage
 
 ```python
-from translit import sanitize_filename
+from disarm import sanitize_filename
 
 assert sanitize_filename("my<file>:v2.txt") == "my_file_v2.txt"
 assert sanitize_filename("café résumé.pdf") == "cafe_resume.pdf"

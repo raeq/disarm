@@ -1,6 +1,6 @@
 # Benchmarks
 
-How to reproduce and extend the translit benchmark suite.
+How to reproduce and extend the disarm benchmark suite.
 
 For published results and analysis, see [Performance](performance.md).
 
@@ -12,8 +12,8 @@ The `benchmarks/` directory contains three tiers of benchmarks:
 | Script | Framework | Purpose | Typical runtime |
 |---|---|---|---|
 | `bench_core.rs` | [Criterion.rs](https://bheisler.github.io/criterion.rs/book/) | Pure-Rust microbenchmarks — measures core transforms without PyO3 overhead | ~2 min |
-| `bench_pyperf.py` | [pyperf](https://pyperf.readthedocs.io/) | Rigorous Python-level benchmarks with statistical analysis — translit vs competitors | ~15 min |
-| `bench_quick.py` | stdlib `timeit` | Quick sanity-check timing — no external dependencies beyond translit | ~30 sec |
+| `bench_pyperf.py` | [pyperf](https://pyperf.readthedocs.io/) | Rigorous Python-level benchmarks with statistical analysis — disarm vs competitors | ~15 min |
+| `bench_quick.py` | stdlib `timeit` | Quick sanity-check timing — no external dependencies beyond disarm | ~30 sec |
 
 Additional focused scripts:
 
@@ -79,12 +79,12 @@ To compare before/after an optimization, run the baseline first, make changes, t
 
 Benchmark groups:
 
-- **transliterate** — translit vs Unidecode, text-unidecode, anyascii across Latin (short/long), Cyrillic (short/long), CJK (short/long), and mixed scripts
-- **slugify** — translit vs python-slugify with default, long-text, and options-heavy configurations
-- **normalize** — translit vs `unicodedata.normalize()` (CPython C extension)
-- **filename** — translit vs pathvalidate for simple, Unicode, and adversarial inputs
-- **strip_accents** — translit vs pure-Python NFD + category filter
-- **fold_case** — translit vs `str.casefold()` (CPython C builtin)
+- **transliterate** — disarm vs Unidecode, text-unidecode, anyascii across Latin (short/long), Cyrillic (short/long), CJK (short/long), and mixed scripts
+- **slugify** — disarm vs python-slugify with default, long-text, and options-heavy configurations
+- **normalize** — disarm vs `unicodedata.normalize()` (CPython C extension)
+- **filename** — disarm vs pathvalidate for simple, Unicode, and adversarial inputs
+- **strip_accents** — disarm vs pure-Python NFD + category filter
+- **fold_case** — disarm vs `str.casefold()` (CPython C builtin)
 - **batch** — `transliterate(list)` and `slugify(list)` vs equivalent Python loops
 
 ```bash

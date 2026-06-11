@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from translit import (
+from disarm import (
     Script,
     detect_scripts,
     list_langs,
@@ -18,7 +18,7 @@ from translit import (
     slugify,
     transliterate,
 )
-from translit._enums import LANG_AUTO, LANG_META, SCRIPT_META
+from disarm._enums import LANG_AUTO, LANG_META, SCRIPT_META
 
 # ---------------------------------------------------------------------------
 # Fixtures

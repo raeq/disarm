@@ -185,14 +185,14 @@ pub fn _transliterate<'py>(
 /// Python-side dispatcher for the shapes the fast entry point does not handle
 /// (lists, str subclasses, reverse `target=`, `context=True`, type errors).
 ///
-/// Registered once at `translit` package import by `_set_transliterate_fallback`.
-/// An `RwLock<Option<…>>` (not a set-once cell) so `importlib.reload(translit)`
+/// Registered once at `disarm` package import by `_set_transliterate_fallback`.
+/// An `RwLock<Option<…>>` (not a set-once cell) so `importlib.reload(disarm)`
 /// re-registers cleanly instead of erroring or calling a stale dispatcher.
 static TRANSLITERATE_FALLBACK: LazyLock<RwLock<Option<Py<PyAny>>>> =
     LazyLock::new(|| RwLock::new(None));
 
 /// Register the Python dispatcher `_transliterate_entry` delegates to (#277
-/// Phase B). Called from `python/translit/_api.py` at package import.
+/// Phase B). Called from `python/disarm/_api.py` at package import.
 #[pyfunction]
 pub fn _set_transliterate_fallback(f: Bound<'_, PyAny>) -> PyResult<()> {
     if !f.is_callable() {
@@ -207,7 +207,7 @@ pub fn _set_transliterate_fallback(f: Bound<'_, PyAny>) -> PyResult<()> {
 
 /// Single-crossing public `transliterate()` entry point (#277 Phase B).
 ///
-/// Bound directly to `translit.transliterate` at runtime: the common shape —
+/// Bound directly to `disarm.transliterate` at runtime: the common shape —
 /// an exact `str` with no reverse/context dispatch — runs entirely in Rust
 /// with **one** Python→native call. A bare `transliterate(text)` extracts only
 /// `text`; every keyword default is a Rust-side constant with zero per-call
@@ -217,7 +217,7 @@ pub fn _set_transliterate_fallback(f: Bound<'_, PyAny>) -> PyResult<()> {
 ///
 /// Unicode → ASCII transliteration. See the package documentation for the
 /// full argument reference; semantics are identical to the Python dispatcher
-/// (`translit._api._transliterate_dispatch`), which type checkers see as the
+/// (`disarm._api._transliterate_dispatch`), which type checkers see as the
 /// signature source of truth.
 #[pyfunction]
 #[pyo3(
@@ -263,8 +263,8 @@ pub fn _transliterate_entry<'py>(
     };
     let Some(fallback) = fallback else {
         return Err(PyRuntimeError::new_err(
-            "translit internal error: transliterate dispatcher not registered — \
-             import the `translit` package rather than `translit._translit` directly",
+            "disarm internal error: transliterate dispatcher not registered — \
+             import the `disarm` package rather than `disarm._disarm` directly",
         ));
     };
     let kwargs = PyDict::new(py);
@@ -282,7 +282,7 @@ pub fn _transliterate_entry<'py>(
 /// Validate the *combination* of `transliterate()` keyword arguments (#231).
 ///
 /// The semantic conflict matrix lives in the core (the single source of truth)
-/// rather than only in the `python/translit/_api.py` wrapper, so a second
+/// rather than only in the `python/disarm/_api.py` wrapper, so a second
 /// binding enforces the identical contract by calling this one function.
 ///
 /// `target` selects *reverse* transliteration; `context` and `tones` are
@@ -477,7 +477,7 @@ pub fn _transliterate_context(
         Ok(None) => {
             // Dictionary not loaded — point the user at a remedy that actually works
             // (#60). Context dictionaries are not shipped in the wheel; build them
-            // and expose them via TRANSLIT_DICT_DIR.
+            // and expose them via DISARM_DICT_DIR.
             Err(crate::Error::ContextDictNotFound {
                 lang: lang_name.to_owned(),
             }

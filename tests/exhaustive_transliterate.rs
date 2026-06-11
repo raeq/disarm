@@ -1,4 +1,4 @@
-//! Exhaustive domain tests for translit.
+//! Exhaustive domain tests for disarm.
 //!
 //! These tests cover every element in bounded Unicode domains, leaving zero
 //! untested inputs within each domain. This is stronger than property-based
@@ -7,12 +7,12 @@
 //! All tests are `#[ignore = "exhaustive: slow, run with --ignored"]` by default so they don't slow everyday development.
 //! Run before release with: `cargo test --test exhaustive_transliterate -- --ignored`
 
-use _translit::tables::hangul::{lookup_compat_jamo, romanize_hangul};
-use _translit::transliterate::{
+use _disarm::tables::hangul::{lookup_compat_jamo, romanize_hangul};
+use _disarm::transliterate::{
     balinese_char_role, indic_char_role, javanese_char_role, khmer_char_role, myanmar_char_role,
     sinhala_char_role, tibetan_char_role, transliterate_impl, IndicRole,
 };
-use _translit::ErrorMode;
+use _disarm::ErrorMode;
 
 // ── Hangul syllables (U+AC00–U+D7A3): all 11,172 ──────────────────────
 

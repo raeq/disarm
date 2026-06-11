@@ -4,14 +4,14 @@ These tests verify that transliterate(text, context=True) produces
 better output than context-free transliteration for Arabic text,
 by restoring vowels from a dictionary-based lookup with bigram context.
 
-Requires: pip install translit-rs[arabic] (or data/arabic_dict.bin present)
+Requires: pip install disarm[arabic] (or data/arabic_dict.bin present)
 """
 
 from __future__ import annotations
 
 import pytest
 
-from translit import transliterate
+from disarm import transliterate
 
 
 def _has_arabic_dict() -> bool:

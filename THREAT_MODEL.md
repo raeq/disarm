@@ -1,19 +1,19 @@
 # Threat Model
 
-This document defines what translit's security-relevant features are intended to do,
+This document defines what disarm's security-relevant features are intended to do,
 what they are explicitly **not** intended to do, and — critically — how we distinguish a
-**vulnerability** from a **known limitation**. Read it before relying on translit in a
+**vulnerability** from a **known limitation**. Read it before relying on disarm in a
 security context, and before reporting a "bypass."
 
 ## Positioning
 
-translit provides **building blocks for adversarial-text defense** — it is a
+disarm provides **building blocks for adversarial-text defense** — it is a
 **defense-in-depth layer, not a complete control**. It performs deterministic,
 table-driven Unicode canonicalization (TR39 confusable mapping, bidi/zalgo/zero-width
 stripping, NFKC, mixed-script and hostname analysis). It makes **no guarantee** that any
 class of attack is fully neutralized.
 
-translit is a pure, in-process text-transformation library: no network access, no
+disarm is a pure, in-process text-transformation library: no network access, no
 filesystem writes, no code execution, no runtime dependencies.
 
 ## Assets and actors
@@ -56,7 +56,7 @@ behavior, not a vulnerability:
 
 - **Confusables not in the bundled TR39 table.** The table is a finite, versioned subset
   of Unicode confusables. Characters outside it — including the official Unicode
-  `confusables.txt` entries translit does not bundle, and entirely novel/ML-discovered
+  `confusables.txt` entries disarm does not bundle, and entirely novel/ML-discovered
   homoglyphs (e.g. Deng et al.'s 8,000+) — are **not** mapped. Normalization is
   enumerate-the-known; it cannot canonicalize the unknown.
 - **Whole-script / single-script spoofs.** A string composed *entirely* of one non-Latin
@@ -71,7 +71,7 @@ behavior, not a vulnerability:
   data is updated. The bundled version is recorded in the release.
 - **Semantic / meaning-level attacks.** Prompt injection, social engineering, or any
   attack that does not depend on character-level visual/format manipulation.
-- **Completeness or "safety" guarantees of any kind.** translit reduces a specific,
+- **Completeness or "safety" guarantees of any kind.** disarm reduces a specific,
   enumerated attack surface. It does not certify that processed text is safe to trust.
 - **Denial of service guarantees.** We aim for linear-time behavior and test for it, but
   do not guarantee resource bounds for adversarial inputs in all configurations. As of
@@ -86,7 +86,7 @@ behavior, not a vulnerability:
 
 ## Vulnerability vs. known limitation
 
-**We will treat as a security vulnerability** a case where translit fails to do what this
+**We will treat as a security vulnerability** a case where disarm fails to do what this
 document says it does — for example:
 
 - `normalize_confusables(text, target)` emits a code point the **bundled** table maps to
@@ -108,17 +108,17 @@ The scope above is grounded in the literature, not asserted:
 
 - **Table-driven normalization is a layer, not a solution.** On *real* phishing text,
   1:1 confusable-database lookup restores only ~35% of visually-perturbed words, versus
-  ~96% for a context-aware character model (Lee et al., *BitAbuse*, 2025). translit is the
+  ~96% for a context-aware character model (Lee et al., *BitAbuse*, 2025). disarm is the
   fast, deterministic first layer — not the whole defense.
 - **The confusable space is unbounded and mostly outside any standard.** Deng et al.
-  (2020) used deep learning to find 8,000+ homoglyphs. Measured against translit's bundled
+  (2020) used deep learning to find 8,000+ homoglyphs. Measured against disarm's bundled
   data: of their ~4,859 *letter* homoglyphs, only ~11% appear in the official TR39
   `confusables.txt` at all — the rest are novel. A TR39-derived tool **cannot** canonicalize
   what TR39 does not list. (Their released set is code-points only, so this measures
   recognition, not target-correctness.)
-- **The dominant real-world threat is the one translit covers well.** Holgers et al.
+- **The dominant real-world threat is the one disarm covers well.** Holgers et al.
   (USENIX 2006) found registered homograph domains are overwhelmingly **single-character,
-  Latin** substitutions (85–88%), with IDN/Unicode a smaller but growing share. translit's
+  Latin** substitutions (85–88%), with IDN/Unicode a smaller but growing share. disarm's
   single-letter Latin confusable coverage of UTS#39 is complete and gated in CI
   (`tests/test_confusable_coverage.py`); `is_safe_hostname` addresses the mixed-script/IDN
   case. Multi-character (`rn`→`m`) and whole-script spoofs remain out of scope (above).

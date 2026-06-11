@@ -1,6 +1,6 @@
 """API surface stability tests.
 
-These tests verify that the public API of translit has not changed.
+These tests verify that the public API of disarm has not changed.
 They check function existence, parameter names, and type annotations —
 NOT behavior or output. Any failure means a breaking API change was
 introduced and must be intentional.
@@ -16,8 +16,8 @@ from typing import get_type_hints
 
 import pytest
 
-import translit
-from translit import (
+import disarm
+from disarm import (
     LANG_META,
     NF,
     SCRIPT_META,
@@ -126,7 +126,7 @@ EXPECTED_ALL = {
     "slugify_de",
     "slugify_el",
     # Exception hierarchy (#183)
-    "TranslitError",
+    "DisarmError",
     "InvalidArgumentError",
     "ResourceLimitError",
     "UnsupportedError",
@@ -223,13 +223,13 @@ class TestAllExports:
     """__all__ must contain exactly the expected public names."""
 
     def test_all_contains_expected(self):
-        actual = set(translit.__all__)
+        actual = set(disarm.__all__)
         expected = EXPECTED_ALL | EXPECTED_LANG_CONSTANTS
         missing = expected - actual
         assert not missing, f"Missing from __all__: {sorted(missing)}"
 
     def test_no_unexpected_exports(self):
-        actual = set(translit.__all__)
+        actual = set(disarm.__all__)
         expected = EXPECTED_ALL | EXPECTED_LANG_CONSTANTS
         extra = actual - expected
         assert not extra, f"Unexpected in __all__: {sorted(extra)}"
@@ -395,7 +395,7 @@ class TestFunctionSignatures:
         ],
     )
     def test_function_params(self, name: str, expected_params: list[str]):
-        fn = getattr(translit, name)
+        fn = getattr(disarm, name)
         assert callable(fn), f"{name} is not callable"
         actual = _param_names(fn)
         assert actual == expected_params, (
@@ -413,7 +413,7 @@ class TestFunctionSignatures:
     )
     def test_first_param_is_positional(self, name: str):
         """The first param (text/texts/data/hostname) must be positional."""
-        fn = getattr(translit, name)
+        fn = getattr(disarm, name)
         kinds = _param_kinds(fn)
         first = list(kinds.keys())[0]
         assert kinds[first] in (
@@ -558,7 +558,7 @@ class TestClassAPIs:
         ],
     )
     def test_class_method_params(self, cls_name: str, method_name: str, expected_params: list[str]):
-        cls = getattr(translit, cls_name)
+        cls = getattr(disarm, cls_name)
         method = getattr(cls, method_name)
         actual = _param_names(method)
         assert actual == expected_params, (
@@ -568,12 +568,12 @@ class TestClassAPIs:
         )
 
     def test_text_has_value_property(self):
-        assert isinstance(inspect.getattr_static(translit.Text, "value"), property), (
+        assert isinstance(inspect.getattr_static(disarm.Text, "value"), property), (
             "Text.value must be a property"
         )
 
     def test_text_pipeline_has_steps_property(self):
-        assert isinstance(inspect.getattr_static(translit.TextPipeline, "steps"), property), (
+        assert isinstance(inspect.getattr_static(disarm.TextPipeline, "steps"), property), (
             "TextPipeline.steps must be a property"
         )
 
@@ -756,10 +756,10 @@ class TestMetadataStability:
 
 class TestExceptionStability:
     def test_translit_error_exists(self):
-        assert hasattr(translit, "TranslitError")
+        assert hasattr(disarm, "DisarmError")
 
     def test_translit_error_is_exception(self):
-        assert issubclass(translit.TranslitError, Exception)
+        assert issubclass(disarm.DisarmError, Exception)
 
 
 # ---------------------------------------------------------------------------
@@ -768,7 +768,7 @@ class TestExceptionStability:
 
 
 class TestModuleCallable:
-    """The translit module itself must be callable (transliterate shorthand)."""
+    """The disarm module itself must be callable (transliterate shorthand)."""
 
     def test_module_is_callable(self):
-        assert callable(translit)
+        assert callable(disarm)

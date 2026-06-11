@@ -1,9 +1,9 @@
 # Performance
 
-This page exists for the skeptical reader who wants to know whether translit's
+This page exists for the skeptical reader who wants to know whether disarm's
 performance numbers are real. Every claim here is one of three things:
 
-1. **A relative claim** (translit is *N×* faster than library *X*) — asserted as
+1. **A relative claim** (disarm is *N×* faster than library *X*) — asserted as
    an executed inequality with a deliberately loose floor, so the doc-test
    proves *category and direction* on any CI hardware without flaking. The
    precise published figure links to its recorded measurement.
@@ -18,7 +18,7 @@ it never passes silently.
 
 ## Credit
 
-translit measures itself against [Unidecode](https://pypi.org/project/Unidecode/)
+disarm measures itself against [Unidecode](https://pypi.org/project/Unidecode/)
 and its lineage — Sean M. Burke's original Perl `Text::Unidecode` and Tomaž
 Šolc's Python port — along with
 [text-unidecode](https://pypi.org/project/text-unidecode/),
@@ -26,7 +26,7 @@ and its lineage — Sean M. Burke's original Perl `Text::Unidecode` and Tomaž
 [python-slugify](https://pypi.org/project/python-slugify/), and
 [pathvalidate](https://pypi.org/project/pathvalidate/). These projects built the
 transliteration category and carried the industry for two decades. They are
-reference points, not targets. Where translit is faster, it is faster while
+reference points, not targets. Where disarm is faster, it is faster while
 doing a deliberately *different* and larger job (see
 [Different scope, more work](#different-scope-more-work)); where a comparator's
 context-free design is the right tool, that is a feature of its design, not a
@@ -35,16 +35,16 @@ against.
 
 ## The two regimes
 
-translit has two distinct performance stories, and conflating them is the most
+disarm has two distinct performance stories, and conflating them is the most
 common way to misread a transliteration benchmark:
 
 - **Per-call (latency) regime** — one short field per call (a name, a title, a
   single record). Here the dominant cost is the Python→Rust boundary crossing,
-  not the per-character work. translit crosses that boundary exactly once and
+  not the per-character work. disarm crosses that boundary exactly once and
   returns already-ASCII input as the original `str` object (#284, #277).
 - **Per-character (throughput) regime** — documents from a few hundred bytes to
   a couple of megabytes. Here the dominant cost is the per-character table
-  lookup, and translit's compile-time flat-array tables (no hashing on lookup)
+  lookup, and disarm's compile-time flat-array tables (no hashing on lookup)
   do the work in Rust.
 
 A short-string ratio and a throughput ratio measure different things; neither
@@ -64,12 +64,12 @@ The defence of these numbers *is* the methodology, so it is stated up front:
   without ever flaking, while the precise figure is backed by a recorded
   measurement. Always round our own numbers **down** and comparators' numbers
   **up**; never the reverse.
-- **Interleaved measurement.** Each executed block times translit and the
+- **Interleaved measurement.** Each executed block times disarm and the
   comparator back-to-back, repeatedly, and takes the **median** of the
   per-round ratios. Transient scheduler noise hits both sides and cancels in the
   ratio.
 - **Pinned, hash-locked comparators.** CI installs the exact comparator versions
-  in [`requirements/bench.txt`](https://github.com/raeq/translit/blob/main/requirements/bench.txt)
+  in [`requirements/bench.txt`](https://github.com/raeq/disarm/blob/main/requirements/bench.txt)
   (`--require-hashes`). The published absolute figures are bucketed by CPU
   microarchitecture and recorded on the `perf-results` branch with the
   fingerprint below.
@@ -82,7 +82,7 @@ The defence of these numbers *is* the methodology, so it is stated up front:
 import time
 import statistics
 
-from translit import transliterate, slugify, sanitize_filename
+from disarm import transliterate, slugify, sanitize_filename
 
 
 def _timed(fn, arg, inner):
@@ -94,10 +94,10 @@ def _timed(fn, arg, inner):
 
 
 def speed_ratio(translit_fn, other_fn, arg, inner=4000, reps=5):
-    """Median interleaved (other / translit) time ratio: >1 means translit is faster.
+    """Median interleaved (other / disarm) time ratio: >1 means disarm is faster.
 
     Timing a whole batch of `inner` calls per span amortises perf_counter
-    overhead to ~0; interleaving translit and the comparator per round and
+    overhead to ~0; interleaving disarm and the comparator per round and
     taking the median across `reps` rounds cancels transient load. The constant
     perf_counter overhead that remains is added to both sides, which only
     *deflates* the ratio — so the floors asserted below are conservative.
@@ -112,7 +112,7 @@ def speed_ratio(translit_fn, other_fn, arg, inner=4000, reps=5):
 
 ## Different scope, more work
 
-Before any speed claim: translit's `transliterate()` is not doing the same job
+Before any speed claim: disarm's `transliterate()` is not doing the same job
 as a context-free transliterator. On every call it also consults the language
 override tables, applies the requested error-handling mode, checks the
 replacement registry, and (optionally) runs script detection. The output
@@ -131,10 +131,10 @@ try:
     transliterate("AB", errors="strict")
     raise AssertionError("strict mode should have raised")
 except Exception as exc:
-    assert type(exc).__name__ == "TranslitError"
+    assert type(exc).__name__ == "DisarmError"
 ```
 
-A context-free library produces one fixed output; translit's per-call price buys
+A context-free library produces one fixed output; disarm's per-call price buys
 language tables, error modes, and a replacement registry. That is the "different
 scope" the speed numbers should be read against — not a like-for-like race.
 
@@ -157,7 +157,7 @@ except ImportError:                       # docs env without the pinned comparat
 short = "Ärger café Москва Ελληνικά"     # mixed Latin diacritics, Cyrillic, Greek
 ratio = speed_ratio(transliterate, unidecode, short)
 # Published: ~15-21x short-string. Loose floor proves direction without flaking.
-assert ratio > 4, f"expected translit clearly faster short-string, got {ratio:.1f}x"
+assert ratio > 4, f"expected disarm clearly faster short-string, got {ratio:.1f}x"
 ```
 
 ### Throughput (document scale)
@@ -177,24 +177,24 @@ document = ("Schöne Grüße aus München. Café au lait. "
             "Здравствуйте, мир. Ελληνικά κείμενα. ") * 40   # ~3 KB, mixed
 ratio = speed_ratio(transliterate, unidecode, document, inner=400, reps=5)
 # Published: ~38x Latin / ~15x Cyrillic at document scale. Loose floor here.
-assert ratio > 6, f"expected translit far faster at document scale, got {ratio:.1f}x"
+assert ratio > 6, f"expected disarm far faster at document scale, got {ratio:.1f}x"
 ```
 
 ### Unidecode's own benchmark
 
-translit also wins **all four cells of Unidecode's own benchmark** — the
+disarm also wins **all four cells of Unidecode's own benchmark** — the
 cross-product of Unidecode's two API entry points
 (`unidecode_expect_ascii`, `unidecode_expect_nonascii`) and its two sample
 inputs. The clean-room replication is in
-[`benchmarks/bench_unidecode_own.py`](https://github.com/raeq/translit/blob/main/benchmarks/bench_unidecode_own.py)
+[`benchmarks/bench_unidecode_own.py`](https://github.com/raeq/disarm/blob/main/benchmarks/bench_unidecode_own.py)
 (the GPL benchmark file itself is not copied — only the methodology). The sweep
 below was recorded in
-[PR #284](https://github.com/raeq/translit/pull/284) and
-[PR #281](https://github.com/raeq/translit/pull/281) on an AMD EPYC 7763 CI
+[PR #284](https://github.com/raeq/disarm/pull/284) and
+[PR #281](https://github.com/raeq/disarm/pull/281) on an AMD EPYC 7763 CI
 bucket (the fields you would record for your own run are described under
 [Absolute numbers](#absolute-numbers-illustrative-and-fingerprinted)):
 
-| Cell | Ratio (Unidecode time / translit time) |
+| Cell | Ratio (Unidecode time / disarm time) |
 |---|---|
 | `expect_ascii` / ASCII input | **1.43×** (71.0 ns vs 101.2 ns) |
 | `expect_ascii` / non-ASCII input | **9.71×** |
@@ -202,7 +202,7 @@ bucket (the fields you would record for your own run are described under
 | `expect_nonascii` / non-ASCII input | **6.66×** |
 
 The narrowest cell (1.43×) is Unidecode's strongest case — pure-ASCII text
-through its ASCII-optimised entry point — and translit still wins it via the
+through its ASCII-optimised entry point — and disarm still wins it via the
 return-original-object fast path. These are recorded absolutes; they are *not*
 asserted in CI (the four-cell pass/fail is checked by the benchmark script, not
 by this page). Re-run them with `python benchmarks/bench_unidecode_own.py`.
@@ -234,8 +234,8 @@ except ImportError:
 
 title = "Hello, World! Crème Brûlée & Café — a Long-ish Title for Slugging"
 ratio = speed_ratio(slugify, py_slugify, title)
-assert ratio > 3, f"expected translit slugify clearly faster, got {ratio:.1f}x"
-# Both produce an ASCII slug; translit also transliterates the accented words.
+assert ratio > 3, f"expected disarm slugify clearly faster, got {ratio:.1f}x"
+# Both produce an ASCII slug; disarm also transliterates the accented words.
 assert slugify("Crème Brûlée") == "creme-brulee"
 ```
 
@@ -253,7 +253,7 @@ except ImportError:
 
 name = "my<illegal>:name?.txt"
 ratio = speed_ratio(sanitize_filename, pv_sanitize, name)
-assert ratio > 3, f"expected translit sanitize_filename clearly faster, got {ratio:.1f}x"
+assert ratio > 3, f"expected disarm sanitize_filename clearly faster, got {ratio:.1f}x"
 assert sanitize_filename(name) == "my_illegal_name.txt"
 ```
 
@@ -282,7 +282,7 @@ setup on platforms or interpreters where the boundary crossing is comparatively
 expensive. Reach for it for thread-parallel and high-volume work, not as a
 guaranteed speedup on a single core.
 
-## Where translit is slower
+## Where disarm is slower
 
 Visible admission of losses is the strongest defence against cherry-picking, so
 this section is deliberate and not buried.
@@ -290,22 +290,22 @@ this section is deliberate and not buried.
 - **NFC/NFKC normalisation vs `unicodedata.normalize`.** CPython's
   `unicodedata` is a C extension operating directly on Python's internal string
   buffer with zero-copy fast paths. For a single string it is **faster** than
-  translit, which crosses into Rust. translit's `normalize()` exists for
+  disarm, which crosses into Rust. disarm's `normalize()` exists for
   *consistency*, not speed: it uses one Unicode version (16.0) across every code
   path — single string, list, and pipelines — so results never differ between
   CPython's bundled Unicode version and the Rust crate's. That consistency is
   the deliberate tradeoff.
 - **Case folding vs `str.casefold()`.** `str.casefold()` is a zero-allocation C
-  builtin; translit's `fold_case()` is within a small factor at the Python level
+  builtin; disarm's `fold_case()` is within a small factor at the Python level
   and is dominated by the boundary-crossing cost, not the fold itself. Use
   `str.casefold()` when you only need CPython's Unicode version and a single
   string.
 
-These losses are real and against C builtins that translit cannot and does not
+These losses are real and against C builtins that disarm cannot and does not
 try to beat. The functional behaviour is still asserted:
 
 ```python
-from translit import fold_case, strip_accents
+from disarm import fold_case, strip_accents
 assert fold_case("Straße") == "strasse"           # full Unicode case folding
 assert strip_accents("café résumé") == "cafe resume"
 ```
@@ -322,8 +322,8 @@ python scripts/perf_fingerprint.py --json
 ```
 
 The short-string figures below were recorded in
-[PR #284](https://github.com/raeq/translit/pull/284) and
-[PR #281](https://github.com/raeq/translit/pull/281) on an AMD EPYC 7763 CI
+[PR #284](https://github.com/raeq/disarm/pull/284) and
+[PR #281](https://github.com/raeq/disarm/pull/281) on an AMD EPYC 7763 CI
 bucket (CPython 3.12, pinned comparators from `requirements/bench.txt`,
 median-of-7 interleaved). They are reproduced here to illustrate the per-call
 regime; **your numbers will differ**, and the only durable claims are the ratios
@@ -393,7 +393,7 @@ What this page does **not** claim:
 
 - No cross-hardware absolute comparisons. A ns figure on one machine says
   nothing about another.
-- No "fastest possible" claim. translit is faster than the pure-Python
+- No "fastest possible" claim. disarm is faster than the pure-Python
   comparators measured here, for the workloads measured here — nothing broader.
 - No claims about workloads not measured on this page.
 - No transliterate-axis comparison against ftfy (it is a normaliser).
@@ -401,8 +401,8 @@ What this page does **not** claim:
 ## Reproducing these numbers
 
 ```bash
-# Install translit with the pinned, hash-locked comparator set
-pip install translit[bench]
+# Install disarm with the pinned, hash-locked comparator set
+pip install disarm[bench]
 
 # Short-string ratios (interleaved, median-of-7), per script
 python benchmarks/bench_ratio.py

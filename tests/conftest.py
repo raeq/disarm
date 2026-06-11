@@ -1,4 +1,4 @@
-"""Shared test fixtures and Hypothesis strategies for translit.
+"""Shared test fixtures and Hypothesis strategies for disarm.
 
 Centralizes Unicode sample data and property-based testing strategies
 so that new tests can import them from one place instead of
@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from hypothesis import strategies as st
 
-from translit._enums import Script
+from disarm._enums import Script
 
 # ---------------------------------------------------------------------------
 # Hypothesis strategies

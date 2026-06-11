@@ -38,7 +38,7 @@ from disarm import __all__ as _disarm_all  # noqa: E402
 
 __all__ = [*_disarm_all, "TranslitError"]
 
-try:  # mirror disarm's version for `translit.__version__` consumers
-    from disarm import __version__  # noqa: F401
-except ImportError:  # pragma: no cover
-    __version__ = "0.8.2"
+# `translit.__version__` reports the translit-rs *distribution* version (0.8.2),
+# not disarm's — a consumer pinning on `translit.__version__` is asking about the
+# translit-rs package, which is frozen at this final 0.8.2 shim release.
+__version__ = "0.8.2"

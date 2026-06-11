@@ -46,7 +46,7 @@ don't skip versions and don't let updates pile up. The anti-drift rule:
 > is **taken**, **folded** into related work, or **skipped with a written reason** — never
 > silently ignored.
 
-(Example of "folded": the pyo3 0.28 migration is folded into the disarm-core extraction
+(Example of "folded": the pyo3 0.28 migration is folded into the pure-Rust core extraction
 at 0.8 — #147 — rather than migrating the PyO3 boundary twice.)
 
 ## Two lanes — the test suite is the triage

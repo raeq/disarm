@@ -16,6 +16,13 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-06-11
+
+The first release under the **`disarm`** name — the continuation of `translit-rs`
+(last released as `0.8.1`). See #264 for the rename rationale. The `0.0.0` entries
+on PyPI / crates.io / npm are name-reservation placeholders, not releases; `0.9.0`
+is the first functional `disarm` release.
+
 ### Changed
 
 - **Renamed the project from `translit` to `disarm`** (#264). This unifies the

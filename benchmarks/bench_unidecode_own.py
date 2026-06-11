@@ -56,11 +56,21 @@ def _comparators() -> dict[str, Callable[[str], str]]:
     }
 
 
-def _time(fn: Callable[[str], str], text: str) -> float:
-    """Seconds for INNER calls of fn over text."""
+# Regime marker (see bench_ratio.py): fresh str object per timed call —
+# production-true; cached-object re-calls hide the AsUTF8 encode cost.
+REGIME = "fresh-string/v2"
+
+
+def _fresh_copies(text: str) -> list[str]:
+    """INNER distinct new str objects, built outside the timed region."""
+    return [(text + " ")[:-1] for _ in range(INNER)]
+
+
+def _time(fn: Callable[[str], str], objs: list[str]) -> float:
+    """Seconds for one call of fn over each of the INNER fresh objects."""
     start = perf_counter()
-    for _ in range(INNER):
-        fn(text)
+    for o in objs:
+        fn(o)
     return perf_counter() - start
 
 
@@ -74,8 +84,8 @@ def measure() -> dict[str, dict[str, float | bool]]:
             translit_ns: list[float] = []
             cmp_ns: list[float] = []
             for _ in range(REPS):
-                t = _time(translit_fn, text)
-                c = _time(cmp_fn, text)
+                t = _time(translit_fn, _fresh_copies(text))
+                c = _time(cmp_fn, _fresh_copies(text))
                 ratios.append(c / t)
                 translit_ns.append(t / INNER * 1e9)
                 cmp_ns.append(c / INNER * 1e9)
@@ -100,7 +110,7 @@ def main(argv: list[str]) -> int:
         slim = {name: {"ratio": c["ratio"], "won": c["won"]} for name, c in cells.items()}
         print(
             json.dumps(
-                {"inner": INNER, "reps": REPS, "cells": slim, "swept": swept},
+                {"regime": REGIME, "inner": INNER, "reps": REPS, "cells": slim, "swept": swept},
                 sort_keys=True,
             )
         )

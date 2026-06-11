@@ -56,11 +56,29 @@ def _load(comparator_src: str) -> Callable[[str], str] | None:
     return fn if callable(fn) else None
 
 
-def _time(fn: Callable[[str], str], text: str) -> float:
-    """Seconds for INNER calls of fn over text."""
+# Measurement regime marker, recorded in every JSON output so perf-results
+# history never silently mixes epochs. "fresh-string/v2" (#277): every timed
+# call receives a NEW str object, because production workloads are always new
+# string objects — re-calling on one cached object lets CPython's per-object
+# AsUTF8 cache hide ~105-137 ns/call of UTF-8 encode cost that only translit
+# pays (pure-Python comparators never call AsUTF8), flattering translit.
+# Records before this marker were the cached-object v1 regime.
+REGIME = "fresh-string/v2"
+
+
+def _fresh_copies(text: str) -> list[str]:
+    """INNER distinct, newly constructed str objects (built outside the timed
+    region). Partial slice of a concatenation: guaranteed-new on CPython —
+    ``s + ""``, full-range slices, and ``"".join((s,))`` all return the
+    original object and would defeat the cold-cache requirement."""
+    return [(text + " ")[:-1] for _ in range(INNER)]
+
+
+def _time(fn: Callable[[str], str], objs: list[str]) -> float:
+    """Seconds for one call of fn over each of the INNER fresh objects."""
     start = perf_counter()
-    for _ in range(INNER):
-        fn(text)
+    for o in objs:
+        fn(o)
     return perf_counter() - start
 
 
@@ -75,9 +93,11 @@ def measure() -> dict[str, dict[str, float]]:
         # so a load spike hits both and cancels in the ratio.
         per_cmp: dict[str, list[float]] = {name: [] for name in comparators}
         for _ in range(REPS):
-            t_translit = _time(translit_fn, text)
+            # Fresh objects per timed run (regime fresh-string/v2): every call
+            # pays the real, production cost of a never-seen str object.
+            t_translit = _time(translit_fn, _fresh_copies(text))
             for name, fn in comparators.items():
-                t_cmp = _time(fn, text)
+                t_cmp = _time(fn, _fresh_copies(text))
                 # ratio = how many x faster translit is than the comparator
                 per_cmp[name].append(t_cmp / t_translit if t_translit > 0 else float("nan"))
         out[label] = {name: round(statistics.median(rs), 3) for name, rs in per_cmp.items() if rs}
@@ -87,7 +107,12 @@ def measure() -> dict[str, dict[str, float]]:
 def main(argv: list[str]) -> int:
     ratios = measure()
     if "--json" in argv[1:]:
-        print(json.dumps({"reps": REPS, "inner": INNER, "ratios": ratios}, sort_keys=True))
+        print(
+            json.dumps(
+                {"regime": REGIME, "reps": REPS, "inner": INNER, "ratios": ratios},
+                sort_keys=True,
+            )
+        )
         return 0
     comparators = sorted({c for r in ratios.values() for c in r})
     if not comparators:

@@ -247,25 +247,28 @@ quotes them separately so neither number overstates the other.
 
 | Input | vs. Unidecode |
 |---|---|
-| Latin | **~21×** |
-| Mixed scripts | **~17×** |
-| Cyrillic / Greek | **~15×** |
+| Latin | **~17×** |
+| Mixed scripts | **~14×** |
+| Cyrillic / Greek | **~13×** |
 
 A `transliterate()` call crosses the Python→Rust boundary exactly once, and
-already-ASCII input returns the original `str` object in roughly 70 ns with
+already-ASCII input returns the original `str` object in roughly 65 ns with
 zero allocation. translit also wins all four cells of [Unidecode's own
 benchmark](benchmarks/bench_unidecode_own.py) — a faithful replication of the
-original, re-measured continuously in CI — from ~1.4× on Unidecode's strongest
-case (ASCII passthrough) to ~23×. That bar is worth clearing precisely because
+original, re-measured continuously in CI — from ~1.3× on Unidecode's strongest
+case (ASCII passthrough) to ~25×. That bar is worth clearing precisely because
 Unidecode has carried this workload for two decades; it remains the reference
 point this library measures itself against.
 
 Throughput figures are from a commodity 4‑vCPU x86‑64 Linux runner (min‑of‑N
 `perf_counter`); per-call figures are interleaved ratios against pinned
 comparator versions on CI runners, median-of-7, bucketed by CPU
-microarchitecture. All are hardware‑dependent and directional, not guarantees.
-See [docs/performance.md](docs/performance.md) for full benchmark methodology
-and results.
+microarchitecture, and measured in the **fresh-string regime** — every timed
+call receives a newly constructed `str` object, as production traffic does,
+rather than re-running one cached object (which would understate comparators'
+real-world parity and overstate ours). All figures are hardware‑dependent and
+directional, not guarantees. See [docs/performance.md](docs/performance.md)
+for full benchmark methodology and results.
 
 ## Drop-in replacement
 

@@ -31,8 +31,8 @@ from disarm import (
     ml_normalize,
     normalize,
     normalize_confusables,
+    normalize_user_input,
     sanitize_filename,
-    sanitize_user_input,
     search_key,
     security_clean,
     slugify,
@@ -286,7 +286,7 @@ class TestPipelineStepTuples:
             "display_clean",
             "search_key",
             "sort_key",
-            "sanitize_user_input",
+            "normalize_user_input",
             "strip_obfuscation",
         }
         assert set(PRESETS.keys()) == expected
@@ -354,7 +354,7 @@ class TestPipelineStepTuples:
                 ],
             ),
             (
-                "sanitize_user_input",
+                "normalize_user_input",
                 [
                     ("normalize", "NFKC"),
                     ("strip_bidi", None),
@@ -476,9 +476,9 @@ class TestPipelineStepTuples:
         assert result.isascii()
         assert result == result.lower()
 
-    def test_sanitize_user_input_strips_zalgo(self):
+    def test_normalize_user_input_strips_zalgo(self):
         zalgo = "h\u0300\u0301\u0302\u0303e\u0300\u0301\u0302\u0303"
-        result = sanitize_user_input(zalgo)
+        result = normalize_user_input(zalgo)
         import unicodedata
 
         marks = sum(1 for c in result if unicodedata.category(c) == "Mn")

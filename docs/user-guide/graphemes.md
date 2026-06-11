@@ -160,10 +160,10 @@ In practice, `grapheme_len` gives the same count for NFC and NFD forms of the sa
 Sanitize input first, then enforce a grapheme-aware length limit:
 
 ```python
-from disarm import sanitize_user_input, grapheme_len, grapheme_truncate
+from disarm import normalize_user_input, grapheme_len, grapheme_truncate
 
 def validate_username(raw: str, max_graphemes: int = 30) -> str:
-    clean = sanitize_user_input(raw)
+    clean = normalize_user_input(raw)
     if grapheme_len(clean) > max_graphemes:
         clean = grapheme_truncate(clean, max_graphemes)
     return clean

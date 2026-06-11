@@ -74,7 +74,7 @@ assert pipe("  Hello   World  ") == 'Hello World'
 | Security | Folds TR39 confusable homoglyphs |
 
 !!! note
-    To also handle zalgo text and bidi injection, use the `sanitize_user_input()` precompiled pipeline instead — it includes `strip_zalgo` and `strip_bidi` steps that `TextPipeline` does not support.
+    To also handle zalgo text and bidi injection, use the `normalize_user_input()` precompiled pipeline instead — it includes `strip_zalgo` and `strip_bidi` steps that `TextPipeline` does not support.
 
 ### ml_corpus_normalize
 
@@ -117,7 +117,7 @@ Policy profiles use `TextPipeline` (Python-configurable steps). For maximum perf
 
 | Need | Use |
 |------|-----|
-| Security-critical input sanitization | `sanitize_user_input()` |
+| Security-critical input normalization | `normalize_user_input()` |
 | Catalog/bibliography keys | `catalog_key()` |
 | Search index keys | `search_key()` |
 | Sort-friendly keys | `sort_key()` |

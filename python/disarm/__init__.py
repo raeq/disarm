@@ -166,7 +166,7 @@ from disarm._presets import (
     is_zalgo,
     list_profiles,
     ml_normalize,
-    sanitize_user_input,
+    normalize_user_input,
     search_key,
     security_clean,
     sort_key,
@@ -227,7 +227,7 @@ __all__ = [
     "search_key",
     "sort_key",
     "strip_bidi",
-    "sanitize_user_input",
+    "normalize_user_input",
     "strip_obfuscation",
     # Zalgo detection and stripping
     "is_zalgo",

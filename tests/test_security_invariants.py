@@ -15,7 +15,7 @@ from hypothesis import strategies as st
 from disarm import (
     is_confusable,
     is_normalized,
-    sanitize_user_input,
+    normalize_user_input,
     security_clean,
 )
 
@@ -243,8 +243,8 @@ class TestPathSafetyInvariant:
 
     @given(text=unicode_text)
     @settings(max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
-    def test_sanitize_user_input_is_path_safe(self, text: str) -> None:
-        out = sanitize_user_input(text)
+    def test_normalize_user_input_is_path_safe(self, text: str) -> None:
+        out = normalize_user_input(text)
         assert "/" not in out
         assert "\\" not in out
         assert ".." not in out

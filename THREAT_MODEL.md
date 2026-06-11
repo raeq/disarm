@@ -44,7 +44,7 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 | `strip_bidi` | Remove the UAX#9 bidi formatting/isolate/override code points enumerated in the implementation. |
 | `strip_zalgo` / `is_zalgo` | Remove or detect runs of combining marks above a configurable threshold. |
 | zero-width / invisible stripping | Remove the enumerated zero-width and invisible code points. |
-| `strip_obfuscation` / `security_clean` / `sanitize_user_input` | Compose the above in a fixed order. The output is "more canonical," not "safe." |
+| `strip_obfuscation` / `security_clean` / `normalize_user_input` | Compose the above in a fixed order. The output is "more canonical," not "safe." |
 | `is_safe_hostname` | Flag **mixed-script** labels and labels containing bundled-table confusables. |
 | `normalize` (NFC/NFD/NFKC/NFKD), `fold_case` | Standard Unicode normalization / full case folding for the bundled Unicode data version. |
 
@@ -87,11 +87,11 @@ behavior, not a vulnerability:
   such as `<script>alert(1)</script>` or `' OR 1=1 --` pass through every transform
   **unchanged** (every Unicode transform is a no-op on ASCII). Preventing injection is the
   job of context-appropriate output encoding at the sink, not of input normalization;
-  disarm is not, and cannot be, a substitute. A preset named `sanitize_user_input` performs
+  disarm is not, and cannot be, a substitute. A preset named `normalize_user_input` performs
   Unicode hygiene only — the name predates this clarification; treat its output as
   normalized, **not** as injection-safe.
 - **Metacharacter unmasking via NFKC (important).** NFKC normalization — step 1 of
-  `security_clean` and `sanitize_user_input` — maps fullwidth and compatibility lookalikes
+  `security_clean` and `normalize_user_input` — maps fullwidth and compatibility lookalikes
   to their ASCII originals **by design** (that is how fullwidth-bypass evasion is collapsed):
   `＜script＞` (U+FF1C…U+FF1E) → `<script>`, `＆`→`&`, `＂`→`"`, `／`→`/`. A consequence is
   that disarm's output can contain *live* ASCII metacharacters that the input had only in a

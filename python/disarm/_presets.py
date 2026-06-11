@@ -15,7 +15,7 @@ from disarm._disarm import (
     _is_zalgo,
     _list_profiles,
     _ml_normalize,
-    _sanitize_user_input,
+    _normalize_user_input,
     _search_key,
     _security_clean,
     _sort_key,
@@ -257,7 +257,7 @@ def strip_bidi(text: str) -> str:
     return _strip_bidi(text)
 
 
-def sanitize_user_input(text: str) -> str:
+def normalize_user_input(text: str) -> str:
     """Unicode hygiene for user-submitted input — **not** an injection defense.
 
     .. warning::
@@ -274,8 +274,8 @@ def sanitize_user_input(text: str) -> str:
     Unicode-level attack vectors: zalgo stacking, homoglyph spoofing, bidi
     overrides, zero-width injections, and control characters.
 
-    Pipeline: ``NFKC → strip_bidi → strip_zero_width → strip_zalgo → confusables
-    → collapse_whitespace`` (invisibles are stripped before zalgo-capping so they
+    Pipeline: ``NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo
+    → confusables → collapse_whitespace`` (invisibles are stripped before zalgo-capping so they
     cannot split combining-mark runs, keeping the output idempotent)
 
     Args:
@@ -286,14 +286,14 @@ def sanitize_user_input(text: str) -> str:
         before emitting into any markup or query context** (see warning above).
 
     Examples:
-        >>> sanitize_user_input("Hello, world!")
+        >>> normalize_user_input("Hello, world!")
         'Hello, world!'
-        >>> sanitize_user_input("p\\u0430ypal")  # Cyrillic а → Latin a
+        >>> normalize_user_input("p\\u0430ypal")  # Cyrillic а → Latin a
         'paypal'
-        >>> sanitize_user_input("admin\\u202euser")  # RLO stripped
+        >>> normalize_user_input("admin\\u202euser")  # RLO stripped
         'adminuser'
     """
-    return _sanitize_user_input(text)
+    return _normalize_user_input(text)
 
 
 def strip_obfuscation(text: str) -> str:
@@ -432,7 +432,7 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("fold_case", None),
         ("collapse_whitespace", None),
     ],
-    "sanitize_user_input": [
+    "normalize_user_input": [
         # #121: order and steps corrected to match actual Rust execution in
         # presets.rs — bidi/invisible stripping runs FIRST for idempotency.
         ("normalize", "NFKC"),
@@ -467,7 +467,7 @@ other:
 
 * ``PRESETS`` (this dict) — *preset* pipelines: fixed, ordered sequences of
   cleaning/normalization steps exposed as the ``security_clean``,
-  ``ml_normalize``, ``sanitize_user_input`` … helpers. Defined here, in Python.
+  ``ml_normalize``, ``normalize_user_input`` … helpers. Defined here, in Python.
 * Policy *profiles* (see :func:`list_profiles` / :func:`get_pipeline`) —
   parameter sets for transliteration workflows (e.g.
   ``scholarly_cyrillic_iso9``). Defined in the Rust core (``src/pipeline.rs``).

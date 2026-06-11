@@ -55,7 +55,7 @@ Script deduplication uses a `HashSet<&str>` to maintain O(1) per-character inser
 
 The `security_clean` preset composes the security-relevant transforms into a single pipeline: NFKC normalization → confusable normalization → bidi stripping → whitespace collapse. This is the recommended entry point for security-sensitive text processing where the goal is to canonicalize Unicode content by neutralizing homoglyph spoofing, removing dangerous bidi overrides, and collapsing invisible characters.
 
-The `sanitize_user_input` preset extends this approach for web application input: NFKC normalization → zalgo stripping → confusable normalization → bidi stripping → whitespace collapse. It adds zalgo text protection (capping combining marks at 2 per base character) while preserving the original script (no transliteration). This is the recommended entry point for sanitizing user-submitted form data, comments, and API payloads.
+The `normalize_user_input` preset extends this approach for web application input: NFKC normalization → strip bidi → strip zero-width → strip control → strip zalgo (capping combining marks at 2 per base character) → confusable normalization → whitespace collapse, while preserving the original script (no transliteration). It is the recommended entry point for *normalizing* user-submitted form data, comments, and API payloads. Note: this is input Unicode normalization, not output sanitization — it provides no XSS/injection protection, so still encode at the output sink (see [Threat Model](../../THREAT_MODEL.md)).
 
 ## Zalgo detection
 

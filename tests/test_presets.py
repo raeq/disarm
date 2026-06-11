@@ -7,7 +7,7 @@ from disarm import (
     catalog_key,
     display_clean,
     ml_normalize,
-    sanitize_user_input,
+    normalize_user_input,
     security_clean,
     strip_bidi,
 )
@@ -108,7 +108,7 @@ class TestPathSafety:
     `..` traversal \u2014 a confusable like U+2044 FRACTION SLASH must not become an
     actionable '/' in the output of a function named to *sanitize* input."""
 
-    @pytest.mark.parametrize("preset", [sanitize_user_input, security_clean])
+    @pytest.mark.parametrize("preset", [normalize_user_input, security_clean])
     @pytest.mark.parametrize(
         "raw",
         [
@@ -128,16 +128,16 @@ class TestPathSafety:
 
     def test_specific_smuggling_vectors(self) -> None:
         # The exact vectors reported in #248.
-        assert sanitize_user_input("etc\u2044passwd") == "etc_passwd"
+        assert normalize_user_input("etc\u2044passwd") == "etc_passwd"
         assert security_clean("a\u2215b") == "a_b"
 
     def test_homoglyph_folding_still_works(self) -> None:
         # Path-safety must not regress the homoglyph neutralisation.
-        assert sanitize_user_input("p\u0430ypal") == "paypal"
+        assert normalize_user_input("p\u0430ypal") == "paypal"
         assert security_clean("p\u0430ypal") == "paypal"
 
     def test_idempotent(self) -> None:
-        for preset in (sanitize_user_input, security_clean):
+        for preset in (normalize_user_input, security_clean):
             once = preset("etc\u2044../passwd")
             assert preset(once) == once
 

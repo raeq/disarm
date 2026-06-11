@@ -148,7 +148,7 @@ fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(presets::_search_key, m)?)?;
     m.add_function(wrap_pyfunction!(presets::_sort_key, m)?)?;
     m.add_function(wrap_pyfunction!(presets::_strip_bidi, m)?)?;
-    m.add_function(wrap_pyfunction!(presets::_sanitize_user_input, m)?)?;
+    m.add_function(wrap_pyfunction!(presets::_normalize_user_input, m)?)?;
     m.add_function(wrap_pyfunction!(presets::_strip_obfuscation, m)?)?;
 
     // Zalgo detection and stripping

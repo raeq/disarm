@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from disarm import sanitize_user_input, security_clean, strip_obfuscation
+from disarm import normalize_user_input, security_clean, strip_obfuscation
 
 # Clean ASCII targets an attacker would spoof.
 CORPUS = [
@@ -53,7 +53,7 @@ ZERO_WIDTH = ["​", "‌", "‍", "﻿", "⁠"]
 BIDI = ["‮", "‭", "‎", "‏", "⁦", "⁩", "؜"]
 COMBINING = ["́", "̀", "҉", "̵", "̶"]  # zalgo marks
 
-DEFENSES = [strip_obfuscation, security_clean, sanitize_user_input]
+DEFENSES = [strip_obfuscation, security_clean, normalize_user_input]
 
 
 def homoglyph(t: str) -> str:
@@ -99,13 +99,13 @@ ATTACKS = {
 
 # Which attacks each pipeline is expected to fully recover, per its documented
 # steps. Only strip_obfuscation strips zalgo completely (max_marks=0);
-# security_clean has no zalgo step and sanitize_user_input caps combining marks
+# security_clean has no zalgo step and normalize_user_input caps combining marks
 # rather than removing them, so neither fully recovers heavy zalgo — by design.
 # We assert only positive recovery, so a future improvement can't break this.
 RECOVERS = {
     "strip_obfuscation": {"homoglyph", "invisible", "bidi", "zalgo", "combined"},
     "security_clean": {"homoglyph", "invisible", "bidi", "combined"},
-    "sanitize_user_input": {"homoglyph", "invisible", "bidi", "combined"},
+    "normalize_user_input": {"homoglyph", "invisible", "bidi", "combined"},
 }
 
 _CASES = [(d, a) for d in DEFENSES for a in ATTACKS if a in RECOVERS[d.__name__]]

@@ -358,13 +358,18 @@ pub fn _display_clean(text: &str) -> PyResult<String> {
     Ok(whitespace::_collapse_whitespace(&buf, true, true))
 }
 
-/// Sanitize user-submitted input for web applications.
+/// Normalize user-submitted input — Unicode hygiene, **not** an output sanitizer.
+///
+/// Neutralizes Unicode-level abuse (zalgo, homoglyphs, bidi, zero-width, control)
+/// while preserving the original script. It performs no HTML/JS/SQL escaping and
+/// is not an XSS or injection defense — encode at the output sink (see
+/// `THREAT_MODEL.md`).
 ///
 /// Pipeline: NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo
 ///           → confusables → collapse_whitespace
 ///
-/// Designed for web developers who want to accept multilingual input in its
-/// original script while preventing malicious abuse:
+/// Accepts multilingual input in its original script while neutralizing
+/// Unicode-level abuse:
 /// - **NFKC**: collapses fullwidth bypasses, ligatures, superscripts
 /// - **strip_bidi / zero-width / control**: removes invisibles *first* so they
 ///   cannot split a run of combining marks (keeps the zalgo cap idempotent)
@@ -378,7 +383,7 @@ pub fn _display_clean(text: &str) -> PyResult<String> {
 /// script is preserved.
 #[pyfunction]
 #[pyo3(signature = (text,))]
-pub fn _sanitize_user_input(text: &str) -> PyResult<String> {
+pub fn _normalize_user_input(text: &str) -> PyResult<String> {
     // 1. NFKC normalization
     let buf = nfkc_normalize(text);
     // 2. Strip invisibles FIRST (bidi/format + zero-width + control) so they
@@ -399,7 +404,7 @@ pub fn _sanitize_user_input(text: &str) -> PyResult<String> {
     // 5. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::_collapse_whitespace(&buf, true, true);
     // 6. Path-safety guarantee (#248): the output of a function named to
-    //    *sanitize* untrusted input must be safe to use as a path component —
+    //    *normalize* untrusted input must be safe to use as a path component —
     //    no synthesised '/', '\', or '..' traversal.
     Ok(neutralize_path_separators(&buf))
 }
@@ -752,65 +757,65 @@ mod tests {
         assert_eq!(_display_clean("hello\u{061C}world").unwrap(), "helloworld");
     }
 
-    // ── sanitize_user_input ──────────────────────────────────
+    // ── normalize_user_input ──────────────────────────────────
 
     #[test]
-    fn test_sanitize_user_input_clean_text() {
+    fn test_normalize_user_input_clean_text() {
         assert_eq!(
-            _sanitize_user_input("Hello, world!").unwrap(),
+            _normalize_user_input("Hello, world!").unwrap(),
             "Hello, world!"
         );
     }
 
     #[test]
-    fn test_sanitize_user_input_preserves_script() {
+    fn test_normalize_user_input_preserves_script() {
         // Original script is preserved (no transliteration)
-        let result = _sanitize_user_input("Москва").unwrap();
+        let result = _normalize_user_input("Москва").unwrap();
         // Confusables maps some Cyrillic to Latin, but that's intentional
         // for homoglyph protection — the key point is no transliteration step
         assert!(!result.is_empty());
     }
 
     #[test]
-    fn test_sanitize_user_input_strips_zalgo() {
+    fn test_normalize_user_input_strips_zalgo() {
         let mut zalgo = String::from("hello");
         for _ in 0..20 {
             zalgo.push('\u{0300}');
         }
         zalgo.push_str(" world");
-        let result = _sanitize_user_input(&zalgo).unwrap();
+        let result = _normalize_user_input(&zalgo).unwrap();
         // Zalgo marks stripped down to max 2 per base
         assert!(result.len() < zalgo.len());
         assert!(result.contains("world"));
     }
 
     #[test]
-    fn test_sanitize_user_input_strips_bidi() {
+    fn test_normalize_user_input_strips_bidi() {
         assert_eq!(
-            _sanitize_user_input("admin\u{202E}user").unwrap(),
+            _normalize_user_input("admin\u{202E}user").unwrap(),
             "adminuser"
         );
     }
 
     #[test]
-    fn test_sanitize_user_input_strips_zero_width() {
+    fn test_normalize_user_input_strips_zero_width() {
         assert_eq!(
-            _sanitize_user_input("pass\u{200B}word").unwrap(),
+            _normalize_user_input("pass\u{200B}word").unwrap(),
             "password"
         );
     }
 
     #[test]
-    fn test_sanitize_user_input_preserves_accents() {
+    fn test_normalize_user_input_preserves_accents() {
         // Legitimate diacritics are preserved — no transliteration or accent stripping
-        assert_eq!(_sanitize_user_input("café").unwrap(), "café");
-        assert_eq!(_sanitize_user_input("résumé").unwrap(), "résumé");
+        assert_eq!(_normalize_user_input("café").unwrap(), "café");
+        assert_eq!(_normalize_user_input("résumé").unwrap(), "résumé");
     }
 
     #[test]
-    fn test_sanitize_user_input_homoglyph() {
+    fn test_normalize_user_input_homoglyph() {
         // Cyrillic а in "pаypal" → Latin a
-        let result = _sanitize_user_input("p\u{0430}ypal").unwrap();
+        let result = _normalize_user_input("p\u{0430}ypal").unwrap();
         assert_eq!(result, "paypal");
     }
 
@@ -899,9 +904,9 @@ mod tests {
             }
 
             #[test]
-            fn sanitize_user_input_idempotent(s in adversarial()) {
-                let once = _sanitize_user_input(&s).unwrap();
-                let twice = _sanitize_user_input(&once).unwrap();
+            fn normalize_user_input_idempotent(s in adversarial()) {
+                let once = _normalize_user_input(&s).unwrap();
+                let twice = _normalize_user_input(&once).unwrap();
                 prop_assert_eq!(nfc(&once), nfc(&twice));
             }
 
@@ -928,8 +933,8 @@ mod tests {
             }
 
             #[test]
-            fn no_bidi_after_sanitize_user_input(s in adversarial()) {
-                prop_assert!(!_sanitize_user_input(&s).unwrap().chars().any(is_bidi_or_format));
+            fn no_bidi_after_normalize_user_input(s in adversarial()) {
+                prop_assert!(!_normalize_user_input(&s).unwrap().chars().any(is_bidi_or_format));
             }
         }
     }

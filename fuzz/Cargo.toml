@@ -31,8 +31,8 @@ doc = false
 bench = false
 
 [[bin]]
-name = "sanitize_user_input"
-path = "fuzz_targets/sanitize_user_input.rs"
+name = "normalize_user_input"
+path = "fuzz_targets/normalize_user_input.rs"
 test = false
 doc = false
 bench = false

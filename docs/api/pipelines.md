@@ -110,20 +110,20 @@ assert sort_key("Café") == 'cafe'
 
 ---
 
-## sanitize_user_input
+## normalize_user_input
 
-::: disarm.sanitize_user_input
+::: disarm.normalize_user_input
 
 ### Pipeline steps
 
-`NFKC → strip_bidi → strip_zero_width → strip_zalgo → confusables → collapse_whitespace`
+`NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo → confusables → collapse_whitespace`
 
 ```python
-from disarm import sanitize_user_input
+from disarm import normalize_user_input
 
-assert sanitize_user_input("Hello, world!") == 'Hello, world!'
-assert sanitize_user_input("p\u0430ypal") == 'paypal'
-assert sanitize_user_input("admin\u202Euser") == 'adminuser'
+assert normalize_user_input("Hello, world!") == 'Hello, world!'
+assert normalize_user_input("p\u0430ypal") == 'paypal'
+assert normalize_user_input("admin\u202Euser") == 'adminuser'
 ```
 
 Unlike `security_clean`, this pipeline also strips zalgo text (excessive combining mark stacking). Unlike `catalog_key`/`search_key`, it does **not** transliterate — the original script is preserved.
@@ -140,7 +140,7 @@ Dict mapping preset function names to their ordered pipeline steps. Each value i
 
 ```python
 assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('confusables', 'latin'), ('strip_bidi', None), ('collapse_whitespace', None)]
-assert PRESETS["sanitize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None)]
+assert PRESETS["normalize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None)]
 ```
 
 Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.

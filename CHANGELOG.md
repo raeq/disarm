@@ -16,6 +16,10 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- **Renamed `sanitize_user_input()` → `normalize_user_input()`.** The old name implied output sanitization (injection safety); this preset performs *input Unicode normalization* only and is not an XSS/SQL defense (see Threat Model). The `PRESETS` registry key changes to match (`"normalize_user_input"`). No alias is kept — update call sites directly.
+
 ## [0.9.0] — 2026-06-11
 
 The first release under the **`disarm`** name — the continuation of `translit-rs`

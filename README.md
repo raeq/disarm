@@ -58,7 +58,7 @@ Requires Python 3.10+. Wheels are available for Linux, macOS, and Windows.
 ## Features
 
 - **[Confusable & homoglyph analysis (TR39)](docs/security/adversarial-defense.md)**: visual [confusable mapping](docs/user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` pipeline (defense-in-depth — see the [Threat Model](THREAT_MODEL.md))
-- **[Canonicalization pipelines](docs/api/pipelines.md)**: `security_clean`, `sanitize_user_input`, `catalog_key`, `search_key`, `sort_key`, `display_clean`, `ml_normalize` for common workflows
+- **[Canonicalization pipelines](docs/api/pipelines.md)**: `security_clean`, `normalize_user_input`, `catalog_key`, `search_key`, `sort_key`, `display_clean`, `ml_normalize` for common workflows
 - **[LLM / RAG pipelines](docs/user-guide/llm-pipelines.md)**: guardrail matching (`llm_guardrail`) and ingestion (`rag_ingest`) profiles — deterministic deobfuscation and ASCII-index normalisation for LLM stacks
 - **[Hostname / IDN analysis](docs/api/predicates.md#is_safe_hostname)**: mixed-script and confusable detection for domains
 - **[Standards-based transliteration](docs/user-guide/transliteration.md)**: best-in-class Latin / Cyrillic / Greek with ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34, and BGN/PCGN, plus [reverse transliteration](docs/user-guide/language-support.md#reverse-transliteration) (Russian, Ukrainian, Greek)
@@ -77,7 +77,7 @@ All text processing is implemented in Rust with O(1) PHF lookups and exposed to 
 ```python
 from disarm import (
     is_confusable, normalize_confusables, strip_obfuscation,
-    security_clean, sanitize_user_input,
+    security_clean, normalize_user_input,
 )
 
 is_confusable("аpple")             # → True  (contains Cyrillic а)
@@ -88,7 +88,7 @@ strip_obfuscation("рroduсt")  # → "product"   (does NOT transliterate; chain
 
 # Pipelines
 security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")            # → "Real text"   (NFKC → confusables → strip bidi → collapse ws)
-sanitize_user_input("pаypal")      # → "paypal"      (NFKC → strip zalgo → confusables → strip bidi → collapse ws)
+normalize_user_input("pаypal")      # → "paypal"  (NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse ws)
 ```
 
 ### Transliteration (standards-based core)
@@ -145,7 +145,7 @@ disarm transliterates a very wide range of scripts, but the **quality guarantee 
 ## Precompiled pipelines
 
 ```python
-from disarm import security_clean, ml_normalize, catalog_key, sanitize_user_input, strip_obfuscation
+from disarm import security_clean, ml_normalize, catalog_key, normalize_user_input, strip_obfuscation
 
 # Security: NFKC → confusables → strip bidi → collapse whitespace
 security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")  # → "Real text"
@@ -157,8 +157,8 @@ ml_normalize("Café ☕ Ünïcödé")  # → "cafe hot beverage unicode"
 catalog_key("Москва", lang="ru")  # → "moskva"
 catalog_key("ΩMEGA  café")        # → "omega cafe"
 
-# Web input: NFKC → strip bidi → strip zero-width → strip zalgo → confusables → collapse
-sanitize_user_input("pаypal")  # → "paypal" (Cyrillic а folded to Latin)
+# Web input: NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse
+normalize_user_input("pаypal")  # → "paypal" (Cyrillic а folded to Latin)
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars → clean text
 strip_obfuscation("рroduсt")       # → "product" (Cyrillic р→p, с→c via TR39)

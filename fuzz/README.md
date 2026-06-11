@@ -24,7 +24,7 @@ The core links PyO3 without the `extension-module` feature, so point at a Python
 PYO3_PYTHON=$(which python3) cargo +nightly fuzz run strip_obfuscation
 ```
 
-Targets: `strip_obfuscation`, `security_clean`, `sanitize_user_input`,
+Targets: `strip_obfuscation`, `security_clean`, `normalize_user_input`,
 `normalize_confusables`.
 
 Time-box a run (e.g. CI/nightly):

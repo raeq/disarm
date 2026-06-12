@@ -21,7 +21,7 @@ extension-module = ["pyo3/extension-module"]
 embed-dicts = []
 
 [dependencies]
-pyo3 = { version = "0.24.1", features = ["abi3-py310"] }
+pyo3 = { version = "0.29.0", features = ["abi3-py310"] }
 regex = "1"
 # Already a transitive dependency via `regex`; promoted to a direct dependency
 # for the LeftmostLongest/LeftmostFirst replacement automata (#242 cluster H

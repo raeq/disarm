@@ -44,6 +44,33 @@ class TestGreekVisualConfusables:
         assert result == expected, f"Greek {note}: expected {expected!r}, got {result!r}"
 
 
+class TestGreekSigmaSkeletonIsEsh:
+    """Σ (U+03A3) folds to esh (U+01A9), not ASCII — and that is intended.
+
+    Investigated as a #245 side finding ("Σ→esh oddity"). TR39 confusables.txt
+    makes LATIN CAPITAL LETTER ESH (U+01A9) the *prototype* for the entire
+    Sigma / n-ary-summation family (03A3, 2211 ∑, 2140 ⅀, the math bold/italic
+    sigmas, Tifinagh ⵉ all map to 01A9). ESH is a genuine Latin-script letter,
+    so ``normalize_confusables(..., target_script="latin")`` correctly returns
+    it. ``normalize_confusables`` folds to the TR39 *skeleton*, which is Latin
+    but not guaranteed ASCII — "neutralized" (source char removed) is the
+    contract, not "ASCII-folded". This is faithful TR39 behavior, NOT a bug;
+    forcing Σ→S here would diverge from the pinned table. Pinned so the intent
+    is explicit and a future "fix" cannot silently change it.
+    """
+
+    def test_capital_sigma_folds_to_esh(self) -> None:
+        # U+03A3 GREEK CAPITAL LETTER SIGMA → U+01A9 LATIN CAPITAL LETTER ESH.
+        result = normalize_confusables("Σ", target_script="latin")
+        assert result == "Ʃ", f"expected esh U+01A9, got {result!r}"
+        # Neutralized: the source Greek sigma is gone (the coverage contract).
+        assert "Σ" not in result
+
+    def test_summation_sign_folds_to_esh(self) -> None:
+        # U+2211 N-ARY SUMMATION shares the same esh skeleton.
+        assert normalize_confusables("∑", target_script="latin") == "Ʃ"
+
+
 class TestCyrillicVisualConfusables:
     """Cyrillic letters must map to their visual Latin equivalents."""
 

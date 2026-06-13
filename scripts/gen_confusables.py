@@ -90,6 +90,30 @@ def is_cyrillic(cp: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Custom Latin overrides
+# ---------------------------------------------------------------------------
+
+# Safe, justified mappings that TR39 does not provide directly. Each entry must
+# be a non-letter look-alike whose folding cannot corrupt legitimate prose.
+#
+# U+2502 BOX DRAWINGS LIGHT VERTICAL → l:
+#   TR39 treats U+2502 as a terminal *prototype* (FE31/FF5C/2503 fold *onto* it)
+#   and never folds it onto a Latin letter, so the generator drops it from the
+#   Latin table. But it is the NFKC decomposition of U+FFE8 (HALFWIDTH FORMS
+#   LIGHT VERTICAL), and the confusable-bearing pipelines (e.g. strip_obfuscation)
+#   run NFKC *before* confusables — so the halfwidth vertical U+FFE8 reaches the
+#   confusable step as U+2502 and previously survived as non-ASCII residue. A
+#   box-drawing glyph is not legitimate prose, so folding the vertical bar onto
+#   'l' (matching the visual shape and the existing TR39 FFE8→l mapping) is safe.
+#   This closes the residue for U+FFE8 (whose NFKC form is U+2502) and for a bare
+#   U+2502 input. Note: U+2503 (heavy vertical) and U+FE31 do NOT NFKC-decompose
+#   to U+2502, so they are out of scope here. See issue #245.
+CUSTOM_LATIN_OVERRIDES: dict[int, str] = {
+    0x2502: "l",  # │ BOX DRAWINGS LIGHT VERTICAL
+}
+
+
+# ---------------------------------------------------------------------------
 # Target script definitions
 # ---------------------------------------------------------------------------
 
@@ -352,6 +376,11 @@ def generate_mappings(
             digit = unicodedata.normalize("NFKC", chr(cp))
             if len(digit) == 1 and "0" <= digit <= "9":
                 merged[cp] = digit
+        # Safe non-letter look-alikes TR39 does not fold onto a Latin letter
+        # (e.g. the box-drawing vertical that NFKC produces from U+FFE8). These
+        # take priority so the pipeline neutralizes them post-NFKC (#245).
+        for cp, target in CUSTOM_LATIN_OVERRIDES.items():
+            merged[cp] = target
         return list(merged.items())
 
     # For non-Latin: also invert equivalence classes

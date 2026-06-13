@@ -120,6 +120,34 @@ class TestStripObfuscationWhitespace:
         assert result == "hello"
 
 
+class TestStripObfuscationBoxDrawingVertical:
+    """Issue #245: the halfwidth vertical must not survive as non-ASCII residue.
+
+    U+FFE8 (HALFWIDTH FORMS LIGHT VERTICAL) NFKC-decomposes to U+2502
+    (BOX DRAWINGS LIGHT VERTICAL), a non-letter symbol. The pipeline runs NFKC
+    *before* confusables, so the confusable step only ever sees U+2502 — which
+    TR39 never folds onto a Latin letter. A custom override folds U+2502 → 'l'
+    (a box-drawing glyph is not legitimate prose, so this cannot corrupt text),
+    closing the residue. See ``scripts/gen_confusables.py`` CUSTOM_LATIN_OVERRIDES.
+    """
+
+    def test_halfwidth_vertical_neutralized(self):
+        # U+FFE8 → NFKC U+2502 → confusables 'l'
+        result = strip_obfuscation("￨")
+        assert result == "l"
+        assert result.isascii()
+
+    def test_bare_box_drawing_vertical_neutralized(self):
+        # A bare U+2502 must also fold (it is the NFKC form of U+FFE8).
+        result = strip_obfuscation("│")
+        assert result == "l"
+        assert result.isascii()
+
+    def test_halfwidth_vertical_in_word(self):
+        # ￨ standing in for 'l' inside Latin text resolves to a clean word.
+        assert strip_obfuscation("wa￨￨et") == "wallet"
+
+
 class TestStripObfuscationEdgeCases:
     """Edge cases."""
 

@@ -39,13 +39,20 @@ jobs:
         run: cargo test --no-default-features --test exhaustive_transliterate -- --ignored
 
       - name: Install maturin
-        run: pip install maturin[patchelf]
+        # Pin to the same range as the project's build-system requirement
+        # (pyproject: maturin>=1.13.3,<2) so a future maturin 2.x can't break the gate.
+        run: pip install "maturin[patchelf]>=1.13.3,<2"
 
       - name: Build wheel and install (for formal invariants)
         run: |
           maturin build --out dist
-          pip install dist/*.whl
+          # Install the test dependencies, then force the freshly-built WHEEL as
+          # the installed `disarm`. `.[test]` alone would (re)build disarm from the
+          # source checkout and shadow the wheel; --force-reinstall --no-deps swaps
+          # only the package so the formal invariants run against the release
+          # artifact, not a source rebuild.
           pip install ".[test]"
+          pip install --force-reinstall --no-deps dist/*.whl
 
       - name: Python formal invariant tests (Tier 3)
         run: pytest -m formal

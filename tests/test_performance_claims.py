@@ -1,9 +1,10 @@
-"""Performance integrity claims relocated from docs/performance.md (#291).
+"""Performance integrity claims relocated from docs/performance.md (#322).
 
 ``docs/performance.md`` presents its numbers as comparison tables only. The
 executable proof that used to back those tables — the conservative ratio floors
 and the fast-path guarantees — lives here, so the claims still self-verify in CI
-instead of rotting in prose.
+instead of rotting in prose. The page carried these as on-page Sybil doc-test
+blocks under #291; #322 makes the page tables-only and relocates the assertions here.
 
 Two kinds of check, mirroring exactly what the doc-test blocks did:
 
@@ -36,30 +37,46 @@ from disarm import (
 )
 
 # ---------------------------------------------------------------------------
-# Interleaved timing helper (mirrors the old doc-test harness)
+# Interleaved timing helper — fresh-string regime (see benchmarks/bench_ratio.py)
 # ---------------------------------------------------------------------------
 
+INNER = 4000
+REPS = 5
 
-def _timed(fn, arg, inner):
-    """Wall-clock seconds for ``inner`` calls of ``fn(arg)``."""
+
+def _fresh_copies(text, n):
+    """``n`` distinct ``str`` objects with identical content.
+
+    Honours the fresh-string regime (``regime: fresh-string/v2``, #303): every
+    timed call must receive a newly constructed object, so disarm cannot reuse
+    CPython's per-object UTF-8 cache (which the pure-Python comparators never
+    touch and which would otherwise inflate the ratio). ``s + ""``, full slices
+    and ``"".join((s,))`` all return the *same* object, so — as in
+    ``benchmarks/bench_ratio.py`` — force a fresh allocation with ``(s + " ")[:-1]``.
+    """
+    return [(text + " ")[:-1] for _ in range(n)]
+
+
+def _timed(fn, objs):
+    """Wall-clock seconds for one call of ``fn`` over each object in ``objs``."""
     start = time.perf_counter()
-    for _ in range(inner):
-        fn(arg)
+    for obj in objs:
+        fn(obj)
     return time.perf_counter() - start
 
 
-def _speed_ratio(translit_fn, other_fn, arg, inner=4000, reps=5):
-    """Median interleaved ``other / disarm`` time ratio; >1 means disarm is faster.
+def _speed_ratio(translit_fn, other_fn, arg, inner=INNER, reps=REPS):
+    """Median interleaved ``other / disarm`` ratio over fresh strings; >1 = disarm faster.
 
-    Interleaving the two functions per round and taking the median across
-    ``reps`` rounds cancels transient scheduler load. The constant
-    ``perf_counter`` overhead that remains is added to both sides, which only
-    *deflates* the ratio — so the floors asserted below are conservative.
+    Fresh objects are built outside the timed region. Interleaving the two
+    functions per round and taking the median across ``reps`` rounds cancels
+    transient scheduler load; the residual ``perf_counter`` overhead is added to
+    both sides, which only *deflates* the ratio — so the floors are conservative.
     """
     ratios = []
     for _ in range(reps):
-        t = _timed(translit_fn, arg, inner)
-        o = _timed(other_fn, arg, inner)
+        t = _timed(translit_fn, _fresh_copies(arg, inner))
+        o = _timed(other_fn, _fresh_copies(arg, inner))
         ratios.append(o / t)
     return statistics.median(ratios)
 

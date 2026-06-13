@@ -1,7 +1,7 @@
 # Performance
 
-disarm's performance numbers, how to read them, and where they are recorded.
-Internals (why it is fast) live in
+This page presents disarm's performance numbers, how to read them, and where
+they are recorded. Internals (why it is fast) live in
 [Architecture: Performance](architecture/performance.md); how to run and extend
 the suite lives in [Benchmarks](benchmarks.md). Every figure here is a recorded,
 fingerprinted measurement — absolutes are non-comparable across hardware, and

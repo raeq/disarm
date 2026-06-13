@@ -59,7 +59,7 @@ assert pipe("Città di Firenze") == 'citta di firenze'
 
 ### normalize_web_input
 
-**Use case:** Lightweight Unicode normalization of web form input (NFKC + confusable-folding). This is *input* normalization, **not** output sanitization — it performs no escaping and is not an XSS/HTML/SQL defense (see [Threat Model](../THREAT_MODEL.md)). It is intentionally lighter than `normalize_user_input()` (no bidi/zero-width/control/zalgo stripping); use that function for adversarial input.
+**Use case:** Lightweight Unicode normalization of web form input (NFKC + confusable-folding). This is *input* normalization, **not** output sanitization — it performs no escaping and is not an XSS/HTML/SQL defense (see [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)). It is intentionally lighter than `normalize_user_input()` (no bidi/zero-width/control/zalgo stripping); use that function for adversarial input.
 
 ```python
 pipe = get_pipeline("normalize_web_input")

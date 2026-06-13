@@ -8,7 +8,7 @@ of those pipelines already has a single-call equivalent in disarm**. The gap
 is discoverability, not capability.
 
 This page maps each observed pattern to its one-liner. The "after" snippets are
-[executed and asserted in CI](../CONTRIBUTING.md#doc-test-recipes), so the
+[executed and asserted in CI](https://github.com/raeq/disarm/blob/main/CONTRIBUTING.md#doc-test-recipes), so the
 equivalences below cannot silently rot. The "before" snippets show the legacy
 hand-rolled code and are not executed.
 

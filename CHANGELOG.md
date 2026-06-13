@@ -28,6 +28,7 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Internal
 
+- **Docs: build the MkDocs site in CI and deploy to Cloudflare Pages** (served at the unchanged `docs.disarm.dev`), replacing the Read the Docs trigger. `mkdocs build --strict` runs in GitHub Actions (Python-only — mkdocstrings parses source statically); push to `main` deploys production, PRs get preview deploys. Legacy `/en/latest/*` URLs 301 to root via `docs/_redirects`. Removed `.readthedocs.yaml` and `RTD_TOKEN`. (#314)
 - **CI: replaced the custom `conversations-resolved.yml` workflow with GitHub's native *Require conversation resolution before merging* branch-protection setting.** The bespoke "Conversations resolved" status check (#55) was flaky — stale check runs lingered after threads were resolved and blocked otherwise-green PRs. Behavior is unchanged (unresolved review threads still block merge), now enforced by the built-in gate instead of a workflow + required status check.
 
 ## [0.9.0] — 2026-06-11

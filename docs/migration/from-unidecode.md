@@ -110,7 +110,7 @@ disarm maps **visually** per [Unicode TR39](https://www.unicode.org/reports/tr39
 (Cyrillic `р` → Latin `p`), which reverses the substitution **for confusables in the TR39
 table**. In a controlled benchmark, visual TR39 mapping reached XMR = 1.000 on the tested
 TR39 pairs where phonetic tools recovered roughly half. It is a defense-in-depth layer,
-not a complete control — see the [Threat Model](../THREAT_MODEL.md).
+not a complete control — see the [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md).
 
 ```python
 # Wrong tool for defense — phonetic mapping, attack survives

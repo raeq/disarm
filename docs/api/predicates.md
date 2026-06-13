@@ -80,7 +80,7 @@ The second element of the tuple returned by `is_suspicious_hostname()`:
 |---|---|---|
 | `suspicious` | `bool` | `True` if a problem was detected (mixed-script or bundled-table confusable) |
 | `scripts` | `list[str]` | Unicode scripts found across all labels |
-| `mixed_script` | `bool` | `True` if multiple scripts detected |
+| `mixed_script` | `bool` | `True` if any single label contains more than one script |
 | `has_confusables` | `bool` | `True` if confusable homoglyphs found |
 | `canonical` | `str` | Latin-normalized form of the hostname |
 
@@ -94,4 +94,4 @@ suspicious, analysis = is_suspicious_hostname("gооgle.com")  # Cyrillic о's
 # suspicious = True, analysis.mixed_script = True, analysis.has_confusables = True
 ```
 
-A hostname is flagged suspicious if any single label is mixed-script (draws on more than one Unicode script) or contains confusable homoglyphs. **A not-suspicious result is not a safety guarantee** — whole-script spoofs with no bundled-table confusable, and confusables outside the bundled table, are out of scope (see [Threat Model](../../THREAT_MODEL.md)); branch on the granular fields plus your own policy.
+A hostname is flagged suspicious if any single label is mixed-script (draws on more than one Unicode script) or contains confusable homoglyphs. **A not-suspicious result is not a safety guarantee** — whole-script spoofs with no bundled-table confusable, and confusables outside the bundled table, are out of scope (see [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)); branch on the granular fields plus your own policy.

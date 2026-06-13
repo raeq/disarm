@@ -11,7 +11,7 @@ for this audience it is a **guardrail primitive**.
 This page frames disarm's existing transforms for two LLM jobs — **guardrail
 matching** (filtering untrusted input) and **ingestion** (normalising content for
 ASCII indexes) — and is explicit about which path each recipe belongs to. Every
-snippet is [executed and asserted in CI](../CONTRIBUTING.md#doc-test-recipes).
+snippet is [executed and asserted in CI](https://github.com/raeq/disarm/blob/main/CONTRIBUTING.md#doc-test-recipes).
 
 !!! warning "Two paths, do not cross them"
     The guardrail path *folds confusables* to defeat homoglyph spoofing. Run it

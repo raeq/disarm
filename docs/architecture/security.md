@@ -18,13 +18,13 @@ Unicode introduces attack surfaces that don't exist in ASCII-only systems:
 
 1. **NFKC normalization**: compatibility decomposition + canonical composition. This collapses fullwidth Latin, circled letters, and other visual variants to their base forms before analysis.
 2. **Per-label script detection**: each dot-separated label is analyzed independently via `detect_scripts()`. A label with characters from multiple scripts is flagged as mixed-script.
-3. **High-risk pair detection**: mixed-script labels are checked against a hardcoded set of high-risk script combinations — Cyrillic+Latin, Greek+Latin, Armenian+Latin. These are the combinations most commonly exploited in homoglyph attacks.
+3. **Mixed-script flagging (conservative, #254)**: *any* label drawing on more than one script (excluding Common/Inherited) is flagged — not a curated set of high-risk pairs. This fails closed: benign combinations (e.g. Latin+CJK) are flagged alongside spoofing ones, so callers wanting a more permissive policy inspect the `mixed_script`/`scripts` fields.
 4. **Confusable detection**: each label is checked via `is_confusable()`, which probes the TR39 confusable table for characters that map to different Latin equivalents.
 5. **Canonical form generation**: `normalize_confusables()` produces a Latin-canonical form that reveals what the hostname "looks like" to a Latin-script reader.
 
 The function returns both a boolean `suspicious` verdict and a `HostnameAnalysis` object with full diagnostic information (detected scripts, mixed-script flag, confusable flag, canonical form). A `False` result is not a safety guarantee — it asserts no problem was *found*, not that the host is safe; callers should implement their own policy on top of disarm's detection.
 
-**Design tradeoff**: the check is deliberately conservative. A fully-Cyrillic domain like `яндекс.ру` is not flagged as unsafe (it's not mixed-script), but a domain with even one Cyrillic character mixed into an otherwise-Latin label is flagged. False positives are preferred over false negatives in this security context.
+**Design tradeoff**: the check is deliberately conservative. A fully-Cyrillic domain like `яндекс.ру` is not flagged as suspicious by the mixed-script rule (it's single-script), but a domain with even one Cyrillic character mixed into an otherwise-Latin label is flagged. False positives are preferred over false negatives in this security context.
 
 ## Confusable normalization
 
@@ -55,7 +55,7 @@ Script deduplication uses a `HashSet<&str>` to maintain O(1) per-character inser
 
 The `security_clean` preset composes the security-relevant transforms into a single pipeline: NFKC normalization → confusable normalization → bidi stripping → whitespace collapse. This is the recommended entry point for security-sensitive text processing where the goal is to canonicalize Unicode content by neutralizing homoglyph spoofing, removing dangerous bidi overrides, and collapsing invisible characters.
 
-The `normalize_user_input` preset extends this approach for web application input: NFKC normalization → strip bidi → strip zero-width → strip control → strip zalgo (capping combining marks at 2 per base character) → confusable normalization → whitespace collapse, while preserving the original script (no transliteration). It is the recommended entry point for *normalizing* user-submitted form data, comments, and API payloads. Note: this is input Unicode normalization, not output sanitization — it provides no XSS/injection protection, so still encode at the output sink (see [Threat Model](../../THREAT_MODEL.md)).
+The `normalize_user_input` preset extends this approach for web application input: NFKC normalization → strip bidi → strip zero-width → strip control → strip zalgo (capping combining marks at 2 per base character) → confusable normalization → whitespace collapse, while preserving the original script (no transliteration). It is the recommended entry point for *normalizing* user-submitted form data, comments, and API payloads. Note: this is input Unicode normalization, not output sanitization — it provides no XSS/injection protection, so still encode at the output sink (see [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)).
 
 ## Zalgo detection
 

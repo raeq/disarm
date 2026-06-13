@@ -14,7 +14,7 @@ the *visual* mapping they miss — as a **defense-in-depth layer, not a complete
 > **Scope.** disarm canonicalizes the confusables it bundles (TR39) and strips the
 > format characters it enumerates. It does **not** promise to stop any attack class, and
 > the confusable space is far larger than any table. See the
-> [Threat Model](../THREAT_MODEL.md) and *[Coverage and limits](#coverage-and-limits)* below.
+> [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md) and *[Coverage and limits](#coverage-and-limits)* below.
 
 ## The core distinction: visual vs. phonetic mapping
 
@@ -103,7 +103,7 @@ bundled data and by what normalization can do at all:
 
 Out of scope by design (not bugs): confusables outside the bundled table, whole-script
 spoofs, multi-character confusables (`rn`→`m`), and Unicode-version skew. See the full
-**[Threat Model](../THREAT_MODEL.md)**.
+**[Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)**.
 
 ## What to use
 

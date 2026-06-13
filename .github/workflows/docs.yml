@@ -1,5 +1,11 @@
 name: Docs
 
+# Build the MkDocs site in CI and deploy it to Cloudflare Pages (served at
+# docs.disarm.dev). Push to main → production deploy; pull requests → preview
+# deploy with the URL surfaced on the PR. Replaces the former Read the Docs
+# trigger (#314). The build needs Python only — mkdocstrings parses the Python
+# source statically (griffe), so no Rust/maturin is required here.
+
 on:
   push:
     branches: [main]
@@ -7,30 +13,66 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - "python/disarm/**"
-      - ".readthedocs.yaml"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "python/disarm/**"
+      - ".github/workflows/docs.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  trigger-rtd-build:
-    name: Trigger Read the Docs build
+  build-deploy:
+    name: Build and deploy docs (Cloudflare Pages)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
     steps:
-      - name: Trigger build
-        env:
-          RTD_TOKEN: ${{ secrets.RTD_TOKEN }}
-        run: |
-          if [ -z "$RTD_TOKEN" ]; then
-            echo "::warning::RTD_TOKEN secret is not set, skipping docs build trigger"
-            exit 0
-          fi
-          STATUS=$(curl -s -o /tmp/rtd-response.json -w "%{http_code}" -X POST \
-            -H "Authorization: Token $RTD_TOKEN" \
-            https://app.readthedocs.org/api/v3/projects/disarm/versions/latest/builds/)
-          echo "HTTP status: $STATUS"
-          cat /tmp/rtd-response.json | python3 -m json.tool 2>/dev/null || cat /tmp/rtd-response.json
-          if [ "$STATUS" -ne 202 ]; then
-            echo "::error::Read the Docs build trigger failed with status $STATUS"
-            exit 1
-          fi
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install docs dependencies
+        run: pip install -r docs/requirements.txt
+      - name: Build site (strict)
+        # --strict turns broken internal links / missing-nav pages into a failed
+        # build, catching doc drift (same discipline as Sybil / check_doc_claims).
+        run: mkdocs build --strict
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # main → production (the project's production branch); PR → a named
+          # preview deploy (pr-<n>) returning a unique *.pages.dev URL.
+          command: >-
+            pages deploy site
+            --project-name=disarm-docs
+            --branch=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'main' }}
+      - name: Surface preview URL on the PR
+        if: github.event_name == 'pull_request' && steps.deploy.outputs.deployment-url != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = ${{ toJSON(steps.deploy.outputs.deployment-url) }};
+            const marker = '<!-- docs-preview -->';
+            const body = `${marker}\n📄 **Docs preview:** ${url}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.data.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

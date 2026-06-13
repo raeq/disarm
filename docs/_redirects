@@ -1,0 +1,2 @@
+# Legacy Read the Docs path prefix → root (docs moved RTD → Cloudflare Pages, #314).
+/en/latest/* /:splat 301

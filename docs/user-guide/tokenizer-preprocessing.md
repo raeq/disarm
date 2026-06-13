@@ -12,7 +12,7 @@ honest about where it helps and where it does not. For the guardrail-matching an
 RAG-ingestion recipes, see [Using disarm in LLM pipelines](llm-pipelines.md);
 this page is the deterministic-preprocessing / token-fertility companion to it
 (both build on the [LLM pre-processing survey](https://github.com/raeq/disarm/issues/133)).
-Every snippet is [executed and asserted in CI](../CONTRIBUTING.md#doc-test-recipes).
+Every snippet is [executed and asserted in CI](https://github.com/raeq/disarm/blob/main/CONTRIBUTING.md#doc-test-recipes).
 
 ## Why token fertility matters
 

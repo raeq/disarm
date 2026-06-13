@@ -1143,7 +1143,7 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
     - ``suspicious``: bool — True if a problem was detected (mixed-script or a
       bundled-table confusable).
     - ``scripts``: list[str] — Unicode scripts found across all labels.
-    - ``mixed_script``: bool — True if multiple scripts detected.
+    - ``mixed_script``: bool — True if any single label contains more than one script.
     - ``has_confusables``: bool — True if confusable homoglyphs found.
     - ``canonical``: str — Latin-normalized form of the hostname.
 

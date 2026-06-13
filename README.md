@@ -1,6 +1,6 @@
 # disarm
 
-[![Documentation](https://readthedocs.org/projects/disarm/badge/?version=latest)](https://docs.disarm.dev/en/latest/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/disarm/blob/main/LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-disarm.dev-blue)](https://docs.disarm.dev/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/disarm/blob/main/LICENSE)
 
 Unicode canonicalization and TR39 confusable analysis for Python — building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling) plus standards-based transliteration. Rust-powered.
 
@@ -256,7 +256,7 @@ quotes them separately so neither number overstates the other.
 A `transliterate()` call crosses the Python→Rust boundary exactly once, and
 already-ASCII input returns the original `str` object in roughly 65 ns with
 zero allocation. disarm also wins all four cells of [Unidecode's own
-benchmark](benchmarks/bench_unidecode_own.py) — a faithful replication of the
+benchmark](https://github.com/raeq/disarm/blob/main/benchmarks/bench_unidecode_own.py) — a faithful replication of the
 original, re-measured continuously in CI — from ~1.3× on Unidecode's strongest
 case (ASCII passthrough) to ~25×. That bar is worth clearing precisely because
 Unidecode has carried this workload for two decades; it remains the reference

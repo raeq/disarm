@@ -41,6 +41,7 @@ Usage
     python benchmarks/quality_cer_wer.py                  # human-readable table
     python benchmarks/quality_cer_wer.py --json           # machine-readable
     python benchmarks/quality_cer_wer.py --update-baseline # rewrite the .md baseline
+    python benchmarks/quality_cer_wer.py --self-check      # assert the CER/WER math
 
 Requires the built extension (``maturin develop``). See ``benchmarks/README.md``.
 """

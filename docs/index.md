@@ -233,7 +233,7 @@ disarm is compiled Rust with O(1) compile-time perfect hash tables — no regex,
 | Slugify | 849K slugs/sec | **10–24×** faster than python-slugify |
 | Batch transliterate (100 strings) | 2.8× faster than loop | — |
 
-See [performance.md](performance.md) for full benchmark methodology and results.
+See [performance.md](performance.md) for the full benchmark results.
 
 ## Drop-in replacement
 
@@ -332,7 +332,7 @@ Internal design documentation for contributors and advanced users.
 
 ## Benchmarks
 
-- **[Performance Overview](performance.md)** — Benchmark methodology, results, and optimization details
+- **[Performance Overview](performance.md)** — Benchmark results: throughput and per-call speedups vs Unidecode, python-slugify, and pathvalidate
 - **[Benchmark Suite](benchmarks.md)** — How to run benchmarks, Criterion and timeit configurations
 
 ---

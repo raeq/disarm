@@ -69,7 +69,7 @@ Internal design documentation for contributors and advanced users.
 
 ## Benchmarks
 
-- **[Performance Overview](performance.md)** — Benchmark methodology, results, and optimization details
+- **[Performance Overview](performance.md)** — Benchmark results: throughput and per-call speedups vs Unidecode, python-slugify, and pathvalidate
 - **[Benchmark Suite](benchmarks.md)** — How to run benchmarks, Criterion and timeit configurations
 
 ---

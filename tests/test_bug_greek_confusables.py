@@ -61,14 +61,14 @@ class TestGreekSigmaSkeletonIsEsh:
 
     def test_capital_sigma_folds_to_esh(self) -> None:
         # U+03A3 GREEK CAPITAL LETTER SIGMA → U+01A9 LATIN CAPITAL LETTER ESH.
-        result = normalize_confusables("Σ", target_script="latin")
-        assert result == "Ʃ", f"expected esh U+01A9, got {result!r}"
+        result = normalize_confusables("\u03a3", target_script="latin")  # Σ
+        assert result == "\u01a9", f"expected esh U+01A9, got {result!r}"  # Ʃ
         # Neutralized: the source Greek sigma is gone (the coverage contract).
-        assert "Σ" not in result
+        assert "\u03a3" not in result
 
     def test_summation_sign_folds_to_esh(self) -> None:
         # U+2211 N-ARY SUMMATION shares the same esh skeleton.
-        assert normalize_confusables("∑", target_script="latin") == "Ʃ"
+        assert normalize_confusables("\u2211", target_script="latin") == "\u01a9"  # ∑ → Ʃ
 
 
 class TestCyrillicVisualConfusables:

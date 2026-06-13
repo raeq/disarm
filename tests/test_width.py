@@ -10,7 +10,7 @@ import unicodedata
 from pathlib import Path
 
 import pytest
-from hypothesis import given
+from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from disarm import grapheme_len, grapheme_width, terminal_width
@@ -80,8 +80,52 @@ def test_iw2_bounds(s: str) -> None:
 
 @given(st.text(max_size=100), st.text(max_size=100))
 def test_iw3_additivity_across_space(a: str, b: str) -> None:
-    # A space between the parts guarantees no cluster merges across the join.
-    assert terminal_width(f"{a} {b}") == terminal_width(a) + 1 + terminal_width(b)
+    """I_w3: width is additive across an inserted space — *when that space
+    forms its own grapheme cluster*.
+
+    A space does **not** unconditionally create a cluster boundary on its
+    right. By UAX #29 (GB9/GB9a) a leading ``Extend`` / ``ZWJ`` /
+    ``SpacingMark`` scalar at the start of ``b`` attaches *leftward* across
+    the space, merging ``" " + b[0]`` into one cluster. The canonical case is
+    a lone Fitzpatrick modifier (U+1F3FB, GCB=Extend): ``" 🏻"`` is a single
+    cluster of width 1 (space base + zero-width extender), whereas ``"🏻"``
+    alone is width 2 (its base has Emoji_Presentation). So additivity cannot
+    hold there — and that is grapheme-cluster-accurate, not a width bug
+    (see issue #279 and docs/limitations.md).
+
+    The honest precondition is therefore that inserting the space genuinely
+    splits into independent clusters, i.e. segmentation is itself additive:
+    ``grapheme_len(joined) == grapheme_len(a) + 1 + grapheme_len(b)``. Under
+    that precondition — and only then — width additivity holds. (We gate on a
+    segmentation fact, not on ``terminal_width`` itself, so this stays a
+    genuine conditional invariant rather than a tautology.)
+    """
+    joined = f"{a} {b}"
+    # Discard (don't vacuously pass) examples where the inserted space merged
+    # into a neighbouring cluster — a leading Extend/ZWJ/SpacingMark in b. Using
+    # assume() lets Hypothesis keep generating satisfying inputs instead of
+    # spending budget on cases the invariant does not cover.
+    assume(grapheme_len(joined) == grapheme_len(a) + 1 + grapheme_len(b))
+    assert terminal_width(joined) == terminal_width(a) + 1 + terminal_width(b)
+
+
+def test_iw3_leading_extend_absorbs_space() -> None:
+    """Regression for #279: a part beginning with a grapheme-Extend scalar
+    absorbs the inserted space into its cluster, so width is *not* additive.
+
+    This pins the precondition boundary of I_w3 with the exact falsifying
+    example from the issue: the naive additive identity fails, yet each side is
+    individually grapheme-cluster-accurate.
+    """
+    fitzpatrick = "\U0001f3fb"  # EMOJI MODIFIER FITZPATRICK TYPE-1-2 (GCB=Extend)
+    joined = f" {fitzpatrick}"
+    # The space and the modifier form ONE cluster (UAX #29 GB9).
+    assert grapheme_len(joined) == 1
+    assert terminal_width(joined) == 1  # space base (1) + zero-width extender (0)
+    # Whereas the modifier alone is its own cluster, width 2 (Emoji_Presentation).
+    assert terminal_width(fitzpatrick) == 2
+    # Hence the naive additive identity does NOT hold across the space here:
+    assert terminal_width(joined) != terminal_width("") + 1 + terminal_width(fitzpatrick)
 
 
 @given(st.text(max_size=200))

@@ -234,6 +234,27 @@ Arabic, Hebrew, and other right-to-left scripts legitimately use bidi formatting
 
 New ZWJ emoji sequences are added with each Unicode version. The `unicode-segmentation` crate's tables must be updated to correctly segment newly standardized sequences. Between crate updates, a brand-new emoji ZWJ sequence may be split across multiple grapheme clusters.
 
+### Terminal width is not additive across a separator when a part begins with a grapheme-extender
+
+`terminal_width()` sums the cell width of each UAX #29 grapheme cluster. A natural expectation is that inserting a separator (e.g. a space) between two strings makes width additive: `terminal_width(a + " " + b) == terminal_width(a) + 1 + terminal_width(b)`. This holds *only when the inserted space forms its own grapheme cluster*.
+
+A space does not unconditionally create a cluster boundary on its right. By UAX #29 rules GB9/GB9a, a scalar whose `Grapheme_Cluster_Break` is `Extend`, `ZWJ`, or `SpacingMark` attaches *leftward* to the preceding cluster. If `b` begins with such a scalar, its first codepoint merges with the separator space into a single cluster, and the parts are no longer independent.
+
+The canonical case is a lone emoji skin-tone modifier (U+1F3FB EMOJI MODIFIER FITZPATRICK TYPE-1-2, `GCB=Extend`):
+
+```python
+from disarm import terminal_width, grapheme_len
+
+terminal_width(" 🏻")              # 1 — " 🏻" is ONE cluster: space (1) + zero-width extender (0)
+grapheme_len(" 🏻")                # 1
+terminal_width("🏻")               # 2 — alone, its base has Emoji_Presentation
+terminal_width("") + 1 + terminal_width("🏻")  # 3 — but the joined string measures 1
+```
+
+Both measurements are individually grapheme-cluster-accurate; the discrepancy is a property of grapheme segmentation, not a width error. The library deliberately does **not** "fix" this by mis-measuring the lone modifier — that would make the width of `🏻` wrong in isolation.
+
+The honest precondition for additivity is that the separator genuinely splits the text into independent clusters, i.e. segmentation is itself additive: `grapheme_len(a + " " + b) == grapheme_len(a) + 1 + grapheme_len(b)`. In practice, ensure `b` does not begin with a combining/extending scalar (or normalize/prepend a base character) before relying on additive width arithmetic. The left operand `a` is unaffected: the separator always starts a fresh cluster regardless of what `a` ends with. (See issue #279.)
+
 ## Filename Sanitization
 
 ### Platform-specific behavior

@@ -245,12 +245,35 @@ mod tests {
 
     #[test]
     fn iw3_additivity_no_cluster_merge() {
-        // Joining at a clear boundary (space) cannot merge clusters.
+        // I_w3: additivity holds when the inserted space forms its own cluster,
+        // i.e. neither side attaches across the join (no leading Extend/ZWJ/
+        // SpacingMark in `b`). `b = "ok"` starts with a base scalar, so the
+        // space is its own cluster and width is additive.
         let a = "世界";
         let b = "ok";
         assert_eq!(
             terminal_width(&format!("{a} {b}")),
             terminal_width(a) + 1 + terminal_width(b)
+        );
+    }
+
+    #[test]
+    fn iw3_leading_extend_absorbs_space() {
+        // #279: when `b` begins with a grapheme-Extend scalar, UAX #29 (GB9)
+        // attaches it leftward across the space — `" 🏻"` is ONE cluster, not
+        // two — so additivity across the space does not (and should not) hold.
+        // This is grapheme-cluster-accurate, not a width bug.
+        let fitzpatrick = "\u{1F3FB}"; // GCB=Extend, base has Emoji_Presentation
+        let joined = format!(" {fitzpatrick}");
+        // The space + modifier are a single cluster of width 1.
+        assert_eq!(crate::grapheme::_grapheme_len(&joined), 1);
+        assert_eq!(terminal_width(&joined), 1);
+        // The lone modifier is its own cluster, width 2.
+        assert_eq!(terminal_width(fitzpatrick), 2);
+        // So the naive additive identity fails across the space here.
+        assert_ne!(
+            terminal_width(&joined),
+            terminal_width("") + 1 + terminal_width(fitzpatrick)
         );
     }
 

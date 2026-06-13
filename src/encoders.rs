@@ -185,7 +185,8 @@ mod tests {
             escape_html_str("café 北京"),
             Cow::Borrowed("café 北京")
         ));
-        // `&` escaped first → entity ampersands are not double-hit.
+        // `&` is itself escaped, so a pre-existing entity is re-escaped
+        // (not idempotent, by design): `&lt;` → `&amp;lt;`.
         assert_eq!(escape_html_str("&lt;"), "&amp;lt;");
     }
 

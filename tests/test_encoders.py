@@ -25,7 +25,9 @@ class TestEscapeHtml:
         assert escape_html("<script>alert(1)</script>") == "&lt;script&gt;alert(1)&lt;/script&gt;"
 
     def test_ampersand_escaped_first(self) -> None:
-        # `&` must be handled so entity ampersands are not double-escaped.
+        # `&` is itself a metacharacter, so it is always escaped first — including
+        # the `&` of a pre-existing entity (this encoder is not idempotent; an
+        # already-escaped `&lt;` becomes `&amp;lt;`, by design — encode once).
         assert escape_html("a & b") == "a &amp; b"
         assert escape_html("&lt;") == "&amp;lt;"
 
@@ -34,10 +36,12 @@ class TestEscapeHtml:
 
     def test_no_raw_metacharacter_in_output(self) -> None:
         out = escape_html("a<b>c&d\"e'f")
-        # The five metacharacters must not survive raw (each is entity-escaped).
+        # The four non-ampersand metacharacters must not survive raw. `&` is not
+        # asserted away: it legitimately remains as every entity's leading `&`.
         for ch, ent in [("<", "&lt;"), (">", "&gt;"), ('"', "&quot;"), ("'", "&#x27;")]:
             assert ch not in out
             assert ent in out
+        assert "&amp;" in out  # the input `&` is entity-escaped
 
     def test_fast_path_returns_original_object(self) -> None:
         clean = "nothing to escape here"
@@ -84,7 +88,9 @@ class TestPercentEncode:
 
     def test_round_trips_via_stdlib(self) -> None:
         s = "Москва: a/b?c=d&e f+g ☕"
-        assert urllib.parse.unquote(percent_encode(s, component=Component.QUERY)) == s
+        # PATH/SEGMENT/QUERY reverse via unquote; FORM via unquote_plus (space→+).
+        for comp in (Component.PATH, Component.SEGMENT, Component.QUERY):
+            assert urllib.parse.unquote(percent_encode(s, component=comp)) == s
         assert urllib.parse.unquote_plus(percent_encode(s, component=Component.FORM)) == s
 
     def test_unknown_component_string_raises(self) -> None:
@@ -113,6 +119,7 @@ class TestEncoderProperties:
         for comp in Component:
             out = percent_encode(s, component=comp)
             assert out.isascii()
-        # QUERY/PATH/SEGMENT round-trip via unquote; FORM via unquote_plus.
-        assert urllib.parse.unquote(percent_encode(s, component=Component.QUERY)) == s
+        # PATH/SEGMENT/QUERY round-trip via unquote; FORM via unquote_plus.
+        for comp in (Component.PATH, Component.SEGMENT, Component.QUERY):
+            assert urllib.parse.unquote(percent_encode(s, component=comp)) == s
         assert urllib.parse.unquote_plus(percent_encode(s, component=Component.FORM)) == s

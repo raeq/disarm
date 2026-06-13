@@ -62,6 +62,7 @@ pub mod grapheme;
 mod hostname;
 #[doc(hidden)]
 pub mod limits;
+pub mod log_injection;
 #[doc(hidden)]
 pub mod normalize;
 mod pipeline;
@@ -117,6 +118,7 @@ fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(transliterate::_seal_registrations, m)?)?;
     m.add_function(wrap_pyfunction!(transliterate::_registrations_sealed, m)?)?;
     m.add_function(wrap_pyfunction!(slugify::_slugify, m)?)?;
+    m.add_function(wrap_pyfunction!(log_injection::_strip_log_injection, m)?)?;
     m.add_function(wrap_pyfunction!(normalize::_normalize, m)?)?;
     m.add_function(wrap_pyfunction!(normalize::_is_normalized, m)?)?;
     m.add_function(wrap_pyfunction!(confusables::_normalize_confusables, m)?)?;

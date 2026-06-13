@@ -57,6 +57,7 @@ from disarm._api import (
     set_emoji_provider,
     slugify,
     strip_accents,
+    strip_log_injection,
     terminal_width,
     transliterate,
 )
@@ -245,6 +246,7 @@ __all__ = [
     "is_suspicious_hostname",
     "escape_html",
     "percent_encode",
+    "strip_log_injection",
     "HostnameAnalysis",
     # Reverse transliteration
     "reverse_langs",

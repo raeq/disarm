@@ -19,3 +19,13 @@ They do **not** make disarm an XSS/injection framework — they are narrow, cont
 ### Component
 
 ::: disarm.Component
+
+---
+
+## strip_log_injection
+
+Neutralizes the characters that let untrusted text forge log records (CRLF / NEL / LS / PS), corrupt parsers (NUL / C0 / C1 controls), or hijack a terminal that views the log (ANSI escape introducers / DEL). It makes a log line safe to **write** — it owns the log-record and operator-terminal sinks.
+
+It makes **no HTML-log-viewer-safety claim**: rendering attacker text in an HTML dashboard (Kibana/Grafana) is stored/second-order XSS, which the *viewer* must output-encode with [`escape_html`](#escape_html). It preserves `<`, `>`, `&` precisely so nothing mistakes it for viewer-safe output, and it is not a defense against logging-framework interpolation (log4shell). See the [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md).
+
+::: disarm.strip_log_injection

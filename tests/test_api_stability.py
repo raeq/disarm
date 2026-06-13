@@ -74,6 +74,7 @@ EXPECTED_ALL = {
     # Output encoders
     "escape_html",
     "percent_encode",
+    "strip_log_injection",
     # Reverse transliteration
     "reverse_langs",
     # Encoding
@@ -363,6 +364,7 @@ CORE_FUNCTION_PARAMS = {
     # Output encoders
     "escape_html": ["text"],
     "percent_encode": ["text", "component"],
+    "strip_log_injection": ["text", "replacement", "keep_tab"],
     # Reverse
     "reverse_langs": [],
     # Encoding

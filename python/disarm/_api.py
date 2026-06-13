@@ -68,6 +68,7 @@ from disarm._disarm import (
     _slugify_batch,
     _strip_accents,
     _strip_accents_batch,
+    _strip_log_injection,
     _terminal_width,
     _TextPipeline,
     # Core transforms (Rust implementations)
@@ -1244,6 +1245,41 @@ def percent_encode(text: str, *, component: Component) -> str:
     # InvalidArgumentError rather than an AttributeError on ``.value``.
     value = component.value if isinstance(component, Component) else component
     return _percent_encode(text, component=value)
+
+
+def strip_log_injection(text: str, *, replacement: str = "\ufffd", keep_tab: bool = False) -> str:
+    """Neutralize log-injection / terminal-control characters in ``text``.
+
+    Replaces -- never silently drops, so a redaction stays visible -- every CR,
+    LF, NEL (U+0085), LS (U+2028), PS (U+2029), NUL, C0/C1 control, ESC, and DEL
+    with ``replacement`` (default U+FFFD). ``\t`` is **also** neutralized by
+    default (``keep_tab=False``): a tab is a field separator in TSV/logfmt logs,
+    so keeping it permits column injection; pass ``keep_tab=True`` for
+    human-readable tabular logs. ANSI escape sequences are neutralized by
+    replacing their introducer (``ESC``), leaving the inert ``[31m`` residue.
+
+    Idempotent; the output never contains a raw CR/LF/ESC. This makes a log line
+    safe to *write*, not safe to later *render as HTML*: it is **not** an
+    HTML/SQL output sanitizer (it preserves ``< > &`` -- encode those at the log
+    *viewer* with :func:`escape_html`), and **not** a defense against
+    logging-framework interpolation (log4shell). See the Threat Model.
+
+    Args:
+        text: The (untrusted) string destined for a log line.
+        replacement: String substituted for each neutralized character. Must not
+            itself contain a neutralized character (else ``DisarmError``).
+        keep_tab: Keep ``\t`` instead of neutralizing it.
+
+    Returns:
+        The neutralized string (the original object when nothing needs it).
+
+    Examples:
+        >>> strip_log_injection("user=admin\nFAKE LOG ENTRY")
+        'user=admin\ufffdFAKE LOG ENTRY'
+        >>> strip_log_injection("a\x1b[31mb")
+        'a\ufffd[31mb'
+    """
+    return _strip_log_injection(text, replacement=replacement, keep_tab=keep_tab)
 
 
 # --- Reverse transliteration ---

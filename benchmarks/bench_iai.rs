@@ -18,6 +18,7 @@
 use std::hint::black_box;
 
 use _disarm::encoders::{escape_html_str, percent_encode_str};
+use _disarm::log_injection::strip_log_injection_str;
 use _disarm::slugify::{slugify_impl, SlugConfig};
 use _disarm::transliterate::transliterate_impl;
 use _disarm::ErrorMode;
@@ -83,11 +84,25 @@ fn percent_encode_doc(text: String) -> usize {
         .len()
 }
 
+// strip_log_injection (#307): clean docs exercise the scan + Cow::Borrowed fast
+// path (the common all-printable line).
+#[library_benchmark]
+#[bench::ascii(doc("ascii_doc"))]
+#[bench::cyrillic(doc("cyrillic_doc"))]
+fn strip_log_injection_doc(text: String) -> usize {
+    black_box(strip_log_injection_str(
+        black_box(&text),
+        black_box("\u{FFFD}"),
+        black_box(false),
+    ))
+    .len()
+}
+
 library_benchmark_group!(
     name = perf_gate;
     // Cache simulation on → iai reports Estimated Cycles, the gated metric (V10).
     config = LibraryBenchmarkConfig::default().tool(Callgrind::with_args(["--cache-sim=yes"]));
-    benchmarks = transliterate_doc, slugify_doc, escape_html_doc, percent_encode_doc
+    benchmarks = transliterate_doc, slugify_doc, escape_html_doc, percent_encode_doc, strip_log_injection_doc
 );
 
 main!(library_benchmark_groups = perf_gate);

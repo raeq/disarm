@@ -49,6 +49,7 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 | `normalize` (NFC/NFD/NFKC/NFKD), `fold_case` | Standard Unicode normalization / full case folding for the bundled Unicode data version. |
 | `escape_html` | HTML entity escaping of the five metacharacters (`& < > " '`) for element-body / quoted-attribute context. |
 | `percent_encode` | RFC 3986 percent-encoding of a value for a named URL component (`path`/`segment`/`query`/`form`). |
+| `strip_log_injection` | Replace CR/LF/NEL/LS/PS, NUL, C0/C1 controls, ESC, and DEL (optionally `\t`) with a replacement, making untrusted text safe to *write* as a log line. |
 
 **Documented invariants** (these we *do* stand behind, and treat failures as bugs):
 
@@ -69,6 +70,14 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 > auto-escaper: `escape_html` is wrong inside `<script>`/unquoted-attr/URL contexts, and
 > `percent_encode` does not vet `javascript:`/`data:` schemes or open redirects. Run them at
 > output, after (not instead of) the input-normalization layer.
+
+> **`strip_log_injection` owns the log-record and operator-terminal sinks, not the log
+> *viewer*.** It neutralizes the character-level vectors (CRLF record forging, NUL/control
+> corruption, ANSI/DEL terminal hijack) but makes **no** HTML-viewer-safety claim: when a
+> log is rendered in an HTML dashboard (Kibana/Grafana), attacker text is stored/second-order
+> XSS that the *viewer* must output-encode (`escape_html`). It preserves `< > &` precisely so
+> nothing mistakes it for viewer-safe output, does no NFKC/confusable folding, and does not
+> address logging-framework interpolation (log4shell `${jndi:...}`).
 
 ## Out of scope — by design, not bugs
 

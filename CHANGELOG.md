@@ -16,6 +16,10 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Internal
+
+- **Wired Tier 3 (exhaustive + formal) into the release/publish gate** (#159, epic #326). `publish.yml` now runs a `tier3` job on the release/publish trigger that executes the exhaustive Rust domain tests (`cargo test --no-default-features --test exhaustive_transliterate -- --ignored`) and the Python formal invariants (`pytest -m formal`, against a freshly built wheel). Every wheel/sdist build job and the `publish` job `needs:` it, so a Tier-3 failure blocks the upload to PyPI — closing the gap where these tiers were a manual pre-release step. They remain excluded from fast PR CI; the `#[ignore]` / `@pytest.mark.formal` markers are untouched.
+
 ## [0.9.1] — 2026-06-13
 
 ### Added

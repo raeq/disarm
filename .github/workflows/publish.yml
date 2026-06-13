@@ -13,9 +13,54 @@ env:
   PACKAGE_NAME: disarm
 
 jobs:
+  # ── Tier 3 release gate (#159, epic #326) ───────────────────────
+  # The exhaustive Rust domain tests (#[ignore]) and the Python formal
+  # invariants (@pytest.mark.formal) are intentionally excluded from the
+  # fast PR CI (ci.yml). On a release/publish they become a HARD gate:
+  # every build job `needs:` this, and so does `publish`, so a Tier-3
+  # failure blocks the upload to PyPI (no wheels are even built). The
+  # #[ignore] / @pytest.mark.formal markers stay intact — they are
+  # re-enabled here explicitly via `-- --ignored` / `-m formal`.
+  # Cargo.lock is gitignored for this library, so it is generated in CI.
+  tier3:
+    name: Tier 3 (exhaustive + formal)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
+
+      - name: Rust exhaustive domain tests (Tier 3)
+        run: cargo test --no-default-features --test exhaustive_transliterate -- --ignored
+
+      - name: Install maturin
+        # Pin to the same range as the project's build-system requirement
+        # (pyproject: maturin>=1.13.3,<2) so a future maturin 2.x can't break the gate.
+        run: pip install "maturin[patchelf]>=1.13.3,<2"
+
+      - name: Build wheel and install (for formal invariants)
+        run: |
+          maturin build --out dist
+          # Install the test dependencies, then force the freshly-built WHEEL as
+          # the installed `disarm`. `.[test]` alone would (re)build disarm from the
+          # source checkout and shadow the wheel; --force-reinstall --no-deps swaps
+          # only the package so the formal invariants run against the release
+          # artifact, not a source rebuild.
+          pip install ".[test]"
+          pip install --force-reinstall --no-deps dist/*.whl
+
+      - name: Python formal invariant tests (Tier 3)
+        run: pytest -m formal
+
   build-sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
+    needs: tier3
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -34,6 +79,7 @@ jobs:
   build-wheels-linux:
     name: Build wheels (Linux ${{ matrix.target }})
     runs-on: ubuntu-latest
+    needs: tier3
     strategy:
       fail-fast: false
       matrix:
@@ -63,6 +109,7 @@ jobs:
   build-wheels-macos:
     name: Build wheels (macOS ${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
+    needs: tier3
     strategy:
       fail-fast: false
       matrix:
@@ -89,6 +136,7 @@ jobs:
   build-wheels-windows:
     name: Build wheels (Windows)
     runs-on: windows-latest
+    needs: tier3
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -106,7 +154,10 @@ jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    needs: [build-sdist, build-wheels-linux, build-wheels-macos, build-wheels-windows]
+    # Depend on tier3 explicitly (belt-and-braces) as well as on the builds:
+    # the builds already `needs: tier3`, but naming it here makes the gate
+    # self-evident and survives any future build-job restructuring (#159).
+    needs: [tier3, build-sdist, build-wheels-linux, build-wheels-macos, build-wheels-windows]
     environment: pypi
     permissions:
       id-token: write

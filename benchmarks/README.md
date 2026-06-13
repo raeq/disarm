@@ -130,3 +130,28 @@ Corpus seeds are synthetic but script-representative; swap in real corpus
 excerpts if license permits — keep them deterministic, and remember the digest
 will change (which is the point). The cluster PRs (#235–#242, #252) cite the
 #234 capstone as their measurement contract.
+
+---
+
+## Quality harness (CER/WER) — a different axis
+
+Everything above measures **speed**. `benchmarks/quality_cer_wer.py` measures
+**transliteration accuracy** instead: Character / Word Error Rate of
+`disarm.transliterate` against a small committed reference set
+(`benchmarks/quality_fixtures/cer_wer_pairs.tsv`). It is the **Phase-0** slice of
+issue #173 (epic #326) — a pre-split behavioural baseline, recorded in
+`benchmarks/quality_baseline.md` and keyed to the disarm version, so re-running
+it after the #38 module split proves no quality drift. The fuller benchmark
+(Dakshina / uroman / ICU baselines, abjad CCPD indicators) stays scoped to #173.
+
+It is pure-Python, offline, deterministic, and runs in well under a second; the
+Levenshtein edit distance is implemented inline (no `jiwer` / `Levenshtein`
+dependency). Like every bench here it is **not** collected by the default
+`pytest` gate — run it explicitly:
+
+```bash
+python benchmarks/quality_cer_wer.py                   # human-readable table
+python benchmarks/quality_cer_wer.py --json            # machine-readable
+python benchmarks/quality_cer_wer.py --update-baseline # rewrite quality_baseline.md
+python benchmarks/quality_cer_wer.py --self-check      # metric sanity, no extension needed
+```

@@ -1,0 +1,59 @@
+# disarm transliteration-quality fixtures — Phase-0 CER/WER baseline (issue #173, epic #326)
+#
+# Columns (TAB-separated): script <TAB> standard <TAB> source <TAB> reference
+#
+# `standard` records the romanization target the `reference` is written against,
+# because "ground truth" is scheme-dependent (issue #173, "Weaknesses"). Two
+# scheme families are used here on purpose:
+#
+#   disarm-default  reference == disarm's own documented default output. Error is
+#                   expected to be ~0; these rows are a DRIFT / REGRESSION sentinel
+#                   — they exist to prove the #38 split changes no behaviour, not
+#                   to flatter the engine.
+#   english-common  reference == an established English exonym / conventional
+#                   spelling (e.g. "Tchaikovsky"). disarm's phonetic default
+#                   legitimately differs; these rows record an HONEST non-zero gap
+#                   so the harness is demonstrably measuring, not asserting "0.0".
+#
+# This is a SMALL, offline, hand-curated set (a Phase-0 baseline), NOT the full
+# Dakshina/uroman/ICU comparison or the abjad CCPD indicators — those remain the
+# scope of #173. Keep it deterministic: no external downloads.
+#
+# Lines beginning with '#' and blank lines are ignored by the harness.
+
+# ── Cyrillic (Russian) — core tier, disarm-default scheme ──
+cyrillic	disarm-default	Москва	Moskva
+cyrillic	disarm-default	Санкт-Петербург	Sankt-Peterburg
+cyrillic	disarm-default	Лев Толстой	Lev Tolstoy
+cyrillic	disarm-default	Привет мир	Privet mir
+cyrillic	disarm-default	Россия	Rossiya
+cyrillic	disarm-default	спасибо	spasibo
+cyrillic	disarm-default	до свидания	do svidaniya
+cyrillic	disarm-default	Фёдор Достоевский	Fyodor Dostoevskiy
+
+# ── Greek — core tier, disarm-default scheme ──
+greek	disarm-default	Αθήνα	Athina
+greek	disarm-default	Ελληνικά	Ellinika
+greek	disarm-default	Σωκράτης	Sokratis
+greek	disarm-default	Αριστοτέλης	Aristotelis
+greek	disarm-default	καλημέρα	kalimera
+greek	disarm-default	Θεσσαλονίκη	Thessaloniki
+
+# ── Latin diacritics — core tier, disarm-default scheme ──
+latin	disarm-default	café	cafe
+latin	disarm-default	résumé	resume
+latin	disarm-default	naïve	naive
+latin	disarm-default	Ångström	Angstrom
+latin	disarm-default	Größe	Grosse
+latin	disarm-default	Straße	Strasse
+latin	disarm-default	déjà vu	deja vu
+latin	disarm-default	São Paulo	Sao Paulo
+latin	disarm-default	François	Francois
+latin	disarm-default	Zürich	Zurich
+latin	disarm-default	Köln	Koln
+
+# ── Honest non-zero gap: established English spellings differ from the phonetic default ──
+cyrillic	english-common	Чайковский	Tchaikovsky
+cyrillic	english-common	Хрущёв	Khrushchev
+cyrillic	english-common	Фёдор Достоевский	Fyodor Dostoevsky
+greek	english-common	Σωκράτης	Socrates

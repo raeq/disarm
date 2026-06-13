@@ -231,8 +231,8 @@ pub(crate) fn recover_lock<T>(result: std::sync::LockResult<T>, table_name: &str
              lock). Recovering from poisoned state — data may be inconsistent. This is a bug; \
              please report it."
         );
-        // `recover_lock` has no `Python<'_>` token, so acquire the GIL here.
-        // `with_gil` panics if no interpreter is initialized (pyo3 is built
+        // `recover_lock` has no `Python<'_>` token, so attach to the interpreter
+        // here. `attach` panics if no interpreter is initialized (pyo3 is built
         // without `auto-initialize`): the shipped extension always has one live,
         // but a pure-Rust caller may not — and lock-poison recovery must stay
         // non-fatal. Catch that panic and fall back to stderr so recovery never
@@ -264,8 +264,8 @@ pub(crate) fn emit_warning_stderr(msg: &str) {
 /// Prefer this over bare `eprintln!` whenever a `Python<'_>` token is at hand
 /// so that Python applications can capture and redirect diagnostics.
 /// Non-PyO3 callsites that lack a `Python<'_>` token should use
-/// `emit_warning_stderr`, or acquire the GIL via `pyo3::Python::with_gil` — but
-/// note `with_gil` panics if no interpreter is initialized, so guard it (as
+/// `emit_warning_stderr`, or attach to the interpreter via `pyo3::Python::attach`
+/// — but note `attach` panics if no interpreter is initialized, so guard it (as
 /// `recover_lock` does on the poison path: catch the panic, fall back to stderr).
 pub(crate) fn emit_py_warning(py: pyo3::Python<'_>, msg: &str) {
     if py

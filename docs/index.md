@@ -228,10 +228,10 @@ disarm is compiled Rust with O(1) compile-time perfect hash tables — no regex,
 
 | Operation | Throughput | vs. legacy |
 |---|---|---|
-| Transliterate (Latin) | 450M chars/sec | **38×** faster than Unidecode |
-| Transliterate (Cyrillic) | 130M chars/sec | **18×** faster than Unidecode |
-| Slugify | 849K slugs/sec | **10–24×** faster than python-slugify |
-| Batch transliterate (100 strings) | 2.8× faster than loop | — |
+| Transliterate (Latin) | ~450M chars/sec | **~38×** faster than Unidecode |
+| Transliterate (Cyrillic) | ~106M chars/sec | **~15×** faster than Unidecode |
+| Slugify | ~712K slugs/sec | **~10–24×** faster than python-slugify |
+| Batch transliterate (100 strings) | ~2.8× faster than loop | — |
 
 See [performance.md](performance.md) for the full benchmark results.
 

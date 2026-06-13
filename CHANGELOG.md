@@ -21,6 +21,10 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 - **Renamed policy profile `web_input_sanitize` → `normalize_web_input`.** Follows the `sanitize_user_input → normalize_user_input` rename: "sanitize" wrongly implied output/injection safety, and was especially misleading here because this profile is *lighter* than `normalize_user_input()` (NFKC + confusables only; no bidi/zero-width/control/zalgo stripping). Use `get_pipeline("normalize_web_input")`. No alias is kept.
 - **Renamed `sanitize_user_input()` → `normalize_user_input()`.** The old name implied output sanitization (injection safety); this preset performs *input Unicode normalization* only and is not an XSS/SQL defense (see Threat Model). The `PRESETS` registry key changes to match (`"normalize_user_input"`). No alias is kept — update call sites directly.
 
+### Internal
+
+- **CI: replaced the custom `conversations-resolved.yml` workflow with GitHub's native *Require conversation resolution before merging* branch-protection setting.** The bespoke "Conversations resolved" status check (#55) was flaky — stale check runs lingered after threads were resolved and blocked otherwise-green PRs. Behavior is unchanged (unresolved review threads still block merge), now enforced by the built-in gate instead of a workflow + required status check.
+
 ## [0.9.0] — 2026-06-11
 
 The first release under the **`disarm`** name — the continuation of `translit-rs`

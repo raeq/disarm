@@ -53,8 +53,8 @@ pytest -m formal                                                            # ti
 1. Create a feature branch: `git checkout -b <branch-name>`
 2. Commit your changes on the branch
 3. Push and open a PR: `gh pr create --repo raeq/disarm`
-4. Address review feedback and **resolve every review thread** — the "Conversations resolved" check (#55) is a hard merge gate and stays red while any conversation is open
-5. Wait for all required status checks ("Rust checks passed", "Python checks passed", "Conversations resolved") to go green
+4. Address review feedback and **resolve every review thread** — GitHub's native *Require conversation resolution before merging* blocks the merge while any conversation is open
+5. Wait for all required status checks ("Rust checks passed", "Python checks passed") to go green
 6. Merge the PR
 
 NEVER push directly to `main` — it will be rejected.

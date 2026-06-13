@@ -56,7 +56,7 @@ SKIP = frozenset(
         "InvalidArgumentError",  # #183 exception subclasses
         "ResourceLimitError",
         "UnsupportedError",
-        "SafeHostnameDetails",
+        "HostnameAnalysis",
     }
 )
 

@@ -14,7 +14,7 @@ Unicode introduces attack surfaces that don't exist in ASCII-only systems:
 
 ## Hostname safety: multi-stage canonicalization
 
-`is_safe_hostname()` implements a conservative check that flags anything suspicious rather than trying to determine benign intent. The pipeline:
+`is_suspicious_hostname()` implements a conservative check that flags anything suspicious rather than trying to determine benign intent. The pipeline:
 
 1. **NFKC normalization**: compatibility decomposition + canonical composition. This collapses fullwidth Latin, circled letters, and other visual variants to their base forms before analysis.
 2. **Per-label script detection**: each dot-separated label is analyzed independently via `detect_scripts()`. A label with characters from multiple scripts is flagged as mixed-script.
@@ -22,7 +22,7 @@ Unicode introduces attack surfaces that don't exist in ASCII-only systems:
 4. **Confusable detection**: each label is checked via `is_confusable()`, which probes the TR39 confusable table for characters that map to different Latin equivalents.
 5. **Canonical form generation**: `normalize_confusables()` produces a Latin-canonical form that reveals what the hostname "looks like" to a Latin-script reader.
 
-The function returns both a boolean safety verdict and a `SafeHostnameDetails` object with full diagnostic information (detected scripts, mixed-script flag, confusable flag, canonical form). This allows callers to implement their own policy on top of disarm's detection.
+The function returns both a boolean `suspicious` verdict and a `HostnameAnalysis` object with full diagnostic information (detected scripts, mixed-script flag, confusable flag, canonical form). A `False` result is not a safety guarantee — it asserts no problem was *found*, not that the host is safe; callers should implement their own policy on top of disarm's detection.
 
 **Design tradeoff**: the check is deliberately conservative. A fully-Cyrillic domain like `яндекс.ру` is not flagged as unsafe (it's not mixed-script), but a domain with even one Cyrillic character mixed into an otherwise-Latin label is flagged. False positives are preferred over false negatives in this security context.
 
@@ -47,7 +47,7 @@ The reserved-name check examines the stem (before the first dot) and compares ca
 
 ## Script detection
 
-`detect_scripts()` classifies each character in a string by its Unicode script property, returning a deduplicated list of script names. This is the foundation for mixed-script detection in both `is_safe_hostname()` and the standalone `is_mixed_script()` predicate.
+`detect_scripts()` classifies each character in a string by its Unicode script property, returning a deduplicated list of script names. This is the foundation for mixed-script detection in both `is_suspicious_hostname()` and the standalone `is_mixed_script()` predicate.
 
 Script deduplication uses a `HashSet<&str>` to maintain O(1) per-character insertion while preserving first-seen ordering in the output vector. This replaced an earlier O(n²) implementation that scanned the output vector for duplicates.
 

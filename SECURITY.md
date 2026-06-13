@@ -58,7 +58,7 @@ A case where disarm fails to do what the [Threat Model](THREAT_MODEL.md) says it
 for example a documented invariant failing (`normalize_confusables` emitting a code point
 the bundled table maps to the target; a documented bidi/zero-width code point not stripped;
 an idempotence violation), a panic / memory-safety issue / super-linear blowup, or
-`is_safe_hostname` reporting a label safe despite a condition it claims to detect.
+`is_suspicious_hostname` failing to flag a label despite a mixed-script or bundled-table confusable condition it claims to detect.
 
 A "bypass" that depends on an **out-of-scope** item (most commonly a confusable that is
 simply not in the bundled TR39 data, a whole-script spoof, or a multi-character confusable)
@@ -75,7 +75,8 @@ mechanisms — described as mechanisms, not guarantees:
   the bundled Unicode TR39 table to a target script (coverage = that table).
 - **Bidi / zalgo / zero-width stripping** — remove the enumerated control, combining-mark,
   and invisible code points.
-- **Hostname / IDN analysis** — `is_safe_hostname` flags mixed-script labels and
-  bundled-table confusables (not whole-script spoofs).
+- **Hostname / IDN analysis** — `is_suspicious_hostname` flags mixed-script labels and
+  bundled-table confusables (not whole-script spoofs); a not-suspicious result is not a
+  safety guarantee.
 - **Filename sanitization** — `..` / path-separator handling for safer filenames.
 - **Encoding detection** — `chardetng` / `encoding_rs` (Mozilla); no arbitrary code paths.

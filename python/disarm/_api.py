@@ -16,10 +16,10 @@ from disarm._disarm import (
     # Resource limit — read from the Rust single source of truth, never
     # re-declared, to prevent silent drift (#200).
     _MAX_BATCH_SIZE,
+    HostnameAnalysis,
     # Exception hierarchy (#183): base + categorised subclasses
     InvalidArgumentError,
     ResourceLimitError,
-    SafeHostnameDetails,
     _clear_replacements,
     _collapse_whitespace,
     _decode_to_utf8,
@@ -42,7 +42,7 @@ from disarm._disarm import (
     _is_mixed_script,
     _is_normalized,
     # Hostname safety
-    _is_safe_hostname,
+    _is_suspicious_hostname,
     # Language profiles
     _list_langs,
     _normalize,  # noqa: F401  (used by normalize() and internal pipelines)
@@ -1134,39 +1134,48 @@ def grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int:
 # --- Hostname safety ---
 
 
-def is_safe_hostname(hostname: str) -> tuple[bool, SafeHostnameDetails]:
-    """Check if a hostname is safe from Unicode homoglyph attacks.
+def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
+    """Flag a hostname as *suspicious* for Unicode homoglyph spoofing.
 
-    Returns (is_safe, details) where details is a ``SafeHostnameDetails``
-    with attributes:
+    Returns ``(suspicious, analysis)`` where ``analysis`` is a
+    ``HostnameAnalysis`` with attributes:
 
-    - ``safe``: bool — True if no homoglyph spoofing detected.
+    - ``suspicious``: bool — True if a problem was detected (mixed-script or a
+      bundled-table confusable).
     - ``scripts``: list[str] — Unicode scripts found across all labels.
     - ``mixed_script``: bool — True if multiple scripts detected.
     - ``has_confusables``: bool — True if confusable homoglyphs found.
     - ``canonical``: str — Latin-normalized form of the hostname.
 
-    A hostname is considered unsafe if any single label is mixed-script
+    A hostname is flagged suspicious if any single label is mixed-script
     (draws on more than one Unicode script, excluding Common/Inherited) or
     contains confusable homoglyphs. The mixed-script rule is conservative and
     fails closed: it flags benign combinations such as Latin+CJK as well as
     spoofing ones, so a caller wanting a more permissive policy can inspect the
     ``mixed_script`` and ``scripts`` fields and decide for itself.
 
+    **A ``False`` (not-suspicious) result is not a safety guarantee.** It means
+    only that no mixed-script label and no confusable *from the bundled TR39
+    table* was found. Whole-script spoofs that use no bundled-table confusable,
+    and confusables outside the bundled table, are out of scope (see the Threat
+    Model) and report not-suspicious. Base allow/deny decisions on the granular
+    findings plus your own policy — a detector can attest the presence of a
+    problem, never the absence of all problems.
+
     Args:
         hostname: Hostname string to check (e.g. "example.com").
 
     Returns:
-        Tuple of (is_safe, details) where details is a SafeHostnameDetails.
+        Tuple of (suspicious, analysis) where analysis is a HostnameAnalysis.
 
     Examples:
-        >>> safe, details = is_safe_hostname("google.com")
-        >>> safe
-        True
-        >>> details.canonical
+        >>> suspicious, analysis = is_suspicious_hostname("google.com")
+        >>> suspicious
+        False
+        >>> analysis.canonical
         'google.com'
     """
-    return _is_safe_hostname(hostname)
+    return _is_suspicious_hostname(hostname)
 
 
 # --- Reverse transliteration ---

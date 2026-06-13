@@ -36,11 +36,11 @@ class TestSecurityNamespace:
 
         assert isinstance(is_mixed_script("hello"), bool)
 
-    def test_import_is_safe_hostname(self) -> None:
-        from disarm.security import is_safe_hostname
+    def test_import_is_suspicious_hostname(self) -> None:
+        from disarm.security import is_suspicious_hostname
 
-        safe, details = is_safe_hostname("example.com")
-        assert isinstance(safe, bool)
+        suspicious, analysis = is_suspicious_hostname("example.com")
+        assert isinstance(suspicious, bool)
 
     def test_import_detect_scripts(self) -> None:
         from disarm.security import Script, detect_scripts
@@ -65,7 +65,7 @@ class TestSecurityNamespace:
         for name in (
             "is_confusable",
             "is_mixed_script",
-            "is_safe_hostname",
+            "is_suspicious_hostname",
             "detect_scripts",
             "normalize_confusables",
             "security_clean",

@@ -114,16 +114,16 @@ spoofs, multi-character confusables (`rn`→`m`), and Unicode-version skew. See 
 | Clean untrusted user input | `normalize_user_input(text)` | NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse → path-safety |
 | General security cleanup | `security_clean(text)` | NFKC → confusables → strip bidi → collapse → path-safety |
 | Detect (don't transform) | `is_confusable(text)`, `is_mixed_script(text)` | predicate |
-| Check a domain for IDN spoofing | `is_safe_hostname(host)` | per-label script + confusable analysis |
+| Check a domain for IDN spoofing | `is_suspicious_hostname(host)` | per-label script + confusable analysis |
 
 ```python
-from disarm import strip_obfuscation, normalize_confusables, is_safe_hostname
+from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
 
 assert strip_obfuscation("рroduсt") == 'product'
 assert normalize_confusables("раypal") == 'paypal'
 
-safe, details = is_safe_hostname("аpple.com")   # leading Cyrillic а
-# safe is False; details.mixed_script and details.has_confusables explain why
+suspicious, analysis = is_suspicious_hostname("аpple.com")   # leading Cyrillic а
+# suspicious is True; analysis.mixed_script and analysis.has_confusables explain why
 ```
 
 `strip_obfuscation` deliberately does **not** transliterate (it preserves case and

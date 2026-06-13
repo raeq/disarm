@@ -200,11 +200,11 @@ The foundational problem is established in the [Unicode Technical Report #39](ht
 
 The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/54) proposes ML-based detection using hash functions but notes the fundamental difficulty: the confusable space grows combinatorially with string length.
 
-**disarm implication**: `normalize_confusables()`, `is_confusable()`, and `is_safe_hostname()` use the TR39 confusables table, which is the standard mitigation. However, confusable detection is necessarily conservative. Legitimate multilingual text (e.g., a Russian name in an otherwise English sentence) will trigger warnings. False positives are an inherent tradeoff of any confusable detection system.
+**disarm implication**: `normalize_confusables()`, `is_confusable()`, and `is_suspicious_hostname()` use the TR39 confusables table, which is the standard mitigation. However, confusable detection is necessarily conservative. Legitimate multilingual text (e.g., a Russian name in an otherwise English sentence) will trigger warnings. False positives are an inherent tradeoff of any confusable detection system.
 
 ### Mixed-script detection is heuristic
 
-`is_mixed_script()` reports whether multiple scripts are present in a string. It does not assess whether the mixing is benign (e.g., Latin punctuation in Arabic text, which is universal) or malicious (Cyrillic spoofing Latin). The `is_safe_hostname()` function applies stricter heuristics but its safe/unsafe classification is still a best-effort judgment, not a cryptographic guarantee.
+`is_mixed_script()` reports whether multiple scripts are present in a string. It does not assess whether the mixing is benign (e.g., Latin punctuation in Arabic text, which is universal) or malicious (Cyrillic spoofing Latin). The `is_suspicious_hostname()` function applies stricter heuristics, but a not-suspicious result is a best-effort judgment, not a safety guarantee — it cannot certify the absence of all spoofing (whole-script spoofs and out-of-table confusables are out of scope).
 
 ## Bidirectional Text Security
 

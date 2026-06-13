@@ -35,7 +35,7 @@ from disarm._api import (
     is_confusable,
     is_mixed_script,
     is_normalized,
-    is_safe_hostname,
+    is_suspicious_hostname,
     lang_info,
     list_context_langs,
     list_langs,
@@ -60,9 +60,9 @@ from disarm._api import (
 )
 from disarm._disarm import (
     DisarmError,
+    HostnameAnalysis,
     InvalidArgumentError,
     ResourceLimitError,
-    SafeHostnameDetails,
     UnsupportedError,
 )
 
@@ -239,8 +239,8 @@ __all__ = [
     "grapheme_width",
     "terminal_width",
     # Hostname safety
-    "is_safe_hostname",
-    "SafeHostnameDetails",
+    "is_suspicious_hostname",
+    "HostnameAnalysis",
     # Reverse transliteration
     "reverse_langs",
     # Encoding detection

@@ -29,7 +29,7 @@ disarm implements *visual* confusable mapping per [Unicode TR39](https://www.uni
 > **Scope.** disarm is a **defense-in-depth layer, not a complete control.** It canonicalizes the confusables it bundles (TR39) and strips the format characters it enumerates; it does not promise to stop any attack class, and the confusable space is far larger than any table. See the **[Threat Model](THREAT_MODEL.md)** for what is and isn't in scope.
 
 ```python
-from disarm import strip_obfuscation, normalize_confusables, is_safe_hostname
+from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
 
 # Fold Cyrillic look-alikes to their Latin prototypes (TR39 visual mapping)
 assert strip_obfuscation("рroduсt") == 'product'
@@ -37,9 +37,9 @@ assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
 
 assert normalize_confusables("раypal") == 'paypal'
 
-# IDN / hostname spoofing check
-safe, details = is_safe_hostname("аpple.com")   # leading Cyrillic а
-# safe is False; details.has_confusables and details.mixed_script flag why
+# IDN / hostname spoofing check (flags the bad; a False result is not a safety guarantee)
+suspicious, analysis = is_suspicious_hostname("аpple.com")   # leading Cyrillic а
+# suspicious is True; analysis.has_confusables and analysis.mixed_script flag why
 ```
 
 ## Installation
@@ -60,7 +60,7 @@ Requires Python 3.10+. Wheels are available for Linux, macOS, and Windows.
 
 - **[Confusable & homoglyph analysis (TR39)](security/adversarial-defense.md)**: visual [confusable mapping](user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` pipeline (defense-in-depth — see the [Threat Model](THREAT_MODEL.md))
 - **[Canonicalization pipelines](api/pipelines.md)**: `security_clean`, `normalize_user_input`, `catalog_key`, `search_key`, `sort_key`, `display_clean`, `ml_normalize` for common workflows
-- **[Hostname / IDN analysis](api/predicates.md#is_safe_hostname)**: mixed-script and confusable detection for domains
+- **[Hostname / IDN analysis](api/predicates.md#is_suspicious_hostname)**: mixed-script and confusable detection for domains
 - **[Standards-based transliteration](user-guide/transliteration.md)**: best-in-class Latin / Cyrillic / Greek with ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34, and BGN/PCGN, plus [reverse transliteration](user-guide/language-support.md#reverse-transliteration) (Russian, Ukrainian, Greek)
 - **[Text normalization](user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](user-guide/text-cleaning.md)
 - **[Slugification](user-guide/slugification.md)** & **[filename sanitization](user-guide/filenames.md)**: URL-safe slugs (python-slugify compatible) and cross-platform safe filenames with path-traversal handling
@@ -189,7 +189,7 @@ The API is organized into domain-specific namespaces. All functions are also ava
 
 | Namespace | Purpose | Key functions |
 |---|---|---|
-| `disarm.security` | Defense & safety analysis | `normalize_confusables`, `is_confusable`, `is_mixed_script`, `is_safe_hostname`, `strip_bidi`, `security_clean` |
+| `disarm.security` | Defense & safety analysis | `normalize_confusables`, `is_confusable`, `is_mixed_script`, `is_suspicious_hostname`, `strip_bidi`, `security_clean` |
 | `disarm` | Core transforms | `transliterate`, `slugify`, `strip_obfuscation`, `Text`, `TextPipeline` |
 | `disarm.normalization` | Unicode normalization | `normalize`, `strip_accents`, `fold_case`, `collapse_whitespace` |
 | `disarm.files` | Filename handling | `sanitize_filename` |
@@ -297,7 +297,7 @@ Complete function signatures, parameters, and return types.
 - **[Core Transforms](api/transforms.md)** — `transliterate`, `slugify`, `normalize`, `sanitize_filename`, `strip_accents`, `strip_zalgo`, `fold_case`, `collapse_whitespace`, `demojize`, `strip_bidi` (all accept `str` or `list[str]`)
 - **[Precompiled Pipelines](api/pipelines.md)** — `security_clean`, `ml_normalize`, `catalog_key`, `display_clean`, `search_key`, `sort_key`, `normalize_user_input`, `PRESETS`, `get_pipeline`, `list_profiles`
 - **[Classes](api/classes.md)** — `Text`, `Slugifier`, `UniqueSlugifier`, `TextPipeline`, compatibility aliases
-- **[Predicates](api/predicates.md)** — `detect_scripts`, `inspect_auto_lang`, `is_mixed_script`, `is_confusable`, `is_ascii`, `is_normalized`, `is_zalgo`, `is_safe_hostname`
+- **[Predicates](api/predicates.md)** — `detect_scripts`, `inspect_auto_lang`, `is_mixed_script`, `is_confusable`, `is_ascii`, `is_normalized`, `is_zalgo`, `is_suspicious_hostname`
 - **[Grapheme Clusters](api/graphemes.md)** — `grapheme_len`, `grapheme_split`, `grapheme_truncate`
 - **[Encoding Detection](api/encoding.md)** — `detect_encoding`, `decode_to_utf8`
 - **[Language Profiles](api/language-profiles.md)** — `list_langs`, `register_lang`, `register_replacements`

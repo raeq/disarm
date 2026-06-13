@@ -98,7 +98,7 @@ assert disarm.is_mixed_script(pure) == False
 ```
 
 - **Flag** with `is_mixed_script` when you only need to *reject* suspicious input
-  (e.g. before storing a username). For hostnames, `is_safe_hostname` returns
+  (e.g. before storing a username). For hostnames, `is_suspicious_hostname` returns
   per-label mixed-script and confusable details.
 - **Fold** with `normalize_confusables(target_script=...)` when you want to
   *coerce* input to a canonical script for comparison.

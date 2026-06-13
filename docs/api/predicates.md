@@ -68,30 +68,30 @@ is_zalgo("a" + "\u0300" * 20)  # True
 
 ---
 
-## is_safe_hostname
+## is_suspicious_hostname
 
-::: disarm.is_safe_hostname
+::: disarm.is_suspicious_hostname
 
-### SafeHostnameDetails
+### HostnameAnalysis
 
-The second element of the tuple returned by `is_safe_hostname()`:
+The second element of the tuple returned by `is_suspicious_hostname()`:
 
 | Attribute | Type | Description |
 |---|---|---|
-| `safe` | `bool` | `True` if no homoglyph spoofing detected |
+| `suspicious` | `bool` | `True` if a problem was detected (mixed-script or bundled-table confusable) |
 | `scripts` | `list[str]` | Unicode scripts found across all labels |
 | `mixed_script` | `bool` | `True` if multiple scripts detected |
 | `has_confusables` | `bool` | `True` if confusable homoglyphs found |
 | `canonical` | `str` | Latin-normalized form of the hostname |
 
 ```python
-from disarm import is_safe_hostname
+from disarm import is_suspicious_hostname
 
-safe, details = is_safe_hostname("google.com")
-# safe = True, details.canonical = "google.com"
+suspicious, analysis = is_suspicious_hostname("google.com")
+# suspicious = False, analysis.canonical = "google.com"
 
-safe, details = is_safe_hostname("gооgle.com")  # Cyrillic о's
-# safe = False, details.mixed_script = True, details.has_confusables = True
+suspicious, analysis = is_suspicious_hostname("gооgle.com")  # Cyrillic о's
+# suspicious = True, analysis.mixed_script = True, analysis.has_confusables = True
 ```
 
-A hostname is considered unsafe if it contains mixed high-risk scripts (Cyrillic+Latin, Greek+Latin) or confusable homoglyphs.
+A hostname is flagged suspicious if any single label is mixed-script (draws on more than one Unicode script) or contains confusable homoglyphs. **A not-suspicious result is not a safety guarantee** — whole-script spoofs with no bundled-table confusable, and confusables outside the bundled table, are out of scope (see [Threat Model](../../THREAT_MODEL.md)); branch on the granular fields plus your own policy.

@@ -28,7 +28,7 @@ disarm implements *visual* confusable mapping per [Unicode TR39](https://www.uni
 > **Not an output sanitizer.** disarm normalizes *input*; it does **not** make text safe to emit into HTML, JS, URLs, SQL, or shells. It performs no escaping and does not strip `<`, `>`, `&` — `<script>alert(1)</script>` passes through unchanged, and NFKC normalization can even *surface* ASCII metacharacters from fullwidth lookalikes (`＜script＞` → `<script>`). disarm is **not** an XSS or injection defense and never replaces one: encode at the output sink (framework auto-escaping, DOMPurify, parameterized queries). Run disarm *before* those, as the Unicode layer they don't cover.
 
 ```python
-from disarm import strip_obfuscation, normalize_confusables, is_safe_hostname
+from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
 
 # Fold Cyrillic look-alikes to their Latin prototypes (TR39 visual mapping)
 strip_obfuscation("рroduсt")        # → "product"  (р→p, с→c)
@@ -36,9 +36,9 @@ strip_obfuscation("pаypаl 🔥🔥")     # → "paypal fire fire"  (also strip
 
 normalize_confusables("раypal")      # → "paypal"   (mixed Cyrillic skeleton → Latin)
 
-# IDN / hostname spoofing check
-safe, details = is_safe_hostname("аpple.com")   # leading Cyrillic а
-# safe is False; details.has_confusables and details.mixed_script flag why
+# IDN / hostname spoofing check (flags the bad; a False result is not a safety guarantee)
+suspicious, analysis = is_suspicious_hostname("аpple.com")   # leading Cyrillic а
+# suspicious is True; analysis.has_confusables and analysis.mixed_script flag why
 ```
 
 ## Installation
@@ -60,7 +60,7 @@ Requires Python 3.10+. Wheels are available for Linux, macOS, and Windows.
 - **[Confusable & homoglyph analysis (TR39)](docs/security/adversarial-defense.md)**: visual [confusable mapping](docs/user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` pipeline (defense-in-depth — see the [Threat Model](THREAT_MODEL.md))
 - **[Canonicalization pipelines](docs/api/pipelines.md)**: `security_clean`, `normalize_user_input`, `catalog_key`, `search_key`, `sort_key`, `display_clean`, `ml_normalize` for common workflows
 - **[LLM / RAG pipelines](docs/user-guide/llm-pipelines.md)**: guardrail matching (`llm_guardrail`) and ingestion (`rag_ingest`) profiles — deterministic deobfuscation and ASCII-index normalisation for LLM stacks
-- **[Hostname / IDN analysis](docs/api/predicates.md#is_safe_hostname)**: mixed-script and confusable detection for domains
+- **[Hostname / IDN analysis](docs/api/predicates.md#is_suspicious_hostname)**: mixed-script and confusable detection for domains
 - **[Standards-based transliteration](docs/user-guide/transliteration.md)**: best-in-class Latin / Cyrillic / Greek with ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34, and BGN/PCGN, plus [reverse transliteration](docs/user-guide/language-support.md#reverse-transliteration) (Russian, Ukrainian, Greek)
 - **[Text normalization](docs/user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](docs/user-guide/text-cleaning.md)
 - **[Slugification](docs/user-guide/slugification.md)** & **[filename sanitization](docs/user-guide/filenames.md)**: URL-safe slugs (python-slugify compatible) and cross-platform safe filenames with path-traversal handling
@@ -189,7 +189,7 @@ The API is organized into domain-specific namespaces. All functions are also ava
 
 | Namespace | Purpose | Key functions |
 |---|---|---|
-| `disarm.security` | Defense & safety analysis | `normalize_confusables`, `is_confusable`, `is_mixed_script`, `is_safe_hostname`, `strip_bidi`, `security_clean` |
+| `disarm.security` | Defense & safety analysis | `normalize_confusables`, `is_confusable`, `is_mixed_script`, `is_suspicious_hostname`, `strip_bidi`, `security_clean` |
 | `disarm` | Core transforms | `transliterate`, `slugify`, `strip_obfuscation`, `Text`, `TextPipeline` |
 | `disarm.normalization` | Unicode normalization | `normalize`, `strip_accents`, `fold_case`, `collapse_whitespace` |
 | `disarm.files` | Filename handling | `sanitize_filename` |

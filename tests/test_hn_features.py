@@ -10,7 +10,7 @@ from disarm import (
     grapheme_len,
     grapheme_split,
     grapheme_truncate,
-    is_safe_hostname,
+    is_suspicious_hostname,
     sanitize_filename,
 )
 
@@ -123,52 +123,52 @@ class TestGraphemeTruncate:
 # ===== Hostname Safety =====
 
 
-class TestIsSafeHostname:
-    def test_safe_ascii_domain(self) -> None:
-        safe, details = is_safe_hostname("paypal.com")
-        assert safe
+class TestIsSuspiciousHostname:
+    def test_clean_ascii_domain_not_suspicious(self) -> None:
+        suspicious, details = is_suspicious_hostname("paypal.com")
+        assert not suspicious
         assert not details.has_confusables
         assert not details.mixed_script
 
     def test_cyrillic_homoglyph_attack(self) -> None:
-        safe, details = is_safe_hostname("\u0440\u0430ypal.com")
-        assert not safe
+        suspicious, details = is_suspicious_hostname("\u0440\u0430ypal.com")
+        assert suspicious
         assert details.has_confusables
         assert details.mixed_script
         assert details.canonical == "paypal.com"
 
     def test_full_cyrillic_google(self) -> None:
         # gооgle with Cyrillic о
-        safe, details = is_safe_hostname("g\u043e\u043egle.com")
-        assert not safe
+        suspicious, details = is_suspicious_hostname("g\u043e\u043egle.com")
+        assert suspicious
         assert details.has_confusables
 
-    def test_punycode_safe(self) -> None:
-        safe, _ = is_safe_hostname("xn--n3h.com")
-        assert safe
+    def test_punycode_not_suspicious(self) -> None:
+        suspicious, _ = is_suspicious_hostname("xn--n3h.com")
+        assert not suspicious
 
     def test_subdomain_checked(self) -> None:
-        safe, details = is_safe_hostname("www.\u0440\u0430ypal.com")
-        assert not safe
+        suspicious, details = is_suspicious_hostname("www.\u0440\u0430ypal.com")
+        assert suspicious
 
-    def test_all_latin_safe(self) -> None:
-        safe, details = is_safe_hostname("example.org")
-        assert safe
+    def test_all_latin_not_suspicious(self) -> None:
+        suspicious, details = is_suspicious_hostname("example.org")
+        assert not suspicious
         assert details.scripts == ["Latin"]
 
-    def test_mixed_non_latin_scripts_unsafe(self) -> None:
+    def test_mixed_non_latin_scripts_suspicious(self) -> None:
         # #254: a label mixing two non-Latin scripts (Cyrillic я + Greek ψ) with
-        # no Latin confusable used to report safe=True. The conservative policy
-        # now flags any mixed-script label as unsafe.
-        safe, details = is_safe_hostname("яψ.com")
-        assert not safe
+        # no Latin confusable used to report not-suspicious. The conservative
+        # policy now flags any mixed-script label as suspicious.
+        suspicious, details = is_suspicious_hostname("яψ.com")
+        assert suspicious
         assert details.mixed_script
         # The mixed-script rule, not the confusable check, is what catches this.
         assert not details.has_confusables
 
-    def test_details_attributes(self) -> None:
-        _, details = is_safe_hostname("test.com")
-        assert hasattr(details, "safe")
+    def test_analysis_attributes(self) -> None:
+        _, details = is_suspicious_hostname("test.com")
+        assert hasattr(details, "suspicious")
         assert hasattr(details, "scripts")
         assert hasattr(details, "mixed_script")
         assert hasattr(details, "has_confusables")
@@ -176,23 +176,23 @@ class TestIsSafeHostname:
 
     # --- Regression: fix #3 — IPv6 literals must not trigger script analysis ---
 
-    def test_ipv6_loopback_is_safe(self) -> None:
-        """[::1] is an IPv6 literal — not an IDN hostname, must be safe."""
-        safe, details = is_safe_hostname("[::1]")
-        assert safe
+    def test_ipv6_loopback_not_suspicious(self) -> None:
+        """[::1] is an IPv6 literal — not an IDN hostname, must not be flagged."""
+        suspicious, details = is_suspicious_hostname("[::1]")
+        assert not suspicious
         assert not details.mixed_script
         assert not details.has_confusables
 
-    def test_ipv6_full_address_is_safe(self) -> None:
-        """[2001:db8::1] must be treated as safe without script analysis."""
-        safe, details = is_safe_hostname("[2001:db8::1]")
-        assert safe
+    def test_ipv6_full_address_not_suspicious(self) -> None:
+        """[2001:db8::1] must be treated as not-suspicious without script analysis."""
+        suspicious, details = is_suspicious_hostname("[2001:db8::1]")
+        assert not suspicious
         assert details.scripts == []
 
-    def test_ipv6_with_port_like_syntax_is_safe(self) -> None:
+    def test_ipv6_with_port_like_syntax_not_suspicious(self) -> None:
         """Bracket + colon is the distinguishing pattern for IPv6 literals."""
-        safe, _ = is_safe_hostname("[fe80::1%eth0]")
-        assert safe
+        suspicious, _ = is_suspicious_hostname("[fe80::1%eth0]")
+        assert not suspicious
 
 
 # ===== Encoding Detection =====

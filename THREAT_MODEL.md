@@ -45,7 +45,7 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 | `strip_zalgo` / `is_zalgo` | Remove or detect runs of combining marks above a configurable threshold. |
 | zero-width / invisible stripping | Remove the enumerated zero-width and invisible code points. |
 | `strip_obfuscation` / `security_clean` / `normalize_user_input` | Compose the above in a fixed order. The output is "more canonical," not "safe." |
-| `is_safe_hostname` | Flag **mixed-script** labels and labels containing bundled-table confusables. |
+| `is_suspicious_hostname` | Flag **mixed-script** labels and labels containing bundled-table confusables. A not-suspicious result asserts no problem was *found*, not that the host is safe. |
 | `normalize` (NFC/NFD/NFKC/NFKD), `fold_case` | Standard Unicode normalization / full case folding for the bundled Unicode data version. |
 
 **Documented invariants** (these we *do* stand behind, and treat failures as bugs):
@@ -72,7 +72,7 @@ behavior, not a vulnerability:
   enumerate-the-known; it cannot canonicalize the unknown.
 - **Whole-script / single-script spoofs.** A string composed *entirely* of one non-Latin
   script that visually reads as Latin (e.g. an all-Cyrillic word) is **not mixed-script**
-  and may contain no table confusable; `is_safe_hostname` and `is_mixed_script` will not
+  and may contain no table confusable; `is_suspicious_hostname` and `is_mixed_script` will not
   flag it. Whole-script confusable detection is not implemented.
 - **Multi-character confusables.** Sequences confusable as a *group* rather than
   per-character — e.g. `rn` → `m`, `cl` → `d`, `vv` → `w` — are not detected or folded.
@@ -122,7 +122,7 @@ document says it does — for example:
 - a documented bidi/zero-width code point is not stripped by the relevant function;
 - an idempotence/fixed-point invariant is violated;
 - a panic, crash, memory-safety issue, or super-linear blowup on some input;
-- `is_safe_hostname` reports a label *safe* despite a bundled-table confusable or a
+- `is_suspicious_hostname` fails to flag a label despite a bundled-table confusable or a
   mixed-script condition it claims to detect.
 
 **We will treat as a known limitation (not a vulnerability)** any "bypass" that depends on
@@ -148,7 +148,7 @@ The scope above is grounded in the literature, not asserted:
   (USENIX 2006) found registered homograph domains are overwhelmingly **single-character,
   Latin** substitutions (85–88%), with IDN/Unicode a smaller but growing share. disarm's
   single-letter Latin confusable coverage of UTS#39 is complete and gated in CI
-  (`tests/test_confusable_coverage.py`); `is_safe_hostname` addresses the mixed-script/IDN
+  (`tests/test_confusable_coverage.py`); `is_suspicious_hostname` addresses the mixed-script/IDN
   case. Multi-character (`rn`→`m`) and whole-script spoofs remain out of scope (above).
 
 References: Holgers, Watson & Gribble, "Cutting through the Confusion," USENIX 2006 ·

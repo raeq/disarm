@@ -163,8 +163,8 @@ fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(width::_grapheme_width, m)?)?;
 
     // Hostname safety
-    m.add_function(wrap_pyfunction!(hostname::_is_safe_hostname, m)?)?;
-    m.add_class::<hostname::SafeHostnameDetails>()?;
+    m.add_function(wrap_pyfunction!(hostname::_is_suspicious_hostname, m)?)?;
+    m.add_class::<hostname::HostnameAnalysis>()?;
 
     // Encoding detection
     m.add_function(wrap_pyfunction!(encoding::_detect_encoding, m)?)?;

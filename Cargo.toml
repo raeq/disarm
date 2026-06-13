@@ -33,7 +33,7 @@ phf = "0.13"
 unicode-segmentation = "1"
 encoding_rs = "0.8"
 chardetng = "1.0"
-idna = "1"  # UTS#46 / punycode decoding for is_safe_hostname (#63)
+idna = "1"  # UTS#46 / punycode decoding for is_suspicious_hostname (#63)
 thiserror = "2.0.18"
 
 [build-dependencies]

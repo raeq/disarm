@@ -69,8 +69,8 @@ EXPECTED_ALL = {
     "grapheme_width",
     "terminal_width",
     # Hostname safety
-    "is_safe_hostname",
-    "SafeHostnameDetails",
+    "is_suspicious_hostname",
+    "HostnameAnalysis",
     # Reverse transliteration
     "reverse_langs",
     # Encoding
@@ -355,7 +355,7 @@ CORE_FUNCTION_PARAMS = {
     "grapheme_width": ["cluster", "ambiguous_wide"],
     "terminal_width": ["text", "ambiguous_wide"],
     # Hostname
-    "is_safe_hostname": ["hostname"],
+    "is_suspicious_hostname": ["hostname"],
     # Reverse
     "reverse_langs": [],
     # Encoding

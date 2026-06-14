@@ -442,6 +442,76 @@ pub fn slugify(text: &str, config: &SlugConfig) -> String {
     crate::slugify::slugify_impl(text, config)
 }
 
+// ── Transliteration ──────────────────────────────────────────────────────────
+
+/// Remove diacritical marks while preserving base characters (NFD → strip
+/// combining marks → NFC). For example `"café"` → `"cafe"`.
+pub fn strip_accents(text: &str) -> String {
+    crate::transliterate::strip_accents(text)
+}
+
+/// True if every character in `text` is ASCII (U+0000–U+007F).
+pub fn is_ascii(text: &str) -> bool {
+    text.is_ascii()
+}
+
+/// The language codes available for transliteration (built-in plus any
+/// registered at runtime).
+pub fn list_langs() -> Vec<String> {
+    crate::tables::list_langs()
+}
+
+/// Transliterate `text` from Unicode to ASCII.
+///
+/// `lang` selects a language-specific romanization table (`None` = the default
+/// multi-script tables; `Some("auto")` enables script detection). `error_mode`
+/// governs unmapped characters: [`crate::ErrorMode::Replace`] substitutes
+/// `replacement`, `Ignore` drops them, `Preserve` passes them through. `tones`
+/// keeps tone marks (pinyin); `strict_iso9` and `gost7034` select the ISO 9 /
+/// GOST 7.034 Cyrillic schemes. They are intended to be mutually exclusive, but
+/// this infallible Rust API does **not** reject passing both — `strict_iso9`
+/// takes precedence if you do. (The Python binding validates and raises; enforce
+/// the constraint yourself if you need it in Rust.)
+///
+/// Returns `Cow::Borrowed` for pure-ASCII input (zero allocation), `Cow::Owned`
+/// otherwise. Infallible: wraps the Layer-1 engine
+/// [`crate::transliterate::transliterate_impl`].
+#[allow(clippy::too_many_arguments)]
+pub fn transliterate<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    error_mode: crate::ErrorMode,
+    replacement: &str,
+    tones: bool,
+    strict_iso9: bool,
+    gost7034: bool,
+) -> std::borrow::Cow<'a, str> {
+    crate::transliterate::transliterate_impl(
+        text,
+        lang,
+        error_mode,
+        replacement,
+        strict_iso9,
+        gost7034,
+        tones,
+    )
+}
+
+/// Find every character in `text` that has no transliteration, as
+/// `(char, byte_offset)` pairs in order of appearance. Pure-ASCII input yields
+/// an empty vector. Mirrors [`transliterate`]'s engine, so the reported set is
+/// exactly what that transform would replace/ignore/preserve. Wraps the Layer-1
+/// core [`crate::transliterate::find_untranslatable_impl`].
+pub fn find_untranslatable(
+    text: &str,
+    lang: Option<&str>,
+    tones: bool,
+    strict_iso9: bool,
+    gost7034: bool,
+) -> Vec<(char, usize)> {
+    crate::transliterate::find_untranslatable_impl(text, lang, strict_iso9, gost7034, tones)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -558,5 +628,24 @@ mod tests {
             ..SlugConfig::default()
         };
         assert_eq!(slugify("hello world", &bounded), "hello");
+    }
+
+    #[test]
+    fn transliterate_surface() {
+        use crate::ErrorMode;
+        // ASCII passes through unchanged (Cow::Borrowed fast path).
+        assert_eq!(
+            transliterate("hello", None, ErrorMode::Replace, "?", false, false, false),
+            "hello"
+        );
+        // Cyrillic auto-transliterates to ASCII.
+        let out = transliterate("Москва", None, ErrorMode::Replace, "?", false, false, false);
+        assert!(out.is_ascii() && !out.is_empty(), "got {out:?}");
+        // strip_accents / is_ascii / list_langs.
+        assert_eq!(strip_accents("café"), "cafe");
+        assert!(is_ascii("hi") && !is_ascii("café"));
+        assert!(list_langs().iter().any(|l| l == "ru"));
+        // ASCII has nothing untranslatable.
+        assert!(find_untranslatable("hello", None, false, false, false).is_empty());
     }
 }

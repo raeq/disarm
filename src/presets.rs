@@ -212,7 +212,7 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
         .into_owned();
     }
     // 4. Strip accents (NFD decompose → remove combining marks → NFC)
-    buf = transliterate::_strip_accents(&buf);
+    buf = transliterate::strip_accents(&buf);
     // 5. Unicode case folding (ß→ss, ﬁ→fi, etc.)
     buf = case_fold::fold_case_impl(&buf);
     // 6. Collapse whitespace + strip control + strip zero-width
@@ -258,7 +258,7 @@ pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResu
     // 4. Confusables → Latin (normalize any remaining cross-script homoglyphs)
     let buf = confusables::normalize_confusables(&buf, "latin")?;
     // 5. Strip accents
-    let buf = transliterate::_strip_accents(&buf);
+    let buf = transliterate::strip_accents(&buf);
     // 6. Unicode case folding
     let buf = case_fold::fold_case_impl(&buf);
     // 7. Collapse whitespace + strip control + strip zero-width
@@ -297,7 +297,7 @@ pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
     )
     .into_owned();
     // 4. Strip accents
-    let buf = transliterate::_strip_accents(&buf);
+    let buf = transliterate::strip_accents(&buf);
     // 5. Unicode case folding
     let buf = case_fold::fold_case_impl(&buf);
     // 6. Collapse whitespace + strip control + strip zero-width
@@ -468,7 +468,7 @@ pub fn _strip_obfuscation(text: &str) -> PyResult<String> {
     //    would fold it and strip_obfuscation would not be idempotent.
     let buf = confusables::normalize_confusables(&buf, "latin")?;
     // 7. Strip accents (NFD decompose + strip combining marks)
-    let buf = transliterate::_strip_accents(&buf);
+    let buf = transliterate::strip_accents(&buf);
     // 8. Collapse whitespace (final cleanup) — case is NOT folded
     Ok(whitespace::collapse_whitespace(&buf, true, true))
 }

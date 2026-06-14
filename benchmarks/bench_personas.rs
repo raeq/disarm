@@ -15,9 +15,10 @@ use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 use _disarm::api::fold_case;
+use _disarm::api::strip_accents;
+use _disarm::api::{find_untranslatable, transliterate};
 use _disarm::api::{slugify, SlugConfig};
 use _disarm::presets::{_search_key, _security_clean};
-use _disarm::transliterate::{_strip_accents, find_untranslatable_impl, transliterate_impl};
 use _disarm::ErrorMode;
 
 #[path = "persona_corpus.rs"]
@@ -34,7 +35,7 @@ fn text_throughput(text: &str) -> Throughput {
 /// Engine-only transliteration call (Ignore mode, no replacement assembly),
 /// so the measurement isolates the per-character loop + table lookups.
 fn engine(text: &str, lang: Option<&str>) -> usize {
-    transliterate_impl(text, lang, ErrorMode::Ignore, "", false, false, false).len()
+    transliterate(text, lang, ErrorMode::Ignore, "", false, false, false).len()
 }
 
 // ---------------------------------------------------------------------------
@@ -104,7 +105,7 @@ fn bench_strict_scan(c: &mut Criterion) {
             BenchmarkId::new("find_untranslatable", name),
             &doc,
             |b, text| {
-                b.iter(|| find_untranslatable_impl(black_box(text), None, false, false, false));
+                b.iter(|| find_untranslatable(black_box(text), None, false, false, false));
             },
         );
     }
@@ -139,7 +140,7 @@ fn bench_strip_accents(c: &mut Criterion) {
         let doc = persona_corpus::doc(name).expect("persona exists");
         group.throughput(text_throughput(&doc));
         group.bench_with_input(BenchmarkId::new("scalar", name), &doc, |b, text| {
-            b.iter(|| _strip_accents(black_box(text)));
+            b.iter(|| strip_accents(black_box(text)));
         });
     }
     group.finish();

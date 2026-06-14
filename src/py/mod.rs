@@ -18,6 +18,7 @@ pub mod normalize;
 pub mod reverse;
 pub mod scripts;
 pub mod slugify;
+pub mod transliterate;
 pub mod whitespace;
 pub mod width;
 pub mod zalgo;

@@ -603,7 +603,7 @@ mod tests {
             } else if *flag == PipelineSteps::DEMOJIZE {
                 emoji::demojize_rust(&s, false)
             } else if *flag == PipelineSteps::STRIP_ACCENTS {
-                transliterate::_strip_accents(&s)
+                transliterate::strip_accents(&s)
             } else if *flag == PipelineSteps::TRANSLITERATE {
                 transliterate::transliterate_impl(
                     &s,

@@ -7,7 +7,7 @@
 
 mod common;
 
-use _disarm::transliterate;
+use _disarm::api;
 use _disarm::ErrorMode;
 use common::*;
 use proptest::prelude::*;
@@ -16,68 +16,40 @@ use proptest::prelude::*;
 
 #[test]
 fn hebrew_unpointed() {
-    let result =
-        transliterate::transliterate_impl("שלום", None, ErrorMode::Ignore, "", false, false, false);
+    let result = api::transliterate("שלום", None, ErrorMode::Ignore, "", false, false, false);
     assert_eq!(result, "shlvm");
 }
 
 #[test]
 fn hebrew_final_forms() {
-    let result =
-        transliterate::transliterate_impl("ך", None, ErrorMode::Ignore, "", false, false, false);
+    let result = api::transliterate("ך", None, ErrorMode::Ignore, "", false, false, false);
     assert_eq!(result, "kh");
-    let result =
-        transliterate::transliterate_impl("ץ", None, ErrorMode::Ignore, "", false, false, false);
+    let result = api::transliterate("ץ", None, ErrorMode::Ignore, "", false, false, false);
     assert_eq!(result, "ts");
 }
 
 #[test]
 fn hebrew_shin_sin_presentation() {
     // Shin with shin dot (FB2A) → sh
-    let result = transliterate::transliterate_impl(
-        "\u{FB2A}",
-        None,
-        ErrorMode::Ignore,
-        "",
-        false,
-        false,
-        false,
-    );
+    let result = api::transliterate("\u{FB2A}", None, ErrorMode::Ignore, "", false, false, false);
     assert_eq!(result, "sh");
     // Shin with sin dot (FB2B) → s
-    let result = transliterate::transliterate_impl(
-        "\u{FB2B}",
-        None,
-        ErrorMode::Ignore,
-        "",
-        false,
-        false,
-        false,
-    );
+    let result = api::transliterate("\u{FB2B}", None, ErrorMode::Ignore, "", false, false, false);
     assert_eq!(result, "s");
 }
 
 #[test]
 fn hebrew_dagesh_presentation() {
     // Bet with dagesh (FB31) → b (vs plain bet → v)
-    let result = transliterate::transliterate_impl(
-        "\u{FB31}",
-        None,
-        ErrorMode::Ignore,
-        "",
-        false,
-        false,
-        false,
-    );
+    let result = api::transliterate("\u{FB31}", None, ErrorMode::Ignore, "", false, false, false);
     assert_eq!(result, "b");
-    let result =
-        transliterate::transliterate_impl("ב", None, ErrorMode::Ignore, "", false, false, false);
+    let result = api::transliterate("ב", None, ErrorMode::Ignore, "", false, false, false);
     assert_eq!(result, "v");
 }
 
 #[test]
 fn hebrew_mixed_with_latin() {
-    let result = transliterate::transliterate_impl(
+    let result = api::transliterate(
         "שלום world",
         None,
         ErrorMode::Ignore,
@@ -93,15 +65,7 @@ fn hebrew_mixed_with_latin() {
 fn hebrew_produces_ascii() {
     let samples = ["שלום", "ישראל", "ירושלים"];
     for sample in &samples {
-        let result = transliterate::transliterate_impl(
-            sample,
-            None,
-            ErrorMode::Ignore,
-            "",
-            false,
-            false,
-            false,
-        );
+        let result = api::transliterate(sample, None, ErrorMode::Ignore, "", false, false, false);
         assert!(
             result.is_ascii(),
             "Expected ASCII for {sample:?}, got: {result:?}"
@@ -117,26 +81,26 @@ proptest! {
 
     #[test]
     fn prop_hebrew_produces_ascii(s in hebrew_text()) {
-        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false, false);
+        let result = api::transliterate(&s, None, ErrorMode::Ignore, "", false, false, false);
         prop_assert!(result.is_ascii(), "Non-ASCII from Hebrew: {:?}", result);
     }
 
     #[test]
     fn prop_hebrew_presentation_produces_ascii(s in hebrew_presentation_text()) {
-        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false, false);
+        let result = api::transliterate(&s, None, ErrorMode::Ignore, "", false, false, false);
         prop_assert!(result.is_ascii(), "Non-ASCII from Hebrew presentation: {:?}", result);
     }
 
     #[test]
     fn prop_hebrew_idempotent(s in hebrew_text()) {
-        let once = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false, false);
-        let twice = transliterate::transliterate_impl(&once, None, ErrorMode::Ignore, "", false, false, false);
+        let once = api::transliterate(&s, None, ErrorMode::Ignore, "", false, false, false);
+        let twice = api::transliterate(&once, None, ErrorMode::Ignore, "", false, false, false);
         prop_assert_eq!(&once, &twice);
     }
 
     #[test]
     fn prop_hebrew_no_double_spaces(s in hebrew_text()) {
-        let result = transliterate::transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false, false);
+        let result = api::transliterate(&s, None, ErrorMode::Ignore, "", false, false, false);
         prop_assert!(!result.contains("  "), "Double space in: {:?}", result);
     }
 }

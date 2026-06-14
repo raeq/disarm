@@ -105,27 +105,42 @@ mod py;
 #[pyo3(name = "_disarm")]
 fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Core transforms
-    m.add_function(wrap_pyfunction!(transliterate::_transliterate, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_transliterate_entry, m)?)?;
+    m.add_function(wrap_pyfunction!(py::transliterate::_transliterate, m)?)?;
     m.add_function(wrap_pyfunction!(
-        transliterate::_set_transliterate_fallback,
+        py::transliterate::_transliterate_entry,
         m
     )?)?;
     m.add_function(wrap_pyfunction!(
-        transliterate::_validate_transliterate_args,
+        py::transliterate::_set_transliterate_fallback,
         m
     )?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_find_untranslatable, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_transliterate_context, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_strip_accents, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_is_ascii, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_list_langs, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_register_lang, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_register_replacements, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_remove_replacement, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_clear_replacements, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_seal_registrations, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_registrations_sealed, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        py::transliterate::_validate_transliterate_args,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        py::transliterate::_find_untranslatable,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        py::transliterate::_transliterate_context,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(py::transliterate::_strip_accents, m)?)?;
+    m.add_function(wrap_pyfunction!(py::transliterate::_is_ascii, m)?)?;
+    m.add_function(wrap_pyfunction!(py::transliterate::_list_langs, m)?)?;
+    m.add_function(wrap_pyfunction!(py::transliterate::_register_lang, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        py::transliterate::_register_replacements,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(py::transliterate::_remove_replacement, m)?)?;
+    m.add_function(wrap_pyfunction!(py::transliterate::_clear_replacements, m)?)?;
+    m.add_function(wrap_pyfunction!(py::transliterate::_seal_registrations, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        py::transliterate::_registrations_sealed,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(py::slugify::_slugify, m)?)?;
     m.add_function(wrap_pyfunction!(
         py::log_injection::_strip_log_injection,
@@ -148,8 +163,14 @@ fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::scripts::_inspect_auto_lang, m)?)?;
 
     // Batch APIs (single PyO3 boundary crossing for N strings)
-    m.add_function(wrap_pyfunction!(transliterate::_transliterate_batch, m)?)?;
-    m.add_function(wrap_pyfunction!(transliterate::_strip_accents_batch, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        py::transliterate::_transliterate_batch,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        py::transliterate::_strip_accents_batch,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(py::slugify::_slugify_batch, m)?)?;
     m.add_function(wrap_pyfunction!(py::normalize::_normalize_batch, m)?)?;
 

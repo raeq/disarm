@@ -12,12 +12,12 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 
 use _disarm::api::collapse_whitespace;
 use _disarm::api::fold_case;
+use _disarm::api::transliterate;
 use _disarm::api::{detect_scripts, is_mixed_script};
 use _disarm::api::{grapheme_len, grapheme_split};
 use _disarm::api::{normalize_confusables, TargetScript};
 use _disarm::api::{slugify, SlugConfig};
 use _disarm::tables::lookup_default;
-use _disarm::transliterate::transliterate_impl;
 use _disarm::ErrorMode;
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ fn bench_transliterate(c: &mut Criterion) {
         group.throughput(text_throughput(input));
         group.bench_with_input(BenchmarkId::new("default", name), input, |b, text| {
             b.iter(|| {
-                transliterate_impl(
+                transliterate(
                     black_box(text),
                     None,
                     ErrorMode::Replace,
@@ -79,7 +79,7 @@ fn bench_transliterate(c: &mut Criterion) {
     group.throughput(text_throughput(CYRILLIC));
     group.bench_function("cyrillic_lang_ru", |b| {
         b.iter(|| {
-            transliterate_impl(
+            transliterate(
                 black_box(CYRILLIC),
                 Some("ru"),
                 ErrorMode::Replace,

@@ -9,6 +9,8 @@
 //! module is migrated to the Layer-1/Layer-2/Layer-3 split; `confusables` was the
 //! first, landing the canonical template.
 
+use std::borrow::Cow;
+
 // ── Confusables (TR39) ──────────────────────────────────────────────────────
 
 /// Target script for confusable folding (see [`normalize_confusables`]).
@@ -135,6 +137,180 @@ pub fn grapheme_split(text: &str) -> Vec<String> {
 /// the Python binding must guard against.
 pub fn grapheme_truncate(text: &str, max_graphemes: usize) -> String {
     crate::grapheme::truncate_to_graphemes(text, max_graphemes)
+}
+
+// ── Unicode normalization (UAX #15) ──────────────────────────────────────────
+
+/// Unicode normalization form for [`normalize`] / [`is_normalized`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum NormalizationForm {
+    /// Canonical composition (NFC).
+    Nfc,
+    /// Canonical decomposition (NFD).
+    Nfd,
+    /// Compatibility composition (NFKC).
+    Nfkc,
+    /// Compatibility decomposition (NFKD).
+    Nfkd,
+}
+
+impl NormalizationForm {
+    /// The uppercase token the underlying normalizer is keyed by.
+    fn as_str(self) -> &'static str {
+        match self {
+            NormalizationForm::Nfc => "NFC",
+            NormalizationForm::Nfd => "NFD",
+            NormalizationForm::Nfkc => "NFKC",
+            NormalizationForm::Nfkd => "NFKD",
+        }
+    }
+}
+
+/// Normalize `text` to the given Unicode normalization form.
+///
+/// Infallible: a [`NormalizationForm`] is always a valid form.
+pub fn normalize(text: &str, form: NormalizationForm) -> String {
+    crate::normalize::normalize(text, form.as_str())
+        .expect("NormalizationForm is always a valid form")
+}
+
+/// True if `text` is already in the given Unicode normalization form.
+///
+/// Infallible: a [`NormalizationForm`] is always a valid form.
+pub fn is_normalized(text: &str, form: NormalizationForm) -> bool {
+    crate::normalize::is_normalized(text, form.as_str())
+        .expect("NormalizationForm is always a valid form")
+}
+
+// ── Output encoders (encode once, at the sink) ───────────────────────────────
+
+/// Escape the five HTML metacharacters for element-body (PCDATA) and
+/// quoted-attribute context: `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`, `"`→`&quot;`,
+/// `'`→`&#x27;`. Returns `Cow::Borrowed` (zero-copy) when nothing needs escaping.
+///
+/// **Not** correct inside `<script>` / `<style>`, unquoted attributes, or URL
+/// attributes — there HTML-entity escaping is insufficient or corrupting. Encode
+/// once at the output sink; disarm is not a context-aware auto-escaper.
+pub fn escape_html(text: &str) -> Cow<'_, str> {
+    crate::encoders::escape_html_str(text)
+}
+
+/// URL component whose RFC 3986 safe-character set drives [`percent_encode`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum UrlComponent {
+    /// A whole path: unreserved + sub-delims + `:` `@` `/`.
+    Path,
+    /// A single path segment: `Path` without `/`.
+    Segment,
+    /// A query value: unreserved only (reserved characters are encoded).
+    Query,
+    /// `Query` plus `application/x-www-form-urlencoded` space → `+`.
+    Form,
+}
+
+impl UrlComponent {
+    /// The lowercase token the underlying encoder is keyed by.
+    fn as_str(self) -> &'static str {
+        match self {
+            UrlComponent::Path => "path",
+            UrlComponent::Segment => "segment",
+            UrlComponent::Query => "query",
+            UrlComponent::Form => "form",
+        }
+    }
+}
+
+/// Percent-encode `text` for `component` (RFC 3986): the input is UTF-8 encoded,
+/// then every byte outside the component's safe set becomes `%XX`. Output is ASCII.
+///
+/// Infallible: a [`UrlComponent`] always names a known component.
+pub fn percent_encode(text: &str, component: UrlComponent) -> String {
+    crate::encoders::percent_encode_str(text, component.as_str())
+        .expect("UrlComponent always names a known component")
+}
+
+// ── Reverse transliteration (romanized Latin → native script) ────────────────
+
+/// Language for [`reverse_transliterate`] — the scripts disarm ships reverse
+/// tables for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ReverseLang {
+    /// Greek (`el`).
+    Greek,
+    /// Russian (`ru`).
+    Russian,
+    /// Ukrainian (`uk`).
+    Ukrainian,
+}
+
+impl ReverseLang {
+    /// The lowercase language code the underlying tables are keyed by.
+    fn as_str(self) -> &'static str {
+        match self {
+            ReverseLang::Greek => "el",
+            ReverseLang::Russian => "ru",
+            ReverseLang::Ukrainian => "uk",
+        }
+    }
+}
+
+/// Convert romanized Latin `text` back to its native script with greedy
+/// longest-match scanning (digraphs/trigraphs like `shch` → щ); unmatched
+/// characters pass through.
+///
+/// Infallible: a [`ReverseLang`] always has a reverse table.
+pub fn reverse_transliterate(text: &str, lang: ReverseLang) -> String {
+    crate::reverse::reverse_transliterate_impl(text, lang.as_str())
+}
+
+/// The languages that support [`reverse_transliterate`], as lowercase codes.
+pub fn reverse_langs() -> Vec<String> {
+    crate::reverse::reverse_langs()
+}
+
+// ── Script detection ─────────────────────────────────────────────────────────
+
+/// Unicode scripts present in `text`, in order of first appearance (Common /
+/// Inherited excluded). Names are stable UCD script identifiers (e.g. `"Latin"`).
+pub fn detect_scripts(text: &str) -> Vec<&'static str> {
+    crate::scripts::detect_scripts(text)
+}
+
+/// True if `text` mixes characters from more than one script (excluding Common /
+/// Inherited) — a homoglyph-spoofing signal.
+pub fn is_mixed_script(text: &str) -> bool {
+    crate::scripts::is_mixed_script(text)
+}
+
+/// How disarm's auto-language detection resolved a string — returned by
+/// [`inspect_auto_lang`] for diagnostics / explainability.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct AutoLangInspection {
+    /// The primary non-Latin script detected, if any (e.g. `"Cyrillic"`).
+    pub script: Option<String>,
+    /// The language auto-detection chose, if any (e.g. `"ru"`).
+    pub chosen_lang: Option<String>,
+    /// Why that choice was made (`"discriminator"`, `"script_default"`,
+    /// `"unambiguous_script"`, `"latin_discriminator"`, `"no_detection"`).
+    pub reason: String,
+    /// The discriminator characters that drove the choice, if any.
+    pub discriminators_hit: Vec<String>,
+}
+
+/// Explain how auto-language detection resolves `text` (which script, which
+/// language, and why) — for diagnostics, not the hot path.
+pub fn inspect_auto_lang(text: &str) -> AutoLangInspection {
+    let (script, chosen_lang, reason, discriminators_hit) = crate::scripts::inspect_auto_lang(text);
+    AutoLangInspection {
+        script: script.map(str::to_owned),
+        chosen_lang,
+        reason: reason.to_owned(),
+        discriminators_hit,
+    }
 }
 
 #[cfg(test)]

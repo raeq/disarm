@@ -17,7 +17,7 @@
 
 use std::hint::black_box;
 
-use _disarm::encoders::{escape_html_str, percent_encode_str};
+use _disarm::api::{escape_html, percent_encode, UrlComponent};
 use _disarm::log_injection::strip_log_injection_str;
 use _disarm::slugify::{slugify_impl, SlugConfig};
 use _disarm::transliterate::transliterate_impl;
@@ -72,16 +72,14 @@ fn slugify_doc(text: String) -> usize {
 #[bench::ascii(doc("ascii_doc"))]
 #[bench::latin(doc("latin_doc"))]
 fn escape_html_doc(text: String) -> usize {
-    black_box(escape_html_str(black_box(&text))).len()
+    black_box(escape_html(black_box(&text))).len()
 }
 
 #[library_benchmark]
 #[bench::latin(doc("latin_doc"))]
 #[bench::cyrillic(doc("cyrillic_doc"))]
 fn percent_encode_doc(text: String) -> usize {
-    black_box(percent_encode_str(black_box(&text), black_box("query")))
-        .unwrap()
-        .len()
+    black_box(percent_encode(black_box(&text), UrlComponent::Query)).len()
 }
 
 // strip_log_injection (#307): clean docs exercise the scan + Cow::Borrowed fast

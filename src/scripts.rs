@@ -1,12 +1,12 @@
-use pyo3::prelude::*;
+//! Layer 1 (pure-Rust core): Unicode script detection + auto-language
+//! inspection. No pyo3. Shims in `src/py/scripts.rs`; crates.io surface is
+//! `crate::api::{detect_scripts, is_mixed_script, inspect_auto_lang}`.
 
 /// Detect Unicode scripts present in text, in order of first appearance.
 ///
 /// Returns `&'static str` script names, avoiding per-character String
 /// allocation.  The `HashSet` and output `Vec` use borrowed static strings.
-#[pyfunction]
-#[pyo3(signature = (text,))]
-pub fn _detect_scripts(text: &str) -> Vec<&'static str> {
+pub(crate) fn detect_scripts(text: &str) -> Vec<&'static str> {
     let mut scripts: Vec<&'static str> = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
@@ -24,9 +24,7 @@ pub fn _detect_scripts(text: &str) -> Vec<&'static str> {
 ///
 /// Short-circuits after finding the second distinct script, avoiding
 /// scanning the rest of the string.
-#[pyfunction]
-#[pyo3(signature = (text,))]
-pub fn _is_mixed_script(text: &str) -> bool {
+pub(crate) fn is_mixed_script(text: &str) -> bool {
     let mut first_script: Option<&'static str> = None;
     for ch in text.chars() {
         let script = detect_char_script(ch);
@@ -440,7 +438,7 @@ fn discriminate_by_chars(text: &str, script: &str) -> Option<&'static str> {
 }
 
 /// Like `discriminate_by_chars` but also returns the discriminator character
-/// that triggered the match.  Used by `_inspect_auto_lang` to provide
+/// that triggered the match.  Used by `inspect_auto_lang` to provide
 /// audit-level detail.
 fn discriminate_by_chars_detailed(text: &str, script: &str) -> Option<(&'static str, char)> {
     // Cap the scan at `SCAN_LIMIT` characters (centralized in `crate::limits`,
@@ -488,7 +486,7 @@ fn discriminate_by_chars_detailed(text: &str, script: &str) -> Option<(&'static 
 /// **Note:** For mixed-script input (e.g. "Hello 北京 Привет"), the first
 /// non-Latin script encountered wins. This is a deliberate simplification —
 /// callers needing per-segment transliteration should split the text first.
-pub fn resolve_auto_lang(text: &str) -> Option<String> {
+pub(crate) fn resolve_auto_lang(text: &str) -> Option<String> {
     // Pass 1: Find primary non-Latin, non-Common script.
     let mut primary_script: Option<&str> = None;
     for ch in text.chars() {
@@ -523,19 +521,25 @@ pub fn resolve_auto_lang(text: &str) -> Option<String> {
 
 /// Inspect how `lang="auto"` would resolve for the given text.
 ///
-/// Returns a Python dict with keys:
+/// Returns the tuple `(script, chosen_lang, reason, discriminators_hit)`:
 ///   - `script`: primary non-Latin script name, or `None`
 ///   - `chosen_lang`: resolved language code, or `None`
 ///   - `reason`: one of `"unambiguous_script"`, `"discriminator"`,
 ///     `"script_default"`, `"latin_discriminator"`, `"no_detection"`
-///   - `discriminators_hit`: list of discriminator characters found
-#[pyfunction]
-#[pyo3(signature = (text,))]
-pub fn _inspect_auto_lang(py: Python<'_>, text: &str) -> PyResult<Py<PyAny>> {
-    use pyo3::types::PyDict;
-
+///   - `discriminators_hit`: the discriminator characters found
+///
+/// The Layer-2 [`crate::api::inspect_auto_lang`] wraps this in a typed
+/// `AutoLangInspection`; the `src/py/scripts.rs` shim marshals it to a Python dict.
+pub(crate) fn inspect_auto_lang(
+    text: &str,
+) -> (
+    Option<&'static str>,
+    Option<String>,
+    &'static str,
+    Vec<String>,
+) {
     // Pass 1: Find primary non-Latin, non-Common script.
-    let mut primary_script: Option<&str> = None;
+    let mut primary_script: Option<&'static str> = None;
     for ch in text.chars() {
         let script = detect_char_script(ch);
         if script != "Common" && script != "Inherited" && script != "Latin" {
@@ -544,12 +548,7 @@ pub fn _inspect_auto_lang(py: Python<'_>, text: &str) -> PyResult<Py<PyAny>> {
         }
     }
 
-    let (script_out, chosen_lang, reason, discriminators_hit): (
-        Option<&str>,
-        Option<String>,
-        &str,
-        Vec<String>,
-    ) = match primary_script {
+    match primary_script {
         Some(script) if is_ambiguous_script(script) => {
             match discriminate_by_chars_detailed(text, script) {
                 Some((lang, ch)) => (
@@ -587,14 +586,7 @@ pub fn _inspect_auto_lang(py: Python<'_>, text: &str) -> PyResult<Py<PyAny>> {
                 }
             }
         }
-    };
-
-    let dict = PyDict::new(py);
-    dict.set_item("script", script_out)?;
-    dict.set_item("chosen_lang", chosen_lang)?;
-    dict.set_item("reason", reason)?;
-    dict.set_item("discriminators_hit", discriminators_hit)?;
-    Ok(dict.into_any().unbind())
+    }
 }
 
 #[cfg(test)]
@@ -616,156 +608,156 @@ mod tests {
 
     #[test]
     fn test_detect_latin() {
-        let scripts = _detect_scripts("hello");
+        let scripts = detect_scripts("hello");
         assert_eq!(scripts, vec!["Latin" as &str]);
     }
 
     #[test]
     fn test_mixed_script() {
-        assert!(_is_mixed_script("hello мир"));
+        assert!(is_mixed_script("hello мир"));
     }
 
     #[test]
     fn test_single_script() {
-        assert!(!_is_mixed_script("hello world"));
+        assert!(!is_mixed_script("hello world"));
     }
 
     #[test]
     fn test_detect_bengali() {
-        let scripts = _detect_scripts("বাংলা");
+        let scripts = detect_scripts("বাংলা");
         assert_eq!(scripts, vec!["Bengali"]);
     }
 
     #[test]
     fn test_detect_tamil() {
-        let scripts = _detect_scripts("தமிழ்");
+        let scripts = detect_scripts("தமிழ்");
         assert_eq!(scripts, vec!["Tamil"]);
     }
 
     #[test]
     fn test_detect_telugu() {
-        let scripts = _detect_scripts("తెలుగు");
+        let scripts = detect_scripts("తెలుగు");
         assert_eq!(scripts, vec!["Telugu"]);
     }
 
     #[test]
     fn test_detect_kannada() {
-        let scripts = _detect_scripts("ಕನ್ನಡ");
+        let scripts = detect_scripts("ಕನ್ನಡ");
         assert_eq!(scripts, vec!["Kannada"]);
     }
 
     #[test]
     fn test_detect_malayalam() {
-        let scripts = _detect_scripts("മലയാളം");
+        let scripts = detect_scripts("മലയാളം");
         assert_eq!(scripts, vec!["Malayalam"]);
     }
 
     #[test]
     fn test_detect_gujarati() {
-        let scripts = _detect_scripts("ગુજરાતી");
+        let scripts = detect_scripts("ગુજરાતી");
         assert_eq!(scripts, vec!["Gujarati"]);
     }
 
     #[test]
     fn test_detect_gurmukhi() {
-        let scripts = _detect_scripts("ਗੁਰਮੁਖੀ");
+        let scripts = detect_scripts("ਗੁਰਮੁਖੀ");
         assert_eq!(scripts, vec!["Gurmukhi"]);
     }
 
     #[test]
     fn test_detect_thai() {
-        let scripts = _detect_scripts("ภาษาไทย");
+        let scripts = detect_scripts("ภาษาไทย");
         assert_eq!(scripts, vec!["Thai"]);
     }
 
     #[test]
     fn test_detect_lao() {
-        let scripts = _detect_scripts("ພາສາລາວ");
+        let scripts = detect_scripts("ພາສາລາວ");
         assert_eq!(scripts, vec!["Lao"]);
     }
 
     #[test]
     fn test_detect_myanmar() {
-        let scripts = _detect_scripts("မြန်မာ");
+        let scripts = detect_scripts("မြန်မာ");
         assert_eq!(scripts, vec!["Myanmar"]);
     }
 
     #[test]
     fn test_detect_tibetan() {
-        let scripts = _detect_scripts("བོད་སྐད");
+        let scripts = detect_scripts("བོད་སྐད");
         assert_eq!(scripts, vec!["Tibetan"]);
     }
 
     #[test]
     fn test_detect_sinhala() {
-        let scripts = _detect_scripts("සිංහල");
+        let scripts = detect_scripts("සිංහල");
         assert_eq!(scripts, vec!["Sinhala"]);
     }
 
     #[test]
     fn test_detect_khmer() {
-        let scripts = _detect_scripts("ភាសាខ្មែរ");
+        let scripts = detect_scripts("ភាសាខ្មែរ");
         assert_eq!(scripts, vec!["Khmer"]);
     }
 
     #[test]
     fn test_detect_georgian() {
-        let scripts = _detect_scripts("ქართული");
+        let scripts = detect_scripts("ქართული");
         assert_eq!(scripts, vec!["Georgian"]);
     }
 
     #[test]
     fn test_detect_armenian() {
-        let scripts = _detect_scripts("Հայերեն");
+        let scripts = detect_scripts("Հայերեն");
         assert_eq!(scripts, vec!["Armenian"]);
     }
 
     #[test]
     fn test_detect_ethiopic() {
-        let scripts = _detect_scripts("አማርኛ");
+        let scripts = detect_scripts("አማርኛ");
         assert_eq!(scripts, vec!["Ethiopic"]);
     }
 
     #[test]
     fn test_detect_hangul() {
-        let scripts = _detect_scripts("한국어");
+        let scripts = detect_scripts("한국어");
         assert_eq!(scripts, vec!["Hangul"]);
     }
 
     #[test]
     fn test_detect_han() {
-        let scripts = _detect_scripts("中文");
+        let scripts = detect_scripts("中文");
         assert_eq!(scripts, vec!["Han"]);
     }
 
     #[test]
     fn test_detect_arabic() {
-        let scripts = _detect_scripts("العربية");
+        let scripts = detect_scripts("العربية");
         assert_eq!(scripts, vec!["Arabic"]);
     }
 
     #[test]
     fn test_detect_hebrew() {
-        let scripts = _detect_scripts("עברית");
+        let scripts = detect_scripts("עברית");
         assert_eq!(scripts, vec!["Hebrew"]);
     }
 
     #[test]
     fn test_detect_oriya() {
-        let scripts = _detect_scripts("ଓଡ଼ିଆ");
+        let scripts = detect_scripts("ଓଡ଼ିଆ");
         assert_eq!(scripts, vec!["Oriya"]);
     }
 
     #[test]
     fn test_detect_coptic() {
-        let scripts = _detect_scripts("Ⲙⲉⲧⲣⲉⲙⲛⲕⲏⲙⲉ");
+        let scripts = detect_scripts("Ⲙⲉⲧⲣⲉⲙⲛⲕⲏⲙⲉ");
         assert_eq!(scripts, vec!["Coptic"]);
     }
 
     #[test]
     fn test_inherited_combining_marks() {
         // Combining acute accent alone should be Inherited (filtered by detect_scripts)
-        let scripts = _detect_scripts("\u{0301}");
+        let scripts = detect_scripts("\u{0301}");
         assert!(scripts.is_empty());
     }
 
@@ -985,13 +977,13 @@ mod tests {
 
     #[test]
     fn test_script_order_preserved() {
-        let scripts = _detect_scripts("hello Москва");
+        let scripts = detect_scripts("hello Москва");
         assert_eq!(scripts, vec!["Latin", "Cyrillic"]);
     }
 
     #[test]
     fn test_three_scripts_detected() {
-        let scripts = _detect_scripts("abc мир 日本");
+        let scripts = detect_scripts("abc мир 日本");
         assert_eq!(scripts.len(), 3);
         assert_eq!(scripts[0], "Latin");
         assert_eq!(scripts[1], "Cyrillic");
@@ -1000,13 +992,13 @@ mod tests {
 
     #[test]
     fn test_empty_string_no_scripts() {
-        let scripts = _detect_scripts("");
+        let scripts = detect_scripts("");
         assert!(scripts.is_empty());
     }
 
     #[test]
     fn test_digits_only_no_scripts() {
-        let scripts = _detect_scripts("12345");
+        let scripts = detect_scripts("12345");
         assert!(scripts.is_empty());
     }
 
@@ -1045,21 +1037,21 @@ mod tests {
     #[test]
     fn test_latin_ligature_fi_detected_as_latin_in_text() {
         // Regression: detect_scripts("ﬁ") previously returned [Armenian]
-        let scripts = _detect_scripts("ﬁ");
+        let scripts = detect_scripts("ﬁ");
         assert_eq!(scripts, vec!["Latin" as &str]);
     }
 
     #[test]
     fn test_armenian_ligature_detected_in_text() {
         // Regression: detect_scripts("ﬓ") previously returned [] (Common)
-        let scripts = _detect_scripts("ﬓ");
+        let scripts = detect_scripts("ﬓ");
         assert_eq!(scripts, vec!["Armenian"]);
     }
 
     #[test]
     fn test_mixed_latin_and_armenian_ligatures() {
         // Text containing both Latin ligature ﬁ and Armenian ligature ﬓ
-        let scripts = _detect_scripts("ﬁﬓ");
+        let scripts = detect_scripts("ﬁﬓ");
         assert_eq!(scripts, vec!["Latin", "Armenian"]);
     }
 

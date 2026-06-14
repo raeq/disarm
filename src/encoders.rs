@@ -10,15 +10,15 @@
 
 use std::borrow::Cow;
 
-use pyo3::prelude::*;
-use pyo3::types::PyString;
+// Layer 1 (pure-Rust core): no pyo3. Shims in `src/py/encoders.rs`; crates.io
+// surface is `crate::api::{escape_html, percent_encode}` (typed `UrlComponent`).
 
 /// Escape the five HTML metacharacters for element-body / quoted-attribute
 /// context: `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`, `"`→`&quot;`, `'`→`&#x27;`.
 ///
 /// Pure `&str` core (no Python). Returns `Cow::Borrowed` when nothing needs
 /// escaping, so the FFI wrapper can hand back the original object zero-copy.
-pub fn escape_html_str(s: &str) -> Cow<'_, str> {
+pub(crate) fn escape_html_str(s: &str) -> Cow<'_, str> {
     if !s
         .bytes()
         .any(|b| matches!(b, b'&' | b'<' | b'>' | b'"' | b'\''))
@@ -37,33 +37,6 @@ pub fn escape_html_str(s: &str) -> Cow<'_, str> {
         }
     }
     Cow::Owned(out)
-}
-
-/// Escape the five HTML metacharacters for element-body (PCDATA) and
-/// quoted-attribute context.
-///
-/// `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`, `"`→`&quot;`, `'`→`&#x27;` (hex
-/// apostrophe; widely safe). Everything else passes through unchanged.
-///
-/// Correct for HTML **element-body and quoted-attribute** context (the five-char
-/// set, with both quotes, covers both). **Not** correct inside `<script>` /
-/// `<style>`, unquoted attributes, URL / `href` / `src` attributes, or HTML
-/// comments — there, HTML-entity escaping is insufficient or actively corrupting
-/// (entities are not decoded inside `<script>`, so `&lt;` renders literally).
-/// Encode once, at the output sink.
-///
-/// Fast path: input with no metacharacter returns the original object
-/// (zero-copy), consistent with the transliterate fast path (#277).
-#[pyfunction]
-#[pyo3(signature = (text,))]
-pub fn _escape_html<'py>(text: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyString>> {
-    let s = text.to_cow()?;
-    match escape_html_str(&s) {
-        // Nothing to escape → hand back the original object (refcount bump,
-        // no string copy). The common case for already-clean text.
-        Cow::Borrowed(_) => Ok(text.clone()),
-        Cow::Owned(escaped) => Ok(PyString::new(text.py(), &escaped)),
-    }
 }
 
 const UPPER_HEX: &[u8; 16] = b"0123456789ABCDEF";
@@ -125,7 +98,7 @@ fn percent_encode_into(text: &str, keep: fn(u8) -> bool, space_to_plus: bool, ou
 
 /// Percent-encode `text` for a named URL component. Pure `&str` core (no
 /// Python). Returns `None` for an unrecognized component name.
-pub fn percent_encode_str(text: &str, component: &str) -> Option<String> {
+pub(crate) fn percent_encode_str(text: &str, component: &str) -> Option<String> {
     let (keep, space_to_plus): (fn(u8) -> bool, bool) = match component {
         "path" => (keep_path, false),
         "segment" => (keep_segment, false),
@@ -136,31 +109,6 @@ pub fn percent_encode_str(text: &str, component: &str) -> Option<String> {
     let mut out = String::with_capacity(text.len());
     percent_encode_into(text, keep, space_to_plus, &mut out);
     Some(out)
-}
-
-/// Percent-encode `text` for a named URL component (RFC 3986).
-///
-/// **Not ASCII-closed:** the input is UTF-8 encoded first, then every byte
-/// outside the component's safe set becomes `%XX` (`é` → `%C3%A9`). Output is
-/// pure ASCII. The safe set differs by component, so `component` is required:
-///
-/// - `path` — unreserved + sub-delims + `:` `@` + `/` (a whole path)
-/// - `segment` — `path` without `/` (a single path segment)
-/// - `query` — unreserved only (a query *value*; reserved chars are encoded)
-/// - `form` — `query` plus `application/x-www-form-urlencoded` space → `+`
-///
-/// Percent-encoding is **not** a defense against `javascript:` / `data:` scheme
-/// injection or open redirects — those are URL-*construction* concerns, out of
-/// scope. Encode once, at the output sink.
-#[pyfunction]
-#[pyo3(signature = (text, *, component))]
-pub fn _percent_encode(text: &str, component: &str) -> PyResult<String> {
-    percent_encode_str(text, component).ok_or_else(|| {
-        crate::InvalidArgumentError::new_err(format!(
-            "unknown percent-encode component {component:?}; expected one of: \
-             'path', 'segment', 'query', 'form'"
-        ))
-    })
 }
 
 #[cfg(test)]

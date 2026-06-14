@@ -17,24 +17,27 @@
 //! `tests/exhaustive_transliterate.rs`. Run before release with:
 //! `cargo test --no-default-features --test exhaustive_grapheme -- --ignored`
 //!
-//! Normalization entry point: we call `_disarm::normalize::_normalize`, the
-//! SAME `#[pyfunction]` disarm ships. Although it is annotated `#[pyfunction]`
-//! its signature is `fn(text: &str, form: &str) -> PyResult<String>` — it takes
-//! no `Python<'_>` token and touches no Python objects, so it is callable
-//! directly from a plain `#[test]` with NO GIL. (The module's own unit tests in
-//! `src/normalize.rs` do exactly this.) Calling it directly guarantees we
-//! exercise the identical code path that ships to users.
+//! Normalization entry point: we call `_disarm::api::normalize`, the pyo3-free
+//! Layer-2 surface over the SAME Layer-1 core (`crate::normalize::normalize`)
+//! that the shipped `#[pyfunction]` shim calls. It is infallible for a typed
+//! [`NormalizationForm`] and touches no Python objects, so it runs from a plain
+//! `#[test]` with no GIL while exercising the identical code path users get.
 
-use _disarm::normalize::_normalize;
+use _disarm::api::{normalize, NormalizationForm};
 use unicode_segmentation::UnicodeSegmentation;
 
-const FORMS: [&str; 4] = ["NFC", "NFD", "NFKC", "NFKD"];
+const FORMS: [NormalizationForm; 4] = [
+    NormalizationForm::Nfc,
+    NormalizationForm::Nfd,
+    NormalizationForm::Nfkc,
+    NormalizationForm::Nfkd,
+];
 
 /// `normalize(whole)` equals the join of per-grapheme-cluster normalizations.
-fn boundary_preserved(s: &str, form: &str) -> bool {
-    _normalize(s, form).unwrap()
+fn boundary_preserved(s: &str, form: NormalizationForm) -> bool {
+    normalize(s, form)
         == s.graphemes(true)
-            .map(|g| _normalize(g, form).unwrap())
+            .map(|g| normalize(g, form))
             .collect::<String>()
 }
 
@@ -43,7 +46,7 @@ fn assert_all_forms(s: &str, ctx: &str) {
     for form in FORMS {
         assert!(
             boundary_preserved(s, form),
-            "boundary violation ({ctx}) under {form}: input={s:?}"
+            "boundary violation ({ctx}) under {form:?}: input={s:?}"
         );
     }
 }
@@ -119,7 +122,7 @@ fn boundary_preservation_full_bmp_singletons() {
         for form in FORMS {
             assert!(
                 boundary_preserved(&s, form),
-                "singleton boundary violation under {form}: U+{cp:04X}"
+                "singleton boundary violation under {form:?}: U+{cp:04X}"
             );
         }
     }

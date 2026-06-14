@@ -593,7 +593,7 @@ mod tests {
             }
             s = if *flag == PipelineSteps::NORMALIZE {
                 match p.normalize_form {
-                    Some(ref form) => normalize::_normalize(&s, form)?,
+                    Some(ref form) => normalize::normalize(&s, form)?,
                     None => s,
                 }
             } else if *flag == PipelineSteps::STRIP_ZALGO {

@@ -12,9 +12,9 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 
 use _disarm::api::collapse_whitespace;
 use _disarm::api::fold_case;
+use _disarm::api::{detect_scripts, is_mixed_script};
 use _disarm::api::{grapheme_len, grapheme_split};
 use _disarm::api::{normalize_confusables, TargetScript};
-use _disarm::scripts::{_detect_scripts, _is_mixed_script};
 use _disarm::slugify::{slugify_impl, SlugConfig};
 use _disarm::tables::lookup_default;
 use _disarm::transliterate::transliterate_impl;
@@ -222,11 +222,11 @@ fn bench_scripts(c: &mut Criterion) {
     ] {
         group.throughput(text_throughput(input));
         group.bench_with_input(BenchmarkId::new("detect", name), input, |b, text| {
-            b.iter(|| _detect_scripts(black_box(text)));
+            b.iter(|| detect_scripts(black_box(text)));
         });
 
         group.bench_with_input(BenchmarkId::new("is_mixed", name), input, |b, text| {
-            b.iter(|| _is_mixed_script(black_box(text)));
+            b.iter(|| is_mixed_script(black_box(text)));
         });
     }
 

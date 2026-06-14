@@ -127,27 +127,27 @@ fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(transliterate::_registrations_sealed, m)?)?;
     m.add_function(wrap_pyfunction!(slugify::_slugify, m)?)?;
     m.add_function(wrap_pyfunction!(log_injection::_strip_log_injection, m)?)?;
-    m.add_function(wrap_pyfunction!(normalize::_normalize, m)?)?;
-    m.add_function(wrap_pyfunction!(normalize::_is_normalized, m)?)?;
+    m.add_function(wrap_pyfunction!(py::normalize::_normalize, m)?)?;
+    m.add_function(wrap_pyfunction!(py::normalize::_is_normalized, m)?)?;
     m.add_function(wrap_pyfunction!(
         py::confusables::_normalize_confusables,
         m
     )?)?;
     m.add_function(wrap_pyfunction!(py::confusables::_is_confusable, m)?)?;
-    m.add_function(wrap_pyfunction!(encoders::_escape_html, m)?)?;
-    m.add_function(wrap_pyfunction!(encoders::_percent_encode, m)?)?;
+    m.add_function(wrap_pyfunction!(py::encoders::_escape_html, m)?)?;
+    m.add_function(wrap_pyfunction!(py::encoders::_percent_encode, m)?)?;
     m.add_function(wrap_pyfunction!(filename::_sanitize_filename, m)?)?;
     m.add_function(wrap_pyfunction!(py::case_fold::_fold_case, m)?)?;
     m.add_function(wrap_pyfunction!(py::whitespace::_collapse_whitespace, m)?)?;
-    m.add_function(wrap_pyfunction!(scripts::_detect_scripts, m)?)?;
-    m.add_function(wrap_pyfunction!(scripts::_is_mixed_script, m)?)?;
-    m.add_function(wrap_pyfunction!(scripts::_inspect_auto_lang, m)?)?;
+    m.add_function(wrap_pyfunction!(py::scripts::_detect_scripts, m)?)?;
+    m.add_function(wrap_pyfunction!(py::scripts::_is_mixed_script, m)?)?;
+    m.add_function(wrap_pyfunction!(py::scripts::_inspect_auto_lang, m)?)?;
 
     // Batch APIs (single PyO3 boundary crossing for N strings)
     m.add_function(wrap_pyfunction!(transliterate::_transliterate_batch, m)?)?;
     m.add_function(wrap_pyfunction!(transliterate::_strip_accents_batch, m)?)?;
     m.add_function(wrap_pyfunction!(slugify::_slugify_batch, m)?)?;
-    m.add_function(wrap_pyfunction!(normalize::_normalize_batch, m)?)?;
+    m.add_function(wrap_pyfunction!(py::normalize::_normalize_batch, m)?)?;
 
     // Stateful classes
     m.add_class::<slugify::_Slugifier>()?;
@@ -187,8 +187,8 @@ fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(encoding::_decode_to_utf8, m)?)?;
 
     // Reverse transliteration
-    m.add_function(wrap_pyfunction!(reverse::_reverse_transliterate, m)?)?;
-    m.add_function(wrap_pyfunction!(reverse::_reverse_langs, m)?)?;
+    m.add_function(wrap_pyfunction!(py::reverse::_reverse_transliterate, m)?)?;
+    m.add_function(wrap_pyfunction!(py::reverse::_reverse_langs, m)?)?;
 
     // Emoji
     m.add_function(wrap_pyfunction!(emoji::_demojize, m)?)?;

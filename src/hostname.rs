@@ -125,7 +125,7 @@ pub fn _is_suspicious_hostname(hostname: &str) -> PyResult<(bool, HostnameAnalys
         decoded_labels.push(label.clone());
 
         // Check scripts in this (decoded) label
-        let label_scripts = scripts::_detect_scripts(&label);
+        let label_scripts = scripts::detect_scripts(&label);
 
         // Track all scripts seen (O(1) dedup via HashSet)
         for s in &label_scripts {

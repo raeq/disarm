@@ -9,7 +9,11 @@
 
 pub mod case_fold;
 pub mod confusables;
+pub mod encoders;
 pub mod grapheme;
+pub mod normalize;
+pub mod reverse;
+pub mod scripts;
 pub mod whitespace;
 pub mod width;
 pub mod zalgo;

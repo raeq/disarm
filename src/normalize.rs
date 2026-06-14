@@ -1,4 +1,8 @@
-use pyo3::prelude::*;
+//! Layer 1 (pure-Rust core): Unicode normalization (NFC/NFD/NFKC/NFKD). No pyo3.
+//!
+//! Shims in `src/py/normalize.rs`; crates.io surface is
+//! `crate::api::{normalize, is_normalized}` (typed `NormalizationForm`).
+
 use unicode_normalization::UnicodeNormalization;
 
 // disarm does not cap input or output size — bounding untrusted input is the
@@ -6,7 +10,7 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Validate normalization form string. Returns an error for invalid forms.
 #[inline]
-fn validate_form(form: &str) -> Result<(), crate::Error> {
+pub(crate) fn validate_form(form: &str) -> Result<(), crate::Error> {
     if !matches!(form, "NFC" | "NFD" | "NFKC" | "NFKD") {
         return Err(crate::Error::InvalidNormForm {
             got: form.to_owned(),
@@ -15,18 +19,16 @@ fn validate_form(form: &str) -> Result<(), crate::Error> {
     Ok(())
 }
 
-/// Unicode normalization (NFC, NFD, NFKC, NFKD).
-#[pyfunction]
-#[pyo3(signature = (text, *, form="NFC"))]
-pub fn _normalize(text: &str, form: &str) -> PyResult<String> {
+/// Unicode normalization (NFC, NFD, NFKC, NFKD). Validates `form`.
+pub(crate) fn normalize(text: &str, form: &str) -> Result<String, crate::Error> {
     let mut out = String::new();
     normalize_into(text, form, &mut out)?;
     Ok(out)
 }
 
-/// In-place form of [`_normalize`] writing into `out` (cleared first), so the
+/// In-place form of [`normalize`] writing into `out` (cleared first), so the
 /// pipeline can reuse one buffer across steps (#236 item 7).
-pub fn normalize_into(text: &str, form: &str, out: &mut String) -> PyResult<()> {
+pub(crate) fn normalize_into(text: &str, form: &str, out: &mut String) -> Result<(), crate::Error> {
     validate_form(form)?;
     out.clear();
     // ASCII is invariant under all four normalization forms (no decomposition,
@@ -54,9 +56,7 @@ pub fn normalize_into(text: &str, form: &str, out: &mut String) -> PyResult<()> 
 /// returns `false` we fall back to a full normalize-and-compare, because the
 /// crate's quick-check tables can be stricter than the normalizer itself for
 /// certain unassigned codepoints (e.g. U+1CCD6 in Unicode 15/16 gaps).
-#[pyfunction]
-#[pyo3(signature = (text, *, form="NFC"))]
-pub fn _is_normalized(text: &str, form: &str) -> PyResult<bool> {
+pub(crate) fn is_normalized(text: &str, form: &str) -> Result<bool, crate::Error> {
     validate_form(form)?;
     let quick = match form {
         "NFC" => unicode_normalization::is_nfc(text),
@@ -81,31 +81,6 @@ pub fn _is_normalized(text: &str, form: &str) -> PyResult<bool> {
     Ok(normalized == text)
 }
 
-/// Batch normalization: process a list of strings in a single PyO3 boundary crossing.
-#[pyfunction]
-#[pyo3(signature = (texts, *, form="NFC"))]
-pub fn _normalize_batch(py: Python<'_>, texts: Vec<String>, form: &str) -> PyResult<Vec<String>> {
-    validate_form(form)?;
-    if texts.len() > crate::MAX_BATCH_SIZE {
-        return Err(crate::Error::BatchTooLarge {
-            len: texts.len(),
-            max: crate::MAX_BATCH_SIZE,
-        }
-        .into());
-    }
-    // Pick the normalizer once (form is validated), then run the pure-Rust loop
-    // with the GIL released (#70): the closure touches no Python objects, so
-    // other Python threads run in parallel during a large batch.
-    let normalize_one: fn(&str) -> String = match form {
-        "NFC" => |t| t.nfc().collect(),
-        "NFD" => |t| t.nfd().collect(),
-        "NFKC" => |t| t.nfkc().collect(),
-        "NFKD" => |t| t.nfkd().collect(),
-        _ => unreachable!(),
-    };
-    Ok(py.detach(move || texts.iter().map(|t| normalize_one(t)).collect()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,7 +88,7 @@ mod tests {
     #[test]
     fn test_nfc_roundtrip() {
         let text = "caf\u{0065}\u{0301}"; // e + combining accent
-        let normalized = _normalize(text, "NFC").unwrap();
+        let normalized = normalize(text, "NFC").unwrap();
         assert_eq!(normalized, "caf\u{00e9}"); // single é
     }
 
@@ -121,9 +96,9 @@ mod tests {
     fn test_normalize_accepts_input_without_size_cap() {
         // There is no input/output size cap (#80); normal and large inputs alike
         // normalize without error.
-        assert!(_normalize("Héllo wörld", "NFKD").is_ok());
+        assert!(normalize("Héllo wörld", "NFKD").is_ok());
         let large = "é".repeat(2 * 1024 * 1024); // ~4 MiB, formerly cap-relevant
-        assert!(_normalize(&large, "NFKD").is_ok());
+        assert!(normalize(&large, "NFKD").is_ok());
     }
 
     mod proptest_properties {
@@ -140,9 +115,9 @@ mod tests {
                 form in prop_oneof!["NFC", "NFD", "NFKC", "NFKD"],
             ) {
                 // Skip inputs that could expand beyond the output cap.
-                let once = _normalize(&s, &form);
+                let once = normalize(&s, &form);
                 if let Ok(once) = once {
-                    let twice = _normalize(&once, &form).unwrap();
+                    let twice = normalize(&once, &form).unwrap();
                     prop_assert_eq!(&once, &twice);
                 }
             }
@@ -153,24 +128,24 @@ mod tests {
                 s in "\\PC*",
                 form in prop_oneof!["NFC", "NFD", "NFKC", "NFKD"],
             ) {
-                if let Ok(normalized) = _normalize(&s, &form) {
-                    prop_assert!(_is_normalized(&normalized, &form).unwrap());
+                if let Ok(normalized) = normalize(&s, &form) {
+                    prop_assert!(is_normalized(&normalized, &form).unwrap());
                 }
             }
 
             /// NFKC output is always also valid NFC.
             #[test]
             fn nfkc_implies_nfc(s in "\\PC*") {
-                if let Ok(nfkc) = _normalize(&s, "NFKC") {
-                    prop_assert!(_is_normalized(&nfkc, "NFC").unwrap());
+                if let Ok(nfkc) = normalize(&s, "NFKC") {
+                    prop_assert!(is_normalized(&nfkc, "NFC").unwrap());
                 }
             }
 
             /// NFKD output is always also valid NFD.
             #[test]
             fn nfkd_implies_nfd(s in "\\PC*") {
-                if let Ok(nfkd) = _normalize(&s, "NFKD") {
-                    prop_assert!(_is_normalized(&nfkd, "NFD").unwrap());
+                if let Ok(nfkd) = normalize(&s, "NFKD") {
+                    prop_assert!(is_normalized(&nfkd, "NFD").unwrap());
                 }
             }
         }

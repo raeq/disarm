@@ -14,14 +14,14 @@ use crate::ErrorMode;
 use crate::limits::{MAX_CAPACITY_HINT, MAX_REPLACEMENT_OUTPUT_BYTES};
 
 /// Apply the global replacement pre-pass under the output-size bound, mapping an
-/// amplification overflow to the canonical `Error::ReplacementOutputTooLarge`.
+/// amplification overflow to the canonical `ErrorRepr::ReplacementOutputTooLarge`.
 ///
 /// Single source for the cap + error construction shared by every transliterate
 /// entrypoint (#251); previously duplicated at four sites. On the PyO3 paths the
-/// call-site `?` converts the `Error` to a `PyErr` (#181).
-fn apply_replacements_bounded(text: &str) -> Result<Cow<'_, str>, crate::Error> {
+/// call-site `?` converts the `ErrorRepr` to a `PyErr` (#181).
+fn apply_replacements_bounded(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
     tables::apply_replacements(text, MAX_REPLACEMENT_OUTPUT_BYTES).map_err(|size| {
-        crate::Error::ReplacementOutputTooLarge {
+        crate::ErrorRepr::ReplacementOutputTooLarge {
             size,
             max: MAX_REPLACEMENT_OUTPUT_BYTES,
         }
@@ -35,7 +35,7 @@ fn apply_replacements_bounded(text: &str) -> Result<Cow<'_, str>, crate::Error> 
 /// `errors=`/`form=`, which reject bad values. Returns an error listing the
 /// valid codes. The special `"auto"` detection mode, the BCP-47 aliases
 /// (`nb`/`nn`/`da`), and any `register_lang()` additions are also accepted.
-pub(crate) fn validate_lang(lang: Option<&str>) -> Result<(), crate::Error> {
+pub(crate) fn validate_lang(lang: Option<&str>) -> Result<(), crate::ErrorRepr> {
     if let Some(l) = lang {
         if l != "auto" && !tables::is_valid_lang(l) {
             // `list_langs()` already includes any `register_lang()` codes, so
@@ -52,7 +52,7 @@ pub(crate) fn validate_lang(lang: Option<&str>) -> Result<(), crate::Error> {
             )
             .map(|s| format!(" (did you mean '{s}'?)"))
             .unwrap_or_default();
-            return Err(crate::Error::UnknownLang {
+            return Err(crate::ErrorRepr::UnknownLang {
                 got: l.to_owned(),
                 suggestion,
                 valid: valid.join(", "),
@@ -85,7 +85,7 @@ enum ScriptClass {
     Other,
 }
 
-/// `errors="strict"` (#184): raise [`crate::Error::Untranslatable`] on the first
+/// `errors="strict"` (#184): raise [`crate::ErrorRepr::Untranslatable`] on the first
 /// character with no transliteration; otherwise return the transliteration
 /// (which is identical under any error mode when nothing is unmapped). `text` is
 /// already post-replacement, so reported offsets are relative to that.
@@ -95,7 +95,7 @@ fn transliterate_strict(
     strict_iso9: bool,
     gost7034: bool,
     tones: bool,
-) -> Result<String, crate::Error> {
+) -> Result<String, crate::ErrorRepr> {
     // #240: single pass with early exit. The former implementation ran the
     // engine twice — once via `find_untranslatable_impl` (which materialised the
     // *complete* Vec of every unmapped char just to read the first) and again to
@@ -116,7 +116,7 @@ fn transliterate_strict(
         true, // stop at the first untranslatable character
     );
     if let Some((ch, byte_offset)) = first.into_iter().next() {
-        return Err(crate::Error::Untranslatable { ch, byte_offset });
+        return Err(crate::ErrorRepr::Untranslatable { ch, byte_offset });
     }
     Ok(result.into_owned())
 }
@@ -142,7 +142,7 @@ pub fn _transliterate<'py>(
     // #130: Defence-in-depth — the PyO3 boundary check in each entry-point guards
     // direct Rust callers; Python callers are covered by the same check.
     if strict_iso9 && gost7034 {
-        return Err(crate::Error::MutuallyExclusiveBare.into());
+        return Err(crate::ErrorRepr::MutuallyExclusiveBare.into());
     }
     validate_lang(lang)?;
     let py = text.py();
@@ -329,7 +329,7 @@ pub fn _validate_transliterate_args(
 }
 
 /// Pure-Rust core of [`_validate_transliterate_args`], returning the core
-/// [`crate::Error`] so it is unit-testable without a Python interpreter (#231).
+/// [`crate::ErrorRepr`] so it is unit-testable without a Python interpreter (#231).
 pub(crate) fn validate_transliterate_args(
     lang: Option<&str>,
     target: Option<&str>,
@@ -339,18 +339,18 @@ pub(crate) fn validate_transliterate_args(
     gost7034: bool,
     tones: bool,
     context: bool,
-) -> Result<(), crate::Error> {
+) -> Result<(), crate::ErrorRepr> {
     if target.is_some() && lang.is_some() {
-        return Err(crate::Error::LangTargetExclusive);
+        return Err(crate::ErrorRepr::LangTargetExclusive);
     }
     if context && target.is_some() {
-        return Err(crate::Error::ContextTargetExclusive);
+        return Err(crate::ErrorRepr::ContextTargetExclusive);
     }
     if context && tones {
-        return Err(crate::Error::TonesWithContext);
+        return Err(crate::ErrorRepr::TonesWithContext);
     }
     if context && errors == "strict" {
-        return Err(crate::Error::StrictWithContext);
+        return Err(crate::ErrorRepr::StrictWithContext);
     }
     if target.is_some() {
         // Collect any forward-only parameter set to a non-default value. Sorted
@@ -373,7 +373,7 @@ pub(crate) fn validate_transliterate_args(
         }
         if !forward_only.is_empty() {
             forward_only.sort_unstable();
-            return Err(crate::Error::ForwardOnlyWithTarget {
+            return Err(crate::ErrorRepr::ForwardOnlyWithTarget {
                 names: forward_only.join(", "),
             });
         }
@@ -395,7 +395,7 @@ pub fn _find_untranslatable(
     tones: bool,
 ) -> PyResult<Vec<(char, usize)>> {
     if strict_iso9 && gost7034 {
-        return Err(crate::Error::MutuallyExclusiveBare.into());
+        return Err(crate::ErrorRepr::MutuallyExclusiveBare.into());
     }
     validate_lang(lang)?;
     let text = apply_replacements_bounded(text)?;
@@ -426,7 +426,7 @@ pub fn _transliterate_context(
     // #130: Defence-in-depth — the PyO3 boundary check in each entry-point guards
     // direct Rust callers; Python callers are covered by the same check.
     if strict_iso9 && gost7034 {
-        return Err(crate::Error::MutuallyExclusiveBare.into());
+        return Err(crate::ErrorRepr::MutuallyExclusiveBare.into());
     }
     validate_lang(lang)?;
     let error_mode = ErrorMode::from_str(errors)?;
@@ -478,14 +478,14 @@ pub fn _transliterate_context(
             // Dictionary not loaded — point the user at a remedy that actually works
             // (#60). Context dictionaries are not shipped in the wheel; build them
             // and expose them via DISARM_DICT_DIR.
-            Err(crate::Error::ContextDictNotFound {
+            Err(crate::ErrorRepr::ContextDictNotFound {
                 lang: lang_name.to_owned(),
             }
             .into())
         }
         Err(corrupt_msg) => {
             // #107: file was found but is corrupt — different remediation from "not found".
-            Err(crate::Error::ContextDictCorrupt {
+            Err(crate::ErrorRepr::ContextDictCorrupt {
                 lang: lang_name.to_owned(),
                 reason: corrupt_msg.to_owned(),
             }
@@ -1596,9 +1596,9 @@ pub fn _list_langs() -> Vec<String> {
 /// Reject a registration mutation once the tables have been sealed (#64).
 /// `pub(crate)` so sibling modules (e.g. the emoji provider setter, #104) can
 /// enforce the same latch.
-pub(crate) fn check_not_sealed(op: &str) -> Result<(), crate::Error> {
+pub(crate) fn check_not_sealed(op: &str) -> Result<(), crate::ErrorRepr> {
     if tables::registrations_sealed() {
-        return Err(crate::Error::Sealed { op: op.to_owned() });
+        return Err(crate::ErrorRepr::Sealed { op: op.to_owned() });
     }
     Ok(())
 }
@@ -1629,14 +1629,14 @@ pub fn _register_lang(code: &str, mappings: HashMap<String, String>) -> PyResult
     if current >= tables::MAX_REGISTERED_LANGS {
         // Re-registering an existing code is always allowed (overwrite, not grow).
         if !tables::has_registered_lang(code) {
-            return Err(crate::Error::RegisterLangLimit {
+            return Err(crate::ErrorRepr::RegisterLangLimit {
                 max: tables::MAX_REGISTERED_LANGS,
             }
             .into());
         }
     }
     tables::register_lang(code, mappings).map_err(|bad_keys| {
-        crate::Error::RegisterLangBadKeys {
+        crate::ErrorRepr::RegisterLangBadKeys {
             keys: bad_keys
                 .iter()
                 .map(|k| format!("{k:?}"))
@@ -1653,7 +1653,7 @@ pub fn _register_lang(code: &str, mappings: HashMap<String, String>) -> PyResult
 pub fn _register_replacements(replacements: HashMap<String, String>) -> PyResult<()> {
     check_not_sealed("register_replacements")?;
     tables::register_replacements(replacements).map_err(|projected| {
-        crate::Error::RegisterReplacementsLimit {
+        crate::ErrorRepr::RegisterReplacementsLimit {
             max: tables::MAX_REPLACEMENTS,
             projected,
         }
@@ -1696,7 +1696,7 @@ pub fn _transliterate_batch(
     // #130: Defence-in-depth — the PyO3 boundary check in each entry-point guards
     // direct Rust callers; Python callers are covered by the same check.
     if strict_iso9 && gost7034 {
-        return Err(crate::Error::MutuallyExclusiveBare.into());
+        return Err(crate::ErrorRepr::MutuallyExclusiveBare.into());
     }
     // Snapshot the element references into an immutable tuple up front (one
     // GIL-held, O(N) reference copy — not a copy of the string contents). The
@@ -1708,7 +1708,7 @@ pub fn _transliterate_batch(
     let texts = texts.to_tuple();
     let len = texts.len();
     if len > crate::MAX_BATCH_SIZE {
-        return Err(crate::Error::BatchTooLarge {
+        return Err(crate::ErrorRepr::BatchTooLarge {
             len,
             max: crate::MAX_BATCH_SIZE,
         }
@@ -1786,7 +1786,7 @@ pub fn _transliterate_batch(
 pub fn _strip_accents_batch(py: Python<'_>, texts: Vec<String>) -> PyResult<Vec<String>> {
     use unicode_normalization::UnicodeNormalization;
     if texts.len() > crate::MAX_BATCH_SIZE {
-        return Err(crate::Error::BatchTooLarge {
+        return Err(crate::ErrorRepr::BatchTooLarge {
             len: texts.len(),
             max: crate::MAX_BATCH_SIZE,
         }
@@ -1857,7 +1857,7 @@ mod tests {
                 transliterate_strict(s, None, false, false, false),
                 reference,
             ) {
-                (Err(crate::Error::Untranslatable { ch, byte_offset }), Some((ech, eoff))) => {
+                (Err(crate::ErrorRepr::Untranslatable { ch, byte_offset }), Some((ech, eoff))) => {
                     assert_eq!(
                         (ch, byte_offset),
                         (ech, eoff),
@@ -1916,7 +1916,7 @@ mod tests {
         gost7034: bool,
         tones: bool,
         context: bool,
-    ) -> Result<(), crate::Error> {
+    ) -> Result<(), crate::ErrorRepr> {
         validate_transliterate_args(
             lang,
             target,
@@ -1929,7 +1929,7 @@ mod tests {
         )
     }
 
-    fn err_msg(r: Result<(), crate::Error>) -> String {
+    fn err_msg(r: Result<(), crate::ErrorRepr>) -> String {
         r.unwrap_err().to_string()
     }
 

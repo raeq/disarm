@@ -131,7 +131,7 @@ pub fn _sanitize_filename(
         "universal" | "windows" => UNIVERSAL_ILLEGAL,
         "posix" => POSIX_ILLEGAL,
         _ => {
-            return Err(crate::Error::InvalidPlatform {
+            return Err(crate::ErrorRepr::InvalidPlatform {
                 got: platform.to_owned(),
             }
             .into())

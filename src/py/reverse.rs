@@ -10,7 +10,7 @@ use pyo3::prelude::*;
 #[pyo3(signature = (text, *, lang))]
 pub fn _reverse_transliterate(text: &str, lang: &str) -> PyResult<String> {
     if !crate::reverse::supports_reverse(lang) {
-        return Err(crate::Error::ReverseUnsupportedLang {
+        return Err(crate::ErrorRepr::ReverseUnsupportedLang {
             lang: lang.to_owned(),
             available: crate::reverse::reverse_langs().join(", "),
         }

@@ -10,9 +10,9 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Validate normalization form string. Returns an error for invalid forms.
 #[inline]
-pub(crate) fn validate_form(form: &str) -> Result<(), crate::Error> {
+pub(crate) fn validate_form(form: &str) -> Result<(), crate::ErrorRepr> {
     if !matches!(form, "NFC" | "NFD" | "NFKC" | "NFKD") {
-        return Err(crate::Error::InvalidNormForm {
+        return Err(crate::ErrorRepr::InvalidNormForm {
             got: form.to_owned(),
         });
     }
@@ -20,7 +20,7 @@ pub(crate) fn validate_form(form: &str) -> Result<(), crate::Error> {
 }
 
 /// Unicode normalization (NFC, NFD, NFKC, NFKD). Validates `form`.
-pub(crate) fn normalize(text: &str, form: &str) -> Result<String, crate::Error> {
+pub(crate) fn normalize(text: &str, form: &str) -> Result<String, crate::ErrorRepr> {
     let mut out = String::new();
     normalize_into(text, form, &mut out)?;
     Ok(out)
@@ -28,7 +28,11 @@ pub(crate) fn normalize(text: &str, form: &str) -> Result<String, crate::Error> 
 
 /// In-place form of [`normalize`] writing into `out` (cleared first), so the
 /// pipeline can reuse one buffer across steps (#236 item 7).
-pub(crate) fn normalize_into(text: &str, form: &str, out: &mut String) -> Result<(), crate::Error> {
+pub(crate) fn normalize_into(
+    text: &str,
+    form: &str,
+    out: &mut String,
+) -> Result<(), crate::ErrorRepr> {
     validate_form(form)?;
     out.clear();
     // ASCII is invariant under all four normalization forms (no decomposition,
@@ -56,7 +60,7 @@ pub(crate) fn normalize_into(text: &str, form: &str, out: &mut String) -> Result
 /// returns `false` we fall back to a full normalize-and-compare, because the
 /// crate's quick-check tables can be stricter than the normalizer itself for
 /// certain unassigned codepoints (e.g. U+1CCD6 in Unicode 15/16 gaps).
-pub(crate) fn is_normalized(text: &str, form: &str) -> Result<bool, crate::Error> {
+pub(crate) fn is_normalized(text: &str, form: &str) -> Result<bool, crate::ErrorRepr> {
     validate_form(form)?;
     let quick = match form {
         "NFC" => unicode_normalization::is_nfc(text),

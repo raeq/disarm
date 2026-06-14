@@ -14,14 +14,14 @@ const MAX_ENTITY_DIGITS: usize = 10;
 
 /// Validate and compile a caller-supplied regex pattern after enforcing a size cap.
 ///
-/// Returns `Err(crate::Error)` if the pattern exceeds `MAX_REGEX_PATTERN_BYTES`,
+/// Returns `Err(crate::ErrorRepr)` if the pattern exceeds `MAX_REGEX_PATTERN_BYTES`,
 /// if the compiled DFA would exceed `MAX_REGEX_DFA_BYTES`, or if
 /// `regex::RegexBuilder` rejects it for any other reason.
 /// Callers at the PyO3 boundary convert the error to a `DisarmError` via the
-/// `From<Error> for PyErr` boundary impl (#181).
-fn compile_regex(pattern: &str) -> Result<regex::Regex, crate::Error> {
+/// `From<ErrorRepr> for PyErr` boundary impl (#181).
+fn compile_regex(pattern: &str) -> Result<regex::Regex, crate::ErrorRepr> {
     if pattern.len() > MAX_REGEX_PATTERN_BYTES {
-        return Err(crate::Error::RegexTooLong {
+        return Err(crate::ErrorRepr::RegexTooLong {
             len: pattern.len(),
             max: MAX_REGEX_PATTERN_BYTES,
         });
@@ -29,7 +29,7 @@ fn compile_regex(pattern: &str) -> Result<regex::Regex, crate::Error> {
     regex::RegexBuilder::new(pattern)
         .size_limit(MAX_REGEX_DFA_BYTES)
         .build()
-        .map_err(|e| crate::Error::RegexCompile {
+        .map_err(|e| crate::ErrorRepr::RegexCompile {
             pattern: pattern.to_owned(),
             source: e,
         })
@@ -53,7 +53,7 @@ static REGEX_CACHE: LazyLock<RwLock<HashMap<String, regex::Regex>>> =
 
 /// Compile `pattern`, reusing a cached `regex::Regex` when the same pattern was
 /// compiled before. Errors are never cached. See [`REGEX_CACHE`].
-fn compile_regex_cached(pattern: &str) -> Result<regex::Regex, crate::Error> {
+fn compile_regex_cached(pattern: &str) -> Result<regex::Regex, crate::ErrorRepr> {
     // Fast path: a read lock and a cheap Arc clone on a hit.
     if let Some(re) = crate::recover_lock(REGEX_CACHE.read(), "REGEX_CACHE").get(pattern) {
         return Ok(re.clone());
@@ -178,7 +178,7 @@ impl SlugConfig {
     /// entrypoints (`_slugify`, `_slugify_batch`, `_Slugifier::new`,
     /// `_UniqueSlugifier::new`).
     ///
-    /// Returns `Err(crate::Error)` if the regex pattern is invalid — callers at
+    /// Returns `Err(crate::ErrorRepr)` if the regex pattern is invalid — callers at
     /// the PyO3 boundary convert the error to a `DisarmError`. (#119)
     pub(crate) fn from_pyargs(
         separator: &str,
@@ -194,7 +194,7 @@ impl SlugConfig {
         entities: bool,
         decimal: bool,
         hexadecimal: bool,
-    ) -> Result<Self, crate::Error> {
+    ) -> Result<Self, crate::ErrorRepr> {
         let compiled_regex = regex_pattern.map(compile_regex_cached).transpose()?;
         Ok(Self {
             separator: separator.to_owned(),
@@ -708,7 +708,7 @@ pub fn _slugify_batch(
     let texts = texts.to_tuple();
     let len = texts.len();
     if len > crate::MAX_BATCH_SIZE {
-        return Err(crate::Error::BatchTooLarge {
+        return Err(crate::ErrorRepr::BatchTooLarge {
             len,
             max: crate::MAX_BATCH_SIZE,
         }
@@ -988,7 +988,7 @@ impl _UniqueSlugifier {
         let config = &self.inner.config;
         loop {
             if counter > MAX_UNIQUE_ATTEMPTS {
-                return Err(crate::Error::UniqueSlugAttemptsExceeded {
+                return Err(crate::ErrorRepr::UniqueSlugAttemptsExceeded {
                     max: MAX_UNIQUE_ATTEMPTS,
                     text: text.to_owned(),
                 }
@@ -1001,7 +1001,7 @@ impl _UniqueSlugifier {
             if counter >= 1 {
                 let min_unique_len = config.separator.len() + 1;
                 if config.max_length > 0 && config.max_length < min_unique_len {
-                    return Err(crate::Error::UniqueSlugMaxLengthTooSmall {
+                    return Err(crate::ErrorRepr::UniqueSlugMaxLengthTooSmall {
                         max_length: config.max_length,
                         separator: config.separator.clone(),
                         min_unique_len,

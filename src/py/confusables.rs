@@ -1,8 +1,8 @@
 //! PyO3 shims for `crate::confusables` (Layer-1).
 //!
 //! These expose `_normalize_confusables` / `_is_confusable` to Python. They are
-//! thin: parameter parsing + the native [`crate::Error`] → `PyErr` conversion
-//! (via `?`, see `From<Error> for PyErr` in `crate::error`). All behaviour lives
+//! thin: parameter parsing + the native [`crate::ErrorRepr`] → `PyErr` conversion
+//! (via `?`, see `From<ErrorRepr> for PyErr` in `crate::error`). All behaviour lives
 //! in the Layer-1 module.
 
 use pyo3::prelude::*;

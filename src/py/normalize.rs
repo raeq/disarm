@@ -1,6 +1,6 @@
 //! PyO3 shims for `crate::normalize` (Layer-1).
 //!
-//! `_normalize` / `_is_normalized` propagate the native [`crate::Error`] via `?`.
+//! `_normalize` / `_is_normalized` propagate the native [`crate::ErrorRepr`] via `?`.
 //! `_normalize_batch` is a Python-boundary batch optimization: one boundary
 //! crossing for N strings, the `MAX_BATCH_SIZE` cap, and a GIL-released loop
 //! (#70) since the work touches no Python objects.
@@ -28,7 +28,7 @@ pub fn _is_normalized(text: &str, form: &str) -> PyResult<bool> {
 pub fn _normalize_batch(py: Python<'_>, texts: Vec<String>, form: &str) -> PyResult<Vec<String>> {
     crate::normalize::validate_form(form)?;
     if texts.len() > crate::MAX_BATCH_SIZE {
-        return Err(crate::Error::BatchTooLarge {
+        return Err(crate::ErrorRepr::BatchTooLarge {
             len: texts.len(),
             max: crate::MAX_BATCH_SIZE,
         }

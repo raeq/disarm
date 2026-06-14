@@ -3,9 +3,9 @@
 //! The PyO3 shims for these functions live in `src/py/confusables.rs`; the
 //! idiomatic crates.io surface is `crate::api::{normalize_confusables,
 //! is_confusable}`. This module is the algorithm, returning the native
-//! [`crate::Error`] (never a `PyErr`).
+//! [`crate::ErrorRepr`] (never a `PyErr`).
 //!
-//! These fns are `pub(crate)` while [`crate::Error`] is `pub(crate)` (avoiding a
+//! These fns are `pub(crate)` while [`crate::ErrorRepr`] is `pub(crate)` (avoiding a
 //! private-in-public leak). They are promoted to `pub` together with the opaque
 //! public `Error` in the first fallible-module extraction sub-PR (#38).
 
@@ -14,10 +14,10 @@ use crate::tables;
 /// Validate the `target_script` parameter.
 ///
 /// Supported values: `"latin"`, `"cyrillic"`.
-fn validate_target_script(target_script: &str) -> Result<(), crate::Error> {
+fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
     match target_script {
         "latin" | "cyrillic" => Ok(()),
-        _ => Err(crate::Error::InvalidTargetScript {
+        _ => Err(crate::ErrorRepr::InvalidTargetScript {
             got: target_script.to_owned(),
         }),
     }
@@ -34,11 +34,11 @@ fn validate_target_script(target_script: &str) -> Result<(), crate::Error> {
 /// See: <https://paultendo.github.io/posts/unicode-confusables-nfkc-conflict/>
 ///
 /// # Valid `target_script` values
-/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::Error`].
+/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
 pub(crate) fn normalize_confusables(
     text: &str,
     target_script: &str,
-) -> Result<String, crate::Error> {
+) -> Result<String, crate::ErrorRepr> {
     let mut out = String::new();
     normalize_confusables_into(text, target_script, &mut out)?;
     Ok(out)
@@ -50,7 +50,7 @@ pub(crate) fn normalize_confusables_into(
     text: &str,
     target_script: &str,
     out: &mut String,
-) -> Result<(), crate::Error> {
+) -> Result<(), crate::ErrorRepr> {
     validate_target_script(target_script)?;
     out.clear();
     out.reserve(text.len());
@@ -75,8 +75,8 @@ pub(crate) fn normalize_confusables_into(
 /// True if text contains any characters confusable with target-script characters.
 ///
 /// # Valid `target_script` values
-/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::Error`].
-pub(crate) fn is_confusable(text: &str, target_script: &str) -> Result<bool, crate::Error> {
+/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
+pub(crate) fn is_confusable(text: &str, target_script: &str) -> Result<bool, crate::ErrorRepr> {
     validate_target_script(target_script)?;
 
     let map = tables::resolve_confusable_map(target_script);

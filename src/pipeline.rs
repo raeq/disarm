@@ -104,7 +104,7 @@ impl _TextPipeline {
         if let Some(form) = normalize {
             // Validate the form
             if !matches!(form, "NFC" | "NFD" | "NFKC" | "NFKD") {
-                return Err(crate::Error::InvalidPipelineNormForm {
+                return Err(crate::ErrorRepr::InvalidPipelineNormForm {
                     got: form.to_owned(),
                 }
                 .into());
@@ -165,7 +165,7 @@ impl _TextPipeline {
         }
 
         if strict_iso9 && gost7034 {
-            return Err(crate::Error::MutuallyExclusivePipeline.into());
+            return Err(crate::ErrorRepr::MutuallyExclusivePipeline.into());
         }
 
         let pipeline = Self {

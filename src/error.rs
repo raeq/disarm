@@ -13,7 +13,7 @@
 //! `except DisarmError` catches every variant (it missed the five
 //! formerly-bare-`PyValueError` sites before #183).
 //!
-//! Each variant also exposes a stable machine-readable [`Error::code`] — new
+//! Each variant also exposes a stable machine-readable [`ErrorRepr::code`] — new
 //! metadata that is not yet surfaced to Python and changes no behaviour.
 
 use std::borrow::Cow;
@@ -60,7 +60,7 @@ fn truncate_error_text(text: &str) -> Cow<'_, str> {
 /// - **Names the offending value and a remedy** (valid options, a limit, a
 ///   command, or a flag to pass) wherever one applies.
 #[derive(Debug, Error)]
-pub(crate) enum Error {
+pub(crate) enum ErrorRepr {
     /// Invalid `errors=` mode string (`ErrorMode::from_str`).
     #[error("errors must be 'replace', 'ignore', or 'preserve', got '{got}'")]
     InvalidErrorMode {
@@ -382,7 +382,7 @@ pub(crate) enum Error {
     },
 }
 
-impl Error {
+impl ErrorRepr {
     /// Stable machine-readable error code for this variant.
     ///
     /// New metadata (#181): not currently surfaced to Python, so it changes no
@@ -393,40 +393,42 @@ impl Error {
     #[allow(dead_code)]
     pub(crate) fn code(&self) -> &'static str {
         match self {
-            Error::InvalidErrorMode { .. } => "invalid_error_mode",
-            Error::InvalidNormForm { .. } => "invalid_norm_form",
-            Error::InvalidPipelineNormForm { .. } => "invalid_pipeline_norm_form",
-            Error::InvalidEmojiStyle { .. } => "invalid_emoji_style",
-            Error::InvalidPlatform { .. } => "invalid_platform",
-            Error::InvalidTargetScript { .. } => "invalid_target_script",
-            Error::UnknownLang { .. } => "unknown_lang",
-            Error::MutuallyExclusiveBare | Error::MutuallyExclusivePipeline => "mutually_exclusive",
-            Error::BatchTooLarge { .. } => "batch_too_large",
-            Error::ReplacementOutputTooLarge { .. } => "replacement_output_too_large",
-            Error::Sealed { .. } => "sealed",
-            Error::RegisterLangLimit { .. } => "register_lang_limit",
-            Error::RegisterLangBadKeys { .. } => "register_lang_bad_keys",
-            Error::RegisterReplacementsLimit { .. } => "register_replacements_limit",
-            Error::ContextDictNotFound { .. } => "context_dict_not_found",
-            Error::ContextDictCorrupt { .. } => "context_dict_corrupt",
-            Error::RegexTooLong { .. } => "regex_too_long",
-            Error::RegexCompile { .. } => "regex_compile",
-            Error::UniqueSlugAttemptsExceeded { .. } => "unique_slug_attempts_exceeded",
-            Error::UniqueSlugMaxLengthTooSmall { .. } => "unique_slug_max_length_too_small",
-            Error::UnknownEncoding { .. } => "unknown_encoding",
-            Error::UnsupportedAutoEncoding { .. } => "unsupported_auto_encoding",
-            Error::EncodingConfidenceTooLow { .. } => "encoding_confidence_too_low",
-            Error::MinConfidenceOutOfRange { .. } => "min_confidence_out_of_range",
-            Error::ReverseUnsupportedLang { .. } => "reverse_unsupported_lang",
-            Error::Untranslatable { .. } => "untranslatable",
-            Error::LossyDecode { .. } => "lossy_decode",
-            Error::LangTargetExclusive => "lang_target_exclusive",
-            Error::ContextTargetExclusive => "context_target_exclusive",
-            Error::TonesWithContext => "tones_with_context",
-            Error::StrictWithContext => "strict_with_context",
-            Error::ForwardOnlyWithTarget { .. } => "forward_only_with_target",
-            Error::NegativeMaxLength { .. } => "negative_max_length",
-            Error::NegativeMaxGraphemes { .. } => "negative_max_graphemes",
+            ErrorRepr::InvalidErrorMode { .. } => "invalid_error_mode",
+            ErrorRepr::InvalidNormForm { .. } => "invalid_norm_form",
+            ErrorRepr::InvalidPipelineNormForm { .. } => "invalid_pipeline_norm_form",
+            ErrorRepr::InvalidEmojiStyle { .. } => "invalid_emoji_style",
+            ErrorRepr::InvalidPlatform { .. } => "invalid_platform",
+            ErrorRepr::InvalidTargetScript { .. } => "invalid_target_script",
+            ErrorRepr::UnknownLang { .. } => "unknown_lang",
+            ErrorRepr::MutuallyExclusiveBare | ErrorRepr::MutuallyExclusivePipeline => {
+                "mutually_exclusive"
+            }
+            ErrorRepr::BatchTooLarge { .. } => "batch_too_large",
+            ErrorRepr::ReplacementOutputTooLarge { .. } => "replacement_output_too_large",
+            ErrorRepr::Sealed { .. } => "sealed",
+            ErrorRepr::RegisterLangLimit { .. } => "register_lang_limit",
+            ErrorRepr::RegisterLangBadKeys { .. } => "register_lang_bad_keys",
+            ErrorRepr::RegisterReplacementsLimit { .. } => "register_replacements_limit",
+            ErrorRepr::ContextDictNotFound { .. } => "context_dict_not_found",
+            ErrorRepr::ContextDictCorrupt { .. } => "context_dict_corrupt",
+            ErrorRepr::RegexTooLong { .. } => "regex_too_long",
+            ErrorRepr::RegexCompile { .. } => "regex_compile",
+            ErrorRepr::UniqueSlugAttemptsExceeded { .. } => "unique_slug_attempts_exceeded",
+            ErrorRepr::UniqueSlugMaxLengthTooSmall { .. } => "unique_slug_max_length_too_small",
+            ErrorRepr::UnknownEncoding { .. } => "unknown_encoding",
+            ErrorRepr::UnsupportedAutoEncoding { .. } => "unsupported_auto_encoding",
+            ErrorRepr::EncodingConfidenceTooLow { .. } => "encoding_confidence_too_low",
+            ErrorRepr::MinConfidenceOutOfRange { .. } => "min_confidence_out_of_range",
+            ErrorRepr::ReverseUnsupportedLang { .. } => "reverse_unsupported_lang",
+            ErrorRepr::Untranslatable { .. } => "untranslatable",
+            ErrorRepr::LossyDecode { .. } => "lossy_decode",
+            ErrorRepr::LangTargetExclusive => "lang_target_exclusive",
+            ErrorRepr::ContextTargetExclusive => "context_target_exclusive",
+            ErrorRepr::TonesWithContext => "tones_with_context",
+            ErrorRepr::StrictWithContext => "strict_with_context",
+            ErrorRepr::ForwardOnlyWithTarget { .. } => "forward_only_with_target",
+            ErrorRepr::NegativeMaxLength { .. } => "negative_max_length",
+            ErrorRepr::NegativeMaxGraphemes { .. } => "negative_max_graphemes",
         }
     }
 }
@@ -438,18 +440,18 @@ impl Error {
 /// disarm's `InvalidArgumentError` (the documented contract) instead of
 /// PyO3's `OverflowError` from a silent unsigned conversion. On 64-bit targets
 /// the only `try_from` failure is a negative value.
-pub(crate) fn checked_max_length(value: i64) -> Result<usize, Error> {
-    usize::try_from(value).map_err(|_| Error::NegativeMaxLength { got: value })
+pub(crate) fn checked_max_length(value: i64) -> Result<usize, ErrorRepr> {
+    usize::try_from(value).map_err(|_| ErrorRepr::NegativeMaxLength { got: value })
 }
 
 /// Convert a caller-supplied signed `max_graphemes` to `usize`, rejecting
 /// negatives in the core (#231). See [`checked_max_length`].
-pub(crate) fn checked_max_graphemes(value: i64) -> Result<usize, Error> {
-    usize::try_from(value).map_err(|_| Error::NegativeMaxGraphemes { got: value })
+pub(crate) fn checked_max_graphemes(value: i64) -> Result<usize, ErrorRepr> {
+    usize::try_from(value).map_err(|_| ErrorRepr::NegativeMaxGraphemes { got: value })
 }
 
-impl From<Error> for pyo3::PyErr {
-    /// Convert a core `Error` into a Python exception from disarm's unified
+impl From<ErrorRepr> for pyo3::PyErr {
+    /// Convert a core `ErrorRepr` into a Python exception from disarm's unified
     /// hierarchy (#183): a [`crate::DisarmError`] base with `InvalidArgumentError`
     /// / `ResourceLimitError` / `UnsupportedError` subclasses. Every variant maps
     /// to exactly one of them, so `except DisarmError` catches all of them —
@@ -461,7 +463,7 @@ impl From<Error> for pyo3::PyErr {
     ///
     /// The match is exhaustive (no wildcard) on purpose: a new variant must be
     /// assigned a category here, not silently default.
-    fn from(err: Error) -> Self {
+    fn from(err: ErrorRepr) -> Self {
         let msg = err.to_string();
 
         // #188: surface the underlying error as a chained `__cause__` for the
@@ -470,10 +472,10 @@ impl From<Error> for pyo3::PyErr {
         // attached under the GIL afterwards. Python can't hold the Rust error
         // type, so the cause carries its rendered text in a `ValueError`.
         let cause: Option<pyo3::PyErr> = match &err {
-            Error::RegexCompile { source, .. } => {
+            ErrorRepr::RegexCompile { source, .. } => {
                 Some(pyo3::exceptions::PyValueError::new_err(source.to_string()))
             }
-            Error::ContextDictCorrupt { reason, .. } => {
+            ErrorRepr::ContextDictCorrupt { reason, .. } => {
                 Some(pyo3::exceptions::PyValueError::new_err(reason.clone()))
             }
             _ => None,
@@ -482,48 +484,49 @@ impl From<Error> for pyo3::PyErr {
         let err_py = match err {
             // InvalidArgumentError — a bad argument value or a contradictory
             // combination of arguments.
-            Error::InvalidErrorMode { .. }
-            | Error::InvalidNormForm { .. }
-            | Error::InvalidPipelineNormForm { .. }
-            | Error::InvalidEmojiStyle { .. }
-            | Error::InvalidPlatform { .. }
-            | Error::InvalidTargetScript { .. }
-            | Error::UnknownLang { .. }
-            | Error::MutuallyExclusiveBare
-            | Error::MutuallyExclusivePipeline
-            | Error::RegisterLangBadKeys { .. }
-            | Error::RegexCompile { .. }
-            | Error::UniqueSlugMaxLengthTooSmall { .. }
-            | Error::UnknownEncoding { .. }
-            | Error::MinConfidenceOutOfRange { .. }
-            | Error::LangTargetExclusive
-            | Error::ContextTargetExclusive
-            | Error::TonesWithContext
-            | Error::StrictWithContext
-            | Error::ForwardOnlyWithTarget { .. }
-            | Error::NegativeMaxLength { .. }
-            | Error::NegativeMaxGraphemes { .. } => crate::InvalidArgumentError::new_err(msg),
+            ErrorRepr::InvalidErrorMode { .. }
+            | ErrorRepr::InvalidNormForm { .. }
+            | ErrorRepr::InvalidPipelineNormForm { .. }
+            | ErrorRepr::InvalidEmojiStyle { .. }
+            | ErrorRepr::InvalidPlatform { .. }
+            | ErrorRepr::InvalidTargetScript { .. }
+            | ErrorRepr::UnknownLang { .. }
+            | ErrorRepr::MutuallyExclusiveBare
+            | ErrorRepr::MutuallyExclusivePipeline
+            | ErrorRepr::RegisterLangBadKeys { .. }
+            | ErrorRepr::RegexCompile { .. }
+            | ErrorRepr::UniqueSlugMaxLengthTooSmall { .. }
+            | ErrorRepr::UnknownEncoding { .. }
+            | ErrorRepr::MinConfidenceOutOfRange { .. }
+            | ErrorRepr::LangTargetExclusive
+            | ErrorRepr::ContextTargetExclusive
+            | ErrorRepr::TonesWithContext
+            | ErrorRepr::StrictWithContext
+            | ErrorRepr::ForwardOnlyWithTarget { .. }
+            | ErrorRepr::NegativeMaxLength { .. }
+            | ErrorRepr::NegativeMaxGraphemes { .. } => crate::InvalidArgumentError::new_err(msg),
 
             // ResourceLimitError — a configured limit was exceeded.
-            Error::BatchTooLarge { .. }
-            | Error::ReplacementOutputTooLarge { .. }
-            | Error::RegisterLangLimit { .. }
-            | Error::RegisterReplacementsLimit { .. }
-            | Error::RegexTooLong { .. }
-            | Error::UniqueSlugAttemptsExceeded { .. } => crate::ResourceLimitError::new_err(msg),
-
-            // UnsupportedError — a requested feature is unavailable.
-            Error::UnsupportedAutoEncoding { .. } | Error::ReverseUnsupportedLang { .. } => {
-                crate::UnsupportedError::new_err(msg)
+            ErrorRepr::BatchTooLarge { .. }
+            | ErrorRepr::ReplacementOutputTooLarge { .. }
+            | ErrorRepr::RegisterLangLimit { .. }
+            | ErrorRepr::RegisterReplacementsLimit { .. }
+            | ErrorRepr::RegexTooLong { .. }
+            | ErrorRepr::UniqueSlugAttemptsExceeded { .. } => {
+                crate::ResourceLimitError::new_err(msg)
             }
 
+            // UnsupportedError — a requested feature is unavailable.
+            ErrorRepr::UnsupportedAutoEncoding { .. }
+            | ErrorRepr::ReverseUnsupportedLang { .. } => crate::UnsupportedError::new_err(msg),
+
             // Base DisarmError — state / data errors that fit no category above.
-            Error::Sealed { .. }
-            | Error::ContextDictNotFound { .. }
-            | Error::ContextDictCorrupt { .. }
-            | Error::EncodingConfidenceTooLow { .. }
-            | Error::Untranslatable { .. }
-            | Error::LossyDecode { .. } => crate::DisarmError::new_err(msg),
+            ErrorRepr::Sealed { .. }
+            | ErrorRepr::ContextDictNotFound { .. }
+            | ErrorRepr::ContextDictCorrupt { .. }
+            | ErrorRepr::EncodingConfidenceTooLow { .. }
+            | ErrorRepr::Untranslatable { .. }
+            | ErrorRepr::LossyDecode { .. } => crate::DisarmError::new_err(msg),
         };
 
         if let Some(cause_err) = cause {
@@ -533,9 +536,123 @@ impl From<Error> for pyo3::PyErr {
     }
 }
 
+// ── Public opaque error (#38) ────────────────────────────────────────────────
+
+/// The error type returned by disarm's fallible Rust API ([`crate::api`]).
+///
+/// Opaque by design: the internal [`ErrorRepr`] variants are an implementation
+/// detail and may change without a breaking release. Callers branch on the
+/// coarse, stable [`Error::kind`] (or read the stable [`Error::code`] / the
+/// `Display` message), never on a concrete variant. `source()` deliberately
+/// returns `None` so the wrapped `regex::Error` (and any future inner error)
+/// does not leak into the public contract.
+#[derive(Debug)]
+pub struct Error(ErrorRepr);
+
+/// Coarse, stable classification of an [`Error`] (#38).
+///
+/// This is the part of the error contract callers may rely on. The set is
+/// `#[non_exhaustive]`: a future release may add a kind, so always include a
+/// wildcard arm when matching.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ErrorKind {
+    /// A bad argument value or a contradictory combination of arguments.
+    InvalidArgument,
+    /// A configured limit was exceeded.
+    ResourceLimit,
+    /// A requested feature or resource is unavailable.
+    Unsupported,
+    /// A residual state/data error fitting no category above. Unstable: errors
+    /// here may be reclassified into a more specific kind in a future release.
+    Other,
+}
+
+impl Error {
+    /// The coarse, stable [`ErrorKind`] of this error.
+    ///
+    /// The partition mirrors the Python exception hierarchy (`InvalidArgumentError`
+    /// / `ResourceLimitError` / `UnsupportedError` / `DisarmError`).
+    pub fn kind(&self) -> ErrorKind {
+        match &self.0 {
+            ErrorRepr::InvalidErrorMode { .. }
+            | ErrorRepr::InvalidNormForm { .. }
+            | ErrorRepr::InvalidPipelineNormForm { .. }
+            | ErrorRepr::InvalidEmojiStyle { .. }
+            | ErrorRepr::InvalidPlatform { .. }
+            | ErrorRepr::InvalidTargetScript { .. }
+            | ErrorRepr::UnknownLang { .. }
+            | ErrorRepr::MutuallyExclusiveBare
+            | ErrorRepr::MutuallyExclusivePipeline
+            | ErrorRepr::RegisterLangBadKeys { .. }
+            | ErrorRepr::RegexCompile { .. }
+            | ErrorRepr::UniqueSlugMaxLengthTooSmall { .. }
+            | ErrorRepr::UnknownEncoding { .. }
+            | ErrorRepr::MinConfidenceOutOfRange { .. }
+            | ErrorRepr::LangTargetExclusive
+            | ErrorRepr::ContextTargetExclusive
+            | ErrorRepr::TonesWithContext
+            | ErrorRepr::StrictWithContext
+            | ErrorRepr::ForwardOnlyWithTarget { .. }
+            | ErrorRepr::NegativeMaxLength { .. }
+            | ErrorRepr::NegativeMaxGraphemes { .. } => ErrorKind::InvalidArgument,
+
+            ErrorRepr::BatchTooLarge { .. }
+            | ErrorRepr::ReplacementOutputTooLarge { .. }
+            | ErrorRepr::RegisterLangLimit { .. }
+            | ErrorRepr::RegisterReplacementsLimit { .. }
+            | ErrorRepr::RegexTooLong { .. }
+            | ErrorRepr::UniqueSlugAttemptsExceeded { .. } => ErrorKind::ResourceLimit,
+
+            ErrorRepr::UnsupportedAutoEncoding { .. }
+            | ErrorRepr::ReverseUnsupportedLang { .. } => ErrorKind::Unsupported,
+
+            ErrorRepr::Sealed { .. }
+            | ErrorRepr::ContextDictNotFound { .. }
+            | ErrorRepr::ContextDictCorrupt { .. }
+            | ErrorRepr::EncodingConfidenceTooLow { .. }
+            | ErrorRepr::Untranslatable { .. }
+            | ErrorRepr::LossyDecode { .. } => ErrorKind::Other,
+        }
+    }
+
+    /// A stable machine-readable code for this error, independent of the
+    /// (mutable) human-readable `Display` message.
+    pub fn code(&self) -> &'static str {
+        self.0.code()
+    }
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::error::Error for Error {
+    /// Always `None`: the opaque error never exposes its inner source (e.g. the
+    /// wrapped `regex::Error`), keeping the public contract decoupled from
+    /// internal dependencies.
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+impl From<ErrorRepr> for Error {
+    fn from(repr: ErrorRepr) -> Self {
+        Error(repr)
+    }
+}
+
+impl From<Error> for pyo3::PyErr {
+    fn from(err: Error) -> Self {
+        err.0.into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{truncate_error_text, Error, MAX_ERROR_INPUT_BYTES};
+    use super::{truncate_error_text, Error, ErrorKind, ErrorRepr, MAX_ERROR_INPUT_BYTES};
 
     #[test]
     fn truncate_error_text_bounds_long_input() {
@@ -554,6 +671,50 @@ mod tests {
     }
 
     #[test]
+    fn opaque_error_kind_partition_and_delegation() {
+        // One representative per kind: the opaque `Error::kind()` partition must
+        // agree with the `From<ErrorRepr> for PyErr` category mapping, and the
+        // opaque wrapper must delegate `Display`/`code` to the inner repr.
+        let cases = [
+            (
+                ErrorRepr::InvalidTargetScript { got: "x".into() },
+                ErrorKind::InvalidArgument,
+                "invalid_target_script",
+            ),
+            (
+                ErrorRepr::BatchTooLarge { len: 2, max: 1 },
+                ErrorKind::ResourceLimit,
+                "batch_too_large",
+            ),
+            (
+                ErrorRepr::ReverseUnsupportedLang {
+                    lang: "zz".into(),
+                    available: "ru".into(),
+                },
+                ErrorKind::Unsupported,
+                "reverse_unsupported_lang",
+            ),
+            (
+                ErrorRepr::Untranslatable {
+                    ch: '\u{1F600}',
+                    byte_offset: 0,
+                },
+                ErrorKind::Other,
+                "untranslatable",
+            ),
+        ];
+        for (repr, kind, code) in cases {
+            let display = repr.to_string();
+            let err = Error::from(repr);
+            assert_eq!(err.kind(), kind, "kind for {code}");
+            assert_eq!(err.code(), code);
+            assert_eq!(err.to_string(), display, "Display delegates to repr");
+            // source() never leaks an inner error (e.g. regex::Error).
+            assert!(std::error::Error::source(&err).is_none());
+        }
+    }
+
+    #[test]
     fn truncate_error_text_cuts_on_char_boundary() {
         // Multi-byte chars straddling the cap must not panic or split a char.
         let s = "é".repeat(100); // 200 bytes
@@ -565,7 +726,7 @@ mod tests {
 
     #[test]
     fn unique_slug_error_display_is_truncated() {
-        let err = Error::UniqueSlugAttemptsExceeded {
+        let err = ErrorRepr::UniqueSlugAttemptsExceeded {
             max: 5,
             text: "x".repeat(500),
         };
@@ -592,72 +753,72 @@ mod tests {
         #[allow(clippy::invalid_regex)]
         let invalid_regex_err = regex::Regex::new("[").unwrap_err();
         let samples = [
-            Error::InvalidErrorMode { got: "x".into() },
-            Error::InvalidNormForm { got: "x".into() },
-            Error::InvalidPipelineNormForm { got: "x".into() },
-            Error::InvalidEmojiStyle { got: "x".into() },
-            Error::InvalidPlatform { got: "x".into() },
-            Error::InvalidTargetScript { got: "x".into() },
-            Error::UnknownLang {
+            ErrorRepr::InvalidErrorMode { got: "x".into() },
+            ErrorRepr::InvalidNormForm { got: "x".into() },
+            ErrorRepr::InvalidPipelineNormForm { got: "x".into() },
+            ErrorRepr::InvalidEmojiStyle { got: "x".into() },
+            ErrorRepr::InvalidPlatform { got: "x".into() },
+            ErrorRepr::InvalidTargetScript { got: "x".into() },
+            ErrorRepr::UnknownLang {
                 got: "x".into(),
                 suggestion: String::new(),
                 valid: "a, b".into(),
             },
-            Error::MutuallyExclusiveBare,
-            Error::MutuallyExclusivePipeline,
-            Error::BatchTooLarge { len: 2, max: 1 },
-            Error::ReplacementOutputTooLarge { size: 2, max: 1 },
-            Error::Sealed {
+            ErrorRepr::MutuallyExclusiveBare,
+            ErrorRepr::MutuallyExclusivePipeline,
+            ErrorRepr::BatchTooLarge { len: 2, max: 1 },
+            ErrorRepr::ReplacementOutputTooLarge { size: 2, max: 1 },
+            ErrorRepr::Sealed {
                 op: "register".into(),
             },
-            Error::RegisterLangLimit { max: 1 },
-            Error::RegisterLangBadKeys {
+            ErrorRepr::RegisterLangLimit { max: 1 },
+            ErrorRepr::RegisterLangBadKeys {
                 keys: "\"x\"".into(),
             },
-            Error::RegisterReplacementsLimit {
+            ErrorRepr::RegisterReplacementsLimit {
                 max: 1,
                 projected: 2,
             },
-            Error::ContextDictNotFound {
+            ErrorRepr::ContextDictNotFound {
                 lang: "Arabic".into(),
             },
-            Error::ContextDictCorrupt {
+            ErrorRepr::ContextDictCorrupt {
                 lang: "Arabic".into(),
                 reason: "bad".into(),
             },
-            Error::RegexTooLong { len: 2, max: 1 },
-            Error::RegexCompile {
+            ErrorRepr::RegexTooLong { len: 2, max: 1 },
+            ErrorRepr::RegexCompile {
                 pattern: "[".into(),
                 source: invalid_regex_err,
             },
-            Error::UniqueSlugAttemptsExceeded {
+            ErrorRepr::UniqueSlugAttemptsExceeded {
                 max: 1,
                 text: "x".into(),
             },
-            Error::UniqueSlugMaxLengthTooSmall {
+            ErrorRepr::UniqueSlugMaxLengthTooSmall {
                 max_length: 1,
                 separator: "-".into(),
                 min_unique_len: 2,
             },
-            Error::UnknownEncoding {
+            ErrorRepr::UnknownEncoding {
                 got: "x".into(),
                 suggestion: String::new(),
             },
-            Error::UnsupportedAutoEncoding { got: "x".into() },
-            Error::EncodingConfidenceTooLow {
+            ErrorRepr::UnsupportedAutoEncoding { got: "x".into() },
+            ErrorRepr::EncodingConfidenceTooLow {
                 confidence: 0.5,
                 min_confidence: 0.9,
                 guess: "UTF-8".into(),
             },
-            Error::ReverseUnsupportedLang {
+            ErrorRepr::ReverseUnsupportedLang {
                 lang: "de".into(),
                 available: "ru, uk".into(),
             },
-            Error::Untranslatable {
+            ErrorRepr::Untranslatable {
                 ch: '😀',
                 byte_offset: 3,
             },
-            Error::LossyDecode {
+            ErrorRepr::LossyDecode {
                 encoding: "Shift_JIS".into(),
             },
         ];
@@ -678,12 +839,12 @@ mod tests {
         // Identifiers permitted to begin a message with an uppercase letter.
         const ALLOWED_UPPERCASE: &[&str] = &["UniqueSlugifier"];
         // Variants that render arbitrary user content with `{:?}` (double quotes).
-        fn allows_double_quote(e: &Error) -> bool {
+        fn allows_double_quote(e: &ErrorRepr) -> bool {
             matches!(
                 e,
-                Error::RegexCompile { .. }
-                    | Error::RegisterLangBadKeys { .. }
-                    | Error::UniqueSlugMaxLengthTooSmall { .. }
+                ErrorRepr::RegexCompile { .. }
+                    | ErrorRepr::RegisterLangBadKeys { .. }
+                    | ErrorRepr::UniqueSlugMaxLengthTooSmall { .. }
             )
         }
 
@@ -693,71 +854,77 @@ mod tests {
         #[allow(clippy::invalid_regex)]
         let regex_err = regex::Regex::new("[").unwrap_err();
         // (sample, does the message echo MARKER?)
-        let samples: Vec<(Error, bool)> = vec![
-            (Error::InvalidErrorMode { got: MARKER.into() }, true),
-            (Error::InvalidNormForm { got: MARKER.into() }, true),
-            (Error::InvalidPipelineNormForm { got: MARKER.into() }, true),
-            (Error::InvalidEmojiStyle { got: MARKER.into() }, true),
-            (Error::InvalidPlatform { got: MARKER.into() }, true),
-            (Error::InvalidTargetScript { got: MARKER.into() }, true),
+        let samples: Vec<(ErrorRepr, bool)> = vec![
+            (ErrorRepr::InvalidErrorMode { got: MARKER.into() }, true),
+            (ErrorRepr::InvalidNormForm { got: MARKER.into() }, true),
             (
-                Error::UnknownLang {
+                ErrorRepr::InvalidPipelineNormForm { got: MARKER.into() },
+                true,
+            ),
+            (ErrorRepr::InvalidEmojiStyle { got: MARKER.into() }, true),
+            (ErrorRepr::InvalidPlatform { got: MARKER.into() }, true),
+            (ErrorRepr::InvalidTargetScript { got: MARKER.into() }, true),
+            (
+                ErrorRepr::UnknownLang {
                     got: MARKER.into(),
                     suggestion: String::new(),
                     valid: "a, b".into(),
                 },
                 true,
             ),
-            (Error::MutuallyExclusiveBare, false),
-            (Error::MutuallyExclusivePipeline, false),
-            (Error::BatchTooLarge { len: 2, max: 1 }, false),
-            (Error::ReplacementOutputTooLarge { size: 2, max: 1 }, false),
-            (Error::Sealed { op: MARKER.into() }, true),
-            (Error::RegisterLangLimit { max: 1 }, false),
+            (ErrorRepr::MutuallyExclusiveBare, false),
+            (ErrorRepr::MutuallyExclusivePipeline, false),
+            (ErrorRepr::BatchTooLarge { len: 2, max: 1 }, false),
+            (
+                ErrorRepr::ReplacementOutputTooLarge { size: 2, max: 1 },
+                false,
+            ),
+            (ErrorRepr::Sealed { op: MARKER.into() }, true),
+            (ErrorRepr::RegisterLangLimit { max: 1 }, false),
             // keys are rendered with {:?} (arbitrary content) — a double-quote exception.
             (
-                Error::RegisterLangBadKeys {
+                ErrorRepr::RegisterLangBadKeys {
                     keys: format!("{MARKER:?}"),
                 },
                 true,
             ),
             (
-                Error::RegisterReplacementsLimit {
+                ErrorRepr::RegisterReplacementsLimit {
                     max: 1,
                     projected: 2,
                 },
                 false,
             ),
             (
-                Error::ContextDictNotFound {
+                ErrorRepr::ContextDictNotFound {
                     lang: MARKER.into(),
                 },
                 true,
             ),
             (
-                Error::ContextDictCorrupt {
+                ErrorRepr::ContextDictCorrupt {
                     lang: MARKER.into(),
                     reason: "bad".into(),
                 },
                 true,
             ),
-            (Error::RegexTooLong { len: 2, max: 1 }, false),
+            (ErrorRepr::RegexTooLong { len: 2, max: 1 }, false),
             (
-                Error::RegexCompile {
+                ErrorRepr::RegexCompile {
                     pattern: MARKER.into(),
                     source: regex_err,
                 },
                 true,
             ),
             (
-                Error::UniqueSlugAttemptsExceeded {
+                ErrorRepr::UniqueSlugAttemptsExceeded {
                     max: 1,
                     text: MARKER.into(),
                 },
                 true,
             ),
             (
-                Error::UniqueSlugMaxLengthTooSmall {
+                ErrorRepr::UniqueSlugMaxLengthTooSmall {
                     max_length: 1,
                     separator: MARKER.into(),
                     min_unique_len: 2,
@@ -765,15 +932,18 @@ mod tests {
                 true,
             ),
             (
-                Error::UnknownEncoding {
+                ErrorRepr::UnknownEncoding {
                     got: MARKER.into(),
                     suggestion: String::new(),
                 },
                 true,
             ),
-            (Error::UnsupportedAutoEncoding { got: MARKER.into() }, true),
             (
-                Error::EncodingConfidenceTooLow {
+                ErrorRepr::UnsupportedAutoEncoding { got: MARKER.into() },
+                true,
+            ),
+            (
+                ErrorRepr::EncodingConfidenceTooLow {
                     confidence: 0.5,
                     min_confidence: 0.9,
                     guess: MARKER.into(),
@@ -781,27 +951,27 @@ mod tests {
                 true,
             ),
             (
-                Error::MinConfidenceOutOfRange {
+                ErrorRepr::MinConfidenceOutOfRange {
                     min_confidence: 1.5,
                 },
                 false,
             ),
             (
-                Error::ReverseUnsupportedLang {
+                ErrorRepr::ReverseUnsupportedLang {
                     lang: MARKER.into(),
                     available: "ru".into(),
                 },
                 true,
             ),
             (
-                Error::Untranslatable {
+                ErrorRepr::Untranslatable {
                     ch: '😀',
                     byte_offset: 3,
                 },
                 false,
             ),
             (
-                Error::LossyDecode {
+                ErrorRepr::LossyDecode {
                     encoding: MARKER.into(),
                 },
                 true,
@@ -841,18 +1011,18 @@ mod tests {
     #[test]
     fn invalid_value_messages_offer_a_remedy() {
         let samples = [
-            Error::InvalidErrorMode { got: "x".into() },
-            Error::InvalidNormForm { got: "x".into() },
-            Error::InvalidPipelineNormForm { got: "x".into() },
-            Error::InvalidEmojiStyle { got: "x".into() },
-            Error::InvalidPlatform { got: "x".into() },
-            Error::InvalidTargetScript { got: "x".into() },
-            Error::UnknownLang {
+            ErrorRepr::InvalidErrorMode { got: "x".into() },
+            ErrorRepr::InvalidNormForm { got: "x".into() },
+            ErrorRepr::InvalidPipelineNormForm { got: "x".into() },
+            ErrorRepr::InvalidEmojiStyle { got: "x".into() },
+            ErrorRepr::InvalidPlatform { got: "x".into() },
+            ErrorRepr::InvalidTargetScript { got: "x".into() },
+            ErrorRepr::UnknownLang {
                 got: "x".into(),
                 suggestion: String::new(),
                 valid: "a, b".into(),
             },
-            Error::MinConfidenceOutOfRange {
+            ErrorRepr::MinConfidenceOutOfRange {
                 min_confidence: 1.5,
             },
         ];
@@ -870,8 +1040,8 @@ mod tests {
     /// message but map to *different* Python exception types (preserved, #181).
     #[test]
     fn mutually_exclusive_variants_share_text_and_code() {
-        let a = Error::MutuallyExclusiveBare;
-        let b = Error::MutuallyExclusivePipeline;
+        let a = ErrorRepr::MutuallyExclusiveBare;
+        let b = ErrorRepr::MutuallyExclusivePipeline;
         assert_eq!(a.to_string(), b.to_string());
         assert_eq!(a.code(), b.code());
         assert_eq!(

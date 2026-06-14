@@ -63,7 +63,7 @@ const COMMON_ENCODING_LABELS: &[&str] = &[
 
 /// Pure Rust byte-to-UTF-8 decoding — no Python dependency.
 ///
-/// Returns `Ok((decoded_text, had_errors))` or a [`crate::Error`].
+/// Returns `Ok((decoded_text, had_errors))` or a [`crate::ErrorRepr`].
 ///
 /// `had_errors` reflects encoding_rs's WHATWG-defined error flag: it is
 /// `true` only when a U+FFFD REPLACEMENT CHARACTER was inserted because a
@@ -87,7 +87,7 @@ pub fn decode_to_utf8_impl(
     encoding: Option<&str>,
     min_confidence: f64,
     strict: bool,
-) -> Result<(String, bool), crate::Error> {
+) -> Result<(String, bool), crate::ErrorRepr> {
     // Validate the [0.0, 1.0] contract here in the core, not only in the
     // `_api.py` wrapper: the raw `_decode_to_utf8` PyO3 function is importable
     // and callable directly, bypassing that wrapper, so a wrapper-only check
@@ -97,7 +97,7 @@ pub fn decode_to_utf8_impl(
     // a detection threshold. NaN is rejected too: `(0.0..=1.0).contains(&NaN)`
     // is false, so the negation below is true.
     if !(0.0..=1.0).contains(&min_confidence) {
-        return Err(crate::Error::MinConfidenceOutOfRange { min_confidence });
+        return Err(crate::ErrorRepr::MinConfidenceOutOfRange { min_confidence });
     }
     let enc = if let Some(name) = encoding {
         encoding_rs::Encoding::for_label(name.as_bytes()).ok_or_else(|| {
@@ -108,7 +108,7 @@ pub fn decode_to_utf8_impl(
                 crate::utils::closest_match(name, COMMON_ENCODING_LABELS.iter().copied())
                     .map(|s| format!(" (did you mean '{s}'?)"))
                     .unwrap_or_default();
-            crate::Error::UnknownEncoding {
+            crate::ErrorRepr::UnknownEncoding {
                 got: name.to_owned(),
                 suggestion,
             }
@@ -116,21 +116,21 @@ pub fn decode_to_utf8_impl(
     } else {
         let (name, confidence) = detect_encoding_impl(bytes);
         if confidence < min_confidence {
-            return Err(crate::Error::EncodingConfidenceTooLow {
+            return Err(crate::ErrorRepr::EncodingConfidenceTooLow {
                 confidence,
                 min_confidence,
                 guess: name,
             });
         }
         encoding_rs::Encoding::for_label(name.as_bytes())
-            .ok_or(crate::Error::UnsupportedAutoEncoding { got: name })?
+            .ok_or(crate::ErrorRepr::UnsupportedAutoEncoding { got: name })?
     };
 
     let (decoded, actual_encoding, had_errors) = enc.decode(bytes);
     // #189: in strict mode a lossy decode (malformed sequences replaced with
     // U+FFFD) is a hard error, not a silent success the caller might ignore.
     if strict && had_errors {
-        return Err(crate::Error::LossyDecode {
+        return Err(crate::ErrorRepr::LossyDecode {
             encoding: actual_encoding.name().to_owned(),
         });
     }
@@ -313,7 +313,7 @@ mod tests {
             let explicit = decode_to_utf8_impl(b"hi", Some("UTF-8"), bad, false);
             for r in [auto, explicit] {
                 assert!(
-                    matches!(r, Err(crate::Error::MinConfidenceOutOfRange { .. })),
+                    matches!(r, Err(crate::ErrorRepr::MinConfidenceOutOfRange { .. })),
                     "min_confidence {bad} should be rejected by the core"
                 );
             }

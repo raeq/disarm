@@ -179,7 +179,7 @@ pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyRes
     crate::transliterate::validate_lang(lang)?;
     // Validate emoji_style — only two modes are supported.
     if !matches!(emoji_style, "cldr" | "none") {
-        return Err(crate::Error::InvalidEmojiStyle {
+        return Err(crate::ErrorRepr::InvalidEmojiStyle {
             got: emoji_style.to_owned(),
         }
         .into());

@@ -3,6 +3,15 @@
 //! All public access goes through the Python package `disarm`.
 //! Rust-internal modules are marked `#[doc(hidden)]` and not part of the public API.
 
+// In the pure crates.io build (`default = []`, no `extension-module`), the
+// shim-backing Layer-1 helpers — the Python-entry validators/dispatchers
+// (`transliterate_context`, the `register_*` cores, `ErrorMode::parse`, the
+// `Pipeline` builder, …) that the binding shims call but `crate::api` does not —
+// are legitimately unused. Allow that here; genuinely-dead code is still caught
+// by the `--features extension-module` clippy run, where every path is live.
+#![cfg_attr(not(feature = "extension-module"), allow(dead_code))]
+
+#[cfg(feature = "extension-module")]
 use pyo3::prelude::*;
 
 // Shared utilities and error construction.
@@ -30,6 +39,7 @@ pub enum ErrorMode {
 
 impl ErrorMode {
     /// Parse a Python-facing error mode string (`"replace"`, `"ignore"`, `"preserve"`).
+    #[cfg(feature = "extension-module")]
     pub fn from_str(s: &str) -> PyResult<Self> {
         Ok(Self::parse(s)?)
     }
@@ -93,14 +103,17 @@ pub mod width;
 #[doc(hidden)]
 pub mod zalgo;
 
-// Layer 3b: the PyO3 binding shims (#38). Currently ungated because `pyo3` is a
-// non-optional dependency; the final extraction sub-PR makes `pyo3` optional and
-// gates this whole module behind `feature = "extension-module"`.
+// Layer 3b: the PyO3 binding shims (#38). Gated behind `feature = "extension-module"`
+// (#42): `pyo3` is an optional dependency, so the pure crates.io core (`default = []`)
+// builds without it. The shims, the `#[pymodule]`, the exception types, the
+// `ErrorRepr -> PyErr` conversion, and `emit_py_warning` are all under this feature.
+#[cfg(feature = "extension-module")]
 #[doc(hidden)]
 mod py;
 
 /// Internal Rust module. Not part of the public Python API.
 /// All public access goes through python/disarm/__init__.py.
+#[cfg(feature = "extension-module")]
 #[pymodule]
 #[pyo3(name = "_disarm")]
 fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -216,8 +229,8 @@ fn _disarm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::reverse::_reverse_langs, m)?)?;
 
     // Emoji
-    m.add_function(wrap_pyfunction!(emoji::_demojize, m)?)?;
-    m.add_function(wrap_pyfunction!(emoji::_set_emoji_provider, m)?)?;
+    m.add_function(wrap_pyfunction!(py::emoji::_demojize, m)?)?;
+    m.add_function(wrap_pyfunction!(py::emoji::_set_emoji_provider, m)?)?;
 
     // Custom exception hierarchy (#183): DisarmError base + categorised
     // subclasses. The Error -> PyErr conversion maps each variant to one of these.
@@ -278,12 +291,19 @@ pub(crate) fn recover_lock<T>(result: std::sync::LockResult<T>, table_name: &str
         // but a pure-Rust caller may not — and lock-poison recovery must stay
         // non-fatal. Catch that panic and fall back to stderr so recovery never
         // aborts. (#117)
-        let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            pyo3::Python::attach(|py| emit_py_warning(py, &msg));
-        }));
-        if emitted.is_err() {
-            emit_warning_stderr(&msg);
+        // The Python `warnings.warn` route only exists in the extension build; the
+        // pure crates.io core (no pyo3) goes straight to stderr.
+        #[cfg(feature = "extension-module")]
+        {
+            let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                pyo3::Python::attach(|py| emit_py_warning(py, &msg));
+            }));
+            if emitted.is_err() {
+                emit_warning_stderr(&msg);
+            }
         }
+        #[cfg(not(feature = "extension-module"))]
+        emit_warning_stderr(&msg);
         e.into_inner()
     })
 }
@@ -308,6 +328,7 @@ pub(crate) fn emit_warning_stderr(msg: &str) {
 /// `emit_warning_stderr`, or attach to the interpreter via `pyo3::Python::attach`
 /// — but note `attach` panics if no interpreter is initialized, so guard it (as
 /// `recover_lock` does on the poison path: catch the panic, fall back to stderr).
+#[cfg(feature = "extension-module")]
 pub(crate) fn emit_py_warning(py: pyo3::Python<'_>, msg: &str) {
     if py
         .import("warnings")
@@ -324,6 +345,7 @@ pub(crate) fn emit_py_warning(py: pyo3::Python<'_>, msg: &str) {
 // registration tables now use `recover_lock` (recover the data as-is; a panic
 // leaves a std collection in a valid-but-unspecified state, never UB).
 
+#[cfg(feature = "extension-module")]
 pyo3::create_exception!(
     disarm,
     DisarmError,
@@ -334,6 +356,7 @@ pyo3::create_exception!(
      subclasses below categorise the failure (#183)."
 );
 
+#[cfg(feature = "extension-module")]
 pyo3::create_exception!(
     disarm,
     InvalidArgumentError,
@@ -343,6 +366,7 @@ pyo3::create_exception!(
      mutually-exclusive flags). Subclass of ``disarm.DisarmError``."
 );
 
+#[cfg(feature = "extension-module")]
 pyo3::create_exception!(
     disarm,
     ResourceLimitError,
@@ -351,6 +375,7 @@ pyo3::create_exception!(
      regex length, unique-slug attempts). Subclass of ``disarm.DisarmError``."
 );
 
+#[cfg(feature = "extension-module")]
 pyo3::create_exception!(
     disarm,
     UnsupportedError,

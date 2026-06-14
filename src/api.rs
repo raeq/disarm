@@ -498,6 +498,21 @@ pub fn slugify(text: &str, config: &SlugConfig) -> String {
     crate::slugify::slugify_impl(text, config)
 }
 
+// ── Emoji ────────────────────────────────────────────────────────────────────
+
+/// Expand emoji sequences in `text` to their CLDR short-name text descriptions
+/// (e.g. `"😀"` → `"grinning face"`). The matching engine handles ZWJ sequences,
+/// skin-tone modifiers, flag/keycap sequences, and presentation selectors;
+/// `strip_modifiers` drops the modifier suffix (`": light skin tone"`, etc.) from
+/// each name. Pure-ASCII input is returned unchanged.
+///
+/// This uses the **built-in CLDR data** (latest English). The custom Python
+/// `EmojiProvider` override exposed by the `disarm` package is binding-layer-only
+/// (Python-only) and is intentionally **not** part of the Rust surface.
+pub fn demojize(text: &str, strip_modifiers: bool) -> String {
+    crate::emoji::demojize_rust(text, strip_modifiers)
+}
+
 // ── Transliteration ──────────────────────────────────────────────────────────
 
 /// Remove diacritical marks while preserving base characters (NFD → strip
@@ -532,6 +547,10 @@ pub fn list_langs() -> Vec<String> {
 /// Returns `Cow::Borrowed` for pure-ASCII input (zero allocation), `Cow::Owned`
 /// otherwise. Infallible: wraps the Layer-1 engine
 /// [`crate::transliterate::transliterate_impl`].
+///
+/// Note: the public bool order is intentionally `(tones, strict_iso9, gost7034)`
+/// to mirror the Python keyword order; the wrapper reorders onto the engine's
+/// `(strict_iso9, gost7034, tones)`. Keep the public order stable.
 #[allow(clippy::too_many_arguments)]
 pub fn transliterate<'a>(
     text: &'a str,
@@ -558,6 +577,10 @@ pub fn transliterate<'a>(
 /// an empty vector. Mirrors [`transliterate`]'s engine, so the reported set is
 /// exactly what that transform would replace/ignore/preserve. Wraps the Layer-1
 /// core [`crate::transliterate::find_untranslatable_impl`].
+///
+/// As with [`transliterate`], the public bool order is intentionally
+/// `(tones, strict_iso9, gost7034)`; the wrapper reorders onto the engine's
+/// `(strict_iso9, gost7034, tones)`.
 pub fn find_untranslatable(
     text: &str,
     lang: Option<&str>,

@@ -9,6 +9,7 @@
 
 pub mod case_fold;
 pub mod confusables;
+pub mod emoji;
 pub mod encoders;
 pub mod encoding;
 pub mod filename;

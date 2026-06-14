@@ -62,9 +62,27 @@ jobs:
       - name: Rust format
         run: cargo fmt --all -- --check
 
-      - name: Rust clippy
-        # --all-targets so test and bench code is linted too (it rots otherwise).
+      - name: Rust clippy (pure core)
+        # Default features = the pyo3-free crates.io core (#38/#42). --all-targets
+        # so test and bench code is linted too (it rots otherwise).
         run: cargo clippy --all-targets --no-default-features -- -D warnings
+
+      - name: Rust clippy (extension-module)
+        # Lints the binding layer too, and catches genuinely-dead code that the
+        # pure build's `cfg(not(extension-module))` dead_code allow would hide.
+        run: cargo clippy --all-targets --features extension-module -- -D warnings
+
+      - name: Pure core has no pyo3 (#38/#42 acceptance gate)
+        # The default-feature crate is the pyo3-free crates.io core; assert the
+        # default dependency tree carries no pyo3 (a leak would re-couple the pure
+        # build to libpython). The extension lives behind `--features extension-module`.
+        run: |
+          if cargo tree -e no-dev | grep -qi pyo3; then
+            echo "::error::pyo3 leaked into the default (pure) dependency tree"
+            cargo tree -e no-dev | grep -i pyo3
+            exit 1
+          fi
+          echo "OK: no pyo3 in the default dependency tree"
 
       - uses: actions/setup-python@v6
         with:

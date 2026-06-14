@@ -131,9 +131,9 @@ pub(crate) fn transliterate_strict(
 /// The default sentinels for `errors` (`"replace"`) and `replace_with`
 /// (`"[?]"`) are the documented public-API defaults — a value other than the
 /// default means the caller set a forward-only parameter explicitly.
-/// Pure-Rust core for the `transliterate()` keyword-argument conflict matrix,
-/// returning the core [`crate::ErrorRepr`] so it is unit-testable without a
-/// Python interpreter (#231). The PyO3 shim
+///
+/// Returns the core [`crate::ErrorRepr`] so it is unit-testable without a
+/// Python interpreter; the PyO3 shim
 /// `crate::py::transliterate::_validate_transliterate_args` wraps it.
 pub(crate) fn validate_transliterate_args(
     lang: Option<&str>,

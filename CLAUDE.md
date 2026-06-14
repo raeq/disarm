@@ -2,13 +2,21 @@
 
 ## Build & Test (everyday)
 
-```bash
-# Rust (disable extension-module to avoid needing Python linkage)
-PYO3_PYTHON=$(which python3) cargo test --no-default-features
+Since #38/#42 the **default build is the pure Rust core** (`default = []`, no pyo3,
+no libpython). The Python extension is opt-in behind the `extension-module` feature
+(maturin / pyproject set it).
 
-# Python (requires `pip install -e .` first)
-pytest
+```bash
+# Rust — pure crates.io core (no pyo3 needed; this is the default now)
+cargo test                          # or: cargo test --no-default-features (identical)
+
+# Python extension — built/linked by maturin (which enables extension-module)
+maturin develop && pytest           # pytest needs `pip install -e .` / maturin develop first
 ```
+
+Do **not** run `cargo build`/`cargo test --features extension-module` directly: that
+links the cdylib without libpython and fails at the link step (pyo3's extension-module
+mode expects the interpreter to provide the symbols). Use maturin for the extension.
 
 ## Test Architecture
 
@@ -82,20 +90,34 @@ cargo fmt --all
 # 3. Check formatting is clean (gate; exits non-zero if fmt changed anything)
 cargo fmt --all -- --check
 
-# 4. Auto-fix compiler-detectable issues
-cargo fix --edition --all-targets --all-features
+# NOTE (#38/#42): the default build is the PURE core (no pyo3). The Python
+# extension is behind `--features extension-module`, which links a cdylib that
+# needs libpython — so a bare `cargo build/test --features extension-module`
+# fails at the link step. Lint BOTH feature sets (clippy is check-only, so it is
+# safe with extension-module); build/test the pure core directly and the
+# extension via maturin.
 
-# 5. Run Clippy with auto-fix for fixable lints
-cargo clippy --fix --all-targets --all-features --allow-dirty --allow-staged
+# 4. Auto-fix compiler-detectable issues (pure core)
+cargo fix --edition --all-targets
 
-# 6. Run Clippy in report-only mode (treat warnings as errors)
-cargo clippy --all-targets --all-features -- -D warnings
+# 5. Run Clippy with auto-fix for fixable lints (pure core)
+cargo clippy --fix --all-targets --allow-dirty --allow-staged
 
-# 7. Build to confirm nothing is broken post-fix
-cargo build --all-targets --all-features
+# 6. Clippy report-only, both feature sets (treat warnings as errors)
+cargo clippy --all-targets -- -D warnings                       # pure core
+cargo clippy --all-targets --features extension-module -- -D warnings  # binding layer
 
-# 8. Run tests to confirm behaviour is preserved
-cargo test --all-targets --all-features
+# 7. Acceptance gate (#38): the pure dependency tree must carry no pyo3
+cargo tree -e no-dev | grep -qi pyo3 && echo "pyo3 leaked!" && exit 1 || true
+
+# 8. Build + test the pure core (no pyo3); the extension is exercised by pytest.
+# `cargo test` (NOT --all-targets) — benches are linted above but not *run* as
+# tests (the iai-callgrind bench needs valgrind and is exercised by the perf gate).
+cargo build --all-targets
+cargo test
+
+# 9. Build the extension + run the Python suite (links libpython via maturin)
+maturin develop && pytest
 ```
 
 ### Python
@@ -161,7 +183,7 @@ same parameters = same binary = same SHA256. No manual edits to dictionary files
 ## Code Conventions
 
 - Crate name: `_disarm` (PyO3 cdylib + lib)
-- Crate type requires `--no-default-features` for pure Rust test/build (extension-module links Python)
+- `default = []` is the pure Rust core (no pyo3); the Python extension is the `extension-module` feature (links libpython — build it via maturin, #38/#42)
 - TSV data lives in `src/tables/data/` — build.rs generates PHF tables from it
 - `unsafe_code = "forbid"` — no unsafe anywhere
 - All transliteration table values must be ASCII (enforced by build.rs at compile time)

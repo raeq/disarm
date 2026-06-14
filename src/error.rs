@@ -463,6 +463,7 @@ pub(crate) fn checked_max_graphemes(value: i64) -> Result<usize, ErrorRepr> {
     usize::try_from(value).map_err(|_| ErrorRepr::NegativeMaxGraphemes { got: value })
 }
 
+#[cfg(feature = "extension-module")]
 impl From<ErrorRepr> for pyo3::PyErr {
     /// Convert a core `ErrorRepr` into a Python exception from disarm's unified
     /// hierarchy (#183): a [`crate::DisarmError`] base with `InvalidArgumentError`
@@ -659,6 +660,7 @@ impl From<ErrorRepr> for Error {
     }
 }
 
+#[cfg(feature = "extension-module")]
 impl From<Error> for pyo3::PyErr {
     fn from(err: Error) -> Self {
         err.0.into()

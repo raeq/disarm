@@ -109,7 +109,9 @@ Changelog = "https://github.com/raeq/disarm/blob/main/CHANGELOG.md"
 [tool.maturin]
 python-source = "python"
 module-name = "disarm._disarm"
-features = ["pyo3/abi3-py310"]
+# The crate default is now the pure Rust core (no pyo3); the Python extension
+# must opt into the `extension-module` feature (which pulls in pyo3 + abi3-py310).
+features = ["extension-module"]
 # Context dictionary data files (data/*.bin) are NOT shipped in the wheel. They
 # are built from source via `bash scripts/bootstrap_dicts.sh` and located at
 # runtime via the DISARM_DICT_DIR environment variable (see src/context.rs).

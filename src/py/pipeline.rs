@@ -54,18 +54,18 @@ impl _TextPipeline {
         strip_bidi: bool,
         strip_zalgo: Option<i64>,
     ) -> PyResult<Self> {
-        // strip_zalgo's value is `max_marks`, which must be >= 0. This signed→
-        // unsigned narrowing is the one binding-boundary concern: reject a
-        // negative here so it can never reach the core's `usize` cap, where it
-        // would silently wrap into an enormous value (effectively disabling the
-        // step) instead of being rejected.
+        // strip_zalgo's value is `max_marks`, which must be a non-negative value
+        // that fits `usize`. This signed→unsigned narrowing is the one binding-
+        // boundary concern: `usize::try_from` rejects both a negative value and
+        // one too large for the platform word (32-bit), so neither can reach the
+        // core's `usize` cap, where it would silently wrap into an enormous value
+        // (effectively disabling the step) instead of being rejected.
         let zalgo_max_marks: Option<usize> = match strip_zalgo {
-            Some(n) if n < 0 => {
-                return Err(crate::InvalidArgumentError::new_err(format!(
-                    "strip_zalgo (max_marks) must be non-negative, got {n}"
-                )));
-            }
-            Some(n) => Some(n as usize),
+            Some(n) => Some(usize::try_from(n).map_err(|_| {
+                crate::InvalidArgumentError::new_err(format!(
+                    "strip_zalgo (max_marks) must be a non-negative value that fits the platform word size, got {n}"
+                ))
+            })?),
             None => None,
         };
 

@@ -15,14 +15,14 @@ class TestStripObfuscationBasic:
     """Core behavior: obfuscation stripped, text preserved."""
 
     def test_pure_cyrillic_not_transliterated(self):
-        # strip_obfuscation does NOT transliterate — only resolves confusables
-        # Pure Cyrillic with no Latin confusables passes through (then fold_case)
-        result = strip_obfuscation("Москва")
-        # Confusables maps some chars to Latin (о→o, а→a) but not all.
-        # The result is NOT "moskva" — that would require transliteration — and
-        # at least one non-ASCII char survives (chars without a Latin confusable
-        # stay Cyrillic), proving no transliteration happened.
-        assert result != "moskva"
+        # strip_obfuscation does NOT transliterate — only resolves confusables.
+        # Россия: Р/о/с fold to Latin look-alikes, but и/я have no Latin
+        # confusable and stay Cyrillic, so the result is the mixed "Poccия", NOT
+        # the phonetic transliteration "Rossiya". (Some words, e.g. "Москва", now
+        # fold entirely via #342's added в→b etc.; "Россия" still leaves
+        # surviving non-ASCII, proving no transliteration happened.)
+        result = strip_obfuscation("Россия")
+        assert result.lower() != "rossiya"
         assert any(ord(ch) > 127 for ch in result), (
             f"expected surviving non-ASCII (no transliteration), got {result!r}"
         )

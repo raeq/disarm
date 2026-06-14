@@ -140,8 +140,9 @@ the wrong path actively destroys signal:
 from disarm import get_pipeline
 
 # WRONG: the guardrail fold mangles legitimate Cyrillic — its confusable step
-# partially rewrites real letters, producing garbage:
-assert get_pipeline("llm_guardrail")("Москва") == "mocĸвa"
+# rewrites real letters to Latin look-alikes, here producing the plausible-but-
+# wrong all-Latin "mockba" instead of the romanisation "moskva":
+assert get_pipeline("llm_guardrail")("Москва") == "mockba"
 
 # RIGHT: the ingestion path romanises the same input cleanly:
 assert get_pipeline("rag_ingest")("Москва") == "Moskva"

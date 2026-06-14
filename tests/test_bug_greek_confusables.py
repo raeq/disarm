@@ -44,31 +44,40 @@ class TestGreekVisualConfusables:
         assert result == expected, f"Greek {note}: expected {expected!r}, got {result!r}"
 
 
-class TestGreekSigmaSkeletonIsEsh:
-    """Σ (U+03A3) folds to esh (U+01A9), not ASCII — and that is intended.
+class TestGreekSigmaFoldsToS:
+    """Σ (U+03A3) and the sigma / n-ary-summation family fold to ASCII S (#341).
 
-    Investigated as a #245 side finding ("Σ→esh oddity"). TR39 confusables.txt
-    makes LATIN CAPITAL LETTER ESH (U+01A9) the *prototype* for the entire
-    Sigma / n-ary-summation family (03A3, 2211 ∑, 2140 ⅀, the math bold/italic
-    sigmas, Tifinagh ⵉ all map to 01A9). ESH is a genuine Latin-script letter,
-    so ``normalize_confusables(..., target_script="latin")`` correctly returns
-    it. ``normalize_confusables`` folds to the TR39 *skeleton*, which is Latin
-    but not guaranteed ASCII — "neutralized" (source char removed) is the
-    contract, not "ASCII-folded". This is faithful TR39 behavior, NOT a bug;
-    forcing Σ→S here would diverge from the pinned table. Pinned so the intent
-    is explicit and a future "fix" cannot silently change it.
+    TR39 confusables.txt makes LATIN CAPITAL LETTER ESH (U+01A9) the *prototype*
+    for the entire Sigma family (03A3, 2211, 2140, the math bold/italic sigmas,
+    Tifinagh 2D49 all map to 01A9). Earlier — the #245 "Σ→esh oddity" —
+    disarm returned that non-ASCII skeleton, on the theory that "neutralized
+    (source removed) is the contract, not ASCII-folded".
+
+    #341 reverses that contract: the non-ASCII Latin-extended prototypes fold to
+    basic ASCII, and esh joins them. Sigma is phonetically 's' (and already
+    transliterates to S), so the Σ→S spoof is now neutralized to plain
+    ASCII instead of surviving as the confusing esh — which also leaked into
+    the confusables-only ``security_clean`` preset. Capital sigmas fold to S
+    (case-preserved); the caseless summation operators and Tifinagh fold to s.
+    A *deliberate, documented* reversal of the #245 decision — exactly the
+    explicit (not silent) change that pin asked for.
     """
 
-    def test_capital_sigma_folds_to_esh(self) -> None:
-        # U+03A3 GREEK CAPITAL LETTER SIGMA → U+01A9 LATIN CAPITAL LETTER ESH.
+    def test_capital_sigma_folds_to_s(self) -> None:
+        # U+03A3 GREEK CAPITAL LETTER SIGMA -> ASCII "S".
         result = normalize_confusables("\u03a3", target_script="latin")  # Σ
-        assert result == "\u01a9", f"expected esh U+01A9, got {result!r}"  # Ʃ
+        assert result == "S", f"expected S, got {result!r}"
+        assert result.isascii()
         # Neutralized: the source Greek sigma is gone (the coverage contract).
         assert "\u03a3" not in result
 
-    def test_summation_sign_folds_to_esh(self) -> None:
-        # U+2211 N-ARY SUMMATION shares the same esh skeleton.
-        assert normalize_confusables("\u2211", target_script="latin") == "\u01a9"  # ∑ → Ʃ
+    def test_math_capital_sigma_folds_to_s(self) -> None:
+        # U+1D6BA MATHEMATICAL BOLD CAPITAL SIGMA -> "S" (same class, case-preserved).
+        assert normalize_confusables("\U0001d6ba", target_script="latin") == "S"
+
+    def test_summation_sign_folds_to_s(self) -> None:
+        # U+2211 N-ARY SUMMATION is caseless, so it folds to lowercase "s".
+        assert normalize_confusables("\u2211", target_script="latin") == "s"  # ∑
 
 
 class TestCyrillicVisualConfusables:

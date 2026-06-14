@@ -1,4 +1,10 @@
-use pyo3::prelude::*;
+//! Layer 1 (pure-Rust core): filename sanitization. No pyo3.
+//!
+//! Shim in `src/py/filename.rs`; crates.io surface is
+//! `crate::api::sanitize_filename` (typed `Platform`). Fallible at Layer 2:
+//! the `lang` parameter is validated against the registrable transliteration
+//! language set, a genuine runtime error.
+
 use unicode_normalization::UnicodeNormalization;
 
 use crate::transliterate;
@@ -109,19 +115,15 @@ fn collapse_dot_sequences(text: &str) -> String {
 ///
 /// When `preserve_extension = false`, the entire string (stem + extension)
 /// is truncated to `max_length` bytes as a unit.
-#[pyfunction]
-#[pyo3(signature = (text, *, separator="_", max_length=255, platform="universal", lang=None, preserve_extension=true))]
-pub fn _sanitize_filename(
+pub(crate) fn sanitize_filename(
     text: &str,
     separator: &str,
-    max_length: i64,
+    max_length: usize,
     platform: &str,
     lang: Option<&str>,
     preserve_extension: bool,
-) -> PyResult<String> {
+) -> Result<String, crate::ErrorRepr> {
     crate::transliterate::validate_lang(lang)?;
-    // #231: validate the non-negative contract in the core, not the binding.
-    let max_length = crate::error::checked_max_length(max_length)?;
     if text.is_empty() {
         return Ok(String::new());
     }
@@ -133,8 +135,7 @@ pub fn _sanitize_filename(
         _ => {
             return Err(crate::ErrorRepr::InvalidPlatform {
                 got: platform.to_owned(),
-            }
-            .into())
+            })
         }
     };
 
@@ -330,7 +331,7 @@ mod tests {
         // "NULtra.txt" truncated to max_length=3 would produce "NUL"
         // which is a Windows reserved name. The post-truncation check
         // should prefix it with underscore.
-        let result = _sanitize_filename("NULtra.txt", "_", 3, "universal", None, false).unwrap();
+        let result = sanitize_filename("NULtra.txt", "_", 3, "universal", None, false).unwrap();
         // Must not be exactly a reserved name
         let upper = result.to_uppercase();
         assert!(
@@ -342,14 +343,14 @@ mod tests {
     #[test]
     fn test_reserved_name_prefixed() {
         // Direct reserved name gets underscore prefix
-        let result = _sanitize_filename("CON", "_", 255, "universal", None, false).unwrap();
+        let result = sanitize_filename("CON", "_", 255, "universal", None, false).unwrap();
         assert!(result.starts_with('_'));
     }
 
     #[test]
     fn test_reserved_name_preserve_extension() {
         // Direct reserved name with preserve_extension=true must keep the extension intact
-        let result = _sanitize_filename("NUL.txt", "_", 7, "universal", None, true).unwrap();
+        let result = sanitize_filename("NUL.txt", "_", 7, "universal", None, true).unwrap();
         assert!(result.ends_with(".txt"), "extension lost: {result}");
         assert!(result.len() <= 7, "exceeds max_length: {result}");
         // Must not be a reserved name
@@ -364,7 +365,7 @@ mod tests {
     fn test_truncation_creates_reserved_preserve_extension() {
         // "NULtra.txt" truncated to max_length=7 with preserve_extension=true:
         // stem gets truncated but extension must survive
-        let result = _sanitize_filename("NULtra.txt", "_", 7, "universal", None, true).unwrap();
+        let result = sanitize_filename("NULtra.txt", "_", 7, "universal", None, true).unwrap();
         assert!(result.ends_with(".txt"), "extension lost: {result}");
         assert!(result.len() <= 7, "exceeds max_length: {result}");
     }
@@ -376,14 +377,14 @@ mod tests {
     #[test]
     fn regress_direct_reserved_nul_preserve_ext_tight() {
         // "NUL.txt" → "_NUL.txt" (8 bytes) must truncate stem, not extension
-        let r = _sanitize_filename("NUL.txt", "_", 7, "universal", None, true).unwrap();
+        let r = sanitize_filename("NUL.txt", "_", 7, "universal", None, true).unwrap();
         assert!(r.ends_with(".txt"), "extension lost: {r}");
         assert!(r.len() <= 7, "exceeds max_length: {r}");
     }
 
     #[test]
     fn regress_direct_reserved_con_preserve_ext_tight() {
-        let r = _sanitize_filename("CON.dat", "_", 8, "universal", None, true).unwrap();
+        let r = sanitize_filename("CON.dat", "_", 8, "universal", None, true).unwrap();
         assert!(r.ends_with(".dat"), "extension lost: {r}");
         assert!(r.len() <= 8, "exceeds max_length: {r}");
         assert!(r.starts_with('_'), "missing underscore prefix: {r}");
@@ -392,14 +393,14 @@ mod tests {
     #[test]
     fn regress_direct_reserved_aux_preserve_ext_exact_fit() {
         // "_AUX.py" is 7 bytes — fits exactly in max_length=7
-        let r = _sanitize_filename("AUX.py", "_", 7, "universal", None, true).unwrap();
+        let r = sanitize_filename("AUX.py", "_", 7, "universal", None, true).unwrap();
         assert_eq!(r, "_AUX.py");
     }
 
     #[test]
     fn regress_direct_reserved_prn_preserve_ext_very_tight() {
         // max_length=5 with ".txt" (4 bytes) leaves only 1 byte for stem
-        let r = _sanitize_filename("PRN.txt", "_", 5, "universal", None, true).unwrap();
+        let r = sanitize_filename("PRN.txt", "_", 5, "universal", None, true).unwrap();
         assert!(r.ends_with(".txt"), "extension lost: {r}");
         assert!(r.len() <= 5, "exceeds max_length: {r}");
     }
@@ -408,7 +409,7 @@ mod tests {
     fn regress_post_truncation_reserved_preserve_ext() {
         // "NULtra.txt" with max_length=7 and preserve_extension=true:
         // First truncation → "NUL.txt" (stem="NUL" is reserved) → "_NUL.txt" → re-truncate
-        let r = _sanitize_filename("NULtra.txt", "_", 7, "universal", None, true).unwrap();
+        let r = sanitize_filename("NULtra.txt", "_", 7, "universal", None, true).unwrap();
         assert!(r.ends_with(".txt"), "extension lost: {r}");
         assert!(r.len() <= 7, "exceeds max_length: {r}");
     }
@@ -416,7 +417,7 @@ mod tests {
     #[test]
     fn regress_post_truncation_con_preserve_ext() {
         // "CONtest.pdf" with max_length=8: truncate stem → "CON.pdf" (reserved) → "_CON.pdf"
-        let r = _sanitize_filename("CONtest.pdf", "_", 8, "universal", None, true).unwrap();
+        let r = sanitize_filename("CONtest.pdf", "_", 8, "universal", None, true).unwrap();
         assert!(r.ends_with(".pdf"), "extension lost: {r}");
         assert!(r.len() <= 8, "exceeds max_length: {r}");
     }
@@ -424,7 +425,7 @@ mod tests {
     #[test]
     fn regress_reserved_no_extension_preserve_true() {
         // "CON" with no extension and preserve_extension=true — no extension to preserve
-        let r = _sanitize_filename("CON", "_", 4, "universal", None, true).unwrap();
+        let r = sanitize_filename("CON", "_", 4, "universal", None, true).unwrap();
         assert!(r.len() <= 4, "exceeds max_length: {r}");
         assert!(r.starts_with('_'), "missing underscore prefix: {r}");
     }
@@ -432,7 +433,7 @@ mod tests {
     #[test]
     fn regress_reserved_preserve_false_still_works() {
         // Ensure preserve_extension=false still works correctly (existing behavior)
-        let r = _sanitize_filename("NUL.txt", "_", 5, "universal", None, false).unwrap();
+        let r = sanitize_filename("NUL.txt", "_", 5, "universal", None, false).unwrap();
         assert!(r.len() <= 5, "exceeds max_length: {r}");
         // Extension may be truncated — that's fine with preserve_extension=false
     }
@@ -442,7 +443,7 @@ mod tests {
         // Every Windows reserved name with an extension must preserve it
         for name in WINDOWS_RESERVED {
             let input = format!("{name}.txt");
-            let r = _sanitize_filename(&input, "_", 255, "universal", None, true).unwrap();
+            let r = sanitize_filename(&input, "_", 255, "universal", None, true).unwrap();
             assert!(
                 r.ends_with(".txt"),
                 "extension lost for reserved name '{name}': got '{r}'"
@@ -457,7 +458,7 @@ mod tests {
     #[test]
     fn regress_posix_reserved_names_no_prefix() {
         // On POSIX, reserved names are not special — extension should still be preserved
-        let r = _sanitize_filename("NUL.txt", "_", 7, "posix", None, true).unwrap();
+        let r = sanitize_filename("NUL.txt", "_", 7, "posix", None, true).unwrap();
         assert!(r.ends_with(".txt"), "extension lost on posix: {r}");
         assert!(!r.starts_with('_'), "unexpected prefix on posix: {r}");
     }
@@ -465,7 +466,7 @@ mod tests {
     #[test]
     fn regress_multibyte_extension_reserved_name() {
         // Extension with multibyte chars — truncation must not split a char
-        let r = _sanitize_filename("CON.ñ", "_", 6, "universal", None, true).unwrap();
+        let r = sanitize_filename("CON.ñ", "_", 6, "universal", None, true).unwrap();
         assert!(r.len() <= 6, "exceeds max_length: {r}");
         // Must be valid UTF-8 (implicit — Rust String guarantees this)
     }
@@ -511,7 +512,7 @@ mod tests {
             }
         }
 
-        // ── _sanitize_filename structural invariants ──────────────────────
+        // ── sanitize_filename structural invariants ──────────────────────
         // These property tests check that key invariants hold for ALL inputs,
         // catching any code path that silently drops extension preservation,
         // exceeds max_length, or produces invalid filenames.
@@ -539,7 +540,7 @@ mod tests {
             ) {
                 let input = format!("{stem}.{ext}");
                 let expected_ext = format!(".{ext}");
-                let result = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, true).unwrap();
+                let result = sanitize_filename(&input, "_", max_length, "universal", None, true).unwrap();
                 prop_assert!(result.len() <= max_length, "exceeds max_length {max_length}: {result}");
                 // Extension must be preserved unless ext itself is >= max_length
                 if expected_ext.len() < max_length {
@@ -558,7 +559,7 @@ mod tests {
                 max_length in 1usize..50,
             ) {
                 let input = format!("{stem}.{ext}");
-                let result = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, false).unwrap();
+                let result = sanitize_filename(&input, "_", max_length, "universal", None, false).unwrap();
                 prop_assert!(result.len() <= max_length, "exceeds max_length {max_length}: {result}");
             }
 
@@ -571,7 +572,7 @@ mod tests {
                 max_length in 6usize..50,
             ) {
                 let input = format!("{name}{ext}");
-                let result = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, true).unwrap();
+                let result = sanitize_filename(&input, "_", max_length, "universal", None, true).unwrap();
                 prop_assert!(result.len() <= max_length, "exceeds max_length {max_length}: {result}");
                 // If there's room for the extension, it must be preserved
                 if ext.len() < max_length {
@@ -587,7 +588,7 @@ mod tests {
                 );
             }
 
-            /// No code path in _sanitize_filename should ever produce a bare
+            /// No code path in sanitize_filename should ever produce a bare
             /// Windows reserved name as the stem (before the first dot).
             #[test]
             fn never_produces_bare_reserved_stem(
@@ -595,7 +596,7 @@ mod tests {
                 max_length in 1usize..30,
                 preserve_ext in proptest::bool::ANY,
             ) {
-                let result = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, preserve_ext).unwrap();
+                let result = sanitize_filename(&input, "_", max_length, "universal", None, preserve_ext).unwrap();
                 if !result.is_empty() {
                     let stem = match result.find('.') {
                         Some(pos) => &result[..pos],
@@ -617,7 +618,7 @@ mod tests {
                 max_length in 1usize..50,
                 preserve_ext in proptest::bool::ANY,
             ) {
-                if let Ok(result) = _sanitize_filename(&input, "_", i64::try_from(max_length).unwrap(), "universal", None, preserve_ext) {
+                if let Ok(result) = sanitize_filename(&input, "_", max_length, "universal", None, preserve_ext) {
                     prop_assert!(
                         result.len() <= max_length,
                         "exceeds max_length {max_length} for input '{input}': got '{result}' (len={})",

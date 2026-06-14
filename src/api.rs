@@ -11,6 +11,8 @@
 
 use std::borrow::Cow;
 
+use crate::Error;
+
 // ── Confusables (TR39) ──────────────────────────────────────────────────────
 
 /// Target script for confusable folding (see [`normalize_confusables`]).
@@ -313,6 +315,62 @@ pub fn inspect_auto_lang(text: &str) -> AutoLangInspection {
     }
 }
 
+// ── Filename sanitization ────────────────────────────────────────────────────
+
+/// Target platform whose illegal-character set and reserved-name rules drive
+/// [`sanitize_filename`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Platform {
+    /// The intersection of all platforms' rules (the safe default).
+    Universal,
+    /// Windows: the universal illegal set plus reserved device names (CON, …).
+    Windows,
+    /// POSIX (Linux/macOS): only `/` and NUL are illegal.
+    Posix,
+}
+
+impl Platform {
+    /// The lowercase token the underlying sanitizer is keyed by.
+    fn as_str(self) -> &'static str {
+        match self {
+            Platform::Universal => "universal",
+            Platform::Windows => "windows",
+            Platform::Posix => "posix",
+        }
+    }
+}
+
+/// Sanitize `text` into a filename safe for `platform`: transliterate to ASCII,
+/// strip illegal characters (replacing runs with `separator`), neutralize `..`
+/// traversal and reserved names, and truncate to `max_length` **bytes**
+/// (extension-aware when `preserve_extension`).
+///
+/// `lang` selects the transliteration language (`None` = auto-detect). This is
+/// the one fallible argument: an unknown language code is a runtime error
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)); `Platform` and the
+/// `usize` length make every other input infallible by construction.
+///
+/// [`ErrorKind::InvalidArgument`]: crate::ErrorKind::InvalidArgument
+pub fn sanitize_filename(
+    text: &str,
+    separator: &str,
+    max_length: usize,
+    platform: Platform,
+    lang: Option<&str>,
+    preserve_extension: bool,
+) -> Result<String, Error> {
+    crate::filename::sanitize_filename(
+        text,
+        separator,
+        max_length,
+        platform.as_str(),
+        lang,
+        preserve_extension,
+    )
+    .map_err(Error::from)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,5 +419,27 @@ mod tests {
         assert_eq!(terminal_width("\u{00A1}", false), 1);
         assert_eq!(terminal_width("\u{00A1}", true), 2);
         assert_eq!(grapheme_width("\u{00A1}", true), 2);
+    }
+
+    #[test]
+    fn sanitize_filename_happy_path() {
+        // Transliterates to ASCII and strips illegal characters.
+        let out = sanitize_filename("héllo/wörld.txt", "_", 255, Platform::Universal, None, true)
+            .unwrap();
+        assert_eq!(out, "hello_world.txt");
+        // POSIX keeps ':' (only '/' and NUL are illegal there).
+        let out = sanitize_filename("a:b", "_", 255, Platform::Posix, None, true).unwrap();
+        assert_eq!(out, "a:b");
+    }
+
+    #[test]
+    fn sanitize_filename_bad_lang_is_invalid_argument() {
+        // The one fallible argument: an unknown language code surfaces the opaque
+        // Error, classified as InvalidArgument (the first fallible Layer-2 path).
+        let err =
+            sanitize_filename("x", "_", 255, Platform::Universal, Some("zzz"), true).unwrap_err();
+        assert_eq!(err.kind(), crate::ErrorKind::InvalidArgument);
+        // Opaque: no inner source leaks.
+        assert!(std::error::Error::source(&err).is_none());
     }
 }

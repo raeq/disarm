@@ -10,6 +10,7 @@
 pub mod case_fold;
 pub mod confusables;
 pub mod encoders;
+pub mod filename;
 pub mod grapheme;
 pub mod normalize;
 pub mod reverse;

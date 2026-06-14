@@ -16,10 +16,8 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 
 use disarm::api::fold_case;
 use disarm::api::strip_accents;
-use disarm::api::{find_untranslatable, transliterate};
 use disarm::api::{search_key, security_clean};
-use disarm::api::{slugify, SlugConfig};
-use disarm::ErrorMode;
+use disarm::api::{slugify, OnUnknown, SlugConfig, Transliterate};
 
 #[path = "persona_corpus.rs"]
 mod persona_corpus;
@@ -35,7 +33,11 @@ fn text_throughput(text: &str) -> Throughput {
 /// Engine-only transliteration call (Ignore mode, no replacement assembly),
 /// so the measurement isolates the per-character loop + table lookups.
 fn engine(text: &str, lang: Option<&str>) -> usize {
-    transliterate(text, lang, ErrorMode::Ignore, "", false, false, false).len()
+    let mut b = Transliterate::new().on_unknown(OnUnknown::Ignore);
+    if let Some(l) = lang {
+        b = b.lang(l);
+    }
+    b.run(text).len()
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +107,7 @@ fn bench_strict_scan(c: &mut Criterion) {
             BenchmarkId::new("find_untranslatable", name),
             &doc,
             |b, text| {
-                b.iter(|| find_untranslatable(black_box(text), None, false, false, false));
+                b.iter(|| Transliterate::new().find_untranslatable(black_box(text)));
             },
         );
     }

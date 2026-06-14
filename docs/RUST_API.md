@@ -17,12 +17,23 @@ lockstep numerically, but the guarantees below apply only to the Rust surface.
 The **only** semver-governed Rust API is:
 
 - the [`disarm::api`](https://docs.rs/disarm/latest/disarm/api/) module — the
-  idiomatic, `pyo3`-free function surface and its parameter types
+  idiomatic, `pyo3`-free function surface, its parameter/builder types
   (`TargetScript`, `NormalizationForm`, `UrlComponent`, `ReverseLang`,
-  `Platform`, `SlugConfig`, `AutoLangInspection`, `HostnameAnalysis`, …);
+  `Platform`, `SlugConfig`, `Scheme`, `OnUnknown`, `Transliterate`,
+  `AutoLangInspection`, `HostnameAnalysis`, …), and the
+  [`DisarmStr`](https://docs.rs/disarm/latest/disarm/trait.DisarmStr.html)
+  extension trait (re-exported at the crate root);
 - the error types [`Error`](https://docs.rs/disarm/latest/disarm/struct.Error.html),
   [`ErrorKind`](https://docs.rs/disarm/latest/disarm/enum.ErrorKind.html), and
   [`ErrorMode`](https://docs.rs/disarm/latest/disarm/enum.ErrorMode.html).
+
+Wide functions use the builder pattern: [`Transliterate`] collapses the
+mutually-exclusive Cyrillic schemes into [`Scheme`] (so the illegal
+`iso9 && gost` state can't be built) and folds the replacement string into
+[`OnUnknown`]. The public enums are `#[non_exhaustive]` and implement
+`FromStr` + `Display`; the no-op-returning transforms (`strip_accents`,
+`fold_case`, `normalize_confusables`, …) return `Cow<'_, str>` and borrow on the
+unchanged path. Pure functions are `#[must_use]`.
 
 Everything else is an implementation detail and carries **no** guarantee:
 

@@ -35,14 +35,37 @@ impl TargetScript {
     }
 }
 
+impl std::fmt::Display for TargetScript {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for TargetScript {
+    type Err = Error;
+
+    /// Parse `"latin"` / `"cyrillic"`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "latin" => Ok(Self::Latin),
+            "cyrillic" => Ok(Self::Cyrillic),
+            _ => Err(Error::from(crate::ErrorRepr::InvalidTargetScript {
+                got: s.to_owned(),
+            })),
+        }
+    }
+}
+
 /// Replace Unicode confusable homoglyphs with their `target`-script prototypes
 /// (TR39). Characters with no mapping pass through unchanged.
 ///
-/// Infallible: a [`TargetScript`] is always a supported script.
-pub fn normalize_confusables(text: &str, target: TargetScript) -> String {
+/// Returns `Cow::Borrowed` when nothing folds (zero allocation), `Cow::Owned`
+/// otherwise. Infallible: a [`TargetScript`] is always a supported script.
+#[must_use]
+pub fn normalize_confusables(text: &str, target: TargetScript) -> Cow<'_, str> {
     // The only error path of the Layer-1 fn is an unsupported target *string*;
     // a `TargetScript` value can never produce one, so this is unreachable.
-    crate::confusables::normalize_confusables(text, target.as_str())
+    crate::confusables::normalize_confusables_cow(text, target.as_str())
         .expect("TargetScript always maps to a supported target script")
 }
 
@@ -50,6 +73,7 @@ pub fn normalize_confusables(text: &str, target: TargetScript) -> String {
 /// character (TR39).
 ///
 /// Infallible: a [`TargetScript`] is always a supported script.
+#[must_use]
 pub fn is_confusable(text: &str, target: TargetScript) -> bool {
     crate::confusables::is_confusable(text, target.as_str())
         .expect("TargetScript always maps to a supported target script")
@@ -62,6 +86,7 @@ pub fn is_confusable(text: &str, target: TargetScript) -> bool {
 ///
 /// `ambiguous_wide` selects the East-Asian Ambiguous policy (UAX #11): when
 /// `true`, ambiguous-width characters count as 2 cells, otherwise 1.
+#[must_use]
 pub fn terminal_width(text: &str, ambiguous_wide: bool) -> usize {
     crate::width::terminal_width_opts(text, ambiguous_wide)
 }
@@ -70,6 +95,7 @@ pub fn terminal_width(text: &str, ambiguous_wide: bool) -> usize {
 ///
 /// `ambiguous_wide` selects the East-Asian Ambiguous policy (UAX #11): when
 /// `true`, ambiguous-width characters count as 2 cells, otherwise 1.
+#[must_use]
 pub fn grapheme_width(cluster: &str, ambiguous_wide: bool) -> usize {
     crate::width::grapheme_width_opts(cluster, ambiguous_wide)
 }
@@ -80,18 +106,21 @@ pub fn grapheme_width(cluster: &str, ambiguous_wide: bool) -> usize {
 ///
 /// `strip_control` also removes C0/C1 control characters (so `\r\n` → `\n`);
 /// `strip_zero_width` also removes zero-width / invisible characters.
+#[must_use]
 pub fn collapse_whitespace(text: &str, strip_control: bool, strip_zero_width: bool) -> String {
     crate::whitespace::collapse_whitespace(text, strip_control, strip_zero_width)
 }
 
 /// Remove C0/C1 control characters (keeping `\n` and `\t`); `\r` is stripped, so
 /// `\r\n` becomes `\n`. A composable primitive of [`collapse_whitespace`].
+#[must_use]
 pub fn strip_control_chars(text: &str) -> String {
     crate::whitespace::strip_control_chars(text)
 }
 
 /// Remove zero-width / invisible characters (ZWSP, ZWJ/ZWNJ, BOM, word joiner,
 /// the invisible math operators). A composable primitive of [`collapse_whitespace`].
+#[must_use]
 pub fn strip_zero_width_chars(text: &str) -> String {
     crate::whitespace::strip_zero_width_chars(text)
 }
@@ -100,6 +129,7 @@ pub fn strip_zero_width_chars(text: &str) -> String {
 
 /// True if any base character carries more than `threshold` consecutive
 /// combining marks in NFD (zalgo-style abuse). A sane default is 3.
+#[must_use]
 pub fn is_zalgo(text: &str, threshold: usize) -> bool {
     crate::zalgo::is_zalgo(text, threshold)
 }
@@ -107,6 +137,7 @@ pub fn is_zalgo(text: &str, threshold: usize) -> bool {
 /// Cap combining marks at `max_marks` per base character (recomposed to NFC),
 /// stripping zalgo stacking while preserving legitimate diacritics. `max_marks`
 /// of 0 strips all combining marks.
+#[must_use]
 pub fn strip_zalgo(text: &str, max_marks: usize) -> String {
     crate::zalgo::strip_zalgo(text, max_marks)
 }
@@ -116,27 +147,46 @@ pub fn strip_zalgo(text: &str, max_marks: usize) -> String {
 /// Full Unicode case folding per CaseFolding.txt (status C + F) — stronger than
 /// `str::to_lowercase` (folds ß→ss, ﬁ→fi, ς→σ, and ~1,500 other mappings). Use
 /// for caseless matching, not display.
-pub fn fold_case(text: &str) -> String {
-    crate::case_fold::fold_case_impl(text)
+///
+/// Returns `Cow::Borrowed` when `text` is already folded (zero allocation).
+#[must_use]
+pub fn fold_case(text: &str) -> Cow<'_, str> {
+    crate::case_fold::fold_case_cow(text)
 }
 
 // ── Grapheme clusters (UAX #29) ──────────────────────────────────────────────
 
 /// Number of user-perceived characters (extended grapheme clusters): `"👩‍👩‍👧‍👦"` → 1.
+#[must_use]
 pub fn grapheme_len(text: &str) -> usize {
     crate::grapheme::grapheme_len(text)
 }
 
 /// Split `text` into its extended grapheme clusters, one user-perceived
-/// character per element.
+/// character per element. Allocates a `String` per cluster; prefer
+/// [`graphemes`] when borrowed slices suffice.
+#[must_use]
 pub fn grapheme_split(text: &str) -> Vec<String> {
     crate::grapheme::grapheme_split(text)
+}
+
+/// Iterate the extended grapheme clusters of `text` as borrowed `&str` slices —
+/// no `Vec`, no per-cluster `String`. Callers that only need a count or the
+/// first few never pay for the rest; `.collect()` when you want owned data.
+///
+/// ```
+/// use disarm::api;
+/// assert_eq!(api::graphemes("a❤️b").count(), 3);
+/// ```
+pub fn graphemes(text: &str) -> impl Iterator<Item = &str> {
+    crate::grapheme::clusters(text)
 }
 
 /// Truncate `text` to at most `max_graphemes` clusters without ever splitting a
 /// cluster (so emoji / combining sequences stay intact). Returned unchanged if
 /// already within the limit. Infallible — `usize` rules out the negative count
 /// the Python binding must guard against.
+#[must_use]
 pub fn grapheme_truncate(text: &str, max_graphemes: usize) -> String {
     crate::grapheme::truncate_to_graphemes(text, max_graphemes)
 }
@@ -172,6 +222,7 @@ impl NormalizationForm {
 /// Normalize `text` to the given Unicode normalization form.
 ///
 /// Infallible: a [`NormalizationForm`] is always a valid form.
+#[must_use]
 pub fn normalize(text: &str, form: NormalizationForm) -> String {
     crate::normalize::normalize(text, form.as_str())
         .expect("NormalizationForm is always a valid form")
@@ -180,6 +231,7 @@ pub fn normalize(text: &str, form: NormalizationForm) -> String {
 /// True if `text` is already in the given Unicode normalization form.
 ///
 /// Infallible: a [`NormalizationForm`] is always a valid form.
+#[must_use]
 pub fn is_normalized(text: &str, form: NormalizationForm) -> bool {
     crate::normalize::is_normalized(text, form.as_str())
         .expect("NormalizationForm is always a valid form")
@@ -194,6 +246,7 @@ pub fn is_normalized(text: &str, form: NormalizationForm) -> bool {
 /// **Not** correct inside `<script>` / `<style>`, unquoted attributes, or URL
 /// attributes — there HTML-entity escaping is insufficient or corrupting. Encode
 /// once at the output sink; disarm is not a context-aware auto-escaper.
+#[must_use]
 pub fn escape_html(text: &str) -> Cow<'_, str> {
     crate::encoders::escape_html_str(text)
 }
@@ -228,6 +281,7 @@ impl UrlComponent {
 /// then every byte outside the component's safe set becomes `%XX`. Output is ASCII.
 ///
 /// Infallible: a [`UrlComponent`] always names a known component.
+#[must_use]
 pub fn percent_encode(text: &str, component: UrlComponent) -> String {
     crate::encoders::percent_encode_str(text, component.as_str())
         .expect("UrlComponent always names a known component")
@@ -264,11 +318,13 @@ impl ReverseLang {
 /// characters pass through.
 ///
 /// Infallible: a [`ReverseLang`] always has a reverse table.
+#[must_use]
 pub fn reverse_transliterate(text: &str, lang: ReverseLang) -> String {
     crate::reverse::reverse_transliterate_impl(text, lang.as_str())
 }
 
 /// The languages that support [`reverse_transliterate`], as lowercase codes.
+#[must_use]
 pub fn reverse_langs() -> Vec<String> {
     crate::reverse::reverse_langs()
 }
@@ -277,12 +333,14 @@ pub fn reverse_langs() -> Vec<String> {
 
 /// Unicode scripts present in `text`, in order of first appearance (Common /
 /// Inherited excluded). Names are stable UCD script identifiers (e.g. `"Latin"`).
+#[must_use]
 pub fn detect_scripts(text: &str) -> Vec<&'static str> {
     crate::scripts::detect_scripts(text)
 }
 
 /// True if `text` mixes characters from more than one script (excluding Common /
 /// Inherited) — a homoglyph-spoofing signal.
+#[must_use]
 pub fn is_mixed_script(text: &str) -> bool {
     crate::scripts::is_mixed_script(text)
 }
@@ -305,6 +363,7 @@ pub struct AutoLangInspection {
 
 /// Explain how auto-language detection resolves `text` (which script, which
 /// language, and why) — for diagnostics, not the hot path.
+#[must_use]
 pub fn inspect_auto_lang(text: &str) -> AutoLangInspection {
     let (script, chosen_lang, reason, discriminators_hit) = crate::scripts::inspect_auto_lang(text);
     AutoLangInspection {
@@ -357,6 +416,7 @@ pub struct HostnameAnalysis {
 /// table* was found. Base allow/deny decisions on the granular `scripts` /
 /// `mixed_script` / `has_confusables` fields plus your own policy — a detector
 /// can attest the *presence* of a problem, never the *absence* of all problems.
+#[must_use]
 pub fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis) {
     let (suspicious, core) = crate::hostname::is_suspicious_hostname(hostname);
     (
@@ -432,6 +492,7 @@ pub fn sanitize_filename(
 /// Detect the probable character encoding of `bytes` (chardetng, Firefox's
 /// detector), returning `(whatwg_label, confidence)`. Detection is probabilistic
 /// — prefer explicit encoding metadata for critical pipelines.
+#[must_use]
 pub fn detect_encoding(bytes: &[u8]) -> (String, f64) {
     crate::encoding::detect_encoding_impl(bytes)
 }
@@ -494,6 +555,7 @@ pub use crate::slugify::SlugConfig;
 /// rather than erroring. This differs from the Python `slugify`, whose convenience
 /// wrapper eagerly validates `lang` and raises. If you need strict validation in
 /// Rust, check the code against [`list_langs`] before building the config.
+#[must_use]
 pub fn slugify(text: &str, config: &SlugConfig) -> String {
     crate::slugify::slugify_impl(text, config)
 }
@@ -509,6 +571,7 @@ pub fn slugify(text: &str, config: &SlugConfig) -> String {
 /// This uses the **built-in CLDR data** (latest English). The custom Python
 /// `EmojiProvider` override exposed by the `disarm` package is binding-layer-only
 /// (Python-only) and is intentionally **not** part of the Rust surface.
+#[must_use]
 pub fn demojize(text: &str, strip_modifiers: bool) -> String {
     crate::emoji::demojize_rust(text, strip_modifiers)
 }
@@ -517,78 +580,217 @@ pub fn demojize(text: &str, strip_modifiers: bool) -> String {
 
 /// Remove diacritical marks while preserving base characters (NFD → strip
 /// combining marks → NFC). For example `"café"` → `"cafe"`.
-pub fn strip_accents(text: &str) -> String {
-    crate::transliterate::strip_accents(text)
+///
+/// Returns `Cow::Borrowed` when there are no accents to strip (zero allocation).
+#[must_use]
+pub fn strip_accents(text: &str) -> Cow<'_, str> {
+    crate::transliterate::strip_accents_cow(text)
 }
 
 /// True if every character in `text` is ASCII (U+0000–U+007F).
+#[must_use]
 pub fn is_ascii(text: &str) -> bool {
     text.is_ascii()
 }
 
 /// The language codes available for transliteration (built-in plus any
 /// registered at runtime).
+#[must_use]
 pub fn list_langs() -> Vec<String> {
     crate::tables::list_langs()
 }
 
-/// Transliterate `text` from Unicode to ASCII.
+/// Cyrillic romanization scheme for [`Transliterate`].
 ///
-/// `lang` selects a language-specific romanization table (`None` = the default
-/// multi-script tables; `Some("auto")` enables script detection). `error_mode`
-/// governs unmapped characters: [`crate::ErrorMode::Replace`] substitutes
-/// `replacement`, `Ignore` drops them, `Preserve` passes them through. `tones`
-/// keeps tone marks (pinyin); `strict_iso9` and `gost7034` select the ISO 9 /
-/// GOST 7.034 Cyrillic schemes. They are intended to be mutually exclusive, but
-/// this infallible Rust API does **not** reject passing both — `strict_iso9`
-/// takes precedence if you do. (The Python binding validates and raises; enforce
-/// the constraint yourself if you need it in Rust.)
-///
-/// Returns `Cow::Borrowed` for pure-ASCII input (zero allocation), `Cow::Owned`
-/// otherwise. Infallible: wraps the Layer-1 engine
-/// [`crate::transliterate::transliterate_impl`].
-///
-/// Note: the public bool order is intentionally `(tones, strict_iso9, gost7034)`
-/// to mirror the Python keyword order; the wrapper reorders onto the engine's
-/// `(strict_iso9, gost7034, tones)`. Keep the public order stable.
-#[allow(clippy::too_many_arguments)]
-pub fn transliterate<'a>(
-    text: &'a str,
-    lang: Option<&str>,
-    error_mode: crate::ErrorMode,
-    replacement: &str,
-    tones: bool,
-    strict_iso9: bool,
-    gost7034: bool,
-) -> std::borrow::Cow<'a, str> {
-    crate::transliterate::transliterate_impl(
-        text,
-        lang,
-        error_mode,
-        replacement,
-        strict_iso9,
-        gost7034,
-        tones,
-    )
+/// The schemes are mutually exclusive *by construction* — you can't be in two at
+/// once, so the old representable-but-invalid `strict_iso9 && gost7034` state
+/// simply can't be expressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum Scheme {
+    /// The default multi-script romanization tables.
+    #[default]
+    Default,
+    /// ISO 9:1995 strict Cyrillic romanization (a reversible 1:1 mapping).
+    StrictIso9,
+    /// GOST 7.034 Cyrillic romanization.
+    GostR7034,
 }
 
-/// Find every character in `text` that has no transliteration, as
-/// `(char, byte_offset)` pairs in order of appearance. Pure-ASCII input yields
-/// an empty vector. Mirrors [`transliterate`]'s engine, so the reported set is
-/// exactly what that transform would replace/ignore/preserve. Wraps the Layer-1
-/// core [`crate::transliterate::find_untranslatable_impl`].
+impl Scheme {
+    /// The engine's `(strict_iso9, gost7034)` flag pair.
+    fn flags(self) -> (bool, bool) {
+        match self {
+            Scheme::Default => (false, false),
+            Scheme::StrictIso9 => (true, false),
+            Scheme::GostR7034 => (false, true),
+        }
+    }
+
+    /// The canonical lowercase token (`"default"` / `"strict_iso9"` / `"gost7034"`).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Scheme::Default => "default",
+            Scheme::StrictIso9 => "strict_iso9",
+            Scheme::GostR7034 => "gost7034",
+        }
+    }
+}
+
+impl std::fmt::Display for Scheme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for Scheme {
+    type Err = Error;
+
+    /// Parse `"default"` / `"strict_iso9"` / `"gost7034"`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "default" => Ok(Self::Default),
+            "strict_iso9" => Ok(Self::StrictIso9),
+            "gost7034" => Ok(Self::GostR7034),
+            _ => Err(Error::from(crate::ErrorRepr::InvalidScheme {
+                got: s.to_owned(),
+            })),
+        }
+    }
+}
+
+/// What [`Transliterate`] does with a character that has no romanization.
 ///
-/// As with [`transliterate`], the public bool order is intentionally
-/// `(tones, strict_iso9, gost7034)`; the wrapper reorders onto the engine's
-/// `(strict_iso9, gost7034, tones)`.
-pub fn find_untranslatable(
-    text: &str,
-    lang: Option<&str>,
+/// The replacement string lives in [`OnUnknown::Replace`] — exactly where it is
+/// meaningful — so it can't be silently ignored by pairing it with `Ignore`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OnUnknown {
+    /// Substitute this string for each untranslatable character (e.g. `"[?]"`).
+    Replace(String),
+    /// Drop untranslatable characters.
+    Ignore,
+    /// Pass untranslatable characters through unchanged.
+    Preserve,
+}
+
+impl Default for OnUnknown {
+    /// `Replace("[?]")` — the documented default sentinel.
+    fn default() -> Self {
+        OnUnknown::Replace("[?]".to_owned())
+    }
+}
+
+impl OnUnknown {
+    /// The engine's `(ErrorMode, replacement)` pair.
+    fn parts(&self) -> (crate::ErrorMode, &str) {
+        match self {
+            OnUnknown::Replace(s) => (crate::ErrorMode::Replace, s.as_str()),
+            OnUnknown::Ignore => (crate::ErrorMode::Ignore, ""),
+            OnUnknown::Preserve => (crate::ErrorMode::Preserve, ""),
+        }
+    }
+}
+
+/// Builder for Unicode → ASCII transliteration.
+///
+/// Replaces a positional 7-argument function: the mutually-exclusive Cyrillic
+/// schemes collapse into [`Scheme`], the replacement string moves inside
+/// [`OnUnknown::Replace`], and adding a future knob no longer breaks call sites.
+///
+/// ```
+/// use disarm::api::{Transliterate, Scheme, OnUnknown};
+/// let s = Transliterate::new()
+///     .scheme(Scheme::StrictIso9)
+///     .on_unknown(OnUnknown::Replace("?".into()))
+///     .run("Москва");
+/// assert!(s.is_ascii());
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct Transliterate {
+    lang: Option<String>,
+    scheme: Scheme,
+    on_unknown: OnUnknown,
     tones: bool,
-    strict_iso9: bool,
-    gost7034: bool,
-) -> Vec<(char, usize)> {
-    crate::transliterate::find_untranslatable_impl(text, lang, strict_iso9, gost7034, tones)
+}
+
+impl Transliterate {
+    /// A new builder with defaults: default tables, `OnUnknown::Replace("[?]")`,
+    /// tones off.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Select a language-specific romanization table. `"auto"` enables script
+    /// detection; the default (unset) uses the multi-script tables.
+    #[must_use]
+    pub fn lang(mut self, lang: impl Into<String>) -> Self {
+        self.lang = Some(lang.into());
+        self
+    }
+
+    /// Select the Cyrillic romanization scheme (default / ISO 9 / GOST 7.034).
+    #[must_use]
+    pub fn scheme(mut self, scheme: Scheme) -> Self {
+        self.scheme = scheme;
+        self
+    }
+
+    /// Set the policy for characters with no romanization.
+    #[must_use]
+    pub fn on_unknown(mut self, on_unknown: OnUnknown) -> Self {
+        self.on_unknown = on_unknown;
+        self
+    }
+
+    /// Keep tone marks (pinyin) instead of dropping them.
+    #[must_use]
+    pub fn tones(mut self, tones: bool) -> Self {
+        self.tones = tones;
+        self
+    }
+
+    /// Transliterate `text`. Returns `Cow::Borrowed` for pure-ASCII input (zero
+    /// allocation), `Cow::Owned` otherwise. Infallible.
+    #[must_use]
+    pub fn run<'a>(&self, text: &'a str) -> Cow<'a, str> {
+        let (error_mode, replacement) = self.on_unknown.parts();
+        let (strict_iso9, gost7034) = self.scheme.flags();
+        crate::transliterate::transliterate_impl(
+            text,
+            self.lang.as_deref(),
+            error_mode,
+            replacement,
+            strict_iso9,
+            gost7034,
+            self.tones,
+        )
+    }
+
+    /// Every character in `text` that has no romanization, as `(char,
+    /// byte_offset)` pairs in order of appearance — exactly the set
+    /// [`run`](Self::run) would replace/ignore/preserve. (Independent of
+    /// [`on_unknown`](Self::on_unknown), which only decides what to *do* with them.)
+    #[must_use]
+    pub fn find_untranslatable(&self, text: &str) -> Vec<(char, usize)> {
+        let (strict_iso9, gost7034) = self.scheme.flags();
+        crate::transliterate::find_untranslatable_impl(
+            text,
+            self.lang.as_deref(),
+            strict_iso9,
+            gost7034,
+            self.tones,
+        )
+    }
+}
+
+/// Transliterate `text` to ASCII with every default (default tables,
+/// `Replace("[?]")`, no tones). Shorthand for `Transliterate::new().run(text)`;
+/// use the [`Transliterate`] builder to choose a [`Scheme`] or [`OnUnknown`].
+#[must_use]
+pub fn transliterate(text: &str) -> Cow<'_, str> {
+    Transliterate::new().run(text)
 }
 
 // ── Precompiled pipeline presets ──────────────────────────────────────────────
@@ -640,6 +842,7 @@ pub fn sort_key(text: &str, lang: Option<&str>) -> Result<String, Error> {
 
 /// Display-safe cleanup for rendered user content: strip bidi/format → collapse
 /// whitespace (also stripping control + zero-width). Infallible.
+#[must_use]
 pub fn display_clean(text: &str) -> String {
     crate::presets::display_clean(text)
 }
@@ -647,6 +850,7 @@ pub fn display_clean(text: &str) -> String {
 /// Strip bidirectional override and formatting characters (UAX #9 §3.3.2 plus the
 /// soft hyphen and deprecated/interlinear format controls). A composable primitive
 /// shared by the security/key presets. Infallible.
+#[must_use]
 pub fn strip_bidi(text: &str) -> String {
     crate::presets::strip_bidi(text)
 }
@@ -681,9 +885,138 @@ pub fn strip_obfuscation(text: &str) -> Result<String, Error> {
 /// now — exposing it as a pure crates.io type is deferred (see the module-level
 /// `src/pipeline.rs` `Pipeline` core), so this read-only registry view is the
 /// pipeline surface Layer 2 exposes. Infallible.
+#[must_use]
 pub fn list_profiles() -> Vec<String> {
     crate::pipeline::profile_names()
 }
+
+// ── Extension trait (#352) ────────────────────────────────────────────────────
+
+/// Method-call syntax over the [`crate::api`] free functions, for any
+/// string-like type (`&str`, `String`, `Cow`, …). `use disarm::DisarmStr;` then
+/// call e.g. `"раypal".normalize_confusables(TargetScript::Latin)`.
+///
+/// Every method is a thin shim over the matching `api::` function — those are the
+/// single implementation. Both ship: the free functions are easier to find in
+/// docs; the methods read better at call sites.
+///
+/// ```
+/// use disarm::DisarmStr;
+/// use disarm::api::TargetScript;
+/// assert_eq!("раypal".normalize_confusables(TargetScript::Latin), "paypal");
+/// assert_eq!("café".strip_accents(), "cafe");
+/// assert!("p\u{0430}ypal.com".is_suspicious_hostname().0);
+/// ```
+pub trait DisarmStr: AsRef<str> {
+    /// See [`normalize_confusables`].
+    #[must_use]
+    fn normalize_confusables(&self, target: TargetScript) -> Cow<'_, str> {
+        normalize_confusables(self.as_ref(), target)
+    }
+    /// See [`is_confusable`].
+    #[must_use]
+    fn is_confusable(&self, target: TargetScript) -> bool {
+        is_confusable(self.as_ref(), target)
+    }
+    /// See [`fold_case`].
+    #[must_use]
+    fn fold_case(&self) -> Cow<'_, str> {
+        fold_case(self.as_ref())
+    }
+    /// See [`strip_accents`].
+    #[must_use]
+    fn strip_accents(&self) -> Cow<'_, str> {
+        strip_accents(self.as_ref())
+    }
+    /// See [`transliterate`].
+    #[must_use]
+    fn transliterate(&self) -> Cow<'_, str> {
+        transliterate(self.as_ref())
+    }
+    /// See [`demojize`].
+    #[must_use]
+    fn demojize(&self, strip_modifiers: bool) -> String {
+        demojize(self.as_ref(), strip_modifiers)
+    }
+    /// See [`normalize`].
+    #[must_use]
+    fn normalize(&self, form: NormalizationForm) -> String {
+        normalize(self.as_ref(), form)
+    }
+    /// See [`is_normalized`].
+    #[must_use]
+    fn is_normalized(&self, form: NormalizationForm) -> bool {
+        is_normalized(self.as_ref(), form)
+    }
+    /// See [`escape_html`].
+    #[must_use]
+    fn escape_html(&self) -> Cow<'_, str> {
+        escape_html(self.as_ref())
+    }
+    /// See [`strip_zalgo`].
+    #[must_use]
+    fn strip_zalgo(&self, max_marks: usize) -> String {
+        strip_zalgo(self.as_ref(), max_marks)
+    }
+    /// See [`is_zalgo`].
+    #[must_use]
+    fn is_zalgo(&self, threshold: usize) -> bool {
+        is_zalgo(self.as_ref(), threshold)
+    }
+    /// See [`detect_scripts`].
+    #[must_use]
+    fn detect_scripts(&self) -> Vec<&'static str> {
+        detect_scripts(self.as_ref())
+    }
+    /// See [`is_mixed_script`].
+    #[must_use]
+    fn is_mixed_script(&self) -> bool {
+        is_mixed_script(self.as_ref())
+    }
+    /// See [`is_suspicious_hostname`].
+    #[must_use]
+    fn is_suspicious_hostname(&self) -> (bool, HostnameAnalysis) {
+        is_suspicious_hostname(self.as_ref())
+    }
+    /// See [`grapheme_len`].
+    #[must_use]
+    fn grapheme_len(&self) -> usize {
+        grapheme_len(self.as_ref())
+    }
+    /// See [`slugify`].
+    #[must_use]
+    fn slugify(&self, config: &SlugConfig) -> String {
+        slugify(self.as_ref(), config)
+    }
+    /// See [`display_clean`].
+    #[must_use]
+    fn display_clean(&self) -> String {
+        display_clean(self.as_ref())
+    }
+    /// See [`security_clean`].
+    ///
+    /// # Errors
+    /// Propagates [`security_clean`]'s error.
+    fn security_clean(&self) -> Result<String, Error> {
+        security_clean(self.as_ref())
+    }
+    /// See [`strip_obfuscation`].
+    ///
+    /// # Errors
+    /// Propagates [`strip_obfuscation`]'s error.
+    fn strip_obfuscation(&self) -> Result<String, Error> {
+        strip_obfuscation(self.as_ref())
+    }
+    /// See [`normalize_user_input`].
+    ///
+    /// # Errors
+    /// Propagates [`normalize_user_input`]'s error.
+    fn normalize_user_input(&self) -> Result<String, Error> {
+        normalize_user_input(self.as_ref())
+    }
+}
+
+impl<T: AsRef<str> + ?Sized> DisarmStr for T {}
 
 #[cfg(test)]
 mod tests {
@@ -805,21 +1138,19 @@ mod tests {
 
     #[test]
     fn transliterate_surface() {
-        use crate::ErrorMode;
         // ASCII passes through unchanged (Cow::Borrowed fast path).
-        assert_eq!(
-            transliterate("hello", None, ErrorMode::Replace, "?", false, false, false),
-            "hello"
-        );
-        // Cyrillic auto-transliterates to ASCII.
-        let out = transliterate("Москва", None, ErrorMode::Replace, "?", false, false, false);
+        assert_eq!(transliterate("hello"), "hello");
+        // Cyrillic auto-transliterates to ASCII via the builder.
+        let out = Transliterate::new()
+            .on_unknown(OnUnknown::Replace("?".into()))
+            .run("Москва");
         assert!(out.is_ascii() && !out.is_empty(), "got {out:?}");
         // strip_accents / is_ascii / list_langs.
         assert_eq!(strip_accents("café"), "cafe");
         assert!(is_ascii("hi") && !is_ascii("café"));
         assert!(list_langs().iter().any(|l| l == "ru"));
         // ASCII has nothing untranslatable.
-        assert!(find_untranslatable("hello", None, false, false, false).is_empty());
+        assert!(Transliterate::new().find_untranslatable("hello").is_empty());
     }
 
     #[test]

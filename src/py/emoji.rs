@@ -211,7 +211,7 @@ pub fn _demojize(
     replace_with: &str,
     provider: Option<Py<PyAny>>,
 ) -> PyResult<String> {
-    let error_mode = ErrorMode::from_str(errors)?;
+    let error_mode = ErrorMode::parse(errors)?;
 
     // Determine which provider to use:
     // 1. Explicit per-call provider

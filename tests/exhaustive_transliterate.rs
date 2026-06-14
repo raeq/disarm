@@ -7,13 +7,14 @@
 //! All tests are `#[ignore = "exhaustive: slow, run with --ignored"]` by default so they don't slow everyday development.
 //! Run before release with: `cargo test --test exhaustive_transliterate -- --ignored`
 
-use disarm::api;
 use disarm::tables::hangul::{lookup_compat_jamo, romanize_hangul};
 use disarm::transliterate::{
     balinese_char_role, indic_char_role, javanese_char_role, khmer_char_role, myanmar_char_role,
     sinhala_char_role, tibetan_char_role, IndicRole,
 };
 use disarm::ErrorMode;
+
+mod common;
 
 // ── Hangul syllables (U+AC00–U+D7A3): all 11,172 ──────────────────────
 
@@ -108,7 +109,8 @@ fn exhaustive_bmp_ignore_produces_ascii() {
         }
         let ch = char::from_u32(cp).unwrap();
         let input = ch.to_string();
-        let output = api::transliterate(&input, None, ErrorMode::Ignore, "", false, false, false);
+        let output =
+            common::transliterate(&input, None, ErrorMode::Ignore, "", false, false, false);
         if !output.is_ascii() {
             failures.push(format!("U+{cp:04X} → {output:?}"));
         }
@@ -133,9 +135,9 @@ fn exhaustive_bmp_idempotence() {
         }
         let ch = char::from_u32(cp).unwrap();
         let input = ch.to_string();
-        let once = api::transliterate(&input, None, ErrorMode::Ignore, "", false, false, false)
+        let once = common::transliterate(&input, None, ErrorMode::Ignore, "", false, false, false)
             .into_owned();
-        let twice = api::transliterate(&once, None, ErrorMode::Ignore, "", false, false, false)
+        let twice = common::transliterate(&once, None, ErrorMode::Ignore, "", false, false, false)
             .into_owned();
         if once != twice {
             failures.push(format!("U+{cp:04X}: once={once:?}, twice={twice:?}"));
@@ -370,11 +372,11 @@ fn deterministic_100x_repeat() {
     ];
 
     for input in &inputs {
-        let first = api::transliterate(input, None, ErrorMode::Ignore, "", false, false, false)
+        let first = common::transliterate(input, None, ErrorMode::Ignore, "", false, false, false)
             .into_owned();
         for run in 1..=100 {
             let result =
-                api::transliterate(input, None, ErrorMode::Ignore, "", false, false, false)
+                common::transliterate(input, None, ErrorMode::Ignore, "", false, false, false)
                     .into_owned();
             assert_eq!(
                 first, result,
@@ -394,7 +396,8 @@ fn exhaustive_cjk_ideographs_ascii_output() {
     for cp in 0x4E00_u32..=0x9FFF {
         let ch = char::from_u32(cp).unwrap();
         let input = ch.to_string();
-        let output = api::transliterate(&input, None, ErrorMode::Ignore, "", false, false, false);
+        let output =
+            common::transliterate(&input, None, ErrorMode::Ignore, "", false, false, false);
         if !output.is_ascii() {
             non_ascii.push(format!("U+{cp:04X} → {output:?}"));
         }

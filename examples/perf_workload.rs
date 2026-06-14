@@ -20,9 +20,7 @@ use std::hint::black_box;
 
 use disarm::api::fold_case;
 use disarm::api::strip_accents;
-use disarm::api::{find_untranslatable, transliterate};
-use disarm::api::{slugify, SlugConfig};
-use disarm::ErrorMode;
+use disarm::api::{slugify, OnUnknown, SlugConfig, Transliterate};
 
 #[path = "../benchmarks/persona_corpus.rs"]
 mod persona_corpus;
@@ -90,20 +88,19 @@ fn main() {
     let mut checksum: u64 = 0;
     for _ in 0..iters {
         let n = match op {
-            "transliterate" | "lang" => transliterate(
-                black_box(&doc),
-                lang,
-                ErrorMode::Ignore,
-                "",
-                false,
-                false,
-                false,
-            )
-            .len(),
+            "transliterate" | "lang" => {
+                let mut b = Transliterate::new().on_unknown(OnUnknown::Ignore);
+                if let Some(l) = lang {
+                    b = b.lang(l);
+                }
+                b.run(black_box(&doc)).len()
+            }
             "slugify" => slugify(black_box(&doc), &config).len(),
             "fold_case" => fold_case(black_box(&doc)).len(),
             "strip_accents" => strip_accents(black_box(&doc)).len(),
-            "strict_scan" => find_untranslatable(black_box(&doc), None, false, false, false).len(),
+            "strict_scan" => Transliterate::new()
+                .find_untranslatable(black_box(&doc))
+                .len(),
             _ => usage(),
         };
         checksum = checksum.wrapping_add(n as u64);

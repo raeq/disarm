@@ -1334,6 +1334,23 @@ pub(crate) fn strip_accents(text: &str) -> String {
     out
 }
 
+/// Borrowing form of [`strip_accents`] (#352): returns `Cow::Borrowed` when there
+/// is nothing to strip — no combining marks in NFD means NFD→strip→NFC is the
+/// identity — so the no-op case (incl. all ASCII) never allocates. The NFD scan
+/// is iterator-only (no allocation).
+pub(crate) fn strip_accents_cow(text: &str) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
+    use unicode_normalization::UnicodeNormalization;
+    if text.is_ascii()
+        || !text
+            .nfd()
+            .any(unicode_normalization::char::is_combining_mark)
+    {
+        return Cow::Borrowed(text);
+    }
+    Cow::Owned(strip_accents(text))
+}
+
 /// In-place form of [`strip_accents`] writing into `out` (cleared first), so
 /// the pipeline can reuse one buffer across steps (#236 item 7).
 pub fn strip_accents_into(text: &str, out: &mut String) {

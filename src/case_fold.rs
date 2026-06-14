@@ -25,6 +25,21 @@ pub(crate) fn fold_case_impl(text: &str) -> String {
     out
 }
 
+/// Borrowing form of [`fold_case_impl`] (#352): returns `Cow::Borrowed` when
+/// `text` is already fully case-folded (no ASCII uppercase and no character with
+/// a folding-table entry), so the no-op case never allocates.
+pub(crate) fn fold_case_cow(text: &str) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
+    let changes = text.chars().any(|ch| {
+        ch.is_ascii_uppercase() || (!ch.is_ascii() && case_folding_data::lookup(ch).is_some())
+    });
+    if changes {
+        Cow::Owned(fold_case_impl(text))
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
 /// In-place form of [`fold_case_impl`] writing into `result` (cleared first),
 /// so the pipeline can reuse one buffer across steps (#236 item 7).
 pub(crate) fn fold_case_into(text: &str, result: &mut String) {

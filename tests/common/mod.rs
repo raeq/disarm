@@ -243,3 +243,65 @@ pub fn tai_le_text() -> BoxedStrategy<String> {
 pub fn new_tai_lue_text() -> BoxedStrategy<String> {
     chars_in_range(0x1980, 0x19C9)
 }
+
+// ── #352: positional shims over the new `Transliterate` builder ────────────────
+// The per-script conformance tables call transliterate ~220 times with positional
+// args. Rather than rewrite each to the builder, these helpers keep the old call
+// shape on top of the new API. Use `common::transliterate(...)` in the tests.
+
+fn scheme_of(strict_iso9: bool, gost7034: bool) -> disarm::api::Scheme {
+    use disarm::api::Scheme;
+    if strict_iso9 {
+        Scheme::StrictIso9
+    } else if gost7034 {
+        Scheme::GostR7034
+    } else {
+        Scheme::Default
+    }
+}
+
+fn on_unknown_of(error_mode: disarm::ErrorMode, replacement: &str) -> disarm::api::OnUnknown {
+    use disarm::api::OnUnknown;
+    match error_mode {
+        disarm::ErrorMode::Replace => OnUnknown::Replace(replacement.to_owned()),
+        disarm::ErrorMode::Ignore => OnUnknown::Ignore,
+        disarm::ErrorMode::Preserve => OnUnknown::Preserve,
+    }
+}
+
+/// Positional transliterate matching the pre-#352 `api::transliterate` signature.
+pub fn transliterate<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    error_mode: disarm::ErrorMode,
+    replacement: &str,
+    tones: bool,
+    strict_iso9: bool,
+    gost7034: bool,
+) -> std::borrow::Cow<'a, str> {
+    let mut b = disarm::api::Transliterate::new()
+        .scheme(scheme_of(strict_iso9, gost7034))
+        .on_unknown(on_unknown_of(error_mode, replacement))
+        .tones(tones);
+    if let Some(l) = lang {
+        b = b.lang(l);
+    }
+    b.run(text)
+}
+
+/// Positional `find_untranslatable` matching the pre-#352 signature.
+pub fn find_untranslatable(
+    text: &str,
+    lang: Option<&str>,
+    tones: bool,
+    strict_iso9: bool,
+    gost7034: bool,
+) -> Vec<(char, usize)> {
+    let mut b = disarm::api::Transliterate::new()
+        .scheme(scheme_of(strict_iso9, gost7034))
+        .tones(tones);
+    if let Some(l) = lang {
+        b = b.lang(l);
+    }
+    b.find_untranslatable(text)
+}

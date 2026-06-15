@@ -16,9 +16,78 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-06-15
+
+The **multi-language milestone** (epic #326): disarm becomes a publishable,
+pyo3-free **Rust crate** with a first-class idiomatic Rust API, gains a **Ruby**
+binding, and adds opt-in diagnostic **logging** — all over a single shared
+pure-Rust core. The Python package is unchanged for callers (same `import disarm`
+surface); the work is the core extraction and the new non-Python surfaces.
+
+### Added
+
+- **Pure-Rust core, published to crates.io** (#38, #42). The default build is now
+  the pyo3-free core (`default = []`); the Python extension is the opt-in
+  `extension-module` feature, so `cargo add disarm` pulls a clean Rust library
+  with no libpython in its dependency tree (enforced by a CI `cargo tree | grep
+  pyo3` gate). The codebase is organized in three layers: Layer-1 `pub(crate)`
+  algorithm cores, Layer-2 the public `disarm::api`, and Layer-3b the
+  feature-gated pyo3 shims — all consuming one implementation.
+- **Idiomatic Rust API (`disarm::api`)** (#352, #361, #362). The semver-governed
+  crates.io surface: typed enums (`TargetScript`, `Scheme`, `NormalizationForm`,
+  `UrlComponent`, `Platform`, `ReverseLang`) that each round-trip via
+  `as_str`/`Display`/`FromStr`; the `Transliterate` builder with `Scheme` /
+  `OnUnknown` (which carries its replacement in the `Replace(String)` variant);
+  an opaque `Error` with a stable `ErrorKind`/`code()`; `Cow<'_, str>`
+  borrow-on-no-op returns; a `graphemes()` iterator; the `SlugConfig` builder; the
+  `DisarmStr` extension trait for method-call syntax; named `#[non_exhaustive]`
+  struct returns (`EncodingDetection`, `DecodedText`, `HostnameAnalysis`,
+  `Untranslatable` — no anonymous tuples); and a **guarded** process-global
+  registration API (`register_lang` / `register_replacements` /
+  `remove_replacement` / `clear_replacements` / `seal_registrations`) that
+  enforces the registration cap and the one-way seal latch. Two contract tests
+  fail CI if a `pub fn` ever returns a tuple or a token enum loses its round-trip.
+- **Ruby bindings — the `disarm` RubyGem** (#45, #357). A
+  [magnus](https://github.com/matsadler/magnus)-based native extension wrapping
+  the pure-Rust core (no Python), with an idiomatic Ruby surface: keyword
+  arguments with defaults, symbol tokens (`:latin`, `:strict_iso9`, …), a single
+  `transliterate(text, scheme:)`, and a `Disarm::Error < StandardError`
+  hierarchy. Precompiled platform gems (Linux x86_64/aarch64, macOS
+  x86_64/arm64, Windows) install with no local Rust toolchain.
+- **Opt-in, binding-neutral diagnostic logging** (#208, #358). Behind the
+  `log` / `log-content` features (off by default), the core emits structured
+  records at API boundaries via the [`log`](https://docs.rs/log) facade — **zero
+  cost when off** (the macros compile to nothing) and never inside a per-codepoint
+  hot loop (enforced by a source-scan test). Default-level records carry
+  **metadata only** (lengths, counts, flags, durations, error codes — never input
+  or output content, enforced by a redaction sentinel test); the `log-content`
+  TRACE escape hatch routes its truncated samples through disarm's own
+  `strip_log_injection` (dogfooding) so a log line can never forge a record.
+
+### Changed
+
+- **Native module renamed `disarm._disarm` → `disarm._core`** (#42). Internal
+  only — Python callers `import disarm` and never reference the native module — so
+  there is no change to the Python API.
+
+### Fixed
+
+- **Confusables: cross-script ASCII folds and additive Greek/Cyrillic pairs**
+  (#341, #342, #343), plus the halfwidth vertical form U+FFE8 residue (#245).
+- **Terminal width: corrected the additivity-across-space precondition** (#279).
+
+### Security
+
+- **HAI-SDLC hardening pass over the Rust core** (#360): a deep multi-pass review
+  (0 critical / 0 high) actioned into 21 fixes — tightened a hostname IPv6-literal
+  zone-id check, added limit-rejection logging, a unique-slug truncation-error fix,
+  and an allocation-free `is_normalized`, among others.
+
 ### Internal
 
 - **Wired Tier 3 (exhaustive + formal) into the release/publish gate** (#159, epic #326). `publish.yml` now runs a `tier3` job on the release/publish trigger that executes the exhaustive Rust domain tests (`cargo test --no-default-features --test exhaustive_transliterate -- --ignored`) and the Python formal invariants (`pytest -m formal`, against a freshly built wheel). Every wheel/sdist build job and the `publish` job `needs:` it, so a Tier-3 failure blocks the upload to PyPI — closing the gap where these tiers were a manual pre-release step. They remain excluded from fast PR CI; the `#[ignore]` / `@pytest.mark.formal` markers are untouched.
+- **Split the 1,200-line `src/api.rs` into cohesive submodules** (`api/{safety,text,transliterate,presets}.rs`) re-exported from `api/mod.rs`, with the `DisarmStr` trait in the hub (#361). No public-path change.
+- **`translit-rs` 0.8.2 redirect shim** published so the old PyPI name points users at `disarm` (#264 follow-up).
 
 ## [0.9.1] — 2026-06-13
 

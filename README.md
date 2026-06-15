@@ -2,7 +2,7 @@
 
 [![Documentation](https://img.shields.io/badge/docs-disarm.dev-blue)](https://docs.disarm.dev/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/disarm/blob/main/LICENSE)
 
-Unicode canonicalization and TR39 confusable analysis for Python — building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling) plus standards-based transliteration. Rust-powered.
+Unicode canonicalization and TR39 *visual* confusable analysis for Python — building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling), plus standards-based *phonetic* transliteration. Rust-powered.
 
 **[Documentation](docs/index.md)** | **[API Reference](docs/api/index.md)** | **[PyPI](https://pypi.org/project/disarm/)**
 
@@ -14,7 +14,7 @@ Unicode canonicalization and TR39 confusable analysis for Python — building bl
 
 The text-cleaning libraries already in most pipelines — `ftfy`, `unidecode`, `anyascii` — were built for encoding repair and ASCII conversion. They map confusables *phonetically* (Cyrillic `р` → Latin `r`), which does not reverse a homoglyph substitution.
 
-disarm implements *visual* confusable mapping per [Unicode TR39](https://www.unicode.org/reports/tr39/) (Cyrillic `р` → Latin `p`). In a controlled benchmark (six attack types, three downstream tasks, two architectures; 435,864 observations), visual TR39 mapping reached **XMR = 1.000 on the tested TR39 homoglyph pairs** (17 Latin–Cyrillic, 19 Greek), where phonetic transliterators plateaued near half:
+disarm's `normalize_confusables()` / `strip_obfuscation()` implement *visual* confusable mapping per [Unicode TR39](https://www.unicode.org/reports/tr39/) (Cyrillic `р` → Latin `p`) — **not** to be confused with `transliterate()`, which romanizes *phonetically* (`р` → `r`) like the tools above. In a controlled benchmark (six attack types, three downstream tasks, two architectures; 435,864 observations), this visual TR39 mapping reached **XMR = 1.000 on the tested TR39 homoglyph pairs** (17 Latin–Cyrillic, 19 Greek), where phonetic transliterators plateaued near half:
 
 | Tool class | Mapping | Homoglyph XMR (tested TR39 pairs) |
 |---|---|---|
@@ -26,6 +26,18 @@ disarm implements *visual* confusable mapping per [Unicode TR39](https://www.uni
 > **Scope.** disarm is a **defense-in-depth layer, not a complete control.** It canonicalizes the confusables it bundles (TR39) and strips the format characters it enumerates; it does not promise to stop any attack class, and the confusable space is far larger than any table. See the **[Threat Model](THREAT_MODEL.md)** for what is and isn't in scope.
 >
 > **Not an output sanitizer.** disarm normalizes *input*; it does **not** make text safe to emit into HTML, JS, URLs, SQL, or shells. It performs no escaping and does not strip `<`, `>`, `&` — `<script>alert(1)</script>` passes through unchanged, and NFKC normalization can even *surface* ASCII metacharacters from fullwidth lookalikes (`＜script＞` → `<script>`). disarm is **not** an XSS or injection defense and never replaces one: encode at the output sink (framework auto-escaping, DOMPurify, parameterized queries). Run disarm *before* those, as the Unicode layer they don't cover.
+
+### Which function do I want?
+
+The most common confusion is reaching for `transliterate()` to defend against homoglyphs. It does the **opposite** mapping. Two distinct operations, two different tables:
+
+| If you want to… | Use | Mapping | Example |
+|---|---|---|---|
+| **Defend against homoglyph / look-alike spoofing** | `normalize_confusables()`, `strip_obfuscation()` | **visual** (TR39) | Cyrillic `р` → Latin **`p`** |
+| **Romanize text to readable ASCII** | `transliterate()` | **phonetic** (BGN/PCGN, ISO 9, GOST) | Cyrillic `р` → Latin **`r`**; `Москва` → `Moskva` |
+| **Flag spoofed hostnames / IDNs** | `is_suspicious_hostname()` | analysis (no rewrite) | `аpple.com` → suspicious |
+
+`transliterate()` is a *romanizer*, not a security control: it maps by sound/standard, so it will turn a Cyrillic `р` into `r` and leave the spoof readable. For homoglyph defense, always use the visual (TR39) functions in row 1.
 
 ```python
 from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
@@ -168,6 +180,8 @@ normalize_user_input("pаypal")      # → "paypal"  (NFKC → strip bidi → st
 ```
 
 ### Transliteration (standards-based core)
+
+> **Romanization, not homoglyph defense.** `transliterate()` maps *phonetically* (Cyrillic `р` → `r`), **not** by TR39 *visual* confusability (`р` → `p`). It will not reverse a look-alike spoof — for that use [`normalize_confusables()` / `strip_obfuscation()`](#which-function-do-i-want).
 
 ```python
 from disarm import transliterate, slugify

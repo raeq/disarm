@@ -6,9 +6,9 @@ message: "If you use this software, please cite it using the metadata from this 
 type: software
 title: "disarm"
 abstract: >-
-  Unicode canonicalization and TR39 confusable analysis: building blocks
+  Unicode canonicalization and TR39 visual confusable analysis: building blocks
   for text-security pipelines (homoglyph, bidi, zalgo, and invisible-character
-  handling) plus standards-based transliteration to roman script. Implemented
+  handling) plus standards-based phonetic transliteration to roman script. Implemented
   in Rust with Python bindings.
 authors:
   - family-names: "Quinn"

@@ -1,6 +1,6 @@
 site_name: disarm
 site_url: https://docs.disarm.dev/
-site_description: Unicode canonicalization and TR39 confusable analysis — building blocks for text-security pipelines plus standards-based transliteration, powered by Rust
+site_description: Unicode canonicalization and TR39 visual confusable analysis — building blocks for text-security pipelines plus standards-based phonetic transliteration, powered by Rust
 site_author: Richard Quinn
 repo_url: https://github.com/raeq/disarm
 repo_name: raeq/disarm
@@ -107,6 +107,7 @@ nav:
   - Limitations: limitations.md
   - Changelog: CHANGELOG.md
   - Contributing: CONTRIBUTING.md
+  - Binding guide: BINDINGS.md
   - Releasing: RELEASING.md
   - Dependency upgrades: DEPENDENCY_UPGRADES.md
   - Security: SECURITY.md

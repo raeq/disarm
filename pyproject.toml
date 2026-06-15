@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "disarm"
 version = "0.10.0"
-description = "Unicode canonicalization and TR39 confusable analysis for Python: building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling) plus standards-based transliteration — powered by Rust"
+description = "Unicode canonicalization and TR39 visual confusable analysis for Python: building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling) plus standards-based phonetic transliteration — powered by Rust"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

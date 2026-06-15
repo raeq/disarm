@@ -183,7 +183,14 @@ def _transliterate_dispatch(
     tones: bool = False,
     context: bool = False,
 ) -> str | list[str]:
-    """Unicode → ASCII transliteration.
+    """Phonetic, standards-based romanization (Unicode → ASCII transliteration).
+
+    This is **not** TR39 *visual* confusable mapping. ``transliterate`` romanizes
+    by sound/standard (Cyrillic ``р`` → ``r``, BGN/PCGN by default), so it will
+    *not* reverse a homoglyph spoof — it leaves a look-alike substitution
+    readable. To fold visual look-alikes for homoglyph defense (Cyrillic
+    ``р`` → ``p``), use :func:`normalize_confusables` or :func:`strip_obfuscation`
+    instead.
 
     Accepts a single string or a list of strings. When a list is passed,
     forward transliteration (the default) processes all strings in a single

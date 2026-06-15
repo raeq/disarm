@@ -16,6 +16,22 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Changed
+
+- **Docs/metadata: scope `transliterate()` vs the TR39 confusable functions (#328).**
+  The headline identity led with "TR39 confusable analysis", while the most
+  discoverable function, `transliterate()`, performs the *opposite* mapping —
+  phonetic BGN/PCGN romanization (Cyrillic `р` → `r`), not TR39 *visual*
+  confusable folding (`р` → `p`). Clarified across every entry point with no
+  behaviour change: the identity one-liner (README, `docs/index.md`,
+  `Cargo.toml`, `pyproject.toml`, `mkdocs.yml`, `CITATION.cff`) now says
+  *visual* confusable analysis and *phonetic* transliteration; a new
+  "Which function do I want?" decision table sits near the top of the README and
+  docs landing page; and `transliterate()`'s docstring (hence
+  `docs/api/transforms.md`) and the README Quick Start block now state it is
+  romanization, not homoglyph defense, pointing to `normalize_confusables()` /
+  `strip_obfuscation()` for the latter.
+
 ## [0.10.0] — 2026-06-15
 
 The **multi-language milestone** (epic #326): disarm becomes a publishable,

@@ -6,43 +6,111 @@ disarm implements Unicode TR39 confusable detection and normalization with multi
 
 ## Detecting confusables
 
-```python
-from disarm import is_confusable, is_mixed_script
+=== "Python"
 
-# Cyrillic Н looks like Latin H
-assert is_confusable("Неllo") == True
-assert is_mixed_script("Неllo") == True
+    ```python
+    from disarm import is_confusable, is_mixed_script
 
-# Pure Latin — no confusables
-assert is_confusable("Hello") == False
-assert is_mixed_script("Hello") == False
-```
+    # Cyrillic Н looks like Latin H
+    assert is_confusable("Неllo") == True
+    assert is_mixed_script("Неllo") == True
+
+    # Pure Latin — no confusables
+    assert is_confusable("Hello") == False
+    assert is_mixed_script("Hello") == False
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, TargetScript};
+
+    // Cyrillic Н looks like Latin H
+    assert_eq!(api::is_confusable("Неllo", TargetScript::Latin), true);
+    assert_eq!(api::is_mixed_script("Неllo"), true);
+
+    // Pure Latin — no confusables
+    assert_eq!(api::is_confusable("Hello", TargetScript::Latin), false);
+    assert_eq!(api::is_mixed_script("Hello"), false);
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Cyrillic Н looks like Latin H
+    Disarm.confusable?("Неllo")   # => true
+
+    # Pure Latin — no confusables
+    Disarm.confusable?("Hello")   # => false
+    ```
 
 ## Normalizing confusables
 
 Replace confusable characters with their target-script equivalents:
 
-```python
-from disarm import normalize_confusables
+=== "Python"
 
-# Cyrillic а, е, о → Latin a, e, o
-assert normalize_confusables("Неllo Wоrld") == 'Hello World'
+    ```python
+    from disarm import normalize_confusables
 
-# Greek omicron → Latin o
-assert normalize_confusables("Ηellο") == 'Hello'
-```
+    # Cyrillic а, е, о → Latin a, e, o
+    assert normalize_confusables("Неllo Wоrld") == 'Hello World'
+
+    # Greek omicron → Latin o
+    assert normalize_confusables("Ηellο") == 'Hello'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, TargetScript};
+
+    // Cyrillic а, е, о → Latin a, e, o
+    assert_eq!(api::normalize_confusables("Неllo Wоrld", TargetScript::Latin), "Hello World");
+
+    // Greek omicron → Latin o
+    assert_eq!(api::normalize_confusables("Ηellο", TargetScript::Latin), "Hello");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Cyrillic а, е, о → Latin a, e, o
+    Disarm.normalize_confusables("Неllo Wоrld")   # => "Hello World"
+
+    # Greek omicron → Latin o
+    Disarm.normalize_confusables("Ηellο")         # => "Hello"
+    ```
 
 ### Target script
 
 By default, confusables are normalized to Latin. You can specify a different target script to normalize *towards* that script instead:
 
-```python
-# Normalize to Latin (default) — non-Latin homoglyphs → Latin
-assert normalize_confusables("раypal") == 'paypal'
+=== "Python"
 
-# Normalize to Cyrillic — non-Cyrillic homoglyphs → Cyrillic
-assert normalize_confusables("paypal", target_script="cyrillic") == 'раураӏ'
-```
+    ```python
+    # Normalize to Latin (default) — non-Latin homoglyphs → Latin
+    assert normalize_confusables("раypal") == 'paypal'
+
+    # Normalize to Cyrillic — non-Cyrillic homoglyphs → Cyrillic
+    assert normalize_confusables("paypal", target_script="cyrillic") == 'раураӏ'
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Normalize to Latin (default) — non-Latin homoglyphs → Latin
+    Disarm.normalize_confusables("раypal")                       # => "paypal"
+
+    # Normalize to Cyrillic — non-Cyrillic homoglyphs → Cyrillic
+    Disarm.normalize_confusables("paypal", target: :cyrillic)    # => "раураӏ"
+    ```
 
 ### Supported target scripts
 
@@ -57,15 +125,26 @@ Characters without a confusable equivalent in the target script pass through unc
 
 Identify which Unicode scripts are present in a string:
 
-```python
-from disarm import detect_scripts, Script
+=== "Python"
 
-scripts = detect_scripts("Hello Мир")
-assert scripts == [Script.LATIN, Script.CYRILLIC]
+    ```python
+    from disarm import detect_scripts, Script
 
-scripts = detect_scripts("東京 Tokyo")
-assert scripts == [Script.HAN, Script.LATIN]
-```
+    scripts = detect_scripts("Hello Мир")
+    assert scripts == [Script.LATIN, Script.CYRILLIC]
+
+    scripts = detect_scripts("東京 Tokyo")
+    assert scripts == [Script.HAN, Script.LATIN]
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    assert_eq!(api::detect_scripts("Hello Мир"), vec!["Latin", "Cyrillic"]);
+    assert_eq!(api::detect_scripts("東京 Tokyo"), vec!["Han", "Latin"]);
+    ```
 
 ### The Script enum
 

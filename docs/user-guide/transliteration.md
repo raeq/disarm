@@ -20,34 +20,76 @@ There are two quality tiers to be aware of (see [Language Support](language-supp
 
 ## Basic usage
 
-```python
-from disarm import transliterate
+=== "Python"
 
-assert transliterate("café") == 'cafe'
-assert transliterate("naïve") == 'naive'
-assert transliterate("Москва") == 'Moskva'
-```
+    ```python
+    from disarm import transliterate
+
+    assert transliterate("café") == 'cafe'
+    assert transliterate("naïve") == 'naive'
+    assert transliterate("Αθήνα") == 'Athina'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    assert_eq!(api::transliterate("café"), "cafe");
+    assert_eq!(api::transliterate("naïve"), "naive");
+    assert_eq!(api::transliterate("Αθήνα"), "Athina");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    Disarm.transliterate("café")    # => "cafe"
+    Disarm.transliterate("naïve")   # => "naive"
+    Disarm.transliterate("Αθήνα")   # => "Athina"
+    ```
 
 ## Language profiles
 
-When a `lang` parameter is provided, language-specific mapping overrides apply before the default table:
+When a `lang` parameter is provided, language-specific mapping overrides apply
+before the default table — for example the Ukrainian profile romanizes Київ →
+Kyiv (the default mapping would not), and German ü → ue:
 
-```python
-# German
-assert transliterate("Ärger über Ölförderung", lang="de") == 'Aerger ueber Oelfoerderung'
+=== "Python"
 
-# Without lang — default mapping
-assert transliterate("Ärger über Ölförderung") == 'Arger uber Olforderung'
+    ```python
+    # Ukrainian
+    assert transliterate("Київ", lang="uk") == 'Kyiv'
 
-# Norwegian
-assert transliterate("Ål i Ørsta", lang="no") == 'Aal i Oersta'
+    # German
+    assert transliterate("Ärger über Ölförderung", lang="de") == 'Aerger ueber Oelfoerderung'
+    # Without lang — default mapping
+    assert transliterate("Ärger über Ölförderung") == 'Arger uber Olforderung'
 
-# Swedish
-assert transliterate("Malmö Ängby", lang="sv") == 'Malmoe Aengby'
+    # Norwegian / Swedish / Turkish
+    assert transliterate("Ål i Ørsta", lang="no") == 'Aal i Oersta'
+    assert transliterate("Malmö Ängby", lang="sv") == 'Malmoe Aengby'
+    assert transliterate("İstanbul çağı", lang="tr") == 'Istanbul cagi'
+    ```
 
-# Turkish
-assert transliterate("İstanbul çağı", lang="tr") == 'Istanbul cagi'
-```
+=== "Rust"
+
+    ```rust
+    use disarm::api::Transliterate;
+
+    assert_eq!(Transliterate::new().lang("uk").run("Київ"), "Kyiv");
+    assert_eq!(Transliterate::new().lang("de").run("Ärger"), "Aerger");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    Disarm.transliterate("Київ", lang: :uk)    # => "Kyiv"
+    Disarm.transliterate("Ärger", lang: :de)   # => "Aerger"
+    ```
 
 ### Auto-detecting the language
 
@@ -228,7 +270,7 @@ disarm operates in two transliteration modes depending on the `context` paramete
 Every character is mapped independently to its ASCII equivalent using a lookup table. No dictionary, no context, no ambiguity resolution. This is the standard approach used by all transliteration libraries (Unidecode, anyascii, text-unidecode).
 
 ```python
-assert transliterate("Москва") == 'Moskva'
+assert transliterate("Київ", lang="uk") == 'Kyiv'
 assert transliterate("كتب العربية") == "ktb al'rbyh"
 assert transliterate("שלום", lang="he") == 'shlvm'
 ```

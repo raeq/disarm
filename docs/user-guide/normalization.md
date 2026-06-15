@@ -27,35 +27,65 @@ Normalization resolves this by converting to a canonical form.
 
 ## Basic usage
 
-```python
-from disarm import normalize
+=== "Python"
 
-# NFC: compose into single codepoints
-assert normalize("e\u0301") == 'é'
+    ```python
+    from disarm import normalize
 
-# NFD: decompose into base + combining marks
-assert normalize("é", form="NFD") == 'é'
+    # NFC: compose into single codepoints
+    assert normalize("e\u0301") == 'é'
 
-# NFKC: compatibility + compose
-assert normalize("ﬁnance", form="NFKC") == 'finance'
-assert normalize("2²", form="NFKC") == '22'
+    # NFD: decompose into base + combining marks
+    assert normalize("é", form="NFD") == 'é'
 
-# NFKD: compatibility + decompose
-assert normalize("ﬁ", form="NFKD") == 'fi'
-```
+    # NFKC: compatibility + compose
+    assert normalize("ﬁnance", form="NFKC") == 'finance'
+    assert normalize("2²", form="NFKC") == '22'
+
+    # NFKD: compatibility + decompose
+    assert normalize("ﬁ", form="NFKD") == 'fi'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, NormalizationForm};
+
+    // NFC: compose into single codepoints
+    assert_eq!(api::normalize("e\u{0301}", NormalizationForm::Nfc), "é");
+    // NFD: decompose into base + combining marks
+    assert_eq!(api::normalize("é", NormalizationForm::Nfd), "é");
+    // NFKC: compatibility + compose
+    assert_eq!(api::normalize("ﬁnance", NormalizationForm::Nfkc), "finance");
+    // NFKD: compatibility + decompose
+    assert_eq!(api::normalize("ﬁ", NormalizationForm::Nfkd), "fi");
+    ```
 
 ## Checking normalization
 
 Test whether a string is already in a given form without performing the full normalization:
 
-```python
-from disarm import is_normalized
+=== "Python"
 
-assert is_normalized("hello") == True
-assert is_normalized("é", form="NFC") == True
-assert is_normalized("é", form="NFD") == False
-assert is_normalized("e\u0301", form="NFD") == True
-```
+    ```python
+    from disarm import is_normalized
+
+    assert is_normalized("hello") == True
+    assert is_normalized("é", form="NFC") == True
+    assert is_normalized("é", form="NFD") == False
+    assert is_normalized("e\u0301", form="NFD") == True
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, NormalizationForm};
+
+    assert_eq!(api::is_normalized("hello", NormalizationForm::Nfc), true);
+    assert_eq!(api::is_normalized("é", NormalizationForm::Nfc), true);
+    assert_eq!(api::is_normalized("é", NormalizationForm::Nfd), false);
+    assert_eq!(api::is_normalized("e\u{0301}", NormalizationForm::Nfd), true);
+    ```
 
 ## The NF enum
 

@@ -1,10 +1,12 @@
 # Grapheme Clusters
 
-Unicode text is more complex than it appears. A single user-perceived "character" can be composed of multiple Unicode codepoints — combining accents, emoji modifiers, ZWJ sequences, regional indicator pairs, and Hangul jamo all create situations where Python's `len()` gives a misleading count.
+Unicode text is more complex than it appears. A single user-perceived "character" can be composed of multiple Unicode codepoints — combining accents, emoji modifiers, ZWJ sequences, regional indicator pairs, and Hangul jamo all create situations where a naive codepoint count is misleading.
 
-disarm provides three functions for working with **extended grapheme clusters** as defined by [UAX #29](https://www.unicode.org/reports/tr29/), giving correct results where `len()` overcounts.
+disarm provides functions for working with **extended grapheme clusters** as defined by [UAX #29](https://www.unicode.org/reports/tr29/), giving correct results where a codepoint count overcounts.
 
 ## The Problem
+
+A naive length is a count of **codepoints**, not user-perceived characters. In Python, `len()` exhibits this:
 
 ```python
 text = "café"            # 4 characters, right?
@@ -21,7 +23,7 @@ assert len("🇬🇧") == 2
 assert len("👋🏽") == 2
 ```
 
-Python's `len()` counts **codepoints**, not **user-perceived characters**. For correct character counting, splitting, and truncation, you need grapheme cluster segmentation.
+A codepoint count is not a count of **user-perceived characters**. For correct character counting, splitting, and truncation, you need grapheme cluster segmentation.
 
 ## Functions
 
@@ -29,37 +31,62 @@ Python's `len()` counts **codepoints**, not **user-perceived characters**. For c
 
 Count the number of user-perceived characters:
 
-```python
-from disarm import grapheme_len
+=== "Python"
 
-assert grapheme_len("café") == 4
-assert grapheme_len("cafe\u0301") == 4
+    ```python
+    from disarm import grapheme_len
 
-# Emoji
-assert grapheme_len("👨‍👩‍👧‍👦") == 1
-assert grapheme_len("🇬🇧") == 1
-assert grapheme_len("👋🏽") == 1
-assert grapheme_len("🏳️‍🌈") == 1
+    assert grapheme_len("café") == 4
+    assert grapheme_len("cafe\u0301") == 4
 
-# Complex scripts
-assert grapheme_len("\u1100\u1161\u11A8") == 1
-assert grapheme_len("नमस्ते") == 3
-```
+    # Emoji
+    assert grapheme_len("👨‍👩‍👧‍👦") == 1
+    assert grapheme_len("🇬🇧") == 1
+    assert grapheme_len("👋🏽") == 1
+    assert grapheme_len("🏳️‍🌈") == 1
+
+    # Complex scripts
+    assert grapheme_len("\u1100\u1161\u11A8") == 1
+    assert grapheme_len("नमस्ते") == 3
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    assert_eq!(api::grapheme_len("café"), 4);
+    assert_eq!(api::grapheme_len("👨‍👩‍👧‍👦"), 1);
+    assert_eq!(api::grapheme_len("🇬🇧"), 1);
+    assert_eq!(api::grapheme_len("नमस्ते"), 3);
+    ```
 
 ### grapheme_split
 
 Split text into individual grapheme clusters:
 
-```python
-from disarm import grapheme_split
+=== "Python"
 
-assert grapheme_split("café") == ['c', 'a', 'f', 'é']
-assert grapheme_split("cafe\u0301") == ['c', 'a', 'f', 'é']
+    ```python
+    from disarm import grapheme_split
 
-assert grapheme_split("👨‍👩‍👧‍👦!") == ['👨\u200d👩\u200d👧\u200d👦', '!']
-assert grapheme_split("🇫🇷🇬🇧") == ['🇫🇷', '🇬🇧']
-assert grapheme_split("Hi 👋🏽") == ['H', 'i', ' ', '👋🏽']
-```
+    assert grapheme_split("café") == ['c', 'a', 'f', 'é']
+    assert grapheme_split("cafe\u0301") == ['c', 'a', 'f', 'é']
+
+    assert grapheme_split("👨‍👩‍👧‍👦!") == ['👨\u200d👩\u200d👧\u200d👦', '!']
+    assert grapheme_split("🇫🇷🇬🇧") == ['🇫🇷', '🇬🇧']
+    assert grapheme_split("Hi 👋🏽") == ['H', 'i', ' ', '👋🏽']
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    assert_eq!(api::grapheme_split("café"), ["c", "a", "f", "é"]);
+    assert_eq!(api::grapheme_split("🇫🇷🇬🇧"), ["🇫🇷", "🇬🇧"]);
+    assert_eq!(api::grapheme_split("Hi 👋🏽"), ["H", "i", " ", "👋🏽"]);
+    ```
 
 !!! note
     Input is limited to 10 MB to prevent excessive memory allocation. Raises `DisarmError` for larger inputs.
@@ -68,18 +95,32 @@ assert grapheme_split("Hi 👋🏽") == ['H', 'i', ' ', '👋🏽']
 
 Truncate text to a maximum number of grapheme clusters without splitting any cluster:
 
-```python
-from disarm import grapheme_truncate
+=== "Python"
 
-assert grapheme_truncate("Hello World", 5) == 'Hello'
-assert grapheme_truncate("café", 3) == 'caf'
-assert grapheme_truncate("cafe\u0301s", 4) == 'café'
+    ```python
+    from disarm import grapheme_truncate
 
-# Emoji are never split
-assert grapheme_truncate("👨‍👩‍👧‍👦🎉", 1) == '👨\u200d👩\u200d👧\u200d👦'
-assert grapheme_truncate("Hi 👩‍👩‍👧‍👦!", 4) == 'Hi 👩\u200d👩\u200d👧\u200d👦'
-assert grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2) == '🇬🇧🇫🇷'
-```
+    assert grapheme_truncate("Hello World", 5) == 'Hello'
+    assert grapheme_truncate("café", 3) == 'caf'
+    assert grapheme_truncate("cafe\u0301s", 4) == 'café'
+
+    # Emoji are never split
+    assert grapheme_truncate("👨‍👩‍👧‍👦🎉", 1) == '👨\u200d👩\u200d👧\u200d👦'
+    assert grapheme_truncate("Hi 👩‍👩‍👧‍👦!", 4) == 'Hi 👩\u200d👩\u200d👧\u200d👦'
+    assert grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2) == '🇬🇧🇫🇷'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    assert_eq!(api::grapheme_truncate("Hello World", 5), "Hello");
+    assert_eq!(api::grapheme_truncate("café", 3), "caf");
+
+    // Emoji are never split
+    assert_eq!(api::grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2), "🇬🇧🇫🇷");
+    ```
 
 Unlike byte-level slicing (`text[:n]`) or codepoint-level slicing, `grapheme_truncate` never produces corrupted output — no broken emoji, no orphaned combining marks, no split Hangul syllables.
 
@@ -212,24 +253,48 @@ columns text occupies (a CJK character is one cluster but two columns). Use
 `terminal_width` and `grapheme_width` for that — measured per grapheme cluster
 over [UAX #11 East Asian Width](https://www.unicode.org/reports/tr11/):
 
-```python
-from disarm import terminal_width, grapheme_width
+=== "Python"
 
-assert terminal_width("hello") == 5
-assert terminal_width("世界") == 4  # wide CJK: 2 columns each
-assert terminal_width("cafe\u0301") == 4  # NFD: "e" + combining acute (U+0301, 0 columns)
-assert terminal_width("a😀") == 3  # emoji cluster occupies 2 columns
-assert grapheme_width("👨‍👩‍👧‍👦") == 2  # one ZWJ cluster, 2 columns
-```
+    ```python
+    from disarm import terminal_width, grapheme_width
+
+    assert terminal_width("hello") == 5
+    assert terminal_width("世界") == 4  # wide CJK: 2 columns each
+    assert terminal_width("cafe\u0301") == 4  # NFD: "e" + combining acute (U+0301, 0 columns)
+    assert terminal_width("a😀") == 3  # emoji cluster occupies 2 columns
+    assert grapheme_width("👨‍👩‍👧‍👦") == 2  # one ZWJ cluster, 2 columns
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    assert_eq!(api::terminal_width("hello", false), 5);
+    assert_eq!(api::terminal_width("世界", false), 4); // wide CJK: 2 columns each
+    assert_eq!(api::terminal_width("a😀", false), 3);  // emoji cluster occupies 2 columns
+    assert_eq!(api::grapheme_width("👨‍👩‍👧‍👦", false), 2); // one ZWJ cluster, 2 columns
+    ```
 
 East Asian **Ambiguous** characters are 1 column by default (matching modern
 UTF-8 terminals); pass `ambiguous_wide=True` for legacy double-width CJK
 terminals:
 
-```python
-assert terminal_width("¡") == 1
-assert terminal_width("¡", ambiguous_wide=True) == 2
-```
+=== "Python"
+
+    ```python
+    assert terminal_width("¡") == 1
+    assert terminal_width("¡", ambiguous_wide=True) == 2
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    assert_eq!(api::terminal_width("¡", false), 1);
+    assert_eq!(api::terminal_width("¡", true), 2);
+    ```
 
 This measures **terminal cells**, not pixels or font metrics. Tabs are not
 expanded and newlines are not modelled — layout that depends on tab stops or

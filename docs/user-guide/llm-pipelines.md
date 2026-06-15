@@ -27,13 +27,35 @@ the *encoding* of a string, not just its letters. disarm's defense functions
 follow the same convention — NFKC is their first step — so they are safe to call
 on raw, untrusted input:
 
-```python
-from disarm import strip_obfuscation
+=== "Python"
 
-# Fullwidth letters (NFKC-folded) and zero-width joiners (stripped):
-assert strip_obfuscation("Ｈｅｌｌｏ") == "Hello"
-assert strip_obfuscation("h​i") == "hi"
-```
+    ```python
+    from disarm import strip_obfuscation
+
+    # Fullwidth letters (NFKC-folded) and zero-width joiners (stripped):
+    assert strip_obfuscation("Ｈｅｌｌｏ") == "Hello"
+    assert strip_obfuscation("h​i") == "hi"
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    // Fullwidth letters (NFKC-folded) and zero-width joiners (stripped):
+    assert_eq!(api::strip_obfuscation("Ｈｅｌｌｏ").unwrap(), "Hello");
+    assert_eq!(api::strip_obfuscation("h​i").unwrap(), "hi");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Fullwidth letters (NFKC-folded) and zero-width joiners (stripped):
+    Disarm.strip_obfuscation("Ｈｅｌｌｏ")   # => "Hello"
+    Disarm.strip_obfuscation("h​i")       # => "hi"
+    ```
 
 You do not need to pre-normalise before handing text to `strip_obfuscation()` or
 `normalize_confusables()`; they start from NFKC themselves.
@@ -49,16 +71,44 @@ The key difference from a LiteLLM-style hand-rolled normaliser is what disarm
 corrupts the numeric text that pervades an LLM stack — model names, versions,
 quantities — so `4`, `0`, `1` are left alone:
 
-```python
-from disarm import normalize_confusables
+=== "Python"
 
-# Identifiers and version numbers survive untouched:
-assert normalize_confusables("gpt-4o") == "gpt-4o"
-assert normalize_confusables("Llama-3.1-70B") == "Llama-3.1-70B"
+    ```python
+    from disarm import normalize_confusables
 
-# But cross-script homoglyph spoofs are folded to their Latin skeleton:
-assert normalize_confusables("pаypаl") == "paypal"   # Cyrillic а → a
-```
+    # Identifiers and version numbers survive untouched:
+    assert normalize_confusables("gpt-4o") == "gpt-4o"
+    assert normalize_confusables("Llama-3.1-70B") == "Llama-3.1-70B"
+
+    # But cross-script homoglyph spoofs are folded to their Latin skeleton:
+    assert normalize_confusables("pаypаl") == "paypal"   # Cyrillic а → a
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, TargetScript};
+
+    // Identifiers and version numbers survive untouched:
+    assert_eq!(api::normalize_confusables("gpt-4o", TargetScript::Latin), "gpt-4o");
+    assert_eq!(api::normalize_confusables("Llama-3.1-70B", TargetScript::Latin), "Llama-3.1-70B");
+
+    // But cross-script homoglyph spoofs are folded to their Latin skeleton:
+    assert_eq!(api::normalize_confusables("pаypаl", TargetScript::Latin), "paypal"); // Cyrillic а → a
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Identifiers and version numbers survive untouched:
+    Disarm.normalize_confusables("gpt-4o")        # => "gpt-4o"
+    Disarm.normalize_confusables("Llama-3.1-70B") # => "Llama-3.1-70B"
+
+    # But cross-script homoglyph spoofs are folded to their Latin skeleton:
+    Disarm.normalize_confusables("pаypаl")        # => "paypal"  (Cyrillic а → a)
+    ```
 
 What TR39 covers instead of leet tables is *visual* confusability: a Cyrillic
 `а` that renders identically to Latin `a` folds to `a`. See
@@ -83,15 +133,35 @@ The other common pattern is `NFKD` + `encode("ascii", "ignore")` (Haystack's
 `ascii_only`, Whisper's text cleaner). On non-Latin content this **deletes** the
 text — an ASCII index built that way simply loses the document:
 
-```python
-from disarm import transliterate
+=== "Python"
 
-passage = "Привет мир"
-# ascii-ignore throws the whole passage away:
-assert passage.encode("ascii", "ignore") == b" "
-# transliterate keeps it, searchable, as readable romanisation:
-assert transliterate(passage) == "Privet mir"
-```
+    ```python
+    from disarm import transliterate
+
+    passage = "Привет мир"
+    # ascii-ignore throws the whole passage away:
+    assert passage.encode("ascii", "ignore") == b" "
+    # transliterate keeps it, searchable, as readable romanisation:
+    assert transliterate(passage) == "Privet mir"
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    // transliterate keeps non-Latin content, searchable, as readable romanisation:
+    assert_eq!(api::transliterate("Привет мир"), "Privet mir");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # transliterate keeps non-Latin content, searchable, as readable romanisation:
+    Disarm.transliterate("Привет мир")   # => "Privet mir"
+    ```
 
 This is the wedge for index/retrieval: non-Latin content stays findable in an
 ASCII-normalised index without losing its semantics.

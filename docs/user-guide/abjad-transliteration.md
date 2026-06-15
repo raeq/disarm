@@ -20,12 +20,34 @@ Standard character-by-character transliteration — the approach used by Unideco
 
 ### Context-free (default)
 
-```python
-from disarm import transliterate
-assert transliterate("كتب العربية") == "ktb al'rbyh"
-assert transliterate("שלום", lang="he") == "shlvm"
-assert transliterate("کتاب فارسی", lang="fa") == "ktab farsy"
-```
+=== "Python"
+
+    ```python
+    from disarm import transliterate
+    assert transliterate("كتب العربية") == "ktb al'rbyh"
+    assert transliterate("שלום", lang="he") == "shlvm"
+    assert transliterate("کتاب فارسی", lang="fa") == "ktab farsy"
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, Transliterate};
+
+    assert_eq!(api::transliterate("كتب العربية"), "ktb al'rbyh");
+    assert_eq!(Transliterate::new().lang("he").run("שלום"), "shlvm");
+    assert_eq!(Transliterate::new().lang("fa").run("کتاب فارسی"), "ktab farsy");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    Disarm.transliterate("كتب العربية")           # => "ktb al'rbyh"
+    Disarm.transliterate("שלום", lang: :he)        # => "shlvm"
+    Disarm.transliterate("کتاب فارسی", lang: :fa)  # => "ktab farsy"
+    ```
 
 This is the same approach as every other transliteration library. Each character maps to a fixed ASCII equivalent via a lookup table. No context, no dictionary, no ambiguity resolution. Fast (O(1) per character), deterministic, and produces the same output as Unidecode for these scripts.
 
@@ -109,10 +131,28 @@ Dictionaries are built reproducibly from source corpora via `scripts/bootstrap_d
 
 The Arabic dictionary covers 99%+ of newspaper vocabulary. The bigram table resolves the most common ambiguities:
 
-```python
-# Without context
-assert transliterate("السلام عليكم") == "alslam 'lykm"
-```
+=== "Python"
+
+    ```python
+    # Without context
+    assert transliterate("السلام عليكم") == "alslam 'lykm"
+    ```
+
+=== "Rust"
+
+    ```rust
+    // Without context
+    assert_eq!(api::transliterate("السلام عليكم"), "alslam 'lykm");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Without context
+    Disarm.transliterate("السلام عليكم")  # => "alslam 'lykm"
+    ```
 
 <!--- skip: next -->
 ```python
@@ -157,10 +197,28 @@ The `lang="fa"` profile overrides 51 character mappings from the Arabic default:
 
 Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian rarely uses diacritics even in formal text. disarm addresses this with a **curated vocabulary** of 266 common words with diacritics applied following BGN/PCGN pronunciation rules:
 
-```python
-# Without context
-assert transliterate("کتاب فارسی", lang="fa") == "ktab farsy"
-```
+=== "Python"
+
+    ```python
+    # Without context
+    assert transliterate("کتاب فارسی", lang="fa") == "ktab farsy"
+    ```
+
+=== "Rust"
+
+    ```rust
+    // Without context
+    assert_eq!(Transliterate::new().lang("fa").run("کتاب فارسی"), "ktab farsy");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Without context
+    Disarm.transliterate("کتاب فارسی", lang: :fa)  # => "ktab farsy"
+    ```
 
 <!--- skip: next -->
 ```python
@@ -188,10 +246,28 @@ The default Hebrew mappings follow **common Israeli romanization** conventions. 
 
 The Hebrew dictionary is built from [Project Ben Yehuda](https://github.com/projectbenyehuda/public_domain_dump), a public domain collection of 26,000+ Hebrew literary works with niqqud. The dictionary maps unpointed consonant skeletons to their most common niqqud-pointed forms:
 
-```python
-# Without context
-assert transliterate("שלום", lang="he") == "shlvm"
-```
+=== "Python"
+
+    ```python
+    # Without context
+    assert transliterate("שלום", lang="he") == "shlvm"
+    ```
+
+=== "Rust"
+
+    ```rust
+    // Without context
+    assert_eq!(Transliterate::new().lang("he").run("שלום"), "shlvm");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Without context
+    Disarm.transliterate("שלום", lang: :he)  # => "shlvm"
+    ```
 
 <!--- skip: next -->
 ```python

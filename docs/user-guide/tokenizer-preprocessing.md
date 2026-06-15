@@ -34,25 +34,59 @@ lookups with ASCII-or-script-stable output and no runtime dependencies.
 words, strips accents and case, and collapses whitespace — without romanizing, so
 the script is preserved:
 
-```python
-from disarm import ml_normalize
+=== "Python"
 
-assert ml_normalize("CAFÉ") == "cafe"
-assert ml_normalize("Привет") == "привет"        # stays Cyrillic, normalized
-assert ml_normalize("Café — RÉSUMÉ 🎉") == "cafe em dash resume party popper"
-```
+    ```python
+    from disarm import ml_normalize
+
+    assert ml_normalize("CAFÉ") == "cafe"
+    assert ml_normalize("Привет") == "привет"        # stays Cyrillic, normalized
+    assert ml_normalize("Café — RÉSUMÉ 🎉") == "cafe em dash resume party popper"
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    // ml_normalize(text, lang, emoji_style) — lang=None preserves the script
+    assert_eq!(api::ml_normalize("CAFÉ", None, "cldr").unwrap(), "cafe");
+    assert_eq!(api::ml_normalize("Привет", None, "cldr").unwrap(), "привет");        // stays Cyrillic, normalized
+    assert_eq!(api::ml_normalize("Café — RÉSUMÉ 🎉", None, "cldr").unwrap(), "cafe em dash resume party popper");
+    ```
 
 **Romanize to ASCII.** `transliterate` (and the `rag_ingest` preset) map
 non-Latin scripts to a shared Latin representation, which tends to tokenize into
-fewer, pretrained-shared subwords:
+fewer, pretrained-shared subwords. The `transliterate` lever is available in
+every binding; the `rag_ingest` preset is a Python pipeline:
 
-```python
-from disarm import transliterate, get_pipeline
+=== "Python"
 
-assert transliterate("नमस्ते") == "namaste"
-assert transliterate("Привет, мир") == "Privet, mir"
-assert get_pipeline("rag_ingest")("Привет, мир!") == "Privet, mir!"
-```
+    ```python
+    from disarm import transliterate, get_pipeline
+
+    assert transliterate("नमस्ते") == "namaste"
+    assert transliterate("Привет, мир") == "Privet, mir"
+    assert get_pipeline("rag_ingest")("Привет, мир!") == "Privet, mir!"
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    assert_eq!(api::transliterate("नमस्ते"), "namaste");
+    assert_eq!(api::transliterate("Привет, мир"), "Privet, mir");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    Disarm.transliterate("नमस्ते")        # => "namaste"
+    Disarm.transliterate("Привет, мир")   # => "Privet, mir"
+    ```
 
 Pick the lever by path: romanize for an index/matching path; keep the script when
 the text goes to a multilingual model that reads it natively (see
@@ -89,11 +123,29 @@ Romanization is not a free win, and fertility is not the whole story:
   phonetic, so it does not recover the intended reading — `東京タワー`
   ("Tokyo Tower") romanizes via pinyin, not Japanese:
 
-  ```python
-  from disarm import transliterate
+  === "Python"
 
-  assert transliterate("東京タワー") == "dong jing tawa-"
-  ```
+      ```python
+      from disarm import transliterate
+
+      assert transliterate("東京タワー") == "dong jing tawa-"
+      ```
+
+  === "Rust"
+
+      ```rust
+      use disarm::api;
+
+      assert_eq!(api::transliterate("東京タワー"), "dong jing tawa-");
+      ```
+
+  === "Ruby"
+
+      ```ruby
+      require "disarm"
+
+      Disarm.transliterate("東京タワー")   # => "dong jing tawa-"
+      ```
 
   Use romanization for matching/indexing where this is acceptable, not where the
   reading must be preserved. See [Limitations](../limitations.md).

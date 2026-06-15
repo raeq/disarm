@@ -12,14 +12,27 @@ When `lang="auto"` is passed to `transliterate()`, `slugify()`, `catalog_key()`,
 
 The entire pipeline is deterministic, O(n), and fail-safe: if detection is uncertain, it falls back to the safe default rather than guessing.
 
-```python
-from disarm import transliterate
+=== "Python"
 
-# Stage 1: Cyrillic detected → ambiguous script
-# Stage 2: ї found → Ukrainian discriminator hit
-# Stage 3: returns "uk"
-assert transliterate("Київ", lang="auto") == 'Kyiv'
-```
+    ```python
+    from disarm import transliterate
+
+    # Stage 1: Cyrillic detected → ambiguous script
+    # Stage 2: ї found → Ukrainian discriminator hit
+    # Stage 3: returns "uk"
+    assert transliterate("Київ", lang="auto") == 'Kyiv'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::Transliterate;
+
+    // Stage 1: Cyrillic detected → ambiguous script
+    // Stage 2: ї found → Ukrainian discriminator hit
+    // Stage 3: returns "uk"
+    assert_eq!(Transliterate::new().lang("auto").run("Київ"), "Kyiv");
+    ```
 
 ---
 
@@ -27,13 +40,25 @@ assert transliterate("Київ", lang="auto") == 'Kyiv'
 
 disarm classifies each character by its Unicode script property using a static table of 42 scripts with binary search lookup. The first non-Latin, non-Common, non-Inherited character determines the **primary script**.
 
-```python
-from disarm import detect_scripts, Script
+=== "Python"
 
-assert detect_scripts("Москва") == [Script.CYRILLIC]
-assert detect_scripts("東京タワー") == [Script.HAN, Script.KATAKANA]
-assert detect_scripts("Hello World") == [Script.LATIN]
-```
+    ```python
+    from disarm import detect_scripts, Script
+
+    assert detect_scripts("Москва") == [Script.CYRILLIC]
+    assert detect_scripts("東京タワー") == [Script.HAN, Script.KATAKANA]
+    assert detect_scripts("Hello World") == [Script.LATIN]
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    assert_eq!(api::detect_scripts("Москва"), vec!["Cyrillic"]);
+    assert_eq!(api::detect_scripts("東京タワー"), vec!["Han", "Katakana"]);
+    assert_eq!(api::detect_scripts("Hello World"), vec!["Latin"]);
+    ```
 
 For Latin-only text, no language override is applied (stage 2 may still detect Latin discriminators like Vietnamese or Turkish characters).
 
@@ -116,27 +141,53 @@ Key properties:
 
 ### Examples
 
-```python
-from disarm import transliterate
+=== "Python"
 
-# Ukrainian: ї is exclusive to Ukrainian Cyrillic
-assert transliterate("Київ", lang="auto") == 'Kyiv'
+    ```python
+    from disarm import transliterate
 
-# Serbian: ћ is exclusive to Serbian Cyrillic
-assert transliterate("Београд", lang="auto") == 'Beograd'
+    # Ukrainian: ї is exclusive to Ukrainian Cyrillic
+    assert transliterate("Київ", lang="auto") == 'Kyiv'
 
-# Persian: پ is exclusive to Persian Arabic
-assert transliterate("پارسی", lang="auto") == 'parsy'
+    # Serbian: ћ is exclusive to Serbian Cyrillic
+    assert transliterate("Београд", lang="auto") == 'Beograd'
 
-# Vietnamese: ơ is exclusive to Vietnamese Latin
-assert transliterate("Hà Nội", lang="auto") == 'Ha Noi'
+    # Persian: پ is exclusive to Persian Arabic
+    assert transliterate("پارسی", lang="auto") == 'parsy'
 
-# German: ß is exclusive to German Latin
-assert transliterate("Straße", lang="auto") == 'Strasse'
+    # Vietnamese: ơ is exclusive to Vietnamese Latin
+    assert transliterate("Hà Nội", lang="auto") == 'Ha Noi'
 
-# No discriminator: Москва has no exclusive chars
-assert transliterate("Москва", lang="auto") == 'Moskva'
-```
+    # German: ß is exclusive to German Latin
+    assert transliterate("Straße", lang="auto") == 'Strasse'
+
+    # No discriminator: Москва has no exclusive chars
+    assert transliterate("Москва", lang="auto") == 'Moskva'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::Transliterate;
+
+    // Ukrainian: ї is exclusive to Ukrainian Cyrillic
+    assert_eq!(Transliterate::new().lang("auto").run("Київ"), "Kyiv");
+
+    // Serbian: ћ is exclusive to Serbian Cyrillic
+    assert_eq!(Transliterate::new().lang("auto").run("Београд"), "Beograd");
+
+    // Persian: پ is exclusive to Persian Arabic
+    assert_eq!(Transliterate::new().lang("auto").run("پارسی"), "parsy");
+
+    // Vietnamese: ơ is exclusive to Vietnamese Latin
+    assert_eq!(Transliterate::new().lang("auto").run("Hà Nội"), "Ha Noi");
+
+    // German: ß is exclusive to German Latin
+    assert_eq!(Transliterate::new().lang("auto").run("Straße"), "Strasse");
+
+    // No discriminator: Москва has no exclusive chars
+    assert_eq!(Transliterate::new().lang("auto").run("Москва"), "Moskva");
+    ```
 
 ---
 
@@ -177,33 +228,59 @@ This means `lang="auto"` is always at least as good as the script default, and o
 
 Use `inspect_auto_lang()` to see exactly how the detection pipeline resolved for a given text. This is useful for logging, auditing, and debugging:
 
-```python
-from disarm import inspect_auto_lang
+=== "Python"
 
-result = inspect_auto_lang("Київ")
-# {
-#     'script': 'Cyrillic',
-#     'chosen_lang': 'uk',
-#     'reason': 'discriminator',
-#     'discriminators_hit': ['ї']
-# }
+    ```python
+    from disarm import inspect_auto_lang
 
-result = inspect_auto_lang("Москва")
-# {
-#     'script': 'Cyrillic',
-#     'chosen_lang': 'ru',
-#     'reason': 'script_default',
-#     'discriminators_hit': []
-# }
+    result = inspect_auto_lang("Київ")
+    # {
+    #     'script': 'Cyrillic',
+    #     'chosen_lang': 'uk',
+    #     'reason': 'discriminator',
+    #     'discriminators_hit': ['ї']
+    # }
 
-result = inspect_auto_lang("Straße")
-# {
-#     'script': None,
-#     'chosen_lang': 'de',
-#     'reason': 'latin_discriminator',
-#     'discriminators_hit': ['ß']
-# }
-```
+    result = inspect_auto_lang("Москва")
+    # {
+    #     'script': 'Cyrillic',
+    #     'chosen_lang': 'ru',
+    #     'reason': 'script_default',
+    #     'discriminators_hit': []
+    # }
+
+    result = inspect_auto_lang("Straße")
+    # {
+    #     'script': None,
+    #     'chosen_lang': 'de',
+    #     'reason': 'latin_discriminator',
+    #     'discriminators_hit': ['ß']
+    # }
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    let kyiv = api::inspect_auto_lang("Київ");
+    assert_eq!(kyiv.script.as_deref(), Some("Cyrillic"));
+    assert_eq!(kyiv.chosen_lang.as_deref(), Some("uk"));
+    assert_eq!(kyiv.reason, "discriminator");
+    assert_eq!(kyiv.discriminators_hit, vec!["ї"]);
+
+    let moscow = api::inspect_auto_lang("Москва");
+    assert_eq!(moscow.script.as_deref(), Some("Cyrillic"));
+    assert_eq!(moscow.chosen_lang.as_deref(), Some("ru"));
+    assert_eq!(moscow.reason, "script_default");
+    assert!(moscow.discriminators_hit.is_empty());
+
+    let strasse = api::inspect_auto_lang("Straße");
+    assert_eq!(strasse.script, None);
+    assert_eq!(strasse.chosen_lang.as_deref(), Some("de"));
+    assert_eq!(strasse.reason, "latin_discriminator");
+    assert_eq!(strasse.discriminators_hit, vec!["ß"]);
+    ```
 
 ### Return value
 

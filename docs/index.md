@@ -29,6 +29,8 @@ disarm's `normalize_confusables()` / `strip_obfuscation()` implement *visual* co
 `ftfy` was statistically equivalent to no preprocessing; `unidecode` *degraded* accuracy on invisible-character attacks. Details: **[Adversarial-Text Defense](security/adversarial-defense.md)** (paper *"Fire Extinguishers Full of Gasoline"*; XMR metric: [Zenodo 10.5281/zenodo.19323513](https://doi.org/10.5281/zenodo.19323513)).
 
 > **Scope.** disarm is a **defense-in-depth layer, not a complete control.** It canonicalizes the confusables it bundles (TR39) and strips the format characters it enumerates; it does not promise to stop any attack class, and the confusable space is far larger than any table. See the **[Threat Model](THREAT_MODEL.md)** for what is and isn't in scope.
+>
+> **Not an output sanitizer.** disarm normalizes *input*; it does **not** make text safe to emit into HTML, JS, URLs, SQL, or shells. It performs no escaping and does not strip `<`, `>`, `&` — `<script>alert(1)</script>` passes through unchanged, and NFKC normalization can even *surface* ASCII metacharacters from fullwidth lookalikes (`＜script＞` → `<script>`). disarm is **not** an XSS or injection defense and never replaces one: encode at the output sink (framework auto-escaping, DOMPurify, parameterized queries). Run disarm *before* those, as the Unicode layer they don't cover.
 
 ### Which function do I want?
 
@@ -70,10 +72,88 @@ import disarm
 
 Requires Python 3.10+. Wheels are available for Linux, macOS, and Windows.
 
+## Use from Rust
+
+`disarm` is also a standalone Rust crate. The **default build is pure Rust** — no
+Python, no `pyo3`, no `libpython` — so it drops into any Rust project as an
+ordinary dependency:
+
+```bash
+cargo add disarm
+```
+
+The public surface is the [`disarm::api`](https://docs.rs/disarm/latest/disarm/api/)
+module plus the error types (`Error`, `ErrorKind`, `ErrorMode`). The
+[`DisarmStr`](https://docs.rs/disarm/latest/disarm/trait.DisarmStr.html) extension
+trait gives the same operations method syntax on any string:
+
+```rust
+use disarm::{api, DisarmStr};
+use disarm::api::{Transliterate, Scheme, OnUnknown, TargetScript};
+
+fn main() {
+    // TR39 confusable folding (Cyrillic look-alikes → Latin)
+    assert_eq!(api::normalize_confusables("раypal", TargetScript::Latin), "paypal");
+    // …or via the extension trait:
+    assert_eq!("раypal".normalize_confusables(TargetScript::Latin), "paypal");
+
+    // Transliteration to ASCII — the one-liner, or the builder for full control
+    assert_eq!(api::transliterate("Москва"), "Moskva");
+    let s = Transliterate::new()
+        .scheme(Scheme::StrictIso9)
+        .on_unknown(OnUnknown::Replace("?".into()))
+        .run("Москва");
+    assert!(s.is_ascii());
+
+    // Canonicalization primitives (borrow on the no-op path via Cow)
+    assert_eq!(api::strip_accents("café"), "cafe");
+    assert_eq!(api::fold_case("ﬁ"), "fi");
+    assert_eq!(api::slugify("Héllo Wörld", &api::SlugConfig::default()), "hello-world");
+
+    // IDN / hostname spoofing check (returns a HostnameAnalysis struct)
+    let analysis = api::is_suspicious_hostname("раypal.com");
+    assert!(analysis.suspicious);
+}
+```
+
+Fallible operations (`sanitize_filename`, `decode_to_utf8`, `strip_log_injection`,
+the key/clean presets) return `Result<_, disarm::Error>`; inspect
+[`Error::kind()`](https://docs.rs/disarm/latest/disarm/struct.Error.html) for a
+stable [`ErrorKind`](https://docs.rs/disarm/latest/disarm/enum.ErrorKind.html).
+
+The `extension-module` Cargo feature (which pulls in `pyo3`) is used **only** to
+build the Python wheel — Rust consumers never enable it. See the [Rust API &
+semver policy](RUST_API.md) and the full reference on
+[docs.rs/disarm](https://docs.rs/disarm).
+
+### Logging (opt-in, off by default)
+
+disarm can emit diagnostic records through the binding-neutral
+[`log`](https://docs.rs/log) facade behind the **`log`** Cargo feature. It is
+**off by default** — the shipped artifact has no logging code in the hot path
+unless you turn it on — and records carry only **metadata** (lengths, language,
+mode, flags, counts, durations, error codes), **never** the input or output
+text. Pick a sink in your application (`env_logger`, `tracing-subscriber`, …):
+
+```toml
+disarm = { version = "0.10", features = ["log"] }
+```
+
+<!--- rust-skip -->
+```rust
+env_logger::init();   // your sink, your level filter
+// Core transforms (transliterate, the registration/seal config calls, …) then
+// emit redacted records — lengths, flags, counts, duration — but never the text.
+```
+
+A library must not set `log`'s `release_max_level_*` (those unify across the
+whole dependency graph) — that ceiling is the application's call.
+
 ## Features
 
 - **[Confusable & homoglyph analysis (TR39)](security/adversarial-defense.md)**: visual [confusable mapping](user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` pipeline (defense-in-depth — see the [Threat Model](THREAT_MODEL.md))
 - **[Canonicalization pipelines](api/pipelines.md)**: `security_clean`, `normalize_user_input`, `catalog_key`, `search_key`, `sort_key`, `display_clean`, `ml_normalize` for common workflows
+- **[LLM / RAG pipelines](user-guide/llm-pipelines.md)**: guardrail matching (`llm_guardrail`) and ingestion (`rag_ingest`) profiles — deterministic deobfuscation and ASCII-index normalisation for LLM stacks
 - **[Hostname / IDN analysis](api/predicates.md#is_suspicious_hostname)**: mixed-script and confusable detection for domains
 - **[Standards-based transliteration](user-guide/transliteration.md)**: best-in-class Latin / Cyrillic / Greek with ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34, and BGN/PCGN, plus [reverse transliteration](user-guide/language-support.md#reverse-transliteration) (Russian, Ukrainian, Greek)
 - **[Text normalization](user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](user-guide/text-cleaning.md)
@@ -226,14 +306,11 @@ from disarm import is_confusable, security_clean, decode_to_utf8, fold_case
 Built-in language profiles span the core and compatibility tiers, with scholarly ASCII Cyrillic support (`strict_iso9`; ISO 9-style digraphs, not the diacritic standard). Profiles apply **sparse overrides** on top of the default table (e.g. German maps `ü` → `ue` instead of the default `u`).
 
 ```python
-from disarm import list_langs, transliterate
+from disarm import list_langs
 
-print(list_langs())
-# ['am', 'ar', 'as', 'bg', 'bn', 'bo', 'ca', 'cs', 'cy', 'da', 'de', 'dv', 'el',
-#  'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy',
-#  'is', 'it', 'ja', 'jv', 'ka', 'km', 'kn', 'ko', 'lo', 'lt', 'lv', 'ml', 'mn',
-#  'mr', 'mt', 'my', 'ne', 'nl', 'no', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa',
-#  'si', 'sk', 'sl', 'sq', 'sr', 'sv', 'ta', 'te', 'th', 'tr', 'uk', 'vi', 'zh']
+# 83 built-in language profiles — see Language support for the full registry
+assert len(list_langs()) == 83
+assert {"de", "uk", "ja-kunrei", "vai"} <= set(list_langs())
 ```
 
 See [Language support](user-guide/language-support.md) for the full registry, per-script policies, and tier classification.
@@ -242,6 +319,14 @@ See [Language support](user-guide/language-support.md) for the full registry, pe
 
 disarm is compiled Rust with O(1) compile-time perfect hash tables — no regex, no per-character Python iteration, no runtime data loading. Speed is a supporting benefit, not the headline; correctness and defense come first.
 
+Performance is measured in two regimes, because they stress different things.
+**Long text** (documents, batch pipelines) is dominated by per-character cost;
+**short strings** (per-record processing — names, titles, slugs, one field at a
+time) are dominated by fixed per-call overhead. disarm is fast in both, and
+quotes them separately so neither number overstates the other.
+
+**Long text — document-scale throughput:**
+
 | Operation | Throughput | vs. legacy |
 |---|---|---|
 | Transliterate (Latin) | ~450M chars/sec | **~38×** faster than Unidecode |
@@ -249,7 +334,32 @@ disarm is compiled Rust with O(1) compile-time perfect hash tables — no regex,
 | Slugify | ~712K slugs/sec | **~10–24×** faster than python-slugify |
 | Batch transliterate (100 strings) | ~2.8× faster than loop | — |
 
-See [performance.md](performance.md) for the full benchmark results.
+**Short strings — per-call, ~70–85 character inputs:**
+
+| Input | vs. Unidecode |
+|---|---|
+| Latin | **~17×** |
+| Mixed scripts | **~14×** |
+| Cyrillic / Greek | **~13×** |
+
+A `transliterate()` call crosses the Python→Rust boundary exactly once, and
+already-ASCII input returns the original `str` object in roughly 65 ns with
+zero allocation. disarm also wins all four cells of [Unidecode's own
+benchmark](https://github.com/raeq/disarm/blob/main/benchmarks/bench_unidecode_own.py) — a faithful replication of the
+original, re-measured continuously in CI — from ~1.3× on Unidecode's strongest
+case (ASCII passthrough) to ~25×. That bar is worth clearing precisely because
+Unidecode has carried this workload for two decades; it remains the reference
+point this library measures itself against.
+
+Throughput figures are from a commodity 4‑vCPU x86‑64 Linux runner (min‑of‑N
+`perf_counter`); per-call figures are interleaved ratios against pinned
+comparator versions on CI runners, median-of-7, bucketed by CPU
+microarchitecture, and measured in the **fresh-string regime** — every timed
+call receives a newly constructed `str` object, as production traffic does,
+rather than re-running one cached object (which would understate comparators'
+real-world parity and overstate ours). All figures are hardware‑dependent and
+directional, not guarantees. See [performance.md](performance.md)
+for full benchmark methodology and results.
 
 ## Drop-in replacement
 

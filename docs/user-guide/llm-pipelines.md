@@ -100,6 +100,8 @@ quantities — so `4`, `0`, `1` are left alone:
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     # Identifiers and version numbers survive untouched:
     Disarm.normalize_confusables("gpt-4o")        # => "gpt-4o"
     Disarm.normalize_confusables("Llama-3.1-70B") # => "Llama-3.1-70B"
@@ -155,6 +157,8 @@ text — an ASCII index built that way simply loses the document:
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     # transliterate keeps non-Latin content, searchable, as readable romanisation:
     Disarm.transliterate("Привет мир")   # => "Privet mir"
     ```

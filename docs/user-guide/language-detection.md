@@ -55,9 +55,9 @@ disarm classifies each character by its Unicode script property using a static t
     ```rust
     use disarm::api;
 
-    api::detect_scripts("Москва");      // => [Script::Cyrillic]
-    api::detect_scripts("東京タワー");    // => [Script::Han, Script::Katakana]
-    api::detect_scripts("Hello World"); // => [Script::Latin]
+    assert_eq!(api::detect_scripts("Москва"), vec!["Cyrillic"]);
+    assert_eq!(api::detect_scripts("東京タワー"), vec!["Han", "Katakana"]);
+    assert_eq!(api::detect_scripts("Hello World"), vec!["Latin"]);
     ```
 
 For Latin-only text, no language override is applied (stage 2 may still detect Latin discriminators like Vietnamese or Turkish characters).
@@ -171,22 +171,22 @@ Key properties:
     use disarm::api::Transliterate;
 
     // Ukrainian: ї is exclusive to Ukrainian Cyrillic
-    Transliterate::new().lang("auto").run("Київ");    // => "Kyiv"
+    assert_eq!(Transliterate::new().lang("auto").run("Київ"), "Kyiv");
 
     // Serbian: ћ is exclusive to Serbian Cyrillic
-    Transliterate::new().lang("auto").run("Београд"); // => "Beograd"
+    assert_eq!(Transliterate::new().lang("auto").run("Београд"), "Beograd");
 
     // Persian: پ is exclusive to Persian Arabic
-    Transliterate::new().lang("auto").run("پارسی");   // => "parsy"
+    assert_eq!(Transliterate::new().lang("auto").run("پارسی"), "parsy");
 
     // Vietnamese: ơ is exclusive to Vietnamese Latin
-    Transliterate::new().lang("auto").run("Hà Nội");  // => "Ha Noi"
+    assert_eq!(Transliterate::new().lang("auto").run("Hà Nội"), "Ha Noi");
 
     // German: ß is exclusive to German Latin
-    Transliterate::new().lang("auto").run("Straße");  // => "Strasse"
+    assert_eq!(Transliterate::new().lang("auto").run("Straße"), "Strasse");
 
     // No discriminator: Москва has no exclusive chars
-    Transliterate::new().lang("auto").run("Москва");  // => "Moskva"
+    assert_eq!(Transliterate::new().lang("auto").run("Москва"), "Moskva");
     ```
 
 ---
@@ -263,29 +263,23 @@ Use `inspect_auto_lang()` to see exactly how the detection pipeline resolved for
     ```rust
     use disarm::api;
 
-    api::inspect_auto_lang("Київ");
-    // AutoLangInfo {
-    //     script: Some("Cyrillic"),
-    //     chosen_lang: Some("uk"),
-    //     reason: "discriminator",
-    //     discriminators_hit: ["ї"],
-    // }
+    let kyiv = api::inspect_auto_lang("Київ");
+    assert_eq!(kyiv.script.as_deref(), Some("Cyrillic"));
+    assert_eq!(kyiv.chosen_lang.as_deref(), Some("uk"));
+    assert_eq!(kyiv.reason, "discriminator");
+    assert_eq!(kyiv.discriminators_hit, vec!["ї"]);
 
-    api::inspect_auto_lang("Москва");
-    // AutoLangInfo {
-    //     script: Some("Cyrillic"),
-    //     chosen_lang: Some("ru"),
-    //     reason: "script_default",
-    //     discriminators_hit: [],
-    // }
+    let moscow = api::inspect_auto_lang("Москва");
+    assert_eq!(moscow.script.as_deref(), Some("Cyrillic"));
+    assert_eq!(moscow.chosen_lang.as_deref(), Some("ru"));
+    assert_eq!(moscow.reason, "script_default");
+    assert!(moscow.discriminators_hit.is_empty());
 
-    api::inspect_auto_lang("Straße");
-    // AutoLangInfo {
-    //     script: None,
-    //     chosen_lang: Some("de"),
-    //     reason: "latin_discriminator",
-    //     discriminators_hit: ["ß"],
-    // }
+    let strasse = api::inspect_auto_lang("Straße");
+    assert_eq!(strasse.script, None);
+    assert_eq!(strasse.chosen_lang.as_deref(), Some("de"));
+    assert_eq!(strasse.reason, "latin_discriminator");
+    assert_eq!(strasse.discriminators_hit, vec!["ß"]);
     ```
 
 ### Return value

@@ -85,6 +85,8 @@ Kyiv (the default mapping would not), and German ü → ue:
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     Disarm.transliterate("Київ", lang: :uk)    # => "Kyiv"
     Disarm.transliterate("Ärger", lang: :de)   # => "Aerger"
     ```

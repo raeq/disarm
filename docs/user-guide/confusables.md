@@ -77,6 +77,8 @@ Replace confusable characters with their target-script equivalents:
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     # Cyrillic а, е, о → Latin a, e, o
     Disarm.normalize_confusables("Неllo Wоrld")   # => "Hello World"
 
@@ -101,6 +103,8 @@ By default, confusables are normalized to Latin. You can specify a different tar
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     # Normalize to Latin (default) — non-Latin homoglyphs → Latin
     Disarm.normalize_confusables("раypal")                       # => "paypal"
 
@@ -138,8 +142,8 @@ Identify which Unicode scripts are present in a string:
     ```rust
     use disarm::api;
 
-    api::detect_scripts("Hello Мир");   // => [Script::Latin, Script::Cyrillic]
-    api::detect_scripts("東京 Tokyo");    // => [Script::Han, Script::Latin]
+    assert_eq!(api::detect_scripts("Hello Мир"), vec!["Latin", "Cyrillic"]);
+    assert_eq!(api::detect_scripts("東京 Tokyo"), vec!["Han", "Latin"]);
     ```
 
 ### The Script enum

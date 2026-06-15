@@ -79,7 +79,7 @@ Remove excessive combining marks (zalgo text abuse) while preserving legitimate 
     assert_eq!(api::strip_zalgo("Việt Nam", 2), "Việt Nam");
 
     // Zalgo stacking is stripped to max_marks (default: 2)
-    api::is_zalgo("café", 3);  // => false
+    assert_eq!(api::is_zalgo("café", 3), false);
     ```
 
 ### strip_zalgo vs strip_accents

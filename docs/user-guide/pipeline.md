@@ -138,7 +138,7 @@ Predicates return their native type and do not chain:
 
     assert!("hello мир".is_mixed_script()); // => true
     assert_eq!("hello мир".detect_scripts(), vec!["Latin", "Cyrillic"]); // => ["Latin", "Cyrillic"]
-    assert!(!api::is_ascii("hello мир")); // => false
+    assert_eq!(api::is_ascii("hello мир"), false);
 
     assert!(api::is_ascii(&"café".transliterate())); // => true
     ```

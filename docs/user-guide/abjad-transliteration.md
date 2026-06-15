@@ -42,6 +42,8 @@ Standard character-by-character transliteration — the approach used by Unideco
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     Disarm.transliterate("كتب العربية")           # => "ktb al'rbyh"
     Disarm.transliterate("שלום", lang: :he)        # => "shlvm"
     Disarm.transliterate("کتاب فارسی", lang: :fa)  # => "ktab farsy"
@@ -146,6 +148,8 @@ The Arabic dictionary covers 99%+ of newspaper vocabulary. The bigram table reso
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     # Without context
     Disarm.transliterate("السلام عليكم")  # => "alslam 'lykm"
     ```
@@ -210,6 +214,8 @@ Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian ra
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     # Without context
     Disarm.transliterate("کتاب فارسی", lang: :fa)  # => "ktab farsy"
     ```
@@ -257,6 +263,8 @@ The Hebrew dictionary is built from [Project Ben Yehuda](https://github.com/proj
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     # Without context
     Disarm.transliterate("שלום", lang: :he)  # => "shlvm"
     ```

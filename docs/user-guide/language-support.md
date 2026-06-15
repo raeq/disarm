@@ -394,6 +394,8 @@ transliterate("Москва", lang=LANG_AUTO)
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     Disarm.transliterate("Ürümqi", lang: :de)       # => "Ueruemqi"
     Disarm.slugify("Ärger im Büro", lang: :de)       # => "aerger-im-buero"
     ```

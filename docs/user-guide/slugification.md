@@ -51,6 +51,8 @@ The character used between words (default: `"-"`):
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     Disarm.slugify("hello world", separator: "_")  # => "hello_world"
     Disarm.slugify("hello world", separator: ".")  # => "hello.world"
     ```
@@ -126,13 +128,14 @@ Language profile for transliteration:
     ```rust
     use disarm::api::{self, SlugConfig};
 
-    api::slugify("Ärger im Büro", &SlugConfig::new().with_lang("de"));
-    // => "aerger-im-buero"
+    assert_eq!(api::slugify("Ärger im Büro", &SlugConfig::new().with_lang("de")), "aerger-im-buero");
     ```
 
 === "Ruby"
 
     ```ruby
+    require "disarm"
+
     Disarm.slugify("Ärger im Büro", lang: :de)  # => "aerger-im-buero"
     ```
 

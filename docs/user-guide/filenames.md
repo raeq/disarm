@@ -26,14 +26,11 @@
     use disarm::api::{self, Platform};
 
     // sanitize_filename(text, separator, max_length, platform, lang, preserve_extension)
-    api::sanitize_filename("my<file>:v2.txt", "_", 255, Platform::Universal, None, true);
-    // => Ok("my_file_v2.txt")
-    api::sanitize_filename("café résumé.pdf", "_", 255, Platform::Universal, None, true);
-    // => Ok("cafe_resume.pdf")
-    api::sanitize_filename("../../../etc/passwd", "_", 255, Platform::Universal, None, true);
-    // => Ok("_.etcpasswd")
-    api::sanitize_filename("CON.txt", "_", 255, Platform::Universal, None, true);
-    // => Ok("_CON.txt")  (Windows reserved name)
+    assert_eq!(api::sanitize_filename("my<file>:v2.txt", "_", 255, Platform::Universal, None, true).unwrap(), "my_file_v2.txt");
+    assert_eq!(api::sanitize_filename("café résumé.pdf", "_", 255, Platform::Universal, None, true).unwrap(), "cafe_resume.pdf");
+    assert_eq!(api::sanitize_filename("../../../etc/passwd", "_", 255, Platform::Universal, None, true).unwrap(), "_.etcpasswd");
+    // CON.txt is a Windows reserved name
+    assert_eq!(api::sanitize_filename("CON.txt", "_", 255, Platform::Universal, None, true).unwrap(), "_CON.txt");
     ```
 
 ## Parameters
@@ -53,8 +50,7 @@ Character used to replace illegal characters (default: `"_"`):
     ```rust
     use disarm::api::{self, Platform};
 
-    api::sanitize_filename("hello:world", "-", 255, Platform::Universal, None, true);
-    // => Ok("hello-world")
+    assert_eq!(api::sanitize_filename("hello:world", "-", 255, Platform::Universal, None, true).unwrap(), "hello-world");
     ```
 
 ### max_length
@@ -94,16 +90,13 @@ Target platform for sanitization rules:
     use disarm::api::{self, Platform};
 
     // Universal (default) — safe on all platforms
-    api::sanitize_filename("my:file?.txt", "_", 255, Platform::Universal, None, true);
-    // => Ok("my_file.txt")
+    assert_eq!(api::sanitize_filename("my:file?.txt", "_", 255, Platform::Universal, None, true).unwrap(), "my_file.txt");
 
     // POSIX — only / and NUL are illegal
-    api::sanitize_filename("my:file?.txt", "_", 255, Platform::Posix, None, true);
-    // => Ok("my:file?.txt")
+    assert_eq!(api::sanitize_filename("my:file?.txt", "_", 255, Platform::Posix, None, true).unwrap(), "my:file?.txt");
 
     // Windows — additionally forbids < > : " | ? * and reserved names
-    api::sanitize_filename("CON.txt", "_", 255, Platform::Windows, None, true);
-    // => Ok("_CON.txt")
+    assert_eq!(api::sanitize_filename("CON.txt", "_", 255, Platform::Windows, None, true).unwrap(), "_CON.txt");
     ```
 
 | Platform | Illegal characters | Reserved names |
@@ -132,12 +125,10 @@ Language profile for transliteration of non-ASCII characters:
     use disarm::api::{self, Platform};
 
     // German profile expands umlauts (ä → ae)
-    api::sanitize_filename("Ärger.txt", "_", 255, Platform::Universal, Some("de"), true);
-    // => Ok("Aerger.txt")
+    assert_eq!(api::sanitize_filename("Ärger.txt", "_", 255, Platform::Universal, Some("de"), true).unwrap(), "Aerger.txt");
 
     // Default profile strips the diaeresis (ä → a)
-    api::sanitize_filename("Ärger.txt", "_", 255, Platform::Universal, None, true);
-    // => Ok("Arger.txt")
+    assert_eq!(api::sanitize_filename("Ärger.txt", "_", 255, Platform::Universal, None, true).unwrap(), "Arger.txt");
     ```
 
 ### preserve_extension

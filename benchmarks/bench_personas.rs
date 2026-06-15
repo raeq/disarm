@@ -85,7 +85,7 @@ fn bench_lang_dispatch(c: &mut Criterion) {
     mappings.insert("м".to_owned(), "m*".to_owned());
     mappings.insert("а".to_owned(), "a*".to_owned());
     mappings.insert("о".to_owned(), "o*".to_owned());
-    disarm::tables::register_lang("x-bench", mappings).expect("valid single-char keys");
+    disarm::api::register_lang("x-bench", mappings).expect("valid single-char keys");
     group.throughput(text_throughput(&cyr));
     group.bench_function("registered_lang_clone_path", |b| {
         b.iter(|| engine(black_box(&cyr), Some("x-bench")));
@@ -216,7 +216,7 @@ fn bench_replacements(c: &mut Criterion) {
     reps.insert("©".to_owned(), "(c)".to_owned());
     reps.insert("™".to_owned(), "(tm)".to_owned());
     reps.insert("€".to_owned(), "EUR".to_owned());
-    disarm::tables::register_replacements(reps).expect("under MAX_REPLACEMENTS");
+    disarm::api::register_replacements(reps).expect("under MAX_REPLACEMENTS");
 
     // No key occurs in ascii_doc: measures the scan + per-call length-sort
     // overhead on the borrowed (no-match) path.

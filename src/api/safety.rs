@@ -1,0 +1,333 @@
+//! Layer 2 (part of [`crate::api`]) — cross-script confusable folding, script /
+//! reverse / hostname analysis, and filename / encoding / log-injection safety.
+
+use crate::Error;
+use std::borrow::Cow;
+
+// ── Confusables (TR39) ──────────────────────────────────────────────────────
+
+/// Target script for confusable folding (see [`normalize_confusables`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum TargetScript {
+    /// Fold confusables onto their Latin prototypes (the common case).
+    Latin,
+    /// Fold confusables onto their Cyrillic prototypes.
+    Cyrillic,
+}
+
+impl TargetScript {
+    /// The lowercase token the underlying tables are keyed by.
+    /// The canonical string token for this value (the inverse of its `FromStr`,
+    /// and what `Display` prints).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TargetScript::Latin => "latin",
+            TargetScript::Cyrillic => "cyrillic",
+        }
+    }
+}
+
+impl std::fmt::Display for TargetScript {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for TargetScript {
+    type Err = Error;
+
+    /// Parse `"latin"` / `"cyrillic"`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "latin" => Ok(Self::Latin),
+            "cyrillic" => Ok(Self::Cyrillic),
+            _ => Err(Error::from(crate::ErrorRepr::InvalidTargetScript {
+                got: s.to_owned(),
+            })),
+        }
+    }
+}
+
+/// Replace Unicode confusable homoglyphs with their `target`-script prototypes
+/// (TR39). Characters with no mapping pass through unchanged.
+///
+/// Returns `Cow::Borrowed` when nothing folds (zero allocation), `Cow::Owned`
+/// otherwise. Infallible: a [`TargetScript`] is always a supported script.
+#[must_use]
+pub fn normalize_confusables(text: &str, target: TargetScript) -> Cow<'_, str> {
+    // The only error path of the Layer-1 fn is an unsupported target *string*;
+    // a `TargetScript` value can never produce one, so this is unreachable.
+    crate::confusables::normalize_confusables_cow(text, target.as_str())
+        .expect("TargetScript always maps to a supported target script")
+}
+
+/// True if `text` contains any character confusable with a `target`-script
+/// character (TR39).
+///
+/// Infallible: a [`TargetScript`] is always a supported script.
+#[must_use]
+pub fn is_confusable(text: &str, target: TargetScript) -> bool {
+    crate::confusables::is_confusable(text, target.as_str())
+        .expect("TargetScript always maps to a supported target script")
+}
+
+// ── Reverse transliteration (romanized Latin → native script) ────────────────
+
+/// Language for [`reverse_transliterate`] — the scripts disarm ships reverse
+/// tables for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ReverseLang {
+    /// Greek (`el`).
+    Greek,
+    /// Russian (`ru`).
+    Russian,
+    /// Ukrainian (`uk`).
+    Ukrainian,
+}
+
+impl ReverseLang {
+    /// The lowercase language code the underlying tables are keyed by.
+    /// The canonical string token for this value (the inverse of its `FromStr`,
+    /// and what `Display` prints).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ReverseLang::Greek => "el",
+            ReverseLang::Russian => "ru",
+            ReverseLang::Ukrainian => "uk",
+        }
+    }
+}
+
+/// Convert romanized Latin `text` back to its native script with greedy
+/// longest-match scanning (digraphs/trigraphs like `shch` → щ); unmatched
+/// characters pass through.
+///
+/// Infallible: a [`ReverseLang`] always has a reverse table.
+#[must_use]
+pub fn reverse_transliterate(text: &str, lang: ReverseLang) -> String {
+    crate::reverse::reverse_transliterate_impl(text, lang.as_str())
+}
+
+/// The languages that support [`reverse_transliterate`], as lowercase codes.
+#[must_use]
+pub fn reverse_langs() -> Vec<String> {
+    crate::reverse::reverse_langs()
+}
+
+// ── Script detection ─────────────────────────────────────────────────────────
+
+/// Unicode scripts present in `text`, in order of first appearance (Common /
+/// Inherited excluded). Names are stable UCD script identifiers (e.g. `"Latin"`).
+#[must_use]
+pub fn detect_scripts(text: &str) -> Vec<&'static str> {
+    crate::scripts::detect_scripts(text)
+}
+
+/// True if `text` mixes characters from more than one script (excluding Common /
+/// Inherited) — a homoglyph-spoofing signal.
+#[must_use]
+pub fn is_mixed_script(text: &str) -> bool {
+    crate::scripts::is_mixed_script(text)
+}
+
+/// How disarm's auto-language detection resolved a string — returned by
+/// [`inspect_auto_lang`] for diagnostics / explainability.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct AutoLangInspection {
+    /// The primary non-Latin script detected, if any (e.g. `"Cyrillic"`).
+    pub script: Option<String>,
+    /// The language auto-detection chose, if any (e.g. `"ru"`).
+    pub chosen_lang: Option<String>,
+    /// Why that choice was made (`"discriminator"`, `"script_default"`,
+    /// `"unambiguous_script"`, `"latin_discriminator"`, `"no_detection"`).
+    pub reason: String,
+    /// The discriminator characters that drove the choice, if any.
+    pub discriminators_hit: Vec<String>,
+}
+
+/// Explain how auto-language detection resolves `text` (which script, which
+/// language, and why) — for diagnostics, not the hot path.
+#[must_use]
+pub fn inspect_auto_lang(text: &str) -> AutoLangInspection {
+    let (script, chosen_lang, reason, discriminators_hit) = crate::scripts::inspect_auto_lang(text);
+    AutoLangInspection {
+        script: script.map(str::to_owned),
+        chosen_lang,
+        reason: reason.to_owned(),
+        discriminators_hit,
+    }
+}
+
+// ── Hostname homoglyph safety ────────────────────────────────────────────────
+
+/// Findings from a hostname homoglyph analysis — returned by
+/// [`is_suspicious_hostname`].
+///
+/// Reports factual findings; it claims nothing about absolute safety. A
+/// `suspicious == false` result is **not** a safety certificate (see
+/// [`is_suspicious_hostname`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct HostnameAnalysis {
+    /// Whether the hostname is flagged suspicious overall (the same value
+    /// returned as the first element of [`is_suspicious_hostname`]'s tuple).
+    pub suspicious: bool,
+    /// Scripts detected across all labels, in order of first appearance
+    /// (Common / Inherited excluded), as stable UCD script identifiers.
+    pub scripts: Vec<String>,
+    /// Whether any single label mixes characters from more than one script.
+    pub mixed_script: bool,
+    /// Whether any label contains a character confusable with a Latin one.
+    pub has_confusables: bool,
+    /// The Latin-normalized (canonical) form of the hostname.
+    pub canonical: String,
+}
+
+/// Detect whether a hostname is *suspicious* for Unicode homoglyph spoofing,
+/// returning `(is_suspicious, analysis)`.
+///
+/// `xn--` (ACE) labels are decoded to their Unicode form via UTS#46 before
+/// analysis (#63); a malformed ACE label fails closed (suspicious). A hostname
+/// is flagged when any single label is mixed-script (conservative, #254), when
+/// any label contains a Latin-confusable character, or when an ACE label fails
+/// to decode.
+///
+/// Infallible: the analysis runs against the fixed `"latin"` target script,
+/// which is always supported.
+///
+/// **A `false` (not-suspicious) result is NOT a safety guarantee.** It means
+/// only that no mixed-script label and no confusable *from the bundled TR39
+/// table* was found. Base allow/deny decisions on the granular `scripts` /
+/// `mixed_script` / `has_confusables` fields plus your own policy — a detector
+/// can attest the *presence* of a problem, never the *absence* of all problems.
+#[must_use]
+pub fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis) {
+    let (suspicious, core) = crate::hostname::is_suspicious_hostname(hostname);
+    (
+        suspicious,
+        HostnameAnalysis {
+            suspicious: core.suspicious,
+            scripts: core.scripts,
+            mixed_script: core.mixed_script,
+            has_confusables: core.has_confusables,
+            canonical: core.canonical,
+        },
+    )
+}
+
+// ── Filename sanitization ────────────────────────────────────────────────────
+
+/// Target platform whose illegal-character set and reserved-name rules drive
+/// [`sanitize_filename`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Platform {
+    /// The intersection of all platforms' rules (the safe default).
+    Universal,
+    /// Windows: the universal illegal set plus reserved device names (CON, …).
+    Windows,
+    /// POSIX (Linux/macOS): only `/` and NUL are illegal.
+    Posix,
+}
+
+impl Platform {
+    /// The lowercase token the underlying sanitizer is keyed by.
+    /// The canonical string token for this value (the inverse of its `FromStr`,
+    /// and what `Display` prints).
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Platform::Universal => "universal",
+            Platform::Windows => "windows",
+            Platform::Posix => "posix",
+        }
+    }
+}
+
+/// Sanitize `text` into a filename safe for `platform`: transliterate to ASCII,
+/// strip illegal characters (replacing runs with `separator`), neutralize `..`
+/// traversal and reserved names, and truncate to `max_length` **bytes**
+/// (extension-aware when `preserve_extension`).
+///
+/// `lang` selects the transliteration language (`None` = auto-detect). This is
+/// the one fallible argument: an unknown language code is a runtime error
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)); `Platform` and the
+/// `usize` length make every other input infallible by construction.
+///
+/// [`ErrorKind::InvalidArgument`]: crate::ErrorKind::InvalidArgument
+pub fn sanitize_filename(
+    text: &str,
+    separator: &str,
+    max_length: usize,
+    platform: Platform,
+    lang: Option<&str>,
+    preserve_extension: bool,
+) -> Result<String, Error> {
+    crate::filename::sanitize_filename(
+        text,
+        separator,
+        max_length,
+        platform.as_str(),
+        lang,
+        preserve_extension,
+    )
+    .map_err(Error::from)
+}
+
+// ── Encoding detection & decoding ────────────────────────────────────────────
+
+/// Detect the probable character encoding of `bytes` (chardetng, Firefox's
+/// detector), returning `(whatwg_label, confidence)`. Detection is probabilistic
+/// — prefer explicit encoding metadata for critical pipelines.
+#[must_use]
+pub fn detect_encoding(bytes: &[u8]) -> (String, f64) {
+    crate::encoding::detect_encoding_impl(bytes)
+}
+
+/// Decode `bytes` to UTF-8. `encoding = None` auto-detects (rejecting a guess
+/// below `min_confidence`, in `0.0..=1.0`). Returns `(text, had_errors)` where
+/// `had_errors` flags inserted U+FFFD replacements; in `strict` mode a lossy
+/// decode is an error instead.
+///
+/// Fails ([`ErrorKind`](crate::ErrorKind)) on an unknown, unsupported, or
+/// low-confidence encoding, an out-of-range `min_confidence`, or (strict) a
+/// lossy decode.
+pub fn decode_to_utf8(
+    bytes: &[u8],
+    encoding: Option<&str>,
+    min_confidence: f64,
+    strict: bool,
+) -> Result<(String, bool), Error> {
+    crate::encoding::decode_to_utf8_impl(bytes, encoding, min_confidence, strict)
+        .map_err(Error::from)
+}
+
+// ── Log-injection neutralization ─────────────────────────────────────────────
+
+/// Neutralize log-injection / terminal-control characters in `text` so it is
+/// safe to *write* as a log line: each CR, LF, NEL, LS, PS, NUL, C0/C1 control,
+/// ESC, and DEL (and tab, unless `keep_tab`) is replaced with `replacement`
+/// (use `""` to drop them). Returns `Cow::Borrowed` for an already-clean line.
+///
+/// Not an HTML/SQL sanitizer and not a defense against logging-framework
+/// interpolation — encode at the *viewer's* sink for those. Fails
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) if `replacement` itself
+/// contains a character this call neutralizes (which would break the
+/// no-raw-CR/LF and idempotency guarantees).
+pub fn strip_log_injection<'a>(
+    text: &'a str,
+    replacement: &str,
+    keep_tab: bool,
+) -> Result<Cow<'a, str>, Error> {
+    crate::log_injection::validate_log_replacement(replacement, keep_tab).map_err(Error::from)?;
+    Ok(crate::log_injection::strip_log_injection_str(
+        text,
+        replacement,
+        keep_tab,
+    ))
+}

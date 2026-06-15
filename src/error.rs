@@ -3,7 +3,7 @@
 //! `Error` is the single internal error enum constructed by the pure-Rust
 //! helper functions.  It carries the structured fields needed to render each
 //! message via its `Display` impl (`thiserror`). All messages follow one house
-//! style (see [`Error`]), enforced by `messages_follow_house_style` (#187).
+//! style (see [`Error`](crate::Error)), enforced by `messages_follow_house_style` (#187).
 //!
 //! The PyO3 boundary converts `Error` into a Python exception via
 //! [`From<Error> for pyo3::PyErr`].  That conversion is the **only** place the
@@ -565,7 +565,7 @@ impl From<ErrorRepr> for pyo3::PyErr {
 
 /// The error type returned by disarm's fallible Rust API ([`crate::api`]).
 ///
-/// Opaque by design: the internal [`ErrorRepr`] variants are an implementation
+/// Opaque by design: the internal `ErrorRepr` variants are an implementation
 /// detail and may change without a breaking release. Callers branch on the
 /// coarse, stable [`Error::kind`] (or read the stable [`Error::code`] / the
 /// `Display` message), never on a concrete variant. `source()` deliberately
@@ -574,7 +574,7 @@ impl From<ErrorRepr> for pyo3::PyErr {
 #[derive(Debug)]
 pub struct Error(ErrorRepr);
 
-/// Coarse, stable classification of an [`Error`] (#38).
+/// Coarse, stable classification of an [`Error`](crate::Error) (#38).
 ///
 /// This is the part of the error contract callers may rely on. The set is
 /// `#[non_exhaustive]`: a future release may add a kind, so always include a

@@ -124,11 +124,9 @@ fn bench_slugify(c: &mut Criterion) {
     }
 
     // With max_length + word_boundary
-    let bounded_config = SlugConfig {
-        max_length: 30,
-        word_boundary: true,
-        ..SlugConfig::default()
-    };
+    let bounded_config = SlugConfig::new()
+        .with_max_length(30)
+        .with_word_boundary(true);
     let bounded_input = "The Quick Brown Fox Jumps Over The Lazy Dog";
     group.throughput(text_throughput(bounded_input));
     group.bench_function("bounded_30_word_boundary", |b| {

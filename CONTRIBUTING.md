@@ -115,7 +115,7 @@ one in effect for that commit), and append specialised analysis tools if relevan
 or your editor.
 
 An assistant **must never** add a `Signed-off-by:` or `Co-developed-by:` trailer — only a
-human can certify the [DCO](#sign-your-work--developer-certificate-of-origin). You, the
+human can certify the [DCO](#sign-your-work-developer-certificate-of-origin). You, the
 human submitter, review the change, add your own `Signed-off-by:`, and take full
 responsibility for it. In short: **`Assisted-by:` is attribution; `Signed-off-by:` is
 accountability** — every AI-assisted commit needs both, and they are never the same line.
@@ -312,7 +312,7 @@ protection.
 2. Make your change **with a test** — ideally one that fails before the change and
    passes after.
 3. Run Tier 1 locally (tests + linters) and confirm it's green.
-4. **Sign off** your commits (`git commit -s`) — see [Sign your work](#sign-your-work--developer-certificate-of-origin) above.
+4. **Sign off** your commits (`git commit -s`) — see [Sign your work](#sign-your-work-developer-certificate-of-origin) above.
 5. Open a pull request describing **what** changed and **why**. Link any related issue.
 6. Wait for the required status checks — **"Rust checks passed"**, **"Python checks
    passed"**, and **"DCO sign-off"** — to go green.

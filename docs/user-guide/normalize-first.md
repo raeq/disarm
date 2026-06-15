@@ -48,19 +48,36 @@ you are introspecting a pipeline to audit it, what you see is what runs.
 ## Guarantee 2 — normalization is grapheme-correct
 
 Normalization **respects grapheme-cluster boundaries**. For every form
-(NFC/NFD/NFKC/NFKD):
+(NFC/NFD/NFKC/NFKD), normalizing the whole string equals normalizing each
+grapheme cluster independently and rejoining:
 
-```python
-import disarm
+=== "Python"
 
-normalize_whole = lambda s, f: disarm.normalize(s, form=f)
-normalize_parts = lambda s, f: "".join(
-    disarm.normalize(g, form=f) for g in disarm.grapheme_split(s)
-)
+    ```python
+    import disarm
 
-s = "क्ष"  # Devanagari conjunct: KA + virama + SSA
-assert normalize_whole(s, "NFC") == normalize_parts(s, "NFC")
-```
+    normalize_whole = lambda s, f: disarm.normalize(s, form=f)
+    normalize_parts = lambda s, f: "".join(
+        disarm.normalize(g, form=f) for g in disarm.grapheme_split(s)
+    )
+
+    s = "क्ष"  # Devanagari conjunct: KA + virama + SSA
+    assert normalize_whole(s, "NFC") == normalize_parts(s, "NFC")
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, NormalizationForm};
+
+    let s = "क्ष"; // Devanagari conjunct: KA + virama + SSA
+    let whole = api::normalize(s, NormalizationForm::Nfc);
+    let parts: String = api::grapheme_split(s)
+        .iter()
+        .map(|g| api::normalize(g, NormalizationForm::Nfc))
+        .collect();
+    assert_eq!(whole, parts); // => true
+    ```
 
 In plain terms: normalization never orphans a combining mark, never splits an
 Indic conjunct, and never merges across cluster boundaries. This is verified
@@ -81,21 +98,41 @@ Mixed-script text is a classic spoofing vector (`pаypаl` with Cyrillic `а`).
 Detect it with `is_mixed_script`, and fold it to a single script with
 `normalize_confusables`:
 
-```python
-import disarm
+=== "Python"
 
-raw = "pаypаl"                     # contains Cyrillic а (U+0430)
+    ```python
+    import disarm
 
-# Normalize first — NFKC folds compatibility variants (fullwidth, ligatures)
-# so the script check sees canonical input, never a disguised bypass.
-s = disarm.normalize(raw, form="NFKC")
+    raw = "pаypаl"                     # contains Cyrillic а (U+0430)
 
-assert disarm.is_mixed_script(s) == True
+    # Normalize first — NFKC folds compatibility variants (fullwidth, ligatures)
+    # so the script check sees canonical input, never a disguised bypass.
+    s = disarm.normalize(raw, form="NFKC")
 
-pure = disarm.normalize_confusables(s, target_script="latin")
-assert pure == 'paypal'
-assert disarm.is_mixed_script(pure) == False
-```
+    assert disarm.is_mixed_script(s) == True
+
+    pure = disarm.normalize_confusables(s, target_script="latin")
+    assert pure == 'paypal'
+    assert disarm.is_mixed_script(pure) == False
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, NormalizationForm, TargetScript};
+
+    let raw = "pаypаl"; // contains Cyrillic а (U+0430)
+
+    // Normalize first — NFKC folds compatibility variants (fullwidth, ligatures)
+    // so the script check sees canonical input, never a disguised bypass.
+    let s = api::normalize(raw, NormalizationForm::Nfkc);
+
+    assert!(api::is_mixed_script(&s)); // => true
+
+    let pure = api::normalize_confusables(&s, TargetScript::Latin);
+    assert_eq!(pure, "paypal");        // => "paypal"
+    assert!(!api::is_mixed_script(&pure)); // => false
+    ```
 
 - **Flag** with `is_mixed_script` when you only need to *reject* suspicious input
   (e.g. before storing a username). For hostnames, `is_suspicious_hostname` returns
@@ -115,23 +152,49 @@ supports reverse transliteration for Greek, Russian, and Ukrainian via
 NFKC's compatibility folding is **lossy** and destroys the information a reversal
 would need:
 
-```python
-import disarm
+=== "Python"
 
-assert disarm.normalize("⁵", form="NFC") == '⁵'    # superscript five — preserved
-assert disarm.normalize("⁵", form="NFKC") == '5'   # folded to ASCII — unrecoverable
-```
+    ```python
+    import disarm
+
+    assert disarm.normalize("⁵", form="NFC") == '⁵'    # superscript five — preserved
+    assert disarm.normalize("⁵", form="NFKC") == '5'   # folded to ASCII — unrecoverable
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, NormalizationForm};
+
+    assert_eq!(api::normalize("⁵", NormalizationForm::Nfc), "⁵");   // => "⁵"  superscript five — preserved
+    assert_eq!(api::normalize("⁵", NormalizationForm::Nfkc), "5");  // => "5"  folded to ASCII — unrecoverable
+    ```
 
 An NFC-first canonicalization keeps the door open to a clean round-trip:
 
-```python
-native = "Москва"
-canonical = disarm.normalize(native, form="NFC")        # canonical, lossless
-romanized = disarm.transliterate(canonical, lang="ru")
-assert romanized == 'Moskva'
-back = disarm.transliterate(romanized, target="ru")
-assert back == 'Москва'                                   # round-trips
-```
+=== "Python"
+
+    ```python
+    native = "Москва"
+    canonical = disarm.normalize(native, form="NFC")        # canonical, lossless
+    romanized = disarm.transliterate(canonical, lang="ru")
+    assert romanized == 'Moskva'
+    back = disarm.transliterate(romanized, target="ru")
+    assert back == 'Москва'                                   # round-trips
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, NormalizationForm, ReverseLang, Transliterate};
+
+    let native = "Москва";
+    let canonical = api::normalize(native, NormalizationForm::Nfc); // canonical, lossless
+    let romanized = Transliterate::new().lang("ru").run(&canonical);
+    assert_eq!(romanized, "Moskva");                                // => "Moskva"
+    let back = api::reverse_transliterate(&romanized, ReverseLang::Russian);
+    assert_eq!(back, "Москва");                                     // => "Москва"  round-trips
+    ```
 
 For the reversible direction, also avoid the steps that erase recoverable
 information — `strip_accents`, `fold_case`, and transliteration to ASCII — unless

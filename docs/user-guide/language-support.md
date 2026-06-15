@@ -180,22 +180,60 @@ All 10 Brahmic scripts use virama/mātrā-aware transliteration: consonants carr
 
 ### CJK examples
 
-```python
-from disarm import transliterate, slugify
+=== "Python"
 
-# Chinese
-assert transliterate("北京市") == 'bei jing shi'
-assert slugify("北京烤鸭") == 'bei-jing-kao-ya'
+    ```python
+    from disarm import transliterate, slugify
 
-# Korean
-assert transliterate("서울") == 'seo ul'
-assert slugify("대한민국") == 'dae-han-min-gug'
+    # Chinese
+    assert transliterate("北京市") == 'bei jing shi'
+    assert slugify("北京烤鸭") == 'bei-jing-kao-ya'
 
-# Japanese (hiragana/katakana use Hepburn; kanji use Chinese pinyin)
-assert transliterate("ひらがな") == 'hiragana'
-assert transliterate("東京タワー") == 'dong jing tawa-'
-assert transliterate("東京タワー", lang="ja") == 'dong jing tawa'
-```
+    # Korean
+    assert transliterate("서울") == 'seo ul'
+    assert slugify("대한민국") == 'dae-han-min-gug'
+
+    # Japanese (hiragana/katakana use Hepburn; kanji use Chinese pinyin)
+    assert transliterate("ひらがな") == 'hiragana'
+    assert transliterate("東京タワー") == 'dong jing tawa-'
+    assert transliterate("東京タワー", lang="ja") == 'dong jing tawa'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, SlugConfig, Transliterate};
+
+    // Chinese
+    assert_eq!(api::transliterate("北京市"), "bei jing shi");
+    assert_eq!(api::slugify("北京烤鸭", &SlugConfig::new()), "bei-jing-kao-ya");
+
+    // Korean
+    assert_eq!(api::transliterate("서울"), "seo ul");
+    assert_eq!(api::slugify("대한민국", &SlugConfig::new()), "dae-han-min-gug");
+
+    // Japanese (hiragana/katakana use Hepburn; kanji use Chinese pinyin)
+    assert_eq!(api::transliterate("ひらがな"), "hiragana");
+    assert_eq!(Transliterate::new().lang("ja").run("東京タワー"), "dong jing tawa");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Chinese
+    Disarm.transliterate("北京市")            # => "bei jing shi"
+    Disarm.slugify("北京烤鸭")                 # => "bei-jing-kao-ya"
+
+    # Korean
+    Disarm.transliterate("서울")              # => "seo ul"
+    Disarm.slugify("대한민국")                 # => "dae-han-min-gug"
+
+    # Japanese (hiragana/katakana use Hepburn; kanji use Chinese pinyin)
+    Disarm.transliterate("ひらがな")           # => "hiragana"
+    Disarm.transliterate("東京タワー", lang: :ja) # => "dong jing tawa"
+    ```
 
 ## Reverse transliteration
 
@@ -333,13 +371,32 @@ transliterate("Москва", lang=LANG_AUTO)
 
 ### With functions
 
-```python
-from disarm import transliterate, slugify, sanitize_filename
+=== "Python"
 
-assert transliterate("Ürümqi", lang="de") == 'Ueruemqi'
-assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
-assert sanitize_filename("Ärger.txt", lang="de") == 'Aerger.txt'
-```
+    ```python
+    from disarm import transliterate, slugify, sanitize_filename
+
+    assert transliterate("Ürümqi", lang="de") == 'Ueruemqi'
+    assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
+    assert sanitize_filename("Ärger.txt", lang="de") == 'Aerger.txt'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, SlugConfig, Transliterate};
+
+    assert_eq!(Transliterate::new().lang("de").run("Ürümqi"), "Ueruemqi");
+    assert_eq!(api::slugify("Ärger im Büro", &SlugConfig::new().with_lang("de")), "aerger-im-buero");
+    // sanitize_filename also accepts a lang profile.
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    Disarm.transliterate("Ürümqi", lang: :de)       # => "Ueruemqi"
+    Disarm.slugify("Ärger im Büro", lang: :de)       # => "aerger-im-buero"
+    ```
 
 ### With classes
 
@@ -363,11 +420,23 @@ assert transliterate("Ç", lang=LANG_FR) == 'C'
 
 ## Listing available languages
 
-```python
-from disarm import list_langs
+=== "Python"
 
-assert list_langs() == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
-```
+    ```python
+    from disarm import list_langs
+
+    assert list_langs() == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api;
+
+    let langs = api::list_langs();
+    assert_eq!(langs[0], "am");
+    // => ["am", "ar", "as", "ban", "bax", "bg", ... "vi", "zh"]
+    ```
 
 ## Custom language profiles
 

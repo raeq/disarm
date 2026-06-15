@@ -1,16 +1,39 @@
 # Slugification
 
-disarm generates URL-safe slugs from Unicode text. The `slugify()` function is parameter-compatible with [python-slugify](https://pypi.org/project/python-slugify/), so migration requires only changing the import.
+disarm generates URL-safe slugs from Unicode text. The `slugify` operation is parameter-compatible with [python-slugify](https://pypi.org/project/python-slugify/), so migration requires only changing the import.
 
 ## Basic usage
 
-```python
-from disarm import slugify
+=== "Python"
 
-assert slugify("Hello, World!") == 'hello-world'
-assert slugify("My Blog Post — Draft #3") == 'my-blog-post-draft-3'
-assert slugify("Ünïcödé Téxt") == 'unicode-text'
-```
+    ```python
+    from disarm import slugify
+
+    assert slugify("Hello, World!") == 'hello-world'
+    assert slugify("My Blog Post — Draft #3") == 'my-blog-post-draft-3'
+    assert slugify("Ünïcödé Téxt") == 'unicode-text'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, SlugConfig};
+
+    let cfg = SlugConfig::default();
+    assert_eq!(api::slugify("Hello, World!", &cfg), "hello-world");
+    assert_eq!(api::slugify("My Blog Post — Draft #3", &cfg), "my-blog-post-draft-3");
+    assert_eq!(api::slugify("Ünïcödé Téxt", &cfg), "unicode-text");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    Disarm.slugify("Hello, World!")           # => "hello-world"
+    Disarm.slugify("My Blog Post — Draft #3")  # => "my-blog-post-draft-3"
+    Disarm.slugify("Ünïcödé Téxt")             # => "unicode-text"
+    ```
 
 ## Parameters
 
@@ -18,10 +41,19 @@ assert slugify("Ünïcödé Téxt") == 'unicode-text'
 
 The character used between words (default: `"-"`):
 
-```python
-assert slugify("hello world", separator="_") == 'hello_world'
-assert slugify("hello world", separator=".") == 'hello.world'
-```
+=== "Python"
+
+    ```python
+    assert slugify("hello world", separator="_") == 'hello_world'
+    assert slugify("hello world", separator=".") == 'hello.world'
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    Disarm.slugify("hello world", separator: "_")  # => "hello_world"
+    Disarm.slugify("hello world", separator: ".")  # => "hello.world"
+    ```
 
 ### lowercase
 
@@ -83,11 +115,29 @@ assert slugify("日本語テスト", allow_unicode=True) == '日本語テスト'
 
 Language profile for transliteration:
 
-```python
-assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
-```
+=== "Python"
 
-Use `lang="auto"` to auto-detect the language from the script:
+    ```python
+    assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, SlugConfig};
+
+    api::slugify("Ärger im Büro", &SlugConfig::new().with_lang("de"));
+    // => "aerger-im-buero"
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    Disarm.slugify("Ärger im Büro", lang: :de)  # => "aerger-im-buero"
+    ```
+
+Use `lang="auto"` to auto-detect the language from the script. For ambiguous
+Cyrillic, auto-detection defaults to Russian:
 
 ```python
 assert slugify("Москва", lang="auto") == 'moskva'

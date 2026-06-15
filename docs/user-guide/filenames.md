@@ -9,14 +9,32 @@
 
 ## Basic usage
 
-```python
-from disarm import sanitize_filename
+=== "Python"
 
-assert sanitize_filename("my<file>:v2.txt") == "my_file_v2.txt"
-assert sanitize_filename("café résumé.pdf") == "cafe_resume.pdf"
-assert sanitize_filename("../../../etc/passwd") == "_.etcpasswd"
-assert sanitize_filename("CON.txt") == "_CON.txt"  # Windows reserved name
-```
+    ```python
+    from disarm import sanitize_filename
+
+    assert sanitize_filename("my<file>:v2.txt") == "my_file_v2.txt"
+    assert sanitize_filename("café résumé.pdf") == "cafe_resume.pdf"
+    assert sanitize_filename("../../../etc/passwd") == "_.etcpasswd"
+    assert sanitize_filename("CON.txt") == "_CON.txt"  # Windows reserved name
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, Platform};
+
+    // sanitize_filename(text, separator, max_length, platform, lang, preserve_extension)
+    api::sanitize_filename("my<file>:v2.txt", "_", 255, Platform::Universal, None, true);
+    // => Ok("my_file_v2.txt")
+    api::sanitize_filename("café résumé.pdf", "_", 255, Platform::Universal, None, true);
+    // => Ok("cafe_resume.pdf")
+    api::sanitize_filename("../../../etc/passwd", "_", 255, Platform::Universal, None, true);
+    // => Ok("_.etcpasswd")
+    api::sanitize_filename("CON.txt", "_", 255, Platform::Universal, None, true);
+    // => Ok("_CON.txt")  (Windows reserved name)
+    ```
 
 ## Parameters
 
@@ -24,9 +42,20 @@ assert sanitize_filename("CON.txt") == "_CON.txt"  # Windows reserved name
 
 Character used to replace illegal characters (default: `"_"`):
 
-```python
-assert sanitize_filename("hello:world", separator="-") == "hello-world"
-```
+=== "Python"
+
+    ```python
+    assert sanitize_filename("hello:world", separator="-") == "hello-world"
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, Platform};
+
+    api::sanitize_filename("hello:world", "-", 255, Platform::Universal, None, true);
+    // => Ok("hello-world")
+    ```
 
 ### max_length
 
@@ -46,16 +75,36 @@ assert sanitize_filename("a" * 300 + ".pdf", max_length=20) == "aaaaaaaaaaaaaaaa
 
 Target platform for sanitization rules:
 
-```python
-# Universal (default) — safe on all platforms
-assert sanitize_filename("my:file?.txt", platform="universal") == "my_file.txt"
+=== "Python"
 
-# POSIX — only / and NUL are illegal
-assert sanitize_filename("my:file?.txt", platform="posix") == "my:file?.txt"
+    ```python
+    # Universal (default) — safe on all platforms
+    assert sanitize_filename("my:file?.txt", platform="universal") == "my_file.txt"
 
-# Windows — additionally forbids < > : " | ? * and reserved names
-assert sanitize_filename("CON.txt", platform="windows") == "_CON.txt"
-```
+    # POSIX — only / and NUL are illegal
+    assert sanitize_filename("my:file?.txt", platform="posix") == "my:file?.txt"
+
+    # Windows — additionally forbids < > : " | ? * and reserved names
+    assert sanitize_filename("CON.txt", platform="windows") == "_CON.txt"
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, Platform};
+
+    // Universal (default) — safe on all platforms
+    api::sanitize_filename("my:file?.txt", "_", 255, Platform::Universal, None, true);
+    // => Ok("my_file.txt")
+
+    // POSIX — only / and NUL are illegal
+    api::sanitize_filename("my:file?.txt", "_", 255, Platform::Posix, None, true);
+    // => Ok("my:file?.txt")
+
+    // Windows — additionally forbids < > : " | ? * and reserved names
+    api::sanitize_filename("CON.txt", "_", 255, Platform::Windows, None, true);
+    // => Ok("_CON.txt")
+    ```
 
 | Platform | Illegal characters | Reserved names |
 |---|---|---|
@@ -67,13 +116,29 @@ assert sanitize_filename("CON.txt", platform="windows") == "_CON.txt"
 
 Language profile for transliteration of non-ASCII characters:
 
-```python
-# German profile expands umlauts (ä → ae)
-assert sanitize_filename("Ärger.txt", lang="de") == "Aerger.txt"
+=== "Python"
 
-# Default profile strips the diaeresis (ä → a)
-assert sanitize_filename("Ärger.txt") == "Arger.txt"
-```
+    ```python
+    # German profile expands umlauts (ä → ae)
+    assert sanitize_filename("Ärger.txt", lang="de") == "Aerger.txt"
+
+    # Default profile strips the diaeresis (ä → a)
+    assert sanitize_filename("Ärger.txt") == "Arger.txt"
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, Platform};
+
+    // German profile expands umlauts (ä → ae)
+    api::sanitize_filename("Ärger.txt", "_", 255, Platform::Universal, Some("de"), true);
+    // => Ok("Aerger.txt")
+
+    // Default profile strips the diaeresis (ä → a)
+    api::sanitize_filename("Ärger.txt", "_", 255, Platform::Universal, None, true);
+    // => Ok("Arger.txt")
+    ```
 
 ### preserve_extension
 

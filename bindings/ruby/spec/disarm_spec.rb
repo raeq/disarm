@@ -62,9 +62,8 @@ RSpec.describe Disarm do
     end
 
     it "honours max_length with word boundaries" do
-      # "the-quick-brown" truncated to 9 bytes on a word boundary → "the-quick".
-      expect(Disarm.slugify("the quick brown", max_length: 9, word_boundary: true))
-        .to eq("the-quick")
+      expect(Disarm.slugify("Very Long Title Here", max_length: 10, word_boundary: true))
+        .to eq("very-long")
     end
 
     it "can preserve case" do
@@ -74,7 +73,7 @@ RSpec.describe Disarm do
 
   describe ".demojize" do
     it "names emoji" do
-      expect(Disarm.demojize("hi 👍")).to include(":")
+      expect(Disarm.demojize("hi 👍")).to eq("hi thumbs up")
     end
   end
 

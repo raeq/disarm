@@ -43,7 +43,7 @@ Disarm.strip_accents("café")                         # => "cafe"
 Disarm.fold_case("HELLO")                            # => "hello"
 Disarm.slugify("Héllo Wörld")                        # => "hello-world"
 Disarm.slugify("Hello World", separator: "_", max_length: 5, word_boundary: true)
-Disarm.demojize("I ❤️ Ruby")                          # => "I :red_heart: Ruby"
+Disarm.demojize("I ❤️ Ruby")                          # => "I red heart Ruby"
 Disarm.demojize("👍🏽", strip_modifiers: true)
 
 # Security presets

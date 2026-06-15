@@ -53,35 +53,43 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - User Guide:
-      - Getting Started: user-guide/getting-started.md
-      - Security & Defense:
-          - Adversarial-Text Defense: security/adversarial-defense.md
-          - Threat Model: THREAT_MODEL.md
-          - Confusable Detection: user-guide/confusables.md
+  - Getting started:
+      - Python: python/getting-started.md
+      - Rust: rust/getting-started.md
+      - Ruby: ruby/getting-started.md
+  - Concepts:
+      - Which function do I want?: concepts/which-function.md
+      - Adversarial-Text Defense: security/adversarial-defense.md
+      - Threat Model: THREAT_MODEL.md
+  - Guide:
+      - Confusable Detection: user-guide/confusables.md
       - Transliteration: user-guide/transliteration.md
       - Slugification: user-guide/slugification.md
       - Normalization: user-guide/normalization.md
       - Normalize-First Canonicalization: user-guide/normalize-first.md
       - Filename Sanitization: user-guide/filenames.md
       - Text Cleaning: user-guide/text-cleaning.md
+      - Grapheme Clusters: user-guide/graphemes.md
       - Text Pipeline: user-guide/pipeline.md
       - LLM Pipelines: user-guide/llm-pipelines.md
       - Tokenizer Preprocessing: user-guide/tokenizer-preprocessing.md
       - Language Support: user-guide/language-support.md
+      - Language Detection: user-guide/language-detection.md
       - Abjad Scripts (Arabic, Persian, Hebrew): user-guide/abjad-transliteration.md
   - API Reference:
-      - Overview: api/index.md
-      - Core Transforms: api/transforms.md
-      - Precompiled Pipelines: api/pipelines.md
-      - Predicates: api/predicates.md
-      - Output Encoders: api/encoders.md
-      - Grapheme Clusters: api/graphemes.md
-      - Encoding: api/encoding.md
-      - Classes: api/classes.md
-      - Enums & Types: api/enums.md
-      - Language Profiles: api/language-profiles.md
-      - Exceptions: api/exceptions.md
+      - Python:
+          - Overview: api/index.md
+          - Core Transforms: api/transforms.md
+          - Precompiled Pipelines: api/pipelines.md
+          - Predicates: api/predicates.md
+          - Output Encoders: api/encoders.md
+          - Grapheme Clusters: api/graphemes.md
+          - Encoding: api/encoding.md
+          - Classes: api/classes.md
+          - Enums & Types: api/enums.md
+          - Language Profiles: api/language-profiles.md
+          - Exceptions: api/exceptions.md
+      - Rust (docs.rs & semver policy): RUST_API.md
   - Architecture:
       - Transliteration Engine: architecture/transliteration-engine.md
       - Data Tables & Caching: architecture/data-tables.md
@@ -102,12 +110,17 @@ nav:
       - From pathvalidate: migration/from-pathvalidate.md
       - From anyascii: migration/from-anyascii.md
   - CLI: cli.md
-  - Performance: performance.md
-  - Benchmarks: benchmarks.md
-  - Limitations: limitations.md
-  - Changelog: CHANGELOG.md
-  - Contributing: CONTRIBUTING.md
-  - Binding guide: BINDINGS.md
-  - Releasing: RELEASING.md
-  - Dependency upgrades: DEPENDENCY_UPGRADES.md
-  - Security: SECURITY.md
+  - Reference:
+      - Language Reference: reference.md
+      - Provenance & Standards: provenance.md
+      - Policy Templates: policy-templates.md
+      - Performance: performance.md
+      - Benchmarks: benchmarks.md
+      - Limitations: limitations.md
+  - Project:
+      - Changelog: CHANGELOG.md
+      - Contributing: CONTRIBUTING.md
+      - Binding guide: BINDINGS.md
+      - Releasing: RELEASING.md
+      - Dependency upgrades: DEPENDENCY_UPGRADES.md
+      - Security: SECURITY.md

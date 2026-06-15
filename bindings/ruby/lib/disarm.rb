@@ -36,13 +36,20 @@ module Disarm
 
   class << self
     # Transliterate Unicode text to ASCII. `scheme:` selects the standard:
-    # :default (the general-purpose scheme), :strict_iso9, or :gost7034. Accepts
-    # a String or Symbol.
-    def transliterate(text, scheme: :default)
+    # :default (the general-purpose scheme), :strict_iso9, or :gost7034. `lang:`
+    # applies a language profile on top of the scheme (e.g. "uk" → Київ → "Kyiv",
+    # "de" → ü → "ue"); nil means no profile. Both accept a String or Symbol.
+    def transliterate(text, scheme: :default, lang: nil)
       scheme = scheme.to_s
+      lang = lang&.to_s
       translate_errors do
-        # The bare default keeps the core's borrow-on-no-op fast path.
-        scheme == "default" ? _transliterate(text) : _transliterate_scheme(text, scheme)
+        # The bare default with no profile keeps the core's borrow-on-no-op fast
+        # path; any scheme or lang takes the option-carrying builder path.
+        if lang.nil? && scheme == "default"
+          _transliterate(text)
+        else
+          _transliterate_opts(text, scheme, lang)
+        end
       end
     end
 

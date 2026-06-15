@@ -16,7 +16,29 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Added
+
+- **Ruby: `transliterate` now accepts a `lang:` language profile.** Previously the
+  Ruby binding's `transliterate` exposed only `scheme:`, so it could not reach the
+  core's per-language profiles (a parity gap vs Python/Rust). `lang:` accepts a
+  String or Symbol and composes with `scheme:` —
+  e.g. `Disarm.transliterate("Київ", lang: :uk) # => "Kyiv"`. Implemented over the
+  core's `Transliterate` builder via a generalized `_transliterate_opts` shim.
+
 ### Changed
+
+- **Docs: language-neutral scaffold — first phase of the docs restructure (#50).**
+  Reshaped the documentation IA toward "language-neutral concept core +
+  per-language specifics": a neutral landing headline (no longer "for Python")
+  that routes by ecosystem; per-language *Getting started* pages under
+  `docs/python/`, `docs/rust/`, and `docs/ruby/`; a shared
+  `docs/concepts/which-function.md` concept page (lifting the #328 decision
+  table into the neutral layer); and an `mkdocs.yml`
+  nav reorganized into *Getting started / Concepts / Guide / API Reference
+  (Python · Rust) / Architecture / Migration / Reference / Project*. Folded six
+  previously orphaned pages into the nav. No library behaviour change; the
+  per-topic concept/usage split and per-language example tabs land in following
+  phases.
 
 - **Docs/metadata: scope `transliterate()` vs the TR39 confusable functions (#328).**
   The headline identity led with "TR39 confusable analysis", while the most

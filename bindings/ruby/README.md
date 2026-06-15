@@ -29,8 +29,10 @@ falls back to compiling from source (needs a Rust toolchain) otherwise.
 require "disarm"
 
 # Standards-based transliteration to ASCII. `scheme:` is a symbol (or string):
-# :default (general-purpose), :strict_iso9 (ISO 9:1995), :gost7034.
+# :default (general-purpose), :strict_iso9 (ISO 9:1995), :gost7034. `lang:`
+# applies a language profile on top (e.g. "uk" → Київ → "Kyiv").
 Disarm.transliterate("Москва")                       # => "Moskva"
+Disarm.transliterate("Київ", lang: :uk)              # => "Kyiv"
 Disarm.transliterate("Москва", scheme: :strict_iso9)
 
 # TR39 confusable folding (homoglyph defense). `target:` defaults to :latin.

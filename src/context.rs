@@ -188,8 +188,10 @@ impl ContextDict {
         let span_bytes = |s: Span| &bytes[s.off as usize..s.off as usize + s.len as usize];
 
         // --- Unigrams: skeleton -> best (first, most-frequent) form span ---
-        // The pre-reservation is capped by the entry-count limit (#116/#200), not
-        // by `data.len()`, so a corrupt header cannot drive a huge allocation.
+        // `min(MAX_DICT_ENTRIES)` clamps only the *pre-reservation* (#116/#200) so a
+        // bogus huge `unigram_count` header cannot drive a giant up-front alloc; it
+        // is NOT an entry cap — a genuine dict with more entries still grows past it
+        // as the loop pushes, bounded by the actual buffer bytes each entry consumes.
         let mut unigrams: Vec<UniEntry> = Vec::with_capacity(unigram_count.min(MAX_DICT_ENTRIES));
         let mut pos = unigram_offset;
         for _ in 0..unigram_count {
@@ -222,6 +224,8 @@ impl ContextDict {
         }
 
         // --- Bigrams: flat (prev, curr, form), parsed then sorted and grouped ---
+        // As above (C6): the clamp bounds the pre-reservation only, not the entry
+        // count; growth past it is bounded by the buffer bytes.
         let mut raw: Vec<RawBi> = Vec::with_capacity(bigram_count.min(MAX_DICT_ENTRIES));
         pos = bigram_offset;
         for _ in 0..bigram_count {

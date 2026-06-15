@@ -49,7 +49,7 @@ pub(crate) fn normalize_into(
         "NFD" => out.extend(text.nfd()),
         "NFKC" => out.extend(text.nfkc()),
         "NFKD" => out.extend(text.nfkd()),
-        _ => unreachable!(),
+        _ => unreachable!("validate_form guarantees a known normalization form"),
     }
     Ok(())
 }
@@ -67,22 +67,24 @@ pub(crate) fn is_normalized(text: &str, form: &str) -> Result<bool, crate::Error
         "NFD" => unicode_normalization::is_nfd(text),
         "NFKC" => unicode_normalization::is_nfkc(text),
         "NFKD" => unicode_normalization::is_nfkd(text),
-        _ => unreachable!(),
+        _ => unreachable!("validate_form guarantees a known normalization form"),
     };
     if quick {
         return Ok(true);
     }
-    // Quick-check said no — verify with a full normalization pass.
-    // If normalizing produces the same bytes, the text is already normalized
-    // and the quick-check gave a false negative (Unicode version gap).
-    let normalized: String = match form {
-        "NFC" => text.nfc().collect(),
-        "NFD" => text.nfd().collect(),
-        "NFKC" => text.nfkc().collect(),
-        "NFKD" => text.nfkd().collect(),
-        _ => unreachable!(),
+    // Quick-check said no — verify with a full normalization pass. Compare the
+    // normalizer's char stream against the input's element-wise (`Iterator::eq`)
+    // rather than collecting a whole `String`: this allocates nothing and exits
+    // on the first differing char (O6). Char-sequence equality is equivalent to
+    // the former byte equality for valid UTF-8.
+    let already_normalized = match form {
+        "NFC" => text.nfc().eq(text.chars()),
+        "NFD" => text.nfd().eq(text.chars()),
+        "NFKC" => text.nfkc().eq(text.chars()),
+        "NFKD" => text.nfkd().eq(text.chars()),
+        _ => unreachable!("validate_form guarantees a known normalization form"),
     };
-    Ok(normalized == text)
+    Ok(already_normalized)
 }
 
 #[cfg(test)]

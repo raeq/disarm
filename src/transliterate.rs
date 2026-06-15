@@ -308,11 +308,17 @@ pub(crate) fn transliterate_impl<'a>(
     // Metadata only — lengths/flags/duration, never the input or output text.
     #[cfg(feature = "log")]
     if let Some(start) = start {
+        // H2: `lang` is the one default-level field that is fully caller-
+        // controlled, so route it through our own log-injection primitive
+        // (belt-and-suspenders over `{:?}`'s escaping — consistent with #358).
+        // O5: `in_bytes` is a sufficient size signal; the extra `chars().count()`
+        // walk is dropped.
+        let lang_log =
+            lang.map(|l| crate::log_injection::strip_log_injection_str(l, "\u{FFFD}", true));
         tl_debug!(
-            "transliterate: in_bytes={} in_chars={} out_bytes={} lang={lang:?} mode={error_mode:?} \
+            "transliterate: in_bytes={} out_bytes={} lang={lang_log:?} mode={error_mode:?} \
              iso9={strict_iso9} gost={gost7034} tones={tones} borrowed={} dur_us={}",
             text.len(),
-            text.chars().count(),
             out.len(),
             matches!(out, Cow::Borrowed(_)),
             start.elapsed().as_micros(),

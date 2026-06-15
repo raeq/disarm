@@ -16,7 +16,7 @@ include!(concat!(env!("OUT_DIR"), "/reverse_translit_phf.rs"));
 const MAX_KEY_LEN: usize = 4; // "shch" is the longest key
 
 /// Look up a romanized substring in the appropriate reverse table.
-fn reverse_lookup<'a>(key: &str, lang: &str) -> Option<&'a str> {
+fn reverse_lookup(key: &str, lang: &str) -> Option<&'static str> {
     let table: &phf::Map<&'static str, &'static str> = match lang {
         "ru" => &REVERSE_RU,
         "uk" => &REVERSE_UK,
@@ -65,8 +65,9 @@ pub(crate) fn reverse_transliterate_impl(text: &str, lang: &str) -> String {
 
         // Greedy: try longest key first, work down to single char
         for key_len in (1..=max_try).rev() {
-            // Only try if the slice is valid UTF-8 (it always will be for ASCII input,
-            // but guard against partial multi-byte sequences)
+            // `text` is always valid UTF-8 (it's a `&str`); this guards against a
+            // fixed-width byte window slicing *through* a multi-byte char, which
+            // would not be valid UTF-8 — skip those `key_len`s. (P8)
             if let Ok(candidate) = std::str::from_utf8(&bytes[i..i + key_len]) {
                 if let Some(native) = reverse_lookup(candidate, lang) {
                     result.push_str(native);

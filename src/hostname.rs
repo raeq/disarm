@@ -23,6 +23,12 @@ fn is_ipv6_literal(normalized: &str) -> bool {
     if colon_count > 7 {
         return false;
     }
+    // A valid literal has at most one zone-ID delimiter (`%`); more than one is
+    // malformed. Bounding it keeps a crafted `[::1%a%b...]` from being waved
+    // through as an IP and thereby skipping homoglyph analysis. (C5)
+    if inner.bytes().filter(|&b| b == b'%').count() > 1 {
+        return false;
+    }
     inner
         .as_bytes()
         .iter()
@@ -116,12 +122,12 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
         // Decode `xn--` ACE labels to their Unicode form (UTS#46, #63) so the
         // on-the-wire IDN homograph attack is analysed instead of passing as
         // inert ASCII. A malformed ACE label cannot be verified → fail closed.
-        // Byte comparison (not `raw_label[..4]`, which would panic on a
-        // non-ASCII label where byte 4 is not a char boundary). ACE labels are
-        // pure ASCII, so a byte-prefix match is exactly right. `>= 4` (not
-        // `> 4`) so a bare, malformed `"xn--"` is still recognised as ACE and
-        // routed through the fail-closed decode below rather than slipping past
-        // as an inert ASCII label.
+        // `raw_label` here is *not yet known* to be ACE — it may be a non-ASCII
+        // Unicode label — so a byte slice `raw_label[..4]` could fall mid-codepoint
+        // and panic; the byte-prefix compare never can, and real ACE labels are
+        // pure ASCII so it matches exactly. `>= 4` (not `> 4`) keeps a bare,
+        // malformed `"xn--"` recognised as ACE and routed through the fail-closed
+        // decode below rather than slipping past as an inert ASCII label.
         let is_ace =
             raw_label.len() >= 4 && raw_label.as_bytes()[..4].eq_ignore_ascii_case(b"xn--");
         let label: String = if is_ace {

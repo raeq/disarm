@@ -1,0 +1,7 @@
+# Workspace at the gem root so `cargo metadata` (run by rb-sys from here) resolves
+# to the extension crate (ext/disarm), not the repo-root core crate. Without this,
+# `cargo metadata` walks up to the core's Cargo.toml and rb-sys builds the wrong
+# crate. (#45 cross-gem fix)
+[workspace]
+members = ["ext/disarm"]
+resolver = "2"

@@ -128,6 +128,14 @@ jobs:
             return 1
           }
 
+          # Validate the (possibly user-supplied) threshold before it reaches
+          # `date`, so a manual run with "6.5" or "6h" fails with a clear message
+          # instead of an opaque date-parse error.
+          if ! [[ "$MAX_AGE_HOURS" =~ ^[0-9]+$ ]]; then
+            echo "::error::max_age_hours must be a non-negative integer (got '$MAX_AGE_HOURS')"
+            exit 1
+          fi
+
           cutoff=$(date -u -d "$MAX_AGE_HOURS hours ago" +%s)
           echo "Deleting caches created before $(date -u -d @"$cutoff" '+%Y-%m-%dT%H:%M:%SZ') (> ${MAX_AGE_HOURS}h old)"
 

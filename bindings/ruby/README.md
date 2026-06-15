@@ -28,21 +28,25 @@ falls back to compiling from source (needs a Rust toolchain) otherwise.
 ```ruby
 require "disarm"
 
-# Standards-based transliteration to ASCII
+# Standards-based transliteration to ASCII. `scheme:` is a symbol (or string):
+# :default (general-purpose), :strict_iso9 (ISO 9:1995), :gost7034.
 Disarm.transliterate("Москва")                       # => "Moskva"
-Disarm.transliterate_scheme("Москва", "strict_iso9") # ISO 9:1995
+Disarm.transliterate("Москва", scheme: :strict_iso9)
 
-# TR39 confusable folding (homoglyph defense)
-Disarm.normalize_confusables("раypal", "latin")      # => "paypal"
-Disarm.confusable?("pаypal", "latin")                # => true
+# TR39 confusable folding (homoglyph defense). `target:` defaults to :latin.
+Disarm.normalize_confusables("раypal")               # => "paypal"
+Disarm.confusable?("pаypal")                          # => true
+Disarm.normalize_confusables("paypal", target: :cyrillic)
 
 # Canonicalization primitives
 Disarm.strip_accents("café")                         # => "cafe"
 Disarm.fold_case("HELLO")                            # => "hello"
 Disarm.slugify("Héllo Wörld")                        # => "hello-world"
+Disarm.slugify("Hello World", separator: "_", max_length: 5, word_boundary: true)
 Disarm.demojize("I ❤️ Ruby")                          # => "I :red_heart: Ruby"
+Disarm.demojize("👍🏽", strip_modifiers: true)
 
-# Security presets (raise on invalid input)
+# Security presets
 Disarm.strip_obfuscation("Ѕ𝗲𝗰𝗿𝗲𝘁  ​data")            # deobfuscated
 Disarm.security_clean("…")                           # homoglyph/bidi/zero-width clean
 
@@ -50,8 +54,25 @@ Disarm.security_clean("…")                           # homoglyph/bidi/zero-wid
 Disarm.suspicious_hostname?("pаypal.com")            # => true (Cyrillic 'а')
 ```
 
-Invalid arguments raise `ArgumentError`; other failures raise `RuntimeError`,
-mapped from the core's `Error::kind`.
+Every option past the text is a keyword argument with the core's default, and
+scheme/target tokens accept symbols or strings. `slugify` exposes the core's
+`SlugConfig` surface (`separator:`, `lowercase:`, `max_length:`,
+`word_boundary:`, `save_order:`, `stopwords:`, `allow_unicode:`, `lang:`,
+`entities:`, `decimal:`, `hexadecimal:`, `safe_chars:`).
+
+### Errors
+
+Everything disarm raises descends from `Disarm::Error < StandardError`, so a
+single `rescue Disarm::Error` catches all of them; an invalid scheme/target or
+other bad argument raises the more specific `Disarm::InvalidArgument`.
+
+```ruby
+begin
+  Disarm.transliterate("x", scheme: :klingon)
+rescue Disarm::InvalidArgument => e   # also rescuable as Disarm::Error
+  warn e.message
+end
+```
 
 ## Security posture
 

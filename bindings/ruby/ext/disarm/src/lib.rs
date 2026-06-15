@@ -2,14 +2,26 @@
 //! module (#45). Every method is a thin wrapper over `disarm_core::api`, so the
 //! security/transform behaviour is defined once in the core and inherited here.
 //!
-//! Targets magnus 0.7 (Ruby >= 3.0). Build via rake-compiler / rb-sys, not
+//! This file is deliberately the *raw* shim: positional arguments, string scheme
+//! / target tokens, and standard Ruby exceptions. The idiomatic Ruby surface —
+//! keyword arguments, symbol tokens, defaults, the `Disarm::Error` hierarchy, and
+//! the single `transliterate(text, scheme:)` entrypoint — is a thin pure-Ruby
+//! layer in `lib/disarm.rb` that forwards to the `_`-prefixed methods defined
+//! here (#357). Keeping the native side raw avoids fighting magnus's fixed-arity
+//! `function!` over keyword handling.
+//!
+//! Targets magnus 0.7 (Ruby >= 3.1). Build via rake-compiler / rb-sys, not
 //! `cargo build` directly (it needs the Ruby headers rb-sys configures).
 
 use disarm_core::api;
 use magnus::{function, prelude::*, Error, Ruby};
 
 /// Map a `disarm` error onto the closest standard Ruby exception:
-/// `InvalidArgument` → `ArgumentError`, everything else → `RuntimeError`.
+/// `InvalidArgument` → `ArgumentError`, everything else → `RuntimeError`. The
+/// pure-Ruby layer (`lib/disarm.rb`) rescues these and re-raises them as
+/// `Disarm::InvalidArgument` / `Disarm::Error` so consumers can `rescue
+/// Disarm::Error` (#357); raising the built-ins here keeps the native side free
+/// of any dependency on Ruby-defined classes existing at call time.
 fn raise(e: &disarm_core::Error) -> Error {
     let class = match e.kind() {
         disarm_core::ErrorKind::InvalidArgument => magnus::exception::arg_error(),
@@ -20,26 +32,30 @@ fn raise(e: &disarm_core::Error) -> Error {
 
 // ── Transliteration ───────────────────────────────────────────────────────────
 
-/// `Disarm.transliterate(text)` — Unicode → ASCII with the default scheme.
+/// `Disarm._transliterate(text)` — Unicode → ASCII with the default scheme (the
+/// common case; keeps the core's borrow-on-no-op fast path).
 fn transliterate(text: String) -> String {
     api::transliterate(&text).into_owned()
 }
 
-/// `Disarm.transliterate_scheme(text, "strict_iso9" | "gost7034" | "default")`.
+/// `Disarm._transliterate_scheme(text, "strict_iso9" | "gost7034" | "default")`.
 fn transliterate_scheme(text: String, scheme: String) -> Result<String, Error> {
     let scheme: api::Scheme = scheme.parse().map_err(|e| raise(&e))?;
-    Ok(api::Transliterate::new().scheme(scheme).run(&text).into_owned())
+    Ok(api::Transliterate::new()
+        .scheme(scheme)
+        .run(&text)
+        .into_owned())
 }
 
 // ── Confusables (TR39) ────────────────────────────────────────────────────────
 
-/// `Disarm.normalize_confusables(text, "latin" | "cyrillic")`.
+/// `Disarm._normalize_confusables(text, "latin" | "cyrillic")`.
 fn normalize_confusables(text: String, target: String) -> Result<String, Error> {
     let target: api::TargetScript = target.parse().map_err(|e| raise(&e))?;
     Ok(api::normalize_confusables(&text, target).into_owned())
 }
 
-/// `Disarm.confusable?(text, "latin" | "cyrillic")`.
+/// `Disarm._confusable?(text, "latin" | "cyrillic")`.
 fn is_confusable(text: String, target: String) -> Result<bool, Error> {
     let target: api::TargetScript = target.parse().map_err(|e| raise(&e))?;
     Ok(api::is_confusable(&text, target))
@@ -55,12 +71,50 @@ fn fold_case(text: String) -> String {
     api::fold_case(&text).into_owned()
 }
 
-fn slugify(text: String) -> String {
-    api::slugify(&text, &api::SlugConfig::default())
+/// `Disarm._slugify(text, …)` — the full slug option surface, positional. The
+/// Ruby layer maps its keyword arguments (with the core's documented defaults)
+/// onto this order. `regex_pattern` and `replacements` are intentionally not
+/// surfaced yet (they need non-scalar Ruby↔Rust conversion); everything else the
+/// core's `SlugConfig` exposes is reachable.
+#[allow(clippy::too_many_arguments)]
+fn slugify(
+    text: String,
+    separator: String,
+    lowercase: bool,
+    max_length: usize,
+    word_boundary: bool,
+    save_order: bool,
+    stopwords: Vec<String>,
+    allow_unicode: bool,
+    lang: Option<String>,
+    entities: bool,
+    decimal: bool,
+    hexadecimal: bool,
+    safe_chars: String,
+) -> String {
+    let mut config = api::SlugConfig::default()
+        .with_separator(separator)
+        .with_lowercase(lowercase)
+        .with_max_length(max_length)
+        .with_word_boundary(word_boundary)
+        .with_save_order(save_order)
+        .with_stopwords(stopwords)
+        .with_allow_unicode(allow_unicode)
+        .with_safe_chars(safe_chars);
+    if let Some(lang) = lang {
+        config = config.with_lang(lang);
+    }
+    // `entities`/`decimal`/`hexadecimal` have no chainable setter; the fields are
+    // public, so set them directly (the core defaults all three to `true`).
+    config.entities = entities;
+    config.decimal = decimal;
+    config.hexadecimal = hexadecimal;
+    api::slugify(&text, &config)
 }
 
-fn demojize(text: String) -> String {
-    api::demojize(&text, false)
+/// `Disarm._demojize(text, strip_modifiers)`.
+fn demojize(text: String, strip_modifiers: bool) -> String {
+    api::demojize(&text, strip_modifiers)
 }
 
 // ── Security presets (fallible) ───────────────────────────────────────────────
@@ -84,16 +138,20 @@ fn suspicious_hostname(host: String) -> bool {
 #[magnus::init(name = "disarm")]
 fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.define_module("Disarm")?;
-    module.define_singleton_method("transliterate", function!(transliterate, 1))?;
-    module.define_singleton_method("transliterate_scheme", function!(transliterate_scheme, 2))?;
-    module.define_singleton_method("normalize_confusables", function!(normalize_confusables, 2))?;
-    module.define_singleton_method("confusable?", function!(is_confusable, 2))?;
+
+    // Raw, `_`-prefixed shims wrapped by the idiomatic Ruby layer (#357).
+    module.define_singleton_method("_transliterate", function!(transliterate, 1))?;
+    module.define_singleton_method("_transliterate_scheme", function!(transliterate_scheme, 2))?;
+    module.define_singleton_method("_normalize_confusables", function!(normalize_confusables, 2))?;
+    module.define_singleton_method("_confusable?", function!(is_confusable, 2))?;
+    module.define_singleton_method("_slugify", function!(slugify, 13))?;
+    module.define_singleton_method("_demojize", function!(demojize, 2))?;
+    module.define_singleton_method("_strip_obfuscation", function!(strip_obfuscation, 1))?;
+    module.define_singleton_method("_security_clean", function!(security_clean, 1))?;
+
+    // No options / no symbols / infallible: already idiomatic, exposed directly.
     module.define_singleton_method("strip_accents", function!(strip_accents, 1))?;
     module.define_singleton_method("fold_case", function!(fold_case, 1))?;
-    module.define_singleton_method("slugify", function!(slugify, 1))?;
-    module.define_singleton_method("demojize", function!(demojize, 1))?;
-    module.define_singleton_method("strip_obfuscation", function!(strip_obfuscation, 1))?;
-    module.define_singleton_method("security_clean", function!(security_clean, 1))?;
     module.define_singleton_method("suspicious_hostname?", function!(suspicious_hostname, 1))?;
     Ok(())
 }

@@ -1,0 +1,33 @@
+# Ruby (magnus) native extension for the disarm Unicode text-security core (#45).
+#
+# This is a *binding crate*, not published to crates.io — it is compiled into the
+# `disarm` RubyGem by rake-compiler/rb-sys. It wraps the pure-Rust `disarm` core
+# (no pyo3) and exposes an idiomatic `Disarm` Ruby module.
+# Standalone workspace so cargo does not walk up to the repo root looking for a
+# workspace (the root is a plain package, not a workspace member of this binding).
+[workspace]
+
+[package]
+name = "disarm-ruby"
+version = "0.10.0"
+edition = "2021"
+rust-version = "1.81"
+license = "MIT"
+description = "Ruby bindings for disarm — Unicode confusable/text-security building blocks"
+publish = false
+
+[lib]
+# Output the `disarm` shared object the gem's `require "disarm/disarm"` loads.
+# Named differently from the core crate (imported below as `disarm_core`) to
+# avoid a self-vs-dependency name clash.
+name = "disarm"
+crate-type = ["cdylib"]
+
+[dependencies]
+# The pure-Rust core (default features = pyo3-free). Path-dep until disarm 0.10
+# lands on crates.io (#42); then swap to `disarm_core = { package = "disarm",
+# version = "0.10" }`.
+disarm_core = { package = "disarm", path = "../../../..", default-features = false }
+# magnus: ergonomic, safe Ruby<->Rust bindings over rb-sys. 0.7 supports Ruby >= 3.0
+# (the gem's required_ruby_version); rb-sys handles the platform glue.
+magnus = "0.7"

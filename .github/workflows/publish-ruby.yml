@@ -1,0 +1,95 @@
+name: Ruby gem (#45)
+
+# Build + test the Ruby binding on PRs that touch it; build precompiled platform
+# gems and push them to RubyGems on a GitHub release. The native ext wraps the
+# pure-Rust core (no Python), so the platform gems install with no Rust toolchain.
+on:
+  push:
+    paths: ["bindings/ruby/**", ".github/workflows/publish-ruby.yml"]
+  pull_request:
+    paths: ["bindings/ruby/**", ".github/workflows/publish-ruby.yml"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Ruby ${{ matrix.ruby }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.1", "3.2", "3.3"]
+    # bundler-cache in the setup action runs at the repo root, which has no
+    # Gemfile — point bundler at the gem's Gemfile everywhere.
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/bindings/ruby/Gemfile
+    defaults:
+      run:
+        working-directory: bindings/ruby
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          rustup-toolchain: stable
+          bundler-cache: true
+          cargo-cache: true
+      - run: bundle exec rake compile
+      - run: bundle exec rake spec
+
+  cross-gems:
+    name: Build gem (${{ matrix.platform }})
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - x86_64-linux
+          - aarch64-linux
+          - x86_64-darwin
+          - arm64-darwin
+          - x64-mingw-ucrt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      - uses: oxidize-rb/actions/cross-gem@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
+        with:
+          platform: ${{ matrix.platform }}
+          ruby-versions: "3.1,3.2,3.3"
+          working-directory: bindings/ruby
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-gem-${{ matrix.platform }}
+          path: bindings/ruby/pkg/*.gem
+
+  publish:
+    name: Publish to RubyGems
+    needs: [test, cross-gems]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    # `gem push` reads its token from GEM_HOST_API_KEY; the value comes from the
+    # repo secret GEM_HOST_API_KEY. The `rubygems` environment (mirroring the
+    # PyPI/crates.io paths) gives the protection-gate option; a repo secret is
+    # readable from an environment-scoped job, so no per-environment secret needed.
+    environment: rubygems
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cross-gem-*
+          merge-multiple: true
+          path: pkg
+      - uses: ruby/setup-ruby@89f90524b88a01fe6e0b732220432cc6142926af # v1
+        with:
+          ruby-version: "3.3"
+      - name: gem push
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.GEM_HOST_API_KEY }}
+        run: for g in pkg/*.gem; do gem push "$g"; done

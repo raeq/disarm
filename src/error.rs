@@ -26,8 +26,9 @@ const MAX_ERROR_INPUT_BYTES: usize = 80;
 /// Bound user-controlled text embedded in an error message (#200): a long or
 /// sensitive input must not bloat the message or be logged in full. Truncates on
 /// a UTF-8 char boundary and appends an ellipsis; short inputs pass through
-/// borrowed and unchanged.
-fn truncate_error_text(text: &str) -> Cow<'_, str> {
+/// borrowed and unchanged. Also the single truncation point reused by the
+/// `log-content` TRACE escape hatch (`tl_trace_content!`, #208).
+pub(crate) fn truncate_error_text(text: &str) -> Cow<'_, str> {
     if text.len() <= MAX_ERROR_INPUT_BYTES {
         return Cow::Borrowed(text);
     }

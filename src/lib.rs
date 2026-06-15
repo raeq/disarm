@@ -33,6 +33,12 @@
 #[cfg(feature = "extension-module")]
 use pyo3::prelude::*;
 
+// #208: the opt-in logging facade. `#[macro_use]` so the `tl_*!` macros are
+// available crate-wide; declared first so every later module can use them. With
+// the `log` feature off they expand to nothing (zero cost, no `log` dependency).
+#[macro_use]
+mod obs;
+
 // Shared utilities and error construction.
 #[doc(hidden)]
 pub mod utils;
@@ -318,6 +324,11 @@ pub(crate) fn recover_lock<T>(result: std::sync::LockResult<T>, table_name: &str
         // through Python's warnings module (a UserWarning via warnings.warn) so
         // that Python applications can capture it via the `warnings`/`logging`
         // APIs, falling back to stderr.
+        // #208: binding-neutral record — `table_name` only, no content. Dual-emit
+        // alongside the existing warnings/stderr path so a Python consumer watching
+        // only `warnings` is unaffected (open question 4); a binding's `log` sink
+        // gets the structured record.
+        tl_error!("lock poisoned, recovered: table={table_name:?}");
         let msg = format!(
             "disarm: lock for `{table_name}` poisoned (a thread panicked while holding the \
              lock). Recovering from poisoned state — data may be inconsistent. This is a bug; \

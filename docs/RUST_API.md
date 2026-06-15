@@ -85,6 +85,8 @@ contract.)
 | *(none)* | ✅ | Pure-Rust core. No `pyo3`, no `libpython`. This is what `cargo add disarm` gives you. |
 | `extension-module` | — | Builds the `disarm._core` Python extension (pulls in `pyo3`). **Python wheel only** — Rust consumers never enable it; a bare `cargo build --features extension-module` fails to link without an interpreter. |
 | `embed-dicts` | — | Embeds the compiled Arabic/Persian/Hebrew context dictionaries into the binary (otherwise they are loaded at runtime). |
+| `log` | — | Opt-in diagnostic logging via the [`log`](https://docs.rs/log) facade (#208). OFF by default — the shipped artifact has **no** logging code in the hot path unless turned on. Records carry only **metadata** (lengths, lang, mode, flags, counts, durations, error codes) — never input/output text. The *sink* is the consumer's choice (`env_logger`, `tracing-subscriber`, …). A library **must not** set `log`'s `release_max_level_*` — that is the application's call. |
+| `log-content` | — | Escape hatch: TRACE-only, possibly-truncated content samples for local debugging. Never enable in production. |
 
 ## Verifying the published surface
 

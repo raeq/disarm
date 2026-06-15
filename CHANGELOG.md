@@ -18,6 +18,17 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **CI: the docs' Rust and Ruby usage examples are now executed gates (#50).**
+  The per-language usage tabs are no longer illustrative — each is run in CI, the
+  way the Python tabs already are (Sybil). `scripts/check_doc_rust_examples.py`
+  extracts every ```rust doc block, compiles and runs it against the pure core
+  with `#![deny(unused_must_use)]` (so an example that discards its result fails);
+  `scripts/check_doc_ruby_examples.rb` evals every Ruby `# =>` line against the
+  freshly-built gem. The Rust gate runs in the `Doc tests` job; the Ruby gate runs
+  in the Ruby workflow, now also triggered on `docs/**`. Catches the
+  signature/output drift that the tabs introduced (which had shipped as
+  non-compiling Rust until this gate).
+
 - **Ruby: `transliterate` now accepts a `lang:` language profile.** Previously the
   Ruby binding's `transliterate` exposed only `scheme:`, so it could not reach the
   core's per-language profiles (a parity gap vs Python/Rust). `lang:` accepts a

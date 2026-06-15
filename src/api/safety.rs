@@ -210,8 +210,10 @@ pub struct HostnameAnalysis {
     pub canonical: String,
 }
 
-/// Detect whether a hostname is *suspicious* for Unicode homoglyph spoofing,
-/// returning `(is_suspicious, analysis)`.
+/// Analyze a hostname for Unicode homoglyph spoofing, returning a
+/// [`HostnameAnalysis`] whose [`suspicious`](HostnameAnalysis::suspicious) field
+/// is the overall verdict (alongside the granular `scripts` / `mixed_script` /
+/// `has_confusables` / `canonical` findings).
 ///
 /// `xn--` (ACE) labels are decoded to their Unicode form via UTS#46 before
 /// analysis (#63); a malformed ACE label fails closed (suspicious). A hostname

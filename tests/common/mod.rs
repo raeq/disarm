@@ -304,4 +304,7 @@ pub fn find_untranslatable(
         b = b.lang(l);
     }
     b.find_untranslatable(text)
+        .into_iter()
+        .map(|u| (u.ch, u.offset))
+        .collect()
 }

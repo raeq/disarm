@@ -111,6 +111,20 @@ pub(crate) enum ErrorRepr {
         got: String,
     },
 
+    /// Invalid `UrlComponent` token (`UrlComponent::from_str`).
+    #[error("url component must be 'path', 'segment', 'query', or 'form', got '{got}'")]
+    InvalidUrlComponent {
+        /// The offending value.
+        got: String,
+    },
+
+    /// Invalid `ReverseLang` code (`ReverseLang::from_str`).
+    #[error("reverse language must be 'el', 'ru', or 'uk', got '{got}'")]
+    InvalidReverseLang {
+        /// The offending value.
+        got: String,
+    },
+
     /// Unknown `lang` code (eager validation, #68).
     #[error(
         "unknown language code '{got}'{suggestion}; expected 'auto', a BCP-47 \
@@ -420,6 +434,8 @@ impl ErrorRepr {
             ErrorRepr::InvalidPlatform { .. } => "invalid_platform",
             ErrorRepr::InvalidTargetScript { .. } => "invalid_target_script",
             ErrorRepr::InvalidScheme { .. } => "invalid_scheme",
+            ErrorRepr::InvalidUrlComponent { .. } => "invalid_url_component",
+            ErrorRepr::InvalidReverseLang { .. } => "invalid_reverse_lang",
             ErrorRepr::InvalidLogReplacement { .. } => "invalid_log_replacement",
             ErrorRepr::UnknownLang { .. } => "unknown_lang",
             ErrorRepr::MutuallyExclusiveBare | ErrorRepr::MutuallyExclusivePipeline => {
@@ -514,6 +530,8 @@ impl From<ErrorRepr> for pyo3::PyErr {
             | ErrorRepr::InvalidPlatform { .. }
             | ErrorRepr::InvalidTargetScript { .. }
             | ErrorRepr::InvalidScheme { .. }
+            | ErrorRepr::InvalidUrlComponent { .. }
+            | ErrorRepr::InvalidReverseLang { .. }
             | ErrorRepr::InvalidLogReplacement { .. }
             | ErrorRepr::UnknownLang { .. }
             | ErrorRepr::MutuallyExclusiveBare
@@ -607,6 +625,8 @@ impl Error {
             | ErrorRepr::InvalidPlatform { .. }
             | ErrorRepr::InvalidTargetScript { .. }
             | ErrorRepr::InvalidScheme { .. }
+            | ErrorRepr::InvalidUrlComponent { .. }
+            | ErrorRepr::InvalidReverseLang { .. }
             | ErrorRepr::InvalidLogReplacement { .. }
             | ErrorRepr::UnknownLang { .. }
             | ErrorRepr::MutuallyExclusiveBare

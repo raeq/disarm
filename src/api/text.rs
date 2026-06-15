@@ -4,6 +4,8 @@
 
 use std::borrow::Cow;
 
+use crate::Error;
+
 // ── Terminal width (UAX #11 / UAX #29) ───────────────────────────────────────
 
 /// Total terminal column width of `text`, summed over UAX #29 grapheme clusters
@@ -133,9 +135,8 @@ pub enum NormalizationForm {
 }
 
 impl NormalizationForm {
-    /// The uppercase token the underlying normalizer is keyed by.
-    /// The canonical string token for this value (the inverse of its `FromStr`,
-    /// and what `Display` prints).
+    /// The canonical token (the inverse of its `FromStr`, and what `Display`
+    /// prints): `"NFC"` / `"NFD"` / `"NFKC"` / `"NFKD"`.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -143,6 +144,29 @@ impl NormalizationForm {
             NormalizationForm::Nfd => "NFD",
             NormalizationForm::Nfkc => "NFKC",
             NormalizationForm::Nfkd => "NFKD",
+        }
+    }
+}
+
+impl std::fmt::Display for NormalizationForm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for NormalizationForm {
+    type Err = Error;
+
+    /// Parse `"NFC"` / `"NFD"` / `"NFKC"` / `"NFKD"`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "NFC" => Ok(Self::Nfc),
+            "NFD" => Ok(Self::Nfd),
+            "NFKC" => Ok(Self::Nfkc),
+            "NFKD" => Ok(Self::Nfkd),
+            _ => Err(Error::from(crate::ErrorRepr::InvalidNormForm {
+                got: s.to_owned(),
+            })),
         }
     }
 }
@@ -194,9 +218,8 @@ pub enum UrlComponent {
 }
 
 impl UrlComponent {
-    /// The lowercase token the underlying encoder is keyed by.
-    /// The canonical string token for this value (the inverse of its `FromStr`,
-    /// and what `Display` prints).
+    /// The canonical token (the inverse of its `FromStr`, and what `Display`
+    /// prints): `"path"` / `"segment"` / `"query"` / `"form"`.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -204,6 +227,29 @@ impl UrlComponent {
             UrlComponent::Segment => "segment",
             UrlComponent::Query => "query",
             UrlComponent::Form => "form",
+        }
+    }
+}
+
+impl std::fmt::Display for UrlComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for UrlComponent {
+    type Err = Error;
+
+    /// Parse `"path"` / `"segment"` / `"query"` / `"form"`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "path" => Ok(Self::Path),
+            "segment" => Ok(Self::Segment),
+            "query" => Ok(Self::Query),
+            "form" => Ok(Self::Form),
+            _ => Err(Error::from(crate::ErrorRepr::InvalidUrlComponent {
+                got: s.to_owned(),
+            })),
         }
     }
 }

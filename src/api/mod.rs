@@ -39,7 +39,7 @@ pub use transliterate::*;
 /// use disarm::api::TargetScript;
 /// assert_eq!("раypal".normalize_confusables(TargetScript::Latin), "paypal");
 /// assert_eq!("café".strip_accents(), "cafe");
-/// assert!("p\u{0430}ypal.com".is_suspicious_hostname().0);
+/// assert!("p\u{0430}ypal.com".is_suspicious_hostname().suspicious);
 /// ```
 pub trait DisarmStr: AsRef<str> {
     /// See [`normalize_confusables`].
@@ -109,7 +109,7 @@ pub trait DisarmStr: AsRef<str> {
     }
     /// See [`is_suspicious_hostname`].
     #[must_use]
-    fn is_suspicious_hostname(&self) -> (bool, HostnameAnalysis) {
+    fn is_suspicious_hostname(&self) -> HostnameAnalysis {
         is_suspicious_hostname(self.as_ref())
     }
     /// See [`grapheme_len`].
@@ -227,16 +227,16 @@ mod tests {
     #[test]
     fn decode_to_utf8_explicit_and_error() {
         // Explicit encoding round-trips; "café" in ISO-8859-1 is 0x63 61 66 E9.
-        let (text, had_errors) =
+        let decoded =
             decode_to_utf8(&[0x63, 0x61, 0x66, 0xE9], Some("ISO-8859-1"), 0.0, false).unwrap();
-        assert_eq!(text, "café");
-        assert!(!had_errors);
+        assert_eq!(decoded.text, "café");
+        assert!(!decoded.had_errors);
         // An unknown label surfaces the opaque Error (InvalidArgument).
         let err = decode_to_utf8(b"hi", Some("FAKE-999"), 0.0, false).unwrap_err();
         assert_eq!(err.kind(), crate::ErrorKind::InvalidArgument);
         // detect_encoding is infallible.
-        let (label, conf) = detect_encoding(b"hello world");
-        assert!(!label.is_empty() && conf > 0.0);
+        let det = detect_encoding(b"hello world");
+        assert!(!det.label.is_empty() && det.confidence > 0.0);
     }
 
     #[test]
@@ -328,13 +328,13 @@ mod tests {
     #[test]
     fn is_suspicious_hostname_surface() {
         // Plain ASCII hostname: not suspicious, single-script, canonical == input.
-        let (susp, a) = is_suspicious_hostname("example.com");
-        assert!(!susp && !a.suspicious && !a.mixed_script);
+        let a = is_suspicious_hostname("example.com");
+        assert!(!a.suspicious && !a.mixed_script);
         assert_eq!(a.canonical, "example.com");
         // A label mixing Cyrillic 'а' (U+0430) into Latin "paypal" is a homoglyph
         // spoof — flagged, with the mixed-script / confusable findings set.
-        let (susp2, a2) = is_suspicious_hostname("p\u{0430}ypal.com");
-        assert!(susp2);
+        let a2 = is_suspicious_hostname("p\u{0430}ypal.com");
+        assert!(a2.suspicious);
         assert!(a2.mixed_script || a2.has_confusables);
     }
 }

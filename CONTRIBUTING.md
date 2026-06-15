@@ -289,7 +289,9 @@ ruby scripts/check_doc_ruby_examples.rb      # eval every Ruby `# =>` line (need
   `#![deny(unused_must_use)]` — so an example that **discards** its result (a
   `Result`, `Vec`, or `Cow`) is a hard error. Assert the output; don't leave a
   bare call with a `// =>` comment. Mark a genuinely illustrative block (a trait
-  sketch, a macro) with `<!--- skip: next -->`, same as Python.
+  sketch, a macro) with `<!--- rust-skip -->` (the Rust gate's own opt-out —
+  distinct from Python's `<!--- skip: next -->`, which Sybil would choke on
+  before a non-Python block).
 - **Ruby tabs** document outputs with `# =>` and start with `require "disarm"`.
   The gate evals each `Disarm.* # => value` line against the freshly-compiled gem
   (it tolerates trailing prose after the literal). It runs in the Ruby workflow

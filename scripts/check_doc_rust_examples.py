@@ -43,9 +43,26 @@ PREAMBLE = (
 _FENCE = re.compile(r"(?m)^([ \t]*)```rust\n(.*?)\n[ \t]*```", re.DOTALL)
 _USE = re.compile(r"\s*use\s+.*;")
 _MAIN = re.compile(r"\s*fn main\s*\(\)\s*\{?\s*$")
-# Same opt-out the Python doc-tests use: a block preceded by this marker is an
-# illustration (a trait sketch, a macro), not a runnable example — skip it.
-_SKIP = "<!--- skip: next -->"
+# Opt-out for a block that is illustration (a trait sketch, a macro), not a
+# runnable example. Deliberately NOT Sybil's `<!--- skip: next -->`: that directive
+# is consumed by Sybil's Python skip state machine, and placing it before a
+# (non-Python) rust block on a Sybil-executed page raises "skip: next cannot
+# follow skip: next". This marker contains no `skip:` token, so Sybil ignores it.
+_SKIP = "<!--- rust-skip -->"
+
+
+def _unwrap(lines: list[str]) -> list[str]:
+    """Drop `use` lines (a shared preamble is injected) and, only when the block
+    is wrapped in `fn main() { ... }`, that wrapper. A standalone `}` is otherwise
+    kept — it may close a real `if`/`match`/closure in the snippet."""
+    kept = [ln for ln in lines if not _USE.match(ln)]
+    if any(_MAIN.match(ln) for ln in kept):
+        kept = [ln for ln in kept if not _MAIN.match(ln)]
+        for i in range(len(kept) - 1, -1, -1):  # drop the matching close brace
+            if kept[i].strip() == "}":
+                del kept[i]
+                break
+    return kept
 
 
 def _blocks() -> list[tuple[str, str]]:
@@ -58,12 +75,7 @@ def _blocks() -> list[tuple[str, str]]:
                 continue
             indent, body = m.group(1), m.group(2)
             lines = [ln[len(indent) :] if ln.startswith(indent) else ln for ln in body.split("\n")]
-            kept = [
-                ln
-                for ln in lines
-                if not _USE.match(ln) and not _MAIN.match(ln) and ln.strip() != "}"
-            ]
-            found.append((md.relative_to(ROOT).as_posix(), "\n".join(kept)))
+            found.append((md.relative_to(ROOT).as_posix(), "\n".join(_unwrap(lines))))
     return found
 
 
@@ -80,7 +92,7 @@ def _render(blocks: list[tuple[str, str]]) -> str:
 
 def main(argv: list[str]) -> int:
     blocks = _blocks()
-    OUT.write_text(_render(blocks))
+    OUT.write_text(_render(blocks), encoding="utf-8")
     print(f"generated {OUT.relative_to(ROOT)} — {len(blocks)} rust doc blocks")
     if "--generate" in argv:
         return 0

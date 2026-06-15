@@ -45,10 +45,10 @@ The most common confusion is reaching for `transliterate()` to defend against ho
 from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
 
 # Fold Cyrillic look-alikes to their Latin prototypes (TR39 visual mapping)
-strip_obfuscation("рroduсt")        # → "product"  (р→p, с→c)
-strip_obfuscation("pаypаl 🔥🔥")     # → "paypal fire fire"  (also strips zalgo/bidi/invisible/emoji)
+assert strip_obfuscation("рroduсt") == 'product'
+assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
 
-normalize_confusables("раypal")      # → "paypal"   (mixed Cyrillic skeleton → Latin)
+assert normalize_confusables("раypal") == 'paypal'
 
 # IDN / hostname spoofing check (flags the bad; a False result is not a safety guarantee)
 suspicious, analysis = is_suspicious_hostname("аpple.com")   # leading Cyrillic а
@@ -107,9 +107,9 @@ fn main() {
     assert_eq!(api::fold_case("ﬁ"), "fi");
     assert_eq!(api::slugify("Héllo Wörld", &api::SlugConfig::default()), "hello-world");
 
-    // IDN / hostname spoofing check
-    let (suspicious, _why) = api::is_suspicious_hostname("раypal.com");
-    assert!(suspicious);
+    // IDN / hostname spoofing check (returns a HostnameAnalysis struct)
+    let analysis = api::is_suspicious_hostname("раypal.com");
+    assert!(analysis.suspicious);
 }
 ```
 
@@ -136,6 +136,7 @@ text. Pick a sink in your application (`env_logger`, `tracing-subscriber`, …):
 disarm = { version = "0.10", features = ["log"] }
 ```
 
+<!--- rust-skip -->
 ```rust
 env_logger::init();   // your sink, your level filter
 // Core transforms (transliterate, the registration/seal config calls, …) then
@@ -170,15 +171,15 @@ from disarm import (
     security_clean, normalize_user_input,
 )
 
-is_confusable("аpple")             # → True  (contains Cyrillic а)
-normalize_confusables("раypal")  # → "paypal"
+assert is_confusable("аpple") == True
+assert normalize_confusables("раypal") == 'paypal'
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars, bidi, emoji → clean text
-strip_obfuscation("рroduсt")  # → "product"   (does NOT transliterate; chain transliterate() if needed)
+assert strip_obfuscation("рroduсt") == 'product'
 
 # Pipelines
-security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")            # → "Real text"   (NFKC → confusables → strip bidi → collapse ws → path-safety)
-normalize_user_input("pаypal")      # → "paypal"  (NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse ws → path-safety)
+assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
+assert normalize_user_input("pаypal") == 'paypal'
 ```
 
 ### Transliteration (standards-based core)
@@ -188,36 +189,36 @@ normalize_user_input("pаypal")      # → "paypal"  (NFKC → strip bidi → st
 ```python
 from disarm import transliterate, slugify
 
-transliterate("café")                      # → "cafe"
-transliterate("Москва")                    # → "Moskva"     (Cyrillic, BGN/PCGN)
-transliterate("Αθήνα")                     # → "Athina"     (Greek, BGN/PCGN)
+assert transliterate("café") == 'cafe'
+assert transliterate("Москва") == 'Moskva'
+assert transliterate("Αθήνα") == 'Athina'
 
 # Named standards (Latin / Cyrillic / Greek)
-transliterate("Юрий", strict_iso9=True)    # → "Jurij"      (ISO 9-style ASCII)
-transliterate("Москва", gost7034=True)     # → "Moskva"     (GOST R 7.0.34)
+assert transliterate("Юрий", strict_iso9=True) == 'Jurij'
+assert transliterate("Москва", gost7034=True) == 'Moskva'
 
 # Language profiles (sparse overrides on top of the default table)
-transliterate("Ärger", lang="de")          # → "Aerger"
-transliterate("Київ", lang="uk")           # → "Kyiv"
+assert transliterate("Ärger", lang="de") == 'Aerger'
+assert transliterate("Київ", lang="uk") == 'Kyiv'
 
 # Auto-detect language from script
-transliterate("Москва", lang="auto")       # → "Moskva"     (detects Cyrillic → Russian)
+assert transliterate("Москва", lang="auto") == 'Moskva'
 
 # Reverse transliteration (Latin → native script): Russian, Ukrainian, Greek
-transliterate("Moskva", target="ru")       # → "Москва"
-transliterate("Athina", target="el")       # → "Αθηνα"
+assert transliterate("Moskva", target="ru") == 'Москва'
+assert transliterate("Athina", target="el") == 'Αθηνα'
 
 # Slugs & filenames
-slugify("café au lait")                    # → "cafe-au-lait"
+assert slugify("café au lait") == 'cafe-au-lait'
 ```
 
 ### Compatibility coverage (CJK and other scripts)
 
 ```python
 # Context-free, character-by-character — best-effort, unidecode-parity (see caveats below)
-transliterate("北京市")                     # → "bei jing shi"   (Chinese, toneless pinyin)
-transliterate("서울")                       # → "seo ul"         (Korean, Revised Romanization)
-transliterate("ひらがな")                   # → "hiragana"       (Japanese, Hepburn)
+assert transliterate("北京市") == 'bei jing shi'
+assert transliterate("서울") == 'seo ul'
+assert transliterate("ひらがな") == 'hiragana'
 ```
 
 ## Coverage tiers
@@ -240,21 +241,21 @@ disarm transliterates a very wide range of scripts, but the **quality guarantee 
 from disarm import security_clean, ml_normalize, catalog_key, normalize_user_input, strip_obfuscation
 
 # Security: NFKC → confusables → strip bidi → collapse whitespace → path-safety
-security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")  # → "Real text"
+assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
 
 # ML/NLP: NFKC → emoji→text → transliterate → strip accents → fold case
-ml_normalize("Café ☕ Ünïcödé")  # → "cafe hot beverage unicode"
+assert ml_normalize("Café ☕ Ünïcödé") == 'cafe hot beverage unicode'
 
 # Library catalog: NFKC → transliterate → confusables → strip accents → fold case
-catalog_key("Москва", lang="ru")  # → "moskva"
-catalog_key("ΩMEGA  café")        # → "omega cafe"
+assert catalog_key("Москва", lang="ru") == 'moskva'
+assert catalog_key("ΩMEGA  café") == 'omega cafe'
 
 # Web input: NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse → path-safety
-normalize_user_input("pаypal")  # → "paypal" (Cyrillic а folded to Latin)
+assert normalize_user_input("pаypal") == 'paypal'
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars → clean text
-strip_obfuscation("рroduсt")       # → "product" (Cyrillic р→p, с→c via TR39)
-strip_obfuscation("pаypаl 🔥🔥")  # → "paypal fire fire"
+assert strip_obfuscation("рroduсt") == 'product'
+assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
 # Note: does NOT transliterate — chain with transliterate() if needed
 ```
 
@@ -272,7 +273,7 @@ result = (
     .fold_case()
     .value
 )
-# → "unicode cafe hot beverage"
+assert result == 'unicode cafe hot beverage'
 ```
 
 ## Package structure
@@ -302,18 +303,11 @@ from disarm import is_confusable, security_clean, decode_to_utf8, fold_case
 Built-in language profiles span the core and compatibility tiers, with scholarly ASCII Cyrillic support (`strict_iso9`; ISO 9-style digraphs, not the diacritic standard). Profiles apply **sparse overrides** on top of the default table (e.g. German maps `ü` → `ue` instead of the default `u`).
 
 ```python
-from disarm import list_langs, transliterate
+from disarm import list_langs
 
-print(len(list_langs()))   # 83
-print(list_langs())
-#  ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr',
-#   'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa',
-#   'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it',
-#   'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo',
-#   'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no',
-#   'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si',
-#   'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th',
-#   'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
+# 83 built-in language profiles — see Language support for the full registry
+assert len(list_langs()) == 83
+assert {"de", "uk", "ja-kunrei", "vai"} <= set(list_langs())
 ```
 
 See [Language support](docs/user-guide/language-support.md) for the full registry, per-script policies, and tier classification.
@@ -371,9 +365,9 @@ disarm provides compatibility aliases for painless migration from existing libra
 ```python
 from disarm import unidecode, casefold, remove_accents
 
-unidecode("café")        # → "cafe"       (alias for transliterate)
-casefold("Straße")       # → "strasse"    (alias for fold_case)
-remove_accents("café")   # → "cafe"       (alias for strip_accents)
+assert unidecode("café") == 'cafe'
+assert casefold("Straße") == 'strasse'
+assert remove_accents("café") == 'cafe'
 ```
 
 `sanitize_filename()` also accepts `replacement_text` and `max_len` kwargs for pathvalidate compatibility, and `is_confusable()` accepts `greedy` for confusable_homoglyphs compatibility. See [migration guides](docs/migration/index.md) for details.

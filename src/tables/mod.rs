@@ -774,8 +774,8 @@ pub fn lookup_emoji_multi(key: &str) -> Option<&'static str> {
 /// `window` rather than indexing it, so an empty slice simply yields `None`
 /// (no bounds risk, C4).
 ///
-/// Byte-identical to the former per-length hex-key PHF probe (verified by
-/// `emoji_trie_matches_phf` against `lookup_emoji_multi`). A sequence is a
+/// Byte-identical to the former per-length hex-key PHF probe; `emoji_trie_matches_phf`
+/// verifies the two agree against `lookup_emoji_multi`. A sequence is a
 /// match only at a terminal node of length ≥ 2 whose **last** code point is not
 /// ZWJ/VS-15/VS-16 — replicating the original "skip incomplete sequences" rule
 /// (a trailing variation selector or ZWJ is a presentation/joiner mark handled

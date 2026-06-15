@@ -58,11 +58,11 @@ fn redaction_and_boundaries() {
     // sentinel; the records must log only the code + counts.
     let mut mappings = HashMap::new();
     mappings.insert("ж".to_owned(), sentinel.to_owned());
-    let _ = disarm::api::register_lang("x-208-log", mappings);
+    disarm::api::register_lang("x-208-log", mappings).expect("registration before seal succeeds");
 
     let mut repls = HashMap::new();
     repls.insert(sentinel.to_owned(), "x".to_owned());
-    let _ = disarm::api::register_replacements(repls);
+    disarm::api::register_replacements(repls).expect("registration before seal succeeds");
 
     disarm::api::seal_registrations();
 

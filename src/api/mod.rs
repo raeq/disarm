@@ -5,8 +5,8 @@
 //! (`src/py/`) and the planned C-ABI consume the same Layer-1 core, so this is
 //! the one place the public Rust behaviour is defined.
 //!
-//! The surface is split into cohesive submodules ([`safety`](self), text,
-//! transliterate, presets) whose items are all re-exported here, so every public
+//! The surface is split into cohesive submodules (`safety`, `text`,
+//! `transliterate`, `presets`) whose items are all re-exported here, so every public
 //! item stays addressable as `crate::api::*`. The [`DisarmStr`] extension trait,
 //! which spans all of them, lives here.
 

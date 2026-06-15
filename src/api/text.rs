@@ -225,7 +225,7 @@ pub use crate::slugify::SlugConfig;
 /// Generate a URL-safe slug from `text` according to `config` (separator, max
 /// length, case folding, stopwords, custom regex, HTML-entity handling, …).
 ///
-/// Build a [`SlugConfig`] from [`SlugConfig::default`] plus field updates.
+/// Build a [`SlugConfig`] with [`SlugConfig::new`] and the `with_*` setters.
 ///
 /// Infallible by design — and therefore **`config.lang` is not validated**: an
 /// unknown language code is treated as "best effort" and falls back to the

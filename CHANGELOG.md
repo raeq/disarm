@@ -29,8 +29,9 @@ surface); the work is the core extraction and the new non-Python surfaces.
 - **Pure-Rust core, published to crates.io** (#38, #42). The default build is now
   the pyo3-free core (`default = []`); the Python extension is the opt-in
   `extension-module` feature, so `cargo add disarm` pulls a clean Rust library
-  with no libpython in its dependency tree (enforced by a CI `cargo tree | grep
-  pyo3` gate). The codebase is organized in three layers: Layer-1 `pub(crate)`
+  with no libpython in its dependency tree (enforced by a CI gate: the default
+  `cargo tree -e no-dev` tree must contain no `pyo3`, matched case-insensitively).
+  The codebase is organized in three layers: Layer-1 `pub(crate)`
   algorithm cores, Layer-2 the public `disarm::api`, and Layer-3b the
   feature-gated pyo3 shims — all consuming one implementation.
 - **Idiomatic Rust API (`disarm::api`)** (#352, #361, #362). The semver-governed
@@ -66,9 +67,11 @@ surface); the work is the core extraction and the new non-Python surfaces.
 
 ### Changed
 
-- **Native module renamed `disarm._disarm` → `disarm._core`** (#42). Internal
-  only — Python callers `import disarm` and never reference the native module — so
-  there is no change to the Python API.
+- **Native module renamed `disarm._disarm` → `disarm._core`** (#42). The public
+  Python API is unchanged — callers `import disarm`. The native module name is an
+  implementation detail the public surface doesn't require; the package's own
+  internals (and the type-stub drift checks) reference `disarm._core` directly, so
+  any consumer reaching into it should update the path.
 
 ### Fixed
 

@@ -18,10 +18,14 @@ ecosystem's, every time. A user of the binding should never be able to tell it i
 
 Two corollaries shape every binding:
 
-- **The core stays binding-neutral.** No `pyo3` / `napi` / `wasm` / JNI type ever
-  appears in Layer-1 (`src/*.rs`). A binding consumes the pure `disarm` crate (or its
-  C-ABI) and nothing in the core knows the binding exists — the same boundary
-  `src/obs.rs` already states for logging.
+- **The algorithm cores stay binding-neutral.** The Layer-1 algorithm modules carry no
+  binding types at all. The one binding that exists today (PyO3) keeps its glue — the
+  `#[pymodule]` in `lib.rs`, the `From<ErrorRepr> for PyErr` in `error.rs`, and
+  `src/py/*` — **feature-gated** (`extension-module`) at the crate's edge, never inside
+  the cores. A new binding adds its own glue at its own edge, consumes the pure `disarm`
+  crate (or its C-ABI), and the algorithm modules never learn it exists — the same
+  boundary `src/obs.rs` states for logging ("No `pyo3`/`napi`/`wasm` ever appears in
+  this path").
 - **Two layers per binding.** A thin **native shim** exposes the core's functions with
   raw, positional, string-token signatures; a **pure-target-language idiomatic layer**
   sits on top and is the only thing users touch. In Ruby that is the `_`-prefixed

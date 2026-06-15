@@ -30,9 +30,13 @@ jobs:
       matrix:
         ruby: ["3.1", "3.2", "3.3"]
     # bundler-cache in the setup action runs at the repo root, which has no
-    # Gemfile — point bundler at the gem's Gemfile everywhere.
+    # Gemfile — point bundler at the gem's Gemfile everywhere. GITHUB_TOKEN
+    # authenticates the cargo-cache cleanup's cargo-binstall fetch, which
+    # otherwise fails the job (exit 94, "Failed to retrieve token from gh auth
+    # token") when it hits GitHub's unauthenticated API rate limit.
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/bindings/ruby/Gemfile
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     defaults:
       run:
         working-directory: bindings/ruby

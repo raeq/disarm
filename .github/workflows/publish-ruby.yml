@@ -4,7 +4,13 @@ name: Ruby gem (#45)
 # gems and push them to RubyGems on a GitHub release. The native ext wraps the
 # pure-Rust core (no Python), so the platform gems install with no Rust toolchain.
 on:
+  # Only `main` on push — a PR branch is already covered by `pull_request`, and
+  # firing both for the same commit spawns two concurrent runs that race on the
+  # identical rb-sys/bundler cache keys ("Unable to reserve cache … another job
+  # may be creating this cache"), flaking the job. Post-merge `main` pushes still
+  # re-validate.
   push:
+    branches: [main]
     paths: ["bindings/ruby/**", ".github/workflows/publish-ruby.yml"]
   pull_request:
     paths: ["bindings/ruby/**", ".github/workflows/publish-ruby.yml"]

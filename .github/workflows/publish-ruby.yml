@@ -83,7 +83,12 @@ jobs:
   publish:
     name: Publish to RubyGems
     needs: [test, cross-gems]
-    if: github.event_name == 'release'
+    # Publish on a GitHub Release, or via a manual `workflow_dispatch` — the latter
+    # is the recovery path when a release's gem build failed (e.g. binding drift)
+    # but the registry version was never pushed. Gated by the `rubygems`
+    # Environment + GEM_HOST_API_KEY, and `gem push` of an existing version fails
+    # by design, so a manual run can never overwrite a published gem.
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # `gem push` reads its token from GEM_HOST_API_KEY; the value comes from the
     # repo secret GEM_HOST_API_KEY. The `rubygems` environment (mirroring the

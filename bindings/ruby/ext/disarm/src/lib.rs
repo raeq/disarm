@@ -130,7 +130,9 @@ fn security_clean(text: String) -> Result<String, Error> {
 /// `Disarm._suspicious_hostname?(host)` — flags mixed-script / confusable IDN
 /// spoofs. A false result asserts nothing was *found*, not that the host is safe.
 fn suspicious_hostname(host: String) -> bool {
-    api::is_suspicious_hostname(&host).0
+    // #362 made the Rust api return `HostnameAnalysis` (the verdict is its
+    // `suspicious` field) instead of a `(bool, _)` tuple.
+    api::is_suspicious_hostname(&host).suspicious
 }
 
 // `name = "disarm"` so the exported init symbol is `Init_disarm` (matching the

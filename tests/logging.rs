@@ -39,7 +39,6 @@ fn drain() -> Vec<(Level, String)> {
 
 #[test]
 fn redaction_and_boundaries() {
-    use disarm::ErrorMode;
     init();
     let _ = drain();
 
@@ -50,7 +49,7 @@ fn redaction_and_boundaries() {
     let input = format!("{sentinel}_Москва_{sentinel}");
 
     // DEBUG: transliterate completion (the wrapper boundary, not the hot loop).
-    let _ = disarm::api::transliterate(&input, None, ErrorMode::Replace, "?", false, false, false);
+    let _ = disarm::api::transliterate(&input);
 
     // INFO: config/state mutations. The mapping value / replacement key carry the
     // sentinel; the records must log only the code + counts.

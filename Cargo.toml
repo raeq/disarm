@@ -97,7 +97,6 @@ pedantic = { level = "warn", priority = -1 }
 needless_pass_by_value = "allow"  # PyO3 extracts Python types by value
 unused_self = "allow"             # #[pymethods] require &self even when unused
 unnecessary_wraps = "allow"       # PyO3 functions must return PyResult
-should_implement_trait = "allow"  # ErrorMode::from_str returns PyResult, not FromStr
 implicit_hasher = "allow"         # #[pyfunction] requires concrete HashMap
 used_underscore_items = "allow"   # _prefix convention for Python-private functions
 struct_excessive_bools = "allow"  # Pipeline config structs mirror Python kwargs

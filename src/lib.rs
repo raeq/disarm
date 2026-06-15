@@ -14,11 +14,12 @@
 //! `extension-module` feature and is not built into the default crate.
 //!
 //! ```
-//! use disarm::api;
+//! use disarm::{api, DisarmStr};
 //! // ASCII passes through unchanged; non-ASCII is romanized to ASCII.
 //! assert_eq!(api::strip_accents("café"), "cafe");
-//! let moscow = api::transliterate("Москва", None, disarm::ErrorMode::Replace, "?", false, false, false);
-//! assert!(moscow.is_ascii() && !moscow.is_empty());
+//! assert_eq!(api::transliterate("Москва"), "Moskva");
+//! // …or via the extension trait:
+//! assert_eq!("Москва".transliterate(), "Moskva");
 //! ```
 
 // In the pure crates.io build (`default = []`, no `extension-module`), the
@@ -56,10 +57,14 @@ pub enum ErrorMode {
 }
 
 impl ErrorMode {
-    /// Parse a Python-facing error mode string (`"replace"`, `"ignore"`, `"preserve"`).
-    #[cfg(feature = "extension-module")]
-    pub fn from_str(s: &str) -> PyResult<Self> {
-        Ok(Self::parse(s)?)
+    /// The canonical lowercase token: `"replace"` / `"ignore"` / `"preserve"`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Replace => "replace",
+            Self::Ignore => "ignore",
+            Self::Preserve => "preserve",
+        }
     }
 
     /// Pure-Rust parse of an error mode string, returning the core `ErrorRepr`.
@@ -73,10 +78,30 @@ impl ErrorMode {
     }
 }
 
+impl std::fmt::Display for ErrorMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ErrorMode {
+    type Err = crate::Error;
+
+    /// Parse `"replace"` / `"ignore"` / `"preserve"`; the Python binding and Rust
+    /// callers share this one validated path ("parse, don't validate").
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s).map_err(crate::Error::from)
+    }
+}
+
 // Layer 2: the idiomatic, pyo3-free Rust API — the published crates.io surface
 // (#38/#42). This and the error types (`Error`, `ErrorKind`, `ErrorMode`) are the
 // ONLY public, semver-governed Rust API; everything below is `pub(crate)`.
 pub mod api;
+
+/// The string extension trait, re-exported at the crate root so callers can
+/// `use disarm::DisarmStr;` for method syntax over the [`api`] functions (#352).
+pub use api::DisarmStr;
 
 // Layer 1: the pure-Rust algorithm cores. `pub(crate)` — reachable by `api` and
 // the PyO3 shims, but not part of the public crate surface (#42).

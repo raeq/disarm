@@ -237,6 +237,78 @@ impl SlugConfig {
             safe_chars: String::new(),
         })
     }
+
+    // ── Chainable builder methods (#352) ──────────────────────────────────────
+    // `SlugConfig::default().with_separator("_").with_max_length(40)` reads the
+    // same way as the `Transliterate` builder, instead of mutating public fields.
+
+    /// Set the word separator (default `"-"`).
+    #[must_use]
+    pub fn with_separator(mut self, separator: impl Into<String>) -> Self {
+        self.separator = separator.into();
+        self
+    }
+
+    /// Lowercase the result (default `true`).
+    #[must_use]
+    pub fn with_lowercase(mut self, lowercase: bool) -> Self {
+        self.lowercase = lowercase;
+        self
+    }
+
+    /// Truncate to at most this many bytes (`0` = no limit).
+    #[must_use]
+    pub fn with_max_length(mut self, max_length: usize) -> Self {
+        self.max_length = max_length;
+        self
+    }
+
+    /// Cut only on a word boundary when truncating.
+    #[must_use]
+    pub fn with_word_boundary(mut self, word_boundary: bool) -> Self {
+        self.word_boundary = word_boundary;
+        self
+    }
+
+    /// Preserve relative word order when removing stopwords.
+    #[must_use]
+    pub fn with_save_order(mut self, save_order: bool) -> Self {
+        self.save_order = save_order;
+        self
+    }
+
+    /// Words to remove from the slug (case-insensitive).
+    #[must_use]
+    pub fn with_stopwords<I, S>(mut self, stopwords: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.stopwords = stopwords.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Keep Unicode word characters instead of transliterating to ASCII.
+    #[must_use]
+    pub fn with_allow_unicode(mut self, allow_unicode: bool) -> Self {
+        self.allow_unicode = allow_unicode;
+        self
+    }
+
+    /// Transliteration language hint (best-effort; not validated).
+    #[must_use]
+    pub fn with_lang(mut self, lang: impl Into<String>) -> Self {
+        self.lang = Some(lang.into());
+        self
+    }
+
+    /// Characters preserved through slugification instead of becoming the
+    /// separator (awesome-slugify `safe_chars`).
+    #[must_use]
+    pub fn with_safe_chars(mut self, safe_chars: impl Into<String>) -> Self {
+        self.safe_chars = safe_chars.into();
+        self
+    }
 }
 
 /// Core slugification pipeline.

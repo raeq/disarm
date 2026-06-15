@@ -10,7 +10,6 @@
 //! `extension-module`.
 
 use disarm::api;
-use disarm::ErrorMode;
 
 #[test]
 fn confusables() {
@@ -115,16 +114,19 @@ fn slugification() {
 
 #[test]
 fn transliteration() {
-    assert_eq!(
-        api::transliterate("hello", None, ErrorMode::Replace, "?", false, false, false),
-        "hello"
-    );
-    let out = api::transliterate("Москва", None, ErrorMode::Replace, "?", false, false, false);
+    use api::{OnUnknown, Scheme, Transliterate};
+    // Free-function convenience (all defaults).
+    assert_eq!(api::transliterate("hello"), "hello");
+    // Builder with a scheme + replacement policy.
+    let out = Transliterate::new()
+        .scheme(Scheme::StrictIso9)
+        .on_unknown(OnUnknown::Replace("?".into()))
+        .run("Москва");
     assert!(out.is_ascii() && !out.is_empty());
     assert_eq!(api::strip_accents("café"), "cafe");
     assert!(api::is_ascii("hi") && !api::is_ascii("café"));
     assert!(api::list_langs().iter().any(|l| l == "ru"));
-    assert!(api::find_untranslatable("hi", None, false, false, false).is_empty());
+    assert!(Transliterate::new().find_untranslatable("hi").is_empty());
 }
 
 #[test]

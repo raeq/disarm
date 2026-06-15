@@ -176,12 +176,16 @@ fn slug_replace_with_automaton(text: &str, automaton: &SlugReplacementAutomaton)
     result
 }
 
-/// Configuration for slug generation, extracted from parameters.
+/// Configuration for slug generation.
 ///
-/// All fields are active.  `save_order` controls whether stopword removal is
-/// applied to interior tokens (`false`, default — all matching tokens removed)
-/// or only to leading/trailing tokens (`true` — python-slugify semantics that
-/// preserves relative word order). (#118)
+/// Construct with [`SlugConfig::new`] (or [`SlugConfig::default`]) and the
+/// chainable `with_*` setters; the fields are readable but, because the struct is
+/// `#[non_exhaustive]`, a new slug option can be added in a future release without
+/// breaking callers. `save_order` controls whether stopword removal is applied to
+/// interior tokens (`false`, default — all matching tokens removed) or only to
+/// leading/trailing tokens (`true` — python-slugify semantics that preserves
+/// relative word order). (#118)
+#[non_exhaustive]
 pub struct SlugConfig {
     /// String inserted between words (default `"-"`).
     pub separator: String,
@@ -285,8 +289,17 @@ impl SlugConfig {
     }
 
     // ── Chainable builder methods (#352) ──────────────────────────────────────
-    // `SlugConfig::default().with_separator("_").with_max_length(40)` reads the
+    // `SlugConfig::new().with_separator("_").with_max_length(40)` reads the
     // same way as the `Transliterate` builder, instead of mutating public fields.
+    // The setters cover every field a free-function caller configures, so the
+    // fluent style is a complete alternative to struct-literal construction.
+
+    /// A `SlugConfig` with the default settings — the entry point for the
+    /// chainable builder (equivalent to [`SlugConfig::default`]).
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Set the word separator (default `"-"`).
     #[must_use]
@@ -353,6 +366,43 @@ impl SlugConfig {
     #[must_use]
     pub fn with_safe_chars(mut self, safe_chars: impl Into<String>) -> Self {
         self.safe_chars = safe_chars.into();
+        self
+    }
+
+    /// Literal `(from, to)` substitutions applied before transliteration
+    /// (e.g. `[("&", "and")]`).
+    #[must_use]
+    pub fn with_replacements<I, F, T>(mut self, replacements: I) -> Self
+    where
+        I: IntoIterator<Item = (F, T)>,
+        F: Into<String>,
+        T: Into<String>,
+    {
+        self.replacements = replacements
+            .into_iter()
+            .map(|(from, to)| (from.into(), to.into()))
+            .collect();
+        self
+    }
+
+    /// Decode HTML named entities (e.g. `&amp;`) before slugifying (default `true`).
+    #[must_use]
+    pub fn with_entities(mut self, entities: bool) -> Self {
+        self.entities = entities;
+        self
+    }
+
+    /// Decode HTML decimal numeric entities (e.g. `&#38;`) (default `true`).
+    #[must_use]
+    pub fn with_decimal(mut self, decimal: bool) -> Self {
+        self.decimal = decimal;
+        self
+    }
+
+    /// Decode HTML hexadecimal numeric entities (e.g. `&#x26;`) (default `true`).
+    #[must_use]
+    pub fn with_hexadecimal(mut self, hexadecimal: bool) -> Self {
+        self.hexadecimal = hexadecimal;
         self
     }
 }

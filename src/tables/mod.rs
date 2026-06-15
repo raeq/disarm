@@ -155,6 +155,7 @@ static REGISTRATIONS_SEALED: AtomicBool = AtomicBool::new(false);
 /// fail. Idempotent and irreversible (by design — sealing is a security latch).
 pub fn seal_registrations() {
     REGISTRATIONS_SEALED.store(true, Ordering::Release);
+    tl_info!("registrations sealed");
 }
 
 /// True if [`seal_registrations`] has been called.
@@ -501,11 +502,17 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
     if !bad_keys.is_empty() {
         return Err(bad_keys);
     }
+    // #208: metadata only — the lang code (a config identifier) and the mapping
+    // count, never the mappings themselves (user-provided content). The var is
+    // cfg-gated so it costs nothing when the `log` feature is off.
+    #[cfg(feature = "log")]
+    let mapping_count = char_map.len();
     let mut table = crate::recover_lock(LANG_TABLES.write(), "LANG_TABLES");
     table.insert(code.to_owned(), char_map);
     // Release so a reader's Acquire load that observes `true` also observes the
     // insert above (same configure-then-use contract as `HAS_REPLACEMENTS`).
     HAS_REGISTERED_LANGS.store(!table.is_empty(), Ordering::Release);
+    tl_info!("register_lang: code={code:?} mappings={mapping_count}");
     Ok(())
 }
 
@@ -562,6 +569,8 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
     // transliterate fully ordered — a reader may still observe a stale `false`
     // and skip; the contract is configure-then-use.)
     HAS_REPLACEMENTS.store(!table.is_empty(), Ordering::Release);
+    // #208: total entry count only — never the replacement keys/values (content).
+    tl_info!("register_replacements: total={}", table.len());
     Ok(())
 }
 

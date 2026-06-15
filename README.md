@@ -100,6 +100,28 @@ build the Python wheel — Rust consumers never enable it. See the [Rust API &
 semver policy](docs/RUST_API.md) and the full reference on
 [docs.rs/disarm](https://docs.rs/disarm).
 
+### Logging (opt-in, off by default)
+
+disarm can emit diagnostic records through the binding-neutral
+[`log`](https://docs.rs/log) facade behind the **`log`** Cargo feature. It is
+**off by default** — the shipped artifact has no logging code in the hot path
+unless you turn it on — and records carry only **metadata** (lengths, language,
+mode, flags, counts, durations, error codes), **never** the input or output
+text. Pick a sink in your application (`env_logger`, `tracing-subscriber`, …):
+
+```toml
+disarm = { version = "0.10", features = ["log"] }
+```
+
+```rust
+env_logger::init();   // your sink, your level filter
+// Core transforms (transliterate, the registration/seal config calls, …) then
+// emit redacted records — lengths, flags, counts, duration — but never the text.
+```
+
+A library must not set `log`'s `release_max_level_*` (those unify across the
+whole dependency graph) — that ceiling is the application's call.
+
 ## Features
 
 - **[Confusable & homoglyph analysis (TR39)](docs/security/adversarial-defense.md)**: visual [confusable mapping](docs/user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` pipeline (defense-in-depth — see the [Threat Model](THREAT_MODEL.md))

@@ -16,6 +16,13 @@ class of attack is fully neutralized.
 disarm is a pure, in-process text-transformation library: no network access, no
 filesystem writes, no code execution, no runtime dependencies.
 
+The opt-in `log` feature (#208) does not change this: emission is the consuming
+binding's *sink* (disarm itself still does no I/O), and default-level records
+(ERROR/WARN/INFO/DEBUG) carry only metadata — lengths, language, mode, flags,
+counts, durations, and `Error::code` — **never** the input or output text.
+Content samples are reachable only via the louder `log-content` feature at TRACE,
+truncated by the same 80-byte `truncate_error_text` cap used for error messages.
+
 **disarm is an *input-normalization* layer, not an *output sanitizer*.** It neutralizes
 character-level Unicode manipulation; it does **not** make text safe to emit into any
 execution or markup context. It performs no HTML/attribute/JS/URL/CSS escaping, no SQL or

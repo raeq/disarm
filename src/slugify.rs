@@ -492,9 +492,13 @@ pub(crate) fn slugify_impl_with_stopset(
     // Precompute safe_chars membership once: `String::contains(char)` is an O(k)
     // substring scan, so the per-char check was O(n·k) for any non-empty
     // safe_chars (#252 O5.1). Empty safe_chars (the default) → skip the set build
-    // and the per-char hash probe entirely (O3).
+    // and the per-char hash probe entirely (O3). `HashSet::new()` does not allocate.
     let has_safe_chars = !config.safe_chars.is_empty();
-    let safe_set: HashSet<char> = config.safe_chars.chars().collect();
+    let safe_set: HashSet<char> = if has_safe_chars {
+        config.safe_chars.chars().collect()
+    } else {
+        HashSet::new()
+    };
 
     for ch in value.chars() {
         if ch.is_alphanumeric()
@@ -611,17 +615,15 @@ fn truncate_at_boundary(slug: &str, max_length: usize, separator: &str) -> Strin
     }
 }
 
-/// Decode a numeric HTML entity (&#NNN; or &#xHHH;) starting at `pos`.
+/// Decode a numeric HTML entity (`&#NNN;` / `&#xHHH;`) starting at `pos`.
 ///
-/// Returns `Some((char, bytes_consumed))` on success, `None` for malformed
-/// or control-character entities.  `num_buf` is a caller-supplied buffer
-/// reused across calls to avoid per-entity allocation.
-/// Decode a numeric entity at `pos` (`&#…` / `&#x…`). Returns `(decoded, consumed)`
-/// where `decoded` is the character on success (`None` for a malformed or
-/// control-character entity) and `consumed` is **always** the number of bytes the
-/// entity occupies, so the caller advances the same amount either way (C3 — this
-/// folds the former separate `decode_numeric_entity_skip` into one place, so the
-/// success and skip scans can no longer drift their bounds).
+/// Returns `(decoded, consumed)`: `decoded` is the character on success (`None`
+/// for a malformed or control-character entity), and `consumed` is **always** the
+/// number of bytes the entity occupies, so the caller advances the same amount
+/// either way (C3 — folds the former separate `decode_numeric_entity_skip` into
+/// one place so the success and skip scans can no longer drift their bounds).
+/// `num_buf` is a caller-supplied buffer reused across calls to avoid per-entity
+/// allocation.
 fn decode_numeric_entity(bytes: &[u8], pos: usize, num_buf: &mut String) -> (Option<char>, usize) {
     let len = bytes.len();
     let mut i = pos + 2; // skip "&#"

@@ -1,0 +1,110 @@
+name: Cleanup caches
+
+# Two complementary mechanisms keep the repo under GitHub's 10 GB cache budget:
+#
+#   1. `cleanup-pr` — on PR close, delete caches scoped to that PR's branch.
+#      GitHub scopes every cache to the branch that created it, so a closed PR's
+#      caches (the heavy Swatinem/rust-cache entries especially) are pure dead
+#      weight until LRU eviction reaps them. Deleting on close reclaims the space
+#      immediately.
+#
+#   2. `sweep-stale` — on a schedule, delete any cache not *accessed* within the
+#      last 36h. This catches stale entries the per-PR cleanup misses: abandoned
+#      branches, renamed cache keys, scheduled-run artifacts. Staleness is keyed
+#      on `last_accessed_at` (LRU), NOT `created_at` — a long-lived cache that is
+#      still actively restored on every `main` build survives; only genuinely
+#      idle ones are removed. (Swap `.last_accessed_at` -> `.created_at` below to
+#      go by raw age instead.)
+#
+# Docs: https://docs.github.com/actions/using-workflows/caching-dependencies-to-speed-up-workflows#force-deleting-cache-entries
+
+on:
+  pull_request:
+    types:
+      - closed
+  schedule:
+    # Every 6h, so a stale entry's worst-case lifetime is ~36h + one interval.
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: "Delete caches not accessed within this many hours"
+        default: "36"
+        required: false
+
+# Only `actions: write` is needed to delete caches; everything else stays read.
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cleanup-pr:
+    name: Delete caches for closed PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete branch-scoped caches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          gh extension install actions/gh-actions-cache
+
+          echo "Listing caches scoped to $BRANCH"
+          cacheKeys=$(gh actions-cache list -R "$REPO" -B "$BRANCH" --limit 100 | cut -f 1)
+
+          if [ -z "$cacheKeys" ]; then
+            echo "No caches to delete."
+            exit 0
+          fi
+
+          # Don't fail the run if a key races with GitHub's own LRU eviction.
+          set +e
+          for cacheKey in $cacheKeys; do
+            echo "Deleting $cacheKey"
+            gh actions-cache delete "$cacheKey" -R "$REPO" -B "$BRANCH" --confirm
+          done
+          echo "Done."
+
+  sweep-stale:
+    name: Sweep caches idle past max age
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete caches not accessed within the threshold
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          MAX_AGE_HOURS: ${{ github.event.inputs.max_age_hours || '36' }}
+        run: |
+          set -euo pipefail
+
+          cutoff=$(date -u -d "$MAX_AGE_HOURS hours ago" +%s)
+          echo "Deleting caches last accessed before $(date -u -d @"$cutoff" '+%Y-%m-%dT%H:%M:%SZ') (> ${MAX_AGE_HOURS}h idle)"
+
+          # Page through every cache; emit "id<TAB>last_accessed_at".
+          gh api --paginate \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/$REPO/actions/caches?per_page=100" \
+            --jq '.actions_caches[] | [.id, (.last_accessed_at | sub("\\..*Z$"; "Z"))] | @tsv' > caches.tsv
+
+          count=0
+          # Read from a file (not a pipe) so the counter survives the loop.
+          while IFS=$'\t' read -r id ts; do
+            [ -n "$id" ] || continue
+            accessed=$(date -u -d "$ts" +%s)
+            if [ "$accessed" -lt "$cutoff" ]; then
+              echo "Deleting cache $id (last accessed $ts)"
+              # Tolerate races with LRU eviction: a 404 here is benign.
+              gh api --method DELETE "/repos/$REPO/actions/caches/$id" >/dev/null 2>&1 \
+                && count=$((count + 1)) \
+                || echo "  (already gone)"
+            fi
+          done < caches.tsv
+
+          echo "Deleted $count stale cache(s)."

@@ -8,7 +8,13 @@ require_relative "disarm/version"
 begin
   ruby_minor = RUBY_VERSION[/\d+\.\d+/]
   require_relative "disarm/#{ruby_minor}/disarm"
-rescue LoadError
+rescue LoadError => e
+  # Only fall back to the unversioned (source-gem) path when the versioned file
+  # is genuinely absent. A real load failure of an *existing* ext (e.g. a missing
+  # dependent shared library or an undefined symbol) must propagate, not be masked
+  # by the fallback.
+  raise unless e.message.include?("cannot load such file")
+
   require_relative "disarm/disarm"
 end
 

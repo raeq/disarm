@@ -18,8 +18,12 @@ Gem::Specification.new do |spec|
   DESC
   spec.homepage = "https://github.com/raeq/disarm"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.0.0"
-  spec.required_rubygems_version = ">= 3.3.11"
+  # 3.1 is the oldest non-EOL Ruby and matches the CI test matrix + cross-gem
+  # targets; magnus 0.7 supports it. RubyGems >= 3.3.22 is required for rb-sys
+  # precompiled platform-gem resolution (older RubyGems can't match the platform
+  # gems) — Ruby 3.1 ships a new-enough RubyGems.
+  spec.required_ruby_version = ">= 3.1.0"
+  spec.required_rubygems_version = ">= 3.3.22"
 
   spec.files = Dir[
     "lib/**/*.rb",

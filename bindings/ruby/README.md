@@ -19,7 +19,7 @@ gem "disarm"
 gem install disarm
 ```
 
-Requires Ruby >= 3.0. `gem install disarm` pulls a precompiled platform gem
+Requires Ruby >= 3.1. `gem install disarm` pulls a precompiled platform gem
 (Linux x86_64/aarch64, macOS x86_64/arm64, Windows) when one is available, and
 falls back to compiling from source (needs a Rust toolchain) otherwise.
 

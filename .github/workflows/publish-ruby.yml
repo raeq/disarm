@@ -32,7 +32,7 @@ jobs:
         working-directory: bindings/ruby
     steps:
       - uses: actions/checkout@v4
-      - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           ruby-version: ${{ matrix.ruby }}
           rustup-toolchain: stable
@@ -56,14 +56,14 @@ jobs:
           - x64-mingw-ucrt
     steps:
       - uses: actions/checkout@v4
-      - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           ruby-version: "3.3"
           bundler-cache: true
-      - uses: oxidize-rb/actions/cross-gem@v1
+      - uses: oxidize-rb/actions/cross-gem@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           platform: ${{ matrix.platform }}
-          ruby-versions: "3.0,3.1,3.2,3.3"
+          ruby-versions: "3.1,3.2,3.3"
           working-directory: bindings/ruby
       - uses: actions/upload-artifact@v4
         with:
@@ -83,7 +83,7 @@ jobs:
           pattern: cross-gem-*
           merge-multiple: true
           path: pkg
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@89f90524b88a01fe6e0b732220432cc6142926af # v1
         with:
           ruby-version: "3.3"
       - name: gem push

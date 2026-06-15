@@ -5,9 +5,11 @@
 
 [![Documentation](https://img.shields.io/badge/docs-disarm.dev-blue)](https://docs.disarm.dev/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/disarm/blob/main/LICENSE)
 
-Unicode canonicalization and TR39 *visual* confusable analysis for Python — building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling), plus standards-based *phonetic* transliteration. Rust-powered.
+Unicode canonicalization and TR39 *visual* confusable analysis — building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling), plus standards-based *phonetic* transliteration. **One pure-Rust core, with bindings for Python, Ruby, and more.**
 
 **[Documentation](index.md)** | **[API Reference](api/index.md)** | **[PyPI](https://pypi.org/project/disarm/)**
+
+**Get started in your language:** [Python](python/getting-started.md) · [Rust](rust/getting-started.md) · [Ruby](ruby/getting-started.md)
 
 ## Demo
 

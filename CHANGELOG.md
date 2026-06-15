@@ -18,6 +18,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed
 
+- **Docs: language-neutral scaffold — first phase of the docs restructure (#50).**
+  Reshaped the documentation IA toward "language-neutral concept core +
+  per-language specifics": a neutral landing headline (no longer "for Python")
+  that routes by ecosystem; per-language *Getting started* pages under
+  `docs/python/`, `docs/rust/`, and `docs/ruby/`; a shared
+  `docs/concepts/which-function.md` concept page (lifting the #328 decision
+  table into the neutral layer); and an `mkdocs.yml`
+  nav reorganized into *Getting started / Concepts / Guide / API Reference
+  (Python · Rust) / Architecture / Migration / Reference / Project*. Folded six
+  previously orphaned pages into the nav. No library behaviour change; the
+  per-topic concept/usage split and per-language example tabs land in following
+  phases.
+
 - **Docs/metadata: scope `transliterate()` vs the TR39 confusable functions (#328).**
   The headline identity led with "TR39 confusable analysis", while the most
   discoverable function, `transliterate()`, performs the *opposite* mapping —

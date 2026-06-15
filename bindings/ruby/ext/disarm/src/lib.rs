@@ -79,7 +79,9 @@ fn suspicious_hostname(host: String) -> bool {
     api::is_suspicious_hostname(&host).0
 }
 
-#[magnus::init]
+// `name = "disarm"` so the exported init symbol is `Init_disarm` (matching the
+// `disarm.so` the gem loads), independent of the `disarm-ruby` package name.
+#[magnus::init(name = "disarm")]
 fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.define_module("Disarm")?;
     module.define_singleton_method("transliterate", function!(transliterate, 1))?;

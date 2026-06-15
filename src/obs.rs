@@ -23,9 +23,11 @@
 //! input or output content: function name, `lang`, `errors` mode, flags, input
 //! length (bytes + chars), output length, counts, durations, and `Error::code`.
 //! Content logging is a separate, louder gate ([`tl_trace_content!`], behind
-//! `log-content` + TRACE) and even then reuses [`crate::utils::truncate_error_text`]
-//! (80-byte, char-boundary). A sentinel test (`tests/logging.rs`) fails the build
-//! if any default-level record contains the input.
+//! `log-content` + TRACE) and even then routes the sample through
+//! [`crate::error::truncate_error_text`] (80-byte, char-boundary) — the macro
+//! enforces the truncation, callers cannot bypass it. A sentinel test
+//! (`tests/logging.rs`) fails the build if any default-level record contains the
+//! input.
 
 /// `target` every disarm record is tagged with, so a sink can filter on it.
 #[cfg(feature = "log")]
@@ -52,6 +54,9 @@ macro_rules! tl_info {
     }};
 }
 
+// Only invoked from inside `#[cfg(feature = "log")]` blocks (the DEBUG records
+// pair with a runtime-gated timer), so it is "unused" in a default build.
+#[allow(unused_macros)]
 macro_rules! tl_debug {
     ($($arg:tt)+) => {{
         #[cfg(feature = "log")]
@@ -59,13 +64,22 @@ macro_rules! tl_debug {
     }};
 }
 
-/// TRACE-level **content** record — behind `log-content` only. May emit a
-/// truncated sample of user text, so it is documented unsafe for production and
-/// never reachable on a default build. The sample is `truncate_error_text`-bound.
+/// TRACE-level **content** record — behind `log-content` only, documented unsafe
+/// for production and never reachable on a default build. Takes a static `label`
+/// and a `text` value; the macro **always** routes `text` through
+/// [`crate::error::truncate_error_text`] (80-byte, char-boundary), so a caller
+/// cannot accidentally emit untruncated content.
+///
+/// `tl_trace_content!("transliterate.in", text)`
 #[allow(unused_macros)]
 macro_rules! tl_trace_content {
-    ($($arg:tt)+) => {{
+    ($label:expr, $text:expr $(,)?) => {{
         #[cfg(feature = "log-content")]
-        log::trace!(target: $crate::obs::TARGET, $($arg)+);
+        log::trace!(
+            target: $crate::obs::TARGET,
+            "{}: {:?}",
+            $label,
+            $crate::error::truncate_error_text($text),
+        );
     }};
 }

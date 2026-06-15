@@ -288,9 +288,12 @@ pub(crate) fn transliterate_impl<'a>(
 ) -> Cow<'a, str> {
     // #208: this thin wrapper is a clean boundary — the per-codepoint loop lives
     // in `_inner`, so a single completion record here never logs in the hot path.
-    // The timer is cfg-gated so it costs nothing when `log` is off.
+    // Gate the timer on the DEBUG level being live (one relaxed atomic load), so
+    // `Instant::now()` is not even called when the feature is on but DEBUG is
+    // filtered off; nothing is computed at all when the `log` feature is off.
     #[cfg(feature = "log")]
-    let start = std::time::Instant::now();
+    let start = log::log_enabled!(target: crate::obs::TARGET, log::Level::Debug)
+        .then(std::time::Instant::now);
     let out = transliterate_impl_inner(
         text,
         lang,
@@ -303,15 +306,18 @@ pub(crate) fn transliterate_impl<'a>(
         false, // not strict — translate the whole input
     );
     // Metadata only — lengths/flags/duration, never the input or output text.
-    tl_debug!(
-        "transliterate: in_bytes={} in_chars={} out_bytes={} lang={lang:?} mode={error_mode:?} \
-         iso9={strict_iso9} gost={gost7034} tones={tones} borrowed={} dur_us={}",
-        text.len(),
-        text.chars().count(),
-        out.len(),
-        matches!(out, Cow::Borrowed(_)),
-        start.elapsed().as_micros(),
-    );
+    #[cfg(feature = "log")]
+    if let Some(start) = start {
+        tl_debug!(
+            "transliterate: in_bytes={} in_chars={} out_bytes={} lang={lang:?} mode={error_mode:?} \
+             iso9={strict_iso9} gost={gost7034} tones={tones} borrowed={} dur_us={}",
+            text.len(),
+            text.chars().count(),
+            out.len(),
+            matches!(out, Cow::Borrowed(_)),
+            start.elapsed().as_micros(),
+        );
+    }
     out
 }
 

@@ -127,7 +127,7 @@ fn security_clean(text: String) -> Result<String, Error> {
     api::security_clean(&text).map_err(|e| raise(&e))
 }
 
-/// `Disarm.suspicious_hostname?(host)` — flags mixed-script / confusable IDN
+/// `Disarm._suspicious_hostname?(host)` — flags mixed-script / confusable IDN
 /// spoofs. A false result asserts nothing was *found*, not that the host is safe.
 fn suspicious_hostname(host: String) -> bool {
     api::is_suspicious_hostname(&host).0
@@ -149,9 +149,11 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_strip_obfuscation", function!(strip_obfuscation, 1))?;
     module.define_singleton_method("_security_clean", function!(security_clean, 1))?;
 
-    // No options / no symbols / infallible: already idiomatic, exposed directly.
-    module.define_singleton_method("strip_accents", function!(strip_accents, 1))?;
-    module.define_singleton_method("fold_case", function!(fold_case, 1))?;
-    module.define_singleton_method("suspicious_hostname?", function!(suspicious_hostname, 1))?;
+    // No options / no symbols, but still wrapped by the Ruby layer so a wrong-type
+    // argument surfaces as Disarm::InvalidArgument rather than a raw TypeError —
+    // keeping `rescue Disarm::Error` exhaustive across the whole public surface.
+    module.define_singleton_method("_strip_accents", function!(strip_accents, 1))?;
+    module.define_singleton_method("_fold_case", function!(fold_case, 1))?;
+    module.define_singleton_method("_suspicious_hostname?", function!(suspicious_hostname, 1))?;
     Ok(())
 }

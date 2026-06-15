@@ -69,6 +69,10 @@ RSpec.describe Disarm do
     it "can preserve case" do
       expect(Disarm.slugify("Hello", lowercase: false)).to eq("Hello")
     end
+
+    it "tolerates stopwords: nil" do
+      expect(Disarm.slugify("hello world", stopwords: nil)).to eq("hello-world")
+    end
   end
 
   describe ".demojize" do
@@ -90,6 +94,16 @@ RSpec.describe Disarm do
   describe "security" do
     it "flags a homoglyph IDN spoof" do
       expect(Disarm.suspicious_hostname?("pаypal.com")).to be(true)
+    end
+  end
+
+  describe "error hierarchy" do
+    it "maps a non-String argument to Disarm::InvalidArgument" do
+      expect { Disarm.strip_accents(42) }.to raise_error(Disarm::InvalidArgument)
+    end
+
+    it "lets a single rescue Disarm::Error catch a wrong-type argument" do
+      expect { Disarm.fold_case(nil) }.to raise_error(Disarm::Error)
     end
   end
 end

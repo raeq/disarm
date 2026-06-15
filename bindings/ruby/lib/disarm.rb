@@ -76,18 +76,20 @@ module Disarm
       safe_chars: ""
     )
       translate_errors do
+        # `Array(stopwords)` tolerates the common `stopwords: nil` (and a bare
+        # String) instead of raising NoMethodError on `.map`.
         _slugify(
           text, separator.to_s, lowercase, max_length, word_boundary, save_order,
-          stopwords.map(&:to_s), allow_unicode, lang&.to_s, entities, decimal,
+          Array(stopwords).map(&:to_s), allow_unicode, lang&.to_s, entities, decimal,
           hexadecimal, safe_chars.to_s
         )
       end
     end
 
-    # Replace emoji with their :shortcode: names. `strip_modifiers:` drops skin
-    # tone / variation modifiers before naming.
+    # Replace emoji with their plain names (e.g. "👍" → "thumbs up").
+    # `strip_modifiers:` drops skin-tone / variation modifiers before naming.
     def demojize(text, strip_modifiers: false)
-      _demojize(text, strip_modifiers)
+      translate_errors { _demojize(text, strip_modifiers) }
     end
 
     # Remove obfuscation (zero-width, bidi, combining-mark abuse) while keeping
@@ -102,16 +104,39 @@ module Disarm
       translate_errors { _security_clean(text) }
     end
 
+    # Strip diacritics ("café" → "cafe").
+    def strip_accents(text)
+      translate_errors { _strip_accents(text) }
+    end
+
+    # Unicode case-fold ("HELLO" → "hello").
+    def fold_case(text)
+      translate_errors { _fold_case(text) }
+    end
+
+    # Whether the hostname looks like a mixed-script / confusable IDN spoof. A
+    # false result asserts nothing was *found*, not that the host is safe.
+    def suspicious_hostname?(host)
+      translate_errors { _suspicious_hostname?(host) }
+    end
+
     private
 
     # Run a native call, re-raising its built-in exception as the matching
-    # Disarm::Error subclass so callers can `rescue Disarm::Error`.
+    # Disarm::Error subclass so callers can `rescue Disarm::Error` across the
+    # whole surface. The original backtrace is preserved (passed as the third
+    # `raise` argument) so the failing native call site stays visible. A bad
+    # argument from the native layer can arrive as ArgumentError (an invalid
+    # scheme/target), TypeError (a non-String argument), or RangeError (e.g. a
+    # negative max_length) — all map to Disarm::InvalidArgument.
     def translate_errors
       yield
-    rescue ::ArgumentError => e
-      raise InvalidArgument, e.message
+    rescue Error
+      raise # already in our hierarchy — don't re-wrap
+    rescue ::ArgumentError, ::TypeError, ::RangeError => e
+      raise InvalidArgument, e.message, e.backtrace
     rescue ::RuntimeError => e
-      raise Error, e.message
+      raise Error, e.message, e.backtrace
     end
   end
 end

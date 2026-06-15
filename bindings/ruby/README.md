@@ -62,9 +62,11 @@ scheme/target tokens accept symbols or strings. `slugify` exposes the core's
 
 ### Errors
 
-Everything disarm raises descends from `Disarm::Error < StandardError`, so a
-single `rescue Disarm::Error` catches all of them; an invalid scheme/target or
-other bad argument raises the more specific `Disarm::InvalidArgument`.
+Every public method is wrapped so that everything disarm raises descends from
+`Disarm::Error < StandardError` — a single `rescue Disarm::Error` catches all of
+them. An invalid scheme/target, a non-String argument, or any other bad input
+raises the more specific `Disarm::InvalidArgument`; the original backtrace is
+preserved so the failing call site stays visible.
 
 ```ruby
 begin

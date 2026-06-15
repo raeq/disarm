@@ -61,6 +61,8 @@ end
 
 ## Where next
 
+- **[Ruby API reference](api.md)** — the full `Disarm` call surface, every method
+  with a runnable example.
 - **Concepts** (shared across every language) — start with
   [Which function do I want?](../concepts/which-function.md), then the topic
   guides under *Guide* in the sidebar.

@@ -90,6 +90,7 @@ nav:
           - Language Profiles: api/language-profiles.md
           - Exceptions: api/exceptions.md
       - Rust (docs.rs & semver policy): RUST_API.md
+      - Ruby (gem API): ruby/api.md
   - Architecture:
       - Transliteration Engine: architecture/transliteration-engine.md
       - Data Tables & Caching: architecture/data-tables.md

@@ -20,6 +20,18 @@ RSpec.describe Disarm do
       expect { Disarm.transliterate("x", scheme: :klingon) }
         .to raise_error(Disarm::InvalidArgument)
     end
+
+    it "applies a language profile via lang:" do
+      expect(Disarm.transliterate("Київ", lang: "uk")).to eq("Kyiv")
+    end
+
+    it "accepts lang: as a symbol" do
+      expect(Disarm.transliterate("Київ", lang: :uk)).to eq("Kyiv")
+    end
+
+    it "composes a language profile with a scheme" do
+      expect(Disarm.transliterate("Київ", scheme: :default, lang: :uk)).to eq("Kyiv")
+    end
   end
 
   describe ".normalize_confusables" do

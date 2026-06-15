@@ -32,8 +32,9 @@ from disarm import (
 assert normalize_confusables("раypal") == "paypal"   # Cyrillic р/а → Latin
 assert strip_obfuscation("рroduсt") == "product"
 
-# Phonetic romanization — readable ASCII, NOT a security control
-assert transliterate("Москва") == "Moskva"
+# Phonetic romanization — readable ASCII, NOT a security control.
+# A language profile sharpens the output: the uk profile gives Київ → Kyiv.
+assert transliterate("Київ", lang="uk") == "Kyiv"
 assert slugify("Héllo Wörld") == "hello-world"
 
 # Hostname / IDN spoof check (a False result is not a safety guarantee)

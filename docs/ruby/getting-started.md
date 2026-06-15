@@ -34,9 +34,10 @@ require "disarm"
 Disarm.normalize_confusables("раypal")        # => "paypal"
 Disarm.confusable?("pаypal")                  # => true
 
-# Phonetic romanization — readable ASCII, NOT a security control
-Disarm.transliterate("Москва")               # => "Moskva"
-Disarm.transliterate("Москва", scheme: :strict_iso9)
+# Phonetic romanization — readable ASCII, NOT a security control.
+# A language profile sharpens the output: the uk profile gives Київ → Kyiv.
+Disarm.transliterate("Київ", lang: "uk")      # => "Kyiv"
+Disarm.transliterate("Київ", scheme: :strict_iso9)
 Disarm.slugify("Héllo Wörld")                 # => "hello-world"
 
 # Hostname / IDN spoof check (a false result is not a safety guarantee)

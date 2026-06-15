@@ -38,13 +38,21 @@ fn transliterate(text: String) -> String {
     api::transliterate(&text).into_owned()
 }
 
-/// `Disarm._transliterate_scheme(text, "strict_iso9" | "gost7034" | "default")`.
-fn transliterate_scheme(text: String, scheme: String) -> Result<String, Error> {
-    let scheme: api::Scheme = scheme.parse().map_err(|e| raise(&e))?;
-    Ok(api::Transliterate::new()
-        .scheme(scheme)
-        .run(&text)
-        .into_owned())
+/// `Disarm._transliterate_opts(text, "default" | "strict_iso9" | "gost7034", lang)`
+/// — a scheme and/or a language profile via the core's `Transliterate` builder.
+/// `lang` is `nil` (no profile) or a code like `"uk"` (Київ → Kyiv); it composes
+/// with the scheme. The idiomatic layer routes the bare-default/no-lang case to
+/// `_transliterate` so this is only hit when at least one option is set.
+fn transliterate_opts(text: String, scheme: String, lang: Option<String>) -> Result<String, Error> {
+    let mut builder = api::Transliterate::new();
+    if scheme != "default" {
+        let scheme: api::Scheme = scheme.parse().map_err(|e| raise(&e))?;
+        builder = builder.scheme(scheme);
+    }
+    if let Some(lang) = lang {
+        builder = builder.lang(lang);
+    }
+    Ok(builder.run(&text).into_owned())
 }
 
 // ── Confusables (TR39) ────────────────────────────────────────────────────────
@@ -143,8 +151,11 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
 
     // Raw, `_`-prefixed shims wrapped by the idiomatic Ruby layer (#357).
     module.define_singleton_method("_transliterate", function!(transliterate, 1))?;
-    module.define_singleton_method("_transliterate_scheme", function!(transliterate_scheme, 2))?;
-    module.define_singleton_method("_normalize_confusables", function!(normalize_confusables, 2))?;
+    module.define_singleton_method("_transliterate_opts", function!(transliterate_opts, 3))?;
+    module.define_singleton_method(
+        "_normalize_confusables",
+        function!(normalize_confusables, 2),
+    )?;
     module.define_singleton_method("_confusable?", function!(is_confusable, 2))?;
     module.define_singleton_method("_slugify", function!(slugify, 13))?;
     module.define_singleton_method("_demojize", function!(demojize, 2))?;

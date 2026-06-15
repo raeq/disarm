@@ -30,9 +30,11 @@ assert_eq!(api::normalize_confusables("раypal", TargetScript::Latin), "paypal"
 // …or via the DisarmStr extension trait on any string:
 assert_eq!("раypal".normalize_confusables(TargetScript::Latin), "paypal");
 
-// Phonetic romanization — readable ASCII, NOT a security control
-assert_eq!(api::transliterate("Москва"), "Moskva");
-let scholarly = Transliterate::new().scheme(Scheme::StrictIso9).run("Москва");
+// Phonetic romanization — readable ASCII, NOT a security control.
+// A language profile sharpens the result: the uk profile gives Київ → Kyiv.
+assert_eq!(Transliterate::new().lang("uk").run("Київ"), "Kyiv");
+// …or pick a scholarly scheme via the same builder:
+let scholarly = Transliterate::new().scheme(Scheme::StrictIso9).run("Київ");
 assert!(scholarly.is_ascii());
 
 // Canonicalization primitives borrow on the no-op path (Cow)

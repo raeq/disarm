@@ -11,7 +11,7 @@ spoofing. It does the **opposite** mapping — it will turn a Cyrillic `р` into
 | If you want to… | Use | Mapping | Example |
 |---|---|---|---|
 | **Defend against homoglyph / look-alike spoofing** | `normalize_confusables`, `strip_obfuscation` | **visual** (Unicode [TR39](https://www.unicode.org/reports/tr39/)) | Cyrillic `р` → Latin **`p`** |
-| **Romanize text to readable ASCII** | `transliterate` | **phonetic / standards-based** (BGN/PCGN, ISO 9, GOST) | Cyrillic `р` → Latin **`r`**; `Москва` → `Moskva` |
+| **Romanize text to readable ASCII** | `transliterate` | **phonetic / standards-based** (BGN/PCGN, ISO 9, GOST) | Cyrillic `р` → Latin **`r`**; `Київ` → `Kyiv` (`uk` profile) |
 | **Flag spoofed hostnames / IDNs** | `is_suspicious_hostname` | analysis (no rewrite) | `аpple.com` → suspicious |
 
 ## Visual mapping — for security
@@ -26,7 +26,8 @@ disarm's [adversarial-text defence](../security/adversarial-defense.md).
 
 `transliterate` is a **romanizer**: it maps by sound and by transliteration
 standard, not by appearance. It sends Cyrillic `р` to `r` (its phonetic value),
-producing readable ASCII like `Москва` → `Moskva`. This is the right tool for
+producing readable ASCII like `Київ` → `Kyiv` (with the `uk` language profile).
+This is the right tool for
 catalog keys, slugs, and search indexing — but it is **not** a security control,
 because it leaves a look-alike spoof intact.
 

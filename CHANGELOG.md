@@ -16,6 +16,15 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Added
+
+- **Ruby: `transliterate` now accepts a `lang:` language profile.** Previously the
+  Ruby binding's `transliterate` exposed only `scheme:`, so it could not reach the
+  core's per-language profiles (a parity gap vs Python/Rust). `lang:` accepts a
+  String or Symbol and composes with `scheme:` —
+  e.g. `Disarm.transliterate("Київ", lang: :uk) # => "Kyiv"`. Implemented over the
+  core's `Transliterate` builder via a generalized `_transliterate_opts` shim.
+
 ### Changed
 
 - **Docs: language-neutral scaffold — first phase of the docs restructure (#50).**

@@ -207,12 +207,12 @@ impl Transliterate {
         )
     }
 
-    /// Every character in `text` that has no romanization, as `(char,
-    /// byte_offset)` pairs in order of appearance — exactly the set
-    /// [`run`](Self::run) would replace/ignore/preserve. (Independent of
-    /// [`on_unknown`](Self::on_unknown), which only decides what to *do* with them.)
+    /// Every character in `text` that has no romanization, in order of
+    /// appearance — exactly the set [`run`](Self::run) would
+    /// replace/ignore/preserve. (Independent of [`on_unknown`](Self::on_unknown),
+    /// which only decides what to *do* with them.)
     #[must_use]
-    pub fn find_untranslatable(&self, text: &str) -> Vec<(char, usize)> {
+    pub fn find_untranslatable(&self, text: &str) -> Vec<Untranslatable> {
         let (strict_iso9, gost7034) = self.scheme.flags();
         crate::transliterate::find_untranslatable_impl(
             text,
@@ -221,7 +221,21 @@ impl Transliterate {
             gost7034,
             self.tones,
         )
+        .into_iter()
+        .map(|(ch, offset)| Untranslatable { ch, offset })
+        .collect()
     }
+}
+
+/// A character with no transliteration, located in the input — an element of
+/// [`Transliterate::find_untranslatable`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Untranslatable {
+    /// The untranslatable character.
+    pub ch: char,
+    /// Its byte offset in the input string.
+    pub offset: usize,
 }
 
 /// Transliterate `text` to ASCII with every default (default tables,

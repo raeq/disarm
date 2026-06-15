@@ -37,8 +37,8 @@ fn main() {
     );
 
     // IDN / hostname spoofing check (a `false` result is not a safety guarantee).
-    let (suspicious, _analysis) = api::is_suspicious_hostname("раypal.com");
-    assert!(suspicious);
+    let analysis = api::is_suspicious_hostname("раypal.com");
+    assert!(analysis.suspicious);
 
     // Fallible surface: an unknown encoding label is rejected with a stable kind.
     let err = api::decode_to_utf8(b"x", Some("NO-SUCH-ENCODING"), 0.0, false).unwrap_err();

@@ -96,12 +96,12 @@ fn log_injection_fallible() {
 
 #[test]
 fn encoding_fallible() {
-    let (text, _) =
+    let decoded =
         api::decode_to_utf8(&[0x63, 0x61, 0x66, 0xE9], Some("ISO-8859-1"), 0.0, false).unwrap();
-    assert_eq!(text, "café");
+    assert_eq!(decoded.text, "café");
     assert!(api::decode_to_utf8(b"x", Some("FAKE-999"), 0.0, false).is_err());
-    let (label, conf) = api::detect_encoding(b"hello world");
-    assert!(!label.is_empty() && conf > 0.0);
+    let det = api::detect_encoding(b"hello world");
+    assert!(!det.label.is_empty() && det.confidence > 0.0);
 }
 
 #[test]
@@ -139,12 +139,12 @@ fn presets_and_pipeline() {
 
 #[test]
 fn hostname() {
-    let (suspicious, analysis) = api::is_suspicious_hostname("example.com");
-    assert!(!suspicious);
+    let analysis = api::is_suspicious_hostname("example.com");
+    assert!(!analysis.suspicious);
     assert_eq!(analysis.canonical, "example.com");
     // A Cyrillic 'а' spoof in a Latin label is flagged.
-    let (susp2, _) = api::is_suspicious_hostname("p\u{0430}ypal.com");
-    assert!(susp2);
+    let spoof = api::is_suspicious_hostname("p\u{0430}ypal.com");
+    assert!(spoof.suspicious);
 }
 
 #[test]

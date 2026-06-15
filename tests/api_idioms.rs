@@ -84,7 +84,7 @@ fn disarm_str_extension_trait() {
     assert_eq!("café".strip_accents(), "cafe");
     assert_eq!("HELLO".fold_case(), "hello");
     assert_eq!("Москва".transliterate(), "Moskva");
-    assert!("p\u{0430}ypal.com".is_suspicious_hostname().0);
+    assert!("p\u{0430}ypal.com".is_suspicious_hostname().suspicious);
     assert!("hello".strip_obfuscation().is_ok());
     // Works on String too (blanket AsRef<str> impl).
     let owned = String::from("café");

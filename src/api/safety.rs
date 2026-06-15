@@ -89,15 +89,36 @@ pub enum ReverseLang {
 }
 
 impl ReverseLang {
-    /// The lowercase language code the underlying tables are keyed by.
-    /// The canonical string token for this value (the inverse of its `FromStr`,
-    /// and what `Display` prints).
+    /// The canonical language-code token (the inverse of its `FromStr`, and what
+    /// `Display` prints): `"el"` / `"ru"` / `"uk"`.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             ReverseLang::Greek => "el",
             ReverseLang::Russian => "ru",
             ReverseLang::Ukrainian => "uk",
+        }
+    }
+}
+
+impl std::fmt::Display for ReverseLang {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ReverseLang {
+    type Err = Error;
+
+    /// Parse `"el"` / `"ru"` / `"uk"`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "el" => Ok(Self::Greek),
+            "ru" => Ok(Self::Russian),
+            "uk" => Ok(Self::Ukrainian),
+            _ => Err(Error::from(crate::ErrorRepr::InvalidReverseLang {
+                got: s.to_owned(),
+            })),
         }
     }
 }
@@ -174,8 +195,9 @@ pub fn inspect_auto_lang(text: &str) -> AutoLangInspection {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct HostnameAnalysis {
-    /// Whether the hostname is flagged suspicious overall (the same value
-    /// returned as the first element of [`is_suspicious_hostname`]'s tuple).
+    /// The overall verdict — this is what [`is_suspicious_hostname`] keys on.
+    /// **`false` is not a safety guarantee** (see the function docs); weigh the
+    /// granular fields below against your own policy.
     pub suspicious: bool,
     /// Scripts detected across all labels, in order of first appearance
     /// (Common / Inherited excluded), as stable UCD script identifiers.
@@ -188,8 +210,10 @@ pub struct HostnameAnalysis {
     pub canonical: String,
 }
 
-/// Detect whether a hostname is *suspicious* for Unicode homoglyph spoofing,
-/// returning `(is_suspicious, analysis)`.
+/// Analyze a hostname for Unicode homoglyph spoofing, returning a
+/// [`HostnameAnalysis`] whose [`suspicious`](HostnameAnalysis::suspicious) field
+/// is the overall verdict (alongside the granular `scripts` / `mixed_script` /
+/// `has_confusables` / `canonical` findings).
 ///
 /// `xn--` (ACE) labels are decoded to their Unicode form via UTS#46 before
 /// analysis (#63); a malformed ACE label fails closed (suspicious). A hostname
@@ -206,18 +230,15 @@ pub struct HostnameAnalysis {
 /// `mixed_script` / `has_confusables` fields plus your own policy — a detector
 /// can attest the *presence* of a problem, never the *absence* of all problems.
 #[must_use]
-pub fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis) {
-    let (suspicious, core) = crate::hostname::is_suspicious_hostname(hostname);
-    (
-        suspicious,
-        HostnameAnalysis {
-            suspicious: core.suspicious,
-            scripts: core.scripts,
-            mixed_script: core.mixed_script,
-            has_confusables: core.has_confusables,
-            canonical: core.canonical,
-        },
-    )
+pub fn is_suspicious_hostname(hostname: &str) -> HostnameAnalysis {
+    let (_, core) = crate::hostname::is_suspicious_hostname(hostname);
+    HostnameAnalysis {
+        suspicious: core.suspicious,
+        scripts: core.scripts,
+        mixed_script: core.mixed_script,
+        has_confusables: core.has_confusables,
+        canonical: core.canonical,
+    }
 }
 
 // ── Filename sanitization ────────────────────────────────────────────────────
@@ -236,15 +257,36 @@ pub enum Platform {
 }
 
 impl Platform {
-    /// The lowercase token the underlying sanitizer is keyed by.
-    /// The canonical string token for this value (the inverse of its `FromStr`,
-    /// and what `Display` prints).
+    /// The canonical token (the inverse of its `FromStr`, and what `Display`
+    /// prints): `"universal"` / `"windows"` / `"posix"`.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Platform::Universal => "universal",
             Platform::Windows => "windows",
             Platform::Posix => "posix",
+        }
+    }
+}
+
+impl std::fmt::Display for Platform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for Platform {
+    type Err = Error;
+
+    /// Parse `"universal"` / `"windows"` / `"posix"`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "universal" => Ok(Self::Universal),
+            "windows" => Ok(Self::Windows),
+            "posix" => Ok(Self::Posix),
+            _ => Err(Error::from(crate::ErrorRepr::InvalidPlatform {
+                got: s.to_owned(),
+            })),
         }
     }
 }
@@ -281,18 +323,42 @@ pub fn sanitize_filename(
 
 // ── Encoding detection & decoding ────────────────────────────────────────────
 
+/// The result of [`detect_encoding`]: a detected encoding label and the
+/// detector's confidence.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct EncodingDetection {
+    /// The detected encoding's WHATWG label (e.g. `"UTF-8"`, `"windows-1251"`).
+    pub label: String,
+    /// Detector confidence in `0.0..=1.0` (probabilistic — prefer explicit
+    /// metadata for critical pipelines).
+    pub confidence: f64,
+}
+
 /// Detect the probable character encoding of `bytes` (chardetng, Firefox's
-/// detector), returning `(whatwg_label, confidence)`. Detection is probabilistic
-/// — prefer explicit encoding metadata for critical pipelines.
+/// detector). Detection is probabilistic — prefer explicit encoding metadata for
+/// critical pipelines.
 #[must_use]
-pub fn detect_encoding(bytes: &[u8]) -> (String, f64) {
-    crate::encoding::detect_encoding_impl(bytes)
+pub fn detect_encoding(bytes: &[u8]) -> EncodingDetection {
+    let (label, confidence) = crate::encoding::detect_encoding_impl(bytes);
+    EncodingDetection { label, confidence }
+}
+
+/// The result of [`decode_to_utf8`]: the decoded text and whether the decode was
+/// lossy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DecodedText {
+    /// The decoded UTF-8 text.
+    pub text: String,
+    /// Whether U+FFFD replacement characters were inserted for undecodable bytes
+    /// (always `false` after a successful `strict` decode).
+    pub had_errors: bool,
 }
 
 /// Decode `bytes` to UTF-8. `encoding = None` auto-detects (rejecting a guess
-/// below `min_confidence`, in `0.0..=1.0`). Returns `(text, had_errors)` where
-/// `had_errors` flags inserted U+FFFD replacements; in `strict` mode a lossy
-/// decode is an error instead.
+/// below `min_confidence`, in `0.0..=1.0`). In `strict` mode a lossy decode is an
+/// error instead of setting [`DecodedText::had_errors`].
 ///
 /// Fails ([`ErrorKind`](crate::ErrorKind)) on an unknown, unsupported, or
 /// low-confidence encoding, an out-of-range `min_confidence`, or (strict) a
@@ -302,8 +368,9 @@ pub fn decode_to_utf8(
     encoding: Option<&str>,
     min_confidence: f64,
     strict: bool,
-) -> Result<(String, bool), Error> {
+) -> Result<DecodedText, Error> {
     crate::encoding::decode_to_utf8_impl(bytes, encoding, min_confidence, strict)
+        .map(|(text, had_errors)| DecodedText { text, had_errors })
         .map_err(Error::from)
 }
 

@@ -1,0 +1,101 @@
+//! Layer 2 (part of [`crate::api`]) — the precompiled pipeline presets and the
+//! named-policy-profile registry.
+
+use crate::Error;
+
+// ── Precompiled pipeline presets ──────────────────────────────────────────────
+
+/// Security-focused text canonicalization (homoglyph / bidi / zero-width / control
+/// neutralization with a path-safety guarantee).
+///
+/// Pipeline: NFKC → confusables → strip bidi/format → collapse whitespace →
+/// path-separator neutralization. Fallible only through the confusables stage,
+/// whose target script is fixed internally, so in practice this never errors;
+/// the [`Result`] keeps the surface uniform with the other key/clean presets.
+pub fn security_clean(text: &str) -> Result<String, Error> {
+    crate::presets::security_clean(text).map_err(Error::from)
+}
+
+/// ML/NLP text normalization: NFKC → emoji→text → transliterate → strip accents →
+/// case fold → collapse whitespace.
+///
+/// `lang` selects the transliteration table (`None` skips transliteration).
+/// `emoji_style` is `"cldr"` (expand emoji to CLDR short names) or `"none"`
+/// (leave emoji as-is). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
+/// on an unknown `lang` or an unsupported `emoji_style`.
+pub fn ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> Result<String, Error> {
+    crate::presets::ml_normalize(text, lang, emoji_style).map_err(Error::from)
+}
+
+/// Library catalog deduplication key: NFKC → strip bidi → transliterate →
+/// confusables → strip accents → case fold → collapse whitespace.
+///
+/// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) on an unknown `lang`.
+pub fn catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> Result<String, Error> {
+    crate::presets::catalog_key(text, lang, strict_iso9).map_err(Error::from)
+}
+
+/// Case/accent/script-insensitive search lookup key (like [`catalog_key`] without
+/// confusable folding). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
+/// on an unknown `lang`.
+pub fn search_key(text: &str, lang: Option<&str>) -> Result<String, Error> {
+    crate::presets::search_key(text, lang).map_err(Error::from)
+}
+
+/// Collation sort key (like [`search_key`] but preserves base accented characters
+/// for correct ordering). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
+/// on an unknown `lang`.
+pub fn sort_key(text: &str, lang: Option<&str>) -> Result<String, Error> {
+    crate::presets::sort_key(text, lang).map_err(Error::from)
+}
+
+/// Display-safe cleanup for rendered user content: strip bidi/format → collapse
+/// whitespace (also stripping control + zero-width). Infallible.
+#[must_use]
+pub fn display_clean(text: &str) -> String {
+    crate::presets::display_clean(text)
+}
+
+/// Strip bidirectional override and formatting characters (UAX #9 §3.3.2 plus the
+/// soft hyphen and deprecated/interlinear format controls). A composable primitive
+/// shared by the security/key presets. Infallible.
+#[must_use]
+pub fn strip_bidi(text: &str) -> String {
+    crate::presets::strip_bidi(text)
+}
+
+/// Normalize user-submitted input — Unicode hygiene that **preserves the original
+/// script** (no transliteration): NFKC → strip bidi/zero-width/control →
+/// strip zalgo → confusables → collapse whitespace → path-separator
+/// neutralization.
+///
+/// Not an output sanitizer (no HTML/JS/SQL escaping). Fallible only through the
+/// fixed-target confusables stage; the [`Result`] keeps the surface uniform.
+pub fn normalize_user_input(text: &str) -> Result<String, Error> {
+    crate::presets::normalize_user_input(text).map_err(Error::from)
+}
+
+/// Maximum-strength deobfuscation: NFKC → strip all combining marks → strip bidi →
+/// strip zero-width → demojize → confusables → strip accents → collapse
+/// whitespace. Preserves case; does not transliterate.
+///
+/// Fallible only through the fixed-target confusables stage; the [`Result`] keeps
+/// the surface uniform.
+pub fn strip_obfuscation(text: &str) -> Result<String, Error> {
+    crate::presets::strip_obfuscation(text).map_err(Error::from)
+}
+
+// ── Named policy profiles ─────────────────────────────────────────────────────
+
+/// Sorted names of the available named policy profiles (the registry that the
+/// `get_pipeline` Python entrypoint builds from).
+///
+/// The stateful pipeline builder itself (`_TextPipeline`) stays binding-only for
+/// now — exposing it as a pure crates.io type is deferred (see the module-level
+/// `src/pipeline.rs` `Pipeline` core), so this read-only registry view is the
+/// pipeline surface Layer 2 exposes. Infallible.
+#[must_use]
+pub fn list_profiles() -> Vec<String> {
+    crate::pipeline::profile_names()
+}

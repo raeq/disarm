@@ -153,13 +153,13 @@ static REGISTRATIONS_SEALED: AtomicBool = AtomicBool::new(false);
 
 /// Seal the global registration tables: subsequent register/remove/clear calls
 /// fail. Idempotent and irreversible (by design — sealing is a security latch).
-pub fn seal_registrations() {
+pub(crate) fn seal_registrations() {
     REGISTRATIONS_SEALED.store(true, Ordering::Release);
     tl_info!("registrations sealed");
 }
 
 /// True if [`seal_registrations`] has been called.
-pub fn registrations_sealed() -> bool {
+pub(crate) fn registrations_sealed() -> bool {
     REGISTRATIONS_SEALED.load(Ordering::Acquire)
 }
 
@@ -399,7 +399,7 @@ pub fn resolve_lang_map(lang: &str) -> Option<&'static phf::Map<char, &'static s
 
 /// Look up `ch` in the user-registered table for `lang`, if any.
 ///
-/// Gated behind [`HAS_REGISTERED_LANGS`]: when no language has been registered
+/// Gated behind `HAS_REGISTERED_LANGS`: when no language has been registered
 /// (the common case) this is a single Acquire atomic load and **never** touches
 /// `LANG_TABLES.read()`, so the per-character hot path pays no lock. When a
 /// language *is* registered the string is cloned (not leaked), so memory stays
@@ -487,7 +487,10 @@ pub fn list_langs() -> Vec<String> {
 /// deliberately favours availability over aborting the process (#64/#117). Once
 /// configuration is complete, seal the registrations (the `_seal_registrations`
 /// entry point) to freeze a known-good table and reject further mutations.
-pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<(), Vec<String>> {
+pub(crate) fn register_lang(
+    code: &str,
+    mappings: HashMap<String, String>,
+) -> Result<(), Vec<String>> {
     let mut char_map = HashMap::new();
     let mut bad_keys: Vec<String> = Vec::new();
     for (key, value) in mappings {
@@ -553,7 +556,7 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
 /// deliberately favours availability over aborting the process (#64/#117). Once
 /// configuration is complete, seal the registrations (the `_seal_registrations`
 /// entry point) to freeze a known-good table and reject further mutations.
-pub fn register_replacements(replacements: HashMap<String, String>) -> Result<(), usize> {
+pub(crate) fn register_replacements(replacements: HashMap<String, String>) -> Result<(), usize> {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     // Compute worst-case size after merge: existing + all-new (ignoring overlap).
     // This is conservative but avoids the cost of set-difference computation.
@@ -595,7 +598,7 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
 /// `transliterate.rs` call `check_not_sealed` before invoking this function.
 /// Any future direct-Rust API (e.g. the core split planned in #38) must add
 /// the same guard at its own boundary. (#123)
-pub fn remove_replacement(key: &str) -> bool {
+pub(crate) fn remove_replacement(key: &str) -> bool {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     let removed = table.remove(key).is_some();
     rebuild_replacement_automaton(&table);
@@ -612,7 +615,7 @@ pub fn remove_replacement(key: &str) -> bool {
 /// `transliterate.rs` call `check_not_sealed` before invoking this function.
 /// Any future direct-Rust API (e.g. the core split planned in #38) must add
 /// the same guard at its own boundary. (#123)
-pub fn clear_replacements() {
+pub(crate) fn clear_replacements() {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     table.clear();
     rebuild_replacement_automaton(&table);
@@ -772,7 +775,7 @@ pub fn lookup_emoji_multi(key: &str) -> Option<&'static str> {
 /// (no bounds risk, C4).
 ///
 /// Byte-identical to the former per-length hex-key PHF probe (verified by
-/// `emoji_trie_matches_phf` against [`lookup_emoji_multi`]). A sequence is a
+/// `emoji_trie_matches_phf` against `lookup_emoji_multi`). A sequence is a
 /// match only at a terminal node of length ≥ 2 whose **last** code point is not
 /// ZWJ/VS-15/VS-16 — replicating the original "skip incomplete sequences" rule
 /// (a trailing variation selector or ZWJ is a presentation/joiner mark handled

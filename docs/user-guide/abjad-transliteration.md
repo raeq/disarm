@@ -141,6 +141,8 @@ The Arabic dictionary covers 99%+ of newspaper vocabulary. The bigram table reso
 === "Rust"
 
     ```rust
+    use disarm::api;
+
     // Without context
     assert_eq!(api::transliterate("السلام عليكم"), "alslam 'lykm");
     ```
@@ -207,6 +209,8 @@ Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian ra
 === "Rust"
 
     ```rust
+    use disarm::api::Transliterate;
+
     // Without context
     assert_eq!(Transliterate::new().lang("fa").run("کتاب فارسی"), "ktab farsy");
     ```
@@ -256,6 +260,8 @@ The Hebrew dictionary is built from [Project Ben Yehuda](https://github.com/proj
 === "Rust"
 
     ```rust
+    use disarm::api::Transliterate;
+
     // Without context
     assert_eq!(Transliterate::new().lang("he").run("שלום"), "shlvm");
     ```

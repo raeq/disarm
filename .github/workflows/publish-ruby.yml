@@ -75,7 +75,10 @@ jobs:
     needs: [test, cross-gems]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
-    # Configure RUBYGEMS_API_KEY on this environment; mirrors the PyPI/crates.io paths.
+    # `gem push` reads its token from GEM_HOST_API_KEY; the value comes from the
+    # repo secret GEM_HOST_API_KEY. The `rubygems` environment (mirroring the
+    # PyPI/crates.io paths) gives the protection-gate option; a repo secret is
+    # readable from an environment-scoped job, so no per-environment secret needed.
     environment: rubygems
     steps:
       - uses: actions/download-artifact@v4
@@ -88,5 +91,5 @@ jobs:
           ruby-version: "3.3"
       - name: gem push
         env:
-          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+          GEM_HOST_API_KEY: ${{ secrets.GEM_HOST_API_KEY }}
         run: for g in pkg/*.gem; do gem push "$g"; done

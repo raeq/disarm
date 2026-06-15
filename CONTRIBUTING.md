@@ -19,6 +19,12 @@ We'd love your help, especially with:
   (e.g. German `ü` → `ue`). Adding or refining a profile for a language you know well
   is a high-value, self-contained contribution. See
   [Language support](https://docs.disarm.dev/user-guide/language-support.html).
+- **A new language binding** (distinct from a profile above). disarm's pure-Rust core
+  is wrapped per programming-language ecosystem — Ruby is live; Node, Go, Java, PHP, and
+  R are planned (#43–#48). A binding for an ecosystem you know well is high-value, but it
+  must *feel native* to that language, not be a re-export of the Rust/Python API. Read
+  [BINDINGS.md](BINDINGS.md) — the per-binding definition of done — and use
+  `bindings/ruby/` as the template before you start.
 - **Coverage requests.** A confusable pair, a script, or a code point we don't yet map
   is a *known limitation* (see the [Threat Model](THREAT_MODEL.md)), not a vulnerability —
   but it is exactly how this layer improves. Use the **🗺️ Coverage / confusable-gap**

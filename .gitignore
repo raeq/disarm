@@ -164,3 +164,6 @@ benchmarks/results_*.txt
 
 # Nested academic paper repo (separate git repo, not part of the package)
 /translit-paper/
+
+# Local Claude Code entrypoint: symlink to AGENTS.md (per-checkout, not tracked)
+/CLAUDE.md

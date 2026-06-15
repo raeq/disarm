@@ -1,10 +1,12 @@
 """Bug: normalize_confusables() before transliterate() corrupts Cyrillic text.
 
-When confusables runs first on non-Latin text, it replaces SOME Cyrillic
-characters with Latin lookalikes (о→o, с→c, а→a) but leaves others as
-Cyrillic (в, л, ч). transliterate() then transliterates the remaining
-Cyrillic but passes through the already-Latin characters, producing
-gibberish.
+When confusables runs first on non-Latin text, it replaces every Cyrillic
+character that has a Latin look-alike (о→o, с→c, а→a, в→b, …) but leaves the
+rest as Cyrillic (и, я, л, ч). transliterate() then transliterates the
+remaining Cyrillic but passes through the already-Latin characters, producing
+gibberish. Some words (e.g. "Москва" → "Mockba") fold *entirely* to a
+plausible-but-wrong Latin string — which is worse, not better, since it no
+longer even looks corrupted.
 
 The fix is twofold:
 1. TextPipeline must reject confusables=True + transliterate=True unless
@@ -32,8 +34,14 @@ class TestConfusableBeforeTransliterateProducesGibberish:
         assert "[?" not in result
 
     def test_manual_wrong_order_produces_mixed_script(self):
-        """Confusables first creates mixed Cyrillic+Latin."""
-        step1 = normalize_confusables("Москва")
+        """Confusables first creates mixed Cyrillic+Latin.
+
+        "Россия" -> "Poccия": Р/о/с fold to Latin, but и/я have no Latin
+        confusable and stay Cyrillic — the classic mixed-script corruption.
+        ("Москва" no longer demonstrates this: every letter now has a Latin
+        fold, so it collapses to the all-Latin "Mockba" — see the module docstring.)
+        """
+        step1 = normalize_confusables("Россия")
         # Some chars became Latin, some stayed Cyrillic
         has_latin = any("a" <= c <= "z" or "A" <= c <= "Z" for c in step1)
         has_cyrillic = any("\u0400" <= c <= "\u04ff" for c in step1)

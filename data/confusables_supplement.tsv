@@ -1,0 +1,41 @@
+# confusables_supplement.tsv — cross-script confusable mappings NOT in TR39.
+#
+# TR39 confusables.txt leaves some visually-identical cross-script pairs with no
+# shared prototype, so disarm's normalize_confusables() returns the source
+# unchanged and a spoofed identifier never collides with its target. This file
+# supplements TR39 with measured cross-script equivalences, folded through
+# scripts/gen_confusables.py with PRIORITY over the generated entries (for both
+# the latin and cyrillic targets). It covers the additive Greek/Cyrillic pairs
+# (#342) and the bare-iota vertical-bar re-point (#343), both carved from #336.
+#
+# Provenance: the in-scope pairs and the danger weights are taken from the
+# measured confusable-vision dataset © Paul Wood FRSA (@paultendo)
+# (confusable-weights-v2.json, 4,174 pairs, v2026-03-02), CC-BY-4.0, applying the
+# selection threshold danger >= 0.97 (the OQ3 decision on #336).
+#
+# Columns (tab-separated):
+#   source   hex codepoint of the non-target source character
+#   latin    latin-target fold ("-" = no latin override; keep the generated value)
+#   cyrillic cyrillic-target fold ("-" = no cyrillic override)
+#   danger   confusable-vision danger weight for the pair (informative)
+#   note     the pair / decision this row encodes
+#
+# All rows are ADDITIVE (fill a pass-through gap) except the #343 ι row (03B9,
+# both columns), which RE-POINTs the bare Greek iota from the i-class to the
+# l/vertical-bar class.
+#
+# source	latin	cyrillic	danger	note
+03AF	i	і	1.000	ί GREEK SMALL LETTER IOTA WITH TONOS / і (pair 1)
+0432	b	-	1.000	в CYRILLIC SMALL LETTER VE → b (pair 2 latin; cyrillic is self)
+043F	n	-	1.000	п CYRILLIC SMALL LETTER PE → n (pair 5 latin; cyrillic is self)
+03C0	n	-	1.000	π GREEK SMALL LETTER PI → n (transitive closure {η,п,π})
+03C7	x	х	1.000	χ GREEK SMALL LETTER CHI / х (pair 8)
+03C9	w	-	1.000	ω GREEK SMALL LETTER OMEGA → w (pair 9 latin; cyrillic ꙍ already)
+03CA	i	ї	1.000	ϊ GREEK SMALL LETTER IOTA WITH DIALYTIKA / ї (pair 10)
+0457	i	-	1.000	ї CYRILLIC SMALL LETTER YI → i (pair 10 latin; cyrillic is self)
+03CC	o	о	1.000	ό GREEK SMALL LETTER OMICRON WITH TONOS / о (pair 11)
+047B	o	о	0.974	ѻ CYRILLIC SMALL LETTER ROUND OMEGA / о (pair 13)
+03B2	-	в	1.000	β GREEK SMALL LETTER BETA → cyrillic в (pair 2 cyrillic; latin b via #341 ß→b)
+03B7	-	п	1.000	η GREEK SMALL LETTER ETA → cyrillic п (pair 5 cyrillic; latin n already)
+0461	-	ꙍ	1.000	ѡ CYRILLIC SMALL LETTER OMEGA → ꙍ (pair 9 cyrillic; latin w already)
+03B9	l	ӏ	1.000	ι GREEK SMALL LETTER IOTA → l / ӏ (#343 re-point; was i / і)

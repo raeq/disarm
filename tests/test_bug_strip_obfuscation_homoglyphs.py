@@ -60,10 +60,12 @@ class TestNonHomoglyphCyrillicUnchanged:
     def test_pure_cyrillic_word_not_transliterated(self):
         # Full Cyrillic word — no spoofing, just foreign text.
         # strip_obfuscation does NOT transliterate — only confusables.
-        # Chars with Latin confusables map (о→o, а→a), others stay Cyrillic.
-        result = strip_obfuscation("Москва")
-        # NOT "moskva" — that requires transliterate(); some non-ASCII survives.
-        assert result != "moskva", f"pure Cyrillic word was transliterated: {result!r}"
+        # Россия: Р/о/с fold to Latin look-alikes, but и/я have no Latin
+        # confusable and stay Cyrillic — proof the word was confusable-folded,
+        # not transliterated to "Rossiya". (After #342, words like "Москва" fold
+        # entirely to Latin, so use one that still leaves surviving non-ASCII.)
+        result = strip_obfuscation("Россия")
+        assert result.lower() != "rossiya", f"pure Cyrillic word was transliterated: {result!r}"
         assert any(ord(ch) > 127 for ch in result), (
             f"expected surviving non-ASCII (no transliteration), got {result!r}"
         )

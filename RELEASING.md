@@ -50,6 +50,35 @@ Milestones are buckets ordered by **scope and readiness, never by date**. We do 
 due dates on milestones, and we do not commit to release dates or ETAs. A milestone *is*
 a release — "milestone" is just the planning-side name for the same thing.
 
+### Across languages — lockstep minors, independent patches
+
+disarm ships **one core to many ecosystems** (the `disarm` crate on crates.io, the
+`disarm` wheel on PyPI, the `disarm` gem on RubyGems, and — as bindings land — npm and
+others). Unlike projects that hide the core as a private engine, disarm's Rust core is
+itself a first-class, user-facing library, so the version number must mean something in
+every ecosystem at once. Two rules keep that honest without forcing wasteful releases:
+
+1. **Minor / feature releases are lockstep.** A new capability — a new transform, or a
+   whole new language binding — bumps the **same minor across every registry**. The
+   JavaScript binding is `0.11` *everywhere*, exactly as the Ruby binding was `0.10`
+   everywhere. The headline `0.MINOR` is a promise: the same capability set exists in
+   every ecosystem at that minor. Re-publishing an otherwise-unchanged binding to carry
+   the new minor is fine and expected — the alignment **is** the point.
+
+2. **Patch / point releases may be per-registry.** A fix that only touches one binding (a
+   packaging bug in the gem, a wrong type in the npm package) ships as a point release
+   **in that ecosystem only** — e.g. an npm-only `0.11.3` — without re-cutting
+   crates.io / PyPI / RubyGems. Because a point release **never adds a capability** (see
+   *Patch* above), per-registry patch numbers can drift without the feature set ever
+   drifting. Do **not** cut no-op point releases in the other ecosystems just to keep the
+   third component identical.
+
+The consequence: at any minor, the shared `0.MINOR` *is* the compatibility statement — a
+binding's `0.11.x` wraps core `0.11`. Once per-registry patch numbers have diverged
+enough to be confusing, add a one-line compatibility note to the docs (e.g. "disarm npm
+`0.11.x` ↔ core `0.11`") — the cheap insurance that lets the patch lanes move
+independently without anyone having to guess which core a binding wraps.
+
 > A note on the term "Semantic Versioning": [CHANGELOG.md](CHANGELOG.md) currently states
 > versions follow SemVer. We follow SemVer's *format* and its patch/minor change
 > discipline within `0.x`, but our **major**-version semantics are defined above

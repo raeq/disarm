@@ -8,13 +8,15 @@ name: Cleanup caches
 #      weight until LRU eviction reaps them. Deleting on close reclaims the space
 #      immediately.
 #
-#   2. `sweep-stale` — on a schedule, delete any cache not *accessed* within the
-#      last 36h. This catches stale entries the per-PR cleanup misses: abandoned
-#      branches, renamed cache keys, scheduled-run artifacts. Staleness is keyed
-#      on `last_accessed_at` (LRU), NOT `created_at` — a long-lived cache that is
-#      still actively restored on every `main` build survives; only genuinely
-#      idle ones are removed. (Swap `.last_accessed_at` -> `.created_at` below to
-#      go by raw age instead.)
+#   2. `sweep-stale` — on a schedule, delete any cache *created* more than 6h
+#      ago. This is an age cap, keyed on `created_at`, NOT `last_accessed_at`:
+#      GitHub already evicts least-recently-used caches natively, so a sweep by
+#      access time would only duplicate that. Capping by creation age instead
+#      guarantees caches are regenerated regularly (fresh toolchains/deps) and
+#      bounds how long any single entry can occupy the budget. Trade-off: hot
+#      `main` build caches (Swatinem) are rebuilt cold within ~6-12h, so the
+#      first build after a sweep is slower. (Swap `.created_at` -> the
+#      `.last_accessed_at` field below to go by idle time instead.)
 #
 # Both jobs page through the full cache list via `gh api --paginate` (no 100-entry
 # cap) and delete by id, tolerating only the 404 that results from racing with
@@ -28,13 +30,13 @@ on:
     types:
       - closed
   schedule:
-    # Every 6h, so a stale entry's worst-case lifetime is ~36h + one interval.
+    # Every 6h; combined with the 6h age cap an entry lives at most ~12h.
     - cron: "0 */6 * * *"
   workflow_dispatch:
     inputs:
       max_age_hours:
-        description: "Delete caches not accessed within this many hours"
-        default: "36"
+        description: "Delete caches created more than this many hours ago"
+        default: "6"
         required: false
 
 # Only `actions: write` is needed to delete caches; everything else stays read.
@@ -100,15 +102,15 @@ jobs:
           echo "Done."
 
   sweep-stale:
-    name: Sweep caches idle past max age
+    name: Sweep caches older than max age
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Delete caches not accessed within the threshold
+      - name: Delete caches created before the threshold
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          MAX_AGE_HOURS: ${{ github.event.inputs.max_age_hours || '36' }}
+          MAX_AGE_HOURS: ${{ github.event.inputs.max_age_hours || '6' }}
         run: |
           set -euo pipefail
 
@@ -127,23 +129,23 @@ jobs:
           }
 
           cutoff=$(date -u -d "$MAX_AGE_HOURS hours ago" +%s)
-          echo "Deleting caches last accessed before $(date -u -d @"$cutoff" '+%Y-%m-%dT%H:%M:%SZ') (> ${MAX_AGE_HOURS}h idle)"
+          echo "Deleting caches created before $(date -u -d @"$cutoff" '+%Y-%m-%dT%H:%M:%SZ') (> ${MAX_AGE_HOURS}h old)"
 
-          # Page through every cache (no 100-entry cap); emit "id<TAB>last_accessed_at"
+          # Page through every cache (no 100-entry cap); emit "id<TAB>created_at"
           # with fractional seconds stripped so GNU date parses it cleanly.
           gh api --paginate \
             -H "Accept: application/vnd.github+json" \
             "/repos/$REPO/actions/caches?per_page=100" \
-            --jq '.actions_caches[] | [.id, (.last_accessed_at | sub("\\..*Z$"; "Z"))] | @tsv' > caches.tsv
+            --jq '.actions_caches[] | [.id, (.created_at | sub("\\..*Z$"; "Z"))] | @tsv' > caches.tsv
 
           failures=0
           count=0
           # Read from a file (not a pipe) so the counters survive the loop.
           while IFS=$'\t' read -r id ts; do
             [ -n "$id" ] || continue
-            accessed=$(date -u -d "$ts" +%s)
-            if [ "$accessed" -lt "$cutoff" ]; then
-              if delete_cache "$id" "idle since $ts"; then
+            created=$(date -u -d "$ts" +%s)
+            if [ "$created" -lt "$cutoff" ]; then
+              if delete_cache "$id" "created $ts"; then
                 count=$((count + 1))
               else
                 failures=$((failures + 1))

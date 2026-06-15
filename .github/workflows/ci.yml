@@ -213,6 +213,14 @@ jobs:
       - name: Run cookbook doc-tests (per-file isolated)
         run: python3 scripts/run_doc_tests.py
 
+      # The Rust analogue of the Sybil gate: extract every ```rust doc block and
+      # compile + run it against the pure core, with deny(unused_must_use) so an
+      # example that discards its result fails. Catches signature/output drift in
+      # the per-language usage tabs (#50). The job already sets up the rust
+      # toolchain above; this step is its consumer.
+      - name: Doc Rust examples (#50)
+        run: python3 scripts/check_doc_rust_examples.py
+
 
   # ── Security audit (#105: cargo audit for RustSec advisories) ──
   # Runs on every PR and weekly. Cargo.lock is not committed (it is .gitignored

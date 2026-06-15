@@ -22,6 +22,7 @@ Three rules govern the split between core and plugins:
 
 ### The `EmojiProvider` Trait
 
+<!--- skip: next -->
 ```rust
 pub trait EmojiProvider: Send + Sync {
     /// Return the textual expansion for an emoji sequence, or None if unknown.
@@ -55,6 +56,7 @@ The engine delegates to the registered provider for the actual sequence-to-text 
 
 The core crate compiles a default provider using PHF, covering the latest Unicode Emoji version with English CLDR short names. This provider is always available and requires no runtime data loading.
 
+<!--- skip: next -->
 ```rust
 // Compiled into the binary at build time
 static DEFAULT_EMOJI: phf::Map<&[u32], &str> = phf_map! {
@@ -89,6 +91,7 @@ Two plugin types are supported:
 
 **Compiled plugins** (primary path). The plugin crate compiles CLDR data into a PHF map at build time. Zero runtime cost, no file I/O, no data directory to manage. This is the default for versioned release plugins.
 
+<!--- skip: next -->
 ```rust
 // In crate disarm-emoji-15
 pub struct Emoji15Provider;
@@ -203,6 +206,7 @@ assert pipe("Hello 🌍!") == "hello globe showing europe-africa!"
 
 The corresponding bitflag is added to `PipelineSteps`:
 
+<!--- skip: next -->
 ```rust
 const DEMOJIZE = 0b0100_0000;
 ```

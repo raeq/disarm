@@ -270,6 +270,31 @@ asserts, add the path, and confirm `pytest docs/` is green. This is a deliberate
 ratchet: un-converted pages stay visibly unguarded until their claims are
 asserted.
 
+### Per-language usage tabs (Rust & Ruby)
+
+User-guide pages show usage in `pymdownx.tabbed` tabs — `=== "Python"` /
+`=== "Rust"` / `=== "Ruby"` — over shared, language-neutral concept prose (#50).
+**Each binding's tab may only use functions that binding actually exposes** (Rust
+≈ the full `disarm::api`; Ruby is a smaller surface — see
+`bindings/ruby/lib/disarm.rb`). Do not invent a call; if a topic isn't in a
+binding, omit that tab. Every tab is gated:
+
+```bash
+python scripts/check_doc_rust_examples.py   # compile + run every ```rust block
+ruby scripts/check_doc_ruby_examples.rb      # eval every Ruby `# =>` line (needs the built gem)
+```
+
+- **Rust tabs** use `assert_eq!`. The gate extracts every ```rust block, wraps
+  each in a `#[test]`, and compiles + runs it against the pure core with
+  `#![deny(unused_must_use)]` — so an example that **discards** its result (a
+  `Result`, `Vec`, or `Cow`) is a hard error. Assert the output; don't leave a
+  bare call with a `// =>` comment. Mark a genuinely illustrative block (a trait
+  sketch, a macro) with `<!--- skip: next -->`, same as Python.
+- **Ruby tabs** document outputs with `# =>` and start with `require "disarm"`.
+  The gate evals each `Disarm.* # => value` line against the freshly-compiled gem
+  (it tolerates trailing prose after the literal). It runs in the Ruby workflow
+  on `bindings/ruby/**` **and** `docs/**` changes.
+
 ## Sign your work — Developer Certificate of Origin
 
 By submitting a contribution, you agree it is licensed under the project's

@@ -18,10 +18,9 @@
 use std::hint::black_box;
 
 use disarm::api::strip_log_injection;
-use disarm::api::transliterate;
 use disarm::api::{escape_html, percent_encode, UrlComponent};
 use disarm::api::{slugify, SlugConfig};
-use disarm::ErrorMode;
+use disarm::api::{OnUnknown, Transliterate};
 
 use iai_callgrind::{
     library_benchmark, library_benchmark_group, main, Callgrind, LibraryBenchmarkConfig,
@@ -44,15 +43,11 @@ fn doc(name: &str) -> String {
 #[bench::cjk(doc("cjk_doc"))]
 #[bench::hangul(doc("hangul_doc"))]
 fn transliterate_doc(text: String) -> usize {
-    black_box(transliterate(
-        black_box(&text),
-        None,
-        ErrorMode::Ignore,
-        "",
-        false,
-        false,
-        false,
-    ))
+    black_box(
+        Transliterate::new()
+            .on_unknown(OnUnknown::Ignore)
+            .run(black_box(&text)),
+    )
     .len()
 }
 

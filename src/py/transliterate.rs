@@ -234,7 +234,7 @@ pub fn _transliterate<'py>(
             )?,
         ));
     }
-    let error_mode = ErrorMode::from_str(errors)?;
+    let error_mode = ErrorMode::parse(errors)?;
     let out = crate::transliterate::transliterate_impl(
         &replaced,
         lang,
@@ -402,7 +402,7 @@ pub fn _transliterate_batch(
     let error_mode = if strict {
         ErrorMode::Ignore
     } else {
-        ErrorMode::from_str(errors)?
+        ErrorMode::parse(errors)?
     };
     // Own the borrowed args so the compute loop holds no Python-borrowed data.
     let lang = lang.map(str::to_owned);

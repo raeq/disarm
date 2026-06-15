@@ -36,6 +36,8 @@ CONFUSABLES_URL = "https://www.unicode.org/Public/security/latest/confusables.tx
 DATA_DIR = Path(__file__).resolve().parent.parent / "src" / "tables" / "data"
 # Pinned, version-controlled source so regeneration is reproducible (see header).
 BUNDLED_CONFUSABLES = Path(__file__).resolve().parent.parent / "data" / "confusables.txt"
+# Measured cross-script supplement folded with priority over TR39 (#342/#343).
+BUNDLED_SUPPLEMENT = Path(__file__).resolve().parent.parent / "data" / "confusables_supplement.tsv"
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +116,67 @@ CUSTOM_LATIN_OVERRIDES: dict[int, str] = {
 
 
 # ---------------------------------------------------------------------------
+# Basic-ASCII fold for non-ASCII Latin-extended prototypes (#341)
+# ---------------------------------------------------------------------------
+
+# TR39 folds ~140 sources onto a non-ASCII *Latin-extended* prototype (ĸ, ꞓ, ß,
+# …) instead of the basic ASCII letter they visually represent. That leaves
+# non-ASCII residue in slug/identifier pipelines and breaks Latin↔non-Latin
+# collision: a Greek κ folds to ĸ (U+0138), so it does NOT collide with ASCII k.
+# This maps each such *terminal prototype glyph* to its basic-ASCII representative
+# (lowercase base — case is reconciled to the source via fix_case_mismatch, so an
+# uppercase source still yields an uppercase letter). Applied to the latin output
+# with priority, after the generated mappings.
+#
+# Glyphs with no clear, non-controversial ASCII fold are deliberately LEFT as
+# non-ASCII residue (#341 "genuinely-non-ASCII, documented, not silently
+# dropped"): ɂ U+0242 (glottal stop), Ƕ U+01F6 (hwair), ǂ U+01C2 (alveolar
+# click), ÷ U+00F7 (division sign), and U+A7CE.
+ASCII_FOLD: dict[str, str] = {
+    # Clear single-letter representatives.
+    # ꞓ/Ꞓ (C WITH BAR) is TR39's *skeleton* for the open-e / epsilon / Ukrainian-ie
+    # class (ε, ɛ, є, ⲉ, the math epsilons, Deseret long-e, …) — its members are all
+    # 'e'-shaped, not 'c'-shaped — so the class folds to e, the #336 decision.
+    "ꞓ": "e",
+    "Ꞓ": "e",  # LATIN (CAPITAL) LETTER C WITH BAR — epsilon/open-e class (#336)
+    "ĸ": "k",  # LATIN SMALL LETTER KRA
+    "ß": "b",  # LATIN SMALL LETTER SHARP S (#336)
+    "ǝ": "e",
+    "Ǝ": "e",
+    "Ə": "e",  # turned/reversed E, schwa
+    "ȷ": "j",  # LATIN SMALL LETTER DOTLESS J
+    "Ⱬ": "z",
+    "ⱬ": "z",  # LATIN (CAPITAL) LETTER Z WITH DESCENDER
+    "Ⱶ": "h",
+    "ⱶ": "h",  # LATIN (CAPITAL) LETTER HALF H
+    "ꜿ": "c",
+    "Ꜿ": "c",  # LATIN (CAPITAL) LETTER REVERSED C WITH DOT
+    "ꟻ": "f",  # LATIN EPIGRAPHIC LETTER REVERSED F
+    "Ꞇ": "t",  # LATIN CAPITAL LETTER INSULAR T
+    "ƫ": "t",  # LATIN SMALL LETTER T WITH PALATAL HOOK
+    "ɋ": "q",  # LATIN SMALL LETTER Q WITH HOOK TAIL
+    "Þ": "p",  # LATIN CAPITAL LETTER THORN (matches the existing þ→p)
+    # Ambiguous prototypes — canonical chosen by visual shape (#341, approved).
+    "Ʌ": "a",  # LATIN CAPITAL LETTER TURNED V
+    "ẟ": "d",  # LATIN SMALL LETTER DELTA
+    "Ɛ": "e",  # LATIN CAPITAL LETTER OPEN E
+    "ȝ": "z",  # LATIN SMALL LETTER YOGH
+    "Ɔ": "o",  # LATIN CAPITAL LETTER OPEN O
+    "Ɐ": "a",  # LATIN CAPITAL LETTER TURNED A
+    "ƨ": "s",  # LATIN SMALL LETTER TONE TWO
+    "ƅ": "b",  # LATIN SMALL LETTER TONE SIX
+    "Ʊ": "u",  # LATIN CAPITAL LETTER UPSILON
+    # esh is TR39's skeleton for the sigma / n-ary-summation family (Σ, ∑, ⅀, the
+    # math sigmas, Tifinagh ⵉ). Folds to s — sigma is phonetically 's' and already
+    # transliterates to S — neutralizing the Σ→S spoof that previously survived as
+    # the non-ASCII Ʃ. Reverses the pre-#341 "neutralize ≠ ASCII-fold" decision
+    # (#245); #341 makes ASCII the contract. (Σ folds to S via the Lu case rule.)
+    "Ʃ": "s",  # LATIN CAPITAL LETTER ESH — sigma/summation class (#341)
+    "Ɒ": "a",  # LATIN CAPITAL LETTER TURNED ALPHA
+}
+
+
+# ---------------------------------------------------------------------------
 # Target script definitions
 # ---------------------------------------------------------------------------
 
@@ -169,6 +232,35 @@ def build_equivalence_classes(
         if len(target_cps) == 1:
             classes[key].add(target_cps[0])
     return dict(classes)
+
+
+def load_supplement(path: Path) -> dict[str, dict[int, str]]:
+    """Parse confusables_supplement.tsv into per-target override maps (#342/#343).
+
+    Returns ``{"latin": {source_cp: target_str, ...}, "cyrillic": {...}}``. A
+    blank or ``-`` cell means "no override for that target" (keep the generated
+    value). These overrides are applied with priority over the TR39-derived
+    mappings, so they can both ADD a missing fold and RE-POINT an existing one.
+    """
+    overrides: dict[str, dict[int, str]] = {"latin": {}, "cyrillic": {}}
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.rstrip("\n")
+        if not line or line.lstrip().startswith("#"):
+            continue
+        parts = line.split("\t")
+        # Fail fast: this file feeds security-critical confusable mappings, so a
+        # malformed row must error rather than be silently dropped.
+        if len(parts) < 3:
+            raise ValueError(
+                f"{path.name}:{lineno}: malformed supplement row (need >=3 "
+                f"tab-separated columns: source, latin, cyrillic): {raw!r}"
+            )
+        cp = int(parts[0].strip(), 16)
+        for target, cell in (("latin", parts[1]), ("cyrillic", parts[2])):
+            value = cell.strip()
+            if value and value != "-":
+                overrides[target][cp] = value
+    return overrides
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +438,7 @@ def filter_latin_homoglyphs(
 def generate_mappings(
     entries: list[tuple[int, list[int]]],
     script_name: str,
+    supplement: dict[int, str] | None = None,
 ) -> list[tuple[int, str]]:
     """Generate all mappings for a target script.
 
@@ -381,6 +474,16 @@ def generate_mappings(
         # take priority so the pipeline neutralizes them post-NFKC (#245).
         for cp, target in CUSTOM_LATIN_OVERRIDES.items():
             merged[cp] = target
+        # #341: fold TR39's non-ASCII Latin-extended prototypes (ĸ/ꞓ/ß/…) down to
+        # their basic-ASCII representative, reconciling case to the source. Glyphs
+        # absent from ASCII_FOLD (esh, ɂ, Ƕ, …) are left as documented residue.
+        for cp, out in list(merged.items()):
+            if len(out) == 1 and out in ASCII_FOLD:
+                merged[cp] = fix_case_mismatch(cp, ASCII_FOLD[out])
+        # #342/#343: measured cross-script supplement, applied with priority so it
+        # can add a missing fold or re-point an existing one.
+        for cp, target in (supplement or {}).items():
+            merged[cp] = target
         return list(merged.items())
 
     # For non-Latin: also invert equivalence classes
@@ -392,6 +495,10 @@ def generate_mappings(
     for cp, target in class_based:
         if cp not in merged:
             merged[cp] = target
+
+    # #342/#343: measured cross-script supplement, applied with priority.
+    for cp, target in (supplement or {}).items():
+        merged[cp] = target
 
     return list(merged.items())
 
@@ -454,10 +561,17 @@ def main() -> None:
     entries = parse_confusables(text)
     print(f"Parsed {len(entries)} total entries", file=sys.stderr)
 
+    supplement = load_supplement(BUNDLED_SUPPLEMENT)
+    print(
+        f"Loaded supplement: {len(supplement['latin'])} latin + "
+        f"{len(supplement['cyrillic'])} cyrillic overrides (#342/#343)",
+        file=sys.stderr,
+    )
+
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     for script_name in SCRIPTS:
-        mappings = generate_mappings(entries, script_name)
+        mappings = generate_mappings(entries, script_name, supplement.get(script_name, {}))
         out_path = args.output_dir / f"confusables_to_{script_name}.tsv"
         write_tsv(mappings, out_path)
         print(

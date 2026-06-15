@@ -12,13 +12,12 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 
 use disarm::api::collapse_whitespace;
 use disarm::api::fold_case;
-use disarm::api::transliterate;
+use disarm::api::Transliterate;
 use disarm::api::{detect_scripts, is_mixed_script};
 use disarm::api::{grapheme_len, grapheme_split};
 use disarm::api::{normalize_confusables, TargetScript};
 use disarm::api::{slugify, SlugConfig};
 use disarm::tables::lookup_default;
-use disarm::ErrorMode;
 
 // ---------------------------------------------------------------------------
 // Input corpus
@@ -61,34 +60,14 @@ fn bench_transliterate(c: &mut Criterion) {
     ] {
         group.throughput(text_throughput(input));
         group.bench_with_input(BenchmarkId::new("default", name), input, |b, text| {
-            b.iter(|| {
-                transliterate(
-                    black_box(text),
-                    None,
-                    ErrorMode::Replace,
-                    "[?]",
-                    false,
-                    false,
-                    false,
-                )
-            });
+            b.iter(|| Transliterate::new().run(black_box(text)));
         });
     }
 
     // Language-specific transliteration
     group.throughput(text_throughput(CYRILLIC));
     group.bench_function("cyrillic_lang_ru", |b| {
-        b.iter(|| {
-            transliterate(
-                black_box(CYRILLIC),
-                Some("ru"),
-                ErrorMode::Replace,
-                "[?]",
-                false,
-                false,
-                false,
-            )
-        });
+        b.iter(|| Transliterate::new().lang("ru").run(black_box(CYRILLIC)));
     });
 
     group.finish();

@@ -44,6 +44,37 @@ pub(crate) fn normalize_confusables(
     Ok(out)
 }
 
+/// Borrowing form of [`normalize_confusables`] (#352): returns `Cow::Borrowed`
+/// when `text` contains no confusable for the target (the common case), so a
+/// no-op never allocates. A single pass — it only starts building an owned
+/// string at the first character that actually folds.
+pub(crate) fn normalize_confusables_cow<'a>(
+    text: &'a str,
+    target_script: &str,
+) -> Result<std::borrow::Cow<'a, str>, crate::ErrorRepr> {
+    use std::borrow::Cow;
+
+    validate_target_script(target_script)?;
+    let map = tables::resolve_confusable_map(target_script);
+
+    for (i, ch) in text.char_indices() {
+        if let Some(replacement) = map.and_then(|m| m.get(&ch).copied()) {
+            // First fold found: copy the borrowed prefix, then fold the rest.
+            let mut out = String::with_capacity(text.len());
+            out.push_str(&text[..i]);
+            out.push_str(replacement);
+            for ch in text[i + ch.len_utf8()..].chars() {
+                match map.and_then(|m| m.get(&ch).copied()) {
+                    Some(replacement) => out.push_str(replacement),
+                    None => out.push(ch),
+                }
+            }
+            return Ok(Cow::Owned(out));
+        }
+    }
+    Ok(Cow::Borrowed(text))
+}
+
 /// In-place form of [`normalize_confusables`] writing into `out` (cleared
 /// first), so the pipeline can reuse one buffer across steps (#236 item 7).
 pub(crate) fn normalize_confusables_into(

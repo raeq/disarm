@@ -66,20 +66,29 @@ cargo add disarm
 ```
 
 The public surface is the [`disarm::api`](https://docs.rs/disarm/latest/disarm/api/)
-module plus the error types (`Error`, `ErrorKind`, `ErrorMode`):
+module plus the error types (`Error`, `ErrorKind`, `ErrorMode`). The
+[`DisarmStr`](https://docs.rs/disarm/latest/disarm/trait.DisarmStr.html) extension
+trait gives the same operations method syntax on any string:
 
 ```rust
-use disarm::{api, ErrorMode};
+use disarm::{api, DisarmStr};
+use disarm::api::{Transliterate, Scheme, OnUnknown, TargetScript};
 
 fn main() {
     // TR39 confusable folding (Cyrillic look-alikes → Latin)
-    assert_eq!(api::normalize_confusables("раypal", api::TargetScript::Latin), "paypal");
+    assert_eq!(api::normalize_confusables("раypal", TargetScript::Latin), "paypal");
+    // …or via the extension trait:
+    assert_eq!("раypal".normalize_confusables(TargetScript::Latin), "paypal");
 
-    // Standards-based transliteration to ASCII (infallible; ASCII passes through)
-    let s = api::transliterate("Москва", None, ErrorMode::Replace, "?", false, false, false);
-    assert_eq!(s, "Moskva");
+    // Transliteration to ASCII — the one-liner, or the builder for full control
+    assert_eq!(api::transliterate("Москва"), "Moskva");
+    let s = Transliterate::new()
+        .scheme(Scheme::StrictIso9)
+        .on_unknown(OnUnknown::Replace("?".into()))
+        .run("Москва");
+    assert!(s.is_ascii());
 
-    // Canonicalization primitives
+    // Canonicalization primitives (borrow on the no-op path via Cow)
     assert_eq!(api::strip_accents("café"), "cafe");
     assert_eq!(api::fold_case("ﬁ"), "fi");
     assert_eq!(api::slugify("Héllo Wörld", &api::SlugConfig::default()), "hello-world");

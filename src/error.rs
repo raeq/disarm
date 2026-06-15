@@ -61,7 +61,7 @@ fn truncate_error_text(text: &str) -> Cow<'_, str> {
 ///   command, or a flag to pass) wherever one applies.
 #[derive(Debug, Error)]
 pub(crate) enum ErrorRepr {
-    /// Invalid `errors=` mode string (`ErrorMode::from_str`).
+    /// Invalid `errors=` mode string (`ErrorMode::parse`).
     #[error("errors must be 'replace', 'ignore', or 'preserve', got '{got}'")]
     InvalidErrorMode {
         /// The offending value.
@@ -99,6 +99,13 @@ pub(crate) enum ErrorRepr {
     /// Invalid `target_script` for confusables functions.
     #[error("target_script must be 'latin' or 'cyrillic', got '{got}'")]
     InvalidTargetScript {
+        /// The offending value.
+        got: String,
+    },
+
+    /// Invalid transliteration scheme string (`Scheme::from_str`, #352).
+    #[error("scheme must be 'default', 'strict_iso9', or 'gost7034', got '{got}'")]
+    InvalidScheme {
         /// The offending value.
         got: String,
     },
@@ -411,6 +418,7 @@ impl ErrorRepr {
             ErrorRepr::InvalidEmojiStyle { .. } => "invalid_emoji_style",
             ErrorRepr::InvalidPlatform { .. } => "invalid_platform",
             ErrorRepr::InvalidTargetScript { .. } => "invalid_target_script",
+            ErrorRepr::InvalidScheme { .. } => "invalid_scheme",
             ErrorRepr::InvalidLogReplacement { .. } => "invalid_log_replacement",
             ErrorRepr::UnknownLang { .. } => "unknown_lang",
             ErrorRepr::MutuallyExclusiveBare | ErrorRepr::MutuallyExclusivePipeline => {
@@ -504,6 +512,7 @@ impl From<ErrorRepr> for pyo3::PyErr {
             | ErrorRepr::InvalidEmojiStyle { .. }
             | ErrorRepr::InvalidPlatform { .. }
             | ErrorRepr::InvalidTargetScript { .. }
+            | ErrorRepr::InvalidScheme { .. }
             | ErrorRepr::InvalidLogReplacement { .. }
             | ErrorRepr::UnknownLang { .. }
             | ErrorRepr::MutuallyExclusiveBare
@@ -596,6 +605,7 @@ impl Error {
             | ErrorRepr::InvalidEmojiStyle { .. }
             | ErrorRepr::InvalidPlatform { .. }
             | ErrorRepr::InvalidTargetScript { .. }
+            | ErrorRepr::InvalidScheme { .. }
             | ErrorRepr::InvalidLogReplacement { .. }
             | ErrorRepr::UnknownLang { .. }
             | ErrorRepr::MutuallyExclusiveBare

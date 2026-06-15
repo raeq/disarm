@@ -18,6 +18,12 @@
 //!
 //! Layer 1 (pure-Rust core): no pyo3. Shim in `src/py/log_injection.rs`;
 //! crates.io surface is `crate::api::strip_log_injection`.
+//!
+//! **Anti-recursion invariant.** The diagnostic logger (`tl_trace_content!`,
+//! #208) dogfoods [`strip_log_injection_str`] to neutralize the samples it
+//! emits. Nothing in this module may therefore emit a `tl_*!` / `log::` record:
+//! a logger that sanitized its own line by calling code that logs would recurse.
+//! `tests/log_injection_no_recursion.rs` enforces this with a source scan.
 
 use std::borrow::Cow;
 

@@ -67,8 +67,21 @@ macro_rules! tl_debug {
 /// TRACE-level **content** record — behind `log-content` only, documented unsafe
 /// for production and never reachable on a default build. Takes a static `label`
 /// and a `text` value; the macro **always** routes `text` through
-/// [`crate::error::truncate_error_text`] (80-byte, char-boundary), so a caller
-/// cannot accidentally emit untruncated content.
+/// [`crate::error::truncate_error_text`] (80-byte, char-boundary) *and then*
+/// through our own [`crate::log_injection::strip_log_injection_str`], so a caller
+/// can neither emit untruncated content nor let a sample forge a log line.
+///
+/// We dogfood the library's own log-injection primitive here rather than lean on
+/// `{:?}`'s escaping alone: `strip_log_injection_str` deterministically
+/// neutralizes the full log-forging set (CR/LF + NEL U+0085, LS U+2028, PS U+2029
+/// and the C0/C1 controls) per `THREAT_MODEL.md`, whereas `Debug`'s escaping is a
+/// printability heuristic that does not *guarantee* those line separators are
+/// rendered inert. (`{:?}` still wraps and escapes the residue so the sample is a
+/// single, quoted token.) Tabs are kept — harmless inside a quoted sample.
+///
+/// Anti-recursion invariant: `strip_log_injection_str` is on this logging path,
+/// so it (and everything in `src/log_injection.rs`) MUST NOT itself log, or a
+/// single record would recurse. `tests/log_injection_no_recursion.rs` enforces it.
 ///
 /// `tl_trace_content!("transliterate.in", text)`
 #[allow(unused_macros)]
@@ -79,7 +92,11 @@ macro_rules! tl_trace_content {
             target: $crate::obs::TARGET,
             "{}: {:?}",
             $label,
-            $crate::error::truncate_error_text($text),
+            $crate::log_injection::strip_log_injection_str(
+                &$crate::error::truncate_error_text($text),
+                "\u{FFFD}",
+                true,
+            ),
         );
     }};
 }

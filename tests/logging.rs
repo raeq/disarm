@@ -46,7 +46,10 @@ fn redaction_and_boundaries() {
     // input text, a register_lang *value*, and a register_replacements *key*, so
     // the test fails if the instrumentation logs any of that content.
     let sentinel = "SENTINEL_café";
-    let input = format!("{sentinel}_Москва_{sentinel}");
+    // Embed raw CR/LF/NEL so the injection-safety assertion below is non-trivial:
+    // a metadata callsite that ever interpolated this input with `{}` instead of
+    // `{:?}` would forge a log line, and the no-raw-newline check would catch it.
+    let input = format!("{sentinel}_Москва\r\n\u{0085}_{sentinel}");
 
     // DEBUG: transliterate completion (the wrapper boundary, not the hot loop).
     let _ = disarm::api::transliterate(&input);
@@ -74,6 +77,17 @@ fn redaction_and_boundaries() {
         assert!(
             !msg.contains(sentinel) && !msg.contains("café") && !msg.contains("Москва"),
             "record leaked content at {level}: {msg}"
+        );
+    }
+
+    // Injection-safety: no record body may carry a raw log-forging character
+    // (CR/LF/NEL/LS/PS). The metadata callsites format untrusted values with
+    // `{:?}`, which escapes these; this assertion turns that convention into an
+    // enforced guarantee that a future `{}` regression would trip.
+    for (level, msg) in &recs {
+        assert!(
+            !msg.contains(['\r', '\n', '\u{0085}', '\u{2028}', '\u{2029}']),
+            "record carries a raw log-forging character at {level}: {msg:?}"
         );
     }
 

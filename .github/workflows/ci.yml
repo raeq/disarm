@@ -83,6 +83,23 @@ jobs:
             exit 1
           fi
           echo "OK: no pyo3 in the default dependency tree"
+          # #208: logging is opt-in (`--features log`); the default build must
+          # pull in NO `log` crate, so the shipped artifact pays zero cost.
+          if cargo tree -e no-dev | grep -qiE '^\S*log v|[└├]── log v'; then
+            echo "::error::log leaked into the default tree (#208: logging must be opt-in)"
+            cargo tree -e no-dev | grep -i 'log v'
+            exit 1
+          fi
+          echo "OK: no log in the default dependency tree"
+
+      - name: Logging build + tests (#208, --features log / log-content)
+        # The opt-in logging facade compiles under every feature combo, the hot
+        # loops stay log-free (guard test), and default-level records carry no
+        # content (redaction sentinel test).
+        run: |
+          cargo clippy --all-targets --no-default-features --features log -- -D warnings
+          cargo build --no-default-features --features log-content
+          cargo test --no-default-features --features log --test logging --test hot_path_guard
 
       - name: Cargo package — crates.io publish dry-run (#42)
         # Build the crate from a packaged tarball with the default (pure) feature

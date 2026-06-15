@@ -500,6 +500,11 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
         }
     }
     if !bad_keys.is_empty() {
+        // #208/P3: count only — never the rejected keys (user-provided content).
+        tl_warn!(
+            "register_lang: rejected non-single-char keys count={}",
+            bad_keys.len()
+        );
         return Err(bad_keys);
     }
     // #208: metadata only — the lang code (a config identifier) and the mapping
@@ -558,6 +563,11 @@ pub fn register_replacements(replacements: HashMap<String, String>) -> Result<()
         .count();
     let projected = table.len() + new_keys;
     if projected > MAX_REPLACEMENTS {
+        // #208/M5: log the limit-rejection (the success path logs tl_info! at the
+        // end) — counts only, never replacement keys/values.
+        tl_warn!(
+            "register_replacements: limit exceeded projected={projected} max={MAX_REPLACEMENTS}"
+        );
         return Err(projected);
     }
     table.extend(replacements);
@@ -757,7 +767,9 @@ pub fn lookup_emoji_multi(key: &str) -> Option<&'static str> {
 }
 
 /// Walk the multi-codepoint emoji trie (#242 item 4) for the longest sequence
-/// starting at `window[0]`, returning `(name, codepoints_consumed)`.
+/// starting at `window[0]`, returning `(name, codepoints_consumed)`. Iterates
+/// `window` rather than indexing it, so an empty slice simply yields `None`
+/// (no bounds risk, C4).
 ///
 /// Byte-identical to the former per-length hex-key PHF probe (verified by
 /// `emoji_trie_matches_phf` against [`lookup_emoji_multi`]). A sequence is a

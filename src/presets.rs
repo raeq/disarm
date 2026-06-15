@@ -7,7 +7,8 @@ use crate::{case_fold, confusables, emoji, transliterate, whitespace, zalgo};
 // disarm does not cap input size in the pipeline presets — bounding untrusted
 // input is the caller's responsibility (every stage is linear time/memory;
 // see #80). The only retained size guard is the register_replacements output
-// amplification bound in src/transliterate.rs.
+// amplification bound (`MAX_REPLACEMENT_OUTPUT_BYTES` in src/limits.rs, #256),
+// enforced in `tables::apply_replacements`.
 
 /// NFKC-normalize `text`, skipping the normalization pass for all-ASCII input.
 ///

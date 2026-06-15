@@ -5,7 +5,7 @@
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::sync::{LazyLock, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 
 use crate::transliterate;
 
@@ -113,6 +113,52 @@ fn build_slug_replacement_automaton(
         .build(&patterns)
         .expect("slug replacement keys are valid aho-corasick patterns");
     Some(SlugReplacementAutomaton { ac, values })
+}
+
+/// Maximum number of distinct replacement automata held in
+/// [`REPLACEMENT_AUTOMATON_CACHE`].
+const REPLACEMENT_AUTOMATON_CACHE_MAX: usize = 32;
+
+/// Bounded cache of compiled replacement automata, keyed by the replacement
+/// pairs (M2). Like [`REGEX_CACHE`], the free `slugify()` and batch paths
+/// otherwise rebuild the aho-corasick automaton on *every* call — an O(pattern
+/// bytes) DFA build that throughput benchmarks never surface — while `_Slugifier`
+/// amortizes it. The automaton is held in an `Arc`, so a cache hit returns a
+/// cheap pointer clone instead of rebuilding. Bounded to
+/// [`REPLACEMENT_AUTOMATON_CACHE_MAX`]; cleared wholesale when full.
+#[allow(clippy::type_complexity)]
+static REPLACEMENT_AUTOMATON_CACHE: LazyLock<
+    RwLock<HashMap<Vec<(String, String)>, Arc<SlugReplacementAutomaton>>>,
+> = LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// Return the replacement automaton for `pairs`, reusing a cached one when the
+/// same pairs were seen before. `None` mirrors [`build_slug_replacement_automaton`]
+/// (fewer than two non-empty pairs) and is never cached. See
+/// [`REPLACEMENT_AUTOMATON_CACHE`].
+fn cached_slug_replacement_automaton(
+    pairs: &[(String, String)],
+) -> Option<Arc<SlugReplacementAutomaton>> {
+    // Fast path: a read lock and a cheap Arc clone on a hit.
+    if let Some(a) = crate::recover_lock(
+        REPLACEMENT_AUTOMATON_CACHE.read(),
+        "REPLACEMENT_AUTOMATON_CACHE",
+    )
+    .get(pairs)
+    {
+        return Some(a.clone());
+    }
+    // Miss: build outside the write lock (the DFA build can be slow).
+    let automaton = Arc::new(build_slug_replacement_automaton(pairs)?);
+    let mut cache = crate::recover_lock(
+        REPLACEMENT_AUTOMATON_CACHE.write(),
+        "REPLACEMENT_AUTOMATON_CACHE",
+    );
+    // Bound growth: clear when full rather than evicting one entry (cheap, rare).
+    if cache.len() >= REPLACEMENT_AUTOMATON_CACHE_MAX && !cache.contains_key(pairs) {
+        cache.clear();
+    }
+    cache.insert(pairs.to_vec(), automaton.clone());
+    Some(automaton)
 }
 
 /// Apply a prebuilt first-match replacement automaton to `text`, writing into a
@@ -341,11 +387,11 @@ pub(crate) fn slugify_impl_with_stopset(
             let (from, to) = &config.replacements[0];
             let replaced = value.replace(from.as_str(), to.as_str());
             value = Cow::Owned(replaced);
-        } else if let Some(automaton) = build_slug_replacement_automaton(&config.replacements) {
+        } else if let Some(automaton) = cached_slug_replacement_automaton(&config.replacements) {
             // Multiple pairs (#242 item 2): first-match via an aho-corasick
             // automaton — O(n + pattern bytes) total instead of the O(n·pairs)
-            // per-position scan below. (Built per call; the build is O(pattern
-            // bytes), still asymptotically better than the scan.)
+            // per-position scan below. The automaton is cached by pairs (M2), so
+            // the free/batch paths no longer rebuild it on every call.
             value = Cow::Owned(slug_replace_with_automaton(&value, &automaton));
         } else {
             // Fallback for the degenerate case the automaton declines (fewer than
@@ -445,13 +491,19 @@ pub(crate) fn slugify_impl_with_stopset(
 
     // Precompute safe_chars membership once: `String::contains(char)` is an O(k)
     // substring scan, so the per-char check was O(n·k) for any non-empty
-    // safe_chars (#252 O5.1). Empty safe_chars → empty set, no allocation.
-    let safe_set: HashSet<char> = config.safe_chars.chars().collect();
+    // safe_chars (#252 O5.1). Empty safe_chars (the default) → skip the set build
+    // and the per-char hash probe entirely (O3). `HashSet::new()` does not allocate.
+    let has_safe_chars = !config.safe_chars.is_empty();
+    let safe_set: HashSet<char> = if has_safe_chars {
+        config.safe_chars.chars().collect()
+    } else {
+        HashSet::new()
+    };
 
     for ch in value.chars() {
         if ch.is_alphanumeric()
             || (config.allow_unicode && !ch.is_ascii() && !ch.is_whitespace())
-            || safe_set.contains(&ch)
+            || (has_safe_chars && safe_set.contains(&ch))
         {
             // safe_chars are kept verbatim and treated as word characters, so a
             // separator is not inserted around them (awesome-slugify semantics, #230).
@@ -563,12 +615,16 @@ fn truncate_at_boundary(slug: &str, max_length: usize, separator: &str) -> Strin
     }
 }
 
-/// Decode a numeric HTML entity (&#NNN; or &#xHHH;) starting at `pos`.
+/// Decode a numeric HTML entity (`&#NNN;` / `&#xHHH;`) starting at `pos`.
 ///
-/// Returns `Some((char, bytes_consumed))` on success, `None` for malformed
-/// or control-character entities.  `num_buf` is a caller-supplied buffer
-/// reused across calls to avoid per-entity allocation.
-fn decode_numeric_entity(bytes: &[u8], pos: usize, num_buf: &mut String) -> Option<(char, usize)> {
+/// Returns `(decoded, consumed)`: `decoded` is the character on success (`None`
+/// for a malformed or control-character entity), and `consumed` is **always** the
+/// number of bytes the entity occupies, so the caller advances the same amount
+/// either way (C3 — folds the former separate `decode_numeric_entity_skip` into
+/// one place so the success and skip scans can no longer drift their bounds).
+/// `num_buf` is a caller-supplied buffer reused across calls to avoid per-entity
+/// allocation.
+fn decode_numeric_entity(bytes: &[u8], pos: usize, num_buf: &mut String) -> (Option<char>, usize) {
     let len = bytes.len();
     let mut i = pos + 2; // skip "&#"
     let is_hex = i < len && (bytes[i] == b'x' || bytes[i] == b'X');
@@ -603,29 +659,24 @@ fn decode_numeric_entity(bytes: &[u8], pos: usize, num_buf: &mut String) -> Opti
         num_buf.parse::<u32>().ok()
     };
     // Exclude control characters — they are never valid slug content.
-    let ch = parsed
-        .and_then(char::from_u32)
-        .filter(|c| !c.is_control())?;
-    Some((ch, i - pos))
-}
+    if let Some(ch) = parsed.and_then(char::from_u32).filter(|c| !c.is_control()) {
+        return (Some(ch), i - pos);
+    }
 
-/// Calculate how many bytes to skip for a malformed numeric entity at `pos`.
-///
-/// Only scans ASCII bytes — stops immediately at non-ASCII (high bit set)
-/// so we never land inside a multi-byte UTF-8 character.
-fn decode_numeric_entity_skip(bytes: &[u8], pos: usize) -> usize {
-    let len = bytes.len();
-    let mut i = pos + 2; // skip "&#"
-    if i < len && (bytes[i] == b'x' || bytes[i] == b'X') {
-        i += 1;
+    // Malformed or control-char entity: skip the whole bad entity rather than
+    // re-scanning its tail as literal text. Only scans ASCII bytes — stops at
+    // non-ASCII (high bit set) so we never land inside a multi-byte char.
+    let mut j = pos + 2;
+    if j < len && (bytes[j] == b'x' || bytes[j] == b'X') {
+        j += 1;
     }
-    while i < len && bytes[i].is_ascii() && bytes[i] != b';' && (i - pos) < MAX_ENTITY_DIGITS + 4 {
-        i += 1;
+    while j < len && bytes[j].is_ascii() && bytes[j] != b';' && (j - pos) < MAX_ENTITY_DIGITS + 4 {
+        j += 1;
     }
-    if i < len && bytes[i] == b';' {
-        i += 1;
+    if j < len && bytes[j] == b';' {
+        j += 1;
     }
-    i - pos
+    (None, j - pos)
 }
 
 /// Decode HTML entities in a single pass: named entities (&amp; &lt; etc.)
@@ -661,33 +712,34 @@ fn decode_entities(text: &str, decimal: bool, hexadecimal: bool) -> Cow<'_, str>
             continue;
         }
 
-        // Try named entities (longest-prefix first for correctness)
+        // Try named entities (longest-prefix first for correctness). Advance by
+        // the matched literal's own length (P6) so the byte count can never drift
+        // from the pattern it consumes.
         if text[i..].starts_with("&amp;") {
             result.push('&');
-            i += 5;
+            i += "&amp;".len();
         } else if text[i..].starts_with("&lt;") {
             result.push('<');
-            i += 4;
+            i += "&lt;".len();
         } else if text[i..].starts_with("&gt;") {
             result.push('>');
-            i += 4;
+            i += "&gt;".len();
         } else if text[i..].starts_with("&quot;") {
             result.push('"');
-            i += 6;
+            i += "&quot;".len();
         } else if text[i..].starts_with("&apos;") {
             result.push('\'');
-            i += 6;
+            i += "&apos;".len();
         } else if text[i..].starts_with("&#") {
             let is_hex = i + 2 < len && (bytes[i + 2] == b'x' || bytes[i + 2] == b'X');
             let decode = if is_hex { hexadecimal } else { decimal };
             if decode {
-                if let Some((ch, consumed)) = decode_numeric_entity(bytes, i, &mut num_buf) {
+                // `consumed` is returned in both cases (C3); push only on success.
+                let (decoded, consumed) = decode_numeric_entity(bytes, i, &mut num_buf);
+                if let Some(ch) = decoded {
                     result.push(ch);
-                    i += consumed;
-                } else {
-                    // Malformed or control-char entity — advance past "&#".
-                    i += decode_numeric_entity_skip(bytes, i);
                 }
+                i += consumed;
             } else {
                 // Flag disabled — preserve the raw '&' and let the loop advance.
                 result.push('&');

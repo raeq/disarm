@@ -24,6 +24,12 @@ pub(crate) const VS15: char = '\u{FE0E}';
 // **test-only** as the reference oracle (`match_emoji_at_reference`).
 #[cfg(test)]
 const KEY_BUF_CAP: usize = 64; // MAX_EMOJI_SEQ_LEN(9) × 5 hex + 8 '_' = 53 bytes; 64 is safe
+                               // P9: tie the test buffer to the real window size (`MAX_WINDOW`, derived from the
+                               // build-generated MAX_EMOJI_SEQ_LEN) so it can never silently under-size if the
+                               // CLDR data grows. Worst case: every code point emits up to 5 hex digits, with a
+                               // `_` separator between the MAX_WINDOW code points → MAX_WINDOW*5 + (MAX_WINDOW-1).
+#[cfg(test)]
+const _: () = assert!(KEY_BUF_CAP >= MAX_WINDOW * 6 - 1);
 
 /// Write a slice of codepoints as an uppercase hex key into `buf`.
 ///
@@ -75,7 +81,16 @@ fn encode_key_into(buf: &mut [u8; KEY_BUF_CAP], cps: &[char]) -> usize {
 /// Stack-only allocations: `key_buf` is a `[u8; KEY_BUF_CAP]` array and
 /// `sep_positions` is a `[usize; MAX_WINDOW]` array — no heap
 /// allocation occurs here regardless of input.
+///
+/// # Panics
+/// Panics if `window` is empty (it indexes `window[0]`). Every caller advances
+/// only while characters remain, so the slice is always non-empty here; the
+/// `debug_assert!` documents and (in debug builds) enforces that contract. (C4)
 pub(crate) fn match_emoji_at(window: &[char]) -> Option<(&'static str, usize)> {
+    debug_assert!(
+        !window.is_empty(),
+        "match_emoji_at requires a non-empty window"
+    );
     let ch = window[0];
 
     // Try multi-codepoint sequences first (longest match).  #242 item 4: walk

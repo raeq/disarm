@@ -329,8 +329,11 @@ pub(crate) fn recover_lock<T>(result: std::sync::LockResult<T>, table_name: &str
         // only `warnings` is unaffected (open question 4); a binding's `log` sink
         // gets the structured record.
         tl_error!("lock poisoned, recovered: table={table_name:?}");
+        // H3: `{table_name:?}` (not plain `{}`) so a dynamic name could never inject
+        // CR/LF into this warning; all current callers pass static literals, and the
+        // debug quoting reads cleanly (`lock for "REGEX_CACHE"`).
         let msg = format!(
-            "disarm: lock for `{table_name}` poisoned (a thread panicked while holding the \
+            "disarm: lock for {table_name:?} poisoned (a thread panicked while holding the \
              lock). Recovering from poisoned state — data may be inconsistent. This is a bug; \
              please report it."
         );

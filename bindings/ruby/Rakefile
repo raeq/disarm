@@ -1,30 +1,27 @@
 # frozen_string_literal: true
 
 require "bundler/gem_tasks"
-require "rake/extensiontask"
+require "rb_sys/extensiontask"
 
-# Platforms for the precompiled native gems (#45 acceptance: `gem install disarm`
-# pulls a platform gem and runs with no local Rust toolchain). Built in CI via
-# rb-sys-dock; locally `rake compile` builds for the host only.
-CROSS_PLATFORMS = %w[
-  aarch64-linux
-  arm64-darwin
-  x86_64-darwin
-  x86_64-linux
-  x64-mingw-ucrt
-].freeze
+GEMSPEC = Gem::Specification.load("disarm.gemspec")
 
-Rake::ExtensionTask.new("disarm") do |ext|
+# rb-sys's ExtensionTask (NOT rake-compiler's bare `Rake::ExtensionTask`) defines
+# the `native:<platform>` / cross-gem tasks the rb-sys-dock cross-gem build runs,
+# in addition to `compile`. The name here drives BOTH the cargo-crate lookup and
+# the built `.so` name, so it must be `disarm` (matching the gem, the `[lib]`, the
+# magnus init, and the `require "disarm/disarm"` loader). The ext crate is named
+# `disarm` too but pinned to a *different version* (0.0.0) than the core (0.10),
+# so the two `disarm` crates coexist in the lockfile without colliding. The
+# gem-root `Cargo.toml` workspace is what lets `cargo metadata` (run from here)
+# resolve to `ext/disarm` instead of the repo-root core crate. (#45 cross-gem)
+RbSys::ExtensionTask.new("disarm", GEMSPEC) do |ext|
   ext.lib_dir = "lib/disarm"
-  ext.ext_dir = "ext/disarm"
-  ext.cross_compile = true
-  ext.cross_platform = CROSS_PLATFORMS
 end
 
 # rspec is a development-only dependency. The cross-gem build container
-# (rb-sys-dock, used by `rake native gem` in CI) installs only build deps, so
-# requiring it at the top would abort the whole Rakefile with a LoadError there.
-# Define the `spec` task only when rspec is actually present.
+# (rb-sys-dock) installs only build deps, so requiring it at load time would abort
+# the whole Rakefile there with a LoadError. Define the `spec` task only when
+# rspec is actually present.
 spec_available =
   begin
     require "rspec/core/rake_task"

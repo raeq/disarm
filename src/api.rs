@@ -665,6 +665,7 @@ impl std::str::FromStr for Scheme {
 /// The replacement string lives in [`OnUnknown::Replace`] — exactly where it is
 /// meaningful — so it can't be silently ignored by pairing it with `Ignore`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum OnUnknown {
     /// Substitute this string for each untranslatable character (e.g. `"[?]"`).
     Replace(String),
@@ -710,13 +711,16 @@ impl OnUnknown {
 pub struct Transliterate {
     lang: Option<String>,
     scheme: Scheme,
-    on_unknown: OnUnknown,
+    // `None` is the default `Replace("[?]")` policy without eagerly heap-allocating
+    // the sentinel — so `transliterate(ascii)` stays allocation-free (#352 review).
+    on_unknown: Option<OnUnknown>,
     tones: bool,
 }
 
 impl Transliterate {
     /// A new builder with defaults: default tables, `OnUnknown::Replace("[?]")`,
-    /// tones off.
+    /// tones off. The default policy is stored lazily, so building and running on
+    /// pure-ASCII input allocates nothing.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -740,7 +744,7 @@ impl Transliterate {
     /// Set the policy for characters with no romanization.
     #[must_use]
     pub fn on_unknown(mut self, on_unknown: OnUnknown) -> Self {
-        self.on_unknown = on_unknown;
+        self.on_unknown = Some(on_unknown);
         self
     }
 
@@ -755,7 +759,12 @@ impl Transliterate {
     /// allocation), `Cow::Owned` otherwise. Infallible.
     #[must_use]
     pub fn run<'a>(&self, text: &'a str) -> Cow<'a, str> {
-        let (error_mode, replacement) = self.on_unknown.parts();
+        // `None` = the default `Replace("[?]")`, supplied as a borrowed `'static`
+        // literal so the default path never allocates the sentinel.
+        let (error_mode, replacement) = match &self.on_unknown {
+            None => (crate::ErrorMode::Replace, "[?]"),
+            Some(on_unknown) => on_unknown.parts(),
+        };
         let (strict_iso9, gost7034) = self.scheme.flags();
         crate::transliterate::transliterate_impl(
             text,

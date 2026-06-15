@@ -16,6 +16,11 @@ name: Cleanup caches
 #      idle ones are removed. (Swap `.last_accessed_at` -> `.created_at` below to
 #      go by raw age instead.)
 #
+# Both jobs page through the full cache list via `gh api --paginate` (no 100-entry
+# cap) and delete by id, tolerating only the 404 that results from racing with
+# GitHub's own LRU eviction — any other failure (403/5xx/rate-limit) fails the
+# step rather than silently leaving caches behind.
+#
 # Docs: https://docs.github.com/actions/using-workflows/caching-dependencies-to-speed-up-workflows#force-deleting-cache-entries
 
 on:
@@ -53,22 +58,45 @@ jobs:
           REPO: ${{ github.repository }}
           BRANCH: refs/pull/${{ github.event.pull_request.number }}/merge
         run: |
-          gh extension install actions/gh-actions-cache
+          set -euo pipefail
+
+          # Delete one cache by id. Returns 0 if it is gone afterwards (including
+          # a 404 race with LRU eviction); non-zero on any unexpected failure so
+          # the caller can fail the step instead of silently dropping caches.
+          delete_cache() {
+            local id="$1" desc="$2" err
+            if err=$(gh api --method DELETE "/repos/$REPO/actions/caches/$id" 2>&1); then
+              echo "Deleted cache $id ($desc)"
+              return 0
+            fi
+            if printf '%s\n' "$err" | grep -q 'HTTP 404'; then
+              echo "Cache $id already gone ($desc) — raced with LRU eviction"
+              return 0
+            fi
+            echo "ERROR deleting cache $id ($desc): $err" >&2
+            return 1
+          }
 
           echo "Listing caches scoped to $BRANCH"
-          cacheKeys=$(gh actions-cache list -R "$REPO" -B "$BRANCH" --limit 100 | cut -f 1)
+          ids=$(gh api --paginate \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/$REPO/actions/caches?ref=$BRANCH&per_page=100" \
+            --jq '.actions_caches[].id')
 
-          if [ -z "$cacheKeys" ]; then
+          if [ -z "$ids" ]; then
             echo "No caches to delete."
             exit 0
           fi
 
-          # Don't fail the run if a key races with GitHub's own LRU eviction.
-          set +e
-          for cacheKey in $cacheKeys; do
-            echo "Deleting $cacheKey"
-            gh actions-cache delete "$cacheKey" -R "$REPO" -B "$BRANCH" --confirm
+          failures=0
+          for id in $ids; do
+            delete_cache "$id" "$BRANCH" || failures=$((failures + 1))
           done
+
+          if [ "$failures" -ne 0 ]; then
+            echo "::error::$failures cache deletion(s) failed"
+            exit 1
+          fi
           echo "Done."
 
   sweep-stale:
@@ -84,27 +112,47 @@ jobs:
         run: |
           set -euo pipefail
 
+          delete_cache() {
+            local id="$1" desc="$2" err
+            if err=$(gh api --method DELETE "/repos/$REPO/actions/caches/$id" 2>&1); then
+              echo "Deleted cache $id ($desc)"
+              return 0
+            fi
+            if printf '%s\n' "$err" | grep -q 'HTTP 404'; then
+              echo "Cache $id already gone ($desc) — raced with LRU eviction"
+              return 0
+            fi
+            echo "ERROR deleting cache $id ($desc): $err" >&2
+            return 1
+          }
+
           cutoff=$(date -u -d "$MAX_AGE_HOURS hours ago" +%s)
           echo "Deleting caches last accessed before $(date -u -d @"$cutoff" '+%Y-%m-%dT%H:%M:%SZ') (> ${MAX_AGE_HOURS}h idle)"
 
-          # Page through every cache; emit "id<TAB>last_accessed_at".
+          # Page through every cache (no 100-entry cap); emit "id<TAB>last_accessed_at"
+          # with fractional seconds stripped so GNU date parses it cleanly.
           gh api --paginate \
             -H "Accept: application/vnd.github+json" \
             "/repos/$REPO/actions/caches?per_page=100" \
             --jq '.actions_caches[] | [.id, (.last_accessed_at | sub("\\..*Z$"; "Z"))] | @tsv' > caches.tsv
 
+          failures=0
           count=0
-          # Read from a file (not a pipe) so the counter survives the loop.
+          # Read from a file (not a pipe) so the counters survive the loop.
           while IFS=$'\t' read -r id ts; do
             [ -n "$id" ] || continue
             accessed=$(date -u -d "$ts" +%s)
             if [ "$accessed" -lt "$cutoff" ]; then
-              echo "Deleting cache $id (last accessed $ts)"
-              # Tolerate races with LRU eviction: a 404 here is benign.
-              gh api --method DELETE "/repos/$REPO/actions/caches/$id" >/dev/null 2>&1 \
-                && count=$((count + 1)) \
-                || echo "  (already gone)"
+              if delete_cache "$id" "idle since $ts"; then
+                count=$((count + 1))
+              else
+                failures=$((failures + 1))
+              fi
             fi
           done < caches.tsv
 
           echo "Deleted $count stale cache(s)."
+          if [ "$failures" -ne 0 ]; then
+            echo "::error::$failures cache deletion(s) failed"
+            exit 1
+          fi

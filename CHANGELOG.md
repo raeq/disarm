@@ -18,6 +18,13 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Ruby: grapheme-cluster operations (#375).** The binding gains `grapheme_len`,
+  `grapheme_split`, `grapheme_truncate`, `grapheme_width`, and `terminal_width` —
+  user-perceived-character counting/splitting/truncation and East Asian Width
+  display measurement (`ambiguous_wide: false` by default), thin wrappers over the
+  core `disarm::api`. Continues the Ruby↔core parity backfill (#375) and unblocks
+  the graphemes Ruby docs.
+
 - **Ruby: normalization + text-cleaning primitives (#375).** The binding gains
   `normalize` / `normalized?` (NFC/NFD/NFKC/NFKD), `collapse_whitespace`,
   `strip_control_chars`, `strip_zero_width_chars`, `strip_bidi`, and `strip_zalgo`

@@ -201,6 +201,48 @@ Disarm.zalgo?("Z\u0301\u0301\u0301\u0301")                       # => true
 Disarm.zalgo?(Disarm.strip_zalgo("Z\u0301\u0301\u0301\u0301"))  # => false
 ```
 
+## Grapheme clusters
+
+Operate on **user-perceived characters** (grapheme clusters) rather than code
+points — an emoji, a flag, or a base-plus-combining-mark counts as one.
+
+### `Disarm.grapheme_len(text)`
+
+Number of grapheme clusters (contrast `String#length`, which counts code points).
+
+```ruby
+Disarm.grapheme_len("a👍b")                        # => 3
+Disarm.grapheme_len("🇬🇧")                          # => 1
+```
+
+### `Disarm.grapheme_split(text)`
+
+Split into an array of grapheme-cluster strings.
+
+```ruby
+Disarm.grapheme_split("a👍")                       # => ["a", "👍"]
+```
+
+### `Disarm.grapheme_truncate(text, max_graphemes)`
+
+Truncate to at most `max_graphemes` clusters, never cutting through one.
+
+```ruby
+Disarm.grapheme_truncate("héllo", 3)               # => "hél"
+Disarm.grapheme_truncate("a👍b👎", 2)               # => "a👍"
+```
+
+### `Disarm.grapheme_width(cluster, ambiguous_wide: false)` · `Disarm.terminal_width(text, ambiguous_wide: false)`
+
+Display width in terminal columns by East Asian Width — `grapheme_width` for a
+single cluster, `terminal_width` for a whole string. Pass `ambiguous_wide: true`
+to count ambiguous-width characters as two columns.
+
+```ruby
+Disarm.grapheme_width("👍")                         # => 2
+Disarm.terminal_width("a👍")                        # => 3
+```
+
 ## Errors
 
 Everything disarm raises descends from `Disarm::Error < StandardError`, so a

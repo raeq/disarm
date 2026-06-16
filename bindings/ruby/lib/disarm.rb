@@ -172,6 +172,35 @@ module Disarm
       translate_errors { _zalgo?(text, threshold) }
     end
 
+    # Number of grapheme clusters (user-perceived characters). Counts an emoji
+    # or flag as one, unlike `String#length` (code points).
+    def grapheme_len(text)
+      translate_errors { _grapheme_len(text) }
+    end
+
+    # Split `text` into an array of grapheme-cluster strings.
+    def grapheme_split(text)
+      translate_errors { _grapheme_split(text) }
+    end
+
+    # Truncate `text` to at most `max_graphemes` grapheme clusters, never cutting
+    # through the middle of a cluster.
+    def grapheme_truncate(text, max_graphemes)
+      translate_errors { _grapheme_truncate(text, max_graphemes) }
+    end
+
+    # Display width (terminal columns) of a single grapheme `cluster` by East
+    # Asian Width. Pass `ambiguous_wide: true` to treat ambiguous-width
+    # characters as 2 columns.
+    def grapheme_width(cluster, ambiguous_wide: false)
+      translate_errors { _grapheme_width(cluster, ambiguous_wide) }
+    end
+
+    # Total display width (terminal columns) of `text`.
+    def terminal_width(text, ambiguous_wide: false)
+      translate_errors { _terminal_width(text, ambiguous_wide) }
+    end
+
     private
 
     # Run a native call, re-raising its built-in exception as the matching

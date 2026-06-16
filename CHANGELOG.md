@@ -145,6 +145,37 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   romanization, not homoglyph defense, pointing to `normalize_confusables()` /
   `strip_obfuscation()` for the latter.
 
+### Internal
+
+- **The Tier 3 exhaustive+formal gate now guards every publish, not just PyPI/crates.io (#159, #395).**
+  The pre-publish regimen — the exhaustive Rust domain tests (`#[ignore]`) and the
+  Python formal invariants (`@pytest.mark.formal`) — moved out of an inline job in
+  `publish.yml` into a reusable `workflow_call` workflow (`.github/workflows/tier3.yml`)
+  that **all four** publish paths depend on: the PyPI wheel, the crates.io core, the
+  **RubyGems gem**, and the **npm addon**. Previously only the wheel and the core were
+  gated, so a release whose core failed the exhaustive net could still ship the
+  bindings. Also wired the exhaustive grapheme-integrity suite (`exhaustive_grapheme`,
+  #174) into the gate alongside `exhaustive_transliterate` — it was documented "run
+  before release" but had never actually been in the release workflow.
+
+- **Binding publish workflows build against the in-repo core on non-publish events (#374, #396).**
+  `publish-ruby.yml`'s `test` job and `publish-node.yml`'s `build` job compiled the
+  binding against the *published* core, so a pre-release binding that calls a core API
+  not yet on crates.io (e.g. `has_anomalies` before this release) failed to build on
+  every PR/push — red on `main` until the matching core shipped. They now apply the
+  same CI-only `[patch.crates-io]` redirect to the in-repo core that `ci.yml`'s drift
+  gate uses, but only on `push` / `pull_request`; on `release` / `workflow_dispatch`
+  the shipped gem and prebuilt addon still build against the **published** core,
+  unchanged.
+
+- **Node binding: bumped vitest 3 → 4, dropping a vulnerable dev-only esbuild (#392, #394).**
+  The Node binding's test runner pulled in esbuild 0.27.7 — a dev-only transitive
+  dependency, never part of the published npm package — which carried two HIGH
+  advisories (`GHSA-gv7w-rqvm-qjhr`, `GHSA-g7r4-m6w7-qqqr`). vitest 4 pulls vite 8,
+  which demotes esbuild to an optional peer dependency, so the vulnerable package
+  drops out of the resolved tree entirely (`npm audit` reports zero vulnerabilities).
+  The Node test matrix is unchanged (20/22).
+
 ## [0.10.0] — 2026-06-15
 
 The **multi-language milestone** (epic #326): disarm becomes a publishable,

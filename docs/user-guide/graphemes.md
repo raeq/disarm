@@ -61,6 +61,17 @@ Count the number of user-perceived characters:
     assert_eq!(api::grapheme_len("नमस्ते"), 3);
     ```
 
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    Disarm.grapheme_len("café")     # => 4
+    Disarm.grapheme_len("👨‍👩‍👧‍👦")    # => 1
+    Disarm.grapheme_len("🇬🇧")       # => 1
+    Disarm.grapheme_len("नमस्ते")     # => 3
+    ```
+
 ### grapheme_split
 
 Split text into individual grapheme clusters:
@@ -86,6 +97,13 @@ Split text into individual grapheme clusters:
     assert_eq!(api::grapheme_split("café"), ["c", "a", "f", "é"]);
     assert_eq!(api::grapheme_split("🇫🇷🇬🇧"), ["🇫🇷", "🇬🇧"]);
     assert_eq!(api::grapheme_split("Hi 👋🏽"), ["H", "i", " ", "👋🏽"]);
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    Disarm.grapheme_split("café")    # => ["c", "a", "f", "é"]
+    Disarm.grapheme_split("🇫🇷🇬🇧")     # => ["🇫🇷", "🇬🇧"]
     ```
 
 !!! note
@@ -120,6 +138,15 @@ Truncate text to a maximum number of grapheme clusters without splitting any clu
 
     // Emoji are never split
     assert_eq!(api::grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2), "🇬🇧🇫🇷");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    Disarm.grapheme_truncate("Hello World", 5)  # => "Hello"
+    Disarm.grapheme_truncate("café", 3)         # => "caf"
+    # Emoji and flags are never split
+    Disarm.grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2)      # => "🇬🇧🇫🇷"
     ```
 
 Unlike byte-level slicing (`text[:n]`) or codepoint-level slicing, `grapheme_truncate` never produces corrupted output — no broken emoji, no orphaned combining marks, no split Hangul syllables.
@@ -276,6 +303,15 @@ over [UAX #11 East Asian Width](https://www.unicode.org/reports/tr11/):
     assert_eq!(api::grapheme_width("👨‍👩‍👧‍👦", false), 2); // one ZWJ cluster, 2 columns
     ```
 
+=== "Ruby"
+
+    ```ruby
+    Disarm.terminal_width("hello")    # => 5
+    Disarm.terminal_width("世界")      # => 4
+    Disarm.terminal_width("a😀")      # => 3
+    Disarm.grapheme_width("👨‍👩‍👧‍👦")    # => 2
+    ```
+
 East Asian **Ambiguous** characters are 1 column by default (matching modern
 UTF-8 terminals); pass `ambiguous_wide=True` for legacy double-width CJK
 terminals:
@@ -294,6 +330,13 @@ terminals:
 
     assert_eq!(api::terminal_width("¡", false), 1);
     assert_eq!(api::terminal_width("¡", true), 2);
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    Disarm.terminal_width("¡")                       # => 1
+    Disarm.terminal_width("¡", ambiguous_wide: true) # => 2
     ```
 
 This measures **terminal cells**, not pixels or font metrics. Tabs are not

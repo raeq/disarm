@@ -71,6 +71,12 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed
 
+- **Docs: Ruby usage tabs across the guide pages unblocked by the parity backfill
+  (#375/#50).** The normalization, text-cleaning, graphemes, filenames, and
+  language-detection guides now show a runnable **Ruby** tab beside Python and
+  Rust — 17 tabs in all. Every Ruby example is executed against the built gem by
+  the doc gate, so the tabs cannot rot.
+
 - **Docs: language-neutral scaffold — first phase of the docs restructure (#50).**
   Reshaped the documentation IA toward "language-neutral concept core +
   per-language specifics": a neutral landing headline (no longer "for Python")

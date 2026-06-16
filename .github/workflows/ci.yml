@@ -26,6 +26,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       docs: ${{ steps.filter.outputs.docs }}
+      ruby: ${{ steps.filter.outputs.ruby }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
@@ -43,6 +44,17 @@ jobs:
               - 'mkdocs.yml'
               - '**.md'
               - '.github/workflows/**'
+            # The Ruby binding must rebuild when ITS OWN code changes AND when the
+            # CORE it wraps changes (#374): a core API change (e.g. the 0.10
+            # tuple→struct return) can break the gem, and that break must surface
+            # on the same PR — not at release. Core = src/**, build.rs, the crate
+            # manifests; binding = bindings/ruby/**.
+            ruby:
+              - 'bindings/ruby/**'
+              - 'src/**'
+              - 'build.rs'
+              - 'Cargo.toml'
+              - '.github/workflows/ci.yml'
 
 
   # ── Lint and format (Linux only, code changes only) ─────────────
@@ -222,6 +234,62 @@ jobs:
         run: python3 scripts/check_doc_rust_examples.py
 
 
+  # ── Ruby binding, built against the LOCAL core (#374) ───────────
+  # PR-time gate for the Ruby gem. The release workflow (publish-ruby.yml) builds
+  # the binding against the PUBLISHED core; this job builds it against the
+  # in-repo core, so an UNRELEASED core API change that breaks the gem fails here
+  # — on the PR that introduces it — instead of silently at release (which is how
+  # the 0.10.0 gem shipped broken, #364–#367). Runs on binding OR core changes.
+  ruby:
+    name: Ruby binding (Ruby ${{ matrix.ruby }})
+    needs: changes
+    if: needs.changes.outputs.ruby == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.1", "3.2", "3.3"]  # the range magnus 0.7 supports
+    env:
+      # bundler-cache runs at the repo root (no Gemfile there) unless pointed at
+      # the gem's Gemfile; GITHUB_TOKEN authenticates the cargo-cache tooling.
+      # (Mirrors publish-ruby.yml.)
+      BUNDLE_GEMFILE: ${{ github.workspace }}/bindings/ruby/Gemfile
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+
+      - name: Build the binding against the in-repo core (#374 drift gate)
+        # The ext pins the core as a REGISTRY dep (version = "0.10") so the
+        # cross-gem build — which mounts only the gem dir — stays self-contained.
+        # Redirect that dep to the in-repo core for this CI build only, so an
+        # unreleased core change is actually exercised. This patch is injected at
+        # runtime and never committed: a relative-path patch would break the
+        # cross-gem build, and gating it here keeps the release path on the
+        # published core.
+        run: printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> bindings/ruby/Cargo.toml
+
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771  # v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          rustup-toolchain: stable
+          bundler-cache: true
+          cargo-cache: true
+
+      - name: Compile + RSpec (against the local core)
+        working-directory: bindings/ruby
+        run: |
+          bundle exec rake compile
+          bundle exec rake spec
+
+      - name: Doc Ruby examples against the local core (#50/#374)
+        # The docs' Ruby `# =>` examples already run against the PUBLISHED gem in
+        # publish-ruby.yml. Running them here too — against the freshly-built
+        # LOCAL-core gem — extends the drift gate to documented output: a core
+        # change that alters a documented Ruby result fails on its own PR. Runs
+        # from the repo root so the script can reach docs/ and the built bundle.
+        run: ruby scripts/check_doc_ruby_examples.rb
+
+
   # ── Security audit (#105: cargo audit for RustSec advisories) ──
   # Runs on every PR and weekly. Cargo.lock is not committed (it is .gitignored
   # for this library), so generate it before auditing.
@@ -306,6 +374,31 @@ jobs:
             echo "lint ($LINT) or test ($TEST) failed"
             exit 1
           fi
+
+  ruby-ok:
+    name: Ruby checks passed
+    if: always()
+    needs: [changes, ruby]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          RUBY_CHANGED="${{ needs.changes.outputs.ruby }}"
+          RUBY_RESULT="${{ needs.ruby.result }}"
+
+          # On a PR that touches neither the binding nor the core, the ruby job
+          # is skipped — the gate passes (nothing to verify).
+          if [[ "$RUBY_CHANGED" != "true" ]]; then
+            echo "No binding/core changes — Ruby gate not required"
+            exit 0
+          fi
+
+          # The binding (or the core it wraps) changed: the build+RSpec against
+          # the local core must have passed (#374).
+          if [[ "$RUBY_RESULT" != "success" ]]; then
+            echo "ruby ($RUBY_RESULT) — the Ruby binding failed to build/spec against the local core"
+            exit 1
+          fi
+          echo "Ruby binding OK against the local core"
 
   python-ok:
     name: Python checks passed

@@ -55,6 +55,10 @@ jobs:
         # is produced against the PUBLISHED core. Injected at runtime, never committed
         # (a committed relative-path patch would break the napi prebuild containers).
         if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
+        # The build matrix includes windows-latest, where `run:` defaults to
+        # PowerShell (no `printf`, and `>>` writes UTF-16). Force bash so the append
+        # is identical on every host.
+        shell: bash
         run: printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml
 
       - uses: actions/setup-node@v4

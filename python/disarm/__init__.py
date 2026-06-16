@@ -31,6 +31,8 @@ from disarm._api import (
     grapheme_split,
     grapheme_truncate,
     grapheme_width,
+    has_anomalies,
+    inspect_anomalies,
     inspect_auto_lang,
     is_ascii,
     is_confusable,
@@ -62,7 +64,9 @@ from disarm._api import (
     transliterate,
 )
 from disarm._core import (
+    AnomalyReport,
     DisarmError,
+    Finding,
     HostnameAnalysis,
     InvalidArgumentError,
     ResourceLimitError,
@@ -244,6 +248,11 @@ __all__ = [
     "terminal_width",
     # Hostname safety
     "is_suspicious_hostname",
+    # Anomaly detection (#389)
+    "has_anomalies",
+    "inspect_anomalies",
+    "AnomalyReport",
+    "Finding",
     "escape_html",
     "percent_encode",
     "strip_log_injection",

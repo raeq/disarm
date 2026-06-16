@@ -82,9 +82,15 @@ pub struct AnomalyReport {
 #[pymethods]
 impl AnomalyReport {
     fn __repr__(&self) -> String {
+        let kinds = self
+            .kinds
+            .iter()
+            .map(|k| format!("'{k}'"))
+            .collect::<Vec<_>>()
+            .join(", ");
         format!(
-            "AnomalyReport(anomalous={}, kinds={:?})",
-            self.anomalous, self.kinds
+            "AnomalyReport(anomalous={}, kinds=[{kinds}])",
+            if self.anomalous { "True" } else { "False" }
         )
     }
 }

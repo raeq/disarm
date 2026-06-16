@@ -16,6 +16,7 @@ from disarm._core import (
     # Resource limit — read from the Rust single source of truth, never
     # re-declared, to prevent silent drift (#200).
     _MAX_BATCH_SIZE,
+    AnomalyReport,
     HostnameAnalysis,
     # Exception hierarchy (#183): base + categorised subclasses
     InvalidArgumentError,
@@ -37,6 +38,9 @@ from disarm._core import (
     _grapheme_split,
     _grapheme_truncate,
     _grapheme_width,
+    # Anomaly detection (#389)
+    _has_anomalies,
+    _inspect_anomalies,
     _inspect_auto_lang,
     _is_ascii,
     _is_confusable,
@@ -1187,6 +1191,67 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
         'google.com'
     """
     return _is_suspicious_hostname(hostname)
+
+
+# --- Anomaly detection (#389) ---
+
+
+def has_anomalies(text: str, lexicon: set[str]) -> bool:
+    """Whether any whitespace token carries out-of-place characters that disguise a real word.
+
+    Reports a *technical fact* — a cross-script homoglyph, leet, segmentation, a
+    zero-width / bidi control, or zalgo — and leaves the malicious-or-not judgement
+    to the caller, exactly as :func:`is_suspicious_hostname` does for hostnames.
+
+    ``lexicon`` is a set of common words for the language being protected; it is
+    used only by the leet and segmentation branches (the invisible / bidi / zalgo /
+    mixed-script branches are script-agnostic and need no lexicon).
+
+    Args:
+        text: Input text.
+        lexicon: Common-word set (e.g. a frequency list for the target language).
+
+    Returns:
+        True if any token tripped a detector.
+
+    Examples:
+        >>> has_anomalies("get fr33 stuff", {"free"})
+        True
+        >>> has_anomalies("a perfectly ordinary sentence", set())
+        False
+    """
+    return _has_anomalies(text, lexicon)
+
+
+def inspect_anomalies(text: str, lexicon: set[str]) -> AnomalyReport:
+    """Full anomaly analysis: every finding with its span and a plain-language reason.
+
+    Parallel to :func:`is_suspicious_hostname`'s ``HostnameAnalysis``. Returns an
+    ``AnomalyReport`` with attributes:
+
+    - ``anomalous``: bool — the same value :func:`has_anomalies` returns.
+    - ``kinds``: list[str] — the anomaly kinds that fired, in first-appearance
+      order (``"invisible"``, ``"bidi"``, ``"zalgo"``, ``"mixed_script"``,
+      ``"leet"``, ``"segmentation"``).
+    - ``findings``: list[Finding] — each with ``kind``, ``token``, ``start``/``end``
+      (byte offsets), ``detail``, and a plain-language ``reason``.
+    - ``reason``: str | None — the first finding's reason.
+
+    Args:
+        text: Input text.
+        lexicon: Common-word set (see :func:`has_anomalies`).
+
+    Returns:
+        An ``AnomalyReport``.
+
+    Examples:
+        >>> r = inspect_anomalies("get fr33", {"free"})
+        >>> r.anomalous, r.kinds
+        (True, ['leet'])
+        >>> r.findings[0].detail
+        'free'
+    """
+    return _inspect_anomalies(text, lexicon)
 
 
 # --- Output encoders (terminal, context-explicit — NOT pipeline steps) ---

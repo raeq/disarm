@@ -7,6 +7,7 @@
 //! at that point this whole module is gated behind `feature = "extension-module"`
 //! and the `pyo3` dependency becomes optional (the final extraction sub-PR).
 
+pub mod anomalies;
 pub mod case_fold;
 pub mod confusables;
 pub mod emoji;

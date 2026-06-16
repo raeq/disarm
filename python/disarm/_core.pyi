@@ -29,6 +29,20 @@ class HostnameAnalysis:
     has_confusables: bool
     canonical: str
 
+class Finding:
+    kind: str
+    token: str
+    start: int
+    end: int
+    detail: str
+    reason: str
+
+class AnomalyReport:
+    anomalous: bool
+    kinds: list[str]
+    findings: list[Finding]
+    reason: str | None
+
 class _Slugifier:
     separator: str
     lang: str | None
@@ -221,6 +235,8 @@ def _grapheme_truncate(text: str, max_graphemes: int) -> str: ...
 def _terminal_width(text: str, *, ambiguous_wide: bool = False) -> int: ...
 def _grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int: ...
 def _is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]: ...
+def _has_anomalies(text: str, lexicon: set[str]) -> bool: ...
+def _inspect_anomalies(text: str, lexicon: set[str]) -> AnomalyReport: ...
 def _escape_html(text: str) -> str: ...
 def _percent_encode(text: str, *, component: str) -> str: ...
 def _strip_log_injection(text: str, *, replacement: str, keep_tab: bool) -> str: ...

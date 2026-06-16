@@ -46,6 +46,15 @@ disarm implements Unicode TR39 confusable detection and normalization with multi
     Disarm.confusable?("Hello")   # => false
     ```
 
+=== "Node"
+
+    ```ts
+    import { isConfusable } from 'disarm'
+
+    isConfusable('Неllo') // => true
+    isConfusable('Hello') // => false
+    ```
+
 ## Normalizing confusables
 
 Replace confusable characters with their target-script equivalents:
@@ -86,6 +95,15 @@ Replace confusable characters with their target-script equivalents:
     Disarm.normalize_confusables("Ηellο")         # => "Hello"
     ```
 
+=== "Node"
+
+    ```ts
+    import { normalizeConfusables } from 'disarm'
+
+    normalizeConfusables('Неllo Wоrld') // => 'Hello World'
+    normalizeConfusables('Ηellο') // => 'Hello'
+    ```
+
 ### Target script
 
 By default, confusables are normalized to Latin. You can specify a different target script to normalize *towards* that script instead:
@@ -110,6 +128,15 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
     # Normalize to Cyrillic — non-Cyrillic homoglyphs → Cyrillic
     Disarm.normalize_confusables("paypal", target: :cyrillic)    # => "раураӏ"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { normalizeConfusables } from 'disarm'
+
+    normalizeConfusables('раypal') // => 'paypal'
+    normalizeConfusables('paypal', { target: 'cyrillic' }) // => 'раураӏ'
     ```
 
 ### Supported target scripts

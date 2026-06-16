@@ -88,6 +88,15 @@ every binding; the `rag_ingest` preset is a Python pipeline:
     Disarm.transliterate("Привет, мир")   # => "Privet, mir"
     ```
 
+=== "Node"
+
+    ```ts
+    import { transliterate } from 'disarm'
+
+    transliterate('नमस्ते') // => 'namaste'
+    transliterate('Привет, мир') // => 'Privet, mir'
+    ```
+
 Pick the lever by path: romanize for an index/matching path; keep the script when
 the text goes to a multilingual model that reads it natively (see
 [when NOT to use disarm](llm-pipelines.md#which-path-and-when-not-to-use-disarm)).
@@ -145,6 +154,14 @@ Romanization is not a free win, and fertility is not the whole story:
       require "disarm"
 
       Disarm.transliterate("東京タワー")   # => "dong jing tawa-"
+      ```
+
+  === "Node"
+
+      ```ts
+      import { transliterate } from 'disarm'
+
+      transliterate('東京タワー') // => 'dong jing tawa-'
       ```
 
   Use romanization for matching/indexing where this is acceptable, not where the

@@ -50,6 +50,16 @@ There are two quality tiers to be aware of (see [Language Support](language-supp
     Disarm.transliterate("Αθήνα")   # => "Athina"
     ```
 
+=== "Node"
+
+    ```ts
+    import { transliterate } from 'disarm'
+
+    transliterate('café') // => 'cafe'
+    transliterate('naïve') // => 'naive'
+    transliterate('Αθήνα') // => 'Athina'
+    ```
+
 ## Language profiles
 
 When a `lang` parameter is provided, language-specific mapping overrides apply
@@ -89,6 +99,13 @@ Kyiv (the default mapping would not), and German ü → ue:
 
     Disarm.transliterate("Київ", lang: :uk)    # => "Kyiv"
     Disarm.transliterate("Ärger", lang: :de)   # => "Aerger"
+    ```
+
+=== "Node"
+
+    ```ts
+    transliterate('Київ', { lang: 'uk' }) // => 'Kyiv'
+    transliterate('Ärger', { lang: 'de' }) // => 'Aerger'
     ```
 
 ### Auto-detecting the language

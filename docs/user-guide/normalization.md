@@ -72,6 +72,16 @@ Normalization resolves this by converting to a canonical form.
     Disarm.normalize("ﬁ", form: :nfkd)        # => "fi"
     ```
 
+=== "Node"
+
+    ```ts
+    import { normalize } from 'disarm'
+
+    normalize('ﬁnance', { form: 'NFKC' }) // => 'finance'
+    normalize('2²', { form: 'NFKC' }) // => '22'
+    normalize('ﬁ', { form: 'NFKD' }) // => 'fi'
+    ```
+
 ## Checking normalization
 
 Test whether a string is already in a given form without performing the full normalization:
@@ -103,6 +113,15 @@ Test whether a string is already in a given form without performing the full nor
     ```ruby
     Disarm.normalized?("hello")            # => true
     Disarm.normalized?("ﬁ", form: :nfkc)   # => false
+    ```
+
+=== "Node"
+
+    ```ts
+    import { isNormalized } from 'disarm'
+
+    isNormalized('hello') // => true
+    isNormalized('ﬁ', { form: 'NFKC' }) // => false
     ```
 
 ## The NF enum

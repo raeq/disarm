@@ -44,6 +44,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Build against the in-repo core on non-publish events (#374 drift gate)
+        # On a push to main, the PUBLISHED core can lag the binding: a pre-release
+        # binding may call a core API that isn't on crates.io yet (e.g. has_anomalies
+        # before 0.11), so a published-core build fails to compile — the addon is red
+        # until the matching core ships. Redirect the registry dep to the in-repo core
+        # for these VALIDATION builds, exactly as ci.yml's `node` job does, so the
+        # addon is exercised against the core it actually targets. On release /
+        # workflow_dispatch (the real publish) we DON'T patch, so the shipped prebuild
+        # is produced against the PUBLISHED core. Injected at runtime, never committed
+        # (a committed relative-path patch would break the napi prebuild containers).
+        if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
+        run: printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -67,7 +80,9 @@ jobs:
 
       - run: npm ci
 
-      - name: Build the native addon (against the published core)
+      - name: Build the native addon
+        # Against the PUBLISHED core on release/dispatch (the shipped prebuild);
+        # against the in-repo core on push-to-main validation (see the #374 step above).
         run: npx napi build --platform --release --target ${{ matrix.settings.target }} --js binding.js --dts binding.d.ts
 
       - uses: actions/upload-artifact@v4

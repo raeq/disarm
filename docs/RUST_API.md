@@ -20,7 +20,7 @@ The **only** semver-governed Rust API is:
   idiomatic, `pyo3`-free function surface, its parameter/builder types
   (`TargetScript`, `NormalizationForm`, `UrlComponent`, `ReverseLang`,
   `Platform`, `SlugConfig`, `Scheme`, `OnUnknown`, `Transliterate`,
-  `AutoLangInspection`, `HostnameAnalysis`, …), and the
+  `AutoLangInspection`, `HostnameAnalysis`, `AnomalyReport`, `AnomalyKind`, `Finding`, …), and the
   [`DisarmStr`](https://docs.rs/disarm/latest/disarm/trait.DisarmStr.html)
   extension trait (re-exported at the crate root);
 - the error types [`Error`](https://docs.rs/disarm/latest/disarm/struct.Error.html),

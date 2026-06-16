@@ -63,6 +63,7 @@ EXECUTED_RECIPES = [
     "user-guide/confusables.md",
     "user-guide/filenames.md",
     "user-guide/graphemes.md",
+    "user-guide/anomaly-detection.md",
     "user-guide/language-detection.md",
     "user-guide/language-support.md",
     "user-guide/llm-pipelines.md",

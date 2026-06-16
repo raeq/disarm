@@ -302,6 +302,23 @@ Explain how `lang: "auto"` detection resolves `text` — a hash with `:script` a
 Disarm.inspect_auto_lang("Москва") # => { script: "Cyrillic", chosen_lang: "ru", reason: "script_default", discriminators_hit: [] }
 ```
 
+## Anomaly detection
+
+### `Disarm.has_anomalies?(text, lexicon)` · `Disarm.inspect_anomalies(text, lexicon)`
+
+Flag text carrying out-of-place characters that disguise a real word — a
+cross-script homoglyph, leet, segmentation, a zero-width / bidi control, or zalgo.
+Reports a technical fact, not intent. `lexicon` is a common-word Array or Set
+(used only by the leet and segmentation branches). `inspect_anomalies` returns a
+hash with `:anomalous`, `:kinds`, `:findings` (each `{ kind:, token:, start:,
+end:, detail:, reason: }`), and `:reason`. See
+[Anomaly Detection](../user-guide/anomaly-detection.md) for the detected classes.
+
+```ruby
+Disarm.has_anomalies?("get fr33 now", ["free"])        # => true
+Disarm.inspect_anomalies("paypаl", ["paypal"])[:kinds] # => ["mixed_script"]
+```
+
 ## Errors
 
 Everything disarm raises descends from `Disarm::Error < StandardError`, so a

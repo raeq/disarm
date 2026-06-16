@@ -39,7 +39,6 @@ function markdownFiles(dir) {
   return out
 }
 
-const blockRe = /^[ \t]*```(?:ts|typescript|js|javascript)\n([\s\S]*?)\n[ \t]*```/gm
 const lineRe = /^(.+?)\s*\/\/\s*=>\s*(.+?)\s*$/
 
 let checked = 0
@@ -47,6 +46,9 @@ const failures = []
 
 for (const md of markdownFiles(join(root, 'docs')).sort()) {
   const text = readFileSync(md, 'utf8')
+  // Construct the block matcher per file so the `/g` `lastIndex` can never carry
+  // over between files and skip blocks.
+  const blockRe = /^[ \t]*```(?:ts|typescript|js|javascript)\n([\s\S]*?)\n[ \t]*```/gm
   let block
   while ((block = blockRe.exec(text)) !== null) {
     for (const raw of block[1].split('\n')) {

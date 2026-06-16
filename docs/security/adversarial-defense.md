@@ -116,15 +116,42 @@ spoofs, multi-character confusables (`rn`→`m`), and Unicode-version skew. See 
 | Detect (don't transform) | `is_confusable(text)`, `is_mixed_script(text)` | predicate |
 | Check a domain for IDN spoofing | `is_suspicious_hostname(host)` | per-label script + confusable analysis |
 
-```python
-from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
+=== "Python"
 
-assert strip_obfuscation("рroduсt") == 'product'
-assert normalize_confusables("раypal") == 'paypal'
+    ```python
+    from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
 
-suspicious, analysis = is_suspicious_hostname("аpple.com")   # leading Cyrillic а
-# suspicious is True; analysis.mixed_script and analysis.has_confusables explain why
-```
+    assert strip_obfuscation("рroduсt") == 'product'
+    assert normalize_confusables("раypal") == 'paypal'
+
+    # leading Cyrillic 'а' is flagged
+    suspicious, analysis = is_suspicious_hostname("аpple.com")
+    assert suspicious is True
+    ```
+
+=== "Rust"
+
+    ```rust
+    use disarm::api::{self, TargetScript};
+
+    assert_eq!(api::strip_obfuscation("рroduсt").unwrap(), "product");
+    assert_eq!(api::normalize_confusables("раypal", TargetScript::Latin), "paypal");
+
+    // leading Cyrillic 'а' is flagged
+    let analysis = api::is_suspicious_hostname("аpple.com");
+    assert!(analysis.suspicious);
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    Disarm.strip_obfuscation("рroduсt")       # => "product"
+    Disarm.normalize_confusables("раypal")    # => "paypal"
+    # leading Cyrillic 'а' is flagged
+    Disarm.suspicious_hostname?("аpple.com")  # => true
+    ```
 
 `strip_obfuscation` deliberately does **not** transliterate (it preserves case and
 non-confusable characters). If you also need ASCII romanization, chain

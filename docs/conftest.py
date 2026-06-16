@@ -62,7 +62,6 @@ EXECUTED_RECIPES = [
     "user-guide/abjad-transliteration.md",
     "user-guide/confusables.md",
     "user-guide/filenames.md",
-    "user-guide/getting-started.md",
     "user-guide/graphemes.md",
     "user-guide/language-detection.md",
     "user-guide/language-support.md",

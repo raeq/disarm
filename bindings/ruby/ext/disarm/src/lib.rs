@@ -143,6 +143,53 @@ fn suspicious_hostname(host: String) -> bool {
     api::is_suspicious_hostname(&host).suspicious
 }
 
+// ── Normalization (#375) ──────────────────────────────────────────────────────
+
+/// `Disarm._normalize(text, "NFC" | "NFD" | "NFKC" | "NFKD")`. The idiomatic
+/// layer upcases its `form:` symbol/string before forwarding.
+fn normalize(text: String, form: String) -> Result<String, Error> {
+    let form: api::NormalizationForm = form.parse().map_err(|e| raise(&e))?;
+    Ok(api::normalize(&text, form))
+}
+
+/// `Disarm._normalized?(text, form)`.
+fn is_normalized(text: String, form: String) -> Result<bool, Error> {
+    let form: api::NormalizationForm = form.parse().map_err(|e| raise(&e))?;
+    Ok(api::is_normalized(&text, form))
+}
+
+// ── Text cleaning (#375) ──────────────────────────────────────────────────────
+
+/// `Disarm._collapse_whitespace(text, strip_control, strip_zero_width)`.
+fn collapse_whitespace(text: String, strip_control: bool, strip_zero_width: bool) -> String {
+    api::collapse_whitespace(&text, strip_control, strip_zero_width)
+}
+
+/// `Disarm._strip_control_chars(text)` — remove C0/C1 controls (except tab/newline).
+fn strip_control_chars(text: String) -> String {
+    api::strip_control_chars(&text)
+}
+
+/// `Disarm._strip_zero_width_chars(text)` — remove ZWSP/ZWNJ/ZWJ/word-joiner.
+fn strip_zero_width_chars(text: String) -> String {
+    api::strip_zero_width_chars(&text)
+}
+
+/// `Disarm._strip_bidi(text)` — remove Unicode bidirectional control characters.
+fn strip_bidi(text: String) -> String {
+    api::strip_bidi(&text)
+}
+
+/// `Disarm._strip_zalgo(text, max_marks)` — cap combining marks per base.
+fn strip_zalgo(text: String, max_marks: usize) -> String {
+    api::strip_zalgo(&text, max_marks)
+}
+
+/// `Disarm._zalgo?(text, threshold)` — any base carrying > threshold marks.
+fn is_zalgo(text: String, threshold: usize) -> bool {
+    api::is_zalgo(&text, threshold)
+}
+
 // `name = "disarm"` so the exported init symbol is `Init_disarm` (matching the
 // `disarm.so` the gem loads), independent of the `disarm-ruby` package name.
 #[magnus::init(name = "disarm")]
@@ -168,5 +215,18 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_strip_accents", function!(strip_accents, 1))?;
     module.define_singleton_method("_fold_case", function!(fold_case, 1))?;
     module.define_singleton_method("_suspicious_hostname?", function!(suspicious_hostname, 1))?;
+
+    // Normalization + text-cleaning primitives (#375 parity backfill).
+    module.define_singleton_method("_normalize", function!(normalize, 2))?;
+    module.define_singleton_method("_normalized?", function!(is_normalized, 2))?;
+    module.define_singleton_method("_collapse_whitespace", function!(collapse_whitespace, 3))?;
+    module.define_singleton_method("_strip_control_chars", function!(strip_control_chars, 1))?;
+    module.define_singleton_method(
+        "_strip_zero_width_chars",
+        function!(strip_zero_width_chars, 1),
+    )?;
+    module.define_singleton_method("_strip_bidi", function!(strip_bidi, 1))?;
+    module.define_singleton_method("_strip_zalgo", function!(strip_zalgo, 2))?;
+    module.define_singleton_method("_zalgo?", function!(is_zalgo, 2))?;
     Ok(())
 }

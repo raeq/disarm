@@ -109,6 +109,55 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "normalization" do
+    it "applies a normalization form (default :nfc)" do
+      expect(Disarm.normalize("ﬁ", form: :nfkc)).to eq("fi")
+    end
+
+    it "accepts the form as a case-insensitive string" do
+      expect(Disarm.normalize("2²", form: "NFKC")).to eq("22")
+    end
+
+    it "reports whether text is already in a form" do
+      expect(Disarm.normalized?("café", form: :nfc)).to be(true)
+      expect(Disarm.normalized?("ﬁ", form: :nfkc)).to be(false)
+    end
+
+    it "raises Disarm::InvalidArgument on an unknown form" do
+      expect { Disarm.normalize("x", form: :nfz) }
+        .to raise_error(Disarm::InvalidArgument)
+    end
+  end
+
+  describe "text cleaning" do
+    it "collapses whitespace runs to single spaces" do
+      expect(Disarm.collapse_whitespace("  a   b ")).to eq("a b")
+    end
+
+    it "strips control characters" do
+      expect(Disarm.strip_control_chars("a\u0007b")).to eq("ab")
+    end
+
+    it "can leave control characters in place" do
+      expect(Disarm.collapse_whitespace("a\u0007b", strip_control: false))
+        .to eq("a\u0007b")
+    end
+
+    it "strips zero-width characters" do
+      expect(Disarm.strip_zero_width_chars("a\u200Bb")).to eq("ab")
+    end
+
+    it "strips bidi controls" do
+      expect(Disarm.strip_bidi("a\u202Eb")).to eq("ab")
+    end
+
+    it "detects zalgo and strips it back under the threshold" do
+      zalgo = "Z" + ("\u0301" * 8)
+      expect(Disarm.zalgo?(zalgo)).to be(true)
+      expect(Disarm.zalgo?(Disarm.strip_zalgo(zalgo))).to be(false)
+    end
+  end
+
   describe "error hierarchy" do
     it "maps a non-String argument to Disarm::InvalidArgument" do
       expect { Disarm.strip_accents(42) }.to raise_error(Disarm::InvalidArgument)

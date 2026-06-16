@@ -107,7 +107,7 @@ Split text into individual grapheme clusters:
     ```
 
 !!! note
-    Input is limited to 10 MB to prevent excessive memory allocation. Raises `DisarmError` for larger inputs.
+    The **Python** binding caps `grapheme_split` input at 10 MB (raising `DisarmError`) to bound memory allocation; this guard has no counterpart in the Rust or Ruby APIs.
 
 ### grapheme_truncate
 

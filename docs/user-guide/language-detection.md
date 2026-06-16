@@ -318,12 +318,15 @@ Use `inspect_auto_lang()` to see exactly how the detection pipeline resolved for
 
 ### Return value
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `script` | `str | None` | Primary non-Latin script detected, or `None` for Latin/ASCII |
-| `chosen_lang` | `str | None` | Resolved language code, or `None` if no language matched |
-| `reason` | `str` | Detection reason: `"unambiguous_script"`, `"discriminator"`, `"script_default"`, `"latin_discriminator"`, or `"no_detection"` |
-| `discriminators_hit` | `list[str]` | Discriminator characters that triggered the match (empty if none) |
+The fields map to each binding's idiom — Python dict keys, Ruby hash keys
+(Symbols), and Rust `AutoLangInspection` fields:
+
+| Key | Description |
+|-----|-------------|
+| `script` | Primary non-Latin script detected; absent / `nil` / `None` for Latin/ASCII |
+| `chosen_lang` | Resolved language code; absent / `nil` / `None` if no language matched |
+| `reason` | Detection reason: `"unambiguous_script"`, `"discriminator"`, `"script_default"`, `"latin_discriminator"`, or `"no_detection"` |
+| `discriminators_hit` | Discriminator characters that triggered the match (empty if none) |
 
 ---
 

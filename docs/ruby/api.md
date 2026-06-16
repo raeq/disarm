@@ -243,6 +243,65 @@ Disarm.grapheme_width("👍")                         # => 2
 Disarm.terminal_width("a👍")                        # => 3
 ```
 
+## Filenames
+
+### `Disarm.sanitize_filename(text, separator: "_", max_length: 255, platform: :universal, lang: nil, preserve_extension: true)`
+
+Turn arbitrary text into a filesystem-safe filename. `platform:` is `:universal`
+(default), `:windows`, or `:posix`; `preserve_extension:` keeps the final
+extension when truncating to `max_length:`. Raises `Disarm::InvalidArgument` on an
+unknown platform.
+
+```ruby
+Disarm.sanitize_filename("My: report*.txt")         # => "My_report.txt"
+Disarm.sanitize_filename("CON", platform: :windows) # => "_CON"
+```
+
+## Reverse transliteration & untranslatable scan
+
+### `Disarm.reverse_transliterate(text, lang:)`
+
+Reverse-transliterate Latin back to a native script. `lang:` is `:el` (Greek),
+`:ru` (Russian), or `:uk` (Ukrainian).
+
+```ruby
+Disarm.reverse_transliterate("Moskva", lang: :ru)  # => "Москва"
+Disarm.reverse_transliterate("Athina", lang: :el)  # => "Αθηνα"
+```
+
+### `Disarm.find_untranslatable(text, scheme: :default, lang: nil)`
+
+Every character with no romanization — the ones `transliterate` would replace —
+as `{ char:, offset: }` hashes (byte offset), in order. `scheme:`/`lang:` mirror
+`transliterate`.
+
+```ruby
+Disarm.find_untranslatable("a🜊")                   # => [{ char: "🜊", offset: 1 }]
+Disarm.find_untranslatable("café")                 # => []
+```
+
+## Script analysis
+
+### `Disarm.detect_scripts(text)` · `Disarm.mixed_script?(text)`
+
+The Unicode scripts present (first-appearance order, Common/Inherited excluded),
+and whether more than one script is present.
+
+```ruby
+Disarm.detect_scripts("aМ")                        # => ["Latin", "Cyrillic"]
+Disarm.mixed_script?("aМ")                         # => true
+```
+
+### `Disarm.inspect_auto_lang(text)`
+
+Explain how `lang: "auto"` detection resolves `text` — a hash with `:script` and
+`:chosen_lang` (both `nil` if undetected), the `:reason`, and any
+`:discriminators_hit`.
+
+```ruby
+Disarm.inspect_auto_lang("Москва") # => { script: "Cyrillic", chosen_lang: "ru", reason: "script_default", discriminators_hit: [] }
+```
+
 ## Errors
 
 Everything disarm raises descends from `Disarm::Error < StandardError`, so a

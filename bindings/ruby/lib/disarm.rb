@@ -201,6 +201,54 @@ module Disarm
       translate_errors { _terminal_width(text, ambiguous_wide) }
     end
 
+    # Turn arbitrary text into a safe filename. `platform:` is :universal
+    # (default), :windows, or :posix; `preserve_extension:` keeps the final
+    # extension when truncating to `max_length:`. Raises Disarm::InvalidArgument
+    # on an unknown platform.
+    def sanitize_filename(text, separator: "_", max_length: 255, platform: :universal,
+                          lang: nil, preserve_extension: true)
+      translate_errors do
+        _sanitize_filename(text, separator.to_s, max_length, platform.to_s,
+                           lang&.to_s, preserve_extension)
+      end
+    end
+
+    # Reverse-transliterate Latin back to a native script. `lang:` is :el (Greek),
+    # :ru (Russian), or :uk (Ukrainian) — a Symbol or String.
+    def reverse_transliterate(text, lang:)
+      translate_errors { _reverse_transliterate(text, lang.to_s) }
+    end
+
+    # Every character in `text` with no romanization, as an array of
+    # `{ char:, offset: }` hashes (byte offset), in order of appearance.
+    # `scheme:`/`lang:` mirror #transliterate.
+    def find_untranslatable(text, scheme: :default, lang: nil)
+      translate_errors do
+        _find_untranslatable(text, scheme.to_s, lang&.to_s)
+          .map { |ch, offset| { char: ch, offset: offset } }
+      end
+    end
+
+    # The Unicode scripts present in `text`, in first-appearance order
+    # (Common/Inherited excluded), as stable UCD identifiers (e.g. "Latin").
+    def detect_scripts(text)
+      translate_errors { _detect_scripts(text) }
+    end
+
+    # Whether `text` mixes characters from more than one script.
+    def mixed_script?(text)
+      translate_errors { _is_mixed_script?(text) }
+    end
+
+    # Explain how `lang: "auto"` detection resolves `text`: a hash with
+    # `:script`, `:chosen_lang` (both nil if undetected), `:reason`, and
+    # `:discriminators_hit`.
+    def inspect_auto_lang(text)
+      script, chosen_lang, reason, discriminators = translate_errors { _inspect_auto_lang(text) }
+      { script: script, chosen_lang: chosen_lang, reason: reason,
+        discriminators_hit: discriminators }
+    end
+
     private
 
     # Run a native call, re-raising its built-in exception as the matching

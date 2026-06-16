@@ -71,6 +71,13 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed
 
+- **Docs: completed the language-neutral restructure (#50).** The
+  Adversarial-Text Defense concept page now shows Python/Rust/Ruby usage tabs (no
+  bare Python), and the stale untabbed `user-guide/getting-started.md` was removed
+  in favour of the per-language getting-started guides (now linked from the index
+  nav). With every published binding carrying install + quickstart + API and
+  `mkdocs build --strict` clean, all four #50 acceptance criteria are met.
+
 - **Docs: Ruby usage tabs across the guide pages unblocked by the parity backfill
   (#375/#50).** The normalization, text-cleaning, graphemes, filenames, and
   language-detection guides now show a runnable **Ruby** tab beside Python and

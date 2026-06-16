@@ -321,7 +321,7 @@ fn inspect_anomalies(
 ) -> (
     bool,
     Vec<String>,
-    Vec<(String, String, u32, u32, String, String)>,
+    Vec<(String, String, usize, usize, String, String)>,
     Option<String>,
 ) {
     let lex: HashSet<String> = lexicon.into_iter().collect();
@@ -334,8 +334,8 @@ fn inspect_anomalies(
             (
                 f.kind.as_str().to_string(),
                 f.token,
-                f.start as u32,
-                f.end as u32,
+                f.start,
+                f.end,
                 f.detail,
                 reason,
             )

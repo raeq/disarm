@@ -1196,7 +1196,7 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
 # --- Anomaly detection (#389) ---
 
 
-def has_anomalies(text: str, lexicon: set[str]) -> bool:
+def has_anomalies(text: str, lexicon: Iterable[str]) -> bool:
     """Whether any whitespace token carries out-of-place characters that disguise a real word.
 
     Reports a *technical fact* — a cross-script homoglyph, leet, segmentation, a
@@ -1209,7 +1209,7 @@ def has_anomalies(text: str, lexicon: set[str]) -> bool:
 
     Args:
         text: Input text.
-        lexicon: Common-word set (e.g. a frequency list for the target language).
+        lexicon: Common-word collection (set, list, …) (e.g. a frequency list for the target language).
 
     Returns:
         True if any token tripped a detector.
@@ -1220,10 +1220,10 @@ def has_anomalies(text: str, lexicon: set[str]) -> bool:
         >>> has_anomalies("a perfectly ordinary sentence", set())
         False
     """
-    return _has_anomalies(text, lexicon)
+    return _has_anomalies(text, set(lexicon))
 
 
-def inspect_anomalies(text: str, lexicon: set[str]) -> AnomalyReport:
+def inspect_anomalies(text: str, lexicon: Iterable[str]) -> AnomalyReport:
     """Full anomaly analysis: every finding with its span and a plain-language reason.
 
     Parallel to :func:`is_suspicious_hostname`'s ``HostnameAnalysis``. Returns an
@@ -1239,7 +1239,7 @@ def inspect_anomalies(text: str, lexicon: set[str]) -> AnomalyReport:
 
     Args:
         text: Input text.
-        lexicon: Common-word set (see :func:`has_anomalies`).
+        lexicon: Common-word collection (set, list, …) (see :func:`has_anomalies`).
 
     Returns:
         An ``AnomalyReport``.
@@ -1251,7 +1251,7 @@ def inspect_anomalies(text: str, lexicon: set[str]) -> AnomalyReport:
         >>> r.findings[0].detail
         'free'
     """
-    return _inspect_anomalies(text, lexicon)
+    return _inspect_anomalies(text, set(lexicon))
 
 
 # --- Output encoders (terminal, context-explicit — NOT pipeline steps) ---

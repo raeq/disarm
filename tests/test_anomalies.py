@@ -28,6 +28,11 @@ def test_lexicon_gates_the_leet_branch():
     assert has_anomalies("get fr33", {"free"})
 
 
+def test_lexicon_accepts_any_iterable():
+    assert has_anomalies("get fr33", ["free"])  # list
+    assert has_anomalies("get fr33", (w for w in ["free"]))  # generator
+
+
 def test_inspect_report_shape_and_span():
     text = "log in to paypаl today"
     r = inspect_anomalies(text, {"paypal"})

@@ -296,11 +296,23 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     if !tok.is_ascii() {
         let chars: Vec<char> = tok.chars().collect();
         for (i, &c) in chars.iter().enumerate() {
-            // invisible inside a Latin word (ZWJ/ZWNJ in Indic/Arabic are legitimate)
-            if INVISIBLE.contains(&c)
-                && chars[..i].iter().any(char::is_ascii_alphabetic)
-                && chars[i + 1..].iter().any(char::is_ascii_alphabetic)
-            {
+            if !INVISIBLE.contains(&c) {
+                continue;
+            }
+            // ZWJ/ZWNJ are legitimate joiners in many non-Latin scripts (Arabic,
+            // Indic) and in emoji sequences, so for them require ASCII-Latin
+            // letters on both sides. Every other invisible (ZWSP, word joiner,
+            // BOM, …) is never legitimate inside a word, so any letter neighbour
+            // — including accented Latin — is enough.
+            let joiner = c == '\u{200C}' || c == '\u{200D}';
+            let neighbour = |slice: &[char]| {
+                if joiner {
+                    slice.iter().any(char::is_ascii_alphabetic)
+                } else {
+                    slice.iter().copied().any(char::is_alphabetic)
+                }
+            };
+            if neighbour(&chars[..i]) && neighbour(&chars[i + 1..]) {
                 return Some(mk(AnomalyKind::Invisible, codepoint(c)));
             }
         }
@@ -455,6 +467,9 @@ mod tests {
         let l = lex(&[]);
         assert!(has_anomalies("pay\u{200B}pal", &l)); // zero-width space
         assert!(has_anomalies("he\u{200C}llo", &l)); // ZWNJ between Latin letters
+                                                     // a never-legitimate invisible (ZWSP) fires even between accented Latin
+                                                     // letters that carry no ASCII letter
+        assert!(has_anomalies("\u{00E9}\u{200B}\u{00E0}", &l)); // é ZWSP à
     }
 
     #[test]

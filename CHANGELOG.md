@@ -90,6 +90,11 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed
 
+- **Docs: Node.js usage tabs across the guide pages (#44).** The twelve guide
+  pages that carry Python/Rust/Ruby tabs now also show a runnable **Node** tab —
+  38 tabs in all, matching the Ruby coverage. Every Node example is executed
+  against the built addon by the doc gate (`scripts/check_doc_node_examples.mjs`).
+
 - **Docs: completed the language-neutral restructure (#50).** The
   Adversarial-Text Defense concept page now shows Python/Rust/Ruby usage tabs (no
   bare Python), and the stale untabbed `user-guide/getting-started.md` was removed

@@ -235,6 +235,19 @@ All 10 Brahmic scripts use virama/mātrā-aware transliteration: consonants carr
     Disarm.transliterate("東京タワー", lang: :ja) # => "dong jing tawa"
     ```
 
+=== "Node"
+
+    ```ts
+    import { transliterate, slugify } from 'disarm'
+
+    transliterate('北京市') // => 'bei jing shi'
+    slugify('北京烤鸭') // => 'bei-jing-kao-ya'
+    transliterate('서울') // => 'seo ul'
+    slugify('대한민국') // => 'dae-han-min-gug'
+    transliterate('ひらがな') // => 'hiragana'
+    transliterate('東京タワー', { lang: 'ja' }) // => 'dong jing tawa'
+    ```
+
 ## Reverse transliteration
 
 disarm can convert romanized Latin text back to native script for selected languages using the `target` parameter:
@@ -398,6 +411,15 @@ transliterate("Москва", lang=LANG_AUTO)
 
     Disarm.transliterate("Ürümqi", lang: :de)       # => "Ueruemqi"
     Disarm.slugify("Ärger im Büro", lang: :de)       # => "aerger-im-buero"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { transliterate, slugify } from 'disarm'
+
+    transliterate('Ürümqi', { lang: 'de' }) // => 'Ueruemqi'
+    slugify('Ärger im Büro', { lang: 'de' }) // => 'aerger-im-buero'
     ```
 
 ### With classes

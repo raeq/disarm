@@ -42,6 +42,18 @@ Remove diacritical marks while preserving base characters:
     Disarm.strip_accents("São Paulo") # => "Sao Paulo"
     ```
 
+=== "Node"
+
+    ```ts
+    import { stripAccents } from 'disarm'
+
+    stripAccents('café') // => 'cafe'
+    stripAccents('naïve') // => 'naive'
+    stripAccents('résumé') // => 'resume'
+    stripAccents('Ångström') // => 'Angstrom'
+    stripAccents('São Paulo') // => 'Sao Paulo'
+    ```
+
 ### How it works
 
 1. NFD decompose — split precomposed characters into base + combining marks
@@ -88,6 +100,15 @@ Remove excessive combining marks (zalgo text abuse) while preserving legitimate 
     # Legitimate diacritics are preserved; zalgo stacking is capped
     Disarm.strip_zalgo("café")   # => "café"
     Disarm.zalgo?("café")        # => false
+    ```
+
+=== "Node"
+
+    ```ts
+    import { stripZalgo, isZalgo } from 'disarm'
+
+    stripZalgo('café') // => 'café'
+    isZalgo('café') // => false
     ```
 
 ### strip_zalgo vs strip_accents
@@ -158,6 +179,17 @@ Full Unicode case folding per CaseFolding.txt (Unicode 16.0) — a more thorough
     Disarm.fold_case("ς")        # => "σ"
     ```
 
+=== "Node"
+
+    ```ts
+    import { foldCase } from 'disarm'
+
+    foldCase('HELLO') // => 'hello'
+    foldCase('Straße') // => 'strasse'
+    foldCase('ﬁnance') // => 'finance'
+    foldCase('ς') // => 'σ'
+    ```
+
 ### When to use fold_case vs .lower()
 
 | Operation | `ß` | `İ` | `ﬁ` | `µ` | `ſ` | `ς` |
@@ -205,6 +237,14 @@ Normalize all Unicode whitespace variants to single ASCII spaces:
 
     ```ruby
     Disarm.collapse_whitespace("  hello   world  ")  # => "hello world"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { collapseWhitespace } from 'disarm'
+
+    collapseWhitespace('  hello   world  ') // => 'hello world'
     ```
 
 ### Control characters

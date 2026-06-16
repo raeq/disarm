@@ -35,6 +35,16 @@ disarm generates URL-safe slugs from Unicode text. The `slugify` operation is pa
     Disarm.slugify("Ünïcödé Téxt")             # => "unicode-text"
     ```
 
+=== "Node"
+
+    ```ts
+    import { slugify } from 'disarm'
+
+    slugify('Hello, World!') // => 'hello-world'
+    slugify('My Blog Post — Draft #3') // => 'my-blog-post-draft-3'
+    slugify('Ünïcödé Téxt') // => 'unicode-text'
+    ```
+
 ## Parameters
 
 ### separator
@@ -55,6 +65,15 @@ The character used between words (default: `"-"`):
 
     Disarm.slugify("hello world", separator: "_")  # => "hello_world"
     Disarm.slugify("hello world", separator: ".")  # => "hello.world"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { slugify } from 'disarm'
+
+    slugify('hello world', { separator: '_' }) // => 'hello_world'
+    slugify('hello world', { separator: '.' }) // => 'hello.world'
     ```
 
 ### lowercase
@@ -137,6 +156,14 @@ Language profile for transliteration:
     require "disarm"
 
     Disarm.slugify("Ärger im Büro", lang: :de)  # => "aerger-im-buero"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { slugify } from 'disarm'
+
+    slugify('Ärger im Büro', { lang: 'de' }) // => 'aerger-im-buero'
     ```
 
 Use `lang="auto"` to auto-detect the language from the script. For ambiguous

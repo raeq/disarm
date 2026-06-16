@@ -57,6 +57,15 @@ on raw, untrusted input:
     Disarm.strip_obfuscation("h​i")       # => "hi"
     ```
 
+=== "Node"
+
+    ```ts
+    import { stripObfuscation } from 'disarm'
+
+    stripObfuscation('Ｈｅｌｌｏ') // => 'Hello'
+    stripObfuscation('h\u200Bi') // => 'hi'
+    ```
+
 You do not need to pre-normalise before handing text to `strip_obfuscation()` or
 `normalize_confusables()`; they start from NFKC themselves.
 
@@ -110,6 +119,16 @@ quantities — so `4`, `0`, `1` are left alone:
     Disarm.normalize_confusables("pаypаl")        # => "paypal"  (Cyrillic а → a)
     ```
 
+=== "Node"
+
+    ```ts
+    import { normalizeConfusables } from 'disarm'
+
+    normalizeConfusables('gpt-4o') // => 'gpt-4o'
+    normalizeConfusables('Llama-3.1-70B') // => 'Llama-3.1-70B'
+    normalizeConfusables('pаypаl') // => 'paypal'
+    ```
+
 What TR39 covers instead of leet tables is *visual* confusability: a Cyrillic
 `а` that renders identically to Latin `a` folds to `a`. See
 [Confusable Detection](confusables.md) for the table and its limits.
@@ -161,6 +180,14 @@ text — an ASCII index built that way simply loses the document:
 
     # transliterate keeps non-Latin content, searchable, as readable romanisation:
     Disarm.transliterate("Привет мир")   # => "Privet mir"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { transliterate } from 'disarm'
+
+    transliterate('Привет мир') // => 'Privet mir'
     ```
 
 This is the wedge for index/retrieval: non-Latin content stays findable in an

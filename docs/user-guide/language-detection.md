@@ -43,6 +43,14 @@ The entire pipeline is deterministic, O(n), and fail-safe: if detection is uncer
     Disarm.transliterate("Київ", lang: "auto")  # => "Kyiv"
     ```
 
+=== "Node"
+
+    ```ts
+    import { transliterate } from 'disarm'
+
+    transliterate('Київ', { lang: 'auto' }) // => 'Kyiv'
+    ```
+
 ---
 
 ## Stage 1: Script Identification
@@ -75,6 +83,16 @@ disarm classifies each character by its Unicode script property using a static t
     Disarm.detect_scripts("Москва")       # => ["Cyrillic"]
     Disarm.detect_scripts("Hello World")  # => ["Latin"]
     Disarm.mixed_script?("Moсква")        # => true
+    ```
+
+=== "Node"
+
+    ```ts
+    import { detectScripts, isMixedScript } from 'disarm'
+
+    detectScripts('Москва') // => ['Cyrillic']
+    detectScripts('Hello World') // => ['Latin']
+    isMixedScript('Moсква') // => true
     ```
 
 For Latin-only text, no language override is applied (stage 2 may still detect Latin discriminators like Vietnamese or Turkish characters).
@@ -216,6 +234,16 @@ Key properties:
     Disarm.transliterate("Москва", lang: "auto")   # => "Moskva"
     ```
 
+=== "Node"
+
+    ```ts
+    import { transliterate } from 'disarm'
+
+    transliterate('Київ', { lang: 'auto' }) // => 'Kyiv'
+    transliterate('Београд', { lang: 'auto' }) // => 'Beograd'
+    transliterate('Москва', { lang: 'auto' }) // => 'Moskva'
+    ```
+
 ---
 
 ## Stage 3: Fallback
@@ -314,6 +342,15 @@ Use `inspect_auto_lang()` to see exactly how the detection pipeline resolved for
     ```ruby
     Disarm.inspect_auto_lang("Київ")  # => { script: "Cyrillic", chosen_lang: "uk", reason: "discriminator", discriminators_hit: ["ї"] }
     Disarm.inspect_auto_lang("Straße") # => { script: nil, chosen_lang: "de", reason: "latin_discriminator", discriminators_hit: ["ß"] }
+    ```
+
+=== "Node"
+
+    ```ts
+    import { inspectAutoLang } from 'disarm'
+
+    inspectAutoLang('Київ') // => { script: 'Cyrillic', chosenLang: 'uk', reason: 'discriminator', discriminatorsHit: ['ї'] }
+    inspectAutoLang('Straße') // => { chosenLang: 'de', reason: 'latin_discriminator', discriminatorsHit: ['ß'] }
     ```
 
 ### Return value

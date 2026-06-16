@@ -49,6 +49,16 @@ Standard character-by-character transliteration — the approach used by Unideco
     Disarm.transliterate("کتاب فارسی", lang: :fa)  # => "ktab farsy"
     ```
 
+=== "Node"
+
+    ```ts
+    import { transliterate } from 'disarm'
+
+    transliterate('كتب العربية') // => "ktb al'rbyh"
+    transliterate('שלום', { lang: 'he' }) // => 'shlvm'
+    transliterate('کتاب فارسی', { lang: 'fa' }) // => 'ktab farsy'
+    ```
+
 This is the same approach as every other transliteration library. Each character maps to a fixed ASCII equivalent via a lookup table. No context, no dictionary, no ambiguity resolution. Fast (O(1) per character), deterministic, and produces the same output as Unidecode for these scripts.
 
 **When to use:** Machine processing where human readability is not required (search indexing, deduplication, database keys).
@@ -156,6 +166,14 @@ The Arabic dictionary covers 99%+ of newspaper vocabulary. The bigram table reso
     Disarm.transliterate("السلام عليكم")  # => "alslam 'lykm"
     ```
 
+=== "Node"
+
+    ```ts
+    import { transliterate } from 'disarm'
+
+    transliterate('السلام عليكم') // => "alslam 'lykm"
+    ```
+
 <!--- skip: next -->
 ```python
 # With context — vowels restored, readable (requires context dictionaries)
@@ -224,6 +242,14 @@ Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian ra
     Disarm.transliterate("کتاب فارسی", lang: :fa)  # => "ktab farsy"
     ```
 
+=== "Node"
+
+    ```ts
+    import { transliterate } from 'disarm'
+
+    transliterate('کتاب فارسی', { lang: 'fa' }) // => 'ktab farsy'
+    ```
+
 <!--- skip: next -->
 ```python
 # With context — vowels from curated dictionary (requires context dictionaries)
@@ -273,6 +299,14 @@ The Hebrew dictionary is built from [Project Ben Yehuda](https://github.com/proj
 
     # Without context
     Disarm.transliterate("שלום", lang: :he)  # => "shlvm"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { transliterate } from 'disarm'
+
+    transliterate('שלום', { lang: 'he' }) // => 'shlvm'
     ```
 
 <!--- skip: next -->

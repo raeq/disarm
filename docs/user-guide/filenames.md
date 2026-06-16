@@ -43,6 +43,16 @@
     Disarm.sanitize_filename("CON.txt")          # => "_CON.txt"
     ```
 
+=== "Node"
+
+    ```ts
+    import { sanitizeFilename } from 'disarm'
+
+    sanitizeFilename('my<file>:v2.txt') // => 'my_file_v2.txt'
+    sanitizeFilename('café résumé.pdf') // => 'cafe_resume.pdf'
+    sanitizeFilename('CON.txt') // => '_CON.txt'
+    ```
+
 ## Parameters
 
 ### separator
@@ -67,6 +77,14 @@ Character used to replace illegal characters (default: `"_"`):
 
     ```ruby
     Disarm.sanitize_filename("hello:world", separator: "-")  # => "hello-world"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { sanitizeFilename } from 'disarm'
+
+    sanitizeFilename('hello:world', { separator: '-' }) // => 'hello-world'
     ```
 
 ### max_length
@@ -126,6 +144,16 @@ Target platform for sanitization rules:
     Disarm.sanitize_filename("CON.txt", platform: :windows)         # => "_CON.txt"
     ```
 
+=== "Node"
+
+    ```ts
+    import { sanitizeFilename } from 'disarm'
+
+    sanitizeFilename('my:file?.txt', { platform: 'universal' }) // => 'my_file.txt'
+    sanitizeFilename('my:file?.txt', { platform: 'posix' }) // => 'my:file?.txt'
+    sanitizeFilename('CON.txt', { platform: 'windows' }) // => '_CON.txt'
+    ```
+
 | Platform | Illegal characters | Reserved names |
 |---|---|---|
 | `"universal"` | Union of POSIX + Windows rules | CON, PRN, AUX, NUL, COM1–9, LPT1–9 |
@@ -165,6 +193,15 @@ Language profile for transliteration of non-ASCII characters:
     Disarm.sanitize_filename("Ärger.txt", lang: "de")  # => "Aerger.txt"
     # Default profile strips the diaeresis (ä → a)
     Disarm.sanitize_filename("Ärger.txt")              # => "Arger.txt"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { sanitizeFilename } from 'disarm'
+
+    sanitizeFilename('Ärger.txt', { lang: 'de' }) // => 'Aerger.txt'
+    sanitizeFilename('Ärger.txt') // => 'Arger.txt'
     ```
 
 ### preserve_extension

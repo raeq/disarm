@@ -72,6 +72,17 @@ Count the number of user-perceived characters:
     Disarm.grapheme_len("नमस्ते")     # => 3
     ```
 
+=== "Node"
+
+    ```ts
+    import { graphemeLen } from 'disarm'
+
+    graphemeLen('café') // => 4
+    graphemeLen('👨‍👩‍👧‍👦') // => 1
+    graphemeLen('🇬🇧') // => 1
+    graphemeLen('नमस्ते') // => 3
+    ```
+
 ### grapheme_split
 
 Split text into individual grapheme clusters:
@@ -104,6 +115,15 @@ Split text into individual grapheme clusters:
     ```ruby
     Disarm.grapheme_split("café")    # => ["c", "a", "f", "é"]
     Disarm.grapheme_split("🇫🇷🇬🇧")     # => ["🇫🇷", "🇬🇧"]
+    ```
+
+=== "Node"
+
+    ```ts
+    import { graphemeSplit } from 'disarm'
+
+    graphemeSplit('café') // => ['c', 'a', 'f', 'é']
+    graphemeSplit('🇫🇷🇬🇧') // => ['🇫🇷', '🇬🇧']
     ```
 
 !!! note
@@ -147,6 +167,16 @@ Truncate text to a maximum number of grapheme clusters without splitting any clu
     Disarm.grapheme_truncate("café", 3)         # => "caf"
     # Emoji and flags are never split
     Disarm.grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2)      # => "🇬🇧🇫🇷"
+    ```
+
+=== "Node"
+
+    ```ts
+    import { graphemeTruncate } from 'disarm'
+
+    graphemeTruncate('Hello World', 5) // => 'Hello'
+    graphemeTruncate('café', 3) // => 'caf'
+    graphemeTruncate('🇬🇧🇫🇷🇩🇪', 2) // => '🇬🇧🇫🇷'
     ```
 
 Unlike byte-level slicing (`text[:n]`) or codepoint-level slicing, `grapheme_truncate` never produces corrupted output — no broken emoji, no orphaned combining marks, no split Hangul syllables.
@@ -312,6 +342,17 @@ over [UAX #11 East Asian Width](https://www.unicode.org/reports/tr11/):
     Disarm.grapheme_width("👨‍👩‍👧‍👦")    # => 2
     ```
 
+=== "Node"
+
+    ```ts
+    import { terminalWidth, graphemeWidth } from 'disarm'
+
+    terminalWidth('hello') // => 5
+    terminalWidth('世界') // => 4
+    terminalWidth('a😀') // => 3
+    graphemeWidth('👨‍👩‍👧‍👦') // => 2
+    ```
+
 East Asian **Ambiguous** characters are 1 column by default (matching modern
 UTF-8 terminals); pass `ambiguous_wide=True` for legacy double-width CJK
 terminals:
@@ -337,6 +378,15 @@ terminals:
     ```ruby
     Disarm.terminal_width("¡")                       # => 1
     Disarm.terminal_width("¡", ambiguous_wide: true) # => 2
+    ```
+
+=== "Node"
+
+    ```ts
+    import { terminalWidth } from 'disarm'
+
+    terminalWidth('¡') // => 1
+    terminalWidth('¡', { ambiguousWide: true }) // => 2
     ```
 
 This measures **terminal cells**, not pixels or font metrics. Tabs are not

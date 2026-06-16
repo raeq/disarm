@@ -107,14 +107,18 @@ spoofs, multi-character confusables (`rn`→`m`), and Unicode-version skew. See 
 
 ## What to use
 
+Function names below are language-neutral; see each binding's tab/reference for
+its exact signature (e.g. Rust's `normalize_confusables` takes an explicit
+`TargetScript`).
+
 | Goal | Use | Pipeline |
 |---|---|---|
-| Fold confusables in a string (TR39) | `normalize_confusables(text)` | NFKC-free, single pass |
-| Maximum deobfuscation (homoglyph + zalgo + invisible + bidi + emoji) | `strip_obfuscation(text)` | NFKC → strip zalgo → strip bidi → strip zero-width → demojize → confusables → strip accents → collapse |
-| Clean untrusted user input | `normalize_user_input(text)` | NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse → path-safety |
-| General security cleanup | `security_clean(text)` | NFKC → confusables → strip bidi → collapse → path-safety |
-| Detect (don't transform) | `is_confusable(text)`, `is_mixed_script(text)` | predicate |
-| Check a domain for IDN spoofing | `is_suspicious_hostname(host)` | per-label script + confusable analysis |
+| Fold confusables in a string (TR39) | `normalize_confusables` | NFKC-free, single pass |
+| Maximum deobfuscation (homoglyph + zalgo + invisible + bidi + emoji) | `strip_obfuscation` | NFKC → strip zalgo → strip bidi → strip zero-width → demojize → confusables → strip accents → collapse |
+| Clean untrusted user input | `normalize_user_input` | NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse → path-safety |
+| General security cleanup | `security_clean` | NFKC → confusables → strip bidi → collapse → path-safety |
+| Detect (don't transform) | `is_confusable`, `is_mixed_script` | predicate |
+| Check a domain for IDN spoofing | `is_suspicious_hostname` | per-label script + confusable analysis |
 
 === "Python"
 

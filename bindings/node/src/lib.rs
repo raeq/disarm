@@ -4,7 +4,7 @@
 //! **raw native shim**: each function is a thin wrapper over `disarm_core::api`
 //! with positional arguments and string-token enums. The idiomatic TypeScript
 //! surface — options objects, string-union types, sensible defaults, and the
-//! `DisarmError` class — lives in the hand-written `src/index.ts` layer that calls
+//! `DisarmError` class — lives in the hand-written `index.ts` layer that calls
 //! these. Keeping the shim dumb lets the core's surface be reshaped without
 //! re-teaching the binding its idioms.
 //!
@@ -81,7 +81,9 @@ pub fn find_untranslatable(
         .into_iter()
         .map(|u| Untranslatable {
             char: u.ch.to_string(),
-            offset: u.offset as u32,
+            // i64 (→ JS number) holds any real byte offset without the u32
+            // truncation a >4 GiB input could otherwise cause.
+            offset: u.offset as i64,
         })
         .collect())
 }
@@ -92,7 +94,7 @@ pub struct Untranslatable {
     /// The untranslatable character.
     pub char: String,
     /// Its byte offset in the input string.
-    pub offset: u32,
+    pub offset: i64,
 }
 
 // ── Confusables (TR39) ────────────────────────────────────────────────────────

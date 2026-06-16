@@ -50,12 +50,14 @@ jobs:
           cache: npm
           cache-dependency-path: bindings/node/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
         with:
           targets: ${{ matrix.settings.target }}
 
       - name: Install the aarch64 cross linker (Linux arm64 only)
-        if: matrix.settings.cross-linker != ''
+        # Truthy check: runs only on the one matrix entry that sets `cross-linker`
+        # (an unset value is falsy), so the apt step never fires on macOS/Windows.
+        if: matrix.settings.cross-linker
         working-directory: .
         run: |
           sudo apt-get update

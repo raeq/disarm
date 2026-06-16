@@ -138,9 +138,9 @@ module Disarm
       translate_errors { _normalized?(text, form.to_s.upcase) }
     end
 
-    # Collapse every run of Unicode whitespace to a single ASCII space. By
-    # default also strips control characters (`strip_control:`) and zero-width
-    # characters (`strip_zero_width:`).
+    # Collapse every run of Unicode whitespace to a single ASCII space and trim
+    # leading/trailing whitespace. By default also strips control characters
+    # (`strip_control:`) and zero-width characters (`strip_zero_width:`).
     def collapse_whitespace(text, strip_control: true, strip_zero_width: true)
       translate_errors { _collapse_whitespace(text, strip_control, strip_zero_width) }
     end

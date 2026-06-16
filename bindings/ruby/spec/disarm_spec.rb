@@ -110,7 +110,10 @@ RSpec.describe Disarm do
   end
 
   describe "normalization" do
-    it "applies a normalization form (default :nfc)" do
+    it "defaults to NFC and accepts an explicit form" do
+      # The default form is :nfc, which leaves the ﬁ ligature intact;
+      # :nfkc is the compatibility form that decomposes it.
+      expect(Disarm.normalize("ﬁ")).to eq("ﬁ")
       expect(Disarm.normalize("ﬁ", form: :nfkc)).to eq("fi")
     end
 

@@ -14,48 +14,16 @@ env:
 
 jobs:
   # ── Tier 3 release gate (#159, epic #326) ───────────────────────
-  # The exhaustive Rust domain tests (#[ignore]) and the Python formal
-  # invariants (@pytest.mark.formal) are intentionally excluded from the
-  # fast PR CI (ci.yml). On a release/publish they become a HARD gate:
-  # every build job `needs:` this, and so does `publish`, so a Tier-3
-  # failure blocks the upload to PyPI (no wheels are even built). The
-  # #[ignore] / @pytest.mark.formal markers stay intact — they are
-  # re-enabled here explicitly via `-- --ignored` / `-m formal`.
-  # Cargo.lock is gitignored for this library, so it is generated in CI.
+  # The exhaustive + formal pre-publish regimen, defined once in the reusable
+  # workflow .github/workflows/tier3.yml and shared by every publish path. Every
+  # build job `needs:` this, and so do `publish` / `publish-crate`, so a Tier-3
+  # failure blocks the upload to PyPI and crates.io (no wheels are even built).
+  # The gem (publish-ruby.yml) and the npm addon (publish-node.yml) gate on the
+  # SAME reusable workflow, so the exhaustive net guards the core and every
+  # binding alike — no artifact ships unless it is green.
   tier3:
     name: Tier 3 (exhaustive + formal)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
-
-      - name: Rust exhaustive domain tests (Tier 3)
-        run: cargo test --no-default-features --test exhaustive_transliterate -- --ignored
-
-      - name: Install maturin
-        # Pin to the same range as the project's build-system requirement
-        # (pyproject: maturin>=1.13.3,<2) so a future maturin 2.x can't break the gate.
-        run: pip install "maturin[patchelf]>=1.13.3,<2"
-
-      - name: Build wheel and install (for formal invariants)
-        run: |
-          maturin build --out dist
-          # Install the test dependencies, then force the freshly-built WHEEL as
-          # the installed `disarm`. `.[test]` alone would (re)build disarm from the
-          # source checkout and shadow the wheel; --force-reinstall --no-deps swaps
-          # only the package so the formal invariants run against the release
-          # artifact, not a source rebuild.
-          pip install ".[test]"
-          pip install --force-reinstall --no-deps dist/*.whl
-
-      - name: Python formal invariant tests (Tier 3)
-        run: pytest -m formal
+    uses: ./.github/workflows/tier3.yml
 
   build-sdist:
     name: Build source distribution

@@ -111,7 +111,15 @@ jobs:
           npx napi build --platform --js binding.js --dts binding.d.ts
           npx tsc
 
-      - name: npm publish (provenance)
+      - name: Update npm for OIDC trusted publishing
+        # Trusted Publishing needs npm CLI >= 11.5 (Node 20 bundles 10.x). Pinned
+        # for a reproducible release; bump deliberately.
+        run: npm install -g npm@11.5.1
+
+      - name: npm publish (OIDC trusted publishing + provenance)
+        # No long-lived NPM_TOKEN: a Trusted Publisher configured on npmjs.org for
+        # repo raeq/disarm + workflow publish-node.yml lets npm mint a short-lived
+        # OIDC credential from `id-token: write` (the same model as the RubyGems
+        # path in publish-ruby.yml, per BINDINGS.md). `--provenance` attaches a
+        # signed build attestation.
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

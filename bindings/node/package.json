@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/raeq/disarm.git",
+    "url": "git+https://github.com/raeq/disarm.git",
     "directory": "bindings/node"
   },
   "homepage": "https://docs.disarm.dev",

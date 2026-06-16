@@ -257,6 +257,13 @@ RSpec.describe Disarm do
       expect(Disarm.inspect_anomalies("paypаl")[:anomalous]).to be(true)
     end
 
+    it "treats an explicit nil lexicon as empty (not an error)" do
+      # Parity with the `= []` default and the other bindings' null handling.
+      expect(Disarm.has_anomalies?("paypаl", nil)).to be(true) # Cyrillic а
+      expect(Disarm.has_anomalies?("a perfectly clean sentence", nil)).to be(false)
+      expect(Disarm.inspect_anomalies("paypаl", nil)[:anomalous]).to be(true)
+    end
+
     it "spares clean text and literal numbers" do
       expect(Disarm.has_anomalies?("a perfectly clean sentence", lex)).to be(false)
       expect(Disarm.has_anomalies?("the win32 api and mp3 file", lex)).to be(false)

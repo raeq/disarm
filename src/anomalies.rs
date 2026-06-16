@@ -405,12 +405,14 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     let has_sym = core
         .chars()
         .any(|c| c.is_ascii_digit() || matches!(c, '@' | '$' | '|' | '!' | '+'));
-    if has_sym {
+    // 4.1: cap the token length BEFORE decoding, so neither the O(n) `leet_demangle`
+    // allocation nor the O(n²) `nearest()` path can be driven by an unbounded
+    // attacker-supplied token (the decode is never longer than the token itself).
+    if has_sym && core.chars().count() <= MAX_LEET_LEN {
         // 7.1: compute the leet decode first so the ordinal/time scan only runs when a
-        // decode actually exists. 4.1: cap the demangled length so the O(n²) `nearest()`
-        // path cannot be driven by an unbounded attacker-supplied token.
+        // decode actually exists.
         if let Some(d) = leet_demangle(core) {
-            if d.chars().count() <= MAX_LEET_LEN && !is_ordinal_or_time(core) {
+            if !is_ordinal_or_time(core) {
                 let base = base_ascii(core);
                 // reject a real word with a trailing literal number (Power5 -> power); keep
                 // interior substitutions (ab0ut) and short leet (th3 -> the): trust base at

@@ -284,6 +284,10 @@ module Disarm
     # Any other Enumerable (Set, etc.) is mapped to String. A bare String is rejected
     # with ArgumentError — callers must wrap it in an Array: ["word"].
     def coerce_lexicon(lexicon)
+      # An explicit nil is treated as an empty lexicon (parity with the `= []`
+      # default and the other bindings' null handling), not an error.
+      return [] if lexicon.nil?
+
       raise ::ArgumentError, "lexicon must be an Array or Enumerable, not a String" \
         if lexicon.is_a?(::String)
 

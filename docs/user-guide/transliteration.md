@@ -104,6 +104,8 @@ Kyiv (the default mapping would not), and German ü → ue:
 === "Node"
 
     ```ts
+    import { transliterate } from 'disarm'
+
     transliterate('Київ', { lang: 'uk' }) // => 'Kyiv'
     transliterate('Ärger', { lang: 'de' }) // => 'Aerger'
     ```

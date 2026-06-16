@@ -416,6 +416,8 @@ transliterate("Москва", lang=LANG_AUTO)
 === "Node"
 
     ```ts
+    import { transliterate, slugify } from 'disarm'
+
     transliterate('Ürümqi', { lang: 'de' }) // => 'Ueruemqi'
     slugify('Ärger im Büro', { lang: 'de' }) // => 'aerger-im-buero'
     ```

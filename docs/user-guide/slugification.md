@@ -70,6 +70,8 @@ The character used between words (default: `"-"`):
 === "Node"
 
     ```ts
+    import { slugify } from 'disarm'
+
     slugify('hello world', { separator: '_' }) // => 'hello_world'
     slugify('hello world', { separator: '.' }) // => 'hello.world'
     ```
@@ -159,6 +161,8 @@ Language profile for transliteration:
 === "Node"
 
     ```ts
+    import { slugify } from 'disarm'
+
     slugify('Ärger im Büro', { lang: 'de' }) // => 'aerger-im-buero'
     ```
 

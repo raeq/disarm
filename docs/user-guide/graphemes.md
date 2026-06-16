@@ -383,6 +383,8 @@ terminals:
 === "Node"
 
     ```ts
+    import { terminalWidth } from 'disarm'
+
     terminalWidth('¡') // => 1
     terminalWidth('¡', { ambiguousWide: true }) // => 2
     ```

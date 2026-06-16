@@ -237,6 +237,8 @@ Key properties:
 === "Node"
 
     ```ts
+    import { transliterate } from 'disarm'
+
     transliterate('Київ', { lang: 'auto' }) // => 'Kyiv'
     transliterate('Београд', { lang: 'auto' }) // => 'Beograd'
     transliterate('Москва', { lang: 'auto' }) // => 'Moskva'

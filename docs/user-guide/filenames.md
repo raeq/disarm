@@ -82,6 +82,8 @@ Character used to replace illegal characters (default: `"_"`):
 === "Node"
 
     ```ts
+    import { sanitizeFilename } from 'disarm'
+
     sanitizeFilename('hello:world', { separator: '-' }) // => 'hello-world'
     ```
 
@@ -145,6 +147,8 @@ Target platform for sanitization rules:
 === "Node"
 
     ```ts
+    import { sanitizeFilename } from 'disarm'
+
     sanitizeFilename('my:file?.txt', { platform: 'universal' }) // => 'my_file.txt'
     sanitizeFilename('my:file?.txt', { platform: 'posix' }) // => 'my:file?.txt'
     sanitizeFilename('CON.txt', { platform: 'windows' }) // => '_CON.txt'
@@ -194,6 +198,8 @@ Language profile for transliteration of non-ASCII characters:
 === "Node"
 
     ```ts
+    import { sanitizeFilename } from 'disarm'
+
     sanitizeFilename('Ärger.txt', { lang: 'de' }) // => 'Aerger.txt'
     sanitizeFilename('Ärger.txt') // => 'Arger.txt'
     ```

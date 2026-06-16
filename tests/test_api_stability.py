@@ -76,6 +76,8 @@ EXPECTED_ALL = {
     "inspect_anomalies",
     "AnomalyReport",
     "Finding",
+    # Reusable anomaly lexicon handle (HAI-SDLC 6.1)
+    "Lexicon",
     # Output encoders
     "escape_html",
     "percent_encode",

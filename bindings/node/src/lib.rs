@@ -17,7 +17,7 @@
 use std::collections::HashSet;
 
 use disarm_core::api;
-use napi::bindgen_prelude::Error as NapiError;
+use napi::bindgen_prelude::{ClassInstance, Either, Error as NapiError};
 use napi_derive::napi;
 
 /// Map a core error to a napi error, tagging the kind so the TS layer re-raises
@@ -391,18 +391,50 @@ pub struct AnomalyReport {
     pub reason: Option<String>,
 }
 
-/// `hasAnomalies(text, lexicon)` — `lexicon` is an array of common words.
+/// A reusable, opaque lexicon handle (HAI-SDLC 6.1).
+///
+/// `hasAnomalies` / `inspectAnomalies` rebuild a `HashSet<String>` from the
+/// caller's word array on every call. A caller hitting these in a loop with a
+/// large lexicon pays that rebuild each time. `Lexicon` builds the internal set
+/// once in its constructor and is then reused across calls.
 #[napi]
-pub fn has_anomalies(text: String, lexicon: Vec<String>) -> bool {
-    let lex = to_lexicon(lexicon);
-    api::has_anomalies(&text, &lex)
+pub struct Lexicon {
+    inner: HashSet<String>,
+}
+
+#[napi]
+impl Lexicon {
+    /// Build a reusable lexicon from a word list, folding it into the internal
+    /// set once.
+    #[napi(constructor)]
+    pub fn new(words: Vec<String>) -> Self {
+        Self {
+            inner: to_lexicon(words),
+        }
+    }
+}
+
+/// `hasAnomalies(text, lexicon)` — `lexicon` is either an array of common words
+/// or a prebuilt `Lexicon` handle (no per-call rebuild).
+#[napi]
+pub fn has_anomalies(text: String, lexicon: Either<Vec<String>, ClassInstance<Lexicon>>) -> bool {
+    match lexicon {
+        Either::A(words) => api::has_anomalies(&text, &to_lexicon(words)),
+        Either::B(lex) => api::has_anomalies(&text, &lex.inner),
+    }
 }
 
 /// `inspectAnomalies(text, lexicon)` — full analysis with per-token findings.
+/// `lexicon` is either an array of common words or a prebuilt `Lexicon` handle.
 #[napi]
-pub fn inspect_anomalies(text: String, lexicon: Vec<String>) -> AnomalyReport {
-    let lex = to_lexicon(lexicon);
-    let r = api::inspect_anomalies(&text, &lex);
+pub fn inspect_anomalies(
+    text: String,
+    lexicon: Either<Vec<String>, ClassInstance<Lexicon>>,
+) -> AnomalyReport {
+    let r = match lexicon {
+        Either::A(words) => api::inspect_anomalies(&text, &to_lexicon(words)),
+        Either::B(lex) => api::inspect_anomalies(&text, &lex.inner),
+    };
     AnomalyReport {
         anomalous: r.anomalous,
         kinds: r.kinds.iter().map(|k| k.as_str().to_string()).collect(),

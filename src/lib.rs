@@ -266,8 +266,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<py::hostname::HostnameAnalysis>()?;
     m.add_function(wrap_pyfunction!(py::anomalies::_has_anomalies, m)?)?;
     m.add_function(wrap_pyfunction!(py::anomalies::_inspect_anomalies, m)?)?;
+    m.add_function(wrap_pyfunction!(py::anomalies::_has_anomalies_lex, m)?)?;
+    m.add_function(wrap_pyfunction!(py::anomalies::_inspect_anomalies_lex, m)?)?;
     m.add_class::<py::anomalies::AnomalyReport>()?;
     m.add_class::<py::anomalies::Finding>()?;
+    m.add_class::<py::anomalies::Lexicon>()?;
 
     // Encoding detection
     m.add_function(wrap_pyfunction!(py::encoding::_detect_encoding, m)?)?;

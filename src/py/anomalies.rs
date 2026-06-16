@@ -106,6 +106,36 @@ impl From<crate::api::AnomalyReport> for AnomalyReport {
     }
 }
 
+/// A reusable, opaque lexicon handle (HAI-SDLC 6.1).
+///
+/// `has_anomalies` / `inspect_anomalies` rebuild a `HashSet<String>` from the
+/// caller's word collection on every call. A caller hitting these in a loop with
+/// a large lexicon pays that rebuild each time. `Lexicon` builds the internal set
+/// once and is then reused across calls. It is immutable, hence `frozen`.
+#[pyclass(frozen)]
+#[pyo3(name = "Lexicon")]
+pub struct Lexicon {
+    pub(crate) inner: HashSet<String>,
+}
+
+#[pymethods]
+impl Lexicon {
+    #[new]
+    fn new(words: Vec<String>) -> Self {
+        // Accept any Python iterable of strings (`set`, `list`, generator, …),
+        // mirroring `has_anomalies(text, lexicon=...)`, and fold it into the
+        // internal set once.
+        Self {
+            inner: words.into_iter().collect(),
+        }
+    }
+
+    /// Number of distinct words in the lexicon.
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+}
+
 /// `has_anomalies(text, lexicon=None) -> bool`
 #[pyfunction]
 #[pyo3(signature = (text, lexicon=None))]
@@ -120,4 +150,16 @@ pub fn _has_anomalies(text: &str, lexicon: Option<HashSet<String>>) -> bool {
 pub fn _inspect_anomalies(text: &str, lexicon: Option<HashSet<String>>) -> AnomalyReport {
     let lexicon = lexicon.unwrap_or_default();
     crate::api::inspect_anomalies(text, &lexicon).into()
+}
+
+/// `has_anomalies` against a prebuilt [`Lexicon`] handle (no per-call rebuild).
+#[pyfunction]
+pub fn _has_anomalies_lex(text: &str, lexicon: PyRef<'_, Lexicon>) -> bool {
+    crate::api::has_anomalies(text, &lexicon.inner)
+}
+
+/// `inspect_anomalies` against a prebuilt [`Lexicon`] handle (no per-call rebuild).
+#[pyfunction]
+pub fn _inspect_anomalies_lex(text: &str, lexicon: PyRef<'_, Lexicon>) -> AnomalyReport {
+    crate::api::inspect_anomalies(text, &lexicon.inner).into()
 }

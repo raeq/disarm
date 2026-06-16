@@ -75,7 +75,7 @@ describe('text cleaning', () => {
     expect(disarm.stripBidi('a‮b')).toBe('ab')
   })
   test('zalgo detection and stripping', () => {
-    const zalgo = 'Z' + '́'.repeat(8)
+    const zalgo = `Z${'́'.repeat(8)}`
     expect(disarm.isZalgo(zalgo)).toBe(true)
     expect(disarm.isZalgo(disarm.stripZalgo(zalgo))).toBe(false)
   })
@@ -113,6 +113,27 @@ describe('graphemes', () => {
     expect(disarm.graphemeWidth('👍')).toBe(2)
     expect(disarm.terminalWidth('a👍')).toBe(3)
     expect(disarm.terminalWidth('¡', { ambiguousWide: true })).toBe(2)
+  })
+})
+
+describe('negative size/threshold validation', () => {
+  // napi's ToUint32 used to silently wrap a negative JS number to a huge value;
+  // these now reject it with DisarmInvalidArgument (matching Python/Ruby).
+  test('graphemeTruncate rejects a negative maxGraphemes', () => {
+    expect(() => disarm.graphemeTruncate('ab', -1)).toThrow(DisarmInvalidArgument)
+    expect(() => disarm.graphemeTruncate('ab', -1)).toThrow(DisarmError)
+  })
+  test('stripZalgo rejects a negative maxMarks', () => {
+    expect(() => disarm.stripZalgo('Z', { maxMarks: -5 })).toThrow(DisarmInvalidArgument)
+  })
+  test('isZalgo rejects a negative threshold', () => {
+    expect(() => disarm.isZalgo('Z', { threshold: -1 })).toThrow(DisarmInvalidArgument)
+  })
+  test('sanitizeFilename rejects a negative maxLength', () => {
+    expect(() => disarm.sanitizeFilename('x', { maxLength: -1 })).toThrow(DisarmInvalidArgument)
+  })
+  test('slugify rejects a negative maxLength', () => {
+    expect(() => disarm.slugify('hello', { maxLength: -1 })).toThrow(DisarmInvalidArgument)
   })
 })
 
@@ -169,7 +190,8 @@ describe('anomaly detection', () => {
   })
 
   test('returns a structured report with byte spans', () => {
-    const r = disarm.inspectAnomalies('log in to paypаl today', ['paypal'])
+    const input = 'log in to paypаl today' // Cyrillic а in "paypаl"
+    const r = disarm.inspectAnomalies(input, ['paypal'])
     expect(r.anomalous).toBe(true)
     expect(r.kinds).toEqual(['mixed_script'])
     const f = r.findings[0]
@@ -177,6 +199,17 @@ describe('anomaly detection', () => {
     expect(f.token).toBe('paypаl')
     expect(f.detail).toContain('Latin')
     expect(f.reason).toContain('Latin')
+    // The byte span must carve the exact token out of the UTF-8 input.
+    expect(typeof f.start).toBe('number')
+    expect(typeof f.end).toBe('number')
+    const slice = Buffer.from(input, 'utf8').slice(f.start, f.end).toString('utf8')
+    expect(slice).toBe(f.token)
+  })
+
+  test('defaults the lexicon to empty (no throw without one)', () => {
+    expect(disarm.hasAnomalies('paypаl')).toBe(true) // Cyrillic а, no lexicon needed
+    const r = disarm.inspectAnomalies('paypаl')
+    expect(r.anomalous).toBe(true)
   })
 
   test('reports nothing for clean text', () => {

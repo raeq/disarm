@@ -253,17 +253,20 @@ module Disarm
     # real word — a cross-script homoglyph, leet, segmentation, a zero-width / bidi
     # control, or zalgo. Reports a technical fact and leaves the malicious-or-not
     # judgement to the caller. `lexicon` is a common-word collection (Array or Set)
-    # used only by the leet and segmentation branches.
-    def has_anomalies?(text, lexicon)
-      translate_errors { _has_anomalies?(text, Array(lexicon).map(&:to_s)) }
+    # used only by the leet and segmentation branches; it defaults to an empty list
+    # when those branches are not needed. A bare String is rejected — pass an Array
+    # or any object responding to `:each`.
+    def has_anomalies?(text, lexicon = [])
+      translate_errors { _has_anomalies?(text, coerce_lexicon(lexicon)) }
     end
 
     # Full anomaly analysis: a hash with `:anomalous`, `:kinds` (in first-appearance
     # order), `:findings` (each `{ kind:, token:, start:, end:, detail:, reason: }`,
     # with byte offsets), and `:reason` (the first finding's reason, or nil).
-    def inspect_anomalies(text, lexicon)
+    # `lexicon` defaults to an empty list; a bare String is rejected.
+    def inspect_anomalies(text, lexicon = [])
       anomalous, kinds, findings, reason =
-        translate_errors { _inspect_anomalies(text, Array(lexicon).map(&:to_s)) }
+        translate_errors { _inspect_anomalies(text, coerce_lexicon(lexicon)) }
       {
         anomalous: anomalous,
         kinds: kinds,
@@ -275,6 +278,23 @@ module Disarm
     end
 
     private
+
+    # Coerce a lexicon argument to an Array of Strings for the native layer.
+    # Fast-path: an Array already containing only Strings is passed through as-is.
+    # Any other Enumerable (Set, etc.) is mapped to String. A bare String is rejected
+    # with ArgumentError — callers must wrap it in an Array: ["word"].
+    def coerce_lexicon(lexicon)
+      # An explicit nil is treated as an empty lexicon (parity with the `= []`
+      # default and the other bindings' null handling), not an error.
+      return [] if lexicon.nil?
+
+      raise ::ArgumentError, "lexicon must be an Array or Enumerable, not a String" \
+        if lexicon.is_a?(::String)
+
+      return lexicon if lexicon.is_a?(::Array) && lexicon.all?(::String)
+
+      lexicon.map(&:to_s)
+    end
 
     # Run a native call, re-raising its built-in exception as the matching
     # Disarm::Error subclass so callers can `rescue Disarm::Error` across the

@@ -288,6 +288,10 @@ jobs:
           bundler-cache: true
           cargo-cache: true
 
+      - name: Lint (RuboCop)
+        working-directory: bindings/ruby
+        run: bundle exec rubocop
+
       - name: Compile + RSpec (against the local core)
         working-directory: bindings/ruby
         run: |
@@ -346,6 +350,10 @@ jobs:
           cache-dependency-path: bindings/node/package-lock.json
 
       - run: npm ci
+
+      - name: Lint (Biome)
+        run: npm run lint
+
       - name: Build (napi addon + TypeScript) and test against the local core
         run: |
           npm run build:debug

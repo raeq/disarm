@@ -30,6 +30,27 @@ fn map_err(e: &disarm_core::Error) -> NapiError {
     NapiError::from_reason(format!("{tag}: {e}"))
 }
 
+/// Validate a size/threshold parameter and cast it to `usize`.
+///
+/// napi coerces JS numbers to `i64` here (not `u32`) precisely so a negative
+/// value survives as a negative integer instead of silently wrapping to a huge
+/// `u32` via `ToUint32`. We reject negatives with a `DisarmInvalidArgument`-tagged
+/// error — matching the Python/Ruby bindings, whose core `checked_*` validators
+/// are crate-internal and not reachable through `disarm_core::api`.
+fn checked_size(name: &str, value: i64) -> Result<usize, NapiError> {
+    if value < 0 {
+        return Err(NapiError::from_reason(format!(
+            "DisarmInvalidArgument: {name} must be non-negative (got {value})"
+        )));
+    }
+    Ok(value as usize)
+}
+
+/// Build the anomaly lexicon set from the incoming word list.
+fn to_lexicon(v: Vec<String>) -> HashSet<String> {
+    v.into_iter().collect()
+}
+
 // ── Transliteration ───────────────────────────────────────────────────────────
 
 /// Unicode → ASCII with the default scheme (the borrow-on-no-op fast path).
@@ -122,7 +143,7 @@ pub fn is_confusable(text: String, target: String) -> Result<bool, NapiError> {
 pub struct SlugOptions {
     pub separator: String,
     pub lowercase: bool,
-    pub max_length: u32,
+    pub max_length: i64,
     pub word_boundary: bool,
     pub save_order: bool,
     pub stopwords: Vec<String>,
@@ -136,11 +157,12 @@ pub struct SlugOptions {
 
 /// Generate a URL-safe slug.
 #[napi]
-pub fn slugify(text: String, opts: SlugOptions) -> String {
+pub fn slugify(text: String, opts: SlugOptions) -> Result<String, NapiError> {
+    let max_length = checked_size("maxLength", opts.max_length)?;
     let mut config = api::SlugConfig::default()
         .with_separator(opts.separator)
         .with_lowercase(opts.lowercase)
-        .with_max_length(opts.max_length as usize)
+        .with_max_length(max_length)
         .with_word_boundary(opts.word_boundary)
         .with_save_order(opts.save_order)
         .with_stopwords(opts.stopwords)
@@ -152,7 +174,7 @@ pub fn slugify(text: String, opts: SlugOptions) -> String {
     config.entities = opts.entities;
     config.decimal = opts.decimal;
     config.hexadecimal = opts.hexadecimal;
-    api::slugify(&text, &config)
+    Ok(api::slugify(&text, &config))
 }
 
 // ── Canonicalization primitives ───────────────────────────────────────────────
@@ -212,13 +234,15 @@ pub fn strip_bidi(text: String) -> String {
 }
 
 #[napi]
-pub fn strip_zalgo(text: String, max_marks: u32) -> String {
-    api::strip_zalgo(&text, max_marks as usize)
+pub fn strip_zalgo(text: String, max_marks: i64) -> Result<String, NapiError> {
+    let max_marks = checked_size("maxMarks", max_marks)?;
+    Ok(api::strip_zalgo(&text, max_marks))
 }
 
 #[napi]
-pub fn is_zalgo(text: String, threshold: u32) -> bool {
-    api::is_zalgo(&text, threshold as usize)
+pub fn is_zalgo(text: String, threshold: i64) -> Result<bool, NapiError> {
+    let threshold = checked_size("threshold", threshold)?;
+    Ok(api::is_zalgo(&text, threshold))
 }
 
 // ── Deobfuscation & security presets (fallible) ───────────────────────────────
@@ -239,16 +263,17 @@ pub fn security_clean(text: String) -> Result<String, NapiError> {
 pub fn sanitize_filename(
     text: String,
     separator: String,
-    max_length: u32,
+    max_length: i64,
     platform: String,
     lang: Option<String>,
     preserve_extension: bool,
 ) -> Result<String, NapiError> {
+    let max_length = checked_size("maxLength", max_length)?;
     let platform: api::Platform = platform.parse().map_err(|e| map_err(&e))?;
     api::sanitize_filename(
         &text,
         &separator,
-        max_length as usize,
+        max_length,
         platform,
         lang.as_deref(),
         preserve_extension,
@@ -259,8 +284,8 @@ pub fn sanitize_filename(
 // ── Grapheme clusters ─────────────────────────────────────────────────────────
 
 #[napi]
-pub fn grapheme_len(text: String) -> u32 {
-    api::grapheme_len(&text) as u32
+pub fn grapheme_len(text: String) -> i64 {
+    api::grapheme_len(&text) as i64
 }
 
 #[napi]
@@ -269,18 +294,19 @@ pub fn grapheme_split(text: String) -> Vec<String> {
 }
 
 #[napi]
-pub fn grapheme_truncate(text: String, max_graphemes: u32) -> String {
-    api::grapheme_truncate(&text, max_graphemes as usize)
+pub fn grapheme_truncate(text: String, max_graphemes: i64) -> Result<String, NapiError> {
+    let max_graphemes = checked_size("maxGraphemes", max_graphemes)?;
+    Ok(api::grapheme_truncate(&text, max_graphemes))
 }
 
 #[napi]
-pub fn grapheme_width(cluster: String, ambiguous_wide: bool) -> u32 {
-    api::grapheme_width(&cluster, ambiguous_wide) as u32
+pub fn grapheme_width(cluster: String, ambiguous_wide: bool) -> i64 {
+    api::grapheme_width(&cluster, ambiguous_wide) as i64
 }
 
 #[napi]
-pub fn terminal_width(text: String, ambiguous_wide: bool) -> u32 {
-    api::terminal_width(&text, ambiguous_wide) as u32
+pub fn terminal_width(text: String, ambiguous_wide: bool) -> i64 {
+    api::terminal_width(&text, ambiguous_wide) as i64
 }
 
 // ── Hostname / script analysis ────────────────────────────────────────────────
@@ -368,14 +394,14 @@ pub struct AnomalyReport {
 /// `hasAnomalies(text, lexicon)` — `lexicon` is an array of common words.
 #[napi]
 pub fn has_anomalies(text: String, lexicon: Vec<String>) -> bool {
-    let lex: HashSet<String> = lexicon.into_iter().collect();
+    let lex = to_lexicon(lexicon);
     api::has_anomalies(&text, &lex)
 }
 
 /// `inspectAnomalies(text, lexicon)` — full analysis with per-token findings.
 #[napi]
 pub fn inspect_anomalies(text: String, lexicon: Vec<String>) -> AnomalyReport {
-    let lex: HashSet<String> = lexicon.into_iter().collect();
+    let lex = to_lexicon(lexicon);
     let r = api::inspect_anomalies(&text, &lex);
     AnomalyReport {
         anomalous: r.anomalous,

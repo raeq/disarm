@@ -57,12 +57,16 @@ jobs:
               - 'Cargo.toml'
               - '.github/workflows/ci.yml'
             # Same drift-gate rationale as `ruby` (#374): rebuild the Node binding
-            # when ITS code OR the CORE it wraps changes (#44).
+            # when ITS code OR the CORE it wraps changes (#44). `docs/**` is included
+            # so the Node `// =>` doc examples re-validate against the built addon
+            # when a usage tab or the API page changes.
             node:
               - 'bindings/node/**'
               - 'src/**'
               - 'build.rs'
               - 'Cargo.toml'
+              - 'docs/**'
+              - 'scripts/check_doc_node_examples.mjs'
               - '.github/workflows/ci.yml'
 
 
@@ -313,7 +317,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ["18", "20", "22"]
+        # The shipped N-API 8 addon supports Node 14+ (package.json `engines`),
+        # but the test runner does not: vitest 3 pulls vite 7, which requires Node
+        # 20.19+/22.12+. So the suite runs on 20/22; the prebuilt addon is the same
+        # ABI-stable binary Node 14–18 consumers load.
+        node: ["20", "22"]
     defaults:
       run:
         working-directory: bindings/node
@@ -342,6 +350,14 @@ jobs:
         run: |
           npm run build:debug
           npm test
+
+      - name: Doc Node examples against the local core (#44)
+        # The docs' Node `// =>` examples (getting-started, the API page, the usage
+        # tabs) run against the freshly-built LOCAL-core addon, so a core change
+        # that alters a documented Node result fails on its own PR. Runs from the
+        # repo root so the script can reach docs/ and the built addon.
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check_doc_node_examples.mjs
 
 
   # ── Security audit (#105: cargo audit for RustSec advisories) ──

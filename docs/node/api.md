@@ -1,0 +1,282 @@
+# Node API reference
+
+The surface is a set of named exports from the `disarm` package plus the
+[`DisarmError`](#errors) class hierarchy. Every function is a thin, idiomatic
+TypeScript wrapper over the pure-Rust core (no Python): options are passed as an
+object with the core's defaults, scheme/target tokens are typed string unions,
+and bad input throws `DisarmInvalidArgument`. The binding is a deliberate
+**subset** of the core — the precompiled-pipeline presets and the fluent `Text`
+builder are not surfaced yet (see [Stability](#stability)).
+
+For install and a five-line tour, start with
+[disarm for Node.js](getting-started.md). The shared, language-neutral
+explanation of *what* each operation does lives under **Concepts** and **Guide**
+in the sidebar — this page is the call surface.
+
+```ts
+import * as disarm from 'disarm'
+// or: import { transliterate, normalizeConfusables, … } from 'disarm'
+```
+
+Every example below is executed against the built addon in CI (the Node doc
+gate), so the documented outputs cannot rot.
+
+## Transliteration
+
+### `transliterate(text, options?)`
+
+Romanize Unicode text to ASCII. `options.scheme` is `'default'` (general-purpose),
+`'strict_iso9'` (ISO 9:1995-style ASCII), or `'gost7034'` (GOST R 7.0.34).
+`options.lang` applies a language profile on top of the scheme (`'uk'`, `'de'`,
+…, or `'auto'` to detect). This is **phonetic romanization for legibility, not a
+security control** — use [`normalizeConfusables`](#confusable-folding) for
+homoglyph defence.
+
+```ts
+transliterate('café') // => 'cafe'
+transliterate('Москва') // => 'Moskva'
+transliterate('Київ', { lang: 'uk' }) // => 'Kyiv'
+transliterate('Юрий', { scheme: 'strict_iso9' }) // => 'Jurij'
+transliterate('Київ', { lang: 'auto' }) // => 'Kyiv'
+```
+
+## Confusable folding
+
+### `normalizeConfusables(text, options?)`
+
+Fold cross-script confusables toward `options.target` (`'latin'` default, or
+`'cyrillic'`) using the TR39 visual mapping — the homoglyph defence.
+
+```ts
+normalizeConfusables('раypal') // => 'paypal'
+```
+
+### `isConfusable(text, options?)`
+
+Whether `text` contains any character confusable with `options.target` (default
+`'latin'`). A `false` asserts only that none of the bundled confusables were
+found, not that the text is safe.
+
+```ts
+isConfusable('pаypal') // => true
+isConfusable('paypal') // => false
+```
+
+## Slugs
+
+### `slugify(text, options?)`
+
+Generate a URL-safe slug. Mirrors the core's `SlugConfig` defaults; every option
+is optional (`separator`, `lowercase`, `maxLength`, `wordBoundary`, `saveOrder`,
+`stopwords`, `allowUnicode`, `lang`, `entities`, `decimal`, `hexadecimal`,
+`safeChars`).
+
+```ts
+slugify('Héllo Wörld') // => 'hello-world'
+slugify('café au lait') // => 'cafe-au-lait'
+```
+
+## Canonicalization primitives
+
+### `stripAccents(text)` · `foldCase(text)` · `demojize(text, options?)`
+
+Strip diacritics; full Unicode case fold (more aggressive than
+`String.toLowerCase()`); and replace emoji with their plain names
+(`options.stripModifiers` drops skin-tone/variation marks).
+
+```ts
+stripAccents('café') // => 'cafe'
+foldCase('Straße') // => 'strasse'
+demojize('Café ☕') // => 'Café hot beverage'
+```
+
+## Normalization
+
+### `normalize(text, options?)` · `isNormalized(text, options?)`
+
+Apply / test a Unicode normalization form. `options.form` is `'NFC'` (default),
+`'NFD'`, `'NFKC'`, or `'NFKD'`.
+
+```ts
+normalize('ﬁ') // => 'ﬁ'
+normalize('ﬁnance', { form: 'NFKC' }) // => 'finance'
+normalize('2²', { form: 'NFKC' }) // => '22'
+isNormalized('café', { form: 'NFC' }) // => true
+isNormalized('ﬁ', { form: 'NFKC' }) // => false
+```
+
+## Text cleaning
+
+### `collapseWhitespace(text, options?)`
+
+Collapse every run of Unicode whitespace to a single ASCII space and trim
+leading/trailing whitespace. By default also strips control and zero-width
+characters (`options.stripControl` / `options.stripZeroWidth`, both `true`).
+
+```ts
+collapseWhitespace('  a   b ') // => 'a b'
+```
+
+### `stripControlChars(text)` · `stripZeroWidthChars(text)` · `stripBidi(text)`
+
+Remove, respectively, C0/C1 control characters (except tab/newline), zero-width
+characters (ZWSP/ZWNJ/ZWJ/word-joiner), and Unicode bidirectional controls — the
+invisible characters used to obfuscate or spoof text.
+
+```ts
+stripControlChars('a\u0007b') // => 'ab'
+stripZeroWidthChars('a\u200Bb') // => 'ab'
+stripBidi('a\u202Eb') // => 'ab'
+```
+
+### `stripZalgo(text, options?)` · `isZalgo(text, options?)`
+
+`isZalgo` flags "zalgo" — combining marks stacked past `options.threshold` (3) on
+a base character; `stripZalgo` caps each base at `options.maxMarks` (2).
+
+```ts
+isZalgo('Z\u0301\u0301\u0301\u0301') // => true
+isZalgo(stripZalgo('Z\u0301\u0301\u0301\u0301')) // => false
+```
+
+## Deobfuscation & security presets
+
+### `stripObfuscation(text)` · `securityClean(text)`
+
+`stripObfuscation` removes obfuscation (zero-width, bidi, combining-mark abuse,
+homoglyphs) while keeping legible content — it does **not** transliterate.
+`securityClean` is the aggressive NFKC → confusables → strip-bidi → collapse →
+path-safety preset.
+
+```ts
+stripObfuscation('рroduсt') // => 'product'
+securityClean('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥') // => 'Real text'
+```
+
+### `sanitizeFilename(text, options?)`
+
+Turn arbitrary text into a filesystem-safe filename. `options.platform` is
+`'universal'` (default), `'windows'`, or `'posix'`; `options.preserveExtension`
+(`true`) keeps the final extension when truncating to `options.maxLength`.
+
+```ts
+sanitizeFilename('My: report*.txt') // => 'My_report.txt'
+sanitizeFilename('CON', { platform: 'windows' }) // => '_CON'
+sanitizeFilename('Ärger.txt', { lang: 'de' }) // => 'Aerger.txt'
+```
+
+## Grapheme clusters
+
+Operate on **user-perceived characters** rather than code points — an emoji, a
+flag, or a base-plus-combining-mark counts as one.
+
+### `graphemeLen(text)` · `graphemeSplit(text)` · `graphemeTruncate(text, maxGraphemes)`
+
+```ts
+graphemeLen('a👍b') // => 3
+graphemeLen('🇬🇧') // => 1
+graphemeSplit('a👍') // => ['a', '👍']
+graphemeTruncate('héllo', 3) // => 'hél'
+```
+
+### `graphemeWidth(cluster, options?)` · `terminalWidth(text, options?)`
+
+Display width in terminal columns by East Asian Width. Pass
+`options.ambiguousWide: true` to count ambiguous-width characters as two columns.
+
+```ts
+graphemeWidth('👍') // => 2
+terminalWidth('a👍') // => 3
+terminalWidth('¡', { ambiguousWide: true }) // => 2
+```
+
+## Reverse transliteration & untranslatable scan
+
+### `reverseTransliterate(text, options)`
+
+Reverse-transliterate Latin back to a native script. `options.lang` is `'el'`
+(Greek), `'ru'` (Russian), or `'uk'` (Ukrainian).
+
+```ts
+reverseTransliterate('Moskva', { lang: 'ru' }) // => 'Москва'
+reverseTransliterate('Athina', { lang: 'el' }) // => 'Αθηνα'
+```
+
+### `findUntranslatable(text, options?)`
+
+Every character with no romanization — the ones `transliterate` would replace —
+as `{ char, offset }` objects (byte offset), in order. `options.scheme`/`lang`
+mirror `transliterate`.
+
+```ts
+findUntranslatable('a\u{1F70A}') // => [{ char: '\u{1F70A}', offset: 1 }]
+findUntranslatable('café') // => []
+```
+
+## Script analysis
+
+### `detectScripts(text)` · `isMixedScript(text)`
+
+The Unicode scripts present (first-appearance order, Common/Inherited excluded),
+and whether more than one is present.
+
+```ts
+detectScripts('aМ') // => ['Latin', 'Cyrillic']
+isMixedScript('aМ') // => true
+```
+
+### `isSuspiciousHostname(host)`
+
+Whether the hostname looks like a mixed-script / confusable IDN spoof. A `false`
+is not a safety guarantee — see the [Threat Model](../THREAT_MODEL.md).
+
+```ts
+isSuspiciousHostname('pаypal.com') // => true
+isSuspiciousHostname('example.com') // => false
+```
+
+### `inspectAutoLang(text)`
+
+Explain how `lang: 'auto'` detection resolves `text` — an object with `script` and
+`chosenLang` (both `undefined` if undetected), the `reason`, and any
+`discriminatorsHit`.
+
+```ts
+inspectAutoLang('Москва') // => { script: 'Cyrillic', chosenLang: 'ru', reason: 'script_default', discriminatorsHit: [] }
+inspectAutoLang('Київ') // => { script: 'Cyrillic', chosenLang: 'uk', reason: 'discriminator', discriminatorsHit: ['ї'] }
+```
+
+## Errors
+
+Everything disarm throws is a `DisarmError` (a subclass of `Error`), so a single
+`instanceof DisarmError` catches the whole surface. Bad input — an unknown
+scheme/target/form/platform token, etc. — throws the more specific
+`DisarmInvalidArgument`.
+
+| Class | Thrown for |
+| --- | --- |
+| `DisarmError` | Base class — `instanceof` this to catch everything. |
+| `DisarmInvalidArgument` | An invalid argument (bad scheme/target/form/platform token). |
+
+```ts
+import { transliterate, DisarmError, DisarmInvalidArgument } from 'disarm'
+
+try {
+  transliterate('x', { scheme: 'klingon' })
+} catch (e) {
+  if (e instanceof DisarmInvalidArgument) console.warn(e.message)
+}
+```
+
+## Stability
+
+The npm package version tracks the Rust crate and the Python/Ruby packages. The
+binding inherits the core's behavioural guarantees and limits verbatim — read the
+[Threat Model](../THREAT_MODEL.md) before relying on it in a security context, and
+note that transliteration **output** is data-driven (Unicode tables, romanization
+standards) and can change across releases without being treated as a breaking
+change.
+
+Not yet surfaced (compose the primitives, or reach for another binding): the
+precompiled-pipeline presets (`securityClean` is exposed, but not the full
+`getPipeline` registry or `mlNormalize`) and the fluent `Text` builder.

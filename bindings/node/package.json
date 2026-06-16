@@ -51,6 +51,6 @@
   "devDependencies": {
     "@napi-rs/cli": "^2.18.4",
     "typescript": "^5.7.3",
-    "vitest": "^2.1.9"
+    "vitest": "^3.2.6"
   }
 }

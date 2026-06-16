@@ -18,6 +18,13 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Node.js docs + doc-example gate (#44).** A `docs/node/` getting-started page
+  and API reference plug into the language-neutral structure (#50), with Node.js
+  added to the Getting started and API Reference nav. Every Node `// =>` example
+  is executed against the built addon by `scripts/check_doc_node_examples.mjs` —
+  the Node analogue of the Sybil/Rust/Ruby doc gates — wired into the `node` CI
+  job (which now also triggers on `docs/**`), so the examples can't rot.
+
 - **Node.js binding (#44).** A new `bindings/node/` napi-rs addon exposes the
   pure-Rust core to Node with a fully-typed, idiomatic **TypeScript** surface —
   `camelCase` functions, options objects with sensible defaults, string-union

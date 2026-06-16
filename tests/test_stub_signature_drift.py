@@ -57,6 +57,9 @@ SKIP = frozenset(
         "ResourceLimitError",
         "UnsupportedError",
         "HostnameAnalysis",
+        # Anomaly detection result objects (#389), return-only like HostnameAnalysis
+        "AnomalyReport",
+        "Finding",
     }
 )
 

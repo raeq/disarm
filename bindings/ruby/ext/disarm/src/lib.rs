@@ -190,6 +190,36 @@ fn is_zalgo(text: String, threshold: usize) -> bool {
     api::is_zalgo(&text, threshold)
 }
 
+// ── Grapheme clusters (#375) ──────────────────────────────────────────────────
+
+/// `Disarm._grapheme_len(text)` — count of user-perceived characters.
+fn grapheme_len(text: String) -> usize {
+    api::grapheme_len(&text)
+}
+
+/// `Disarm._grapheme_split(text)` — split into grapheme-cluster strings.
+fn grapheme_split(text: String) -> Vec<String> {
+    api::grapheme_split(&text)
+}
+
+/// `Disarm._grapheme_truncate(text, max_graphemes)` — truncate by graphemes,
+/// never mid-cluster.
+fn grapheme_truncate(text: String, max_graphemes: usize) -> String {
+    api::grapheme_truncate(&text, max_graphemes)
+}
+
+/// `Disarm._grapheme_width(cluster, ambiguous_wide)` — display columns of one
+/// cluster (East Asian Width).
+fn grapheme_width(cluster: String, ambiguous_wide: bool) -> usize {
+    api::grapheme_width(&cluster, ambiguous_wide)
+}
+
+/// `Disarm._terminal_width(text, ambiguous_wide)` — display columns of the whole
+/// string.
+fn terminal_width(text: String, ambiguous_wide: bool) -> usize {
+    api::terminal_width(&text, ambiguous_wide)
+}
+
 // `name = "disarm"` so the exported init symbol is `Init_disarm` (matching the
 // `disarm.so` the gem loads), independent of the `disarm-ruby` package name.
 #[magnus::init(name = "disarm")]
@@ -228,5 +258,12 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_strip_bidi", function!(strip_bidi, 1))?;
     module.define_singleton_method("_strip_zalgo", function!(strip_zalgo, 2))?;
     module.define_singleton_method("_zalgo?", function!(is_zalgo, 2))?;
+
+    // Grapheme-cluster operations (#375 parity backfill).
+    module.define_singleton_method("_grapheme_len", function!(grapheme_len, 1))?;
+    module.define_singleton_method("_grapheme_split", function!(grapheme_split, 1))?;
+    module.define_singleton_method("_grapheme_truncate", function!(grapheme_truncate, 2))?;
+    module.define_singleton_method("_grapheme_width", function!(grapheme_width, 2))?;
+    module.define_singleton_method("_terminal_width", function!(terminal_width, 2))?;
     Ok(())
 }

@@ -161,6 +161,32 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "grapheme clusters" do
+    it "counts user-perceived characters, not code points" do
+      expect(Disarm.grapheme_len("a👍b")).to eq(3)
+      expect(Disarm.grapheme_len("🇬🇧")).to eq(1)
+    end
+
+    it "splits into grapheme-cluster strings" do
+      expect(Disarm.grapheme_split("a👍")).to eq(["a", "👍"])
+    end
+
+    it "truncates by graphemes without cutting a cluster" do
+      expect(Disarm.grapheme_truncate("héllo", 3)).to eq("hél")
+      expect(Disarm.grapheme_truncate("a👍b👎", 2)).to eq("a👍")
+    end
+
+    it "measures display width by East Asian Width" do
+      expect(Disarm.grapheme_width("👍")).to eq(2)
+      expect(Disarm.grapheme_width("a")).to eq(1)
+    end
+
+    it "measures total terminal width" do
+      expect(Disarm.terminal_width("a👍")).to eq(3)
+      expect(Disarm.terminal_width("hello")).to eq(5)
+    end
+  end
+
   describe "error hierarchy" do
     it "maps a non-String argument to Disarm::InvalidArgument" do
       expect { Disarm.strip_accents(42) }.to raise_error(Disarm::InvalidArgument)

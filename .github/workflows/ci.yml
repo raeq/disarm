@@ -256,7 +256,7 @@ jobs:
       BUNDLE_GEMFILE: ${{ github.workspace }}/bindings/ruby/Gemfile
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
 
       - name: Build the binding against the in-repo core (#374 drift gate)
         # The ext pins the core as a REGISTRY dep (version = "0.10") so the
@@ -280,6 +280,14 @@ jobs:
         run: |
           bundle exec rake compile
           bundle exec rake spec
+
+      - name: Doc Ruby examples against the local core (#50/#374)
+        # The docs' Ruby `# =>` examples already run against the PUBLISHED gem in
+        # publish-ruby.yml. Running them here too — against the freshly-built
+        # LOCAL-core gem — extends the drift gate to documented output: a core
+        # change that alters a documented Ruby result fails on its own PR. Runs
+        # from the repo root so the script can reach docs/ and the built bundle.
+        run: ruby scripts/check_doc_ruby_examples.rb
 
 
   # ── Security audit (#105: cargo audit for RustSec advisories) ──

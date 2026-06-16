@@ -1,0 +1,33 @@
+# Node.js (napi-rs) native addon for the pure-Rust `disarm` core (#44).
+#
+# Like the Ruby gem (bindings/ruby), this wraps the published `disarm` crate — a
+# REGISTRY dependency, never a path — so the napi prebuild containers, which mount
+# only this directory, can fetch it. The core is imported under the alias
+# `disarm_core` because the package name `disarm` would otherwise clash with this
+# crate's own name (which must match the npm package / `.node` binary).
+[package]
+name = "disarm"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.81"
+publish = false
+description = "Node.js bindings for disarm — Unicode confusable/text-security building blocks"
+license = "MIT"
+
+[lib]
+# napi addons are cdylibs loaded by Node's N-API; the `.node` file name is driven
+# by package.json's `napi.name`, independent of this crate name.
+crate-type = ["cdylib"]
+
+[dependencies]
+# N-API 8 is supported by Node 12.22+/14.17+/15.12+ — well below our floor.
+napi = { version = "2", default-features = false, features = ["napi8"] }
+napi-derive = "2"
+disarm_core = { package = "disarm", version = "0.10", default-features = false }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
+strip = "symbols"

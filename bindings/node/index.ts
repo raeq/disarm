@@ -1,0 +1,293 @@
+/**
+ * disarm for Node.js — Unicode confusable/text-security building blocks, powered
+ * by a pure-Rust core (#44).
+ *
+ * This is the idiomatic TypeScript layer over the raw napi binding (`./binding`):
+ * it adds options objects with sensible defaults, string-union token types, and a
+ * native {@link DisarmError} class. The behaviour is defined once in the Rust core
+ * and inherited here — see https://docs.disarm.dev for the language-neutral guides.
+ */
+import * as native from './binding'
+import type { Untranslatable, AutoLangInspection } from './binding'
+
+export type { Untranslatable, AutoLangInspection }
+
+// ── Errors ──────────────────────────────────────────────────────────────────
+
+/** Base class for every error disarm raises, so callers can `catch (e) { if (e instanceof DisarmError) … }`. */
+export class DisarmError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'DisarmError'
+  }
+}
+
+/** An invalid argument — an unknown scheme/target/form/platform token, etc. */
+export class DisarmInvalidArgument extends DisarmError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'DisarmInvalidArgument'
+  }
+}
+
+/** Run a native call, re-raising its tagged napi error as the matching `DisarmError` subclass. */
+function call<T>(fn: () => T): T {
+  try {
+    return fn()
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.startsWith('DisarmInvalidArgument:')) {
+      throw new DisarmInvalidArgument(msg.slice('DisarmInvalidArgument:'.length).trim())
+    }
+    if (msg.startsWith('DisarmError:')) {
+      throw new DisarmError(msg.slice('DisarmError:'.length).trim())
+    }
+    throw e
+  }
+}
+
+// ── Token types ─────────────────────────────────────────────────────────────
+
+/** Transliteration scheme: the general-purpose default, ISO 9-style ASCII, or GOST R 7.0.34. */
+export type Scheme = 'default' | 'strict_iso9' | 'gost7034'
+/** Confusable-folding target script. */
+export type TargetScript = 'latin' | 'cyrillic'
+/** Unicode normalization form. */
+export type NormalizationForm = 'NFC' | 'NFD' | 'NFKC' | 'NFKD'
+/** Filename-safety platform ruleset. */
+export type Platform = 'universal' | 'windows' | 'posix'
+/** Reverse-transliteration target language. */
+export type ReverseLang = 'el' | 'ru' | 'uk'
+
+// ── Transliteration ─────────────────────────────────────────────────────────
+
+export interface TransliterateOptions {
+  /** The scheme (default: `'default'`). */
+  scheme?: Scheme
+  /** A language profile applied on top of the scheme (e.g. `'uk'`, `'de'`, or `'auto'`). */
+  lang?: string
+}
+
+/** Romanize Unicode text to ASCII. */
+export function transliterate(text: string, options: TransliterateOptions = {}): string {
+  const { scheme = 'default', lang } = options
+  if (scheme === 'default' && lang == null) {
+    return native.transliterate(text)
+  }
+  return call(() => native.transliterateOpts(text, scheme, lang ?? undefined))
+}
+
+/** Reverse-transliterate Latin back to a native script (`'el'`, `'ru'`, or `'uk'`). */
+export function reverseTransliterate(text: string, options: { lang: ReverseLang }): string {
+  return call(() => native.reverseTransliterate(text, options.lang))
+}
+
+/** Every character in `text` with no romanization, as `{ char, offset }` (byte offset), in order. */
+export function findUntranslatable(
+  text: string,
+  options: TransliterateOptions = {},
+): Untranslatable[] {
+  const { scheme = 'default', lang } = options
+  return call(() => native.findUntranslatable(text, scheme, lang ?? undefined))
+}
+
+// ── Confusables (TR39) ──────────────────────────────────────────────────────
+
+/** Fold cross-script confusables toward `target` (default `'latin'`). */
+export function normalizeConfusables(
+  text: string,
+  options: { target?: TargetScript } = {},
+): string {
+  return call(() => native.normalizeConfusables(text, options.target ?? 'latin'))
+}
+
+/** Whether `text` contains a character confusable with `target` (default `'latin'`). */
+export function isConfusable(text: string, options: { target?: TargetScript } = {}): boolean {
+  return call(() => native.isConfusable(text, options.target ?? 'latin'))
+}
+
+// ── Slugs ───────────────────────────────────────────────────────────────────
+
+export interface SlugifyOptions {
+  separator?: string
+  lowercase?: boolean
+  maxLength?: number
+  wordBoundary?: boolean
+  saveOrder?: boolean
+  stopwords?: string[]
+  allowUnicode?: boolean
+  lang?: string
+  entities?: boolean
+  decimal?: boolean
+  hexadecimal?: boolean
+  safeChars?: string
+}
+
+/** Generate a URL-safe slug. Mirrors the core's `SlugConfig` defaults. */
+export function slugify(text: string, options: SlugifyOptions = {}): string {
+  return native.slugify(text, {
+    separator: options.separator ?? '-',
+    lowercase: options.lowercase ?? true,
+    maxLength: options.maxLength ?? 0,
+    wordBoundary: options.wordBoundary ?? false,
+    saveOrder: options.saveOrder ?? false,
+    stopwords: options.stopwords ?? [],
+    allowUnicode: options.allowUnicode ?? false,
+    lang: options.lang,
+    entities: options.entities ?? true,
+    decimal: options.decimal ?? true,
+    hexadecimal: options.hexadecimal ?? true,
+    safeChars: options.safeChars ?? '',
+  })
+}
+
+// ── Canonicalization primitives ─────────────────────────────────────────────
+
+/** Strip diacritics (`"café"` → `"cafe"`). */
+export function stripAccents(text: string): string {
+  return native.stripAccents(text)
+}
+
+/** Full Unicode case fold — more aggressive than `String.toLowerCase()`. */
+export function foldCase(text: string): string {
+  return native.foldCase(text)
+}
+
+/** Replace emoji with their plain names. `stripModifiers` drops skin-tone/variation marks. */
+export function demojize(text: string, options: { stripModifiers?: boolean } = {}): string {
+  return native.demojize(text, options.stripModifiers ?? false)
+}
+
+// ── Normalization ───────────────────────────────────────────────────────────
+
+/** Apply a Unicode normalization `form` (default `'NFC'`). */
+export function normalize(text: string, options: { form?: NormalizationForm } = {}): string {
+  return call(() => native.normalize(text, options.form ?? 'NFC'))
+}
+
+/** Whether `text` is already in normalization `form` (default `'NFC'`). */
+export function isNormalized(text: string, options: { form?: NormalizationForm } = {}): boolean {
+  return call(() => native.isNormalized(text, options.form ?? 'NFC'))
+}
+
+// ── Text cleaning ───────────────────────────────────────────────────────────
+
+export interface CollapseWhitespaceOptions {
+  /** Also strip C0/C1 control characters (default `true`). */
+  stripControl?: boolean
+  /** Also strip zero-width characters (default `true`). */
+  stripZeroWidth?: boolean
+}
+
+/** Collapse Unicode whitespace runs to single ASCII spaces and trim the ends. */
+export function collapseWhitespace(text: string, options: CollapseWhitespaceOptions = {}): string {
+  return native.collapseWhitespace(text, options.stripControl ?? true, options.stripZeroWidth ?? true)
+}
+
+/** Remove C0/C1 control characters (except tab/newline). */
+export function stripControlChars(text: string): string {
+  return native.stripControlChars(text)
+}
+
+/** Remove zero-width characters (ZWSP/ZWNJ/ZWJ/word-joiner). */
+export function stripZeroWidthChars(text: string): string {
+  return native.stripZeroWidthChars(text)
+}
+
+/** Remove Unicode bidirectional control characters. */
+export function stripBidi(text: string): string {
+  return native.stripBidi(text)
+}
+
+/** Cap combining marks per base character at `maxMarks` (default `2`). */
+export function stripZalgo(text: string, options: { maxMarks?: number } = {}): string {
+  return native.stripZalgo(text, options.maxMarks ?? 2)
+}
+
+/** Whether any base character carries more than `threshold` (default `3`) combining marks. */
+export function isZalgo(text: string, options: { threshold?: number } = {}): boolean {
+  return native.isZalgo(text, options.threshold ?? 3)
+}
+
+// ── Deobfuscation & security presets ────────────────────────────────────────
+
+/** Remove obfuscation (zero-width, bidi, combining-mark abuse, homoglyphs) while keeping legible content. */
+export function stripObfuscation(text: string): string {
+  return call(() => native.stripObfuscation(text))
+}
+
+/** Aggressive security cleaning: NFKC → confusables → strip bidi → collapse → path-safety. */
+export function securityClean(text: string): string {
+  return call(() => native.securityClean(text))
+}
+
+export interface SanitizeFilenameOptions {
+  separator?: string
+  maxLength?: number
+  platform?: Platform
+  lang?: string
+  preserveExtension?: boolean
+}
+
+/** Turn arbitrary text into a filesystem-safe filename. */
+export function sanitizeFilename(text: string, options: SanitizeFilenameOptions = {}): string {
+  return call(() =>
+    native.sanitizeFilename(
+      text,
+      options.separator ?? '_',
+      options.maxLength ?? 255,
+      options.platform ?? 'universal',
+      options.lang ?? undefined,
+      options.preserveExtension ?? true,
+    ),
+  )
+}
+
+// ── Grapheme clusters ───────────────────────────────────────────────────────
+
+/** Number of grapheme clusters (user-perceived characters). */
+export function graphemeLen(text: string): number {
+  return native.graphemeLen(text)
+}
+
+/** Split `text` into grapheme-cluster strings. */
+export function graphemeSplit(text: string): string[] {
+  return native.graphemeSplit(text)
+}
+
+/** Truncate to at most `maxGraphemes` clusters, never cutting through one. */
+export function graphemeTruncate(text: string, maxGraphemes: number): string {
+  return native.graphemeTruncate(text, maxGraphemes)
+}
+
+/** Display width (terminal columns) of a single grapheme `cluster` by East Asian Width. */
+export function graphemeWidth(cluster: string, options: { ambiguousWide?: boolean } = {}): number {
+  return native.graphemeWidth(cluster, options.ambiguousWide ?? false)
+}
+
+/** Total display width (terminal columns) of `text`. */
+export function terminalWidth(text: string, options: { ambiguousWide?: boolean } = {}): number {
+  return native.terminalWidth(text, options.ambiguousWide ?? false)
+}
+
+// ── Hostname / script analysis ──────────────────────────────────────────────
+
+/** Whether the hostname looks like a mixed-script / confusable IDN spoof (a `false` is not a safety guarantee). */
+export function isSuspiciousHostname(host: string): boolean {
+  return native.isSuspiciousHostname(host)
+}
+
+/** The Unicode scripts present, in first-appearance order (Common/Inherited excluded). */
+export function detectScripts(text: string): string[] {
+  return native.detectScripts(text)
+}
+
+/** Whether `text` mixes characters from more than one script. */
+export function isMixedScript(text: string): boolean {
+  return native.isMixedScript(text)
+}
+
+/** Explain how `lang: 'auto'` detection resolves `text`. */
+export function inspectAutoLang(text: string): AutoLangInspection {
+  return native.inspectAutoLang(text)
+}

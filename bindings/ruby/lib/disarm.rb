@@ -256,17 +256,34 @@ module Disarm
     # used only by the leet and segmentation branches; it defaults to an empty list
     # when those branches are not needed. A bare String is rejected — pass an Array
     # or any object responding to `:each`.
+    #
+    # For repeated calls over the same word list, build a Disarm::Lexicon once and
+    # pass it here: the native HashSet is then reused rather than rebuilt per call
+    # (HAI-SDLC 6.1).
     def has_anomalies?(text, lexicon = [])
-      translate_errors { _has_anomalies?(text, coerce_lexicon(lexicon)) }
+      translate_errors do
+        if lexicon.is_a?(Disarm::Lexicon)
+          _has_anomalies_lex(text, lexicon)
+        else
+          _has_anomalies?(text, coerce_lexicon(lexicon))
+        end
+      end
     end
 
     # Full anomaly analysis: a hash with `:anomalous`, `:kinds` (in first-appearance
     # order), `:findings` (each `{ kind:, token:, start:, end:, detail:, reason: }`,
     # with byte offsets), and `:reason` (the first finding's reason, or nil).
-    # `lexicon` defaults to an empty list; a bare String is rejected.
+    # `lexicon` defaults to an empty list; a bare String is rejected. Pass a
+    # pre-built Disarm::Lexicon to reuse the native HashSet across calls (6.1).
     def inspect_anomalies(text, lexicon = [])
       anomalous, kinds, findings, reason =
-        translate_errors { _inspect_anomalies(text, coerce_lexicon(lexicon)) }
+        translate_errors do
+          if lexicon.is_a?(Disarm::Lexicon)
+            _inspect_anomalies_lex(text, lexicon)
+          else
+            _inspect_anomalies(text, coerce_lexicon(lexicon))
+          end
+        end
       {
         anomalous: anomalous,
         kinds: kinds,

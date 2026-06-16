@@ -313,6 +313,44 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "reusable lexicon (Disarm::Lexicon)" do
+    words = %w[free viagra paypal]
+    lex = Disarm::Lexicon.new(words)
+
+    it "gives has_anomalies? the same result as the raw array" do
+      ["get fr33 now", "paypаl", "buy v.i.a.g.r.a now",
+       "a perfectly clean sentence", "the win32 api and mp3 file"].each do |text|
+        expect(Disarm.has_anomalies?(text, lex))
+          .to eq(Disarm.has_anomalies?(text, words))
+      end
+    end
+
+    it "gives inspect_anomalies the same result as the raw array" do
+      text = "log in to payp\u{0430}l today"
+      from_lex   = Disarm.inspect_anomalies(text, lex)
+      from_array = Disarm.inspect_anomalies(text, words)
+      expect(from_lex).to eq(from_array)
+      expect(from_lex[:anomalous]).to be(true)
+      expect(from_lex[:findings].first[:token]).to eq("payp\u{0430}l")
+    end
+
+    it "can be reused across many calls" do
+      # The HashSet is built once at construction; each call reuses it.
+      expect(Disarm.has_anomalies?("get fr33 now", lex)).to be(true)
+      expect(Disarm.has_anomalies?("buy v.i.a.g.r.a now", lex)).to be(true)
+      expect(Disarm.has_anomalies?("a perfectly clean sentence", lex)).to be(false)
+      expect(Disarm.inspect_anomalies("get fr33 now", lex)[:anomalous]).to be(true)
+    end
+
+    it "accepts a Set when constructing the lexicon" do
+      require "set"
+      # The native constructor takes an Array; a Set is converted with #to_a, the
+      # same way coerce_lexicon tolerates any Enumerable on the call path.
+      set_lex = Disarm::Lexicon.new(Set.new(["free"]).to_a)
+      expect(Disarm.has_anomalies?("get fr33", set_lex)).to be(true)
+    end
+  end
+
   describe "error hierarchy" do
     it "maps a non-String argument to Disarm::InvalidArgument" do
       expect { Disarm.strip_accents(42) }.to raise_error(Disarm::InvalidArgument)

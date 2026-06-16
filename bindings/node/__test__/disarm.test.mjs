@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'vitest'
 import * as disarm from '../index.js'
-import { DisarmError, DisarmInvalidArgument } from '../index.js'
+import { DisarmError, DisarmInvalidArgument, Lexicon } from '../index.js'
 
 describe('transliterate', () => {
   test('default scheme', () => {
@@ -218,5 +218,36 @@ describe('anomaly detection', () => {
     expect(r.kinds).toEqual([])
     expect(r.findings).toEqual([])
     expect(r.reason ?? null).toBeNull()
+  })
+
+  describe('Lexicon (reusable handle, 6.1)', () => {
+    test('a Lexicon gives the same hasAnomalies result as the raw array', () => {
+      const lexicon = new Lexicon(lex)
+      for (const input of ['get fr33 now', 'buy v.i.a.g.r.a now', 'the win32 api and mp3 file']) {
+        expect(disarm.hasAnomalies(input, lexicon)).toBe(disarm.hasAnomalies(input, lex))
+      }
+    })
+
+    test('a Lexicon gives the same inspectAnomalies report as the raw array', () => {
+      const input = 'log in to paypаl today' // Cyrillic а in "paypаl"
+      const words = ['paypal']
+      const lexicon = new Lexicon(words)
+      expect(disarm.inspectAnomalies(input, lexicon)).toEqual(disarm.inspectAnomalies(input, words))
+    })
+
+    test('one Lexicon is reusable across many calls', () => {
+      const lexicon = new Lexicon(lex)
+      expect(disarm.hasAnomalies('get fr33 now', lexicon)).toBe(true)
+      expect(disarm.hasAnomalies('a perfectly clean sentence', lexicon)).toBe(false)
+      expect(disarm.hasAnomalies('paypаl', lexicon)).toBe(true) // Cyrillic а
+      const r = disarm.inspectAnomalies('buy v.i.a.g.r.a now', lexicon)
+      expect(r.anomalous).toBe(true)
+    })
+
+    test('an empty Lexicon still flags lexicon-free anomalies', () => {
+      const empty = new Lexicon([])
+      expect(disarm.hasAnomalies('paypаl', empty)).toBe(true) // Cyrillic а, no lexicon needed
+      expect(disarm.inspectAnomalies('paypаl', empty).anomalous).toBe(true)
+    })
   })
 })

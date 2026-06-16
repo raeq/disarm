@@ -314,29 +314,49 @@ fn collect_lexicon(lexicon: Vec<String>) -> HashSet<String> {
     lexicon.into_iter().collect()
 }
 
+/// A reusable, pre-built lexicon (`Disarm::Lexicon`) — the `HashSet<String>` is
+/// collected once at construction so repeated `has_anomalies?`/`inspect_anomalies`
+/// calls over the same word list skip the per-call Array→HashSet rebuild (HAI-SDLC
+/// 6.1). Mirrors the Python binding's reusable lexicon handle.
+#[magnus::wrap(class = "Disarm::Lexicon", free_immediately, size)]
+struct Lexicon {
+    inner: HashSet<String>,
+}
+
+/// `Disarm::Lexicon.new(words)` — build the internal `HashSet<String>` once from an
+/// Array/Set of words (reusing `collect_lexicon`).
+fn lexicon_new(words: Vec<String>) -> Lexicon {
+    Lexicon {
+        inner: collect_lexicon(words),
+    }
+}
+
 /// `Disarm._has_anomalies?(text, lexicon)` — `lexicon` is an array of common words.
 fn has_anomalies(text: String, lexicon: Vec<String>) -> bool {
     api::has_anomalies(&text, &collect_lexicon(lexicon))
 }
 
-/// `Disarm._inspect_anomalies(text, lexicon)` — `[anomalous, kinds, findings,
-/// reason]` where each finding is `[kind, token, start, end, detail, reason]` (the
-/// Ruby layer maps it to a hash).
+/// `Disarm._has_anomalies_lex(text, lexicon)` — the reuse path: takes a pre-built
+/// `Disarm::Lexicon`, so the `HashSet` is shared rather than rebuilt per call.
+fn has_anomalies_lex(text: String, lex: &Lexicon) -> bool {
+    api::has_anomalies(&text, &lex.inner)
+}
+
 // The flat tuple return is intentional: `lib/disarm.rb` maps it to a named hash.
 // A dedicated magnus struct would require registering a Ruby class just for this
 // internal boundary, which is more boilerplate than the tuple costs.
 #[allow(clippy::type_complexity)]
-fn inspect_anomalies(
-    text: String,
-    lexicon: Vec<String>,
-) -> (
+type AnomalyReportTuple = (
     bool,
     Vec<String>,
     Vec<(String, String, usize, usize, String, String)>,
     Option<String>,
-) {
-    let lex = collect_lexicon(lexicon);
-    let r = api::inspect_anomalies(&text, &lex);
+);
+
+/// Run `api::inspect_anomalies` and flatten its report into the tuple shape the
+/// Ruby layer maps to a hash. Shared by the Array and `Disarm::Lexicon` entrypoints.
+fn inspect_anomalies_impl(text: &str, lex: &HashSet<String>) -> AnomalyReportTuple {
+    let r = api::inspect_anomalies(text, lex);
     let findings = r
         .findings
         .into_iter()
@@ -354,6 +374,19 @@ fn inspect_anomalies(
         .collect();
     let kinds = r.kinds.iter().map(|k| k.as_str().to_string()).collect();
     (r.anomalous, kinds, findings, r.reason)
+}
+
+/// `Disarm._inspect_anomalies(text, lexicon)` — `[anomalous, kinds, findings,
+/// reason]` where each finding is `[kind, token, start, end, detail, reason]` (the
+/// Ruby layer maps it to a hash).
+fn inspect_anomalies(text: String, lexicon: Vec<String>) -> AnomalyReportTuple {
+    inspect_anomalies_impl(&text, &collect_lexicon(lexicon))
+}
+
+/// `Disarm._inspect_anomalies_lex(text, lexicon)` — the reuse path: the same tuple
+/// shape as `inspect_anomalies`, but taking a pre-built `Disarm::Lexicon`.
+fn inspect_anomalies_lex(text: String, lex: &Lexicon) -> AnomalyReportTuple {
+    inspect_anomalies_impl(&text, &lex.inner)
 }
 
 // `name = "disarm"` so the exported init symbol is `Init_disarm` (matching the
@@ -414,5 +447,13 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_inspect_auto_lang", function!(inspect_auto_lang, 1))?;
     module.define_singleton_method("_has_anomalies?", function!(has_anomalies, 2))?;
     module.define_singleton_method("_inspect_anomalies", function!(inspect_anomalies, 2))?;
+
+    // Reusable lexicon handle (HAI-SDLC 6.1): build the HashSet once, reuse it
+    // across calls. `Disarm::Lexicon.new(words)` wraps the Rust `Lexicon`; the
+    // `_lex` variants take it directly so the membership set is shared, not rebuilt.
+    let lexicon = module.define_class("Lexicon", ruby.class_object())?;
+    lexicon.define_singleton_method("new", function!(lexicon_new, 1))?;
+    module.define_singleton_method("_has_anomalies_lex", function!(has_anomalies_lex, 2))?;
+    module.define_singleton_method("_inspect_anomalies_lex", function!(inspect_anomalies_lex, 2))?;
     Ok(())
 }

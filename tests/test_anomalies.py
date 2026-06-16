@@ -5,7 +5,7 @@ these tests verify the binding wiring, the lexicon contract, and the report shap
 """
 
 import disarm
-from disarm import AnomalyReport, Finding, has_anomalies, inspect_anomalies
+from disarm import AnomalyReport, Finding, Lexicon, has_anomalies, inspect_anomalies
 
 LEX = {"free", "viagra", "about", "paypal"}
 
@@ -113,3 +113,53 @@ def test_has_anomalies_lexicon_none_explicit():
 def test_inspect_anomalies_lexicon_none_explicit():
     r = inspect_anomalies("clean text", lexicon=None)
     assert r.anomalous is False
+
+
+# --- Reusable Lexicon handle (HAI-SDLC 6.1) ---
+
+
+def test_lexicon_is_exported():
+    assert "Lexicon" in disarm.__all__
+    assert hasattr(disarm, "Lexicon")
+    assert disarm.Lexicon is Lexicon
+
+
+def test_lexicon_len_reports_distinct_words():
+    lex = Lexicon(["paypal", "free", "viagra"])
+    assert len(lex) == 3
+    # Duplicates collapse into the internal set.
+    assert len(Lexicon(["free", "free", "free"])) == 1
+    assert len(Lexicon([])) == 0
+
+
+def test_has_anomalies_lexicon_matches_raw_set():
+    words = ["free", "viagra", "about", "paypal"]
+    lex = Lexicon(words)
+    for s in ["get fr33 now", "buy v.i.a.g.r.a now", "paypаl", "a clean sentence"]:
+        assert has_anomalies(s, lex) == has_anomalies(s, set(words))
+
+
+def test_inspect_anomalies_lexicon_matches_raw_set():
+    words = ["free", "paypal"]
+    lex = Lexicon(words)
+    for s in ["get fr33", "log in to paypаl today", "nothing odd here"]:
+        from_lex = inspect_anomalies(s, lex)
+        from_set = inspect_anomalies(s, set(words))
+        assert from_lex.anomalous == from_set.anomalous
+        assert from_lex.kinds == from_set.kinds
+        assert [f.token for f in from_lex.findings] == [f.token for f in from_set.findings]
+
+
+def test_lexicon_is_reusable_across_calls():
+    # The same handle drives many calls and gives stable results each time.
+    lex = Lexicon(["free", "paypal"])
+    for _ in range(5):
+        assert has_anomalies("get fr33", lex) is True
+        assert has_anomalies("perfectly clean text", lex) is False
+        assert inspect_anomalies("get fr33", lex).kinds == ["leet"]
+
+
+def test_lexicon_leet_gating_matches_set_semantics():
+    # An empty Lexicon disables the leet branch, exactly like an empty set.
+    assert has_anomalies("get fr33", Lexicon([])) == has_anomalies("get fr33", set())
+    assert has_anomalies("get fr33", Lexicon(["free"])) is True

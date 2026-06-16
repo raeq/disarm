@@ -69,6 +69,7 @@ from disarm._core import (
     Finding,
     HostnameAnalysis,
     InvalidArgumentError,
+    Lexicon,
     ResourceLimitError,
     UnsupportedError,
 )
@@ -253,6 +254,8 @@ __all__ = [
     "inspect_anomalies",
     "AnomalyReport",
     "Finding",
+    # Reusable anomaly lexicon handle (HAI-SDLC 6.1)
+    "Lexicon",
     "escape_html",
     "percent_encode",
     "strip_log_injection",

@@ -28,6 +28,15 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   Ruby, and Node bindings, with a per-language usage page. A dated **defensive
   publication** — published as prior art so the method stays freely usable.
 
+- **Reusable anomaly lexicon handle (`Lexicon`).** The binding `has_anomalies` /
+  `inspect_anomalies` functions rebuilt a hash set from the caller's word list on
+  every call; a new opaque `Lexicon` class lets callers build the set **once** and
+  reuse it across many calls (`disarm.Lexicon(words)` in Python, `new Lexicon(words)`
+  in Node, `Disarm::Lexicon.new(words)` in Ruby). Both functions accept either the
+  raw word collection (unchanged, back-compatible) or a `Lexicon`. The Rust core
+  already amortizes this (it takes `&HashSet<String>`), so this closes the gap only
+  the FFI bindings had.
+
 - **Node.js docs + doc-example gate (#44).** A `docs/node/` getting-started page
   and API reference plug into the language-neutral structure (#50), with Node.js
   added to the Getting started and API Reference nav. Every Node `// =>` example

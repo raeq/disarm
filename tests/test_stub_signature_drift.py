@@ -44,7 +44,9 @@ VAR_POSITIONAL = "var-positional"
 VAR_KEYWORD = "var-keyword"
 
 # Builder classes whose constructor signature we compare via __init__.
-BUILDER_CLASSES = ("_Slugifier", "_UniqueSlugifier", "_TextPipeline")
+# Lexicon (HAI-SDLC 6.1) is constructed from a word collection, so — unlike the
+# return-only result objects in SKIP — it has an introspectable constructor.
+BUILDER_CLASSES = ("_Slugifier", "_UniqueSlugifier", "_TextPipeline", "Lexicon")
 
 # Opaque/builtin types with no introspectable constructor signature.
 # These have no __text_signature__ and inspect.signature() raises on them,

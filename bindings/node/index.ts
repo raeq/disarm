@@ -8,6 +8,7 @@
  * and inherited here — see https://docs.disarm.dev for the language-neutral guides.
  */
 import * as native from './binding'
+import { Lexicon } from './binding'
 import type {
   Untranslatable,
   AutoLangInspection,
@@ -16,6 +17,14 @@ import type {
 } from './binding'
 
 export type { Untranslatable, AutoLangInspection }
+
+/**
+ * A reusable, opaque lexicon handle (HAI-SDLC 6.1). `hasAnomalies` /
+ * `inspectAnomalies` rebuild an internal set from the caller's word array on
+ * every call; constructing a `Lexicon` once (`new Lexicon([...])`) and passing
+ * it instead builds that set a single time and reuses it across calls.
+ */
+export { Lexicon }
 
 /** The anomaly branch that fired for a finding. */
 export type AnomalyKind = 'invisible' | 'bidi' | 'zalgo' | 'mixed_script' | 'leet' | 'segmentation'
@@ -327,9 +336,16 @@ export function inspectAutoLang(text: string): AutoLangInspection {
  * real word — a cross-script homoglyph, leet, segmentation, a zero-width / bidi
  * control, or zalgo. Reports a technical fact and leaves the malicious-or-not
  * judgement to the caller. `lexicon` is a common-word collection (a `Set` or
- * array) used only by the leet and segmentation branches.
+ * array) — or a prebuilt {@link Lexicon} handle, which avoids rebuilding the
+ * internal set on every call — used only by the leet and segmentation branches.
  */
-export function hasAnomalies(text: string, lexicon: Iterable<string> = []): boolean {
+export function hasAnomalies(
+  text: string,
+  lexicon: Iterable<string> | Lexicon = [],
+): boolean {
+  if (lexicon instanceof Lexicon) {
+    return native.hasAnomalies(text, lexicon)
+  }
   return native.hasAnomalies(text, Array.isArray(lexicon) ? lexicon : [...lexicon])
 }
 
@@ -337,8 +353,15 @@ export function hasAnomalies(text: string, lexicon: Iterable<string> = []): bool
  * Full anomaly analysis: an `AnomalyReport` with `anomalous`, `kinds` (in
  * first-appearance order), `findings` (each `{ kind, token, start, end, detail,
  * reason }`, with byte offsets), and `reason` (the first finding's reason).
+ * `lexicon` may be a `Set`/array of words or a prebuilt {@link Lexicon} handle.
  */
-export function inspectAnomalies(text: string, lexicon: Iterable<string> = []): AnomalyReport {
+export function inspectAnomalies(
+  text: string,
+  lexicon: Iterable<string> | Lexicon = [],
+): AnomalyReport {
+  if (lexicon instanceof Lexicon) {
+    return native.inspectAnomalies(text, lexicon) as AnomalyReport
+  }
   const words = Array.isArray(lexicon) ? lexicon : [...lexicon]
   return native.inspectAnomalies(text, words) as AnomalyReport
 }

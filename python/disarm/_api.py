@@ -20,6 +20,8 @@ from disarm._core import (
     HostnameAnalysis,
     # Exception hierarchy (#183): base + categorised subclasses
     InvalidArgumentError,
+    # Reusable anomaly lexicon handle (HAI-SDLC 6.1)
+    Lexicon,
     ResourceLimitError,
     _clear_replacements,
     _collapse_whitespace,
@@ -40,7 +42,9 @@ from disarm._core import (
     _grapheme_width,
     # Anomaly detection (#389)
     _has_anomalies,
+    _has_anomalies_lex,
     _inspect_anomalies,
+    _inspect_anomalies_lex,
     _inspect_auto_lang,
     _is_ascii,
     _is_confusable,
@@ -1196,7 +1200,7 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
 # --- Anomaly detection (#389) ---
 
 
-def has_anomalies(text: str, lexicon: Iterable[str] | None = None) -> bool:
+def has_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> bool:
     """Whether any whitespace token carries out-of-place characters that disguise a real word.
 
     Reports a *technical fact* — a cross-script homoglyph, leet, segmentation, a
@@ -1210,12 +1214,18 @@ def has_anomalies(text: str, lexicon: Iterable[str] | None = None) -> bool:
     still catch those classes of anomaly.  Pass a lexicon if you also want leet and
     segmentation detection.
 
+    **Reusing a large lexicon (HAI-SDLC 6.1).** Passing a raw collection rebuilds
+    an internal set on every call. When calling this in a loop with a large
+    lexicon, build a :class:`Lexicon` once and pass it instead — the set is built
+    a single time and reused across calls, with identical results.
+
     Args:
         text: Input text.
         lexicon: Common-word collection (set, list, …) for the target language,
-            used only by the leet and segmentation branches.  When ``None``
-            (the default) or an empty iterable, those two branches are effectively
-            disabled; all other branches still run.
+            *or* a prebuilt :class:`Lexicon` handle, used only by the leet and
+            segmentation branches.  When ``None`` (the default) or an empty
+            iterable, those two branches are effectively disabled; all other
+            branches still run.
 
     Returns:
         True if any token tripped a detector.
@@ -1227,11 +1237,16 @@ def has_anomalies(text: str, lexicon: Iterable[str] | None = None) -> bool:
         False
         >>> has_anomalies("paypаl")  # Cyrillic а — mixed-script, no lexicon needed
         True
+        >>> lex = Lexicon({"free"})  # build once, reuse across calls
+        >>> has_anomalies("get fr33 stuff", lex)
+        True
     """
+    if isinstance(lexicon, Lexicon):
+        return _has_anomalies_lex(text, lexicon)
     return _has_anomalies(text, set(lexicon) if lexicon is not None else None)
 
 
-def inspect_anomalies(text: str, lexicon: Iterable[str] | None = None) -> AnomalyReport:
+def inspect_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> AnomalyReport:
     """Full anomaly analysis: every finding with its span and a plain-language reason.
 
     Parallel to :func:`is_suspicious_hostname`'s ``HostnameAnalysis``. Returns an
@@ -1249,9 +1264,14 @@ def inspect_anomalies(text: str, lexicon: Iterable[str] | None = None) -> Anomal
     invisible, bidi, zalgo, and mixed-script branches still run; only leet and
     segmentation detection requires a lexicon.
 
+    **Reusing a large lexicon (HAI-SDLC 6.1).** As with :func:`has_anomalies`,
+    pass a prebuilt :class:`Lexicon` to avoid rebuilding the internal set on every
+    call when looping over a large lexicon.
+
     Args:
         text: Input text.
-        lexicon: Common-word collection (set, list, …) (see :func:`has_anomalies`).
+        lexicon: Common-word collection (set, list, …) *or* a prebuilt
+            :class:`Lexicon` handle (see :func:`has_anomalies`).
             Defaults to ``None`` (empty — leet/segmentation branches disabled).
 
     Returns:
@@ -1266,6 +1286,8 @@ def inspect_anomalies(text: str, lexicon: Iterable[str] | None = None) -> Anomal
         >>> inspect_anomalies("clean text").anomalous
         False
     """
+    if isinstance(lexicon, Lexicon):
+        return _inspect_anomalies_lex(text, lexicon)
     return _inspect_anomalies(text, set(lexicon) if lexicon is not None else None)
 
 

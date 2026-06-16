@@ -8,9 +8,9 @@
  * and inherited here — see https://docs.disarm.dev for the language-neutral guides.
  */
 import * as native from './binding'
-import type { Untranslatable, AutoLangInspection } from './binding'
+import type { Untranslatable, AutoLangInspection, Finding, AnomalyReport } from './binding'
 
-export type { Untranslatable, AutoLangInspection }
+export type { Untranslatable, AutoLangInspection, Finding, AnomalyReport }
 
 // ── Errors ──────────────────────────────────────────────────────────────────
 
@@ -290,4 +290,26 @@ export function isMixedScript(text: string): boolean {
 /** Explain how `lang: 'auto'` detection resolves `text`. */
 export function inspectAutoLang(text: string): AutoLangInspection {
   return native.inspectAutoLang(text)
+}
+
+// ── Anomaly detection ───────────────────────────────────────────────────────
+
+/**
+ * Whether any whitespace token carries out-of-place characters that disguise a
+ * real word — a cross-script homoglyph, leet, segmentation, a zero-width / bidi
+ * control, or zalgo. Reports a technical fact and leaves the malicious-or-not
+ * judgement to the caller. `lexicon` is a common-word collection (a `Set` or
+ * array) used only by the leet and segmentation branches.
+ */
+export function hasAnomalies(text: string, lexicon: Iterable<string>): boolean {
+  return native.hasAnomalies(text, [...lexicon])
+}
+
+/**
+ * Full anomaly analysis: an `AnomalyReport` with `anomalous`, `kinds` (in
+ * first-appearance order), `findings` (each `{ kind, token, start, end, detail,
+ * reason }`, with byte offsets), and `reason` (the first finding's reason).
+ */
+export function inspectAnomalies(text: string, lexicon: Iterable<string>): AnomalyReport {
+  return native.inspectAnomalies(text, [...lexicon])
 }

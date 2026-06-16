@@ -14,6 +14,8 @@
 //! with `DisarmInvalidArgument:` (vs `DisarmError:`) so the TS layer can raise the
 //! matching error subclass.
 
+use std::collections::HashSet;
+
 use disarm_core::api;
 use napi::bindgen_prelude::Error as NapiError;
 use napi_derive::napi;
@@ -328,5 +330,71 @@ pub fn inspect_auto_lang(text: String) -> AutoLangInspection {
         chosen_lang: r.chosen_lang,
         reason: r.reason,
         discriminators_hit: r.discriminators_hit,
+    }
+}
+
+// ── Anomaly detection (#389) ──────────────────────────────────────────────────
+
+/// One reason a token is anomalous (a single finding).
+#[napi(object)]
+pub struct Finding {
+    /// Which branch fired: `"invisible"` | `"bidi"` | `"zalgo"` | `"mixed_script"` | `"leet"` | `"segmentation"`.
+    pub kind: String,
+    /// The offending whitespace token, as it appeared.
+    pub token: String,
+    /// Byte offset of the token start in the input.
+    pub start: i64,
+    /// Byte offset of the token end in the input.
+    pub end: i64,
+    /// Evidence: the codepoint, the scripts, or the decoded word.
+    pub detail: String,
+    /// A plain-language sentence describing the finding.
+    pub reason: String,
+}
+
+/// Structured anomaly report.
+#[napi(object)]
+pub struct AnomalyReport {
+    /// Whether any token tripped (the same value `hasAnomalies` returns).
+    pub anomalous: bool,
+    /// The anomaly kinds that fired, in first-appearance order.
+    pub kinds: Vec<String>,
+    /// Every finding, with span and detail.
+    pub findings: Vec<Finding>,
+    /// The first finding's reason, if any.
+    pub reason: Option<String>,
+}
+
+/// `hasAnomalies(text, lexicon)` — `lexicon` is an array of common words.
+#[napi]
+pub fn has_anomalies(text: String, lexicon: Vec<String>) -> bool {
+    let lex: HashSet<String> = lexicon.into_iter().collect();
+    api::has_anomalies(&text, &lex)
+}
+
+/// `inspectAnomalies(text, lexicon)` — full analysis with per-token findings.
+#[napi]
+pub fn inspect_anomalies(text: String, lexicon: Vec<String>) -> AnomalyReport {
+    let lex: HashSet<String> = lexicon.into_iter().collect();
+    let r = api::inspect_anomalies(&text, &lex);
+    AnomalyReport {
+        anomalous: r.anomalous,
+        kinds: r.kinds.iter().map(|k| k.as_str().to_string()).collect(),
+        findings: r
+            .findings
+            .into_iter()
+            .map(|f| {
+                let reason = f.reason();
+                Finding {
+                    kind: f.kind.as_str().to_string(),
+                    token: f.token,
+                    start: f.start as i64,
+                    end: f.end as i64,
+                    detail: f.detail,
+                    reason,
+                }
+            })
+            .collect(),
+        reason: r.reason,
     }
 }

@@ -1,0 +1,115 @@
+//! PyO3 shims for `crate::anomalies` (Layer-1) / [`crate::api`] (Layer-2).
+//!
+//! [`AnomalyReport`] and [`Finding`] are return-only `#[pyclass]` result objects
+//! that wrap the Layer-2 data and re-expose its fields as Python getters, the way
+//! [`crate::py::hostname::HostnameAnalysis`] does for hostnames. The detector
+//! reports a technical fact and leaves the malicious-or-not judgement to the
+//! caller. `lexicon` is accepted as any Python iterable of strings (a `set` is
+//! idiomatic) and converted to a `HashSet`.
+
+use std::collections::HashSet;
+
+use pyo3::prelude::*;
+
+/// One reason a token is anomalous (a single [`crate::api::Finding`]).
+#[pyclass(skip_from_py_object)]
+#[pyo3(name = "Finding")]
+#[derive(Clone)]
+pub struct Finding {
+    /// Which branch fired: `"invisible"`, `"bidi"`, `"zalgo"`, `"mixed_script"`, `"leet"`, or `"segmentation"`.
+    #[pyo3(get)]
+    pub kind: String,
+    /// The offending whitespace token, as it appeared.
+    #[pyo3(get)]
+    pub token: String,
+    /// Byte offset of the token start in the input.
+    #[pyo3(get)]
+    pub start: usize,
+    /// Byte offset of the token end in the input.
+    #[pyo3(get)]
+    pub end: usize,
+    /// Evidence: the codepoint, the scripts, or the decoded word.
+    #[pyo3(get)]
+    pub detail: String,
+    /// A plain-language sentence describing the finding.
+    #[pyo3(get)]
+    pub reason: String,
+}
+
+#[pymethods]
+impl Finding {
+    fn __repr__(&self) -> String {
+        format!(
+            "Finding(kind={:?}, token={:?}, start={}, end={}, detail={:?})",
+            self.kind, self.token, self.start, self.end, self.detail
+        )
+    }
+}
+
+impl From<crate::api::Finding> for Finding {
+    fn from(f: crate::api::Finding) -> Self {
+        let reason = f.reason();
+        Finding {
+            kind: f.kind.as_str().to_string(),
+            token: f.token,
+            start: f.start,
+            end: f.end,
+            detail: f.detail,
+            reason,
+        }
+    }
+}
+
+/// Structured anomaly report, parallel to `HostnameAnalysis`.
+#[pyclass(skip_from_py_object)]
+#[pyo3(name = "AnomalyReport")]
+#[derive(Clone)]
+pub struct AnomalyReport {
+    /// Whether any token tripped (the same value `has_anomalies` returns).
+    #[pyo3(get)]
+    pub anomalous: bool,
+    /// The anomaly kinds that fired, in order of first appearance.
+    #[pyo3(get)]
+    pub kinds: Vec<String>,
+    /// Every finding, with span and detail.
+    #[pyo3(get)]
+    pub findings: Vec<Finding>,
+    /// The first finding's reason, or `None`.
+    #[pyo3(get)]
+    pub reason: Option<String>,
+}
+
+#[pymethods]
+impl AnomalyReport {
+    fn __repr__(&self) -> String {
+        format!(
+            "AnomalyReport(anomalous={}, kinds={:?})",
+            self.anomalous, self.kinds
+        )
+    }
+}
+
+impl From<crate::api::AnomalyReport> for AnomalyReport {
+    fn from(r: crate::api::AnomalyReport) -> Self {
+        AnomalyReport {
+            anomalous: r.anomalous,
+            kinds: r.kinds.iter().map(|k| k.as_str().to_string()).collect(),
+            findings: r.findings.into_iter().map(Finding::from).collect(),
+            reason: r.reason,
+        }
+    }
+}
+
+/// `has_anomalies(text, lexicon) -> bool`
+#[pyfunction]
+#[pyo3(signature = (text, lexicon))]
+pub fn _has_anomalies(text: &str, lexicon: HashSet<String>) -> bool {
+    crate::api::has_anomalies(text, &lexicon)
+}
+
+/// `inspect_anomalies(text, lexicon) -> AnomalyReport`
+#[pyfunction]
+#[pyo3(signature = (text, lexicon))]
+pub fn _inspect_anomalies(text: &str, lexicon: HashSet<String>) -> AnomalyReport {
+    crate::api::inspect_anomalies(text, &lexicon).into()
+}

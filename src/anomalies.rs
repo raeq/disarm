@@ -447,4 +447,153 @@ mod tests {
         assert_eq!(r.kinds, vec![AnomalyKind::Leet]);
         assert_eq!(r.findings[0].detail, "free");
     }
+
+    // ── invisible ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn invisible_fires_inside_a_latin_word() {
+        let l = lex(&[]);
+        assert!(has_anomalies("pay\u{200B}pal", &l)); // zero-width space
+        assert!(has_anomalies("he\u{200C}llo", &l)); // ZWNJ between Latin letters
+    }
+
+    #[test]
+    fn invisible_spares_emoji_and_non_latin_joiners() {
+        let l = lex(&[]);
+        // emoji ZWJ sequence — no ASCII letter on either side of the joiner
+        assert!(!has_anomalies(
+            "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}",
+            &l
+        ));
+        // ZWJ between Arabic letters is legitimate joining, not an anomaly
+        assert!(!has_anomalies(
+            "\u{0643}\u{062A}\u{200D}\u{0627}\u{0628}",
+            &l
+        ));
+        // soft hyphen is legitimate hyphenation, not flagged
+        assert!(!has_anomalies("encyclo\u{00AD}pedia", &l));
+    }
+
+    // ── bidi ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn bidi_fires_on_override_and_trojan_isolate() {
+        let l = lex(&[]);
+        assert!(has_anomalies("user\u{202E}txt.exe", &l)); // RLO override
+        assert!(has_anomalies("ab\u{2066}cd", &l)); // isolate inside a majority-Latin token
+    }
+
+    #[test]
+    fn bidi_spares_marks_and_embeddings() {
+        let l = lex(&[]);
+        // bare directional marks (LRM/RLM) are common and benign
+        assert!(!has_anomalies("hello\u{200F}world", &l));
+        // an LRE..PDF embedding around RTL text (no Latin majority) is benign
+        assert!(!has_anomalies(
+            "\u{202B}\u{0639}\u{0631}\u{0628}\u{064A}\u{202C}",
+            &l
+        ));
+    }
+
+    // ── zalgo ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn zalgo_fires_but_spares_normal_accents() {
+        let l = lex(&[]);
+        assert!(has_anomalies("z\u{0301}\u{0301}\u{0301}\u{0301}algo", &l));
+        assert!(!has_anomalies("café résumé naïve", &l));
+    }
+
+    // ── mixed_script ────────────────────────────────────────────────────────
+
+    #[test]
+    fn mixed_script_fires_on_latin_plus_cyrillic_or_greek() {
+        let l = lex(&[]);
+        assert!(has_anomalies("payp\u{0430}l", &l)); // Cyrillic а
+        assert!(has_anomalies("Vi\u{03B1}gra", &l)); // Greek α among Latin
+    }
+
+    #[test]
+    fn mixed_script_spares_cjk_units_and_single_scripts() {
+        let l = lex(&[]);
+        assert!(!has_anomalies("漢字 mixed with text", &l)); // Han + Latin, not Cyr/Greek
+        assert!(!has_anomalies("kΩ µF resistor", &l)); // legitimate unit symbols
+        assert!(!has_anomalies("Москва Россия", &l)); // pure Cyrillic
+    }
+
+    // ── leet ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn leet_decodes_substitutions_to_words() {
+        let l = lex(&["free", "about", "the", "dont", "pass"]);
+        assert!(has_anomalies("get fr33 stuff", &l));
+        assert!(has_anomalies("talk ab0ut it", &l)); // interior substitution
+        assert!(has_anomalies("th3 answer", &l)); // short decode
+        assert!(has_anomalies("d0n't", &l)); // apostrophe skipped
+        assert!(has_anomalies("p@ss", &l)); // @ -> a, $-style symbols
+    }
+
+    #[test]
+    fn leet_spares_literal_numbers() {
+        let l = lex(&["power", "covid"]);
+        assert!(!has_anomalies("the win32 api and mp3 file", &l));
+        assert!(!has_anomalies("Power5 chip", &l)); // word + trailing literal number
+        assert!(!has_anomalies("covid19 update", &l));
+        assert!(!has_anomalies("on the 21st at 3pm", &l)); // ordinal + time
+    }
+
+    // ── segmentation ────────────────────────────────────────────────────────
+
+    #[test]
+    fn segmentation_fires_on_dense_single_letter_splits() {
+        let l = lex(&["viagra"]);
+        assert!(has_anomalies("buy v.i.a.g.r.a now", &l));
+        assert!(has_anomalies("v_i_a_g_r_a", &l));
+    }
+
+    #[test]
+    fn segmentation_spares_hyphenated_words() {
+        let l = lex(&["viagra"]);
+        assert!(!has_anomalies("a 6-foot-6 player", &l)); // multi-letter parts
+        assert!(!has_anomalies("send an e-mail today", &l)); // a single separator
+    }
+
+    // ── reports / parity ──────────────────────────────────────────────────────
+
+    #[test]
+    fn clean_text_reports_nothing() {
+        let l = lex(&["free", "viagra"]);
+        let r = inspect_anomalies("a perfectly ordinary sentence", &l);
+        assert!(!r.anomalous);
+        assert!(r.kinds.is_empty());
+        assert!(r.findings.is_empty());
+        assert!(r.reason.is_none());
+    }
+
+    #[test]
+    fn inspect_records_span_kind_and_reason() {
+        let l = lex(&["paypal"]);
+        let r = inspect_anomalies("log in to payp\u{0430}l today", &l);
+        assert_eq!(r.kinds, vec![AnomalyKind::MixedScript]);
+        let f = &r.findings[0];
+        assert_eq!(f.kind, AnomalyKind::MixedScript);
+        assert_eq!(&f.token, "payp\u{0430}l");
+        // the span points at the offending token in the original text
+        assert_eq!(&"log in to payp\u{0430}l today"[f.start..f.end], f.token);
+        assert!(r.reason.unwrap().contains("Latin"));
+    }
+
+    #[test]
+    fn has_anomalies_matches_inspect() {
+        let l = lex(&["free", "viagra", "paypal"]);
+        for s in [
+            "get fr33",
+            "payp\u{0430}l",
+            "v.i.a.g.r.a",
+            "perfectly clean text",
+            "user\u{202E}txt",
+        ] {
+            assert_eq!(has_anomalies(s, &l), inspect_anomalies(s, &l).anomalous);
+        }
+    }
 }

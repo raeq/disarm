@@ -187,6 +187,61 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "filenames" do
+    it "turns text into a safe filename" do
+      expect(Disarm.sanitize_filename("My: report*.txt")).to eq("My_report.txt")
+    end
+
+    it "applies platform rules" do
+      expect(Disarm.sanitize_filename("CON", platform: :windows)).to eq("_CON")
+    end
+
+    it "raises Disarm::InvalidArgument on an unknown platform" do
+      expect { Disarm.sanitize_filename("x", platform: :amiga) }
+        .to raise_error(Disarm::InvalidArgument)
+    end
+  end
+
+  describe "reverse transliteration" do
+    it "maps Latin back to a native script" do
+      expect(Disarm.reverse_transliterate("Moskva", lang: :ru)).to eq("Москва")
+      expect(Disarm.reverse_transliterate("Athina", lang: :el)).to eq("Αθηνα")
+    end
+
+    it "raises Disarm::InvalidArgument on an unsupported lang" do
+      expect { Disarm.reverse_transliterate("x", lang: :fr) }
+        .to raise_error(Disarm::InvalidArgument)
+    end
+  end
+
+  describe "untranslatable scan" do
+    it "lists characters with no romanization as { char:, offset: }" do
+      expect(Disarm.find_untranslatable("a🜊")).to eq([{ char: "🜊", offset: 1 }])
+    end
+
+    it "is empty when everything romanizes" do
+      expect(Disarm.find_untranslatable("café")).to eq([])
+    end
+  end
+
+  describe "script analysis" do
+    it "detects the scripts present, in order" do
+      expect(Disarm.detect_scripts("aМ")).to eq(%w[Latin Cyrillic])
+    end
+
+    it "flags mixed-script text" do
+      expect(Disarm.mixed_script?("aМ")).to be(true)
+      expect(Disarm.mixed_script?("abc")).to be(false)
+    end
+
+    it "explains auto-language detection" do
+      info = Disarm.inspect_auto_lang("Москва")
+      expect(info[:script]).to eq("Cyrillic")
+      expect(info[:chosen_lang]).to eq("ru")
+      expect(info[:reason]).to eq("script_default")
+    end
+  end
+
   describe "error hierarchy" do
     it "maps a non-String argument to Disarm::InvalidArgument" do
       expect { Disarm.strip_accents(42) }.to raise_error(Disarm::InvalidArgument)

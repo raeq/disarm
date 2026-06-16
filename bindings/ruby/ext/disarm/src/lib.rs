@@ -220,6 +220,87 @@ fn terminal_width(text: String, ambiguous_wide: bool) -> usize {
     api::terminal_width(&text, ambiguous_wide)
 }
 
+// ── Filenames (#375) ──────────────────────────────────────────────────────────
+
+/// `Disarm._sanitize_filename(text, separator, max_length, platform, lang,
+/// preserve_extension)` — fallible; `platform` is "universal" | "windows" | "posix".
+#[allow(clippy::too_many_arguments)]
+fn sanitize_filename(
+    text: String,
+    separator: String,
+    max_length: usize,
+    platform: String,
+    lang: Option<String>,
+    preserve_extension: bool,
+) -> Result<String, Error> {
+    let platform: api::Platform = platform.parse().map_err(|e| raise(&e))?;
+    api::sanitize_filename(
+        &text,
+        &separator,
+        max_length,
+        platform,
+        lang.as_deref(),
+        preserve_extension,
+    )
+    .map_err(|e| raise(&e))
+}
+
+// ── Reverse transliteration & untranslatable scan (#375) ──────────────────────
+
+/// `Disarm._reverse_transliterate(text, lang)` — Latin → native; `lang` is
+/// "el" | "ru" | "uk".
+fn reverse_transliterate(text: String, lang: String) -> Result<String, Error> {
+    let lang: api::ReverseLang = lang.parse().map_err(|e| raise(&e))?;
+    Ok(api::reverse_transliterate(&text, lang))
+}
+
+/// `Disarm._find_untranslatable(text, scheme, lang)` — every character with no
+/// romanization, as `[char, byte_offset]` pairs (the Ruby layer maps these to
+/// `{ char:, offset: }` hashes).
+fn find_untranslatable(
+    text: String,
+    scheme: String,
+    lang: Option<String>,
+) -> Result<Vec<(String, usize)>, Error> {
+    let mut builder = api::Transliterate::new();
+    if scheme != "default" {
+        let scheme: api::Scheme = scheme.parse().map_err(|e| raise(&e))?;
+        builder = builder.scheme(scheme);
+    }
+    if let Some(lang) = lang {
+        builder = builder.lang(lang);
+    }
+    Ok(builder
+        .find_untranslatable(&text)
+        .into_iter()
+        .map(|u| (u.ch.to_string(), u.offset))
+        .collect())
+}
+
+// ── Script analysis (#375) ────────────────────────────────────────────────────
+
+/// `Disarm._detect_scripts(text)` — Unicode scripts present, in first-appearance
+/// order (Common/Inherited excluded).
+fn detect_scripts(text: String) -> Vec<String> {
+    api::detect_scripts(&text)
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+}
+
+/// `Disarm._is_mixed_script?(text)` — whether `text` mixes more than one script.
+fn is_mixed_script(text: String) -> bool {
+    api::is_mixed_script(&text)
+}
+
+/// `Disarm._inspect_auto_lang(text)` — `[script, chosen_lang, reason,
+/// discriminators_hit]` (the Ruby layer maps it to a hash). `script`/`chosen_lang`
+/// are nil when nothing was detected.
+fn inspect_auto_lang(text: String) -> (Option<String>, Option<String>, String, Vec<String>) {
+    let r = api::inspect_auto_lang(&text);
+    (r.script, r.chosen_lang, r.reason, r.discriminators_hit)
+}
+
 // `name = "disarm"` so the exported init symbol is `Init_disarm` (matching the
 // `disarm.so` the gem loads), independent of the `disarm-ruby` package name.
 #[magnus::init(name = "disarm")]
@@ -265,5 +346,16 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_grapheme_truncate", function!(grapheme_truncate, 2))?;
     module.define_singleton_method("_grapheme_width", function!(grapheme_width, 2))?;
     module.define_singleton_method("_terminal_width", function!(terminal_width, 2))?;
+
+    // Filenames, reverse transliteration, and script analysis (#375).
+    module.define_singleton_method("_sanitize_filename", function!(sanitize_filename, 6))?;
+    module.define_singleton_method(
+        "_reverse_transliterate",
+        function!(reverse_transliterate, 2),
+    )?;
+    module.define_singleton_method("_find_untranslatable", function!(find_untranslatable, 3))?;
+    module.define_singleton_method("_detect_scripts", function!(detect_scripts, 1))?;
+    module.define_singleton_method("_is_mixed_script?", function!(is_mixed_script, 1))?;
+    module.define_singleton_method("_inspect_auto_lang", function!(inspect_auto_lang, 1))?;
     Ok(())
 }

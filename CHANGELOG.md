@@ -18,6 +18,14 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Ruby: filename, reverse-transliteration, and script-analysis ops (#375).**
+  Completes the plain-function parity backfill: `sanitize_filename`
+  (`platform:`/`max_length:`/`preserve_extension:`), `reverse_transliterate(lang:)`
+  (`:el`/`:ru`/`:uk`), `find_untranslatable` (→ `{ char:, offset: }` hashes),
+  `detect_scripts`, `mixed_script?`, and `inspect_auto_lang` (→ a
+  `:script`/`:chosen_lang`/`:reason`/`:discriminators_hit` hash) — thin wrappers
+  over the core `disarm::api`.
+
 - **Ruby: grapheme-cluster operations (#375).** The binding gains `grapheme_len`,
   `grapheme_split`, `grapheme_truncate`, `grapheme_width`, and `terminal_width` —
   user-perceived-character counting/splitting/truncation and East Asian Width

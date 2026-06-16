@@ -146,6 +146,61 @@ Disarm.suspicious_hostname?("pаypal.com")          # => true
 Disarm.suspicious_hostname?("example.com")         # => false
 ```
 
+## Normalization
+
+### `Disarm.normalize(text, form: :nfc)`
+
+Apply a Unicode normalization form — `:nfc` (default), `:nfd`, `:nfkc`, or
+`:nfkd` (a Symbol or String, case-insensitive).
+
+```ruby
+Disarm.normalize("ﬁ", form: :nfkc)                 # => "fi"
+Disarm.normalize("2²", form: :nfkc)                # => "22"
+```
+
+### `Disarm.normalized?(text, form: :nfc)`
+
+Whether `text` is already in normalization `form:` (default `:nfc`).
+
+```ruby
+Disarm.normalized?("café", form: :nfc)             # => true
+Disarm.normalized?("ﬁ", form: :nfkc)               # => false
+```
+
+## Text cleaning
+
+### `Disarm.collapse_whitespace(text, strip_control: true, strip_zero_width: true)`
+
+Collapse every run of Unicode whitespace to a single ASCII space, and trim
+leading/trailing whitespace. By default it also strips control and zero-width
+characters; pass `strip_control: false` / `strip_zero_width: false` to keep them.
+
+```ruby
+Disarm.collapse_whitespace("  a   b ")             # => "a b"
+```
+
+### `Disarm.strip_control_chars(text)` · `Disarm.strip_zero_width_chars(text)` · `Disarm.strip_bidi(text)`
+
+Remove, respectively, C0/C1 control characters (except tab/newline), zero-width
+characters (ZWSP/ZWNJ/ZWJ/word-joiner), and Unicode bidirectional controls — the
+invisible characters used to obfuscate or spoof text.
+
+```ruby
+Disarm.strip_control_chars("a\u0007b")              # => "ab"
+Disarm.strip_zero_width_chars("a\u200Bb")           # => "ab"
+Disarm.strip_bidi("a\u202Eb")                       # => "ab"
+```
+
+### `Disarm.strip_zalgo(text, max_marks: 2)` · `Disarm.zalgo?(text, threshold: 3)`
+
+`zalgo?` flags "zalgo" — combining marks stacked past `threshold:` on a base
+character; `strip_zalgo` caps each base character at `max_marks:` combining marks.
+
+```ruby
+Disarm.zalgo?("Z\u0301\u0301\u0301\u0301")                       # => true
+Disarm.zalgo?(Disarm.strip_zalgo("Z\u0301\u0301\u0301\u0301"))  # => false
+```
+
 ## Errors
 
 Everything disarm raises descends from `Disarm::Error < StandardError`, so a

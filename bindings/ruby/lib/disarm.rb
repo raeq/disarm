@@ -127,6 +127,51 @@ module Disarm
       translate_errors { _suspicious_hostname?(host) }
     end
 
+    # Apply a Unicode normalization form. `form:` is :nfc (default), :nfd,
+    # :nfkc, or :nfkd (a Symbol or String; case-insensitive).
+    def normalize(text, form: :nfc)
+      translate_errors { _normalize(text, form.to_s.upcase) }
+    end
+
+    # Whether `text` is already in normalization `form:` (default :nfc).
+    def normalized?(text, form: :nfc)
+      translate_errors { _normalized?(text, form.to_s.upcase) }
+    end
+
+    # Collapse every run of Unicode whitespace to a single ASCII space and trim
+    # leading/trailing whitespace. By default also strips control characters
+    # (`strip_control:`) and zero-width characters (`strip_zero_width:`).
+    def collapse_whitespace(text, strip_control: true, strip_zero_width: true)
+      translate_errors { _collapse_whitespace(text, strip_control, strip_zero_width) }
+    end
+
+    # Remove C0/C1 control characters (except tab and newline).
+    def strip_control_chars(text)
+      translate_errors { _strip_control_chars(text) }
+    end
+
+    # Remove zero-width characters (ZWSP, ZWNJ, ZWJ, word joiner).
+    def strip_zero_width_chars(text)
+      translate_errors { _strip_zero_width_chars(text) }
+    end
+
+    # Remove Unicode bidirectional control characters (a homoglyph/spoof vector).
+    def strip_bidi(text)
+      translate_errors { _strip_bidi(text) }
+    end
+
+    # Strip "zalgo" combining-mark stacking, keeping at most `max_marks:` (2)
+    # combining marks per base character.
+    def strip_zalgo(text, max_marks: 2)
+      translate_errors { _strip_zalgo(text, max_marks) }
+    end
+
+    # Whether `text` looks like zalgo: any base character carries more than
+    # `threshold:` (3) combining marks.
+    def zalgo?(text, threshold: 3)
+      translate_errors { _zalgo?(text, threshold) }
+    end
+
     private
 
     # Run a native call, re-raising its built-in exception as the matching

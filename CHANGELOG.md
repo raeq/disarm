@@ -18,6 +18,15 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Ruby: normalization + text-cleaning primitives (#375).** The binding gains
+  `normalize` / `normalized?` (NFC/NFD/NFKC/NFKD), `collapse_whitespace`,
+  `strip_control_chars`, `strip_zero_width_chars`, `strip_bidi`, and `strip_zalgo`
+  / `zalgo?` — the first batch of the Ruby↔core parity backfill (#375), which
+  unblocks honest normalization/text-cleaning Ruby docs. Each is a thin
+  keyword-argument wrapper over the core `disarm::api`, carrying the core's
+  defaults (`normalize(form: :nfc)`, `strip_zalgo(max_marks: 2)`,
+  `zalgo?(threshold: 3)`).
+
 - **CI: the Ruby binding is built and RSpec'd against the *local* core on every PR (#374).**
   A new `ruby` job in `ci.yml` compiles the gem (Ruby 3.1–3.3) and runs `rake spec`
   against the **in-repo** core — not the published one — on any PR that touches the

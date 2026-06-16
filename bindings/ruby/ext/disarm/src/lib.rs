@@ -24,7 +24,10 @@ use magnus::{function, prelude::*, Error, Ruby};
 /// `Disarm::InvalidArgument` / `Disarm::Error` so consumers can `rescue
 /// Disarm::Error` (#357); raising the built-ins here keeps the native side free
 /// of any dependency on Ruby-defined classes existing at call time.
-fn raise(e: &disarm_core::Error) -> Error {
+///
+/// Named `map_err` (not `raise`) to signal it constructs a magnus `Error` value
+/// rather than raising immediately — mirrors the Node shim's convention.
+fn map_err(e: &disarm_core::Error) -> Error {
     let class = match e.kind() {
         disarm_core::ErrorKind::InvalidArgument => magnus::exception::arg_error(),
         _ => magnus::exception::runtime_error(),
@@ -48,7 +51,7 @@ fn transliterate(text: String) -> String {
 fn transliterate_opts(text: String, scheme: String, lang: Option<String>) -> Result<String, Error> {
     let mut builder = api::Transliterate::new();
     if scheme != "default" {
-        let scheme: api::Scheme = scheme.parse().map_err(|e| raise(&e))?;
+        let scheme: api::Scheme = scheme.parse().map_err(|e| map_err(&e))?;
         builder = builder.scheme(scheme);
     }
     if let Some(lang) = lang {
@@ -61,13 +64,13 @@ fn transliterate_opts(text: String, scheme: String, lang: Option<String>) -> Res
 
 /// `Disarm._normalize_confusables(text, "latin" | "cyrillic")`.
 fn normalize_confusables(text: String, target: String) -> Result<String, Error> {
-    let target: api::TargetScript = target.parse().map_err(|e| raise(&e))?;
+    let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
     Ok(api::normalize_confusables(&text, target).into_owned())
 }
 
 /// `Disarm._confusable?(text, "latin" | "cyrillic")`.
 fn is_confusable(text: String, target: String) -> Result<bool, Error> {
-    let target: api::TargetScript = target.parse().map_err(|e| raise(&e))?;
+    let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
     Ok(api::is_confusable(&text, target))
 }
 
@@ -130,11 +133,11 @@ fn demojize(text: String, strip_modifiers: bool) -> String {
 // ── Security presets (fallible) ───────────────────────────────────────────────
 
 fn strip_obfuscation(text: String) -> Result<String, Error> {
-    api::strip_obfuscation(&text).map_err(|e| raise(&e))
+    api::strip_obfuscation(&text).map_err(|e| map_err(&e))
 }
 
 fn security_clean(text: String) -> Result<String, Error> {
-    api::security_clean(&text).map_err(|e| raise(&e))
+    api::security_clean(&text).map_err(|e| map_err(&e))
 }
 
 /// `Disarm._suspicious_hostname?(host)` — flags mixed-script / confusable IDN
@@ -150,13 +153,13 @@ fn suspicious_hostname(host: String) -> bool {
 /// `Disarm._normalize(text, "NFC" | "NFD" | "NFKC" | "NFKD")`. The idiomatic
 /// layer upcases its `form:` symbol/string before forwarding.
 fn normalize(text: String, form: String) -> Result<String, Error> {
-    let form: api::NormalizationForm = form.parse().map_err(|e| raise(&e))?;
+    let form: api::NormalizationForm = form.parse().map_err(|e| map_err(&e))?;
     Ok(api::normalize(&text, form))
 }
 
 /// `Disarm._normalized?(text, form)`.
 fn is_normalized(text: String, form: String) -> Result<bool, Error> {
-    let form: api::NormalizationForm = form.parse().map_err(|e| raise(&e))?;
+    let form: api::NormalizationForm = form.parse().map_err(|e| map_err(&e))?;
     Ok(api::is_normalized(&text, form))
 }
 
@@ -235,7 +238,7 @@ fn sanitize_filename(
     lang: Option<String>,
     preserve_extension: bool,
 ) -> Result<String, Error> {
-    let platform: api::Platform = platform.parse().map_err(|e| raise(&e))?;
+    let platform: api::Platform = platform.parse().map_err(|e| map_err(&e))?;
     api::sanitize_filename(
         &text,
         &separator,
@@ -244,7 +247,7 @@ fn sanitize_filename(
         lang.as_deref(),
         preserve_extension,
     )
-    .map_err(|e| raise(&e))
+    .map_err(|e| map_err(&e))
 }
 
 // ── Reverse transliteration & untranslatable scan (#375) ──────────────────────
@@ -252,7 +255,7 @@ fn sanitize_filename(
 /// `Disarm._reverse_transliterate(text, lang)` — Latin → native; `lang` is
 /// "el" | "ru" | "uk".
 fn reverse_transliterate(text: String, lang: String) -> Result<String, Error> {
-    let lang: api::ReverseLang = lang.parse().map_err(|e| raise(&e))?;
+    let lang: api::ReverseLang = lang.parse().map_err(|e| map_err(&e))?;
     Ok(api::reverse_transliterate(&text, lang))
 }
 
@@ -266,7 +269,7 @@ fn find_untranslatable(
 ) -> Result<Vec<(String, usize)>, Error> {
     let mut builder = api::Transliterate::new();
     if scheme != "default" {
-        let scheme: api::Scheme = scheme.parse().map_err(|e| raise(&e))?;
+        let scheme: api::Scheme = scheme.parse().map_err(|e| map_err(&e))?;
         builder = builder.scheme(scheme);
     }
     if let Some(lang) = lang {
@@ -305,15 +308,23 @@ fn inspect_auto_lang(text: String) -> (Option<String>, Option<String>, String, V
 
 // ── Anomaly detection (#389) ──────────────────────────────────────────────────
 
+/// Collect a `Vec<String>` lexicon into a `HashSet<String>` for O(1) membership
+/// lookups. Shared by `has_anomalies` and `inspect_anomalies`.
+fn collect_lexicon(lexicon: Vec<String>) -> HashSet<String> {
+    lexicon.into_iter().collect()
+}
+
 /// `Disarm._has_anomalies?(text, lexicon)` — `lexicon` is an array of common words.
 fn has_anomalies(text: String, lexicon: Vec<String>) -> bool {
-    let lex: HashSet<String> = lexicon.into_iter().collect();
-    api::has_anomalies(&text, &lex)
+    api::has_anomalies(&text, &collect_lexicon(lexicon))
 }
 
 /// `Disarm._inspect_anomalies(text, lexicon)` — `[anomalous, kinds, findings,
 /// reason]` where each finding is `[kind, token, start, end, detail, reason]` (the
 /// Ruby layer maps it to a hash).
+// The flat tuple return is intentional: `lib/disarm.rb` maps it to a named hash.
+// A dedicated magnus struct would require registering a Ruby class just for this
+// internal boundary, which is more boilerplate than the tuple costs.
 #[allow(clippy::type_complexity)]
 fn inspect_anomalies(
     text: String,
@@ -324,7 +335,7 @@ fn inspect_anomalies(
     Vec<(String, String, usize, usize, String, String)>,
     Option<String>,
 ) {
-    let lex: HashSet<String> = lexicon.into_iter().collect();
+    let lex = collect_lexicon(lexicon);
     let r = api::inspect_anomalies(&text, &lex);
     let findings = r
         .findings

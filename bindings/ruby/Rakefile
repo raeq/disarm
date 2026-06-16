@@ -32,4 +32,19 @@ spec_available =
   end
 
 task build: :compile
-task default: (spec_available ? %i[compile spec] : %i[compile])
+
+# rubocop is a development-only dependency; guard the same way as rspec.
+rubocop_available =
+  begin
+    require "rubocop/rake_task"
+    RuboCop::RakeTask.new
+    true
+  rescue LoadError
+    false
+  end
+
+task default: (
+  %i[compile] +
+  (spec_available ? %i[spec] : []) +
+  (rubocop_available ? %i[rubocop] : [])
+)

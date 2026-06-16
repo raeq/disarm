@@ -46,9 +46,11 @@
   "scripts": {
     "build": "napi build --platform --release --js binding.js --dts binding.d.ts && tsc",
     "build:debug": "napi build --platform --js binding.js --dts binding.d.ts && tsc",
+    "lint": "biome check .",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@napi-rs/cli": "^2.18.4",
     "typescript": "^5.7.3",
     "vitest": "^4.1.9"

@@ -251,6 +251,12 @@ RSpec.describe Disarm do
       expect(Disarm.has_anomalies?("buy v.i.a.g.r.a now", lex)).to be(true)
     end
 
+    it "works with no lexicon argument (default [])" do
+      # Mixed-script detection never needs a lexicon — the default must suffice.
+      expect(Disarm.has_anomalies?("paypаl")).to be(true) # Cyrillic а, no lexicon
+      expect(Disarm.inspect_anomalies("paypаl")[:anomalous]).to be(true)
+    end
+
     it "spares clean text and literal numbers" do
       expect(Disarm.has_anomalies?("a perfectly clean sentence", lex)).to be(false)
       expect(Disarm.has_anomalies?("the win32 api and mp3 file", lex)).to be(false)
@@ -261,15 +267,34 @@ RSpec.describe Disarm do
       expect(Disarm.has_anomalies?("get fr33", Set.new(["free"]))).to be(true)
     end
 
+    it "rejects a bare String lexicon with ArgumentError" do
+      expect { Disarm.has_anomalies?("text", "paypal") }
+        .to raise_error(Disarm::InvalidArgument, /Enumerable/)
+      expect { Disarm.inspect_anomalies("text", "paypal") }
+        .to raise_error(Disarm::InvalidArgument, /Enumerable/)
+    end
+
     it "returns a structured report with byte spans" do
-      r = Disarm.inspect_anomalies("log in to paypаl today", ["paypal"])
+      # U+0430 (Cyrillic а) is a 2-byte UTF-8 sequence; the token "paypаl"
+      # starts at byte 10 in "log in to paypаl today".
+      text = "log in to payp\u{0430}l today"
+      r = Disarm.inspect_anomalies(text, ["paypal"])
       expect(r[:anomalous]).to be(true)
       expect(r[:kinds]).to eq(["mixed_script"])
       f = r[:findings].first
       expect(f[:kind]).to eq("mixed_script")
-      expect(f[:token]).to eq("paypаl")
+      expect(f[:token]).to eq("payp\u{0430}l")
       expect(f[:detail]).to include("Latin")
       expect(f[:reason]).to include("Latin")
+
+      # Byte-span assertions: text.byteslice(start, length) must equal the token.
+      byte_start = f[:start]
+      byte_end   = f[:end]
+      expect(byte_start).to be_a(Integer)
+      expect(byte_end).to be_a(Integer)
+      expect(byte_end).to be > byte_start
+      extracted = text.byteslice(byte_start, byte_end - byte_start)
+      expect(extracted).to eq(f[:token])
     end
 
     it "reports nothing for clean text" do

@@ -72,3 +72,44 @@ def test_exports():
     for name in ("has_anomalies", "inspect_anomalies", "AnomalyReport", "Finding"):
         assert name in disarm.__all__
         assert hasattr(disarm, name)
+
+
+# --- Lexicon-optional tests (Finding 2.1) ---
+
+
+def test_has_anomalies_no_lexicon_mixed_script():
+    # "paypаl" contains Cyrillic а (U+0430) — the mixed-script branch needs no lexicon.
+    assert has_anomalies("paypаl")  # no lexicon argument
+
+
+def test_has_anomalies_no_lexicon_clean_text():
+    # Clean ASCII text must not fire when called with no lexicon argument.
+    assert not has_anomalies("clean text")
+
+
+def test_inspect_anomalies_no_lexicon_returns_report():
+    # inspect_anomalies must accept zero positional arguments beyond text.
+    r = inspect_anomalies("clean text")
+    assert isinstance(r, AnomalyReport)
+    assert r.anomalous is False
+    assert r.kinds == []
+    assert r.findings == []
+    assert r.reason is None
+
+
+def test_inspect_anomalies_no_lexicon_catches_mixed_script():
+    # The mixed-script branch fires without a lexicon.
+    r = inspect_anomalies("paypаl")
+    assert r.anomalous is True
+    assert "mixed_script" in r.kinds
+
+
+def test_has_anomalies_lexicon_none_explicit():
+    # lexicon=None is identical to omitting it.
+    assert has_anomalies("paypаl", lexicon=None)
+    assert not has_anomalies("clean text", lexicon=None)
+
+
+def test_inspect_anomalies_lexicon_none_explicit():
+    r = inspect_anomalies("clean text", lexicon=None)
+    assert r.anomalous is False

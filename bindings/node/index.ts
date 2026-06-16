@@ -8,9 +8,26 @@
  * and inherited here — see https://docs.disarm.dev for the language-neutral guides.
  */
 import * as native from './binding'
-import type { Untranslatable, AutoLangInspection, Finding, AnomalyReport } from './binding'
+import type {
+  Untranslatable,
+  AutoLangInspection,
+  Finding as NativeFinding,
+  AnomalyReport as NativeAnomalyReport,
+} from './binding'
 
-export type { Untranslatable, AutoLangInspection, Finding, AnomalyReport }
+export type { Untranslatable, AutoLangInspection }
+
+/** The anomaly branch that fired for a finding. */
+export type AnomalyKind = 'invisible' | 'bidi' | 'zalgo' | 'mixed_script' | 'leet' | 'segmentation'
+
+/**
+ * One reason a token is anomalous. Re-typed over the generated {@link NativeFinding}
+ * so `kind` is the {@link AnomalyKind} string-union rather than a bare `string`.
+ */
+export type Finding = Omit<NativeFinding, 'kind'> & { kind: AnomalyKind }
+
+/** Structured anomaly report, with {@link Finding}s carrying a typed `kind`. */
+export type AnomalyReport = Omit<NativeAnomalyReport, 'findings'> & { findings: Finding[] }
 
 // ── Errors ──────────────────────────────────────────────────────────────────
 
@@ -30,19 +47,28 @@ export class DisarmInvalidArgument extends DisarmError {
   }
 }
 
-/** Run a native call, re-raising its tagged napi error as the matching `DisarmError` subclass. */
+const INVALID_ARG_TAG = 'DisarmInvalidArgument: '
+const ERROR_TAG = 'DisarmError: '
+
+/**
+ * Run a native call, re-raising its tagged napi error as the matching
+ * `DisarmError` subclass. The native shim prefixes fallible messages with
+ * `"DisarmInvalidArgument: "` or `"DisarmError: "`; we strip the matched tag
+ * cleanly. Any other throw — an untagged `Error`, or a non-`Error` value — is
+ * still wrapped as a `DisarmError` so nothing leaks out unwrapped.
+ */
 function call<T>(fn: () => T): T {
   try {
     return fn()
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    if (msg.startsWith('DisarmInvalidArgument:')) {
-      throw new DisarmInvalidArgument(msg.slice('DisarmInvalidArgument:'.length).trim())
+    if (msg.startsWith(INVALID_ARG_TAG)) {
+      throw new DisarmInvalidArgument(msg.slice(INVALID_ARG_TAG.length))
     }
-    if (msg.startsWith('DisarmError:')) {
-      throw new DisarmError(msg.slice('DisarmError:'.length).trim())
+    if (msg.startsWith(ERROR_TAG)) {
+      throw new DisarmError(msg.slice(ERROR_TAG.length))
     }
-    throw e
+    throw new DisarmError(msg)
   }
 }
 
@@ -125,20 +151,22 @@ export interface SlugifyOptions {
 
 /** Generate a URL-safe slug. Mirrors the core's `SlugConfig` defaults. */
 export function slugify(text: string, options: SlugifyOptions = {}): string {
-  return native.slugify(text, {
-    separator: options.separator ?? '-',
-    lowercase: options.lowercase ?? true,
-    maxLength: options.maxLength ?? 0,
-    wordBoundary: options.wordBoundary ?? false,
-    saveOrder: options.saveOrder ?? false,
-    stopwords: options.stopwords ?? [],
-    allowUnicode: options.allowUnicode ?? false,
-    lang: options.lang,
-    entities: options.entities ?? true,
-    decimal: options.decimal ?? true,
-    hexadecimal: options.hexadecimal ?? true,
-    safeChars: options.safeChars ?? '',
-  })
+  return call(() =>
+    native.slugify(text, {
+      separator: options.separator ?? '-',
+      lowercase: options.lowercase ?? true,
+      maxLength: options.maxLength ?? 0,
+      wordBoundary: options.wordBoundary ?? false,
+      saveOrder: options.saveOrder ?? false,
+      stopwords: options.stopwords ?? [],
+      allowUnicode: options.allowUnicode ?? false,
+      lang: options.lang,
+      entities: options.entities ?? true,
+      decimal: options.decimal ?? true,
+      hexadecimal: options.hexadecimal ?? true,
+      safeChars: options.safeChars ?? '',
+    }),
+  )
 }
 
 // ── Canonicalization primitives ─────────────────────────────────────────────
@@ -201,12 +229,12 @@ export function stripBidi(text: string): string {
 
 /** Cap combining marks per base character at `maxMarks` (default `2`). */
 export function stripZalgo(text: string, options: { maxMarks?: number } = {}): string {
-  return native.stripZalgo(text, options.maxMarks ?? 2)
+  return call(() => native.stripZalgo(text, options.maxMarks ?? 2))
 }
 
 /** Whether any base character carries more than `threshold` (default `3`) combining marks. */
 export function isZalgo(text: string, options: { threshold?: number } = {}): boolean {
-  return native.isZalgo(text, options.threshold ?? 3)
+  return call(() => native.isZalgo(text, options.threshold ?? 3))
 }
 
 // ── Deobfuscation & security presets ────────────────────────────────────────
@@ -257,7 +285,7 @@ export function graphemeSplit(text: string): string[] {
 
 /** Truncate to at most `maxGraphemes` clusters, never cutting through one. */
 export function graphemeTruncate(text: string, maxGraphemes: number): string {
-  return native.graphemeTruncate(text, maxGraphemes)
+  return call(() => native.graphemeTruncate(text, maxGraphemes))
 }
 
 /** Display width (terminal columns) of a single grapheme `cluster` by East Asian Width. */
@@ -301,8 +329,8 @@ export function inspectAutoLang(text: string): AutoLangInspection {
  * judgement to the caller. `lexicon` is a common-word collection (a `Set` or
  * array) used only by the leet and segmentation branches.
  */
-export function hasAnomalies(text: string, lexicon: Iterable<string>): boolean {
-  return native.hasAnomalies(text, [...lexicon])
+export function hasAnomalies(text: string, lexicon: Iterable<string> = []): boolean {
+  return native.hasAnomalies(text, Array.isArray(lexicon) ? lexicon : [...lexicon])
 }
 
 /**
@@ -310,6 +338,7 @@ export function hasAnomalies(text: string, lexicon: Iterable<string>): boolean {
  * first-appearance order), `findings` (each `{ kind, token, start, end, detail,
  * reason }`, with byte offsets), and `reason` (the first finding's reason).
  */
-export function inspectAnomalies(text: string, lexicon: Iterable<string>): AnomalyReport {
-  return native.inspectAnomalies(text, [...lexicon])
+export function inspectAnomalies(text: string, lexicon: Iterable<string> = []): AnomalyReport {
+  const words = Array.isArray(lexicon) ? lexicon : [...lexicon]
+  return native.inspectAnomalies(text, words) as AnomalyReport
 }

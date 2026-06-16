@@ -1,0 +1,95 @@
+# RuboCop baseline for the disarm Ruby binding.
+# Target: Ruby 3.1 (oldest supported, matches CI matrix and magnus 0.7).
+# Scope: lib/ and spec/ only — ext/ is Rust.
+
+plugins:
+  - rubocop-performance
+
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.1
+  SuggestExtensions: false
+  Include:
+    - "lib/**/*.rb"
+    - "spec/**/*.rb"
+    - "Rakefile"
+  Exclude:
+    - "ext/**/*"
+    - "vendor/**/*"
+    - "tmp/**/*"
+
+# ── Style cops disabled to match existing codebase conventions ────────────────
+
+# The existing source uses double-quoted strings throughout; enforce that style.
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+# The module uses `class << self`; converting to module_function would churn
+# every method signature.
+Style/ModuleFunction:
+  Enabled: false
+
+# Trailing-comma style is already consistent in the codebase; don't enforce one.
+Style/TrailingCommaInHashLiteral:
+  Enabled: false
+
+Style/TrailingCommaInArguments:
+  Enabled: false
+
+Style/TrailingCommaInArrayLiteral:
+  Enabled: false
+
+# The existing rescue clause catches three exception classes on one line.
+Style/RescueModifier:
+  Enabled: false
+
+# String concatenation in specs (e.g. "Z" + ("́" * 8)) is intentional
+# for readability of what's being built.
+Style/StringConcatenation:
+  Enabled: false
+
+# Naming: the public API matches the disarm core's naming (has_anomalies? mirrors
+# the Rust api::has_anomalies); renaming it in Ruby would break the idiom.
+Naming/PredicatePrefix:
+  Enabled: false
+
+# ── Length / complexity cops ──────────────────────────────────────────────────
+
+# lib/disarm.rb is a single-file API surface; module length is not meaningful.
+Metrics/ModuleLength:
+  Enabled: false
+
+# The class << self block in lib/disarm.rb is the single public surface; its
+# length mirrors the API footprint.
+Metrics/ClassLength:
+  Enabled: false
+
+Metrics/MethodLength:
+  Max: 20
+
+Metrics/BlockLength:
+  Enabled: false
+
+# slugify and sanitize_filename mirror the Rust core option sets; reducing
+# parameter counts would require keyword-argument explosion or option structs.
+Metrics/ParameterLists:
+  Enabled: false
+
+# ── Lint cops ─────────────────────────────────────────────────────────────────
+
+# Spec files legitimately assign a local at describe-block level.
+Lint/UselessAssignment:
+  Enabled: false
+
+# Performance cop: `all?(::String)` predicate form is cleaner than the block
+# form but rubocop-performance 1.21+ has this as a correctable auto-fix.
+# Accept both forms; the existing code uses the block form intentionally.
+Performance/RedundantEqualityComparisonBlock:
+  Enabled: false
+
+# ── Spec-specific relaxations ──────────────────────────────────────────────────
+# (rubocop-rspec is not a development dependency; RSpec-namespace cops are not
+#  loaded. If added later, configure them here.)

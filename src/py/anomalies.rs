@@ -106,16 +106,18 @@ impl From<crate::api::AnomalyReport> for AnomalyReport {
     }
 }
 
-/// `has_anomalies(text, lexicon) -> bool`
+/// `has_anomalies(text, lexicon=None) -> bool`
 #[pyfunction]
-#[pyo3(signature = (text, lexicon))]
-pub fn _has_anomalies(text: &str, lexicon: HashSet<String>) -> bool {
+#[pyo3(signature = (text, lexicon=None))]
+pub fn _has_anomalies(text: &str, lexicon: Option<HashSet<String>>) -> bool {
+    let lexicon = lexicon.unwrap_or_default();
     crate::api::has_anomalies(text, &lexicon)
 }
 
-/// `inspect_anomalies(text, lexicon) -> AnomalyReport`
+/// `inspect_anomalies(text, lexicon=None) -> AnomalyReport`
 #[pyfunction]
-#[pyo3(signature = (text, lexicon))]
-pub fn _inspect_anomalies(text: &str, lexicon: HashSet<String>) -> AnomalyReport {
+#[pyo3(signature = (text, lexicon=None))]
+pub fn _inspect_anomalies(text: &str, lexicon: Option<HashSet<String>>) -> AnomalyReport {
+    let lexicon = lexicon.unwrap_or_default();
     crate::api::inspect_anomalies(text, &lexicon).into()
 }

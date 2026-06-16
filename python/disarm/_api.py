@@ -1196,7 +1196,7 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
 # --- Anomaly detection (#389) ---
 
 
-def has_anomalies(text: str, lexicon: Iterable[str]) -> bool:
+def has_anomalies(text: str, lexicon: Iterable[str] | None = None) -> bool:
     """Whether any whitespace token carries out-of-place characters that disguise a real word.
 
     Reports a *technical fact* — a cross-script homoglyph, leet, segmentation, a
@@ -1204,12 +1204,18 @@ def has_anomalies(text: str, lexicon: Iterable[str]) -> bool:
     to the caller, exactly as :func:`is_suspicious_hostname` does for hostnames.
 
     ``lexicon`` is a set of common words for the language being protected; it is
-    used only by the leet and segmentation branches (the invisible / bidi / zalgo /
-    mixed-script branches are script-agnostic and need no lexicon).
+    used only by the leet and segmentation branches.  The invisible, bidi, zalgo,
+    and mixed-script branches are script-agnostic and **need no lexicon** — calling
+    ``has_anomalies(text)`` with no lexicon (or ``lexicon=None``) is valid and will
+    still catch those classes of anomaly.  Pass a lexicon if you also want leet and
+    segmentation detection.
 
     Args:
         text: Input text.
-        lexicon: Common-word collection (set, list, …) (e.g. a frequency list for the target language).
+        lexicon: Common-word collection (set, list, …) for the target language,
+            used only by the leet and segmentation branches.  When ``None``
+            (the default) or an empty iterable, those two branches are effectively
+            disabled; all other branches still run.
 
     Returns:
         True if any token tripped a detector.
@@ -1217,13 +1223,15 @@ def has_anomalies(text: str, lexicon: Iterable[str]) -> bool:
     Examples:
         >>> has_anomalies("get fr33 stuff", {"free"})
         True
-        >>> has_anomalies("a perfectly ordinary sentence", set())
+        >>> has_anomalies("a perfectly ordinary sentence")
         False
+        >>> has_anomalies("paypаl")  # Cyrillic а — mixed-script, no lexicon needed
+        True
     """
-    return _has_anomalies(text, set(lexicon))
+    return _has_anomalies(text, set(lexicon) if lexicon is not None else None)
 
 
-def inspect_anomalies(text: str, lexicon: Iterable[str]) -> AnomalyReport:
+def inspect_anomalies(text: str, lexicon: Iterable[str] | None = None) -> AnomalyReport:
     """Full anomaly analysis: every finding with its span and a plain-language reason.
 
     Parallel to :func:`is_suspicious_hostname`'s ``HostnameAnalysis``. Returns an
@@ -1237,9 +1245,14 @@ def inspect_anomalies(text: str, lexicon: Iterable[str]) -> AnomalyReport:
       (byte offsets), ``detail``, and a plain-language ``reason``.
     - ``reason``: str | None — the first finding's reason.
 
+    The ``lexicon`` is optional (see :func:`has_anomalies`).  When omitted, the
+    invisible, bidi, zalgo, and mixed-script branches still run; only leet and
+    segmentation detection requires a lexicon.
+
     Args:
         text: Input text.
         lexicon: Common-word collection (set, list, …) (see :func:`has_anomalies`).
+            Defaults to ``None`` (empty — leet/segmentation branches disabled).
 
     Returns:
         An ``AnomalyReport``.
@@ -1250,8 +1263,10 @@ def inspect_anomalies(text: str, lexicon: Iterable[str]) -> AnomalyReport:
         (True, ['leet'])
         >>> r.findings[0].detail
         'free'
+        >>> inspect_anomalies("clean text").anomalous
+        False
     """
-    return _inspect_anomalies(text, set(lexicon))
+    return _inspect_anomalies(text, set(lexicon) if lexicon is not None else None)
 
 
 # --- Output encoders (terminal, context-explicit — NOT pipeline steps) ---

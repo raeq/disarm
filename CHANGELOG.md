@@ -18,6 +18,15 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **CI: the Ruby binding is built and RSpec'd against the *local* core on every PR (#374).**
+  A new `ruby` job in `ci.yml` compiles the gem (Ruby 3.1–3.3) and runs `rake spec`
+  against the **in-repo** core — not the published one — on any PR that touches the
+  binding *or the core it wraps*. It injects a CI-only `[patch.crates-io]` redirect
+  so an unreleased core API change is actually exercised; the registry-core build in
+  `publish-ruby.yml` is unchanged. A core change that breaks the gem (like the 0.10
+  tuple→struct return that shipped a broken gem, #364–#367) now fails the new
+  "Ruby checks passed" gate on the PR that introduces it, not silently at release.
+
 - **CI: the docs' Rust and Ruby usage examples are now executed gates (#50).**
   The per-language usage tabs are no longer illustrative — each is run in CI, the
   way the Python tabs already are (Sybil). `scripts/check_doc_rust_examples.py`

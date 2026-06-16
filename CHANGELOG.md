@@ -18,6 +18,18 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Node.js binding (#44).** A new `bindings/node/` napi-rs addon exposes the
+  pure-Rust core to Node with a fully-typed, idiomatic **TypeScript** surface —
+  `camelCase` functions, options objects with sensible defaults, string-union
+  token types, and a `DisarmError` / `DisarmInvalidArgument` class hierarchy. It
+  covers the full plain-function surface (transliterate, confusables, slugify,
+  normalization, text cleaning, graphemes, filenames, reverse/untranslatable,
+  script analysis) and ships `.d.ts` types. Two layers, like the gem: a raw napi
+  shim (`src/lib.rs`) under a hand-written `index.ts`. Built + vitest-tested in CI
+  against the in-repo core (the #374 drift gate, now `node`/"Node checks passed"),
+  with a `publish-node.yml` release workflow (per-platform prebuilds + npm
+  provenance) so `npm i disarm` needs no Rust toolchain.
+
 - **Ruby: filename, reverse-transliteration, and script-analysis ops (#375).**
   Completes the plain-function parity backfill: `sanitize_filename`
   (`platform:`/`max_length:`/`preserve_extension:`), `reverse_transliterate(lang:)`

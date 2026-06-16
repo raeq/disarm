@@ -249,6 +249,31 @@ module Disarm
         discriminators_hit: discriminators }
     end
 
+    # Whether any whitespace token carries out-of-place characters that disguise a
+    # real word — a cross-script homoglyph, leet, segmentation, a zero-width / bidi
+    # control, or zalgo. Reports a technical fact and leaves the malicious-or-not
+    # judgement to the caller. `lexicon` is a common-word collection (Array or Set)
+    # used only by the leet and segmentation branches.
+    def has_anomalies?(text, lexicon)
+      translate_errors { _has_anomalies?(text, Array(lexicon).map(&:to_s)) }
+    end
+
+    # Full anomaly analysis: a hash with `:anomalous`, `:kinds` (in first-appearance
+    # order), `:findings` (each `{ kind:, token:, start:, end:, detail:, reason: }`,
+    # with byte offsets), and `:reason` (the first finding's reason, or nil).
+    def inspect_anomalies(text, lexicon)
+      anomalous, kinds, findings, reason =
+        translate_errors { _inspect_anomalies(text, Array(lexicon).map(&:to_s)) }
+      {
+        anomalous: anomalous,
+        kinds: kinds,
+        findings: findings.map do |kind, token, start, finish, detail, fr|
+          { kind: kind, token: token, start: start, end: finish, detail: detail, reason: fr }
+        end,
+        reason: reason,
+      }
+    end
+
     private
 
     # Run a native call, re-raising its built-in exception as the matching

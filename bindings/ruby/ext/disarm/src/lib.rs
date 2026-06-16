@@ -13,6 +13,8 @@
 //! Targets magnus 0.7 (Ruby >= 3.1). Build via rake-compiler / rb-sys, not
 //! `cargo build` directly (it needs the Ruby headers rb-sys configures).
 
+use std::collections::HashSet;
+
 use disarm_core::api;
 use magnus::{function, prelude::*, Error, Ruby};
 
@@ -301,6 +303,48 @@ fn inspect_auto_lang(text: String) -> (Option<String>, Option<String>, String, V
     (r.script, r.chosen_lang, r.reason, r.discriminators_hit)
 }
 
+// ── Anomaly detection (#389) ──────────────────────────────────────────────────
+
+/// `Disarm._has_anomalies?(text, lexicon)` — `lexicon` is an array of common words.
+fn has_anomalies(text: String, lexicon: Vec<String>) -> bool {
+    let lex: HashSet<String> = lexicon.into_iter().collect();
+    api::has_anomalies(&text, &lex)
+}
+
+/// `Disarm._inspect_anomalies(text, lexicon)` — `[anomalous, kinds, findings,
+/// reason]` where each finding is `[kind, token, start, end, detail, reason]` (the
+/// Ruby layer maps it to a hash).
+#[allow(clippy::type_complexity)]
+fn inspect_anomalies(
+    text: String,
+    lexicon: Vec<String>,
+) -> (
+    bool,
+    Vec<String>,
+    Vec<(String, String, u32, u32, String, String)>,
+    Option<String>,
+) {
+    let lex: HashSet<String> = lexicon.into_iter().collect();
+    let r = api::inspect_anomalies(&text, &lex);
+    let findings = r
+        .findings
+        .into_iter()
+        .map(|f| {
+            let reason = f.reason();
+            (
+                f.kind.as_str().to_string(),
+                f.token,
+                f.start as u32,
+                f.end as u32,
+                f.detail,
+                reason,
+            )
+        })
+        .collect();
+    let kinds = r.kinds.iter().map(|k| k.as_str().to_string()).collect();
+    (r.anomalous, kinds, findings, r.reason)
+}
+
 // `name = "disarm"` so the exported init symbol is `Init_disarm` (matching the
 // `disarm.so` the gem loads), independent of the `disarm-ruby` package name.
 #[magnus::init(name = "disarm")]
@@ -357,5 +401,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_detect_scripts", function!(detect_scripts, 1))?;
     module.define_singleton_method("_is_mixed_script?", function!(is_mixed_script, 1))?;
     module.define_singleton_method("_inspect_auto_lang", function!(inspect_auto_lang, 1))?;
+    module.define_singleton_method("_has_anomalies?", function!(has_anomalies, 2))?;
+    module.define_singleton_method("_inspect_anomalies", function!(inspect_anomalies, 2))?;
     Ok(())
 }

@@ -112,8 +112,9 @@ jobs:
           npx tsc
 
       - name: Update npm for OIDC trusted publishing
-        # Trusted Publishing needs npm CLI >= 11.5; Node 20's bundled npm is 10.x.
-        run: npm install -g npm@latest
+        # Trusted Publishing needs npm CLI >= 11.5 (Node 20 bundles 10.x). Pinned
+        # for a reproducible release; bump deliberately.
+        run: npm install -g npm@11.5.1
 
       - name: npm publish (OIDC trusted publishing + provenance)
         # No long-lived NPM_TOKEN: a Trusted Publisher configured on npmjs.org for

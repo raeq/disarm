@@ -318,9 +318,9 @@ jobs:
       fail-fast: false
       matrix:
         # The shipped N-API 8 addon supports Node 14+ (package.json `engines`),
-        # but the test runner does not: vitest 3 pulls vite 7, which requires Node
-        # 20.19+/22.12+. So the suite runs on 20/22; the prebuilt addon is the same
-        # ABI-stable binary Node 14–18 consumers load.
+        # but the test runner does not: vitest 4 pulls vite 8, which requires Node
+        # ^20.19 || >=22.12. So the suite runs on 20/22; the prebuilt addon is the
+        # same ABI-stable binary Node 14–18 consumers load.
         node: ["20", "22"]
     defaults:
       run:

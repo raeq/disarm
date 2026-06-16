@@ -111,6 +111,7 @@ pub use api::DisarmStr;
 
 // Layer 1: the pure-Rust algorithm cores. `pub(crate)` — reachable by `api` and
 // the PyO3 shims, but not part of the public crate surface (#42).
+pub(crate) mod anomalies;
 pub(crate) mod case_fold;
 pub(crate) mod confusables;
 pub(crate) mod context;

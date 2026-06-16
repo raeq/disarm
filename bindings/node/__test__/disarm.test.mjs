@@ -149,3 +149,41 @@ describe('script analysis', () => {
     expect(info.discriminatorsHit).toEqual([])
   })
 })
+
+describe('anomaly detection', () => {
+  const lex = ['free', 'viagra', 'paypal']
+
+  test('flags out-of-place characters that disguise a word', () => {
+    expect(disarm.hasAnomalies('get fr33 now', lex)).toBe(true)
+    expect(disarm.hasAnomalies('paypаl', lex)).toBe(true) // Cyrillic а
+    expect(disarm.hasAnomalies('buy v.i.a.g.r.a now', lex)).toBe(true)
+  })
+
+  test('spares clean text and literal numbers', () => {
+    expect(disarm.hasAnomalies('a perfectly clean sentence', lex)).toBe(false)
+    expect(disarm.hasAnomalies('the win32 api and mp3 file', lex)).toBe(false)
+  })
+
+  test('accepts a Set lexicon', () => {
+    expect(disarm.hasAnomalies('get fr33', new Set(['free']))).toBe(true)
+  })
+
+  test('returns a structured report with byte spans', () => {
+    const r = disarm.inspectAnomalies('log in to paypаl today', ['paypal'])
+    expect(r.anomalous).toBe(true)
+    expect(r.kinds).toEqual(['mixed_script'])
+    const f = r.findings[0]
+    expect(f.kind).toBe('mixed_script')
+    expect(f.token).toBe('paypаl')
+    expect(f.detail).toContain('Latin')
+    expect(f.reason).toContain('Latin')
+  })
+
+  test('reports nothing for clean text', () => {
+    const r = disarm.inspectAnomalies('nothing to see here', [])
+    expect(r.anomalous).toBe(false)
+    expect(r.kinds).toEqual([])
+    expect(r.findings).toEqual([])
+    expect(r.reason ?? null).toBeNull()
+  })
+})

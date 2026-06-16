@@ -242,6 +242,45 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "anomaly detection" do
+    lex = %w[free viagra paypal]
+
+    it "flags out-of-place characters that disguise a word" do
+      expect(Disarm.has_anomalies?("get fr33 now", lex)).to be(true)
+      expect(Disarm.has_anomalies?("paypаl", lex)).to be(true) # Cyrillic а
+      expect(Disarm.has_anomalies?("buy v.i.a.g.r.a now", lex)).to be(true)
+    end
+
+    it "spares clean text and literal numbers" do
+      expect(Disarm.has_anomalies?("a perfectly clean sentence", lex)).to be(false)
+      expect(Disarm.has_anomalies?("the win32 api and mp3 file", lex)).to be(false)
+    end
+
+    it "accepts a Set lexicon" do
+      require "set"
+      expect(Disarm.has_anomalies?("get fr33", Set.new(["free"]))).to be(true)
+    end
+
+    it "returns a structured report with byte spans" do
+      r = Disarm.inspect_anomalies("log in to paypаl today", ["paypal"])
+      expect(r[:anomalous]).to be(true)
+      expect(r[:kinds]).to eq(["mixed_script"])
+      f = r[:findings].first
+      expect(f[:kind]).to eq("mixed_script")
+      expect(f[:token]).to eq("paypаl")
+      expect(f[:detail]).to include("Latin")
+      expect(f[:reason]).to include("Latin")
+    end
+
+    it "reports nothing for clean text" do
+      r = Disarm.inspect_anomalies("nothing to see here", [])
+      expect(r[:anomalous]).to be(false)
+      expect(r[:kinds]).to be_empty
+      expect(r[:findings]).to be_empty
+      expect(r[:reason]).to be_nil
+    end
+  end
+
   describe "error hierarchy" do
     it "maps a non-String argument to Disarm::InvalidArgument" do
       expect { Disarm.strip_accents(42) }.to raise_error(Disarm::InvalidArgument)

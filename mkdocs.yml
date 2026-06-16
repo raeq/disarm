@@ -76,6 +76,7 @@ nav:
       - Tokenizer Preprocessing: user-guide/tokenizer-preprocessing.md
       - Language Support: user-guide/language-support.md
       - Language Detection: user-guide/language-detection.md
+      - Anomaly Detection: user-guide/anomaly-detection.md
       - Abjad Scripts (Arabic, Persian, Hebrew): user-guide/abjad-transliteration.md
   - API Reference:
       - Python:

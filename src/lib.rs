@@ -111,6 +111,7 @@ pub use api::DisarmStr;
 
 // Layer 1: the pure-Rust algorithm cores. `pub(crate)` — reachable by `api` and
 // the PyO3 shims, but not part of the public crate surface (#42).
+pub(crate) mod anomalies;
 pub(crate) mod case_fold;
 pub(crate) mod confusables;
 pub(crate) mod context;
@@ -263,6 +264,10 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Hostname safety
     m.add_function(wrap_pyfunction!(py::hostname::_is_suspicious_hostname, m)?)?;
     m.add_class::<py::hostname::HostnameAnalysis>()?;
+    m.add_function(wrap_pyfunction!(py::anomalies::_has_anomalies, m)?)?;
+    m.add_function(wrap_pyfunction!(py::anomalies::_inspect_anomalies, m)?)?;
+    m.add_class::<py::anomalies::AnomalyReport>()?;
+    m.add_class::<py::anomalies::Finding>()?;
 
     // Encoding detection
     m.add_function(wrap_pyfunction!(py::encoding::_detect_encoding, m)?)?;

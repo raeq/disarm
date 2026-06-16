@@ -71,6 +71,11 @@ EXPECTED_ALL = {
     # Hostname safety
     "is_suspicious_hostname",
     "HostnameAnalysis",
+    # Anomaly detection (#389)
+    "has_anomalies",
+    "inspect_anomalies",
+    "AnomalyReport",
+    "Finding",
     # Output encoders
     "escape_html",
     "percent_encode",
@@ -361,6 +366,9 @@ CORE_FUNCTION_PARAMS = {
     "terminal_width": ["text", "ambiguous_wide"],
     # Hostname
     "is_suspicious_hostname": ["hostname"],
+    # Anomaly detection (#389)
+    "has_anomalies": ["text", "lexicon"],
+    "inspect_anomalies": ["text", "lexicon"],
     # Output encoders
     "escape_html": ["text"],
     "percent_encode": ["text", "component"],

@@ -18,6 +18,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Anomaly detection: `has_anomalies` / `inspect_anomalies` (#389).** An
+  out-of-place-character detector: it flags text disguising a real word via a
+  cross-script homoglyph, leet, single-letter segmentation, a zero-width / bidi
+  control, or zalgo, and reports a **technical fact, not intent** (like the
+  hostname analysis). Built on the core's own primitives plus a caller-supplied
+  common-word lexicon (used only by the leet/segmentation branches; the others are
+  script-agnostic). Exposed across the Rust core (`disarm::api`) and the Python,
+  Ruby, and Node bindings, with a per-language usage page. A dated **defensive
+  publication** — published as prior art so the method stays freely usable.
+
 - **Node.js docs + doc-example gate (#44).** A `docs/node/` getting-started page
   and API reference plug into the language-neutral structure (#50), with Node.js
   added to the Getting started and API Reference nav. Every Node `// =>` example

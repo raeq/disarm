@@ -246,6 +246,23 @@ inspectAutoLang('Москва') // => { script: 'Cyrillic', chosenLang: 'ru', re
 inspectAutoLang('Київ') // => { script: 'Cyrillic', chosenLang: 'uk', reason: 'discriminator', discriminatorsHit: ['ї'] }
 ```
 
+## Anomaly detection
+
+### `hasAnomalies(text, lexicon)` · `inspectAnomalies(text, lexicon)`
+
+Flag text carrying out-of-place characters that disguise a real word — a
+cross-script homoglyph, leet, segmentation, a zero-width / bidi control, or zalgo.
+Reports a technical fact, not intent. `lexicon` is a `Set` or array of common
+words (used only by the leet and segmentation branches). `inspectAnomalies`
+returns an `AnomalyReport` (`anomalous`, `kinds`, `findings` — each `{ kind,
+token, start, end, detail, reason }` — and `reason`). See
+[Anomaly Detection](../user-guide/anomaly-detection.md) for the detected classes.
+
+```ts
+hasAnomalies('get fr33 now', ['free'])       // => true
+inspectAnomalies('paypаl', ['paypal']).kinds // => ['mixed_script']
+```
+
 ## Errors
 
 Everything disarm throws is a `DisarmError` (a subclass of `Error`), so a single

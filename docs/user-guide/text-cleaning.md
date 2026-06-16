@@ -82,6 +82,14 @@ Remove excessive combining marks (zalgo text abuse) while preserving legitimate 
     assert_eq!(api::is_zalgo("café", 3), false);
     ```
 
+=== "Ruby"
+
+    ```ruby
+    # Legitimate diacritics are preserved; zalgo stacking is capped
+    Disarm.strip_zalgo("café")   # => "café"
+    Disarm.zalgo?("café")        # => false
+    ```
+
 ### strip_zalgo vs strip_accents
 
 | Function | Purpose | `café` | Zalgo `h̷̑ȇ̷l̷̑l̷̑ȏ̷` |
@@ -191,6 +199,12 @@ Normalize all Unicode whitespace variants to single ASCII spaces:
     // Normalize Unicode whitespace variants
     assert_eq!(api::collapse_whitespace("hello\u{00a0}world", true, true), "hello world");
     assert_eq!(api::collapse_whitespace("hello\u{2003}world", true, true), "hello world");
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    Disarm.collapse_whitespace("  hello   world  ")  # => "hello world"
     ```
 
 ### Control characters

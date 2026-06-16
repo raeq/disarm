@@ -34,6 +34,15 @@ The entire pipeline is deterministic, O(n), and fail-safe: if detection is uncer
     assert_eq!(Transliterate::new().lang("auto").run("Київ"), "Kyiv");
     ```
 
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # Cyrillic detected → ї discriminator → Ukrainian
+    Disarm.transliterate("Київ", lang: "auto")  # => "Kyiv"
+    ```
+
 ---
 
 ## Stage 1: Script Identification
@@ -58,6 +67,14 @@ disarm classifies each character by its Unicode script property using a static t
     assert_eq!(api::detect_scripts("Москва"), vec!["Cyrillic"]);
     assert_eq!(api::detect_scripts("東京タワー"), vec!["Han", "Katakana"]);
     assert_eq!(api::detect_scripts("Hello World"), vec!["Latin"]);
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    Disarm.detect_scripts("Москва")       # => ["Cyrillic"]
+    Disarm.detect_scripts("Hello World")  # => ["Latin"]
+    Disarm.mixed_script?("Moсква")        # => true
     ```
 
 For Latin-only text, no language override is applied (stage 2 may still detect Latin discriminators like Vietnamese or Turkish characters).
@@ -189,6 +206,16 @@ Key properties:
     assert_eq!(Transliterate::new().lang("auto").run("Москва"), "Moskva");
     ```
 
+=== "Ruby"
+
+    ```ruby
+    # ї is exclusive to Ukrainian; ћ to Serbian
+    Disarm.transliterate("Київ", lang: "auto")     # => "Kyiv"
+    Disarm.transliterate("Београд", lang: "auto")  # => "Beograd"
+    # No discriminator: Москва falls back to the script default (ru)
+    Disarm.transliterate("Москва", lang: "auto")   # => "Moskva"
+    ```
+
 ---
 
 ## Stage 3: Fallback
@@ -282,14 +309,24 @@ Use `inspect_auto_lang()` to see exactly how the detection pipeline resolved for
     assert_eq!(strasse.discriminators_hit, vec!["ß"]);
     ```
 
+=== "Ruby"
+
+    ```ruby
+    Disarm.inspect_auto_lang("Київ")  # => { script: "Cyrillic", chosen_lang: "uk", reason: "discriminator", discriminators_hit: ["ї"] }
+    Disarm.inspect_auto_lang("Straße") # => { script: nil, chosen_lang: "de", reason: "latin_discriminator", discriminators_hit: ["ß"] }
+    ```
+
 ### Return value
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `script` | `str | None` | Primary non-Latin script detected, or `None` for Latin/ASCII |
-| `chosen_lang` | `str | None` | Resolved language code, or `None` if no language matched |
-| `reason` | `str` | Detection reason: `"unambiguous_script"`, `"discriminator"`, `"script_default"`, `"latin_discriminator"`, or `"no_detection"` |
-| `discriminators_hit` | `list[str]` | Discriminator characters that triggered the match (empty if none) |
+The fields map to each binding's idiom — Python dict keys, Ruby hash keys
+(Symbols), and Rust `AutoLangInspection` fields:
+
+| Key | Description |
+|-----|-------------|
+| `script` | Primary non-Latin script detected; absent / `nil` / `None` for Latin/ASCII |
+| `chosen_lang` | Resolved language code; absent / `nil` / `None` if no language matched |
+| `reason` | Detection reason: `"unambiguous_script"`, `"discriminator"`, `"script_default"`, `"latin_discriminator"`, or `"no_detection"` |
+| `discriminators_hit` | Discriminator characters that triggered the match (empty if none) |
 
 ---
 

@@ -61,6 +61,17 @@ Normalization resolves this by converting to a canonical form.
     assert_eq!(api::normalize("ﬁ", NormalizationForm::Nfkd), "fi");
     ```
 
+=== "Ruby"
+
+    ```ruby
+    require "disarm"
+
+    # form: is :nfc (default), :nfd, :nfkc, or :nfkd
+    Disarm.normalize("ﬁnance", form: :nfkc)   # => "finance"
+    Disarm.normalize("2²", form: :nfkc)       # => "22"
+    Disarm.normalize("ﬁ", form: :nfkd)        # => "fi"
+    ```
+
 ## Checking normalization
 
 Test whether a string is already in a given form without performing the full normalization:
@@ -85,6 +96,13 @@ Test whether a string is already in a given form without performing the full nor
     assert_eq!(api::is_normalized("é", NormalizationForm::Nfc), true);
     assert_eq!(api::is_normalized("é", NormalizationForm::Nfd), false);
     assert_eq!(api::is_normalized("e\u{0301}", NormalizationForm::Nfd), true);
+    ```
+
+=== "Ruby"
+
+    ```ruby
+    Disarm.normalized?("hello")            # => true
+    Disarm.normalized?("ﬁ", form: :nfkc)   # => false
     ```
 
 ## The NF enum

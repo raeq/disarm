@@ -1,0 +1,68 @@
+name: Tier 3 (exhaustive + formal)
+
+# Reusable pre-publish gate (#159, epic #326) — the exhaustive + formal regimen.
+#
+# The exhaustive Rust domain tests (#[ignore]) and the Python formal invariants
+# (@pytest.mark.formal) are intentionally excluded from the fast PR CI (ci.yml):
+# they are slow and run the full Unicode space. On a release they become a HARD
+# gate that EVERY publish path depends on — the PyPI wheel and the crates.io core
+# (publish.yml), the RubyGems gem (publish-ruby.yml), and the npm addon
+# (publish-node.yml). A Tier-3 failure therefore blocks the upload of every
+# artifact at once: the core and all of its bindings ship only if the same
+# exhaustive net is green. Exposed via `workflow_call` so all three publish
+# workflows share one definition instead of drifting copies.
+#
+# The #[ignore] / @pytest.mark.formal markers stay intact — they are re-enabled
+# here explicitly via `-- --ignored` / `-m formal`. Cargo.lock is gitignored for
+# this library, so it is generated in CI.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tier3:
+    name: Tier 3 (exhaustive + formal)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
+
+      - name: Rust exhaustive transliterate domain tests (Tier 3)
+        run: cargo test --no-default-features --test exhaustive_transliterate -- --ignored
+
+      - name: Rust exhaustive grapheme-integrity tests (Tier 3, #174)
+        # The grapheme-boundary suite is documented as "run before release" but
+        # was never in the gate — wire it in alongside the transliterate sweep so
+        # the normalize-respects-grapheme-boundaries invariant is exhaustively
+        # re-checked on every release.
+        run: cargo test --no-default-features --test exhaustive_grapheme -- --ignored
+
+      - name: Install maturin
+        # Pin to the same range as the project's build-system requirement
+        # (pyproject: maturin>=1.13.3,<2) so a future maturin 2.x can't break the gate.
+        run: pip install "maturin[patchelf]>=1.13.3,<2"
+
+      - name: Build wheel and install (for formal invariants)
+        run: |
+          maturin build --out dist
+          # Install the test dependencies, then force the freshly-built WHEEL as
+          # the installed `disarm`. `.[test]` alone would (re)build disarm from the
+          # source checkout and shadow the wheel; --force-reinstall --no-deps swaps
+          # only the package so the formal invariants run against the release
+          # artifact, not a source rebuild.
+          pip install ".[test]"
+          pip install --force-reinstall --no-deps dist/*.whl
+
+      - name: Python formal invariant tests (Tier 3)
+        run: pytest -m formal

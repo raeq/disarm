@@ -89,9 +89,20 @@ jobs:
           name: cross-gem-${{ matrix.platform }}
           path: bindings/ruby/pkg/*.gem
 
+  # ── Tier 3 release gate (#159) ──────────────────────────────────
+  # The gem must not ship unless the SAME exhaustive + formal regimen that gates
+  # the PyPI wheel and the crates.io core (publish.yml) is green. Reused from
+  # .github/workflows/tier3.yml. Release/dispatch only — the exhaustive suite is a
+  # release gate, not a per-PR/-push cost (the PR-time `test` job already builds +
+  # RSpecs the binding against the core).
+  tier3:
+    name: Tier 3 (exhaustive + formal)
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/tier3.yml
+
   publish:
     name: Publish to RubyGems
-    needs: [test, cross-gems]
+    needs: [test, cross-gems, tier3]
     # Publish on a GitHub Release, or via a manual `workflow_dispatch` — the latter
     # is the recovery path when a release's gem build failed (e.g. binding drift)
     # but the registry version was never pushed. `gem push` of an existing version

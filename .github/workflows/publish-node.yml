@@ -76,9 +76,20 @@ jobs:
           path: bindings/node/disarm.*.node
           if-no-files-found: error
 
+  # ── Tier 3 release gate (#159) ──────────────────────────────────
+  # The npm addon must not ship unless the SAME exhaustive + formal regimen that
+  # gates the PyPI wheel and the crates.io core (publish.yml) is green. Reused
+  # from .github/workflows/tier3.yml. Release/dispatch only — the exhaustive suite
+  # is a release gate, not a per-push cost (the PR-time `node` job in ci.yml
+  # already builds the addon + runs vitest against the core).
+  tier3:
+    name: Tier 3 (exhaustive + formal)
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/tier3.yml
+
   publish:
     name: Publish to npm
-    needs: build
+    needs: [build, tier3]
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:

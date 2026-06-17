@@ -45,8 +45,8 @@ transliterate('Київ', { lang: 'auto' }) // => 'Kyiv'
 ### `searchKey(text, options?)` · `sortKey(text, options?)` · `catalogKey(text, options?)`
 
 Derive stable lookup keys for search, ordering, and deduplication.
-`searchKey` is a case/accent/script-insensitive search key; `sortKey` is the same
-but keeps base accented characters so collation orders correctly; `catalogKey`
+`searchKey` is a case/accent/script-insensitive search key; `sortKey` is an
+accent-folded collation key (currently the same output as `searchKey`); `catalogKey`
 is a library-catalog dedup key (`searchKey` plus confusable folding).
 `options.lang` selects the transliteration table (`'ru'`, `'de'`, …);
 `catalogKey` also takes `options.strictIso9` to pick the ISO 9:1995 Cyrillic

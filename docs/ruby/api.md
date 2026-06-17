@@ -150,8 +150,8 @@ Disarm.search_key("Café")                          # => "cafe"
 
 ### `Disarm.sort_key(text, lang: nil)`
 
-Collation sort key — like `search_key`, but tuned for correct ordering rather than
-exact-match folding.
+An accent-folded collation/sort key — currently produces the same output as
+`search_key`.
 
 ```ruby
 Disarm.sort_key("café")                            # => "cafe"

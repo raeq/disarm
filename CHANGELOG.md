@@ -142,6 +142,18 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed
 
+- **`security_clean` now caps combining marks (anti-zalgo, #429).** The preset
+  left zalgo-stacked tokens intact, so a mark-stacked `admin` did not match its
+  base form in a denylist/dedup comparison `security_clean` is meant to
+  canonicalize. It now caps combining marks at **2 per base** (the same threshold
+  `normalize_user_input` already used), removing abusive stacking while preserving
+  legitimate diacritics — `security_clean` stays accent-preserving (`café` →
+  `café`, `Việt` → `Việt`; full accent folding remains in `search_key`/`sort_key`).
+  The cap runs after the invisible/control strip so a stripped character between
+  marks cannot split a run and hide the count (#121), and idempotency is verified
+  by the raw-equality property test. **Output change:** inputs with more than two
+  stacked marks per base are now capped.
+
 - **`is_suspicious_hostname` and `has_anomalies` now flag bidi-direction
   conflicts (#412).** These detectors strengthen as disarm grows. A hostname that
   mixes strong-LTR and strong-RTL characters (the "BiDi Swap" shape, e.g.

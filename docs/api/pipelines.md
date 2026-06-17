@@ -8,7 +8,7 @@ Ready-to-use multi-step text processing pipelines. Each is a single compiled Rus
 
 ### Pipeline steps
 
-`NFKC → strip bidi/format → strip invisibles (#413) → collapse_whitespace → NFC → confusables → NFC → (path-separator neutralization)`
+`NFKC → strip bidi/format → strip invisibles (#413) → collapse_whitespace → strip_zalgo (#429) → NFC → confusables → NFC → (path-separator neutralization)`
 
 ```python
 from disarm import security_clean
@@ -151,7 +151,7 @@ from disarm import PRESETS
 Dict mapping preset function names to their ordered pipeline steps. Each value is a list of `(step_name, parameter)` tuples in execution order.
 
 ```python
-assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_invisibles', 'comparison'), ('collapse_whitespace', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
+assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_invisibles', 'comparison'), ('collapse_whitespace', None), ('strip_zalgo', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
 assert PRESETS["normalize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_invisibles', 'comparison'), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None), ('normalize', 'NFC')]
 ```
 

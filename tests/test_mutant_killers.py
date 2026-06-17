@@ -301,6 +301,7 @@ class TestPipelineStepTuples:
                     ("strip_bidi", None),
                     ("strip_invisibles", "comparison"),
                     ("collapse_whitespace", None),
+                    ("strip_zalgo", None),
                     ("normalize", "NFC"),
                     ("confusables", "latin"),
                     ("normalize", "NFC"),

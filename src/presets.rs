@@ -172,11 +172,12 @@ fn is_bidi_or_format(ch: char) -> bool {
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → strip bidi/format → collapse_whitespace → NFC → confusables → NFC → (path-separator neutralization)
+/// Pipeline: NFKC → strip bidi/format → strip invisibles → collapse_whitespace → cap marks (zalgo) → NFC → confusables → NFC → (path-separator neutralization)
 ///
 /// Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
-/// zero-width injections and control chars, and removes dangerous bidi
-/// overrides and soft hyphens that could enable text reordering attacks.
+/// zero-width injections and control chars, removes dangerous bidi overrides and
+/// soft hyphens, and caps combining-mark stacking (#429) while preserving
+/// legitimate diacritics.
 ///
 /// `strip_bidi` runs *before* `collapse_whitespace` so that removing
 /// invisible characters (e.g. soft hyphen U+00AD) can expose leading,
@@ -196,6 +197,14 @@ pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
     let buf = invisibles::strip_invisible_classes(&buf, COMPARISON_STRIP);
     // 3. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 3b. Cap combining marks at 2 per base (#429), matching normalize_user_input.
+    //     Removes zalgo stacking so a stacked token matches its base in a denylist
+    //     comparison, while keeping legitimate diacritics (`café`, `Việt`). Runs
+    //     AFTER collapse_whitespace — which strips the control / zero-width
+    //     characters — so a stripped invisible between two marks cannot split a
+    //     mark run and hide the count (the #121 lesson); a later strip would merge
+    //     the runs and break idempotency.
+    let buf = zalgo::strip_zalgo(&buf, 2);
     // 4. NFC (#416): the strips above can leave a base character next to a
     //    combining mark that was non-adjacent before (e.g. separated by a
     //    now-removed zero-width), which the leading NFKC passed over. Compose it

@@ -464,6 +464,10 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         # PUA (keeping valid emoji flags). "comparison" = strip PUA, strip all VS.
         ("strip_invisibles", "comparison"),
         ("collapse_whitespace", None),
+        # #429: cap combining marks at 2 per base (anti-zalgo). After
+        # collapse_whitespace so a stripped control/zero-width between marks cannot
+        # split a mark run and hide the count (#121).
+        ("strip_zalgo", None),
         # NFC sandwich around confusables (#416): the strips can leave a base next
         # to a combining mark; the first NFC composes it so the fold sees a
         # consistent form, the second recomposes the fold's output. TR39

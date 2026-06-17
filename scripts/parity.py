@@ -215,8 +215,13 @@ def _read_md(rel):
 
 
 def _tab_blocks(text, label):
-    # mkdocs-material content tabs: `=== "Label"` then a body until the next tab / heading.
-    return "\n".join(re.findall(rf'===\s+"{label}"\s*\n(.*?)(?=\n===\s+"|\n#|\Z)', text, re.S))
+    # mkdocs-material content tabs: `=== "Label"` then a body until the next tab
+    # marker (at any indentation) or a column-0 Markdown heading. Tab markers are
+    # matched at line start with optional leading whitespace, so tabs nested under
+    # a list item (`  === "Node"`, as on tokenizer-preprocessing.md) are scraped
+    # too — otherwise ops mentioned only in an indented tab look undocumented.
+    pat = rf'^[ \t]*===\s+"{label}"\s*\n(.*?)(?=\n[ \t]*===\s+"|\n#|\Z)'
+    return "\n".join(re.findall(pat, text, re.S | re.M))
 
 
 def docs_text(lang):

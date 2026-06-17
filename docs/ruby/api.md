@@ -150,12 +150,13 @@ Disarm.search_key("Café")                          # => "cafe"
 
 ### `Disarm.sort_key(text, lang: nil)`
 
-An accent-folded collation/sort key — currently produces the same output as
-`search_key`.
+A collation/sort key that **preserves base accented characters** — unlike
+`search_key` it keeps the accent (so accented and unaccented forms stay
+distinct), while still folding non-Latin scripts to Latin.
 
 ```ruby
-Disarm.sort_key("café")                            # => "cafe"
-Disarm.sort_key("Éclair")                          # => "eclair"
+Disarm.sort_key("café")                            # => "café"
+Disarm.sort_key("Éclair")                          # => "éclair"
 ```
 
 ### `Disarm.catalog_key(text, lang: nil, strict_iso9: false)`

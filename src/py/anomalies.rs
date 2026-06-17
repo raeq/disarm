@@ -137,20 +137,42 @@ impl Lexicon {
     }
 }
 
+/// Fold a Python iterable of strings (a `set` — idiomatic — or a `list`,
+/// generator, …) into a lowercased lexicon set in a **single pass**.
+///
+/// Extracting the argument as a `HashSet<String>` and then handing it to
+/// `api::lexicon` would build the set twice (once at extraction, once when
+/// lowercasing); iterating the raw object folds straight into one set, matching
+/// the cost of a prebuilt [`Lexicon`] handle. The lowercasing mirrors
+/// [`crate::api::lexicon`] so the raw-set and handle paths agree.
+fn lexicon_from_py(words: Option<Bound<'_, PyAny>>) -> PyResult<HashSet<String>> {
+    let Some(words) = words else {
+        return Ok(HashSet::new());
+    };
+    let mut set = HashSet::new();
+    for item in words.try_iter()? {
+        set.insert(item?.extract::<String>()?.to_lowercase());
+    }
+    Ok(set)
+}
+
 /// `has_anomalies(text, lexicon=None) -> bool`
 #[pyfunction]
 #[pyo3(signature = (text, lexicon=None))]
-pub fn _has_anomalies(text: &str, lexicon: Option<HashSet<String>>) -> bool {
-    let lexicon = crate::api::lexicon(lexicon.unwrap_or_default());
-    crate::api::has_anomalies(text, &lexicon)
+pub fn _has_anomalies(text: &str, lexicon: Option<Bound<'_, PyAny>>) -> PyResult<bool> {
+    let lexicon = lexicon_from_py(lexicon)?;
+    Ok(crate::api::has_anomalies(text, &lexicon))
 }
 
 /// `inspect_anomalies(text, lexicon=None) -> AnomalyReport`
 #[pyfunction]
 #[pyo3(signature = (text, lexicon=None))]
-pub fn _inspect_anomalies(text: &str, lexicon: Option<HashSet<String>>) -> AnomalyReport {
-    let lexicon = crate::api::lexicon(lexicon.unwrap_or_default());
-    crate::api::inspect_anomalies(text, &lexicon).into()
+pub fn _inspect_anomalies(
+    text: &str,
+    lexicon: Option<Bound<'_, PyAny>>,
+) -> PyResult<AnomalyReport> {
+    let lexicon = lexicon_from_py(lexicon)?;
+    Ok(crate::api::inspect_anomalies(text, &lexicon).into())
 }
 
 /// `has_anomalies` against a prebuilt [`Lexicon`] handle (no per-call rebuild).

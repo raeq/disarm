@@ -467,10 +467,21 @@ fn split_tokens(text: &str) -> Vec<(usize, &str)> {
 /// The detector decodes and **lowercases** candidate words before looking them up
 /// (`fr33` → `free`, `V.I.A.G.R.A` → `viagra`), so the lexicon must be lowercase too;
 /// a title-cased wordlist like `["Free"]` would otherwise silently miss `fr33`. Build
-/// the set through this helper (the bindings do) so case-folding is automatic.
+/// the set through this helper (the bindings do) so the lowercasing is automatic.
+///
+/// Accepts any iterable of string-like items (`String`, `&str`, `&String`,
+/// `Cow<str>`, …), so callers holding borrowed data need not pre-allocate owned
+/// `String`s just to build the set.
 #[must_use]
-pub fn lexicon<I: IntoIterator<Item = String>>(words: I) -> HashSet<String> {
-    words.into_iter().map(|s| s.to_lowercase()).collect()
+pub fn lexicon<I, S>(words: I) -> HashSet<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    words
+        .into_iter()
+        .map(|s| s.as_ref().to_lowercase())
+        .collect()
 }
 
 /// True if any whitespace token carries out-of-place characters that disguise a real word.
@@ -478,7 +489,7 @@ pub fn lexicon<I: IntoIterator<Item = String>>(words: I) -> HashSet<String> {
 /// Reports a technical fact and leaves the malicious-or-not judgement to the caller.
 /// `lexicon` is a set of common words for the language being protected (used only by the
 /// leet and segmentation branches). Entries must be **lowercase** — build it with
-/// [`lexicon`] so case-folding matches the detector's lowercased lookups.
+/// [`lexicon`] so the lowercasing matches the detector's lowercased lookups.
 #[must_use]
 pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
     split_tokens(text)

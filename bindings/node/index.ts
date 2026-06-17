@@ -280,6 +280,36 @@ export function sanitizeFilename(text: string, options: SanitizeFilenameOptions 
   )
 }
 
+// ── Key-derivation presets ──────────────────────────────────────────────────
+
+/**
+ * Case/accent/script-insensitive search lookup key (like {@link catalogKey}
+ * without confusable folding). `lang` selects the transliteration table.
+ */
+export function searchKey(text: string, options: { lang?: string } = {}): string {
+  return call(() => native.searchKey(text, options.lang ?? undefined))
+}
+
+/**
+ * Collation sort key — like {@link searchKey} but preserves base accented
+ * characters for correct ordering. `lang` selects the transliteration table.
+ */
+export function sortKey(text: string, options: { lang?: string } = {}): string {
+  return call(() => native.sortKey(text, options.lang ?? undefined))
+}
+
+/**
+ * Library catalog deduplication key — like {@link searchKey} plus confusable
+ * folding. `lang` selects the transliteration table; `strictIso9` (default
+ * `false`) picks the ISO 9:1995 Cyrillic scheme.
+ */
+export function catalogKey(
+  text: string,
+  options: { lang?: string; strictIso9?: boolean } = {},
+): string {
+  return call(() => native.catalogKey(text, options.lang ?? undefined, options.strictIso9 ?? false))
+}
+
 // ── Grapheme clusters ───────────────────────────────────────────────────────
 
 /** Number of grapheme clusters (user-perceived characters). */

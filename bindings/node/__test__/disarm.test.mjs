@@ -98,6 +98,30 @@ describe('filenames', () => {
   })
 })
 
+describe('key-derivation presets', () => {
+  const asciiKey = /^[\x20-\x7e]+$/
+
+  test('searchKey yields a non-empty ASCII key', () => {
+    const key = disarm.searchKey('Köln')
+    expect(key.length).toBeGreaterThan(0)
+    expect(key).toMatch(asciiKey)
+  })
+  test('sortKey yields a non-empty key', () => {
+    const key = disarm.sortKey('Café')
+    expect(key.length).toBeGreaterThan(0)
+  })
+  test('catalogKey yields a non-empty ASCII key', () => {
+    const key = disarm.catalogKey('naïve')
+    expect(key.length).toBeGreaterThan(0)
+    expect(key).toMatch(asciiKey)
+  })
+  test('lang and strictIso9 options are accepted', () => {
+    expect(disarm.searchKey('Москва', { lang: 'ru' }).length).toBeGreaterThan(0)
+    expect(disarm.sortKey('Москва', { lang: 'ru' }).length).toBeGreaterThan(0)
+    expect(disarm.catalogKey('Москва', { lang: 'ru', strictIso9: true }).length).toBeGreaterThan(0)
+  })
+})
+
 describe('graphemes', () => {
   test('graphemeLen counts user-perceived characters', () => {
     expect(disarm.graphemeLen('a👍b')).toBe(3)

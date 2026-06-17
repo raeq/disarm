@@ -140,6 +140,24 @@ fn security_clean(text: String) -> Result<String, Error> {
     api::security_clean(&text).map_err(|e| map_err(&e))
 }
 
+/// `Disarm._search_key(text, lang)` — case/accent/script-insensitive lookup key.
+/// `lang` is `nil` (no profile) or a code like `"ru"`. Fails on an unknown `lang`.
+fn search_key(text: String, lang: Option<String>) -> Result<String, Error> {
+    api::search_key(&text, lang.as_deref()).map_err(|e| map_err(&e))
+}
+
+/// `Disarm._sort_key(text, lang)` — collation sort key (preserves base accented
+/// characters for correct ordering). Fails on an unknown `lang`.
+fn sort_key(text: String, lang: Option<String>) -> Result<String, Error> {
+    api::sort_key(&text, lang.as_deref()).map_err(|e| map_err(&e))
+}
+
+/// `Disarm._catalog_key(text, lang, strict_iso9)` — catalog deduplication key.
+/// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails on an unknown `lang`.
+fn catalog_key(text: String, lang: Option<String>, strict_iso9: bool) -> Result<String, Error> {
+    api::catalog_key(&text, lang.as_deref(), strict_iso9).map_err(|e| map_err(&e))
+}
+
 /// `Disarm._suspicious_hostname?(host)` — flags mixed-script / confusable IDN
 /// spoofs. A false result asserts nothing was *found*, not that the host is safe.
 fn suspicious_hostname(host: String) -> bool {
@@ -407,6 +425,11 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_demojize", function!(demojize, 2))?;
     module.define_singleton_method("_strip_obfuscation", function!(strip_obfuscation, 1))?;
     module.define_singleton_method("_security_clean", function!(security_clean, 1))?;
+
+    // Key-derivation presets (#404 Group A parity backfill).
+    module.define_singleton_method("_search_key", function!(search_key, 2))?;
+    module.define_singleton_method("_sort_key", function!(sort_key, 2))?;
+    module.define_singleton_method("_catalog_key", function!(catalog_key, 3))?;
 
     // No options / no symbols, but still wrapped by the Ruby layer so a wrong-type
     // argument surfaces as Disarm::InvalidArgument rather than a raw TypeError —

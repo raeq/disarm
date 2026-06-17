@@ -343,12 +343,36 @@ operations:
       python: strip_log_injection
       ruby: null
       node: null
+  - id: strip_noncharacters
+    names:
+      rust: strip_noncharacters
+      python: strip_noncharacters
+      ruby: strip_noncharacters
+      node: stripNoncharacters
   - id: strip_obfuscation
     names:
       rust: strip_obfuscation
       python: strip_obfuscation
       ruby: strip_obfuscation
       node: stripObfuscation
+  - id: strip_pua
+    names:
+      rust: strip_pua
+      python: strip_pua
+      ruby: strip_pua
+      node: stripPua
+  - id: strip_tags
+    names:
+      rust: strip_tags
+      python: strip_tags
+      ruby: strip_tags
+      node: stripTags
+  - id: strip_variation_selectors
+    names:
+      rust: strip_variation_selectors
+      python: strip_variation_selectors
+      ruby: strip_variation_selectors
+      node: stripVariationSelectors
   - id: strip_zalgo
     names:
       rust: strip_zalgo

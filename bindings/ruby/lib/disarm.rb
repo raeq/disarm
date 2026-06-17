@@ -183,6 +183,28 @@ module Disarm
       translate_errors { _strip_bidi(text) }
     end
 
+    # Strip the Unicode Tags block (U+E0000-U+E007F) - the "ASCII smuggling"
+    # channel - preserving well-formed emoji subdivision flag sequences (#413).
+    def strip_tags(text)
+      translate_errors { _strip_tags(text) }
+    end
+
+    # Strip every variation selector (VS1-VS256) - the arbitrary-byte smuggling
+    # channel (#413).
+    def strip_variation_selectors(text)
+      translate_errors { _strip_variation_selectors(text) }
+    end
+
+    # Strip every Unicode noncharacter (U+FDD0-U+FDEF and U+xFFFE/U+xFFFF) (#413).
+    def strip_noncharacters(text)
+      translate_errors { _strip_noncharacters(text) }
+    end
+
+    # Strip every Private Use Area code point (BMP and planes 15/16) (#413).
+    def strip_pua(text)
+      translate_errors { _strip_pua(text) }
+    end
+
     # Strip "zalgo" combining-mark stacking, keeping at most `max_marks:` (2)
     # combining marks per base character.
     def strip_zalgo(text, max_marks: 2)

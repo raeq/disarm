@@ -299,6 +299,7 @@ class TestPipelineStepTuples:
                 [
                     ("normalize", "NFKC"),
                     ("strip_bidi", None),
+                    ("strip_invisibles", "comparison"),
                     ("collapse_whitespace", None),
                     ("normalize", "NFC"),
                     ("confusables", "latin"),
@@ -331,6 +332,7 @@ class TestPipelineStepTuples:
                 "display_clean",
                 [
                     ("strip_bidi", None),
+                    ("strip_invisibles", "rendering"),
                     ("collapse_whitespace", None),
                 ],
             ),
@@ -363,9 +365,11 @@ class TestPipelineStepTuples:
                     ("strip_bidi", None),
                     ("strip_zero_width", None),
                     ("strip_control", None),
+                    ("strip_invisibles", "comparison"),
                     ("strip_zalgo", None),
                     ("confusables", "latin"),
                     ("collapse_whitespace", None),
+                    ("normalize", "NFC"),
                 ],
             ),
         ],

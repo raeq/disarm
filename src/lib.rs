@@ -123,6 +123,7 @@ pub(crate) mod encoding;
 pub(crate) mod filename;
 pub(crate) mod grapheme;
 pub(crate) mod hostname;
+pub(crate) mod invisibles;
 pub(crate) mod limits;
 pub(crate) mod log_injection;
 pub(crate) mod normalize;
@@ -251,6 +252,13 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::presets::_search_key, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_sort_key, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_strip_bidi, m)?)?;
+    m.add_function(wrap_pyfunction!(py::presets::_strip_tags, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        py::presets::_strip_variation_selectors,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(py::presets::_strip_noncharacters, m)?)?;
+    m.add_function(wrap_pyfunction!(py::presets::_strip_pua, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_normalize_user_input, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_strip_obfuscation, m)?)?;
 

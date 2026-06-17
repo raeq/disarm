@@ -2,7 +2,23 @@ use std::borrow::Cow;
 
 use unicode_normalization::UnicodeNormalization;
 
-use crate::{case_fold, confusables, emoji, transliterate, whitespace, zalgo};
+use crate::{case_fold, confusables, emoji, invisibles, transliterate, whitespace, zalgo};
+
+/// #413 strip policy for the comparison/storage presets (`security_clean`,
+/// `normalize_user_input`, `strip_obfuscation`): strip every variation selector
+/// and the Private Use Area.
+const COMPARISON_STRIP: invisibles::StripPolicy = invisibles::StripPolicy {
+    strip_pua: true,
+    keep_presentation_vs: false,
+};
+
+/// #413 strip policy for the rendering preset (`display_clean`): preserve the
+/// Private Use Area (icon fonts) and keep the VS15/VS16 presentation selectors
+/// after a base character.
+const RENDERING_STRIP: invisibles::StripPolicy = invisibles::StripPolicy {
+    strip_pua: false,
+    keep_presentation_vs: true,
+};
 
 // disarm does not cap input size in the pipeline presets — bounding untrusted
 // input is the caller's responsibility (every stage is linear time/memory;
@@ -173,6 +189,11 @@ pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
     let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides, isolates, marks, and soft hyphens
     let buf = strip_bidi(&buf);
+    // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags
+    //     (keeping valid emoji flag sequences), variation selectors, CGJ,
+    //     noncharacters, and the Private Use Area. Runs before the NFC below so a
+    //     CGJ stripped from between a base and a mark gets recomposed.
+    let buf = invisibles::strip_invisible_classes(&buf, COMPARISON_STRIP);
     // 3. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::collapse_whitespace(&buf, true, true);
     // 4. NFC (#416): the strips above can leave a base character next to a
@@ -448,6 +469,12 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
 pub(crate) fn display_clean(text: &str) -> String {
     // 1. Strip bidi overrides, isolates, marks, and soft hyphens
     let buf = strip_bidi(text);
+    // 1b. Strip the #413 smuggling / non-interchange classes, with the rendering
+    //     policy: keep well-formed emoji flags, keep VS15/VS16 after a base, and
+    //     PRESERVE the Private Use Area (icon fonts) rather than deleting it. CGJ
+    //     and noncharacters are still stripped. No NFC pass: display_clean does no
+    //     NFKC, so any base+mark left decomposed stays decomposed (idempotent).
+    let buf = invisibles::strip_invisible_classes(&buf, RENDERING_STRIP);
     // 2. Collapse whitespace + strip control + strip zero-width
     whitespace::collapse_whitespace(&buf, true, true)
 }
@@ -489,12 +516,19 @@ pub(crate) fn normalize_user_input(text: &str) -> Result<String, crate::ErrorRep
     let buf = strip_bidi(&buf);
     let buf = whitespace::strip_zero_width_chars(&buf);
     let buf = whitespace::strip_control_chars(&buf);
+    // 2b. Strip the #413 smuggling / non-interchange classes (Tags with the flag
+    //     carve-out, variation selectors, CGJ, noncharacters, PUA).
+    let buf = invisibles::strip_invisible_classes(&buf, COMPARISON_STRIP);
     // 3. Cap combining marks at 2 per base character (zalgo)
     let buf = zalgo::strip_zalgo(&buf, 2);
     // 4. Confusables → Latin (neutralizes cross-script homoglyphs)
     let buf = confusables::normalize_confusables(&buf, "latin")?;
     // 5. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 5b. Terminal NFC (#416/#413): stripping a CGJ (or other invisible) from
+    //     between a base and a combining mark leaves them adjacent but decomposed;
+    //     recompose so the pipeline stays a fixed point.
+    let buf = nfc_normalize(&buf);
     // 6. Path-safety guarantee (#248): the output of a function named to
     //    *normalize* untrusted input must be safe to use as a path component —
     //    no synthesised '/', '\', or '..' traversal.
@@ -537,6 +571,11 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> 
     let buf = whitespace::strip_zero_width_chars(&buf);
     // 5. Demojize — expand emoji to text names with spacing
     let buf = emoji::demojize_rust(&buf, false);
+    // 5b. Strip the #413 smuggling / non-interchange classes. Runs AFTER demojize
+    //     so the emoji pass sees flags/presentation selectors intact; whatever
+    //     demojize leaves (stray Tags, variation selectors, noncharacters, PUA) is
+    //     removed here. CGJ is already gone via the zalgo(0) combining-mark strip.
+    let buf = invisibles::strip_invisible_classes(&buf, COMPARISON_STRIP);
     // 6. Confusables → Latin (TR39 visual mapping: Cyrillic р→p, с→c, В→B).
     //    Runs AFTER demojize so that typographic punctuation in emoji names
     //    (e.g. the ’ in "woman’s hat") is folded too; otherwise a second pass

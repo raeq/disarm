@@ -8,7 +8,7 @@ Ready-to-use multi-step text processing pipelines. Each is a single compiled Rus
 
 ### Pipeline steps
 
-`NFKC → confusables → strip bidi/format → collapse_whitespace → (path-separator neutralization)`
+`NFKC → strip bidi/format → strip invisibles (#413) → collapse_whitespace → NFC → confusables → NFC → (path-separator neutralization)`
 
 ```python
 from disarm import security_clean
@@ -62,7 +62,7 @@ assert catalog_key("Müller", lang="de") == 'mueller'
 
 ### Pipeline steps
 
-`strip_bidi` → `strip_control` → `strip_zero_width` → `collapse_whitespace`
+`strip_bidi` → `strip invisibles (#413, rendering policy)` → `strip_control` → `strip_zero_width` → `collapse_whitespace`
 
 ```python
 from disarm import display_clean
@@ -128,7 +128,7 @@ assert sort_key("Café") == 'café'
 
 ### Pipeline steps
 
-`NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo → confusables → collapse_whitespace → (path-separator neutralization)`
+`NFKC → strip_bidi → strip_zero_width → strip_control → strip invisibles (#413) → strip_zalgo → confusables → collapse_whitespace → NFC → (path-separator neutralization)`
 
 ```python
 from disarm import normalize_user_input
@@ -151,8 +151,8 @@ from disarm import PRESETS
 Dict mapping preset function names to their ordered pipeline steps. Each value is a list of `(step_name, parameter)` tuples in execution order.
 
 ```python
-assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('collapse_whitespace', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
-assert PRESETS["normalize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None)]
+assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_invisibles', 'comparison'), ('collapse_whitespace', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
+assert PRESETS["normalize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_invisibles', 'comparison'), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None), ('normalize', 'NFC')]
 ```
 
 Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.

@@ -12,6 +12,7 @@ from disarm import (
     security_clean,
     sort_key,
     strip_bidi,
+    strip_obfuscation,
 )
 
 # ===== security_clean =====
@@ -425,6 +426,7 @@ class TestPresetsMetadataOrder:
             "strip_bidi",
             "strip_zero_width",
             "demojize",
+            "strip_invisibles",
             "confusables",
             "strip_accents",
             "collapse_whitespace",
@@ -534,3 +536,108 @@ class TestTerminalNfcIdempotency:
             )
 
         check()
+
+
+# ===== #413: invisible / non-interchange code point stripping =====
+
+
+def _tags(s: str) -> str:
+    """Encode an ASCII string into the Unicode Tags block (the smuggling channel)."""
+    return "".join(chr(0xE0000 + ord(c)) for c in s)
+
+
+# A well-formed Scotland subdivision flag: U+1F3F4 + g,b,s,c,t tag letters + cancel.
+SCOTLAND_FLAG = "\U0001f3f4\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f"
+
+
+class TestInvisibleNonInterchangeStripping:
+    """#413 — the security presets strip the LLM-smuggling and non-interchange
+    code point classes that survive NFKC and the existing zero-width passes.
+
+    Two tiers: (A) active smuggling channels (Unicode Tags U+E0000-E007F and
+    variation selectors), and (B) adjacent hygiene (Combining Grapheme Joiner
+    U+034F, noncharacters, Private Use Area, Braille blank U+2800). None is a
+    blanket delete: valid emoji flag sequences and (in display_clean) the
+    presentation selectors and PUA are preserved.
+    """
+
+    # -- (A) smuggling channels --
+
+    def test_tag_block_smuggling_stripped(self):
+        assert security_clean("hi" + _tags("PWN")) == "hi"
+        assert normalize_user_input("hi" + _tags("PWN")) == "hi"
+
+    def test_deprecated_language_tag_e0001_fixed(self):
+        # U+E0001 LANGUAGE TAG used to survive even strip_obfuscation.
+        assert strip_obfuscation("hi\U000e0001bye") == "hibye"
+        assert security_clean("a\U000e0001b") == "ab"
+
+    def test_variation_selectors_stripped_in_comparison_presets(self):
+        assert normalize_user_input("g\ufe01data") == "gdata"  # VS2
+        assert security_clean("g\U000e0100data") == "gdata"  # VS17
+
+    # -- (B) adjacent hygiene --
+
+    def test_cgj_stripped(self):
+        # Denylist evasion: "ad" + CGJ + "min" renders as "admin".
+        assert security_clean("ad\u034fmin") == "admin"
+        assert normalize_user_input("ad\u034fmin") == "admin"
+
+    def test_noncharacters_stripped(self):
+        assert security_clean("a\ufffeb") == "ab"
+        assert security_clean("a\ufdd0b") == "ab"
+        assert security_clean("a\U0001fffeb") == "ab"  # plane-1 noncharacter
+
+    def test_pua_stripped_in_comparison_kept_in_display(self):
+        assert security_clean("a\ue000b") == "ab"  # BMP PUA
+        assert security_clean("a\U000f0000b") == "ab"  # plane-15 PUA
+        # display_clean preserves PUA (icon fonts) — "flag, don't delete".
+        assert "\ue000" in display_clean("a\ue000b")
+
+    def test_braille_blank_folds_to_space(self):
+        # U+2800 renders blank but is category Symbol, so collapse_whitespace
+        # ignored it; it now folds to a space (not deleted) so Braille round-trips.
+        assert security_clean("a\u2800b") == "a b"
+        assert display_clean("a\u2800b") == "a b"
+
+    # -- carve-outs (not a blanket delete) --
+
+    def test_emoji_flag_sequence_preserved(self):
+        # The Scotland flag (U+1F3F4 + tag letters + U+E007F) must survive a
+        # Tags-block strip in the rendering preset.
+        assert display_clean(SCOTLAND_FLAG + " wins") == SCOTLAND_FLAG + " wins"
+
+    def test_presentation_selector_preserved_in_display(self):
+        # VS16 (emoji presentation) is kept after a base in display_clean…
+        assert display_clean("❤\ufe0f") == "❤\ufe0f"
+        # …but stripped in the comparison presets.
+        assert "\ufe0f" not in security_clean("❤\ufe0f")
+
+    def test_strip_obfuscation_demojize_unchanged(self):
+        # The emoji path is untouched: heart + VS16 still demojizes to "red heart".
+        assert strip_obfuscation("❤\ufe0f") == "red heart"
+
+    # -- idempotency (the strips must not break the fixed-point invariant) --
+
+    def test_idempotent_across_all_classes(self):
+        samples = [
+            "ad\u034fmin",  # CGJ
+            "a\u200b\u034f\u0301b",  # zero-width + CGJ + combining mark
+            "a\u2800b",  # Braille blank
+            "ab\ufffec\ue000d",  # noncharacter + PUA
+            "hi" + _tags("PWN"),  # tags
+        ]
+        for preset in (security_clean, normalize_user_input, display_clean, strip_obfuscation):
+            for s in samples:
+                assert preset(preset(s)) == preset(s), f"{preset.__name__} not idempotent on {s!r}"
+
+    # -- standalone public helpers --
+
+    def test_standalone_helpers(self):
+        from disarm import strip_noncharacters, strip_pua, strip_tags, strip_variation_selectors
+
+        assert strip_tags("hi" + _tags("PWN")) == "hi"
+        assert strip_tags(SCOTLAND_FLAG) == SCOTLAND_FLAG  # flag preserved
+        assert strip_variation_selectors("g\ufe01\U000e0100data") == "gdata"
+        assert strip_noncharacters("a\ufffeb\ufdd0c") == "abc"
+        assert strip_pua("a\ue000b\U000f0000c") == "abc"

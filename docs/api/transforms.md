@@ -68,6 +68,30 @@ Functions that transform text. All are pure functions — they never mutate the 
 
 ---
 
+## strip_tags
+
+::: disarm.strip_tags
+
+---
+
+## strip_variation_selectors
+
+::: disarm.strip_variation_selectors
+
+---
+
+## strip_noncharacters
+
+::: disarm.strip_noncharacters
+
+---
+
+## strip_pua
+
+::: disarm.strip_pua
+
+---
+
 ## strip_zalgo
 
 ::: disarm.strip_zalgo

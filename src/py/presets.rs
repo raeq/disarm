@@ -68,6 +68,34 @@ pub fn _strip_bidi(text: &str) -> String {
     crate::presets::strip_bidi(text)
 }
 
+/// `strip_tags(text) -> str` (#413), preserving valid emoji flag sequences.
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _strip_tags(text: &str) -> String {
+    crate::api::strip_tags(text)
+}
+
+/// `strip_variation_selectors(text) -> str` (#413).
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _strip_variation_selectors(text: &str) -> String {
+    crate::api::strip_variation_selectors(text)
+}
+
+/// `strip_noncharacters(text) -> str` (#413).
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _strip_noncharacters(text: &str) -> String {
+    crate::api::strip_noncharacters(text)
+}
+
+/// `strip_pua(text) -> str` (#413).
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _strip_pua(text: &str) -> String {
+    crate::api::strip_pua(text)
+}
+
 /// Normalize user-submitted input — Unicode hygiene, **not** an output sanitizer.
 #[pyfunction]
 #[pyo3(signature = (text,))]

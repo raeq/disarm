@@ -235,6 +235,30 @@ pub fn strip_bidi(text: String) -> String {
     api::strip_bidi(&text)
 }
 
+/// Strip the Unicode Tags block (U+E0000–U+E007F), preserving valid emoji flags (#413).
+#[napi]
+pub fn strip_tags(text: String) -> String {
+    api::strip_tags(&text)
+}
+
+/// Strip every variation selector (VS1–VS256) (#413).
+#[napi]
+pub fn strip_variation_selectors(text: String) -> String {
+    api::strip_variation_selectors(&text)
+}
+
+/// Strip every Unicode noncharacter (#413).
+#[napi]
+pub fn strip_noncharacters(text: String) -> String {
+    api::strip_noncharacters(&text)
+}
+
+/// Strip every Private Use Area code point (#413).
+#[napi]
+pub fn strip_pua(text: String) -> String {
+    api::strip_pua(&text)
+}
+
 #[napi]
 pub fn strip_zalgo(text: String, max_marks: i64) -> Result<String, NapiError> {
     let max_marks = checked_size("maxMarks", max_marks)?;

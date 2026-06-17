@@ -641,3 +641,56 @@ class TestInvisibleNonInterchangeStripping:
         assert strip_variation_selectors("g\ufe01\U000e0100data") == "gdata"
         assert strip_noncharacters("a\ufffeb\ufdd0c") == "abc"
         assert strip_pua("a\ue000b\U000f0000c") == "abc"
+
+
+# ===== #429: security_clean caps combining marks (anti-zalgo) =====
+
+
+class TestSecurityCleanZalgoCap:
+    """#429 — security_clean caps combining marks per base (default 2), matching
+    normalize_user_input, so a zalgo-stacked token matches its base form in a
+    denylist/dedup comparison while legitimate diacritics survive.
+    """
+
+    def _marks(self, s: str) -> int:
+        return sum(1 for c in s if 0x0300 <= ord(c) <= 0x036F)
+
+    def test_caps_zalgo_stacking(self):
+        zalgo = "a" + "".join(chr(c) for c in range(0x0300, 0x0310))  # 'a' + 16 marks
+        # capped to <= 2 (one acute composes onto 'a', leaving one combining mark)
+        assert self._marks(security_clean(zalgo)) <= 2
+
+    def test_legitimate_diacritics_preserved(self):
+        # <= 2 marks per base is preserved — accent-preserving, no transliteration.
+        assert security_clean("café") == "café"  # 1 mark in NFD
+        assert security_clean("Việt") == "Việt"  # ệ = 2 marks in NFD
+
+    def test_matches_normalize_user_input_cap(self):
+        zalgo = "Z" + "\u0301" * 8
+        assert self._marks(security_clean(zalgo)) == self._marks(normalize_user_input(zalgo))
+
+    def test_idempotent_zalgo_split_by_invisible(self):
+        # A control / zero-width char between marks must not let a second pass cap
+        # differently (#121): strip_zalgo runs AFTER the invisible/control strip.
+        for sep in ("\x00", "\u200b", "\u034f"):
+            s = "a" + "\u0301\u0301" + sep + "\u0301\u0301\u0301"
+            assert security_clean(security_clean(s)) == security_clean(s)
+
+    @pytest.mark.hypothesis
+    def test_idempotent_under_marks_and_invisibles(self):
+        from hypothesis import given
+        from hypothesis import strategies as st
+
+        piece = st.one_of(
+            st.sampled_from("abZáệ"),
+            st.sampled_from("\u0300\u0301\u0302\u0303"),  # combining marks
+            st.sampled_from(["\x00", "\u200b", "\u034f", "\ufeff"]),  # control / invisibles
+        )
+        strategy = st.lists(piece, min_size=1, max_size=24).map("".join)
+
+        @given(strategy)
+        def check(text):
+            once = security_clean(text)
+            assert security_clean(once) == once, f"not idempotent on {text!r}: {once!r}"
+
+        check()

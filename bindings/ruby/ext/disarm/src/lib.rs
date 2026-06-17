@@ -373,7 +373,9 @@ fn list_context_langs() -> Vec<String> {
 /// Collect a `Vec<String>` lexicon into a `HashSet<String>` for O(1) membership
 /// lookups. Shared by `has_anomalies` and `inspect_anomalies`.
 fn collect_lexicon(lexicon: Vec<String>) -> HashSet<String> {
-    lexicon.into_iter().collect()
+    // Delegates to api::lexicon, which lowercases entries so a title-cased wordlist
+    // still matches the detector's lowercased decoded words.
+    api::lexicon(lexicon)
 }
 
 /// A reusable, pre-built lexicon (`Disarm::Lexicon`) — the `HashSet<String>` is

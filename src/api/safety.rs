@@ -401,4 +401,6 @@ pub fn strip_log_injection<'a>(
 
 // ── Anomaly detection ───────────────────────────────────────────────────────
 
-pub use crate::anomalies::{has_anomalies, inspect_anomalies, AnomalyKind, AnomalyReport, Finding};
+pub use crate::anomalies::{
+    has_anomalies, inspect_anomalies, lexicon, AnomalyKind, AnomalyReport, Finding,
+};

@@ -163,3 +163,12 @@ def test_lexicon_leet_gating_matches_set_semantics():
     # An empty Lexicon disables the leet branch, exactly like an empty set.
     assert has_anomalies("get fr33", Lexicon([])) == has_anomalies("get fr33", set())
     assert has_anomalies("get fr33", Lexicon(["free"])) is True
+
+
+def test_lexicon_is_case_insensitive_on_ingest():
+    # The lexicon is lowercased on ingest, so a title-cased/upper wordlist still
+    # matches the detector's lowercased decoded words (regression: "Free" missed fr33).
+    assert has_anomalies("get fr33 now", {"Free"}) is True  # leet, raw set
+    assert has_anomalies("v.i.a.g.r.a", {"VIAGRA"}) is True  # segmentation, raw set
+    assert has_anomalies("get fr33 now", Lexicon(["Free"])) is True  # handle path
+    assert inspect_anomalies("get fr33", {"Free"}).anomalous is True

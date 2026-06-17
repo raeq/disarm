@@ -332,6 +332,12 @@ RSpec.describe Disarm do
       expect(Disarm.has_anomalies?("the win32 api and mp3 file", lex)).to be(false)
     end
 
+    it "lowercases the lexicon on ingest (title-cased wordlist matches)" do
+      expect(Disarm.has_anomalies?("get fr33 now", ["Free"])).to be(true)
+      expect(Disarm.has_anomalies?("buy v.i.a.g.r.a now", ["VIAGRA"])).to be(true)
+      expect(Disarm.has_anomalies?("get fr33 now", Disarm::Lexicon.new(["Free"]))).to be(true)
+    end
+
     it "accepts a Set lexicon" do
       require "set"
       expect(Disarm.has_anomalies?("get fr33", Set.new(["free"]))).to be(true)

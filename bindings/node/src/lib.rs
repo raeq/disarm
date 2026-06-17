@@ -46,9 +46,11 @@ fn checked_size(name: &str, value: i64) -> Result<usize, NapiError> {
     Ok(value as usize)
 }
 
-/// Build the anomaly lexicon set from the incoming word list.
+/// Build the anomaly lexicon set from the incoming word list. Delegates to
+/// `api::lexicon`, which lowercases entries so a title-cased wordlist (`"Free"`)
+/// still matches the detector's lowercased decoded words (`fr33`).
 fn to_lexicon(v: Vec<String>) -> HashSet<String> {
-    v.into_iter().collect()
+    api::lexicon(v)
 }
 
 // ── Transliteration ───────────────────────────────────────────────────────────

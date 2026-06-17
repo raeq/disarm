@@ -298,9 +298,10 @@ class TestPipelineStepTuples:
                 "security_clean",
                 [
                     ("normalize", "NFKC"),
-                    ("confusables", "latin"),
                     ("strip_bidi", None),
                     ("collapse_whitespace", None),
+                    ("normalize", "NFC"),
+                    ("confusables", "latin"),
                     ("normalize", "NFC"),
                 ],
             ),

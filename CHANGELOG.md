@@ -216,16 +216,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   NFKC passed over the still-separated mark and the later zero-width strip then
   left the base and mark adjacent but *decomposed* — so the composed form
   appeared only on the second call, violating the documented `f(f(x)) == f(x)`
-  invariant (which `THREAT_MODEL.md` classifies as a vulnerability). A **terminal
-  NFC pass** now closes the pipeline of both presets in the Rust core (so every
-  binding inherits it), recomposing the adjacency on the first call. NFC is
-  sufficient: the leading NFKC already removed compatibility forms and stripping
-  only deletes code points. **Output change:** for these previously
-  non-idempotent inputs the first call now returns the composed NFC form.
-  `sort_key` was affected only because it began *preserving* accents in #411
-  (`search_key`/`catalog_key`, which fold accents away, were never affected); the
-  proptest idempotency assertions were also strengthened from
-  equality-modulo-NFC to raw equality, which is what let this slip through before.
+  invariant (which `THREAT_MODEL.md` classifies as a vulnerability). An **NFC pass
+  after the strips** now recomposes the adjacency on the first call, in the Rust
+  core, so every binding inherits it. For `security_clean` a second, deeper cause
+  was also fixed: TR39 confusable skeletoning is **not normalization-stable** (it
+  drops the diacritic on some *composed* accented letters — `ç`→`c`, `ø`→`o` — but
+  not the *decomposed* form, and can emit a decomposed skeleton like `Ý`→`Y`+◌́),
+  so the confusable fold is now **sandwiched between two NFC passes** and the
+  pipeline is a verified fixed point under a strengthened raw-equality proptest.
+  **Output change:** for these previously non-idempotent inputs the first call now
+  returns the composed NFC form. `sort_key` was affected only because it began
+  *preserving* accents in #411 (`search_key`/`catalog_key`, which fold accents
+  away, were never affected). A separate, pre-existing `sort_key` non-idempotency
+  (transliterate-before-fold-case on a case pair) is tracked in #419.
 
 ### Internal
 

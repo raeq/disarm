@@ -30,7 +30,7 @@ from disarm._core import (
 def security_clean(text: str) -> str:
     """Security-focused text canonicalization.
 
-    Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace → (path-separator neutralization)
+    Pipeline: NFKC → strip bidi/format → collapse_whitespace → NFC → confusables → NFC → (path-separator neutralization)
 
     Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
     dangerous bidi overrides and soft hyphens, then normalizes whitespace
@@ -404,11 +404,15 @@ def strip_zalgo(text: str, *, max_marks: int = 2) -> str:
 PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "security_clean": [
         ("normalize", "NFKC"),
-        ("confusables", "latin"),
         ("strip_bidi", None),
         ("collapse_whitespace", None),
-        # Terminal NFC (#416): recompose any base+mark adjacency the strips left
-        # behind, so the pipeline is a fixed point (f(f(x)) == f(x)).
+        # NFC sandwich around confusables (#416): the strips can leave a base next
+        # to a combining mark; the first NFC composes it so the fold sees a
+        # consistent form, the second recomposes the fold's output. TR39
+        # skeletoning is not normalization-stable, so without this the pipeline is
+        # not a fixed point (f(f(x)) != f(x)).
+        ("normalize", "NFC"),
+        ("confusables", "latin"),
         ("normalize", "NFC"),
     ],
     "ml_normalize": [

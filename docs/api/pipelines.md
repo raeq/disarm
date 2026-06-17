@@ -151,7 +151,7 @@ from disarm import PRESETS
 Dict mapping preset function names to their ordered pipeline steps. Each value is a list of `(step_name, parameter)` tuples in execution order.
 
 ```python
-assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('confusables', 'latin'), ('strip_bidi', None), ('collapse_whitespace', None)]
+assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('collapse_whitespace', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
 assert PRESETS["normalize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None)]
 ```
 

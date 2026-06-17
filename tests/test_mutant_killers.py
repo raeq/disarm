@@ -366,6 +366,7 @@ class TestPipelineStepTuples:
                     ("strip_zalgo", None),
                     ("confusables", "latin"),
                     ("collapse_whitespace", None),
+                    ("normalize", "NFC"),
                 ],
             ),
         ],

@@ -203,6 +203,26 @@ fn strip_bidi(text: String) -> String {
     api::strip_bidi(&text)
 }
 
+/// `Disarm._strip_tags(text)` — strip the Unicode Tags block, keeping emoji flags (#413).
+fn strip_tags(text: String) -> String {
+    api::strip_tags(&text)
+}
+
+/// `Disarm._strip_variation_selectors(text)` — strip every variation selector (#413).
+fn strip_variation_selectors(text: String) -> String {
+    api::strip_variation_selectors(&text)
+}
+
+/// `Disarm._strip_noncharacters(text)` — strip every Unicode noncharacter (#413).
+fn strip_noncharacters(text: String) -> String {
+    api::strip_noncharacters(&text)
+}
+
+/// `Disarm._strip_pua(text)` — strip every Private Use Area code point (#413).
+fn strip_pua(text: String) -> String {
+    api::strip_pua(&text)
+}
+
 /// `Disarm._strip_zalgo(text, max_marks)` — cap combining marks per base.
 fn strip_zalgo(text: String, max_marks: usize) -> String {
     api::strip_zalgo(&text, max_marks)
@@ -527,6 +547,13 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         function!(strip_zero_width_chars, 1),
     )?;
     module.define_singleton_method("_strip_bidi", function!(strip_bidi, 1))?;
+    module.define_singleton_method("_strip_tags", function!(strip_tags, 1))?;
+    module.define_singleton_method(
+        "_strip_variation_selectors",
+        function!(strip_variation_selectors, 1),
+    )?;
+    module.define_singleton_method("_strip_noncharacters", function!(strip_noncharacters, 1))?;
+    module.define_singleton_method("_strip_pua", function!(strip_pua, 1))?;
     module.define_singleton_method("_strip_zalgo", function!(strip_zalgo, 2))?;
     module.define_singleton_method("_zalgo?", function!(is_zalgo, 2))?;
 

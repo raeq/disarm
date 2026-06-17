@@ -150,6 +150,21 @@ stripZeroWidthChars('a\u200Bb') // => 'ab'
 stripBidi('a\u202Eb') // => 'ab'
 ```
 
+### `stripTags(text)` · `stripVariationSelectors(text)` · `stripNoncharacters(text)` · `stripPua(text)`
+
+Strip the invisible / non-interchange code-point classes weaponized for "ASCII
+smuggling" into LLMs and adjacent hygiene (#413): the Unicode **Tags** block
+(preserving valid emoji flag sequences), every **variation selector**, every
+**noncharacter**, and the **Private Use Area**. These are the composable
+primitives behind the security presets, which strip them automatically.
+
+```ts
+stripTags('a\u{E0001}b') // => 'ab'
+stripVariationSelectors('g\u{FE01}data') // => 'gdata'
+stripNoncharacters('a\u{FFFE}b') // => 'ab'
+stripPua('a\u{E000}b') // => 'ab'
+```
+
 ### `stripZalgo(text, options?)` · `isZalgo(text, options?)`
 
 `isZalgo` flags "zalgo" — combining marks stacked past `options.threshold` (3) on

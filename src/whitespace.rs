@@ -47,7 +47,11 @@ pub(crate) fn collapse_whitespace_into(
             continue;
         }
 
-        if ch.is_whitespace() {
+        // Braille Pattern Blank (U+2800) renders as an empty cell but is category
+        // Symbol, not whitespace — used as invisible padding / length-check
+        // evasion. Fold it to a space (not delete) so genuine Braille round-trips
+        // as a blank cell rather than collapsing (#413).
+        if ch.is_whitespace() || ch == '\u{2800}' {
             if seen_non_ws && !prev_was_space {
                 result.push(' ');
                 prev_was_space = true;

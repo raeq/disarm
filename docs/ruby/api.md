@@ -244,6 +244,21 @@ Disarm.strip_zero_width_chars("a\u200Bb")           # => "ab"
 Disarm.strip_bidi("a\u202Eb")                       # => "ab"
 ```
 
+### `Disarm.strip_tags(text)` · `Disarm.strip_variation_selectors(text)` · `Disarm.strip_noncharacters(text)` · `Disarm.strip_pua(text)`
+
+Strip the invisible / non-interchange code-point classes weaponized for "ASCII
+smuggling" into LLMs and adjacent hygiene (#413): the Unicode **Tags** block
+(preserving valid emoji flag sequences), every **variation selector**, every
+**noncharacter**, and the **Private Use Area**. These are the composable
+primitives behind the security presets, which strip them automatically.
+
+```ruby
+Disarm.strip_tags("a\u{E0001}b")                    # => "ab"
+Disarm.strip_variation_selectors("g\u{FE01}data")   # => "gdata"
+Disarm.strip_noncharacters("a\u{FFFE}b")            # => "ab"
+Disarm.strip_pua("a\u{E000}b")                      # => "ab"
+```
+
 ### `Disarm.strip_zalgo(text, max_marks: 2)` · `Disarm.zalgo?(text, threshold: 3)`
 
 `zalgo?` flags "zalgo" — combining marks stacked past `threshold:` on a base

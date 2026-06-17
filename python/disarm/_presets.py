@@ -20,7 +20,11 @@ from disarm._core import (
     _security_clean,
     _sort_key,
     _strip_bidi,
+    _strip_noncharacters,
     _strip_obfuscation,
+    _strip_pua,
+    _strip_tags,
+    _strip_variation_selectors,
     _strip_zalgo,
 )
 
@@ -268,6 +272,57 @@ def strip_bidi(text: str) -> str:
     return _strip_bidi(text)
 
 
+def strip_tags(text: str) -> str:
+    """Strip the Unicode Tags block (U+E0000–U+E007F) — the "ASCII smuggling" channel.
+
+    Preserves well-formed emoji subdivision flag sequences (``U+1F3F4`` + tag
+    letters + ``U+E007F``, e.g. the Scotland flag); stray tag characters
+    (including the deprecated language tag ``U+E0001``) are removed.
+
+    Examples:
+        >>> strip_tags("hi\\U000e0050\\U000e0057\\U000e004e")  # tag-encoded "PWN"
+        'hi'
+    """
+    return _strip_tags(text)
+
+
+def strip_variation_selectors(text: str) -> str:
+    """Strip every variation selector (VS1–VS16 and VS17–VS256).
+
+    These are the arbitrary-byte smuggling channel. Use ``display_clean`` if you
+    need to keep the VS15/VS16 presentation selectors for rendering.
+
+    Examples:
+        >>> strip_variation_selectors("g\\ufe01data")  # VS2
+        'gdata'
+    """
+    return _strip_variation_selectors(text)
+
+
+def strip_noncharacters(text: str) -> str:
+    """Strip every Unicode noncharacter (U+FDD0–U+FDEF, and U+xFFFE/U+xFFFF per plane).
+
+    Examples:
+        >>> strip_noncharacters("a\\ufffeb")
+        'ab'
+    """
+    return _strip_noncharacters(text)
+
+
+def strip_pua(text: str) -> str:
+    """Strip every Private Use Area code point (BMP and planes 15/16).
+
+    PUA renders as arbitrary, font-defined glyphs (icon fonts, platform logos).
+    Stripped by the comparison presets; use this helper to apply the same policy
+    directly, or ``display_clean`` to *preserve* PUA for rendering.
+
+    Examples:
+        >>> strip_pua("a\\ue000b")
+        'ab'
+    """
+    return _strip_pua(text)
+
+
 def normalize_user_input(text: str) -> str:
     """Unicode hygiene for user-submitted input — **not** an injection defense.
 
@@ -467,6 +522,10 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("strip_zalgo", None),
         ("confusables", "latin"),
         ("collapse_whitespace", None),
+        # Terminal NFC (#416/#413): recompose any base+mark adjacency left by an
+        # invisible (e.g. a CGJ) stripped from between them, so the pipeline stays
+        # a fixed point.
+        ("normalize", "NFC"),
     ],
     "strip_obfuscation": [
         ("normalize", "NFKC"),

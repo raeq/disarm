@@ -152,7 +152,7 @@ Dict mapping preset function names to their ordered pipeline steps. Each value i
 
 ```python
 assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('collapse_whitespace', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
-assert PRESETS["normalize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None)]
+assert PRESETS["normalize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None), ('normalize', 'NFC')]
 ```
 
 Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.

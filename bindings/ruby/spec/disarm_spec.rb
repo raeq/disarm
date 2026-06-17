@@ -192,6 +192,20 @@ RSpec.describe Disarm do
       expect(Disarm.strip_bidi("a\u202Eb")).to eq("ab")
     end
 
+    it "strips invisible / non-interchange classes (#413)" do
+      tags = ->(s) { s.chars.map { |c| (0xE0000 + c.ord).chr(Encoding::UTF_8) }.join }
+      scotland = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}"
+      expect(Disarm.strip_tags("hi" + tags.call("PWN"))).to eq("hi")
+      expect(Disarm.strip_tags(scotland)).to eq(scotland) # valid emoji flag preserved
+      expect(Disarm.strip_variation_selectors("g\u{FE01}data")).to eq("gdata")
+      expect(Disarm.strip_noncharacters("a\u{FFFE}b")).to eq("ab")
+      expect(Disarm.strip_pua("a\u{E000}b")).to eq("ab")
+      # Preset behaviour flows from the core.
+      expect(Disarm.security_clean("hi" + tags.call("PWN"))).to eq("hi")
+      expect(Disarm.security_clean("ad\u{034F}min")).to eq("admin") # CGJ
+      expect(Disarm.security_clean("a\u{2800}b")).to eq("a b") # Braille blank -> space
+    end
+
     it "detects zalgo and strips it back under the threshold" do
       zalgo = "Z" + ("\u0301" * 8)
       expect(Disarm.zalgo?(zalgo)).to be(true)

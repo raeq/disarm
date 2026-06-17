@@ -18,6 +18,25 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Strip invisible & non-interchange code points in the security presets (#413).**
+  The presets a service puts in front of an LLM, a logger, or a denylist now
+  neutralize the dominant 2024–25 "ASCII smuggling" channels and the adjacent
+  non-interchange classes that survive NFKC and the existing zero-width passes:
+  the **Unicode Tags** block (`U+E0000`–`U+E007F`, including the previously-missed
+  `U+E0001`), **variation selectors**, the **Combining Grapheme Joiner**
+  (`U+034F`, a denylist-evasion blocker), **noncharacters**, and the **Private Use
+  Area**; the **Braille Pattern Blank** (`U+2800`) now folds to a space rather than
+  surviving as invisible padding. None of this is a blanket delete — a well-formed
+  emoji **subdivision flag** (`U+1F3F4` … `U+E007F`) is preserved, and `display_clean`
+  keeps the VS15/VS16 presentation selectors after a base and **preserves** the PUA
+  (icon fonts), while the comparison presets (`security_clean`,
+  `normalize_user_input`, `strip_obfuscation`) strip it. Four standalone helpers —
+  `strip_tags`, `strip_variation_selectors`, `strip_noncharacters`, `strip_pua` —
+  are exposed across the Rust core and the Python, Node, and Ruby bindings for
+  composing policy directly. **Output change:** the comparison presets now remove
+  these classes; idempotency is preserved (a terminal NFC recomposes any base+mark
+  adjacency a strip creates).
+
 - **Bidi-direction conflict detection (`has_bidi_conflict`, #412).** A new
   primitive that flags text mixing strong left-to-right and strong right-to-left
   characters — the precondition for Unicode Bidi display-reordering and the

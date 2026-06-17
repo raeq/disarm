@@ -52,6 +52,38 @@ pub fn strip_zero_width_chars(text: &str) -> String {
     crate::whitespace::strip_zero_width_chars(text)
 }
 
+// ── Invisible / non-interchange code points (#413) ───────────────────────────
+
+/// Remove the Unicode **Tags** block (`U+E0000`–`U+E007F`) — the "ASCII
+/// smuggling" covert channel — **preserving** well-formed emoji subdivision flag
+/// sequences (`U+1F3F4` + tag letters + `U+E007F`, e.g. the Scotland flag).
+#[must_use]
+pub fn strip_tags(text: &str) -> String {
+    crate::invisibles::strip_tags(text)
+}
+
+/// Remove every Unicode **variation selector** (VS1–VS16, `U+FE00`–`U+FE0F`, and
+/// the Variation Selectors Supplement VS17–VS256, `U+E0100`–`U+E01EF`) — the
+/// arbitrary-byte smuggling channel.
+#[must_use]
+pub fn strip_variation_selectors(text: &str) -> String {
+    crate::invisibles::strip_variation_selectors(text)
+}
+
+/// Remove every Unicode **noncharacter** (`U+FDD0`–`U+FDEF` and the last two
+/// code points of every plane) — permanently reserved, invalid for interchange.
+#[must_use]
+pub fn strip_noncharacters(text: &str) -> String {
+    crate::invisibles::strip_noncharacters(text)
+}
+
+/// Remove every **Private Use Area** code point (BMP `U+E000`–`U+F8FF`, plane 15,
+/// plane 16) — renders as arbitrary, font-defined glyphs.
+#[must_use]
+pub fn strip_pua(text: &str) -> String {
+    crate::invisibles::strip_pua(text)
+}
+
 // ── Zalgo (combining-mark abuse) ─────────────────────────────────────────────
 
 /// True if any base character carries more than `threshold` consecutive

@@ -181,7 +181,11 @@ from disarm._presets import (
     security_clean,
     sort_key,
     strip_bidi,
+    strip_noncharacters,
     strip_obfuscation,
+    strip_pua,
+    strip_tags,
+    strip_variation_selectors,
     strip_zalgo,
 )
 from disarm._types import NF, EmojiProvider, TransliterateErrorMode
@@ -237,6 +241,10 @@ __all__ = [
     "search_key",
     "sort_key",
     "strip_bidi",
+    "strip_tags",
+    "strip_variation_selectors",
+    "strip_noncharacters",
+    "strip_pua",
     "normalize_user_input",
     "strip_obfuscation",
     # Zalgo detection and stripping

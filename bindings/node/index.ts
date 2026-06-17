@@ -252,6 +252,26 @@ export function stripBidi(text: string): string {
   return native.stripBidi(text)
 }
 
+/** Strip the Unicode Tags block (U+E0000–U+E007F), preserving valid emoji flag sequences (#413). */
+export function stripTags(text: string): string {
+  return native.stripTags(text)
+}
+
+/** Strip every variation selector (VS1–VS256) (#413). */
+export function stripVariationSelectors(text: string): string {
+  return native.stripVariationSelectors(text)
+}
+
+/** Strip every Unicode noncharacter (#413). */
+export function stripNoncharacters(text: string): string {
+  return native.stripNoncharacters(text)
+}
+
+/** Strip every Private Use Area code point (#413). */
+export function stripPua(text: string): string {
+  return native.stripPua(text)
+}
+
 /** Cap combining marks per base character at `maxMarks` (default `2`). */
 export function stripZalgo(text: string, options: { maxMarks?: number } = {}): string {
   return call(() => native.stripZalgo(text, options.maxMarks ?? 2))

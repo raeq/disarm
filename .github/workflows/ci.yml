@@ -198,7 +198,7 @@ jobs:
           pytest --doctest-modules "$DISARM_DIR/__init__.py" "$DISARM_DIR/_compat.py" -q
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: coverage-report
           path: coverage.xml

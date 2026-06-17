@@ -2003,7 +2003,9 @@ def lang_info(code: str) -> LangMeta:
         code: Language code (e.g. ``"de"``, ``"cop"``, ``"ban"``).
 
     Returns:
-        Dict with ``name``, ``script``, and ``region`` keys.
+        A :class:`LangMeta` dict with ``name``, ``script``, ``region``, and
+        ``context`` keys (``context`` is ``"full"``, ``"partial"``, or
+        ``"none"``).
 
     Raises:
         KeyError: If the code is not a recognized language.
@@ -2024,7 +2026,8 @@ def script_info(script: str | Script) -> ScriptMeta:
         script: Script name (e.g. ``"Coptic"``) or :class:`Script` enum value.
 
     Returns:
-        Dict with ``name``, ``default_lang``, and ``example`` keys.
+        A :class:`ScriptMeta` dict with ``name``, ``default_lang``, ``example``,
+        and ``context_aware`` keys.
 
     Raises:
         KeyError: If the script is not recognized.

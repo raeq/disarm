@@ -132,6 +132,59 @@ whitespace collapse, and path-safety in one preset.
 Disarm.security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")                 # => "Real text"
 ```
 
+## Collation & lookup keys
+
+Stable keys for searching, sorting, and deduplicating text across cases, accents,
+and scripts. All three accept a `lang:` profile (a String or Symbol; `nil` means
+none) and raise `Disarm::InvalidArgument` on an unknown lang.
+
+### `Disarm.search_key(text, lang: nil)`
+
+Case/accent/script-insensitive search-index key — fold to a single canonical form
+so `"Köln"` and `"koln"` collide in a lookup table.
+
+```ruby
+Disarm.search_key("Köln")                          # => "koln"
+Disarm.search_key("Café")                          # => "cafe"
+```
+
+### `Disarm.sort_key(text, lang: nil)`
+
+A collation/sort key that **preserves base accented characters** — unlike
+`search_key` it keeps the accent (so accented and unaccented forms stay
+distinct), while still folding non-Latin scripts to Latin.
+
+```ruby
+Disarm.sort_key("café")                            # => "café"
+Disarm.sort_key("Éclair")                          # => "éclair"
+```
+
+### `Disarm.catalog_key(text, lang: nil, strict_iso9: false)`
+
+Library-catalog deduplication key — `search_key` plus confusable folding.
+`strict_iso9:` selects the ISO 9:1995 Cyrillic scheme for transliteration.
+
+```ruby
+Disarm.catalog_key("Толстой")                      # => "tolstoy"
+Disarm.catalog_key("Толстой", strict_iso9: true)   # => "tolstoj"
+```
+
+## Pipelines
+
+### `Disarm.get_pipeline(profile)`
+
+Build a reusable `Disarm::Pipeline` for a named policy `profile` (e.g.
+`"search_index"`). The profile's steps are validated and assembled once at
+construction, so the returned handle's `#process(text)` can be called many times
+without re-resolving the profile. Raises `Disarm::InvalidArgument` on an unknown
+profile name.
+
+```ruby
+pipe = Disarm.get_pipeline("search_index")
+pipe.process("Café")                               # => "cafe"
+pipe.process("Köln")                               # => "koln"
+```
+
 ## Hostname / IDN analysis
 
 ### `Disarm.suspicious_hostname?(host)`
@@ -300,6 +353,34 @@ Explain how `lang: "auto"` detection resolves `text` — a hash with `:script` a
 
 ```ruby
 Disarm.inspect_auto_lang("Москва") # => { script: "Cyrillic", chosen_lang: "ru", reason: "script_default", discriminators_hit: [] }
+```
+
+### `Disarm.lang_info(code)` · `Disarm.script_info(name)`
+
+Curated metadata for one language `code` (e.g. `"de"`) or one script `name` (e.g.
+`"Coptic"`), each a hash with symbol keys. `lang_info` returns `{ name:, script:,
+region:, context: }` (where `:context` is `"none"`/`"partial"`/`"full"`);
+`script_info` returns `{ name:, default_lang:, example:, context_aware: }`
+(`:default_lang` is `nil` when none). Each raises `Disarm::InvalidArgument` on an
+unknown code/name.
+
+```ruby
+Disarm.lang_info("de")[:name]                      # => "German"
+Disarm.lang_info("de")[:script]                    # => "Latin"
+Disarm.script_info("Coptic")[:default_lang]        # => "cop"
+Disarm.script_info("Coptic")[:context_aware]       # => false
+```
+
+### `Disarm.list_scripts` · `Disarm.list_context_langs`
+
+Enumerate what disarm knows: `list_scripts` is every Unicode script as a stable
+UCD identifier (includes `"Common"`/`"Inherited"`), sorted by name;
+`list_context_langs` is the language codes with context-aware transliteration
+support, sorted by code. Both return an `Array<String>`.
+
+```ruby
+Disarm.list_scripts.include?("Latin")              # => true
+Disarm.list_context_langs                          # => ["ar", "fa", "he"]
 ```
 
 ## Anomaly detection

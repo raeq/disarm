@@ -63,7 +63,20 @@ def test_binding_parity_advisory(tmp_path: pathlib.Path) -> None:
             stacklevel=2,
         )
 
-    # (b) stale committed manifest
+    # (b) docs coverage — "=== <lang>: <n> docs gaps ===" (op not documented in its docs)
+    docs = [
+        (lang, int(n)) for lang, n in re.findall(r"=== (\w+): (\d+) docs gaps ===", proc.stdout)
+    ]
+    docs_summary = ", ".join(f"{lang} {n}" for lang, n in docs if n)
+    if docs_summary:
+        warnings.warn(
+            f"binding docs gaps (advisory, non-blocking): {docs_summary}. "
+            "Run `python scripts/parity.py` for the undocumented ops per language.",
+            ParityWarning,
+            stacklevel=2,
+        )
+
+    # (c) stale committed manifest
     if MANIFEST.exists() and regen.read_text() != MANIFEST.read_text():
         warnings.warn(
             "generated/parity.yaml is out of date — run `python scripts/parity.py` and commit it.",

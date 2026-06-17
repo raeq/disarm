@@ -221,6 +221,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::whitespace::_collapse_whitespace, m)?)?;
     m.add_function(wrap_pyfunction!(py::scripts::_detect_scripts, m)?)?;
     m.add_function(wrap_pyfunction!(py::scripts::_is_mixed_script, m)?)?;
+    m.add_function(wrap_pyfunction!(py::scripts::_has_bidi_conflict, m)?)?;
     m.add_function(wrap_pyfunction!(py::scripts::_inspect_auto_lang, m)?)?;
 
     // Batch APIs (single PyO3 boundary crossing for N strings)

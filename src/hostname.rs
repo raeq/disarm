@@ -50,6 +50,14 @@ pub(crate) struct HostnameAnalysis {
     pub(crate) mixed_script: bool,
     /// Whether any label contains a confusable mapping to a Latin character.
     pub(crate) has_confusables: bool,
+    /// Whether the decoded hostname mixes strong LTR and strong RTL characters
+    /// (Bidi-reorder / "BiDi Swap" precondition). Folded into `suspicious`.
+    pub(crate) bidi_conflict: bool,
+    /// Whether the labels span more than one distinct script (Common/Inherited
+    /// excluded). Broader than `bidi_conflict`; NOT folded into `suspicious`.
+    pub(crate) cross_label_script: bool,
+    /// Per-label resolved scripts, left to right (Common/Inherited excluded).
+    pub(crate) label_scripts: Vec<Vec<String>>,
     /// The Latin-normalized (canonical) form of the hostname.
     pub(crate) canonical: String,
 }
@@ -69,6 +77,11 @@ pub(crate) struct HostnameAnalysis {
 ///   wanting a more permissive policy can inspect the `mixed_script`/`scripts`
 ///   fields.
 /// - It contains confusable characters that map to different Latin characters
+/// - The decoded hostname mixes strong left-to-right and strong right-to-left
+///   characters (`bidi_conflict`, #412) — the "BiDi Swap" reorder precondition,
+///   which `mixed_script` misses because the mixing is *across* labels. The
+///   broader `cross_label_script` fact is exposed but deliberately NOT folded in
+///   (it fires on benign IDN ccTLDs like `google.рф`).
 /// - An ACE label fails to decode, or a confusable check errors (fail closed)
 ///
 /// Returns a tuple of (is_suspicious, analysis).
@@ -96,6 +109,9 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
                 scripts: Vec::new(),
                 mixed_script: false,
                 has_confusables: false,
+                bidi_conflict: false,
+                cross_label_script: false,
+                label_scripts: Vec::new(),
                 canonical: normalized,
             },
         );
@@ -108,6 +124,7 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
     let mut has_mixed = false;
     let mut has_confusables = false;
     let mut decoded_labels: Vec<String> = Vec::new();
+    let mut per_label_scripts: Vec<Vec<String>> = Vec::new();
 
     for raw_label in normalized.split('.') {
         // Empty labels arise from leading, trailing, or consecutive dots
@@ -116,6 +133,7 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
         // placeholder so the canonical form preserves dot structure).
         if raw_label.is_empty() {
             decoded_labels.push(String::new());
+            per_label_scripts.push(Vec::new());
             continue;
         }
 
@@ -143,6 +161,7 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
 
         // Check scripts in this (decoded) label
         let label_scripts = scripts::detect_scripts(&label);
+        per_label_scripts.push(label_scripts.iter().map(|s| (*s).to_string()).collect());
 
         // Track all scripts seen (O(1) dedup via HashSet)
         for s in &label_scripts {
@@ -186,6 +205,19 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
 
     // Generate canonical Latin form from the decoded labels.
     let decoded_hostname = decoded_labels.join(".");
+
+    // Direction conflict (#412): the decoded hostname mixes strong-LTR and
+    // strong-RTL characters — the "BiDi Swap" precondition. Computed on the same
+    // decoded codepoints, with no U+202x override involved. Fold it into the
+    // verdict (it is precise and rare in legitimate hostnames). `cross_label_script`
+    // (more than one script across labels) is the broader, noisier fact — it
+    // fires on benign IDN ccTLDs (`google.рф`), so it is exposed but NOT folded.
+    let bidi_conflict = scripts::has_bidi_conflict(&decoded_hostname);
+    let cross_label_script = all_scripts.len() > 1;
+    if bidi_conflict {
+        suspicious = true;
+    }
+
     let canonical =
         confusables::normalize_confusables(&decoded_hostname, "latin").unwrap_or(decoded_hostname);
 
@@ -196,6 +228,9 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
             scripts: all_scripts.into_iter().map(String::from).collect(),
             mixed_script: has_mixed,
             has_confusables,
+            bidi_conflict,
+            cross_label_script,
+            label_scripts: per_label_scripts,
             canonical,
         },
     )
@@ -294,5 +329,73 @@ mod tests {
         let (suspicious, details) = is_suspicious_hostname("[2001:db8::1]");
         assert!(!suspicious);
         assert!(details.scripts.is_empty());
+    }
+
+    // ── #412: bidi-direction conflict ────────────────────────────────────────
+
+    #[test]
+    fn test_bidi_swap_hostname_flags_direction_conflict() {
+        // "varonis.com.ו.קום": Latin subdomain stacked on a Hebrew (RTL) domain —
+        // the BiDi-Swap shape. mixed_script stays false (each label is single
+        // script), but bidi_conflict fires and drives suspicious=true.
+        let (suspicious, d) =
+            is_suspicious_hostname("varonis.com.\u{05D5}.\u{05E7}\u{05D5}\u{05DD}");
+        assert!(suspicious);
+        assert!(
+            d.bidi_conflict,
+            "LTR+RTL across labels must set bidi_conflict"
+        );
+        assert!(d.cross_label_script);
+        assert!(!d.mixed_script, "no single label is mixed-script");
+        assert_eq!(d.label_scripts.len(), 4);
+        assert_eq!(d.label_scripts[0], vec!["Latin".to_string()]);
+        assert_eq!(d.label_scripts[3], vec!["Hebrew".to_string()]);
+    }
+
+    #[test]
+    fn test_bidi_conflict_intra_label() {
+        // The intra-label case: "varonisו.com" — one label mixes Latin + Hebrew.
+        let (suspicious, d) = is_suspicious_hostname("varonis\u{05D5}.com");
+        assert!(suspicious);
+        assert!(d.bidi_conflict);
+    }
+
+    #[test]
+    fn test_benign_idn_cctld_no_direction_conflict() {
+        // "google.рф": Latin label under a Cyrillic ccTLD. Both scripts are LTR,
+        // so there is NO direction conflict (cross_label_script is true but does
+        // not flip suspicious on its own).
+        let (_, d) = is_suspicious_hostname("google.\u{0440}\u{0444}");
+        assert!(!d.bidi_conflict);
+        assert!(d.cross_label_script);
+    }
+
+    #[test]
+    fn test_all_rtl_hostname_no_direction_conflict() {
+        // "אתר.קום": a legitimately all-Hebrew domain — single direction (RTL),
+        // so bidi_conflict is false and cross_label_script is false.
+        let (_, d) = is_suspicious_hostname("\u{05D0}\u{05EA}\u{05E8}.\u{05E7}\u{05D5}\u{05DD}");
+        assert!(!d.bidi_conflict);
+        assert!(!d.cross_label_script);
+    }
+
+    #[test]
+    fn test_ascii_hostname_no_new_signals() {
+        let (suspicious, d) = is_suspicious_hostname("example.com");
+        assert!(!suspicious);
+        assert!(!d.bidi_conflict);
+        assert!(!d.cross_label_script);
+        assert_eq!(
+            d.label_scripts,
+            vec![vec!["Latin".to_string()], vec!["Latin".to_string()]]
+        );
+    }
+
+    #[test]
+    fn test_bidi_conflict_on_decoded_punycode() {
+        // xn--9db.xn--9dbq2a decodes to Hebrew ו.קום — all-RTL after decode, so
+        // bidi_conflict is false, exactly as for the literal Hebrew form.
+        let (_, d) = is_suspicious_hostname("xn--9db.xn--9dbq2a");
+        assert!(!d.bidi_conflict);
     }
 }

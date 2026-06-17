@@ -29,6 +29,12 @@ pub struct HostnameAnalysis {
     #[pyo3(get)]
     pub has_confusables: bool,
     #[pyo3(get)]
+    pub bidi_conflict: bool,
+    #[pyo3(get)]
+    pub cross_label_script: bool,
+    #[pyo3(get)]
+    pub label_scripts: Vec<Vec<String>>,
+    #[pyo3(get)]
     pub canonical: String,
 }
 
@@ -39,6 +45,9 @@ impl From<crate::api::HostnameAnalysis> for HostnameAnalysis {
             scripts: a.scripts,
             mixed_script: a.mixed_script,
             has_confusables: a.has_confusables,
+            bidi_conflict: a.bidi_conflict,
+            cross_label_script: a.cross_label_script,
+            label_scripts: a.label_scripts,
             canonical: a.canonical,
         }
     }

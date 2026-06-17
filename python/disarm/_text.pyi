@@ -127,6 +127,9 @@ class Text:
     def is_mixed_script(self) -> bool:
         """True if text contains characters from multiple Unicode scripts."""
         ...
+    def has_bidi_conflict(self) -> bool:
+        """True if text mixes strong left-to-right and right-to-left characters."""
+        ...
     def detect_scripts(self) -> list[Script]:
         """Return Unicode scripts present, in order of first appearance."""
         ...

@@ -13,7 +13,7 @@ path. They do NOT require any mocking.
 import pytest
 from conftest import SCRIPT_SAMPLES
 
-from disarm import detect_scripts, is_mixed_script
+from disarm import detect_scripts, has_bidi_conflict, is_mixed_script
 from disarm._enums import Script
 
 # ═══════════════════════════════════════════════════════════════════
@@ -329,3 +329,27 @@ class TestUnknownScriptWarning:
             detect_scripts("hello Москва")
 
         assert len(caught) == 0
+
+
+class TestHasBidiConflict:
+    """has_bidi_conflict (#412): strong-LTR + strong-RTL coexistence."""
+
+    def test_fires_on_ltr_plus_rtl(self):
+        assert has_bidi_conflict("helloא")  # Latin + Hebrew
+        assert has_bidi_conflict("аו")  # Cyrillic + Hebrew (no Latin)
+        assert has_bidi_conflict("testا")  # Latin + Arabic
+
+    def test_quiet_on_single_direction(self):
+        assert not has_bidi_conflict("hello world")  # all LTR
+        assert not has_bidi_conflict("אתר")  # all Hebrew (RTL)
+        assert not has_bidi_conflict("helloрф")  # Latin + Cyrillic, both LTR
+
+    def test_digits_are_neutral(self):
+        assert not has_bidi_conflict("ו443")  # Hebrew + ASCII digits
+        assert not has_bidi_conflict("ו٤")  # Hebrew + Arabic-Indic digit (AN)
+
+    def test_exported(self):
+        import disarm
+
+        assert "has_bidi_conflict" in disarm.__all__
+        assert disarm.Text("helloא").has_bidi_conflict() is True

@@ -107,6 +107,11 @@ RSpec.describe Disarm do
     it "flags a homoglyph IDN spoof" do
       expect(Disarm.suspicious_hostname?("pаypal.com")).to be(true)
     end
+
+    it "flags a BiDi-Swap hostname via the direction conflict (#412)" do
+      # Latin subdomain stacked on a Hebrew (RTL) domain — folded into the verdict.
+      expect(Disarm.suspicious_hostname?("varonis.com.ו.קום")).to be(true)
+    end
   end
 
   describe "key derivation" do
@@ -267,6 +272,14 @@ RSpec.describe Disarm do
       expect(Disarm.mixed_script?("abc")).to be(false)
     end
 
+    it "flags a bidi-direction conflict (#412)" do
+      expect(Disarm.bidi_conflict?("helloא")).to be(true)  # Latin + Hebrew
+      expect(Disarm.bidi_conflict?("аום")).to be(true)     # Cyrillic + Hebrew
+      expect(Disarm.bidi_conflict?("hello")).to be(false)  # all LTR
+      expect(Disarm.bidi_conflict?("אתר")).to be(false)    # all RTL
+      expect(Disarm.bidi_conflict?("ו443")).to be(false)   # digits neutral
+    end
+
     it "explains auto-language detection" do
       info = Disarm.inspect_auto_lang("Москва")
       expect(info[:script]).to eq("Cyrillic")
@@ -371,6 +384,13 @@ RSpec.describe Disarm do
       expect(byte_end).to be > byte_start
       extracted = text.byteslice(byte_start, byte_end - byte_start)
       expect(extracted).to eq(f[:token])
+    end
+
+    it "flags a bidi-direction conflict as bidi_mixed (#412)" do
+      # Latin + Hebrew in one token reorders; reported as the precise kind.
+      expect(Disarm.inspect_anomalies("varonis\u{05D5}", [])[:kinds]).to eq(["bidi_mixed"])
+      # Cyrillic + Hebrew: missed by the Latin-anchored mixed_script rule.
+      expect(Disarm.inspect_anomalies("\u{0430}\u{05D5}\u{05DD}", [])[:kinds]).to eq(["bidi_mixed"])
     end
 
     it "reports nothing for clean text" do

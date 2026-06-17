@@ -1,8 +1,9 @@
 # Anomaly Detection
 
 `has_anomalies` / `inspect_anomalies` flag text that carries **out-of-place
-characters disguising a real word** — a cross-script homoglyph, leet, a
-single-letter segmentation, a zero-width / bidi control, or zalgo. Like
+characters disguising a real word** — a cross-script homoglyph, a bidi-direction
+conflict, leet, a single-letter segmentation, a zero-width / bidi control, or
+zalgo. Like
 [`is_suspicious_hostname`](../api/predicates.md#is_suspicious_hostname), the
 detector reports a **technical fact** and leaves the malicious-or-not judgement to
 the caller — it never claims intent.
@@ -23,6 +24,7 @@ script-agnostic, so they port across writing systems.
 | `bidi` | an LRO/RLO override anywhere, or an isolate inside a majority-Latin token (Trojan Source) | bare directional marks; LRE..PDF embeddings (RTL text, hashtags) |
 | `zalgo` | excessive stacked combining marks | ordinary accents |
 | `mixed_script` | Latin combined with Cyrillic or Greek in one token | CJK / Thai / kaomoji; legitimate unit symbols (`kΩ`, `µF`) |
+| `bidi_mixed` | one token mixes strong left-to-right and strong right-to-left **letters** (`varonisו`), which can visually reorder ("BiDi Swap") — no `U+202x` override (that is `bidi`) | single-direction text (all-LTR or all-RTL); digits are neutral |
 | `leet` | every out-of-place char substitutes a letter and the result is a common word (`fr33` → `free`) | a literal number that maps to no letter (`win32`, `Power5`, `21st`, `3pm`) |
 | `segmentation` | dense separators splitting single letters into a real word (`v.i.a.g.r.a`) | multi-letter parts (`6-foot-6`); a lone separator (`e-mail`) |
 

@@ -236,23 +236,31 @@ findUntranslatable('café') // => []
 
 ## Script analysis
 
-### `detectScripts(text)` · `isMixedScript(text)`
+### `detectScripts(text)` · `isMixedScript(text)` · `hasBidiConflict(text)`
 
 The Unicode scripts present (first-appearance order, Common/Inherited excluded),
-and whether more than one is present.
+whether more than one is present, and whether the text mixes strong
+left-to-right and strong right-to-left characters — the "BiDi Swap"
+display-reorder precondition (fires on real letters, no `U+202x` override).
 
 ```ts
 detectScripts('aМ') // => ['Latin', 'Cyrillic']
 isMixedScript('aМ') // => true
+hasBidiConflict('helloא') // => true   (Latin + Hebrew)
+hasBidiConflict('helloМ') // => false  (Latin + Cyrillic, both LTR)
 ```
 
 ### `isSuspiciousHostname(host)`
 
-Whether the hostname looks like a mixed-script / confusable IDN spoof. A `false`
-is not a safety guarantee — see the [Threat Model](../THREAT_MODEL.md).
+Whether the hostname looks like a mixed-script / confusable / bidi-reorder IDN
+spoof. Flags a mixed-script label, a Latin confusable, or a bidi-direction
+conflict (the "BiDi Swap" precondition — an LTR brand label stacked on an RTL
+domain). A `false` is not a safety guarantee — see the
+[Threat Model](../THREAT_MODEL.md).
 
 ```ts
 isSuspiciousHostname('pаypal.com') // => true
+isSuspiciousHostname('varonis.com.ו.קום') // => true   (BiDi Swap)
 isSuspiciousHostname('example.com') // => false
 ```
 

@@ -307,6 +307,10 @@ class Text:
         """True if text contains characters from multiple Unicode scripts."""
         return self._t().is_mixed_script(self._value)
 
+    def has_bidi_conflict(self) -> bool:
+        """True if text mixes strong left-to-right and strong right-to-left characters."""
+        return self._t().has_bidi_conflict(self._value)
+
     def detect_scripts(self) -> list[Script]:
         """Return Unicode scripts present, in order of first appearance."""
         return self._t().detect_scripts(self._value)

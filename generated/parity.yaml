@@ -109,6 +109,12 @@ operations:
       python: has_anomalies
       ruby: has_anomalies?
       node: hasAnomalies
+  - id: has_bidi_conflict
+    names:
+      rust: has_bidi_conflict
+      python: has_bidi_conflict
+      ruby: null
+      node: hasBidiConflict
   - id: inspect_anomalies
     names:
       rust: inspect_anomalies
@@ -163,6 +169,12 @@ operations:
       python: lang_info
       ruby: lang_info
       node: langInfo
+  - id: lexicon
+    names:
+      rust: lexicon
+      python: null
+      ruby: null
+      node: null
   - id: list_context_langs
     names:
       rust: list_context_langs

@@ -398,7 +398,7 @@ pub struct LangMeta {
     pub script: String,
     /// The region/locale it is associated with.
     pub region: String,
-    /// Whether/how the profile is context-aware (`""` if not).
+    /// Context-aware transliteration support: `"none"`, `"partial"`, or `"full"`.
     pub context: String,
 }
 

@@ -13,6 +13,7 @@ correctness gate: stale generated data is a real bug. Fix by running
 from __future__ import annotations
 
 import pathlib
+import shutil
 import subprocess
 import sys
 
@@ -26,6 +27,13 @@ GENERATED = ROOT / "src" / "metadata.rs"
 def test_metadata_rs_is_in_sync_with_python(tmp_path: pathlib.Path) -> None:
     if not GEN.exists() or not GENERATED.exists():  # pragma: no cover
         pytest.skip("metadata generator/output not present")
+    # The committed file and the regenerated one are both rustfmt-canonicalized by the
+    # generator; without rustfmt the regen would be raw and the byte comparison would
+    # false-fail even on identical data. Skip rather than mislead — `cargo fmt --check`
+    # independently keeps src/metadata.rs formatted, and this guard runs wherever the
+    # rust toolchain is present (CI).
+    if shutil.which("rustfmt") is None:  # pragma: no cover
+        pytest.skip("rustfmt not available; cannot canonicalize the regenerated file")
 
     regen = tmp_path / "metadata.rs"
     proc = subprocess.run(

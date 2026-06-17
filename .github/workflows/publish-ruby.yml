@@ -45,7 +45,7 @@ jobs:
       run:
         working-directory: bindings/ruby
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
 
       - name: Build against the in-repo core on non-publish events (#374 drift gate)
         # On a PR or a push to main, the PUBLISHED core can lag the binding: a
@@ -92,7 +92,7 @@ jobs:
           - arm64-darwin
           - x64-mingw-ucrt
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
       - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           ruby-version: "3.3"

@@ -32,7 +32,7 @@ jobs:
         # Rust analysis excluded: CodeQL's Rust support is limited and
         # cargo clippy (in ci.yml) catches more issues with zero false positives.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4

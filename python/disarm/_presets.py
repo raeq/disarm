@@ -201,23 +201,27 @@ def sort_key(
 ) -> str:
     """Sort key generation pipeline.
 
-    Pipeline: NFKC → strip_bidi → transliterate → fold_case → collapse_whitespace
+    Pipeline: NFKC → strip_bidi → transliterate-non-Latin → fold_case →
+    collapse_whitespace
 
-    Produces a case-insensitive ASCII key for alphabetical ordering.
-    Transliteration folds accented characters to their ASCII base (``é`` → ``e``,
-    ``ü`` → ``u``), so the result is **accent-folded**, not accent-preserving.
+    Produces a case-insensitive collation key for alphabetical ordering.
+    Unlike :func:`search_key`, it **preserves base accented characters** so the
+    accent can tie-break the ordering: ``"Über"`` folds to ``"über"`` (not
+    ``"uber"``) and sorts next to ``"Uber"``. Non-Latin scripts are still folded
+    to a consistent Latin form (``"Война"`` → ``"voyna"``) so cross-script titles
+    interfile. This is the collation counterpart to :func:`search_key`, which
+    folds accents away for exact-match lookup — the two are deliberately *not*
+    interchangeable for accented Latin input.
 
-    .. note::
-        In practice this currently produces the same output as
-        :func:`search_key`: ``search_key`` adds an explicit accent-strip pass,
-        but transliteration has already removed accents by that point, so the
-        two keys coincide for typical input. Use whichever name documents intent
-        at the call site. (Distinct accent-preserving ordering is tracked for a
-        future release.)
+    Because Latin letters are preserved verbatim, ``lang`` only affects
+    transliteration of non-Latin runs; an accented Latin letter is never expanded
+    by a language profile here (e.g. ``sort_key("Über", lang="de")`` is
+    ``"über"``, whereas ``search_key("Über", lang="de")`` is ``"ueber"``).
 
     Args:
         text: Input text to generate a sort key from.
-        lang: Language code for transliteration (e.g. "ru", "de").
+        lang: Language code for transliteration of non-Latin scripts
+            (e.g. "ru", "de").
 
     Returns:
         Normalized sort key string.
@@ -226,9 +230,9 @@ def sort_key(
         >>> sort_key("Война и мир")
         'voyna i mir'
         >>> sort_key("Über allen Gipfeln")
-        'uber allen gipfeln'
+        'über allen gipfeln'
         >>> sort_key("  Café  ")
-        'cafe'
+        'café'
     """
     return _sort_key(text, lang=lang)
 
@@ -428,7 +432,10 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "sort_key": [
         ("normalize", "NFKC"),
         ("strip_bidi", None),
-        ("transliterate", None),
+        # "non_latin": transliterate folds only non-Latin scripts; base accented
+        # Latin characters are preserved so the accent can order the key (this is
+        # what distinguishes sort_key from search_key, which strips accents here).
+        ("transliterate", "non_latin"),
         ("fold_case", None),
         ("collapse_whitespace", None),
     ],

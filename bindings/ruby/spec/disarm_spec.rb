@@ -114,8 +114,13 @@ RSpec.describe Disarm do
       expect(Disarm.search_key("Köln")).not_to be_empty
     end
 
-    it "derives a non-empty sort key" do
-      expect(Disarm.sort_key("Café")).not_to be_empty
+    it "preserves base accented characters in the sort key" do
+      # Unlike search_key, sort_key keeps the accent so it can order the key.
+      expect(Disarm.sort_key("Café")).to eq("café")
+      expect(Disarm.search_key("Café")).to eq("cafe")
+      expect(Disarm.sort_key("Café")).not_to eq(Disarm.search_key("Café"))
+      # Non-Latin scripts are still folded to a consistent Latin form.
+      expect(Disarm.sort_key("Москва")).to eq("moskva")
     end
 
     it "derives a non-empty catalog key" do

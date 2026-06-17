@@ -348,7 +348,7 @@ class TestPipelineStepTuples:
                 [
                     ("normalize", "NFKC"),
                     ("strip_bidi", None),
-                    ("transliterate", None),
+                    ("transliterate", "non_latin"),
                     ("fold_case", None),
                     ("collapse_whitespace", None),
                 ],
@@ -471,10 +471,12 @@ class TestPipelineStepTuples:
         result = search_key("HELLO")
         assert result == "hello"
 
-    def test_sort_key_transliterates_and_folds(self):
-        result = sort_key("Café")
-        assert result.isascii()
-        assert result == result.lower()
+    def test_sort_key_preserves_accent_folds_case_and_translit(self):
+        # Latin accent preserved (kills a "strip accents like search_key" mutant),
+        # case folded, and non-Latin still transliterated to Latin.
+        assert sort_key("Café") == "café"
+        assert sort_key("CAFÉ") == "café"
+        assert sort_key("Москва") == "moskva"
 
     def test_normalize_user_input_strips_zalgo(self):
         zalgo = "h\u0300\u0301\u0302\u0303e\u0300\u0301\u0302\u0303"

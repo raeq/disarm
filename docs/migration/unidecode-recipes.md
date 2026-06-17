@@ -26,7 +26,7 @@ hand-rolled code and are not executed.
 | `re.sub(r"\W+", "-", unidecode(t).lower().strip())` | `slugify(t)` |
 | `unidecode(name).replace(os.sep, "_")` | `sanitize_filename(name, platform=...)` |
 | `unidecode(t).encode("ascii")` | `transliterate(t).encode("ascii")` |
-| `unidecode(t.lower().strip())` for dict / search keys | `search_key(t)` / `catalog_key(t)` / `sort_key(t)` |
+| `unidecode(t.lower().strip())` for dict / search keys | `search_key(t)` / `catalog_key(t)` (both fold accents like unidecode; `sort_key` keeps them) |
 | `quote(unidecode(t))` | `quote(transliterate(t))` (or `slugify` for URLs) |
 
 ## URL slugs
@@ -111,23 +111,27 @@ key = unidecode("Café del Mar".lower().strip())
 # After — pick the helper that documents intent
 from disarm import search_key, catalog_key, sort_key
 
-# For typical text the three coincide — use the name that fits the call site:
+# search_key / catalog_key fold accents to ASCII (the direct unidecode swap):
 assert search_key("  Café  RÉSUMÉ  ") == "cafe resume"
 assert catalog_key("Café del Mar") == "cafe del mar"
-assert sort_key("Café del Mar") == "cafe del mar"
+# sort_key keeps accented Latin so the accent can order the collation key:
+assert sort_key("Café del Mar") == "café del mar"
 ```
 
-All three apply NFKC → transliterate → case-fold → collapse-whitespace, so for
-plain text they produce the same key. They differ by the extra pass each adds:
+`search_key` and `catalog_key` fold accents to ASCII — the direct replacements
+for `unidecode`-based keys. `sort_key` deliberately does not. They differ by the
+extra pass each adds:
 
-- **`search_key`** — lightest; nothing extra. For search / lookup indexes.
+- **`search_key`** — lightest; folds accents, nothing else. For search / lookup
+  indexes.
 - **`catalog_key`** — adds a [TR39 confusable](../user-guide/confusables.md) fold,
   which canonicalises look-alikes that *survive* transliteration (curly quotes,
   primes, and similar punctuation). Built for bibliographic de-duplication where
   typographic variants of the same title should collapse to one key.
-- **`sort_key`** — strips bidi controls for stable ordering. (It currently
-  coincides with `search_key` for typical input; use the name that documents the
-  call site.)
+- **`sort_key`** — **preserves base accented characters** (`"Café"` → `"café"`)
+  so the accent can order the key, folding only non-Latin scripts to Latin and
+  stripping bidi controls for stable ordering. Its accent-folding counterpart is
+  `search_key`.
 
 The confusable fold is what sets `catalog_key` apart — typographic variants of a
 title collapse to the same key:

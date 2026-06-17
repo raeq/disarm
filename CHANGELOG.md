@@ -109,6 +109,21 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed
 
+- **`sort_key` now preserves base accented characters (#99.1).** `sort_key` is
+  documented as a *collation* key — "Über" should sort next to "Uber" with the
+  accent intact — but it shared `search_key`'s full transliteration pass, so it
+  ASCII-folded every accent (`"Über"` → `"uber"`) and produced output identical
+  to `search_key`. It now transliterates **only non-Latin scripts**, preserving
+  Latin accents (`sort_key("Über")` → `"über"`, `sort_key("Café")` → `"café"`)
+  while still folding Cyrillic/Greek/etc. to a consistent Latin form
+  (`"Война и мир"` → `"voyna i mir"`). `search_key` and `catalog_key` are
+  unchanged — they still fold accents for exact-match lookup and dedup. A
+  language profile no longer expands an accented Latin letter in a sort key
+  (`sort_key("Über", lang="de")` is `"über"`, not `"ueber"`). **Output change:**
+  persisted sort keys for accented-Latin input will differ from 0.10 and should
+  be regenerated. Applies across the Rust core and the Python, Ruby, and Node
+  bindings.
+
 - **Docs: synced the public XMR benchmark claims to the v2 note (#399).** The README,
   the docs landing page, the adversarial-defense page, and the unidecode-migration guide
   led with the v1 *curated-set* headline (XMR = 1.000 on the hand-curated pairs). They now

@@ -632,23 +632,31 @@ class TestSlugifyNoPretranslateKwarg:
         assert "pretranslate" not in (slugify.__doc__ or "")
 
 
-class TestSortKeyDocstringHonest:
-    """sort_key folds accents (it doesn't preserve them); docstring must not lie (#99.1)."""
+class TestSortKeyPreservesAccents:
+    """sort_key preserves base accented characters for collation; docstring must
+    match the behavior (#99.1, behavior corrected in 0.11)."""
 
-    def test_sort_key_folds_accents(self):
+    def test_sort_key_preserves_accents(self):
         from disarm import search_key, sort_key
 
-        assert sort_key("naïve") == "naive"
-        assert sort_key("Köln") == "koln"
-        # Documented reality: coincides with search_key for typical input.
-        assert sort_key("naïve") == search_key("naïve")
+        assert sort_key("naïve") == "naïve"
+        assert sort_key("Köln") == "köln"
+        # Diverges from search_key, which folds the accent away for lookup.
+        assert search_key("naïve") == "naive"
+        assert sort_key("naïve") != search_key("naïve")
 
-    def test_docstring_does_not_claim_preservation(self):
+    def test_sort_key_still_folds_non_latin(self):
+        from disarm import sort_key
+
+        # Non-Latin scripts are still transliterated to a consistent Latin form.
+        assert sort_key("Москва") == "moskva"
+        assert sort_key("Война и мир") == "voyna i mir"
+
+    def test_docstring_claims_preservation(self):
         from disarm import sort_key
 
         doc = sort_key.__doc__ or ""
-        assert "without accent stripping" not in doc
-        assert "accent-folded" in doc
+        assert "preserves base accented characters" in doc
 
 
 class TestUniqueSlugifyMultibytePanic:

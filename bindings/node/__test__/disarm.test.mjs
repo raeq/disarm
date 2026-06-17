@@ -106,9 +106,13 @@ describe('key-derivation presets', () => {
     expect(key.length).toBeGreaterThan(0)
     expect(key).toMatch(asciiKey)
   })
-  test('sortKey yields a non-empty key', () => {
-    const key = disarm.sortKey('Café')
-    expect(key.length).toBeGreaterThan(0)
+  test('sortKey preserves base accented characters for collation', () => {
+    // Unlike searchKey, sortKey keeps the accent so it can order the key.
+    expect(disarm.sortKey('Café')).toBe('café')
+    expect(disarm.searchKey('Café')).toBe('cafe')
+    expect(disarm.sortKey('Café')).not.toBe(disarm.searchKey('Café'))
+    // Non-Latin scripts are still folded to a consistent Latin form.
+    expect(disarm.sortKey('Москва')).toBe('moskva')
   })
   test('catalogKey yields a non-empty ASCII key', () => {
     const key = disarm.catalogKey('naïve')

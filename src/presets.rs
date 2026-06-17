@@ -303,34 +303,87 @@ pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate
     Ok(buf)
 }
 
+/// Transliterate only non-Latin scripts, preserving Latin (including accented
+/// Latin), Common (digits/punctuation/whitespace) and Inherited (combining
+/// marks) characters verbatim.
+///
+/// This is the one step that distinguishes [`sort_key`] from [`search_key`]:
+/// `search_key` ASCII-folds every accented letter (`ü` → `u`) for exact-match
+/// lookup, whereas a collation key must keep the accent so ordering can tie-break
+/// on it. We still fold *non-Latin* scripts to a consistent Latin form so that,
+/// e.g., Cyrillic and Latin titles interfile ("Война" → "voyna").
+///
+/// disarm's transliteration tables are per-codepoint, so splitting the input
+/// into maximal non-Latin runs at Latin/Common boundaries and transliterating
+/// each run independently yields the same output as transliterating the whole
+/// string would — minus the Latin characters we deliberately keep.
+fn transliterate_preserving_latin(text: &str, lang: Option<&str>) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut run = String::new(); // pending consecutive non-Latin characters
+    let flush = |run: &mut String, out: &mut String| {
+        if !run.is_empty() {
+            out.push_str(&transliterate::transliterate_impl(
+                run,
+                lang,
+                crate::ErrorMode::Preserve,
+                "",
+                false,
+                false,
+                false,
+            ));
+            run.clear();
+        }
+    };
+    for ch in text.chars() {
+        // Latin (incl. Latin-1 Supplement / Extended accented letters), Common,
+        // and Inherited (combining diacritics) are kept as-is; everything else
+        // is buffered into the current run and transliterated at the next break.
+        if matches!(
+            crate::scripts::detect_char_script(ch),
+            "Latin" | "Common" | "Inherited"
+        ) {
+            flush(&mut run, &mut out);
+            out.push(ch);
+        } else {
+            run.push(ch);
+        }
+    }
+    flush(&mut run, &mut out);
+    out
+}
+
 /// Sort key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → transliterate → fold_case → collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → transliterate-non-Latin → fold_case →
+/// collapse_whitespace
 ///
-/// Like `search_key` but preserves base accented characters for correct
-/// alphabetical ordering.  "Über" sorts next to "Uber", and "Война и мир"
-/// files under "voyna i mir".
+/// Like [`search_key`] but **preserves base accented characters** so the accent
+/// survives for ordering: "Über" folds to `über` (not `uber`), staying distinct
+/// from an unaccented "Uber" instead of colliding with it. Non-Latin scripts are
+/// still folded to a consistent Latin form so "Война и мир" files under
+/// "voyna i mir". This is the collation counterpart to `search_key`, which folds
+/// accents away for exact-match lookup — the two keys are deliberately *not*
+/// interchangeable for accented Latin input.
+///
+/// Note: the result is a normalized string, not a UCA collation-weight key, so
+/// plain codepoint comparison will *not* interfile `über` with ASCII `u…` words
+/// (precomposed `ü` = U+00FC sorts after all of ASCII). Feed the key to a
+/// locale-aware collator when linguistically-correct order matters; the value
+/// here is that the accent is *preserved* for that collator rather than folded.
 ///
 /// `strip_bidi` runs early (#93) so invisible bidi/format chars cannot perturb
 /// the ordering of otherwise-identical strings.
 pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::ErrorRepr> {
     crate::transliterate::validate_lang(lang)?;
-    // 1. NFKC normalization
+    // 1. NFKC normalization (canonical-composes accents: `é` stays one codepoint)
     let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides + soft hyphen + format marks (#93)
     let buf = strip_bidi(&buf);
-    // 3. Transliterate (always — sort keys need a consistent script)
-    let buf = transliterate::transliterate_impl(
-        &buf,
-        lang,
-        crate::ErrorMode::Preserve,
-        "",
-        false,
-        false,
-        false,
-    )
-    .into_owned();
-    // 4. Unicode case folding
+    // 3. Transliterate non-Latin scripts only — Latin accents are preserved so
+    //    the collation key can order on them (this is the sort_key/search_key
+    //    distinction; search_key strips accents here instead).
+    let buf = transliterate_preserving_latin(&buf, lang);
+    // 4. Unicode case folding (`Über` → `über`; `ß` → `ss`; accents survive)
     let buf = case_fold::fold_case_impl(&buf);
     // 5. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::collapse_whitespace(&buf, true, true);
@@ -666,25 +719,52 @@ mod tests {
     }
 
     #[test]
-    fn test_sort_key_preserves_accents_as_base() {
-        // sort_key does NOT strip accents — fold_case handles ß→ss etc.
-        // but accented chars stay as their base after transliteration
-        let result = sort_key("Über", None).unwrap();
-        assert_eq!(result, "uber");
+    fn test_sort_key_preserves_accents() {
+        // sort_key PRESERVES base accented Latin characters for collation; only
+        // case is folded (Über → über). This is the documented distinction from
+        // search_key, which folds the accent away (über vs uber).
+        assert_eq!(sort_key("Über", None).unwrap(), "über");
+        assert_eq!(sort_key("naïve", None).unwrap(), "naïve");
+        assert_eq!(sort_key("Köln", None).unwrap(), "köln");
+        // ß is a case-fold expansion, not an accent: it still becomes "ss".
+        assert_eq!(sort_key("Straße", None).unwrap(), "strasse");
     }
 
     #[test]
     fn test_sort_key_cyrillic() {
+        // Non-Latin scripts are still folded to a consistent Latin form.
         assert_eq!(sort_key("Война и мир", None).unwrap(), "voyna i mir");
     }
 
     #[test]
     fn test_sort_key_vs_search_key() {
-        // Both produce lowercase ASCII for non-Latin
+        // Non-Latin folds to the same Latin form in both keys.
         assert_eq!(
             sort_key("Москва", None).unwrap(),
             search_key("Москва", None).unwrap()
         );
+        // But accented Latin diverges: sort_key keeps the accent for ordering,
+        // search_key folds it away for exact-match lookup.
+        assert_eq!(search_key("Über", None).unwrap(), "uber");
+        assert_ne!(
+            sort_key("Über", None).unwrap(),
+            search_key("Über", None).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_sort_key_lang_does_not_expand_latin_accents() {
+        // A language profile only transliterates non-Latin runs; an accented
+        // Latin letter is never expanded by `lang` in a sort key (de: ü→ue is a
+        // search/fold convention, not a collation one).
+        assert_eq!(sort_key("Über", Some("de")).unwrap(), "über");
+        assert_eq!(search_key("Über", Some("de")).unwrap(), "ueber");
+    }
+
+    #[test]
+    fn test_sort_key_mixed_script_preserves_latin_folds_other() {
+        // Greek folds to Latin; the Latin accent survives intact.
+        assert_eq!(sort_key("Ω café", None).unwrap(), "o café");
     }
 
     #[test]

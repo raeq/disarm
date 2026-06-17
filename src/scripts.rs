@@ -269,7 +269,7 @@ static SCRIPT_RANGES: &[(u32, u32, &str)] = &[
 /// Uses binary search over sorted, non-overlapping Unicode Script ranges
 /// (UAX #24).  O(log n) where n = number of ranges (~100), vs the previous
 /// linear chain which was O(n) worst-case.
-fn detect_char_script(ch: char) -> &'static str {
+pub(crate) fn detect_char_script(ch: char) -> &'static str {
     let cp = ch as u32;
 
     // Fast path for ASCII (very common).

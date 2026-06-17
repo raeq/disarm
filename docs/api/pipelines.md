@@ -98,14 +98,26 @@ assert search_key("ΩMEGA", lang="auto") == 'omega'
 
 ### Pipeline steps
 
-`NFKC → transliterate → fold_case → collapse_whitespace`
+`NFKC → strip_bidi → transliterate-non-Latin → fold_case → collapse_whitespace`
+
+Unlike `search_key`, `sort_key` **preserves base accented characters** so
+accented and unaccented forms stay distinct and the accent survives for a
+locale-aware collator. Non-Latin scripts are still folded to a consistent Latin
+form; Latin letters (including accented ones) are kept verbatim, so `lang` only
+affects non-Latin runs. (The key is a normalized string, not a UCA weight key —
+pass it to a Unicode collator when linguistically-correct order matters.)
 
 ```python
-from disarm import sort_key
+from disarm import search_key, sort_key
 
-assert sort_key("Über", lang="de") == 'ueber'
+# accents preserved for ordering (contrast search_key, which folds them away)
+assert sort_key("Über") == 'über'
+assert search_key("Über") == 'uber'
+# a language profile never expands an accented Latin letter in a sort key
+assert sort_key("Über", lang="de") == 'über'
+# non-Latin scripts are still folded to Latin so titles interfile
 assert sort_key("Война и мир", lang="ru") == 'voyna i mir'
-assert sort_key("Café") == 'cafe'
+assert sort_key("Café") == 'café'
 ```
 
 ---

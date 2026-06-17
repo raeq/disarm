@@ -9,7 +9,10 @@ use pyo3::prelude::*;
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace.
+/// Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
+/// collapse_whitespace → cap combining marks (anti-zalgo, #429) → NFC →
+/// confusables → NFC (confusables sandwiched between NFC passes for
+/// idempotency, #416).
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _security_clean(text: &str) -> PyResult<String> {

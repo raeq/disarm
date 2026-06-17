@@ -132,6 +132,26 @@ class TestPathSeparatorsPassThrough:
         # no '..' collapse).
         assert preset(text) == text
 
+    @pytest.mark.parametrize("preset", [normalize_user_input, security_clean])
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("a\u2044b", "a/b"),  # U+2044 FRACTION SLASH \u2192 real '/'
+            ("a\u2215b", "a/b"),  # U+2215 DIVISION SLASH \u2192 real '/'
+            ("a\u2025b", "a..b"),  # U+2025 TWO DOT LEADER \u2192 '..'
+        ],
+    )
+    def test_confusable_slashes_normalize_not_rewritten(
+        self, preset, raw: str, expected: str
+    ) -> None:
+        # A confusable that NFKC/confusables fold to a real '/' (or '..') is
+        # *normalized* to that separator \u2014 canonicalization working as intended \u2014
+        # NOT rewritten to '_' as the old path-neutralization did (#431 migration
+        # note). The separator is real after the fold; defend traversal at the sink.
+        out = preset(raw)
+        assert out == expected
+        assert "_" not in out
+
     def test_homoglyph_folding_still_works(self) -> None:
         # Dropping path-neutralization must not regress homoglyph folding.
         assert normalize_user_input("p\u0430ypal") == "paypal"

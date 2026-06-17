@@ -463,8 +463,11 @@ pub(crate) fn display_clean(text: &str) -> String {
 /// is not an XSS or injection defense — encode at the output sink (see
 /// `THREAT_MODEL.md`).
 ///
-/// Pipeline: NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo
-///           → confusables → collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → strip_zero_width → strip_control → strip
+///           invisible classes (#413) → strip_zalgo → confusables →
+///           collapse_whitespace → NFC (terminal NFC recomposes any base+mark
+///           left adjacent by a stripped invisible, keeping the preset
+///           idempotent — #416/#413)
 ///
 /// Accepts multilingual input in its original script while neutralizing
 /// Unicode-level abuse:

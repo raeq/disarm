@@ -34,7 +34,11 @@ from disarm._core import (
 def security_clean(text: str) -> str:
     """Security-focused text canonicalization.
 
-    Pipeline: NFKC → strip bidi/format → collapse_whitespace → NFC → confusables → NFC
+    Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
+    collapse_whitespace → cap combining marks (anti-zalgo, #429) → NFC →
+    confusables → NFC (the confusable fold is sandwiched between two NFC passes
+    so TR39 skeletoning is normalization-stable and the preset is idempotent —
+    #416)
 
     Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
     dangerous bidi overrides and soft hyphens, then normalizes whitespace
@@ -340,10 +344,11 @@ def normalize_user_input(text: str) -> str:
     Unicode-level attack vectors: zalgo stacking, homoglyph spoofing, bidi
     overrides, zero-width injections, and control characters.
 
-    Pipeline: ``NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo
-    → confusables → collapse_whitespace`` (invisibles are stripped before
-    zalgo-capping so they cannot split combining-mark runs, keeping the output
-    idempotent)
+    Pipeline: ``NFKC → strip_bidi → strip_zero_width → strip_control → strip
+    invisible classes (#413) → strip_zalgo → confusables → collapse_whitespace →
+    NFC`` (invisibles are stripped before zalgo-capping so they cannot split
+    combining-mark runs, and the terminal NFC recomposes any base+mark left
+    adjacent by a stripped invisible — keeping the output idempotent, #416/#413)
 
     Args:
         text: User-submitted input string.

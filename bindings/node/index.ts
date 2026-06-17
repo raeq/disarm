@@ -8,7 +8,7 @@
  * and inherited here — see https://docs.disarm.dev for the language-neutral guides.
  */
 import * as native from './binding'
-import { Lexicon } from './binding'
+import { Lexicon, Pipeline } from './binding'
 import type {
   Untranslatable,
   AutoLangInspection,
@@ -25,6 +25,20 @@ export type { Untranslatable, AutoLangInspection }
  * it instead builds that set a single time and reuses it across calls.
  */
 export { Lexicon }
+
+/**
+ * A reusable, opaque named-policy-profile pipeline handle (#404). Build it once
+ * with {@link getPipeline} for a named profile, then apply it to any number of
+ * inputs via `.process(text)` — the profile's steps are validated and compiled
+ * a single time and reused across calls, rather than re-resolved each call.
+ *
+ * ```ts
+ * const pipe = getPipeline('search_index') // build once
+ * pipe.process('Café')   // → 'cafe'
+ * pipe.process('Москва') // → 'moskva'   (same handle, many inputs)
+ * ```
+ */
+export { Pipeline }
 
 /** The anomaly branch that fired for a finding. */
 export type AnomalyKind = 'invisible' | 'bidi' | 'zalgo' | 'mixed_script' | 'leet' | 'segmentation'
@@ -256,6 +270,19 @@ export function stripObfuscation(text: string): string {
 /** Aggressive security cleaning: NFKC → confusables → strip bidi → collapse → path-safety. */
 export function securityClean(text: string): string {
   return call(() => native.securityClean(text))
+}
+
+/**
+ * Build a reusable {@link Pipeline} handle for a named policy profile (#404).
+ * Resolve and compile the profile's steps once here, then call `.process(text)`
+ * on the returned handle for each input — the per-call cost is just running the
+ * already-compiled steps, not re-resolving the profile (mirrors {@link Lexicon}).
+ *
+ * An unknown `profile` throws {@link DisarmInvalidArgument} (naming the
+ * available profiles).
+ */
+export function getPipeline(profile: string): Pipeline {
+  return call(() => native.getPipeline(profile))
 }
 
 export interface SanitizeFilenameOptions {

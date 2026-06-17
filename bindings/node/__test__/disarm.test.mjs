@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'vitest'
 import * as disarm from '../index.js'
-import { DisarmError, DisarmInvalidArgument, Lexicon } from '../index.js'
+import { DisarmError, DisarmInvalidArgument, Lexicon, Pipeline } from '../index.js'
 
 describe('transliterate', () => {
   test('default scheme', () => {
@@ -278,5 +278,29 @@ describe('anomaly detection', () => {
       expect(disarm.hasAnomalies('paypаl', empty)).toBe(true) // Cyrillic а, no lexicon needed
       expect(disarm.inspectAnomalies('paypаl', empty).anomalous).toBe(true)
     })
+  })
+})
+
+describe('getPipeline (reusable policy-profile handle, #404)', () => {
+  // 'search_index' is a built-in profile (NFKC → transliterate → strip accents →
+  // fold case → collapse whitespace); it yields a clean, folded string.
+  test('process yields a cleaned string', () => {
+    const p = disarm.getPipeline('search_index')
+    expect(p).toBeInstanceOf(Pipeline)
+    expect(p.process('Café')).toBe('cafe')
+  })
+
+  test('the SAME handle is reusable across many calls', () => {
+    const p = disarm.getPipeline('search_index')
+    expect(p.process('Café')).toBe('cafe')
+    expect(p.process('Москва')).toBe('moskva')
+    expect(p.process('  Hello   World  ')).toBe('hello world')
+    // Reusing it once more must give the same result as a fresh handle.
+    expect(p.process('Café')).toBe(disarm.getPipeline('search_index').process('Café'))
+  })
+
+  test('an unknown profile throws DisarmInvalidArgument', () => {
+    expect(() => disarm.getPipeline('nope')).toThrow(DisarmInvalidArgument)
+    expect(() => disarm.getPipeline('nope')).toThrow(DisarmError)
   })
 })

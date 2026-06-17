@@ -16,7 +16,7 @@
 use std::collections::HashSet;
 
 use disarm_core::api;
-use magnus::{function, prelude::*, Error, Ruby};
+use magnus::{function, method, prelude::*, Error, Ruby};
 
 /// Map a `disarm` error onto the closest standard Ruby exception:
 /// `InvalidArgument` → `ArgumentError`, everything else → `RuntimeError`. The
@@ -407,6 +407,31 @@ fn inspect_anomalies_lex(text: String, lex: &Lexicon) -> AnomalyReportTuple {
     inspect_anomalies_impl(&text, &lex.inner)
 }
 
+// ── Pipeline (#404 phase 2) ───────────────────────────────────────────────────
+
+/// A reusable, pre-built policy pipeline (`Disarm::Pipeline`) — the profile's
+/// steps are validated and assembled once at construction (`get_pipeline`), so
+/// repeated `process` calls over the same profile skip the per-call profile
+/// lookup/validation. Mirrors the `Disarm::Lexicon` reusable handle (and the
+/// Python binding's pipeline handle).
+#[magnus::wrap(class = "Disarm::Pipeline", free_immediately, size)]
+struct Pipeline {
+    inner: api::Pipeline,
+}
+
+/// `Disarm::Pipeline#process(text)` — run the pre-built pipeline over `text`.
+fn pipeline_process(rb_self: &Pipeline, text: String) -> Result<String, Error> {
+    rb_self.inner.process(&text).map_err(|e| map_err(&e))
+}
+
+/// `Disarm._get_pipeline(profile)` — build a reusable `Disarm::Pipeline` for a
+/// named policy profile. Fails (Disarm::InvalidArgument) on an unknown profile.
+fn get_pipeline(profile: String) -> Result<Pipeline, Error> {
+    Ok(Pipeline {
+        inner: api::get_pipeline(&profile).map_err(|e| map_err(&e))?,
+    })
+}
+
 // `name = "disarm"` so the exported init symbol is `Init_disarm` (matching the
 // `disarm.so` the gem loads), independent of the `disarm-ruby` package name.
 #[magnus::init(name = "disarm")]
@@ -478,5 +503,13 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     lexicon.define_singleton_method("new", function!(lexicon_new, 1))?;
     module.define_singleton_method("_has_anomalies_lex", function!(has_anomalies_lex, 2))?;
     module.define_singleton_method("_inspect_anomalies_lex", function!(inspect_anomalies_lex, 2))?;
+
+    // Reusable pipeline handle (#404 phase 2): build the profile's steps once via
+    // `Disarm.get_pipeline(profile)` (routed through the `_get_pipeline` shim) and
+    // reuse the `Disarm::Pipeline` across calls. `process` is the Rust-defined
+    // instance method on the wrapped handle. Mirrors `Disarm::Lexicon` above.
+    let pipeline = module.define_class("Pipeline", ruby.class_object())?;
+    pipeline.define_method("process", method!(pipeline_process, 1))?;
+    module.define_singleton_method("_get_pipeline", function!(get_pipeline, 1))?;
     Ok(())
 }

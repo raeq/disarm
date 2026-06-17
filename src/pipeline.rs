@@ -60,7 +60,9 @@ const STEP_ORDER: &[(PipelineSteps, &str)] = &[
 /// Composable, pre-compiled text cleaning pipeline (pure core).
 ///
 /// Built via [`Pipeline::new`]; the PyO3 `_TextPipeline` shim (`src/py/pipeline.rs`)
-/// owns one of these and forwards `process` / `steps` / `__repr__`.
+/// owns one of these and forwards `process` / `steps` / `__repr__`. The Layer-2
+/// `api::Pipeline` handle (#404) wraps one and forwards `process`.
+#[derive(Debug, Clone)]
 pub(crate) struct Pipeline {
     steps: PipelineSteps,
     normalize_form: Option<String>,
@@ -994,8 +996,7 @@ mod tests {
 
     #[test]
     fn test_constructor_invalid_norm_form() {
-        // `Pipeline` is not `Debug` (no need across the binding boundary), so
-        // match on the Result rather than using `.unwrap_err()`.
+        // Match on the Result variant (the error path) directly.
         let res = Pipeline::new(
             Some("BOGUS"),
             false,

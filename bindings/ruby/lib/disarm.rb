@@ -315,6 +315,22 @@ module Disarm
       }
     end
 
+    # Build a reusable Disarm::Pipeline for a named policy `profile` (e.g.
+    # "search_index", "normalize_web_input"). The profile's steps are validated
+    # and assembled once at construction, so the returned handle can be reused
+    # across many `#process` calls without re-resolving the profile each time —
+    # the same reuse pattern as Disarm::Lexicon. Raises Disarm::InvalidArgument
+    # on an unknown profile name.
+    #
+    #   pipe = Disarm.get_pipeline("search_index")
+    #   pipe.process("Café") # => "cafe"
+    #   pipe.process("Köln") # reuse the same handle
+    #
+    # Disarm::Pipeline#process is the Rust-defined instance method on the handle.
+    def get_pipeline(profile)
+      translate_errors { _get_pipeline(profile.to_s) }
+    end
+
     private
 
     # Coerce a lexicon argument to an Array of Strings for the native layer.

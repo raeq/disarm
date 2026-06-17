@@ -484,3 +484,35 @@ pub fn inspect_anomalies(
         reason: r.reason,
     }
 }
+
+// ── Pipeline (reusable policy-profile handle, #404) ───────────────────────────
+
+/// A reusable, opaque named-policy-profile pipeline handle (#404).
+///
+/// `getPipeline` validates and compiles a profile's steps once; the resulting
+/// handle is then applied to any number of inputs via `process`. Like the
+/// `Lexicon` handle, the build cost is paid a single time and reused across
+/// calls, rather than re-resolved per call.
+#[napi]
+pub struct Pipeline {
+    inner: api::Pipeline,
+}
+
+#[napi]
+impl Pipeline {
+    /// Run the named pipeline over `text`, returning the cleaned string.
+    #[napi]
+    pub fn process(&self, text: String) -> Result<String, NapiError> {
+        self.inner.process(&text).map_err(|e| map_err(&e))
+    }
+}
+
+/// `getPipeline(profile)` — build a reusable `Pipeline` handle for a named
+/// policy profile. An unknown profile raises a `DisarmInvalidArgument`-tagged
+/// error naming the available profiles.
+#[napi]
+pub fn get_pipeline(profile: String) -> Result<Pipeline, NapiError> {
+    Ok(Pipeline {
+        inner: api::get_pipeline(&profile).map_err(|e| map_err(&e))?,
+    })
+}

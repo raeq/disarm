@@ -34,6 +34,46 @@ a dedicated HTML sanitizer (e.g. DOMPurify) for rich HTML, and parameterized que
 SQL. disarm runs *before* those, as the Unicode layer they do not cover; it never replaces
 them. See the XSS / injection and metacharacter-unmasking items under *Out of scope*.
 
+## Pipeline placement (a required ordering)
+
+Because disarm canonicalizes — NFKC unmasking and invisible-character stripping both **change
+what the text becomes** (see *Out of scope*; disarm operates on already-decoded Unicode, so this
+is normalization, not byte decoding) — *where* it sits in your pipeline is a security property of
+the integration, not an implementation detail.
+
+**The invariant: canonicalize first, then validate, authorize, and encode — never the
+reverse.** Run disarm *before* every decision a downstream stage makes about the text: filter
+and denylist checks, authorization and identity comparisons, and context-dependent output
+encoding. A validator that runs *after* disarm sees the canonical form; a validator that runs
+*before* it can be defeated by a payload disarm later reconstitutes (see *Payload reconstitution
+via invisible-character stripping* under *Out of scope*).
+
+**A "disarmed" string carries no safety property — do not launder trust through it.** The
+output of `security_clean` / `normalize_user_input` / `strip_obfuscation` is *more canonical*,
+not *safe*: after unmasking and coalescence it is, if anything, **more** actionable than the
+input, never less. Passing text through disarm grants it nothing; every downstream sink must
+still validate and context-encode as though the text were raw.
+
+As disarm's invisible-character coverage grows (e.g. #413), it strips *more* of the separators
+an attacker can use to fragment a payload — so coalescence widens with coverage. The ordering
+invariant above is what keeps that an asset: the canonicalizer reunites the fragments **before**
+the validator sees them, instead of after.
+
+## Naming
+
+Preset and function names in disarm describe the **steps they apply**, not a safety outcome.
+`strip_obfuscation` strips; `security_clean` and `display_clean` compose a fixed sequence of
+strips and normalizations; `normalize_user_input` normalizes. None of them assert that their
+output is secure, clean, or safe to trust — the *Positioning* and *Out of scope* sections
+govern, and a name is only ever shorthand for the mechanism it runs.
+
+A name that **sounds like a guarantee** — anything matching `*_clean` or `*_secure` — is, by
+this standard, a **documentation defect**: it invites exactly the trust-laundering this document
+warns against. disarm treats such names as defects subject to **rename with a deprecation
+cycle** (a deprecated alias kept for a transition period, then removed), tracked as their own
+issues. Until a rename lands, read every `*_clean` name as a description of its pipeline steps
+and nothing more.
+
 ## Assets and actors
 
 - **Asset:** the integrity of text as it enters a downstream system (classifier,
@@ -125,6 +165,21 @@ behavior, not a vulnerability:
   it means disarm output is, if anything, **more** important to context-encode on the way
   out, never less. Do not treat normalized text as closer to injection-safe than the raw
   input; it is not.
+- **Payload reconstitution via invisible-character stripping (coalescence).** Removing
+  zero-width and other invisible code points — the zero-width pass shared by `security_clean`,
+  `normalize_user_input`, and `strip_obfuscation` — **rejoins** the characters on either side. A
+  payload an attacker fragmented to slip past an upstream filter is reassembled into its live
+  form: `<scr`+`U+200B`+`ipt>` → `<script>` and `..`+`U+200B`+`/..`+`U+200B`+`/etc/passwd` →
+  `../../etc/passwd`. The same holds for separators that only `strip_obfuscation` removes today —
+  e.g. a Combining Grapheme Joiner, `DR`+`U+034F`+`OP` → `DROP` — because `strip_obfuscation`
+  strips *all* combining marks while the security/normalization presets do not (yet; #413 widens
+  their stripped set, which is one reason it lands after the idempotency fix). This is correct
+  canonicalization — the same shape as *Metacharacter unmasking via NFKC* above, and the very
+  reason to strip the separators — **not** a vulnerability, and **not** an idempotence failure:
+  the pipelines remain `f(f(x)) == f(x)`, because coalescence happens on the first pass and is
+  stable thereafter. As with unmasking, the consequence is placement — validate and
+  context-encode the **output**, and run disarm **before** any filter the reconstituted form
+  could defeat (see *Pipeline placement*). Widening the stripped set (e.g. #413) widens this.
 - **Completeness or "safety" guarantees of any kind.** disarm reduces a specific,
   enumerated attack surface. It does not certify that processed text is safe to trust.
 - **Denial of service guarantees.** We aim for linear-time behavior and test for it, but
@@ -134,7 +189,11 @@ behavior, not a vulnerability:
   `register_replacements` output amplification). This includes the raw-bytes decode path
   (`detect_encoding` / `decode_to_utf8`), which has no size bound; it is fuzzed and tested
   for no-panic and linear behavior on hostile bytes (#78), but a caller accepting
-  arbitrarily large byte buffers must bound them itself.
+  arbitrarily large byte buffers must bound them itself. Output length is also not bounded by
+  input length: NFKC compatibility decomposition can expand a single code point into many
+  (`U+FDFA` ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM → 18 characters), and `demojize`
+  replaces an emoji with its name. Cap *output* on grapheme boundaries (`grapheme_truncate`) if
+  you bound length downstream.
 - **Linguistic correctness** of transliteration (context-free romanization is lossy for
   CJK/Indic/abjad — that is a quality property, not a security property).
 

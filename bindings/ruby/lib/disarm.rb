@@ -270,6 +270,31 @@ module Disarm
         discriminators_hit: discriminators }
     end
 
+    # Curated metadata for one language `code` (e.g. "de"), as a hash with symbol
+    # keys: `:name`, `:script`, `:region`, and `:context` ("none"/"partial"/"full").
+    # Raises Disarm::InvalidArgument on an unknown code.
+    def lang_info(code)
+      translate_errors { _lang_info(code.to_s) }
+    end
+
+    # Curated metadata for one script `name` (e.g. "Coptic"), as a hash with symbol
+    # keys: `:name`, `:default_lang` (nil when none), `:example`, and
+    # `:context_aware`. Raises Disarm::InvalidArgument on an unknown script.
+    def script_info(name)
+      translate_errors { _script_info(name.to_s) }
+    end
+
+    # Every script disarm knows, as stable UCD script identifiers (includes
+    # "Common"/"Inherited"), sorted by name.
+    def list_scripts
+      translate_errors { _list_scripts }
+    end
+
+    # The language codes with context-aware transliteration support, sorted by code.
+    def list_context_langs
+      translate_errors { _list_context_langs }
+    end
+
     # Whether any whitespace token carries out-of-place characters that disguise a
     # real word — a cross-script homoglyph, leet, segmentation, a zero-width / bidi
     # control, or zalgo. Reports a technical fact and leaves the malicious-or-not

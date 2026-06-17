@@ -14,11 +14,13 @@ use std::borrow::Cow;
 
 use crate::Error;
 
+mod metadata;
 mod presets;
 mod safety;
 mod text;
 mod transliterate;
 
+pub use metadata::*;
 pub use presets::*;
 pub use safety::*;
 pub use text::*;

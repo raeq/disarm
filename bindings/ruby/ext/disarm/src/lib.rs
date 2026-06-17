@@ -16,7 +16,7 @@
 use std::collections::HashSet;
 
 use disarm_core::api;
-use magnus::{function, method, prelude::*, Error, Ruby};
+use magnus::{function, method, prelude::*, Error, RHash, Ruby, Symbol};
 
 /// Map a `disarm` error onto the closest standard Ruby exception:
 /// `InvalidArgument` → `ArgumentError`, everything else → `RuntimeError`. The
@@ -324,6 +324,50 @@ fn inspect_auto_lang(text: String) -> (Option<String>, Option<String>, String, V
     (r.script, r.chosen_lang, r.reason, r.discriminators_hit)
 }
 
+// ── Metadata introspection (#404 phase 3) ─────────────────────────────────────
+
+/// `Disarm._lang_info(code)` — curated metadata for one language as a Ruby Hash
+/// with symbol keys (`{ name:, script:, region:, context: }`), mirroring the
+/// hash-building style of `inspect_auto_lang`'s wrapper. Fails (ArgumentError →
+/// Disarm::InvalidArgument) on an unknown code.
+fn lang_info(code: String) -> Result<RHash, Error> {
+    let meta = api::lang_info(&code).map_err(|e| map_err(&e))?;
+    let hash = RHash::new();
+    hash.aset(Symbol::new("name"), meta.name)?;
+    hash.aset(Symbol::new("script"), meta.script)?;
+    hash.aset(Symbol::new("region"), meta.region)?;
+    hash.aset(Symbol::new("context"), meta.context)?;
+    Ok(hash)
+}
+
+/// `Disarm._script_info(name)` — curated metadata for one script as a Ruby Hash
+/// with symbol keys (`{ name:, default_lang:, example:, context_aware: }`);
+/// `default_lang` is `nil` when the core has none. Fails (ArgumentError →
+/// Disarm::InvalidArgument) on an unknown script.
+fn script_info(name: String) -> Result<RHash, Error> {
+    let meta = api::script_info(&name).map_err(|e| map_err(&e))?;
+    let hash = RHash::new();
+    hash.aset(Symbol::new("name"), meta.name)?;
+    // `Option<&str>` maps to the string or `nil`, matching the core's `None`.
+    hash.aset(Symbol::new("default_lang"), meta.default_lang)?;
+    hash.aset(Symbol::new("example"), meta.example)?;
+    hash.aset(Symbol::new("context_aware"), meta.context_aware)?;
+    Ok(hash)
+}
+
+/// `Disarm._list_scripts` — every script disarm knows, as stable UCD identifiers.
+fn list_scripts() -> Vec<String> {
+    api::list_scripts().into_iter().map(str::to_owned).collect()
+}
+
+/// `Disarm._list_context_langs` — language codes with context-aware support.
+fn list_context_langs() -> Vec<String> {
+    api::list_context_langs()
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+}
+
 // ── Anomaly detection (#389) ──────────────────────────────────────────────────
 
 /// Collect a `Vec<String>` lexicon into a `HashSet<String>` for O(1) membership
@@ -493,6 +537,13 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_detect_scripts", function!(detect_scripts, 1))?;
     module.define_singleton_method("_is_mixed_script?", function!(is_mixed_script, 1))?;
     module.define_singleton_method("_inspect_auto_lang", function!(inspect_auto_lang, 1))?;
+
+    // Metadata introspection (#404 phase 3 parity backfill).
+    module.define_singleton_method("_lang_info", function!(lang_info, 1))?;
+    module.define_singleton_method("_script_info", function!(script_info, 1))?;
+    module.define_singleton_method("_list_scripts", function!(list_scripts, 0))?;
+    module.define_singleton_method("_list_context_langs", function!(list_context_langs, 0))?;
+
     module.define_singleton_method("_has_anomalies?", function!(has_anomalies, 2))?;
     module.define_singleton_method("_inspect_anomalies", function!(inspect_anomalies, 2))?;
 

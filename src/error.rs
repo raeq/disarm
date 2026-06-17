@@ -134,6 +134,20 @@ pub(crate) enum ErrorRepr {
         available: String,
     },
 
+    /// Unknown `lang` code passed to `lang_info` metadata lookup (#404).
+    #[error("unknown language code '{got}'")]
+    UnknownLangInfo {
+        /// The offending code.
+        got: String,
+    },
+
+    /// Unknown `script` name passed to `script_info` metadata lookup (#404).
+    #[error("unknown script '{got}'")]
+    UnknownScript {
+        /// The offending script name.
+        got: String,
+    },
+
     /// Unknown `lang` code (eager validation, #68).
     #[error(
         "unknown language code '{got}'{suggestion}; expected 'auto', a BCP-47 \
@@ -447,6 +461,8 @@ impl ErrorRepr {
             ErrorRepr::InvalidReverseLang { .. } => "invalid_reverse_lang",
             ErrorRepr::InvalidLogReplacement { .. } => "invalid_log_replacement",
             ErrorRepr::UnknownProfile { .. } => "unknown_profile",
+            ErrorRepr::UnknownLangInfo { .. } => "unknown_lang_info",
+            ErrorRepr::UnknownScript { .. } => "unknown_script",
             ErrorRepr::UnknownLang { .. } => "unknown_lang",
             ErrorRepr::MutuallyExclusiveBare | ErrorRepr::MutuallyExclusivePipeline => {
                 "mutually_exclusive"
@@ -544,6 +560,8 @@ impl From<ErrorRepr> for pyo3::PyErr {
             | ErrorRepr::InvalidReverseLang { .. }
             | ErrorRepr::InvalidLogReplacement { .. }
             | ErrorRepr::UnknownProfile { .. }
+            | ErrorRepr::UnknownLangInfo { .. }
+            | ErrorRepr::UnknownScript { .. }
             | ErrorRepr::UnknownLang { .. }
             | ErrorRepr::MutuallyExclusiveBare
             | ErrorRepr::MutuallyExclusivePipeline
@@ -640,6 +658,8 @@ impl Error {
             | ErrorRepr::InvalidReverseLang { .. }
             | ErrorRepr::InvalidLogReplacement { .. }
             | ErrorRepr::UnknownProfile { .. }
+            | ErrorRepr::UnknownLangInfo { .. }
+            | ErrorRepr::UnknownScript { .. }
             | ErrorRepr::UnknownLang { .. }
             | ErrorRepr::MutuallyExclusiveBare
             | ErrorRepr::MutuallyExclusivePipeline

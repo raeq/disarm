@@ -387,6 +387,75 @@ pub fn inspect_auto_lang(text: String) -> AutoLangInspection {
     }
 }
 
+// ── Metadata introspection (#404) ─────────────────────────────────────────────
+
+/// Static facts about a language profile (the `lang` codes accepted across the API).
+#[napi(object)]
+pub struct LangMeta {
+    /// The language's English name (e.g. `"German"`).
+    pub name: String,
+    /// The primary script it is written in (e.g. `"Latin"`).
+    pub script: String,
+    /// The region/locale it is associated with.
+    pub region: String,
+    /// Whether/how the profile is context-aware (`""` if not).
+    pub context: String,
+}
+
+/// Static facts about a Unicode script known to the transliteration tables.
+#[napi(object)]
+pub struct ScriptMeta {
+    /// The script's name (e.g. `"Coptic"`).
+    pub name: String,
+    /// The default language code for the script, if any (e.g. `"cop"`).
+    pub default_lang: Option<String>,
+    /// A short example string in the script.
+    pub example: String,
+    /// Whether transliteration of this script is context-aware.
+    pub context_aware: bool,
+}
+
+/// Look up static facts about a language `code`. An unknown code raises a
+/// `DisarmInvalidArgument`-tagged error.
+#[napi]
+pub fn lang_info(code: String) -> Result<LangMeta, NapiError> {
+    let m = api::lang_info(&code).map_err(|e| map_err(&e))?;
+    Ok(LangMeta {
+        name: m.name.to_string(),
+        script: m.script.to_string(),
+        region: m.region.to_string(),
+        context: m.context.to_string(),
+    })
+}
+
+/// Look up static facts about a script by `name`. An unknown name raises a
+/// `DisarmInvalidArgument`-tagged error.
+#[napi]
+pub fn script_info(name: String) -> Result<ScriptMeta, NapiError> {
+    let m = api::script_info(&name).map_err(|e| map_err(&e))?;
+    Ok(ScriptMeta {
+        name: m.name.to_string(),
+        default_lang: m.default_lang.map(str::to_owned),
+        example: m.example.to_string(),
+        context_aware: m.context_aware,
+    })
+}
+
+/// Every Unicode script name known to the transliteration tables.
+#[napi]
+pub fn list_scripts() -> Vec<String> {
+    api::list_scripts().into_iter().map(str::to_owned).collect()
+}
+
+/// Every language code that has a context-aware transliteration profile.
+#[napi]
+pub fn list_context_langs() -> Vec<String> {
+    api::list_context_langs()
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+}
+
 // ── Anomaly detection (#389) ──────────────────────────────────────────────────
 
 /// One reason a token is anomalous (a single finding).

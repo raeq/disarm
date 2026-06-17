@@ -357,12 +357,19 @@ fn transliterate_preserving_latin(text: &str, lang: Option<&str>) -> String {
 /// Pipeline: NFKC → strip_bidi → transliterate-non-Latin → fold_case →
 /// collapse_whitespace
 ///
-/// Like [`search_key`] but **preserves base accented characters** for correct
-/// alphabetical ordering: "Über" sorts next to "Uber" (it folds to `über`, not
-/// `uber`), while non-Latin scripts are still folded to a consistent Latin form
-/// so "Война и мир" files under "voyna i mir". This is the collation counterpart
-/// to `search_key`, which folds accents away for exact-match lookup — the two
-/// keys are deliberately *not* interchangeable for accented Latin input.
+/// Like [`search_key`] but **preserves base accented characters** so the accent
+/// survives for ordering: "Über" folds to `über` (not `uber`), staying distinct
+/// from an unaccented "Uber" instead of colliding with it. Non-Latin scripts are
+/// still folded to a consistent Latin form so "Война и мир" files under
+/// "voyna i mir". This is the collation counterpart to `search_key`, which folds
+/// accents away for exact-match lookup — the two keys are deliberately *not*
+/// interchangeable for accented Latin input.
+///
+/// Note: the result is a normalized string, not a UCA collation-weight key, so
+/// plain codepoint comparison will *not* interfile `über` with ASCII `u…` words
+/// (precomposed `ü` = U+00FC sorts after all of ASCII). Feed the key to a
+/// locale-aware collator when linguistically-correct order matters; the value
+/// here is that the accent is *preserved* for that collator rather than folded.
 ///
 /// `strip_bidi` runs early (#93) so invisible bidi/format chars cannot perturb
 /// the ordering of otherwise-identical strings.

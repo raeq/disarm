@@ -100,10 +100,12 @@ assert search_key("ΩMEGA", lang="auto") == 'omega'
 
 `NFKC → strip_bidi → transliterate-non-Latin → fold_case → collapse_whitespace`
 
-Unlike `search_key`, `sort_key` **preserves base accented characters** so the
-accent can order the collation key. Non-Latin scripts are still folded to a
-consistent Latin form; Latin letters (including accented ones) are kept verbatim,
-so `lang` only affects non-Latin runs.
+Unlike `search_key`, `sort_key` **preserves base accented characters** so
+accented and unaccented forms stay distinct and the accent survives for a
+locale-aware collator. Non-Latin scripts are still folded to a consistent Latin
+form; Latin letters (including accented ones) are kept verbatim, so `lang` only
+affects non-Latin runs. (The key is a normalized string, not a UCA weight key —
+pass it to a Unicode collator when linguistically-correct order matters.)
 
 ```python
 from disarm import search_key, sort_key

@@ -204,14 +204,21 @@ def sort_key(
     Pipeline: NFKC → strip_bidi → transliterate-non-Latin → fold_case →
     collapse_whitespace
 
-    Produces a case-insensitive collation key for alphabetical ordering.
-    Unlike :func:`search_key`, it **preserves base accented characters** so the
-    accent can tie-break the ordering: ``"Über"`` folds to ``"über"`` (not
-    ``"uber"``) and sorts next to ``"Uber"``. Non-Latin scripts are still folded
-    to a consistent Latin form (``"Война"`` → ``"voyna"``) so cross-script titles
+    A case-insensitive collation key that, unlike :func:`search_key`,
+    **preserves base accented characters** rather than folding them away.
+    It keeps the accent so accented and unaccented forms stay distinct
+    (``"Über"`` folds to ``"über"``, not ``"uber"``) and the accent survives
+    for a locale-aware collator. Non-Latin scripts are still folded to a
+    consistent Latin form (``"Война"`` → ``"voyna"``) so cross-script titles
     interfile. This is the collation counterpart to :func:`search_key`, which
     folds accents away for exact-match lookup — the two are deliberately *not*
     interchangeable for accented Latin input.
+
+    Note: the result is a normalized string, not a UCA collation-weight key, so
+    comparing keys with plain codepoint ordering will *not* interfile ``über``
+    with ASCII ``u…`` words. Pass the key to a Unicode/locale collator when
+    linguistically-correct order matters; the value here is that the accent is
+    preserved for it rather than folded away.
 
     Because Latin letters are preserved verbatim, ``lang`` only affects
     transliteration of non-Latin runs; an accented Latin letter is never expanded

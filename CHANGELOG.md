@@ -110,10 +110,10 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 ### Changed
 
 - **`sort_key` now preserves base accented characters (#99.1).** `sort_key` is
-  documented as a *collation* key — "Über" should sort next to "Uber" with the
-  accent intact — but it shared `search_key`'s full transliteration pass, so it
-  ASCII-folded every accent (`"Über"` → `"uber"`) and produced output identical
-  to `search_key`. It now transliterates **only non-Latin scripts**, preserving
+  documented as a *collation* key — accented forms should stay distinct so the
+  accent survives for ordering — but it shared `search_key`'s full
+  transliteration pass, so it ASCII-folded every accent (`"Über"` → `"uber"`)
+  and produced output identical to `search_key`. It now transliterates **only non-Latin scripts**, preserving
   Latin accents (`sort_key("Über")` → `"über"`, `sort_key("Café")` → `"café"`)
   while still folding Cyrillic/Greek/etc. to a consistent Latin form
   (`"Война и мир"` → `"voyna i mir"`). `search_key` and `catalog_key` are

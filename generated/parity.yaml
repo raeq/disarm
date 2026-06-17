@@ -113,7 +113,7 @@ operations:
     names:
       rust: has_bidi_conflict
       python: has_bidi_conflict
-      ruby: null
+      ruby: bidi_conflict?
       node: hasBidiConflict
   - id: inspect_anomalies
     names:

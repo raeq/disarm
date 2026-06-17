@@ -92,40 +92,6 @@ pub(crate) fn strip_bidi_into(text: &str, out: &mut String) {
     out.extend(text.chars().filter(|&ch| !is_bidi_or_format(ch)));
 }
 
-/// Make text safe to use as a path component (#248).
-///
-/// The security presets must *guarantee* path-safe output: confusable folding
-/// can synthesise a separator from a homoglyph (e.g. U+2044 FRACTION SLASH →
-/// `/`, U+2215 DIVISION SLASH → `/`, U+2025 TWO DOT LEADER → `..`), and a caller
-/// using a preset literally named to *sanitize* untrusted input may reasonably
-/// treat the result as safe. Replace ASCII path separators with `_` (matching
-/// `sanitize_filename`'s default separator) and collapse runs of `.` so no `..`
-/// traversal token survives. With no `/` or `\` left, `../`-style traversal is
-/// impossible regardless of dots. Idempotent.
-fn neutralize_path_separators(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut prev_dot = false;
-    for ch in text.chars() {
-        match ch {
-            '/' | '\\' => {
-                out.push('_');
-                prev_dot = false;
-            }
-            '.' => {
-                if !prev_dot {
-                    out.push('.');
-                }
-                prev_dot = true;
-            }
-            other => {
-                out.push(other);
-                prev_dot = false;
-            }
-        }
-    }
-    out
-}
-
 #[inline]
 fn is_bidi_or_format(ch: char) -> bool {
     // ── Soft hyphen ─────────────────────────────────────
@@ -172,7 +138,7 @@ fn is_bidi_or_format(ch: char) -> bool {
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → strip bidi/format → strip invisibles → collapse_whitespace → cap marks (zalgo) → NFC → confusables → NFC → (path-separator neutralization)
+/// Pipeline: NFKC → strip bidi/format → strip invisibles → collapse_whitespace → cap marks (zalgo) → NFC → confusables → NFC
 ///
 /// Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
 /// zero-width injections and control chars, removes dangerous bidi overrides and
@@ -219,10 +185,12 @@ pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
     //    pipeline is a fixed point (`f(f(x)) == f(x)`).
     let buf = confusables::normalize_confusables(&buf, "latin")?;
     let buf = nfc_normalize(&buf);
-    // 6. Path-safety guarantee (#248): never emit a synthesised '/', '\', or
-    //    '..' traversal (a confusable like U+2044 must not become an actionable
-    //    separator in security-preset output).
-    Ok(neutralize_path_separators(&buf))
+    // #431: no path-separator neutralization. Mapping a synthesised '/' (e.g. a
+    // confusable-unmasked U+2044) to '_' is sink-specific output-sanitizer
+    // behaviour, which THREAT_MODEL.md says disarm does not do — and it silently
+    // corrupted legitimate URLs/paths. Path-traversal defence belongs at the sink,
+    // run on this canonicalized output (see THREAT_MODEL.md "Pipeline placement").
+    Ok(buf.into_owned())
 }
 
 /// ML/NLP text normalization pipeline.
@@ -495,8 +463,11 @@ pub(crate) fn display_clean(text: &str) -> String {
 /// is not an XSS or injection defense — encode at the output sink (see
 /// `THREAT_MODEL.md`).
 ///
-/// Pipeline: NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo
-///           → confusables → collapse_whitespace → (path-separator neutralization)
+/// Pipeline: NFKC → strip_bidi → strip_zero_width → strip_control → strip
+///           invisible classes (#413) → strip_zalgo → confusables →
+///           collapse_whitespace → NFC (terminal NFC recomposes any base+mark
+///           left adjacent by a stripped invisible, keeping the preset
+///           idempotent — #416/#413)
 ///
 /// Accepts multilingual input in its original script while neutralizing
 /// Unicode-level abuse:
@@ -538,10 +509,10 @@ pub(crate) fn normalize_user_input(text: &str) -> Result<String, crate::ErrorRep
     //     between a base and a combining mark leaves them adjacent but decomposed;
     //     recompose so the pipeline stays a fixed point.
     let buf = nfc_normalize(&buf);
-    // 6. Path-safety guarantee (#248): the output of a function named to
-    //    *normalize* untrusted input must be safe to use as a path component —
-    //    no synthesised '/', '\', or '..' traversal.
-    Ok(neutralize_path_separators(&buf))
+    // #431: no path-separator neutralization — see security_clean. Mapping '/' to
+    // '_' is sink-specific output sanitization (out of scope per THREAT_MODEL.md)
+    // and corrupted legitimate input; defend traversal at the sink instead.
+    Ok(buf.into_owned())
 }
 
 /// Maximum-strength text deobfuscation pipeline.
@@ -600,32 +571,16 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> 
 mod tests {
     use super::*;
 
-    // ── neutralize_path_separators: path-safety guarantee for security presets (#248) ──
+    // #431: security_clean / normalize_user_input no longer neutralize path
+    // separators — '/' and '\' pass through (defend traversal at the sink).
     #[test]
-    fn test_neutralize_path_separators() {
-        // Separators (whatever their origin) become '_'.
-        assert_eq!(neutralize_path_separators("etc/passwd"), "etc_passwd");
-        assert_eq!(neutralize_path_separators("a\\b"), "a_b");
-        // No '/' or '\' survives, so '../'-style traversal is impossible; dot
-        // runs collapse so no `..` token remains either.
-        assert_eq!(neutralize_path_separators("../../etc"), "._._etc");
-        assert_eq!(neutralize_path_separators("a..b"), "a.b");
-        // Single dots and benign text are preserved.
-        assert_eq!(neutralize_path_separators("file.tar.gz"), "file.tar.gz");
-        assert_eq!(neutralize_path_separators("hello world"), "hello world");
-        assert!(!neutralize_path_separators("x⁄y/z\\w").contains(['/', '\\']));
-    }
-
-    #[test]
-    fn test_neutralize_path_separators_idempotent() {
-        for s in ["etc/passwd", "../../x", "a..b/c\\d", "plain text"] {
-            let once = neutralize_path_separators(s);
-            assert_eq!(
-                neutralize_path_separators(&once),
-                once,
-                "not idempotent: {s:?}"
-            );
-        }
+    fn test_presets_do_not_mangle_path_separators() {
+        assert_eq!(
+            security_clean("https://example.com/path").unwrap(),
+            "https://example.com/path"
+        );
+        assert_eq!(security_clean("../etc/passwd").unwrap(), "../etc/passwd");
+        assert_eq!(normalize_user_input("a/b\\c").unwrap(), "a/b\\c");
     }
 
     // ── nfkc_normalize: ASCII fast path must equal full NFKC (#198) ──

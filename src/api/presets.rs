@@ -6,12 +6,15 @@ use crate::Error;
 // ── Precompiled pipeline presets ──────────────────────────────────────────────
 
 /// Security-focused text canonicalization (homoglyph / bidi / zero-width / control
-/// neutralization with a path-safety guarantee).
+/// neutralization).
 ///
-/// Pipeline: NFKC → confusables → strip bidi/format → collapse whitespace →
-/// path-separator neutralization. Fallible only through the confusables stage,
-/// whose target script is fixed internally, so in practice this never errors;
-/// the [`Result`] keeps the surface uniform with the other key/clean presets.
+/// Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
+/// collapse whitespace → cap combining marks (anti-zalgo, #429) → NFC →
+/// confusables → NFC. (The confusable fold is sandwiched between two NFC passes
+/// so TR39 skeletoning is normalization-stable and the preset is idempotent —
+/// #416.) Fallible only through the confusables stage, whose target script is
+/// fixed internally, so in practice this never errors; the [`Result`] keeps the
+/// surface uniform with the other key/clean presets.
 pub fn security_clean(text: &str) -> Result<String, Error> {
     crate::presets::security_clean(text).map_err(Error::from)
 }
@@ -66,9 +69,12 @@ pub fn strip_bidi(text: &str) -> String {
 }
 
 /// Normalize user-submitted input — Unicode hygiene that **preserves the original
-/// script** (no transliteration): NFKC → strip bidi/zero-width/control →
-/// strip zalgo → confusables → collapse whitespace → path-separator
-/// neutralization.
+/// script** (no transliteration): NFKC → strip bidi/format → strip zero-width →
+/// strip control → strip invisible classes (#413) → cap combining marks
+/// (anti-zalgo) → confusables → collapse whitespace → NFC. (The invisibles are
+/// stripped before the zalgo cap so they cannot split a mark run, and the
+/// terminal NFC recomposes any base+mark left adjacent — keeping the preset
+/// idempotent, #121/#416.)
 ///
 /// Not an output sanitizer (no HTML/JS/SQL escaping). Fallible only through the
 /// fixed-target confusables stage; the [`Result`] keeps the surface uniform.

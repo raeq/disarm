@@ -142,6 +142,21 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed
 
+- **`security_clean` and `normalize_user_input` no longer neutralize path
+  separators (#431, reverses #248).** The presets previously rewrote `/` and `\`
+  to `_` and collapsed `..` runs so the output was safe to drop into a filesystem
+  path. That is *sink-specific output sanitization* — out of scope for the
+  canonicalization presets per [THREAT_MODEL.md](THREAT_MODEL.md) — and it
+  corrupted legitimate input: URLs, file paths, and any `/`- or `\`-bearing
+  string came back mangled (`"https://example.com/path"` →
+  `"https:__example.com_path"`). The presets now pass separators through
+  verbatim. **Migration:** if you fed preset output straight into a filesystem
+  path, defend traversal at the sink instead — call `sanitize_filename` on the
+  final path component, or validate against your own allowlist. A confusable
+  fraction/division slash that NFKC folds to a real `/` is still *normalized* to
+  `/` (that is canonicalization working as intended); it is just no longer
+  rewritten away. The internal `neutralize_path_separators` helper is removed.
+
 - **`security_clean` now caps combining marks (anti-zalgo, #429).** The preset
   left zalgo-stacked tokens intact, so a mark-stacked `admin` did not match its
   base form in a denylist/dedup comparison `security_clean` is meant to

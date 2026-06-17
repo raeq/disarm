@@ -289,7 +289,12 @@ export function stripObfuscation(text: string): string {
   return call(() => native.stripObfuscation(text))
 }
 
-/** Aggressive security cleaning: NFKC → confusables → strip bidi → collapse → path-safety. */
+/**
+ * Aggressive security cleaning: NFKC → strip bidi/format → strip invisible
+ * classes (#413) → collapse whitespace → cap combining marks (anti-zalgo) → NFC
+ * → confusables → NFC (confusables sandwiched between NFC passes for
+ * idempotency).
+ */
 export function securityClean(text: string): string {
   return call(() => native.securityClean(text))
 }

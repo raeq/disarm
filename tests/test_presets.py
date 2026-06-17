@@ -105,45 +105,61 @@ class TestSecurityClean:
         assert result == "paypal"
 
 
-# ===== path-safety guarantee (#248) =====
+# ===== path separators pass through (#431, reverses #248) =====
 
 
-class TestPathSafety:
-    """The security presets must never emit a synthesised path separator or
-    `..` traversal \u2014 a confusable like U+2044 FRACTION SLASH must not become an
-    actionable '/' in the output of a function named to *sanitize* input."""
+class TestPathSeparatorsPassThrough:
+    """#431: the canonicalization presets no longer neutralize path separators.
+
+    Mapping ``/`` \u2192 ``_`` and collapsing ``..`` is *sink-specific output
+    sanitization* (out of scope per THREAT_MODEL.md) and corrupted legitimate
+    input such as URLs and file paths. The presets canonicalize Unicode; callers
+    that build filesystem paths must defend traversal at the sink (e.g.
+    ``sanitize_filename`` / their own validation)."""
 
     @pytest.mark.parametrize("preset", [normalize_user_input, security_clean])
     @pytest.mark.parametrize(
-        "raw",
+        "text",
         [
-            "etc\u2044passwd",  # U+2044 FRACTION SLASH (folds to '/')
-            "a\u2215b",  # U+2215 DIVISION SLASH
-            "x\ua4fa\u2044bin",  # U+A4FA (\u2192 '..') + fraction slash
-            "\u2025\u2025/etc",  # U+2025 TWO DOT LEADER (\u2192 '..') + real slash
-            "../../etc/passwd",  # plain ASCII traversal
-            "a\\b\\c",  # backslash separators
+            "https://example.com/path",
+            "../etc/passwd",
+            "a/b\\c",
+            "folder/sub/file.txt",
         ],
     )
-    def test_no_synthesised_separators(self, preset, raw: str) -> None:
-        out = preset(raw)
-        assert "/" not in out, f"{preset.__name__}({raw!r}) -> {out!r} contains '/'"
-        assert "\\" not in out, f"{preset.__name__}({raw!r}) -> {out!r} contains '\\'"
-        assert ".." not in out, f"{preset.__name__}({raw!r}) -> {out!r} contains '..'"
+    def test_real_separators_survive(self, preset, text: str) -> None:
+        # Legitimate ASCII separators are preserved verbatim (no '_' rewrite,
+        # no '..' collapse).
+        assert preset(text) == text
 
-    def test_specific_smuggling_vectors(self) -> None:
-        # The exact vectors reported in #248.
-        assert normalize_user_input("etc\u2044passwd") == "etc_passwd"
-        assert security_clean("a\u2215b") == "a_b"
+    @pytest.mark.parametrize("preset", [normalize_user_input, security_clean])
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("a\u2044b", "a/b"),  # U+2044 FRACTION SLASH \u2192 real '/'
+            ("a\u2215b", "a/b"),  # U+2215 DIVISION SLASH \u2192 real '/'
+            ("a\u2025b", "a..b"),  # U+2025 TWO DOT LEADER \u2192 '..'
+        ],
+    )
+    def test_confusable_slashes_normalize_not_rewritten(
+        self, preset, raw: str, expected: str
+    ) -> None:
+        # A confusable that NFKC/confusables fold to a real '/' (or '..') is
+        # *normalized* to that separator \u2014 canonicalization working as intended \u2014
+        # NOT rewritten to '_' as the old path-neutralization did (#431 migration
+        # note). The separator is real after the fold; defend traversal at the sink.
+        out = preset(raw)
+        assert out == expected
+        assert "_" not in out
 
     def test_homoglyph_folding_still_works(self) -> None:
-        # Path-safety must not regress the homoglyph neutralisation.
+        # Dropping path-neutralization must not regress homoglyph folding.
         assert normalize_user_input("p\u0430ypal") == "paypal"
         assert security_clean("p\u0430ypal") == "paypal"
 
     def test_idempotent(self) -> None:
         for preset in (normalize_user_input, security_clean):
-            once = preset("etc\u2044../passwd")
+            once = preset("etc/../passwd")
             assert preset(once) == once
 
 

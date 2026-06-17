@@ -242,7 +242,7 @@ disarm transliterates a very wide range of scripts, but the **quality guarantee 
 ```python
 from disarm import security_clean, ml_normalize, catalog_key, normalize_user_input, strip_obfuscation
 
-# Security: NFKC → confusables → strip bidi → collapse whitespace → path-safety
+# Security: NFKC → strip bidi → strip invisibles → collapse → cap marks → NFC → confusables → NFC
 assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
 
 # ML/NLP: NFKC → emoji→text → transliterate → strip accents → fold case
@@ -252,7 +252,7 @@ assert ml_normalize("Café ☕ Ünïcödé") == 'cafe hot beverage unicode'
 assert catalog_key("Москва", lang="ru") == 'moskva'
 assert catalog_key("ΩMEGA  café") == 'omega cafe'
 
-# Web input: NFKC → strip bidi → strip zero-width → strip control → strip zalgo → confusables → collapse → path-safety
+# Web input: NFKC → strip bidi → strip zero-width → strip control → strip invisibles → strip zalgo → confusables → collapse → NFC
 assert normalize_user_input("pаypal") == 'paypal'
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars → clean text

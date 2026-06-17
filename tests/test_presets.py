@@ -1,5 +1,7 @@
 """Tests for precompiled pipeline functions."""
 
+import unicodedata
+
 import pytest
 
 from disarm import (
@@ -653,7 +655,12 @@ class TestSecurityCleanZalgoCap:
     """
 
     def _marks(self, s: str) -> int:
-        return sum(1 for c in s if 0x0300 <= ord(c) <= 0x036F)
+        # Count *every* combining mark the cap applies to, not just the
+        # U+0300–U+036F Combining Diacritical Marks block: decompose to NFD
+        # (so composed accents like é surface their mark) and count Unicode
+        # general-category M* (Mn/Mc/Me). This matches `strip_zalgo`, which caps
+        # all combining marks regardless of block.
+        return sum(1 for c in unicodedata.normalize("NFD", s) if unicodedata.category(c)[0] == "M")
 
     def test_caps_zalgo_stacking(self):
         zalgo = "a" + "".join(chr(c) for c in range(0x0300, 0x0310))  # 'a' + 16 marks

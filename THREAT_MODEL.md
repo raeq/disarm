@@ -37,8 +37,9 @@ them. See the XSS / injection and metacharacter-unmasking items under *Out of sc
 ## Pipeline placement (a required ordering)
 
 Because disarm canonicalizes — NFKC unmasking and invisible-character stripping both **change
-what the text decodes to** (see *Out of scope*) — *where* it sits in your pipeline is a
-security property of the integration, not an implementation detail.
+what the text becomes** (see *Out of scope*; disarm operates on already-decoded Unicode, so this
+is normalization, not byte decoding) — *where* it sits in your pipeline is a security property of
+the integration, not an implementation detail.
 
 **The invariant: canonicalize first, then validate, authorize, and encode — never the
 reverse.** Run disarm *before* every decision a downstream stage makes about the text: filter
@@ -165,11 +166,14 @@ behavior, not a vulnerability:
   out, never less. Do not treat normalized text as closer to injection-safe than the raw
   input; it is not.
 - **Payload reconstitution via invisible-character stripping (coalescence).** Removing
-  zero-width and other invisible code points — the core of `strip_obfuscation`, and the
-  zero-width pass in `security_clean` / `normalize_user_input` — **rejoins** the characters on
-  either side. A payload an attacker fragmented to slip past an upstream filter is reassembled
-  into its live form: `<scr`+`U+200B`+`ipt>` → `<script>`, `DR`+`U+034F`+`OP` → `DROP`,
-  `..`+`U+200B`+`/..`+`U+200B`+`/etc/passwd` → `../../etc/passwd`. This is correct
+  zero-width and other invisible code points — the zero-width pass shared by `security_clean`,
+  `normalize_user_input`, and `strip_obfuscation` — **rejoins** the characters on either side. A
+  payload an attacker fragmented to slip past an upstream filter is reassembled into its live
+  form: `<scr`+`U+200B`+`ipt>` → `<script>` and `..`+`U+200B`+`/..`+`U+200B`+`/etc/passwd` →
+  `../../etc/passwd`. The same holds for separators that only `strip_obfuscation` removes today —
+  e.g. a Combining Grapheme Joiner, `DR`+`U+034F`+`OP` → `DROP` — because `strip_obfuscation`
+  strips *all* combining marks while the security/normalization presets do not (yet; #413 widens
+  their stripped set, which is one reason it lands after the idempotency fix). This is correct
   canonicalization — the same shape as *Metacharacter unmasking via NFKC* above, and the very
   reason to strip the separators — **not** a vulnerability, and **not** an idempotence failure:
   the pipelines remain `f(f(x)) == f(x)`, because coalescence happens on the first pass and is

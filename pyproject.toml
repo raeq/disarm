@@ -84,7 +84,7 @@ bench = [
 ]
 docs = [
     "mkdocs>=1.6",
-    "mkdocstrings[python]>=0.30.1",
+    "mkdocstrings[python]>=1.0.4",
     "pymdown-extensions>=10.0",
 ]
 # NOTE: context-aware transliteration (transliterate(context=True), ar/fa/he) is

@@ -1,6 +1,7 @@
 # This CITATION.cff file was generated with cffinit-compatible metadata.
 # Visit https://citation-file-format.github.io/ to learn more.
-# After the first Zenodo release, add the concept DOI under `identifiers`.
+# `identifiers` carries the XMR benchmark note DOI; add the software's own concept
+# DOI here too after a Zenodo software release.
 cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata from this file."
 type: software
@@ -9,13 +10,17 @@ abstract: >-
   Unicode canonicalization and TR39 visual confusable analysis: building blocks
   for text-security pipelines (homoglyph, bidi, zalgo, and invisible-character
   handling) plus standards-based phonetic transliteration to roman script. Implemented
-  in Rust with Python bindings.
+  in Rust with Python, Ruby, and Node.js bindings.
 authors:
   - family-names: "Quinn"
     given-names: "Richard"
     email: "quinn.richard@gmail.com"
-version: "0.6.3"
-date-released: "2026-06-08"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20618323"
+    description: "XMR metric and broad-sample adversarial-defence benchmark (v2 technical note)"
+version: "0.11.0"
+date-released: "2026-06-17"
 license: MIT
 repository-code: "https://github.com/raeq/disarm"
 url: "https://docs.disarm.dev"

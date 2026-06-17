@@ -108,9 +108,11 @@ introducing spurious tokens that can *degrade* downstream model accuracy.
 
 disarm maps **visually** per [Unicode TR39](https://www.unicode.org/reports/tr39/)
 (Cyrillic `р` → Latin `p`), which reverses the substitution **for confusables in the TR39
-table**. In a controlled benchmark, visual TR39 mapping reached XMR = 1.000 on the tested
-TR39 pairs where phonetic tools recovered roughly half. It is a defense-in-depth layer,
-not a complete control — see the [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md).
+table**. Measured over a broad sample of the TR39 confusable space (1,314 single-codepoint
+sources), visual TR39 mapping recovers XMR ≈ 0.63–0.68 — neutralizing ~95% of sources —
+where phonetic tools stay at or below 0.19 ([XMR v2 note](https://doi.org/10.5281/zenodo.20618323)).
+It is a defense-in-depth layer, not a complete control — see the
+[Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md).
 
 ```python
 # Wrong tool for defense — phonetic mapping, attack survives

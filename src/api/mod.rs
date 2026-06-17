@@ -326,6 +326,26 @@ mod tests {
     }
 
     #[test]
+    fn get_pipeline_surface() {
+        // A known profile builds a reusable handle and processes text.
+        let pipe = get_pipeline("search_index").unwrap();
+        // search_index: NFKC → transliterate → strip_accents → fold_case →
+        // collapse_whitespace, so "Café" lowercases and loses its accent.
+        assert_eq!(pipe.process("Café").unwrap(), "cafe");
+        // The handle is reusable across inputs.
+        assert_eq!(pipe.process("Москва").unwrap(), "moskva");
+        // An unknown profile surfaces an InvalidArgument error naming the profile.
+        let err = get_pipeline("does_not_exist").unwrap_err();
+        assert_eq!(err.kind(), crate::ErrorKind::InvalidArgument);
+        assert!(
+            err.to_string().contains("does_not_exist"),
+            "message should name the unknown profile: {err}"
+        );
+        // Opaque: no inner source leaks.
+        assert!(std::error::Error::source(&err).is_none());
+    }
+
+    #[test]
     fn is_suspicious_hostname_surface() {
         // Plain ASCII hostname: not suspicious, single-script, canonical == input.
         let a = is_suspicious_hostname("example.com");

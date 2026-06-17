@@ -99,3 +99,53 @@ pub fn strip_obfuscation(text: &str) -> Result<String, Error> {
 pub fn list_profiles() -> Vec<String> {
     crate::pipeline::profile_names()
 }
+
+/// A reusable, read-only handle to a named policy-profile pipeline (#404).
+///
+/// Built with [`get_pipeline`] from one of the profiles in [`list_profiles`],
+/// then applied to any number of inputs via [`Pipeline::process`]. This is the
+/// pure crates.io counterpart to the binding-only stateful builder
+/// (`_TextPipeline`): a precompiled, immutable handle the Node/Ruby bindings can
+/// wrap as a reusable object (mirroring the `Lexicon` handle), not a mutable
+/// pipeline builder.
+///
+/// ```
+/// use disarm::api::get_pipeline;
+/// let pipe = get_pipeline("search_index").unwrap();
+/// assert_eq!(pipe.process("Café").unwrap(), "cafe");
+/// ```
+#[derive(Debug, Clone)]
+pub struct Pipeline {
+    inner: crate::pipeline::Pipeline,
+}
+
+impl Pipeline {
+    /// Run the named pipeline over `text`.
+    ///
+    /// # Errors
+    /// Propagates the pipeline's error (a profile's steps are validated at
+    /// [`get_pipeline`] time, so in practice `process` does not error; the
+    /// [`Result`] keeps the surface uniform).
+    pub fn process(&self, text: &str) -> Result<String, Error> {
+        self.inner.process(text).map_err(Error::from)
+    }
+}
+
+/// Build the reusable [`Pipeline`] handle for a named policy profile (#404).
+///
+/// `profile` is one of the names returned by [`list_profiles`]. Fails
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) on an unknown profile,
+/// naming the offending value and the available profiles.
+///
+/// # Errors
+/// Returns an [`ErrorKind::InvalidArgument`](crate::ErrorKind) error if
+/// `profile` is not a known profile name.
+pub fn get_pipeline(profile: &str) -> Result<Pipeline, Error> {
+    match crate::pipeline::get_pipeline(profile).map_err(Error::from)? {
+        Some(inner) => Ok(Pipeline { inner }),
+        None => Err(Error::from(crate::ErrorRepr::UnknownProfile {
+            got: profile.to_owned(),
+            available: crate::pipeline::profile_names().join(", "),
+        })),
+    }
+}

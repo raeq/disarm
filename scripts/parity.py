@@ -34,7 +34,9 @@ def rust_surface() -> set[str]:
     out: set[str] = set()
     for p in (ROOT / "src/api").rglob("*.rs"):
         t = p.read_text()
-        out |= set(re.findall(r"pub fn ([a-z0-9_]+)", t))
+        # ^pub fn = module-level free functions only; an indented `    pub fn` is an
+        # impl method (e.g. Pipeline::process), not part of the api op surface.
+        out |= set(re.findall(r"^pub fn ([a-z0-9_]+)", t, re.M))
         for blk in re.findall(r"pub use [^;{]*\{([^}]*)\}", t):  # pub use x::{a, b, C}
             out |= {s.strip() for s in blk.split(",")}
         out |= set(re.findall(r"pub use [^;{]*::([a-z0-9_]+)\s*;", t))  # pub use x::name;

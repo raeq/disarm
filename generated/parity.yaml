@@ -63,7 +63,7 @@ operations:
       node: null
   - id: find_untranslatable
     names:
-      rust: find_untranslatable
+      rust: null
       python: find_untranslatable
       ruby: find_untranslatable
       node: findUntranslatable
@@ -75,10 +75,10 @@ operations:
       node: foldCase
   - id: get_pipeline
     names:
-      rust: null
+      rust: get_pipeline
       python: get_pipeline
-      ruby: null
-      node: null
+      ruby: get_pipeline
+      node: getPipeline
   - id: grapheme_len
     names:
       rust: grapheme_len

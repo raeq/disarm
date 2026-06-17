@@ -379,6 +379,32 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "reusable pipeline (Disarm::Pipeline)" do
+    it "builds a handle whose #process returns a cleaned string" do
+      pipe = Disarm.get_pipeline("search_index")
+      expect(pipe).to be_a(Disarm::Pipeline)
+      expect(pipe.process("Café")).to eq("cafe")
+    end
+
+    it "can be reused across many calls" do
+      # The pipeline is assembled once; each #process call reuses it.
+      pipe = Disarm.get_pipeline("search_index")
+      expect(pipe.process("Café")).to eq("cafe")
+      expect(pipe.process("Köln")).to eq("koln")
+      expect(pipe.process("naïve")).to eq("naive")
+    end
+
+    it "supports another profile" do
+      pipe = Disarm.get_pipeline("normalize_web_input")
+      expect(pipe.process("  hello   world  ")).to eq("hello world")
+    end
+
+    it "raises Disarm::InvalidArgument on an unknown profile" do
+      expect { Disarm.get_pipeline("not_a_real_profile") }
+        .to raise_error(Disarm::InvalidArgument)
+    end
+  end
+
   describe "error hierarchy" do
     it "maps a non-String argument to Disarm::InvalidArgument" do
       expect { Disarm.strip_accents(42) }.to raise_error(Disarm::InvalidArgument)

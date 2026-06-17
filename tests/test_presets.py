@@ -8,7 +8,9 @@ from disarm import (
     display_clean,
     ml_normalize,
     normalize_user_input,
+    search_key,
     security_clean,
+    sort_key,
     strip_bidi,
 )
 
@@ -427,3 +429,108 @@ class TestPresetsMetadataOrder:
             "strip_accents",
             "collapse_whitespace",
         ]
+
+
+# ===== #416: idempotency across an invisible-separated combining mark =====
+
+
+class TestTerminalNfcIdempotency:
+    """#416 — `security_clean` and `sort_key` must be fixed points even when an
+    invisible code point separates a base character from a combining mark.
+
+    Mechanism of the bug (and why the terminal NFC fixes it):
+
+    Both pipelines run NFKC *first*, then strip invisible code points later (the
+    zero-width pass folded into `collapse_whitespace`). With input
+    ``"a" + U+200B + U+0301 + "b"`` the combining acute (U+0301) is NOT adjacent to
+    its base `a` during the leading NFKC — the zero-width sits between them — so
+    NFKC leaves it decomposed. The strip then deletes the zero-width, making
+    `a` and U+0301 adjacent *after* the only normalization pass. The composed form
+    (`á`, U+00E1) therefore appeared only on the *second* call, so
+    ``f(x) != f(f(x))`` — which `THREAT_MODEL.md` classifies as a vulnerability.
+
+    The fix is a terminal NFC pass appended to each pipeline (#416): it recomposes
+    the adjacency the strip created, on the first call, so `f(x)` is a fixed point.
+    NFC (not NFKC) is sufficient — the leading NFKC already removed every
+    compatibility form and stripping only deletes code points, so nothing after it
+    can reintroduce one.
+    """
+
+    # The invisible separators that trigger the bug: zero-width space/non-joiner/
+    # joiner and the BOM / zero-width no-break space. Explicit escapes (not literal
+    # invisibles) so the vectors are auditable and editor-safe. (CGJ U+034F joins
+    # this set once #413 makes it a strip target.)
+    INVISIBLES = ["\u200b", "\u200c", "\u200d", "\ufeff"]
+    COMBINING_ACUTE = "\u0301"
+
+    @pytest.mark.parametrize("preset", [security_clean, sort_key])
+    @pytest.mark.parametrize("sep", INVISIBLES, ids=lambda s: f"U+{ord(s):04X}")
+    def test_invisible_separated_mark_is_recomposed_and_idempotent(self, preset, sep):
+        # 'a' + <invisible> + combining acute + 'b'
+        text = f"a{sep}{self.COMBINING_ACUTE}b"
+        once = preset(text)
+        # The invisible is gone and the base+mark are recomposed to a single 'á'
+        # (U+00E1) on the FIRST pass — not left decomposed for a second call.
+        assert once == "áb", f"{preset.__name__}: expected composed 'áb', got {once!r}"
+        # The fixed-point property the bug violated.
+        assert preset(once) == once, f"{preset.__name__} not idempotent for U+{ord(sep):04X}"
+
+    def test_security_clean_repro_from_issue(self):
+        # The exact #416 repro: first call must already be composed.
+        out = security_clean("a\u200b\u0301b")
+        # 'a' + combining acute compose to a single 'á' (U+00E1); then 'b'.
+        assert [hex(ord(c)) for c in out] == ["0xe1", "0x62"]  # á, b
+        assert security_clean(out) == out
+
+    def test_sort_key_repro_is_a_411_regression(self):
+        # sort_key only has this bug because #411 made it *preserve* accents
+        # instead of folding them away. `search_key` still folds (it strips the
+        # accent), so it was never affected — it canonicalizes to plain "ab".
+        bad = "a\u200b\u0301b"
+        assert sort_key(bad) == "áb"  # accent preserved, composed (NFC)
+        assert sort_key(sort_key(bad)) == sort_key(bad)  # idempotent after the fix
+        assert search_key(bad) == "ab"  # contrast: folds the accent, always idempotent
+
+    def test_unaffected_presets_were_already_idempotent(self):
+        # Siblings are fixed points for a different reason and needed no change:
+        # they either fold/strip the mark or never compose it. Pin that so a
+        # future refactor cannot silently regress them.
+        text = "a\u200b\u0301b"
+        for preset in (normalize_user_input, display_clean, search_key, catalog_key, ml_normalize):
+            assert preset(preset(text)) == preset(text), f"{preset.__name__} regressed"
+
+    def test_plain_inputs_unchanged_by_terminal_nfc(self):
+        # The terminal NFC is a no-op on text that has no strip-created adjacency:
+        # ASCII passes through, and already-composed accents are untouched (so the
+        # #411 accent-preservation outputs are stable).
+        assert security_clean("hello world") == "hello world"
+        assert sort_key("Über") == "über"  # "Über" -> "über", composed
+        assert sort_key("café") == "café"  # already NFC
+
+    @pytest.mark.hypothesis
+    def test_idempotent_under_injected_invisibles_property(self):
+        # A *targeted* property test. Plain `st.text()` almost never emits the
+        # base+invisible+combining-mark shape that triggers #416 (which is why the
+        # pre-existing random idempotency tests missed it), so this strategy
+        # interleaves letters, combining marks, and invisibles explicitly.
+        from hypothesis import given
+        from hypothesis import strategies as st
+
+        letters = st.sampled_from("abcdeáüöABCДΩ中")
+        marks = st.sampled_from("\u0301\u0300\u0308\u0327")  # acute, grave, diaeresis, cedilla
+        invisibles = st.sampled_from(self.INVISIBLES)
+        piece = st.one_of(letters, marks, invisibles)
+        strategy = st.lists(piece, min_size=1, max_size=24).map("".join)
+
+        # Scoped to security_clean (the #416 acceptance target). sort_key's
+        # terminal NFC is pinned deterministically above; a *separate* pre-existing
+        # transliterate-order bug keeps it from being globally idempotent over this
+        # broad alphabet (tracked in #419), so it is excluded here.
+        @given(strategy)
+        def check(text):
+            once = security_clean(text)
+            assert security_clean(once) == once, (
+                f"security_clean not idempotent on {text!r}: {once!r} -> {security_clean(once)!r}"
+            )
+
+        check()

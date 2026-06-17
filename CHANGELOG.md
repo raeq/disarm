@@ -208,6 +208,28 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   romanization, not homoglyph defense, pointing to `normalize_confusables()` /
   `strip_obfuscation()` for the latter.
 
+### Fixed
+
+- **`security_clean` / `sort_key` idempotency on invisible-separated combining
+  marks (#416).** When an invisible code point separated a base character from a
+  combining mark (e.g. `"a"` + `U+200B` + combining acute + `"b"`), the leading
+  NFKC passed over the still-separated mark and the later zero-width strip then
+  left the base and mark adjacent but *decomposed* — so the composed form
+  appeared only on the second call, violating the documented `f(f(x)) == f(x)`
+  invariant (which `THREAT_MODEL.md` classifies as a vulnerability). An **NFC pass
+  after the strips** now recomposes the adjacency on the first call, in the Rust
+  core, so every binding inherits it. For `security_clean` a second, deeper cause
+  was also fixed: TR39 confusable skeletoning is **not normalization-stable** (it
+  drops the diacritic on some *composed* accented letters — `ç`→`c`, `ø`→`o` — but
+  not the *decomposed* form, and can emit a decomposed skeleton like `Ý`→`Y`+◌́),
+  so the confusable fold is now **sandwiched between two NFC passes** and the
+  pipeline is a verified fixed point under a strengthened raw-equality proptest.
+  **Output change:** for these previously non-idempotent inputs the first call now
+  returns the composed NFC form. `sort_key` was affected only because it began
+  *preserving* accents in #411 (`search_key`/`catalog_key`, which fold accents
+  away, were never affected). A separate, pre-existing `sort_key` non-idempotency
+  (transliterate-before-fold-case on a case pair) is tracked in #419.
+
 ### Internal
 
 - **The Tier 3 exhaustive+formal gate now guards every publish, not just PyPI/crates.io (#159, #395).**

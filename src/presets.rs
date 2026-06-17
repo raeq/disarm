@@ -31,6 +31,28 @@ fn nfkc_normalize(text: &str) -> Cow<'_, str> {
     }
 }
 
+/// NFC-normalize `text`, skipping the pass for all-ASCII input (ASCII is already
+/// in NFC normal form).
+///
+/// Used by the presets to keep them fixed points (#416). Stripping a zero-width /
+/// invisible separator can leave a base character adjacent to a combining mark
+/// that was not adjacent before — a *decomposed* sequence the leading NFKC passed
+/// over; an NFC recomposes it. `security_clean` additionally **sandwiches** its
+/// confusable fold between two NFC passes, because TR39 skeletoning is not
+/// normalization-stable (it treats composed vs decomposed accented letters
+/// differently, and can emit a decomposed skeleton). NFC, not NFKC, is correct:
+/// the leading NFKC already removed every compatibility form, and the later steps
+/// only delete or skeleton code points, so only canonical base+mark adjacencies
+/// can appear — exactly what NFC composes.
+#[inline]
+fn nfc_normalize(text: &str) -> Cow<'_, str> {
+    if text.is_ascii() {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(text.nfc().collect())
+    }
+}
+
 /// Strip dangerous bidirectional override and formatting characters
 /// that `collapse_whitespace` does not handle.
 ///
@@ -134,7 +156,7 @@ fn is_bidi_or_format(ch: char) -> bool {
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace → (path-separator neutralization)
+/// Pipeline: NFKC → strip bidi/format → collapse_whitespace → NFC → confusables → NFC → (path-separator neutralization)
 ///
 /// Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
 /// zero-width injections and control chars, and removes dangerous bidi
@@ -143,17 +165,31 @@ fn is_bidi_or_format(ch: char) -> bool {
 /// `strip_bidi` runs *before* `collapse_whitespace` so that removing
 /// invisible characters (e.g. soft hyphen U+00AD) can expose leading,
 /// trailing, or consecutive whitespace that `collapse_whitespace` then
-/// normalizes.  This guarantees idempotency.
+/// normalizes. Confusable folding is sandwiched between two NFC passes (#416) —
+/// TR39 skeletoning is not normalization-stable — so the pipeline is idempotent
+/// (`f(f(x)) == f(x)`).
 pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf = nfkc_normalize(text);
-    // 2. Confusables → Latin (neutralizes cross-script homoglyphs)
-    let buf = confusables::normalize_confusables(&buf, "latin")?;
-    // 3. Strip bidi overrides, isolates, marks, and soft hyphens
+    // 2. Strip bidi overrides, isolates, marks, and soft hyphens
     let buf = strip_bidi(&buf);
-    // 4. Collapse whitespace + strip control + strip zero-width
+    // 3. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::collapse_whitespace(&buf, true, true);
-    // 5. Path-safety guarantee (#248): never emit a synthesised '/', '\', or
+    // 4. NFC (#416): the strips above can leave a base character next to a
+    //    combining mark that was non-adjacent before (e.g. separated by a
+    //    now-removed zero-width), which the leading NFKC passed over. Compose it
+    //    here so the confusable fold below sees the *composed* form consistently.
+    let buf = nfc_normalize(&buf);
+    // 5. Confusables → Latin (neutralizes cross-script homoglyphs). Sandwiched
+    //    between two NFC passes (#416) because TR39 skeletoning is not
+    //    normalization-stable: it drops the diacritic on some *composed* accented
+    //    letters (`ç`→`c`, `ø`→`o`) but never on the *decomposed* form, and it can
+    //    *emit* a decomposed skeleton (`Ý`→`Y`+◌́). The NFC above feeds it a
+    //    consistent (composed) form; the NFC below recomposes its output, so the
+    //    pipeline is a fixed point (`f(f(x)) == f(x)`).
+    let buf = confusables::normalize_confusables(&buf, "latin")?;
+    let buf = nfc_normalize(&buf);
+    // 6. Path-safety guarantee (#248): never emit a synthesised '/', '\', or
     //    '..' traversal (a confusable like U+2044 must not become an actionable
     //    separator in security-preset output).
     Ok(neutralize_path_separators(&buf))
@@ -387,6 +423,17 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
     let buf = case_fold::fold_case_impl(&buf);
     // 5. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 6. Terminal NFC (#416): because sort_key now *preserves* Latin accents
+    //    (#411) instead of folding them away, a combining mark separated from its
+    //    base by a now-stripped zero-width would otherwise survive in decomposed
+    //    form and only compose on the next pass — breaking idempotency. Recompose
+    //    so `f(f(x)) == f(x)`. `buf` is already owned, so reuse it directly on the
+    //    ASCII fast path instead of copying out of a borrowed Cow.
+    let buf = if buf.is_ascii() {
+        buf
+    } else {
+        buf.nfc().collect()
+    };
     Ok(buf)
 }
 
@@ -671,6 +718,39 @@ mod tests {
     }
 
     #[test]
+    fn test_security_clean_idempotent_on_invisible_separated_mark() {
+        // #416: stripping the zero-width leaves `a` adjacent to U+0301 (combining
+        // acute) — a decomposed sequence the leading NFKC passed over. The
+        // terminal NFC recomposes it on the FIRST pass, so f(f(x)) == f(x).
+        for sep in ['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'] {
+            let input = format!("a{sep}\u{0301}b");
+            let once = security_clean(&input).unwrap();
+            assert_eq!(once, "\u{00E1}b", "sep {sep:?} should compose to á+b");
+            assert_eq!(
+                once,
+                security_clean(&once).unwrap(),
+                "sep {sep:?} not idempotent"
+            );
+        }
+    }
+
+    #[test]
+    fn test_sort_key_idempotent_on_invisible_separated_mark() {
+        // #416 / #411: sort_key now preserves the accent, so the same decomposed
+        // sequence must be recomposed by the terminal NFC to stay a fixed point.
+        for sep in ['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'] {
+            let input = format!("a{sep}\u{0301}b");
+            let once = sort_key(&input, None).unwrap();
+            assert_eq!(once, "\u{00E1}b");
+            assert_eq!(
+                once,
+                sort_key(&once, None).unwrap(),
+                "sep {sep:?} not idempotent"
+            );
+        }
+    }
+
+    #[test]
     fn test_ml_normalize_basic() {
         let result = ml_normalize("Café Résumé", None, "cldr").unwrap();
         assert_eq!(result, "cafe resume");
@@ -946,10 +1026,23 @@ mod tests {
 
             #[test]
             fn security_clean_idempotent(s in adversarial()) {
+                // #416: assert *raw* equality, not equality-modulo-NFC. The
+                // earlier `nfc(once) == nfc(twice)` form normalized away the very
+                // difference the terminal-NFC fix removes, so it could not catch
+                // the base+invisible+mark idempotency violation.
                 let once = security_clean(&s).unwrap();
                 let twice = security_clean(&once).unwrap();
-                prop_assert_eq!(nfc(&once), nfc(&twice));
+                prop_assert_eq!(once, twice);
             }
+
+            // NOTE: a full `sort_key_idempotent` proptest is deliberately omitted.
+            // sort_key's terminal NFC (#416) fixes the base+invisible+mark case
+            // (pinned deterministically in `test_sort_key_idempotent_on_invisible_separated_mark`),
+            // but a *separate*, pre-existing bug remains: transliterate runs before
+            // fold_case, so a case pair where only the folded form is in the
+            // transliterate table is non-idempotent (e.g. `sort_key("Ჱ")` → `"ჱ"`
+            // → `"he"`). That is tracked in #419; a global sort_key
+            // idempotency proptest would flake on it.
 
             #[test]
             fn strip_obfuscation_idempotent(s in adversarial()) {

@@ -98,8 +98,11 @@ PROVIDED_VIA = {
         "python": "collapse_whitespace(strip_zero_width=True) / get_pipeline()"
     },
 }
-# registration mutates process-global state; encoders are sink-context tools —
-# flag as a deliberate scope decision for Ruby/Node, not blind backfill.
+# Deliberate scope decisions for Ruby/Node — not blind backfill:
+#  * registration mutates process-global state; encoders are sink-context tools;
+#  * dedup_batch / make_cached_transliterator are Python-idiomatic performance
+#    helpers (Node/Ruby use native map / the Lexicon-style handle idiom);
+#  * set_emoji_provider is global-state mutation + an FFI callback (#404).
 SCOPE_REVIEW = {
     "register_lang",
     "register_replacements",
@@ -119,6 +122,9 @@ SCOPE_REVIEW = {
     "display_clean",
     "ml_normalize",
     "normalize_user_input",
+    "dedup_batch",
+    "make_cached_transliterator",
+    "set_emoji_provider",
 }
 
 SURF = {

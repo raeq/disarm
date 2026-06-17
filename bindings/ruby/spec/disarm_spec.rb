@@ -109,6 +109,34 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "key derivation" do
+    it "derives a non-empty search key" do
+      expect(Disarm.search_key("Köln")).not_to be_empty
+    end
+
+    it "derives a non-empty sort key" do
+      expect(Disarm.sort_key("Café")).not_to be_empty
+    end
+
+    it "derives a non-empty catalog key" do
+      expect(Disarm.catalog_key("naïve")).not_to be_empty
+    end
+
+    it "accepts the lang: keyword argument" do
+      expect(Disarm.search_key("Москва", lang: :ru)).not_to be_empty
+      expect(Disarm.sort_key("Москва", lang: "ru")).not_to be_empty
+    end
+
+    it "accepts the strict_iso9: keyword on catalog_key" do
+      expect(Disarm.catalog_key("Москва", lang: :ru, strict_iso9: true)).not_to be_empty
+    end
+
+    it "raises Disarm::InvalidArgument on an unknown lang" do
+      expect { Disarm.search_key("x", lang: :klingon) }
+        .to raise_error(Disarm::InvalidArgument)
+    end
+  end
+
   describe "normalization" do
     it "defaults to NFC and accepts an explicit form" do
       # The default form is :nfc, which leaves the ﬁ ligature intact;

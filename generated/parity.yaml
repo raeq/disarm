@@ -5,8 +5,8 @@ operations:
     names:
       rust: catalog_key
       python: catalog_key
-      ruby: null
-      node: null
+      ruby: catalog_key
+      node: catalogKey
   - id: clear_replacements
     names:
       rust: clear_replacements
@@ -281,8 +281,8 @@ operations:
     names:
       rust: search_key
       python: search_key
-      ruby: null
-      node: null
+      ruby: search_key
+      node: searchKey
   - id: security_clean
     names:
       rust: security_clean
@@ -305,8 +305,8 @@ operations:
     names:
       rust: sort_key
       python: sort_key
-      ruby: null
-      node: null
+      ruby: sort_key
+      node: sortKey
   - id: strip_accents
     names:
       rust: strip_accents

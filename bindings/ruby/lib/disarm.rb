@@ -111,6 +111,27 @@ module Disarm
       translate_errors { _security_clean(text) }
     end
 
+    # Case/accent/script-insensitive search lookup key. `lang:` applies a
+    # language profile for transliteration (e.g. "ru", "uk"); nil means none.
+    # Raises Disarm::InvalidArgument on an unknown lang.
+    def search_key(text, lang: nil)
+      translate_errors { _search_key(text, lang&.to_s) }
+    end
+
+    # Collation sort key (like #search_key, but keeps base accented characters
+    # for correct ordering). `lang:` applies a language profile; nil means none.
+    # Raises Disarm::InvalidArgument on an unknown lang.
+    def sort_key(text, lang: nil)
+      translate_errors { _sort_key(text, lang&.to_s) }
+    end
+
+    # Library catalog deduplication key (search_key plus confusable folding).
+    # `lang:` applies a language profile; `strict_iso9:` selects the ISO 9:1995
+    # Cyrillic scheme. Raises Disarm::InvalidArgument on an unknown lang.
+    def catalog_key(text, lang: nil, strict_iso9: false)
+      translate_errors { _catalog_key(text, lang&.to_s, strict_iso9) }
+    end
+
     # Strip diacritics ("café" → "cafe").
     def strip_accents(text)
       translate_errors { _strip_accents(text) }

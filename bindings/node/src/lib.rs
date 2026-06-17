@@ -281,6 +281,34 @@ pub fn sanitize_filename(
     .map_err(|e| map_err(&e))
 }
 
+// ── Key-derivation presets (fallible, #404) ───────────────────────────────────
+
+/// Case/accent/script-insensitive search lookup key. `lang` selects the
+/// transliteration table (omit for none).
+#[napi]
+pub fn search_key(text: String, lang: Option<String>) -> Result<String, NapiError> {
+    api::search_key(&text, lang.as_deref()).map_err(|e| map_err(&e))
+}
+
+/// Collation sort key (like `searchKey` but preserves base accented characters
+/// for correct ordering). `lang` selects the transliteration table.
+#[napi]
+pub fn sort_key(text: String, lang: Option<String>) -> Result<String, NapiError> {
+    api::sort_key(&text, lang.as_deref()).map_err(|e| map_err(&e))
+}
+
+/// Library catalog deduplication key (like `searchKey` plus confusable folding).
+/// `lang` selects the transliteration table; `strict_iso9` picks the ISO 9:1995
+/// Cyrillic scheme.
+#[napi]
+pub fn catalog_key(
+    text: String,
+    lang: Option<String>,
+    strict_iso9: bool,
+) -> Result<String, NapiError> {
+    api::catalog_key(&text, lang.as_deref(), strict_iso9).map_err(|e| map_err(&e))
+}
+
 // ── Grapheme clusters ─────────────────────────────────────────────────────────
 
 #[napi]

@@ -18,9 +18,8 @@ authors:
 identifiers:
   - type: doi
     value: "10.5281/zenodo.20618323"
-    description: "XMR metric and broad-sample adversarial-defence benchmark (v2 technical note)"
+    description: "XMR metric and broad-sample adversarial-defense benchmark (v2 technical note)"
 version: "0.11.0"
-date-released: "2026-06-17"
 license: MIT
 repository-code: "https://github.com/raeq/disarm"
 url: "https://docs.disarm.dev"

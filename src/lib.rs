@@ -123,6 +123,7 @@ pub(crate) mod encoding;
 pub(crate) mod filename;
 pub(crate) mod grapheme;
 pub(crate) mod hostname;
+pub(crate) mod invisibles;
 pub(crate) mod limits;
 pub(crate) mod log_injection;
 pub(crate) mod normalize;

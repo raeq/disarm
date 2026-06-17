@@ -341,8 +341,10 @@ pub fn terminal_width(text: String, ambiguous_wide: bool) -> i64 {
 
 // ── Hostname / script analysis ────────────────────────────────────────────────
 
-/// Whether the hostname looks like a mixed-script / confusable IDN spoof. A
-/// `false` asserts nothing was *found*, not that the host is safe.
+/// Whether the hostname looks like a mixed-script / confusable / bidi-reorder
+/// IDN spoof. Flags a single mixed-script label, a Latin confusable, or a
+/// bidi-direction conflict (`hasBidiConflict`, the "BiDi Swap" precondition,
+/// #412). A `false` asserts nothing was *found*, not that the host is safe.
 #[napi]
 pub fn is_suspicious_hostname(host: String) -> bool {
     api::is_suspicious_hostname(&host).suspicious
@@ -362,6 +364,15 @@ pub fn detect_scripts(text: String) -> Vec<String> {
 #[napi]
 pub fn is_mixed_script(text: String) -> bool {
     api::is_mixed_script(&text)
+}
+
+/// Whether `text` mixes strong left-to-right and strong right-to-left characters
+/// — the precondition for Bidi display-reordering ("BiDi Swap"). Fires on the
+/// real letters (no `U+202x` override); a `false` result is not a safety
+/// guarantee.
+#[napi]
+pub fn has_bidi_conflict(text: String) -> bool {
+    api::has_bidi_conflict(&text)
 }
 
 /// How `lang: "auto"` detection resolves `text`.
@@ -463,7 +474,7 @@ pub fn list_context_langs() -> Vec<String> {
 /// One reason a token is anomalous (a single finding).
 #[napi(object)]
 pub struct Finding {
-    /// Which branch fired: `"invisible"` | `"bidi"` | `"zalgo"` | `"mixed_script"` | `"leet"` | `"segmentation"`.
+    /// Which branch fired: `"invisible"` | `"bidi"` | `"zalgo"` | `"mixed_script"` | `"bidi_mixed"` | `"leet"` | `"segmentation"`.
     pub kind: String,
     /// The offending whitespace token, as it appeared.
     pub token: String,

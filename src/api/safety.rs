@@ -155,6 +155,21 @@ pub fn is_mixed_script(text: &str) -> bool {
     crate::scripts::is_mixed_script(text)
 }
 
+/// True if `text` contains both strong left-to-right and strong right-to-left
+/// characters — the precondition for Unicode Bidi display-reordering (UAX #9),
+/// and the structural signal behind "BiDi Swap"-style spoofs.
+///
+/// Unlike a bidi-override (`U+202x`) check, this fires on the *real letters*
+/// (e.g. an LTR brand label beside an RTL domain, `varonis.com.ו.קום`), where no
+/// override is present and override-stripping is a no-op. Latin/Cyrillic/Greek/
+/// CJK/… are left-to-right; Hebrew/Arabic/Syriac/Thaana/N'Ko are right-to-left;
+/// digits, punctuation and combining marks are neutral and never create a
+/// conflict on their own. A `false` result is **not** a safety guarantee.
+#[must_use]
+pub fn has_bidi_conflict(text: &str) -> bool {
+    crate::scripts::has_bidi_conflict(text)
+}
+
 /// How disarm's auto-language detection resolved a string — returned by
 /// [`inspect_auto_lang`] for diagnostics / explainability.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,6 +221,18 @@ pub struct HostnameAnalysis {
     pub mixed_script: bool,
     /// Whether any label contains a character confusable with a Latin one.
     pub has_confusables: bool,
+    /// Whether the decoded hostname mixes strong left-to-right and strong
+    /// right-to-left characters — the precondition for Bidi display-reordering
+    /// ("BiDi Swap"). This is folded into [`suspicious`](Self::suspicious).
+    pub bidi_conflict: bool,
+    /// Whether the labels resolve to more than one distinct script (Common /
+    /// Inherited excluded). Broader and noisier than [`bidi_conflict`](Self::bidi_conflict)
+    /// — it fires on benign IDN-ccTLD patterns like `google.рф` — so it is
+    /// **not** folded into [`suspicious`](Self::suspicious); exposed for policy.
+    pub cross_label_script: bool,
+    /// Per-label resolved scripts, left to right (Common / Inherited excluded),
+    /// so a caller can apply position-aware policy without re-parsing.
+    pub label_scripts: Vec<Vec<String>>,
     /// The Latin-normalized (canonical) form of the hostname.
     pub canonical: String,
 }
@@ -218,8 +245,9 @@ pub struct HostnameAnalysis {
 /// `xn--` (ACE) labels are decoded to their Unicode form via UTS#46 before
 /// analysis (#63); a malformed ACE label fails closed (suspicious). A hostname
 /// is flagged when any single label is mixed-script (conservative, #254), when
-/// any label contains a Latin-confusable character, or when an ACE label fails
-/// to decode.
+/// any label contains a Latin-confusable character, when the decoded hostname
+/// mixes strong LTR and strong RTL characters (`bidi_conflict`, the "BiDi Swap"
+/// precondition, #412), or when an ACE label fails to decode.
 ///
 /// Infallible: the analysis runs against the fixed `"latin"` target script,
 /// which is always supported.
@@ -237,6 +265,9 @@ pub fn is_suspicious_hostname(hostname: &str) -> HostnameAnalysis {
         scripts: core.scripts,
         mixed_script: core.mixed_script,
         has_confusables: core.has_confusables,
+        bidi_conflict: core.bidi_conflict,
+        cross_label_script: core.cross_label_script,
+        label_scripts: core.label_scripts,
         canonical: core.canonical,
     }
 }

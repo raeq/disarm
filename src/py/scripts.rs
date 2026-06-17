@@ -20,6 +20,13 @@ pub fn _is_mixed_script(text: &str) -> bool {
     crate::scripts::is_mixed_script(text)
 }
 
+/// `has_bidi_conflict(text) -> bool`
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _has_bidi_conflict(text: &str) -> bool {
+    crate::scripts::has_bidi_conflict(text)
+}
+
 /// `inspect_auto_lang(text) -> dict` with keys `script`, `chosen_lang`,
 /// `reason`, `discriminators_hit`.
 #[pyfunction]

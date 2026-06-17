@@ -35,6 +35,12 @@ See [Language Detection](../user-guide/language-detection.md#inspecting-detectio
 
 ---
 
+## has_bidi_conflict
+
+::: disarm.has_bidi_conflict
+
+---
+
 ## is_confusable
 
 ::: disarm.is_confusable

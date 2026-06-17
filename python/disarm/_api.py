@@ -43,6 +43,7 @@ from disarm._core import (
     # Anomaly detection (#389)
     _has_anomalies,
     _has_anomalies_lex,
+    _has_bidi_conflict,
     _inspect_anomalies,
     _inspect_anomalies_lex,
     _inspect_auto_lang,
@@ -1159,19 +1160,28 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
     Returns ``(suspicious, analysis)`` where ``analysis`` is a
     ``HostnameAnalysis`` with attributes:
 
-    - ``suspicious``: bool — True if a problem was detected (mixed-script or a
-      bundled-table confusable).
+    - ``suspicious``: bool — True if a problem was detected (mixed-script, a
+      bundled-table confusable, or a bidi-direction conflict).
     - ``scripts``: list[str] — Unicode scripts found across all labels.
     - ``mixed_script``: bool — True if any single label contains more than one script.
     - ``has_confusables``: bool — True if confusable homoglyphs found.
+    - ``bidi_conflict``: bool — True if the decoded hostname mixes strong
+      left-to-right and strong right-to-left characters (the "BiDi Swap" reorder
+      precondition). Folded into ``suspicious``.
+    - ``cross_label_script``: bool — True if the labels span more than one
+      distinct script. Broader and noisier than ``bidi_conflict`` (it fires on
+      benign IDN ccTLDs like ``google.рф``), so it is **not** folded into
+      ``suspicious``; exposed for caller policy.
+    - ``label_scripts``: list[list[str]] — per-label resolved scripts, left to right.
     - ``canonical``: str — Latin-normalized form of the hostname.
 
     A hostname is flagged suspicious if any single label is mixed-script
-    (draws on more than one Unicode script, excluding Common/Inherited) or
-    contains confusable homoglyphs. The mixed-script rule is conservative and
-    fails closed: it flags benign combinations such as Latin+CJK as well as
-    spoofing ones, so a caller wanting a more permissive policy can inspect the
-    ``mixed_script`` and ``scripts`` fields and decide for itself.
+    (draws on more than one Unicode script, excluding Common/Inherited),
+    contains confusable homoglyphs, or has a bidi-direction conflict
+    (``bidi_conflict``). The mixed-script rule is conservative and fails closed:
+    it flags benign combinations such as Latin+CJK as well as spoofing ones, so a
+    caller wanting a more permissive policy can inspect the ``mixed_script`` and
+    ``scripts`` fields and decide for itself.
 
     **A ``False`` (not-suspicious) result is not a safety guarantee.** It means
     only that no mixed-script label and no confusable *from the bundled TR39
@@ -1597,6 +1607,34 @@ def is_mixed_script(text: str) -> bool:
         True
     """
     return _is_mixed_script(text)
+
+
+def has_bidi_conflict(text: str) -> bool:
+    """True if text mixes strong left-to-right and strong right-to-left characters.
+
+    This is the precondition for Unicode Bidi display-reordering (UAX #9) — the
+    structural signal behind "BiDi Swap"-style spoofs, where an LTR brand label
+    sits beside an RTL domain (e.g. ``"varonis.com.ו.קום"``). Unlike a
+    bidi-override (``U+202x``) check, it fires on the *real letters*: Latin /
+    Cyrillic / Greek / CJK are left-to-right; Hebrew / Arabic / Syriac / Thaana /
+    N'Ko are right-to-left; digits, punctuation and combining marks are neutral
+    and never create a conflict on their own.
+
+    A ``False`` result is **not** a safety guarantee.
+
+    Args:
+        text: Input string.
+
+    Returns:
+        True if both a strong-LTR and a strong-RTL character are present.
+
+    Examples:
+        >>> has_bidi_conflict("hello")
+        False
+        >>> has_bidi_conflict("helloא")  # Latin + Hebrew
+        True
+    """
+    return _has_bidi_conflict(text)
 
 
 def is_confusable(

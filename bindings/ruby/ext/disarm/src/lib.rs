@@ -316,6 +316,14 @@ fn is_mixed_script(text: String) -> bool {
     api::is_mixed_script(&text)
 }
 
+/// `Disarm._has_bidi_conflict?(text)` — whether `text` mixes strong left-to-right
+/// and strong right-to-left characters (the "BiDi Swap" reorder precondition,
+/// #412). Fires on the real letters, no `U+202x` override; `false` is not a
+/// safety guarantee.
+fn has_bidi_conflict(text: String) -> bool {
+    api::has_bidi_conflict(&text)
+}
+
 /// `Disarm._inspect_auto_lang(text)` — `[script, chosen_lang, reason,
 /// discriminators_hit]` (the Ruby layer maps it to a hash). `script`/`chosen_lang`
 /// are nil when nothing was detected.
@@ -538,6 +546,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_find_untranslatable", function!(find_untranslatable, 3))?;
     module.define_singleton_method("_detect_scripts", function!(detect_scripts, 1))?;
     module.define_singleton_method("_is_mixed_script?", function!(is_mixed_script, 1))?;
+    module.define_singleton_method("_has_bidi_conflict?", function!(has_bidi_conflict, 1))?;
     module.define_singleton_method("_inspect_auto_lang", function!(inspect_auto_lang, 1))?;
 
     // Metadata introspection (#404 phase 3 parity backfill).

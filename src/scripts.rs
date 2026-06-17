@@ -301,6 +301,70 @@ pub(crate) fn detect_char_script(ch: char) -> &'static str {
     }
 }
 
+/// The scripts whose letters are strong **right-to-left** under the Unicode
+/// Bidirectional Algorithm (UAX #9): Hebrew/Syriac/Thaana/N'Ko are class `R`,
+/// Arabic is `AL`. For detecting a *direction conflict* the distinction between
+/// `R` and `AL` does not matter — both reorder against left-to-right text — so
+/// they are folded into a single `Rtl`.
+const RTL_SCRIPTS: &[&str] = &["Hebrew", "Arabic", "Syriac", "Thaana", "NKo"];
+
+/// Strong bidirectional direction of a character, for direction-conflict
+/// detection.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum StrongDir {
+    /// Strong left-to-right (UAX #9 `L`): letters of Latin, Cyrillic, Greek,
+    /// CJK, Indic, … — every named script that is not strong-RTL.
+    Ltr,
+    /// Strong right-to-left (UAX #9 `R`/`AL`): letters of [`RTL_SCRIPTS`].
+    Rtl,
+}
+
+/// Resolve a character's strong bidi direction, or `None` for a bidi-neutral
+/// character (digits and numerics — UAX #9 `EN`/`AN` — plus all `Common` and
+/// `Inherited` punctuation, whitespace and combining marks).
+///
+/// This is derived from disarm's own [`detect_char_script`] ranges — it is
+/// *script-level*, a deliberate, conservative approximation of the per-codepoint
+/// UAX #9 class and needs no external bidi table. Numerics are excluded first so
+/// that, e.g., Arabic-Indic digits (which live in the Arabic block but are bidi
+/// class `AN`) do not by themselves create a conflict.
+pub(crate) fn strong_dir(ch: char) -> Option<StrongDir> {
+    if ch.is_numeric() {
+        return None;
+    }
+    match detect_char_script(ch) {
+        "Common" | "Inherited" => None,
+        s if RTL_SCRIPTS.contains(&s) => Some(StrongDir::Rtl),
+        _ => Some(StrongDir::Ltr),
+    }
+}
+
+/// True iff `text` contains at least one strong-left-to-right character **and**
+/// at least one strong-right-to-left character — the precondition for Unicode
+/// Bidi display-reordering (UAX #9).
+///
+/// This is the structural signal behind "BiDi Swap"-style spoofs, where an LTR
+/// brand label sits beside an RTL domain (e.g. `varonis.com.ו.קום`): the
+/// reordering happens in the *real letters*, with **no** U+202x override
+/// involved, so [`crate::whitespace`]-style override stripping is a no-op on it.
+/// A `false` result is not a safety guarantee — it only means no strong-LTR and
+/// strong-RTL letters coexist in this string.
+pub(crate) fn has_bidi_conflict(text: &str) -> bool {
+    let mut ltr = false;
+    let mut rtl = false;
+    for ch in text.chars() {
+        match strong_dir(ch) {
+            Some(StrongDir::Ltr) => ltr = true,
+            Some(StrongDir::Rtl) => rtl = true,
+            None => continue,
+        }
+        if ltr && rtl {
+            return true;
+        }
+    }
+    false
+}
+
 /// Map a detected script name to a default language code (ISO 639-1 where one
 /// exists, otherwise ISO 639-3 — e.g. `chr`, `cop`, `vai`, `tzm`).
 ///
@@ -1284,5 +1348,36 @@ mod tests {
     fn test_discriminate_latin_ascii_only() {
         // Pure ASCII — returns None
         assert_eq!(resolve_auto_lang("hello"), None);
+    }
+
+    #[test]
+    fn strong_dir_classifies_ltr_rtl_and_neutral() {
+        // Strong LTR: Latin, Cyrillic, Greek, CJK letters.
+        for ch in ['a', 'Z', 'д', 'Ω', '中', '한'] {
+            assert_eq!(strong_dir(ch), Some(StrongDir::Ltr), "{ch:?}");
+        }
+        // Strong RTL: Hebrew, Arabic, Syriac, Thaana, N'Ko letters.
+        for ch in ['\u{05D5}', '\u{0627}', '\u{0710}', '\u{0780}', '\u{07CA}'] {
+            assert_eq!(strong_dir(ch), Some(StrongDir::Rtl), "{ch:?}");
+        }
+        // Neutral: ASCII digits, Arabic-Indic digits (AN), punctuation, space, mark.
+        for ch in ['0', '\u{0664}', '.', '-', ' ', '\u{0301}'] {
+            assert_eq!(strong_dir(ch), None, "{ch:?}");
+        }
+    }
+
+    #[test]
+    fn has_bidi_conflict_only_on_ltr_plus_rtl() {
+        // LTR + RTL letters => conflict.
+        assert!(has_bidi_conflict("varonis\u{05D5}")); // Latin + Hebrew vav
+        assert!(has_bidi_conflict("\u{05D5}.\u{05E7}\u{05D5}\u{05DD}com")); // Hebrew + Latin
+        assert!(has_bidi_conflict("\u{0430}\u{05D5}")); // Cyrillic + Hebrew (no Latin)
+                                                        // Single-direction strings => no conflict.
+        assert!(!has_bidi_conflict("varonis.com")); // all LTR
+        assert!(!has_bidi_conflict("\u{05D0}\u{05EA}\u{05E8}")); // all Hebrew (RTL)
+        assert!(!has_bidi_conflict("google\u{0440}\u{0444}")); // Latin + Cyrillic, both LTR
+                                                               // Digits never create a conflict on their own.
+        assert!(!has_bidi_conflict("\u{05D5}443")); // Hebrew + ASCII digits
+        assert!(!has_bidi_conflict("\u{05D5}\u{0664}")); // Hebrew + Arabic-Indic digit (AN)
     }
 }

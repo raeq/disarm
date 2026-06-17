@@ -62,6 +62,10 @@ pub enum AnomalyKind {
     Zalgo,
     /// One token mixing Latin with Cyrillic or Greek (a Latin homoglyph).
     MixedScript,
+    /// One token mixing strong left-to-right and strong right-to-left *letters*
+    /// (no `U+202x` override — that is [`Bidi`](Self::Bidi)), which can visually
+    /// reorder under the Unicode Bidi Algorithm — the "BiDi Swap" precondition.
+    BidiMixed,
     /// A letter-for-symbol substitution decoding to a common word (`fr33` -> `free`).
     Leet,
     /// Dense separators splitting single letters into a real word (`v.i.a.g.r.a`).
@@ -77,6 +81,7 @@ impl AnomalyKind {
             AnomalyKind::Bidi => "bidi",
             AnomalyKind::Zalgo => "zalgo",
             AnomalyKind::MixedScript => "mixed_script",
+            AnomalyKind::BidiMixed => "bidi_mixed",
             AnomalyKind::Leet => "leet",
             AnomalyKind::Segmentation => "segmentation",
         }
@@ -120,6 +125,10 @@ impl Finding {
                 )
             }
             AnomalyKind::MixedScript => format!("{:?} mixes {}", self.token, self.detail),
+            AnomalyKind::BidiMixed => format!(
+                "{:?} mixes left-to-right and right-to-left letters ({}), which can visually reorder",
+                self.token, self.detail
+            ),
             AnomalyKind::Leet => {
                 format!("{:?} decodes to the word {:?}", self.token, self.detail)
             }
@@ -382,6 +391,16 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         let core_lower = core.to_lowercase();
         if core.chars().count() >= 2 && !UNITS.contains(&core_lower.as_str()) {
             let scripts = detect_scripts(core);
+            // Direction conflict (#412): a single token mixing strong-LTR and
+            // strong-RTL *letters* (no U+202x override — that is the `Bidi` kind)
+            // can visually reorder under the Bidi Algorithm ("BiDi Swap"). This is
+            // the precise, reorder-capable subset of mixed-script, and it also
+            // catches non-Latin RTL mixes (e.g. Cyrillic+Hebrew) the Latin-anchored
+            // `mixed_script` rule below cannot see. Checked first so the more
+            // specific kind wins.
+            if crate::scripts::has_bidi_conflict(core) {
+                return Some(mk(AnomalyKind::BidiMixed, scripts.join(" and ")));
+            }
             let has_latin = scripts.contains(&"Latin");
             // Flag Latin mixed with ANY non-Latin, non-CJK script (Cyrillic, Greek,
             // Armenian, Cherokee, Coptic, …). CJK (Han/Kana/Hangul/Bopomofo) is exempt
@@ -681,6 +700,38 @@ mod tests {
         assert!(!has_anomalies("漢字 mixed with text", &l)); // Han + Latin (separate tokens)
         assert!(!has_anomalies("kΩ µF resistor", &l)); // legitimate unit symbols
         assert!(!has_anomalies("Москва Россия", &l)); // pure Cyrillic
+    }
+
+    // ── bidi_mixed (#412) ─────────────────────────────────────────────────────
+
+    #[test]
+    fn bidi_mixed_fires_on_ltr_plus_rtl_token() {
+        let l = lex(&[]);
+        // Latin + Hebrew in one token reorders under the Bidi Algorithm. Reported
+        // as the precise `bidi_mixed` kind, not the generic `mixed_script`.
+        let r = inspect_anomalies("varonis\u{05D5}", &l);
+        assert!(r.anomalous);
+        assert_eq!(r.kinds, vec![AnomalyKind::BidiMixed]);
+    }
+
+    #[test]
+    fn bidi_mixed_catches_non_latin_rtl_mix_missed_by_mixed_script() {
+        let l = lex(&[]);
+        // Cyrillic + Hebrew: no Latin, so the Latin-anchored mixed_script rule
+        // cannot see it — but it is still a direction conflict.
+        let r = inspect_anomalies("\u{0430}\u{05D5}\u{05DD}", &l);
+        assert!(r.anomalous);
+        assert_eq!(r.kinds, vec![AnomalyKind::BidiMixed]);
+    }
+
+    #[test]
+    fn bidi_mixed_does_not_fire_on_same_direction_mix() {
+        let l = lex(&[]);
+        // Latin + Cyrillic are both LTR — no direction conflict, still mixed_script.
+        let r = inspect_anomalies("payp\u{0430}l", &l);
+        assert_eq!(r.kinds, vec![AnomalyKind::MixedScript]);
+        // A single-direction RTL token is clean.
+        assert!(!has_anomalies("\u{05D0}\u{05EA}\u{05E8}", &l)); // all Hebrew
     }
 
     // ── leet ────────────────────────────────────────────────────────────────

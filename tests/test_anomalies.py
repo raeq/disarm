@@ -172,3 +172,26 @@ def test_lexicon_is_case_insensitive_on_ingest():
     assert has_anomalies("v.i.a.g.r.a", {"VIAGRA"}) is True  # segmentation, raw set
     assert has_anomalies("get fr33 now", Lexicon(["Free"])) is True  # handle path
     assert inspect_anomalies("get fr33", {"Free"}).anomalous is True
+
+
+# --- bidi_mixed direction-conflict kind (#412) ---
+
+
+def test_bidi_mixed_fires_on_ltr_plus_rtl_token():
+    # Latin + Hebrew in one token can visually reorder; reported as bidi_mixed,
+    # the precise kind (not the generic mixed_script).
+    r = inspect_anomalies("varonisו", set())
+    assert r.anomalous
+    assert r.kinds == ["bidi_mixed"]
+
+
+def test_bidi_mixed_catches_non_latin_rtl_mix():
+    # Cyrillic + Hebrew: the Latin-anchored mixed_script rule misses this, but
+    # the direction conflict is still caught.
+    assert has_anomalies("аום", set())
+    assert inspect_anomalies("аום", set()).kinds == ["bidi_mixed"]
+
+
+def test_bidi_mixed_quiet_on_same_direction():
+    # Latin + Cyrillic are both LTR — still mixed_script, not bidi_mixed.
+    assert inspect_anomalies("paypаl", set()).kinds == ["mixed_script"]

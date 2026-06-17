@@ -383,6 +383,16 @@ export function isMixedScript(text: string): boolean {
   return native.isMixedScript(text)
 }
 
+/**
+ * Whether `text` mixes strong left-to-right and strong right-to-left characters
+ * — the precondition for Bidi display-reordering ("BiDi Swap", #412). Fires on
+ * the real letters (no `U+202x` override); a `false` result is not a safety
+ * guarantee.
+ */
+export function hasBidiConflict(text: string): boolean {
+  return native.hasBidiConflict(text)
+}
+
 /** Explain how `lang: 'auto'` detection resolves `text`. */
 export function inspectAutoLang(text: string): AutoLangInspection {
   return native.inspectAutoLang(text)

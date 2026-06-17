@@ -18,6 +18,20 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Bidi-direction conflict detection (`has_bidi_conflict`, #412).** A new
+  primitive that flags text mixing strong left-to-right and strong right-to-left
+  characters — the precondition for Unicode Bidi display-reordering and the
+  structural signal behind "BiDi Swap"-style spoofs (an LTR brand label stacked
+  on an RTL domain, `varonis.com.ו.קום`). Unlike a `U+202x` override check, it
+  fires on the *real letters*. Derived from disarm's own script ranges (no new
+  table); exposed across the Rust core (`disarm::api::has_bidi_conflict`) and the
+  Python (`has_bidi_conflict`, `Text.has_bidi_conflict`), Node (`hasBidiConflict`)
+  and Ruby (`Disarm.bidi_conflict?`) bindings.
+- **`HostnameAnalysis` direction fields (#412).** The Python `HostnameAnalysis`
+  gains `bidi_conflict` (folded into `suspicious`), `cross_label_script` (the
+  broader, non-folded cross-label fact), and `label_scripts` (per-label resolved
+  scripts, left to right) for position-aware caller policy.
+
 - **Anomaly detection: `has_anomalies` / `inspect_anomalies` (#389).** An
   out-of-place-character detector: it flags text disguising a real word via a
   cross-script homoglyph, leet, single-letter segmentation, a zero-width / bidi
@@ -108,6 +122,20 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   core's `Transliterate` builder via a generalized `_transliterate_opts` shim.
 
 ### Changed
+
+- **`is_suspicious_hostname` and `has_anomalies` now flag bidi-direction
+  conflicts (#412).** These detectors strengthen as disarm grows. A hostname that
+  mixes strong-LTR and strong-RTL characters (the "BiDi Swap" shape, e.g.
+  `varonis.com.ו.קום`) is now flagged `suspicious` via the new `bidi_conflict`
+  signal — previously it slipped past `mixed_script` (which is per-label) and was
+  only caught incidentally, if at all. The anomaly detector gains a `bidi_mixed`
+  finding kind for a token mixing strong-LTR and strong-RTL letters: it is the
+  precise, reorder-capable subset of `mixed_script` and additionally catches
+  non-Latin RTL mixes (e.g. Cyrillic+Hebrew) the Latin-anchored `mixed_script`
+  rule could not see. **Behaviour change:** some inputs that previously reported
+  `mixed_script` (Latin+Hebrew/Arabic) now report `bidi_mixed`, and some that
+  reported clean now flag. `bidi_conflict=False` / no `bidi_mixed` is not a
+  safety guarantee.
 
 - **`sort_key` now preserves base accented characters (#99.1).** `sort_key` is
   documented as a *collation* key — accented forms should stay distinct so the

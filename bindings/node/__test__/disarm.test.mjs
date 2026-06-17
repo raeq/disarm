@@ -191,9 +191,18 @@ describe('script analysis', () => {
     expect(disarm.isMixedScript('aМ')).toBe(true)
     expect(disarm.isMixedScript('abc')).toBe(false)
   })
+  test('hasBidiConflict (#412)', () => {
+    expect(disarm.hasBidiConflict('helloא')).toBe(true) // Latin + Hebrew
+    expect(disarm.hasBidiConflict('аום')).toBe(true) // Cyrillic + Hebrew
+    expect(disarm.hasBidiConflict('hello')).toBe(false) // all LTR
+    expect(disarm.hasBidiConflict('אתר')).toBe(false) // all RTL
+    expect(disarm.hasBidiConflict('ו443')).toBe(false) // digits are neutral
+  })
   test('isSuspiciousHostname', () => {
     expect(disarm.isSuspiciousHostname('pаypal.com')).toBe(true)
     expect(disarm.isSuspiciousHostname('example.com')).toBe(false)
+    // #412: a BiDi-Swap host (Latin sub on a Hebrew domain) is now flagged.
+    expect(disarm.isSuspiciousHostname('varonis.com.ו.קום')).toBe(true)
   })
   test('inspectAutoLang', () => {
     const info = disarm.inspectAutoLang('Москва')
@@ -266,6 +275,13 @@ describe('anomaly detection', () => {
     expect(typeof f.end).toBe('number')
     const slice = Buffer.from(input, 'utf8').slice(f.start, f.end).toString('utf8')
     expect(slice).toBe(f.token)
+  })
+
+  test('flags a bidi-direction conflict as bidi_mixed (#412)', () => {
+    // Latin + Hebrew in one token can visually reorder.
+    expect(disarm.inspectAnomalies('varonisו', []).kinds).toEqual(['bidi_mixed'])
+    // Cyrillic + Hebrew: missed by the Latin-anchored mixed_script rule.
+    expect(disarm.inspectAnomalies('аום', []).kinds).toEqual(['bidi_mixed'])
   })
 
   test('defaults the lexicon to empty (no throw without one)', () => {

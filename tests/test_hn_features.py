@@ -280,3 +280,33 @@ class TestFilenameNFC:
         # Should produce the same result as NFC input
         nfc_name = "caf\u00e9.txt"
         assert sanitize_filename(nfc_name) == result
+
+
+class TestBidiDirectionConflict:
+    """#412: bidi-direction conflict fields on HostnameAnalysis."""
+
+    def test_bidi_swap_hostname(self):
+        # "varonis.com.ו.קום" — Latin subdomain on a Hebrew (RTL) domain.
+        suspicious, d = is_suspicious_hostname("varonis.com.ו.קום")
+        assert suspicious
+        assert d.bidi_conflict
+        assert d.cross_label_script
+        assert not d.mixed_script  # each label is single-script
+        assert d.label_scripts[0] == ["Latin"]
+        assert d.label_scripts[3] == ["Hebrew"]
+
+    def test_benign_idn_cctld_not_direction_conflict(self):
+        # google.рф — Latin under a Cyrillic ccTLD; both LTR, no reorder risk.
+        _, d = is_suspicious_hostname("google.рф")
+        assert not d.bidi_conflict
+        assert d.cross_label_script  # broader fact, not folded into suspicious
+
+    def test_all_rtl_no_conflict(self):
+        _, d = is_suspicious_hostname("אתר.קום")
+        assert not d.bidi_conflict
+        assert not d.cross_label_script
+
+    def test_ascii_clean(self):
+        suspicious, d = is_suspicious_hostname("example.com")
+        assert not suspicious
+        assert not d.bidi_conflict and not d.cross_label_script

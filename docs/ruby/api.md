@@ -335,14 +335,18 @@ Disarm.find_untranslatable("café")                 # => []
 
 ## Script analysis
 
-### `Disarm.detect_scripts(text)` · `Disarm.mixed_script?(text)`
+### `Disarm.detect_scripts(text)` · `Disarm.mixed_script?(text)` · `Disarm.bidi_conflict?(text)`
 
 The Unicode scripts present (first-appearance order, Common/Inherited excluded),
-and whether more than one script is present.
+whether more than one script is present, and whether the text mixes strong
+left-to-right and strong right-to-left characters — the "BiDi Swap"
+display-reorder precondition (fires on real letters, no `U+202x` override).
 
 ```ruby
 Disarm.detect_scripts("aМ")                        # => ["Latin", "Cyrillic"]
 Disarm.mixed_script?("aМ")                         # => true
+Disarm.bidi_conflict?("helloא")                    # => true  (Latin + Hebrew)
+Disarm.bidi_conflict?("helloМ")                    # => false (both LTR)
 ```
 
 ### `Disarm.inspect_auto_lang(text)`

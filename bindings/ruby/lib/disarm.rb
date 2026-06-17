@@ -142,8 +142,10 @@ module Disarm
       translate_errors { _fold_case(text) }
     end
 
-    # Whether the hostname looks like a mixed-script / confusable IDN spoof. A
-    # false result asserts nothing was *found*, not that the host is safe.
+    # Whether the hostname looks like a mixed-script / confusable / bidi-reorder
+    # IDN spoof. Flags a mixed-script label, a Latin confusable, or a
+    # bidi-direction conflict (see #bidi_conflict?, the "BiDi Swap" precondition).
+    # A false result asserts nothing was *found*, not that the host is safe.
     def suspicious_hostname?(host)
       translate_errors { _suspicious_hostname?(host) }
     end
@@ -259,6 +261,14 @@ module Disarm
     # Whether `text` mixes characters from more than one script.
     def mixed_script?(text)
       translate_errors { _is_mixed_script?(text) }
+    end
+
+    # Whether `text` mixes strong left-to-right and strong right-to-left
+    # characters — the precondition for Bidi display-reordering (UAX #9) and the
+    # structural signal behind "BiDi Swap"-style spoofs. Fires on the real
+    # letters (no U+202x override). A false result is not a safety guarantee.
+    def bidi_conflict?(text)
+      translate_errors { _has_bidi_conflict?(text) }
     end
 
     # Explain how `lang: "auto"` detection resolves `text`: a hash with

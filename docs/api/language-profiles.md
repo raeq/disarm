@@ -22,6 +22,75 @@ Returns both built-in and user-registered language codes, sorted alphabetically.
 
 ---
 
+## lang_info
+
+::: disarm.lang_info
+
+Returns a `LangMeta` dict with `name`, `script`, `region`, and `context` keys for
+a language code. The `context` field is one of `"none"`, `"partial"`, or `"full"`,
+indicating how much the language benefits from `context=True` in `transliterate()`.
+Raises `KeyError` if the code is not recognized.
+
+### Example
+
+```python
+from disarm import lang_info
+
+meta = lang_info("de")
+assert meta["name"] == 'German'
+assert meta["script"] == 'Latin'
+assert meta["region"] == 'European'
+assert meta["context"] == 'none'
+
+assert lang_info("cop")["script"] == 'Coptic'
+```
+
+---
+
+## script_info
+
+::: disarm.script_info
+
+Returns a `ScriptMeta` dict with `name`, `default_lang`, `example`, and
+`context_aware` keys for a Unicode script. Accepts either a script name string or a
+`Script` enum value. Raises `KeyError` if the script is not recognized.
+
+### Example
+
+```python
+from disarm import Script, script_info
+
+meta = script_info("Coptic")
+assert meta["name"] == 'Coptic'
+assert meta["default_lang"] == 'cop'
+assert meta["context_aware"] is False
+
+# A Script enum value works too
+assert script_info(Script.THAI)["name"] == 'Thai'
+```
+
+---
+
+## list_context_langs
+
+::: disarm.list_context_langs
+
+Returns the sorted list of language codes whose `lang_info()` metadata has a
+`context` field other than `"none"` — i.e. the languages that benefit from
+`context=True` in `transliterate()`.
+
+### Example
+
+```python
+from disarm import list_context_langs
+
+assert list_context_langs() == ['ar', 'fa', 'he']
+assert "ar" in list_context_langs()
+assert "de" not in list_context_langs()
+```
+
+---
+
 ## register_lang
 
 ::: disarm.register_lang

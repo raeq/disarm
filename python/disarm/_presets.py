@@ -35,10 +35,10 @@ def security_clean(text: str) -> str:
     """Security-focused text canonicalization.
 
     Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
-    collapse_whitespace → cap combining marks (anti-zalgo, #429) → NFC →
-    confusables → NFC (the confusable fold is sandwiched between two NFC passes
-    so TR39 skeletoning is normalization-stable and the preset is idempotent —
-    #416)
+    strip_control → strip_zero_width → collapse_whitespace → cap combining marks
+    (anti-zalgo, #429) → NFC → confusables → NFC (the confusable fold is
+    sandwiched between two NFC passes so TR39 skeletoning is normalization-stable
+    and the preset is idempotent — #416)
 
     Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
     dangerous bidi overrides and soft hyphens, then normalizes whitespace
@@ -469,9 +469,14 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         # #413: strip Unicode Tags / variation selectors / CGJ / noncharacters /
         # PUA (keeping valid emoji flags). "comparison" = strip PUA, strip all VS.
         ("strip_invisibles", "comparison"),
+        # #433: control/zero-width stripping is now explicit (was fused into
+        # collapse_whitespace); collapse folds whitespace only. Runs before
+        # strip_zalgo so a stripped invisible between marks cannot split a run.
+        ("strip_control", None),
+        ("strip_zero_width", None),
         ("collapse_whitespace", None),
-        # #429: cap combining marks at 2 per base (anti-zalgo). After
-        # collapse_whitespace so a stripped control/zero-width between marks cannot
+        # #429: cap combining marks at 2 per base (anti-zalgo). After the
+        # control/zero-width strip so a stripped invisible between marks cannot
         # split a mark run and hide the count (#121).
         ("strip_zalgo", None),
         # NFC sandwich around confusables (#416): the strips can leave a base next
@@ -488,6 +493,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("demojize", "cldr"),
         ("strip_accents", None),
         ("fold_case", None),
+        # #433: explicit strip steps (was fused into collapse_whitespace).
+        ("strip_control", None),
+        ("strip_zero_width", None),
         ("collapse_whitespace", None),
     ],
     "catalog_key": [
@@ -497,6 +505,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("confusables", "latin"),
         ("strip_accents", None),
         ("fold_case", None),
+        # #433: explicit strip steps (was fused into collapse_whitespace).
+        ("strip_control", None),
+        ("strip_zero_width", None),
         ("collapse_whitespace", None),
     ],
     "display_clean": [
@@ -504,6 +515,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         # #413: rendering policy — keep VS15/VS16 after a base and PRESERVE the PUA
         # (icon fonts); still strip Tags (keeping flags), CGJ, and noncharacters.
         ("strip_invisibles", "rendering"),
+        # #433: explicit strip steps (was fused into collapse_whitespace).
+        ("strip_control", None),
+        ("strip_zero_width", None),
         ("collapse_whitespace", None),
     ],
     "search_key": [
@@ -512,6 +526,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("transliterate", None),
         ("strip_accents", None),
         ("fold_case", None),
+        # #433: explicit strip steps (was fused into collapse_whitespace).
+        ("strip_control", None),
+        ("strip_zero_width", None),
         ("collapse_whitespace", None),
     ],
     "sort_key": [
@@ -522,6 +539,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         # what distinguishes sort_key from search_key, which strips accents here).
         ("transliterate", "non_latin"),
         ("fold_case", None),
+        # #433: explicit strip steps (was fused into collapse_whitespace).
+        ("strip_control", None),
+        ("strip_zero_width", None),
         ("collapse_whitespace", None),
         # Terminal NFC (#416): sort_key preserves accents (#411), so a combining
         # mark separated from its base by a now-stripped zero-width must be
@@ -561,6 +581,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         # typographic punctuation in emoji names must be folded too, for idempotency (#141).
         ("confusables", "latin"),
         ("strip_accents", None),
+        # #433: explicit strip_control before the fold (zero-width already stripped
+        # above); collapse folds whitespace only.
+        ("strip_control", None),
         ("collapse_whitespace", None),
     ],
 }

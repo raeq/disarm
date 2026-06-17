@@ -245,7 +245,7 @@ disarm transliterates a very wide range of scripts, but the **quality guarantee 
 ```python
 from disarm import security_clean, ml_normalize, catalog_key, normalize_user_input, strip_obfuscation
 
-# Security: NFKC → strip bidi → strip invisibles → collapse → cap marks → NFC → confusables → NFC
+# Security: NFKC → strip bidi → strip invisibles → strip control/zero-width → collapse → cap marks → NFC → confusables → NFC
 assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
 
 # ML/NLP: NFKC → emoji→text → transliterate → strip accents → fold case

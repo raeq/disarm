@@ -29,17 +29,23 @@ pub fn grapheme_width(cluster: &str, ambiguous_wide: bool) -> usize {
 
 // ── Whitespace ───────────────────────────────────────────────────────────────
 
-/// Normalize Unicode whitespace runs to single ASCII spaces, trimming the ends.
+/// Fold Unicode whitespace runs to single ASCII spaces, trimming the ends (#433).
 ///
-/// `strip_control` also removes C0/C1 control characters (so `\r\n` → `\n`);
-/// `strip_zero_width` also removes zero-width / invisible characters.
+/// Folds **whitespace only** — the line controls (TAB/LF/VT/FF/CR), the
+/// information separators (`U+001C`–`U+001F`), NEL, the `Zs`/`Zl`/`Zp` spaces,
+/// and the blank-rendering set (Braille blank, the Hangul fillers) each become a
+/// single space. It does **not** delete control or zero-width characters — pair
+/// it with [`strip_control_chars`] / [`strip_zero_width_chars`] for that. Folding
+/// (not deleting) the line controls means `a\rb` → `a b`, never `ab`.
 #[must_use]
-pub fn collapse_whitespace(text: &str, strip_control: bool, strip_zero_width: bool) -> String {
-    crate::whitespace::collapse_whitespace(text, strip_control, strip_zero_width)
+pub fn collapse_whitespace(text: &str) -> String {
+    crate::whitespace::collapse_whitespace(text)
 }
 
-/// Remove C0/C1 control characters (keeping `\n` and `\t`); `\r` is stripped, so
-/// `\r\n` becomes `\n`. A composable primitive of [`collapse_whitespace`].
+/// Remove C0/C1 control characters that are **not** whitespace (#433): NUL, DEL,
+/// the C1 block, etc. are stripped, while the line controls (TAB, LF, VT, FF, CR,
+/// `U+001C`–`U+001F`, NEL) are preserved for [`collapse_whitespace`] to fold. A
+/// composable primitive of [`collapse_whitespace`].
 #[must_use]
 pub fn strip_control_chars(text: &str) -> String {
     crate::whitespace::strip_control_chars(text)

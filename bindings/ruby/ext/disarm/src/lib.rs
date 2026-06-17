@@ -183,9 +183,9 @@ fn is_normalized(text: String, form: String) -> Result<bool, Error> {
 
 // ── Text cleaning (#375) ──────────────────────────────────────────────────────
 
-/// `Disarm._collapse_whitespace(text, strip_control, strip_zero_width)`.
-fn collapse_whitespace(text: String, strip_control: bool, strip_zero_width: bool) -> String {
-    api::collapse_whitespace(&text, strip_control, strip_zero_width)
+/// `Disarm._collapse_whitespace(text)` — fold whitespace only (#433).
+fn collapse_whitespace(text: String) -> String {
+    api::collapse_whitespace(&text)
 }
 
 /// `Disarm._strip_control_chars(text)` — remove C0/C1 controls (except tab/newline).
@@ -540,7 +540,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     // Normalization + text-cleaning primitives (#375 parity backfill).
     module.define_singleton_method("_normalize", function!(normalize, 2))?;
     module.define_singleton_method("_normalized?", function!(is_normalized, 2))?;
-    module.define_singleton_method("_collapse_whitespace", function!(collapse_whitespace, 3))?;
+    module.define_singleton_method("_collapse_whitespace", function!(collapse_whitespace, 1))?;
     module.define_singleton_method("_strip_control_chars", function!(strip_control_chars, 1))?;
     module.define_singleton_method(
         "_strip_zero_width_chars",

@@ -342,7 +342,7 @@ CORE_FUNCTION_PARAMS = {
     ],
     "strip_accents": ["text"],
     "fold_case": ["text"],
-    "collapse_whitespace": ["text", "strip_control", "strip_zero_width"],
+    "collapse_whitespace": ["text"],
     "demojize": [
         "text",
         "strip_modifiers",
@@ -473,7 +473,7 @@ CLASS_METHODS = {
             "context",
         ],
         "fold_case": [],
-        "collapse_whitespace": ["strip_control", "strip_zero_width"],
+        "collapse_whitespace": [],
         "slugify": [
             "separator",
             "lowercase",

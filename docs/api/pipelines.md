@@ -8,7 +8,7 @@ Ready-to-use multi-step text processing pipelines. Each is a single compiled Rus
 
 ### Pipeline steps
 
-`NFKC → strip bidi/format → strip invisibles (#413) → collapse_whitespace → strip_zalgo (#429) → NFC → confusables → NFC`
+`NFKC → strip bidi/format → strip invisibles (#413) → strip_control → strip_zero_width → collapse_whitespace → strip_zalgo (#429) → NFC → confusables → NFC`
 
 ```python
 from disarm import security_clean
@@ -25,7 +25,7 @@ assert security_clean("Ηello Ꮤorld") == 'Hello World'
 
 ### Pipeline steps
 
-`NFKC → emoji→text → [transliterate] → strip_accents → fold_case → collapse_whitespace`
+`NFKC → emoji→text → [transliterate] → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
 
 ```python
 from disarm import ml_normalize
@@ -43,7 +43,7 @@ assert ml_normalize("I ❤️ Python 🐍") == 'i red heart python snake'
 
 ### Pipeline steps
 
-`NFKC → transliterate → confusables → strip_accents → fold_case → collapse_whitespace`
+`NFKC → transliterate → confusables → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
 
 ```python
 from disarm import catalog_key
@@ -80,7 +80,7 @@ assert display_clean("admin\u202Euser") == 'adminuser'
 
 ### Pipeline steps
 
-`NFKC → transliterate → strip_accents → fold_case → collapse_whitespace`
+`NFKC → transliterate → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
 
 ```python
 from disarm import search_key
@@ -98,7 +98,7 @@ assert search_key("ΩMEGA", lang="auto") == 'omega'
 
 ### Pipeline steps
 
-`NFKC → strip_bidi → transliterate-non-Latin → fold_case → collapse_whitespace`
+`NFKC → strip_bidi → transliterate-non-Latin → fold_case → strip_control → strip_zero_width → collapse_whitespace`
 
 Unlike `search_key`, `sort_key` **preserves base accented characters** so
 accented and unaccented forms stay distinct and the accent survives for a
@@ -151,7 +151,7 @@ from disarm import PRESETS
 Dict mapping preset function names to their ordered pipeline steps. Each value is a list of `(step_name, parameter)` tuples in execution order.
 
 ```python
-assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_invisibles', 'comparison'), ('collapse_whitespace', None), ('strip_zalgo', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
+assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_invisibles', 'comparison'), ('strip_control', None), ('strip_zero_width', None), ('collapse_whitespace', None), ('strip_zalgo', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
 assert PRESETS["normalize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_invisibles', 'comparison'), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None), ('normalize', 'NFC')]
 ```
 

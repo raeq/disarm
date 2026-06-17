@@ -222,11 +222,14 @@ Disarm.normalized?("ﬁ", form: :nfkc)               # => false
 
 ## Text cleaning
 
-### `Disarm.collapse_whitespace(text, strip_control: true, strip_zero_width: true)`
+### `Disarm.collapse_whitespace(text)`
 
-Collapse every run of Unicode whitespace to a single ASCII space, and trim
-leading/trailing whitespace. By default it also strips control and zero-width
-characters; pass `strip_control: false` / `strip_zero_width: false` to keep them.
+Fold every run of Unicode whitespace to a single ASCII space, and trim
+leading/trailing whitespace. Since #433 this folds **whitespace only** — the
+line controls (CR/VT/FF/NEL/`U+001C`–`U+001F`) and the blank-rendering set
+(Braille blank, Hangul fillers) fold to a space rather than being deleted, so
+`"a\rb"` → `"a b"`. It does **not** delete control or zero-width characters; use
+`Disarm.strip_control_chars` / `Disarm.strip_zero_width_chars` for that.
 
 ```ruby
 Disarm.collapse_whitespace("  a   b ")             # => "a b"

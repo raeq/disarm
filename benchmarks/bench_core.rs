@@ -168,17 +168,13 @@ fn bench_whitespace(c: &mut Criterion) {
     let mut group = c.benchmark_group("whitespace");
 
     group.throughput(text_throughput(WHITESPACE_MESSY));
-    group.bench_function("messy_full_strip", |b| {
-        b.iter(|| collapse_whitespace(black_box(WHITESPACE_MESSY), true, true));
-    });
-
-    group.bench_function("messy_no_strip", |b| {
-        b.iter(|| collapse_whitespace(black_box(WHITESPACE_MESSY), false, false));
+    group.bench_function("messy_fold", |b| {
+        b.iter(|| collapse_whitespace(black_box(WHITESPACE_MESSY)));
     });
 
     group.throughput(text_throughput("hello world"));
     group.bench_function("clean_passthrough", |b| {
-        b.iter(|| collapse_whitespace(black_box("hello world"), true, true));
+        b.iter(|| collapse_whitespace(black_box("hello world")));
     });
 
     group.finish();

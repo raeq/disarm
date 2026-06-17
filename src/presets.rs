@@ -138,7 +138,9 @@ fn is_bidi_or_format(ch: char) -> bool {
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → strip bidi/format → strip invisibles → collapse_whitespace → cap marks (zalgo) → NFC → confusables → NFC
+/// Pipeline: NFKC → strip bidi/format → strip invisibles → strip_control →
+/// strip_zero_width → collapse_whitespace → cap marks (zalgo) → NFC →
+/// confusables → NFC
 ///
 /// Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
 /// zero-width injections and control chars, removes dangerous bidi overrides and
@@ -161,15 +163,19 @@ pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
     //     noncharacters, and the Private Use Area. Runs before the NFC below so a
     //     CGJ stripped from between a base and a mark gets recomposed.
     let buf = invisibles::strip_invisible_classes(&buf, COMPARISON_STRIP);
-    // 3. Collapse whitespace + strip control + strip zero-width
-    let buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 3. Strip non-whitespace controls + zero-width, then fold whitespace (#433:
+    //    these were one fused `collapse_whitespace(_, true, true)` call; the split
+    //    makes the steps explicit and lets the line controls fold to a space
+    //    rather than be deleted, so e.g. `a\rb` → `a b`, not `ab`).
+    let buf = whitespace::strip_control_chars(&buf);
+    let buf = whitespace::strip_zero_width_chars(&buf);
+    let buf = whitespace::collapse_whitespace(&buf);
     // 3b. Cap combining marks at 2 per base (#429), matching normalize_user_input.
     //     Removes zalgo stacking so a stacked token matches its base in a denylist
     //     comparison, while keeping legitimate diacritics (`café`, `Việt`). Runs
-    //     AFTER collapse_whitespace — which strips the control / zero-width
-    //     characters — so a stripped invisible between two marks cannot split a
-    //     mark run and hide the count (the #121 lesson); a later strip would merge
-    //     the runs and break idempotency.
+    //     AFTER the control / zero-width strip above so a stripped invisible
+    //     between two marks cannot split a mark run and hide the count (the #121
+    //     lesson); a later strip would merge the runs and break idempotency.
     let buf = zalgo::strip_zalgo(&buf, 2);
     // 4. NFC (#416): the strips above can leave a base character next to a
     //    combining mark that was non-adjacent before (e.g. separated by a
@@ -247,8 +253,10 @@ pub(crate) fn ml_normalize(
     buf = transliterate::strip_accents(&buf);
     // 5. Unicode case folding (ß→ss, ﬁ→fi, etc.)
     buf = case_fold::fold_case_impl(&buf);
-    // 6. Collapse whitespace + strip control + strip zero-width
-    buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 6. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+    buf = whitespace::strip_control_chars(&buf);
+    buf = whitespace::strip_zero_width_chars(&buf);
+    buf = whitespace::collapse_whitespace(&buf);
     Ok(buf)
 }
 
@@ -295,8 +303,10 @@ pub(crate) fn catalog_key(
     let buf = transliterate::strip_accents(&buf);
     // 6. Unicode case folding
     let buf = case_fold::fold_case_impl(&buf);
-    // 7. Collapse whitespace + strip control + strip zero-width
-    let buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+    let buf = whitespace::strip_control_chars(&buf);
+    let buf = whitespace::strip_zero_width_chars(&buf);
+    let buf = whitespace::collapse_whitespace(&buf);
     Ok(buf)
 }
 
@@ -332,8 +342,10 @@ pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate
     let buf = transliterate::strip_accents(&buf);
     // 5. Unicode case folding
     let buf = case_fold::fold_case_impl(&buf);
-    // 6. Collapse whitespace + strip control + strip zero-width
-    let buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 6. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+    let buf = whitespace::strip_control_chars(&buf);
+    let buf = whitespace::strip_zero_width_chars(&buf);
+    let buf = whitespace::collapse_whitespace(&buf);
     Ok(buf)
 }
 
@@ -419,8 +431,10 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
     let buf = transliterate_preserving_latin(&buf, lang);
     // 4. Unicode case folding (`Über` → `über`; `ß` → `ss`; accents survive)
     let buf = case_fold::fold_case_impl(&buf);
-    // 5. Collapse whitespace + strip control + strip zero-width
-    let buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+    let buf = whitespace::strip_control_chars(&buf);
+    let buf = whitespace::strip_zero_width_chars(&buf);
+    let buf = whitespace::collapse_whitespace(&buf);
     // 6. Terminal NFC (#416): because sort_key now *preserves* Latin accents
     //    (#411) instead of folding them away, a combining mark separated from its
     //    base by a now-stripped zero-width would otherwise survive in decomposed
@@ -437,7 +451,7 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
 
 /// Display-safe text cleaning pipeline.
 ///
-/// Pipeline: strip bidi/format → collapse_whitespace (strip control + strip zero-width)
+/// Pipeline: strip bidi/format → strip invisibles → strip_control → strip_zero_width → collapse_whitespace
 ///
 /// Lightweight cleanup for user-submitted content destined for rendering.
 /// Strips bidirectional overrides (which can visually reorder text to hide
@@ -452,8 +466,10 @@ pub(crate) fn display_clean(text: &str) -> String {
     //     and noncharacters are still stripped. No NFC pass: display_clean does no
     //     NFKC, so any base+mark left decomposed stays decomposed (idempotent).
     let buf = invisibles::strip_invisible_classes(&buf, RENDERING_STRIP);
-    // 2. Collapse whitespace + strip control + strip zero-width
-    whitespace::collapse_whitespace(&buf, true, true)
+    // 2. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+    let buf = whitespace::strip_control_chars(&buf);
+    let buf = whitespace::strip_zero_width_chars(&buf);
+    whitespace::collapse_whitespace(&buf)
 }
 
 /// Normalize user-submitted input — Unicode hygiene, **not** an output sanitizer.
@@ -485,14 +501,15 @@ pub(crate) fn display_clean(text: &str) -> String {
 pub(crate) fn normalize_user_input(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization
     let buf = nfkc_normalize(text);
-    // 2. Strip invisibles FIRST (bidi/format + zero-width + control) so they
-    //    cannot split a run of combining marks; otherwise removing them later
-    //    would merge two short runs into one long run that a second pass would
-    //    cap differently (zalgo-capping would not be idempotent). Control chars
-    //    other than \n/\t are removed at the final cleanup step regardless, so
-    //    removing them here too is behaviour-preserving and keeps the cap
-    //    idempotent — e.g. "\u{301}\u{301}\0\u{301}" must not become a longer
-    //    contiguous run once the NUL is stripped.
+    // 2. Strip invisibles FIRST (bidi/format + zero-width + non-whitespace
+    //    control) so they cannot split a run of combining marks; otherwise
+    //    removing them later would merge two short runs into one long run that a
+    //    second pass would cap differently (zalgo-capping would not be
+    //    idempotent) — e.g. "\u{301}\u{301}\0\u{301}" must not become a longer
+    //    contiguous run once the NUL is stripped. (#433) strip_control_chars now
+    //    *preserves* the whitespace controls — CR/VT/FF/NEL/FS–US — which the
+    //    final fold turns into a space; folding a separator, unlike deleting it,
+    //    leaves a stable boundary and so keeps the cap idempotent.
     let buf = strip_bidi(&buf);
     let buf = whitespace::strip_zero_width_chars(&buf);
     let buf = whitespace::strip_control_chars(&buf);
@@ -503,8 +520,10 @@ pub(crate) fn normalize_user_input(text: &str) -> Result<String, crate::ErrorRep
     let buf = zalgo::strip_zalgo(&buf, 2);
     // 4. Confusables → Latin (neutralizes cross-script homoglyphs)
     let buf = confusables::normalize_confusables(&buf, "latin")?;
-    // 5. Collapse whitespace + strip control + strip zero-width
-    let buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 5. Fold whitespace (#433: fold-only — control/zero-width were already
+    //    stripped explicitly above, before the zalgo cap, per #121). The line
+    //    controls now fold to a space instead of being deleted, so `a\rb` → `a b`.
+    let buf = whitespace::collapse_whitespace(&buf);
     // 5b. Terminal NFC (#416/#413): stripping a CGJ (or other invisible) from
     //     between a base and a combining mark leaves them adjacent but decomposed;
     //     recompose so the pipeline stays a fixed point.
@@ -563,8 +582,11 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> 
     let buf = confusables::normalize_confusables(&buf, "latin")?;
     // 7. Strip accents (NFD decompose + strip combining marks)
     let buf = transliterate::strip_accents(&buf);
-    // 8. Collapse whitespace (final cleanup) — case is NOT folded
-    Ok(whitespace::collapse_whitespace(&buf, true, true))
+    // 8. Strip non-whitespace controls, then fold whitespace (#433: split out of
+    //    the former fused collapse; zero-width was already stripped above). Case
+    //    is NOT folded.
+    let buf = whitespace::strip_control_chars(&buf);
+    Ok(whitespace::collapse_whitespace(&buf))
 }
 
 #[cfg(test)]

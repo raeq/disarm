@@ -47,13 +47,8 @@ class Text:
     def fold_case(self) -> Text:
         """Full Unicode case folding (1,557 mappings from CaseFolding.txt)."""
         ...
-    def collapse_whitespace(
-        self,
-        *,
-        strip_control: bool = True,
-        strip_zero_width: bool = True,
-    ) -> Text:
-        """Normalize whitespace to single ASCII spaces."""
+    def collapse_whitespace(self) -> Text:
+        """Fold whitespace runs to single ASCII spaces (fold-only, #433)."""
         ...
     def slugify(
         self,

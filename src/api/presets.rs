@@ -9,8 +9,9 @@ use crate::Error;
 /// neutralization).
 ///
 /// Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
-/// collapse whitespace → cap combining marks (anti-zalgo, #429) → NFC →
-/// confusables → NFC. (The confusable fold is sandwiched between two NFC passes
+/// strip control → strip zero-width → collapse whitespace → cap combining marks
+/// (anti-zalgo, #429) → NFC → confusables → NFC. (The confusable fold is
+/// sandwiched between two NFC passes
 /// so TR39 skeletoning is normalization-stable and the preset is idempotent —
 /// #416.) Fallible only through the confusables stage, whose target script is
 /// fixed internally, so in practice this never errors; the [`Result`] keeps the

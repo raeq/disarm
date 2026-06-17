@@ -216,8 +216,8 @@ pub fn is_normalized(text: String, form: String) -> Result<bool, NapiError> {
 // ── Text cleaning ─────────────────────────────────────────────────────────────
 
 #[napi]
-pub fn collapse_whitespace(text: String, strip_control: bool, strip_zero_width: bool) -> String {
-    api::collapse_whitespace(&text, strip_control, strip_zero_width)
+pub fn collapse_whitespace(text: String) -> String {
+    api::collapse_whitespace(&text)
 }
 
 #[napi]

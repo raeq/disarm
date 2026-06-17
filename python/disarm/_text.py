@@ -158,21 +158,13 @@ class Text:
         """
         return Text(self._t().fold_case(self._value))
 
-    def collapse_whitespace(
-        self,
-        *,
-        strip_control: bool = True,
-        strip_zero_width: bool = True,
-    ) -> Text:
-        """Normalize whitespace to single ASCII spaces; optionally strip
-        control characters and zero-width characters."""
-        return Text(
-            self._t().collapse_whitespace(
-                self._value,
-                strip_control=strip_control,
-                strip_zero_width=strip_zero_width,
-            )
-        )
+    def collapse_whitespace(self) -> Text:
+        """Fold whitespace runs to single ASCII spaces, trimming the ends (#433).
+
+        Folds whitespace only — it does not delete control or zero-width
+        characters. The line controls (CR/VT/FF/NEL/…) fold to a space rather
+        than being deleted, so ``"a\\rb"`` becomes ``"a b"``."""
+        return Text(self._t().collapse_whitespace(self._value))
 
     def slugify(
         self,

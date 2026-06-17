@@ -204,7 +204,9 @@ Use `fold_case()` when you need case-insensitive comparison that handles the ful
 
 ## collapse_whitespace
 
-Normalize all Unicode whitespace variants to single ASCII spaces:
+Fold every run of Unicode whitespace to a single ASCII space and trim the ends.
+Since #433 this folds **whitespace only** — it does not delete control or
+zero-width characters (see the note below).
 
 === "Python"
 
@@ -215,9 +217,8 @@ Normalize all Unicode whitespace variants to single ASCII spaces:
     assert collapse_whitespace("hello   world") == 'hello world'
 
     # Normalize Unicode whitespace variants
-    assert collapse_whitespace("hello\u00a0world") == 'hello world'
-
-    assert collapse_whitespace("hello\u2003world") == 'hello world'
+    assert collapse_whitespace("hello world") == 'hello world'
+    assert collapse_whitespace("hello world") == 'hello world'
     ```
 
 === "Rust"
@@ -225,12 +226,12 @@ Normalize all Unicode whitespace variants to single ASCII spaces:
     ```rust
     use disarm::api;
 
-    // Collapse runs of whitespace (strip_control, strip_zero_width)
-    assert_eq!(api::collapse_whitespace("hello   world", true, true), "hello world");
+    // Fold runs of whitespace
+    assert_eq!(api::collapse_whitespace("hello   world"), "hello world");
 
     // Normalize Unicode whitespace variants
-    assert_eq!(api::collapse_whitespace("hello\u{00a0}world", true, true), "hello world");
-    assert_eq!(api::collapse_whitespace("hello\u{2003}world", true, true), "hello world");
+    assert_eq!(api::collapse_whitespace("hello\u{00a0}world"), "hello world");
+    assert_eq!(api::collapse_whitespace("hello\u{2003}world"), "hello world");
     ```
 
 === "Ruby"
@@ -247,31 +248,39 @@ Normalize all Unicode whitespace variants to single ASCII spaces:
     collapseWhitespace('  hello   world  ') // => 'hello world'
     ```
 
-### Control characters
+### Line controls and blank-rendering code points fold to a space (#433)
 
-By default, control characters (U+0000–U+001F, U+007F–U+009F) are stripped:
-
-```python
-assert collapse_whitespace("hello\x00world") == 'helloworld'
-
-# Keep control characters
-assert collapse_whitespace("hello\x00world", strip_control=False) == 'hello\x00world'
-```
-
-### Zero-width characters
-
-By default, zero-width characters are stripped:
+The line controls — VT, FF, CR, NEL, and the information separators
+(U+001C–U+001F) — are Unicode whitespace, so they **fold to a single space**
+rather than being deleted (deleting them silently joined the surrounding
+tokens). Blank-rendering code points that no whitespace category reaches — the
+Braille blank (U+2800) and the Hangul fillers (U+115F, U+1160, U+3164, U+FFA0) —
+fold too.
 
 ```python
-assert collapse_whitespace("hello\u200bworld") == 'helloworld'
-
-assert collapse_whitespace("hello\ufeffworld") == 'helloworld'
-
-# Keep zero-width characters
-assert collapse_whitespace("hello\u200bworld", strip_zero_width=False) == 'hello\u200bworld'
+assert collapse_whitespace("a\rb") == 'a b'          # carriage return → space
+assert collapse_whitespace("a⠀b") == 'a b'    # Braille blank → space
+assert collapse_whitespace("aㅤb") == 'a b'    # Hangul filler → space
 ```
 
-Zero-width characters handled:
+### Stripping control and zero-width characters
+
+`collapse_whitespace` no longer deletes control or zero-width characters — that
+is a separate concern, so a non-whitespace control (NUL) or a zero-width space
+passes through unchanged:
+
+```python
+assert collapse_whitespace("hello\x00world") == 'hello\x00world'
+assert collapse_whitespace("hello​world") == 'hello​world'
+```
+
+To also delete them, run the dedicated steps first. The `security_clean` /
+`normalize_user_input` presets already do this internally; to compose it
+yourself, build a [`TextPipeline`](../api/pipelines.md) with the `strip_control`,
+`strip_zero_width`, and `collapse_whitespace` steps (Rust and Node expose the
+standalone `strip_control_chars` / `strip_zero_width_chars` primitives directly).
+
+Zero-width characters handled by the `strip_zero_width` step:
 
 - U+200B Zero Width Space (ZWSP)
 - U+200C Zero Width Non-Joiner (ZWNJ)

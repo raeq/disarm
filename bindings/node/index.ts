@@ -12,11 +12,13 @@ import { Lexicon, Pipeline } from './binding'
 import type {
   Untranslatable,
   AutoLangInspection,
+  LangMeta,
+  ScriptMeta,
   Finding as NativeFinding,
   AnomalyReport as NativeAnomalyReport,
 } from './binding'
 
-export type { Untranslatable, AutoLangInspection }
+export type { Untranslatable, AutoLangInspection, LangMeta, ScriptMeta }
 
 /**
  * A reusable, opaque lexicon handle (HAI-SDLC 6.1). `hasAnomalies` /
@@ -384,6 +386,36 @@ export function isMixedScript(text: string): boolean {
 /** Explain how `lang: 'auto'` detection resolves `text`. */
 export function inspectAutoLang(text: string): AutoLangInspection {
   return native.inspectAutoLang(text)
+}
+
+// ── Metadata introspection (#404) ───────────────────────────────────────────
+
+/**
+ * Static facts about a language `code` — its English name, primary script,
+ * region, and context-awareness. An unknown code throws
+ * {@link DisarmInvalidArgument}.
+ */
+export function langInfo(code: string): LangMeta {
+  return call(() => native.langInfo(code))
+}
+
+/**
+ * Static facts about a script by `name` — its default language code (if any),
+ * an example string, and whether its transliteration is context-aware. An
+ * unknown name throws {@link DisarmInvalidArgument}.
+ */
+export function scriptInfo(name: string): ScriptMeta {
+  return call(() => native.scriptInfo(name))
+}
+
+/** Every Unicode script name known to the transliteration tables. */
+export function listScripts(): string[] {
+  return native.listScripts()
+}
+
+/** Every language code that has a context-aware transliteration profile. */
+export function listContextLangs(): string[] {
+  return native.listContextLangs()
 }
 
 // ── Anomaly detection ───────────────────────────────────────────────────────

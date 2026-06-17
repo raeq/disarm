@@ -159,16 +159,16 @@ operations:
       node: isZalgo
   - id: lang_info
     names:
-      rust: null
+      rust: lang_info
       python: lang_info
-      ruby: null
-      node: null
+      ruby: lang_info
+      node: langInfo
   - id: list_context_langs
     names:
-      rust: null
+      rust: list_context_langs
       python: list_context_langs
-      ruby: null
-      node: null
+      ruby: list_context_langs
+      node: listContextLangs
   - id: list_langs
     names:
       rust: list_langs
@@ -183,10 +183,10 @@ operations:
       node: null
   - id: list_scripts
     names:
-      rust: null
+      rust: list_scripts
       python: list_scripts
-      ruby: null
-      node: null
+      ruby: list_scripts
+      node: listScripts
   - id: make_cached_transliterator
     names:
       rust: null
@@ -267,10 +267,10 @@ operations:
       node: sanitizeFilename
   - id: script_info
     names:
-      rust: null
+      rust: script_info
       python: script_info
-      ruby: null
-      node: null
+      ruby: script_info
+      node: scriptInfo
   - id: seal_registrations
     names:
       rust: seal_registrations

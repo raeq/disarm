@@ -270,6 +270,36 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "metadata introspection" do
+    it "returns curated language metadata with symbol keys" do
+      expect(Disarm.lang_info("de")[:name]).to eq("German")
+    end
+
+    it "returns curated script metadata with symbol keys" do
+      expect(Disarm.script_info("Coptic")[:default_lang]).to eq("cop")
+    end
+
+    it "lists the known scripts" do
+      scripts = Disarm.list_scripts
+      expect(scripts).to include("Latin")
+      expect(scripts).to include("Common")
+    end
+
+    it "lists the context-aware languages" do
+      langs = Disarm.list_context_langs
+      expect(langs).to include("ar")
+      expect(langs).not_to include("de")
+    end
+
+    it "raises Disarm::InvalidArgument on an unknown language code" do
+      expect { Disarm.lang_info("zz") }.to raise_error(Disarm::InvalidArgument)
+    end
+
+    it "raises Disarm::InvalidArgument on an unknown script" do
+      expect { Disarm.script_info("Nope") }.to raise_error(Disarm::InvalidArgument)
+    end
+  end
+
   describe "anomaly detection" do
     lex = %w[free viagra paypal]
 

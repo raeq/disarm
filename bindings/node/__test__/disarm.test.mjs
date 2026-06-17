@@ -200,6 +200,29 @@ describe('script analysis', () => {
   })
 })
 
+describe('metadata introspection (#404)', () => {
+  test('langInfo returns static facts about a language', () => {
+    expect(disarm.langInfo('de').name).toBe('German')
+  })
+  test('scriptInfo returns static facts about a script', () => {
+    expect(disarm.scriptInfo('Coptic').defaultLang).toBe('cop')
+  })
+  test('listScripts includes Latin and Common', () => {
+    const scripts = disarm.listScripts()
+    expect(scripts).toContain('Latin')
+    expect(scripts).toContain('Common')
+  })
+  test('listContextLangs includes context-aware langs only', () => {
+    const langs = disarm.listContextLangs()
+    expect(langs).toContain('ar')
+    expect(langs).not.toContain('de')
+  })
+  test('an unknown code/script throws DisarmInvalidArgument', () => {
+    expect(() => disarm.langInfo('zz')).toThrow(DisarmInvalidArgument)
+    expect(() => disarm.scriptInfo('Nope')).toThrow(DisarmInvalidArgument)
+  })
+})
+
 describe('anomaly detection', () => {
   const lex = ['free', 'viagra', 'paypal']
 

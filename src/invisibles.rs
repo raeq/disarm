@@ -69,19 +69,27 @@ const CGJ: char = '\u{034F}';
 const FLAG_BASE: char = '\u{1F3F4}';
 const CANCEL_TAG: char = '\u{E007F}';
 
-/// If `chars[start]` (a [`FLAG_BASE`]) begins a well-formed emoji subdivision
-/// flag — one or more tag letters terminated by a single [`CANCEL_TAG`] — return
-/// the index of that terminator. Otherwise `None` (the tag run is malformed and
-/// its tag characters are stray smuggling payload).
-fn flag_sequence_end(chars: &[char], start: usize) -> Option<usize> {
-    let mut i = start + 1;
-    let mut saw_letter = false;
-    while i < chars.len() && is_tag_letter(chars[i]) {
-        saw_letter = true;
-        i += 1;
+/// Called with `chars` positioned just after a [`FLAG_BASE`]. If a well-formed
+/// emoji subdivision flag tail follows — one or more tag letters terminated by a
+/// single [`CANCEL_TAG`] — consume it and return it (letters + terminator) so the
+/// caller can re-emit the whole flag. Otherwise consume only the tag letters
+/// (which are stray smuggling payload, dropped) and return `None`, leaving the
+/// non-tag character that ended the run in the iterator. Streams over the input
+/// with at most a small buffer for the tail — no `Vec<char>` of the whole string.
+fn consume_flag_tail(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<String> {
+    let mut tail = String::new();
+    while let Some(&c) = chars.peek() {
+        if is_tag_letter(c) {
+            tail.push(c);
+            chars.next();
+        } else {
+            break;
+        }
     }
-    if saw_letter && i < chars.len() && chars[i] == CANCEL_TAG {
-        Some(i)
+    if !tail.is_empty() && chars.peek() == Some(&CANCEL_TAG) {
+        tail.push(CANCEL_TAG);
+        chars.next();
+        Some(tail)
     } else {
         None
     }
@@ -97,22 +105,23 @@ fn is_presentation_base(ch: char) -> bool {
 /// Public helper: strip the Unicode Tags block, **preserving** well-formed emoji
 /// subdivision flag sequences (`U+1F3F4` … `U+E007F`).
 pub(crate) fn strip_tags(text: &str) -> String {
-    let chars: Vec<char> = text.chars().collect();
+    // Fast path: every tag-block character and the flag base is non-ASCII.
+    if text.is_ascii() {
+        return text.to_string();
+    }
     let mut out = String::with_capacity(text.len());
-    let mut i = 0;
-    while i < chars.len() {
-        let ch = chars[i];
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
         if ch == FLAG_BASE {
-            if let Some(end) = flag_sequence_end(&chars, i) {
-                out.extend(&chars[i..=end]);
-                i = end + 1;
-                continue;
+            out.push(FLAG_BASE);
+            if let Some(tail) = consume_flag_tail(&mut chars) {
+                out.push_str(&tail); // a valid flag: re-emit its tag sequence
             }
+            continue;
         }
         if !is_tag(ch) {
             out.push(ch);
         }
-        i += 1;
     }
     out
 }
@@ -139,23 +148,22 @@ pub(crate) fn strip_pua(text: &str) -> String {
 /// valid flag sequences), the Combining Grapheme Joiner, and noncharacters.
 /// Variation selectors and Private Use Area are governed by `policy`.
 pub(crate) fn strip_invisible_classes(text: &str, policy: StripPolicy) -> String {
-    let chars: Vec<char> = text.chars().collect();
+    // Fast path: every class handled here (tags, CGJ, noncharacters, PUA,
+    // variation selectors, the flag base) is non-ASCII, so ASCII passes through.
+    if text.is_ascii() {
+        return text.to_string();
+    }
     let mut out = String::with_capacity(text.len());
-    let mut i = 0;
-    while i < chars.len() {
-        let ch = chars[i];
-
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
         // Emoji subdivision flag: preserve the whole well-formed sequence.
         if ch == FLAG_BASE {
-            if let Some(end) = flag_sequence_end(&chars, i) {
-                out.extend(&chars[i..=end]);
-                i = end + 1;
-                continue;
+            out.push(FLAG_BASE);
+            if let Some(tail) = consume_flag_tail(&mut chars) {
+                out.push_str(&tail);
             }
+            continue;
         }
-
-        i += 1;
-
         if is_tag(ch) || ch == CGJ || is_noncharacter(ch) {
             continue;
         }

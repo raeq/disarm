@@ -426,6 +426,7 @@ class TestPresetsMetadataOrder:
             "strip_bidi",
             "strip_zero_width",
             "demojize",
+            "strip_invisibles",
             "confusables",
             "strip_accents",
             "collapse_whitespace",

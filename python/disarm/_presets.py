@@ -460,6 +460,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "security_clean": [
         ("normalize", "NFKC"),
         ("strip_bidi", None),
+        # #413: strip Unicode Tags / variation selectors / CGJ / noncharacters /
+        # PUA (keeping valid emoji flags). "comparison" = strip PUA, strip all VS.
+        ("strip_invisibles", "comparison"),
         ("collapse_whitespace", None),
         # NFC sandwich around confusables (#416): the strips can leave a base next
         # to a combining mark; the first NFC composes it so the fold sees a
@@ -488,6 +491,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     ],
     "display_clean": [
         ("strip_bidi", None),
+        # #413: rendering policy — keep VS15/VS16 after a base and PRESERVE the PUA
+        # (icon fonts); still strip Tags (keeping flags), CGJ, and noncharacters.
+        ("strip_invisibles", "rendering"),
         ("collapse_whitespace", None),
     ],
     "search_key": [
@@ -519,6 +525,10 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("strip_bidi", None),
         ("strip_zero_width", None),
         ("strip_control", None),
+        # #413: strip Tags / variation selectors / CGJ / noncharacters / PUA
+        # (comparison policy). Runs after the invisible strips so it cannot split a
+        # mark run that the zalgo cap below then counts (the #121 lesson).
+        ("strip_invisibles", "comparison"),
         ("strip_zalgo", None),
         ("confusables", "latin"),
         ("collapse_whitespace", None),
@@ -533,6 +543,10 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("strip_bidi", None),
         ("strip_zero_width", None),
         ("demojize", "cldr"),
+        # #413: strip Tags / variation selectors / noncharacters / PUA after
+        # demojize (so the emoji pass sees flags/selectors intact). CGJ is already
+        # gone via the strip_zalgo(0) combining-mark strip above.
+        ("strip_invisibles", "comparison"),
         # confusables runs AFTER demojize (matches src/presets.rs::_strip_obfuscation):
         # typographic punctuation in emoji names must be folded too, for idempotency (#141).
         ("confusables", "latin"),

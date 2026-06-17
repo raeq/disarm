@@ -124,9 +124,10 @@ impl Lexicon {
     fn new(words: Vec<String>) -> Self {
         // Accept any Python iterable of strings (`set`, `list`, generator, …),
         // mirroring `has_anomalies(text, lexicon=...)`, and fold it into the
-        // internal set once.
+        // internal set once. `api::lexicon` lowercases entries so a title-cased
+        // wordlist still matches the detector's lowercased decoded words.
         Self {
-            inner: words.into_iter().collect(),
+            inner: crate::api::lexicon(words),
         }
     }
 
@@ -140,7 +141,7 @@ impl Lexicon {
 #[pyfunction]
 #[pyo3(signature = (text, lexicon=None))]
 pub fn _has_anomalies(text: &str, lexicon: Option<HashSet<String>>) -> bool {
-    let lexicon = lexicon.unwrap_or_default();
+    let lexicon = crate::api::lexicon(lexicon.unwrap_or_default());
     crate::api::has_anomalies(text, &lexicon)
 }
 
@@ -148,7 +149,7 @@ pub fn _has_anomalies(text: &str, lexicon: Option<HashSet<String>>) -> bool {
 #[pyfunction]
 #[pyo3(signature = (text, lexicon=None))]
 pub fn _inspect_anomalies(text: &str, lexicon: Option<HashSet<String>>) -> AnomalyReport {
-    let lexicon = lexicon.unwrap_or_default();
+    let lexicon = crate::api::lexicon(lexicon.unwrap_or_default());
     crate::api::inspect_anomalies(text, &lexicon).into()
 }
 

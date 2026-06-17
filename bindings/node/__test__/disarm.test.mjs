@@ -245,6 +245,12 @@ describe('anomaly detection', () => {
     expect(disarm.hasAnomalies('get fr33', new Set(['free']))).toBe(true)
   })
 
+  test('lexicon is case-insensitive on ingest (title-cased wordlist matches)', () => {
+    expect(disarm.hasAnomalies('get fr33 now', ['Free'])).toBe(true)
+    expect(disarm.hasAnomalies('buy v.i.a.g.r.a now', ['VIAGRA'])).toBe(true)
+    expect(disarm.hasAnomalies('get fr33 now', new Lexicon(['Free']))).toBe(true)
+  })
+
   test('returns a structured report with byte spans', () => {
     const input = 'log in to paypаl today' // Cyrillic а in "paypаl"
     const r = disarm.inspectAnomalies(input, ['paypal'])

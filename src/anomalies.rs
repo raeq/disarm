@@ -461,11 +461,24 @@ fn split_tokens(text: &str) -> Vec<(usize, &str)> {
     out
 }
 
+/// Build a lexicon set for [`has_anomalies`] / [`inspect_anomalies`], lowercasing
+/// each entry.
+///
+/// The detector decodes and **lowercases** candidate words before looking them up
+/// (`fr33` → `free`, `V.I.A.G.R.A` → `viagra`), so the lexicon must be lowercase too;
+/// a title-cased wordlist like `["Free"]` would otherwise silently miss `fr33`. Build
+/// the set through this helper (the bindings do) so case-folding is automatic.
+#[must_use]
+pub fn lexicon<I: IntoIterator<Item = String>>(words: I) -> HashSet<String> {
+    words.into_iter().map(|s| s.to_lowercase()).collect()
+}
+
 /// True if any whitespace token carries out-of-place characters that disguise a real word.
 ///
 /// Reports a technical fact and leaves the malicious-or-not judgement to the caller.
 /// `lexicon` is a set of common words for the language being protected (used only by the
-/// leet and segmentation branches).
+/// leet and segmentation branches). Entries must be **lowercase** — build it with
+/// [`lexicon`] so case-folding matches the detector's lowercased lookups.
 #[must_use]
 pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
     split_tokens(text)
@@ -517,6 +530,18 @@ mod tests {
 
     fn lex(words: &[&str]) -> HashSet<String> {
         words.iter().map(|w| (*w).to_string()).collect()
+    }
+
+    #[test]
+    fn lexicon_lowercases_so_title_cased_wordlists_match() {
+        // `lexicon()` folds case, so a title-cased wordlist still matches the
+        // detector's lowercased decoded words (regression: `{"Free"}` missed `fr33`).
+        let title = lexicon(["Free".to_string(), "Viagra".to_string()]);
+        assert!(title.contains("free") && title.contains("viagra"));
+        assert!(has_anomalies("get fr33 now", &title)); // leet
+        assert!(has_anomalies("v.i.a.g.r.a", &title)); // segmentation
+                                                       // a raw (un-folded) set is the caller's responsibility and does NOT match:
+        assert!(!has_anomalies("get fr33 now", &lex(&["Free"])));
     }
 
     #[test]

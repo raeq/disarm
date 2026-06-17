@@ -19,14 +19,16 @@ Unicode canonicalization and TR39 *visual* confusable analysis — building bloc
 
 The text-cleaning libraries already in most pipelines — `ftfy`, `unidecode`, `anyascii` — were built for encoding repair and ASCII conversion. They map confusables *phonetically* (Cyrillic `р` → Latin `r`), which does not reverse a homoglyph substitution.
 
-disarm's `normalize_confusables()` / `strip_obfuscation()` implement *visual* confusable mapping per [Unicode TR39](https://www.unicode.org/reports/tr39/) (Cyrillic `р` → Latin `p`) — **not** to be confused with `transliterate()`, which romanizes *phonetically* (`р` → `r`) like the tools above. In a controlled benchmark (six attack types, three downstream tasks, two architectures; 435,864 observations), this visual TR39 mapping reached **XMR = 1.000 on the tested TR39 homoglyph pairs** (17 Latin–Cyrillic, 19 Greek), where phonetic transliterators plateaued near half:
+disarm's `normalize_confusables()` / `strip_obfuscation()` implement *visual* confusable mapping per [Unicode TR39](https://www.unicode.org/reports/tr39/) (Cyrillic `р` → Latin `p`) — **not** to be confused with `transliterate()`, which romanizes *phonetically* (`р` → `r`) like the tools above. Measured over a broad sample of the TR39 confusable space — the 1,314 single-codepoint sources whose skeleton is a single Latin letter (of TR39's 6,565) — this visual mapping recovers **XMR = 0.634** (`strip_obfuscation`) to **0.682** (full pipeline), neutralizing **~95% of sources** at the per-source level, where phonetic transliterators stay at or below 0.19:
 
-| Tool class | Mapping | Homoglyph XMR (tested TR39 pairs) |
+| Tool class | Mapping | Homoglyph XMR (broad TR39 sample) |
 |---|---|---|
-| `unidecode`, `anyascii`, `cyrtranslit`, `uroman` | phonetic | ~0.49 |
-| **disarm** (`strip_obfuscation` / `normalize_confusables`) | **visual (TR39)** | **1.000** |
+| NFKC (compatibility folding) | — | 0.103 |
+| `unidecode`, `anyascii`, `cyrtranslit`, `uroman` | phonetic | ≤ 0.187 |
+| **disarm** (`strip_obfuscation` / `normalize_confusables`) | **visual (TR39)** | **0.634 / 0.682** (95% CI 0.603–0.664 / 0.652–0.710) |
+| TR39 skeleton — shares the attack table (oracle ceiling) | visual | 1.000 |
 
-`ftfy` was statistically equivalent to no preprocessing; `unidecode` *degraded* accuracy on invisible-character attacks. Details: **[Adversarial-Text Defense](security/adversarial-defense.md)** (paper *"Fire Extinguishers Full of Gasoline"*; XMR metric: [Zenodo 10.5281/zenodo.19323513](https://doi.org/10.5281/zenodo.19323513)).
+On the original curated cut (18 hand-curated Cyrillic look-alike pairs) disarm reproduces **XMR = 1.000** exactly — a labeled sanity check, not the headline. `ftfy` was statistically equivalent to no preprocessing; `unidecode` *degraded* accuracy on invisible-character attacks. Details: **[Adversarial-Text Defense](security/adversarial-defense.md)** (paper *"Fire Extinguishers Full of Gasoline"*; XMR metric: [Zenodo 10.5281/zenodo.20618323](https://doi.org/10.5281/zenodo.20618323)).
 
 > **Scope.** disarm is a **defense-in-depth layer, not a complete control.** It canonicalizes the confusables it bundles (TR39) and strips the format characters it enumerates; it does not promise to stop any attack class, and the confusable space is far larger than any table. See the **[Threat Model](THREAT_MODEL.md)** for what is and isn't in scope.
 >

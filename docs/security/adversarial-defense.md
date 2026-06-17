@@ -46,11 +46,19 @@ Unicode normalization baselines across six attack types, three downstream tasks
 (SST-2, toxicity, AG News), and two model architectures (DistilBERT, RoBERTa-base):
 **435,864 experimental observations**. Headline results:
 
-- **Phonetic tools plateau; visual mapping recovers the tested pairs.** On homoglyph
-  attacks, phonetic transliterators recover roughly half of inputs (XMR ≈ 0.49), while
-  TR39 visual mapping (disarm) reached **XMR = 1.000 on the tested TR39 pairs**
-  (17 Latin–Cyrillic, 19 Greek). That is coverage of those pairs — not a guarantee
-  against arbitrary homoglyphs (see *[Coverage and limits](#coverage-and-limits)*).
+- **Phonetic tools plateau; visual mapping leads, but is bounded by table coverage.**
+  The XMR confusable-recovery metric was re-measured (v2) over a broad sample of the
+  TR39 space — the 1,314 single-codepoint sources whose skeleton is a single Latin letter
+  (of 6,565). disarm's visual TR39 mapping reaches **XMR = 0.634** (`strip_obfuscation`;
+  95% CI 0.603–0.664) and **0.682** (full pipeline; CI 0.652–0.710), versus **≤ 0.187**
+  for phonetic transliterators and **0.103** for NFKC. The TR39 skeleton transform scores
+  **1.000 by construction** — it shares its table with the attack, so it is the *oracle
+  ceiling*, not a competitor. **Per-source coverage is distinct from instance XMR:** disarm
+  neutralizes **~95% of sources** (0.949 / 0.954); because one unrecovered substitution
+  fails a whole instance and each snippet carries several, that ~5% gap compounds into the
+  instance scores above. On the original v1 curated cut (18 hand-curated Cyrillic look-alike
+  pairs) disarm reproduces **XMR = 1.000** exactly — a labeled sanity check, not the headline
+  (see *[Coverage and limits](#coverage-and-limits)*).
 - **`ftfy` is equivalent to doing nothing** (TOST equivalence, δ = 0.05, across all
   six attack types).
 - **`unidecode` actively harms.** It maps invisible characters to visible ASCII
@@ -65,8 +73,9 @@ Unicode normalization baselines across six attack types, three downstream tasks
   For Cyrillic-native text, normalizing toward Latin reduces a Cyrillic-native model to
   near-chance — `normalize_confusables(text, target_script="cyrillic")` exists for this.
 
-The XMR metric is published as a versioned specification on Zenodo:
-[10.5281/zenodo.19323513](https://doi.org/10.5281/zenodo.19323513).
+The XMR metric and this broad-sample re-measurement are published as a versioned note on
+Zenodo: [10.5281/zenodo.20618323](https://doi.org/10.5281/zenodo.20618323) (v2; supersedes
+the v1 note's curated-set headline).
 
 ### Exact Match Recovery (XMR)
 
@@ -84,8 +93,9 @@ conservative upper bound on failure rate.
 
 ## Coverage and limits
 
-The XMR results above measure the *tested TR39 pairs*. Real coverage is bounded by the
-bundled data and by what normalization can do at all:
+The XMR results above measure a broad sample of the TR39 confusable space (1,314
+single-codepoint sources). Real-world coverage is bounded further by the bundled data
+and by what normalization can do at all:
 
 - **Single-letter Latin confusables: complete.** disarm folds 100% of UTS#39
   single-codepoint confusables whose prototype is a basic Latin letter (gated by

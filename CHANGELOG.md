@@ -109,6 +109,17 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed
 
+- **Docs: synced the public XMR benchmark claims to the v2 note (#399).** The README,
+  the docs landing page, the adversarial-defense page, and the unidecode-migration guide
+  led with the v1 *curated-set* headline (XMR = 1.000 on the hand-curated pairs). They now
+  lead with the v2 **broad-sample** measurement over the 1,314 single-codepoint TR39 sources
+  whose skeleton is a single Latin letter: instance XMR **0.634 / 0.682** (95% CI) with
+  **~95% per-source coverage** (stated as a distinct quantity), plus the **NFKC (0.103)** and
+  **TR39-skeleton-oracle (1.000, by construction)** baselines, citing the v2 DOI
+  **10.5281/zenodo.20618323**. The curated 1.000 is retained only as a labeled sanity check,
+  and the curated set is described correctly (18 hand-curated Cyrillic pairs; the 19 Greek
+  pairs were a separate experiment). `CITATION.cff` is bumped to `0.11.0` with the note DOI.
+
 - **Docs: Node.js usage tabs across the guide pages (#44).** The twelve guide
   pages that carry Python/Rust/Ruby tabs now also show a runnable **Node** tab —
   38 tabs in all, matching the Ruby coverage. Every Node example is executed

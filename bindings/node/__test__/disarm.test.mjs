@@ -359,7 +359,7 @@ describe('invisible / non-interchange stripping (#413)', () => {
   const SCOTLAND = '\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}'
 
   test('standalone helpers', () => {
-    expect(disarm.stripTags('hi' + tags('PWN'))).toBe('hi')
+    expect(disarm.stripTags(`hi${tags('PWN')}`)).toBe('hi')
     expect(disarm.stripTags(SCOTLAND)).toBe(SCOTLAND) // valid emoji flag preserved
     expect(disarm.stripVariationSelectors('g\u{FE01}data')).toBe('gdata')
     expect(disarm.stripNoncharacters('a\u{FFFE}b')).toBe('ab')
@@ -367,7 +367,7 @@ describe('invisible / non-interchange stripping (#413)', () => {
   })
 
   test('preset behaviour flows from the core', () => {
-    expect(disarm.securityClean('hi' + tags('PWN'))).toBe('hi') // tag smuggling stripped
+    expect(disarm.securityClean(`hi${tags('PWN')}`)).toBe('hi') // tag smuggling stripped
     expect(disarm.securityClean('ad\u{034F}min')).toBe('admin') // CGJ stripped
     expect(disarm.securityClean('a\u{2800}b')).toBe('a b') // Braille blank -> space
     expect(disarm.securityClean('a\u{E000}b')).toBe('ab') // PUA stripped (comparison preset)

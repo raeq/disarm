@@ -144,6 +144,9 @@ ignore_missing_imports = true
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# The binding-parity seeder + live checker are compact, standalone tooling scripts
+# kept as-authored; exempt them from lint/format rather than expand their dense style.
+extend-exclude = ["scripts/parity.py", "scripts/parity_check.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

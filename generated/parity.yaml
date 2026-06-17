@@ -1,0 +1,433 @@
+# disarm parity manifest (v2 seed). symbol | {provided_via:…} | {alias_of:…} | null(gap).
+# Python=__all__, Rust=pub fn + pub use re-exports, Ruby=def lines, Node=export function.
+operations:
+  - id: catalog_key
+    names:
+      rust: catalog_key
+      python: catalog_key
+      ruby: null
+      node: null
+  - id: clear_replacements
+    names:
+      rust: clear_replacements
+      python: clear_replacements
+      ruby: null
+      node: null
+  - id: collapse_whitespace
+    names:
+      rust: collapse_whitespace
+      python: collapse_whitespace
+      ruby: collapse_whitespace
+      node: collapseWhitespace
+  - id: decode_to_utf8
+    names:
+      rust: decode_to_utf8
+      python: decode_to_utf8
+      ruby: null
+      node: null
+  - id: dedup_batch
+    names:
+      rust: null
+      python: dedup_batch
+      ruby: null
+      node: null
+  - id: demojize
+    names:
+      rust: demojize
+      python: demojize
+      ruby: demojize
+      node: demojize
+  - id: detect_encoding
+    names:
+      rust: detect_encoding
+      python: detect_encoding
+      ruby: null
+      node: null
+  - id: detect_scripts
+    names:
+      rust: detect_scripts
+      python: detect_scripts
+      ruby: detect_scripts
+      node: detectScripts
+  - id: display_clean
+    names:
+      rust: display_clean
+      python: display_clean
+      ruby: null
+      node: null
+  - id: escape_html
+    names:
+      rust: escape_html
+      python: escape_html
+      ruby: null
+      node: null
+  - id: find_untranslatable
+    names:
+      rust: find_untranslatable
+      python: find_untranslatable
+      ruby: find_untranslatable
+      node: findUntranslatable
+  - id: fold_case
+    names:
+      rust: fold_case
+      python: fold_case
+      ruby: fold_case
+      node: foldCase
+  - id: get_pipeline
+    names:
+      rust: null
+      python: get_pipeline
+      ruby: null
+      node: null
+  - id: grapheme_len
+    names:
+      rust: grapheme_len
+      python: grapheme_len
+      ruby: grapheme_len
+      node: graphemeLen
+  - id: grapheme_split
+    names:
+      rust: grapheme_split
+      python: grapheme_split
+      ruby: grapheme_split
+      node: graphemeSplit
+  - id: grapheme_truncate
+    names:
+      rust: grapheme_truncate
+      python: grapheme_truncate
+      ruby: grapheme_truncate
+      node: graphemeTruncate
+  - id: grapheme_width
+    names:
+      rust: grapheme_width
+      python: grapheme_width
+      ruby: grapheme_width
+      node: graphemeWidth
+  - id: has_anomalies
+    names:
+      rust: has_anomalies
+      python: has_anomalies
+      ruby: has_anomalies?
+      node: hasAnomalies
+  - id: inspect_anomalies
+    names:
+      rust: inspect_anomalies
+      python: inspect_anomalies
+      ruby: inspect_anomalies
+      node: inspectAnomalies
+  - id: inspect_auto_lang
+    names:
+      rust: inspect_auto_lang
+      python: inspect_auto_lang
+      ruby: inspect_auto_lang
+      node: inspectAutoLang
+  - id: is_ascii
+    names:
+      rust: is_ascii
+      python: is_ascii
+      ruby: null
+      node: null
+  - id: is_confusable
+    names:
+      rust: is_confusable
+      python: is_confusable
+      ruby: confusable?
+      node: isConfusable
+  - id: is_mixed_script
+    names:
+      rust: is_mixed_script
+      python: is_mixed_script
+      ruby: mixed_script?
+      node: isMixedScript
+  - id: is_normalized
+    names:
+      rust: is_normalized
+      python: is_normalized
+      ruby: normalized?
+      node: isNormalized
+  - id: is_suspicious_hostname
+    names:
+      rust: is_suspicious_hostname
+      python: is_suspicious_hostname
+      ruby: suspicious_hostname?
+      node: isSuspiciousHostname
+  - id: is_zalgo
+    names:
+      rust: is_zalgo
+      python: is_zalgo
+      ruby: zalgo?
+      node: isZalgo
+  - id: lang_info
+    names:
+      rust: null
+      python: lang_info
+      ruby: null
+      node: null
+  - id: list_context_langs
+    names:
+      rust: null
+      python: list_context_langs
+      ruby: null
+      node: null
+  - id: list_langs
+    names:
+      rust: list_langs
+      python: list_langs
+      ruby: null
+      node: null
+  - id: list_profiles
+    names:
+      rust: list_profiles
+      python: list_profiles
+      ruby: null
+      node: null
+  - id: list_scripts
+    names:
+      rust: null
+      python: list_scripts
+      ruby: null
+      node: null
+  - id: make_cached_transliterator
+    names:
+      rust: null
+      python: make_cached_transliterator
+      ruby: null
+      node: null
+  - id: ml_normalize
+    names:
+      rust: ml_normalize
+      python: ml_normalize
+      ruby: null
+      node: null
+  - id: normalize
+    names:
+      rust: normalize
+      python: normalize
+      ruby: normalize
+      node: normalize
+  - id: normalize_confusables
+    names:
+      rust: normalize_confusables
+      python: normalize_confusables
+      ruby: normalize_confusables
+      node: normalizeConfusables
+  - id: normalize_user_input
+    names:
+      rust: normalize_user_input
+      python: normalize_user_input
+      ruby: null
+      node: null
+  - id: percent_encode
+    names:
+      rust: percent_encode
+      python: percent_encode
+      ruby: null
+      node: null
+  - id: register_lang
+    names:
+      rust: register_lang
+      python: register_lang
+      ruby: null
+      node: null
+  - id: register_replacements
+    names:
+      rust: register_replacements
+      python: register_replacements
+      ruby: null
+      node: null
+  - id: registrations_sealed
+    names:
+      rust: registrations_sealed
+      python: registrations_sealed
+      ruby: null
+      node: null
+  - id: remove_replacement
+    names:
+      rust: remove_replacement
+      python: remove_replacement
+      ruby: null
+      node: null
+  - id: reverse_langs
+    names:
+      rust: reverse_langs
+      python: reverse_langs
+      ruby: null
+      node: null
+  - id: reverse_transliterate
+    names:
+      rust: reverse_transliterate
+      python: { provided_via: "transliterate(target=…)" }
+      ruby: reverse_transliterate
+      node: reverseTransliterate
+  - id: sanitize_filename
+    names:
+      rust: sanitize_filename
+      python: sanitize_filename
+      ruby: sanitize_filename
+      node: sanitizeFilename
+  - id: script_info
+    names:
+      rust: null
+      python: script_info
+      ruby: null
+      node: null
+  - id: seal_registrations
+    names:
+      rust: seal_registrations
+      python: seal_registrations
+      ruby: null
+      node: null
+  - id: search_key
+    names:
+      rust: search_key
+      python: search_key
+      ruby: null
+      node: null
+  - id: security_clean
+    names:
+      rust: security_clean
+      python: security_clean
+      ruby: security_clean
+      node: securityClean
+  - id: set_emoji_provider
+    names:
+      rust: null
+      python: set_emoji_provider
+      ruby: null
+      node: null
+  - id: slugify
+    names:
+      rust: slugify
+      python: slugify
+      ruby: slugify
+      node: slugify
+  - id: sort_key
+    names:
+      rust: sort_key
+      python: sort_key
+      ruby: null
+      node: null
+  - id: strip_accents
+    names:
+      rust: strip_accents
+      python: strip_accents
+      ruby: strip_accents
+      node: stripAccents
+  - id: strip_bidi
+    names:
+      rust: strip_bidi
+      python: strip_bidi
+      ruby: strip_bidi
+      node: stripBidi
+  - id: strip_control_chars
+    names:
+      rust: strip_control_chars
+      python: { provided_via: "collapse_whitespace(strip_control=True) / get_pipeline()" }
+      ruby: strip_control_chars
+      node: stripControlChars
+  - id: strip_log_injection
+    names:
+      rust: strip_log_injection
+      python: strip_log_injection
+      ruby: null
+      node: null
+  - id: strip_obfuscation
+    names:
+      rust: strip_obfuscation
+      python: strip_obfuscation
+      ruby: strip_obfuscation
+      node: stripObfuscation
+  - id: strip_zalgo
+    names:
+      rust: strip_zalgo
+      python: strip_zalgo
+      ruby: strip_zalgo
+      node: stripZalgo
+  - id: strip_zero_width_chars
+    names:
+      rust: strip_zero_width_chars
+      python: { provided_via: "collapse_whitespace(strip_zero_width=True) / get_pipeline()" }
+      ruby: strip_zero_width_chars
+      node: stripZeroWidthChars
+  - id: terminal_width
+    names:
+      rust: terminal_width
+      python: terminal_width
+      ruby: terminal_width
+      node: terminalWidth
+  - id: transliterate
+    names:
+      rust: transliterate
+      python: transliterate
+      ruby: transliterate
+      node: transliterate
+  - id: ascii_fold
+    alias_of: transliterate
+    names:
+      rust: null
+      python: ascii_fold
+      ruby: null
+      node: null
+  - id: casefold
+    alias_of: fold_case
+    names:
+      rust: null
+      python: casefold
+      ruby: null
+      node: null
+  - id: remove_accents
+    alias_of: strip_accents
+    names:
+      rust: null
+      python: remove_accents
+      ruby: null
+      node: null
+  - id: slugify_de
+    alias_of: slugify
+    names:
+      rust: null
+      python: slugify_de
+      ruby: null
+      node: null
+  - id: slugify_el
+    alias_of: slugify
+    names:
+      rust: null
+      python: slugify_el
+      ruby: null
+      node: null
+  - id: slugify_filename
+    alias_of: slugify
+    names:
+      rust: null
+      python: slugify_filename
+      ruby: null
+      node: null
+  - id: slugify_ru
+    alias_of: slugify
+    names:
+      rust: null
+      python: slugify_ru
+      ruby: null
+      node: null
+  - id: slugify_unicode
+    alias_of: slugify
+    names:
+      rust: null
+      python: slugify_unicode
+      ruby: null
+      node: null
+  - id: slugify_url
+    alias_of: slugify
+    names:
+      rust: null
+      python: slugify_url
+      ruby: null
+      node: null
+  - id: unidecode
+    alias_of: transliterate
+    names:
+      rust: null
+      python: unidecode
+      ruby: null
+      node: null

@@ -190,6 +190,64 @@ for lang in ("ruby", "node", "python"):
         print(f"  clear gaps   ({len(hard)}): " + ", ".join(hard))
 
 
+# ── docs coverage ─────────────────────────────────────────────────────────────
+# An op is "documented" in language L if its L-specific symbol appears in L's docs:
+# the per-language API / getting-started pages, plus that language's content-tab
+# blocks (`=== "Node"` …) in the shared guides. Same presence heuristic as the symbol
+# parity above — it catches code that shipped without docs.
+DOC_PRIMARY = {
+    "rust": ["docs/RUST_API.md", "docs/rust"],
+    "python": ["docs/api", "docs/python"],
+    "ruby": ["docs/ruby"],
+    "node": ["docs/node"],
+}
+DOC_TAB_DIRS = ["docs/user-guide", "docs/concepts", "docs/migration"]
+DOC_TAB_LABEL = {"rust": "Rust", "python": "Python", "ruby": "Ruby", "node": "Node"}
+
+
+def _read_md(rel):
+    p = ROOT / rel
+    if p.is_file():
+        return p.read_text()
+    if p.is_dir():
+        return "\n".join(f.read_text() for f in sorted(p.rglob("*.md")))
+    return ""
+
+
+def _tab_blocks(text, label):
+    # mkdocs-material content tabs: `=== "Label"` then a body until the next tab / heading.
+    return "\n".join(re.findall(rf'===\s+"{label}"\s*\n(.*?)(?=\n===\s+"|\n#|\Z)', text, re.S))
+
+
+def docs_text(lang):
+    parts = [_read_md(r) for r in DOC_PRIMARY[lang]]
+    shared = "\n".join(_read_md(d) for d in DOC_TAB_DIRS)
+    parts.append(_tab_blocks(shared, DOC_TAB_LABEL[lang]))
+    return "\n".join(parts)
+
+
+DOCS = {lang: docs_text(lang) for lang in LANGS}
+
+
+def docs_covered(c, lang):
+    sym = canonmap[c].get(lang)
+    return bool(sym) and (sym in DOCS[lang] or sym.rstrip("?!") in DOCS[lang])
+
+
+print("\n=== docs coverage (op documented in the language's docs) ===")
+for lang in LANGS:
+    exposed = [c for c in ops if canonmap[c].get(lang)]
+    doc = sum(docs_covered(c, lang) for c in exposed)
+    print(f"  {lang:7}{doc:2}/{len(exposed)} ({100 * doc // max(len(exposed), 1)}%)")
+
+for lang in LANGS:
+    exposed = [c for c in ops if canonmap[c].get(lang)]
+    undoc = sorted(c for c in exposed if not docs_covered(c, lang))
+    print(f"\n=== {lang}: {len(undoc)} docs gaps ===")
+    if undoc:
+        print("  " + ", ".join(undoc))
+
+
 # write corrected manifest with alias_of/provided_via support
 def cell(c, l):
     if l in canonmap[c]:

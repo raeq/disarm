@@ -208,6 +208,25 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   romanization, not homoglyph defense, pointing to `normalize_confusables()` /
   `strip_obfuscation()` for the latter.
 
+### Fixed
+
+- **`security_clean` / `sort_key` idempotency on invisible-separated combining
+  marks (#416).** When an invisible code point separated a base character from a
+  combining mark (e.g. `"a"` + `U+200B` + combining acute + `"b"`), the leading
+  NFKC passed over the still-separated mark and the later zero-width strip then
+  left the base and mark adjacent but *decomposed* — so the composed form
+  appeared only on the second call, violating the documented `f(f(x)) == f(x)`
+  invariant (which `THREAT_MODEL.md` classifies as a vulnerability). A **terminal
+  NFC pass** now closes the pipeline of both presets in the Rust core (so every
+  binding inherits it), recomposing the adjacency on the first call. NFC is
+  sufficient: the leading NFKC already removed compatibility forms and stripping
+  only deletes code points. **Output change:** for these previously
+  non-idempotent inputs the first call now returns the composed NFC form.
+  `sort_key` was affected only because it began *preserving* accents in #411
+  (`search_key`/`catalog_key`, which fold accents away, were never affected); the
+  proptest idempotency assertions were also strengthened from
+  equality-modulo-NFC to raw equality, which is what let this slip through before.
+
 ### Internal
 
 - **The Tier 3 exhaustive+formal gate now guards every publish, not just PyPI/crates.io (#159, #395).**

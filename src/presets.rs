@@ -31,6 +31,27 @@ fn nfkc_normalize(text: &str) -> Cow<'_, str> {
     }
 }
 
+/// NFC-normalize `text`, skipping the pass for all-ASCII input (ASCII is already
+/// in NFC normal form).
+///
+/// Used as the **terminal** step of presets that strip invisible code points
+/// after their leading NFKC pass (#416). Stripping a zero-width / invisible
+/// separator can leave a base character adjacent to a combining mark that was
+/// not adjacent before — a *decomposed* sequence that the leading NFKC already
+/// passed over. A final NFC recomposes it, making the pipeline a fixed point
+/// (`f(f(x)) == f(x)`). NFC, not NFKC, is sufficient and correct: the leading
+/// NFKC already removed every compatibility form, and stripping only *deletes*
+/// code points, so no new compatibility form can appear — only canonical
+/// base+mark adjacencies, which is exactly what NFC composes.
+#[inline]
+fn nfc_normalize(text: &str) -> Cow<'_, str> {
+    if text.is_ascii() {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(text.nfc().collect())
+    }
+}
+
 /// Strip dangerous bidirectional override and formatting characters
 /// that `collapse_whitespace` does not handle.
 ///
@@ -134,7 +155,7 @@ fn is_bidi_or_format(ch: char) -> bool {
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace → (path-separator neutralization)
+/// Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace → NFC → (path-separator neutralization)
 ///
 /// Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
 /// zero-width injections and control chars, and removes dangerous bidi
@@ -143,7 +164,8 @@ fn is_bidi_or_format(ch: char) -> bool {
 /// `strip_bidi` runs *before* `collapse_whitespace` so that removing
 /// invisible characters (e.g. soft hyphen U+00AD) can expose leading,
 /// trailing, or consecutive whitespace that `collapse_whitespace` then
-/// normalizes.  This guarantees idempotency.
+/// normalizes. A terminal NFC pass (#416) recomposes any base+mark adjacency a
+/// strip created, so the pipeline is idempotent (`f(f(x)) == f(x)`).
 pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf = nfkc_normalize(text);
@@ -153,7 +175,14 @@ pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
     let buf = strip_bidi(&buf);
     // 4. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::collapse_whitespace(&buf, true, true);
-    // 5. Path-safety guarantee (#248): never emit a synthesised '/', '\', or
+    // 5. Terminal NFC (#416): the strips above can leave a base character next to
+    //    a combining mark that was non-adjacent before (e.g. separated by a
+    //    now-removed zero-width), which the leading NFKC passed over. Recompose so
+    //    the pipeline is a fixed point — without this, `f(f(x)) != f(x)`. Runs
+    //    before path-neutralization so #248 remains the final gate; NFC composes
+    //    letters, never a '/', '\\', or '..', so the two steps are independent.
+    let buf = nfc_normalize(&buf);
+    // 6. Path-safety guarantee (#248): never emit a synthesised '/', '\', or
     //    '..' traversal (a confusable like U+2044 must not become an actionable
     //    separator in security-preset output).
     Ok(neutralize_path_separators(&buf))
@@ -387,6 +416,12 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
     let buf = case_fold::fold_case_impl(&buf);
     // 5. Collapse whitespace + strip control + strip zero-width
     let buf = whitespace::collapse_whitespace(&buf, true, true);
+    // 6. Terminal NFC (#416): because sort_key now *preserves* Latin accents
+    //    (#411) instead of folding them away, a combining mark separated from its
+    //    base by a now-stripped zero-width would otherwise survive in decomposed
+    //    form and only compose on the next pass — breaking idempotency. Recompose
+    //    so `f(f(x)) == f(x)`.
+    let buf = nfc_normalize(&buf).into_owned();
     Ok(buf)
 }
 
@@ -671,6 +706,39 @@ mod tests {
     }
 
     #[test]
+    fn test_security_clean_idempotent_on_invisible_separated_mark() {
+        // #416: stripping the zero-width leaves `a` adjacent to U+0301 (combining
+        // acute) — a decomposed sequence the leading NFKC passed over. The
+        // terminal NFC recomposes it on the FIRST pass, so f(f(x)) == f(x).
+        for sep in ['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'] {
+            let input = format!("a{sep}\u{0301}b");
+            let once = security_clean(&input).unwrap();
+            assert_eq!(once, "\u{00E1}b", "sep {sep:?} should compose to á+b");
+            assert_eq!(
+                once,
+                security_clean(&once).unwrap(),
+                "sep {sep:?} not idempotent"
+            );
+        }
+    }
+
+    #[test]
+    fn test_sort_key_idempotent_on_invisible_separated_mark() {
+        // #416 / #411: sort_key now preserves the accent, so the same decomposed
+        // sequence must be recomposed by the terminal NFC to stay a fixed point.
+        for sep in ['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'] {
+            let input = format!("a{sep}\u{0301}b");
+            let once = sort_key(&input, None).unwrap();
+            assert_eq!(once, "\u{00E1}b");
+            assert_eq!(
+                once,
+                sort_key(&once, None).unwrap(),
+                "sep {sep:?} not idempotent"
+            );
+        }
+    }
+
+    #[test]
     fn test_ml_normalize_basic() {
         let result = ml_normalize("Café Résumé", None, "cldr").unwrap();
         assert_eq!(result, "cafe resume");
@@ -946,9 +1014,22 @@ mod tests {
 
             #[test]
             fn security_clean_idempotent(s in adversarial()) {
+                // #416: assert *raw* equality, not equality-modulo-NFC. The
+                // earlier `nfc(once) == nfc(twice)` form normalized away the very
+                // difference the terminal-NFC fix removes, so it could not catch
+                // the base+invisible+mark idempotency violation.
                 let once = security_clean(&s).unwrap();
                 let twice = security_clean(&once).unwrap();
-                prop_assert_eq!(nfc(&once), nfc(&twice));
+                prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn sort_key_idempotent(s in adversarial()) {
+                // #416/#411: sort_key preserves accents, so it needs the same
+                // terminal NFC to be a true fixed point. Raw equality.
+                let once = sort_key(&s, None).unwrap();
+                let twice = sort_key(&once, None).unwrap();
+                prop_assert_eq!(once, twice);
             }
 
             #[test]

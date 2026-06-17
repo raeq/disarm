@@ -407,6 +407,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("confusables", "latin"),
         ("strip_bidi", None),
         ("collapse_whitespace", None),
+        # Terminal NFC (#416): recompose any base+mark adjacency the strips left
+        # behind, so the pipeline is a fixed point (f(f(x)) == f(x)).
+        ("normalize", "NFC"),
     ],
     "ml_normalize": [
         ("normalize", "NFKC"),
@@ -445,6 +448,10 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("transliterate", "non_latin"),
         ("fold_case", None),
         ("collapse_whitespace", None),
+        # Terminal NFC (#416): sort_key preserves accents (#411), so a combining
+        # mark separated from its base by a now-stripped zero-width must be
+        # recomposed here or the key is not a fixed point.
+        ("normalize", "NFC"),
     ],
     "normalize_user_input": [
         # #121: order and steps corrected to match actual Rust execution in

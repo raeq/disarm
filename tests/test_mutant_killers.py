@@ -301,6 +301,7 @@ class TestPipelineStepTuples:
                     ("confusables", "latin"),
                     ("strip_bidi", None),
                     ("collapse_whitespace", None),
+                    ("normalize", "NFC"),
                 ],
             ),
             (
@@ -351,6 +352,7 @@ class TestPipelineStepTuples:
                     ("transliterate", "non_latin"),
                     ("fold_case", None),
                     ("collapse_whitespace", None),
+                    ("normalize", "NFC"),
                 ],
             ),
             (

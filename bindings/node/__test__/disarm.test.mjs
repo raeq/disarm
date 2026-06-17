@@ -120,6 +120,11 @@ describe('key-derivation presets', () => {
     expect(disarm.sortKey('Москва', { lang: 'ru' }).length).toBeGreaterThan(0)
     expect(disarm.catalogKey('Москва', { lang: 'ru', strictIso9: true }).length).toBeGreaterThan(0)
   })
+  test('an unknown lang throws DisarmInvalidArgument', () => {
+    expect(() => disarm.searchKey('x', { lang: 'zz' })).toThrow(DisarmInvalidArgument)
+    expect(() => disarm.sortKey('x', { lang: 'zz' })).toThrow(DisarmInvalidArgument)
+    expect(() => disarm.catalogKey('x', { lang: 'zz' })).toThrow(DisarmInvalidArgument)
+  })
 })
 
 describe('graphemes', () => {

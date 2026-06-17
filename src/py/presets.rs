@@ -9,8 +9,7 @@ use pyo3::prelude::*;
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace →
-/// (path-separator neutralization).
+/// Pipeline: NFKC → confusables → strip bidi/format → collapse_whitespace.
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _security_clean(text: &str) -> PyResult<String> {

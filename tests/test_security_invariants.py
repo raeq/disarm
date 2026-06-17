@@ -234,25 +234,9 @@ class TestSecurityCleanComposite:
         # No consecutive spaces
         assert "  " not in result
 
-
-class TestPathSafetyInvariant:
-    """#248: the security presets must guarantee path-safe output across the
-    whole Unicode input space — no synthesised '/', '\\', or '..' traversal,
-    however the input tries to smuggle one (e.g. via confusable fraction/division
-    slashes or two-dot leaders)."""
-
-    @given(text=unicode_text)
-    @settings(max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
-    def test_normalize_user_input_is_path_safe(self, text: str) -> None:
-        out = normalize_user_input(text)
-        assert "/" not in out
-        assert "\\" not in out
-        assert ".." not in out
-
-    @given(text=unicode_text)
-    @settings(max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
-    def test_security_clean_is_path_safe(self, text: str) -> None:
-        out = security_clean(text)
-        assert "/" not in out
-        assert "\\" not in out
-        assert ".." not in out
+    def test_real_path_separators_survive(self) -> None:
+        """#431 (reverses #248): the presets no longer rewrite path separators —
+        a plain path round-trips unchanged. Traversal is defended at the sink,
+        not by the canonicalization presets."""
+        assert security_clean("a/b\\c") == "a/b\\c"
+        assert normalize_user_input("a/b\\c") == "a/b\\c"

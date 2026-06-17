@@ -6,12 +6,12 @@ use crate::Error;
 // ── Precompiled pipeline presets ──────────────────────────────────────────────
 
 /// Security-focused text canonicalization (homoglyph / bidi / zero-width / control
-/// neutralization with a path-safety guarantee).
+/// neutralization).
 ///
-/// Pipeline: NFKC → confusables → strip bidi/format → collapse whitespace →
-/// path-separator neutralization. Fallible only through the confusables stage,
-/// whose target script is fixed internally, so in practice this never errors;
-/// the [`Result`] keeps the surface uniform with the other key/clean presets.
+/// Pipeline: NFKC → confusables → strip bidi/format → collapse whitespace.
+/// Fallible only through the confusables stage, whose target script is fixed
+/// internally, so in practice this never errors; the [`Result`] keeps the
+/// surface uniform with the other key/clean presets.
 pub fn security_clean(text: &str) -> Result<String, Error> {
     crate::presets::security_clean(text).map_err(Error::from)
 }
@@ -67,8 +67,7 @@ pub fn strip_bidi(text: &str) -> String {
 
 /// Normalize user-submitted input — Unicode hygiene that **preserves the original
 /// script** (no transliteration): NFKC → strip bidi/zero-width/control →
-/// strip zalgo → confusables → collapse whitespace → path-separator
-/// neutralization.
+/// strip zalgo → confusables → collapse whitespace.
 ///
 /// Not an output sanitizer (no HTML/JS/SQL escaping). Fallible only through the
 /// fixed-target confusables stage; the [`Result`] keeps the surface uniform.

@@ -125,8 +125,8 @@ Disarm.strip_obfuscation("рroduсt")                # => "product"
 
 ### `Disarm.security_clean(text)`
 
-Aggressive security cleaning: NFKC, confusable folding, bidi stripping,
-whitespace collapse, and path-safety in one preset.
+Aggressive security cleaning: NFKC, confusable folding, bidi stripping, and
+whitespace collapse in one preset.
 
 ```ruby
 Disarm.security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")                 # => "Real text"

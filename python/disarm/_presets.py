@@ -34,7 +34,7 @@ from disarm._core import (
 def security_clean(text: str) -> str:
     """Security-focused text canonicalization.
 
-    Pipeline: NFKC → strip bidi/format → collapse_whitespace → NFC → confusables → NFC → (path-separator neutralization)
+    Pipeline: NFKC → strip bidi/format → collapse_whitespace → NFC → confusables → NFC
 
     Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
     dangerous bidi overrides and soft hyphens, then normalizes whitespace
@@ -341,8 +341,9 @@ def normalize_user_input(text: str) -> str:
     overrides, zero-width injections, and control characters.
 
     Pipeline: ``NFKC → strip_bidi → strip_zero_width → strip_control → strip_zalgo
-    → confusables → collapse_whitespace → (path-separator neutralization)`` (invisibles are stripped before zalgo-capping so they
-    cannot split combining-mark runs, keeping the output idempotent)
+    → confusables → collapse_whitespace`` (invisibles are stripped before
+    zalgo-capping so they cannot split combining-mark runs, keeping the output
+    idempotent)
 
     Args:
         text: User-submitted input string.

@@ -9,7 +9,7 @@ Usage:
   node   tools/introspect/node_surface.mjs         > surfaces/node.json
   ruby   tools/introspect/ruby_surface.rb          > surfaces/ruby.json
   cargo  public-api --simplified | ... > surfaces/rust.json
-  python tools/parity_check.py parity.yaml surfaces/
+  python scripts/parity_check.py generated/parity.yaml surfaces/
 """
 
 import sys, json, re, pathlib

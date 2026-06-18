@@ -201,7 +201,10 @@ def audit_npm() -> list[Finding]:
     node_dir = REPO / "bindings" / "node"
     if not shutil.which("npm") or not (node_dir / "package.json").exists():
         return [Finding("npm", "node binding", "(npm not available)", "", "", "skipped")]
-    # `npm outdated` exits 1 when anything is outdated — that is not an error here.
+    # `npm outdated` exits 0 when everything is current and 1 when something is
+    # outdated — neither is an error. Any OTHER code (or stderr noise with no
+    # stdout) is a real failure (no node_modules, network, …); report it as
+    # "unknown" rather than letting an empty stdout masquerade as "all current".
     proc = subprocess.run(  # noqa: S603
         ["npm", "outdated", "--json"],  # noqa: S607
         cwd=node_dir,
@@ -209,8 +212,12 @@ def audit_npm() -> list[Finding]:
         text=True,
     )
     out = proc.stdout.strip()
+    if proc.returncode not in (0, 1):
+        return [Finding("npm", "node binding", "(npm outdated failed)", "", "", "unknown")]
     if not out:
-        return []
+        if proc.returncode == 0 and not proc.stderr.strip():
+            return []  # genuinely all current
+        return [Finding("npm", "node binding", "(npm outdated inconclusive)", "", "", "unknown")]
     try:
         data = json.loads(out)
     except json.JSONDecodeError:
@@ -229,6 +236,10 @@ def audit_bundler() -> list[Finding]:
     ruby_dir = REPO / "bindings" / "ruby"
     if not shutil.which("bundle") or not (ruby_dir / "Gemfile").exists():
         return [Finding("bundler", "ruby binding", "(bundler not available)", "", "", "skipped")]
+    # `bundle outdated` exits 0 when all gems are current and non-zero when some
+    # are outdated — but it ALSO exits non-zero on a real failure (no
+    # Gemfile.lock, resolver error). Parse the "newest …" lines; if none parse on
+    # a non-zero exit, treat it as a failure ("unknown"), not "all current".
     proc = subprocess.run(  # noqa: S603
         ["bundle", "outdated", "--parseable"],  # noqa: S607
         cwd=ruby_dir,
@@ -246,6 +257,10 @@ def audit_bundler() -> list[Finding]:
         findings.append(
             Finding("bundler", "ruby binding", name, current, latest, _severity(current, latest))
         )
+    if not findings and proc.returncode != 0:
+        return [
+            Finding("bundler", "ruby binding", "(bundle outdated inconclusive)", "", "", "unknown")
+        ]
     return findings
 
 

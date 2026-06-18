@@ -36,6 +36,17 @@ CONFUSABLES_URL = "https://www.unicode.org/Public/security/latest/confusables.tx
 DATA_DIR = Path(__file__).resolve().parent.parent / "src" / "tables" / "data"
 # Pinned, version-controlled source so regeneration is reproducible (see header).
 BUNDLED_CONFUSABLES = Path(__file__).resolve().parent.parent / "data" / "confusables.txt"
+
+# Digit-protection (#439) and case-folding read `unicodedata`, so the generator's
+# output depends on the running Python's Unicode version. Under a table older than
+# the data, a recently-assigned digit (e.g. the OUTLINED DIGITS U+1CCF0/U+1CCF1,
+# or any non-ASCII digit unknown to that table) is not recognised as `Nd` and
+# folds to its look-alike LETTER instead of its digit — silently corrupting the
+# maps. The bundled confusables.txt is Unicode 17.0.0; require at least the floor
+# below (which knows the currently-problematic digit blocks) and warn on any
+# mismatch. Run under the newest Python available.
+DATA_UNICODE_VERSION = "17.0.0"
+MIN_UNICODE_VERSION = "16.0.0"
 # Measured cross-script supplement folded with priority over TR39 (#342/#343).
 BUNDLED_SUPPLEMENT = Path(__file__).resolve().parent.parent / "data" / "confusables_supplement.tsv"
 
@@ -293,6 +304,24 @@ def fix_case_mismatch(source_cp: int, target_str: str) -> str:
     return target_str
 
 
+def enforce_digit_target(source_cp: int, target_str: str) -> str | None:
+    """A digit source must never fold to a letter (#439).
+
+    TR39 routes OUTLINED DIGIT ZERO/ONE (U+1CCF0/U+1CCF1) through the visual chain
+    0→O / 1→l, so their prototype is the *letter* O / l — but a digit must fold to
+    its canonical ASCII digit, exactly as the rest of that block does
+    (1CCF2–1CCF9 → 2–9). For any decimal-digit (`Nd`) source whose computed target
+    is not already a single ASCII digit, remap it to the source's own digit value;
+    return ``None`` to drop the row if that value is somehow indeterminate.
+    """
+    if unicodedata.category(chr(source_cp)) != "Nd":
+        return target_str
+    if len(target_str) == 1 and target_str.isascii() and target_str.isdigit():
+        return target_str
+    d = unicodedata.digit(chr(source_cp), None)
+    return str(d) if d is not None else None
+
+
 def filter_direct(
     entries: list[tuple[int, list[int]]],
     script_name: str,
@@ -322,7 +351,10 @@ def filter_direct(
         if not target_str.strip():
             continue
         target_str = fix_case_mismatch(source_cp, target_str)
-        result.append((source_cp, target_str))
+        guarded = enforce_digit_target(source_cp, target_str)
+        if guarded is None:
+            continue
+        result.append((source_cp, guarded))
     return result
 
 
@@ -398,9 +430,10 @@ def filter_via_classes(
             if target_cp is not None:
                 target_str = chr(target_cp)
                 target_str = fix_case_mismatch(m, target_str)
+                guarded = enforce_digit_target(m, target_str)
                 # Only keep if not already mapped (direct takes priority)
-                if m not in result_map:
-                    result_map[m] = target_str
+                if guarded is not None and m not in result_map:
+                    result_map[m] = guarded
 
     return list(result_map.items())
 
@@ -528,7 +561,28 @@ def write_tsv(mappings: list[tuple[int, str]], path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _check_unicode_version() -> None:
+    """Refuse to run under a Unicode table too old to classify the data's digits (#439)."""
+    cur = unicodedata.unidata_version
+    as_tuple = lambda v: tuple(int(p) for p in v.split("."))  # noqa: E731
+    if as_tuple(cur) < as_tuple(MIN_UNICODE_VERSION):
+        sys.exit(
+            f"gen_confusables requires unicodedata >= {MIN_UNICODE_VERSION}, but this Python "
+            f"ships {cur}. Under an older table, digits assigned in newer Unicode (e.g. the "
+            f"outlined digits U+1CCF0/U+1CCF1) are not recognised and fold to look-alike "
+            f"letters (#439). Run under a newer Python."
+        )
+    if cur != DATA_UNICODE_VERSION:
+        print(
+            f"warning: confusables.txt is Unicode {DATA_UNICODE_VERSION} but this Python's "
+            f"unicodedata is {cur}; characters assigned only in {DATA_UNICODE_VERSION} may be "
+            f"misclassified. Regenerate under a matching Python when one is available.",
+            file=sys.stderr,
+        )
+
+
 def main() -> None:
+    _check_unicode_version()
     parser = argparse.ArgumentParser(
         description="Generate confusable TSV files from TR39 confusables.txt"
     )

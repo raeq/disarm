@@ -49,7 +49,7 @@ encoding. A validator that runs *after* disarm sees the canonical form; a valida
 via invisible-character stripping* under *Out of scope*).
 
 **A "disarmed" string carries no safety property — do not launder trust through it.** The
-output of `security_clean` / `normalize_user_input` / `strip_obfuscation` is *more canonical*,
+output of `canonicalize` / `canonicalize_strict` / `strip_obfuscation` is *more canonical*,
 not *safe*: after unmasking and coalescence it is, if anything, **more** actionable than the
 input, never less. Passing text through disarm grants it nothing; every downstream sink must
 still validate and context-encode as though the text were raw.
@@ -62,17 +62,19 @@ the validator sees them, instead of after.
 ## Naming
 
 Preset and function names in disarm describe the **steps they apply**, not a safety outcome.
-`strip_obfuscation` strips; `security_clean` and `display_clean` compose a fixed sequence of
-strips and normalizations; `normalize_user_input` normalizes. None of them assert that their
+`strip_obfuscation` strips; `canonicalize` and `strip_format` compose a fixed sequence of
+strips and normalizations; `canonicalize_strict` normalizes. None of them assert that their
 output is secure, clean, or safe to trust — the *Positioning* and *Out of scope* sections
 govern, and a name is only ever shorthand for the mechanism it runs.
 
 A name that **sounds like a guarantee** — anything matching `*_clean` or `*_secure` — is, by
 this standard, a **documentation defect**: it invites exactly the trust-laundering this document
 warns against. disarm treats such names as defects subject to **rename with a deprecation
-cycle** (a deprecated alias kept for a transition period, then removed), tracked as their own
-issues. Until a rename lands, read every `*_clean` name as a description of its pipeline steps
-and nothing more.
+cycle** (a deprecated alias kept for a transition period, then removed). The original
+`security_clean` / `display_clean` / `normalize_user_input` presets were renamed on exactly
+these grounds in 0.11 (#430) to the mechanism names `canonicalize` / `strip_format` /
+`canonicalize_strict`; the old names remain as deprecated aliases and are removed in 1.0. Read
+every name as a description of its pipeline steps and nothing more.
 
 ## Assets and actors
 
@@ -91,7 +93,7 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 | `strip_bidi` | Remove the UAX#9 bidi formatting/isolate/override code points enumerated in the implementation. |
 | `strip_zalgo` / `is_zalgo` | Remove or detect runs of combining marks above a configurable threshold. |
 | zero-width / invisible stripping | Remove the enumerated zero-width and invisible code points. |
-| `strip_obfuscation` / `security_clean` / `normalize_user_input` | Compose the above in a fixed order. The output is "more canonical," not "safe." |
+| `strip_obfuscation` / `canonicalize` / `canonicalize_strict` | Compose the above in a fixed order. The output is "more canonical," not "safe." (`canonicalize` / `canonicalize_strict` were named `security_clean` / `normalize_user_input` before 0.11 — deprecated aliases, removed in 1.0.) |
 | `is_suspicious_hostname` | Flag **mixed-script** labels and labels containing bundled-table confusables. A not-suspicious result asserts no problem was *found*, not that the host is safe. |
 | `normalize` (NFC/NFD/NFKC/NFKD), `fold_case` | Standard Unicode normalization / full case folding for the bundled Unicode data version. |
 | `escape_html` | HTML entity escaping of the five metacharacters (`& < > " '`) for element-body / quoted-attribute context. |
@@ -153,11 +155,10 @@ behavior, not a vulnerability:
   such as `<script>alert(1)</script>` or `' OR 1=1 --` pass through every transform
   **unchanged** (every Unicode transform is a no-op on ASCII). Preventing injection is the
   job of context-appropriate output encoding at the sink, not of input normalization;
-  disarm is not, and cannot be, a substitute. A preset named `normalize_user_input` performs
-  Unicode hygiene only — the name predates this clarification; treat its output as
-  normalized, **not** as injection-safe.
+  disarm is not, and cannot be, a substitute. A preset named `canonicalize_strict` performs
+  Unicode hygiene only — treat its output as normalized, **not** as injection-safe.
 - **Metacharacter unmasking via NFKC (important).** NFKC normalization — step 1 of
-  `security_clean` and `normalize_user_input` — maps fullwidth and compatibility lookalikes
+  `canonicalize` and `canonicalize_strict` — maps fullwidth and compatibility lookalikes
   to their ASCII originals **by design** (that is how fullwidth-bypass evasion is collapsed):
   `＜script＞` (U+FF1C…U+FF1E) → `<script>`, `＆`→`&`, `＂`→`"`, `／`→`/`. A consequence is
   that disarm's output can contain *live* ASCII metacharacters that the input had only in a
@@ -166,8 +167,8 @@ behavior, not a vulnerability:
   out, never less. Do not treat normalized text as closer to injection-safe than the raw
   input; it is not.
 - **Payload reconstitution via invisible-character stripping (coalescence).** Removing
-  zero-width and other invisible code points — the zero-width pass shared by `security_clean`,
-  `normalize_user_input`, and `strip_obfuscation` — **rejoins** the characters on either side. A
+  zero-width and other invisible code points — the zero-width pass shared by `canonicalize`,
+  `canonicalize_strict`, and `strip_obfuscation` — **rejoins** the characters on either side. A
   payload an attacker fragmented to slip past an upstream filter is reassembled into its live
   form: `<scr`+`U+200B`+`ipt>` → `<script>` and `..`+`U+200B`+`/..`+`U+200B`+`/etc/passwd` →
   `../../etc/passwd`. The same holds for separators that only `strip_obfuscation` removes today —

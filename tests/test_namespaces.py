@@ -49,10 +49,20 @@ class TestSecurityNamespace:
         assert isinstance(scripts, list)
         assert all(isinstance(s, Script) for s in scripts)
 
-    def test_import_security_clean(self) -> None:
+    def test_import_canonicalize(self) -> None:
+        from disarm.security import canonicalize
+
+        assert isinstance(canonicalize("test"), str)
+
+    def test_import_security_clean_deprecated_alias(self) -> None:
+        import warnings
+
         from disarm.security import security_clean
 
-        assert isinstance(security_clean("test"), str)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert isinstance(security_clean("test"), str)
+        assert any(issubclass(w.category, DeprecationWarning) for w in caught)
 
     def test_import_strip_bidi(self) -> None:
         from disarm.security import strip_bidi
@@ -68,6 +78,7 @@ class TestSecurityNamespace:
             "is_suspicious_hostname",
             "detect_scripts",
             "normalize_confusables",
+            "canonicalize",
             "security_clean",
             "strip_bidi",
         ):

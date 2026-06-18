@@ -207,9 +207,14 @@ RSpec.describe Disarm do
       expect(Disarm.strip_noncharacters("a\u{FFFE}b")).to eq("ab")
       expect(Disarm.strip_pua("a\u{E000}b")).to eq("ab")
       # Preset behaviour flows from the core.
-      expect(Disarm.security_clean("hi" + tags.call("PWN"))).to eq("hi")
-      expect(Disarm.security_clean("ad\u{034F}min")).to eq("admin") # CGJ
-      expect(Disarm.security_clean("a\u{2800}b")).to eq("a b") # Braille blank -> space
+      expect(Disarm.canonicalize("hi" + tags.call("PWN"))).to eq("hi")
+      expect(Disarm.canonicalize("ad\u{034F}min")).to eq("admin") # CGJ
+      expect(Disarm.canonicalize("a\u{2800}b")).to eq("a b") # Braille blank -> space
+    end
+
+    it "keeps security_clean as a deprecated alias for canonicalize (#430)" do
+      input = "p\u{0430}ypal\u{202E}"
+      expect(Disarm.security_clean(input)).to eq(Disarm.canonicalize(input))
     end
 
     it "detects zalgo and strips it back under the threshold" do

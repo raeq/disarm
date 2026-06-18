@@ -144,7 +144,7 @@ Each of the 83 built-in language profiles has dedicated tests verifying:
 
 ### Security invariant tests
 
-`tests/test_security_invariants.py` uses Hypothesis to verify that `security_clean()` enforces its security contracts on any input:
+`tests/test_security_invariants.py` uses Hypothesis to verify that `canonicalize()` enforces its security contracts on any input:
 
 | Invariant | Guarantee |
 |-----------|-----------|
@@ -153,7 +153,7 @@ Each of the 83 built-in language profiles has dedicated tests verifying:
 | Confusable neutralization | No cross-script confusables in output |
 | NFKC normalization | Output always in NFKC form |
 | Whitespace collapse | No consecutive whitespace in output |
-| Idempotency | `security_clean(security_clean(x)) == security_clean(x)` |
+| Idempotency | `canonicalize(canonicalize(x)) == canonicalize(x)` |
 
 ---
 

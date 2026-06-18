@@ -258,10 +258,10 @@ In practice, `grapheme_len` gives the same count for NFC and NFD forms of the sa
 Sanitize input first, then enforce a grapheme-aware length limit:
 
 ```python
-from disarm import normalize_user_input, grapheme_len, grapheme_truncate
+from disarm import canonicalize_strict, grapheme_len, grapheme_truncate
 
 def validate_username(raw: str, max_graphemes: int = 30) -> str:
-    clean = normalize_user_input(raw)
+    clean = canonicalize_strict(raw)
     if grapheme_len(clean) > max_graphemes:
         clean = grapheme_truncate(clean, max_graphemes)
     return clean
@@ -269,13 +269,13 @@ def validate_username(raw: str, max_graphemes: int = 30) -> str:
 
 ### Post/tweet fields
 
-Use `display_clean` for lightweight sanitization and `grapheme_truncate` for the character limit:
+Use `strip_format` for lightweight sanitization and `grapheme_truncate` for the character limit:
 
 ```python
-from disarm import display_clean, grapheme_truncate
+from disarm import strip_format, grapheme_truncate
 
 def prepare_post(raw: str, max_graphemes: int = 280) -> str:
-    clean = display_clean(raw)
+    clean = strip_format(raw)
     return grapheme_truncate(clean, max_graphemes)
 ```
 
@@ -284,10 +284,10 @@ def prepare_post(raw: str, max_graphemes: int = 280) -> str:
 When storing text in a column with a character limit, truncate by grapheme clusters — never by bytes or codepoints, which can split emoji or combining sequences:
 
 ```python
-from disarm import security_clean, grapheme_truncate
+from disarm import canonicalize, grapheme_truncate
 
 def safe_for_db(raw: str, max_graphemes: int = 255) -> str:
-    clean = security_clean(raw)
+    clean = canonicalize(raw)
     return grapheme_truncate(clean, max_graphemes)
 ```
 

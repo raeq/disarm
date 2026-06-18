@@ -5,8 +5,8 @@ use crate::Error;
 
 // ── Precompiled pipeline presets ──────────────────────────────────────────────
 
-/// Security-focused text canonicalization (homoglyph / bidi / zero-width / control
-/// neutralization).
+/// Canonicalize text for security-sensitive *comparison* (homoglyph / bidi /
+/// zero-width / control neutralization).
 ///
 /// Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
 /// strip control → strip zero-width → collapse whitespace → cap combining marks
@@ -16,8 +16,21 @@ use crate::Error;
 /// #416.) Fallible only through the confusables stage, whose target script is
 /// fixed internally, so in practice this never errors; the [`Result`] keeps the
 /// surface uniform with the other key/clean presets.
+///
+/// The name describes the mechanism (Unicode canonicalization for matching), not
+/// a safety guarantee: this is **not** an output sanitizer — encode at the sink.
+pub fn canonicalize(text: &str) -> Result<String, Error> {
+    crate::presets::canonicalize(text).map_err(Error::from)
+}
+
+/// Deprecated alias for [`canonicalize`]. Renamed in 0.11 because the `*_clean`
+/// name overpromised safety (see `THREAT_MODEL.md`); removed in 1.0.
+///
+/// # Errors
+/// Propagates [`canonicalize`]'s error.
+#[deprecated(since = "0.11.0", note = "renamed to `canonicalize`; removed in 1.0")]
 pub fn security_clean(text: &str) -> Result<String, Error> {
-    crate::presets::security_clean(text).map_err(Error::from)
+    canonicalize(text)
 }
 
 /// ML/NLP text normalization: NFKC → emoji→text → transliterate → strip accents →
@@ -54,11 +67,22 @@ pub fn sort_key(text: &str, lang: Option<&str>) -> Result<String, Error> {
     crate::presets::sort_key(text, lang).map_err(Error::from)
 }
 
-/// Display-safe cleanup for rendered user content: strip bidi/format → collapse
+/// Strip bidi/format and other invisible-injection vectors from rendered user
+/// content: strip bidi/format → strip invisibles (rendering policy) → collapse
 /// whitespace (also stripping control + zero-width). Infallible.
+///
+/// Visual hygiene only — **not** markup-safe; still escape at the output layer.
+#[must_use]
+pub fn strip_format(text: &str) -> String {
+    crate::presets::strip_format(text)
+}
+
+/// Deprecated alias for [`strip_format`]. Renamed in 0.11 because `display_clean`
+/// implied markup-safety it does not provide (see `THREAT_MODEL.md`); removed in 1.0.
+#[deprecated(since = "0.11.0", note = "renamed to `strip_format`; removed in 1.0")]
 #[must_use]
 pub fn display_clean(text: &str) -> String {
-    crate::presets::display_clean(text)
+    strip_format(text)
 }
 
 /// Strip bidirectional override and formatting characters (UAX #9 §3.3.2 plus the
@@ -79,8 +103,21 @@ pub fn strip_bidi(text: &str) -> String {
 ///
 /// Not an output sanitizer (no HTML/JS/SQL escaping). Fallible only through the
 /// fixed-target confusables stage; the [`Result`] keeps the surface uniform.
+pub fn canonicalize_strict(text: &str) -> Result<String, Error> {
+    crate::presets::canonicalize_strict(text).map_err(Error::from)
+}
+
+/// Deprecated alias for [`canonicalize_strict`]. Renamed in 0.11 (the old name
+/// conceded itself a relic in `THREAT_MODEL.md`); removed in 1.0.
+///
+/// # Errors
+/// Propagates [`canonicalize_strict`]'s error.
+#[deprecated(
+    since = "0.11.0",
+    note = "renamed to `canonicalize_strict`; removed in 1.0"
+)]
 pub fn normalize_user_input(text: &str) -> Result<String, Error> {
-    crate::presets::normalize_user_input(text).map_err(Error::from)
+    canonicalize_strict(text)
 }
 
 /// Maximum-strength deobfuscation: NFKC → strip all combining marks → strip bidi →

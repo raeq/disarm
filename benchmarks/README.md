@@ -45,7 +45,7 @@ numbers are FFI-dominated and must never gate a core cluster.
   the same job with the same rustc** (the crate is compiled twice; dependency
   caching is fine, the double build is not) (V12).
 - `ftfy` is a normalizer, not a transliterator: it appears only on the
-  `normalize` / `security_clean` axis, never in a transliterate-axis ratio (V16).
+  `normalize` / `canonicalize` axis, never in a transliterate-axis ratio (V16).
 
 ## Local loop (fast, same-machine — the engineering delta)
 
@@ -105,7 +105,7 @@ even more machine-specific than wall-clock).
 | Strict-mode collect-all + double pass | `strict_scan/find_untranslatable/*` | wall time |
 | Slugify ASCII-identity copies | `slugify_doc/default/ascii_doc` | wall time, allocations |
 | Scalar `_strip_accents` ASCII fast path | `strip_accents/scalar/ascii_doc` | wall time |
-| Pipeline step-chain buffer reuse | `presets_doc/{security_clean,search_key}` | wall time, allocations |
+| Pipeline step-chain buffer reuse | `presets_doc/{canonicalize,search_key}` | wall time, allocations |
 | Per-call constants / FFI-adjacent | `short_per_call/*`, plus `benchmarks/bench_pyperf.py` | wall time |
 
 ## Notes for implementers

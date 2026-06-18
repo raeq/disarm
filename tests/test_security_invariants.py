@@ -1,6 +1,6 @@
-"""Property-based tests: security_clean output invariants.
+"""Property-based tests: canonicalize output invariants.
 
-security_clean is the primary defense against homoglyph attacks, bidi spoofing,
+canonicalize is the primary defense against homoglyph attacks, bidi spoofing,
 and invisible character injection. These tests verify that its output satisfies
 the security properties it promises, across the full Unicode input space.
 """
@@ -13,15 +13,15 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from disarm import (
+    canonicalize,
+    canonicalize_strict,
     is_confusable,
     is_normalized,
-    normalize_user_input,
-    security_clean,
 )
 
 pytestmark = pytest.mark.hypothesis
 
-# Bidi override and formatting characters that security_clean must strip
+# Bidi override and formatting characters that canonicalize must strip
 BIDI_CHARS = frozenset(
     "\u00ad"  # Soft hyphen
     "\u061c"  # Arabic Letter Mark
@@ -53,16 +53,16 @@ ZERO_WIDTH_CHARS = frozenset(
 
 
 class TestSecurityCleanBidiStripping:
-    """security_clean must strip all bidi override characters."""
+    """canonicalize must strip all bidi override characters."""
 
     @given(text=unicode_text)
     @settings(max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
     def test_no_bidi_chars_in_output(self, text: str) -> None:
         """Output must contain zero bidi override/formatting characters."""
-        result = security_clean(text)
+        result = canonicalize(text)
         found = [ch for ch in result if ch in BIDI_CHARS]
         assert not found, (
-            f"Bidi chars survived security_clean:\n"
+            f"Bidi chars survived canonicalize:\n"
             f"  input:  {text!r}\n"
             f"  output: {result!r}\n"
             f"  found:  {[f'U+{ord(c):04X}' for c in found]}"
@@ -71,21 +71,21 @@ class TestSecurityCleanBidiStripping:
     def test_all_13_bidi_chars_stripped(self) -> None:
         """Verify each of the 13 bidi chars individually."""
         for ch in BIDI_CHARS:
-            result = security_clean(f"test{ch}word")
+            result = canonicalize(f"test{ch}word")
             assert ch not in result, f"U+{ord(ch):04X} not stripped"
 
 
 class TestSecurityCleanZeroWidth:
-    """security_clean must strip zero-width characters."""
+    """canonicalize must strip zero-width characters."""
 
     @given(text=unicode_text)
     @settings(max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
     def test_no_zero_width_in_output(self, text: str) -> None:
         """Output must contain zero zero-width characters."""
-        result = security_clean(text)
+        result = canonicalize(text)
         found = [ch for ch in result if ch in ZERO_WIDTH_CHARS]
         assert not found, (
-            f"Zero-width chars survived security_clean:\n"
+            f"Zero-width chars survived canonicalize:\n"
             f"  input:  {text!r}\n"
             f"  output: {result!r}\n"
             f"  found:  {[f'U+{ord(c):04X}' for c in found]}"
@@ -93,15 +93,15 @@ class TestSecurityCleanZeroWidth:
 
 
 class TestSecurityCleanConfusables:
-    """security_clean must neutralize confusable homoglyphs."""
+    """canonicalize must neutralize confusable homoglyphs."""
 
     @given(text=unicode_text)
     @settings(max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
     def test_output_not_confusable(self, text: str) -> None:
-        """After security_clean, is_confusable must return False."""
-        result = security_clean(text)
+        """After canonicalize, is_confusable must return False."""
+        result = canonicalize(text)
         assert not is_confusable(result), (
-            f"is_confusable returned True after security_clean:\n"
+            f"is_confusable returned True after canonicalize:\n"
             f"  input:  {text!r}\n"
             f"  output: {result!r}"
         )
@@ -110,60 +110,58 @@ class TestSecurityCleanConfusables:
         """Classic Cyrillic-Latin homoglyph attack must be neutralized."""
         # "раypal" using Cyrillic р (U+0440) and а (U+0430)
         attack = "\u0440\u0430ypal"
-        result = security_clean(attack)
+        result = canonicalize(attack)
         assert result == "paypal"
         assert not is_confusable(result)
 
 
 class TestSecurityCleanNormalization:
-    """security_clean output must be NFKC-normalized."""
+    """canonicalize output must be NFKC-normalized."""
 
     @given(text=unicode_text)
     @settings(max_examples=500, suppress_health_check=[HealthCheck.too_slow])
     def test_output_is_nfkc(self, text: str) -> None:
         """Output should be in NFKC form (or close — confusables may
         introduce non-NFKC chars, but the NFKC step runs first)."""
-        result = security_clean(text)
+        result = canonicalize(text)
         # The pipeline is NFKC → confusables → collapse_ws → strip_bidi.
         # Confusables replaces chars with ASCII, collapse_ws strips chars,
         # strip_bidi strips chars. None of these introduce non-NFC chars.
         # So the output should still be NFC at minimum.
         assert is_normalized(result, form="NFC"), (
-            f"security_clean output is not NFC:\n  input:  {text!r}\n  output: {result!r}"
+            f"canonicalize output is not NFC:\n  input:  {text!r}\n  output: {result!r}"
         )
 
 
 class TestSecurityCleanWhitespace:
-    """security_clean must normalize whitespace."""
+    """canonicalize must normalize whitespace."""
 
     @given(text=unicode_text)
     @settings(max_examples=500, suppress_health_check=[HealthCheck.too_slow])
     def test_no_consecutive_spaces(self, text: str) -> None:
         """Output must not contain consecutive ASCII spaces."""
-        result = security_clean(text)
+        result = canonicalize(text)
         assert "  " not in result, (
-            f"Consecutive spaces in security_clean output:\n"
-            f"  input:  {text!r}\n"
-            f"  output: {result!r}"
+            f"Consecutive spaces in canonicalize output:\n  input:  {text!r}\n  output: {result!r}"
         )
 
     @given(text=unicode_text)
     @settings(max_examples=500, suppress_health_check=[HealthCheck.too_slow])
     def test_no_leading_trailing_whitespace(self, text: str) -> None:
         """Output must not have leading/trailing whitespace."""
-        result = security_clean(text)
+        result = canonicalize(text)
         if result:
             assert result[0] != " ", f"Leading space: {result!r}"
             assert result[-1] != " ", f"Trailing space: {result!r}"
 
 
 class TestSecurityCleanIdempotent:
-    """security_clean must be idempotent."""
+    """canonicalize must be idempotent."""
 
     @given(text=unicode_text)
     @settings(max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
     def test_idempotent(self, text: str) -> None:
-        """security_clean(security_clean(x)) == security_clean(x).
+        """canonicalize(canonicalize(x)) == canonicalize(x).
 
         Comparison uses NFC normalization because NFKC can produce combining
         mark sequences where marks with the same canonical combining class
@@ -172,10 +170,10 @@ class TestSecurityCleanIdempotent:
         """
         import unicodedata
 
-        once = security_clean(text)
-        twice = security_clean(once)
+        once = canonicalize(text)
+        twice = canonicalize(once)
         assert unicodedata.normalize("NFC", once) == unicodedata.normalize("NFC", twice), (
-            f"security_clean is not idempotent:\n"
+            f"canonicalize is not idempotent:\n"
             f"  input:  {text!r}\n"
             f"  once:   {once!r}\n"
             f"  twice:  {twice!r}"
@@ -189,26 +187,26 @@ class TestSecurityCleanComposite:
         """NFKC collapses fullwidth chars that bypass naive filters."""
         # Fullwidth "admin" — U+FF41 U+FF44 U+FF4D U+FF49 U+FF4E
         fullwidth = "\uff41\uff44\uff4d\uff49\uff4e"
-        result = security_clean(fullwidth)
+        result = canonicalize(fullwidth)
         assert result == "admin"
 
     def test_bidi_plus_homoglyph(self) -> None:
         """Combined bidi override + homoglyph attack."""
         attack = "\u202e\u0430dmin"  # RLO + Cyrillic а
-        result = security_clean(attack)
+        result = canonicalize(attack)
         assert "\u202e" not in result
         assert not is_confusable(result)
 
     def test_zwsp_splitting_keyword(self) -> None:
         """Zero-width space splitting a keyword."""
         attack = "pass\u200bword"
-        result = security_clean(attack)
+        result = canonicalize(attack)
         assert result == "password"
 
     def test_invisible_math_operators(self) -> None:
         """Invisible math operators (U+2061–U+2064) must be stripped."""
         attack = "admin\u2061user"
-        result = security_clean(attack)
+        result = canonicalize(attack)
         assert result == "adminuser"
 
     @given(
@@ -224,7 +222,7 @@ class TestSecurityCleanComposite:
     @settings(max_examples=500)
     def test_mixed_attack_vectors(self, text: str) -> None:
         """Random mix of ASCII + attack chars must always clean safely."""
-        result = security_clean(text)
+        result = canonicalize(text)
         # No bidi chars
         assert not any(ch in BIDI_CHARS for ch in result)
         # No zero-width chars
@@ -238,5 +236,5 @@ class TestSecurityCleanComposite:
         """#431 (reverses #248): the presets no longer rewrite path separators —
         a plain path round-trips unchanged. Traversal is defended at the sink,
         not by the canonicalization presets."""
-        assert security_clean("a/b\\c") == "a/b\\c"
-        assert normalize_user_input("a/b\\c") == "a/b\\c"
+        assert canonicalize("a/b\\c") == "a/b\\c"
+        assert canonicalize_strict("a/b\\c") == "a/b\\c"

@@ -133,10 +133,39 @@ fn transliteration() {
 
 #[test]
 fn presets_and_pipeline() {
-    assert!(api::security_clean("hello").is_ok());
-    let _ = api::display_clean("hello");
+    assert!(api::canonicalize("hello").is_ok());
+    let _ = api::strip_format("hello");
     let _ = api::strip_bidi("hello");
     assert!(api::list_profiles().iter().all(|p| !p.is_empty()));
+}
+
+#[test]
+#[allow(deprecated)]
+fn deprecated_preset_aliases_forward_to_new_names() {
+    use api::DisarmStr;
+
+    // #430: the old names remain as deprecated aliases (removed in 1.0) and
+    // must be byte-identical to the new names they forward to.
+    let input = "p\u{0430}ypal\u{202e}";
+    assert_eq!(
+        api::security_clean(input).unwrap(),
+        api::canonicalize(input).unwrap()
+    );
+    assert_eq!(api::display_clean(input), api::strip_format(input));
+    assert_eq!(
+        api::normalize_user_input(input).unwrap(),
+        api::canonicalize_strict(input).unwrap()
+    );
+    // The DisarmStr method aliases forward too.
+    assert_eq!(
+        input.security_clean().unwrap(),
+        input.canonicalize().unwrap()
+    );
+    assert_eq!(input.display_clean(), input.strip_format());
+    assert_eq!(
+        input.normalize_user_input().unwrap(),
+        input.canonicalize_strict().unwrap()
+    );
 }
 
 #[test]

@@ -154,7 +154,7 @@ whole dependency graph) — that ceiling is the application's call.
 ## Features
 
 - **[Confusable & homoglyph analysis (TR39)](security/adversarial-defense.md)**: visual [confusable mapping](user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` pipeline (defense-in-depth — see the [Threat Model](THREAT_MODEL.md))
-- **[Canonicalization pipelines](api/pipelines.md)**: `security_clean`, `normalize_user_input`, `catalog_key`, `search_key`, `sort_key`, `display_clean`, `ml_normalize` for common workflows
+- **[Canonicalization pipelines](api/pipelines.md)**: `canonicalize`, `canonicalize_strict`, `catalog_key`, `search_key`, `sort_key`, `strip_format`, `ml_normalize` for common workflows
 - **[LLM / RAG pipelines](user-guide/llm-pipelines.md)**: guardrail matching (`llm_guardrail`) and ingestion (`rag_ingest`) profiles — deterministic deobfuscation and ASCII-index normalisation for LLM stacks
 - **[Hostname / IDN analysis](api/predicates.md#is_suspicious_hostname)**: mixed-script and confusable detection for domains
 - **[Standards-based transliteration](user-guide/transliteration.md)**: best-in-class Latin / Cyrillic / Greek with ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34, and BGN/PCGN, plus [reverse transliteration](user-guide/language-support.md#reverse-transliteration) (Russian, Ukrainian, Greek)
@@ -173,7 +173,7 @@ All text processing is implemented in Rust with O(1) PHF lookups and exposed to 
 ```python
 from disarm import (
     is_confusable, normalize_confusables, strip_obfuscation,
-    security_clean, normalize_user_input,
+    canonicalize, canonicalize_strict,
 )
 
 assert is_confusable("аpple") == True
@@ -183,8 +183,8 @@ assert normalize_confusables("раypal") == 'paypal'
 assert strip_obfuscation("рroduсt") == 'product'
 
 # Pipelines
-assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
-assert normalize_user_input("pаypal") == 'paypal'
+assert canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
+assert canonicalize_strict("pаypal") == 'paypal'
 ```
 
 ### Transliteration (standards-based core)
@@ -243,10 +243,10 @@ disarm transliterates a very wide range of scripts, but the **quality guarantee 
 ## Precompiled pipelines
 
 ```python
-from disarm import security_clean, ml_normalize, catalog_key, normalize_user_input, strip_obfuscation
+from disarm import canonicalize, ml_normalize, catalog_key, canonicalize_strict, strip_obfuscation
 
 # Security: NFKC → strip bidi → strip invisibles → strip control/zero-width → collapse → cap marks → NFC → confusables → NFC
-assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
+assert canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
 
 # ML/NLP: NFKC → emoji→text → transliterate → strip accents → fold case
 assert ml_normalize("Café ☕ Ünïcödé") == 'cafe hot beverage unicode'
@@ -256,7 +256,7 @@ assert catalog_key("Москва", lang="ru") == 'moskva'
 assert catalog_key("ΩMEGA  café") == 'omega cafe'
 
 # Web input: NFKC → strip bidi → strip zero-width → strip control → strip invisibles → strip zalgo → confusables → collapse → NFC
-assert normalize_user_input("pаypal") == 'paypal'
+assert canonicalize_strict("pаypal") == 'paypal'
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars → clean text
 assert strip_obfuscation("рroduсt") == 'product'
@@ -287,7 +287,7 @@ The API is organized into domain-specific namespaces. All functions are also ava
 
 | Namespace | Purpose | Key functions |
 |---|---|---|
-| `disarm.security` | Defense & safety analysis | `normalize_confusables`, `is_confusable`, `is_mixed_script`, `is_suspicious_hostname`, `strip_bidi`, `security_clean` |
+| `disarm.security` | Defense & safety analysis | `normalize_confusables`, `is_confusable`, `is_mixed_script`, `is_suspicious_hostname`, `strip_bidi`, `canonicalize` |
 | `disarm` | Core transforms | `transliterate`, `slugify`, `strip_obfuscation`, `Text`, `TextPipeline` |
 | `disarm.normalization` | Unicode normalization | `normalize`, `strip_accents`, `fold_case`, `collapse_whitespace` |
 | `disarm.files` | Filename handling | `sanitize_filename` |
@@ -295,12 +295,12 @@ The API is organized into domain-specific namespaces. All functions are also ava
 
 ```python
 # Namespace imports
-from disarm.security import is_confusable, security_clean
+from disarm.security import is_confusable, canonicalize
 from disarm.codec import decode_to_utf8
 from disarm.normalization import fold_case
 
 # Top-level imports also work
-from disarm import is_confusable, security_clean, decode_to_utf8, fold_case
+from disarm import is_confusable, canonicalize, decode_to_utf8, fold_case
 ```
 
 ## Language profiles
@@ -423,7 +423,7 @@ Complete function signatures, parameters, and return types.
 
 - **[Overview](api/index.md)** — API reference index
 - **[Core Transforms](api/transforms.md)** — `transliterate`, `slugify`, `normalize`, `sanitize_filename`, `strip_accents`, `strip_zalgo`, `fold_case`, `collapse_whitespace`, `demojize`, `strip_bidi` (all accept `str` or `list[str]`)
-- **[Precompiled Pipelines](api/pipelines.md)** — `security_clean`, `ml_normalize`, `catalog_key`, `display_clean`, `search_key`, `sort_key`, `normalize_user_input`, `PRESETS`, `get_pipeline`, `list_profiles`
+- **[Precompiled Pipelines](api/pipelines.md)** — `canonicalize`, `ml_normalize`, `catalog_key`, `strip_format`, `search_key`, `sort_key`, `canonicalize_strict`, `PRESETS`, `get_pipeline`, `list_profiles`
 - **[Classes](api/classes.md)** — `Text`, `Slugifier`, `UniqueSlugifier`, `TextPipeline`, compatibility aliases
 - **[Predicates](api/predicates.md)** — `detect_scripts`, `inspect_auto_lang`, `is_mixed_script`, `is_confusable`, `is_ascii`, `is_normalized`, `is_zalgo`, `is_suspicious_hostname`
 - **[Grapheme Clusters](api/graphemes.md)** — `grapheme_len`, `grapheme_split`, `grapheme_truncate`

@@ -881,7 +881,7 @@ def collapse_whitespace(text: str) -> str:
     and the blank-rendering set (Braille blank, the Hangul fillers) each fold to a
     single space. It does **not** delete control or zero-width characters — to do
     that, run a :class:`TextPipeline` with the ``strip_control`` /
-    ``strip_zero_width`` steps (the ``security_clean`` / ``normalize_user_input``
+    ``strip_zero_width`` steps (the ``canonicalize`` / ``canonicalize_strict``
     presets already do).
 
     Folding the line controls (rather than deleting them) means a carriage return

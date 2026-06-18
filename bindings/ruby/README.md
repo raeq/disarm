@@ -50,7 +50,7 @@ Disarm.demojize("👍🏽", strip_modifiers: true)
 
 # Security presets
 Disarm.strip_obfuscation("Ѕ𝗲𝗰𝗿𝗲𝘁  ​data")            # deobfuscated
-Disarm.security_clean("…")                           # homoglyph/bidi/zero-width clean
+Disarm.canonicalize("…")                           # homoglyph/bidi/zero-width clean
 
 # IDN / hostname spoof check (a false result is not a safety guarantee)
 Disarm.suspicious_hostname?("pаypal.com")            # => true (Cyrillic 'а')

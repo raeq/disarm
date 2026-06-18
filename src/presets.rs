@@ -4,15 +4,15 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::{case_fold, confusables, emoji, invisibles, transliterate, whitespace, zalgo};
 
-/// #413 strip policy for the comparison/storage presets (`security_clean`,
-/// `normalize_user_input`, `strip_obfuscation`): strip every variation selector
+/// #413 strip policy for the comparison/storage presets (`canonicalize`,
+/// `canonicalize_strict`, `strip_obfuscation`): strip every variation selector
 /// and the Private Use Area.
 const COMPARISON_STRIP: invisibles::StripPolicy = invisibles::StripPolicy {
     strip_pua: true,
     keep_presentation_vs: false,
 };
 
-/// #413 strip policy for the rendering preset (`display_clean`): preserve the
+/// #413 strip policy for the rendering preset (`strip_format`): preserve the
 /// Private Use Area (icon fonts) and keep the VS15/VS16 presentation selectors
 /// after a base character.
 const RENDERING_STRIP: invisibles::StripPolicy = invisibles::StripPolicy {
@@ -62,7 +62,7 @@ fn nfkc_normalize(text: &str) -> Cow<'_, str> {
 /// Used by the presets to keep them fixed points (#416). Stripping a zero-width /
 /// invisible separator can leave a base character adjacent to a combining mark
 /// that was not adjacent before — a *decomposed* sequence the leading NFKC passed
-/// over; an NFC recomposes it. `security_clean` additionally **sandwiches** its
+/// over; an NFC recomposes it. `canonicalize` additionally **sandwiches** its
 /// confusable fold between two NFC passes, because TR39 skeletoning is not
 /// normalization-stable (it treats composed vs decomposed accented letters
 /// differently, and can emit a decomposed skeleton). NFC, not NFKC, is correct:
@@ -113,7 +113,7 @@ fn is_bidi_or_format(ch: char) -> bool {
     // U+206A–U+206F (deprecated: symmetric/digit shaping, inhibit join) and
     // U+FFF9–U+FFFB (interlinear annotation anchor/separator/terminator) are
     // invisible/format characters; strip them here too so strip_bidi /
-    // display_clean don't leave them behind (they were previously only handled
+    // strip_format don't leave them behind (they were previously only handled
     // as transliteration-table entries).
     if matches!(ch, '\u{206A}'..='\u{206F}' | '\u{FFF9}'..='\u{FFFB}') {
         return true;
@@ -162,7 +162,7 @@ fn is_bidi_or_format(ch: char) -> bool {
 /// normalizes. Confusable folding is sandwiched between two NFC passes (#416) —
 /// TR39 skeletoning is not normalization-stable — so the pipeline is idempotent
 /// (`f(f(x)) == f(x)`).
-pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
+pub(crate) fn canonicalize(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides, isolates, marks, and soft hyphens
@@ -179,7 +179,7 @@ pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
     let buf = whitespace::strip_control_chars(&buf);
     let buf = whitespace::strip_zero_width_chars(&buf);
     let buf = whitespace::collapse_whitespace(&buf);
-    // 3b. Cap combining marks at 2 per base (#429), matching normalize_user_input.
+    // 3b. Cap combining marks at 2 per base (#429), matching canonicalize_strict.
     //     Removes zalgo stacking so a stacked token matches its base in a denylist
     //     comparison, while keeping legitimate diacritics (`café`, `Việt`). Runs
     //     AFTER the control / zero-width strip above so a stripped invisible
@@ -497,13 +497,13 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
 /// Strips bidirectional overrides (which can visually reorder text to hide
 /// malicious content), control characters, and zero-width injections, then
 /// collapses runs of whitespace to single spaces.
-pub(crate) fn display_clean(text: &str) -> String {
+pub(crate) fn strip_format(text: &str) -> String {
     // 1. Strip bidi overrides, isolates, marks, and soft hyphens
     let buf = strip_bidi(text);
     // 1b. Strip the #413 smuggling / non-interchange classes, with the rendering
     //     policy: keep well-formed emoji flags, keep VS15/VS16 after a base, and
     //     PRESERVE the Private Use Area (icon fonts) rather than deleting it. CGJ
-    //     and noncharacters are still stripped. No NFC pass: display_clean does no
+    //     and noncharacters are still stripped. No NFC pass: strip_format does no
     //     NFKC, so any base+mark left decomposed stays decomposed (idempotent).
     let buf = invisibles::strip_invisible_classes(&buf, RENDERING_STRIP);
     // 2. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
@@ -535,10 +535,10 @@ pub(crate) fn display_clean(text: &str) -> String {
 /// - **confusables**: neutralizes cross-script homoglyph attacks
 /// - **collapse_whitespace**: final whitespace-run normalization
 ///
-/// Unlike `security_clean`, this pipeline strips zalgo text.  Unlike
+/// Unlike `canonicalize`, this pipeline strips zalgo text.  Unlike
 /// `catalog_key`/`search_key`, it does *not* transliterate — the original
 /// script is preserved.
-pub(crate) fn normalize_user_input(text: &str) -> Result<String, crate::ErrorRepr> {
+pub(crate) fn canonicalize_strict(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization
     let buf = nfkc_normalize(text);
     // 2. Strip invisibles FIRST (bidi/format + zero-width + non-whitespace
@@ -562,7 +562,7 @@ pub(crate) fn normalize_user_input(text: &str) -> Result<String, crate::ErrorRep
     //    NFC to a fixed point (#434): a duplicate combining mark can survive one
     //    fold and recompose via NFC, re-creating a foldable composed char the next
     //    pass would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping makes the preset a
-    //    true fixed point — see `security_clean` for the full rationale.
+    //    true fixed point — see `canonicalize` for the full rationale.
     let mut buf = buf;
     for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
         let next = nfc_normalize(&confusables::normalize_confusables(&buf, "latin")?).into_owned();
@@ -579,7 +579,7 @@ pub(crate) fn normalize_user_input(text: &str) -> Result<String, crate::ErrorRep
     //     between a base and a combining mark leaves them adjacent but decomposed;
     //     recompose so the pipeline stays a fixed point.
     let buf = nfc_normalize(&buf);
-    // #431: no path-separator neutralization — see security_clean. Mapping '/' to
+    // #431: no path-separator neutralization — see canonicalize. Mapping '/' to
     // '_' is sink-specific output sanitization (out of scope per THREAT_MODEL.md)
     // and corrupted legitimate input; defend traversal at the sink instead.
     Ok(buf.into_owned())
@@ -644,16 +644,16 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> 
 mod tests {
     use super::*;
 
-    // #431: security_clean / normalize_user_input no longer neutralize path
+    // #431: canonicalize / canonicalize_strict no longer neutralize path
     // separators — '/' and '\' pass through (defend traversal at the sink).
     #[test]
     fn test_presets_do_not_mangle_path_separators() {
         assert_eq!(
-            security_clean("https://example.com/path").unwrap(),
+            canonicalize("https://example.com/path").unwrap(),
             "https://example.com/path"
         );
-        assert_eq!(security_clean("../etc/passwd").unwrap(), "../etc/passwd");
-        assert_eq!(normalize_user_input("a/b\\c").unwrap(), "a/b\\c");
+        assert_eq!(canonicalize("../etc/passwd").unwrap(), "../etc/passwd");
+        assert_eq!(canonicalize_strict("a/b\\c").unwrap(), "a/b\\c");
     }
 
     // ── nfkc_normalize: ASCII fast path must equal full NFKC (#198) ──
@@ -755,56 +755,56 @@ mod tests {
     }
 
     #[test]
-    fn test_security_clean_homoglyph() {
+    fn test_canonicalize_homoglyph() {
         // Cyrillic р and а in "раypal"
-        let result = security_clean("\u{0440}\u{0430}ypal").unwrap();
+        let result = canonicalize("\u{0440}\u{0430}ypal").unwrap();
         assert_eq!(result, "paypal");
     }
 
     #[test]
-    fn test_security_clean_bidi() {
-        let result = security_clean("admin\u{202E}user").unwrap();
+    fn test_canonicalize_bidi() {
+        let result = canonicalize("admin\u{202E}user").unwrap();
         assert_eq!(result, "adminuser");
     }
 
     #[test]
-    fn test_security_clean_arabic_letter_mark() {
-        let result = security_clean("admin\u{061C}user").unwrap();
+    fn test_canonicalize_arabic_letter_mark() {
+        let result = canonicalize("admin\u{061C}user").unwrap();
         assert_eq!(result, "adminuser");
     }
 
     #[test]
-    fn test_security_clean_invisible_math_operators() {
+    fn test_canonicalize_invisible_math_operators() {
         // Invisible math operators are stripped by collapse_whitespace (step 3),
-        // so security_clean should remove them too.
-        let result = security_clean("pass\u{2061}word").unwrap();
+        // so canonicalize should remove them too.
+        let result = canonicalize("pass\u{2061}word").unwrap();
         assert_eq!(result, "password");
     }
 
     #[test]
-    fn test_security_clean_soft_hyphen() {
-        let result = security_clean("pass\u{00AD}word").unwrap();
+    fn test_canonicalize_soft_hyphen() {
+        let result = canonicalize("pass\u{00AD}word").unwrap();
         assert_eq!(result, "password");
     }
 
     #[test]
-    fn test_security_clean_zwsp() {
-        let result = security_clean("admin\u{200B}user").unwrap();
+    fn test_canonicalize_zwsp() {
+        let result = canonicalize("admin\u{200B}user").unwrap();
         assert_eq!(result, "adminuser");
     }
 
     #[test]
-    fn test_security_clean_idempotent_on_invisible_separated_mark() {
+    fn test_canonicalize_idempotent_on_invisible_separated_mark() {
         // #416: stripping the zero-width leaves `a` adjacent to U+0301 (combining
         // acute) — a decomposed sequence the leading NFKC passed over. The
         // terminal NFC recomposes it on the FIRST pass, so f(f(x)) == f(x).
         for sep in ['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'] {
             let input = format!("a{sep}\u{0301}b");
-            let once = security_clean(&input).unwrap();
+            let once = canonicalize(&input).unwrap();
             assert_eq!(once, "\u{00E1}b", "sep {sep:?} should compose to á+b");
             assert_eq!(
                 once,
-                security_clean(&once).unwrap(),
+                canonicalize(&once).unwrap(),
                 "sep {sep:?} not idempotent"
             );
         }
@@ -818,15 +818,15 @@ mod tests {
         // `c` — non-idempotent. The fixed-point loop folds all the way to `c`.
         let input = "c\u{0327}\u{0327}"; // c + two COMBINING CEDILLA
         for preset in [
-            security_clean(input).unwrap(),
-            normalize_user_input(input).unwrap(),
+            canonicalize(input).unwrap(),
+            canonicalize_strict(input).unwrap(),
         ] {
             assert_eq!(preset, "c", "should fold to a bare c in one call");
         }
-        assert_eq!(security_clean("c").unwrap(), security_clean(input).unwrap());
+        assert_eq!(canonicalize("c").unwrap(), canonicalize(input).unwrap());
         assert_eq!(
-            normalize_user_input("c").unwrap(),
-            normalize_user_input(input).unwrap()
+            canonicalize_strict("c").unwrap(),
+            canonicalize_strict(input).unwrap()
         );
     }
 
@@ -1000,81 +1000,78 @@ mod tests {
     }
 
     #[test]
-    fn test_display_clean_basic() {
-        assert_eq!(display_clean("hello   world"), "hello world");
-        assert_eq!(display_clean("hello\x00world"), "helloworld");
-        assert_eq!(display_clean("hello\u{200B}world"), "helloworld");
+    fn test_strip_format_basic() {
+        assert_eq!(strip_format("hello   world"), "hello world");
+        assert_eq!(strip_format("hello\x00world"), "helloworld");
+        assert_eq!(strip_format("hello\u{200B}world"), "helloworld");
     }
 
     #[test]
-    fn test_display_clean_strips_bidi() {
+    fn test_strip_format_strips_bidi() {
         // RLO can visually reorder rendered text to hide malicious content
-        assert_eq!(display_clean("admin\u{202E}user"), "adminuser");
+        assert_eq!(strip_format("admin\u{202E}user"), "adminuser");
         // Soft hyphen can split security keywords invisibly
-        assert_eq!(display_clean("pass\u{00AD}word"), "password");
+        assert_eq!(strip_format("pass\u{00AD}word"), "password");
         // Arabic Letter Mark
-        assert_eq!(display_clean("hello\u{061C}world"), "helloworld");
+        assert_eq!(strip_format("hello\u{061C}world"), "helloworld");
     }
 
-    // ── normalize_user_input ──────────────────────────────────
+    // ── canonicalize_strict ──────────────────────────────────
 
     #[test]
-    fn test_normalize_user_input_clean_text() {
+    fn test_canonicalize_strict_clean_text() {
         assert_eq!(
-            normalize_user_input("Hello, world!").unwrap(),
+            canonicalize_strict("Hello, world!").unwrap(),
             "Hello, world!"
         );
     }
 
     #[test]
-    fn test_normalize_user_input_preserves_script() {
+    fn test_canonicalize_strict_preserves_script() {
         // Original script is preserved (no transliteration)
-        let result = normalize_user_input("Москва").unwrap();
+        let result = canonicalize_strict("Москва").unwrap();
         // Confusables maps some Cyrillic to Latin, but that's intentional
         // for homoglyph protection — the key point is no transliteration step
         assert!(!result.is_empty());
     }
 
     #[test]
-    fn test_normalize_user_input_strips_zalgo() {
+    fn test_canonicalize_strict_strips_zalgo() {
         let mut zalgo = String::from("hello");
         for _ in 0..20 {
             zalgo.push('\u{0300}');
         }
         zalgo.push_str(" world");
-        let result = normalize_user_input(&zalgo).unwrap();
+        let result = canonicalize_strict(&zalgo).unwrap();
         // Zalgo marks stripped down to max 2 per base
         assert!(result.len() < zalgo.len());
         assert!(result.contains("world"));
     }
 
     #[test]
-    fn test_normalize_user_input_strips_bidi() {
+    fn test_canonicalize_strict_strips_bidi() {
         assert_eq!(
-            normalize_user_input("admin\u{202E}user").unwrap(),
+            canonicalize_strict("admin\u{202E}user").unwrap(),
             "adminuser"
         );
     }
 
     #[test]
-    fn test_normalize_user_input_strips_zero_width() {
-        assert_eq!(
-            normalize_user_input("pass\u{200B}word").unwrap(),
-            "password"
-        );
+    fn test_canonicalize_strict_strips_zero_width() {
+        assert_eq!(canonicalize_strict("pass\u{200B}word").unwrap(), "password");
     }
 
     #[test]
-    fn test_normalize_user_input_preserves_accents() {
+    fn test_canonicalize_strict_preserves_accents() {
         // Legitimate diacritics are preserved — no transliteration or accent stripping
-        assert_eq!(normalize_user_input("café").unwrap(), "café");
-        assert_eq!(normalize_user_input("résumé").unwrap(), "résumé");
+        assert_eq!(canonicalize_strict("café").unwrap(), "café");
+        assert_eq!(canonicalize_strict("résumé").unwrap(), "résumé");
     }
 
     #[test]
-    fn test_normalize_user_input_homoglyph() {
+    fn test_canonicalize_strict_homoglyph() {
         // Cyrillic а in "pаypal" → Latin a
-        let result = normalize_user_input("p\u{0430}ypal").unwrap();
+        let result = canonicalize_strict("p\u{0430}ypal").unwrap();
         assert_eq!(result, "paypal");
     }
 
@@ -1149,13 +1146,13 @@ mod tests {
             #![proptest_config(ProptestConfig::with_cases(1000))]
 
             #[test]
-            fn security_clean_idempotent(s in adversarial()) {
+            fn canonicalize_idempotent(s in adversarial()) {
                 // #416: assert *raw* equality, not equality-modulo-NFC. The
                 // earlier `nfc(once) == nfc(twice)` form normalized away the very
                 // difference the terminal-NFC fix removes, so it could not catch
                 // the base+invisible+mark idempotency violation.
-                let once = security_clean(&s).unwrap();
-                let twice = security_clean(&once).unwrap();
+                let once = canonicalize(&s).unwrap();
+                let twice = canonicalize(&once).unwrap();
                 prop_assert_eq!(once, twice);
             }
 
@@ -1192,12 +1189,12 @@ mod tests {
             }
 
             #[test]
-            fn normalize_user_input_idempotent(s in adversarial()) {
+            fn canonicalize_strict_idempotent(s in adversarial()) {
                 // #434: raw equality (not nfc-modulo). The confusables fixed-point
                 // loop + terminal NFC make this a true fixed point, so the weaker
                 // `nfc(once) == nfc(twice)` form is no longer needed.
-                let once = normalize_user_input(&s).unwrap();
-                let twice = normalize_user_input(&once).unwrap();
+                let once = canonicalize_strict(&s).unwrap();
+                let twice = canonicalize_strict(&once).unwrap();
                 prop_assert_eq!(once, twice);
             }
 
@@ -1214,8 +1211,8 @@ mod tests {
             }
 
             #[test]
-            fn no_bidi_after_security_clean(s in adversarial()) {
-                prop_assert!(!security_clean(&s).unwrap().chars().any(is_bidi_or_format));
+            fn no_bidi_after_canonicalize(s in adversarial()) {
+                prop_assert!(!canonicalize(&s).unwrap().chars().any(is_bidi_or_format));
             }
 
             #[test]
@@ -1224,8 +1221,8 @@ mod tests {
             }
 
             #[test]
-            fn no_bidi_after_normalize_user_input(s in adversarial()) {
-                prop_assert!(!normalize_user_input(&s).unwrap().chars().any(is_bidi_or_format));
+            fn no_bidi_after_canonicalize_strict(s in adversarial()) {
+                prop_assert!(!canonicalize_strict(&s).unwrap().chars().any(is_bidi_or_format));
             }
         }
     }

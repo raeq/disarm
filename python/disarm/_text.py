@@ -19,6 +19,7 @@ type (``bool``, ``list``) and do not chain.
 from __future__ import annotations
 
 import importlib
+import warnings
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -254,12 +255,21 @@ class Text:
         """Strip bidirectional override and formatting characters."""
         return Text(self._t().strip_bidi(self._value))
 
-    def security_clean(self) -> Text:
-        """Apply the security_clean precompiled pipeline.
+    def canonicalize(self) -> Text:
+        """Apply the canonicalize precompiled pipeline.
 
-        NFKC → confusables → strip bidi/format → collapse_whitespace.
+        NFKC → strip bidi/format → confusables → collapse_whitespace.
         """
-        return Text(self._t().security_clean(self._value))
+        return Text(self._t().canonicalize(self._value))
+
+    def security_clean(self) -> Text:
+        """Deprecated alias for :meth:`canonicalize` (#430); removed in 1.0."""
+        warnings.warn(
+            "Text.security_clean is deprecated; use Text.canonicalize (removed in 1.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.canonicalize()
 
     def ml_normalize(
         self,
@@ -274,12 +284,22 @@ class Text:
         """
         return Text(self._t().ml_normalize(self._value, lang=lang, emoji=emoji))
 
-    def display_clean(self) -> Text:
-        """Apply the display_clean precompiled pipeline.
+    def strip_format(self) -> Text:
+        """Apply the strip_format precompiled pipeline.
 
-        Collapse whitespace, strip control and zero-width characters.
+        Strip bidi/format and invisibles, collapse whitespace, strip control
+        and zero-width characters.
         """
-        return Text(self._t().display_clean(self._value))
+        return Text(self._t().strip_format(self._value))
+
+    def display_clean(self) -> Text:
+        """Deprecated alias for :meth:`strip_format` (#430); removed in 1.0."""
+        warnings.warn(
+            "Text.display_clean is deprecated; use Text.strip_format (removed in 1.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.strip_format()
 
     # ── Non-chaining predicates ──────────────────────────────────
 

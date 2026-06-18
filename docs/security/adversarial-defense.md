@@ -125,8 +125,8 @@ its exact signature (e.g. Rust's `normalize_confusables` takes an explicit
 |---|---|---|
 | Fold confusables in a string (TR39) | `normalize_confusables` | NFKC-free, single pass |
 | Maximum deobfuscation (homoglyph + zalgo + invisible + bidi + emoji) | `strip_obfuscation` | NFKC → strip zalgo → strip bidi → strip zero-width → demojize → confusables → strip accents → collapse |
-| Clean untrusted user input | `normalize_user_input` | NFKC → strip bidi → strip zero-width → strip control → strip invisibles → strip zalgo → confusables → collapse → NFC |
-| General security cleanup | `security_clean` | NFKC → strip bidi → strip invisibles → strip control/zero-width → collapse → cap marks → NFC → confusables → NFC |
+| Clean untrusted user input | `canonicalize_strict` | NFKC → strip bidi → strip zero-width → strip control → strip invisibles → strip zalgo → confusables → collapse → NFC |
+| General security cleanup | `canonicalize` | NFKC → strip bidi → strip invisibles → strip control/zero-width → collapse → cap marks → NFC → confusables → NFC |
 | Detect (don't transform) | `is_confusable`, `is_mixed_script` | predicate |
 | Check a domain for IDN spoofing | `is_suspicious_hostname` | per-label script + confusable analysis |
 

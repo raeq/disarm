@@ -15,8 +15,8 @@ use pyo3::prelude::*;
 /// NFC passes for idempotency, #416).
 #[pyfunction]
 #[pyo3(signature = (text,))]
-pub fn _security_clean(text: &str) -> PyResult<String> {
-    Ok(crate::presets::security_clean(text)?)
+pub fn _canonicalize(text: &str) -> PyResult<String> {
+    Ok(crate::presets::canonicalize(text)?)
 }
 
 /// ML/NLP text normalization pipeline.
@@ -50,13 +50,13 @@ pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
     Ok(crate::presets::sort_key(text, lang)?)
 }
 
-/// Display-safe text cleaning pipeline.
+/// Strip bidi/format and invisible-injection vectors from rendered content.
 ///
-/// Infallible: strip bidi/format → collapse_whitespace.
+/// Infallible: strip bidi/format → strip invisibles → collapse_whitespace.
 #[pyfunction]
 #[pyo3(signature = (text,))]
-pub fn _display_clean(text: &str) -> String {
-    crate::presets::display_clean(text)
+pub fn _strip_format(text: &str) -> String {
+    crate::presets::strip_format(text)
 }
 
 /// Strip bidirectional override and formatting characters (UAX #9).
@@ -98,11 +98,11 @@ pub fn _strip_pua(text: &str) -> String {
     crate::api::strip_pua(text)
 }
 
-/// Normalize user-submitted input — Unicode hygiene, **not** an output sanitizer.
+/// Strict canonicalization of user input — Unicode hygiene, **not** a sanitizer.
 #[pyfunction]
 #[pyo3(signature = (text,))]
-pub fn _normalize_user_input(text: &str) -> PyResult<String> {
-    Ok(crate::presets::normalize_user_input(text)?)
+pub fn _canonicalize_strict(text: &str) -> PyResult<String> {
+    Ok(crate::presets::canonicalize_strict(text)?)
 }
 
 /// Maximum-strength text deobfuscation pipeline.

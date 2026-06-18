@@ -177,17 +177,17 @@ isZalgo(stripZalgo('Z\u0301\u0301\u0301\u0301')) // => false
 
 ## Deobfuscation & security presets
 
-### `stripObfuscation(text)` · `securityClean(text)`
+### `stripObfuscation(text)` · `canonicalize(text)`
 
 `stripObfuscation` removes obfuscation (zero-width, bidi, combining-mark abuse,
 homoglyphs) while keeping legible content — it does **not** transliterate.
-`securityClean` is the aggressive NFKC → strip-bidi → strip-invisibles →
+`canonicalize` is the aggressive NFKC → strip-bidi → strip-invisibles →
 strip-control/zero-width → collapse → cap-marks → NFC → confusables → NFC preset
 (confusables sandwiched between NFC passes for idempotency).
 
 ```ts
 stripObfuscation('рroduсt') // => 'product'
-securityClean('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥') // => 'Real text'
+canonicalize('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥') // => 'Real text'
 ```
 
 ### `sanitizeFilename(text, options?)`
@@ -364,5 +364,5 @@ standards) and can change across releases without being treated as a breaking
 change.
 
 Not yet surfaced (compose the primitives, or reach for another binding): the
-precompiled-pipeline presets (`securityClean` is exposed, but not the full
+precompiled-pipeline presets (`canonicalize` is exposed, but not the full
 `getPipeline` registry or `mlNormalize`) and the fluent `Text` builder.

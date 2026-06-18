@@ -20,24 +20,24 @@ import disarm
 from disarm import (
     PRESETS,
     TextPipeline,
+    canonicalize,
+    canonicalize_strict,
     catalog_key,
     collapse_whitespace,
     decode_to_utf8,
     demojize,
-    display_clean,
     grapheme_len,
     grapheme_split,
     grapheme_truncate,
     ml_normalize,
     normalize,
     normalize_confusables,
-    normalize_user_input,
     sanitize_filename,
     search_key,
-    security_clean,
     slugify,
     sort_key,
     strip_accents,
+    strip_format,
     strip_zalgo,
     transliterate,
 )
@@ -280,24 +280,32 @@ class TestPipelineStepTuples:
     def test_presets_is_dict(self):
         assert isinstance(PRESETS, dict)
 
-    def test_presets_has_all_eight(self):
-        expected = {
-            "security_clean",
+    def test_presets_has_all_keys(self):
+        canonical = {
+            "canonicalize",
             "ml_normalize",
             "catalog_key",
-            "display_clean",
+            "strip_format",
             "search_key",
             "sort_key",
-            "normalize_user_input",
+            "canonicalize_strict",
             "strip_obfuscation",
         }
-        assert set(PRESETS.keys()) == expected
+        # #430: deprecated preset-name aliases remain valid keys until 1.0.
+        deprecated = {"security_clean", "display_clean", "normalize_user_input"}
+        assert set(PRESETS.keys()) == canonical | deprecated
+
+    def test_deprecated_preset_keys_alias_canonical(self):
+        # #430: old keys resolve to the same step lists as their new names.
+        assert PRESETS["security_clean"] == PRESETS["canonicalize"]
+        assert PRESETS["display_clean"] == PRESETS["strip_format"]
+        assert PRESETS["normalize_user_input"] == PRESETS["canonicalize_strict"]
 
     @pytest.mark.parametrize(
         "name,expected_steps",
         [
             (
-                "security_clean",
+                "canonicalize",
                 [
                     ("normalize", "NFKC"),
                     ("strip_bidi", None),
@@ -339,7 +347,7 @@ class TestPipelineStepTuples:
                 ],
             ),
             (
-                "display_clean",
+                "strip_format",
                 [
                     ("strip_bidi", None),
                     ("strip_invisibles", "rendering"),
@@ -376,7 +384,7 @@ class TestPipelineStepTuples:
                 ],
             ),
             (
-                "normalize_user_input",
+                "canonicalize_strict",
                 [
                     ("normalize", "NFKC"),
                     ("strip_bidi", None),
@@ -472,9 +480,9 @@ class TestPipelineStepTuples:
 
     # -- Precompiled pipelines produce different output --
 
-    def test_security_clean_normalizes_confusables(self):
+    def test_canonicalize_normalizes_confusables(self):
         # Cyrillic а looks like Latin a
-        result = security_clean("p\u0430ypal")
+        result = canonicalize("p\u0430ypal")
         assert result == "paypal"
 
     def test_ml_normalize_strips_accents(self):
@@ -487,8 +495,8 @@ class TestPipelineStepTuples:
         assert result.isascii()
         assert "moskva" in result
 
-    def test_display_clean_strips_bidi(self):
-        result = display_clean("hello\u200eworld")
+    def test_strip_format_strips_bidi(self):
+        result = strip_format("hello\u200eworld")
         assert "\u200e" not in result
 
     def test_search_key_folds_case(self):
@@ -502,9 +510,9 @@ class TestPipelineStepTuples:
         assert sort_key("CAFÉ") == "café"
         assert sort_key("Москва") == "moskva"
 
-    def test_normalize_user_input_strips_zalgo(self):
+    def test_canonicalize_strict_strips_zalgo(self):
         zalgo = "h\u0300\u0301\u0302\u0303e\u0300\u0301\u0302\u0303"
-        result = normalize_user_input(zalgo)
+        result = canonicalize_strict(zalgo)
         import unicodedata
 
         marks = sum(1 for c in result if unicodedata.category(c) == "Mn")

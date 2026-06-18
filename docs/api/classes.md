@@ -41,9 +41,9 @@ All core transforms are available as methods:
 | `.sanitize_filename(...)` | `Text` | Safe filename |
 | `.demojize(...)` | `Text` | Emoji → text descriptions |
 | `.strip_bidi()` | `Text` | Strip bidi overrides |
-| `.security_clean()` | `Text` | Security pipeline |
+| `.canonicalize()` | `Text` | Security pipeline |
 | `.ml_normalize(...)` | `Text` | ML/NLP pipeline |
-| `.display_clean()` | `Text` | Display cleanup pipeline |
+| `.strip_format()` | `Text` | Display cleanup pipeline |
 | `.catalog_key(...)` | `Text` | Catalog key pipeline |
 | `.grapheme_truncate(n)` | `Text` | Truncate to n graphemes |
 

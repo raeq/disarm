@@ -59,7 +59,7 @@ assert pipe("Città di Firenze") == 'citta di firenze'
 
 ### normalize_web_input
 
-**Use case:** Lightweight Unicode normalization of web form input (NFKC + confusable-folding). This is *input* normalization, **not** output sanitization — it performs no escaping and is not an XSS/HTML/SQL defense (see [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)). It is intentionally lighter than `normalize_user_input()` (no bidi/zero-width/control/zalgo stripping); use that function for adversarial input.
+**Use case:** Lightweight Unicode normalization of web form input (NFKC + confusable-folding). This is *input* normalization, **not** output sanitization — it performs no escaping and is not an XSS/HTML/SQL defense (see [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)). It is intentionally lighter than `canonicalize_strict()` (no bidi/zero-width/control/zalgo stripping); use that function for adversarial input.
 
 ```python
 pipe = get_pipeline("normalize_web_input")
@@ -74,7 +74,7 @@ assert pipe("  Hello   World  ") == 'Hello World'
 | Confusables | Folds TR39 confusable homoglyphs (not an output/injection defense) |
 
 !!! note
-    To also handle zalgo text and bidi injection, use the `normalize_user_input()` precompiled pipeline instead — it includes `strip_zalgo` and `strip_bidi` steps that `TextPipeline` does not support.
+    To also handle zalgo text and bidi injection, use the `canonicalize_strict()` precompiled pipeline instead — it includes `strip_zalgo` and `strip_bidi` steps that `TextPipeline` does not support.
 
 ### ml_corpus_normalize
 
@@ -117,11 +117,11 @@ Policy profiles use `TextPipeline` (Python-configurable steps). For maximum perf
 
 | Need | Use |
 |------|-----|
-| Unicode input normalization | `normalize_user_input()` |
+| Unicode input normalization | `canonicalize_strict()` |
 | Catalog/bibliography keys | `catalog_key()` |
 | Search index keys | `search_key()` |
 | Sort-friendly keys | `sort_key()` |
-| Security canonicalization | `security_clean()` |
+| Security canonicalization | `canonicalize()` |
 | ML preprocessing | `ml_normalize()` |
 
 Policy profiles are best for **custom workflows** where you need the flexibility of `TextPipeline` parameters, or when you want symbolic profile names in configuration files.

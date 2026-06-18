@@ -123,13 +123,13 @@ chain [`transliterate`](#transliteration) if you also need ASCII.
 Disarm.strip_obfuscation("рroduсt")                # => "product"
 ```
 
-### `Disarm.security_clean(text)`
+### `Disarm.canonicalize(text)`
 
 Aggressive security cleaning: NFKC, confusable folding, bidi stripping, and
 whitespace collapse in one preset.
 
 ```ruby
-Disarm.security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")                 # => "Real text"
+Disarm.canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥")                 # => "Real text"
 ```
 
 ## Collation & lookup keys

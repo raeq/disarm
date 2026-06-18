@@ -16,7 +16,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 
 use disarm::api::fold_case;
 use disarm::api::strip_accents;
-use disarm::api::{search_key, security_clean};
+use disarm::api::{canonicalize, search_key};
 use disarm::api::{slugify, OnUnknown, SlugConfig, Transliterate};
 
 #[path = "persona_corpus.rs"]
@@ -172,8 +172,8 @@ fn bench_presets_doc(c: &mut Criterion) {
     let mut group = c.benchmark_group("presets_doc");
     let doc = persona_corpus::doc("mixed_web").expect("persona exists");
     group.throughput(text_throughput(&doc));
-    group.bench_function("security_clean", |b| {
-        b.iter(|| security_clean(black_box(&doc)));
+    group.bench_function("canonicalize", |b| {
+        b.iter(|| canonicalize(black_box(&doc)));
     });
     group.bench_function("search_key", |b| {
         b.iter(|| search_key(black_box(&doc), None));

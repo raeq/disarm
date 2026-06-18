@@ -28,16 +28,46 @@ pub(crate) fn fold_case_impl(text: &str) -> String {
 /// Borrowing form of [`fold_case_impl`] (#352): returns `Cow::Borrowed` when
 /// `text` is already fully case-folded (no ASCII uppercase and no character with
 /// a folding-table entry), so the no-op case never allocates.
+///
+/// Single pass with lazy allocation (review H-P1): each character is probed in
+/// the folding table **once** — the buffer is created (and the unchanged prefix
+/// copied) only at the first character that actually folds. The old form scanned
+/// to detect a change and then scanned again to fold, doubling the PHF probes on
+/// the most expensive (all-foldable) inputs.
 pub(crate) fn fold_case_cow(text: &str) -> std::borrow::Cow<'_, str> {
     use std::borrow::Cow;
-    let changes = text.chars().any(|ch| {
-        ch.is_ascii_uppercase() || (!ch.is_ascii() && case_folding_data::lookup(ch).is_some())
-    });
-    if changes {
-        Cow::Owned(fold_case_impl(text))
-    } else {
-        Cow::Borrowed(text)
+
+    // Pure-ASCII: one cheap byte scan; allocate only if an uppercase is present.
+    if text.is_ascii() {
+        if text.bytes().any(|b| b.is_ascii_uppercase()) {
+            let mut out = text.to_owned();
+            out.make_ascii_lowercase();
+            return Cow::Owned(out);
+        }
+        return Cow::Borrowed(text);
     }
+
+    let mut out: Option<String> = None;
+    let start_owned = |i: usize| {
+        let mut s = String::with_capacity(text.len() + text.len() / 10);
+        s.push_str(&text[..i]);
+        s
+    };
+    for (i, ch) in text.char_indices() {
+        if ch.is_ascii_uppercase() {
+            out.get_or_insert_with(|| start_owned(i))
+                .push(ch.to_ascii_lowercase());
+        } else if !ch.is_ascii() {
+            if let Some(folded) = case_folding_data::lookup(ch) {
+                out.get_or_insert_with(|| start_owned(i)).push_str(folded);
+            } else if let Some(buf) = out.as_mut() {
+                buf.push(ch);
+            }
+        } else if let Some(buf) = out.as_mut() {
+            buf.push(ch);
+        }
+    }
+    out.map_or(Cow::Borrowed(text), Cow::Owned)
 }
 
 /// In-place form of [`fold_case_impl`] writing into `result` (cleared first),

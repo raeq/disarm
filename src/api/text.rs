@@ -314,9 +314,10 @@ pub use crate::slugify::SlugConfig;
 /// Infallible by design — and therefore **`config.lang` is not validated**: an
 /// unknown language code is treated as "best effort" and falls back to the
 /// default transliterator (the same lenient behaviour as the underlying engine),
-/// rather than erroring. This differs from the Python `slugify`, whose convenience
-/// wrapper eagerly validates `lang` and raises. If you need strict validation in
-/// Rust, check the code against [`list_langs`](crate::api::list_langs) before building the config.
+/// rather than erroring. The Python `slugify` wrapper treats `lang` the same way
+/// — it forwards the code unvalidated and silently falls back, so neither
+/// binding raises on an unknown slug `lang`. If you need strict validation,
+/// check the code against [`list_langs`](crate::api::list_langs) before building the config.
 #[must_use]
 pub fn slugify(text: &str, config: &SlugConfig) -> String {
     crate::slugify::slugify_impl(text, config)

@@ -98,6 +98,14 @@ pub(crate) fn strip_bidi(text: &str) -> String {
 /// In-place form of [`strip_bidi`] (#236 item 7).
 pub(crate) fn strip_bidi_into(text: &str, out: &mut String) {
     out.clear();
+    // Every bidi/format target is >= U+00AD, so pure-ASCII input passes through
+    // unchanged — skip the per-char filter entirely (review D-3). Guarded by
+    // `strip_bidi_has_no_ascii_targets`.
+    if text.is_ascii() {
+        out.push_str(text);
+        return;
+    }
+    out.reserve(text.len()); // filter's size_hint lower bound is 0
     out.extend(text.chars().filter(|&ch| !is_bidi_or_format(ch)));
 }
 
@@ -471,6 +479,14 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
     //    the collation key can order on them (this is the sort_key/search_key
     //    distinction; search_key strips accents here instead).
     let buf = transliterate_preserving_latin(&buf, lang);
+    // 4b. Fold case AGAIN. Transliteration can *emit* uppercase from a non-Latin
+    //     source the pre-transliterate fold could not reach — e.g. Old Persian
+    //     `𐏈` (U+103C8) romanizes to the proper noun `Auramazda`. Without this
+    //     second fold the key is `Auramazda` on pass 1 and `auramazda` on pass 2,
+    //     violating `f(f(x)) == f(x)`. `fold_case` only lowercases (it never
+    //     strips accents), so accent preservation — the sort_key invariant
+    //     (`Über` → `über`) — is unaffected.
+    let buf = case_fold::fold_case_impl(&buf);
     // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
     let buf = whitespace::strip_control_chars(&buf);
     let buf = whitespace::strip_zero_width_chars(&buf);
@@ -755,6 +771,18 @@ mod tests {
     }
 
     #[test]
+    fn strip_bidi_has_no_ascii_targets() {
+        // Premise for the strip_bidi_into ASCII fast path (review D-3): no ASCII
+        // code point is a bidi/format character, so ASCII passes through whole.
+        for cp in 0u8..=0x7F {
+            assert!(
+                !is_bidi_or_format(cp as char),
+                "ASCII U+{cp:02X} must not be a bidi/format target"
+            );
+        }
+    }
+
+    #[test]
     fn test_canonicalize_homoglyph() {
         // Cyrillic р and а in "раypal"
         let result = canonicalize("\u{0440}\u{0430}ypal").unwrap();
@@ -935,6 +963,17 @@ mod tests {
     }
 
     #[test]
+    fn test_sort_key_folds_uppercase_emitted_by_transliteration() {
+        // Review (D-1 generator): a non-Latin source can transliterate to an
+        // uppercase-bearing proper noun — Old Persian `𐏈` (U+103C8) → "Auramazda"
+        // — which the pre-transliterate fold can't reach. The post-transliterate
+        // fold makes the key lowercase and a true fixed point.
+        let once = sort_key("\u{103C8}", None).unwrap();
+        assert_eq!(once, "auramazda");
+        assert_eq!(sort_key(&once, None).unwrap(), once);
+    }
+
+    #[test]
     fn test_sort_key_cyrillic() {
         // Non-Latin scripts are still folded to a consistent Latin form.
         assert_eq!(sort_key("Война и мир", None).unwrap(), "voyna i mir");
@@ -1014,6 +1053,24 @@ mod tests {
         assert_eq!(strip_format("pass\u{00AD}word"), "password");
         // Arabic Letter Mark
         assert_eq!(strip_format("hello\u{061C}world"), "helloworld");
+    }
+
+    #[test]
+    fn test_strip_format_idempotent_on_vs_after_blank_render() {
+        // Review D-2: a presentation VS kept after a base that a *later* strip
+        // removes (Braille blank, Hangul filler, control, zero-width) used to be
+        // orphaned on the second pass. Now the VS is dropped with its base, so
+        // one pass already reaches the fixed point.
+        for input in [
+            "\u{2800}\u{FE0F}x", // Braille blank (blank-render) + VS16
+            "\u{115F}\u{FE0F}x", // Hangul Choseong filler + VS16
+            "\u{0000}\u{FE0F}x", // NUL (control) + VS16
+            "\u{200B}\u{FE0F}x", // ZWSP (zero-width) + VS16
+        ] {
+            let once = strip_format(input);
+            assert_eq!(once, "x", "input {input:?} should reduce to \"x\"");
+            assert_eq!(strip_format(&once), once, "not idempotent on {input:?}");
+        }
     }
 
     // ── canonicalize_strict ──────────────────────────────────
@@ -1115,6 +1172,11 @@ mod tests {
             '\u{0301}',
             '\u{0300}',
             '\u{0489}',
+            // marks that compose a Latin confusable base into a *precomposed*
+            // confusable table key (cedilla → ç, diaeresis → ï): the trigger
+            // class for the post-fold-NFC idempotency path (review D-1/#434).
+            '\u{0327}',
+            '\u{0308}',
             // confusables (Cyrillic а р с е о) + a fullwidth char + an emoji
             '\u{0430}',
             '\u{0440}',
@@ -1196,6 +1258,16 @@ mod tests {
                 let once = canonicalize_strict(&s).unwrap();
                 let twice = canonicalize_strict(&once).unwrap();
                 prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn strip_format_idempotent(s in adversarial()) {
+                // Review D-2: a presentation VS kept after a base that a later
+                // strip removes (blank-render, control, zero-width) was orphaned
+                // on the second pass. `is_presentation_base` now rejects those
+                // bases, so the preset is a true fixed point.
+                let once = strip_format(&s);
+                prop_assert_eq!(&once, &strip_format(&once));
             }
 
             #[test]

@@ -529,9 +529,13 @@ pub(crate) fn slugify_impl_with_stopset(
         }
     }
 
-    // Step 5: Apply custom regex pattern
+    // Step 5: Apply custom regex pattern. `replace_all` returns `Cow::Borrowed`
+    // when the pattern doesn't match, so only take ownership on an actual
+    // replacement — a no-match no longer force-allocates (review L-P1).
     if let Some(ref re) = config.regex_pattern {
-        value = Cow::Owned(re.replace_all(&value, "").into_owned());
+        if let Cow::Owned(replaced) = re.replace_all(&value, "") {
+            value = Cow::Owned(replaced);
+        }
     }
 
     // Step 6: Replace non-alphanumeric with separator
@@ -660,9 +664,34 @@ fn truncate_at_boundary(slug: &str, max_length: usize, separator: &str) -> Strin
     let boundary = floor_char_boundary(slug, max_length);
     let truncated = &slug[..boundary];
     match truncated.rfind(separator) {
+        // Everything before the last full separator: ends on a token boundary.
         Some(pos) => truncated[..pos].to_owned(),
-        None => truncated.to_owned(),
+        // No full separator survived the cut, but `floor_char_boundary` can land
+        // *inside* a multi-char separator, leaving a trailing partial separator
+        // (e.g. separator "--", slug "ab--cd", max 3 → "ab-"). Strip it so the
+        // slug never ends in a (partial or whole) separator (review M-C1).
+        None => strip_trailing_separator_prefix(truncated, separator).to_owned(),
     }
+}
+
+/// Strip the longest suffix of `s` that is a non-empty prefix of `separator`.
+///
+/// Used to clean a trailing *partial* separator left by a mid-separator
+/// truncation. Safe for the slug domain: the separator characters are never
+/// allowed content characters, so a trailing run matching a separator prefix can
+/// only be a cut separator, not content.
+fn strip_trailing_separator_prefix<'a>(s: &'a str, separator: &str) -> &'a str {
+    if separator.is_empty() {
+        return s;
+    }
+    let max = separator.len().min(s.len());
+    for len in (1..=max).rev() {
+        let start = s.len() - len;
+        if s.is_char_boundary(start) && separator.starts_with(&s[start..]) {
+            return &s[..start];
+        }
+    }
+    s
 }
 
 /// Decode a numeric HTML entity (`&#NNN;` / `&#xHHH;`) starting at `pos`.
@@ -1134,6 +1163,25 @@ mod tests {
     }
 
     #[test]
+    fn test_truncate_at_boundary_strips_partial_multichar_separator() {
+        // Review M-C1: a multi-char separator cut mid-sequence must not leave a
+        // trailing partial separator. "ab--cd" truncated to 3 → "ab-" → "ab".
+        assert_eq!(truncate_at_boundary("ab--cd", 3, "--"), "ab");
+        // A clean full-separator cut still lands on the token boundary.
+        assert_eq!(truncate_at_boundary("ab--cd", 4, "--"), "ab");
+        // End-to-end through slugify with a custom multi-char separator.
+        let cfg = SlugConfig::new()
+            .with_separator("--")
+            .with_max_length(3)
+            .with_word_boundary(true);
+        let out = slugify_impl("ab cd", &cfg);
+        assert!(
+            !out.ends_with('-'),
+            "slug {out:?} must not end in a partial separator"
+        );
+    }
+
+    #[test]
     fn test_allow_unicode_max_length_no_panic() {
         // This previously panicked with "assertion failed: self.is_char_boundary(new_len)"
         let mut config = default_config();
@@ -1268,6 +1316,27 @@ mod tests {
                 config.max_length = max_len;
                 let result = slugify_impl(&s, &config);
                 prop_assert!(result.len() <= max_len);
+            }
+
+            /// Review M-C1: with a custom multi-char separator and word-boundary
+            /// truncation, the slug must never end in a partial or whole
+            /// separator (the default-separator proptests can't reach this).
+            #[test]
+            fn slugify_multichar_separator_no_trailing_separator(
+                s in "\\PC*",
+                max_len in 1..60usize,
+            ) {
+                let mut config = default_config();
+                config.separator = "--".to_owned();
+                config.max_length = max_len;
+                config.word_boundary = true;
+                let result = slugify_impl(&s, &config);
+                prop_assert!(result.len() <= max_len);
+                prop_assert!(
+                    result.is_empty() || !result.ends_with('-'),
+                    "slug {:?} ends in a (partial) separator",
+                    result
+                );
             }
 
             /// allow_unicode slug never panics and respects max_length.

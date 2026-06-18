@@ -158,7 +158,8 @@ def catalog_key(
 def strip_format(text: str) -> str:
     """Strip bidi/format and invisible-injection vectors from rendered content.
 
-    Pipeline: strip bidi/format → collapse_whitespace (strip control + strip zero-width)
+    Pipeline: strip bidi/format → strip invisibles (#413, rendering policy) →
+              strip control → strip zero-width → collapse_whitespace
 
     Lightweight cleanup for user-submitted content destined for rendering.
     Strips bidirectional overrides (which can visually reorder text to hide
@@ -242,7 +243,7 @@ def sort_key(
     """Sort key generation pipeline.
 
     Pipeline: NFKC → strip_bidi → fold_case → transliterate-non-Latin →
-    collapse_whitespace
+    fold_case → collapse_whitespace
 
     A case-insensitive collation key that, unlike :func:`search_key`,
     **preserves base accented characters** rather than folding them away.
@@ -590,14 +591,16 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("normalize", "NFKC"),
         ("strip_bidi", None),
         # #419: fold_case BEFORE transliterate so a case pair whose folded form is
-        # in the translit table is stable across passes. (No second fold needed:
-        # sort_key transliterates only non-Latin scripts, never emitting uppercase
-        # the way search/catalog's full transliteration does.)
+        # in the translit table is stable across passes.
         ("fold_case", None),
         # "non_latin": transliterate folds only non-Latin scripts; base accented
         # Latin characters are preserved so the accent can order the key (this is
         # what distinguishes sort_key from search_key, which strips accents here).
         ("transliterate", "non_latin"),
+        # fold_case AGAIN: transliteration can emit uppercase from a non-Latin
+        # source the pre-fold can't reach (Old Persian 𐏈 → "Auramazda"), so fold
+        # here too for idempotency. fold_case only lowercases, so accents survive.
+        ("fold_case", None),
         # #433: explicit strip steps (was fused into collapse_whitespace).
         ("strip_control", None),
         ("strip_zero_width", None),

@@ -5,8 +5,9 @@ The surface is a set of named exports from the `disarm` package plus the
 TypeScript wrapper over the pure-Rust core (no Python): options are passed as an
 object with the core's defaults, scheme/target tokens are typed string unions,
 and bad input throws `DisarmInvalidArgument`. The binding is a deliberate
-**subset** of the core — the precompiled-pipeline presets and the fluent `Text`
-builder are not surfaced yet (see [Stability](#stability)).
+**subset** of the core — `mlNormalize` and the fluent `Text` builder are not
+surfaced yet (the `canonicalize` / `stripObfuscation` presets and the
+`getPipeline` policy registry are; see [Stability](#stability)).
 
 For install and a five-line tour, start with
 [disarm for Node.js](getting-started.md). The shared, language-neutral
@@ -354,6 +355,23 @@ try {
 }
 ```
 
+## Policy pipelines
+
+### `getPipeline(profile)` · `Pipeline#process`
+
+Build a reusable, precompiled pipeline handle for a named policy profile, then
+apply it to any number of inputs — the profile's steps are resolved and compiled
+once, so each `process` call only runs the transforms. An unknown profile name
+throws `DisarmInvalidArgument`.
+
+```ts
+import { getPipeline } from 'disarm'
+
+const pipe = getPipeline('search_index') // build once
+pipe.process('Café') // => 'cafe'
+pipe.process('Москва') // => 'moskva'
+```
+
 ## Stability
 
 The npm package version tracks the Rust crate and the Python/Ruby packages. The
@@ -364,5 +382,10 @@ standards) and can change across releases without being treated as a breaking
 change.
 
 Not yet surfaced (compose the primitives, or reach for another binding): the
-precompiled-pipeline presets (`canonicalize` is exposed, but not the full
-`getPipeline` registry or `mlNormalize`) and the fluent `Text` builder.
+`mlNormalize` / `stripFormat` presets, the fluent `Text` builder, and the output
+encoders / encoding family (`escapeHtml`, `percentEncode`, `stripLogInjection`,
+`detectEncoding`, `decodeToUtf8`). In particular `stripLogInjection` — a
+security-relevant control — is **not** available here; neutralize log-injection
+at the sink, or use the Python binding. The `canonicalize` / `stripObfuscation`
+presets and the `getPipeline` policy-profile registry **are** exposed — see
+[Policy pipelines](#policy-pipelines).

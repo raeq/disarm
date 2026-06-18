@@ -258,7 +258,10 @@ class Text:
     def canonicalize(self) -> Text:
         """Apply the canonicalize precompiled pipeline.
 
-        NFKC → strip bidi/format → confusables → collapse_whitespace.
+        NFKC → strip bidi/format → strip invisibles (#413) → strip control →
+        strip zero-width → collapse whitespace → cap combining marks
+        (anti-zalgo, #429) → NFC → confusables → NFC (the confusable fold is
+        NFC-sandwiched and iterated to a fixed point for idempotency, #416/#434).
         """
         return Text(self._t().canonicalize(self._value))
 

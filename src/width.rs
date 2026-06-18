@@ -81,6 +81,14 @@ pub(crate) fn grapheme_width_opts(cluster: &str, ambiguous_wide: bool) -> usize 
         return 0;
     };
 
+    // H-P5: a single-char ASCII cluster — the dominant input (identifiers, URLs,
+    // usernames) — can never be wide, ambiguous, emoji, or a combining sequence,
+    // so skip both the emoji-range and width-class table searches. ASCII C0/DEL
+    // controls are width 0; every other ASCII character is width 1.
+    if base.is_ascii() && rest.as_str().is_empty() {
+        return usize::from(!base.is_ascii_control());
+    }
+
     let base_emoji = in_range_set(EMOJI_PRESENTATION_RANGES, base as u32) // default-emoji base
         || is_regional_indicator(base); // flag (segmenter pairs regional indicators)
     let base_class = width_class(base as u32);

@@ -451,3 +451,11 @@ binding inherits the core's behavioural guarantees and limits verbatim — read 
 note that transliteration **output** is data-driven (Unicode tables, romanization
 standards) and can change across releases without being treated as a breaking
 change. Pin a version if you need byte-stable output.
+
+**Not surfaced in this binding** (Python-only for now — compose the primitives,
+or use the Python package): the output encoders / encoding family
+(`escape_html`, `percent_encode`, `strip_log_injection`, `detect_encoding`,
+`decode_to_utf8`), the `ml_normalize` / `strip_format` / `canonicalize_strict`
+presets, and the `list_profiles` / `list_langs` / `is_ascii` helpers. In
+particular, `strip_log_injection` is a security-relevant control that is **not**
+available here — neutralize log-injection at the sink, or use the Python binding.

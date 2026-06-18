@@ -474,6 +474,55 @@ pub(crate) fn catalog_key(
     strict_iso9: bool,
 ) -> Result<String, crate::ErrorRepr> {
     crate::transliterate::validate_lang(lang)?;
+    const STEPS: &[Step] = &[
+        // 1. NFKC normalization
+        Step::Nfkc,
+        // 2. Strip bidi overrides + soft hyphen + format marks (#93)
+        Step::StripBidi,
+        // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
+        //    the transliteration table but whose original is not (e.g. Georgian
+        //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
+        //    on the second pass — non-idempotent. Fold before transliterate so both
+        //    passes see the same form.
+        Step::FoldCase,
+        // 4. Transliterate (always — catalog keys should be pure ASCII where possible;
+        //    runs before confusables so that non-Latin scripts are romanized first,
+        //    avoiding broken confusable mappings like Cyrillic к → literal \u{0138})
+        Step::Transliterate {
+            mode: crate::ErrorMode::Preserve,
+            only_if_lang: false,
+        },
+        // 5. Confusables → Latin (normalize any remaining cross-script homoglyphs)
+        Step::Confusables("latin"),
+        // 6. Strip accents
+        Step::StripAccents,
+        // 6b. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
+        //     (`£` → `GBP`, `№` → `No`), unreachable by the pre-transliterate fold.
+        Step::FoldCase,
+        // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+        Step::StripControl,
+        Step::StripZeroWidth,
+        Step::CollapseWs,
+    ];
+    run(
+        STEPS,
+        text,
+        &PresetCtx {
+            lang,
+            strict_iso9,
+            emoji_cldr: false,
+        },
+    )
+}
+
+/// Legacy oracle for [`catalog_key`], retained until the final cleanup task
+/// (#453). Byte-identical to the runner-based impl above.
+pub(crate) fn catalog_key_legacy(
+    text: &str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+) -> Result<String, crate::ErrorRepr> {
+    crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
     let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides + soft hyphen + format marks (#93)
@@ -1529,6 +1578,11 @@ mod tests {
                 let once = search_key(&s, None).unwrap();
                 let twice = search_key(&once, None).unwrap();
                 prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn catalog_key_matches_legacy(s in adversarial()) {
+                prop_assert_eq!(catalog_key(&s, None, false).unwrap(), catalog_key_legacy(&s, None, false).unwrap());
             }
 
             #[test]

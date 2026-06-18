@@ -12,6 +12,10 @@ version: 2
 #    majors into one unmergeable PR).
 #  * Auto-merge — green PRs merge hands-off (.github/workflows/dependabot-auto-merge.yml);
 #    a red PR is the only thing that pulls in a human (the migration procedure).
+#  * Completeness — EVERY manifest is watched (core + both binding crates, the Node
+#    package, the Ruby bundle). Watching only the root cargo/uv/actions is how napi (2→3)
+#    and magnus (0.7→0.8) rotted unseen. scripts/audit_dependencies.py + the weekly
+#    `dependency-audit` workflow are the dev-time backstop that keeps a future gap visible.
 updates:
   # Keep third-party GitHub Actions (pinned to commit SHAs) up to date.
   - package-ecosystem: "github-actions"
@@ -30,9 +34,16 @@ updates:
           - "minor"
           - "patch"
 
-  # Rust dependencies — keep Cargo.lock fresh for RustSec advisory scanning (#105).
+  # Rust dependencies — keep every Cargo.lock fresh for RustSec advisory scanning
+  # (#105) and to catch binding-crate drift. `directories` covers the core crate
+  # AND both binding workspaces (bindings/node, bindings/ruby); watching only "/"
+  # is how napi (2→3) and magnus (0.7→0.8) rotted unseen. Mirrored by the
+  # `audit_dependencies.py` dev-time check, which audits the same manifests.
   - package-ecosystem: "cargo"
-    directory: "/"
+    directories:
+      - "/"
+      - "/bindings/node"
+      - "/bindings/ruby"
     schedule:
       interval: "weekly"
     cooldown:
@@ -59,6 +70,40 @@ updates:
       semver-patch-days: 2
     groups:
       uv:
+        patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Node binding — JS toolchain (napi cli, biome, typescript, vitest).
+  - package-ecosystem: "npm"
+    directory: "/bindings/node"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 2
+    groups:
+      npm:
+        patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Ruby binding — gem toolchain (rspec, rubocop, rake-compiler).
+  - package-ecosystem: "bundler"
+    directory: "/bindings/ruby"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 2
+    groups:
+      bundler:
         patterns: ["*"]
         update-types:
           - "minor"

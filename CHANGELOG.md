@@ -321,6 +321,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Internal
 
+- **Dependency-freshness audit across every manifest + full dependabot coverage.**
+  Dependabot only watched the root cargo/uv/actions manifests, so the binding crates
+  rotted a full major unseen (`napi` 2→3, `magnus` 0.7→0.8). `.github/dependabot.yml`
+  now watches **every** manifest — the core crate and both binding workspaces (cargo),
+  the Node package (npm), and the Ruby bundle (bundler) — and a new dev-time
+  `scripts/audit_dependencies.py` audits all of them against their registries in one
+  command (`--strict` to fail on a major lag), run weekly by the `dependency-audit`
+  workflow. The guard makes any future config gap visible instead of silent. See
+  [DEPENDENCY_UPGRADES.md](DEPENDENCY_UPGRADES.md).
+
 - **The Tier 3 exhaustive+formal gate now guards every publish, not just PyPI/crates.io (#159, #395).**
   The pre-publish regimen — the exhaustive Rust domain tests (`#[ignore]`) and the
   Python formal invariants (`@pytest.mark.formal`) — moved out of an inline job in

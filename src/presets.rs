@@ -524,6 +524,51 @@ pub(crate) fn catalog_key(
 /// query — otherwise lookups silently miss.
 pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate::ErrorRepr> {
     crate::transliterate::validate_lang(lang)?;
+    const STEPS: &[Step] = &[
+        // 1. NFKC normalization
+        Step::Nfkc,
+        // 2. Strip bidi overrides + soft hyphen + format marks (#93)
+        Step::StripBidi,
+        // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
+        //    the transliteration table but whose original is not (e.g. Georgian
+        //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
+        //    on the second pass — non-idempotent. Fold before transliterate so both
+        //    passes see the same form.
+        Step::FoldCase,
+        // 4. Transliterate (always — search keys should be pure ASCII where possible)
+        Step::Transliterate {
+            mode: crate::ErrorMode::Preserve,
+            only_if_lang: false,
+        },
+        // 5. Strip accents
+        Step::StripAccents,
+        // 6. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
+        //    (`£` → `GBP`, `№` → `No`), which the pre-transliterate fold above could not
+        //    reach. Folding the output too makes the key a fixed point.
+        Step::FoldCase,
+        // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+        Step::StripControl,
+        Step::StripZeroWidth,
+        Step::CollapseWs,
+    ];
+    run(
+        STEPS,
+        text,
+        &PresetCtx {
+            lang,
+            strict_iso9: false,
+            emoji_cldr: false,
+        },
+    )
+}
+
+/// Legacy oracle for [`search_key`], retained until the final cleanup task
+/// (#453). Byte-identical to the runner-based impl above.
+pub(crate) fn search_key_legacy(
+    text: &str,
+    lang: Option<&str>,
+) -> Result<String, crate::ErrorRepr> {
+    crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization
     let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides + soft hyphen + format marks (#93)
@@ -1472,6 +1517,11 @@ mod tests {
                 let once = sort_key(&s, None).unwrap();
                 let twice = sort_key(&once, None).unwrap();
                 prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn search_key_matches_legacy(s in adversarial()) {
+                prop_assert_eq!(search_key(&s, None).unwrap(), search_key_legacy(&s, None).unwrap());
             }
 
             #[test]

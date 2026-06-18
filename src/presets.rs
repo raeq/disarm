@@ -727,6 +727,59 @@ fn transliterate_preserving_latin(text: &str, lang: Option<&str>) -> String {
 /// `strip_bidi` runs early (#93) so invisible bidi/format chars cannot perturb
 /// the ordering of otherwise-identical strings.
 pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::ErrorRepr> {
+    // `const` declared before the validate prologue to satisfy
+    // clippy::items_after_statements; it has no runtime effect.
+    const STEPS: &[Step] = &[
+        // 1. NFKC normalization (canonical-composes accents: `é` stays one codepoint)
+        Step::Nfkc,
+        // 2. Strip bidi overrides + soft hyphen + format marks (#93)
+        Step::StripBidi,
+        // 3. Unicode case folding FIRST (#419). A cased letter whose *folded* form is
+        //    in the transliteration table but whose original form is not — e.g. a
+        //    Georgian Mtavruli capital `Ჱ` (U+1CB1), absent from the table, folds to
+        //    Mkhedruli `ჱ` (U+10F1), which transliterates to `he` — would otherwise
+        //    transliterate only on the *second* pass, breaking idempotency. Folding
+        //    before transliterate makes both passes see the same form. (`Über` →
+        //    `über`; `ß` → `ss`; Latin accents survive.)
+        Step::FoldCase,
+        // 4. Transliterate non-Latin scripts only — Latin accents are preserved so
+        //    the collation key can order on them (this is the sort_key/search_key
+        //    distinction; search_key strips accents here instead).
+        Step::TranslitPreservingLatin,
+        // 4b. Fold case AGAIN. Transliteration can *emit* uppercase from a non-Latin
+        //     source the pre-transliterate fold could not reach — e.g. Old Persian
+        //     `𐏈` (U+103C8) romanizes to the proper noun `Auramazda`. Without this
+        //     second fold the key is `Auramazda` on pass 1 and `auramazda` on pass 2,
+        //     violating `f(f(x)) == f(x)`. `fold_case` only lowercases (it never
+        //     strips accents), so accent preservation — the sort_key invariant
+        //     (`Über` → `über`) — is unaffected.
+        Step::FoldCase,
+        // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+        Step::StripControl,
+        Step::StripZeroWidth,
+        Step::CollapseWs,
+        // 6. Terminal NFC (#416): because sort_key now *preserves* Latin accents
+        //    (#411) instead of folding them away, a combining mark separated from its
+        //    base by a now-stripped zero-width would otherwise survive in decomposed
+        //    form and only compose on the next pass — breaking idempotency. Recompose
+        //    so `f(f(x)) == f(x)`.
+        Step::NfcIfNonAscii,
+    ];
+    crate::transliterate::validate_lang(lang)?;
+    run(
+        STEPS,
+        text,
+        &PresetCtx {
+            lang,
+            strict_iso9: false,
+            emoji_cldr: false,
+        },
+    )
+}
+
+/// Legacy oracle for [`sort_key`], retained until the final cleanup task (#453).
+/// Byte-identical to the runner-based impl above.
+pub(crate) fn sort_key_legacy(text: &str, lang: Option<&str>) -> Result<String, crate::ErrorRepr> {
     crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization (canonical-composes accents: `é` stays one codepoint)
     let buf = nfkc_normalize(text);
@@ -1615,6 +1668,11 @@ mod tests {
                 let once = sort_key(&s, None).unwrap();
                 let twice = sort_key(&once, None).unwrap();
                 prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn sort_key_matches_legacy(s in adversarial()) {
+                prop_assert_eq!(sort_key(&s, None).unwrap(), sort_key_legacy(&s, None).unwrap());
             }
 
             #[test]

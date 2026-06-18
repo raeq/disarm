@@ -681,6 +681,35 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
 /// malicious content), control characters, and zero-width injections, then
 /// collapses runs of whitespace to single spaces.
 pub(crate) fn strip_format(text: &str) -> String {
+    const STEPS: &[Step] = &[
+        // 1. Strip bidi overrides, isolates, marks, and soft hyphens
+        Step::StripBidi,
+        // 1b. Strip the #413 smuggling / non-interchange classes, with the rendering
+        //     policy: keep well-formed emoji flags, keep VS15/VS16 after a base, and
+        //     PRESERVE the Private Use Area (icon fonts) rather than deleting it. CGJ
+        //     and noncharacters are still stripped. No NFC pass: strip_format does no
+        //     NFKC, so any base+mark left decomposed stays decomposed (idempotent).
+        Step::StripInvisible(RENDERING_STRIP),
+        // 2. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+        Step::StripControl,
+        Step::StripZeroWidth,
+        Step::CollapseWs,
+    ];
+    run(
+        STEPS,
+        text,
+        &PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+        },
+    )
+    .expect("strip_format steps are infallible")
+}
+
+/// Legacy oracle for [`strip_format`], retained until the final cleanup task
+/// (#453). Byte-identical to the runner-based impl above.
+pub(crate) fn strip_format_legacy(text: &str) -> String {
     // 1. Strip bidi overrides, isolates, marks, and soft hyphens
     let buf = strip_bidi(text);
     // 1b. Strip the #413 smuggling / non-interchange classes, with the rendering
@@ -1474,6 +1503,11 @@ mod tests {
                 let once = canonicalize_strict(&s).unwrap();
                 let twice = canonicalize_strict(&once).unwrap();
                 prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn strip_format_matches_legacy(s in adversarial()) {
+                prop_assert_eq!(strip_format(&s), strip_format_legacy(&s));
             }
 
             #[test]

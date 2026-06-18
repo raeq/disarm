@@ -574,7 +574,9 @@ def slugify(
             list input, #193).
         TypeError: If ``text`` is neither ``str`` nor ``list[str]``.
         DisarmError: If an internal Rust error occurs (e.g. an invalid
-            ``regex_pattern`` or unknown ``lang`` code).
+            ``regex_pattern``). An unknown ``lang`` does **not** raise — it is
+            treated as best-effort and falls back to the default transliterator;
+            pre-check against ``list_langs()`` if you need strict validation.
 
     Examples:
         >>> slugify("Hello World!")
@@ -934,9 +936,9 @@ def demojize(
         provider: An object implementing the :class:`EmojiProvider` protocol.
             Overrides the global provider for this call.
             None uses the global provider or the built-in default.
-        delimiters: ``emoji`` library compatibility — ignored with a
-            ``DeprecationWarning``. disarm always outputs bare CLDR
-            short names without delimiters; wrap the result yourself if
+        delimiters: ``emoji`` library compatibility — ignored, with a
+            ``DeprecationWarning`` *when explicitly passed*. disarm always outputs
+            bare CLDR short names without delimiters; wrap the result yourself if
             you need delimiters (e.g. ``f":{name}:"``).
 
     Returns:
@@ -1648,11 +1650,12 @@ def is_confusable(
         text: Input string.
         target_script: Script to check confusability against. Currently only
             ``"latin"`` is supported; any other value raises ``DisarmError``.
-        greedy: ``confusable_homoglyphs`` compatibility — ignored with a
-            ``DeprecationWarning``. disarm always checks all characters.
-        preferred_aliases: ``confusable_homoglyphs`` compatibility — ignored
-            with a ``DeprecationWarning``. disarm uses its own script
-            detection engine.
+        greedy: ``confusable_homoglyphs`` compatibility — ignored, with a
+            ``DeprecationWarning`` *when explicitly passed*. disarm always checks
+            all characters.
+        preferred_aliases: ``confusable_homoglyphs`` compatibility — ignored,
+            with a ``DeprecationWarning`` *when explicitly passed*. disarm uses
+            its own script detection engine.
 
     Returns:
         True if any confusable homoglyphs are present.

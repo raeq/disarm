@@ -15,6 +15,13 @@
 /// of the separate [`strip_control_chars`] / [`strip_zero_width_chars`] steps.
 /// Folding (not deleting) the line controls means `a\rb` → `a b`, not `ab`, so
 /// an invisible line break can no longer silently join two tokens.
+///
+/// Ordering contract (review D-8): the three whitespace functions are **not**
+/// order-commutative. `collapse_whitespace` is the *terminal* whitespace step —
+/// it trims leading/trailing runs that an earlier strip may expose. The presets
+/// always run it last; a [`crate::pipeline::Pipeline`] built by hand that
+/// sequences a `COLLAPSE_WS` step *before* a later strip can leave untrimmed
+/// leading/trailing space. Run collapse after every strip that can expose one.
 pub(crate) fn collapse_whitespace(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     collapse_whitespace_into(text, &mut out);
@@ -109,6 +116,9 @@ pub(crate) fn strip_control_chars(text: &str) -> String {
 /// In-place form of [`strip_control_chars`] (#236 item 7).
 pub(crate) fn strip_control_chars_into(text: &str, out: &mut String) {
     out.clear();
+    // The filter's `size_hint` lower bound is 0, so `extend` cannot pre-size the
+    // buffer; reserve up front (review M-P5). A mandatory stage in every key path.
+    out.reserve(text.len());
     out.extend(
         text.chars()
             .filter(|&ch| !ch.is_control() || is_fold_whitespace(ch)),
@@ -131,6 +141,7 @@ pub(crate) fn strip_zero_width_chars_into(text: &str, out: &mut String) {
         out.push_str(text);
         return;
     }
+    out.reserve(text.len()); // filter's size_hint lower bound is 0 (review M-P5)
     out.extend(text.chars().filter(|&ch| !is_zero_width(ch)));
 }
 

@@ -76,17 +76,30 @@ const CANCEL_TAG: char = '\u{E007F}';
 /// (which are stray smuggling payload, dropped) and return `None`, leaving the
 /// non-tag character that ended the run in the iterator. Streams over the input
 /// with at most a small buffer for the tail — no `Vec<char>` of the whole string.
+/// The complete set of RGI emoji subdivision-flag payloads — the ASCII the tag
+/// letters decode to (England / Scotland / Wales). These are the *only*
+/// well-formed `U+1F3F4` + tag-letters + `U+E007F` sequences; any other tail is
+/// the Tags "ASCII smuggling" channel wearing a flag base, so it is stripped
+/// (review D-6). Bounding to the region-subtag *shape* alone would still pass a
+/// ≤6-letter lowercase payload; matching the exact allowlist closes the channel.
+const VALID_SUBDIVISION_FLAGS: [&str; 3] = ["gbeng", "gbsct", "gbwls"];
+
 fn consume_flag_tail(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<String> {
     let mut tail = String::new();
+    let mut decoded = String::new();
     while let Some(&c) = chars.peek() {
         if is_tag_letter(c) {
             tail.push(c);
+            // Tag letters U+E0061..=U+E007A decode to ASCII a..z.
+            if let Some(ascii) = char::from_u32(c as u32 - 0xE0000) {
+                decoded.push(ascii);
+            }
             chars.next();
         } else {
             break;
         }
     }
-    if !tail.is_empty() && chars.peek() == Some(&CANCEL_TAG) {
+    if chars.peek() == Some(&CANCEL_TAG) && VALID_SUBDIVISION_FLAGS.contains(&decoded.as_str()) {
         tail.push(CANCEL_TAG);
         chars.next();
         Some(tail)
@@ -95,11 +108,18 @@ fn consume_flag_tail(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Op
     }
 }
 
-/// A character that a presentation selector may legitimately follow: any kept,
-/// non-whitespace character. (Used only by the `display_clean` carve-out.)
+/// A character that a presentation selector may legitimately follow in the
+/// rendering carve-out: a base that survives **every** downstream strip
+/// `strip_format` runs after this one (control, zero-width, and the
+/// whitespace/blank-render fold). Keeping a VS after a base that a later stage
+/// removes orphans the selector, so a second pass strips it and the preset is
+/// not idempotent (post-0.11 review D-2). Reject those bases here.
 #[inline]
 fn is_presentation_base(ch: char) -> bool {
     !ch.is_whitespace()
+        && !ch.is_control()
+        && !crate::whitespace::is_blank_render(ch)
+        && !crate::whitespace::is_zero_width(ch)
 }
 
 /// Public helper: strip the Unicode Tags block, **preserving** well-formed emoji
@@ -252,6 +272,21 @@ mod tests {
         // …but a malformed tag run (no terminator) after the flag is stripped.
         let bad = "\u{1F3F4}\u{E0067}\u{E0062}"; // no CANCEL TAG
         assert_eq!(strip_tags(bad), "\u{1F3F4}");
+    }
+
+    #[test]
+    fn rejects_flag_base_with_non_subdivision_tag_payload() {
+        // Review D-6: a well-*shaped* sequence (flag base + tag letters +
+        // terminator) whose payload is not a real RGI subdivision (England /
+        // Scotland / Wales) is the Tags smuggling channel, and must be stripped
+        // to the bare flag base — not preserved.
+        // "pwn" tag-encoded: U+E0070 U+E0077 U+E006E, then CANCEL TAG.
+        let smuggled = "\u{1F3F4}\u{E0070}\u{E0077}\u{E006E}\u{E007F}";
+        assert_eq!(strip_tags(smuggled), "\u{1F3F4}");
+        assert_eq!(strip_invisible_classes(smuggled, comparison()), "\u{1F3F4}");
+        // Wales (gbwls) is a real subdivision flag and is preserved.
+        let wales = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}";
+        assert_eq!(strip_tags(wales), wales);
     }
 
     #[test]

@@ -40,7 +40,12 @@ pub(crate) fn grapheme_split(text: &str) -> Vec<String> {
 /// `crate::api::grapheme_truncate`, split out so callers with a known-good `usize`
 /// (tests, internal callers) skip the boundary conversion.
 pub(crate) fn truncate_to_graphemes(text: &str, max_graphemes: usize) -> String {
-    let mut result = String::with_capacity(text.len());
+    // Reserve for the *result*, not the whole input (review M-P4): keeping a few
+    // graphemes from a huge string shouldn't allocate the full input length.
+    // ~4 bytes/grapheme covers typical clusters; rare large emoji ZWJ sequences
+    // just trigger an amortized realloc. Capped at the input length.
+    let cap = text.len().min(max_graphemes.saturating_mul(4));
+    let mut result = String::with_capacity(cap);
     for (count, g) in clusters(text).enumerate() {
         if count >= max_graphemes {
             break;

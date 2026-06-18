@@ -109,7 +109,7 @@ assert search_key("ΩMEGA", lang="auto") == 'omega'
 
 ### Pipeline steps
 
-`NFKC → strip_bidi → fold_case → transliterate-non-Latin → strip_control → strip_zero_width → collapse_whitespace`
+`NFKC → strip_bidi → fold_case → transliterate-non-Latin → fold_case → strip_control → strip_zero_width → collapse_whitespace`
 
 Unlike `search_key`, `sort_key` **preserves base accented characters** so
 accented and unaccented forms stay distinct and the accent survives for a

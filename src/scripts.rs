@@ -5,14 +5,15 @@
 /// Detect Unicode scripts present in text, in order of first appearance.
 ///
 /// Returns `&'static str` script names, avoiding per-character String
-/// allocation.  The `HashSet` and output `Vec` use borrowed static strings.
+/// allocation. Real text mixes only a handful of scripts, so the output `Vec`
+/// is deduped with a linear `contains` rather than a heap-allocated `HashSet`
+/// (review M-P3) — for ≤~3 distinct scripts the scan is cheaper than the hash.
 pub(crate) fn detect_scripts(text: &str) -> Vec<&'static str> {
     let mut scripts: Vec<&'static str> = Vec::new();
-    let mut seen = std::collections::HashSet::new();
 
     for ch in text.chars() {
         let script = detect_char_script(ch);
-        if script != "Common" && script != "Inherited" && seen.insert(script) {
+        if script != "Common" && script != "Inherited" && !scripts.contains(&script) {
             scripts.push(script);
         }
     }

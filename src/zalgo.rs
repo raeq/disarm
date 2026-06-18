@@ -26,23 +26,25 @@ pub(crate) const DEFAULT_THRESHOLD: usize = 3;
 /// Vietnamese double-stacked marks) while stripping anything beyond that.
 pub(crate) const DEFAULT_MAX_MARKS: usize = 2;
 
-/// Count consecutive combining marks after each base character in NFD form.
-/// Returns the maximum count found.
-fn max_combining_run(text: &str) -> usize {
-    let mut max_run: usize = 0;
-    let mut current_run: usize = 0;
-
+/// Streaming check: does any base character carry **more than** `threshold`
+/// consecutive combining marks in NFD form?
+///
+/// Returns the instant the first run exceeds `threshold`, so a short zalgo burst
+/// at the front of a long benign tail settles in `O(burst)`, not `O(len)` — no
+/// full NFD walk once the verdict is decided (review H-P2/H-P3).
+fn exceeds_combining_run(text: &str, threshold: usize) -> bool {
+    let mut run: usize = 0;
     for ch in text.nfd() {
         if is_combining_mark(ch) {
-            current_run += 1;
-            if current_run > max_run {
-                max_run = current_run;
+            run += 1;
+            if run > threshold {
+                return true;
             }
         } else {
-            current_run = 0;
+            run = 0;
         }
     }
-    max_run
+    false
 }
 
 /// Detect whether text contains zalgo-style combining mark abuse.
@@ -59,7 +61,7 @@ pub(crate) fn is_zalgo(text: &str, threshold: usize) -> bool {
     if text.is_ascii() {
         return false;
     }
-    max_combining_run(text) > threshold
+    exceeds_combining_run(text, threshold)
 }
 
 /// Strip excessive combining marks, keeping at most `max_marks` per base
@@ -85,6 +87,15 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
     // Fast path: pure ASCII has no combining marks.
     if text.is_ascii() {
         out.push_str(text);
+        return;
+    }
+
+    // Fast path (H-P3): if no base exceeds `max_marks`, the mark-filtering step
+    // is a no-op, so skip the intermediate `filtered` buffer and just normalize
+    // to NFC (`NFC(NFD(x)) == NFC(x)`), preserving the documented NFC output
+    // contract without the per-char copy. Most non-ASCII text has no zalgo.
+    if !exceeds_combining_run(text, max_marks) {
+        out.extend(text.nfc());
         return;
     }
 
@@ -224,15 +235,37 @@ mod tests {
     }
 
     #[test]
-    fn test_max_combining_run() {
-        assert_eq!(max_combining_run("hello"), 0);
-        assert_eq!(max_combining_run("café"), 1);
-        assert_eq!(max_combining_run(""), 0);
+    fn test_exceeds_combining_run() {
+        assert!(!exceeds_combining_run("hello", 0));
+        assert!(!exceeds_combining_run("café", 1)); // 1 mark, threshold 1
+        assert!(!exceeds_combining_run("", 0));
 
         let mut text = String::from("a");
         for _ in 0..5 {
             text.push('\u{0300}');
         }
-        assert_eq!(max_combining_run(&text), 5);
+        assert!(exceeds_combining_run(&text, 2)); // 5 marks > 2
+        assert!(!exceeds_combining_run(&text, 5)); // 5 marks, threshold 5
+    }
+
+    proptest::proptest! {
+        /// H-P3: `strip_zalgo` always returns NFC — the fast path that skips the
+        /// filter must still normalize.
+        #[test]
+        fn strip_zalgo_output_is_nfc(s in "\\PC*", max in 0usize..4) {
+            let out = strip_zalgo(&s, max);
+            proptest::prop_assert!(unicode_normalization::is_nfc(&out));
+        }
+
+        /// The fast path (no excess marks) must produce the same bytes as the
+        /// full filter path would on the same input.
+        #[test]
+        fn strip_zalgo_fast_path_matches_filter(s in "\\PC*") {
+            // With a high cap, no run is ever excess, so the fast path is taken;
+            // it must equal a plain NFC normalization.
+            let out = strip_zalgo(&s, 1000);
+            let nfc: String = s.nfc().collect();
+            proptest::prop_assert_eq!(out, nfc);
+        }
     }
 }

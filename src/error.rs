@@ -442,12 +442,9 @@ pub(crate) enum ErrorRepr {
 impl ErrorRepr {
     /// Stable machine-readable error code for this variant.
     ///
-    /// New metadata (#181): not currently surfaced to Python, so it changes no
-    /// behaviour. Codes are stable identifiers, independent of the (mutable)
-    /// human-readable message text. Wired into the Python surface in a follow-up
-    /// (the boundary conversion will attach it); unused in non-test builds until
-    /// then, hence `allow(dead_code)`.
-    #[allow(dead_code)]
+    /// Metadata (#181): a stable identifier, independent of the (mutable)
+    /// human-readable message text. Reached through the public [`Error::code`]
+    /// wrapper, so it is live in non-test builds (review M-D1).
     pub(crate) fn code(&self) -> &'static str {
         match self {
             ErrorRepr::InvalidErrorMode { .. } => "invalid_error_mode",
@@ -645,6 +642,7 @@ impl Error {
     ///
     /// The partition mirrors the Python exception hierarchy (`InvalidArgumentError`
     /// / `ResourceLimitError` / `UnsupportedError` / `DisarmError`).
+    #[must_use]
     pub fn kind(&self) -> ErrorKind {
         match &self.0 {
             ErrorRepr::InvalidErrorMode { .. }
@@ -697,6 +695,7 @@ impl Error {
 
     /// A stable machine-readable code for this error, independent of the
     /// (mutable) human-readable `Display` message.
+    #[must_use]
     pub fn code(&self) -> &'static str {
         self.0.code()
     }

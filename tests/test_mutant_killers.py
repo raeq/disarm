@@ -377,6 +377,7 @@ class TestPipelineStepTuples:
                     ("strip_bidi", None),
                     ("fold_case", None),  # #419: before transliterate
                     ("transliterate", "non_latin"),
+                    ("fold_case", None),  # again: transliterate can emit uppercase
                     ("strip_control", None),
                     ("strip_zero_width", None),
                     ("collapse_whitespace", None),

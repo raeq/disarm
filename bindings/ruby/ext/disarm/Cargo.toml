@@ -31,6 +31,6 @@ crate-type = ["cdylib"]
 # build (which mounts only this gem dir) can fetch it. Imported as `disarm_core`
 # because the package name `disarm` would otherwise clash with this crate.
 disarm_core = { package = "disarm", version = "0.10", default-features = false }
-# magnus: ergonomic, safe Ruby<->Rust bindings over rb-sys. 0.7 supports Ruby >= 3.0
+# magnus: ergonomic, safe Ruby<->Rust bindings over rb-sys. 0.8 supports Ruby >= 3.0
 # (the gem's required_ruby_version); rb-sys handles the platform glue.
-magnus = "0.7"
+magnus = "0.8"

@@ -291,7 +291,6 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
-<<<<<<< HEAD
 - **Digit confusables fold to their digit, not a look-alike letter (#439).** The
   confusable maps mapped many non-ASCII digit sources to letters or punctuation —
   Arabic-Indic `٠`→`.`, `١`→`l`, `٥`→`o`, Devanagari/Bengali/NKO zeros→`o`/`O`, and
@@ -316,6 +315,17 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   keys are now lowercase and stable. Output change: a few currency/symbol inputs
   that previously produced uppercase keys now fold to lowercase. Idempotency is
   pinned by per-preset property tests.
+
+- **`security_clean` / `normalize_user_input` idempotency on duplicate combining
+  marks (#434, #416 residual).** A *duplicate* combining mark broke the single
+  `NFC → confusables → NFC` sandwich: NFC composed only one mark onto the base, the
+  TR39 fold dropped it, and the recomposing NFC reattached the *spare* mark —
+  re-creating a foldable composed character the next call would consume, so
+  `f(f(x)) != f(x)` (`"c"`+◌̧+◌̧ → `"ç"` then `"c"`). The confusable fold is now
+  iterated to a fixed point (each pass removes ≥1 mark, so it converges in a
+  couple of iterations), making both presets true fixed points. The `#416`
+  Hypothesis idempotency property is re-broadened and the `normalize_user_input`
+  Rust proptest strengthened from nfc-modulo to raw equality.
 
 - **Line controls no longer join tokens in `collapse_whitespace` (#433).** TAB
   and LF folded to a space, but VT, FF, CR, NEL, and the information separators

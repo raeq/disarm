@@ -35,6 +35,173 @@ const CONFUSABLE_FIXED_POINT_ITERS: usize = 8;
 // amplification bound (`MAX_REPLACEMENT_OUTPUT_BYTES` in src/limits.rs, #256),
 // enforced in `tables::apply_replacements`.
 
+// ---------------------------------------------------------------------------
+// Shared ping-pong runner for the preset step lists (#453)
+// ---------------------------------------------------------------------------
+
+/// Runtime parameters for steps whose behaviour depends on call-site args.
+/// Compile-time params (zalgo cap, strip policy, confusable target) ride in the
+/// `Step` enum payload so step arrays stay `const`.
+struct PresetCtx<'a> {
+    lang: Option<&'a str>,
+    strict_iso9: bool,
+    emoji_cldr: bool,
+}
+
+/// One preset stage. A preset is a `const &[Step]`; ordering, subsetting, and
+/// repeats are expressed by the array. Mirrors `pipeline.rs` apply_step_into,
+/// extended with the four non-uniform preset stages.
+#[derive(Clone, Copy)]
+enum Step {
+    Nfkc,
+    Nfc,
+    NfcIfNonAscii,
+    StripBidi,
+    StripInvisible(invisibles::StripPolicy),
+    StripControl,
+    StripZeroWidth,
+    CollapseWs,
+    Zalgo(usize),
+    FoldCase,
+    StripAccents,
+    Transliterate {
+        mode: crate::ErrorMode,
+        only_if_lang: bool,
+    },
+    TranslitPreservingLatin,
+    Confusables(&'static str),
+    ConfusablesNfcFixedPoint(&'static str),
+    Demojize {
+        only_if_cldr: bool,
+    },
+}
+
+/// Apply one step, writing into the reused scratch `out`. Returns `true` when `out`
+/// holds the result (caller swaps it in) or `false` for a no-op (input unchanged,
+/// `out` left as a spare). Every writing leaf clears `out` itself.
+fn apply_into(
+    step: Step,
+    input: &str,
+    ctx: &PresetCtx,
+    out: &mut String,
+) -> Result<bool, crate::ErrorRepr> {
+    match step {
+        Step::Nfkc => {
+            crate::normalize::normalize_into(input, "NFKC", out)?;
+            Ok(true)
+        }
+        Step::Nfc => {
+            crate::normalize::normalize_into(input, "NFC", out)?;
+            Ok(true)
+        }
+        Step::NfcIfNonAscii => {
+            if input.is_ascii() {
+                Ok(false)
+            } else {
+                crate::normalize::normalize_into(input, "NFC", out)?;
+                Ok(true)
+            }
+        }
+        Step::StripBidi => {
+            strip_bidi_into(input, out);
+            Ok(true)
+        }
+        Step::StripInvisible(policy) => {
+            invisibles::strip_invisible_classes_into(input, policy, out);
+            Ok(true)
+        }
+        Step::StripControl => {
+            whitespace::strip_control_chars_into(input, out);
+            Ok(true)
+        }
+        Step::StripZeroWidth => {
+            whitespace::strip_zero_width_chars_into(input, out);
+            Ok(true)
+        }
+        Step::CollapseWs => {
+            whitespace::collapse_whitespace_into(input, out);
+            Ok(true)
+        }
+        Step::Zalgo(cap) => {
+            zalgo::strip_zalgo_into(input, cap, out);
+            Ok(true)
+        }
+        Step::FoldCase => {
+            case_fold::fold_case_into(input, out);
+            Ok(true)
+        }
+        Step::StripAccents => {
+            transliterate::strip_accents_into(input, out);
+            Ok(true)
+        }
+        Step::Transliterate { mode, only_if_lang } => {
+            if only_if_lang && ctx.lang.is_none() {
+                return Ok(false);
+            }
+            match transliterate::transliterate_impl(
+                input,
+                ctx.lang,
+                mode,
+                "",
+                ctx.strict_iso9,
+                false,
+                false,
+            ) {
+                Cow::Borrowed(_) => Ok(false),
+                Cow::Owned(s) => {
+                    *out = s;
+                    Ok(true)
+                }
+            }
+        }
+        Step::TranslitPreservingLatin => {
+            *out = transliterate_preserving_latin(input, ctx.lang);
+            Ok(true)
+        }
+        Step::Confusables(target) => {
+            confusables::normalize_confusables_into(input, target, out)?;
+            Ok(true)
+        }
+        Step::ConfusablesNfcFixedPoint(target) => {
+            let mut buf = input.to_owned();
+            for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
+                let next =
+                    nfc_normalize(&confusables::normalize_confusables(&buf, target)?).into_owned();
+                if next == buf {
+                    break;
+                }
+                buf = next;
+            }
+            if buf == input {
+                Ok(false)
+            } else {
+                *out = buf;
+                Ok(true)
+            }
+        }
+        Step::Demojize { only_if_cldr } => {
+            if only_if_cldr && !ctx.emoji_cldr {
+                return Ok(false);
+            }
+            emoji::demojize_rust_into(input, false, out);
+            Ok(true)
+        }
+    }
+}
+
+/// Execute a preset step list with a two-buffer ping-pong (the engine pattern from
+/// `pipeline.rs`): O(1) live buffers regardless of step count, no per-stage alloc.
+fn run(steps: &[Step], text: &str, ctx: &PresetCtx) -> Result<String, crate::ErrorRepr> {
+    let mut cur = text.to_owned();
+    let mut scratch = String::new();
+    for &step in steps {
+        if apply_into(step, &cur, ctx, &mut scratch)? {
+            std::mem::swap(&mut cur, &mut scratch);
+        }
+    }
+    Ok(cur)
+}
+
 /// NFKC-normalize `text`, skipping the normalization pass for all-ASCII input.
 ///
 /// Every ASCII scalar (U+0000–U+007F) is already in NFKC normal form — ASCII has
@@ -659,6 +826,55 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn run_executes_steps_in_order_with_pingpong() {
+        let steps = &[Step::StripBidi, Step::FoldCase, Step::CollapseWs];
+        let ctx = PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+        };
+        let got = run(steps, "  HE\u{202E}LLO  ", &ctx).unwrap();
+        let want = whitespace::collapse_whitespace(&case_fold::fold_case_impl(&strip_bidi(
+            "  HE\u{202E}LLO  ",
+        )));
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn run_empty_steps_is_identity() {
+        let ctx = PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+        };
+        assert_eq!(run(&[], "café \u{202E}x", &ctx).unwrap(), "café \u{202E}x");
+    }
+
+    #[test]
+    fn run_skips_noop_steps_without_corrupting_buffers() {
+        // NfcIfNonAscii is a no-op on ASCII; gated Transliterate is a no-op with lang=None.
+        // A no-op in the MIDDLE of the chain must not leak stale scratch into the next step.
+        let ctx = PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+        };
+        let steps = &[
+            Step::FoldCase,
+            Step::NfcIfNonAscii,
+            Step::Transliterate {
+                mode: crate::ErrorMode::Preserve,
+                only_if_lang: true,
+            },
+            Step::CollapseWs,
+        ];
+        assert_eq!(
+            run(steps, "  HELLO   WORLD  ", &ctx).unwrap(),
+            "hello world"
+        );
+    }
 
     // #431: canonicalize / canonicalize_strict no longer neutralize path
     // separators — '/' and '\' pass through (defend traversal at the sink).

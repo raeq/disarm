@@ -1012,6 +1012,58 @@ pub(crate) fn strip_format_legacy(text: &str) -> String {
 /// `catalog_key`/`search_key`, it does *not* transliterate — the original
 /// script is preserved.
 pub(crate) fn canonicalize_strict(text: &str) -> Result<String, crate::ErrorRepr> {
+    const STEPS: &[Step] = &[
+        // 1. NFKC normalization
+        Step::Nfkc,
+        // 2. Strip invisibles FIRST (bidi/format + zero-width + non-whitespace
+        //    control) so they cannot split a run of combining marks; otherwise
+        //    removing them later would merge two short runs into one long run that a
+        //    second pass would cap differently (zalgo-capping would not be
+        //    idempotent) — e.g. "\u{301}\u{301}\0\u{301}" must not become a longer
+        //    contiguous run once the NUL is stripped. (#433) strip_control_chars now
+        //    *preserves* the whitespace controls — CR/VT/FF/NEL/FS–US — which the
+        //    final fold turns into a space; folding a separator, unlike deleting it,
+        //    leaves a stable boundary and so keeps the cap idempotent.
+        Step::StripBidi,
+        Step::StripZeroWidth,
+        Step::StripControl,
+        // 2b. Strip the #413 smuggling / non-interchange classes (Tags with the flag
+        //     carve-out, variation selectors, CGJ, noncharacters, PUA).
+        Step::StripInvisible(COMPARISON_STRIP),
+        // 3. Cap combining marks at 2 per base character (zalgo)
+        Step::Zalgo(2),
+        // 4. Confusables → Latin (neutralizes cross-script homoglyphs), iterated with
+        //    NFC to a fixed point (#434): a duplicate combining mark can survive one
+        //    fold and recompose via NFC, re-creating a foldable composed char the next
+        //    pass would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping makes the preset a
+        //    true fixed point — see `canonicalize` for the full rationale.
+        Step::ConfusablesNfcFixedPoint("latin"),
+        // 5. Fold whitespace (#433: fold-only — control/zero-width were already
+        //    stripped explicitly above, before the zalgo cap, per #121). The line
+        //    controls now fold to a space instead of being deleted, so `a\rb` → `a b`.
+        Step::CollapseWs,
+        // 5b. Terminal NFC (#416/#413): stripping a CGJ (or other invisible) from
+        //     between a base and a combining mark leaves them adjacent but decomposed;
+        //     recompose so the pipeline stays a fixed point.
+        Step::Nfc,
+    ];
+    // #431: no path-separator neutralization — see canonicalize. Mapping '/' to
+    // '_' is sink-specific output sanitization (out of scope per THREAT_MODEL.md)
+    // and corrupted legitimate input; defend traversal at the sink instead.
+    run(
+        STEPS,
+        text,
+        &PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+        },
+    )
+}
+
+/// Legacy oracle for [`canonicalize_strict`], retained until the final cleanup
+/// task (#453). Byte-identical to the runner-based impl above.
+pub(crate) fn canonicalize_strict_legacy(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization
     let buf = nfkc_normalize(text);
     // 2. Strip invisibles FIRST (bidi/format + zero-width + non-whitespace
@@ -1846,6 +1898,11 @@ mod tests {
                 let once = canonicalize_strict(&s).unwrap();
                 let twice = canonicalize_strict(&once).unwrap();
                 prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn canonicalize_strict_matches_legacy(s in adversarial()) {
+                prop_assert_eq!(canonicalize_strict(&s).unwrap(), canonicalize_strict_legacy(&s).unwrap());
             }
 
             #[test]

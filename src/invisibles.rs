@@ -167,6 +167,11 @@ pub(crate) fn strip_pua(text: &str) -> String {
 /// according to `policy`. Always strips: stray Tags-block characters (keeping
 /// valid flag sequences), the Combining Grapheme Joiner, and noncharacters.
 /// Variation selectors and Private Use Area are governed by `policy`.
+// Returning form is now used only by the `_legacy` preset oracles and this
+// module's unit tests; the presets call `strip_invisible_classes_into`. The
+// extension-module clippy build has no test target, so without this it reads as
+// dead. Reassessed in the #453 cleanup task.
+#[allow(dead_code)]
 pub(crate) fn strip_invisible_classes(text: &str, policy: StripPolicy) -> String {
     let mut out = String::new();
     strip_invisible_classes_into(text, policy, &mut out);

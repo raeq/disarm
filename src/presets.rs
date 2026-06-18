@@ -214,6 +214,10 @@ fn run(steps: &[Step], text: &str, ctx: &PresetCtx) -> Result<String, crate::Err
 /// Each preset then takes ownership at the first stage that produces a new
 /// `String` (every next step returns one), so the only ASCII allocation is the
 /// one that stage would make anyway. See #198.
+// Used only by the `_legacy` preset oracles now; the ported presets emit NFKC via
+// `Step::Nfkc`/`normalize_into`. Dead under the no-test extension-module clippy
+// build until the #453 cleanup task removes the oracles (and this fn with them).
+#[allow(dead_code)]
 #[inline]
 fn nfkc_normalize(text: &str) -> Cow<'_, str> {
     if text.is_ascii() {
@@ -398,6 +402,7 @@ pub(crate) fn canonicalize(text: &str) -> Result<String, crate::ErrorRepr> {
 
 /// Legacy oracle for [`canonicalize`], retained until the final cleanup task
 /// (#453). Byte-identical to the runner-based impl above.
+#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
 pub(crate) fn canonicalize_legacy(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf = nfkc_normalize(text);
@@ -514,6 +519,7 @@ pub(crate) fn ml_normalize(
 
 /// Legacy oracle for [`ml_normalize`], retained until the final cleanup task
 /// (#453). Byte-identical to the runner-based impl above.
+#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
 pub(crate) fn ml_normalize_legacy(
     text: &str,
     lang: Option<&str>,
@@ -629,6 +635,7 @@ pub(crate) fn catalog_key(
 
 /// Legacy oracle for [`catalog_key`], retained until the final cleanup task
 /// (#453). Byte-identical to the runner-based impl above.
+#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
 pub(crate) fn catalog_key_legacy(
     text: &str,
     lang: Option<&str>,
@@ -727,6 +734,7 @@ pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate
 
 /// Legacy oracle for [`search_key`], retained until the final cleanup task
 /// (#453). Byte-identical to the runner-based impl above.
+#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
 pub(crate) fn search_key_legacy(
     text: &str,
     lang: Option<&str>,
@@ -889,6 +897,7 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
 
 /// Legacy oracle for [`sort_key`], retained until the final cleanup task (#453).
 /// Byte-identical to the runner-based impl above.
+#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
 pub(crate) fn sort_key_legacy(text: &str, lang: Option<&str>) -> Result<String, crate::ErrorRepr> {
     crate::transliterate::validate_lang(lang)?;
     // 1. NFKC normalization (canonical-composes accents: `é` stays one codepoint)
@@ -970,6 +979,7 @@ pub(crate) fn strip_format(text: &str) -> String {
 
 /// Legacy oracle for [`strip_format`], retained until the final cleanup task
 /// (#453). Byte-identical to the runner-based impl above.
+#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
 pub(crate) fn strip_format_legacy(text: &str) -> String {
     // 1. Strip bidi overrides, isolates, marks, and soft hyphens
     let buf = strip_bidi(text);
@@ -1063,6 +1073,7 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<String, crate::ErrorRepr
 
 /// Legacy oracle for [`canonicalize_strict`], retained until the final cleanup
 /// task (#453). Byte-identical to the runner-based impl above.
+#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
 pub(crate) fn canonicalize_strict_legacy(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization
     let buf = nfkc_normalize(text);
@@ -1180,6 +1191,7 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> 
 
 /// Legacy oracle for [`strip_obfuscation`], retained until the final cleanup
 /// task (#453). Byte-identical to the runner-based impl above.
+#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
 pub(crate) fn strip_obfuscation_legacy(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf = nfkc_normalize(text);

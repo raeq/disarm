@@ -20,6 +20,15 @@ const RENDERING_STRIP: invisibles::StripPolicy = invisibles::StripPolicy {
     keep_presentation_vs: true,
 };
 
+/// Safety bound on the confusables fixed-point loop (#434). A single
+/// `NFC → confusables → NFC` sandwich is not always a fixed point: a duplicate
+/// combining mark leaves a *spare* mark that the terminal NFC reattaches,
+/// re-creating a foldable composed character the next pass would consume (so the
+/// preset is non-idempotent). The loop converges in a couple of iterations —
+/// each folding pass removes at least one mark — and this bound is only a
+/// guard against an unexpected non-converging input.
+const CONFUSABLE_FIXED_POINT_ITERS: usize = 8;
+
 // disarm does not cap input size in the pipeline presets — bounding untrusted
 // input is the caller's responsibility (every stage is linear time/memory;
 // see #80). The only retained size guard is the register_replacements output
@@ -182,21 +191,31 @@ pub(crate) fn security_clean(text: &str) -> Result<String, crate::ErrorRepr> {
     //    now-removed zero-width), which the leading NFKC passed over. Compose it
     //    here so the confusable fold below sees the *composed* form consistently.
     let buf = nfc_normalize(&buf);
-    // 5. Confusables → Latin (neutralizes cross-script homoglyphs). Sandwiched
-    //    between two NFC passes (#416) because TR39 skeletoning is not
-    //    normalization-stable: it drops the diacritic on some *composed* accented
-    //    letters (`ç`→`c`, `ø`→`o`) but never on the *decomposed* form, and it can
-    //    *emit* a decomposed skeleton (`Ý`→`Y`+◌́). The NFC above feeds it a
-    //    consistent (composed) form; the NFC below recomposes its output, so the
-    //    pipeline is a fixed point (`f(f(x)) == f(x)`).
-    let buf = confusables::normalize_confusables(&buf, "latin")?;
-    let buf = nfc_normalize(&buf);
+    // 5. Confusables → Latin (neutralizes cross-script homoglyphs), iterated to a
+    //    fixed point between NFC passes (#416/#434). TR39 skeletoning is not
+    //    normalization-stable: it drops the diacritic on a *composed* accented
+    //    letter (`ç`→`c`, `ø`→`o`) but never on the *decomposed* form, and it can
+    //    *emit* a decomposed skeleton (`Ý`→`Y`+◌́). The leading NFC feeds it a
+    //    composed form and the trailing NFC recomposes its output — but a
+    //    *duplicate* combining mark breaks a single sandwich: NFC composes only
+    //    one mark onto the base, the fold drops it, and the recomposing NFC
+    //    reattaches the *spare* mark, re-creating a foldable composed char the
+    //    next call would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping until stable
+    //    makes the preset a true fixed point (`f(f(x)) == f(x)`).
+    let mut buf = buf.into_owned();
+    for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
+        let next = nfc_normalize(&confusables::normalize_confusables(&buf, "latin")?).into_owned();
+        if next == buf {
+            break;
+        }
+        buf = next;
+    }
     // #431: no path-separator neutralization. Mapping a synthesised '/' (e.g. a
     // confusable-unmasked U+2044) to '_' is sink-specific output-sanitizer
     // behaviour, which THREAT_MODEL.md says disarm does not do — and it silently
     // corrupted legitimate URLs/paths. Path-traversal defence belongs at the sink,
     // run on this canonicalized output (see THREAT_MODEL.md "Pipeline placement").
-    Ok(buf.into_owned())
+    Ok(buf)
 }
 
 /// ML/NLP text normalization pipeline.
@@ -539,8 +558,19 @@ pub(crate) fn normalize_user_input(text: &str) -> Result<String, crate::ErrorRep
     let buf = invisibles::strip_invisible_classes(&buf, COMPARISON_STRIP);
     // 3. Cap combining marks at 2 per base character (zalgo)
     let buf = zalgo::strip_zalgo(&buf, 2);
-    // 4. Confusables → Latin (neutralizes cross-script homoglyphs)
-    let buf = confusables::normalize_confusables(&buf, "latin")?;
+    // 4. Confusables → Latin (neutralizes cross-script homoglyphs), iterated with
+    //    NFC to a fixed point (#434): a duplicate combining mark can survive one
+    //    fold and recompose via NFC, re-creating a foldable composed char the next
+    //    pass would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping makes the preset a
+    //    true fixed point — see `security_clean` for the full rationale.
+    let mut buf = buf;
+    for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
+        let next = nfc_normalize(&confusables::normalize_confusables(&buf, "latin")?).into_owned();
+        if next == buf {
+            break;
+        }
+        buf = next;
+    }
     // 5. Fold whitespace (#433: fold-only — control/zero-width were already
     //    stripped explicitly above, before the zalgo cap, per #121). The line
     //    controls now fold to a space instead of being deleted, so `a\rb` → `a b`.
@@ -778,6 +808,26 @@ mod tests {
                 "sep {sep:?} not idempotent"
             );
         }
+    }
+
+    #[test]
+    fn test_presets_idempotent_on_duplicate_combining_marks() {
+        // #434: a duplicate combining mark used to break the confusables sandwich.
+        // `c`+◌̧+◌̧: NFC composes one cedilla → `ç`, the fold drops it → `c`, and the
+        // recomposing NFC reattaches the spare → `ç`, which the next pass folds to
+        // `c` — non-idempotent. The fixed-point loop folds all the way to `c`.
+        let input = "c\u{0327}\u{0327}"; // c + two COMBINING CEDILLA
+        for preset in [
+            security_clean(input).unwrap(),
+            normalize_user_input(input).unwrap(),
+        ] {
+            assert_eq!(preset, "c", "should fold to a bare c in one call");
+        }
+        assert_eq!(security_clean("c").unwrap(), security_clean(input).unwrap());
+        assert_eq!(
+            normalize_user_input("c").unwrap(),
+            normalize_user_input(input).unwrap()
+        );
     }
 
     #[test]
@@ -1143,9 +1193,12 @@ mod tests {
 
             #[test]
             fn normalize_user_input_idempotent(s in adversarial()) {
+                // #434: raw equality (not nfc-modulo). The confusables fixed-point
+                // loop + terminal NFC make this a true fixed point, so the weaker
+                // `nfc(once) == nfc(twice)` form is no longer needed.
                 let once = normalize_user_input(&s).unwrap();
                 let twice = normalize_user_input(&once).unwrap();
-                prop_assert_eq!(nfc(&once), nfc(&twice));
+                prop_assert_eq!(once, twice);
             }
 
             #[test]

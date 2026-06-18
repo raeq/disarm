@@ -201,7 +201,7 @@ information — `strip_accents`, `fold_case`, and transliteration to ASCII — u
 you keep the original alongside the canonical key.
 
 This is the deliberate counterpart to the **security/search** canonicalization
-recipes (`security_clean`, `catalog_key`, `search_key`), which use **NFKC** on
+recipes (`canonicalize`, `catalog_key`, `search_key`), which use **NFKC** on
 purpose: they *want* the lossy folding so that `⁵`, `ﬁ`, and fullwidth variants
 all collapse to one comparison key. Reversibility and aggressive folding are
 opposite goals — choose per use case.
@@ -221,5 +221,5 @@ explicitly want compatibility folding and do not need the original back.
 
 - [Normalization](normalization.md) — the forms in depth
 - [Text Pipeline](pipeline.md) — composing the steps
-- [Precompiled Pipelines](../api/pipelines.md) — `security_clean`, `catalog_key`, `search_key`, and the policy profiles
+- [Precompiled Pipelines](../api/pipelines.md) — `canonicalize`, `catalog_key`, `search_key`, and the policy profiles
 - [Confusable Detection](confusables.md) — script and homoglyph analysis

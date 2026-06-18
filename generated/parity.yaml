@@ -1,6 +1,18 @@
 # disarm parity manifest (v2 seed). symbol | {provided_via:…} | {alias_of:…} | null(gap).
 # Python=__all__, Rust=pub fn + pub use re-exports, Ruby=def lines, Node=export function.
 operations:
+  - id: canonicalize
+    names:
+      rust: canonicalize
+      python: canonicalize
+      ruby: canonicalize
+      node: canonicalize
+  - id: canonicalize_strict
+    names:
+      rust: canonicalize_strict
+      python: canonicalize_strict
+      ruby: null
+      node: null
   - id: catalog_key
     names:
       rust: catalog_key
@@ -337,6 +349,12 @@ operations:
       python: { provided_via: "collapse_whitespace(strip_control=True) / get_pipeline()" }
       ruby: strip_control_chars
       node: stripControlChars
+  - id: strip_format
+    names:
+      rust: strip_format
+      python: strip_format
+      ruby: null
+      node: null
   - id: strip_log_injection
     names:
       rust: strip_log_injection

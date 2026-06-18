@@ -140,8 +140,8 @@ fn strip_obfuscation(text: String) -> Result<String, Error> {
     api::strip_obfuscation(&text).map_err(|e| map_err(&e))
 }
 
-fn security_clean(text: String) -> Result<String, Error> {
-    api::security_clean(&text).map_err(|e| map_err(&e))
+fn canonicalize(text: String) -> Result<String, Error> {
+    api::canonicalize(&text).map_err(|e| map_err(&e))
 }
 
 /// `Disarm._search_key(text, lang)` — case/accent/script-insensitive lookup key.
@@ -529,7 +529,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_slugify", function!(slugify, 13))?;
     module.define_singleton_method("_demojize", function!(demojize, 2))?;
     module.define_singleton_method("_strip_obfuscation", function!(strip_obfuscation, 1))?;
-    module.define_singleton_method("_security_clean", function!(security_clean, 1))?;
+    module.define_singleton_method("_canonicalize", function!(canonicalize, 1))?;
 
     // Key-derivation presets (#404 Group A parity backfill).
     module.define_singleton_method("_search_key", function!(search_key, 2))?;

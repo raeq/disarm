@@ -24,13 +24,13 @@ The core links PyO3 without the `extension-module` feature, so point at a Python
 PYO3_PYTHON=$(which python3) cargo +nightly fuzz run strip_obfuscation
 ```
 
-Targets: `strip_obfuscation`, `security_clean`, `normalize_user_input`,
+Targets: `strip_obfuscation`, `canonicalize`, `canonicalize_strict`,
 `normalize_confusables`.
 
 Time-box a run (e.g. CI/nightly):
 
 ```bash
-PYO3_PYTHON=$(which python3) cargo +nightly fuzz run security_clean -- -max_total_time=300
+PYO3_PYTHON=$(which python3) cargo +nightly fuzz run canonicalize -- -max_total_time=300
 ```
 
 Any crash/assertion is written to `fuzz/artifacts/`; minimize and add a

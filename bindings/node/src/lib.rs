@@ -279,8 +279,8 @@ pub fn strip_obfuscation(text: String) -> Result<String, NapiError> {
 }
 
 #[napi]
-pub fn security_clean(text: String) -> Result<String, NapiError> {
-    api::security_clean(&text).map_err(|e| map_err(&e))
+pub fn canonicalize(text: String) -> Result<String, NapiError> {
+    api::canonicalize(&text).map_err(|e| map_err(&e))
 }
 
 /// Turn arbitrary text into a safe filename. `platform` is `"universal"` |

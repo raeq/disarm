@@ -100,7 +100,10 @@ describe('text cleaning', () => {
 
 describe('deobfuscation & security', () => {
   test('stripObfuscation', () => expect(disarm.stripObfuscation('рroduсt')).toBe('product'))
-  test('securityClean', () => expect(disarm.securityClean('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥')).toBe('Real text'))
+  test('canonicalize', () => expect(disarm.canonicalize('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥')).toBe('Real text'))
+  // #430: securityClean is a deprecated alias for canonicalize (removed in 1.0).
+  test('securityClean (deprecated alias)', () =>
+    expect(disarm.securityClean('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥')).toBe(disarm.canonicalize('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥')))
 })
 
 describe('filenames', () => {
@@ -384,10 +387,10 @@ describe('invisible / non-interchange stripping (#413)', () => {
   })
 
   test('preset behaviour flows from the core', () => {
-    expect(disarm.securityClean(`hi${tags('PWN')}`)).toBe('hi') // tag smuggling stripped
-    expect(disarm.securityClean('ad\u{034F}min')).toBe('admin') // CGJ stripped
-    expect(disarm.securityClean('a\u{2800}b')).toBe('a b') // Braille blank -> space
-    expect(disarm.securityClean('a\u{E000}b')).toBe('ab') // PUA stripped (comparison preset)
+    expect(disarm.canonicalize(`hi${tags('PWN')}`)).toBe('hi') // tag smuggling stripped
+    expect(disarm.canonicalize('ad\u{034F}min')).toBe('admin') // CGJ stripped
+    expect(disarm.canonicalize('a\u{2800}b')).toBe('a b') // Braille blank -> space
+    expect(disarm.canonicalize('a\u{E000}b')).toBe('ab') // PUA stripped (comparison preset)
     expect(disarm.stripObfuscation('hi\u{E0001}bye')).toBe('hibye') // deprecated language tag
   })
 })

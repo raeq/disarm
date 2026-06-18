@@ -142,6 +142,8 @@ fn presets_and_pipeline() {
 #[test]
 #[allow(deprecated)]
 fn deprecated_preset_aliases_forward_to_new_names() {
+    use api::DisarmStr;
+
     // #430: the old names remain as deprecated aliases (removed in 1.0) and
     // must be byte-identical to the new names they forward to.
     let input = "p\u{0430}ypal\u{202e}";
@@ -155,7 +157,6 @@ fn deprecated_preset_aliases_forward_to_new_names() {
         api::canonicalize_strict(input).unwrap()
     );
     // The DisarmStr method aliases forward too.
-    use api::DisarmStr;
     assert_eq!(
         input.security_clean().unwrap(),
         input.canonicalize().unwrap()

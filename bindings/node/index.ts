@@ -292,13 +292,24 @@ export function stripObfuscation(text: string): string {
 }
 
 /**
- * Aggressive security cleaning: NFKC → strip bidi/format → strip invisible
- * classes (#413) → strip control → strip zero-width → collapse whitespace → cap
- * combining marks (anti-zalgo) → NFC → confusables → NFC (confusables sandwiched
- * between NFC passes for idempotency).
+ * Canonicalize text for security-sensitive comparison: NFKC → strip bidi/format
+ * → strip invisible classes (#413) → strip control → strip zero-width → collapse
+ * whitespace → cap combining marks (anti-zalgo) → NFC → confusables → NFC
+ * (confusables sandwiched between NFC passes for idempotency).
+ *
+ * The name describes the mechanism (Unicode canonicalization for matching), not
+ * a safety guarantee — this is not an output sanitizer; encode at the sink.
+ */
+export function canonicalize(text: string): string {
+  return call(() => native.canonicalize(text))
+}
+
+/**
+ * @deprecated Renamed to {@link canonicalize} in 0.11 (the `*Clean` name
+ * overpromised safety); removed in 1.0.
  */
 export function securityClean(text: string): string {
-  return call(() => native.securityClean(text))
+  return canonicalize(text)
 }
 
 /**

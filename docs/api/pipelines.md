@@ -2,19 +2,30 @@
 
 Ready-to-use multi-step text processing pipelines. Each is a single compiled Rust function with no pipeline construction overhead at call time.
 
-## security_clean
+!!! warning "Renamed in 0.11 (#430)"
+    Three presets were renamed to describe their mechanism rather than imply a
+    safety outcome. The old names are **deprecated aliases**, behave identically,
+    and are **removed in 1.0**:
 
-::: disarm.security_clean
+    | Old name | New name |
+    |---|---|
+    | `security_clean` | `canonicalize` |
+    | `display_clean` | `strip_format` |
+    | `normalize_user_input` | `canonicalize_strict` |
+
+## canonicalize
+
+::: disarm.canonicalize
 
 ### Pipeline steps
 
 `NFKC → strip bidi/format → strip invisibles (#413) → strip_control → strip_zero_width → collapse_whitespace → strip_zalgo (#429) → NFC → confusables → NFC`
 
 ```python
-from disarm import security_clean
+from disarm import canonicalize
 
-assert security_clean("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
-assert security_clean("Ηello Ꮤorld") == 'Hello World'
+assert canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
+assert canonicalize("Ηello Ꮤorld") == 'Hello World'
 ```
 
 ---
@@ -56,20 +67,20 @@ assert catalog_key("Müller", lang="de") == 'mueller'
 
 ---
 
-## display_clean
+## strip_format
 
-::: disarm.display_clean
+::: disarm.strip_format
 
 ### Pipeline steps
 
 `strip_bidi` → `strip invisibles (#413, rendering policy)` → `strip_control` → `strip_zero_width` → `collapse_whitespace`
 
 ```python
-from disarm import display_clean
+from disarm import strip_format
 
-assert display_clean("hello\x00world\u200b!") == 'helloworld!'
-assert display_clean("  spaced   out  ") == 'spaced out'
-assert display_clean("admin\u202Euser") == 'adminuser'
+assert strip_format("hello\x00world\u200b!") == 'helloworld!'
+assert strip_format("  spaced   out  ") == 'spaced out'
+assert strip_format("admin\u202Euser") == 'adminuser'
 ```
 
 ---
@@ -122,23 +133,23 @@ assert sort_key("Café") == 'café'
 
 ---
 
-## normalize_user_input
+## canonicalize_strict
 
-::: disarm.normalize_user_input
+::: disarm.canonicalize_strict
 
 ### Pipeline steps
 
 `NFKC → strip_bidi → strip_zero_width → strip_control → strip invisibles (#413) → strip_zalgo → confusables → collapse_whitespace → NFC`
 
 ```python
-from disarm import normalize_user_input
+from disarm import canonicalize_strict
 
-assert normalize_user_input("Hello, world!") == 'Hello, world!'
-assert normalize_user_input("p\u0430ypal") == 'paypal'
-assert normalize_user_input("admin\u202Euser") == 'adminuser'
+assert canonicalize_strict("Hello, world!") == 'Hello, world!'
+assert canonicalize_strict("p\u0430ypal") == 'paypal'
+assert canonicalize_strict("admin\u202Euser") == 'adminuser'
 ```
 
-Unlike `security_clean`, this pipeline also strips zalgo text (excessive combining mark stacking). Unlike `catalog_key`/`search_key`, it does **not** transliterate — the original script is preserved.
+Unlike `canonicalize`, this pipeline also strips zalgo text (excessive combining mark stacking). Unlike `catalog_key`/`search_key`, it does **not** transliterate — the original script is preserved.
 
 ---
 
@@ -151,8 +162,8 @@ from disarm import PRESETS
 Dict mapping preset function names to their ordered pipeline steps. Each value is a list of `(step_name, parameter)` tuples in execution order.
 
 ```python
-assert PRESETS["security_clean"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_invisibles', 'comparison'), ('strip_control', None), ('strip_zero_width', None), ('collapse_whitespace', None), ('strip_zalgo', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
-assert PRESETS["normalize_user_input"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_invisibles', 'comparison'), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None), ('normalize', 'NFC')]
+assert PRESETS["canonicalize"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_invisibles', 'comparison'), ('strip_control', None), ('strip_zero_width', None), ('collapse_whitespace', None), ('strip_zalgo', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
+assert PRESETS["canonicalize_strict"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_invisibles', 'comparison'), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None), ('normalize', 'NFC')]
 ```
 
 Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.

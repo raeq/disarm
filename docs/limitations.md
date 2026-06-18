@@ -214,7 +214,7 @@ The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/
 
 Beyond source code, bidi overrides can disguise malicious filenames. The sequence `invoice[RLO]fdp.exe` renders visually as `invoiceexe.pdf` in many text renderers.
 
-**disarm implication**: `strip_bidi()` and the `security_clean()` pipeline strip these characters. This is the correct mitigation for user-submitted content destined for display. Soft hyphens (U+00AD), which can enable text-reordering attacks in some renderers, are also stripped.
+**disarm implication**: `strip_bidi()` and the `canonicalize()` pipeline strip these characters. This is the correct mitigation for user-submitted content destined for display. Soft hyphens (U+00AD), which can enable text-reordering attacks in some renderers, are also stripped.
 
 ### Stripping is destructive for legitimate bidi text
 

@@ -105,10 +105,19 @@ module Disarm
       translate_errors { _strip_obfuscation(text) }
     end
 
-    # Aggressive security cleaning: strip obfuscation, control characters, and
-    # other spoofing vectors.
+    # Canonicalize text for security-sensitive comparison: strip obfuscation,
+    # control characters, and other spoofing vectors. The name describes the
+    # mechanism (Unicode canonicalization for matching), not a safety guarantee —
+    # this is not an output sanitizer; encode at the sink.
+    def canonicalize(text)
+      translate_errors { _canonicalize(text) }
+    end
+
+    # @deprecated Renamed to {#canonicalize} in 0.11 (the +_clean+ name
+    #   overpromised safety); removed in 1.0.
     def security_clean(text)
-      translate_errors { _security_clean(text) }
+      warn("[disarm] security_clean is deprecated; use canonicalize (removed in 1.0)", category: :deprecated)
+      canonicalize(text)
     end
 
     # Case/accent/script-insensitive search lookup key. `lang:` applies a

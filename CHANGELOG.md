@@ -289,6 +289,29 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   romanization, not homoglyph defense, pointing to `normalize_confusables()` /
   `strip_obfuscation()` for the latter.
 
+### Deprecated
+
+- **Presets renamed to mechanism names; old names deprecated (#430).** The three
+  presets whose `*_clean` / `normalize_user_input` names overpromised safety —
+  flagged as documentation defects in `THREAT_MODEL.md` — are renamed to names
+  that describe their mechanism. The rename is byte-stable (`old(x) == new(x)`
+  for all inputs):
+
+  | Old name (deprecated) | New name |
+  |---|---|
+  | `security_clean` | `canonicalize` |
+  | `display_clean` | `strip_format` |
+  | `normalize_user_input` | `canonicalize_strict` |
+
+  The old names remain as deprecated aliases across every binding — Rust (free
+  functions + `DisarmStr` methods, `#[deprecated(since = "0.11.0")]`), Python
+  (each emits a `DeprecationWarning`; the `Text` builder's `.security_clean()` /
+  `.display_clean()` methods and the `PRESETS` keys are aliased too), Node
+  (`securityClean`, `@deprecated`), and Ruby (`Disarm.security_clean`, warns with
+  `category: :deprecated`). They are **removed in 1.0**. `catalog_key`,
+  `search_key`, `sort_key`, `ml_normalize`, and `strip_obfuscation` are
+  unchanged.
+
 ### Fixed
 
 - **Digit confusables fold to their digit, not a look-alike letter (#439).** The

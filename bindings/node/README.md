@@ -64,7 +64,7 @@ Transliteration (`transliterate`, `reverseTransliterate`, `findUntranslatable`),
 confusables (`normalizeConfusables`, `isConfusable`), slugs (`slugify`),
 normalization (`normalize`, `isNormalized`), text cleaning (`collapseWhitespace`,
 `stripControlChars`, `stripZeroWidthChars`, `stripBidi`, `stripZalgo`, `isZalgo`),
-deobfuscation/security presets (`stripObfuscation`, `securityClean`,
+deobfuscation/security presets (`stripObfuscation`, `canonicalize`,
 `sanitizeFilename`), grapheme clusters (`graphemeLen`, `graphemeSplit`,
 `graphemeTruncate`, `graphemeWidth`, `terminalWidth`), and script analysis
 (`detectScripts`, `isMixedScript`, `isSuspiciousHostname`, `inspectAutoLang`).

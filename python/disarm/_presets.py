@@ -7,19 +7,21 @@ backend) into ready-made canonicalization pipelines.  Re-exported from the
 
 from __future__ import annotations
 
+import warnings
+
 from disarm._api import TextPipeline
 from disarm._core import (
+    _canonicalize,
+    _canonicalize_strict,
     _catalog_key,
-    _display_clean,
     _get_pipeline,
     _is_zalgo,
     _list_profiles,
     _ml_normalize,
-    _normalize_user_input,
     _search_key,
-    _security_clean,
     _sort_key,
     _strip_bidi,
+    _strip_format,
     _strip_noncharacters,
     _strip_obfuscation,
     _strip_pua,
@@ -31,8 +33,8 @@ from disarm._core import (
 # --- Precompiled pipelines ---
 
 
-def security_clean(text: str) -> str:
-    """Security-focused text canonicalization.
+def canonicalize(text: str) -> str:
+    """Canonicalize text for security-sensitive comparison.
 
     Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
     strip_control → strip_zero_width → collapse_whitespace → cap combining marks
@@ -61,10 +63,25 @@ def security_clean(text: str) -> str:
         execution or markup context — see warning above.
 
     Examples:
-        >>> security_clean("Ηello Ꮤorld")  # Greek Η + Cherokee Ꮤ → Latin
+        >>> canonicalize("Ηello Ꮤorld")  # Greek Η + Cherokee Ꮤ → Latin
         'Hello World'
     """
-    return _security_clean(text)
+    return _canonicalize(text)
+
+
+def security_clean(text: str) -> str:
+    """Deprecated alias for :func:`canonicalize`.
+
+    .. deprecated:: 0.11.0
+       The ``*_clean`` name overpromised safety (see ``THREAT_MODEL.md``). Use
+       :func:`canonicalize`. This alias is removed in 1.0.
+    """
+    warnings.warn(
+        "security_clean is deprecated; use canonicalize (removed in 1.0)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return canonicalize(text)
 
 
 def ml_normalize(
@@ -138,8 +155,8 @@ def catalog_key(
     return _catalog_key(text, lang=lang, strict_iso9=strict_iso9)
 
 
-def display_clean(text: str) -> str:
-    """Display-safe text cleaning pipeline.
+def strip_format(text: str) -> str:
+    """Strip bidi/format and invisible-injection vectors from rendered content.
 
     Pipeline: strip bidi/format → collapse_whitespace (strip control + strip zero-width)
 
@@ -162,12 +179,27 @@ def display_clean(text: str) -> str:
         rendering into HTML or any other markup context (see warning above).
 
     Examples:
-        >>> display_clean("hello\\x00world\\u200b!")
+        >>> strip_format("hello\\x00world\\u200b!")
         'helloworld!'
-        >>> display_clean("  spaced   out  ")
+        >>> strip_format("  spaced   out  ")
         'spaced out'
     """
-    return _display_clean(text)
+    return _strip_format(text)
+
+
+def display_clean(text: str) -> str:
+    """Deprecated alias for :func:`strip_format`.
+
+    .. deprecated:: 0.11.0
+       ``display_clean`` implied markup-safety it does not provide (see
+       ``THREAT_MODEL.md``). Use :func:`strip_format`. Removed in 1.0.
+    """
+    warnings.warn(
+        "display_clean is deprecated; use strip_format (removed in 1.0)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return strip_format(text)
 
 
 def search_key(
@@ -327,8 +359,8 @@ def strip_pua(text: str) -> str:
     return _strip_pua(text)
 
 
-def normalize_user_input(text: str) -> str:
-    """Unicode hygiene for user-submitted input — **not** an injection defense.
+def canonicalize_strict(text: str) -> str:
+    """Strict Unicode canonicalization of user input — **not** an injection defense.
 
     .. warning::
        This normalizes Unicode; it does **not** make text safe to emit into
@@ -358,14 +390,29 @@ def normalize_user_input(text: str) -> str:
         before emitting into any markup or query context** (see warning above).
 
     Examples:
-        >>> normalize_user_input("Hello, world!")
+        >>> canonicalize_strict("Hello, world!")
         'Hello, world!'
-        >>> normalize_user_input("p\\u0430ypal")  # Cyrillic а → Latin a
+        >>> canonicalize_strict("p\\u0430ypal")  # Cyrillic а → Latin a
         'paypal'
-        >>> normalize_user_input("admin\\u202euser")  # RLO stripped
+        >>> canonicalize_strict("admin\\u202euser")  # RLO stripped
         'adminuser'
     """
-    return _normalize_user_input(text)
+    return _canonicalize_strict(text)
+
+
+def normalize_user_input(text: str) -> str:
+    """Deprecated alias for :func:`canonicalize_strict`.
+
+    .. deprecated:: 0.11.0
+       The old name predated the canonicalize/sanitize distinction in
+       ``THREAT_MODEL.md``. Use :func:`canonicalize_strict`. Removed in 1.0.
+    """
+    warnings.warn(
+        "normalize_user_input is deprecated; use canonicalize_strict (removed in 1.0)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return canonicalize_strict(text)
 
 
 def strip_obfuscation(text: str) -> str:
@@ -463,7 +510,7 @@ def strip_zalgo(text: str, *, max_marks: int = 2) -> str:
 # --- Preset pipeline metadata ---
 
 PRESETS: dict[str, list[tuple[str, str | None]]] = {
-    "security_clean": [
+    "canonicalize": [
         ("normalize", "NFKC"),
         ("strip_bidi", None),
         # #413: strip Unicode Tags / variation selectors / CGJ / noncharacters /
@@ -515,7 +562,7 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("strip_zero_width", None),
         ("collapse_whitespace", None),
     ],
-    "display_clean": [
+    "strip_format": [
         ("strip_bidi", None),
         # #413: rendering policy — keep VS15/VS16 after a base and PRESERVE the PUA
         # (icon fonts); still strip Tags (keeping flags), CGJ, and noncharacters.
@@ -560,7 +607,7 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         # recomposed here or the key is not a fixed point.
         ("normalize", "NFC"),
     ],
-    "normalize_user_input": [
+    "canonicalize_strict": [
         # #121: order and steps corrected to match actual Rust execution in
         # presets.rs — bidi/invisible stripping runs FIRST for idempotency.
         ("normalize", "NFKC"),
@@ -609,15 +656,25 @@ This is one of **two distinct registries** and is easy to confuse with the
 other:
 
 * ``PRESETS`` (this dict) — *preset* pipelines: fixed, ordered sequences of
-  cleaning/normalization steps exposed as the ``security_clean``,
-  ``ml_normalize``, ``normalize_user_input`` … helpers. Defined here, in Python.
+  cleaning/normalization steps exposed as the ``canonicalize``,
+  ``ml_normalize``, ``canonicalize_strict`` … helpers. Defined here, in Python.
 * Policy *profiles* (see :func:`list_profiles` / :func:`get_pipeline`) —
   parameter sets for transliteration workflows (e.g.
   ``scholarly_cyrillic_iso9``). Defined in the Rust core (``src/pipeline.rs``).
 
 A name from one registry is **not** valid in the other: pass profile names to
 :func:`get_pipeline`, and use the keys here to look up preset step lists.
+
+The deprecated preset names (``security_clean``, ``display_clean``,
+``normalize_user_input``) remain valid keys through the 0.11 deprecation cycle
+and are removed in 1.0 — prefer the new names.
 """
+
+# Deprecated preset-name aliases (#430): keep the old keys resolving to the same
+# step lists for the 0.11 deprecation cycle. Removed in 1.0.
+PRESETS["security_clean"] = PRESETS["canonicalize"]
+PRESETS["display_clean"] = PRESETS["strip_format"]
+PRESETS["normalize_user_input"] = PRESETS["canonicalize_strict"]
 
 
 # --- Policy profiles ---

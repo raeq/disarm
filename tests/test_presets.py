@@ -6,102 +6,102 @@ import pytest
 
 from disarm import (
     DisarmError,
+    canonicalize,
+    canonicalize_strict,
     catalog_key,
-    display_clean,
     ml_normalize,
-    normalize_user_input,
     search_key,
-    security_clean,
     sort_key,
     strip_bidi,
+    strip_format,
     strip_obfuscation,
 )
 
-# ===== security_clean =====
+# ===== canonicalize =====
 
 
 class TestSecurityClean:
-    """Tests for security_clean(): NFKC → confusables → collapse_ws → strip bidi."""
+    """Tests for canonicalize(): NFKC → confusables → collapse_ws → strip bidi."""
 
     def test_homoglyph_cyrillic_latin(self) -> None:
         """Cyrillic р and а mixed with Latin → normalized to all-Latin."""
-        assert security_clean("\u0440\u0430ypal") == "paypal"
+        assert canonicalize("\u0440\u0430ypal") == "paypal"
 
     def test_homoglyph_cyrillic_o(self) -> None:
         """Cyrillic о mixed with Latin g, l, e → normalized."""
-        assert security_clean("g\u043e\u043egle") == "google"
+        assert canonicalize("g\u043e\u043egle") == "google"
 
     def test_fullwidth_script_tag(self) -> None:
         """Fullwidth angle brackets collapsed by NFKC."""
-        assert security_clean("\uff1cscript\uff1e") == "<script>"
+        assert canonicalize("\uff1cscript\uff1e") == "<script>"
 
     def test_fullwidth_sql(self) -> None:
         """Fullwidth SELECT → plain ASCII after NFKC."""
-        result = security_clean("\uff33\uff25\uff2c\uff25\uff23\uff34")
+        result = canonicalize("\uff33\uff25\uff2c\uff25\uff23\uff34")
         assert result == "SELECT"
 
     def test_ligature_bypass(self) -> None:
         """Ligature ﬁ collapsed by NFKC."""
-        assert security_clean("\ufb01lter") == "filter"
+        assert canonicalize("\ufb01lter") == "filter"
 
     def test_zwsp_injection(self) -> None:
         """Zero-width space stripped."""
-        assert security_clean("admin\u200buser") == "adminuser"
+        assert canonicalize("admin\u200buser") == "adminuser"
 
     def test_zwnj_injection(self) -> None:
         """Zero-width non-joiner stripped."""
-        assert security_clean("admin\u200cuser") == "adminuser"
+        assert canonicalize("admin\u200cuser") == "adminuser"
 
     def test_bom_injection(self) -> None:
         """BOM character stripped."""
-        assert security_clean("admin\ufeffuser") == "adminuser"
+        assert canonicalize("admin\ufeffuser") == "adminuser"
 
     def test_bidi_override_rtl(self) -> None:
         """Right-to-left override stripped."""
-        assert security_clean("admin\u202euser") == "adminuser"
+        assert canonicalize("admin\u202euser") == "adminuser"
 
     def test_bidi_override_ltr(self) -> None:
         """Left-to-right override stripped."""
-        assert security_clean("admin\u202duser") == "adminuser"
+        assert canonicalize("admin\u202duser") == "adminuser"
 
     def test_soft_hyphen(self) -> None:
         """Soft hyphen stripped."""
-        assert security_clean("pass\u00adword") == "password"
+        assert canonicalize("pass\u00adword") == "password"
 
     def test_lrm_rlm(self) -> None:
         """Left-to-right mark and right-to-left mark stripped."""
-        assert security_clean("hello\u200eworld") == "helloworld"
-        assert security_clean("hello\u200fworld") == "helloworld"
+        assert canonicalize("hello\u200eworld") == "helloworld"
+        assert canonicalize("hello\u200fworld") == "helloworld"
 
     def test_bidi_isolates(self) -> None:
         """Bidi isolate characters stripped."""
-        assert security_clean("a\u2066b\u2067c\u2068d\u2069e") == "abcde"
+        assert canonicalize("a\u2066b\u2067c\u2068d\u2069e") == "abcde"
 
     def test_bidi_embedding(self) -> None:
         """Bidi embedding/pop stripped."""
-        assert security_clean("a\u202ab\u202bc\u202cd") == "abcd"
+        assert canonicalize("a\u202ab\u202bc\u202cd") == "abcd"
 
     def test_control_chars_stripped(self) -> None:
         """Control characters stripped."""
-        assert security_clean("hello\x00world") == "helloworld"
-        assert security_clean("hello\x01world") == "helloworld"
+        assert canonicalize("hello\x00world") == "helloworld"
+        assert canonicalize("hello\x01world") == "helloworld"
 
     def test_whitespace_collapsed(self) -> None:
         """Multiple whitespace collapsed to single space."""
-        assert security_clean("hello   world") == "hello world"
+        assert canonicalize("hello   world") == "hello world"
 
     def test_superscript_digits(self) -> None:
         """Superscript digits normalized by NFKC."""
-        assert security_clean("\u00b9\u00b2\u00b3") == "123"
+        assert canonicalize("\u00b9\u00b2\u00b3") == "123"
 
     def test_clean_text_unchanged(self) -> None:
         """Clean ASCII passes through unchanged."""
-        assert security_clean("hello world") == "hello world"
+        assert canonicalize("hello world") == "hello world"
 
     def test_combined_attack(self) -> None:
         """Multiple attack vectors in a single string."""
         # Cyrillic homoglyph + ZWSP + bidi override + soft hyphen
-        result = security_clean("\u0440\u0430y\u200bp\u202ea\u00adl")
+        result = canonicalize("\u0440\u0430y\u200bp\u202ea\u00adl")
         assert result == "paypal"
 
 
@@ -117,7 +117,7 @@ class TestPathSeparatorsPassThrough:
     that build filesystem paths must defend traversal at the sink (e.g.
     ``sanitize_filename`` / their own validation)."""
 
-    @pytest.mark.parametrize("preset", [normalize_user_input, security_clean])
+    @pytest.mark.parametrize("preset", [canonicalize_strict, canonicalize])
     @pytest.mark.parametrize(
         "text",
         [
@@ -132,7 +132,7 @@ class TestPathSeparatorsPassThrough:
         # no '..' collapse).
         assert preset(text) == text
 
-    @pytest.mark.parametrize("preset", [normalize_user_input, security_clean])
+    @pytest.mark.parametrize("preset", [canonicalize_strict, canonicalize])
     @pytest.mark.parametrize(
         "raw,expected",
         [
@@ -154,11 +154,11 @@ class TestPathSeparatorsPassThrough:
 
     def test_homoglyph_folding_still_works(self) -> None:
         # Dropping path-neutralization must not regress homoglyph folding.
-        assert normalize_user_input("p\u0430ypal") == "paypal"
-        assert security_clean("p\u0430ypal") == "paypal"
+        assert canonicalize_strict("p\u0430ypal") == "paypal"
+        assert canonicalize("p\u0430ypal") == "paypal"
 
     def test_idempotent(self) -> None:
-        for preset in (normalize_user_input, security_clean):
+        for preset in (canonicalize_strict, canonicalize):
             once = preset("etc/../passwd")
             assert preset(once) == once
 
@@ -272,55 +272,55 @@ class TestCatalogKey:
         assert catalog_key("\ufb01lter") == catalog_key("filter")
 
 
-# ===== display_clean =====
+# ===== strip_format =====
 
 
 class TestDisplayClean:
-    """Tests for display_clean(): collapse_whitespace with control/zero-width stripping."""
+    """Tests for strip_format(): collapse_whitespace with control/zero-width stripping."""
 
     def test_whitespace_collapsed(self) -> None:
         """Multiple spaces → single space."""
-        assert display_clean("hello   world") == "hello world"
+        assert strip_format("hello   world") == "hello world"
 
     def test_tabs_and_newlines(self) -> None:
         """Tabs become spaces, newlines become spaces."""
-        assert display_clean("hello\t\tworld") == "hello world"
+        assert strip_format("hello\t\tworld") == "hello world"
 
     def test_null_bytes(self) -> None:
         """Null bytes stripped."""
-        assert display_clean("hello\x00world") == "helloworld"
+        assert strip_format("hello\x00world") == "helloworld"
 
     def test_control_chars(self) -> None:
         """Various control chars stripped."""
-        assert display_clean("hello\x01\x02\x03world") == "helloworld"
+        assert strip_format("hello\x01\x02\x03world") == "helloworld"
 
     def test_zwsp_stripped(self) -> None:
         """Zero-width space stripped."""
-        assert display_clean("hello\u200bworld") == "helloworld"
+        assert strip_format("hello\u200bworld") == "helloworld"
 
     def test_bom_stripped(self) -> None:
         """BOM stripped."""
-        assert display_clean("\ufeffhello") == "hello"
+        assert strip_format("\ufeffhello") == "hello"
 
     def test_leading_trailing_trimmed(self) -> None:
         """Leading/trailing whitespace trimmed."""
-        assert display_clean("  hello  ") == "hello"
+        assert strip_format("  hello  ") == "hello"
 
     def test_unicode_whitespace(self) -> None:
         """Various Unicode whitespace variants collapsed."""
         # Em space, en space
-        assert display_clean("hello\u2003\u2002world") == "hello world"
+        assert strip_format("hello\u2003\u2002world") == "hello world"
 
     def test_invisible_math_operators(self) -> None:
         """U+2061–2064 invisible math operators stripped as zero-width."""
-        assert display_clean("a\u2061b") == "ab"  # Function Application
-        assert display_clean("a\u2062b") == "ab"  # Invisible Times
-        assert display_clean("a\u2063b") == "ab"  # Invisible Separator
-        assert display_clean("a\u2064b") == "ab"  # Invisible Plus
+        assert strip_format("a\u2061b") == "ab"  # Function Application
+        assert strip_format("a\u2062b") == "ab"  # Invisible Times
+        assert strip_format("a\u2063b") == "ab"  # Invisible Separator
+        assert strip_format("a\u2064b") == "ab"  # Invisible Plus
 
     def test_clean_text_unchanged(self) -> None:
         """Clean text passes through unchanged."""
-        assert display_clean("hello world") == "hello world"
+        assert strip_format("hello world") == "hello world"
 
 
 # ===== strip_bidi =====
@@ -456,7 +456,7 @@ class TestPresetsMetadataOrder:
 
 
 class TestTerminalNfcIdempotency:
-    """#416 — `security_clean` and `sort_key` must be fixed points even when an
+    """#416 — `canonicalize` and `sort_key` must be fixed points even when an
     invisible code point separates a base character from a combining mark.
 
     Mechanism of the bug (and why the terminal NFC fixes it):
@@ -484,7 +484,7 @@ class TestTerminalNfcIdempotency:
     INVISIBLES = ["\u200b", "\u200c", "\u200d", "\ufeff"]
     COMBINING_ACUTE = "\u0301"
 
-    @pytest.mark.parametrize("preset", [security_clean, sort_key])
+    @pytest.mark.parametrize("preset", [canonicalize, sort_key])
     @pytest.mark.parametrize("sep", INVISIBLES, ids=lambda s: f"U+{ord(s):04X}")
     def test_invisible_separated_mark_is_recomposed_and_idempotent(self, preset, sep):
         # 'a' + <invisible> + combining acute + 'b'
@@ -498,10 +498,10 @@ class TestTerminalNfcIdempotency:
 
     def test_security_clean_repro_from_issue(self):
         # The exact #416 repro: first call must already be composed.
-        out = security_clean("a\u200b\u0301b")
+        out = canonicalize("a\u200b\u0301b")
         # 'a' + combining acute compose to a single 'á' (U+00E1); then 'b'.
         assert [hex(ord(c)) for c in out] == ["0xe1", "0x62"]  # á, b
-        assert security_clean(out) == out
+        assert canonicalize(out) == out
 
     def test_sort_key_repro_is_a_411_regression(self):
         # sort_key only has this bug because #411 made it *preserve* accents
@@ -517,14 +517,14 @@ class TestTerminalNfcIdempotency:
         # they either fold/strip the mark or never compose it. Pin that so a
         # future refactor cannot silently regress them.
         text = "a\u200b\u0301b"
-        for preset in (normalize_user_input, display_clean, search_key, catalog_key, ml_normalize):
+        for preset in (canonicalize_strict, strip_format, search_key, catalog_key, ml_normalize):
             assert preset(preset(text)) == preset(text), f"{preset.__name__} regressed"
 
     def test_plain_inputs_unchanged_by_terminal_nfc(self):
         # The terminal NFC is a no-op on text that has no strip-created adjacency:
         # ASCII passes through, and already-composed accents are untouched (so the
         # #411 accent-preservation outputs are stable).
-        assert security_clean("hello world") == "hello world"
+        assert canonicalize("hello world") == "hello world"
         assert sort_key("Über") == "über"  # "Über" -> "über", composed
         assert sort_key("café") == "café"  # already NFC
 
@@ -543,15 +543,15 @@ class TestTerminalNfcIdempotency:
         piece = st.one_of(letters, marks, invisibles)
         strategy = st.lists(piece, min_size=1, max_size=24).map("".join)
 
-        # Scoped to security_clean (the #416 acceptance target). sort_key's
+        # Scoped to canonicalize (the #416 acceptance target). sort_key's
         # terminal NFC is pinned deterministically above; a *separate* pre-existing
         # transliterate-order bug keeps it from being globally idempotent over this
         # broad alphabet (tracked in #419), so it is excluded here.
         @given(strategy)
         def check(text):
-            once = security_clean(text)
-            assert security_clean(once) == once, (
-                f"security_clean not idempotent on {text!r}: {once!r} -> {security_clean(once)!r}"
+            once = canonicalize(text)
+            assert canonicalize(once) == once, (
+                f"canonicalize not idempotent on {text!r}: {once!r} -> {canonicalize(once)!r}"
             )
 
         check()
@@ -576,61 +576,61 @@ class TestInvisibleNonInterchangeStripping:
     Two tiers: (A) active smuggling channels (Unicode Tags U+E0000-E007F and
     variation selectors), and (B) adjacent hygiene (Combining Grapheme Joiner
     U+034F, noncharacters, Private Use Area, Braille blank U+2800). None is a
-    blanket delete: valid emoji flag sequences and (in display_clean) the
+    blanket delete: valid emoji flag sequences and (in strip_format) the
     presentation selectors and PUA are preserved.
     """
 
     # -- (A) smuggling channels --
 
     def test_tag_block_smuggling_stripped(self):
-        assert security_clean("hi" + _tags("PWN")) == "hi"
-        assert normalize_user_input("hi" + _tags("PWN")) == "hi"
+        assert canonicalize("hi" + _tags("PWN")) == "hi"
+        assert canonicalize_strict("hi" + _tags("PWN")) == "hi"
 
     def test_deprecated_language_tag_e0001_fixed(self):
         # U+E0001 LANGUAGE TAG used to survive even strip_obfuscation.
         assert strip_obfuscation("hi\U000e0001bye") == "hibye"
-        assert security_clean("a\U000e0001b") == "ab"
+        assert canonicalize("a\U000e0001b") == "ab"
 
     def test_variation_selectors_stripped_in_comparison_presets(self):
-        assert normalize_user_input("g\ufe01data") == "gdata"  # VS2
-        assert security_clean("g\U000e0100data") == "gdata"  # VS17
+        assert canonicalize_strict("g\ufe01data") == "gdata"  # VS2
+        assert canonicalize("g\U000e0100data") == "gdata"  # VS17
 
     # -- (B) adjacent hygiene --
 
     def test_cgj_stripped(self):
         # Denylist evasion: "ad" + CGJ + "min" renders as "admin".
-        assert security_clean("ad\u034fmin") == "admin"
-        assert normalize_user_input("ad\u034fmin") == "admin"
+        assert canonicalize("ad\u034fmin") == "admin"
+        assert canonicalize_strict("ad\u034fmin") == "admin"
 
     def test_noncharacters_stripped(self):
-        assert security_clean("a\ufffeb") == "ab"
-        assert security_clean("a\ufdd0b") == "ab"
-        assert security_clean("a\U0001fffeb") == "ab"  # plane-1 noncharacter
+        assert canonicalize("a\ufffeb") == "ab"
+        assert canonicalize("a\ufdd0b") == "ab"
+        assert canonicalize("a\U0001fffeb") == "ab"  # plane-1 noncharacter
 
     def test_pua_stripped_in_comparison_kept_in_display(self):
-        assert security_clean("a\ue000b") == "ab"  # BMP PUA
-        assert security_clean("a\U000f0000b") == "ab"  # plane-15 PUA
-        # display_clean preserves PUA (icon fonts) — "flag, don't delete".
-        assert "\ue000" in display_clean("a\ue000b")
+        assert canonicalize("a\ue000b") == "ab"  # BMP PUA
+        assert canonicalize("a\U000f0000b") == "ab"  # plane-15 PUA
+        # strip_format preserves PUA (icon fonts) — "flag, don't delete".
+        assert "\ue000" in strip_format("a\ue000b")
 
     def test_braille_blank_folds_to_space(self):
         # U+2800 renders blank but is category Symbol, so collapse_whitespace
         # ignored it; it now folds to a space (not deleted) so Braille round-trips.
-        assert security_clean("a\u2800b") == "a b"
-        assert display_clean("a\u2800b") == "a b"
+        assert canonicalize("a\u2800b") == "a b"
+        assert strip_format("a\u2800b") == "a b"
 
     # -- carve-outs (not a blanket delete) --
 
     def test_emoji_flag_sequence_preserved(self):
         # The Scotland flag (U+1F3F4 + tag letters + U+E007F) must survive a
         # Tags-block strip in the rendering preset.
-        assert display_clean(SCOTLAND_FLAG + " wins") == SCOTLAND_FLAG + " wins"
+        assert strip_format(SCOTLAND_FLAG + " wins") == SCOTLAND_FLAG + " wins"
 
     def test_presentation_selector_preserved_in_display(self):
-        # VS16 (emoji presentation) is kept after a base in display_clean…
-        assert display_clean("❤\ufe0f") == "❤\ufe0f"
+        # VS16 (emoji presentation) is kept after a base in strip_format…
+        assert strip_format("❤\ufe0f") == "❤\ufe0f"
         # …but stripped in the comparison presets.
-        assert "\ufe0f" not in security_clean("❤\ufe0f")
+        assert "\ufe0f" not in canonicalize("❤\ufe0f")
 
     def test_strip_obfuscation_demojize_unchanged(self):
         # The emoji path is untouched: heart + VS16 still demojizes to "red heart".
@@ -646,7 +646,7 @@ class TestInvisibleNonInterchangeStripping:
             "ab\ufffec\ue000d",  # noncharacter + PUA
             "hi" + _tags("PWN"),  # tags
         ]
-        for preset in (security_clean, normalize_user_input, display_clean, strip_obfuscation):
+        for preset in (canonicalize, canonicalize_strict, strip_format, strip_obfuscation):
             for s in samples:
                 assert preset(preset(s)) == preset(s), f"{preset.__name__} not idempotent on {s!r}"
 
@@ -662,12 +662,12 @@ class TestInvisibleNonInterchangeStripping:
         assert strip_pua("a\ue000b\U000f0000c") == "abc"
 
 
-# ===== #429: security_clean caps combining marks (anti-zalgo) =====
+# ===== #429: canonicalize caps combining marks (anti-zalgo) =====
 
 
 class TestSecurityCleanZalgoCap:
-    """#429 — security_clean caps combining marks per base (default 2), matching
-    normalize_user_input, so a zalgo-stacked token matches its base form in a
+    """#429 — canonicalize caps combining marks per base (default 2), matching
+    canonicalize_strict, so a zalgo-stacked token matches its base form in a
     denylist/dedup comparison while legitimate diacritics survive.
     """
 
@@ -682,23 +682,23 @@ class TestSecurityCleanZalgoCap:
     def test_caps_zalgo_stacking(self):
         zalgo = "a" + "".join(chr(c) for c in range(0x0300, 0x0310))  # 'a' + 16 marks
         # capped to <= 2 (one acute composes onto 'a', leaving one combining mark)
-        assert self._marks(security_clean(zalgo)) <= 2
+        assert self._marks(canonicalize(zalgo)) <= 2
 
     def test_legitimate_diacritics_preserved(self):
         # <= 2 marks per base is preserved — accent-preserving, no transliteration.
-        assert security_clean("café") == "café"  # 1 mark in NFD
-        assert security_clean("Việt") == "Việt"  # ệ = 2 marks in NFD
+        assert canonicalize("café") == "café"  # 1 mark in NFD
+        assert canonicalize("Việt") == "Việt"  # ệ = 2 marks in NFD
 
     def test_matches_normalize_user_input_cap(self):
         zalgo = "Z" + "\u0301" * 8
-        assert self._marks(security_clean(zalgo)) == self._marks(normalize_user_input(zalgo))
+        assert self._marks(canonicalize(zalgo)) == self._marks(canonicalize_strict(zalgo))
 
     def test_idempotent_zalgo_split_by_invisible(self):
         # A control / zero-width char between marks must not let a second pass cap
         # differently (#121): strip_zalgo runs AFTER the invisible/control strip.
         for sep in ("\x00", "\u200b", "\u034f"):
             s = "a" + "\u0301\u0301" + sep + "\u0301\u0301\u0301"
-            assert security_clean(security_clean(s)) == security_clean(s)
+            assert canonicalize(canonicalize(s)) == canonicalize(s)
 
     @pytest.mark.hypothesis
     def test_idempotent_under_marks_and_invisibles(self):
@@ -714,7 +714,7 @@ class TestSecurityCleanZalgoCap:
 
         @given(strategy)
         def check(text):
-            once = security_clean(text)
-            assert security_clean(once) == once, f"not idempotent on {text!r}: {once!r}"
+            once = canonicalize(text)
+            assert canonicalize(once) == once, f"not idempotent on {text!r}: {once!r}"
 
         check()

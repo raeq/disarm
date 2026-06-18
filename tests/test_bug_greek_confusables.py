@@ -5,7 +5,7 @@ Greek Ρ (Rho, U+03A1) is visually identical to Latin P, but ``transliterate()``
 maps it to R (phonetic). TR39 ``confusables.txt`` maps Ρ→P (visual), and
 ``normalize_confusables()`` follows that visual mapping. These tests guard that
 phonetic-vs-visual distinction — and the ``strip_obfuscation()`` /
-``security_clean()`` flows built on it — focusing on the historically confusing
+``canonicalize()`` flows built on it — focusing on the historically confusing
 characters: the lowercase homoglyphs and the combining-mark / case-corrected
 prototypes locked in by #22. The exhaustive pair table is exercised separately
 in ``test_confusables.py``; this file documents the *intent*.
@@ -57,7 +57,7 @@ class TestGreekSigmaFoldsToS:
     basic ASCII, and esh joins them. Sigma is phonetically 's' (and already
     transliterates to S), so the Σ→S spoof is now neutralized to plain
     ASCII instead of surviving as the confusing esh — which also leaked into
-    the confusables-only ``security_clean`` preset. Capital sigmas fold to S
+    the confusables-only ``canonicalize`` preset. Capital sigmas fold to S
     (case-preserved); the caseless summation operators and Tifinagh fold to s.
     A *deliberate, documented* reversal of the #245 decision — exactly the
     explicit (not silent) change that pin asked for.

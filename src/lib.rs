@@ -245,10 +245,10 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::pipeline::_list_profiles, m)?)?;
 
     // Precompiled pipelines
-    m.add_function(wrap_pyfunction!(py::presets::_security_clean, m)?)?;
+    m.add_function(wrap_pyfunction!(py::presets::_canonicalize, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_ml_normalize, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_catalog_key, m)?)?;
-    m.add_function(wrap_pyfunction!(py::presets::_display_clean, m)?)?;
+    m.add_function(wrap_pyfunction!(py::presets::_strip_format, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_search_key, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_sort_key, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_strip_bidi, m)?)?;
@@ -259,7 +259,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(py::presets::_strip_noncharacters, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_strip_pua, m)?)?;
-    m.add_function(wrap_pyfunction!(py::presets::_normalize_user_input, m)?)?;
+    m.add_function(wrap_pyfunction!(py::presets::_canonicalize_strict, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_strip_obfuscation, m)?)?;
 
     // Zalgo detection and stripping

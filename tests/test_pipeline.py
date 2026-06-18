@@ -322,7 +322,7 @@ class TestPresets:
         assert isinstance(PRESETS, dict)
 
     def test_all_preset_names_present(self) -> None:
-        for name in ("security_clean", "ml_normalize", "catalog_key", "display_clean"):
+        for name in ("canonicalize", "ml_normalize", "catalog_key", "strip_format"):
             assert name in PRESETS, f"preset {name!r} missing from PRESETS"
 
     def test_preset_steps_are_tuples(self) -> None:
@@ -333,9 +333,9 @@ class TestPresets:
                 assert len(step) == 2, f"{name}: step {step!r} has wrong length"
 
     def test_security_clean_starts_with_nfkc(self) -> None:
-        assert PRESETS["security_clean"][0] == ("normalize", "NFKC")
+        assert PRESETS["canonicalize"][0] == ("normalize", "NFKC")
 
     def test_display_clean_is_minimal(self) -> None:
         # strip_bidi → strip_invisibles (#413) → strip_control → strip_zero_width
         # → collapse_whitespace (#433: control/zero-width strips now explicit)
-        assert len(PRESETS["display_clean"]) == 5
+        assert len(PRESETS["strip_format"]) == 5

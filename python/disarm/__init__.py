@@ -170,6 +170,8 @@ from disarm._enums import (
 )
 from disarm._presets import (
     PRESETS,
+    canonicalize,
+    canonicalize_strict,
     catalog_key,
     display_clean,
     get_pipeline,
@@ -181,6 +183,7 @@ from disarm._presets import (
     security_clean,
     sort_key,
     strip_bidi,
+    strip_format,
     strip_noncharacters,
     strip_obfuscation,
     strip_pua,
@@ -234,10 +237,10 @@ __all__ = [
     "demojize",
     "set_emoji_provider",
     # Precompiled pipelines
-    "security_clean",
+    "canonicalize",
     "ml_normalize",
     "catalog_key",
-    "display_clean",
+    "strip_format",
     "search_key",
     "sort_key",
     "strip_bidi",
@@ -245,8 +248,12 @@ __all__ = [
     "strip_variation_selectors",
     "strip_noncharacters",
     "strip_pua",
-    "normalize_user_input",
+    "canonicalize_strict",
     "strip_obfuscation",
+    # Deprecated preset aliases (#430) — removed in 1.0
+    "security_clean",
+    "display_clean",
+    "normalize_user_input",
     # Zalgo detection and stripping
     "is_zalgo",
     "strip_zalgo",

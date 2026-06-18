@@ -24,15 +24,15 @@ doc = false
 bench = false
 
 [[bin]]
-name = "security_clean"
-path = "fuzz_targets/security_clean.rs"
+name = "canonicalize"
+path = "fuzz_targets/canonicalize.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "normalize_user_input"
-path = "fuzz_targets/normalize_user_input.rs"
+name = "canonicalize_strict"
+path = "fuzz_targets/canonicalize_strict.rs"
 test = false
 doc = false
 bench = false

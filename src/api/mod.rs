@@ -124,17 +124,17 @@ pub trait DisarmStr: AsRef<str> {
     fn slugify(&self, config: &SlugConfig) -> String {
         slugify(self.as_ref(), config)
     }
-    /// See [`display_clean`].
+    /// See [`strip_format`].
     #[must_use]
-    fn display_clean(&self) -> String {
-        display_clean(self.as_ref())
+    fn strip_format(&self) -> String {
+        strip_format(self.as_ref())
     }
-    /// See [`security_clean`].
+    /// See [`canonicalize`].
     ///
     /// # Errors
-    /// Propagates [`security_clean`]'s error.
-    fn security_clean(&self) -> Result<String, Error> {
-        security_clean(self.as_ref())
+    /// Propagates [`canonicalize`]'s error.
+    fn canonicalize(&self) -> Result<String, Error> {
+        canonicalize(self.as_ref())
     }
     /// See [`strip_obfuscation`].
     ///
@@ -143,12 +143,37 @@ pub trait DisarmStr: AsRef<str> {
     fn strip_obfuscation(&self) -> Result<String, Error> {
         strip_obfuscation(self.as_ref())
     }
-    /// See [`normalize_user_input`].
+    /// See [`canonicalize_strict`].
     ///
     /// # Errors
-    /// Propagates [`normalize_user_input`]'s error.
+    /// Propagates [`canonicalize_strict`]'s error.
+    fn canonicalize_strict(&self) -> Result<String, Error> {
+        canonicalize_strict(self.as_ref())
+    }
+    /// Deprecated alias for [`DisarmStr::strip_format`]; removed in 1.0.
+    #[deprecated(since = "0.11.0", note = "renamed to `strip_format`; removed in 1.0")]
+    #[must_use]
+    fn display_clean(&self) -> String {
+        strip_format(self.as_ref())
+    }
+    /// Deprecated alias for [`DisarmStr::canonicalize`]; removed in 1.0.
+    ///
+    /// # Errors
+    /// Propagates [`canonicalize`]'s error.
+    #[deprecated(since = "0.11.0", note = "renamed to `canonicalize`; removed in 1.0")]
+    fn security_clean(&self) -> Result<String, Error> {
+        canonicalize(self.as_ref())
+    }
+    /// Deprecated alias for [`DisarmStr::canonicalize_strict`]; removed in 1.0.
+    ///
+    /// # Errors
+    /// Propagates [`canonicalize_strict`]'s error.
+    #[deprecated(
+        since = "0.11.0",
+        note = "renamed to `canonicalize_strict`; removed in 1.0"
+    )]
     fn normalize_user_input(&self) -> Result<String, Error> {
-        normalize_user_input(self.as_ref())
+        canonicalize_strict(self.as_ref())
     }
 }
 
@@ -291,8 +316,8 @@ mod tests {
 
     #[test]
     fn preset_pipelines_surface() {
-        // security_clean folds Cyrillic homoglyphs (р а → p a) and strips bidi.
-        assert_eq!(security_clean("\u{0440}\u{0430}ypal").unwrap(), "paypal");
+        // canonicalize folds Cyrillic homoglyphs (р а → p a) and strips bidi.
+        assert_eq!(canonicalize("\u{0440}\u{0430}ypal").unwrap(), "paypal");
         // Key presets are case/accent/script insensitive.
         assert_eq!(search_key("CAFÉ", None).unwrap(), "cafe");
         assert_eq!(sort_key("Москва", None).unwrap(), "moskva");
@@ -300,10 +325,10 @@ mod tests {
         // ml_normalize lowercases, strips accents.
         assert_eq!(ml_normalize("Café", None, "cldr").unwrap(), "cafe");
         // Infallible presets.
-        assert_eq!(display_clean("hello   world"), "hello world");
+        assert_eq!(strip_format("hello   world"), "hello world");
         assert_eq!(strip_bidi("pass\u{00AD}word"), "password");
-        // normalize_user_input preserves script/accents; strip_obfuscation runs.
-        assert_eq!(normalize_user_input("café").unwrap(), "café");
+        // canonicalize_strict preserves script/accents; strip_obfuscation runs.
+        assert_eq!(canonicalize_strict("café").unwrap(), "café");
         assert!(!strip_obfuscation("p\u{0430}ypal").unwrap().is_empty());
         // Bad lang / emoji_style surface InvalidArgument.
         assert_eq!(

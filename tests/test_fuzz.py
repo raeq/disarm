@@ -178,7 +178,7 @@ class TestPipelineFuzz:
     @given(text=full_unicode)
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_security_clean_never_panics(self, text: str) -> None:
-        result = disarm.security_clean(text)
+        result = disarm.canonicalize(text)
         assert isinstance(result, str)
 
     @given(text=full_unicode)
@@ -190,7 +190,7 @@ class TestPipelineFuzz:
     @given(text=full_unicode)
     @settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
     def test_display_clean_never_panics(self, text: str) -> None:
-        result = disarm.display_clean(text)
+        result = disarm.strip_format(text)
         assert isinstance(result, str)
 
 

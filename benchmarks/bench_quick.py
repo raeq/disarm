@@ -83,9 +83,9 @@ def main() -> None:
 
     # -- Precompiled pipelines --
     print("\n--- precompiled pipelines ---")
-    _bench("security_clean", lambda: disarm.security_clean("Ηello Ꮤorld\u200b"))
+    _bench("canonicalize", lambda: disarm.canonicalize("Ηello Ꮤorld\u200b"))
     _bench("ml_normalize", lambda: disarm.ml_normalize("Café RÉSUMÉ"))
-    _bench("display_clean", lambda: disarm.display_clean("hello\x00  world\u200b"))
+    _bench("strip_format", lambda: disarm.strip_format("hello\x00  world\u200b"))
 
     # -- Grapheme --
     print("\n--- grapheme ---")

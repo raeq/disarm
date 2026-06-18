@@ -253,7 +253,7 @@ class TestPipelineMethods:
 
     def test_security_clean(self) -> None:
         # Fullwidth Ａ → A, collapse whitespace
-        result = Text("\uff21  hello").security_clean().value
+        result = Text("\uff21  hello").canonicalize().value
         assert "A" in result
         assert "  " not in result
 
@@ -266,7 +266,7 @@ class TestPipelineMethods:
         assert "strasse" in result
 
     def test_display_clean(self) -> None:
-        result = Text("hello\x00  world").display_clean().value
+        result = Text("hello\x00  world").strip_format().value
         assert "\x00" not in result
         assert "  " not in result
 
@@ -278,12 +278,12 @@ class TestPipelineMethods:
 
     def test_pipeline_methods_chain(self) -> None:
         """Pipeline methods can be chained with other transforms."""
-        result = Text("  Héllo  ").display_clean().transliterate().value
+        result = Text("  Héllo  ").strip_format().transliterate().value
         assert result == "Hello"
 
     def test_security_clean_chain(self) -> None:
-        """security_clean can be followed by further transforms."""
-        result = Text("\uff21bc").security_clean().fold_case().value
+        """canonicalize can be followed by further transforms."""
+        result = Text("\uff21bc").canonicalize().fold_case().value
         assert result == "abc"
 
     def test_grapheme_split(self) -> None:

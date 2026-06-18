@@ -229,12 +229,12 @@ class TestNFKCConfusablesComposition:
     def test_long_s_resolves_via_nfkc_in_presets(self):
         import unicodedata
 
-        from disarm import catalog_key, security_clean
+        from disarm import canonicalize, catalog_key
 
         # ſ (U+017F): NFKC→s, but the TR39 confusable target is 'f'. In the preset
         # pipeline NFKC runs first, so it must become 's', never 'f'.
         assert unicodedata.normalize("NFKC", "ſ") == "s"
-        assert security_clean("ſ") == "s"
+        assert canonicalize("ſ") == "s"
         assert catalog_key("maſſe") == "masse"
 
     def test_nfkc_ascii_remap_surface_is_pinned(self):

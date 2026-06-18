@@ -94,8 +94,11 @@ class Text:
     def strip_bidi(self) -> Text:
         """Strip bidirectional override and formatting characters."""
         ...
+    def canonicalize(self) -> Text:
+        """Apply the canonicalize pipeline (NFKC → bidi → confusables → whitespace)."""
+        ...
     def security_clean(self) -> Text:
-        """Apply the security_clean pipeline (NFKC → confusables → bidi → whitespace)."""
+        """Deprecated alias for :meth:`canonicalize` (#430); removed in 1.0."""
         ...
     def ml_normalize(
         self,
@@ -105,8 +108,11 @@ class Text:
     ) -> Text:
         """Apply the ML/NLP normalization pipeline."""
         ...
+    def strip_format(self) -> Text:
+        """Strip bidi/format and invisibles from rendered content."""
+        ...
     def display_clean(self) -> Text:
-        """Apply display-safe text cleaning."""
+        """Deprecated alias for :meth:`strip_format` (#430); removed in 1.0."""
         ...
 
     # Non-chaining predicates

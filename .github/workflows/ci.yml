@@ -97,6 +97,15 @@ jobs:
         # pure build's `cfg(not(extension-module))` dead_code allow would hide.
         run: cargo clippy --all-targets --features extension-module -- -D warnings
 
+      - name: Allocation & space-cost lint gate
+        # clippy with a curated allocation/clone/by-value lint set promoted to
+        # deny (redundant_clone, or_fun_call, the pedantic alloc lints) — the
+        # strongest "unnecessary allocation" lints that the default `-D warnings`
+        # gate leaves off. EXT=1 also lints the binding layer. Runtime heap
+        # profiling (dhat-rs) and complexity (iai-callgrind, perf-gate.yml) are
+        # separate, on-demand tools — see the script header.
+        run: EXT=1 bash scripts/perf_lint.sh
+
       - name: Pure core has no pyo3 (#38/#42 acceptance gate)
         # The default-feature crate is the pyo3-free crates.io core; assert the
         # default dependency tree carries no pyo3 (a leak would re-couple the pure

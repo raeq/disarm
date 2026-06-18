@@ -345,7 +345,9 @@ fn read_char_str_tsv(path: &Path) -> BTreeMap<u32, String> {
         }
         // Lines without a tab map to the empty string.
         // Don't trim the value — trailing spaces may be significant (e.g., U+30FB → " ").
-        let (hex, value) = trimmed.split_once('\t').unwrap_or((trimmed.trim_end(), ""));
+        let (hex, value) = trimmed
+            .split_once('\t')
+            .unwrap_or_else(|| (trimmed.trim_end(), ""));
         let cp = u32::from_str_radix(hex.trim(), 16).unwrap_or_else(|e| {
             panic!("Bad hex '{hex}' in {}: {e}", path.display());
         });

@@ -1506,7 +1506,10 @@ mod tests {
                 // (Asserting "no uppercase" would be wrong: fold_case's table does
                 // not cover every cased script — e.g. Cherokee U+13A0 — so an
                 // uppercase char it cannot fold legitimately survives.)
-                prop_assert_eq!(case_fold::fold_case_impl(&out), out.clone());
+                prop_assert!(
+                    case_fold::fold_case_impl(&out) == out,
+                    "fold_case not a fixed point of ml_normalize output: {out:?}"
+                );
                 // collapse_whitespace ran last: trimmed, and no run of ASCII spaces.
                 prop_assert_eq!(out.trim(), &out, "not trimmed: {:?}", out);
                 prop_assert!(!out.contains("  "), "double space in {out:?}");

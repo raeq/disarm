@@ -128,12 +128,33 @@ yank policy** in [RELEASING.md](RELEASING.md).
 
 ## Per-ecosystem
 
-The same policy applies across all three Dependabot ecosystems (and, at 0.8, each
-language binding's registry):
+The same policy applies across **every** manifest in the repo. Dependabot must watch all
+of them — watching only the root `cargo`/`uv`/`actions` is how the binding crates rotted a
+full major (`napi` 2→3, `magnus` 0.7→0.8) with no PR and no signal until an audit found
+them. The covered ecosystems:
 
-- **cargo** — keeps `Cargo.lock` fresh for RustSec advisory scanning.
+- **cargo** — the core crate **and both binding workspaces** (`bindings/node`,
+  `bindings/ruby`), via the `directories` list. Keeps every `Cargo.lock` fresh for RustSec
+  advisory scanning.
 - **uv** (Python dev/docs/test/bench extras) — the package itself has no runtime deps.
 - **github-actions** — third-party actions are SHA-pinned; Dependabot bumps the pins.
+- **npm** — the Node binding's JS toolchain (`bindings/node`).
+- **bundler** — the Ruby binding's gem toolchain (`bindings/ruby`).
 
 Configuration lives in `.github/dependabot.yml` (cooldown + minor/patch grouping; majors
 are never grouped, so each opens its own PR) and the auto-merge workflow above.
+
+### Dev-time freshness audit
+
+Dependabot is reactive and only as complete as its config — a missing entry rots silently.
+`scripts/audit_dependencies.py` is the **active** complement: one command audits *every*
+manifest above against its registry and flags anything a **major** version behind.
+
+```bash
+python scripts/audit_dependencies.py            # report drift across all ecosystems
+python scripts/audit_dependencies.py --strict   # exit 1 if any major is behind (CI)
+```
+
+Run it whenever you touch the bindings or before a release; the weekly
+`dependency-audit` workflow runs it as a backstop and surfaces majors in its job summary.
+This is the guard that makes a future dependabot-config gap *visible* instead of silent.

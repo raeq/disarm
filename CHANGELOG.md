@@ -291,6 +291,18 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **Digit confusables fold to their digit, not a look-alike letter (#439).** The
+  confusable maps mapped many non-ASCII digit sources to letters or punctuation —
+  Arabic-Indic `٠`→`.`, `١`→`l`, `٥`→`o`, Devanagari/Bengali/NKO zeros→`o`/`O`, and
+  the Unicode 16 outlined digits `𜳰`→`O` / `𜳱`→`l`. The root cause: `gen_confusables.py`
+  classifies digits via `unicodedata`, so running it under a Python whose Unicode
+  table is older than the bundled `confusables.txt` silently mis-folds any digit
+  that table doesn't yet know. The generator now (a) folds every `Nd` digit source
+  to its canonical ASCII digit and (b) refuses to run under a Unicode table older
+  than the data (warning on any mismatch). The maps are regenerated: every digit
+  spoof now canonicalizes to the plain digit (`٠`/`०`/`𜳰` → `0`), keeping numbers
+  numeric (the `llm_guardrail` "digits are never remapped to letters" guarantee).
+
 - **Line controls no longer join tokens in `collapse_whitespace` (#433).** TAB
   and LF folded to a space, but VT, FF, CR, NEL, and the information separators
   (`U+001C`–`U+001F`) were *deleted* — so `a` + CR + `b` became `ab` while `a` +

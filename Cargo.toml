@@ -92,6 +92,7 @@ proptest = "1"
 # the benches or `cargo test`/`cargo clippy --all-targets` in this repo needs 1.86+.
 criterion = { version = "0.8", features = ["html_reports"] }
 iai-callgrind = "0.16.1"
+stats_alloc = "0.1.10"
 
 [[bench]]
 name = "bench_core"

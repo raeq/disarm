@@ -167,13 +167,27 @@ pub(crate) fn strip_pua(text: &str) -> String {
 /// according to `policy`. Always strips: stray Tags-block characters (keeping
 /// valid flag sequences), the Combining Grapheme Joiner, and noncharacters.
 /// Variation selectors and Private Use Area are governed by `policy`.
+// Returning form is used only by this module's unit tests now (the presets call
+// `strip_invisible_classes_into`), so it is compiled only into test builds —
+// keeping the non-test extension-module build free of a dead-code allow (#453).
+#[cfg(test)]
 pub(crate) fn strip_invisible_classes(text: &str, policy: StripPolicy) -> String {
+    let mut out = String::new();
+    strip_invisible_classes_into(text, policy, &mut out);
+    out
+}
+
+/// `strip_invisible_classes`, writing into a caller-owned buffer (ping-pong form).
+/// Clears `out` first, like every other `*_into` leaf.
+pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out: &mut String) {
+    out.clear();
     // Fast path: every class handled here (tags, CGJ, noncharacters, PUA,
     // variation selectors, the flag base) is non-ASCII, so ASCII passes through.
     if text.is_ascii() {
-        return text.to_string();
+        out.push_str(text);
+        return;
     }
-    let mut out = String::with_capacity(text.len());
+    out.reserve(text.len());
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {
         // Emoji subdivision flag: preserve the whole well-formed sequence.
@@ -202,7 +216,6 @@ pub(crate) fn strip_invisible_classes(text: &str, policy: StripPolicy) -> String
         }
         out.push(ch);
     }
-    out
 }
 
 #[cfg(test)]
@@ -337,5 +350,35 @@ mod tests {
         let s = "hi\u{E0001}\u{FE01}ad\u{034F}min\u{FFFE}\u{E000}";
         let once = strip_invisible_classes(s, comparison());
         assert_eq!(once, strip_invisible_classes(&once, comparison()));
+    }
+
+    #[test]
+    fn strip_invisible_classes_into_matches_returning() {
+        let mut out = String::new();
+        for s in [
+            "",
+            "abc",
+            "a\u{200D}b",
+            "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
+            "x\u{E0041}y",
+            "z\u{FE0F}",
+        ] {
+            strip_invisible_classes_into(s, comparison(), &mut out);
+            assert_eq!(
+                out,
+                strip_invisible_classes(s, comparison()),
+                "comparison: {s:?}"
+            );
+            strip_invisible_classes_into(s, rendering(), &mut out);
+            assert_eq!(
+                out,
+                strip_invisible_classes(s, rendering()),
+                "rendering: {s:?}"
+            );
+        }
+        // Buffer reuse: a previous non-empty value must be fully overwritten.
+        out.push_str("STALE");
+        strip_invisible_classes_into("abc", comparison(), &mut out);
+        assert_eq!(out, "abc");
     }
 }

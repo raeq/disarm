@@ -101,10 +101,12 @@ jobs:
         # clippy with a curated allocation/clone/by-value lint set promoted to
         # deny (redundant_clone, or_fun_call, the pedantic alloc lints) — the
         # strongest "unnecessary allocation" lints that the default `-D warnings`
-        # gate leaves off. EXT=1 also lints the binding layer. Runtime heap
-        # profiling (dhat-rs) and complexity (iai-callgrind, perf-gate.yml) are
-        # separate, on-demand tools — see the script header.
-        run: EXT=1 bash scripts/perf_lint.sh
+        # gate leaves off. Pure core only: the allocations live in the core; the
+        # pyo3 extension layer is thin FFI glue whose owned-by-value signatures
+        # are idiomatic (they'd trip needless_pass_by_value), same rationale as
+        # the binding investigation in #457. Runtime heap profiling (dhat-rs) and
+        # complexity (iai-callgrind, perf-gate.yml) are separate on-demand tools.
+        run: bash scripts/perf_lint.sh
 
       - name: Pure core has no pyo3 (#38/#42 acceptance gate)
         # The default-feature crate is the pyo3-free crates.io core; assert the

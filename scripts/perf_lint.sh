@@ -29,8 +29,14 @@
 #       `iai estimated-cycles gate`) with input-size sweeps; super-linear
 #       scaling shows up as a non-constant instruction-count ratio.
 #
-# Usage:  bash scripts/perf_lint.sh          # pure core (default, quick)
-#         EXT=1 bash scripts/perf_lint.sh    # also lint the binding layer
+# Usage:  bash scripts/perf_lint.sh          # pure core (default, quick) — the gate
+#         EXT=1 bash scripts/perf_lint.sh    # ALSO lint the pyo3 extension layer
+#
+# The gate runs PURE CORE only. The pyo3 extension layer is thin FFI glue whose
+# owned-by-value signatures are idiomatic (pyo3 takes owned Python objects), so
+# `needless_pass_by_value` reports them as false positives — same reason the
+# language bindings are not allocation-gated (#457). EXT=1 is an opt-in for
+# manual inspection of the binding layer; expect by-value noise there.
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."

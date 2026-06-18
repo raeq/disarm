@@ -1,8 +1,9 @@
-//! Cross-script confusable folding — #341, #342, #343 (carved from #336).
+//! Cross-script confusable folding — #341, #342, #343, #436 (carved from #336).
 //!
 //! Mirrors `tests/test_confusables_cross_script.py` at the pure-Rust `api` layer:
 //! #341 folds TR39's non-ASCII Latin-extended prototypes to basic ASCII, #342
-//! adds seven Greek/Cyrillic pairs, #343 re-points the bare iota to the l class.
+//! adds seven Greek/Cyrillic pairs, #436 folds the bare iota to the i-class
+//! (reverting #343's vertical-bar re-point).
 
 use disarm::api::{normalize_confusables as nc, TargetScript};
 
@@ -87,25 +88,35 @@ fn pairs_342_cyrillic_closure() {
     assert_eq!(nc("ѡ", CYR), "ꙍ");
 }
 
-// ── #343: unify the vertical-bar class ι / ӏ / ا ────────────────────────────
+// ── #436: the whole iota family folds to the i-class ────────────────────────
 
 #[test]
-fn bar_343_latin_l() {
-    for c in ["ι", "ӏ", "ا"] {
-        assert_eq!(nc(c, LATIN), "l", "{c} → l");
+fn iota_436_family_folds_to_i_in_latin() {
+    // The whole iota family — bare ι (U+03B9) and the accented ί/ϊ — folds to i
+    // in the latin target (matching upstream TR39 03B9→0069). The bare iota's
+    // latin fold is the #436 change; the accented ones were already i (#342).
+    for c in ["ι", "ί", "ϊ"] {
+        assert_eq!(nc(c, LATIN), "i", "{c} → i");
     }
+    // The dominant ι-for-i spoof now collides with the real word.
+    assert_eq!(nc("bιtcoin", LATIN), "bitcoin");
 }
 
 #[test]
-fn bar_343_cyrillic_palochka() {
-    for c in ["ι", "ӏ", "ا"] {
+fn iota_436_bare_cyrillic_target() {
+    // Bare iota → і (cyrillic). The accented forms keep their own #342 cyrillic
+    // targets (ί→і, ϊ→ї), so only the bare iota is asserted here.
+    assert_eq!(nc("ι", CYR), "і", "ι → і");
+}
+
+// ── the vertical-bar class no longer contains iota ──────────────────────────
+
+#[test]
+fn bar_class_excludes_iota() {
+    // ӏ (palochka U+04CF) and ا (alef U+0627) are genuine full-height bars and
+    // stay in the l-class; only the bare iota left (it is x-height, like i).
+    for c in ["ӏ", "ا"] {
+        assert_eq!(nc(c, LATIN), "l", "{c} → l");
         assert_eq!(nc(c, CYR), "ӏ", "{c} → ӏ");
     }
-}
-
-#[test]
-fn bar_343_accented_iotas_still_i() {
-    // #342 boundary: diacritic'd iotas read as i; only the bare stroke is l.
-    assert_eq!(nc("ί", LATIN), "i");
-    assert_eq!(nc("ϊ", LATIN), "i");
 }

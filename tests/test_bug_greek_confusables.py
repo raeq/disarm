@@ -109,3 +109,8 @@ class TestVisualConfusablesInPipeline:
     def test_strip_obfuscation_greek_iota_in_word(self) -> None:
         # Ι (U+0399) embedded in Latin text should resolve to I
         assert strip_obfuscation("\u0399nstagram") == "Instagram"
+
+    def test_strip_obfuscation_greek_lowercase_iota_to_i(self) -> None:
+        # ι (U+03B9) folds to i (#436, reverting #343's →l), so the ι-for-i
+        # spoof collides with the real word even through the NFKC-first preset.
+        assert strip_obfuscation("bιtcoin") == "bitcoin"

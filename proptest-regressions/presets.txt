@@ -7,3 +7,5 @@
 cc dd4d93168a5d35a0b3a1e2b5b1f64972f84a6a0a69d20d399cc09e070e147dee # shrinks to s = "👒"
 cc 00e32bc989c08fc29432d4dcf7e7b80e2827eed32cb9dbc68d8b7cf38251687c # shrinks to s = "\u{301}\u{ad}\u{301}\u{301}"
 cc 669b863b6d0ddca7ad46b4fe60007db2fdbe18df1d7a017ff0b8ab0d952a3458 # shrinks to s = "\u{301}\u{301}\0\u{301}"
+cc da36583310da1e7223530863bfb32f55a617bf2ef42b31a6f08d71d60f8ae38f # shrinks to s = "£"
+cc 88f3c26133409f858f19ddb38641040bc1c50665eb05233ddeab4c0ff8440776 # shrinks to s = "£"

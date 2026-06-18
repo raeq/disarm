@@ -113,7 +113,7 @@ def catalog_key(
 ) -> str:
     """Library catalog key generation pipeline.
 
-    Pipeline: NFKC → transliterate → confusables → strip_accents →
+    Pipeline: NFKC → fold_case → transliterate → confusables → strip_accents →
               fold_case → collapse_whitespace
 
     Produces a canonical deduplication key for bibliographic titles.
@@ -177,7 +177,7 @@ def search_key(
 ) -> str:
     """Search index key generation pipeline.
 
-    Pipeline: NFKC → transliterate → strip_accents → fold_case →
+    Pipeline: NFKC → fold_case → transliterate → strip_accents → fold_case →
               collapse_whitespace
 
     Produces a case-insensitive, accent-insensitive, script-insensitive
@@ -209,7 +209,7 @@ def sort_key(
 ) -> str:
     """Sort key generation pipeline.
 
-    Pipeline: NFKC → strip_bidi → transliterate-non-Latin → fold_case →
+    Pipeline: NFKC → strip_bidi → fold_case → transliterate-non-Latin →
     collapse_whitespace
 
     A case-insensitive collation key that, unlike :func:`search_key`,
@@ -501,6 +501,11 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "catalog_key": [
         ("normalize", "NFKC"),
         ("strip_bidi", None),
+        # #419: fold_case runs BEFORE transliterate so a case pair whose folded
+        # form is in the translit table (Mtavruli Ჱ → Mkhedruli ჱ → "he") is
+        # stable across passes; a second fold after transliterate catches the
+        # uppercase ASCII full transliteration can emit (£ → GBP).
+        ("fold_case", None),
         ("transliterate", None),
         ("confusables", "latin"),
         ("strip_accents", None),
@@ -523,6 +528,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "search_key": [
         ("normalize", "NFKC"),
         ("strip_bidi", None),
+        # #419: fold_case BEFORE transliterate (case-pair idempotency) and AGAIN
+        # after (full transliteration can emit uppercase, e.g. £ → GBP).
+        ("fold_case", None),
         ("transliterate", None),
         ("strip_accents", None),
         ("fold_case", None),
@@ -534,11 +542,15 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "sort_key": [
         ("normalize", "NFKC"),
         ("strip_bidi", None),
+        # #419: fold_case BEFORE transliterate so a case pair whose folded form is
+        # in the translit table is stable across passes. (No second fold needed:
+        # sort_key transliterates only non-Latin scripts, never emitting uppercase
+        # the way search/catalog's full transliteration does.)
+        ("fold_case", None),
         # "non_latin": transliterate folds only non-Latin scripts; base accented
         # Latin characters are preserved so the accent can order the key (this is
         # what distinguishes sort_key from search_key, which strips accents here).
         ("transliterate", "non_latin"),
-        ("fold_case", None),
         # #433: explicit strip steps (was fused into collapse_whitespace).
         ("strip_control", None),
         ("strip_zero_width", None),

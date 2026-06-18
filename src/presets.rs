@@ -262,7 +262,7 @@ pub(crate) fn ml_normalize(
 
 /// Library catalog key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → transliterate → confusables → strip_accents → fold_case → collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → fold_case → transliterate → confusables → strip_accents → fold_case → collapse_whitespace
 ///
 /// Transliteration runs before confusable normalization so that non-Latin
 /// scripts receive correct phonetic romanization (e.g. Cyrillic г→g, not
@@ -284,7 +284,13 @@ pub(crate) fn catalog_key(
     let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides + soft hyphen + format marks (#93)
     let buf = strip_bidi(&buf);
-    // 3. Transliterate (always — catalog keys should be pure ASCII where possible;
+    // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
+    //    the transliteration table but whose original is not (e.g. Georgian
+    //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
+    //    on the second pass — non-idempotent. Fold before transliterate so both
+    //    passes see the same form.
+    let buf = case_fold::fold_case_impl(&buf);
+    // 4. Transliterate (always — catalog keys should be pure ASCII where possible;
     //    runs before confusables so that non-Latin scripts are romanized first,
     //    avoiding broken confusable mappings like Cyrillic к → literal \u{0138})
     let buf = transliterate::transliterate_impl(
@@ -297,11 +303,12 @@ pub(crate) fn catalog_key(
         false,
     )
     .into_owned();
-    // 4. Confusables → Latin (normalize any remaining cross-script homoglyphs)
+    // 5. Confusables → Latin (normalize any remaining cross-script homoglyphs)
     let buf = confusables::normalize_confusables(&buf, "latin")?;
-    // 5. Strip accents
+    // 6. Strip accents
     let buf = transliterate::strip_accents(&buf);
-    // 6. Unicode case folding
+    // 6b. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
+    //     (`£` → `GBP`, `№` → `No`), unreachable by the pre-transliterate fold.
     let buf = case_fold::fold_case_impl(&buf);
     // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
     let buf = whitespace::strip_control_chars(&buf);
@@ -312,7 +319,7 @@ pub(crate) fn catalog_key(
 
 /// Search index key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → transliterate → strip_accents → fold_case → collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → fold_case → transliterate → strip_accents → fold_case → collapse_whitespace
 ///
 /// Produces a case-insensitive, accent-insensitive, script-insensitive lookup
 /// key.  Like `catalog_key` but without confusable normalization — lighter and
@@ -327,7 +334,13 @@ pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate
     let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides + soft hyphen + format marks (#93)
     let buf = strip_bidi(&buf);
-    // 3. Transliterate (always — search keys should be pure ASCII where possible)
+    // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
+    //    the transliteration table but whose original is not (e.g. Georgian
+    //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
+    //    on the second pass — non-idempotent. Fold before transliterate so both
+    //    passes see the same form.
+    let buf = case_fold::fold_case_impl(&buf);
+    // 4. Transliterate (always — search keys should be pure ASCII where possible)
     let buf = transliterate::transliterate_impl(
         &buf,
         lang,
@@ -338,11 +351,13 @@ pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate
         false,
     )
     .into_owned();
-    // 4. Strip accents
+    // 5. Strip accents
     let buf = transliterate::strip_accents(&buf);
-    // 5. Unicode case folding
+    // 6. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
+    //    (`£` → `GBP`, `№` → `No`), which the pre-transliterate fold above could not
+    //    reach. Folding the output too makes the key a fixed point.
     let buf = case_fold::fold_case_impl(&buf);
-    // 6. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+    // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
     let buf = whitespace::strip_control_chars(&buf);
     let buf = whitespace::strip_zero_width_chars(&buf);
     let buf = whitespace::collapse_whitespace(&buf);
@@ -400,7 +415,7 @@ fn transliterate_preserving_latin(text: &str, lang: Option<&str>) -> String {
 
 /// Sort key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → transliterate-non-Latin → fold_case →
+/// Pipeline: NFKC → strip_bidi → fold_case → transliterate-non-Latin →
 /// collapse_whitespace
 ///
 /// Like [`search_key`] but **preserves base accented characters** so the accent
@@ -425,12 +440,18 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
     let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides + soft hyphen + format marks (#93)
     let buf = strip_bidi(&buf);
-    // 3. Transliterate non-Latin scripts only — Latin accents are preserved so
+    // 3. Unicode case folding FIRST (#419). A cased letter whose *folded* form is
+    //    in the transliteration table but whose original form is not — e.g. a
+    //    Georgian Mtavruli capital `Ჱ` (U+1CB1), absent from the table, folds to
+    //    Mkhedruli `ჱ` (U+10F1), which transliterates to `he` — would otherwise
+    //    transliterate only on the *second* pass, breaking idempotency. Folding
+    //    before transliterate makes both passes see the same form. (`Über` →
+    //    `über`; `ß` → `ss`; Latin accents survive.)
+    let buf = case_fold::fold_case_impl(&buf);
+    // 4. Transliterate non-Latin scripts only — Latin accents are preserved so
     //    the collation key can order on them (this is the sort_key/search_key
     //    distinction; search_key strips accents here instead).
     let buf = transliterate_preserving_latin(&buf, lang);
-    // 4. Unicode case folding (`Über` → `über`; `ß` → `ss`; accents survive)
-    let buf = case_fold::fold_case_impl(&buf);
     // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
     let buf = whitespace::strip_control_chars(&buf);
     let buf = whitespace::strip_zero_width_chars(&buf);
@@ -776,6 +797,34 @@ mod tests {
     }
 
     #[test]
+    fn test_key_presets_idempotent_on_case_pair_transliteration() {
+        // #419: a Georgian Mtavruli capital `Ჱ` (U+1CB1) is absent from the
+        // transliteration table but folds to Mkhedruli `ჱ` (U+10F1), which IS in
+        // the table (→ "he"). Folding case before transliterate makes the key
+        // presets reach the fully-transliterated form on the first pass.
+        let input = "\u{1CB1}"; // Ჱ
+        for once in [
+            sort_key(input, None).unwrap(),
+            search_key(input, None).unwrap(),
+            catalog_key(input, None, false).unwrap(),
+        ] {
+            assert_eq!(once, "he", "first pass should fully transliterate");
+        }
+        assert_eq!(
+            sort_key(input, None).unwrap(),
+            sort_key("he", None).unwrap()
+        );
+        assert_eq!(
+            search_key(input, None).unwrap(),
+            search_key("he", None).unwrap()
+        );
+        assert_eq!(
+            catalog_key(input, None, false).unwrap(),
+            catalog_key("he", None, false).unwrap()
+        );
+    }
+
+    #[test]
     fn test_ml_normalize_basic() {
         let result = ml_normalize("Café Résumé", None, "cldr").unwrap();
         assert_eq!(result, "cafe resume");
@@ -1060,14 +1109,30 @@ mod tests {
                 prop_assert_eq!(once, twice);
             }
 
-            // NOTE: a full `sort_key_idempotent` proptest is deliberately omitted.
-            // sort_key's terminal NFC (#416) fixes the base+invisible+mark case
-            // (pinned deterministically in `test_sort_key_idempotent_on_invisible_separated_mark`),
-            // but a *separate*, pre-existing bug remains: transliterate runs before
-            // fold_case, so a case pair where only the folded form is in the
-            // transliterate table is non-idempotent (e.g. `sort_key("Ჱ")` → `"ჱ"`
-            // → `"he"`). That is tracked in #419; a global sort_key
-            // idempotency proptest would flake on it.
+            // #419: the transliterating key presets fold case BEFORE transliterate,
+            // so a case pair whose folded form is in the table (but whose original
+            // is not) is stable across passes. `adversarial()` draws `any::<char>()`,
+            // so it exercises cross-script case pairs like Georgian Mtavruli.
+            #[test]
+            fn sort_key_idempotent(s in adversarial()) {
+                let once = sort_key(&s, None).unwrap();
+                let twice = sort_key(&once, None).unwrap();
+                prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn search_key_idempotent(s in adversarial()) {
+                let once = search_key(&s, None).unwrap();
+                let twice = search_key(&once, None).unwrap();
+                prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn catalog_key_idempotent(s in adversarial()) {
+                let once = catalog_key(&s, None, false).unwrap();
+                let twice = catalog_key(&once, None, false).unwrap();
+                prop_assert_eq!(once, twice);
+            }
 
             #[test]
             fn strip_obfuscation_idempotent(s in adversarial()) {

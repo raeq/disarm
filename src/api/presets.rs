@@ -31,8 +31,8 @@ pub fn ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> Result
     crate::presets::ml_normalize(text, lang, emoji_style).map_err(Error::from)
 }
 
-/// Library catalog deduplication key: NFKC → strip bidi → transliterate →
-/// confusables → strip accents → case fold → collapse whitespace.
+/// Library catalog deduplication key: NFKC → strip bidi → case fold →
+/// transliterate → confusables → strip accents → case fold → collapse whitespace.
 ///
 /// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails
 /// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) on an unknown `lang`.

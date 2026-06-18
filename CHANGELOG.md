@@ -142,6 +142,23 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed
 
+- **Re-point Greek small letter iota `U+03B9` to the i-class, reverting #343
+  (#436).** `#343` had re-pointed the bare iota from `i`/`і` to the
+  `l`/vertical-bar class (`l`/`ӏ`) to unify `{ι, ӏ, ا}`. That split the iota
+  family — the accented iotas `U+03AF` (ί) and `U+03CA` (ϊ) still folded to `i`
+  in the same table — and was shadowed in the security presets: `security_clean`
+  and `strip_obfuscation` run NFKC first, which decomposes the accented iotas to
+  bare iota, so under #343 the *whole* family folded to `l` there. It also
+  contradicted the upstream Unicode TR39 mapping (`03B9 → 0069`, i.e. `i`) and
+  missed the dominant spoof — `normalize_confusables("bιtcoin")` returned
+  `"bltcoin"` instead of colliding with `"bitcoin"`. The bare iota now folds to
+  `i` (latin)/`і` (cyrillic), consistent with its accented forms, so the entire
+  iota family folds to the i-class under `normalize_confusables` and the
+  NFKC-first presets, and the `ι`-for-`i` spoof is caught (`bιtcoin → bitcoin`).
+  The genuine full-height bars — `ӏ` (palochka `U+04CF`), `ا` (alef `U+0627`),
+  and the `U+2502`/`U+FFE8` bars (#245) — stay in the l-class. The only
+  confusable-table change is the single iota row in each target.
+
 - **`security_clean` and `normalize_user_input` no longer neutralize path
   separators (#431, reverses #248).** The presets previously rewrote `/` and `\`
   to `_` and collapsed `..` runs so the output was safe to drop into a filesystem

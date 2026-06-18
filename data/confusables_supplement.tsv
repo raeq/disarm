@@ -6,7 +6,8 @@
 # supplements TR39 with measured cross-script equivalences, folded through
 # scripts/gen_confusables.py with PRIORITY over the generated entries (for both
 # the latin and cyrillic targets). It covers the additive Greek/Cyrillic pairs
-# (#342) and the bare-iota vertical-bar re-point (#343), both carved from #336.
+# (#342), carved from #336. (The #343 bare-iota vertical-bar re-point of 03B9 was
+# reverted in #436 — see the note on that row.)
 #
 # Provenance: the in-scope pairs and the danger weights are taken from the
 # measured confusable-vision dataset © Paul Wood FRSA (@paultendo)
@@ -20,9 +21,13 @@
 #   danger   confusable-vision danger weight for the pair (informative)
 #   note     the pair / decision this row encodes
 #
-# All rows are ADDITIVE (fill a pass-through gap) except the #343 ι row (03B9,
-# both columns), which RE-POINTs the bare Greek iota from the i-class to the
-# l/vertical-bar class.
+# All other rows are ADDITIVE (fill a pass-through gap). The bare-iota ι row
+# (03B9) RE-POINTs the bare Greek iota to the i-class (i / і), matching its
+# accented forms (03AF/03CA). Both columns are pinned explicitly — the latin `i`
+# coincides with the current upstream TR39 mapping (03B9 → 0069) but is stated so
+# disarm's fold is stable if upstream drifts, keeping the iota family on one
+# class in one place; the cyrillic `і` is a genuine override. This reverts the
+# #343 re-point of 03B9 to the l/vertical-bar class (#436).
 #
 # source	latin	cyrillic	danger	note
 03AF	i	і	1.000	ί GREEK SMALL LETTER IOTA WITH TONOS / і (pair 1)
@@ -38,4 +43,4 @@
 03B2	-	в	1.000	β GREEK SMALL LETTER BETA → cyrillic в (pair 2 cyrillic; latin b via #341 ß→b)
 03B7	-	п	1.000	η GREEK SMALL LETTER ETA → cyrillic п (pair 5 cyrillic; latin n already)
 0461	-	ꙍ	1.000	ѡ CYRILLIC SMALL LETTER OMEGA → ꙍ (pair 9 cyrillic; latin w already)
-03B9	l	ӏ	1.000	ι GREEK SMALL LETTER IOTA → l / ӏ (#343 re-point; was i / і)
+03B9	i	і	1.000	ι GREEK SMALL LETTER IOTA → i / і (reverts #343; family-consistent with 03AF/03CA, catches ι-for-i)

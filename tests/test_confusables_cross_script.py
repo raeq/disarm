@@ -1,14 +1,16 @@
-"""Cross-script confusable folding — #341, #342, #343 (all carved from #336).
+"""Cross-script confusable folding — #341, #342, #436 (carved from #336).
 
-These three close the cross-script gaps where ``normalize_confusables`` either
-left non-ASCII residue (#341) or returned the source unchanged so a spoof never
-collided with its target (#342/#343):
+These close the cross-script gaps where ``normalize_confusables`` either left
+non-ASCII residue (#341) or returned the source unchanged / on the wrong class so
+a spoof never collided with its target (#342, #436):
 
 - #341  TR39 folds ~140 sources onto a non-ASCII Latin-extended prototype
         (ĸ/ꞓ/ß/…). We fold those to basic ASCII so a Greek κ collides with k.
 - #342  Seven additive Greek/Cyrillic pairs gain a shared latin/cyrillic fold.
-- #343  The bare Greek iota ι is re-pointed from the i-class to the l /
-        vertical-bar class so {ι, ӏ, ا} unify.
+- #436  The bare Greek iota ι folds to the i-class (i / і), reverting #343's
+        re-point to the l / vertical-bar class — so the whole iota family
+        {ι, ί, ϊ} is consistent and the ι-for-i spoof is caught. ӏ (palochka)
+        and ا (alef) stay in the l-class.
 
 Inputs use the literal glyphs (the codepoint is named in comments) so a reviewer
 can see the visual confusable under test.
@@ -130,12 +132,42 @@ class TestAdditivePairs342:
 
 
 # ---------------------------------------------------------------------------
-# #343 — unify the vertical-bar class ι / ӏ / ا on l (latin) / ӏ (cyrillic)
+# #436 — the whole iota family folds to the i-class (reverts #343)
 # ---------------------------------------------------------------------------
 
 
-class TestVerticalBarClass343:
-    BAR = ["ι", "ӏ", "ا"]  # ι (iota), ӏ (palochka), ا (alef)
+class TestIotaFamilyIClass436:
+    IOTA = ["ι", "ί", "ϊ"]  # ι (bare), ί (tonos), ϊ (dialytika)
+
+    @pytest.mark.parametrize("c", IOTA)
+    def test_latin_i(self, c: str) -> None:
+        # The whole family folds to i in the latin target. Bare iota joining its
+        # accented forms here (matching upstream TR39 03B9→0069) is the #436
+        # change; the accented ones were already i (#342).
+        assert _nc(c) == "i"
+
+    def test_bare_iota_cyrillic_target(self) -> None:
+        # Bare iota → і (cyrillic). The accented forms keep their own #342
+        # cyrillic targets (ί→і, ϊ→ї), so only the bare iota is asserted here.
+        assert _nc("ι", "cyrillic") == "і"  # BYELORUSSIAN-UKRAINIAN I (U+0456)
+
+    def test_catches_iota_for_i_spoof(self) -> None:
+        # The dominant ι-for-i substitution now collides with the real word.
+        assert _nc("bιtcoin") == "bitcoin"
+
+    def test_idempotent(self) -> None:
+        for c in self.IOTA:
+            assert _nc(_nc(c)) == _nc(c)
+            assert _nc(_nc(c, "cyrillic"), "cyrillic") == _nc(c, "cyrillic")
+
+
+# ---------------------------------------------------------------------------
+# The vertical-bar class no longer contains iota (ӏ / ا stay on l / ӏ)
+# ---------------------------------------------------------------------------
+
+
+class TestVerticalBarClass:
+    BAR = ["ӏ", "ا"]  # ӏ (palochka), ا (alef) — genuine full-height bars
 
     @pytest.mark.parametrize("c", BAR)
     def test_latin_l(self, c: str) -> None:
@@ -145,11 +177,10 @@ class TestVerticalBarClass343:
     def test_cyrillic_palochka(self, c: str) -> None:
         assert _nc(c, "cyrillic") == "ӏ"  # ӏ
 
-    def test_accented_iotas_still_i(self) -> None:
-        # The #342 boundary: the diacritic'd iotas read as i, only the *bare*
-        # stroke ι re-points to l. Different codepoints, deliberate split.
-        assert _nc("ί") == "i"  # ί iota+tonos
-        assert _nc("ϊ") == "i"  # ϊ iota+dialytika
+    def test_iota_is_not_in_the_bar_class(self) -> None:
+        # The bare iota left the l-class in #436.
+        assert _nc("ι") == "i"
+        assert _nc("ι", "cyrillic") == "і"
 
     def test_idempotent(self) -> None:
         for c in self.BAR:

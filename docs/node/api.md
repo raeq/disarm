@@ -361,15 +361,17 @@ try {
 
 Build a reusable, precompiled pipeline handle for a named policy profile, then
 apply it to any number of inputs — the profile's steps are resolved and compiled
-once, so each `process` call only runs the transforms. An unknown profile name
-throws `DisarmInvalidArgument`.
+once with `getPipeline`, so each `pipe.process(...)` call only runs the
+transforms. An unknown profile name throws `DisarmInvalidArgument`.
 
 ```ts
 import { getPipeline } from 'disarm'
 
-const pipe = getPipeline('search_index') // build once
-pipe.process('Café') // => 'cafe'
-pipe.process('Москва') // => 'moskva'
+// Build the handle once, then reuse it across inputs:
+//   const pipe = getPipeline('search_index')
+//   pipe.process(input)
+getPipeline('search_index').process('Café') // => 'cafe'
+getPipeline('search_index').process('Москва') // => 'moskva'
 ```
 
 ## Stability

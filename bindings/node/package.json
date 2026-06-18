@@ -25,16 +25,14 @@
     "node": ">= 14"
   },
   "napi": {
-    "name": "disarm",
-    "triples": {
-      "defaults": true,
-      "additional": [
-        "aarch64-apple-darwin",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-unknown-linux-gnu",
-        "x86_64-pc-windows-msvc"
-      ]
-    }
+    "binaryName": "disarm",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
   },
   "files": [
     "index.js",
@@ -51,7 +49,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
-    "@napi-rs/cli": "^2.18.4",
+    "@napi-rs/cli": "^3.7.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   }

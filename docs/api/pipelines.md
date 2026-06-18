@@ -43,7 +43,7 @@ assert ml_normalize("I ❤️ Python 🐍") == 'i red heart python snake'
 
 ### Pipeline steps
 
-`NFKC → transliterate → confusables → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+`NFKC → fold_case → transliterate → confusables → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
 
 ```python
 from disarm import catalog_key
@@ -80,7 +80,7 @@ assert display_clean("admin\u202Euser") == 'adminuser'
 
 ### Pipeline steps
 
-`NFKC → transliterate → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+`NFKC → fold_case → transliterate → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
 
 ```python
 from disarm import search_key
@@ -98,7 +98,7 @@ assert search_key("ΩMEGA", lang="auto") == 'omega'
 
 ### Pipeline steps
 
-`NFKC → strip_bidi → transliterate-non-Latin → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+`NFKC → strip_bidi → fold_case → transliterate-non-Latin → strip_control → strip_zero_width → collapse_whitespace`
 
 Unlike `search_key`, `sort_key` **preserves base accented characters** so
 accented and unaccented forms stay distinct and the accent survives for a

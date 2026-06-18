@@ -328,10 +328,11 @@ class TestPipelineStepTuples:
                 [
                     ("normalize", "NFKC"),
                     ("strip_bidi", None),
+                    ("fold_case", None),  # #419: before transliterate
                     ("transliterate", None),
                     ("confusables", "latin"),
                     ("strip_accents", None),
-                    ("fold_case", None),
+                    ("fold_case", None),  # #419: again after (transliterate emits uppercase)
                     ("strip_control", None),
                     ("strip_zero_width", None),
                     ("collapse_whitespace", None),
@@ -352,9 +353,10 @@ class TestPipelineStepTuples:
                 [
                     ("normalize", "NFKC"),
                     ("strip_bidi", None),
+                    ("fold_case", None),  # #419: before transliterate
                     ("transliterate", None),
                     ("strip_accents", None),
-                    ("fold_case", None),
+                    ("fold_case", None),  # #419: again after (transliterate emits uppercase)
                     ("strip_control", None),
                     ("strip_zero_width", None),
                     ("collapse_whitespace", None),
@@ -365,8 +367,8 @@ class TestPipelineStepTuples:
                 [
                     ("normalize", "NFKC"),
                     ("strip_bidi", None),
+                    ("fold_case", None),  # #419: before transliterate
                     ("transliterate", "non_latin"),
-                    ("fold_case", None),
                     ("strip_control", None),
                     ("strip_zero_width", None),
                     ("collapse_whitespace", None),

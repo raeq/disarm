@@ -291,6 +291,7 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+<<<<<<< HEAD
 - **Digit confusables fold to their digit, not a look-alike letter (#439).** The
   confusable maps mapped many non-ASCII digit sources to letters or punctuation —
   Arabic-Indic `٠`→`.`, `١`→`l`, `٥`→`o`, Devanagari/Bengali/NKO zeros→`o`/`O`, and
@@ -302,6 +303,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   than the data (warning on any mismatch). The maps are regenerated: every digit
   spoof now canonicalizes to the plain digit (`٠`/`०`/`𜳰` → `0`), keeping numbers
   numeric (the `llm_guardrail` "digits are never remapped to letters" guarantee).
+
+- **`sort_key` / `search_key` / `catalog_key` are now idempotent across scripts
+  and cases (#419).** The transliterating key presets ran `transliterate` before
+  `fold_case`, so a cased letter whose *folded* form is in the table but whose
+  original is not — e.g. a Georgian Mtavruli capital `Ჱ` (U+1CB1), absent from the
+  table, folds to Mkhedruli `ჱ` which transliterates to `he` — only transliterated
+  on the *second* pass, violating `f(f(x)) == f(x)`. `fold_case` now runs **before**
+  `transliterate` so both passes see the same form. `search_key`/`catalog_key`
+  additionally fold **again** after transliterate, since full transliteration can
+  *emit* uppercase ASCII (`£`→`GBP`, `№`→`No`) that the pre-fold can't reach — those
+  keys are now lowercase and stable. Output change: a few currency/symbol inputs
+  that previously produced uppercase keys now fold to lowercase. Idempotency is
+  pinned by per-preset property tests.
 
 - **Line controls no longer join tokens in `collapse_whitespace` (#433).** TAB
   and LF folded to a space, but VT, FF, CR, NEL, and the information separators

@@ -473,7 +473,8 @@ pub(crate) fn catalog_key(
     lang: Option<&str>,
     strict_iso9: bool,
 ) -> Result<String, crate::ErrorRepr> {
-    crate::transliterate::validate_lang(lang)?;
+    // `const` declared before the validate prologue to satisfy
+    // clippy::items_after_statements; it has no runtime effect.
     const STEPS: &[Step] = &[
         // 1. NFKC normalization
         Step::Nfkc,
@@ -504,6 +505,7 @@ pub(crate) fn catalog_key(
         Step::StripZeroWidth,
         Step::CollapseWs,
     ];
+    crate::transliterate::validate_lang(lang)?;
     run(
         STEPS,
         text,
@@ -572,7 +574,8 @@ pub(crate) fn catalog_key_legacy(
 /// hyphen) embedded in a stored value still produces the same key as the clean
 /// query — otherwise lookups silently miss.
 pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate::ErrorRepr> {
-    crate::transliterate::validate_lang(lang)?;
+    // `const` declared before the validate prologue to satisfy
+    // clippy::items_after_statements; it has no runtime effect.
     const STEPS: &[Step] = &[
         // 1. NFKC normalization
         Step::Nfkc,
@@ -600,6 +603,7 @@ pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate
         Step::StripZeroWidth,
         Step::CollapseWs,
     ];
+    crate::transliterate::validate_lang(lang)?;
     run(
         STEPS,
         text,
@@ -917,6 +921,51 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<String, crate::ErrorRepr
 /// Use cases: content moderation, anti-phishing, spam detection, hate speech
 /// detection, social media NLP preprocessing.
 pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> {
+    const STEPS: &[Step] = &[
+        // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
+        Step::Nfkc,
+        // 2. Strip ALL combining marks (max_marks=0) — removes zalgo AND accents early
+        Step::Zalgo(0),
+        // 3. Strip bidi overrides, isolates, marks, and soft hyphens
+        Step::StripBidi,
+        // 4. Strip zero-width chars (ZWS, ZWNJ, ZWJ, WJ, BOM)
+        Step::StripZeroWidth,
+        // 5. Demojize — expand emoji to text names with spacing
+        Step::Demojize {
+            only_if_cldr: false,
+        },
+        // 5b. Strip the #413 smuggling / non-interchange classes. Runs AFTER demojize
+        //     so the emoji pass sees flags/presentation selectors intact; whatever
+        //     demojize leaves (stray Tags, variation selectors, noncharacters, PUA) is
+        //     removed here. CGJ is already gone via the zalgo(0) combining-mark strip.
+        Step::StripInvisible(COMPARISON_STRIP),
+        // 6. Confusables → Latin (TR39 visual mapping: Cyrillic р→p, с→c, В→B).
+        //    Runs AFTER demojize so that typographic punctuation in emoji names
+        //    (e.g. the ’ in "woman’s hat") is folded too; otherwise a second pass
+        //    would fold it and strip_obfuscation would not be idempotent.
+        Step::Confusables("latin"),
+        // 7. Strip accents (NFD decompose + strip combining marks)
+        Step::StripAccents,
+        // 8. Strip non-whitespace controls, then fold whitespace (#433: split out of
+        //    the former fused collapse; zero-width was already stripped above). Case
+        //    is NOT folded.
+        Step::StripControl,
+        Step::CollapseWs,
+    ];
+    run(
+        STEPS,
+        text,
+        &PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+        },
+    )
+}
+
+/// Legacy oracle for [`strip_obfuscation`], retained until the final cleanup
+/// task (#453). Byte-identical to the runner-based impl above.
+pub(crate) fn strip_obfuscation_legacy(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf = nfkc_normalize(text);
     // 2. Strip ALL combining marks (max_marks=0) — removes zalgo AND accents early
@@ -1590,6 +1639,11 @@ mod tests {
                 let once = catalog_key(&s, None, false).unwrap();
                 let twice = catalog_key(&once, None, false).unwrap();
                 prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn strip_obfuscation_matches_legacy(s in adversarial()) {
+                prop_assert_eq!(strip_obfuscation(&s).unwrap(), strip_obfuscation_legacy(&s).unwrap());
             }
 
             #[test]

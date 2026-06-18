@@ -10,13 +10,13 @@
 //! here (#357). Keeping the native side raw avoids fighting magnus's fixed-arity
 //! `function!` over keyword handling.
 //!
-//! Targets magnus 0.7 (Ruby >= 3.1). Build via rake-compiler / rb-sys, not
+//! Targets magnus 0.8 (Ruby >= 3.1). Build via rake-compiler / rb-sys, not
 //! `cargo build` directly (it needs the Ruby headers rb-sys configures).
 
 use std::collections::HashSet;
 
 use disarm_core::api;
-use magnus::{function, method, prelude::*, Error, RHash, Ruby, Symbol};
+use magnus::{function, method, prelude::*, Error, RHash, Ruby};
 
 /// Map a `disarm` error onto the closest standard Ruby exception:
 /// `InvalidArgument` → `ArgumentError`, everything else → `RuntimeError`. The
@@ -28,9 +28,13 @@ use magnus::{function, method, prelude::*, Error, RHash, Ruby, Symbol};
 /// Named `map_err` (not `raise`) to signal it constructs a magnus `Error` value
 /// rather than raising immediately — mirrors the Node shim's convention.
 fn map_err(e: &disarm_core::Error) -> Error {
+    // magnus 0.8 moved the exception-class constructors onto the `Ruby` handle
+    // (Ractor-safety). map_err is only ever called from inside a Ruby method
+    // callback, so the GVL is held and `Ruby::get()` cannot fail.
+    let ruby = Ruby::get().expect("map_err must run while holding the Ruby GVL");
     let class = match e.kind() {
-        disarm_core::ErrorKind::InvalidArgument => magnus::exception::arg_error(),
-        _ => magnus::exception::runtime_error(),
+        disarm_core::ErrorKind::InvalidArgument => ruby.exception_arg_error(),
+        _ => ruby.exception_runtime_error(),
     };
     Error::new(class, e.to_string())
 }
@@ -360,11 +364,12 @@ fn inspect_auto_lang(text: String) -> (Option<String>, Option<String>, String, V
 /// Disarm::InvalidArgument) on an unknown code.
 fn lang_info(code: String) -> Result<RHash, Error> {
     let meta = api::lang_info(&code).map_err(|e| map_err(&e))?;
-    let hash = RHash::new();
-    hash.aset(Symbol::new("name"), meta.name)?;
-    hash.aset(Symbol::new("script"), meta.script)?;
-    hash.aset(Symbol::new("region"), meta.region)?;
-    hash.aset(Symbol::new("context"), meta.context)?;
+    let ruby = Ruby::get().expect("a Ruby method callback always holds the GVL");
+    let hash = ruby.hash_new();
+    hash.aset(ruby.to_symbol("name"), meta.name)?;
+    hash.aset(ruby.to_symbol("script"), meta.script)?;
+    hash.aset(ruby.to_symbol("region"), meta.region)?;
+    hash.aset(ruby.to_symbol("context"), meta.context)?;
     Ok(hash)
 }
 
@@ -374,12 +379,13 @@ fn lang_info(code: String) -> Result<RHash, Error> {
 /// Disarm::InvalidArgument) on an unknown script.
 fn script_info(name: String) -> Result<RHash, Error> {
     let meta = api::script_info(&name).map_err(|e| map_err(&e))?;
-    let hash = RHash::new();
-    hash.aset(Symbol::new("name"), meta.name)?;
+    let ruby = Ruby::get().expect("a Ruby method callback always holds the GVL");
+    let hash = ruby.hash_new();
+    hash.aset(ruby.to_symbol("name"), meta.name)?;
     // `Option<&str>` maps to the string or `nil`, matching the core's `None`.
-    hash.aset(Symbol::new("default_lang"), meta.default_lang)?;
-    hash.aset(Symbol::new("example"), meta.example)?;
-    hash.aset(Symbol::new("context_aware"), meta.context_aware)?;
+    hash.aset(ruby.to_symbol("default_lang"), meta.default_lang)?;
+    hash.aset(ruby.to_symbol("example"), meta.example)?;
+    hash.aset(ruby.to_symbol("context_aware"), meta.context_aware)?;
     Ok(hash)
 }
 

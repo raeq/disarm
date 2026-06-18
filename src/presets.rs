@@ -202,31 +202,6 @@ fn run(steps: &[Step], text: &str, ctx: &PresetCtx) -> Result<String, crate::Err
     Ok(cur)
 }
 
-/// NFKC-normalize `text`, skipping the normalization pass for all-ASCII input.
-///
-/// Every ASCII scalar (U+0000–U+007F) is already in NFKC normal form — ASCII has
-/// no compatibility decompositions and no combining marks to compose — so
-/// `nfkc()` is the identity on ASCII (the same property `normalize()`'s ASCII
-/// fast path relies on). Detecting that with one SIMD-friendly `is_ascii()` scan
-/// lets these presets skip the normalizer's per-character state machine **and**
-/// the allocation for the common ASCII case: the ASCII branch borrows the input
-/// (`Cow::Borrowed`, like transliterate()'s fast path) rather than copying it.
-/// Each preset then takes ownership at the first stage that produces a new
-/// `String` (every next step returns one), so the only ASCII allocation is the
-/// one that stage would make anyway. See #198.
-// Used only by the `_legacy` preset oracles now; the ported presets emit NFKC via
-// `Step::Nfkc`/`normalize_into`. Dead under the no-test extension-module clippy
-// build until the #453 cleanup task removes the oracles (and this fn with them).
-#[allow(dead_code)]
-#[inline]
-fn nfkc_normalize(text: &str) -> Cow<'_, str> {
-    if text.is_ascii() {
-        Cow::Borrowed(text)
-    } else {
-        Cow::Owned(text.nfkc().collect())
-    }
-}
-
 /// NFC-normalize `text`, skipping the pass for all-ASCII input (ASCII is already
 /// in NFC normal form).
 ///
@@ -400,65 +375,6 @@ pub(crate) fn canonicalize(text: &str) -> Result<String, crate::ErrorRepr> {
     )
 }
 
-/// Legacy oracle for [`canonicalize`], retained until the final cleanup task
-/// (#453). Byte-identical to the runner-based impl above.
-#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
-pub(crate) fn canonicalize_legacy(text: &str) -> Result<String, crate::ErrorRepr> {
-    // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
-    let buf = nfkc_normalize(text);
-    // 2. Strip bidi overrides, isolates, marks, and soft hyphens
-    let buf = strip_bidi(&buf);
-    // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags
-    //     (keeping valid emoji flag sequences), variation selectors, CGJ,
-    //     noncharacters, and the Private Use Area. Runs before the NFC below so a
-    //     CGJ stripped from between a base and a mark gets recomposed.
-    let buf = invisibles::strip_invisible_classes(&buf, COMPARISON_STRIP);
-    // 3. Strip non-whitespace controls + zero-width, then fold whitespace (#433:
-    //    these were one fused `collapse_whitespace(_, true, true)` call; the split
-    //    makes the steps explicit and lets the line controls fold to a space
-    //    rather than be deleted, so e.g. `a\rb` → `a b`, not `ab`).
-    let buf = whitespace::strip_control_chars(&buf);
-    let buf = whitespace::strip_zero_width_chars(&buf);
-    let buf = whitespace::collapse_whitespace(&buf);
-    // 3b. Cap combining marks at 2 per base (#429), matching canonicalize_strict.
-    //     Removes zalgo stacking so a stacked token matches its base in a denylist
-    //     comparison, while keeping legitimate diacritics (`café`, `Việt`). Runs
-    //     AFTER the control / zero-width strip above so a stripped invisible
-    //     between two marks cannot split a mark run and hide the count (the #121
-    //     lesson); a later strip would merge the runs and break idempotency.
-    let buf = zalgo::strip_zalgo(&buf, 2);
-    // 4. NFC (#416): the strips above can leave a base character next to a
-    //    combining mark that was non-adjacent before (e.g. separated by a
-    //    now-removed zero-width), which the leading NFKC passed over. Compose it
-    //    here so the confusable fold below sees the *composed* form consistently.
-    let buf = nfc_normalize(&buf);
-    // 5. Confusables → Latin (neutralizes cross-script homoglyphs), iterated to a
-    //    fixed point between NFC passes (#416/#434). TR39 skeletoning is not
-    //    normalization-stable: it drops the diacritic on a *composed* accented
-    //    letter (`ç`→`c`, `ø`→`o`) but never on the *decomposed* form, and it can
-    //    *emit* a decomposed skeleton (`Ý`→`Y`+◌́). The leading NFC feeds it a
-    //    composed form and the trailing NFC recomposes its output — but a
-    //    *duplicate* combining mark breaks a single sandwich: NFC composes only
-    //    one mark onto the base, the fold drops it, and the recomposing NFC
-    //    reattaches the *spare* mark, re-creating a foldable composed char the
-    //    next call would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping until stable
-    //    makes the preset a true fixed point (`f(f(x)) == f(x)`).
-    let mut buf = buf.into_owned();
-    for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
-        let next = nfc_normalize(&confusables::normalize_confusables(&buf, "latin")?).into_owned();
-        if next == buf {
-            break;
-        }
-        buf = next;
-    }
-    // #431: no path-separator neutralization. Mapping a synthesised '/' (e.g. a
-    // confusable-unmasked U+2044) to '_' is sink-specific output-sanitizer
-    // behaviour, which THREAT_MODEL.md says disarm does not do — and it silently
-    // corrupted legitimate URLs/paths. Path-traversal defence belongs at the sink,
-    // run on this canonicalized output (see THREAT_MODEL.md "Pipeline placement").
-    Ok(buf)
-}
-
 /// ML/NLP text normalization pipeline.
 ///
 /// Pipeline: NFKC → emoji→text → strip_accents → fold_case → collapse_whitespace
@@ -515,59 +431,6 @@ pub(crate) fn ml_normalize(
             emoji_cldr: emoji_style == "cldr",
         },
     )
-}
-
-/// Legacy oracle for [`ml_normalize`], retained until the final cleanup task
-/// (#453). Byte-identical to the runner-based impl above.
-#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
-pub(crate) fn ml_normalize_legacy(
-    text: &str,
-    lang: Option<&str>,
-    emoji_style: &str,
-) -> Result<String, crate::ErrorRepr> {
-    crate::transliterate::validate_lang(lang)?;
-    // Validate emoji_style — only two modes are supported.
-    if !matches!(emoji_style, "cldr" | "none") {
-        return Err(crate::ErrorRepr::InvalidEmojiStyle {
-            got: emoji_style.to_owned(),
-        });
-    }
-    // 1. NFKC normalization (borrowed for ASCII; ownership is taken below).
-    let normalized = nfkc_normalize(text);
-    // 2. Emoji → text (CLDR short names). This stage — or `into_owned()` when
-    //    emoji expansion is off — yields the owned `buf` the remaining stages
-    //    mutate in place. For the common ASCII+CLDR path `demojize_rust` borrows
-    //    `normalized`, so the NFKC step adds no allocation of its own.
-    let mut buf = if emoji_style == "cldr" {
-        emoji::demojize_rust(&normalized, false)
-    } else {
-        normalized.into_owned()
-    };
-    // 3. Transliterate if lang is set (e.g. "de" for ü→ue, "ja" for kana).
-    //    Use Ignore mode: ML pipelines need clean ASCII-ish output, so
-    //    characters with no mapping (e.g. katakana ー) should be dropped
-    //    rather than preserved verbatim.
-    if lang.is_some() {
-        buf = transliterate::transliterate_impl(
-            &buf,
-            lang,
-            crate::ErrorMode::Ignore,
-            "",
-            false,
-            false,
-            false,
-        )
-        .into_owned();
-    }
-    // 4. Strip accents (NFD decompose → remove combining marks → NFC)
-    buf = transliterate::strip_accents(&buf);
-    // 5. Unicode case folding (ß→ss, ﬁ→fi, etc.)
-    buf = case_fold::fold_case_impl(&buf);
-    // 6. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-    buf = whitespace::strip_control_chars(&buf);
-    buf = whitespace::strip_zero_width_chars(&buf);
-    buf = whitespace::collapse_whitespace(&buf);
-    Ok(buf)
 }
 
 /// Library catalog key generation pipeline.
@@ -633,52 +496,6 @@ pub(crate) fn catalog_key(
     )
 }
 
-/// Legacy oracle for [`catalog_key`], retained until the final cleanup task
-/// (#453). Byte-identical to the runner-based impl above.
-#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
-pub(crate) fn catalog_key_legacy(
-    text: &str,
-    lang: Option<&str>,
-    strict_iso9: bool,
-) -> Result<String, crate::ErrorRepr> {
-    crate::transliterate::validate_lang(lang)?;
-    // 1. NFKC normalization
-    let buf = nfkc_normalize(text);
-    // 2. Strip bidi overrides + soft hyphen + format marks (#93)
-    let buf = strip_bidi(&buf);
-    // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
-    //    the transliteration table but whose original is not (e.g. Georgian
-    //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
-    //    on the second pass — non-idempotent. Fold before transliterate so both
-    //    passes see the same form.
-    let buf = case_fold::fold_case_impl(&buf);
-    // 4. Transliterate (always — catalog keys should be pure ASCII where possible;
-    //    runs before confusables so that non-Latin scripts are romanized first,
-    //    avoiding broken confusable mappings like Cyrillic к → literal \u{0138})
-    let buf = transliterate::transliterate_impl(
-        &buf,
-        lang,
-        crate::ErrorMode::Preserve,
-        "",
-        strict_iso9,
-        false,
-        false,
-    )
-    .into_owned();
-    // 5. Confusables → Latin (normalize any remaining cross-script homoglyphs)
-    let buf = confusables::normalize_confusables(&buf, "latin")?;
-    // 6. Strip accents
-    let buf = transliterate::strip_accents(&buf);
-    // 6b. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
-    //     (`£` → `GBP`, `№` → `No`), unreachable by the pre-transliterate fold.
-    let buf = case_fold::fold_case_impl(&buf);
-    // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-    let buf = whitespace::strip_control_chars(&buf);
-    let buf = whitespace::strip_zero_width_chars(&buf);
-    let buf = whitespace::collapse_whitespace(&buf);
-    Ok(buf)
-}
-
 /// Search index key generation pipeline.
 ///
 /// Pipeline: NFKC → strip_bidi → fold_case → transliterate → strip_accents → fold_case → collapse_whitespace
@@ -730,48 +547,6 @@ pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate
             emoji_cldr: false,
         },
     )
-}
-
-/// Legacy oracle for [`search_key`], retained until the final cleanup task
-/// (#453). Byte-identical to the runner-based impl above.
-#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
-pub(crate) fn search_key_legacy(
-    text: &str,
-    lang: Option<&str>,
-) -> Result<String, crate::ErrorRepr> {
-    crate::transliterate::validate_lang(lang)?;
-    // 1. NFKC normalization
-    let buf = nfkc_normalize(text);
-    // 2. Strip bidi overrides + soft hyphen + format marks (#93)
-    let buf = strip_bidi(&buf);
-    // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
-    //    the transliteration table but whose original is not (e.g. Georgian
-    //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
-    //    on the second pass — non-idempotent. Fold before transliterate so both
-    //    passes see the same form.
-    let buf = case_fold::fold_case_impl(&buf);
-    // 4. Transliterate (always — search keys should be pure ASCII where possible)
-    let buf = transliterate::transliterate_impl(
-        &buf,
-        lang,
-        crate::ErrorMode::Preserve,
-        "",
-        false,
-        false,
-        false,
-    )
-    .into_owned();
-    // 5. Strip accents
-    let buf = transliterate::strip_accents(&buf);
-    // 6. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
-    //    (`£` → `GBP`, `№` → `No`), which the pre-transliterate fold above could not
-    //    reach. Folding the output too makes the key a fixed point.
-    let buf = case_fold::fold_case_impl(&buf);
-    // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-    let buf = whitespace::strip_control_chars(&buf);
-    let buf = whitespace::strip_zero_width_chars(&buf);
-    let buf = whitespace::collapse_whitespace(&buf);
-    Ok(buf)
 }
 
 /// Transliterate only non-Latin scripts, preserving Latin (including accented
@@ -895,53 +670,6 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
     )
 }
 
-/// Legacy oracle for [`sort_key`], retained until the final cleanup task (#453).
-/// Byte-identical to the runner-based impl above.
-#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
-pub(crate) fn sort_key_legacy(text: &str, lang: Option<&str>) -> Result<String, crate::ErrorRepr> {
-    crate::transliterate::validate_lang(lang)?;
-    // 1. NFKC normalization (canonical-composes accents: `é` stays one codepoint)
-    let buf = nfkc_normalize(text);
-    // 2. Strip bidi overrides + soft hyphen + format marks (#93)
-    let buf = strip_bidi(&buf);
-    // 3. Unicode case folding FIRST (#419). A cased letter whose *folded* form is
-    //    in the transliteration table but whose original form is not — e.g. a
-    //    Georgian Mtavruli capital `Ჱ` (U+1CB1), absent from the table, folds to
-    //    Mkhedruli `ჱ` (U+10F1), which transliterates to `he` — would otherwise
-    //    transliterate only on the *second* pass, breaking idempotency. Folding
-    //    before transliterate makes both passes see the same form. (`Über` →
-    //    `über`; `ß` → `ss`; Latin accents survive.)
-    let buf = case_fold::fold_case_impl(&buf);
-    // 4. Transliterate non-Latin scripts only — Latin accents are preserved so
-    //    the collation key can order on them (this is the sort_key/search_key
-    //    distinction; search_key strips accents here instead).
-    let buf = transliterate_preserving_latin(&buf, lang);
-    // 4b. Fold case AGAIN. Transliteration can *emit* uppercase from a non-Latin
-    //     source the pre-transliterate fold could not reach — e.g. Old Persian
-    //     `𐏈` (U+103C8) romanizes to the proper noun `Auramazda`. Without this
-    //     second fold the key is `Auramazda` on pass 1 and `auramazda` on pass 2,
-    //     violating `f(f(x)) == f(x)`. `fold_case` only lowercases (it never
-    //     strips accents), so accent preservation — the sort_key invariant
-    //     (`Über` → `über`) — is unaffected.
-    let buf = case_fold::fold_case_impl(&buf);
-    // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-    let buf = whitespace::strip_control_chars(&buf);
-    let buf = whitespace::strip_zero_width_chars(&buf);
-    let buf = whitespace::collapse_whitespace(&buf);
-    // 6. Terminal NFC (#416): because sort_key now *preserves* Latin accents
-    //    (#411) instead of folding them away, a combining mark separated from its
-    //    base by a now-stripped zero-width would otherwise survive in decomposed
-    //    form and only compose on the next pass — breaking idempotency. Recompose
-    //    so `f(f(x)) == f(x)`. `buf` is already owned, so reuse it directly on the
-    //    ASCII fast path instead of copying out of a borrowed Cow.
-    let buf = if buf.is_ascii() {
-        buf
-    } else {
-        buf.nfc().collect()
-    };
-    Ok(buf)
-}
-
 /// Display-safe text cleaning pipeline.
 ///
 /// Pipeline: strip bidi/format → strip invisibles → strip_control → strip_zero_width → collapse_whitespace
@@ -975,24 +703,6 @@ pub(crate) fn strip_format(text: &str) -> String {
         },
     )
     .expect("strip_format steps are infallible")
-}
-
-/// Legacy oracle for [`strip_format`], retained until the final cleanup task
-/// (#453). Byte-identical to the runner-based impl above.
-#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
-pub(crate) fn strip_format_legacy(text: &str) -> String {
-    // 1. Strip bidi overrides, isolates, marks, and soft hyphens
-    let buf = strip_bidi(text);
-    // 1b. Strip the #413 smuggling / non-interchange classes, with the rendering
-    //     policy: keep well-formed emoji flags, keep VS15/VS16 after a base, and
-    //     PRESERVE the Private Use Area (icon fonts) rather than deleting it. CGJ
-    //     and noncharacters are still stripped. No NFC pass: strip_format does no
-    //     NFKC, so any base+mark left decomposed stays decomposed (idempotent).
-    let buf = invisibles::strip_invisible_classes(&buf, RENDERING_STRIP);
-    // 2. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-    let buf = whitespace::strip_control_chars(&buf);
-    let buf = whitespace::strip_zero_width_chars(&buf);
-    whitespace::collapse_whitespace(&buf)
 }
 
 /// Normalize user-submitted input — Unicode hygiene, **not** an output sanitizer.
@@ -1071,56 +781,6 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<String, crate::ErrorRepr
     )
 }
 
-/// Legacy oracle for [`canonicalize_strict`], retained until the final cleanup
-/// task (#453). Byte-identical to the runner-based impl above.
-#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
-pub(crate) fn canonicalize_strict_legacy(text: &str) -> Result<String, crate::ErrorRepr> {
-    // 1. NFKC normalization
-    let buf = nfkc_normalize(text);
-    // 2. Strip invisibles FIRST (bidi/format + zero-width + non-whitespace
-    //    control) so they cannot split a run of combining marks; otherwise
-    //    removing them later would merge two short runs into one long run that a
-    //    second pass would cap differently (zalgo-capping would not be
-    //    idempotent) — e.g. "\u{301}\u{301}\0\u{301}" must not become a longer
-    //    contiguous run once the NUL is stripped. (#433) strip_control_chars now
-    //    *preserves* the whitespace controls — CR/VT/FF/NEL/FS–US — which the
-    //    final fold turns into a space; folding a separator, unlike deleting it,
-    //    leaves a stable boundary and so keeps the cap idempotent.
-    let buf = strip_bidi(&buf);
-    let buf = whitespace::strip_zero_width_chars(&buf);
-    let buf = whitespace::strip_control_chars(&buf);
-    // 2b. Strip the #413 smuggling / non-interchange classes (Tags with the flag
-    //     carve-out, variation selectors, CGJ, noncharacters, PUA).
-    let buf = invisibles::strip_invisible_classes(&buf, COMPARISON_STRIP);
-    // 3. Cap combining marks at 2 per base character (zalgo)
-    let buf = zalgo::strip_zalgo(&buf, 2);
-    // 4. Confusables → Latin (neutralizes cross-script homoglyphs), iterated with
-    //    NFC to a fixed point (#434): a duplicate combining mark can survive one
-    //    fold and recompose via NFC, re-creating a foldable composed char the next
-    //    pass would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping makes the preset a
-    //    true fixed point — see `canonicalize` for the full rationale.
-    let mut buf = buf;
-    for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
-        let next = nfc_normalize(&confusables::normalize_confusables(&buf, "latin")?).into_owned();
-        if next == buf {
-            break;
-        }
-        buf = next;
-    }
-    // 5. Fold whitespace (#433: fold-only — control/zero-width were already
-    //    stripped explicitly above, before the zalgo cap, per #121). The line
-    //    controls now fold to a space instead of being deleted, so `a\rb` → `a b`.
-    let buf = whitespace::collapse_whitespace(&buf);
-    // 5b. Terminal NFC (#416/#413): stripping a CGJ (or other invisible) from
-    //     between a base and a combining mark leaves them adjacent but decomposed;
-    //     recompose so the pipeline stays a fixed point.
-    let buf = nfc_normalize(&buf);
-    // #431: no path-separator neutralization — see canonicalize. Mapping '/' to
-    // '_' is sink-specific output sanitization (out of scope per THREAT_MODEL.md)
-    // and corrupted legitimate input; defend traversal at the sink instead.
-    Ok(buf.into_owned())
-}
-
 /// Maximum-strength text deobfuscation pipeline.
 ///
 /// Pipeline: NFKC → strip_zalgo(max_marks=0) → strip_bidi → strip_zero_width
@@ -1189,42 +849,44 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> 
     )
 }
 
-/// Legacy oracle for [`strip_obfuscation`], retained until the final cleanup
-/// task (#453). Byte-identical to the runner-based impl above.
-#[allow(dead_code)] // legacy oracle: removed in the #453 cleanup task
-pub(crate) fn strip_obfuscation_legacy(text: &str) -> Result<String, crate::ErrorRepr> {
-    // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
-    let buf = nfkc_normalize(text);
-    // 2. Strip ALL combining marks (max_marks=0) — removes zalgo AND accents early
-    let buf = zalgo::strip_zalgo(&buf, 0);
-    // 3. Strip bidi overrides, isolates, marks, and soft hyphens
-    let buf = strip_bidi(&buf);
-    // 4. Strip zero-width chars (ZWS, ZWNJ, ZWJ, WJ, BOM)
-    let buf = whitespace::strip_zero_width_chars(&buf);
-    // 5. Demojize — expand emoji to text names with spacing
-    let buf = emoji::demojize_rust(&buf, false);
-    // 5b. Strip the #413 smuggling / non-interchange classes. Runs AFTER demojize
-    //     so the emoji pass sees flags/presentation selectors intact; whatever
-    //     demojize leaves (stray Tags, variation selectors, noncharacters, PUA) is
-    //     removed here. CGJ is already gone via the zalgo(0) combining-mark strip.
-    let buf = invisibles::strip_invisible_classes(&buf, COMPARISON_STRIP);
-    // 6. Confusables → Latin (TR39 visual mapping: Cyrillic р→p, с→c, В→B).
-    //    Runs AFTER demojize so that typographic punctuation in emoji names
-    //    (e.g. the ’ in "woman’s hat") is folded too; otherwise a second pass
-    //    would fold it and strip_obfuscation would not be idempotent.
-    let buf = confusables::normalize_confusables(&buf, "latin")?;
-    // 7. Strip accents (NFD decompose + strip combining marks)
-    let buf = transliterate::strip_accents(&buf);
-    // 8. Strip non-whitespace controls, then fold whitespace (#433: split out of
-    //    the former fused collapse; zero-width was already stripped above). Case
-    //    is NOT folded.
-    let buf = whitespace::strip_control_chars(&buf);
-    Ok(whitespace::collapse_whitespace(&buf))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preset_golden_fixtures() {
+        // Frozen pre-refactor outputs — lock byte-identity for the #430 byte-stable
+        // aliases (canonicalize, strip_format, canonicalize_strict) and the hot-path
+        // keys. Regenerate ONLY with explicit sign-off: changing one is an API break
+        // for the byte-stable aliases. Generated by running the pre-refactor impl.
+        let alias_in = "Ηеllо\u{202E}\u{200B}Wo\u{0301}\u{0301}\u{0301}rld\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}";
+        assert_eq!(
+            canonicalize(alias_in).unwrap(),
+            "HelloW\u{f3}\u{301}rld\u{1f3f4}\u{e0067}\u{e0062}\u{e0073}\u{e0063}\u{e0074}\u{e007f}"
+        );
+        assert_eq!(
+            strip_format(alias_in),
+            "\u{397}\u{435}ll\u{43e}Wo\u{301}\u{301}\u{301}rld\u{1f3f4}\u{e0067}\u{e0062}\u{e0073}\u{e0063}\u{e0074}\u{e007f}"
+        );
+        assert_eq!(
+            canonicalize_strict(alias_in).unwrap(),
+            "HelloW\u{f3}\u{301}rld\u{1f3f4}\u{e0067}\u{e0062}\u{e0073}\u{e0063}\u{e0074}\u{e007f}"
+        );
+        assert_eq!(search_key("CAFÉ\u{200B} ИМЯ", None).unwrap(), "cafe imya");
+        assert_eq!(
+            catalog_key("Война и МИР\u{00AD}", None, false).unwrap(),
+            "voyna i mir"
+        );
+        assert_eq!(sort_key("Über ИМЯ", None).unwrap(), "\u{fc}ber imya");
+        assert_eq!(
+            ml_normalize("Café \u{1F600} ИМЯ", Some("ru"), "cldr").unwrap(),
+            "cafe grinning face imya"
+        );
+        assert_eq!(
+            strip_obfuscation("Ηеllо\u{202E}Wоrld \u{1F600}").unwrap(),
+            "HelloWorld grinning face"
+        );
+    }
 
     #[test]
     fn run_executes_steps_in_order_with_pingpong() {
@@ -1285,45 +947,6 @@ mod tests {
         );
         assert_eq!(canonicalize("../etc/passwd").unwrap(), "../etc/passwd");
         assert_eq!(canonicalize_strict("a/b\\c").unwrap(), "a/b\\c");
-    }
-
-    // ── nfkc_normalize: ASCII fast path must equal full NFKC (#198) ──
-    // The fast path returns the ASCII input borrowed (no copy); this guards
-    // that the optimization is output-preserving against the reference `nfkc()`
-    // pass across ASCII, fullwidth, ligature, superscript, and combining-mark
-    // inputs.
-    #[test]
-    fn test_nfkc_normalize_matches_reference() {
-        let cases = [
-            "",                   // empty
-            "hello world 123",    // pure ASCII (fast path)
-            "!@#$%^&*()_+-=[]{}", // ASCII punctuation (fast path)
-            "\u{007F}\u{0000}",   // ASCII control bounds (fast path)
-            "Ｆｕｌｌｗｉｄｔｈ", // fullwidth → ASCII (slow path changes it)
-            "ﬁ ﬂ ﬃ",              // ligatures → fi/fl/ffi
-            "x²y³",               // superscripts → x2y3
-            "café e\u{0301}",     // precomposed + combining acute
-            "ⅣⅧ",                 // Roman numerals → IV / VIII
-            "Москва 日本語 αβγ",  // non-ASCII, mostly unchanged by NFKC
-        ];
-        for s in cases {
-            let reference: String = s.nfkc().collect();
-            assert_eq!(
-                nfkc_normalize(s).as_ref(),
-                reference.as_str(),
-                "nfkc_normalize diverged from nfkc() on {s:?}"
-            );
-        }
-    }
-
-    // The ASCII fast path must *borrow* (zero-copy), not allocate; non-ASCII
-    // input must take the owned NFKC path (#198, #202 review).
-    #[test]
-    fn test_nfkc_normalize_borrows_ascii_owns_nonascii() {
-        assert!(matches!(nfkc_normalize("plain ascii"), Cow::Borrowed(_)));
-        assert!(matches!(nfkc_normalize(""), Cow::Borrowed(_)));
-        assert!(matches!(nfkc_normalize("Ｆｕｌｌ"), Cow::Owned(_)));
-        assert!(matches!(nfkc_normalize("café"), Cow::Owned(_)));
     }
 
     // ── strip_bidi: exhaustive UAX #9 coverage ────────────────
@@ -1833,11 +1456,6 @@ mod tests {
                 prop_assert_eq!(once, twice);
             }
 
-            #[test]
-            fn canonicalize_matches_legacy(s in adversarial()) {
-                prop_assert_eq!(canonicalize(&s).unwrap(), canonicalize_legacy(&s).unwrap());
-            }
-
             // #419: the transliterating key presets fold case BEFORE transliterate,
             // so a case pair whose folded form is in the table (but whose original
             // is not) is stable across passes. `adversarial()` draws `any::<char>()`,
@@ -1850,28 +1468,6 @@ mod tests {
             }
 
             #[test]
-            fn sort_key_matches_legacy(s in adversarial()) {
-                prop_assert_eq!(sort_key(&s, None).unwrap(), sort_key_legacy(&s, None).unwrap());
-            }
-
-            #[test]
-            fn ml_normalize_matches_legacy(
-                s in adversarial(),
-                lang in prop::option::of(prop::sample::select(vec!["de", "ru", "ja"])),
-                style in prop::sample::select(vec!["cldr", "none"]),
-            ) {
-                prop_assert_eq!(
-                    ml_normalize(&s, lang, style).unwrap(),
-                    ml_normalize_legacy(&s, lang, style).unwrap(),
-                );
-            }
-
-            #[test]
-            fn search_key_matches_legacy(s in adversarial()) {
-                prop_assert_eq!(search_key(&s, None).unwrap(), search_key_legacy(&s, None).unwrap());
-            }
-
-            #[test]
             fn search_key_idempotent(s in adversarial()) {
                 let once = search_key(&s, None).unwrap();
                 let twice = search_key(&once, None).unwrap();
@@ -1879,20 +1475,10 @@ mod tests {
             }
 
             #[test]
-            fn catalog_key_matches_legacy(s in adversarial()) {
-                prop_assert_eq!(catalog_key(&s, None, false).unwrap(), catalog_key_legacy(&s, None, false).unwrap());
-            }
-
-            #[test]
             fn catalog_key_idempotent(s in adversarial()) {
                 let once = catalog_key(&s, None, false).unwrap();
                 let twice = catalog_key(&once, None, false).unwrap();
                 prop_assert_eq!(once, twice);
-            }
-
-            #[test]
-            fn strip_obfuscation_matches_legacy(s in adversarial()) {
-                prop_assert_eq!(strip_obfuscation(&s).unwrap(), strip_obfuscation_legacy(&s).unwrap());
             }
 
             #[test]
@@ -1910,16 +1496,6 @@ mod tests {
                 let once = canonicalize_strict(&s).unwrap();
                 let twice = canonicalize_strict(&once).unwrap();
                 prop_assert_eq!(once, twice);
-            }
-
-            #[test]
-            fn canonicalize_strict_matches_legacy(s in adversarial()) {
-                prop_assert_eq!(canonicalize_strict(&s).unwrap(), canonicalize_strict_legacy(&s).unwrap());
-            }
-
-            #[test]
-            fn strip_format_matches_legacy(s in adversarial()) {
-                prop_assert_eq!(strip_format(&s), strip_format_legacy(&s));
             }
 
             #[test]

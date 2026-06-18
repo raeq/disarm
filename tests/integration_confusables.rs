@@ -1,4 +1,4 @@
-//! Cross-script confusable folding — #341, #342, #343, #436 (carved from #336).
+//! Cross-script confusable folding — #341, #342, #436 (carved from #336).
 //!
 //! Mirrors `tests/test_confusables_cross_script.py` at the pure-Rust `api` layer:
 //! #341 folds TR39's non-ASCII Latin-extended prototypes to basic ASCII, #342

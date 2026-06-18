@@ -21,11 +21,13 @@
 #   danger   confusable-vision danger weight for the pair (informative)
 #   note     the pair / decision this row encodes
 #
-# All rows are ADDITIVE (fill a pass-through gap). The bare-iota ι row (03B9)
-# folds to the i-class (i / і), matching its accented forms (03AF/03CA) and the
-# upstream TR39 mapping 03B9 → 0069; the latin target equals the generated value
-# and the cyrillic target (і) is the additive part. This reverts the #343
-# re-point of 03B9 to the l/vertical-bar class (#436).
+# All other rows are ADDITIVE (fill a pass-through gap). The bare-iota ι row
+# (03B9) RE-POINTs the bare Greek iota to the i-class (i / і), matching its
+# accented forms (03AF/03CA). Both columns are pinned explicitly — the latin `i`
+# coincides with the current upstream TR39 mapping (03B9 → 0069) but is stated so
+# disarm's fold is stable if upstream drifts, keeping the iota family on one
+# class in one place; the cyrillic `і` is a genuine override. This reverts the
+# #343 re-point of 03B9 to the l/vertical-bar class (#436).
 #
 # source	latin	cyrillic	danger	note
 03AF	i	і	1.000	ί GREEK SMALL LETTER IOTA WITH TONOS / і (pair 1)

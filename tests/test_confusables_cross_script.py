@@ -1,8 +1,8 @@
-"""Cross-script confusable folding — #341, #342, #343, #436 (carved from #336).
+"""Cross-script confusable folding — #341, #342, #436 (carved from #336).
 
 These close the cross-script gaps where ``normalize_confusables`` either left
-non-ASCII residue (#341) or returned the source unchanged so a spoof never
-collided with its target (#342):
+non-ASCII residue (#341) or returned the source unchanged / on the wrong class so
+a spoof never collided with its target (#342, #436):
 
 - #341  TR39 folds ~140 sources onto a non-ASCII Latin-extended prototype
         (ĸ/ꞓ/ß/…). We fold those to basic ASCII so a Greek κ collides with k.

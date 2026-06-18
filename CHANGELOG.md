@@ -157,6 +157,24 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `/` (that is canonicalization working as intended); it is just no longer
   rewritten away. The internal `neutralize_path_separators` helper is removed.
 
+- **`collapse_whitespace` folds the full whitespace set and the blank-rendering
+  code points; control/zero-width stripping is now a separate step (#433).**
+  `collapse_whitespace` was category-driven and also deleted controls and
+  zero-width characters inline. It now **folds whitespace only**, to a single
+  space, over an explicit core-defined set: the line controls (TAB/LF/VT/FF/CR),
+  the information separators (`U+001C`–`U+001F`), NEL, the `Zs`/`Zl`/`Zp` spaces,
+  **and** a blank-rendering set that category detection cannot reach —
+  `U+2800` Braille blank and the Hangul fillers `U+115F`/`U+1160`/`U+3164`/`U+FFA0`
+  (e.g. `aㅤb` → `a b`). **Breaking:** `collapse_whitespace` drops its
+  `strip_control` / `strip_zero_width` parameters (Rust, Python, Node, Ruby) — it
+  no longer deletes anything. Compose `strip_control_chars` / `strip_zero_width_chars`
+  before it for the old behaviour; the presets do this internally, so their output
+  is unchanged except for the line-control fix below. `strip_control_chars` now
+  **preserves** the whitespace controls (CR/VT/FF/NEL/`U+001C`–`U+001F`) so the
+  fold can turn them into a space; it still removes NUL, DEL, and the rest of the
+  C0/C1 block. The `PRESETS` metadata now lists the explicit `strip_control` /
+  `strip_zero_width` steps.
+
 - **`security_clean` now caps combining marks (anti-zalgo, #429).** The preset
   left zalgo-stacked tokens intact, so a mark-stacked `admin` did not match its
   base form in a denylist/dedup comparison `security_clean` is meant to
@@ -255,6 +273,14 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `strip_obfuscation()` for the latter.
 
 ### Fixed
+
+- **Line controls no longer join tokens in `collapse_whitespace` (#433).** TAB
+  and LF folded to a space, but VT, FF, CR, NEL, and the information separators
+  (`U+001C`–`U+001F`) were *deleted* — so `a` + CR + `b` became `ab` while `a` +
+  LF + `b` became `a b`. All of them are Unicode whitespace; deleting them was an
+  invisible-join (coalescence) vector. They now all fold to a single space, so
+  `a\rb` → `a b`. The blank-rendering Braille and Hangul fillers, which category
+  detection passed straight through, are folded too.
 
 - **`security_clean` / `sort_key` idempotency on invisible-separated combining
   marks (#416).** When an invisible code point separated a base character from a

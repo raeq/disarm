@@ -211,20 +211,22 @@ class TestDefaultParameterValues:
         result = sanitize_filename("a" * 100 + ".txt", max_length=50)
         assert len(result.encode("utf-8")) <= 50
 
-    # -- collapse_whitespace defaults --
+    # -- collapse_whitespace is fold-only (#433) --
 
-    def test_collapse_whitespace_default_strips_control(self):
-        result = collapse_whitespace("hello\x00world")
-        assert "\x00" not in result
+    def test_collapse_whitespace_preserves_nonws_control(self):
+        # Fold-only: a non-whitespace control (NUL) is NOT deleted here \u2014 that is
+        # strip_control_chars' job. It passes through unchanged.
+        assert collapse_whitespace("hello\x00world") == "hello\x00world"
 
-    def test_collapse_whitespace_strip_control_false(self):
-        result = collapse_whitespace("hello\x00world", strip_control=False)
-        # Control char should survive
-        assert "\x00" in result or len(result) >= 10
+    def test_collapse_whitespace_preserves_zero_width(self):
+        # Fold-only: zero-width is NOT deleted here (strip_zero_width_chars' job).
+        assert collapse_whitespace("hello\u200bworld") == "hello\u200bworld"
 
-    def test_collapse_whitespace_default_strips_zero_width(self):
-        result = collapse_whitespace("hello\u200bworld")
-        assert "\u200b" not in result
+    def test_collapse_whitespace_folds_line_controls_to_space(self):
+        # #433: CR (and the other line controls) fold to a space, not deleted.
+        assert collapse_whitespace("a\rb") == "a b"
+        assert collapse_whitespace("a\u2800b") == "a b"  # Braille blank
+        assert collapse_whitespace("a\u3164b") == "a b"  # Hangul filler
 
     # -- demojize defaults --
 
@@ -300,6 +302,8 @@ class TestPipelineStepTuples:
                     ("normalize", "NFKC"),
                     ("strip_bidi", None),
                     ("strip_invisibles", "comparison"),
+                    ("strip_control", None),
+                    ("strip_zero_width", None),
                     ("collapse_whitespace", None),
                     ("strip_zalgo", None),
                     ("normalize", "NFC"),
@@ -314,6 +318,8 @@ class TestPipelineStepTuples:
                     ("demojize", "cldr"),
                     ("strip_accents", None),
                     ("fold_case", None),
+                    ("strip_control", None),
+                    ("strip_zero_width", None),
                     ("collapse_whitespace", None),
                 ],
             ),
@@ -326,6 +332,8 @@ class TestPipelineStepTuples:
                     ("confusables", "latin"),
                     ("strip_accents", None),
                     ("fold_case", None),
+                    ("strip_control", None),
+                    ("strip_zero_width", None),
                     ("collapse_whitespace", None),
                 ],
             ),
@@ -334,6 +342,8 @@ class TestPipelineStepTuples:
                 [
                     ("strip_bidi", None),
                     ("strip_invisibles", "rendering"),
+                    ("strip_control", None),
+                    ("strip_zero_width", None),
                     ("collapse_whitespace", None),
                 ],
             ),
@@ -345,6 +355,8 @@ class TestPipelineStepTuples:
                     ("transliterate", None),
                     ("strip_accents", None),
                     ("fold_case", None),
+                    ("strip_control", None),
+                    ("strip_zero_width", None),
                     ("collapse_whitespace", None),
                 ],
             ),
@@ -355,6 +367,8 @@ class TestPipelineStepTuples:
                     ("strip_bidi", None),
                     ("transliterate", "non_latin"),
                     ("fold_case", None),
+                    ("strip_control", None),
+                    ("strip_zero_width", None),
                     ("collapse_whitespace", None),
                     ("normalize", "NFC"),
                 ],

@@ -175,13 +175,19 @@ RSpec.describe Disarm do
       expect(Disarm.collapse_whitespace("  a   b ")).to eq("a b")
     end
 
+    it "folds line controls to a space instead of deleting them (#433)" do
+      expect(Disarm.collapse_whitespace("a\rb")).to eq("a b")
+      expect(Disarm.collapse_whitespace("a\u2800b")).to eq("a b") # Braille blank
+    end
+
     it "strips control characters" do
       expect(Disarm.strip_control_chars("a\u0007b")).to eq("ab")
     end
 
-    it "can leave control characters in place" do
-      expect(Disarm.collapse_whitespace("a\u0007b", strip_control: false))
-        .to eq("a\u0007b")
+    it "folds whitespace only — non-whitespace controls pass through (#433)" do
+      # BEL (U+0007) is not whitespace, so collapse leaves it in place; deleting
+      # it is strip_control_chars' job.
+      expect(Disarm.collapse_whitespace("a\u0007b")).to eq("a\u0007b")
     end
 
     it "strips zero-width characters" do

@@ -161,11 +161,15 @@ module Disarm
       translate_errors { _normalized?(text, form.to_s.upcase) }
     end
 
-    # Collapse every run of Unicode whitespace to a single ASCII space and trim
-    # leading/trailing whitespace. By default also strips control characters
-    # (`strip_control:`) and zero-width characters (`strip_zero_width:`).
-    def collapse_whitespace(text, strip_control: true, strip_zero_width: true)
-      translate_errors { _collapse_whitespace(text, strip_control, strip_zero_width) }
+    # Fold every run of Unicode whitespace to a single ASCII space and trim
+    # leading/trailing whitespace (#433). Folds whitespace ONLY — the line
+    # controls (TAB/LF/VT/FF/CR), the information separators (U+001C–U+001F),
+    # NEL, the Zs/Zl/Zp spaces, and the blank-rendering set (Braille blank,
+    # Hangul fillers) each fold to a single space. It does NOT delete control or
+    # zero-width characters — use `strip_control_chars` / `strip_zero_width_chars`
+    # for that. Folding the line controls (not deleting) means "a\rb" → "a b".
+    def collapse_whitespace(text)
+      translate_errors { _collapse_whitespace(text) }
     end
 
     # Remove C0/C1 control characters (except tab and newline).

@@ -873,41 +873,38 @@ def fold_case(text: str) -> str:
 casefold = fold_case
 
 
-def collapse_whitespace(
-    text: str,
-    *,
-    strip_control: bool = True,
-    strip_zero_width: bool = True,
-) -> str:
-    """Normalize all Unicode whitespace variants to single ASCII spaces.
+def collapse_whitespace(text: str) -> str:
+    """Fold all Unicode whitespace runs to single ASCII spaces, trimming the ends.
 
-    Optionally strip control characters and zero-width characters.
+    Folds **whitespace only** (#433): the line controls (TAB/LF/VT/FF/CR), the
+    information separators (U+001C–U+001F), NEL, the ``Zs``/``Zl``/``Zp`` spaces,
+    and the blank-rendering set (Braille blank, the Hangul fillers) each fold to a
+    single space. It does **not** delete control or zero-width characters — to do
+    that, run a :class:`TextPipeline` with the ``strip_control`` /
+    ``strip_zero_width`` steps (the ``security_clean`` / ``normalize_user_input``
+    presets already do).
+
+    Folding the line controls (rather than deleting them) means a carriage return
+    between two tokens becomes a space, never a silent join: ``"a\\rb"`` →
+    ``"a b"``.
 
     Args:
         text: Input string.
-        strip_control: Remove C0/C1 control characters (U+0000–U+001F,
-            U+007F–U+009F) except tab and newline. Carriage return (``\\r``)
-            is stripped, so Windows-style ``\\r\\n`` becomes ``\\n``.
-        strip_zero_width: Remove zero-width space (U+200B), zero-width
-            non-joiner (U+200C), zero-width joiner (U+200D), and
-            word joiner (U+2060).
 
     Returns:
-        String with whitespace collapsed and optionally cleaned.
+        String with whitespace runs folded to single spaces and ends trimmed.
 
     Examples:
         >>> collapse_whitespace("  hello   world  ")
         'hello world'
         >>> collapse_whitespace("tabs\\there\\ttoo")
         'tabs here too'
-        >>> collapse_whitespace("a\\u200Bb\\u200Bc")  # zero-width spaces
-        'abc'
+        >>> collapse_whitespace("a\\rb")  # carriage return folds, not deletes
+        'a b'
     """
     if not isinstance(text, str):
         raise TypeError(f"collapse_whitespace() expects str, got {type(text).__name__}")
-    return _collapse_whitespace(
-        text, strip_control=strip_control, strip_zero_width=strip_zero_width
-    )
+    return _collapse_whitespace(text)
 
 
 def demojize(

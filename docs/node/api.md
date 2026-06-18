@@ -181,9 +181,9 @@ isZalgo(stripZalgo('Z\u0301\u0301\u0301\u0301')) // => false
 
 `stripObfuscation` removes obfuscation (zero-width, bidi, combining-mark abuse,
 homoglyphs) while keeping legible content — it does **not** transliterate.
-`securityClean` is the aggressive NFKC → strip-bidi → strip-invisibles → collapse
-→ cap-marks → NFC → confusables → NFC preset (confusables sandwiched between NFC
-passes for idempotency).
+`securityClean` is the aggressive NFKC → strip-bidi → strip-invisibles →
+strip-control/zero-width → collapse → cap-marks → NFC → confusables → NFC preset
+(confusables sandwiched between NFC passes for idempotency).
 
 ```ts
 stripObfuscation('рroduсt') // => 'product'

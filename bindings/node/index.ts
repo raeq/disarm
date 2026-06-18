@@ -225,16 +225,18 @@ export function isNormalized(text: string, options: { form?: NormalizationForm }
 
 // ── Text cleaning ───────────────────────────────────────────────────────────
 
-export interface CollapseWhitespaceOptions {
-  /** Also strip C0/C1 control characters (default `true`). */
-  stripControl?: boolean
-  /** Also strip zero-width characters (default `true`). */
-  stripZeroWidth?: boolean
-}
-
-/** Collapse Unicode whitespace runs to single ASCII spaces and trim the ends. */
-export function collapseWhitespace(text: string, options: CollapseWhitespaceOptions = {}): string {
-  return native.collapseWhitespace(text, options.stripControl ?? true, options.stripZeroWidth ?? true)
+/**
+ * Fold Unicode whitespace runs to single ASCII spaces and trim the ends (#433).
+ *
+ * Folds whitespace ONLY — the line controls (TAB/LF/VT/FF/CR), the information
+ * separators (U+001C–U+001F), NEL, the Zs/Zl/Zp spaces, and the blank-rendering
+ * set (Braille blank, Hangul fillers) each fold to a single space. It does NOT
+ * delete control or zero-width characters — use `stripControlChars` /
+ * `stripZeroWidthChars` for that. Folding the line controls (rather than
+ * deleting them) means `a\rb` → `a b`, never `ab`.
+ */
+export function collapseWhitespace(text: string): string {
+  return native.collapseWhitespace(text)
 }
 
 /** Remove C0/C1 control characters (except tab/newline). */
@@ -291,9 +293,9 @@ export function stripObfuscation(text: string): string {
 
 /**
  * Aggressive security cleaning: NFKC → strip bidi/format → strip invisible
- * classes (#413) → collapse whitespace → cap combining marks (anti-zalgo) → NFC
- * → confusables → NFC (confusables sandwiched between NFC passes for
- * idempotency).
+ * classes (#413) → strip control → strip zero-width → collapse whitespace → cap
+ * combining marks (anti-zalgo) → NFC → confusables → NFC (confusables sandwiched
+ * between NFC passes for idempotency).
  */
 export function securityClean(text: string): string {
   return call(() => native.securityClean(text))

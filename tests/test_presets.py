@@ -447,6 +447,7 @@ class TestPresetsMetadataOrder:
             "strip_invisibles",
             "confusables",
             "strip_accents",
+            "strip_control",  # #433: explicit before the fold
             "collapse_whitespace",
         ]
 

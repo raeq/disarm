@@ -4,57 +4,53 @@ use disarm::api;
 
 #[test]
 fn collapse_basic() {
-    assert_eq!(
-        api::collapse_whitespace("hello   world", true, true),
-        "hello world"
-    );
+    assert_eq!(api::collapse_whitespace("hello   world"), "hello world");
 }
 
 #[test]
 fn collapse_strips_leading_trailing() {
-    assert_eq!(api::collapse_whitespace("  hello  ", true, true), "hello");
+    assert_eq!(api::collapse_whitespace("  hello  "), "hello");
 }
 
 #[test]
-fn collapse_with_control_chars() {
-    assert_eq!(
-        api::collapse_whitespace("hello\x00world", true, true),
-        "helloworld"
-    );
+fn collapse_folds_only_preserves_control() {
+    // #433: collapse folds whitespace ONLY — a non-whitespace control (NUL) is
+    // NOT deleted here (that is strip_control_chars' job); it passes through.
+    assert_eq!(api::collapse_whitespace("hello\x00world"), "hello\x00world");
 }
 
 #[test]
-fn collapse_preserves_control_when_disabled() {
+fn collapse_folds_only_preserves_zero_width() {
+    // #433: zero-width is preserved here (strip_zero_width_chars' job).
     assert_eq!(
-        api::collapse_whitespace("hello\x00world", false, true),
-        "hello\x00world"
-    );
-}
-
-#[test]
-fn collapse_strips_zero_width() {
-    assert_eq!(
-        api::collapse_whitespace("hello\u{200B}world", true, true),
-        "helloworld"
-    );
-}
-
-#[test]
-fn collapse_preserves_zero_width_when_disabled() {
-    assert_eq!(
-        api::collapse_whitespace("hello\u{200B}world", true, false),
+        api::collapse_whitespace("hello\u{200B}world"),
         "hello\u{200B}world"
     );
 }
 
 #[test]
+fn collapse_folds_line_controls_to_space() {
+    // #433: CR folds to a space (was deleted → joined tokens).
+    assert_eq!(api::collapse_whitespace("a\rb"), "a b");
+    assert_eq!(api::collapse_whitespace("a\u{000B}b"), "a b"); // VT
+    assert_eq!(api::collapse_whitespace("a\u{0085}b"), "a b"); // NEL
+}
+
+#[test]
+fn collapse_folds_blank_render_set() {
+    // #433: Braille blank + Hangul fillers fold to a space.
+    assert_eq!(api::collapse_whitespace("a\u{2800}b"), "a b");
+    assert_eq!(api::collapse_whitespace("a\u{3164}b"), "a b");
+}
+
+#[test]
 fn collapse_empty() {
-    assert_eq!(api::collapse_whitespace("", true, true), "");
+    assert_eq!(api::collapse_whitespace(""), "");
 }
 
 #[test]
 fn collapse_only_whitespace() {
-    assert_eq!(api::collapse_whitespace("   \t\n  ", true, true), "");
+    assert_eq!(api::collapse_whitespace("   \t\n  "), "");
 }
 
 #[test]

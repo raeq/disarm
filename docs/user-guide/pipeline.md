@@ -32,7 +32,7 @@ Wrap a string in `Text`, chain methods, extract with `.value` or `str()`. Each m
     let normalized = "  Héllo   Straße  ".normalize(NormalizationForm::Nfc);
     let romanized = Transliterate::new().lang("de").run(&normalized);
     let folded = romanized.fold_case();
-    let result = api::collapse_whitespace(&folded, true, true);
+    let result = api::collapse_whitespace(&folded);
     assert_eq!(result, "hello strasse"); // => "hello strasse"
     ```
 
@@ -109,7 +109,7 @@ All 8 standalone transform functions are available as chainable methods:
 | `.strip_accents()` | Remove combining diacritical marks |
 | `.transliterate(lang=...)` | Unicode → ASCII transliteration |
 | `.fold_case()` | Unicode case folding (ß→ss, İ→i̇, etc.) |
-| `.collapse_whitespace()` | Normalize whitespace, strip control chars |
+| `.collapse_whitespace()` | Fold whitespace runs to single spaces (fold-only) |
 | `.slugify(separator=...)` | URL-safe slug generation |
 | `.sanitize_filename()` | OS-safe filename sanitization |
 

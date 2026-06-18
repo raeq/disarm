@@ -336,5 +336,6 @@ class TestPresets:
         assert PRESETS["security_clean"][0] == ("normalize", "NFKC")
 
     def test_display_clean_is_minimal(self) -> None:
-        # strip_bidi → strip_invisibles (#413) → collapse_whitespace
-        assert len(PRESETS["display_clean"]) == 3
+        # strip_bidi → strip_invisibles (#413) → strip_control → strip_zero_width
+        # → collapse_whitespace (#433: control/zero-width strips now explicit)
+        assert len(PRESETS["display_clean"]) == 5

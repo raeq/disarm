@@ -300,11 +300,11 @@ impl Pipeline {
             whitespace::strip_zero_width_chars_into(input, out);
             Ok(true)
         } else if step == PipelineSteps::COLLAPSE_WS {
-            // Collapse only — strip_control / strip_zero_width are their own
-            // steps. With both flags false this preserves any control and
-            // zero-width characters those steps didn't run, collapsing solely
+            // Fold whitespace only (#433) — STRIP_CONTROL / STRIP_ZERO_WIDTH are
+            // their own steps, so any control or zero-width character a caller did
+            // not enable those steps for is preserved here; this folds solely the
             // whitespace runs.
-            whitespace::collapse_whitespace_into(input, false, false, out);
+            whitespace::collapse_whitespace_into(input, out);
             Ok(true)
         } else {
             Ok(false)
@@ -607,7 +607,7 @@ mod tests {
             } else if *flag == PipelineSteps::STRIP_ZERO_WIDTH {
                 whitespace::strip_zero_width_chars(&s)
             } else if *flag == PipelineSteps::COLLAPSE_WS {
-                whitespace::collapse_whitespace(&s, false, false)
+                whitespace::collapse_whitespace(&s)
             } else {
                 s
             };
@@ -687,28 +687,24 @@ mod tests {
     }
 
     #[test]
-    fn whitespace_tail_matches_former_fused_pass() {
-        // The three-pass strip_control → strip_zero_width → collapse tail must
-        // equal the old fused _collapse_whitespace(_, true, true) it replaced,
-        // including for chars that are both control and whitespace-adjacent.
+    fn whitespace_tail_strip_control_zero_width_collapse() {
+        // The three-pass strip_control → strip_zero_width → collapse tail:
+        // non-whitespace controls + zero-width are deleted, then whitespace folds.
+        // #433: CR is now *folded* (a\rb → a b), not deleted (was a\rb → ab).
         let tail = PipelineSteps::STRIP_CONTROL
             | PipelineSteps::STRIP_ZERO_WIDTH
             | PipelineSteps::COLLAPSE_WS;
         let p = pipeline(tail, None);
-        for input in [
-            "a\nb",
-            "a\t\tb",
-            "a\u{0000}\nb",
-            "a \u{200b} b",
-            "a\n\n  b\tc",
-            "  lead\u{0000}ing \u{200d} trail  ",
-            "\u{feff}bom\rcr",
+        for (input, expected) in [
+            ("a\nb", "a b"),
+            ("a\t\tb", "a b"),
+            ("a\u{0000}\nb", "a b"), // NUL deleted, LF folded
+            ("a \u{200b} b", "a b"), // ZWSP deleted
+            ("a\n\n  b\tc", "a b c"),
+            ("  lead\u{0000}ing \u{200d} trail  ", "leading trail"),
+            ("\u{feff}bom\rcr", "bom cr"), // BOM deleted; CR folds (#433), not deleted
         ] {
-            assert_eq!(
-                p.process(input).unwrap(),
-                whitespace::collapse_whitespace(input, true, true),
-                "tail diverged from fused pass for {input:?}"
-            );
+            assert_eq!(p.process(input).unwrap(), expected, "tail for {input:?}");
         }
     }
 

@@ -35,8 +35,10 @@ fn width_and_graphemes() {
 
 #[test]
 fn text_cleanup() {
-    assert_eq!(api::collapse_whitespace("a   b", true, true), "a b");
-    assert_eq!(api::strip_control_chars("a\rb"), "ab");
+    assert_eq!(api::collapse_whitespace("a   b"), "a b");
+    assert_eq!(api::collapse_whitespace("a\rb"), "a b"); // #433: CR folds, not deleted
+    assert_eq!(api::strip_control_chars("a\x00b"), "ab"); // NUL (non-ws) removed
+    assert_eq!(api::strip_control_chars("a\rb"), "a\rb"); // #433: CR preserved for fold
     assert_eq!(api::strip_zero_width_chars("a\u{200b}b"), "ab");
     assert!(!api::is_zalgo("hi", 3));
     assert_eq!(api::strip_zalgo("a", 2), "a");

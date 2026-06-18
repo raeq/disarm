@@ -33,6 +33,18 @@ jobs:
           while read -r sha; do
             [ -z "$sha" ] && continue
             author="$(git show -s --format='%an <%ae>' "$sha")"
+            # Trusted-automation exemption: commits authored by a GitHub App bot
+            # (login ends in "[bot]" — e.g. dependabot[bot], github-actions[bot])
+            # are the repo's own configured automation, not third-party human
+            # contributions, so they carry no DCO attestation. This matches the
+            # official DCO app's default and lets dependabot PRs auto-merge
+            # (otherwise every dependency bump is blocked and silently rots).
+            case "$author" in
+              *"[bot] <"*)
+                echo "skip $sha  $author (trusted bot — DCO exempt)"
+                continue
+                ;;
+            esac
             signoffs="$(git show -s --format='%(trailers:key=Signed-off-by,valueonly)' "$sha")"
             if printf '%s\n' "$signoffs" | grep -qxF "$author"; then
               echo "ok   $sha  $author"

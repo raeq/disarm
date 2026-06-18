@@ -329,7 +329,10 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `scripts/audit_dependencies.py` audits all of them against their registries in one
   command (`--strict` to fail on a major lag), run weekly by the `dependency-audit`
   workflow. The guard makes any future config gap visible instead of silent. See
-  [DEPENDENCY_UPGRADES.md](DEPENDENCY_UPGRADES.md).
+  [DEPENDENCY_UPGRADES.md](DEPENDENCY_UPGRADES.md). The DCO check now exempts
+  trusted GitHub App bots (`*[bot]` authors, e.g. `dependabot[bot]`) — matching the
+  official DCO app's default — so dependabot's PRs can finally satisfy branch
+  protection and auto-merge instead of every bump being silently blocked.
 
 - **The Tier 3 exhaustive+formal gate now guards every publish, not just PyPI/crates.io (#159, #395).**
   The pre-publish regimen — the exhaustive Rust domain tests (`#[ignore]`) and the

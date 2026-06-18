@@ -1481,6 +1481,43 @@ mod tests {
                 prop_assert_eq!(once, twice);
             }
 
+            // ml_normalize is the one preset that is *not* a fixed point under the
+            // "cldr" emoji style: `demojize` expands typographic punctuation inside
+            // CLDR names (e.g. the U+2019 in "woman’s hat" → "right apostrophe") on a
+            // second pass. With emoji_style="none" there is no demojize, so it *is*
+            // idempotent — pin that across both the lang-present and lang-absent paths.
+            #[test]
+            fn ml_normalize_idempotent_emoji_none(
+                s in adversarial(),
+                lang in prop::option::of(prop::sample::select(vec!["de", "ru", "ja"])),
+            ) {
+                let once = ml_normalize(&s, lang, "none").unwrap();
+                let twice = ml_normalize(&once, lang, "none").unwrap();
+                prop_assert_eq!(once, twice);
+            }
+
+            // Structural post-conditions that hold for ALL four conditional paths
+            // (lang present/absent × emoji_style cldr/none), since full idempotency
+            // is excluded above. Verifies the case-fold and whitespace-collapse stages
+            // actually took effect regardless of which conditional stages ran.
+            #[test]
+            fn ml_normalize_postconditions_all_modes(
+                s in adversarial(),
+                lang in prop::option::of(prop::sample::select(vec!["de", "ru", "ja"])),
+                style in prop::sample::select(vec!["cldr", "none"]),
+            ) {
+                let out = ml_normalize(&s, lang, style).unwrap();
+                // fold_case ran (after demojize/transliterate) and nothing after it
+                // re-introduces case, so the output is a fixed point of fold_case.
+                // (Asserting "no uppercase" would be wrong: fold_case's table does
+                // not cover every cased script — e.g. Cherokee U+13A0 — so an
+                // uppercase char it cannot fold legitimately survives.)
+                prop_assert_eq!(case_fold::fold_case_impl(&out), out.clone());
+                // collapse_whitespace ran last: trimmed, and no run of ASCII spaces.
+                prop_assert_eq!(out.trim(), &out, "not trimmed: {:?}", out);
+                prop_assert!(!out.contains("  "), "double space in {out:?}");
+            }
+
             #[test]
             fn strip_obfuscation_idempotent(s in adversarial()) {
                 let once = strip_obfuscation(&s).unwrap();

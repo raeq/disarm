@@ -21,8 +21,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # N-API 8 is supported by Node 12.22+/14.17+/15.12+ — well below our floor.
-napi = { version = "2", default-features = false, features = ["napi8"] }
-napi-derive = "2"
+napi = { version = "3", default-features = false, features = ["napi8"] }
+napi-derive = "3"
 disarm_core = { package = "disarm", version = "0.10", default-features = false }
 
 [build-dependencies]

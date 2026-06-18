@@ -409,6 +409,55 @@ pub(crate) fn ml_normalize(
     lang: Option<&str>,
     emoji_style: &str,
 ) -> Result<String, crate::ErrorRepr> {
+    // `const` declared before the prologue to satisfy
+    // clippy::items_after_statements; it has no runtime effect.
+    const STEPS: &[Step] = &[
+        // 1. NFKC normalization
+        Step::Nfkc,
+        // 2. Emoji → text (CLDR short names) when emoji_style == "cldr".
+        Step::Demojize { only_if_cldr: true },
+        // 3. Transliterate if lang is set (e.g. "de" for ü→ue, "ja" for kana).
+        //    Use Ignore mode: ML pipelines need clean ASCII-ish output, so
+        //    characters with no mapping (e.g. katakana ー) should be dropped
+        //    rather than preserved verbatim.
+        Step::Transliterate {
+            mode: crate::ErrorMode::Ignore,
+            only_if_lang: true,
+        },
+        // 4. Strip accents (NFD decompose → remove combining marks → NFC)
+        Step::StripAccents,
+        // 5. Unicode case folding (ß→ss, ﬁ→fi, etc.)
+        Step::FoldCase,
+        // 6. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+        Step::StripControl,
+        Step::StripZeroWidth,
+        Step::CollapseWs,
+    ];
+    crate::transliterate::validate_lang(lang)?;
+    // Validate emoji_style — only two modes are supported.
+    if !matches!(emoji_style, "cldr" | "none") {
+        return Err(crate::ErrorRepr::InvalidEmojiStyle {
+            got: emoji_style.to_owned(),
+        });
+    }
+    run(
+        STEPS,
+        text,
+        &PresetCtx {
+            lang,
+            strict_iso9: false,
+            emoji_cldr: emoji_style == "cldr",
+        },
+    )
+}
+
+/// Legacy oracle for [`ml_normalize`], retained until the final cleanup task
+/// (#453). Byte-identical to the runner-based impl above.
+pub(crate) fn ml_normalize_legacy(
+    text: &str,
+    lang: Option<&str>,
+    emoji_style: &str,
+) -> Result<String, crate::ErrorRepr> {
     crate::transliterate::validate_lang(lang)?;
     // Validate emoji_style — only two modes are supported.
     if !matches!(emoji_style, "cldr" | "none") {
@@ -1673,6 +1722,18 @@ mod tests {
             #[test]
             fn sort_key_matches_legacy(s in adversarial()) {
                 prop_assert_eq!(sort_key(&s, None).unwrap(), sort_key_legacy(&s, None).unwrap());
+            }
+
+            #[test]
+            fn ml_normalize_matches_legacy(
+                s in adversarial(),
+                lang in prop::option::of(prop::sample::select(vec!["de", "ru", "ja"])),
+                style in prop::sample::select(vec!["cldr", "none"]),
+            ) {
+                prop_assert_eq!(
+                    ml_normalize(&s, lang, style).unwrap(),
+                    ml_normalize_legacy(&s, lang, style).unwrap(),
+                );
             }
 
             #[test]

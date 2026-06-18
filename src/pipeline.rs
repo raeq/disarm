@@ -300,9 +300,9 @@ impl Pipeline {
             whitespace::strip_zero_width_chars_into(input, out);
             Ok(true)
         } else if step == PipelineSteps::COLLAPSE_WS {
-            // Collapse only — strip_control / strip_zero_width are their own
-            // steps. With both flags false this preserves any control and
-            // zero-width characters those steps didn't run, collapsing solely
+            // Fold whitespace only (#433) — STRIP_CONTROL / STRIP_ZERO_WIDTH are
+            // their own steps, so any control or zero-width character a caller did
+            // not enable those steps for is preserved here; this folds solely the
             // whitespace runs.
             whitespace::collapse_whitespace_into(input, out);
             Ok(true)

@@ -69,6 +69,23 @@ describe('text cleaning', () => {
   test('collapseWhitespace collapses and trims', () => {
     expect(disarm.collapseWhitespace('  a   b ')).toBe('a b')
   })
+  test('collapseWhitespace folds line controls + blank-render to a space (#433)', () => {
+    // Line controls fold to a space rather than being deleted (no token join).
+    expect(disarm.collapseWhitespace('a\rb')).toBe('a b') // CR
+    expect(disarm.collapseWhitespace('a\x0Bb')).toBe('a b') // VT
+    expect(disarm.collapseWhitespace('a\x85b')).toBe('a b') // NEL
+    expect(disarm.collapseWhitespace('a\x1Cb')).toBe('a b') // FS
+    expect(disarm.collapseWhitespace('a\x1Fb')).toBe('a b') // US
+    // Blank-rendering code points fold too.
+    expect(disarm.collapseWhitespace('a⠀b')).toBe('a b') // Braille blank
+    expect(disarm.collapseWhitespace('aㅤb')).toBe('a b') // Hangul filler
+  })
+  test('collapseWhitespace folds whitespace only — preserves controls/zero-width (#433)', () => {
+    // It no longer accepts strip options and does not delete anything: a
+    // non-whitespace control (NUL) and a zero-width space pass through.
+    expect(disarm.collapseWhitespace('a\x00b')).toBe('a\x00b')
+    expect(disarm.collapseWhitespace('a​b')).toBe('a​b')
+  })
   test('strip control / zero-width / bidi', () => {
     expect(disarm.stripControlChars('ab')).toBe('ab')
     expect(disarm.stripZeroWidthChars('a​b')).toBe('ab')

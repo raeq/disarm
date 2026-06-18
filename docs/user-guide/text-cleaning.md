@@ -277,8 +277,9 @@ assert collapse_whitespace("hello​world") == 'hello​world'
 To also delete them, run the dedicated steps first. The `security_clean` /
 `normalize_user_input` presets already do this internally; to compose it
 yourself, build a [`TextPipeline`](../api/pipelines.md) with the `strip_control`,
-`strip_zero_width`, and `collapse_whitespace` steps (Rust and Node expose the
-standalone `strip_control_chars` / `strip_zero_width_chars` primitives directly).
+`strip_zero_width`, and `collapse_whitespace` steps (Rust, Node, and Ruby also
+expose the standalone `strip_control_chars` / `strip_zero_width_chars` primitives
+directly; Python exposes them only as pipeline steps).
 
 Zero-width characters handled by the `strip_zero_width` step:
 

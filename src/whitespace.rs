@@ -201,7 +201,7 @@ mod tests {
         // controls (NUL) are NOT deleted here — that is strip_zero_width_chars /
         // strip_control_chars' job. They pass through unchanged.
         assert_eq!(collapse_whitespace("he\u{200B}llo"), "he\u{200B}llo");
-        assert_eq!(collapse_whitespace("a\u{2061}b"), "a\u{2061}b"); // invisible times
+        assert_eq!(collapse_whitespace("a\u{2061}b"), "a\u{2061}b"); // function application
         assert_eq!(collapse_whitespace("a\x00b"), "a\x00b"); // NUL preserved
     }
 

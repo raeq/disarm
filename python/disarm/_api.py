@@ -879,8 +879,10 @@ def collapse_whitespace(text: str) -> str:
     Folds **whitespace only** (#433): the line controls (TAB/LF/VT/FF/CR), the
     information separators (U+001C–U+001F), NEL, the ``Zs``/``Zl``/``Zp`` spaces,
     and the blank-rendering set (Braille blank, the Hangul fillers) each fold to a
-    single space. It does **not** delete control or zero-width characters — pair
-    it with :func:`strip_control_chars` / :func:`strip_zero_width_chars` for that.
+    single space. It does **not** delete control or zero-width characters — to do
+    that, run a :class:`TextPipeline` with the ``strip_control`` /
+    ``strip_zero_width`` steps (the ``security_clean`` / ``normalize_user_input``
+    presets already do).
 
     Folding the line controls (rather than deleting them) means a carriage return
     between two tokens becomes a space, never a silent join: ``"a\\rb"`` →

@@ -40,22 +40,43 @@ fn preset_per_call_allocations_are_bounded() {
     let canon = allocs_for(|| {
         let _ = disarm::api::canonicalize(canon_input);
     });
-    // Post-refactor measured: 7 allocs/call (ping-pong runner; deterministic).
-    // Bound = measured + 1. Pre-refactor the chained presets allocated one String
-    // per stage (~7-10/call, review D-3); a regression to per-stage allocation
-    // (re-introducing a fresh String per stage) would push this past the bound.
+    // Measured: 5 allocs/call. Bound = measured + 1. Pre-refactor the chained
+    // presets allocated one String per stage (~10/call, review D-3); the ping-pong
+    // runner plus the buffer-reusing confusables→NFC fixed-point loop (PR #454
+    // review) brought this down. A regression to per-stage / per-iteration
+    // allocation would push it past the bound.
     assert!(
-        canon <= 8,
-        "canonicalize allocated {canon} times/call (expected <=8 after ping-pong)"
+        canon <= 6,
+        "canonicalize allocated {canon} times/call (expected <=6 after ping-pong)"
+    );
+
+    // canonicalize_strict shares the buffer-reusing fixed-point loop.
+    let strict = allocs_for(|| {
+        let _ = disarm::api::canonicalize_strict(canon_input);
+    });
+    assert!(
+        strict <= 6,
+        "canonicalize_strict allocated {strict} times/call (expected <=6)"
     );
 
     let key_input = "CAFÉ\u{200B} ИМЯ";
     let key = allocs_for(|| {
         let _ = disarm::api::search_key(key_input, None);
     });
-    // Post-refactor measured: 3 allocs/call (deterministic). Bound = measured + 1.
+    // Measured: 3 allocs/call. Bound = measured + 1.
     assert!(
         key <= 4,
         "search_key allocated {key} times/call (expected <=4 after ping-pong)"
+    );
+
+    // sort_key: transliterate-preserving-latin now writes into the runner's scratch
+    // (PR #454 review) instead of returning a fresh String.
+    let sort_input = "Über ИМЯ Война";
+    let sort = allocs_for(|| {
+        let _ = disarm::api::sort_key(sort_input, None);
+    });
+    assert!(
+        sort <= 6,
+        "sort_key allocated {sort} times/call (expected <=6)"
     );
 }

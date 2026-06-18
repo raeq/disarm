@@ -1,5 +1,9 @@
 use std::borrow::Cow;
 
+// Only the test module's `nfc()` helper uses the `.nfc()` extension method now —
+// the presets normalize via `crate::normalize::normalize_into`. Gate the trait
+// import to test builds so the non-test lib build has no unused import.
+#[cfg(test)]
 use unicode_normalization::UnicodeNormalization;
 
 use crate::{case_fold, confusables, emoji, invisibles, transliterate, whitespace, zalgo};
@@ -155,7 +159,7 @@ fn apply_into(
             }
         }
         Step::TranslitPreservingLatin => {
-            *out = transliterate_preserving_latin(input, ctx.lang);
+            transliterate_preserving_latin_into(input, ctx.lang, out);
             Ok(true)
         }
         Step::Confusables(target) => {
@@ -163,19 +167,28 @@ fn apply_into(
             Ok(true)
         }
         Step::ConfusablesNfcFixedPoint(target) => {
-            let mut buf = input.to_owned();
+            // #416/#434: confusables→NFC iterated to a fixed point. Reuse buffers
+            // across iterations (PR #454 review) instead of allocating a fresh
+            // `String` per pass — `cur` holds the running text, `conf` the
+            // confusables intermediate, `nxt` the NFC result; the two scratch
+            // buffers are cleared-and-refilled (not reallocated) each pass, so the
+            // loop allocates only as they reach their high-water mark, on the
+            // hottest presets (`canonicalize` / `canonicalize_strict`).
+            let mut cur = input.to_owned();
+            let mut conf = String::new();
+            let mut nxt = String::new();
             for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
-                let next =
-                    nfc_normalize(&confusables::normalize_confusables(&buf, target)?).into_owned();
-                if next == buf {
+                confusables::normalize_confusables_into(&cur, target, &mut conf)?;
+                crate::normalize::normalize_into(&conf, "NFC", &mut nxt)?;
+                if nxt == cur {
                     break;
                 }
-                buf = next;
+                std::mem::swap(&mut cur, &mut nxt);
             }
-            if buf == input {
+            if cur == input {
                 Ok(false)
             } else {
-                *out = buf;
+                *out = cur;
                 Ok(true)
             }
         }
@@ -200,28 +213,6 @@ fn run(steps: &[Step], text: &str, ctx: &PresetCtx) -> Result<String, crate::Err
         }
     }
     Ok(cur)
-}
-
-/// NFC-normalize `text`, skipping the pass for all-ASCII input (ASCII is already
-/// in NFC normal form).
-///
-/// Used by the presets to keep them fixed points (#416). Stripping a zero-width /
-/// invisible separator can leave a base character adjacent to a combining mark
-/// that was not adjacent before — a *decomposed* sequence the leading NFKC passed
-/// over; an NFC recomposes it. `canonicalize` additionally **sandwiches** its
-/// confusable fold between two NFC passes, because TR39 skeletoning is not
-/// normalization-stable (it treats composed vs decomposed accented letters
-/// differently, and can emit a decomposed skeleton). NFC, not NFKC, is correct:
-/// the leading NFKC already removed every compatibility form, and the later steps
-/// only delete or skeleton code points, so only canonical base+mark adjacencies
-/// can appear — exactly what NFC composes.
-#[inline]
-fn nfc_normalize(text: &str) -> Cow<'_, str> {
-    if text.is_ascii() {
-        Cow::Borrowed(text)
-    } else {
-        Cow::Owned(text.nfc().collect())
-    }
 }
 
 /// Strip dangerous bidirectional override and formatting characters
@@ -563,8 +554,12 @@ pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate
 /// into maximal non-Latin runs at Latin/Common boundaries and transliterating
 /// each run independently yields the same output as transliterating the whole
 /// string would — minus the Latin characters we deliberately keep.
-fn transliterate_preserving_latin(text: &str, lang: Option<&str>) -> String {
-    let mut out = String::with_capacity(text.len());
+fn transliterate_preserving_latin_into(text: &str, lang: Option<&str>, out: &mut String) {
+    // Ping-pong form: write into the runner's reused scratch buffer rather than
+    // returning a fresh `String` (PR #454 review). Clears `out` first, per the
+    // `*_into` leaf convention.
+    out.clear();
+    out.reserve(text.len());
     let mut run = String::new(); // pending consecutive non-Latin characters
     let flush = |run: &mut String, out: &mut String| {
         if !run.is_empty() {
@@ -588,14 +583,13 @@ fn transliterate_preserving_latin(text: &str, lang: Option<&str>) -> String {
             crate::scripts::detect_char_script(ch),
             "Latin" | "Common" | "Inherited"
         ) {
-            flush(&mut run, &mut out);
+            flush(&mut run, out);
             out.push(ch);
         } else {
             run.push(ch);
         }
     }
-    flush(&mut run, &mut out);
-    out
+    flush(&mut run, out);
 }
 
 /// Sort key generation pipeline.

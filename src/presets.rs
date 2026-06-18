@@ -338,6 +338,67 @@ fn is_bidi_or_format(ch: char) -> bool {
 /// TR39 skeletoning is not normalization-stable — so the pipeline is idempotent
 /// (`f(f(x)) == f(x)`).
 pub(crate) fn canonicalize(text: &str) -> Result<String, crate::ErrorRepr> {
+    const STEPS: &[Step] = &[
+        // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
+        Step::Nfkc,
+        // 2. Strip bidi overrides, isolates, marks, and soft hyphens
+        Step::StripBidi,
+        // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags
+        //     (keeping valid emoji flag sequences), variation selectors, CGJ,
+        //     noncharacters, and the Private Use Area. Runs before the NFC below so a
+        //     CGJ stripped from between a base and a mark gets recomposed.
+        Step::StripInvisible(COMPARISON_STRIP),
+        // 3. Strip non-whitespace controls + zero-width, then fold whitespace (#433:
+        //    these were one fused `collapse_whitespace(_, true, true)` call; the split
+        //    makes the steps explicit and lets the line controls fold to a space
+        //    rather than be deleted, so e.g. `a\rb` → `a b`, not `ab`).
+        Step::StripControl,
+        Step::StripZeroWidth,
+        Step::CollapseWs,
+        // 3b. Cap combining marks at 2 per base (#429), matching canonicalize_strict.
+        //     Removes zalgo stacking so a stacked token matches its base in a denylist
+        //     comparison, while keeping legitimate diacritics (`café`, `Việt`). Runs
+        //     AFTER the control / zero-width strip above so a stripped invisible
+        //     between two marks cannot split a mark run and hide the count (the #121
+        //     lesson); a later strip would merge the runs and break idempotency.
+        Step::Zalgo(2),
+        // 4. NFC (#416): the strips above can leave a base character next to a
+        //    combining mark that was non-adjacent before (e.g. separated by a
+        //    now-removed zero-width), which the leading NFKC passed over. Compose it
+        //    here so the confusable fold below sees the *composed* form consistently.
+        Step::Nfc,
+        // 5. Confusables → Latin (neutralizes cross-script homoglyphs), iterated to a
+        //    fixed point between NFC passes (#416/#434). TR39 skeletoning is not
+        //    normalization-stable: it drops the diacritic on a *composed* accented
+        //    letter (`ç`→`c`, `ø`→`o`) but never on the *decomposed* form, and it can
+        //    *emit* a decomposed skeleton (`Ý`→`Y`+◌́). The leading NFC feeds it a
+        //    composed form and the trailing NFC recomposes its output — but a
+        //    *duplicate* combining mark breaks a single sandwich: NFC composes only
+        //    one mark onto the base, the fold drops it, and the recomposing NFC
+        //    reattaches the *spare* mark, re-creating a foldable composed char the
+        //    next call would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping until stable
+        //    makes the preset a true fixed point (`f(f(x)) == f(x)`).
+        Step::ConfusablesNfcFixedPoint("latin"),
+    ];
+    // #431: no path-separator neutralization. Mapping a synthesised '/' (e.g. a
+    // confusable-unmasked U+2044) to '_' is sink-specific output-sanitizer
+    // behaviour, which THREAT_MODEL.md says disarm does not do — and it silently
+    // corrupted legitimate URLs/paths. Path-traversal defence belongs at the sink,
+    // run on this canonicalized output (see THREAT_MODEL.md "Pipeline placement").
+    run(
+        STEPS,
+        text,
+        &PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+        },
+    )
+}
+
+/// Legacy oracle for [`canonicalize`], retained until the final cleanup task
+/// (#453). Byte-identical to the runner-based impl above.
+pub(crate) fn canonicalize_legacy(text: &str) -> Result<String, crate::ErrorRepr> {
     // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
     let buf = nfkc_normalize(text);
     // 2. Strip bidi overrides, isolates, marks, and soft hyphens
@@ -1706,6 +1767,11 @@ mod tests {
                 let once = canonicalize(&s).unwrap();
                 let twice = canonicalize(&once).unwrap();
                 prop_assert_eq!(once, twice);
+            }
+
+            #[test]
+            fn canonicalize_matches_legacy(s in adversarial()) {
+                prop_assert_eq!(canonicalize(&s).unwrap(), canonicalize_legacy(&s).unwrap());
             }
 
             // #419: the transliterating key presets fold case BEFORE transliterate,

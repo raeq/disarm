@@ -112,4 +112,18 @@ fn preset_per_call_allocations_are_bounded() {
             "{name} on benign ASCII allocated {n} times/call (Cow fast path expected 0)"
         );
     }
+
+    // #458 Option D: benign *non-ASCII* that no step changes (pure Han + Hangul +
+    // inert accented Latin — no combining marks, NFKC-stable, not confusable) also
+    // skips, for the non-transliterating presets that do not strip accents. 0 allocs.
+    // (A preset that transliterates, or strips accents off dakuten kana / precomposed
+    // accents, correctly does NOT skip these — that path is covered elsewhere.)
+    let benign_nonascii = "日本語漢字 한국어 café";
+    let n = allocs_for(|| {
+        let _ = disarm::api::canonicalize(benign_nonascii);
+    });
+    assert_eq!(
+        n, 0,
+        "canonicalize on benign non-ASCII allocated {n} times/call (Option D expected 0)"
+    );
 }

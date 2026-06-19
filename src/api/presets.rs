@@ -1,6 +1,8 @@
 //! Layer 2 (part of [`crate::api`]) — the precompiled pipeline presets and the
 //! named-policy-profile registry.
 
+use std::borrow::Cow;
+
 use crate::Error;
 
 // ── Precompiled pipeline presets ──────────────────────────────────────────────
@@ -19,7 +21,7 @@ use crate::Error;
 ///
 /// The name describes the mechanism (Unicode canonicalization for matching), not
 /// a safety guarantee: this is **not** an output sanitizer — encode at the sink.
-pub fn canonicalize(text: &str) -> Result<String, Error> {
+pub fn canonicalize(text: &str) -> Result<Cow<'_, str>, Error> {
     crate::presets::canonicalize(text).map_err(Error::from)
 }
 
@@ -29,7 +31,7 @@ pub fn canonicalize(text: &str) -> Result<String, Error> {
 /// # Errors
 /// Propagates [`canonicalize`]'s error.
 #[deprecated(since = "0.11.0", note = "renamed to `canonicalize`; removed in 1.0")]
-pub fn security_clean(text: &str) -> Result<String, Error> {
+pub fn security_clean(text: &str) -> Result<Cow<'_, str>, Error> {
     canonicalize(text)
 }
 
@@ -40,7 +42,11 @@ pub fn security_clean(text: &str) -> Result<String, Error> {
 /// `emoji_style` is `"cldr"` (expand emoji to CLDR short names) or `"none"`
 /// (leave emoji as-is). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
 /// on an unknown `lang` or an unsupported `emoji_style`.
-pub fn ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> Result<String, Error> {
+pub fn ml_normalize<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    emoji_style: &str,
+) -> Result<Cow<'a, str>, Error> {
     crate::presets::ml_normalize(text, lang, emoji_style).map_err(Error::from)
 }
 
@@ -49,21 +55,25 @@ pub fn ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> Result
 ///
 /// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails
 /// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) on an unknown `lang`.
-pub fn catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> Result<String, Error> {
+pub fn catalog_key<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+) -> Result<Cow<'a, str>, Error> {
     crate::presets::catalog_key(text, lang, strict_iso9).map_err(Error::from)
 }
 
 /// Case/accent/script-insensitive search lookup key (like [`catalog_key`] without
 /// confusable folding). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
 /// on an unknown `lang`.
-pub fn search_key(text: &str, lang: Option<&str>) -> Result<String, Error> {
+pub fn search_key<'a>(text: &'a str, lang: Option<&str>) -> Result<Cow<'a, str>, Error> {
     crate::presets::search_key(text, lang).map_err(Error::from)
 }
 
 /// Collation sort key (like [`search_key`] but preserves base accented characters
 /// for correct ordering). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
 /// on an unknown `lang`.
-pub fn sort_key(text: &str, lang: Option<&str>) -> Result<String, Error> {
+pub fn sort_key<'a>(text: &'a str, lang: Option<&str>) -> Result<Cow<'a, str>, Error> {
     crate::presets::sort_key(text, lang).map_err(Error::from)
 }
 
@@ -73,7 +83,7 @@ pub fn sort_key(text: &str, lang: Option<&str>) -> Result<String, Error> {
 ///
 /// Visual hygiene only — **not** markup-safe; still escape at the output layer.
 #[must_use]
-pub fn strip_format(text: &str) -> String {
+pub fn strip_format(text: &str) -> Cow<'_, str> {
     crate::presets::strip_format(text)
 }
 
@@ -81,7 +91,7 @@ pub fn strip_format(text: &str) -> String {
 /// implied markup-safety it does not provide (see `THREAT_MODEL.md`); removed in 1.0.
 #[deprecated(since = "0.11.0", note = "renamed to `strip_format`; removed in 1.0")]
 #[must_use]
-pub fn display_clean(text: &str) -> String {
+pub fn display_clean(text: &str) -> Cow<'_, str> {
     strip_format(text)
 }
 
@@ -103,7 +113,7 @@ pub fn strip_bidi(text: &str) -> String {
 ///
 /// Not an output sanitizer (no HTML/JS/SQL escaping). Fallible only through the
 /// fixed-target confusables stage; the [`Result`] keeps the surface uniform.
-pub fn canonicalize_strict(text: &str) -> Result<String, Error> {
+pub fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, Error> {
     crate::presets::canonicalize_strict(text).map_err(Error::from)
 }
 
@@ -116,7 +126,7 @@ pub fn canonicalize_strict(text: &str) -> Result<String, Error> {
     since = "0.11.0",
     note = "renamed to `canonicalize_strict`; removed in 1.0"
 )]
-pub fn normalize_user_input(text: &str) -> Result<String, Error> {
+pub fn normalize_user_input(text: &str) -> Result<Cow<'_, str>, Error> {
     canonicalize_strict(text)
 }
 
@@ -126,7 +136,7 @@ pub fn normalize_user_input(text: &str) -> Result<String, Error> {
 ///
 /// Fallible only through the fixed-target confusables stage; the [`Result`] keeps
 /// the surface uniform.
-pub fn strip_obfuscation(text: &str) -> Result<String, Error> {
+pub fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, Error> {
     crate::presets::strip_obfuscation(text).map_err(Error::from)
 }
 

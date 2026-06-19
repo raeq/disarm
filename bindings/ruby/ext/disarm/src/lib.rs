@@ -137,29 +137,39 @@ fn demojize(text: String, strip_modifiers: bool) -> String {
 // ── Security presets (fallible) ───────────────────────────────────────────────
 
 fn strip_obfuscation(text: String) -> Result<String, Error> {
-    api::strip_obfuscation(&text).map_err(|e| map_err(&e))
+    api::strip_obfuscation(&text)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 fn canonicalize(text: String) -> Result<String, Error> {
-    api::canonicalize(&text).map_err(|e| map_err(&e))
+    api::canonicalize(&text)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 /// `Disarm._search_key(text, lang)` — case/accent/script-insensitive lookup key.
 /// `lang` is `nil` (no profile) or a code like `"ru"`. Fails on an unknown `lang`.
 fn search_key(text: String, lang: Option<String>) -> Result<String, Error> {
-    api::search_key(&text, lang.as_deref()).map_err(|e| map_err(&e))
+    api::search_key(&text, lang.as_deref())
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 /// `Disarm._sort_key(text, lang)` — collation sort key (preserves base accented
 /// characters for correct ordering). Fails on an unknown `lang`.
 fn sort_key(text: String, lang: Option<String>) -> Result<String, Error> {
-    api::sort_key(&text, lang.as_deref()).map_err(|e| map_err(&e))
+    api::sort_key(&text, lang.as_deref())
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 /// `Disarm._catalog_key(text, lang, strict_iso9)` — catalog deduplication key.
 /// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails on an unknown `lang`.
 fn catalog_key(text: String, lang: Option<String>, strict_iso9: bool) -> Result<String, Error> {
-    api::catalog_key(&text, lang.as_deref(), strict_iso9).map_err(|e| map_err(&e))
+    api::catalog_key(&text, lang.as_deref(), strict_iso9)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 /// `Disarm._suspicious_hostname?(host)` — flags mixed-script / confusable IDN

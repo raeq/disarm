@@ -275,12 +275,16 @@ pub fn is_zalgo(text: String, threshold: i64) -> Result<bool, NapiError> {
 
 #[napi]
 pub fn strip_obfuscation(text: String) -> Result<String, NapiError> {
-    api::strip_obfuscation(&text).map_err(|e| map_err(&e))
+    api::strip_obfuscation(&text)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 #[napi]
 pub fn canonicalize(text: String) -> Result<String, NapiError> {
-    api::canonicalize(&text).map_err(|e| map_err(&e))
+    api::canonicalize(&text)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 /// Turn arbitrary text into a safe filename. `platform` is `"universal"` |
@@ -313,14 +317,18 @@ pub fn sanitize_filename(
 /// transliteration table (omit for none).
 #[napi]
 pub fn search_key(text: String, lang: Option<String>) -> Result<String, NapiError> {
-    api::search_key(&text, lang.as_deref()).map_err(|e| map_err(&e))
+    api::search_key(&text, lang.as_deref())
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 /// Collation sort key (like `searchKey` but preserves base accented characters
 /// for correct ordering). `lang` selects the transliteration table.
 #[napi]
 pub fn sort_key(text: String, lang: Option<String>) -> Result<String, NapiError> {
-    api::sort_key(&text, lang.as_deref()).map_err(|e| map_err(&e))
+    api::sort_key(&text, lang.as_deref())
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 /// Library catalog deduplication key (like `searchKey` plus confusable folding).
@@ -332,7 +340,9 @@ pub fn catalog_key(
     lang: Option<String>,
     strict_iso9: bool,
 ) -> Result<String, NapiError> {
-    api::catalog_key(&text, lang.as_deref(), strict_iso9).map_err(|e| map_err(&e))
+    api::catalog_key(&text, lang.as_deref(), strict_iso9)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
 }
 
 // ── Grapheme clusters ─────────────────────────────────────────────────────────

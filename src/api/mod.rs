@@ -126,34 +126,34 @@ pub trait DisarmStr: AsRef<str> {
     }
     /// See [`strip_format`].
     #[must_use]
-    fn strip_format(&self) -> String {
+    fn strip_format(&self) -> Cow<'_, str> {
         strip_format(self.as_ref())
     }
     /// See [`canonicalize`].
     ///
     /// # Errors
     /// Propagates [`canonicalize`]'s error.
-    fn canonicalize(&self) -> Result<String, Error> {
+    fn canonicalize(&self) -> Result<Cow<'_, str>, Error> {
         canonicalize(self.as_ref())
     }
     /// See [`strip_obfuscation`].
     ///
     /// # Errors
     /// Propagates [`strip_obfuscation`]'s error.
-    fn strip_obfuscation(&self) -> Result<String, Error> {
+    fn strip_obfuscation(&self) -> Result<Cow<'_, str>, Error> {
         strip_obfuscation(self.as_ref())
     }
     /// See [`canonicalize_strict`].
     ///
     /// # Errors
     /// Propagates [`canonicalize_strict`]'s error.
-    fn canonicalize_strict(&self) -> Result<String, Error> {
+    fn canonicalize_strict(&self) -> Result<Cow<'_, str>, Error> {
         canonicalize_strict(self.as_ref())
     }
     /// Deprecated alias for [`DisarmStr::strip_format`]; removed in 1.0.
     #[deprecated(since = "0.11.0", note = "renamed to `strip_format`; removed in 1.0")]
     #[must_use]
-    fn display_clean(&self) -> String {
+    fn display_clean(&self) -> Cow<'_, str> {
         strip_format(self.as_ref())
     }
     /// Deprecated alias for [`DisarmStr::canonicalize`]; removed in 1.0.
@@ -161,7 +161,7 @@ pub trait DisarmStr: AsRef<str> {
     /// # Errors
     /// Propagates [`canonicalize`]'s error.
     #[deprecated(since = "0.11.0", note = "renamed to `canonicalize`; removed in 1.0")]
-    fn security_clean(&self) -> Result<String, Error> {
+    fn security_clean(&self) -> Result<Cow<'_, str>, Error> {
         canonicalize(self.as_ref())
     }
     /// Deprecated alias for [`DisarmStr::canonicalize_strict`]; removed in 1.0.
@@ -172,7 +172,7 @@ pub trait DisarmStr: AsRef<str> {
         since = "0.11.0",
         note = "renamed to `canonicalize_strict`; removed in 1.0"
     )]
-    fn normalize_user_input(&self) -> Result<String, Error> {
+    fn normalize_user_input(&self) -> Result<Cow<'_, str>, Error> {
         canonicalize_strict(self.as_ref())
     }
 }

@@ -81,9 +81,10 @@ fn preset_per_call_allocations_are_bounded() {
     );
 
     // #458 fast path: benign / ASCII-dominated input (the deployment norm) that no
-    // step can change skips the whole pipeline. Only the final String return is
-    // allocated — 1 alloc, not the 5–10 of the full run. (A `Cow` return would
-    // make this zero; tracked as the follow-up in #458.)
+    // step can change skips the whole pipeline AND returns the input borrowed
+    // (`Cow::Borrowed`), so it allocates **nothing** — down from the 5–10 of the
+    // full run. The `disarm::api` presets return `Cow<str>`; only the bindings
+    // clone at the FFI edge.
     let benign = "The quick brown fox jumps over the lazy dog. Hello world.";
     for (name, n) in [
         (
@@ -106,9 +107,9 @@ fn preset_per_call_allocations_are_bounded() {
             }),
         ),
     ] {
-        assert!(
-            n <= 1,
-            "{name} on benign ASCII allocated {n} times/call (fast path expected <=1)"
+        assert_eq!(
+            n, 0,
+            "{name} on benign ASCII allocated {n} times/call (Cow fast path expected 0)"
         );
     }
 }

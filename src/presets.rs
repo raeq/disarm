@@ -333,13 +333,17 @@ thread_local! {
 ///
 /// #458 fast path: if no step can act on `text` (`nothing_actionable`), it is a
 /// no-op — return it unchanged without the per-stage scans/allocations.
-fn run(steps: &[Step], text: &str, ctx: &PresetCtx) -> Result<String, crate::ErrorRepr> {
+fn run<'a>(
+    steps: &[Step],
+    text: &'a str,
+    ctx: &PresetCtx,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     #[cfg(test)]
     let guard_on = !FASTPATH_DISABLED.with(std::cell::Cell::get);
     #[cfg(not(test))]
     let guard_on = true;
     if guard_on && nothing_actionable(text, AsciiActionable::for_steps(steps)) {
-        return Ok(text.to_owned());
+        return Ok(Cow::Borrowed(text));
     }
     let mut cur = text.to_owned();
     let mut scratch = String::new();
@@ -348,7 +352,7 @@ fn run(steps: &[Step], text: &str, ctx: &PresetCtx) -> Result<String, crate::Err
             std::mem::swap(&mut cur, &mut scratch);
         }
     }
-    Ok(cur)
+    Ok(Cow::Owned(cur))
 }
 
 /// Run `f` with the #458 fast-path guard disabled (test-only): forces the full
@@ -453,7 +457,7 @@ fn is_bidi_or_format(ch: char) -> bool {
 /// normalizes. Confusable folding is sandwiched between two NFC passes (#416) —
 /// TR39 skeletoning is not normalization-stable — so the pipeline is idempotent
 /// (`f(f(x)) == f(x)`).
-pub(crate) fn canonicalize(text: &str) -> Result<String, crate::ErrorRepr> {
+pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
     const STEPS: &[Step] = &[
         // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
         Step::Nfkc,
@@ -523,11 +527,11 @@ pub(crate) fn canonicalize(text: &str) -> Result<String, crate::ErrorRepr> {
 /// # Parameters
 /// - `emoji_style`: `"cldr"` — expand emoji to CLDR short names (default);
 ///   `"none"` — leave emoji characters as-is; any other value raises `DisarmError`.
-pub(crate) fn ml_normalize(
-    text: &str,
+pub(crate) fn ml_normalize<'a>(
+    text: &'a str,
     lang: Option<&str>,
     emoji_style: &str,
-) -> Result<String, crate::ErrorRepr> {
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
     const STEPS: &[Step] = &[
@@ -584,11 +588,11 @@ pub(crate) fn ml_normalize(
 ///
 /// Produces a canonical deduplication key for bibliographic titles.
 /// Optional ISO 9:1995 transliteration for Cyrillic catalog records.
-pub(crate) fn catalog_key(
-    text: &str,
+pub(crate) fn catalog_key<'a>(
+    text: &'a str,
     lang: Option<&str>,
     strict_iso9: bool,
-) -> Result<String, crate::ErrorRepr> {
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the validate prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
     const STEPS: &[Step] = &[
@@ -644,7 +648,10 @@ pub(crate) fn catalog_key(
 /// `strip_bidi` runs early (#93) so an invisible char (bidi override, soft
 /// hyphen) embedded in a stored value still produces the same key as the clean
 /// query — otherwise lookups silently miss.
-pub(crate) fn search_key(text: &str, lang: Option<&str>) -> Result<String, crate::ErrorRepr> {
+pub(crate) fn search_key<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the validate prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
     const STEPS: &[Step] = &[
@@ -759,7 +766,10 @@ fn transliterate_preserving_latin_into(text: &str, lang: Option<&str>, out: &mut
 ///
 /// `strip_bidi` runs early (#93) so invisible bidi/format chars cannot perturb
 /// the ordering of otherwise-identical strings.
-pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::ErrorRepr> {
+pub(crate) fn sort_key<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the validate prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
     const STEPS: &[Step] = &[
@@ -818,7 +828,7 @@ pub(crate) fn sort_key(text: &str, lang: Option<&str>) -> Result<String, crate::
 /// Strips bidirectional overrides (which can visually reorder text to hide
 /// malicious content), control characters, and zero-width injections, then
 /// collapses runs of whitespace to single spaces.
-pub(crate) fn strip_format(text: &str) -> String {
+pub(crate) fn strip_format(text: &str) -> Cow<'_, str> {
     const STEPS: &[Step] = &[
         // 1. Strip bidi overrides, isolates, marks, and soft hyphens
         Step::StripBidi,
@@ -871,7 +881,7 @@ pub(crate) fn strip_format(text: &str) -> String {
 /// Unlike `canonicalize`, this pipeline strips zalgo text.  Unlike
 /// `catalog_key`/`search_key`, it does *not* transliterate — the original
 /// script is preserved.
-pub(crate) fn canonicalize_strict(text: &str) -> Result<String, crate::ErrorRepr> {
+pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
     const STEPS: &[Step] = &[
         // 1. NFKC normalization
         Step::Nfkc,
@@ -946,7 +956,7 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<String, crate::ErrorRepr
 ///
 /// Use cases: content moderation, anti-phishing, spam detection, hate speech
 /// detection, social media NLP preprocessing.
-pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> {
+pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
     const STEPS: &[Step] = &[
         // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
         Step::Nfkc,
@@ -999,29 +1009,38 @@ mod tests {
     #[allow(clippy::type_complexity)]
     fn all_presets() -> Vec<(&'static str, Box<dyn Fn(&str) -> String>)> {
         vec![
-            ("canonicalize", Box::new(|s| canonicalize(s).unwrap())),
+            (
+                "canonicalize",
+                Box::new(|s| canonicalize(s).unwrap().into_owned()),
+            ),
             (
                 "canonicalize_strict",
-                Box::new(|s| canonicalize_strict(s).unwrap()),
+                Box::new(|s| canonicalize_strict(s).unwrap().into_owned()),
             ),
             (
                 "strip_obfuscation",
-                Box::new(|s| strip_obfuscation(s).unwrap()),
+                Box::new(|s| strip_obfuscation(s).unwrap().into_owned()),
             ),
-            ("strip_format", Box::new(strip_format)),
-            ("search_key", Box::new(|s| search_key(s, None).unwrap())),
-            ("sort_key", Box::new(|s| sort_key(s, None).unwrap())),
+            ("strip_format", Box::new(|s| strip_format(s).into_owned())),
+            (
+                "search_key",
+                Box::new(|s| search_key(s, None).unwrap().into_owned()),
+            ),
+            (
+                "sort_key",
+                Box::new(|s| sort_key(s, None).unwrap().into_owned()),
+            ),
             (
                 "catalog_key",
-                Box::new(|s| catalog_key(s, None, false).unwrap()),
+                Box::new(|s| catalog_key(s, None, false).unwrap().into_owned()),
             ),
             (
                 "ml_normalize_cldr",
-                Box::new(|s| ml_normalize(s, None, "cldr").unwrap()),
+                Box::new(|s| ml_normalize(s, None, "cldr").unwrap().into_owned()),
             ),
             (
                 "ml_normalize_none",
-                Box::new(|s| ml_normalize(s, None, "none").unwrap()),
+                Box::new(|s| ml_normalize(s, None, "none").unwrap().into_owned()),
             ),
         ]
     }
@@ -1725,7 +1744,7 @@ mod tests {
                 // the base+invisible+mark idempotency violation.
                 let once = canonicalize(&s).unwrap();
                 let twice = canonicalize(&once).unwrap();
-                prop_assert_eq!(once, twice);
+                prop_assert_eq!(&once, &twice);
             }
 
             // #419: the transliterating key presets fold case BEFORE transliterate,
@@ -1736,21 +1755,21 @@ mod tests {
             fn sort_key_idempotent(s in adversarial()) {
                 let once = sort_key(&s, None).unwrap();
                 let twice = sort_key(&once, None).unwrap();
-                prop_assert_eq!(once, twice);
+                prop_assert_eq!(&once, &twice);
             }
 
             #[test]
             fn search_key_idempotent(s in adversarial()) {
                 let once = search_key(&s, None).unwrap();
                 let twice = search_key(&once, None).unwrap();
-                prop_assert_eq!(once, twice);
+                prop_assert_eq!(&once, &twice);
             }
 
             #[test]
             fn catalog_key_idempotent(s in adversarial()) {
                 let once = catalog_key(&s, None, false).unwrap();
                 let twice = catalog_key(&once, None, false).unwrap();
-                prop_assert_eq!(once, twice);
+                prop_assert_eq!(&once, &twice);
             }
 
             // ml_normalize is the one preset that is *not* a fixed point under the
@@ -1765,7 +1784,7 @@ mod tests {
             ) {
                 let once = ml_normalize(&s, lang, "none").unwrap();
                 let twice = ml_normalize(&once, lang, "none").unwrap();
-                prop_assert_eq!(once, twice);
+                prop_assert_eq!(&once, &twice);
             }
 
             // Structural post-conditions that hold for ALL four conditional paths
@@ -1807,7 +1826,7 @@ mod tests {
                 // `nfc(once) == nfc(twice)` form is no longer needed.
                 let once = canonicalize_strict(&s).unwrap();
                 let twice = canonicalize_strict(&once).unwrap();
-                prop_assert_eq!(once, twice);
+                prop_assert_eq!(&once, &twice);
             }
 
             #[test]

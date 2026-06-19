@@ -202,31 +202,53 @@ fn apply_into(
     }
 }
 
-/// Which ASCII byte classes a preset's steps can change (#458 fast-path guard).
-/// Every non-ASCII-acting step (NFKC/NFC, strip-bidi/zero-width/invisible, zalgo,
-/// strip-accents, demojize, transliterate — all act only on code points ≥ U+0080)
-/// contributes no flag; the guard's leading `is_ascii` bail settles them.
+/// Which codepoint classes a preset's steps can change (#458 fast-path guard).
+/// Some classes act only on ASCII bytes (`controls`, `collapse_ws`), some only on
+/// non-ASCII code points (`norm`/`bidi`/`zero_width`/`invisible`/`transliterate`/
+/// `demojize`), and `fold_case`/`confusables` span both tiers. `nothing_actionable`
+/// applies the relevant subset per character.
 #[derive(Clone, Copy)]
-struct AsciiActionable {
+struct Actionable {
+    // ── ASCII-byte classes ──
     controls: bool,    // StripControl removes C0/DEL controls
     collapse_ws: bool, // CollapseWs trims/folds ASCII whitespace
-    fold_case: bool,   // FoldCase lowercases ASCII A–Z
-    confusables: bool, // Confusables rewrites the ASCII sources in the table
+    // ── both tiers ──
+    fold_case: bool,   // FoldCase folds cased letters (ASCII A–Z and beyond)
+    confusables: bool, // Confusables rewrites table sources (ASCII and non-ASCII)
+    // ── non-ASCII code-point classes ──
+    nfkc: bool, // Nfkc/Nfc/NfcIfNonAscii change NFKC-unstable chars (round-trips
+    //                 // decomposables like Hangul/dakuten-kana/precomposed accents)
+    marks: bool,         // Nfkc/Nfc/Zalgo/StripAccents touch standalone combining marks
+    strip_accents: bool, // StripAccents removes the mark from precomposed accented letters
+    zalgo_cap: Option<usize>, // Zalgo(cap): a char whose NFD has > cap marks is re-capped
+    bidi: bool,          // StripBidi
+    zero_width: bool,    // StripZeroWidth
+    invisible: bool,     // StripInvisible (tags, VS, CGJ, noncharacters, PUA)
+    transliterate: bool, // Transliterate / TranslitPreservingLatin — maps *any* non-ASCII
+    demojize: bool,      // Demojize (emoji → CLDR names)
 }
 
-impl AsciiActionable {
-    /// Union of the ASCII classes `steps` touch. Exhaustive match: a new `Step`
-    /// will not compile until it is classified here, and the fast-path
-    /// equivalence and mask-audit tests fail if it is classified wrong.
-    /// Confusable steps are asserted Latin-only — the guard's ASCII rewrite set
-    /// is Latin-specific, so a non-Latin target panics here rather than silently
-    /// mis-classifying.
+impl Actionable {
+    /// Union of the classes `steps` touch. Exhaustive match: a new `Step` will not
+    /// compile until it is classified here, and the fast-path equivalence +
+    /// mask-audit tests fail if it is classified wrong. Confusable steps are
+    /// asserted Latin-only — the guard's confusable-source check is Latin-specific,
+    /// so a non-Latin target panics here rather than silently mis-classifying.
     fn for_steps(steps: &[Step]) -> Self {
         let mut m = Self {
             controls: false,
             collapse_ws: false,
             fold_case: false,
             confusables: false,
+            nfkc: false,
+            marks: false,
+            strip_accents: false,
+            zalgo_cap: None,
+            bidi: false,
+            zero_width: false,
+            invisible: false,
+            transliterate: false,
+            demojize: false,
         };
         for &step in steps {
             match step {
@@ -234,35 +256,40 @@ impl AsciiActionable {
                 Step::CollapseWs => m.collapse_ws = true,
                 Step::FoldCase => m.fold_case = true,
                 Step::Confusables(target) | Step::ConfusablesNfcFixedPoint(target) => {
-                    // The guard carries only the *Latin* ASCII rewrite set
-                    // (`is_ascii_confusable_latin`, generated from
-                    // confusables_to_latin.tsv). Other targets rewrite *different*
-                    // ASCII bytes — the Cyrillic map rewrites `A`/`B`/`a`/`b` →
-                    // Cyrillic look-alikes — so classifying a non-Latin target with
-                    // the Latin set would let the guard skip pure-ASCII input the
-                    // fold would change. Reject it loudly: a non-Latin confusable
-                    // preset needs a per-target ASCII table and a target-aware guard
-                    // before it can be added.
+                    // The guard's confusable-source check is Latin-specific (the
+                    // ASCII set is generated from confusables_to_latin.tsv and the
+                    // non-ASCII check uses `resolve_confusable_map("latin")`). Other
+                    // targets rewrite *different* sources — the Cyrillic map rewrites
+                    // ASCII `A`/`B`/`a`/`b` — so a non-Latin target classified here
+                    // would let the guard skip input the fold would change. Reject it
+                    // loudly: a non-Latin confusable preset needs target-aware tables.
                     assert!(
                         target == "latin",
                         "fast-path guard supports only Latin confusable targets; \
-                         {target:?} rewrites different ASCII bytes — add a per-target \
-                         ASCII rewrite table and make the guard target-aware first"
+                         {target:?} rewrites different sources — make the guard \
+                         target-aware first"
                     );
                     m.confusables = true;
                 }
-                // ≥ U+0080-only steps: no ASCII byte is affected.
-                Step::Nfkc
-                | Step::Nfc
-                | Step::NfcIfNonAscii
-                | Step::StripBidi
-                | Step::StripInvisible(_)
-                | Step::StripZeroWidth
-                | Step::Zalgo(_)
-                | Step::StripAccents
-                | Step::Transliterate { .. }
-                | Step::TranslitPreservingLatin
-                | Step::Demojize { .. } => {}
+                Step::Nfkc | Step::Nfc | Step::NfcIfNonAscii => {
+                    m.nfkc = true;
+                    m.marks = true; // normalization composes/reorders combining marks
+                }
+                Step::Zalgo(cap) => {
+                    m.marks = true; // a run of standalone marks can exceed the cap
+                    m.zalgo_cap = Some(cap);
+                }
+                Step::StripAccents => {
+                    m.marks = true;
+                    m.strip_accents = true;
+                }
+                Step::StripBidi => m.bidi = true,
+                Step::StripZeroWidth => m.zero_width = true,
+                Step::StripInvisible(_) => m.invisible = true,
+                Step::Transliterate { .. } | Step::TranslitPreservingLatin => {
+                    m.transliterate = true;
+                }
+                Step::Demojize { .. } => m.demojize = true,
             }
         }
         m
@@ -279,43 +306,132 @@ const fn is_removed_control(b: u8) -> bool {
     (b < 0x20 && !is_ascii_fold_ws(b)) || b == 0x7F
 }
 
-/// True when no step in the preset can change `text` — the #458 fast-path guard.
-/// Pure byte arithmetic: any byte ≥ U+0080 bails (a non-ASCII step might act; the
-/// benign-non-ASCII case is the deferred Option D), otherwise each ASCII byte is
-/// tested against the preset's actionable classes. Whitespace is structural —
-/// collapse trims the ends and folds runs/non-space whitespace to one space — so
-/// a lone interior `0x20` is clean but a leading/trailing/repeated one is not.
-fn nothing_actionable(text: &str, mask: AsciiActionable) -> bool {
-    let bytes = text.as_bytes();
-    let n = bytes.len();
-    let mut prev_space = false;
-    let mut i = 0;
-    while i < n {
-        let b = bytes[i];
-        if b >= 0x80 {
-            return false;
-        }
-        if mask.controls && is_removed_control(b) {
-            return false;
-        }
-        if mask.collapse_ws && is_ascii_fold_ws(b) && b != b' ' {
-            return false; // TAB/CR/FS–US fold to a space
-        }
-        if mask.fold_case && b.is_ascii_uppercase() {
-            return false;
-        }
-        if mask.confusables && crate::tables::is_ascii_confusable_latin(b) {
-            return false;
-        }
-        if mask.collapse_ws && b == b' ' {
-            if i == 0 || i + 1 == n || prev_space {
-                return false; // leading / trailing / run-of-spaces collapses
+/// True when NFKC changes `ch`. Unlike NFKD-stability, this is round-trip-aware:
+/// Hangul syllables, dakuten kana, and precomposed accented letters decompose
+/// under NFKD but **recompose** under NFKC, so they are NFKC-stable (inert for an
+/// NFKC/NFC step). Allocation-free (iterator, no collect).
+fn nfkc_changes(ch: char) -> bool {
+    use unicode_normalization::UnicodeNormalization;
+    let mut it = std::iter::once(ch).nfkc();
+    !(it.next() == Some(ch) && it.next().is_none())
+}
+
+/// True when the NFD of `ch` contains a combining mark — i.e. `strip_accents`
+/// (NFD → drop marks → NFC) would change it, even though NFKC round-trips it. Catches
+/// precomposed accented letters (`é` → `e`) and dakuten kana. Allocation-free.
+fn decomposes_to_mark(ch: char) -> bool {
+    use unicode_normalization::char::is_combining_mark;
+    use unicode_normalization::UnicodeNormalization;
+    std::iter::once(ch).nfd().any(is_combining_mark)
+}
+
+/// True when `ch`'s NFD has more than `cap` combining marks — i.e. `strip_zalgo(cap)`
+/// re-caps it (NFD → drop marks beyond `cap` → NFC). Catches precomposed code points
+/// that pack many marks, e.g. polytonic Greek `ᾂ` (3 marks) under cap 2. Allocation-free.
+fn nfd_mark_run_exceeds(ch: char, cap: usize) -> bool {
+    use unicode_normalization::char::is_combining_mark;
+    use unicode_normalization::UnicodeNormalization;
+    let mut marks = 0usize;
+    for c in std::iter::once(ch).nfd() {
+        if is_combining_mark(c) {
+            marks += 1;
+            if marks > cap {
+                return true;
             }
-            prev_space = true;
+        }
+    }
+    false
+}
+
+/// Conservative: a char `demojize` might expand. The table lookups are exact; the
+/// range predicates add a safety margin (over-marking only loses an optimization).
+fn is_demojizable(ch: char) -> bool {
+    crate::tables::lookup_emoji_single(ch).is_some()
+        || crate::tables::is_emoji_multi_starter(ch)
+        || emoji::is_emoji_codepoint(ch)
+        || emoji::is_emoji_modifier(ch)
+}
+
+/// True when some step in the preset can change non-ASCII char `ch`. Each class is
+/// a **conservative superset** of what the step actually touches (over-marking only
+/// costs a skipped optimization; under-marking would be unsound), verified
+/// exhaustively-in-distribution by the `fast_path_equivalence` proptest.
+fn acts_on_nonascii(
+    ch: char,
+    m: Actionable,
+    conf_map: Option<&'static phf::Map<char, &'static str>>,
+) -> bool {
+    // Transliterate can map *any* non-ASCII code point (the table covers Latin-1
+    // symbols like `×`→`x` too, not just non-Latin scripts), so for a transliterating
+    // preset every non-ASCII char is actionable.
+    m.transliterate
+        || (m.nfkc && nfkc_changes(ch))
+        || (m.marks && unicode_normalization::char::is_combining_mark(ch))
+        || (m.strip_accents && decomposes_to_mark(ch))
+        || m.zalgo_cap.is_some_and(|cap| nfd_mark_run_exceeds(ch, cap))
+        || (m.fold_case && ch.is_alphabetic()) // case folding touches cased letters
+        // StripControl removes the C1 controls (U+0080–U+009F) too, not just C0.
+        || (m.controls && ch.is_control() && !whitespace::is_fold_whitespace(ch))
+        // CollapseWs folds non-ASCII whitespace (NEL, NBSP, the Unicode spaces) and
+        // the blank-render set (U+2800, Hangul fillers) to a space.
+        || (m.collapse_ws
+            && (whitespace::is_fold_whitespace(ch) || whitespace::is_blank_render(ch)))
+        || (m.bidi && is_bidi_or_format(ch))
+        || (m.zero_width && whitespace::is_zero_width(ch))
+        || (m.invisible
+            && (invisibles::is_tag(ch)
+                || invisibles::is_variation_selector(ch)
+                || invisibles::is_noncharacter(ch)
+                || invisibles::is_pua(ch)
+                || ch == '\u{034F}')) // CGJ
+        || (m.confusables && conf_map.is_some_and(|map| map.contains_key(&ch)))
+        || (m.demojize && is_demojizable(ch))
+}
+
+/// True when no step in the preset can change `text` — the #458 fast-path guard.
+/// ASCII bytes are tested by byte arithmetic (controls, fold-whitespace, case, the
+/// ASCII confusable set); whitespace is structural (collapse trims the ends and
+/// folds runs/non-space whitespace, so a lone interior `0x20` is clean but a
+/// leading/trailing/repeated one is not). Non-ASCII code points are tested by
+/// `acts_on_nonascii` (Option D), so benign foreign text (CJK, Hangul, inert
+/// accented Latin) skips too. `conf_map` is the resolved Latin confusable map (the
+/// caller resolves it once when `mask.confusables`).
+fn nothing_actionable(
+    text: &str,
+    mask: Actionable,
+    conf_map: Option<&'static phf::Map<char, &'static str>>,
+) -> bool {
+    let mut prev_space = false;
+    let mut chars = text.char_indices().peekable();
+    while let Some((i, ch)) = chars.next() {
+        if ch.is_ascii() {
+            let b = ch as u8;
+            if mask.controls && is_removed_control(b) {
+                return false;
+            }
+            if mask.collapse_ws && is_ascii_fold_ws(b) && b != b' ' {
+                return false; // TAB/CR/FS–US fold to a space
+            }
+            if mask.fold_case && b.is_ascii_uppercase() {
+                return false;
+            }
+            if mask.confusables && crate::tables::is_ascii_confusable_latin(b) {
+                return false;
+            }
+            if mask.collapse_ws && b == b' ' {
+                if i == 0 || chars.peek().is_none() || prev_space {
+                    return false; // leading / trailing / run-of-spaces collapses
+                }
+                prev_space = true;
+            } else {
+                prev_space = false;
+            }
         } else {
+            if acts_on_nonascii(ch, mask, conf_map) {
+                return false;
+            }
             prev_space = false;
         }
-        i += 1;
     }
     true
 }
@@ -342,8 +458,17 @@ fn run<'a>(
     let guard_on = !FASTPATH_DISABLED.with(std::cell::Cell::get);
     #[cfg(not(test))]
     let guard_on = true;
-    if guard_on && nothing_actionable(text, AsciiActionable::for_steps(steps)) {
-        return Ok(Cow::Borrowed(text));
+    if guard_on {
+        let mask = Actionable::for_steps(steps);
+        // Resolve the Latin confusable map once (it is `&'static`), not per char.
+        let conf_map = if mask.confusables {
+            crate::tables::resolve_confusable_map("latin")
+        } else {
+            None
+        };
+        if nothing_actionable(text, mask, conf_map) {
+            return Ok(Cow::Borrowed(text));
+        }
     }
     let mut cur = text.to_owned();
     let mut scratch = String::new();
@@ -1082,7 +1207,46 @@ mod tests {
     #[test]
     #[should_panic(expected = "only Latin confusable targets")]
     fn fast_path_rejects_non_latin_confusable_target() {
-        let _ = AsciiActionable::for_steps(&[Step::Confusables("cyrillic")]);
+        let _ = Actionable::for_steps(&[Step::Confusables("cyrillic")]);
+    }
+
+    /// Option D exhaustive audit (tier 3): every BMP + key-astral code point, in
+    /// three positions, through every preset — the guarded output must equal the
+    /// un-guarded full pipeline. Catches any non-ASCII class the conservative
+    /// `acts_on_nonascii` predicate under-marks. ~0.6M comparisons; run pre-release.
+    #[test]
+    #[ignore = "tier 3: exhaustive over the BMP + astral emoji/tag ranges — run before release"]
+    fn fast_path_nonascii_exhaustive() {
+        let presets = all_presets();
+        let check = |cp: u32| {
+            let Some(ch) = char::from_u32(cp) else { return };
+            if ch.is_ascii() {
+                return;
+            }
+            for probe in [format!("{ch}"), format!("a{ch}z"), format!("{ch} {ch}")] {
+                for (name, f) in &presets {
+                    let guarded = f(&probe);
+                    let full = without_fastpath(|| f(&probe));
+                    assert_eq!(
+                        guarded, full,
+                        "{name}: fast path differs from full pipeline on U+{cp:04X} probe {probe:?}"
+                    );
+                }
+            }
+        };
+        for cp in 0x80..=0xFFFFu32 {
+            check(cp);
+        }
+        // Astral ranges where actionable classes live: emoji, tags, math alphanum,
+        // and supplementary noncharacters/PUA.
+        for cp in (0x1D400..=0x1D7FF) // Mathematical Alphanumeric
+            .chain(0x1F000..=0x1FAFF) // emoji
+            .chain(0xE0000..=0xE007F) // Tags
+            .chain(0xF0000..=0xF00FF)
+        // PUA-A sample
+        {
+            check(cp);
+        }
     }
 
     #[test]
@@ -1705,13 +1869,31 @@ mod tests {
                 '"',
                 '`',
                 '|',
+                // non-ASCII: actionable classes + benign foreign text (Option D
+                // skip path) — accented/inert Latin, CJK, Hangul, Cyrillic, Arabic,
+                // Greek, C1 control, NBSP, combining mark, zero-width, bidi, emoji.
                 'é',
+                'ñ',
+                'ø',
+                'þ',
                 'Ω',
+                'Σ',
+                '日',
+                '本',
+                '한',
+                '글',
+                'м',
+                'и',
+                'р',
+                'ا',
+                '\u{0080}',
+                '\u{00A0}',
                 '\u{0301}',
                 '\u{200B}',
                 '\u{202E}',
                 '\u{1F600}',
-                '日',
+                '\u{1F3F4}',
+                '\u{2800}',
             ]);
             prop_oneof![
                 proptest::collection::vec(edge, 0..24)

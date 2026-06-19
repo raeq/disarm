@@ -16,7 +16,7 @@ use pyo3::prelude::*;
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _canonicalize(text: &str) -> PyResult<String> {
-    Ok(crate::presets::canonicalize(text)?)
+    Ok(crate::presets::canonicalize(text)?.into_owned())
 }
 
 /// ML/NLP text normalization pipeline.
@@ -26,28 +26,28 @@ pub fn _canonicalize(text: &str) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, emoji_style="cldr"))]
 pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyResult<String> {
-    Ok(crate::presets::ml_normalize(text, lang, emoji_style)?)
+    Ok(crate::presets::ml_normalize(text, lang, emoji_style)?.into_owned())
 }
 
 /// Library catalog key generation pipeline.
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, strict_iso9=false))]
 pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResult<String> {
-    Ok(crate::presets::catalog_key(text, lang, strict_iso9)?)
+    Ok(crate::presets::catalog_key(text, lang, strict_iso9)?.into_owned())
 }
 
 /// Search index key generation pipeline.
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None))]
 pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
-    Ok(crate::presets::search_key(text, lang)?)
+    Ok(crate::presets::search_key(text, lang)?.into_owned())
 }
 
 /// Sort key generation pipeline.
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None))]
 pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
-    Ok(crate::presets::sort_key(text, lang)?)
+    Ok(crate::presets::sort_key(text, lang)?.into_owned())
 }
 
 /// Strip bidi/format and invisible-injection vectors from rendered content.
@@ -56,7 +56,7 @@ pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _strip_format(text: &str) -> String {
-    crate::presets::strip_format(text)
+    crate::presets::strip_format(text).into_owned()
 }
 
 /// Strip bidirectional override and formatting characters (UAX #9).
@@ -102,12 +102,12 @@ pub fn _strip_pua(text: &str) -> String {
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _canonicalize_strict(text: &str) -> PyResult<String> {
-    Ok(crate::presets::canonicalize_strict(text)?)
+    Ok(crate::presets::canonicalize_strict(text)?.into_owned())
 }
 
 /// Maximum-strength text deobfuscation pipeline.
 #[pyfunction]
 #[pyo3(signature = (text,))]
 pub fn _strip_obfuscation(text: &str) -> PyResult<String> {
-    Ok(crate::presets::strip_obfuscation(text)?)
+    Ok(crate::presets::strip_obfuscation(text)?.into_owned())
 }

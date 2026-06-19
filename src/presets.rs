@@ -216,22 +216,41 @@ struct AsciiActionable {
 
 impl AsciiActionable {
     /// Union of the ASCII classes `steps` touch. Exhaustive match: a new `Step`
-    /// will not compile until it is classified here, and the fast-path equivalence
-    /// + mask-audit tests fail if it is classified wrong.
-    const fn for_steps(steps: &[Step]) -> Self {
+    /// will not compile until it is classified here, and the fast-path
+    /// equivalence and mask-audit tests fail if it is classified wrong.
+    /// Confusable steps are asserted Latin-only — the guard's ASCII rewrite set
+    /// is Latin-specific, so a non-Latin target panics here rather than silently
+    /// mis-classifying.
+    fn for_steps(steps: &[Step]) -> Self {
         let mut m = Self {
             controls: false,
             collapse_ws: false,
             fold_case: false,
             confusables: false,
         };
-        let mut i = 0;
-        while i < steps.len() {
-            match steps[i] {
+        for &step in steps {
+            match step {
                 Step::StripControl => m.controls = true,
                 Step::CollapseWs => m.collapse_ws = true,
                 Step::FoldCase => m.fold_case = true,
-                Step::Confusables(_) | Step::ConfusablesNfcFixedPoint(_) => m.confusables = true,
+                Step::Confusables(target) | Step::ConfusablesNfcFixedPoint(target) => {
+                    // The guard carries only the *Latin* ASCII rewrite set
+                    // (`is_ascii_confusable_latin`, generated from
+                    // confusables_to_latin.tsv). Other targets rewrite *different*
+                    // ASCII bytes — the Cyrillic map rewrites `A`/`B`/`a`/`b` →
+                    // Cyrillic look-alikes — so classifying a non-Latin target with
+                    // the Latin set would let the guard skip pure-ASCII input the
+                    // fold would change. Reject it loudly: a non-Latin confusable
+                    // preset needs a per-target ASCII table and a target-aware guard
+                    // before it can be added.
+                    assert!(
+                        target == "latin",
+                        "fast-path guard supports only Latin confusable targets; \
+                         {target:?} rewrites different ASCII bytes — add a per-target \
+                         ASCII rewrite table and make the guard target-aware first"
+                    );
+                    m.confusables = true;
+                }
                 // ≥ U+0080-only steps: no ASCII byte is affected.
                 Step::Nfkc
                 | Step::Nfc
@@ -245,7 +264,6 @@ impl AsciiActionable {
                 | Step::TranslitPreservingLatin
                 | Step::Demojize { .. } => {}
             }
-            i += 1;
         }
         m
     }
@@ -1037,6 +1055,15 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The guard's ASCII rewrite set is Latin-only; a preset using a non-Latin
+    /// confusable target (whose map rewrites different ASCII bytes, e.g. Cyrillic
+    /// `A`/`B`/`a`/`b`) must be rejected rather than silently mis-classified.
+    #[test]
+    #[should_panic(expected = "only Latin confusable targets")]
+    fn fast_path_rejects_non_latin_confusable_target() {
+        let _ = AsciiActionable::for_steps(&[Step::Confusables("cyrillic")]);
     }
 
     #[test]

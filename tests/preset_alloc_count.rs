@@ -79,4 +79,36 @@ fn preset_per_call_allocations_are_bounded() {
         sort <= 6,
         "sort_key allocated {sort} times/call (expected <=6)"
     );
+
+    // #458 fast path: benign / ASCII-dominated input (the deployment norm) that no
+    // step can change skips the whole pipeline. Only the final String return is
+    // allocated — 1 alloc, not the 5–10 of the full run. (A `Cow` return would
+    // make this zero; tracked as the follow-up in #458.)
+    let benign = "The quick brown fox jumps over the lazy dog. Hello world.";
+    for (name, n) in [
+        (
+            "canonicalize",
+            allocs_for(|| {
+                let _ = disarm::api::canonicalize(benign);
+            }),
+        ),
+        (
+            "strip_obfuscation",
+            allocs_for(|| {
+                let _ = disarm::api::strip_obfuscation(benign);
+            }),
+        ),
+        // lowercase so FoldCase has nothing to do either
+        (
+            "search_key",
+            allocs_for(|| {
+                let _ = disarm::api::search_key("the quick brown fox jumps over", None);
+            }),
+        ),
+    ] {
+        assert!(
+            n <= 1,
+            "{name} on benign ASCII allocated {n} times/call (fast path expected <=1)"
+        );
+    }
 }

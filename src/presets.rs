@@ -202,9 +202,127 @@ fn apply_into(
     }
 }
 
-/// Execute a preset step list with a two-buffer ping-pong (the engine pattern from
-/// `pipeline.rs`): O(1) live buffers regardless of step count, no per-stage alloc.
+/// Which ASCII byte classes a preset's steps can change (#458 fast-path guard).
+/// Every non-ASCII-acting step (NFKC/NFC, strip-bidi/zero-width/invisible, zalgo,
+/// strip-accents, demojize, transliterate — all act only on code points ≥ U+0080)
+/// contributes no flag; the guard's leading `is_ascii` bail settles them.
+#[derive(Clone, Copy)]
+struct AsciiActionable {
+    controls: bool,    // StripControl removes C0/DEL controls
+    collapse_ws: bool, // CollapseWs trims/folds ASCII whitespace
+    fold_case: bool,   // FoldCase lowercases ASCII A–Z
+    confusables: bool, // Confusables rewrites the ASCII sources in the table
+}
+
+impl AsciiActionable {
+    /// Union of the ASCII classes `steps` touch. Exhaustive match: a new `Step`
+    /// will not compile until it is classified here, and the fast-path equivalence
+    /// + mask-audit tests fail if it is classified wrong.
+    const fn for_steps(steps: &[Step]) -> Self {
+        let mut m = Self {
+            controls: false,
+            collapse_ws: false,
+            fold_case: false,
+            confusables: false,
+        };
+        let mut i = 0;
+        while i < steps.len() {
+            match steps[i] {
+                Step::StripControl => m.controls = true,
+                Step::CollapseWs => m.collapse_ws = true,
+                Step::FoldCase => m.fold_case = true,
+                Step::Confusables(_) | Step::ConfusablesNfcFixedPoint(_) => m.confusables = true,
+                // ≥ U+0080-only steps: no ASCII byte is affected.
+                Step::Nfkc
+                | Step::Nfc
+                | Step::NfcIfNonAscii
+                | Step::StripBidi
+                | Step::StripInvisible(_)
+                | Step::StripZeroWidth
+                | Step::Zalgo(_)
+                | Step::StripAccents
+                | Step::Transliterate { .. }
+                | Step::TranslitPreservingLatin
+                | Step::Demojize { .. } => {}
+            }
+            i += 1;
+        }
+        m
+    }
+}
+
+/// ASCII fold-whitespace bytes — the subset of `whitespace::is_fold_whitespace`
+/// below U+0080: TAB–CR, the information separators, and SPACE.
+const fn is_ascii_fold_ws(b: u8) -> bool {
+    matches!(b, 0x09..=0x0D | 0x1C..=0x1F | 0x20)
+}
+/// Bytes `strip_control_chars` removes: C0/DEL controls that are not whitespace.
+const fn is_removed_control(b: u8) -> bool {
+    (b < 0x20 && !is_ascii_fold_ws(b)) || b == 0x7F
+}
+
+/// True when no step in the preset can change `text` — the #458 fast-path guard.
+/// Pure byte arithmetic: any byte ≥ U+0080 bails (a non-ASCII step might act; the
+/// benign-non-ASCII case is the deferred Option D), otherwise each ASCII byte is
+/// tested against the preset's actionable classes. Whitespace is structural —
+/// collapse trims the ends and folds runs/non-space whitespace to one space — so
+/// a lone interior `0x20` is clean but a leading/trailing/repeated one is not.
+fn nothing_actionable(text: &str, mask: AsciiActionable) -> bool {
+    let bytes = text.as_bytes();
+    let n = bytes.len();
+    let mut prev_space = false;
+    let mut i = 0;
+    while i < n {
+        let b = bytes[i];
+        if b >= 0x80 {
+            return false;
+        }
+        if mask.controls && is_removed_control(b) {
+            return false;
+        }
+        if mask.collapse_ws && is_ascii_fold_ws(b) && b != b' ' {
+            return false; // TAB/CR/FS–US fold to a space
+        }
+        if mask.fold_case && b.is_ascii_uppercase() {
+            return false;
+        }
+        if mask.confusables && crate::tables::is_ascii_confusable_latin(b) {
+            return false;
+        }
+        if mask.collapse_ws && b == b' ' {
+            if i == 0 || i + 1 == n || prev_space {
+                return false; // leading / trailing / run-of-spaces collapses
+            }
+            prev_space = true;
+        } else {
+            prev_space = false;
+        }
+        i += 1;
+    }
+    true
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test hook: when set, `run` skips the #458 fast-path guard so the
+    /// equivalence + mask-audit tests can compare each preset's guarded output
+    /// against its un-guarded full pipeline (see `without_fastpath`).
+    static FASTPATH_DISABLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Execute a preset step list with a two-buffer ping-pong (the engine pattern
+/// from `pipeline.rs`): O(1) live buffers regardless of step count.
+///
+/// #458 fast path: if no step can act on `text` (`nothing_actionable`), it is a
+/// no-op — return it unchanged without the per-stage scans/allocations.
 fn run(steps: &[Step], text: &str, ctx: &PresetCtx) -> Result<String, crate::ErrorRepr> {
+    #[cfg(test)]
+    let guard_on = !FASTPATH_DISABLED.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    let guard_on = true;
+    if guard_on && nothing_actionable(text, AsciiActionable::for_steps(steps)) {
+        return Ok(text.to_owned());
+    }
     let mut cur = text.to_owned();
     let mut scratch = String::new();
     for &step in steps {
@@ -213,6 +331,16 @@ fn run(steps: &[Step], text: &str, ctx: &PresetCtx) -> Result<String, crate::Err
         }
     }
     Ok(cur)
+}
+
+/// Run `f` with the #458 fast-path guard disabled (test-only): forces the full
+/// pipeline so a test can compare it against the guarded path.
+#[cfg(test)]
+fn without_fastpath<R>(f: impl FnOnce() -> R) -> R {
+    FASTPATH_DISABLED.with(|d| d.set(true));
+    let r = f();
+    FASTPATH_DISABLED.with(|d| d.set(false));
+    r
 }
 
 /// Strip dangerous bidirectional override and formatting characters
@@ -847,6 +975,70 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<String, crate::ErrorRepr> 
 mod tests {
     use super::*;
 
+    /// Every preset as a `&str -> String` closure, for the #458 fast-path checks.
+    /// `ml_normalize` appears under both emoji styles so the conditional demojize
+    /// path is exercised on each side of the guard.
+    #[allow(clippy::type_complexity)]
+    fn all_presets() -> Vec<(&'static str, Box<dyn Fn(&str) -> String>)> {
+        vec![
+            ("canonicalize", Box::new(|s| canonicalize(s).unwrap())),
+            (
+                "canonicalize_strict",
+                Box::new(|s| canonicalize_strict(s).unwrap()),
+            ),
+            (
+                "strip_obfuscation",
+                Box::new(|s| strip_obfuscation(s).unwrap()),
+            ),
+            ("strip_format", Box::new(strip_format)),
+            ("search_key", Box::new(|s| search_key(s, None).unwrap())),
+            ("sort_key", Box::new(|s| sort_key(s, None).unwrap())),
+            (
+                "catalog_key",
+                Box::new(|s| catalog_key(s, None, false).unwrap()),
+            ),
+            (
+                "ml_normalize_cldr",
+                Box::new(|s| ml_normalize(s, None, "cldr").unwrap()),
+            ),
+            (
+                "ml_normalize_none",
+                Box::new(|s| ml_normalize(s, None, "none").unwrap()),
+            ),
+        ]
+    }
+
+    /// #458 mask audit (criterion 5): exhaustive over all 128 ASCII bytes in six
+    /// positions (alone, embedded, doubled, leading, trailing, spaced). For every
+    /// preset the guarded output must equal the un-guarded full pipeline. This
+    /// fails if a `Step` acts on an ASCII class the guard's mask misses — it would
+    /// change the byte while the guard wrongly skipped the input — or if the
+    /// generated `ASCII_CONFUSABLE_LATIN` set ever drifts from the table.
+    #[test]
+    fn fast_path_mask_covers_every_ascii_byte() {
+        for b in 0u8..128 {
+            let c = b as char;
+            let probes = [
+                c.to_string(),
+                format!("a{c}b"),
+                format!("{c}{c}"),
+                format!("{c}a"),
+                format!("a{c}"),
+                format!("a {c} b"),
+            ];
+            for probe in &probes {
+                for (name, f) in all_presets() {
+                    let guarded = f(probe);
+                    let full = without_fastpath(|| f(probe));
+                    assert_eq!(
+                        guarded, full,
+                        "{name}: fast path differs from full pipeline on byte {b:#04x} probe {probe:?}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn preset_golden_fixtures() {
         // Frozen pre-refactor outputs — lock byte-identity for the #430 byte-stable
@@ -1436,8 +1628,67 @@ mod tests {
             s.nfc().collect()
         }
 
+        /// #458 fast-path generator: dense in the bytes that exercise every ASCII
+        /// actionable class and its boundaries — uppercase (FoldCase), whitespace
+        /// incl. fold-controls and boundary/run spaces (CollapseWs), C0/DEL
+        /// controls (StripControl), the ASCII confusable sources `" ` |`
+        /// (Confusables) — mixed with the non-ASCII classes and benign ASCII.
+        /// Unioned with `adversarial()` to span both the edges and the broad space.
+        fn fastpath_gen() -> impl Strategy<Value = String> {
+            let edge = prop::sample::select(vec![
+                'a',
+                'b',
+                'Z',
+                'A',
+                '0',
+                '9',
+                '.',
+                '-',
+                '_',
+                ' ',
+                '\t',
+                '\n',
+                '\r',
+                '\u{0B}',
+                '\u{0C}',
+                '\u{1C}',
+                '\u{00}',
+                '\u{07}',
+                '\u{1B}',
+                '\u{7F}',
+                '"',
+                '`',
+                '|',
+                'é',
+                'Ω',
+                '\u{0301}',
+                '\u{200B}',
+                '\u{202E}',
+                '\u{1F600}',
+                '日',
+            ]);
+            prop_oneof![
+                proptest::collection::vec(edge, 0..24)
+                    .prop_map(|cs| cs.into_iter().collect::<String>())
+                    .boxed(),
+                adversarial().boxed(),
+            ]
+        }
+
         proptest! {
             #![proptest_config(ProptestConfig::with_cases(1000))]
+
+            /// #458 criterion 1: every preset's guarded output equals its
+            /// un-guarded full pipeline. The guard is sound iff it never skips an
+            /// input the pipeline would change.
+            #[test]
+            fn fast_path_equivalence(s in fastpath_gen()) {
+                for (name, f) in all_presets() {
+                    let guarded = f(&s);
+                    let full = without_fastpath(|| f(&s));
+                    prop_assert_eq!(&guarded, &full, "{} fast-path != full on {:?}", name, s);
+                }
+            }
 
             #[test]
             fn canonicalize_idempotent(s in adversarial()) {

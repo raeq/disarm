@@ -401,11 +401,17 @@ fn nothing_actionable(
     mask: Actionable,
     conf_map: Option<&'static phf::Map<char, &'static str>>,
 ) -> bool {
+    // Byte loop, not `char_indices`: the ASCII path (the deployment norm) stays a
+    // tight per-byte scan with no UTF-8 decode; a multi-byte lead byte (≥ 0xC0) is
+    // decoded once and tested by `acts_on_nonascii`, then its continuation bytes
+    // are skipped via `len_utf8`.
+    let bytes = text.as_bytes();
+    let n = bytes.len();
     let mut prev_space = false;
-    let mut chars = text.char_indices().peekable();
-    while let Some((i, ch)) = chars.next() {
-        if ch.is_ascii() {
-            let b = ch as u8;
+    let mut i = 0;
+    while i < n {
+        let b = bytes[i];
+        if b < 0x80 {
             if mask.controls && is_removed_control(b) {
                 return false;
             }
@@ -419,18 +425,23 @@ fn nothing_actionable(
                 return false;
             }
             if mask.collapse_ws && b == b' ' {
-                if i == 0 || chars.peek().is_none() || prev_space {
+                if i == 0 || i + 1 == n || prev_space {
                     return false; // leading / trailing / run-of-spaces collapses
                 }
                 prev_space = true;
             } else {
                 prev_space = false;
             }
+            i += 1;
         } else {
+            // SAFETY-free: `i` is always on a char boundary (we advance by 1 for
+            // ASCII and by `len_utf8` for non-ASCII), so the slice decodes cleanly.
+            let ch = text[i..].chars().next().unwrap_or('\u{FFFD}');
             if acts_on_nonascii(ch, mask, conf_map) {
                 return false;
             }
             prev_space = false;
+            i += ch.len_utf8();
         }
     }
     true

@@ -472,8 +472,8 @@ fn acts_on_nonascii(
         || (m.demojize && is_demojizable(ch))
         // ── costliest last: single-scalar NFKC/NFD normalization iterators (P-1) ──
         // #471: the cheap conjoining-jamo range check runs first. NFKC *composes* an
-        // L+V(+T) jamo sequence into one syllable — a cross-character operation each
-        // jamo is stable under in isolation, so the per-scalar `nfkc_changes` cannot
+        // L+V(+T) jamo sequence into one syllable — a cross-character operation; each
+        // jamo is NFKC-stable in isolation, so the per-scalar `nfkc_changes` cannot
         // see it. A jamo must therefore always decline the fast path.
         || (m.nfkc && (is_conjoining_jamo(ch) || nfkc_changes(ch)))
         || (m.strip_accents && decomposes_to_mark(ch))
@@ -2332,20 +2332,25 @@ mod tests {
             ]
         }
 
-        /// #471: conjoining Hangul jamo in `L`, `L+V`, `L+V+T` order. NFKC composes
-        /// the sequence into one syllable, but each jamo is NFKC-stable alone and is
-        /// not a combining mark — exactly the cross-character case the per-character
-        /// guard missed. `fastpath_gen` never emitted these, so `fast_path_equivalence`
-        /// passed while the guard was unsound; this closes that generator gap.
+        /// #471: a leading jamo `L` with an optional vowel `V` and trailing `T` — so
+        /// it emits a lone `L`, `L+V`, and `L+V+T`. NFKC composes an `L+V(+T)` run into
+        /// one syllable, but each jamo is NFKC-stable alone and is not a combining mark
+        /// — exactly the cross-character case the per-character guard missed (the lone
+        /// `L` is genuinely inert and pins that the over-marking stays equivalent).
+        /// `fastpath_gen` never emitted these, so `fast_path_equivalence` passed while
+        /// the guard was unsound; this closes that generator gap.
         fn jamo_seq() -> impl Strategy<Value = String> {
             let lead = (0x1100u32..=0x1112).prop_map(|c| char::from_u32(c).unwrap());
-            let vowel = (0x1161u32..=0x1175).prop_map(|c| char::from_u32(c).unwrap());
+            let vowel =
+                prop::option::of((0x1161u32..=0x1175).prop_map(|c| char::from_u32(c).unwrap()));
             let trail =
                 prop::option::of((0x11A8u32..=0x11C2).prop_map(|c| char::from_u32(c).unwrap()));
             (lead, vowel, trail).prop_map(|(l, v, t)| {
                 let mut s = String::new();
                 s.push(l);
-                s.push(v);
+                if let Some(v) = v {
+                    s.push(v);
+                }
                 if let Some(t) = t {
                     s.push(t);
                 }

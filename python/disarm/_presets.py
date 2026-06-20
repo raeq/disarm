@@ -10,7 +10,7 @@ from __future__ import annotations
 import warnings
 
 from disarm._api import TextPipeline
-from disarm._core import (
+from disarm._boundary import (
     _canonicalize,
     _canonicalize_strict,
     _catalog_key,

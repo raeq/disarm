@@ -154,6 +154,15 @@ _surrogate_text = st.lists(
 ).map("".join)
 
 
+def test_container_string_args_are_scrubbed() -> None:
+    """#469 review: the guard scrubs strings inside containers too — a `set` passed
+    as a lexicon (`has_anomalies`) must not raise on a surrogate element and behaves
+    as its WTF-8→UTF-8 scrubbed form."""
+    bad = "a" + HI + "b"
+    with _no_deprecation():
+        assert disarm.has_anomalies("hi", {bad}) == disarm.has_anomalies("hi", {_canonical(bad)})
+
+
 @pytest.mark.hypothesis
 @given(s=_surrogate_text)
 def test_surrogate_totality_matches_reference(s: str) -> None:

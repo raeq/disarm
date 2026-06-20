@@ -40,12 +40,16 @@ def _wtf8(s: str) -> str:
 
 
 def _scrub(value: Any) -> Any:
-    """Scrub strings (and lists/tuples of them — e.g. stopwords, lexicons); pass
-    everything else through unchanged. Identity on valid input."""
+    """Scrub strings and any container of them — lists/tuples (stopwords), sets/
+    frozensets (lexicon / anomaly word sets, e.g. `has_anomalies`), and dicts
+    (`register_lang` / `register_replacements` tables, keys and values). Everything
+    else passes through unchanged; identity on valid input."""
     if isinstance(value, str):
         return _wtf8(value)
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple, set, frozenset)):
         return type(value)(_scrub(item) for item in value)
+    if isinstance(value, dict):
+        return {_scrub(k): _scrub(v) for k, v in value.items()}
     return value
 
 

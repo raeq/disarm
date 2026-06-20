@@ -1348,3 +1348,32 @@ pub(crate) fn script(name: &str) -> Option<&'static ScriptRow> {
         .ok()
         .map(|i| &SCRIPTS_META[i].1)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn langs_sorted_by_code() {
+        assert!(
+            LANGS.windows(2).all(|w| w[0].0 < w[1].0),
+            "LANGS must be strictly sorted by code for binary_search"
+        );
+    }
+
+    #[test]
+    fn scripts_meta_sorted_by_name() {
+        assert!(
+            SCRIPTS_META.windows(2).all(|w| w[0].0 < w[1].0),
+            "SCRIPTS_META must be strictly sorted by name for binary_search"
+        );
+    }
+
+    #[test]
+    fn scripts_sorted_and_unique() {
+        assert!(
+            SCRIPTS.windows(2).all(|w| w[0] < w[1]),
+            "SCRIPTS must be strictly sorted and unique"
+        );
+    }
+}

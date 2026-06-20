@@ -102,6 +102,13 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
     let mut filtered = String::with_capacity(text.len());
     let mut mark_count: usize = 0;
 
+    // The cap is counted over the *NFD (decomposed)* sequence, so it bounds the
+    // number of combining marks per base in decomposed space — a precomposed
+    // accented letter (e.g. `é` = one mark in NFD) costs one toward the cap, and a
+    // base carrying N stacked marks is capped to `max_marks` of them. The final NFC
+    // recompose may then re-attach kept marks into precomposed forms; the count is
+    // deliberately taken *before* that recompose so stacking is measured uniformly
+    // regardless of the input's composition.
     for ch in text.nfd() {
         if is_combining_mark(ch) {
             mark_count += 1;

@@ -29,8 +29,13 @@ use crate::utils::floor_char_boundary;
 
 /// Check if a stem (filename without extension) matches a Windows reserved name.
 fn is_windows_reserved(stem: &str) -> bool {
-    let upper = stem.to_uppercase();
-    WINDOWS_RESERVED.iter().any(|r| upper == *r)
+    // Windows reserved-name matching is ASCII case-insensitive, and every
+    // `WINDOWS_RESERVED` entry is ASCII (`CON`, `PRN`, `COM1`, …). Compare with
+    // `eq_ignore_ascii_case` rather than allocating a Unicode-uppercased `String`
+    // per call — same result, no allocation, and a closer match to the OS rule.
+    WINDOWS_RESERVED
+        .iter()
+        .any(|r| stem.eq_ignore_ascii_case(r))
 }
 
 /// Apply max_length truncation with optional extension preservation.

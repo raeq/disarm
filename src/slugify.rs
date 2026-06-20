@@ -31,7 +31,12 @@ fn compile_regex(pattern: &str) -> Result<regex::Regex, crate::ErrorRepr> {
         });
     }
     regex::RegexBuilder::new(pattern)
+        // Bound both the compiled-program size and the match-time lazy-DFA cache by
+        // the project constant (S-1). Without `dfa_size_limit` the match-time cache
+        // used the regex-crate default, not our limit — symmetry hardening on the one
+        // caller-supplied-regex path.
         .size_limit(MAX_REGEX_DFA_BYTES)
+        .dfa_size_limit(MAX_REGEX_DFA_BYTES)
         .build()
         .map_err(|e| crate::ErrorRepr::RegexCompile {
             pattern: pattern.to_owned(),

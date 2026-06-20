@@ -153,6 +153,27 @@ Unlike `canonicalize`, this pipeline also strips zalgo text (excessive combining
 
 ---
 
+## strip_obfuscation
+
+::: disarm.strip_obfuscation
+
+### Pipeline steps
+
+`NFKC → strip_zalgo(0) → strip_bidi → strip_zero_width → demojize → strip invisibles (#413) → confusables → strip_accents → strip_control → collapse_whitespace`
+
+```python
+from disarm import strip_obfuscation
+
+# Homoglyphs (Greek/Cyrillic) folded, bidi override removed, emoji expanded.
+assert strip_obfuscation("Ηеllо‮Wоrld \U0001F600") == "HelloWorld grinning face"
+# Strips ALL combining marks (zalgo and accents) but preserves case.
+assert strip_obfuscation("Cáfé") == "Cafe"
+```
+
+Maximum-strength deobfuscation for content moderation, anti-phishing, and spam/NLP preprocessing. Strips every combining mark (zalgo **and** accents), resolves homoglyphs by TR39 visual similarity (Cyrillic `р`→`p`, not phonetic `р`→`r`), and expands emoji to text. **Preserves case** — case is meaningful, not deception. Confusable normalization runs *after* `demojize` so typographic punctuation inside emoji names is folded too. Does **not** transliterate; chain `transliterate()` on the result if you also need phonetic romanization.
+
+---
+
 ## PRESETS
 
 ```python

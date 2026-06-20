@@ -304,6 +304,38 @@ class Text:
         )
         return self.strip_format()
 
+    def canonicalize_strict(self) -> Text:
+        """Apply the canonicalize_strict precompiled pipeline.
+
+        Strict Unicode hygiene for untrusted input: NFKC → strip bidi/format,
+        zero-width and control → strip invisibles (#413) → strip_zalgo →
+        confusables → collapse whitespace → NFC. Like :meth:`canonicalize` but
+        also strips zalgo, and unlike the key presets it does not transliterate —
+        the original script is preserved.
+        """
+        return Text(self._t().canonicalize_strict(self._value))
+
+    def normalize_user_input(self) -> Text:
+        """Deprecated alias for :meth:`canonicalize_strict` (#430); removed in 1.0."""
+        warnings.warn(
+            "Text.normalize_user_input is deprecated; use Text.canonicalize_strict "
+            "(removed in 1.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.canonicalize_strict()
+
+    def strip_obfuscation(self) -> Text:
+        """Apply the strip_obfuscation precompiled pipeline.
+
+        Maximum-strength deobfuscation: NFKC → strip_zalgo(0) → strip bidi →
+        strip zero-width → demojize → strip invisibles (#413) → confusables →
+        strip_accents → strip control → collapse whitespace. Strips all combining
+        marks (zalgo and accents) and resolves homoglyphs by visual similarity,
+        but preserves case and does not transliterate.
+        """
+        return Text(self._t().strip_obfuscation(self._value))
+
     # ── Non-chaining predicates ──────────────────────────────────
 
     def is_ascii(self) -> bool:

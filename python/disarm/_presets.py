@@ -326,7 +326,7 @@ def strip_tags(text: str) -> str:
 def strip_variation_selectors(text: str) -> str:
     """Strip every variation selector (VS1–VS16 and VS17–VS256).
 
-    These are the arbitrary-byte smuggling channel. Use ``display_clean`` if you
+    These are the arbitrary-byte smuggling channel. Use ``strip_format`` if you
     need to keep the VS15/VS16 presentation selectors for rendering.
 
     Examples:
@@ -351,7 +351,7 @@ def strip_pua(text: str) -> str:
 
     PUA renders as arbitrary, font-defined glyphs (icon fonts, platform logos).
     Stripped by the comparison presets; use this helper to apply the same policy
-    directly, or ``display_clean`` to *preserve* PUA for rendering.
+    directly, or ``strip_format`` to *preserve* PUA for rendering.
 
     Examples:
         >>> strip_pua("a\\ue000b")

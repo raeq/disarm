@@ -13,6 +13,23 @@
 //! Targets magnus 0.8 (Ruby >= 3.1). Build via rake-compiler / rb-sys, not
 //! `cargo build` directly (it needs the Ruby headers rb-sys configures).
 
+// S-4: this shim is an FFI boundary that must never panic across into Ruby. Lock
+// that in structurally with the no-panic restriction lints (caught by the binding's
+// clippy gate). The handful of `Ruby::get().expect(...)` calls are GVL invariants
+// (a Ruby callback always holds the GVL) and carry a local `#[allow]` with that
+// justification; everything else must return a magnus `Error`, never panic.
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::panic,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
+
 use std::collections::HashSet;
 
 use disarm_core::api;
@@ -30,7 +47,9 @@ use magnus::{function, method, prelude::*, Error, RHash, Ruby};
 fn map_err(e: &disarm_core::Error) -> Error {
     // magnus 0.8 moved the exception-class constructors onto the `Ruby` handle
     // (Ractor-safety). map_err is only ever called from inside a Ruby method
-    // callback, so the GVL is held and `Ruby::get()` cannot fail.
+    // callback, so the GVL is held and `Ruby::get()` cannot fail — a justified
+    // exception to the no-panic gate above.
+    #[allow(clippy::expect_used)]
     let ruby = Ruby::get().expect("map_err must run while holding the Ruby GVL");
     let class = match e.kind() {
         disarm_core::ErrorKind::InvalidArgument => ruby.exception_arg_error(),
@@ -374,6 +393,8 @@ fn inspect_auto_lang(text: String) -> (Option<String>, Option<String>, String, V
 /// Disarm::InvalidArgument) on an unknown code.
 fn lang_info(code: String) -> Result<RHash, Error> {
     let meta = api::lang_info(&code).map_err(|e| map_err(&e))?;
+    // GVL invariant: a Ruby method callback always holds the GVL. Justified.
+    #[allow(clippy::expect_used)]
     let ruby = Ruby::get().expect("a Ruby method callback always holds the GVL");
     let hash = ruby.hash_new();
     hash.aset(ruby.to_symbol("name"), meta.name)?;
@@ -389,6 +410,8 @@ fn lang_info(code: String) -> Result<RHash, Error> {
 /// Disarm::InvalidArgument) on an unknown script.
 fn script_info(name: String) -> Result<RHash, Error> {
     let meta = api::script_info(&name).map_err(|e| map_err(&e))?;
+    // GVL invariant: a Ruby method callback always holds the GVL. Justified.
+    #[allow(clippy::expect_used)]
     let ruby = Ruby::get().expect("a Ruby method callback always holds the GVL");
     let hash = ruby.hash_new();
     hash.aset(ruby.to_symbol("name"), meta.name)?;

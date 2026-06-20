@@ -109,8 +109,9 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 - No transform panics on any input. The confusable / normalization / bidi-stripping
   transforms are table-driven and linear-time (no regex). `unsafe` is forbidden
   crate-wide (`unsafe_code = "forbid"`). (Note: `slugify` accepts a *caller-supplied*
-  separator regex — bounded by an input-size cap — which is the one regex path and is not
-  part of the security transforms; see the DoS item under *Out of scope*.)
+  separator regex — bounded by a cap on the **regex pattern length** plus compiled-program
+  and match-time DFA size limits, not a cap on the input text — which is the one regex path
+  and is not part of the security transforms; see the DoS item under *Out of scope*.)
 
 > **Output encoders are the narrow, context-pinned exception to "disarm is not an output
 > sanitizer."** `escape_html` and `percent_encode` are *terminal* encoders, applied at the

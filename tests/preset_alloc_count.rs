@@ -126,4 +126,30 @@ fn preset_per_call_allocations_are_bounded() {
         n, 0,
         "canonicalize on benign non-ASCII allocated {n} times/call (Option D expected 0)"
     );
+
+    // #464 WhitespaceOnly fast path: benign ASCII that is clean except for
+    // whitespace (here a trailing space + a doubled interior space) reduces to a
+    // single `collapse_whitespace` pass — one allocation for the owned output,
+    // versus the 5–10 of the full pipeline. It cannot be zero (the result differs
+    // from the borrowed input), but it must stay at the single collapse-output alloc.
+    let ws_dirty = "the quick brown fox  jumps over the lazy dog. hello world. ";
+    for (name, n) in [
+        (
+            "canonicalize",
+            allocs_for(|| {
+                let _ = disarm::api::canonicalize(ws_dirty);
+            }),
+        ),
+        (
+            "strip_obfuscation",
+            allocs_for(|| {
+                let _ = disarm::api::strip_obfuscation(ws_dirty);
+            }),
+        ),
+    ] {
+        assert!(
+            n <= 1,
+            "{name} on whitespace-only-dirty ASCII allocated {n} times/call (#464 expected <=1)"
+        );
+    }
 }

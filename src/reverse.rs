@@ -13,7 +13,14 @@
 include!(concat!(env!("OUT_DIR"), "/reverse_translit_phf.rs"));
 
 /// Maximum key length in any reverse table (for greedy matching window).
-const MAX_KEY_LEN: usize = 4; // "shch" is the longest key
+///
+/// This is a length in **bytes** used to size the byte-window scan in
+/// `reverse_transliterate_impl`. It equals the longest key's *character* count
+/// only because every reverse key is ASCII (one byte per char) — a romanization
+/// alphabet. If a non-ASCII key is ever added, this byte/char equivalence breaks
+/// and the greedy window would need a byte-length bound; the invariant is guarded
+/// by `reverse_keys_are_ascii`.
+const MAX_KEY_LEN: usize = 4; // "shch" is the longest key (4 ASCII bytes)
 
 /// Look up a romanized substring in the appropriate reverse table.
 fn reverse_lookup(key: &str, lang: &str) -> Option<&'static str> {
@@ -107,6 +114,30 @@ pub(crate) fn reverse_transliterate_impl(text: &str, lang: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Corr-Low: the greedy byte-window scan and `MAX_KEY_LEN` assume every reverse
+    // key is ASCII (byte length == char length). Guard the assumption so a future
+    // non-ASCII key (which would silently break the window bound) is caught here.
+    #[test]
+    fn reverse_keys_are_ascii() {
+        for (lang, table) in [
+            ("ru", &REVERSE_RU),
+            ("uk", &REVERSE_UK),
+            ("el", &REVERSE_EL),
+        ] {
+            for key in table.keys() {
+                assert!(
+                    key.is_ascii(),
+                    "reverse key {key:?} ({lang}) is non-ASCII — MAX_KEY_LEN byte/char \
+                     equivalence and the greedy window no longer hold"
+                );
+                assert!(
+                    key.len() <= MAX_KEY_LEN,
+                    "reverse key {key:?} ({lang}) exceeds MAX_KEY_LEN={MAX_KEY_LEN}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_russian_basic() {

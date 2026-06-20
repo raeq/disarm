@@ -158,6 +158,22 @@ pub mod tables;
 // `ErrorRepr -> PyErr` conversion, and `emit_py_warning` are all under this feature.
 #[cfg(feature = "extension-module")]
 #[doc(hidden)]
+// S-4: the PyO3 shim layer is an FFI boundary that must never panic on caller
+// input. Lock that in structurally with the no-panic restriction lints, scoped to
+// this module (the core uses `unwrap`/indexing freely under its own invariants).
+// Enforced by `cargo clippy --features extension-module` (pre-push step 6).
+#[cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::string_slice,
+        clippy::panic,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 mod py;
 
 /// The private compiled extension module, imported as `disarm._core` (the public

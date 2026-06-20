@@ -14,6 +14,23 @@
 //! with `DisarmInvalidArgument:` (vs `DisarmError:`) so the TS layer can raise the
 //! matching error subclass.
 
+// S-4: this shim is an FFI boundary that must never panic across into Node. Lock
+// that in structurally with the no-panic restriction lints (caught by the binding's
+// clippy gate). A genuine invariant violation should return a `napi::Error`, not
+// `unwrap`/`panic`.
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::string_slice,
+        clippy::panic,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
+
 use std::collections::HashSet;
 
 use disarm_core::api;

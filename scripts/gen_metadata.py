@@ -108,6 +108,39 @@ def main() -> None:
         "    SCRIPTS_META.binary_search_by_key(&name, |(k, _)| *k).ok().map(|i| &SCRIPTS_META[i].1)",
         "}",
         "",
+        # C-1: `lang()`/`script()` binary-search these arrays, so they must stay
+        # strictly sorted (and unique) by key. Emitted alongside the data so a
+        # future out-of-order `gen_metadata.py` change is caught, mirroring
+        # `builtin_langs_is_sorted` in `tables/mod.rs`.
+        "#[cfg(test)]",
+        "mod tests {",
+        "    use super::*;",
+        "",
+        "    #[test]",
+        "    fn langs_sorted_by_code() {",
+        "        assert!(",
+        "            LANGS.windows(2).all(|w| w[0].0 < w[1].0),",
+        '            "LANGS must be strictly sorted by code for binary_search"',
+        "        );",
+        "    }",
+        "",
+        "    #[test]",
+        "    fn scripts_meta_sorted_by_name() {",
+        "        assert!(",
+        "            SCRIPTS_META.windows(2).all(|w| w[0].0 < w[1].0),",
+        '            "SCRIPTS_META must be strictly sorted by name for binary_search"',
+        "        );",
+        "    }",
+        "",
+        "    #[test]",
+        "    fn scripts_sorted_and_unique() {",
+        "        assert!(",
+        "            SCRIPTS.windows(2).all(|w| w[0] < w[1]),",
+        '            "SCRIPTS must be strictly sorted and unique"',
+        "        );",
+        "    }",
+        "}",
+        "",
     ]
     OUT.write_text("\n".join(lines) + "\n")
     # Canonicalize with rustfmt (edition 2021) so the committed file matches what

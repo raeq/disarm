@@ -114,6 +114,15 @@ class Text:
     def display_clean(self) -> Text:
         """Deprecated alias for :meth:`strip_format` (#430); removed in 1.0."""
         ...
+    def canonicalize_strict(self) -> Text:
+        """Apply the strict canonicalization pipeline (Unicode hygiene + zalgo, no transliteration)."""
+        ...
+    def normalize_user_input(self) -> Text:
+        """Deprecated alias for :meth:`canonicalize_strict` (#430); removed in 1.0."""
+        ...
+    def strip_obfuscation(self) -> Text:
+        """Apply the maximum-strength deobfuscation pipeline (marks, homoglyphs, emoji; preserves case)."""
+        ...
 
     # Non-chaining predicates
     def is_ascii(self) -> bool:

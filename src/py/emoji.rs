@@ -51,7 +51,9 @@ fn try_python_provider(
 
     // Try longest first
     for len in (1..=try_len).rev() {
-        let seq: Vec<u32> = window[..len].iter().map(|c| *c as u32).collect();
+        // `len <= try_len <= window.len()`, so this is in bounds; `take(len)` makes
+        // that panic-free without an index (satisfies the FFI no-panic gate).
+        let seq: Vec<u32> = window.iter().take(len).map(|c| *c as u32).collect();
         let py_seq = PyList::new(py, &seq).ok()?;
 
         let result = match provider.call_method1(py, "lookup", (py_seq,)) {

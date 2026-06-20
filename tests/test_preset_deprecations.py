@@ -49,7 +49,11 @@ def test_deprecated_alias_warns(old: str, new: str) -> None:
 
 @pytest.mark.parametrize(
     "old,new",
-    [("security_clean", "canonicalize"), ("display_clean", "strip_format")],
+    [
+        ("security_clean", "canonicalize"),
+        ("display_clean", "strip_format"),
+        ("normalize_user_input", "canonicalize_strict"),
+    ],
 )
 def test_deprecated_text_builder_method(old: str, new: str) -> None:
     """The Text builder's renamed methods warn and match the new method."""

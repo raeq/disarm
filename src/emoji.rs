@@ -263,6 +263,10 @@ pub(crate) fn is_emoji_codepoint(ch: char) -> bool {
         0x2B50..=0x2B55 |     // Additional symbols
         0xFE00..=0xFE0F |     // Variation selectors
         0x1F000..=0x1FAFF |   // Supplementary emoji blocks
+        // GAP — U+1FB00..=U+1FBFF (Symbols for Legacy Computing) is intentionally
+        // excluded: it is box-drawing / teletext / segmented-display graphics, not
+        // emoji, and carries no RGI emoji property. Skipping it keeps demojize from
+        // expanding legacy terminal art into emoji names.
         0x1FC00..=0x1FFFF |   // Future emoji blocks
         0xE0020..=0xE007F     // Tags (used in flag sequences)
     )

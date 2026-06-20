@@ -1,5 +1,6 @@
 """Tests for the fluent Text builder API."""
 
+import disarm
 from disarm import Text
 from disarm._enums import Script
 
@@ -269,6 +270,23 @@ class TestPipelineMethods:
         result = Text("hello\x00  world").strip_format().value
         assert "\x00" not in result
         assert "  " not in result
+
+    def test_canonicalize_strict(self) -> None:
+        # Strips zalgo (excess marks) while preserving the script; matches the
+        # module-level preset (parity).
+        zalgo = "hé́́́llo"
+        assert Text(zalgo).canonicalize_strict().value == disarm.canonicalize_strict(zalgo)
+        # Homoglyph folded, bidi removed.
+        assert Text("pаypal").canonicalize_strict().value == "paypal"
+
+    def test_strip_obfuscation(self) -> None:
+        # Strips accents + homoglyphs, preserves case; matches the module preset.
+        assert Text("Cáfé").strip_obfuscation().value == disarm.strip_obfuscation("Cáfé")
+        assert Text("Cáfé").strip_obfuscation().value == "Cafe"
+
+    def test_strip_obfuscation_chain(self) -> None:
+        # A pipeline method can be followed by further transforms.
+        assert Text("Cáfé").strip_obfuscation().fold_case().value == "cafe"
 
     def test_grapheme_len(self) -> None:
         # Family emoji = 1 grapheme

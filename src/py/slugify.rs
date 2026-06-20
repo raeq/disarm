@@ -307,13 +307,20 @@ fn build_unique_candidate(base: &str, counter: u64, config: &SlugConfig) -> (Str
             // digits is the aliasing case, so flag it lossy.
             let boundary = floor_char_boundary(&suffix, config.max_length);
             lossy = boundary < suffix.len();
+            // `floor_char_boundary` returns a valid char boundary <= len, so this
+            // slice cannot panic — a justified exception to the FFI no-panic gate.
+            #[allow(clippy::string_slice)]
             suffix[..boundary].clone_into(&mut candidate);
         } else {
             // Only the base is truncated; the full `{sep}{counter}` is preserved,
             // so the counter stays faithfully encoded (not lossy).
             let avail = config.max_length - suffix.len();
             let boundary = floor_char_boundary(base, avail);
-            candidate = format!("{}{suffix}", &base[..boundary]);
+            // `floor_char_boundary` returns a valid char boundary <= len, so this
+            // slice cannot panic — a justified exception to the FFI no-panic gate.
+            #[allow(clippy::string_slice)]
+            let head = &base[..boundary];
+            candidate = format!("{head}{suffix}");
         }
     }
     (candidate, lossy)

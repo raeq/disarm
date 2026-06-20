@@ -1,11 +1,5 @@
 use std::borrow::Cow;
 
-// Only the test module's `nfc()` helper uses the `.nfc()` extension method now —
-// the presets normalize via `crate::normalize::normalize_into`. Gate the trait
-// import to test builds so the non-test lib build has no unused import.
-#[cfg(test)]
-use unicode_normalization::UnicodeNormalization;
-
 use crate::{case_fold, confusables, emoji, invisibles, transliterate, whitespace, zalgo};
 
 /// #413 strip policy for the comparison/storage presets (`canonicalize`,
@@ -177,13 +171,25 @@ fn apply_into(
             let mut cur = input.to_owned();
             let mut conf = String::new();
             let mut nxt = String::new();
+            // P-2: once `cur` has been through an NFC pass it is NFC-stable, so when a
+            // later confusables pass changes nothing (`conf == cur`) the trailing NFC
+            // is a no-op — skip it and stop, sparing a full-string normalization on the
+            // terminal iteration. On the first iteration `cur` is the step input, whose
+            // NFC-ness is unknown (`canonicalize_strict` reaches this step without an
+            // immediately-preceding NFC), so the NFC still runs there. The result is
+            // byte-identical to normalizing on every pass.
+            let mut cur_is_nfc = false;
             for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
                 confusables::normalize_confusables_into(&cur, target, &mut conf)?;
+                if conf == cur && cur_is_nfc {
+                    break;
+                }
                 crate::normalize::normalize_into(&conf, "NFC", &mut nxt)?;
                 if nxt == cur {
                     break;
                 }
                 std::mem::swap(&mut cur, &mut nxt);
+                cur_is_nfc = true;
             }
             if cur == input {
                 Ok(false)
@@ -363,13 +369,18 @@ fn acts_on_nonascii(
 ) -> bool {
     // Transliterate can map *any* non-ASCII code point (the table covers Latin-1
     // symbols like `×`→`x` too, not just non-Latin scripts), so for a transliterating
-    // preset every non-ASCII char is actionable.
-    m.transliterate
-        || (m.nfkc && nfkc_changes(ch))
-        || (m.marks && unicode_normalization::char::is_combining_mark(ch))
-        || (m.strip_accents && decomposes_to_mark(ch))
-        || m.zalgo_cap.is_some_and(|cap| nfd_mark_run_exceeds(ch, cap))
-        || (m.fold_case && ch.is_alphabetic()) // case folding touches cased letters
+    // preset every non-ASCII char is actionable — and it dominates the cost, so test
+    // it first and short-circuit the whole scan to O(1)/char.
+    if m.transliterate {
+        return true;
+    }
+    // P-1: cheap pure-range / single-lookup classes first; the costliest predicates —
+    // the single-scalar NFKC/NFD normalization *iterators* (`nfkc_changes`,
+    // `decomposes_to_mark`, `nfd_mark_run_exceeds`) — run last, only when nothing
+    // cheaper already marked the char. `||` is commutative for the *result*, so the
+    // reordering is purely a per-char cost change; the `fast_path_equivalence`
+    // proptest and the tier-3 exhaustive non-ASCII audit pin the result invariant.
+    (m.marks && unicode_normalization::char::is_combining_mark(ch))
         // StripControl removes the C1 controls (U+0080–U+009F) too, not just C0.
         || (m.controls && ch.is_control() && !whitespace::is_fold_whitespace(ch))
         // CollapseWs folds non-ASCII whitespace (NEL, NBSP, the Unicode spaces) and
@@ -384,8 +395,19 @@ fn acts_on_nonascii(
                 || invisibles::is_noncharacter(ch)
                 || invisibles::is_pua(ch)
                 || ch == '\u{034F}')) // CGJ
+        // FP-1: gate on the fold *table* (`case_folding.tsv`, the actual authority
+        // `fold_case_into` consults), not std `is_alphabetic`. The table folds some
+        // non-alphabetic code points (circled capitals `Ⓐ`, Roman numerals `Ⅰ`) that
+        // `is_alphabetic` misses — an under-mark — and skips many alphabetics (CJK)
+        // it never folds. The table match can neither under- nor over-mark relative
+        // to the fold step, decoupling soundness from std's Unicode version.
+        || (m.fold_case && crate::tables::case_folding_data::lookup(ch).is_some())
         || (m.confusables && conf_map.is_some_and(|map| map.contains_key(&ch)))
         || (m.demojize && is_demojizable(ch))
+        // ── costliest last: single-scalar NFKC/NFD normalization iterators (P-1) ──
+        || (m.nfkc && nfkc_changes(ch))
+        || (m.strip_accents && decomposes_to_mark(ch))
+        || m.zalgo_cap.is_some_and(|cap| nfd_mark_run_exceeds(ch, cap))
 }
 
 /// Three-way verdict from the fast-path guard (#458 + #464).
@@ -914,10 +936,15 @@ fn transliterate_preserving_latin_into(text: &str, lang: Option<&str>, out: &mut
         // Latin (incl. Latin-1 Supplement / Extended accented letters), Common,
         // and Inherited (combining diacritics) are kept as-is; everything else
         // is buffered into the current run and transliterated at the next break.
-        if matches!(
-            crate::scripts::detect_char_script(ch),
-            "Latin" | "Common" | "Inherited"
-        ) {
+        // P-3: every ASCII code point is Latin or Common (asserted by
+        // `ascii_is_always_kept_verbatim`), so skip the per-char script binary
+        // search on the hot ASCII path and keep it verbatim directly.
+        if ch.is_ascii()
+            || matches!(
+                crate::scripts::detect_char_script(ch),
+                "Latin" | "Common" | "Inherited"
+            )
+        {
             flush(&mut run, out);
             out.push(ch);
         } else {
@@ -929,8 +956,12 @@ fn transliterate_preserving_latin_into(text: &str, lang: Option<&str>, out: &mut
 
 /// Sort key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → fold_case → transliterate-non-Latin →
-/// collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → fold_case → transliterate-non-Latin → fold_case
+/// → collapse_whitespace → NFC (if non-ASCII)
+///
+/// The second `fold_case` lowercases any uppercase a transliteration *emits* (e.g.
+/// Old Persian `𐏈` → `Auramazda`), and the terminal NFC recomposes a base+mark left
+/// adjacent by a stripped invisible — both required for `f(f(x)) == f(x)` (#419/#416).
 ///
 /// Like [`search_key`] but **preserves base accented characters** so the accent
 /// survives for ordering: "Über" folds to `über` (not `uber`), staying distinct
@@ -1265,6 +1296,60 @@ mod tests {
     #[should_panic(expected = "only Latin confusable targets")]
     fn fast_path_rejects_non_latin_confusable_target() {
         let _ = Actionable::for_steps(&[Step::Confusables("cyrillic")]);
+    }
+
+    /// FP-1: the `fold_case` actionability predicate gates on the fold *table*
+    /// (`case_folding.tsv`), not std `is_alphabetic`, so it can neither under-mark a
+    /// char the fold changes nor over-mark one it leaves alone — decoupling soundness
+    /// from std's Unicode version. The observable proof is the over-mark direction: a
+    /// CJK ideograph is `is_alphabetic` (the old gate marked it) but is not in the
+    /// fold table, so the table-gated predicate leaves it inert; a circled capital
+    /// the table *does* fold stays marked.
+    #[test]
+    fn fast_path_fold_case_predicate_uses_fold_table_not_is_alphabetic() {
+        let fold_only = Actionable {
+            controls: false,
+            collapse_ws: false,
+            fold_case: true,
+            confusables: false,
+            nfkc: false,
+            marks: false,
+            strip_accents: false,
+            zalgo_cap: None,
+            bidi: false,
+            zero_width: false,
+            invisible: false,
+            transliterate: false,
+            demojize: false,
+        };
+        // `日` (U+65E5): alphabetic but not foldable — the old `is_alphabetic` gate
+        // over-marked it; the fold-table gate does not.
+        assert!('日'.is_alphabetic());
+        assert!(crate::tables::case_folding_data::lookup('日').is_none());
+        assert!(
+            !acts_on_nonascii('日', fold_only, None),
+            "CJK is not folded, so the table-gated predicate must leave it inert"
+        );
+        // `Ⓐ` (U+24B6): in the fold table (→ `ⓐ`) — must stay marked.
+        assert!(crate::tables::case_folding_data::lookup('\u{24B6}').is_some());
+        assert!(
+            acts_on_nonascii('\u{24B6}', fold_only, None),
+            "a foldable char must be marked actionable"
+        );
+    }
+
+    /// P-3 premise: every ASCII code point is `Latin` or `Common`, so
+    /// `transliterate_preserving_latin_into` keeps it verbatim and may skip the
+    /// per-char script binary search. Lock the assumption.
+    #[test]
+    fn ascii_is_always_kept_verbatim() {
+        for b in 0u8..128 {
+            let script = crate::scripts::detect_char_script(b as char);
+            assert!(
+                matches!(script, "Latin" | "Common" | "Inherited"),
+                "ASCII U+{b:02X} has script {script:?} — the P-3 ASCII fast path would mis-handle it"
+            );
+        }
     }
 
     /// Option D exhaustive audit (tier 3): every BMP + key-astral code point, in
@@ -1953,12 +2038,6 @@ mod tests {
             .prop_map(|cs| cs.into_iter().collect())
         }
 
-        /// Compare under NFC: NFKC can reorder combining marks of equal
-        /// canonical combining class, which is canonically equivalent.
-        fn nfc(s: &str) -> String {
-            s.nfc().collect()
-        }
-
         /// #458 fast-path generator: dense in the bytes that exercise every ASCII
         /// actionable class and its boundaries — uppercase (FoldCase), whitespace
         /// incl. fold-controls and boundary/run spaces (CollapseWs), C0/DEL
@@ -2117,9 +2196,15 @@ mod tests {
 
             #[test]
             fn strip_obfuscation_idempotent(s in adversarial()) {
+                // Assert *raw* equality, matching the four peer presets. NFKC up front,
+                // the all-marks zalgo strip, confusable fold (run after demojize so
+                // typographic punctuation in CLDR names folds too), accent strip and
+                // whitespace collapse leave a stable fixed point — `strip_accents`'
+                // terminal NFC means no decomposed tail survives — so the weaker
+                // nfc-modulo form (which could mask a real non-idempotency) is not needed.
                 let once = strip_obfuscation(&s).unwrap();
                 let twice = strip_obfuscation(&once).unwrap();
-                prop_assert_eq!(nfc(&once), nfc(&twice));
+                prop_assert_eq!(&once, &twice);
             }
 
             #[test]

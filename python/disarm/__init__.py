@@ -64,7 +64,7 @@ from disarm._api import (
     terminal_width,
     transliterate,
 )
-from disarm._core import (
+from disarm._boundary import (
     AnomalyReport,
     DisarmError,
     Finding,

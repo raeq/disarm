@@ -21,10 +21,11 @@ from collections.abc import Callable
 from typing import Any
 
 from disarm import find_untranslatable, strip_accents, transliterate
-from disarm._core import (
+from disarm._boundary import (
     InvalidArgumentError,
     UnsupportedError,
     _Slugifier,
+    _surrogate_safe,
     _UniqueSlugifier,
 )
 
@@ -297,6 +298,9 @@ class Slugify:
             return result[0].upper() + result[1:]
         return result
 
+    # #469: the inner `_Slugifier.slugify` is an instance-method boundary the
+    # module-level `_boundary` wrap does not cover, so guard the public call here.
+    @_surrogate_safe
     def __call__(self, text: str, **kwargs: Any) -> str:
         if kwargs:
             merged = {**self._kwargs}
@@ -371,6 +375,7 @@ class UniqueSlugify(Slugify):
             self._dirty = False
         return self._unique_inner
 
+    @_surrogate_safe  # #469: guard the inner-method boundary (see Slugify.__call__)
     def __call__(self, text: str, **kwargs: Any) -> str:
         result = str(self._ensure_unique_inner().slugify(text))
         return self._capitalize_first(result, self._capitalize)

@@ -129,6 +129,24 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 > nothing mistakes it for viewer-safe output, does no NFKC/confusable folding, and does not
 > address logging-framework interpolation (log4shell `${jndi:...}`).
 
+### Malformed-Unicode input at the binding boundary (#469)
+
+Untrusted text reaches the bindings as a host-language string that may contain
+**unpaired surrogates** — a Python `str` from `surrogateescape`/WTF-8 decoding, a
+JS UTF-16 string with broken pairs, or invalid UTF-8 bytes in Ruby. These have no
+UTF-8 encoding and so cannot become a Rust `&str`. Rather than leak the host's
+encoding exception on a per-message hot path, every binding **sanitizes at the
+boundary** with a defined, uniform contract: the input is interpreted as **WTF-8 →
+UTF-8**, so a well-formed high+low surrogate pair is recombined into its astral
+scalar and each genuinely lone surrogate code unit is replaced with exactly one
+`U+FFFD` (the Unicode replacement character). No public entrypoint raises an
+encoding error on this input, and the result is exactly what the same call would
+produce on the sanitized string. The substituted `U+FFFD` is **terminal** — this
+neutralizes the malformed input, it does **not** recover the original bytes, so a
+token a surrogate was splitting stays split (`ba<lone>d` → `ba`U+FFFD`d`). Valid
+input, including astral characters, is unaffected. (Python and Node honor this
+today; Ruby is tracked in #472.)
+
 ## Out of scope — by design, not bugs
 
 These are **known limitations**. A "bypass" that relies on any of them is expected

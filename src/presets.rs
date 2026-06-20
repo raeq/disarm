@@ -69,6 +69,14 @@ enum Step {
     TranslitPreservingLatin,
     Confusables(&'static str),
     ConfusablesNfcFixedPoint(&'static str),
+    /// Iterate an inner step list to a fixed point (#467). The catalog key's
+    /// romanization core (`transliterate → confusables → strip_accents`) is not a
+    /// fixed point in a single pass: `strip_accents` can drop the U+0338 overlay of
+    /// a negated relation and expose a confusable the fold already passed
+    /// (`∤`→`∣`→`l`); `confusables` can emit a letter `transliterate` folds
+    /// (`ᴔ`→`ǝo`, then `ǝ`→`e`); and the maps chain. Looping the whole core makes
+    /// the preset idempotent. The inner list must not itself contain `FixedPoint`.
+    FixedPoint(&'static [Step]),
     Demojize {
         only_if_cldr: bool,
     },
@@ -198,6 +206,27 @@ fn apply_into(
                 Ok(true)
             }
         }
+        Step::FixedPoint(inner) => {
+            // #467: apply the inner sub-pipeline repeatedly until its output
+            // stabilizes. Each pass runs `inner` once via the same ping-pong as
+            // `run`; every pass folds at least one more form (a confusable exposed by
+            // strip-accents, or a letter the next transliterate pass romanizes), so
+            // it converges in a couple of passes and is bounded by the cap.
+            let mut cur = input.to_owned();
+            for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
+                let next = apply_steps(inner, &cur, ctx)?;
+                if next == cur {
+                    break;
+                }
+                cur = next;
+            }
+            if cur == input {
+                Ok(false)
+            } else {
+                *out = cur;
+                Ok(true)
+            }
+        }
         Step::Demojize { only_if_cldr } => {
             if only_if_cldr && !ctx.emoji_cldr {
                 return Ok(false);
@@ -277,6 +306,18 @@ impl Actionable {
                     );
                     m.confusables = true;
                 }
+                Step::FixedPoint(inner) => {
+                    // A fixed-point loop changes exactly what its inner steps change,
+                    // so its mask is their union (#467). Recurses one level only —
+                    // enforce that the inner list has no nested `FixedPoint`, keeping
+                    // the `apply_into`/`apply_steps` recursion bounded (it runs in the
+                    // equivalence tests over every preset, so a violation is caught).
+                    debug_assert!(
+                        !inner.iter().any(|s| matches!(s, Step::FixedPoint(_))),
+                        "FixedPoint inner list must not contain a nested FixedPoint"
+                    );
+                    m.union(Self::for_steps(inner));
+                }
                 Step::Nfkc | Step::Nfc | Step::NfcIfNonAscii => {
                     m.nfkc = true;
                     m.marks = true; // normalization composes/reorders combining marks
@@ -299,6 +340,31 @@ impl Actionable {
             }
         }
         m
+    }
+
+    /// OR another mask's classes into this one — used to fold a `FixedPoint`'s inner
+    /// mask into the outer preset's (#467).
+    fn union(&mut self, o: Self) {
+        self.controls |= o.controls;
+        self.collapse_ws |= o.collapse_ws;
+        self.fold_case |= o.fold_case;
+        self.confusables |= o.confusables;
+        self.nfkc |= o.nfkc;
+        self.marks |= o.marks;
+        self.strip_accents |= o.strip_accents;
+        // A *smaller* cap marks more chars actionable (`nfd_mark_run_exceeds`), so the
+        // conservative union is the minimum when both are `Some` — `or` alone would
+        // under-approximate. (No shipped `FixedPoint` inner sets zalgo_cap, so this is
+        // belt-and-suspenders, but it keeps `union` sound for any future inner list.)
+        self.zalgo_cap = match (self.zalgo_cap, o.zalgo_cap) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        self.bidi |= o.bidi;
+        self.zero_width |= o.zero_width;
+        self.invisible |= o.invisible;
+        self.transliterate |= o.transliterate;
+        self.demojize |= o.demojize;
     }
 }
 
@@ -549,14 +615,21 @@ fn run<'a>(
             Guard::Actionable => {}
         }
     }
-    let mut cur = text.to_owned();
+    Ok(Cow::Owned(apply_steps(steps, text, ctx)?))
+}
+
+/// Apply a step list once via the two-buffer ping-pong, returning the owned result.
+/// Shared by `run` (the top-level pass, after the fast-path guard) and
+/// `Step::FixedPoint` (one pass of its inner sub-pipeline, #467).
+fn apply_steps(steps: &[Step], input: &str, ctx: &PresetCtx) -> Result<String, crate::ErrorRepr> {
+    let mut cur = input.to_owned();
     let mut scratch = String::new();
     for &step in steps {
         if apply_into(step, &cur, ctx, &mut scratch)? {
             std::mem::swap(&mut cur, &mut scratch);
         }
     }
-    Ok(Cow::Owned(cur))
+    Ok(cur)
 }
 
 /// Run `f` with the #458 fast-path guard disabled (test-only): forces the full
@@ -810,17 +883,28 @@ pub(crate) fn catalog_key<'a>(
         //    on the second pass — non-idempotent. Fold before transliterate so both
         //    passes see the same form.
         Step::FoldCase,
-        // 4. Transliterate (always — catalog keys should be pure ASCII where possible;
-        //    runs before confusables so that non-Latin scripts are romanized first,
-        //    avoiding broken confusable mappings like Cyrillic к → literal \u{0138})
-        Step::Transliterate {
-            mode: crate::ErrorMode::Preserve,
-            only_if_lang: false,
-        },
-        // 5. Confusables → Latin (normalize any remaining cross-script homoglyphs)
-        Step::Confusables("latin"),
-        // 6. Strip accents
-        Step::StripAccents,
+        // 4/5/6. Romanization core, iterated to a fixed point (#467). A single pass
+        //    of transliterate → confusables → strip-accents is not idempotent: each
+        //    step can feed an EARLIER one on a re-run —
+        //      • strip-accents drops the U+0338 overlay of a negated relation and
+        //        exposes a confusable the fold already passed (`∤`→`∣`→`l`);
+        //      • confusables emits a letter transliterate romanizes (`ᴔ`→`ǝo`, then
+        //        `ǝ`→`e`);
+        //      • the maps chain.
+        //    Looping the whole core folds them all the way down in one call. Order
+        //    within each pass is preserved (transliterate first, so non-Latin scripts
+        //    are romanized before confusables — avoiding broken mappings like Cyrillic
+        //    к → literal \u{0138}; confusables before strip-accents, so a confusable
+        //    that *emits* an accent is still stripped). Transliterate uses Preserve
+        //    mode (always on) so catalog keys are pure ASCII where possible.
+        Step::FixedPoint(&[
+            Step::Transliterate {
+                mode: crate::ErrorMode::Preserve,
+                only_if_lang: false,
+            },
+            Step::Confusables("latin"),
+            Step::StripAccents,
+        ]),
         // 6b. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
         //     (`£` → `GBP`, `№` → `No`), unreachable by the pre-transliterate fold.
         Step::FoldCase,
@@ -1770,6 +1854,42 @@ mod tests {
         assert_eq!(result, "joga");
     }
 
+    /// #467: `catalog_key` must be a fixed point in one call. Its single
+    /// `Confusables` pass left two ways for a foldable form to survive to a second
+    /// call:
+    ///   (A) `StripAccents` (which runs *after* `Confusables`) drops the U+0338
+    ///       overlay of a negated relation, exposing a confusable base the fold
+    ///       already passed: `∤`→`∣`→`l`.
+    ///   (B) the confusables map itself chains — a value that is again confusable:
+    ///       `ᴔ`→`ǝo`→`eo`, `➗`→`÷`→`/`.
+    /// Each must reach its fixed point on the first call (`f(x) == f(f(x))`) and
+    /// equal the stable target. These are the complete BMP trigger set.
+    #[test]
+    fn test_catalog_key_idempotent_on_confusable_cascades() {
+        for (input, want) in [
+            // (A) negated relations: NFD = base + U+0338, base is a confusable.
+            ("\u{2204}", "e"),  // ∄ THERE DOES NOT EXIST → ∃ → e
+            ("\u{2224}", "l"),  // ∤ DOES NOT DIVIDE → ∣ → l
+            ("\u{2226}", "ll"), // ∦ NOT PARALLEL TO → ∥ → ll
+            ("\u{2241}", "~"),  // ≁ NOT TILDE → ∼ → ~
+            // (B) chained confusables (single codepoint, no combining mark).
+            ("\u{1D14}", "eo"), // ᴔ TURNED OE → ǝo → eo
+            ("\u{256A}", "!"),  // ╪ BOX DRAWINGS … → ǂ → !
+            ("\u{2797}", "/"),  // ➗ HEAVY DIVISION SIGN → ÷ → /
+        ] {
+            let once = catalog_key(input, None, false).unwrap();
+            assert_eq!(
+                once, want,
+                "catalog_key({input:?}) should fold fully in one call"
+            );
+            assert_eq!(
+                once,
+                catalog_key(&once, None, false).unwrap(),
+                "catalog_key not idempotent on {input:?}"
+            );
+        }
+    }
+
     #[test]
     fn test_search_key_accent_insensitive() {
         let a = search_key("Café", None).unwrap();
@@ -2103,6 +2223,32 @@ mod tests {
             ]
         }
 
+        /// #467 generator: dense in the `catalog_key` confusable-cascade class — a
+        /// confusable that survives the single `Confusables` pass and only folds on
+        /// a second call. Seeds the precomposed triggers (both mechanisms found in
+        /// the BMP) and the raw ingredients to synthesize fresh ones: the combining
+        /// long solidus overlay `U+0338` (which `strip_accents` drops to re-expose a
+        /// base) and the confusable bases the negated relations decompose to. Mixed
+        /// with `adversarial()` so the property still spans the broad space.
+        fn confusable_cascade() -> impl Strategy<Value = String> {
+            const TRIGGERS: &[char] = &[
+                // (A) precomposed negated relations: NFD = base + U+0338.
+                '\u{2204}', '\u{2224}', '\u{2226}', '\u{2241}',
+                // (B) chained confusables (a confusable whose fold is again confusable).
+                '\u{1D14}', '\u{256A}', '\u{2797}',
+                // raw ingredients: the overlay + the bases, to synthesize new forms
+                // (`base` + `U+0338`) the precomposed set doesn't enumerate.
+                '\u{0338}', '\u{2203}', '\u{2223}', '\u{2225}', '\u{223C}',
+            ];
+            let trig = proptest::sample::select(TRIGGERS.to_vec());
+            prop_oneof![
+                proptest::collection::vec(trig, 0..12)
+                    .prop_map(|cs| cs.into_iter().collect::<String>())
+                    .boxed(),
+                adversarial().boxed(),
+            ]
+        }
+
         proptest! {
             #![proptest_config(ProptestConfig::with_cases(1000))]
 
@@ -2149,6 +2295,18 @@ mod tests {
 
             #[test]
             fn catalog_key_idempotent(s in adversarial()) {
+                let once = catalog_key(&s, None, false).unwrap();
+                let twice = catalog_key(&once, None, false).unwrap();
+                prop_assert_eq!(&once, &twice);
+            }
+
+            // #467: the same raw-idempotency property, but over a generator dense in
+            // the confusable-cascade class (a confusable surviving the single
+            // Confusables pass — exposed by strip_accents or chained through the
+            // map). `catalog_key_idempotent` above draws this only rarely from
+            // `any::<char>()`; this reliably exercises it.
+            #[test]
+            fn catalog_key_idempotent_on_cascades(s in confusable_cascade()) {
                 let once = catalog_key(&s, None, false).unwrap();
                 let twice = catalog_key(&once, None, false).unwrap();
                 prop_assert_eq!(&once, &twice);

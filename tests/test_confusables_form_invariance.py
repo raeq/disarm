@@ -16,10 +16,12 @@ Scope (determined by sweeping every public text entry point):
     are not canonicalization primitives.
   * ALREADY ROBUST (no-regression baseline, asserted below) — the NFKC-first presets
     (`canonicalize`, `strip_obfuscation`, the `*_key` presets): they normalize first.
-  * SEPARATE finding (tracked elsewhere, not asserted here) — `transliterate` /
-    `slugify` have a *phonetic* form-dependence (`ї`→"yi" vs "i"); different mechanism.
+  * SAME ROOT, fixed together (#477, asserted in test_form_invariance_audit) —
+    `transliterate` / `slugify` had a *phonetic* form-dependence (`ї`→"yi" vs "i");
+    the same compose-at-lookup boundary closes it across the family.
 
-These FAIL until the confusables API normalizes (canonically) first.
+Both the confusables fold and the transliterate family compose each base + combining
+mark cluster at lookup time, so the recovered output no longer depends on normal form.
 """
 
 from __future__ import annotations

@@ -314,6 +314,27 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **Confusable folding, detection, and transliteration are invariant to the input's
+  normal form (#475, #477).** The confusables maps and the transliteration tables are
+  keyed per code point on the *precomposed* form (`ї` U+0457 → `i` / `yi`), so a
+  *decomposed* input (`і` U+0456 + combining diaeresis U+0308) reached only the base
+  entry and the mark survived — an attacker could evade the recovery, or flip
+  `is_confusable`, just by sending NFD. The confusables fold and detect
+  (`normalize_confusables`, `is_confusable`) and every public `str → str` recovery
+  entrypoint — `transliterate`, `unidecode`, and the whole `slugify*` family (including
+  the Unicode-preserving `slugify_unicode`) — now compose each base + combining-mark
+  cluster at lookup time, so the result is invariant to the input's normal form
+  (`f(NFC(x)) == f(NFD(x)) == f(NFKD(x))`, and likewise for the `is_confusable`
+  predicate). The composition is **compose-only** (it never *decomposes*): a
+  composition-excluded presentation form such as Hebrew `שׂ` U+FB2B keeps its own table
+  entry (`→ s`), where a naïve "NFC the input first" would have decomposed it and
+  changed the output. It is gated on a combining-mark check, so mark-free input (ASCII,
+  CJK, precomposed letters) keeps its borrow/zero-allocation fast path; it composes the
+  full cluster (Vietnamese `ệ`, polytonic Greek `ᾷ`, and Brahmic two-part vowels like
+  Bengali `ো`). A self-guarding audit enumerates the public entrypoints and asserts the
+  invariant, so a future entrypoint that forgets to normalize fails the test, not in
+  production.
+
 - **Digit confusables fold to their digit, not a look-alike letter (#439).** The
   confusable maps mapped many non-ASCII digit sources to letters or punctuation —
   Arabic-Indic `٠`→`.`, `١`→`l`, `٥`→`o`, Devanagari/Bengali/NKO zeros→`o`/`O`, and

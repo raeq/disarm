@@ -23,37 +23,24 @@ fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
     }
 }
 
-/// Canonically recompose `text` to NFC (#475), borrowing when it is already NFC.
-///
-/// The public confusable fold/detect functions recompose first so a *decomposed*
-/// homoglyph (`і` + combining diaeresis) reaches the bundled table's *precomposed*
-/// entry (`ї`→`i`) instead of mapping only the base and leaving the mark — otherwise
-/// the recovery is evadable, and detection flips, by sending the decomposed form.
-/// NFC, **not** NFKC: NFC only recomposes canonical forms, so it cannot trigger the
-/// TR39/NFKC compatibility conflicts noted on `normalize_confusables` (e.g. ſ U+017F,
-/// a compatibility mapping NFC never applies). The preset-internal
-/// `normalize_confusables_into` stays pure — the presets normalize themselves.
-fn to_nfc(text: &str) -> std::borrow::Cow<'_, str> {
-    if crate::normalize::is_normalized(text, "NFC").expect("NFC is a valid normalization form") {
-        std::borrow::Cow::Borrowed(text)
-    } else {
-        std::borrow::Cow::Owned(
-            crate::normalize::normalize(text, "NFC").expect("NFC is an infallible form"),
-        )
-    }
-}
-
 /// Replace Unicode confusable homoglyphs with target-script equivalents.
 ///
-/// Recomposes to NFC first (#475, see [`to_nfc`]) so the fold is invariant to the
-/// input's normal form.
+/// The public fold/detect entrypoints compose each base + combining-mark cluster at
+/// lookup time (#475/#477, see [`crate::compose`]) so a *decomposed* homoglyph (`і`
+/// U+0456 + combining diaeresis U+0308) reaches the bundled table's *precomposed*
+/// entry (`ї` U+0457 → `i`) instead of mapping only the base and leaving the mark —
+/// otherwise the recovery is evadable, and detection flips, by sending the decomposed
+/// form. Compose-only (never decompose), so a composition-excluded presentation form
+/// (`שׂ` U+FB2B) keeps its own table entry, and the result is invariant to the input's
+/// normal form. The preset-internal `normalize_confusables_into` stays pure — the
+/// presets canonicalize their own input upstream.
 ///
 /// # NFKC interaction warning
-/// This function applies **NFC** (canonical) but **not NFKC** (compatibility)
-/// normalization. NFKC must not be added as a pre-processing step: ~31 codepoints in
-/// the TR39 confusables table conflict with NFKC mappings (e.g. ſ U+017F: TR39→f but
-/// NFKC→s). NFC is safe because it never applies a compatibility mapping. If NFKC is
-/// ever needed, `gen_confusables.py` must filter entries where the TR39 target
+/// Compose-at-lookup applies only **canonical** composition, never **NFKC**
+/// (compatibility) mappings. NFKC must not be added: ~31 codepoints in the TR39
+/// confusables table conflict with NFKC mappings (e.g. ſ U+017F: TR39→f but NFKC→s).
+/// Canonical composition is safe because it never applies a compatibility mapping. If
+/// NFKC is ever needed, `gen_confusables.py` must filter entries where the TR39 target
 /// differs from `unicodedata.normalize('NFKC', chr(cp))`.
 /// See: <https://paultendo.github.io/posts/unicode-confusables-nfkc-conflict/>
 ///
@@ -63,8 +50,15 @@ pub(crate) fn normalize_confusables(
     text: &str,
     target_script: &str,
 ) -> Result<String, crate::ErrorRepr> {
-    let mut out = String::new();
-    normalize_confusables_into(&to_nfc(text), target_script, &mut out)?;
+    validate_target_script(target_script)?;
+    let map = tables::resolve_confusable_map(target_script);
+    let mut out = String::with_capacity(text.len());
+    for (ch, _) in crate::compose::composed(text) {
+        match map.and_then(|m| m.get(&ch).copied()) {
+            Some(replacement) => out.push_str(replacement),
+            None => out.push(ch),
+        }
+    }
     Ok(out)
 }
 
@@ -79,21 +73,23 @@ pub(crate) fn normalize_confusables_cow<'a>(
     use std::borrow::Cow;
 
     validate_target_script(target_script)?;
-
-    // #475: when the input is not already NFC, recompose then fold — the result is
-    // owned (it can't borrow `text`). Recurse on the recomposed string (now NFC, so it
-    // takes the in-place branch below — no further recursion): if nothing folds, reuse
-    // the recomposed buffer instead of allocating a second one. When the input IS NFC
-    // (the common case), fall through and fold in place, preserving borrow-on-no-op.
-    if !crate::normalize::is_normalized(text, "NFC").expect("NFC is a valid normalization form") {
-        let nfc = crate::normalize::normalize(text, "NFC").expect("NFC is an infallible form");
-        return Ok(match normalize_confusables_cow(&nfc, target_script)? {
-            Cow::Borrowed(_) => Cow::Owned(nfc),
-            Cow::Owned(folded) => Cow::Owned(folded),
-        });
-    }
-
     let map = tables::resolve_confusable_map(target_script);
+
+    // #475/#477: a base + combining-mark cluster must fold as its precomposed form.
+    // Compose-at-lookup can only change something when a combining mark is present, so
+    // gate on that: mark-bearing input is folded into an owned buffer, while mark-free
+    // input (the common case — ASCII, CJK, precomposed letters) falls through to the
+    // single-pass borrow-on-no-op path, which never allocates on a no-op.
+    if crate::compose::has_combining_mark(text) {
+        let mut out = String::with_capacity(text.len());
+        for (ch, _) in crate::compose::composed(text) {
+            match map.and_then(|m| m.get(&ch).copied()) {
+                Some(replacement) => out.push_str(replacement),
+                None => out.push(ch),
+            }
+        }
+        return Ok(Cow::Owned(out));
+    }
 
     for (i, ch) in text.char_indices() {
         if let Some(replacement) = map.and_then(|m| m.get(&ch).copied()) {
@@ -148,11 +144,11 @@ pub(crate) fn normalize_confusables_into(
 pub(crate) fn is_confusable(text: &str, target_script: &str) -> Result<bool, crate::ErrorRepr> {
     validate_target_script(target_script)?;
 
-    // #475: detect on the NFC form so a decomposed homoglyph can't evade detection
-    // (a composed `ç` is confusable; its decomposed `c`+cedilla otherwise is not).
-    let text = to_nfc(text);
+    // #475/#477: detect on the compose-at-lookup form so a decomposed homoglyph can't
+    // evade detection (a composed `ç` is confusable; its decomposed `c`+cedilla
+    // otherwise is not). See [`crate::compose`].
     let map = tables::resolve_confusable_map(target_script);
-    for ch in text.chars() {
+    for (ch, _) in crate::compose::composed(text) {
         if map.is_some_and(|m| m.contains_key(&ch)) {
             return Ok(true);
         }
@@ -201,7 +197,7 @@ mod tests {
 
     #[test]
     fn fold_and_detect_are_form_invariant() {
-        // #475: recompose to NFC first, so a decomposed homoglyph folds/detects the
+        // #475/#477: compose-at-lookup, so a decomposed homoglyph folds/detects the
         // same as its precomposed form. `ї` (U+0457) → "i"; NFD is `і` + U+0308.
         use unicode_normalization::UnicodeNormalization;
         for ch in ['\u{0457}', '\u{00E7}', '\u{03AF}', '\u{0625}'] {
@@ -223,9 +219,26 @@ mod tests {
 
     #[test]
     fn nfc_form_preserves_existing_output() {
-        // Already-NFC / ASCII input is unchanged by the #475 recompose (borrow path).
+        // Already-NFC / ASCII input is unchanged by compose-at-lookup (mark-free gate).
         assert_eq!(normalize_confusables("\u{0430}ll", "latin").unwrap(), "all");
         assert_eq!(normalize_confusables("hello", "latin").unwrap(), "hello");
+    }
+
+    #[test]
+    fn composition_excluded_presentation_form_is_untouched() {
+        // #477: compose-only must never *decompose*. The Hebrew presentation form `שׂ`
+        // (U+FB2B) is composition-excluded; an NFC-first fix would decompose it and
+        // change its output. Compose-at-lookup leaves a lone starter alone, and leaves
+        // an excluded base+mark pair (`ש` U+05E9 + sin dot U+05C2) decomposed — neither
+        // is a Latin confusable, so both pass through unchanged, and the two forms agree.
+        assert_eq!(
+            normalize_confusables("\u{FB2B}", "latin").unwrap(),
+            "\u{FB2B}"
+        );
+        assert_eq!(
+            normalize_confusables("\u{05E9}\u{05C2}", "latin").unwrap(),
+            "\u{05E9}\u{05C2}"
+        );
     }
 
     #[test]
@@ -298,16 +311,21 @@ mod tests {
                     s, normalized);
             }
 
-            /// normalize_confusables never drops characters — it only replaces.
-            /// Output character count must be >= input character count
-            /// (replacements may expand, e.g. a ligature confusable, but never shrink).
+            /// The *fold* never drops characters — every table value is non-empty, so
+            /// each looked-up code point yields at least one output char. The count is
+            /// measured against the compose-at-lookup stream, not the raw input:
+            /// composing a base + combining-mark cluster (`і`+◌̈ → `ї`, #475/#477)
+            /// legitimately reduces the count by one grapheme before the fold, which is
+            /// exactly the form-invariant behaviour the dedicated tests assert. What
+            /// must never happen is the *fold* deleting content.
             #[test]
-            fn normalize_confusables_never_drops_chars(s in "\\PC*") {
+            fn fold_never_drops_chars(s in "\\PC*") {
                 let result = normalize_confusables(&s, "latin").unwrap();
+                let composed = crate::compose::composed(&s).count();
                 prop_assert!(
-                    result.chars().count() >= s.chars().count(),
-                    "normalize_confusables dropped chars: {:?} ({} chars) → {:?} ({} chars)",
-                    s, s.chars().count(), result, result.chars().count()
+                    result.chars().count() >= composed,
+                    "fold dropped chars: {:?} ({} composed) → {:?} ({} chars)",
+                    s, composed, result, result.chars().count()
                 );
             }
 

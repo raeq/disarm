@@ -53,8 +53,14 @@ impl std::str::FromStr for TargetScript {
 /// Replace Unicode confusable homoglyphs with their `target`-script prototypes
 /// (TR39). Characters with no mapping pass through unchanged.
 ///
-/// Returns `Cow::Borrowed` when nothing folds (zero allocation), `Cow::Owned`
-/// otherwise. Infallible: a [`TargetScript`] is always a supported script.
+/// The input is canonically recomposed (NFC) before folding (#475, in the Layer-1
+/// core), so the fold is invariant to the input's normal form — a decomposed
+/// homoglyph (`і` + combining diaeresis) folds the same as its composed `ї`, instead
+/// of leaving the mark and letting an attacker evade the fold by decomposing.
+///
+/// Returns `Cow::Borrowed` when the input is already NFC and nothing folds (zero
+/// allocation), `Cow::Owned` otherwise. Infallible: a [`TargetScript`] is always a
+/// supported script.
 #[must_use]
 pub fn normalize_confusables(text: &str, target: TargetScript) -> Cow<'_, str> {
     // The only error path of the Layer-1 fn is an unsupported target *string*;
@@ -66,7 +72,10 @@ pub fn normalize_confusables(text: &str, target: TargetScript) -> Cow<'_, str> {
 /// True if `text` contains any character confusable with a `target`-script
 /// character (TR39).
 ///
-/// Infallible: a [`TargetScript`] is always a supported script.
+/// Detection runs on the canonically recomposed (NFC) form (#475, in the Layer-1
+/// core), so it cannot be evaded by decomposing the homoglyph (which would otherwise
+/// flip a composed `ç` from detected to not-detected). Infallible: a [`TargetScript`]
+/// is always a supported script.
 #[must_use]
 pub fn is_confusable(text: &str, target: TargetScript) -> bool {
     crate::confusables::is_confusable(text, target.as_str())

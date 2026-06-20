@@ -23,13 +23,37 @@ fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
     }
 }
 
+/// Canonically recompose `text` to NFC (#475), borrowing when it is already NFC.
+///
+/// The public confusable fold/detect functions recompose first so a *decomposed*
+/// homoglyph (`і` + combining diaeresis) reaches the bundled table's *precomposed*
+/// entry (`ї`→`i`) instead of mapping only the base and leaving the mark — otherwise
+/// the recovery is evadable, and detection flips, by sending the decomposed form.
+/// NFC, **not** NFKC: NFC only recomposes canonical forms, so it cannot trigger the
+/// TR39/NFKC compatibility conflicts noted on `normalize_confusables` (e.g. ſ U+017F,
+/// a compatibility mapping NFC never applies). The preset-internal
+/// `normalize_confusables_into` stays pure — the presets normalize themselves.
+fn to_nfc(text: &str) -> std::borrow::Cow<'_, str> {
+    if crate::normalize::is_normalized(text, "NFC").unwrap_or(false) {
+        std::borrow::Cow::Borrowed(text)
+    } else {
+        std::borrow::Cow::Owned(
+            crate::normalize::normalize(text, "NFC").expect("NFC is an infallible form"),
+        )
+    }
+}
+
 /// Replace Unicode confusable homoglyphs with target-script equivalents.
 ///
+/// Recomposes to NFC first (#475, see [`to_nfc`]) so the fold is invariant to the
+/// input's normal form.
+///
 /// # NFKC interaction warning
-/// This function does **not** apply NFKC normalization. If NFKC is ever added
-/// as a pre-processing step, ~31 codepoints in the TR39 confusables table
-/// conflict with NFKC mappings (e.g. ſ U+017F: TR39→f but NFKC→s). In that
-/// case, `gen_confusables.py` must filter entries where the TR39 target
+/// This function applies **NFC** (canonical) but **not NFKC** (compatibility)
+/// normalization. NFKC must not be added as a pre-processing step: ~31 codepoints in
+/// the TR39 confusables table conflict with NFKC mappings (e.g. ſ U+017F: TR39→f but
+/// NFKC→s). NFC is safe because it never applies a compatibility mapping. If NFKC is
+/// ever needed, `gen_confusables.py` must filter entries where the TR39 target
 /// differs from `unicodedata.normalize('NFKC', chr(cp))`.
 /// See: <https://paultendo.github.io/posts/unicode-confusables-nfkc-conflict/>
 ///
@@ -40,7 +64,7 @@ pub(crate) fn normalize_confusables(
     target_script: &str,
 ) -> Result<String, crate::ErrorRepr> {
     let mut out = String::new();
-    normalize_confusables_into(text, target_script, &mut out)?;
+    normalize_confusables_into(&to_nfc(text), target_script, &mut out)?;
     Ok(out)
 }
 
@@ -55,6 +79,17 @@ pub(crate) fn normalize_confusables_cow<'a>(
     use std::borrow::Cow;
 
     validate_target_script(target_script)?;
+
+    // #475: when the input is not already NFC, recompose then fold — the result is
+    // owned (it can't borrow `text`). When it IS NFC (the common case), fold in place
+    // below, preserving the borrow-on-no-op fast path.
+    if !crate::normalize::is_normalized(text, "NFC").unwrap_or(false) {
+        let nfc = crate::normalize::normalize(text, "NFC").expect("NFC is an infallible form");
+        let mut out = String::new();
+        normalize_confusables_into(&nfc, target_script, &mut out)?;
+        return Ok(Cow::Owned(out));
+    }
+
     let map = tables::resolve_confusable_map(target_script);
 
     for (i, ch) in text.char_indices() {
@@ -110,6 +145,9 @@ pub(crate) fn normalize_confusables_into(
 pub(crate) fn is_confusable(text: &str, target_script: &str) -> Result<bool, crate::ErrorRepr> {
     validate_target_script(target_script)?;
 
+    // #475: detect on the NFC form so a decomposed homoglyph can't evade detection
+    // (a composed `ç` is confusable; its decomposed `c`+cedilla otherwise is not).
+    let text = to_nfc(text);
     let map = tables::resolve_confusable_map(target_script);
     for ch in text.chars() {
         if map.is_some_and(|m| m.contains_key(&ch)) {
@@ -156,6 +194,35 @@ mod tests {
     #[test]
     fn test_is_confusable_empty() {
         assert!(!is_confusable("", "latin").unwrap());
+    }
+
+    #[test]
+    fn fold_and_detect_are_form_invariant() {
+        // #475: recompose to NFC first, so a decomposed homoglyph folds/detects the
+        // same as its precomposed form. `ї` (U+0457) → "i"; NFD is `і` + U+0308.
+        use unicode_normalization::UnicodeNormalization;
+        for ch in ['\u{0457}', '\u{00E7}', '\u{03AF}', '\u{0625}'] {
+            let nfc: String = std::iter::once(ch).collect();
+            let nfd: String = std::iter::once(ch).nfd().collect();
+            assert_ne!(nfc, nfd, "{ch:?} must actually decompose for this test");
+            assert_eq!(
+                normalize_confusables(&nfc, "latin").unwrap(),
+                normalize_confusables(&nfd, "latin").unwrap(),
+                "fold not form-invariant on {ch:?}"
+            );
+            assert_eq!(
+                is_confusable(&nfc, "latin").unwrap(),
+                is_confusable(&nfd, "latin").unwrap(),
+                "detection not form-invariant on {ch:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn nfc_form_preserves_existing_output() {
+        // Already-NFC / ASCII input is unchanged by the #475 recompose (borrow path).
+        assert_eq!(normalize_confusables("\u{0430}ll", "latin").unwrap(), "all");
+        assert_eq!(normalize_confusables("hello", "latin").unwrap(), "hello");
     }
 
     #[test]

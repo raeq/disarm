@@ -383,6 +383,60 @@ fn transliterate_impl_inner<'a>(
         return Cow::Borrowed(text);
     }
 
+    // #477: compose-at-lookup at the boundary. A decomposed homoglyph (`і` U+0456 +
+    // combining diaeresis) must transliterate as its precomposed form (`ї` → "yi"),
+    // not as the bare base, so the transform — and `find_untranslatable`, which drives
+    // the same engine — is invariant to the input's normal form. `compose_str` is
+    // compose-only (never decomposes a composition-excluded singleton like `שׂ`) and
+    // borrows when the input has no combining mark (the common case), so mark-free
+    // input keeps the original borrow + zero-alloc path. See [`crate::compose`].
+    match crate::compose::compose_str(text) {
+        Cow::Borrowed(_) => transliterate_dispatch(
+            text,
+            lang,
+            error_mode,
+            replace_with,
+            strict_iso9,
+            gost7034,
+            tones,
+            untranslatable,
+            stop_on_first,
+        ),
+        // Mark-bearing: the engine result borrows the local composed string, so own it
+        // to return the `'a` lifetime. A collector's offsets are into the composed form.
+        Cow::Owned(composed) => Cow::Owned(
+            transliterate_dispatch(
+                &composed,
+                lang,
+                error_mode,
+                replace_with,
+                strict_iso9,
+                gost7034,
+                tones,
+                untranslatable,
+                stop_on_first,
+            )
+            .into_owned(),
+        ),
+    }
+}
+
+/// The transliteration engine: resolve the per-call lookup once and run the
+/// monomorphized per-character loop. Callers reach it through
+/// [`transliterate_impl_inner`], which composes the input at the boundary (#477)
+/// before dispatching here.
+#[allow(clippy::too_many_arguments)]
+fn transliterate_dispatch<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    error_mode: ErrorMode,
+    replace_with: &str,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+    untranslatable: Option<&mut Vec<(char, usize)>>,
+    stop_on_first: bool,
+) -> Cow<'a, str> {
     // Resolve lang="auto" to detected language code.
     let resolved: Option<String>;
     let lang = if lang == Some("auto") {
@@ -1479,6 +1533,35 @@ pub(crate) fn clear_replacements() -> Result<(), crate::ErrorRepr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #477: compose-at-lookup makes the transform invariant to the input's normal
+    /// form, while never *decomposing* a composition-excluded singleton.
+    #[test]
+    fn transliterate_compose_at_lookup_form_invariance() {
+        use unicode_normalization::UnicodeNormalization;
+        let t = |s: &str| {
+            transliterate_impl(s, None, ErrorMode::Ignore, "", false, false, false).into_owned()
+        };
+
+        // ї (U+0457) → "yi"; its NFD is і (U+0456) + combining diaeresis (U+0308). The
+        // decomposed form must romanize identically (else the base alone → "i").
+        let yi = "\u{0457}";
+        let yi_nfd: String = yi.nfd().collect();
+        assert_ne!(yi, yi_nfd.as_str(), "ї must actually decompose");
+        assert_eq!(t(yi), "yi");
+        assert_eq!(t(&yi_nfd), "yi", "transliterate not form-invariant on ї");
+
+        // Multi-mark cluster: Vietnamese ệ (U+1EC7) decomposed (e + ◌̣ + ◌̂) must reach
+        // the same output as the precomposed scalar.
+        let e_nfd = "e\u{0323}\u{0302}";
+        assert_eq!(t(e_nfd), t("\u{1EC7}"));
+
+        // Compose-only must never *decompose*: the Hebrew presentation form שׂ (U+FB2B,
+        // composition-excluded) → "s". An NFC-first fix decomposed it to shin + sin dot
+        // and regressed the romanization; raw U+FB2B has no following mark, so
+        // compose-at-lookup leaves it untouched and the table entry stands.
+        assert_eq!(t("\u{FB2B}"), "s");
+    }
 
     /// #240 — the single-pass strict transliteration must (a) succeed with the
     /// Ignore-mode output when everything is translatable, and (b) error on the

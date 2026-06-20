@@ -491,12 +491,26 @@ pub(crate) fn slugify_impl_with_stopset(
         }
     }
 
-    // Step 3: Transliterate (unless allow_unicode)
-    // #236 item 3: only reallocate when transliterate changed the text. ASCII
-    // input returns Cow::Borrowed, so the former unconditional into_owned()
-    // allocated on every plain-ASCII slug. Extract owned-ness first so the
-    // borrow of `value` ends before we reassign it (#114).
-    if !config.allow_unicode {
+    // Step 3: Transliterate, or — on the Unicode-preserving path — compose.
+    // #236 item 3: only reallocate when the step changed the text. ASCII input
+    // returns Cow::Borrowed, so the former unconditional into_owned() allocated on
+    // every plain-ASCII slug. Extract owned-ness first so the borrow of `value` ends
+    // before we reassign it (#114).
+    if config.allow_unicode {
+        // #477: the Unicode-preserving path skips transliterate, so compose here —
+        // a decomposed homoglyph (`і` + combining diaeresis) must yield the same slug
+        // as its precomposed form (`ї`). `compose_str` borrows when the input has no
+        // combining mark, so the common ASCII/precomposed slug keeps its zero-alloc
+        // path; it never decomposes a composition-excluded singleton. See
+        // [`crate::compose`].
+        let owned = match crate::compose::compose_str(&value) {
+            Cow::Borrowed(_) => None,
+            Cow::Owned(s) => Some(s),
+        };
+        if let Some(s) = owned {
+            value = Cow::Owned(s);
+        }
+    } else {
         let owned = match transliterate::transliterate_impl(
             &value,
             config.lang.as_deref(),

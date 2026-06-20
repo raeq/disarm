@@ -205,8 +205,8 @@ fn apply_into(
 /// Which codepoint classes a preset's steps can change (#458 fast-path guard).
 /// Some classes act only on ASCII bytes (`controls`, `collapse_ws`), some only on
 /// non-ASCII code points (`norm`/`bidi`/`zero_width`/`invisible`/`transliterate`/
-/// `demojize`), and `fold_case`/`confusables` span both tiers. `nothing_actionable`
-/// applies the relevant subset per character.
+/// `demojize`), and `fold_case`/`confusables` span both tiers. `classify` applies
+/// the relevant subset per character.
 #[derive(Clone, Copy)]
 struct Actionable {
     // ── ASCII-byte classes ──
@@ -388,7 +388,22 @@ fn acts_on_nonascii(
         || (m.demojize && is_demojizable(ch))
 }
 
-/// True when no step in the preset can change `text` — the #458 fast-path guard.
+/// Three-way verdict from the fast-path guard (#458 + #464).
+enum Guard {
+    /// No step can change `text`: return it borrowed, zero-alloc (#458).
+    Inert,
+    /// The *only* actionable class is ASCII whitespace collapse (#464): leading /
+    /// trailing / run-of-spaces or a fold-control (TAB/CR/FS–US) needs folding, but
+    /// nothing else does. Every other step is a no-op on this input *and* on
+    /// `collapse_whitespace`'s output, so the whole pipeline collapses to that one
+    /// step — run it alone instead of the full ~10× pipeline.
+    WhitespaceOnly,
+    /// Some non-whitespace step acts (or a non-ASCII char is actionable): the full
+    /// pipeline is required.
+    Actionable,
+}
+
+/// Classify `text` against the preset's step mask — the #458/#464 fast-path guard.
 /// ASCII bytes are tested by byte arithmetic (controls, fold-whitespace, case, the
 /// ASCII confusable set); whitespace is structural (collapse trims the ends and
 /// folds runs/non-space whitespace, so a lone interior `0x20` is clean but a
@@ -396,11 +411,21 @@ fn acts_on_nonascii(
 /// `acts_on_nonascii` (Option D), so benign foreign text (CJK, Hangul, inert
 /// accented Latin) skips too. `conf_map` is the resolved Latin confusable map (the
 /// caller resolves it once when `mask.confusables`).
-fn nothing_actionable(
+///
+/// The whitespace classes are *noted* rather than terminal: any non-whitespace
+/// action returns `Actionable` immediately; if only whitespace fired, the result is
+/// `WhitespaceOnly`; if nothing fired, `Inert`. The `WhitespaceOnly` path is
+/// restricted to ASCII-whitespace dirt — any actionable *non-ASCII* char (including
+/// non-ASCII whitespace, whose fold could interact with NFKC ordering) returns
+/// `Actionable` — which keeps its soundness trivial: when ASCII whitespace is the
+/// only actionable class, every other step is a no-op so `collapse_whitespace(text)`
+/// equals the full pipeline. The `run`-vs-`run_full` equivalence + ASCII-byte
+/// mask-audit tests are the machine-checked oracle for that claim.
+fn classify(
     text: &str,
     mask: Actionable,
     conf_map: Option<&'static phf::Map<char, &'static str>>,
-) -> bool {
+) -> Guard {
     // Byte loop, not `char_indices`: the ASCII path (the deployment norm) stays a
     // tight per-byte scan with no UTF-8 decode; a multi-byte lead byte (≥ 0xC0) is
     // decoded once and tested by `acts_on_nonascii`, then its continuation bytes
@@ -408,25 +433,29 @@ fn nothing_actionable(
     let bytes = text.as_bytes();
     let n = bytes.len();
     let mut prev_space = false;
+    let mut saw_ws = false;
     let mut i = 0;
     while i < n {
         let b = bytes[i];
         if b < 0x80 {
+            // ── Non-whitespace ASCII actions ⇒ the full pipeline is required. ──
             if mask.controls && is_removed_control(b) {
-                return false;
-            }
-            if mask.collapse_ws && is_ascii_fold_ws(b) && b != b' ' {
-                return false; // TAB/CR/FS–US fold to a space
+                return Guard::Actionable;
             }
             if mask.fold_case && b.is_ascii_uppercase() {
-                return false;
+                return Guard::Actionable;
             }
             if mask.confusables && crate::tables::is_ascii_confusable_latin(b) {
-                return false;
+                return Guard::Actionable;
             }
-            if mask.collapse_ws && b == b' ' {
+            // ── ASCII whitespace `collapse_whitespace` would fold ⇒ note, keep
+            //    scanning; if nothing else fires this is the #464 WhitespaceOnly case.
+            if mask.collapse_ws && is_ascii_fold_ws(b) && b != b' ' {
+                saw_ws = true; // TAB/CR/FS–US fold to a space
+                prev_space = false;
+            } else if mask.collapse_ws && b == b' ' {
                 if i == 0 || i + 1 == n || prev_space {
-                    return false; // leading / trailing / run-of-spaces collapses
+                    saw_ws = true; // leading / trailing / run-of-spaces collapses
                 }
                 prev_space = true;
             } else {
@@ -438,13 +467,17 @@ fn nothing_actionable(
             // ASCII and by `len_utf8` for non-ASCII), so the slice decodes cleanly.
             let ch = text[i..].chars().next().unwrap_or('\u{FFFD}');
             if acts_on_nonascii(ch, mask, conf_map) {
-                return false;
+                return Guard::Actionable;
             }
             prev_space = false;
             i += ch.len_utf8();
         }
     }
-    true
+    if saw_ws {
+        Guard::WhitespaceOnly
+    } else {
+        Guard::Inert
+    }
 }
 
 #[cfg(test)]
@@ -458,8 +491,12 @@ thread_local! {
 /// Execute a preset step list with a two-buffer ping-pong (the engine pattern
 /// from `pipeline.rs`): O(1) live buffers regardless of step count.
 ///
-/// #458 fast path: if no step can act on `text` (`nothing_actionable`), it is a
-/// no-op — return it unchanged without the per-stage scans/allocations.
+/// #458 fast path: if no step can act on `text` (`Guard::Inert`), it is a no-op —
+/// return it borrowed, with no per-stage scans/allocations. #464 fast path: if the
+/// only actionable class is ASCII whitespace collapse (`Guard::WhitespaceOnly`),
+/// the pipeline reduces to a single `collapse_whitespace` pass (every other step is
+/// a no-op on the input and on collapse's output) — run that one step instead of
+/// the ~10× full pipeline.
 fn run<'a>(
     steps: &[Step],
     text: &'a str,
@@ -477,8 +514,17 @@ fn run<'a>(
         } else {
             None
         };
-        if nothing_actionable(text, mask, conf_map) {
-            return Ok(Cow::Borrowed(text));
+        match classify(text, mask, conf_map) {
+            Guard::Inert => return Ok(Cow::Borrowed(text)),
+            Guard::WhitespaceOnly => {
+                // `WhitespaceOnly` ⇒ `Step::CollapseWs` is in `steps` (it is the only
+                // class that sets the verdict), so this is byte-identical to the
+                // pipeline's own collapse step run in isolation. One pass + one alloc.
+                let mut out = String::new();
+                whitespace::collapse_whitespace_into(text, &mut out);
+                return Ok(Cow::Owned(out));
+            }
+            Guard::Actionable => {}
         }
     }
     let mut cur = text.to_owned();
@@ -1257,6 +1303,70 @@ mod tests {
         // PUA-A sample
         {
             check(cp);
+        }
+    }
+
+    /// #464: benign ASCII that is clean except for whitespace (leading / trailing /
+    /// doubled spaces, or a fold-control) takes the `WhitespaceOnly` path — the
+    /// pipeline reduces to one `collapse_whitespace` pass. The output must equal both
+    /// `collapse_whitespace` *and* the un-guarded full pipeline, for every preset.
+    #[test]
+    fn whitespace_only_fast_path_matches_full_pipeline() {
+        let probes = [
+            "hello world ",         // trailing space
+            " hello world",         // leading space
+            "hello  world",         // doubled interior space
+            "  hello   world  ",    // all three
+            "hello\tworld",         // fold-control (TAB)
+            "a\rb\nc",              // CR + LF fold-controls
+            "the quick brown fox ", // longer, lowercase (no FoldCase trigger)
+            // benign non-ASCII present but inert (Option D) + ASCII whitespace dirt:
+            // still WhitespaceOnly for the non-transliterating presets.
+            "café  date",
+        ];
+        for probe in probes {
+            let collapsed = whitespace::collapse_whitespace(probe);
+            for (name, f) in all_presets() {
+                let guarded = f(probe);
+                let full = without_fastpath(|| f(probe));
+                assert_eq!(
+                    guarded, full,
+                    "{name}: WhitespaceOnly fast path differs from full pipeline on {probe:?}"
+                );
+                // For the pure whitespace-hygiene presets the result is exactly the
+                // collapse (no transliteration/folding can apply to lowercase ASCII).
+                if matches!(
+                    name,
+                    "canonicalize" | "canonicalize_strict" | "strip_format"
+                ) {
+                    assert_eq!(
+                        guarded, collapsed,
+                        "{name}: WhitespaceOnly result should equal collapse_whitespace on {probe:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// #464: whitespace dirt combined with a *non*-whitespace actionable byte must
+    /// fall through to the full pipeline, not the WhitespaceOnly shortcut. If the
+    /// shortcut fired here it would skip case folding / confusable folding / control
+    /// stripping and silently corrupt the output.
+    #[test]
+    fn whitespace_plus_other_action_takes_full_pipeline() {
+        for probe in [
+            "Hello  World",    // doubled space + uppercase (FoldCase presets)
+            "hello  \u{0007}", // doubled space + BEL control (StripControl presets)
+            "café  CAFÉ ",     // whitespace + accented uppercase
+        ] {
+            for (name, f) in all_presets() {
+                let guarded = f(probe);
+                let full = without_fastpath(|| f(probe));
+                assert_eq!(
+                    guarded, full,
+                    "{name}: guarded != full on mixed whitespace+action input {probe:?}"
+                );
+            }
         }
     }
 

@@ -29,14 +29,16 @@ pub fn grapheme_width(cluster: &str, ambiguous_wide: bool) -> usize {
 
 // ── Whitespace ───────────────────────────────────────────────────────────────
 
-/// Fold Unicode whitespace runs to single ASCII spaces, trimming the ends (#433).
+/// Fold interior Unicode whitespace runs to a single ASCII space and **strip
+/// leading and trailing whitespace** (#433): `"  café   world  "` → `"café world"`.
 ///
 /// Folds **whitespace only** — the line controls (TAB/LF/VT/FF/CR), the
 /// information separators (`U+001C`–`U+001F`), NEL, the `Zs`/`Zl`/`Zp` spaces,
-/// and the blank-rendering set (Braille blank, the Hangul fillers) each become a
-/// single space. It does **not** delete control or zero-width characters — pair
-/// it with [`strip_control_chars`] / [`strip_zero_width_chars`] for that. Folding
-/// (not deleting) the line controls means `a\rb` → `a b`, never `ab`.
+/// and the blank-rendering set (Braille blank, the Hangul fillers) each fold to a
+/// single space; the result is then trimmed at both ends. It does **not** delete
+/// control or zero-width characters — pair it with [`strip_control_chars`] /
+/// [`strip_zero_width_chars`] for that. Folding (not deleting) the line controls
+/// means `a\rb` → `a b`, never `ab`.
 #[must_use]
 pub fn collapse_whitespace(text: &str) -> String {
     crate::whitespace::collapse_whitespace(text)

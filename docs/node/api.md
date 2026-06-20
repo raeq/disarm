@@ -136,9 +136,9 @@ leading/trailing whitespace. Folds **whitespace only** — the line controls
 (TAB/LF/VT/FF/CR), the information separators (`U+001C`–`U+001F`), NEL, the
 `Zs`/`Zl`/`Zp` spaces, and the blank-rendering set (Braille blank, the Hangul
 fillers) each fold to a single space. It does **not** delete control or
-zero-width characters — use [`stripControlChars`](#stripcontrolcharstext) /
-[`stripZeroWidthChars`](#stripzerowidthcharstext) for that. Folding (not deleting)
-the line controls means `'a\rb'` becomes `'a b'`, never `'ab'`.
+zero-width characters — use `stripControlChars` / `stripZeroWidthChars` for that.
+Folding (not deleting) the line controls means `'a\rb'` becomes `'a b'`, never
+`'ab'`.
 
 ```ts
 collapseWhitespace('  a   b ') // => 'a b'

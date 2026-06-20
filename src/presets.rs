@@ -471,9 +471,24 @@ fn acts_on_nonascii(
         || (m.confusables && conf_map.is_some_and(|map| map.contains_key(&ch)))
         || (m.demojize && is_demojizable(ch))
         // ── costliest last: single-scalar NFKC/NFD normalization iterators (P-1) ──
-        || (m.nfkc && nfkc_changes(ch))
+        // #471: the cheap conjoining-jamo range check runs first. NFKC *composes* an
+        // L+V(+T) jamo sequence into one syllable — a cross-character operation; each
+        // jamo is NFKC-stable in isolation, so the per-scalar `nfkc_changes` cannot
+        // see it. A jamo must therefore always decline the fast path.
+        || (m.nfkc && (is_conjoining_jamo(ch) || nfkc_changes(ch)))
         || (m.strip_accents && decomposes_to_mark(ch))
         || m.zalgo_cap.is_some_and(|cap| nfd_mark_run_exceeds(ch, cap))
+}
+
+/// Conjoining Hangul jamo (#471): the Hangul Jamo block (`U+1100–U+11FF`) plus Jamo
+/// Extended-A (`U+A960–U+A97F`) and Extended-B (`U+D7B0–U+D7FF`). NFKC composes an
+/// `L + V (+ T)` jamo *sequence* into a single precomposed syllable, but each jamo
+/// is NFKC-stable alone and is not a combining mark, so the per-character guard
+/// cannot detect the composition from any single code point. Marking the whole
+/// blocks is a conservative superset — some archaic jamo never compose — which only
+/// forgoes the fast path (over-marking is sound; under-marking would not be).
+const fn is_conjoining_jamo(ch: char) -> bool {
+    matches!(ch as u32, 0x1100..=0x11FF | 0xA960..=0xA97F | 0xD7B0..=0xD7FF)
 }
 
 /// Three-way verdict from the fast-path guard (#458 + #464).
@@ -1382,6 +1397,50 @@ mod tests {
         let _ = Actionable::for_steps(&[Step::Confusables("cyrillic")]);
     }
 
+    /// #471: NFKC composition of conjoining Hangul jamo is a *cross-character*
+    /// operation — `L + V` compose into one `LV` syllable, `LV + T` into `LVT` —
+    /// yet each jamo is NFKC-stable in isolation and is not a combining mark, so the
+    /// per-character actionability test under-approximates and the guard wrongly
+    /// fast-paths the sequence. The guarded output must equal the full pipeline, and
+    /// an NFKC-bearing preset must actually compose. Was a silent normalization-
+    /// evasion (decomposed Hangul canonicalized differently from precomposed).
+    #[test]
+    fn fast_path_composes_conjoining_jamo() {
+        // (input, the NFKC-composed syllable a composing preset must reach)
+        let cases = [
+            ("\u{1100}\u{1161}", "\u{AC00}"),         // L+V         → 가
+            ("\u{AC00}\u{11A8}", "\u{AC01}"),         // LV syllable + T → 각
+            ("\u{1100}\u{1161}\u{11A8}", "\u{AC01}"), // L+V+T       → 각
+        ];
+        for (input, composed) in cases {
+            for (name, f) in all_presets() {
+                let guarded = f(input);
+                let full = without_fastpath(|| f(input));
+                assert_eq!(
+                    guarded, full,
+                    "{name}: fast path differs from full pipeline on jamo {input:?}"
+                );
+            }
+            // strip_obfuscation (NFKC first) must compose the jamo, not pass them through.
+            assert_eq!(
+                strip_obfuscation(input).unwrap(),
+                composed,
+                "strip_obfuscation should NFKC-compose {input:?}"
+            );
+        }
+
+        // A grid sample across the jamo block: every L×V pair must compose (the guard
+        // must decline all of them), not just the three pinned above.
+        for l in 0x1100u32..=0x1112 {
+            for v in 0x1161u32..=0x1175 {
+                let input: String = [l, v].iter().filter_map(|&c| char::from_u32(c)).collect();
+                let guarded = strip_obfuscation(&input).unwrap();
+                let full = without_fastpath(|| strip_obfuscation(&input).unwrap());
+                assert_eq!(guarded, full, "fast path != full on L={l:#06X} V={v:#06X}");
+            }
+        }
+    }
+
     /// FP-1: the `fold_case` actionability predicate gates on the fold *table*
     /// (`case_folding.tsv`), not std `is_alphabetic`, so it can neither under-mark a
     /// char the fold changes nor over-mark one it leaves alone — decoupling soundness
@@ -1472,6 +1531,29 @@ mod tests {
         // PUA-A sample
         {
             check(cp);
+        }
+        // #471: the per-character probes above never place two *different*
+        // conjoining jamo adjacent, so they cannot see cross-character NFKC
+        // composition (`L+V` → one syllable). Sweep the conjoining-jamo grid in
+        // `L+V` and `L+V+T` order — every pair must match the full pipeline.
+        for l in 0x1100u32..=0x1112 {
+            for v in 0x1161u32..=0x1175 {
+                for t in std::iter::once(None).chain((0x11A8u32..=0x11C2).map(Some)) {
+                    let probe: String = [Some(l), Some(v), t]
+                        .into_iter()
+                        .flatten()
+                        .filter_map(char::from_u32)
+                        .collect();
+                    for (name, f) in &presets {
+                        let guarded = f(&probe);
+                        let full = without_fastpath(|| f(&probe));
+                        assert_eq!(
+                            guarded, full,
+                            "{name}: fast path differs from full pipeline on jamo {probe:?}"
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -2220,6 +2302,7 @@ mod tests {
                     .prop_map(|cs| cs.into_iter().collect::<String>())
                     .boxed(),
                 adversarial().boxed(),
+                jamo_seq().boxed(),
             ]
         }
 
@@ -2247,6 +2330,32 @@ mod tests {
                     .boxed(),
                 adversarial().boxed(),
             ]
+        }
+
+        /// #471: a leading jamo `L` with an optional vowel `V` and trailing `T` — so
+        /// it emits a lone `L`, `L+V`, and `L+V+T`. NFKC composes an `L+V(+T)` run into
+        /// one syllable, but each jamo is NFKC-stable alone and is not a combining mark
+        /// — exactly the cross-character case the per-character guard missed (the lone
+        /// `L` is genuinely inert and pins that the over-marking stays equivalent).
+        /// `fastpath_gen` never emitted these, so `fast_path_equivalence` passed while
+        /// the guard was unsound; this closes that generator gap.
+        fn jamo_seq() -> impl Strategy<Value = String> {
+            let lead = (0x1100u32..=0x1112).prop_map(|c| char::from_u32(c).unwrap());
+            let vowel =
+                prop::option::of((0x1161u32..=0x1175).prop_map(|c| char::from_u32(c).unwrap()));
+            let trail =
+                prop::option::of((0x11A8u32..=0x11C2).prop_map(|c| char::from_u32(c).unwrap()));
+            (lead, vowel, trail).prop_map(|(l, v, t)| {
+                let mut s = String::new();
+                s.push(l);
+                if let Some(v) = v {
+                    s.push(v);
+                }
+                if let Some(t) = t {
+                    s.push(t);
+                }
+                s
+            })
         }
 
         proptest! {

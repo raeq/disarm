@@ -308,8 +308,14 @@ impl Actionable {
                 }
                 Step::FixedPoint(inner) => {
                     // A fixed-point loop changes exactly what its inner steps change,
-                    // so its mask is their union (#467). Recurses one level; the inner
-                    // list is asserted not to contain another `FixedPoint`.
+                    // so its mask is their union (#467). Recurses one level only —
+                    // enforce that the inner list has no nested `FixedPoint`, keeping
+                    // the `apply_into`/`apply_steps` recursion bounded (it runs in the
+                    // equivalence tests over every preset, so a violation is caught).
+                    debug_assert!(
+                        !inner.iter().any(|s| matches!(s, Step::FixedPoint(_))),
+                        "FixedPoint inner list must not contain a nested FixedPoint"
+                    );
                     m.union(Self::for_steps(inner));
                 }
                 Step::Nfkc | Step::Nfc | Step::NfcIfNonAscii => {
@@ -346,7 +352,14 @@ impl Actionable {
         self.nfkc |= o.nfkc;
         self.marks |= o.marks;
         self.strip_accents |= o.strip_accents;
-        self.zalgo_cap = self.zalgo_cap.or(o.zalgo_cap);
+        // A *smaller* cap marks more chars actionable (`nfd_mark_run_exceeds`), so the
+        // conservative union is the minimum when both are `Some` — `or` alone would
+        // under-approximate. (No shipped `FixedPoint` inner sets zalgo_cap, so this is
+        // belt-and-suspenders, but it keeps `union` sound for any future inner list.)
+        self.zalgo_cap = match (self.zalgo_cap, o.zalgo_cap) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         self.bidi |= o.bidi;
         self.zero_width |= o.zero_width;
         self.invisible |= o.invisible;

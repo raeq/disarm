@@ -30,7 +30,7 @@ RSpec.describe "Disarm surrogate / invalid-UTF-8 contract (#469)",
     ["adjacent to text", utf8.call("abc" + lone_hi), "abc\u{FFFD}"],
     ["two lone around text", utf8.call("a" + lone_hi + "b" + lone_lo + "c"), "a\u{FFFD}b\u{FFFD}c"],
     ["embedded in actionable", utf8.call("PаyPal" + lone_hi + "  ‮ rld"), "PаyPal\u{FFFD}  ‮ rld"],
-    ["well-formed pair", pair, "\u{1F600}"],                 # recombine, NOT "??"
+    ["well-formed pair", pair, "\u{1F600}"], # recombine, NOT "??"
     ["pair embedded", utf8.call("x" + pair + "y"), "x\u{1F600}y"],
     ["lone then pair", utf8.call(lone_hi + pair), "\u{FFFD}\u{1F600}"]
   ]

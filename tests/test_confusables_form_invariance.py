@@ -30,8 +30,9 @@ import pytest
 
 import disarm
 
-# Cross-script homoglyphs that the table folds aggressively in precomposed form: the
-# 8 "clean" cases (NFC → pure ASCII) plus a couple more. Their NFD splits base+mark.
+# Cross-script homoglyphs the table folds aggressively in precomposed form, where the
+# NFC form yields pure ASCII but the NFD form keeps the mark. Their NFD splits
+# base+mark; a representative slice of the divergence set the broad sweep below pins.
 HOMOGLYPHS = [
     "ї",  # ї CYRILLIC SMALL LETTER YI        -> i
     "ç",  # ç LATIN SMALL LETTER C WITH CEDILLA-> c

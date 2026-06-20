@@ -34,7 +34,7 @@ fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
 /// a compatibility mapping NFC never applies). The preset-internal
 /// `normalize_confusables_into` stays pure — the presets normalize themselves.
 fn to_nfc(text: &str) -> std::borrow::Cow<'_, str> {
-    if crate::normalize::is_normalized(text, "NFC").unwrap_or(false) {
+    if crate::normalize::is_normalized(text, "NFC").expect("NFC is a valid normalization form") {
         std::borrow::Cow::Borrowed(text)
     } else {
         std::borrow::Cow::Owned(
@@ -81,13 +81,16 @@ pub(crate) fn normalize_confusables_cow<'a>(
     validate_target_script(target_script)?;
 
     // #475: when the input is not already NFC, recompose then fold — the result is
-    // owned (it can't borrow `text`). When it IS NFC (the common case), fold in place
-    // below, preserving the borrow-on-no-op fast path.
-    if !crate::normalize::is_normalized(text, "NFC").unwrap_or(false) {
+    // owned (it can't borrow `text`). Recurse on the recomposed string (now NFC, so it
+    // takes the in-place branch below — no further recursion): if nothing folds, reuse
+    // the recomposed buffer instead of allocating a second one. When the input IS NFC
+    // (the common case), fall through and fold in place, preserving borrow-on-no-op.
+    if !crate::normalize::is_normalized(text, "NFC").expect("NFC is a valid normalization form") {
         let nfc = crate::normalize::normalize(text, "NFC").expect("NFC is an infallible form");
-        let mut out = String::new();
-        normalize_confusables_into(&nfc, target_script, &mut out)?;
-        return Ok(Cow::Owned(out));
+        return Ok(match normalize_confusables_cow(&nfc, target_script)? {
+            Cow::Borrowed(_) => Cow::Owned(nfc),
+            Cow::Owned(folded) => Cow::Owned(folded),
+        });
     }
 
     let map = tables::resolve_confusable_map(target_script);

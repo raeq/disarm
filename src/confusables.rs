@@ -23,8 +23,6 @@ fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
     }
 }
 
-/// Canonically recompose `text` to NFC (#475), borrowing when it is already NFC.
-///
 /// Replace Unicode confusable homoglyphs with target-script equivalents.
 ///
 /// The public fold/detect entrypoints compose each base + combining-mark cluster at
@@ -38,11 +36,11 @@ fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
 /// presets canonicalize their own input upstream.
 ///
 /// # NFKC interaction warning
-/// This function applies **NFC** (canonical) but **not NFKC** (compatibility)
-/// normalization. NFKC must not be added as a pre-processing step: ~31 codepoints in
-/// the TR39 confusables table conflict with NFKC mappings (e.g. ſ U+017F: TR39→f but
-/// NFKC→s). NFC is safe because it never applies a compatibility mapping. If NFKC is
-/// ever needed, `gen_confusables.py` must filter entries where the TR39 target
+/// Compose-at-lookup applies only **canonical** composition, never **NFKC**
+/// (compatibility) mappings. NFKC must not be added: ~31 codepoints in the TR39
+/// confusables table conflict with NFKC mappings (e.g. ſ U+017F: TR39→f but NFKC→s).
+/// Canonical composition is safe because it never applies a compatibility mapping. If
+/// NFKC is ever needed, `gen_confusables.py` must filter entries where the TR39 target
 /// differs from `unicodedata.normalize('NFKC', chr(cp))`.
 /// See: <https://paultendo.github.io/posts/unicode-confusables-nfkc-conflict/>
 ///

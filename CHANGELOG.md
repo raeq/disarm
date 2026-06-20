@@ -319,11 +319,13 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   keyed per code point on the *precomposed* form (`ї` U+0457 → `i` / `yi`), so a
   *decomposed* input (`і` U+0456 + combining diaeresis U+0308) reached only the base
   entry and the mark survived — an attacker could evade the recovery, or flip
-  `is_confusable`, just by sending NFD. Every public `str → str` recovery entrypoint —
-  `normalize_confusables`, `is_confusable`, `transliterate`, `unidecode`, and the whole
-  `slugify*` family (including the Unicode-preserving `slugify_unicode`) — now composes
-  each base + combining-mark cluster at lookup time, so `f(NFC(x)) == f(NFD(x)) ==
-  f(NFKD(x))`. The composition is **compose-only** (it never *decomposes*): a
+  `is_confusable`, just by sending NFD. The confusables fold and detect
+  (`normalize_confusables`, `is_confusable`) and every public `str → str` recovery
+  entrypoint — `transliterate`, `unidecode`, and the whole `slugify*` family (including
+  the Unicode-preserving `slugify_unicode`) — now compose each base + combining-mark
+  cluster at lookup time, so the result is invariant to the input's normal form
+  (`f(NFC(x)) == f(NFD(x)) == f(NFKD(x))`, and likewise for the `is_confusable`
+  predicate). The composition is **compose-only** (it never *decomposes*): a
   composition-excluded presentation form such as Hebrew `שׂ` U+FB2B keeps its own table
   entry (`→ s`), where a naïve "NFC the input first" would have decomposed it and
   changed the output. It is gated on a combining-mark check, so mark-free input (ASCII,

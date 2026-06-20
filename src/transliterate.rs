@@ -384,14 +384,13 @@ fn transliterate_impl_inner<'a>(
     }
 
     // #477: compose-at-lookup at the boundary. A decomposed homoglyph (`і` U+0456 +
-    // combining diaeresis) must transliterate as its precomposed form (`ї` → "yi"),
-    // not as the bare base, so the transform — and `find_untranslatable`, which drives
-    // the same engine — is invariant to the input's normal form. `compose_str` is
-    // compose-only (never decomposes a composition-excluded singleton like `שׂ`) and
-    // borrows when the input has no combining mark (the common case), so mark-free
-    // input keeps the original borrow + zero-alloc path. See [`crate::compose`].
-    match crate::compose::compose_str(text) {
-        Cow::Borrowed(_) => transliterate_dispatch(
+    // combining diaeresis) must transliterate as its precomposed form (`ї` → "yi"), not
+    // as the bare base, so the transform — and `find_untranslatable`, which drives the
+    // same engine — is invariant to the input's normal form. Compose-only (never
+    // decomposes a composition-excluded singleton like `שׂ`); mark-free input (the
+    // common case) keeps the original borrow + zero-alloc path. See [`crate::compose`].
+    if !crate::compose::has_combining_mark(text) {
+        return transliterate_dispatch(
             text,
             lang,
             error_mode,
@@ -401,10 +400,43 @@ fn transliterate_impl_inner<'a>(
             tones,
             untranslatable,
             stop_on_first,
-        ),
-        // Mark-bearing: the engine result borrows the local composed string, so own it
-        // to return the `'a` lifetime. A collector's offsets are into the composed form.
-        Cow::Owned(composed) => Cow::Owned(
+        );
+    }
+
+    // Mark-bearing: build the composed buffer, recording each composed char's byte
+    // offset back into the caller's `text` (a cluster's chars all share the cluster
+    // start). The engine runs on `composed`, so its result is owned to return the `'a`
+    // lifetime, and any offsets a collector gathers are remapped from `composed` back to
+    // `text` — so `find_untranslatable` / strict-mode diagnostics still point at the
+    // original input, not the composed buffer (#479 review).
+    let mut composed = String::with_capacity(text.len());
+    let mut origin: Vec<(usize, usize)> = Vec::new(); // (offset in `composed`, in `text`)
+    for (ch, orig) in crate::compose::composed(text) {
+        origin.push((composed.len(), orig));
+        composed.push(ch);
+    }
+
+    match untranslatable {
+        Some(collector) => {
+            let start = collector.len();
+            let out = transliterate_dispatch(
+                &composed,
+                lang,
+                error_mode,
+                replace_with,
+                strict_iso9,
+                gost7034,
+                tones,
+                Some(&mut *collector),
+                stop_on_first,
+            )
+            .into_owned();
+            for entry in &mut collector[start..] {
+                entry.1 = remap_composed_offset(entry.1, &origin);
+            }
+            Cow::Owned(out)
+        }
+        None => Cow::Owned(
             transliterate_dispatch(
                 &composed,
                 lang,
@@ -413,11 +445,26 @@ fn transliterate_impl_inner<'a>(
                 strict_iso9,
                 gost7034,
                 tones,
-                untranslatable,
+                None,
                 stop_on_first,
             )
             .into_owned(),
         ),
+    }
+}
+
+/// Map a byte offset into the composed buffer back to the originating byte offset in
+/// the caller's `text` (#479 review). `origin` is `(composed_offset, original_offset)`
+/// per composed char, ascending by composed offset; a collected offset is always a
+/// composed char boundary, so the exact-match arm is taken.
+fn remap_composed_offset(composed_offset: usize, origin: &[(usize, usize)]) -> usize {
+    match origin.binary_search_by_key(&composed_offset, |&(c, _)| c) {
+        Ok(i) => origin[i].1,
+        // Defensive: not a char boundary (never happens) — fall back to the preceding
+        // cluster's origin, or the raw offset if there is none.
+        Err(i) => origin
+            .get(i.wrapping_sub(1))
+            .map_or(composed_offset, |&(_, o)| o),
     }
 }
 
@@ -1561,6 +1608,21 @@ mod tests {
         // and regressed the romanization; raw U+FB2B has no following mark, so
         // compose-at-lookup leaves it untouched and the table entry stands.
         assert_eq!(t("\u{FB2B}"), "s");
+    }
+
+    /// #479 review: composing at the boundary must not shift the byte offsets that
+    /// `find_untranslatable` reports — they must stay anchored to the caller's `text`,
+    /// not the internal composed buffer, even for decomposed input.
+    #[test]
+    fn find_untranslatable_offsets_are_in_original_text() {
+        // "x" (ASCII) + і+◌̈ (decomposed ї, composes & is translatable) + 🦀 (U+1F980,
+        // never translatable). The crab must be reported at its real byte offset in the
+        // *original* string: 'x'(1) + 'і'(2) + '◌̈'(2) = 5.
+        let s = "x\u{0456}\u{0308}\u{1F980}";
+        let crab_offset = s.char_indices().last().unwrap().0;
+        assert_eq!(crab_offset, 5);
+        let found = find_untranslatable_impl(s, None, false, false, false);
+        assert_eq!(found, vec![('\u{1F980}', crab_offset)]);
     }
 
     /// #240 — the single-pass strict transliteration must (a) succeed with the

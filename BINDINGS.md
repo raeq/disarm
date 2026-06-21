@@ -84,6 +84,22 @@ exactly what turns one cycle into three.
   headline of a minor, the way Ruby was `0.10`). Per-registry **patch** fixes may
   diverge.
 
+**Binding ↔ core compatibility.** The shared `0.MINOR` *is* the compatibility statement:
+a binding's `0.MINOR.x` wraps core `0.MINOR`, in every ecosystem at once. As of **0.11**
+(the Node.js binding's headline minor), all registries are aligned:
+
+| Artifact | Registry | Wraps core |
+|----------|----------|------------|
+| `disarm` crate | crates.io | — (is the core) |
+| `disarm` wheel | PyPI | `0.11` |
+| `disarm` gem | RubyGems | `0.11` |
+| `disarm` package | npm | `0.11` |
+
+Per [RELEASING.md](RELEASING.md), a fix touching one binding may ship as a per-registry
+**patch** (e.g. an npm-only `0.11.3`) without re-cutting the others — so the third
+component can drift while the `0.MINOR` feature set stays identical. When that drift gets
+confusing, update the *Wraps core* column above rather than forcing no-op releases.
+
 ## Per-language conventions
 
 Starting points, not mandates — pick the binding tech the ecosystem actually trusts at

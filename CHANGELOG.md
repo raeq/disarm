@@ -16,6 +16,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-06-21
+
 ### Performance
 
 - **Transliterate recovers most of the form-invariance compose-at-lookup regression.**
@@ -30,8 +32,6 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   U+0000–058F. Behaviour is identical (verified by the exhaustive, formal, and
   form-invariance suites); Rust-level micro-bench gains, pre → post: latin −33%,
   cyrillic −20%, mixed −21%, greek −12% ns/char.
-
-## [0.11.0] — 2026-06-21
 
 ### Added
 

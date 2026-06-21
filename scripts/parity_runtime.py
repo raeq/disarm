@@ -61,9 +61,11 @@ def load_manifest() -> dict[str, dict[str, str | None]]:
             continue
         names: dict[str, str | None] = {}
         for lang in ("rust", "python", "ruby", "node"):
-            m = re.search(rf"^\s*{lang}:\s*(\S+)", blk, re.M)
-            val = m.group(1) if m else "null"
-            names[lang] = None if val == "null" else val
+            m = re.search(rf"^\s*{lang}:\s*(.+)$", blk, re.M)
+            val = m.group(1).strip() if m else "null"
+            # `null` = gap; `{ provided_via: ... }` / `{ alias_of: ... }` are
+            # not direct exports, so treat those non-symbol cells as absent.
+            names[lang] = None if (val == "null" or val.startswith("{")) else val
         ops[op_id] = names
     return ops
 
@@ -188,24 +190,24 @@ BATTERY = [
     "Ⅻ",
     "½",
     "../../etc/passwd",
-    "_·",
+    "_\u00b7",
     "report...",
     "CON.txt",
     "a\tb",
-    "a b c",
-    "‮abc",
-    "e" + "́" * 6,
+    "a b c",
+    "\u202eabc",
+    "e" + "\u0301" * 6,
     "\U0001f600",
     "\U0001f1e9\U0001f1ea",
-    "pаypаl",
+    "p\u0430yp\u0430l",
     "ＣＯＮ",
-    "﻿bom",
-    "a​b",
-    "‮",
+    "\ufeffbom",
+    "a\u200bb",
+    "\u202e",
     "Ａｄｍｉｎ",
     "Москва",
     "東京",
-    "café́",
+    "caf\u00e9\u0301",
     "\U0001d54a\U0001d557",
     "a.b.c",
     "...",

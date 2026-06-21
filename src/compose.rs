@@ -179,35 +179,61 @@ impl Iterator for Composed<'_> {
 }
 
 impl Composed<'_> {
-    /// Queue the NFC'd cluster onto `pending`, recomposing every composition-excluded
-    /// base+mark *prefix* via the widening map.
+    /// Queue the NFC'd cluster onto `pending`, recomposing composition-excluded base+mark
+    /// sequences via the widening map.
     ///
-    /// A whole-cluster lookup is not enough: `.nfc()` decomposes an excluded singleton
-    /// (`ড়` U+09DC → ড + nukta), and when that singleton is followed by an *unrelated*
-    /// mark (a visarga) the cluster is `ড nukta visarga`, which misses the 2-char
-    /// `ড nukta` key — leaving the singleton decomposed and making the fold oscillate
-    /// (compose ⇄ decompose, non-idempotent). So match greedily at each position: try the
-    /// longest map key that fits (keys are at most `EXCLUDED_COMPOSITIONS_MAX_KEY_CHARS`
-    /// chars — a build-time bound that tracks the data), emit the precomposed scalar, and
-    /// advance past it; otherwise emit the char verbatim. The common single-mark cluster
-    /// still resolves in one step.
+    /// Fast path — the whole cluster is itself an excluded composition (the common
+    /// excluded-pair case: KA+nukta, shin+sin-dot): one O(1) lookup, no scan, no
+    /// allocation. A plain base+mark that canonically composed (`é`, `ệ`) is one char and
+    /// also takes a cheap miss-then-emit.
+    ///
+    /// General path — greedy longest-prefix matching, needed because a whole-cluster
+    /// lookup is *not* enough: `.nfc()` decomposes an excluded singleton (`ড়` U+09DC → ড +
+    /// nukta), and when that singleton is followed by an *unrelated* mark (a visarga) the
+    /// cluster is `ড nukta visarga`, which misses the 2-char `ড nukta` key — leaving the
+    /// singleton decomposed and making the fold oscillate (compose ⇄ decompose,
+    /// non-idempotent). So at each position match the longest map key that fits, emit the
+    /// precomposed scalar, and advance past it; otherwise emit one char. The scan walks the
+    /// `&str` by char boundaries (a fixed stack array of cut points, no `Vec`).
     fn recompose_excluded(&mut self, nfc: &str, start: usize) {
-        let cs: Vec<char> = nfc.chars().collect();
-        let mut i = 0;
-        while i < cs.len() {
-            let max = (i + EXCLUDED_COMPOSITIONS_MAX_KEY_CHARS).min(cs.len());
-            // Longest prefix first: a 3-char excluded stack must win over its 2-char head.
-            let matched = (i + 2..=max).rev().find_map(|end| {
-                let key: String = cs[i..end].iter().collect();
-                EXCLUDED_COMPOSITIONS
-                    .get(key.as_str())
-                    .map(|&pc| (pc, end - i))
-            });
-            let (out, len) = matched.unwrap_or((cs[i], 1));
-            self.pending.push_back((out, start));
-            i += len;
+        // Whole-cluster fast path: the common excluded pair resolves in one lookup.
+        if let Some(&precomposed) = EXCLUDED_COMPOSITIONS.get(nfc) {
+            self.pending.push_back((precomposed, start));
+            return;
+        }
+        let mut rest = nfc;
+        while !rest.is_empty() {
+            if let Some((precomposed, len)) = excluded_prefix(rest) {
+                self.pending.push_back((precomposed, start));
+                rest = &rest[len..];
+            } else {
+                // SAFETY of unwrap: `rest` is non-empty, so it has a first char.
+                let ch = rest.chars().next().unwrap_or('\u{FFFD}');
+                self.pending.push_back((ch, start));
+                rest = &rest[ch.len_utf8()..];
+            }
         }
     }
+}
+
+/// Longest composition-excluded key (≥ 2 chars) that is a char-prefix of `s`, as
+/// `(precomposed, byte_len)`. Keys are at most `EXCLUDED_COMPOSITIONS_MAX_KEY_CHARS`
+/// chars; record each candidate cut point in a fixed stack array (no heap), then probe
+/// longest-first so a 3-char excluded stack wins over its 2-char head.
+fn excluded_prefix(s: &str) -> Option<(char, usize)> {
+    let mut cuts = [0usize; EXCLUDED_COMPOSITIONS_MAX_KEY_CHARS];
+    let mut count = 0;
+    for (i, (off, ch)) in s.char_indices().enumerate() {
+        if i >= EXCLUDED_COMPOSITIONS_MAX_KEY_CHARS {
+            break;
+        }
+        cuts[i] = off + ch.len_utf8();
+        count = i + 1;
+    }
+    (2..=count).rev().find_map(|n| {
+        let end = cuts[n - 1];
+        EXCLUDED_COMPOSITIONS.get(&s[..end]).map(|&pc| (pc, end))
+    })
 }
 
 #[cfg(test)]

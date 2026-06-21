@@ -183,6 +183,10 @@ _CLASS_CALLABLES: list[tuple[str, Callable[[], Callable[[str], str]]]] = [
     ("Slugifier", lambda: disarm.Slugifier()),
     ("UniqueSlugifier", lambda: disarm.UniqueSlugifier()),
     ("TextPipeline", lambda: disarm.TextPipeline(transliterate=True)),
+    # awesome-slugify compat shims (#473-guarded): exercise them so a regression in their
+    # __call__ fails here rather than slipping past the function-level audit (#476 review).
+    ("Slugify", lambda: disarm.Slugify()),
+    ("UniqueSlugify", lambda: disarm.UniqueSlugify()),
 ]
 
 
@@ -206,6 +210,21 @@ def test_lexicon_construction_is_surrogate_safe(text: str) -> None:
         clean = disarm.Lexicon(["free", "m" + _canonical(text) + "oney"])
     probe = "get free m" + text + "oney"
     assert disarm.has_anomalies(probe, lex) == disarm.has_anomalies(_canonical(probe), clean)
+
+
+def test_lexicon_from_generator_is_not_truncated_on_retry() -> None:
+    """#476 review: a generator of words is consumed by the first construction attempt;
+    the scrub-and-retry must see the snapshot, not an exhausted iterator (a silently
+    truncated lexicon)."""
+    words = ["free", "m" + HI + "oney", "cash"]
+    with _no_deprecation():
+        lex = disarm.Lexicon(w for w in words)  # one-shot generator
+        clean = disarm.Lexicon([_canonical(w) for w in words])
+    # every word (including the one after the surrogate) must still match
+    for probe in words:
+        assert disarm.has_anomalies(_canonical(probe), lex) == disarm.has_anomalies(
+            _canonical(probe), clean
+        )
 
 
 def test_text_builder_is_surrogate_safe() -> None:
@@ -258,5 +277,5 @@ def test_every_exported_class_is_surrogate_audited() -> None:
     assert not missing, (
         f"exported classes neither covered nor exempt from the surrogate contract: {missing}"
     )
-    stale = accounted - exported - {"Slugify", "UniqueSlugify"}
+    stale = accounted - exported
     assert not stale, f"covered/exempt names that are not exported classes: {stale}"

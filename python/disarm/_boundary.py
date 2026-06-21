@@ -53,6 +53,18 @@ def _scrub(value: Any) -> Any:
     return value
 
 
+def _snapshot(value: Any) -> Any:
+    """Materialize a one-shot iterable (a generator/iterator — e.g. a `Lexicon` word
+    stream) to a list, so a scrub-and-retry scrubs the same items the first attempt
+    consumed rather than an exhausted iterator (#476 review). Strings and stable
+    collections (list / tuple / set / frozenset / dict) pass through unchanged."""
+    if hasattr(value, "__iter__") and not isinstance(
+        value, (str, bytes, list, tuple, set, frozenset, dict)
+    ):
+        return list(value)
+    return value
+
+
 def _surrogate_safe(fn: _F) -> _F:
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -91,6 +103,11 @@ del _name, _obj
 # prebuilt handle vs an iterable — stays True for every real handle.
 class _LexiconMeta(type):
     def __call__(cls, *args: Any, **kwargs: Any) -> Any:
+        # Snapshot one-shot iterables up front: `Lexicon(words)` accepts any
+        # `Iterable[str]`, and a generator would be exhausted by the first attempt,
+        # leaving the retry to scrub an empty stream (#476 review).
+        args = tuple(_snapshot(a) for a in args)
+        kwargs = {k: _snapshot(v) for k, v in kwargs.items()}
         try:
             return _core.Lexicon(*args, **kwargs)
         except UnicodeEncodeError:

@@ -443,6 +443,30 @@ rescue Disarm::InvalidArgument => e   # also rescuable as Disarm::Error
 end
 ```
 
+## Malformed input (invalid UTF-8 / lone surrogates)
+
+Every text entry point sanitizes malformed input at the boundary with a uniform,
+defined contract (shared with the Python and Node bindings) — see the
+[Threat Model](../THREAT_MODEL.md#malformed-unicode-input-at-the-binding-boundary-469). A `String`
+tagged `UTF-8` whose bytes are not valid UTF-8 (a lone surrogate is the forbidden
+3-byte sequence `ED A0 BD`) is interpreted as **WTF-8 → UTF-8**: a well-formed
+high+low surrogate pair recombines into its astral scalar, and each genuinely lone
+surrogate code unit (or otherwise non-decodable byte) becomes exactly one `U+FFFD`.
+No call raises an `EncodingError` on this input, and the result equals the same call
+on the sanitized string. (This is **not** Ruby's per-byte `String#scrub`, which emits
+three `U+FFFD` for one surrogate — the contract is one `U+FFFD` per code unit.)
+
+The substituted `U+FFFD` is **terminal** — it neutralizes the malformed unit, it does
+**not** recover the original bytes. Valid input, astral characters included, is
+unaffected.
+
+```ruby
+# a lone high surrogate (bytes ED A0 BD) becomes one U+FFFD (no EncodingError)
+Disarm.fold_case("a" + "\xED\xA0\xBD".dup.force_encoding("UTF-8") + "b") # => "a�b"
+# a well-formed surrogate pair (ED A0 BD ED B8 80) recombines to its astral scalar
+Disarm.fold_case("\xED\xA0\xBD\xED\xB8\x80".dup.force_encoding("UTF-8")) # => "😀"
+```
+
 ## Stability
 
 The Ruby gem version tracks the Rust crate and Python package numerically. The

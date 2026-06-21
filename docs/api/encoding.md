@@ -49,3 +49,15 @@ text, had_errors = decode_to_utf8(raw_bytes, min_confidence=1.0)
 `had_errors=False` is not a fidelity guarantee — windows-1252 and other single-byte encodings map every byte to a codepoint without inserting U+FFFD, so a wrong-encoding decode yields mojibake with `had_errors=False`. Pass `strict=True` to raise on U+FFFD insertion, but prefer explicit encoding metadata for critical data.
 
 Supports all WHATWG encodings: UTF-8, windows-1252, ISO-8859-1, Shift_JIS, EUC-JP, EUC-KR, Big5, GB18030, and more.
+
+## Malformed `str` input (lone surrogates)
+
+`decode_to_utf8` handles raw *bytes*. A separate, always-on contract covers a `str` that
+itself carries unpaired surrogates (e.g. from `surrogatepass` / WTF-8 decoding): it can't
+encode to UTF-8 for the Rust core, so every text entry point interprets it as **WTF-8 →
+UTF-8** at the boundary — a well-formed high+low pair recombines into its astral scalar,
+and each lone surrogate code unit becomes exactly one `U+FFFD`. No call raises, and the
+result equals the call on the scrubbed string. This is a **silently lossy** neutralization
+(the `U+FFFD` is terminal — the original code unit is not recovered). The full contract,
+uniform across the Python, Node, and Ruby bindings, is in the
+[Threat Model](../THREAT_MODEL.md#malformed-unicode-input-at-the-binding-boundary-469).

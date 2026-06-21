@@ -144,8 +144,8 @@ encoding error on this input, and the result is exactly what the same call would
 produce on the sanitized string. The substituted `U+FFFD` is **terminal** — this
 neutralizes the malformed input, it does **not** recover the original bytes, so a
 token a surrogate was splitting stays split (`ba<lone>d` → `ba`U+FFFD`d`). Valid
-input, including astral characters, is unaffected. (Python and Node honor this
-today; Ruby is tracked in #472.)
+input, including astral characters, is unaffected. (All three bindings — Python,
+Node, and Ruby — honor this; Ruby's boundary decode landed in PR #490, closing #472.)
 
 ## Out of scope — by design, not bugs
 

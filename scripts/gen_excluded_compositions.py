@@ -59,8 +59,10 @@ def _mapped_codepoints() -> set[int]:
     gated on this set: composing a base+mark cluster toward a precomposed scalar only
     helps when that scalar resolves to something. Gating here also removes the
     NFKC-recovery cycle by construction — an *unmapped* excluded composite (FORKING
-    U+2ADC = NONFORKING + U+0338, COMBINING GREEK DIALYTIKA TONOS U+0344) is never
-    composed toward, so the transliterate recovery cannot decompose it and loop."""
+    U+2ADC = NONFORKING + U+0338) is never composed toward, so the transliterate recovery
+    cannot decompose it and loop. (U+0344 is NOT such a case: translit_default maps it to
+    the empty string, so it is "mapped" and emitted — see the review-L-3 note in
+    `classify`.)"""
     mapped: set[int] = set()
     for name in RECOVERY_TABLES:
         for line in (DATA_DIR / name).read_text(encoding="utf-8").splitlines():
@@ -119,9 +121,18 @@ def classify() -> tuple[list[tuple[int, int]], list[tuple[str, int]]]:
         if not _is_composition_excluded(cp):
             continue
         # Build-time gate: only compose toward a scalar that a recovery table maps. This
-        # is the cycle fix — an unmapped excluded composite (U+2ADC, U+0344) is skipped,
-        # so transliterate's NFKC recovery never decomposes a char the compose map would
-        # rebuild. It also keeps the map to only the entries that change an output.
+        # is the cycle fix — a *genuinely unmapped* excluded composite (FORKING U+2ADC =
+        # NONFORKING + U+0338) is skipped, so transliterate's NFKC recovery never
+        # decomposes a char the compose map would rebuild. It also keeps the map to only
+        # entries the recovery tables can act on.
+        #
+        # Note (review L-3): "mapped" includes scalars that map to the EMPTY string —
+        # e.g. COMBINING GREEK DIALYTIKA TONOS U+0344 (= U+0308 U+0301) is in
+        # translit_default as `0344 -> ""`. So its `0308 0301 -> 0344` row IS emitted, even
+        # though both the composed scalar and its pieces transliterate to nothing, making
+        # that row output-neutral. It is harmless (and the lone mark-only no-op), but it is
+        # NOT skipped here — only truly *absent*-from-every-table scalars are. Dropping
+        # output-neutral rows would need an output-aware pass over the recovery values.
         if cp not in mapped:
             continue
         nfd = _full_canonical_decomposition(cp)

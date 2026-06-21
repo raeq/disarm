@@ -225,19 +225,19 @@ mod tests {
     }
 
     #[test]
-    fn composition_excluded_presentation_form_is_untouched() {
-        // #477: compose-only must never *decompose*. The Hebrew presentation form `שׂ`
-        // (U+FB2B) is composition-excluded; an NFC-first fix would decompose it and
-        // change its output. Compose-at-lookup leaves a lone starter alone, and leaves
-        // an excluded base+mark pair (`ש` U+05E9 + sin dot U+05C2) decomposed — neither
-        // is a Latin confusable, so both pass through unchanged, and the two forms agree.
+    fn composition_excluded_presentation_form_is_form_invariant() {
+        // #477/#481: the input is never decomposed (the #478 regression class), so a bare
+        // presentation form `שׂ` U+FB2B passes through unchanged. Its decomposition `ש`
+        // U+05E9 + sin dot U+05C2 now *composes* to U+FB2B via the widening map (#481)
+        // rather than staying split, so both forms agree on U+FB2B — form-invariant, and
+        // neither is a Latin confusable, so both pass through to the same scalar.
         assert_eq!(
             normalize_confusables("\u{FB2B}", "latin").unwrap(),
             "\u{FB2B}"
         );
         assert_eq!(
             normalize_confusables("\u{05E9}\u{05C2}", "latin").unwrap(),
-            "\u{05E9}\u{05C2}"
+            "\u{FB2B}"
         );
     }
 

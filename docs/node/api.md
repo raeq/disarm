@@ -323,7 +323,7 @@ listContextLangs() // => ['ar', 'fa', 'he']
 
 ## Anomaly detection
 
-### `hasAnomalies(text, lexicon)` · `inspectAnomalies(text, lexicon)`
+### `hasAnomalies(text, lexicon?)` · `inspectAnomalies(text, lexicon?)`
 
 Flag text carrying out-of-place characters that disguise a real word — a
 cross-script homoglyph, leet, segmentation, a zero-width / bidi control, or zalgo.

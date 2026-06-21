@@ -391,7 +391,8 @@ fn transliterate_impl_inner<'a>(
     //
     // Fused fast path (#477 perf): run the engine directly on the borrowed input with
     // `detect_compose = true`. The engine bails (returns `None`) the instant it decodes a
-    // combining mark or conjoining jamo — composition has to run first. Detecting it off
+    // combining mark or conjoining Hangul **L** jamo (the `could_compose` predicate) —
+    // composition has to run first. Detecting it off
     // the scalar the engine already decoded removes the old `needs_composition` pre-scan,
     // a *second* full decode of the whole string that every non-ASCII (mark-free) call
     // used to pay. Mark-free input — the overwhelming common case — completes here in one
@@ -489,6 +490,11 @@ fn remap_composed_offset(composed_offset: usize, origin: &[(usize, usize)]) -> u
 /// monomorphized per-character loop. Callers reach it through
 /// [`transliterate_impl_inner`], which composes the input at the boundary (#477)
 /// before dispatching here.
+///
+/// Returns `None` **only** as a control-flow signal: with `detect_compose = true` the run
+/// hit a char needing composition and bailed (the caller must redo over the composed
+/// buffer). It is *not* a "no output" case — a successful run is always `Some` (a `Cow`
+/// that may borrow or own). With `detect_compose = false` the result is always `Some`.
 #[allow(clippy::too_many_arguments)]
 fn transliterate_dispatch<'a>(
     text: &'a str,
@@ -698,7 +704,8 @@ where
         i += ch.len_utf8();
 
         // #477 fusion: on the fast (borrowed-input) attempt, bail the moment a combining
-        // mark or conjoining jamo appears — composition must run first. Detecting it here,
+        // mark or conjoining Hangul **L** jamo appears (the `could_compose` predicate) —
+        // composition must run first. Detecting it here,
         // off the scalar we already decoded, replaces the separate `needs_composition`
         // pre-scan (a second full decode of the whole string) for the common mark-free
         // case. The caller discards this partial result and redoes the work over the

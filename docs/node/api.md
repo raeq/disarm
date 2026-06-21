@@ -379,6 +379,27 @@ getPipeline('search_index').process('Café') // => 'cafe'
 getPipeline('search_index').process('Москва') // => 'moskva'
 ```
 
+## Malformed input (lone surrogates / invalid UTF-16)
+
+Every text entry point sanitizes malformed input at the boundary with a uniform,
+defined contract (shared with the Python and Ruby bindings) — see the
+[Threat Model](../THREAT_MODEL.md#malformed-unicode-input-at-the-binding-boundary-469). A JS string with
+broken UTF-16 (lone surrogates) is interpreted as **WTF-8 → UTF-8**: a well-formed
+high+low pair recombines into its astral scalar, and each genuinely lone surrogate code
+unit becomes exactly one `U+FFFD`. No call throws an encoding error on this input, and the
+result equals the same call on the sanitized string.
+
+The substituted `U+FFFD` is **terminal** — it neutralizes the malformed unit, it does
+**not** recover the original bytes, so a token a surrogate was splitting stays split.
+Valid input, astral characters included, is unaffected.
+
+```ts
+// a lone high surrogate becomes one U+FFFD (the call does not throw)
+foldCase('a\uD800b') // => 'a�b'
+// a well-formed high+low pair is read as its one astral scalar, not two U+FFFD
+foldCase('😀') // => '\u{1F600}'
+```
+
 ## Stability
 
 The npm package version tracks the Rust crate and the Python/Ruby packages. The

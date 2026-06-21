@@ -67,6 +67,8 @@ from disarm._boundary import (
     _reverse_langs,
     _reverse_transliterate,
     _sanitize_filename,
+    # WTF-8 -> UTF-8 scrub for surrogate-laced constructor inputs (#476 follow-up)
+    _scrub,
     _seal_registrations,
     # Emoji provider
     _set_emoji_provider,
@@ -1780,7 +1782,12 @@ class Slugifier:
         # the classes, the typical choice for long-lived web handlers. Sanitize
         # it once here through this slugifier's own config (separator, lang,
         # max_length, …) so it is URL-safe and length-bounded like real output.
-        self._default: str | None = self._inner.slugify(default) if default is not None else None
+        # `_scrub` first (#476 follow-up): the boundary contract says no public
+        # entrypoint raises on a lone surrogate, and `default=` crosses to Rust here in
+        # `__init__` — outside the `@_surrogate_safe`-guarded `__call__`.
+        self._default: str | None = (
+            self._inner.slugify(_scrub(default)) if default is not None else None
+        )
 
     @_surrogate_safe
     def __call__(self, text: str) -> str:
@@ -1853,7 +1860,11 @@ class UniqueSlugifier:
         # consume a uniqueness slot and suffix the empty slug to "-1" (truthy),
         # masking the fallback. The probe sees the raw empty slug without mutating
         # the unique state, so `_inner` is fed exactly once per call.
-        self._default: str | None = default
+        # The default is slugified lazily through `_inner` in `__call__` (eager
+        # slugification here would consume a uniqueness slot), so `_scrub` the raw
+        # surrogate-laced form now — `@_surrogate_safe` on `__call__` only scrubs its
+        # `text` argument, not this stored attribute (#476 follow-up).
+        self._default: str | None = _scrub(default) if default is not None else None
         self._probe: Slugifier | None = (
             Slugifier(**_cfg) if default is not None else None  # type: ignore[arg-type]
         )

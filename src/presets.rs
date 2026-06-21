@@ -305,6 +305,14 @@ impl Actionable {
                          target-aware first"
                     );
                     m.confusables = true;
+                    // The confusables fold composes base+mark clusters at lookup (#475),
+                    // so it acts on a decomposed homoglyph (`і`+◌̈ → folds like `ї`).
+                    // Mark `m.marks` to match that behaviour (L-2): every shipped preset
+                    // happens to set it via a preceding `Nfkc` step, so the guard is sound
+                    // today, but a `Confusables`-only preset with no normalization step
+                    // would otherwise have the guard skip a decomposed homoglyph the step
+                    // would fold — a bypass. Self-consistent now, regardless of ordering.
+                    m.marks = true;
                 }
                 Step::FixedPoint(inner) => {
                     // A fixed-point loop changes exactly what its inner steps change,
@@ -1395,6 +1403,22 @@ mod tests {
     #[should_panic(expected = "only Latin confusable targets")]
     fn fast_path_rejects_non_latin_confusable_target() {
         let _ = Actionable::for_steps(&[Step::Confusables("cyrillic")]);
+    }
+
+    /// L-2: the confusables fold composes base+mark clusters at lookup (#475), so it acts
+    /// on a decomposed homoglyph. The mask must set `marks` on the `Confusables` step
+    /// alone — not rely on a preceding `Nfkc` to set it — else a `Confusables`-only preset
+    /// would let the guard skip a decomposed homoglyph the step would fold (a bypass).
+    #[test]
+    fn confusables_step_marks_clusters_actionable() {
+        assert!(
+            Actionable::for_steps(&[Step::Confusables("latin")]).marks,
+            "Confusables step must set marks (decomposed-homoglyph bypass)"
+        );
+        assert!(
+            Actionable::for_steps(&[Step::ConfusablesNfcFixedPoint("latin")]).marks,
+            "ConfusablesNfcFixedPoint step must set marks"
+        );
     }
 
     /// #471: NFKC composition of conjoining Hangul jamo is a *cross-character*

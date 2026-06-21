@@ -201,6 +201,31 @@ def test_class_callable_matches_wtf8_reference(
         assert make()(text) == make()(_canonical(text)), f"{label}() not surrogate-safe on {text!r}"
 
 
+# The two classes whose `__init__` takes a `default=` empty-slug fallback that crosses
+# the str->Rust boundary (#193) — the surface review L-1 covers.
+_DEFAULT_KWARG_CLASSES = [
+    ("Slugifier", disarm.Slugifier),
+    ("UniqueSlugifier", disarm.UniqueSlugifier),
+]
+
+
+@pytest.mark.parametrize(
+    "label,factory", _DEFAULT_KWARG_CLASSES, ids=[n for n, _ in _DEFAULT_KWARG_CLASSES]
+)
+@pytest.mark.parametrize("text", SURROGATE_INPUTS)
+def test_slugifier_default_kwarg_is_surrogate_safe(
+    label: str, factory: Callable[..., Callable[[str], str]], text: str
+) -> None:
+    """The `default=` kwarg crosses the str->Rust boundary in `__init__` (not the
+    `@_surrogate_safe`-guarded `__call__`), so a lone surrogate there must be scrubbed,
+    not raise (#476 follow-up / review L-1). The empty input routes to that default, so
+    the result must equal the instance built from the WTF-8->UTF-8 reference default."""
+    with _no_deprecation():
+        got = factory(default="x" + text + "y")("")  # construction must not raise
+        want = factory(default="x" + _canonical(text) + "y")("")
+    assert got == want, f"{label}(default=…) not surrogate-safe on {text!r}"
+
+
 @pytest.mark.parametrize("text", SURROGATE_INPUTS)
 def test_lexicon_construction_is_surrogate_safe(text: str) -> None:
     """`Lexicon([...])` must scrub its words at construction rather than raise (#476),

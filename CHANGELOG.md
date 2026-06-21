@@ -314,8 +314,24 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **Hardening-review follow-ups (M-2, M-3, L-1, L-2).** A pass over the 2026-06-20 deep
+  review closed four small correctness/perf/security gaps: (M-2) the eager
+  `normalize_confusables` no longer unconditionally allocates and rebuilds the string on a
+  pure-ASCII / already-folded no-op — it now delegates to the borrowing form, sharing its
+  borrow-on-no-op fast path; (M-3) that borrowing form skips the `needs_composition`
+  char-decode scan on pure-ASCII input via a cheap `is_ascii()` short-circuit; (L-1) the
+  `Slugifier` / `UniqueSlugifier` `default=` constructor kwarg — which crosses the str→Rust
+  boundary in `__init__`, outside the `@_surrogate_safe`-guarded `__call__` — is now
+  WTF-8→UTF-8 scrubbed, so a lone-surrogate default no longer raises `UnicodeEncodeError`
+  (closing the last gap in the #476 contract); (L-2) the fast-path guard's `Confusables`
+  step now sets its `marks` bit itself rather than relying on a preceding `Nfkc` step, so a
+  hypothetical `Confusables`-only preset can't let the guard skip a decomposed homoglyph the
+  fold would recover. Per-cluster allocation in `compose.rs` (L-6) is also removed via a
+  reused NFC scratch buffer, and a stale generator comment claiming U+0344 is "unmapped" is
+  corrected (it maps to the empty string, so its output-neutral row is emitted, not skipped).
 - **`normalize_confusables` is idempotent on an excluded singleton followed by an
   unrelated mark.** The compose-at-lookup pass (#481) recovered a composition-excluded
+  precomposed singleton (`ড়` U+09DC = ড + nukta) only by a whole-cluster widening-map
   precomposed singleton (`ড়` U+09DC = ড + nukta) only by a whole-cluster widening-map
   lookup. When such a singleton was followed by an *unrelated* combining mark (a visarga),
   the cluster's `.nfc()` decomposed the singleton (`ড় ◌ঃ` → ড nukta visarga) and the

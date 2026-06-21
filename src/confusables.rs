@@ -50,16 +50,13 @@ pub(crate) fn normalize_confusables(
     text: &str,
     target_script: &str,
 ) -> Result<String, crate::ErrorRepr> {
-    validate_target_script(target_script)?;
-    let map = tables::resolve_confusable_map(target_script);
-    let mut out = String::with_capacity(text.len());
-    for (ch, _) in crate::compose::composed(text) {
-        match map.and_then(|m| m.get(&ch).copied()) {
-            Some(replacement) => out.push_str(replacement),
-            None => out.push(ch),
-        }
-    }
-    Ok(out)
+    // Delegate to the borrowing form so the no-op fast path is shared by both public
+    // entrypoints (M-2): this eager API used to unconditionally allocate a
+    // `String::with_capacity(text.len())` and rebuild it even on pure-ASCII / already-
+    // folded input, while `_cow` already borrows-on-no-op. One `into_owned()` restores
+    // parity — a genuine fold still allocates once; a no-op only allocates in this final
+    // owned conversion (a copy of a borrow), not in a needless full rebuild.
+    Ok(normalize_confusables_cow(text, target_script)?.into_owned())
 }
 
 /// Borrowing form of [`normalize_confusables`] (#352): returns `Cow::Borrowed`
@@ -80,7 +77,11 @@ pub(crate) fn normalize_confusables_cow<'a>(
     // such input is present, so gate on that: it is folded into an owned buffer, while
     // input with neither (the common case — ASCII, CJK, precomposed letters) falls
     // through to the single-pass borrow-on-no-op path, which never allocates on a no-op.
-    if crate::compose::needs_composition(text) {
+    // ASCII can carry neither a combining mark nor a conjoining jamo, so skip the
+    // `needs_composition` char-decode scan on it entirely (M-3) — `is_ascii` is a cheap
+    // byte scan that short-circuits on the first non-ASCII byte, so non-ASCII pays ~nothing
+    // extra, but pure-ASCII input no longer runs a second full trie-lookup pass.
+    if !text.is_ascii() && crate::compose::needs_composition(text) {
         let mut out = String::with_capacity(text.len());
         for (ch, _) in crate::compose::composed(text) {
             match map.and_then(|m| m.get(&ch).copied()) {

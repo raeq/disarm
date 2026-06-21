@@ -45,6 +45,7 @@ pub(crate) fn composed(text: &str) -> Composed<'_> {
         text,
         iter: text.char_indices().peekable(),
         pending: VecDeque::new(),
+        scratch: String::new(),
     }
 }
 
@@ -77,6 +78,10 @@ pub(crate) struct Composed<'a> {
     iter: std::iter::Peekable<std::str::CharIndices<'a>>,
     /// Chars of a composed cluster's NFC result, waiting to be yielded.
     pending: VecDeque<(char, usize)>,
+    /// Reused buffer for a cluster's NFC form (L-6): mark-heavy input would otherwise
+    /// allocate a fresh `String` per cluster. Cleared and refilled each cluster, so its
+    /// capacity is retained across the whole iteration — one alloc, not one-per-cluster.
+    scratch: String,
 }
 
 // Conjoining Hangul jamo composition (#483). The L/V/T ranges and the syllable formula
@@ -172,8 +177,15 @@ impl Iterator for Composed<'_> {
         // NFC, so consult the widening map (#481): the cluster's NFC string keys the
         // precomposed scalar. Offsets collapse to the cluster start — exact enough for
         // diagnostics, and the common single-mark cluster yields one char anyway.
-        let nfc: String = self.text[start..end].nfc().collect();
-        self.recompose_excluded(&nfc, start);
+        //
+        // Reuse `self.scratch` for the NFC form (L-6): take it out (so `recompose_excluded`
+        // can borrow `&mut self.pending`), refill, consume, then put it back with its grown
+        // capacity — no per-cluster `String` allocation on mark-heavy input.
+        let mut scratch = std::mem::take(&mut self.scratch);
+        scratch.clear();
+        scratch.extend(self.text[start..end].nfc());
+        self.recompose_excluded(&scratch, start);
+        self.scratch = scratch;
         self.pending.pop_front()
     }
 }

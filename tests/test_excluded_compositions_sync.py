@@ -11,6 +11,7 @@ interpreter's, so the committed set is a superset — we assert containment, not
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 from pathlib import Path
 
@@ -24,6 +25,10 @@ _spec = importlib.util.spec_from_file_location(
 assert _spec and _spec.loader
 gen = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gen)
+
+# `classify()` does a full Unicode scan; memoize so the two tests below share one pass
+# instead of scanning twice (Copilot review on #482).
+_classify = functools.lru_cache(maxsize=None)(gen.classify)
 
 
 def _read_excluded() -> dict[str, int]:
@@ -49,7 +54,7 @@ def _read_singletons() -> dict[int, int]:
 
 def test_excluded_composition_map_is_complete() -> None:
     """Every mapped base+mark exclusion the current Unicode data yields is committed."""
-    _singletons, excluded = gen.classify()
+    _singletons, excluded = _classify()
     committed = _read_excluded()
     missing = [(nfd, cp) for nfd, cp in excluded if committed.get(nfd) != cp]
     assert not missing, f"excluded_compositions.tsv missing entries: {missing[:10]}"
@@ -57,7 +62,7 @@ def test_excluded_composition_map_is_complete() -> None:
 
 def test_canonical_singletons_are_complete() -> None:
     """Every canonical singleton the current Unicode data yields is committed."""
-    singletons, _excluded = gen.classify()
+    singletons, _excluded = _classify()
     committed = _read_singletons()
     missing = [(s, g) for s, g in singletons if committed.get(s) != g]
     assert not missing, f"canonical_singletons.tsv missing entries: {missing[:10]}"

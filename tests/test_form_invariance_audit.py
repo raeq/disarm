@@ -24,6 +24,7 @@ roots: `transliterate`, `unidecode`, and every `slugify*` (nine entrypoints).
 
 from __future__ import annotations
 
+import functools
 import inspect
 import unicodedata
 import warnings
@@ -184,13 +185,15 @@ def _all_forms(ch: str) -> list[str]:
     return [unicodedata.normalize(f, ch) for f in FORMS] + [ch]  # NFC, NFD, NFKD, raw
 
 
-def _excluded_singletons(hi: int = 0x110000) -> list[str]:
+@functools.cache
+def _excluded_singletons(hi: int = 0x110000) -> tuple[str, ...]:
     """Composition-excluded code points: NFC differs from the raw scalar (a singleton or
     excluded canonical decomposition NFC does not recompose). Full range by default so the
-    closure assertions also cover the SMP (e.g. musical symbols)."""
-    return [
+    closure assertions also cover the SMP (e.g. musical symbols). Memoized: the ~1.1M-NFC
+    scan runs once and is reused across every closure test below (Copilot review on #482)."""
+    return tuple(
         chr(c) for c in range(0x20, hi) if (ch := chr(c)) and unicodedata.normalize("NFC", ch) != ch
-    ]
+    )
 
 
 # The accepted transliterate tail: two Greek accent-PUNCTUATION code points, not letters

@@ -171,3 +171,111 @@ def test_surrogate_totality_matches_reference(s: str) -> None:
     for _name, fn in PRESETS:
         with _no_deprecation():
             assert fn(s) == fn(_canonical(s))
+
+
+# ── #476: class-based entrypoints (the boundary adapter wraps only module-level
+# callables, so PyO3/Python classes that cross the str->Rust boundary on construction
+# or in a method are covered here). ──
+
+# Fresh-instance factories so the per-call comparison is not polluted by stateful
+# instances (UniqueSlugifier dedups across calls on the same instance).
+_CLASS_CALLABLES: list[tuple[str, Callable[[], Callable[[str], str]]]] = [
+    ("Slugifier", lambda: disarm.Slugifier()),
+    ("UniqueSlugifier", lambda: disarm.UniqueSlugifier()),
+    ("TextPipeline", lambda: disarm.TextPipeline(transliterate=True)),
+    # awesome-slugify compat shims (#473-guarded): exercise them so a regression in their
+    # __call__ fails here rather than slipping past the function-level audit (#476 review).
+    ("Slugify", lambda: disarm.Slugify()),
+    ("UniqueSlugify", lambda: disarm.UniqueSlugify()),
+]
+
+
+@pytest.mark.parametrize("label,make", _CLASS_CALLABLES, ids=[n for n, _ in _CLASS_CALLABLES])
+@pytest.mark.parametrize("text", SURROGATE_INPUTS)
+def test_class_callable_matches_wtf8_reference(
+    label: str, make: Callable[[], Callable[[str], str]], text: str
+) -> None:
+    """A callable class instance (Slugifier/UniqueSlugifier/TextPipeline) must not raise
+    on a surrogate and must equal the call on the WTF-8->UTF-8 reference (#476)."""
+    with _no_deprecation():
+        assert make()(text) == make()(_canonical(text)), f"{label}() not surrogate-safe on {text!r}"
+
+
+@pytest.mark.parametrize("text", SURROGATE_INPUTS)
+def test_lexicon_construction_is_surrogate_safe(text: str) -> None:
+    """`Lexicon([...])` must scrub its words at construction rather than raise (#476),
+    and behave as the lexicon built from the WTF-8->UTF-8 reference words."""
+    with _no_deprecation():
+        lex = disarm.Lexicon(["free", "m" + text + "oney"])  # must not raise
+        clean = disarm.Lexicon(["free", "m" + _canonical(text) + "oney"])
+    probe = "get free m" + text + "oney"
+    assert disarm.has_anomalies(probe, lex) == disarm.has_anomalies(_canonical(probe), clean)
+
+
+def test_lexicon_from_generator_is_not_truncated_on_retry() -> None:
+    """#476 review: a generator of words is consumed by the first construction attempt;
+    the scrub-and-retry must see the snapshot, not an exhausted iterator (a silently
+    truncated lexicon)."""
+    words = ["free", "m" + HI + "oney", "cash"]
+    with _no_deprecation():
+        lex = disarm.Lexicon(w for w in words)  # one-shot generator
+        clean = disarm.Lexicon([_canonical(w) for w in words])
+    # every word (including the one after the surrogate) must still match
+    for probe in words:
+        assert disarm.has_anomalies(_canonical(probe), lex) == disarm.has_anomalies(
+            _canonical(probe), clean
+        )
+
+
+def test_text_builder_is_surrogate_safe() -> None:
+    """The `Text` builder (already routes through the wrapped functions) tolerates a
+    surrogate and equals the reference; pinned so it stays covered."""
+    with _no_deprecation():
+        assert disarm.Text("a" + HI + "b").transliterate().value == disarm.transliterate(
+            _canonical("a" + HI + "b")
+        )
+
+
+# Exported classes with no text-accepting boundary surface: typing Protocols, value/
+# result objects (returned, never constructed from user text), enum (meta)classes, and
+# the exception hierarchy. Reviewed so a NEW exported class defaults to *in*-scope.
+_SURROGATE_EXEMPT_CLASSES = {
+    "CachedTransliterator",  # typing.Protocol
+    "EmojiProvider",  # typing.Protocol
+    "AnomalyReport",  # result object
+    "Finding",  # result object
+    "HostnameAnalysis",  # result object
+    "LangMeta",
+    "ScriptMeta",
+    "Component",
+    "Script",
+    "NF",  # enums / enum metaclasses
+    "DisarmError",
+    "InvalidArgumentError",
+    "ResourceLimitError",
+    "UnsupportedError",  # exceptions
+}
+# Classes given explicit behavioral coverage above (or already guarded in #469/#473).
+_SURROGATE_COVERED_CLASSES = {
+    "Lexicon",
+    "Slugifier",
+    "UniqueSlugifier",
+    "TextPipeline",
+    "Text",
+    "Slugify",
+    "UniqueSlugify",  # compat wrappers, guarded in #473
+}
+
+
+def test_every_exported_class_is_surrogate_audited() -> None:
+    """Dynamic guard (#476): every exported class is either covered by the contract above
+    or on the reviewed exempt list — so a future exported class with a text surface fails
+    here rather than silently skipping the boundary, mirroring the function-level audit."""
+    exported = {n for n in disarm.__all__ if inspect.isclass(getattr(disarm, n, None))}
+    accounted = _SURROGATE_COVERED_CLASSES | _SURROGATE_EXEMPT_CLASSES
+    missing = exported - accounted
+    assert not missing, (
+        f"exported classes neither covered nor exempt from the surrogate contract: {missing}"
+    )
+    stale = accounted - exported
+    assert not stale, f"covered/exempt names that are not exported classes: {stale}"

@@ -330,6 +330,18 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   class) and non-emptiness/idempotency property tests lock the defenses in. (A separate
   idempotency gap from the extension-split boundary moving between passes is tracked in
   #488.)
+- **Class-based entrypoints honor the malformed-Unicode (surrogate) contract (#476).**
+  The #469 boundary adapter wrapped every module-level `_core` callable, but the
+  **class** entrypoints that cross the `str` → Rust boundary on construction or in a
+  method were not covered: `Lexicon(["a\ud83d…"])` raised `UnicodeEncodeError`, and so
+  did calling a `Slugifier` / `UniqueSlugifier` / `TextPipeline` on surrogate-laced text.
+  They now apply the same WTF-8 → UTF-8 scrub-and-retry: the three callable classes guard
+  their `__call__`, and `Lexicon` (a `frozen`, non-subclassable PyO3 class) is guarded by
+  a metaclass proxy whose construction scrubs while `isinstance` still recognizes every
+  real handle, so the `has_anomalies` / `inspect_anomalies` prebuilt-handle dispatch is
+  unaffected. The dynamic surrogate audit is extended to enumerate the exported classes
+  (covered or reviewed-exempt), so a future class with a text surface fails the audit
+  rather than silently skipping the contract.
 
 - **Hangul romanization is invariant to the input's normal form (#483).** A precomposed
   syllable run was romanized with inter-syllable spaces (`처리` → `"cheo ri"`), but the

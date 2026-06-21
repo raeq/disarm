@@ -12,9 +12,12 @@ real defect and never a curated-output disagreement (no ghosts):
         unidecode / slugify output must be all-ASCII.
   * grapheme split losslessness ................. any segmentation must
         concatenate back to the input; uses disarm's own split for the count.
-  * normalize algebraic laws .................... NFC=NFC.NFD, NFD=NFD.NFC,
-        NFKC=NFKC.NFKD, NFKD=NFKD.NFC, each idempotent. These hold for ANY
-        correct normalizer regardless of Unicode version (internal).
+  * normalize algebraic laws .................... reading `A.B` as A∘B (apply B,
+        then A): NFC=NFC.NFD, NFD=NFD.NFC, NFKC=NFKC.NFKD, NFKD=NFKD.NFC, each
+        idempotent. The outer form fully (re)normalizes a canonically-equivalent
+        re-encoding of its input — e.g. NFKD.NFC: NFC(x) is canonically equivalent
+        to x, so NFKD(NFC(x)) == NFKD(x). (NOT NFC.NFKD, which recomposes.) These
+        hold for ANY correct normalizer regardless of Unicode version (internal).
   * is_ascii / is_normalized self-consistency ... is_ascii==str.isascii (ASCII
         is eternal); is_normalized(x,F)==(normalize(x,F)==x) (both disarm's own,
         so immune to CPython Unicode-version skew).
@@ -36,7 +39,7 @@ import unicodedata
 from datetime import timedelta
 
 import pytest
-from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 import disarm
@@ -290,6 +293,7 @@ def test_normalize_composition_laws(s):
     assert disarm.normalize(nfkd, form="NFKC") == disarm.normalize(s, form="NFKC"), (
         "NFKC != NFKC.NFKD"
     )
+    assert disarm.normalize(nfc, form="NFKD") == nfkd, "NFKD != NFKD.NFC"
 
 
 @SETTINGS
@@ -331,7 +335,6 @@ ASSIGNED = st.text(
 def test_normalize_matches_unicodedata(s):
     # Only compare where every codepoint is assigned in CPython's Unicode build,
     # so disarm vs CPython Unicode-version skew cannot produce a false failure.
-    assume(all(unicodedata.category(c) != "Cn" for c in s))
     for F in FORMS:
         assert disarm.normalize(s, form=F) == unicodedata.normalize(F, s), (
             f"normalize {F} != unicodedata on {s!r}"

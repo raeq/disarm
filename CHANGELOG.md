@@ -16,6 +16,21 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Performance
+
+- **Transliterate recovers most of the form-invariance compose-at-lookup regression.**
+  The #475/#477/#481 boundary added a `needs_composition` pre-scan that walked every
+  non-ASCII input a second time (UTF-8 decode + `is_combining_mark` trie lookup per
+  character) before transliterating, so the hot path paid two full passes where it used
+  to pay one — the latin/unidecode comparator ratio fell ~18 → ~11 across #474 → #480.
+  The mark/jamo detection is now fused into the engine's existing decode loop: the fast
+  pass bails to the compose path only when it actually meets a combining mark, so
+  mark-free input (the common case) makes a single pass. `needs_composition` (still used
+  by the confusables fold) also drops the trie lookup for a range fast-path over
+  U+0000–058F. Behaviour is identical (verified by the exhaustive, formal, and
+  form-invariance suites); Rust-level micro-bench gains, pre → post: latin −33%,
+  cyrillic −20%, mixed −21%, greek −12% ns/char.
+
 ## [0.11.0] — 2026-06-21
 
 ### Added

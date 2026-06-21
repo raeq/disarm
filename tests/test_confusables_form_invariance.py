@@ -81,6 +81,34 @@ def test_confusables_divergence_set_is_broad() -> None:
     assert divergent == [], f"{len(divergent)} code points still diverge NFC vs NFD"
 
 
+# An excluded precomposed singleton (one whose canonical decomposition does NOT
+# recompose under NFC) FOLLOWED BY an unrelated combining mark. The lookup-time
+# compose pass used to NFC the whole cluster — decomposing the singleton — then miss
+# the widening-map key because of the trailing mark, leaving it decomposed. The fold
+# then oscillated (compose -> decompose -> compose), i.e. `nc(nc(x)) != nc(x)`.
+EXCLUDED_SINGLETON_PLUS_MARK = [
+    "ড়ঃ",  # ড় BENGALI RRA (= ড + nukta) + ◌ঃ visarga
+    "क़ः",  # क़ DEVANAGARI QA (= क + nukta) + ◌ः visarga
+    "שׂ֑",  # שׂ HEBREW SHIN+SIN-DOT + ◌֑ etnahta
+    "בּଃ",  # בּ HEBREW BET+DAGESH + ◌ଃ ORIYA visarga (the proptest seed)
+]
+
+
+@pytest.mark.parametrize("s", EXCLUDED_SINGLETON_PLUS_MARK)
+def test_normalize_confusables_idempotent_on_excluded_singleton_plus_mark(s: str) -> None:
+    """`normalize_confusables` must be idempotent: a second pass changes nothing."""
+    once = disarm.normalize_confusables(s)
+    assert disarm.normalize_confusables(once) == once, f"not idempotent on {s!r}: {once!r}"
+
+
+@pytest.mark.parametrize("s", EXCLUDED_SINGLETON_PLUS_MARK)
+def test_excluded_singleton_plus_mark_is_form_invariant(s: str) -> None:
+    """The same input across normal forms folds identically — the singleton is
+    recovered whether it arrives precomposed or pre-decomposed by the attacker."""
+    outs = {disarm.normalize_confusables(v) for v in _forms(s)}
+    assert len(outs) == 1, f"not form-invariant on {s!r}: {outs}"
+
+
 # ── No-regression baseline: the NFKC-first presets are ALREADY form-invariant. ──
 
 NFKC_PRESETS = [

@@ -173,14 +173,40 @@ impl Iterator for Composed<'_> {
         // precomposed scalar. Offsets collapse to the cluster start — exact enough for
         // diagnostics, and the common single-mark cluster yields one char anyway.
         let nfc: String = self.text[start..end].nfc().collect();
-        if let Some(&precomposed) = EXCLUDED_COMPOSITIONS.get(nfc.as_str()) {
-            self.pending.push_back((precomposed, start));
-        } else {
-            for c in nfc.chars() {
-                self.pending.push_back((c, start));
-            }
-        }
+        self.recompose_excluded(&nfc, start);
         self.pending.pop_front()
+    }
+}
+
+impl Composed<'_> {
+    /// Queue the NFC'd cluster onto `pending`, recomposing every composition-excluded
+    /// base+mark *prefix* via the widening map.
+    ///
+    /// A whole-cluster lookup is not enough: `.nfc()` decomposes an excluded singleton
+    /// (`ড়` U+09DC → ড + nukta), and when that singleton is followed by an *unrelated*
+    /// mark (a visarga) the cluster is `ড nukta visarga`, which misses the 2-char
+    /// `ড nukta` key — leaving the singleton decomposed and making the fold oscillate
+    /// (compose ⇄ decompose, non-idempotent). So match greedily at each position: try the
+    /// longest map key that fits (keys are at most `EXCLUDED_COMPOSITIONS_MAX_KEY_CHARS`
+    /// chars — a build-time bound that tracks the data), emit the precomposed scalar, and
+    /// advance past it; otherwise emit the char verbatim. The common single-mark cluster
+    /// still resolves in one step.
+    fn recompose_excluded(&mut self, nfc: &str, start: usize) {
+        let cs: Vec<char> = nfc.chars().collect();
+        let mut i = 0;
+        while i < cs.len() {
+            let max = (i + EXCLUDED_COMPOSITIONS_MAX_KEY_CHARS).min(cs.len());
+            // Longest prefix first: a 3-char excluded stack must win over its 2-char head.
+            let matched = (i + 2..=max).rev().find_map(|end| {
+                let key: String = cs[i..end].iter().collect();
+                EXCLUDED_COMPOSITIONS
+                    .get(key.as_str())
+                    .map(|&pc| (pc, end - i))
+            });
+            let (out, len) = matched.unwrap_or((cs[i], 1));
+            self.pending.push_back((out, start));
+            i += len;
+        }
     }
 }
 
@@ -292,6 +318,26 @@ mod tests {
         assert_eq!(chars("\u{1100}\u{11AB}"), vec!['\u{1100}', '\u{11AB}']); // L + T, no V
                                                                              // an L followed by a non-jamo letter stays separate
         assert_eq!(chars("\u{1100}a"), vec!['\u{1100}', 'a']);
+    }
+
+    #[test]
+    fn excluded_singleton_with_trailing_unrelated_mark_recomposes() {
+        // Regression: an excluded precomposed singleton FOLLOWED BY an unrelated mark.
+        // `ড়` U+09DC (excluded singleton = ড U+09A1 + nukta U+09BC) then ◌ঃ visarga
+        // U+0983. The cluster collects all three; `.nfc()` *decomposes* the excluded
+        // singleton (ড nukta visarga), and a whole-cluster map lookup misses the 2-char
+        // key because of the trailing visarga — leaving the singleton decomposed, which
+        // makes the fold oscillate (compose → decompose → compose) and non-idempotent.
+        // Greedy prefix matching recomposes `ড nukta` → U+09DC and keeps the visarga.
+        assert_eq!(chars("\u{09DC}\u{0983}"), vec!['\u{09DC}', '\u{0983}']);
+        // the proptest seed that surfaced it: Hebrew FB31 (excluded) + Oriya visarga.
+        assert_eq!(chars("\u{FB31}\u{0B03}"), vec!['\u{FB31}', '\u{0B03}']);
+        // and the decomposed form of the same input lands on the identical scalar —
+        // form-invariance, which is what idempotency of the whole fold reduces to here.
+        assert_eq!(
+            chars("\u{09A1}\u{09BC}\u{0983}"),
+            vec!['\u{09DC}', '\u{0983}']
+        );
     }
 
     #[test]

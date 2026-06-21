@@ -62,9 +62,10 @@ pub(crate) fn compose_str(text: &str) -> std::borrow::Cow<'_, str> {
 }
 
 /// True if [`composed`] could change `text` — the cheap gate that decides whether to run
-/// the compose pass at all. Two triggers: a combining mark (General_Category=Mark, which
-/// also catches the spacing marks Mc in Brahmic two-part vowels), or a leading conjoining
-/// Hangul jamo (L, General_Category=Lo, which the mark test misses — #483). Input with
+/// the compose pass at all. Two triggers, found anywhere in `text`: a combining mark
+/// (General_Category=Mark, which also catches the spacing marks Mc in Brahmic two-part
+/// vowels), or a conjoining Hangul **L** jamo — a leading *consonant*, not a string
+/// position — (General_Category=Lo, which the mark test misses — #483). Input with
 /// neither (ASCII, CJK, lone precomposed letters) takes a borrow/identity fast path.
 pub(crate) fn needs_composition(text: &str) -> bool {
     text.chars()

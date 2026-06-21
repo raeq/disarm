@@ -318,9 +318,12 @@ HANGUL_RUNS = [
 @pytest.mark.parametrize("name", ["transliterate", "unidecode", "slugify"])
 @pytest.mark.parametrize("run,want", HANGUL_RUNS, ids=[w.replace(" ", "_") for _, w in HANGUL_RUNS])
 def test_hangul_romanization_is_form_invariant(name: str, run: str, want: str) -> None:
-    """A precomposed syllable run and its conjoining-jamo NFD must romanize identically."""
+    """A precomposed syllable run and its conjoining-jamo NFD must romanize identically —
+    and to the expected spaced reading (slugify maps the inter-syllable space to `-`), so
+    a *form-invariant* regression of the output is also caught."""
     fn = getattr(disarm, name)
+    expected = want.replace(" ", "-") if name == "slugify" else want
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         outs = {fn(f) for f in _all_forms(run)}
-    assert len(outs) == 1, f"{name} not form-invariant on Hangul {run!r}: {outs}"
+    assert outs == {expected}, f"{name} on Hangul {run!r}: {outs} != {{{expected!r}}}"

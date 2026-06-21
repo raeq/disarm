@@ -120,6 +120,25 @@ fn collapse_dot_sequences(text: &str) -> String {
 ///
 /// When `preserve_extension = false`, the entire string (stem + extension)
 /// is truncated to `max_length` bytes as a unit.
+/// Final filename hygiene shared by both return paths (#485/#487), run on the fully
+/// assembled name so it covers the extension branch — which re-prepends `'.'` and is exempt
+/// from the stem's leading/trailing dot trim, so the assembled name can keep a leading dot
+/// (a Unix dotfile), keep a trailing dot or space (which Windows strips at the filesystem
+/// layer, making disarm's output and the stored file disagree), or reduce to a bare `"."` /
+/// `".."` directory reference. Trim leading and trailing dots and spaces, then fall back to
+/// `"_"` — the same fallback every all-stripped input uses — for an empty, `"."`, or `".."`
+/// result. Trimming only shortens, so a prior `max_length` cap still holds.
+fn finalize_name(name: String) -> String {
+    let trimmed = name.trim_matches(|c: char| c == '.' || c == ' ');
+    if trimmed.is_empty() {
+        String::from("_")
+    } else if trimmed.len() == name.len() {
+        name
+    } else {
+        trimmed.to_owned()
+    }
+}
+
 pub(crate) fn sanitize_filename(
     text: &str,
     separator: &str,
@@ -129,9 +148,9 @@ pub(crate) fn sanitize_filename(
     preserve_extension: bool,
 ) -> Result<String, crate::ErrorRepr> {
     crate::transliterate::validate_lang(lang)?;
-    if text.is_empty() {
-        return Ok(String::new());
-    }
+    // #485: no empty-input short-circuit — `""` flows through to `finalize_name`, which
+    // returns the same `"_"` fallback every all-stripped input uses (the old early return
+    // here bypassed that fallback and returned `""`, a downstream write-target footgun).
 
     // Validate platform
     let illegal_chars: &[char] = match platform {
@@ -249,7 +268,7 @@ pub(crate) fn sanitize_filename(
             max_length,
             preserve_extension,
         );
-        return Ok(final_name);
+        return Ok(finalize_name(final_name));
     }
 
     // Append sanitized extension
@@ -284,12 +303,9 @@ pub(crate) fn sanitize_filename(
         }
     }
 
-    // Fallback for empty result
-    if final_name.is_empty() {
-        final_name = String::from("_");
-    }
-
-    Ok(final_name)
+    // Final hygiene + never-empty / never-`.`-`..` fallback, shared with the reserved
+    // branch above (#485/#487).
+    Ok(finalize_name(final_name))
 }
 
 #[cfg(test)]
@@ -601,19 +617,36 @@ mod tests {
                 max_length in 1usize..30,
                 preserve_ext in proptest::bool::ANY,
             ) {
+                // #485: no `if !result.is_empty()` guard — the output is never empty, so
+                // a bare reserved stem can never be hidden behind an empty result.
                 let result = sanitize_filename(&input, "_", max_length, "universal", None, preserve_ext).unwrap();
-                if !result.is_empty() {
-                    let stem = match result.find('.') {
-                        Some(pos) => &result[..pos],
-                        None => &result,
-                    };
-                    let upper = stem.to_uppercase();
-                    prop_assert!(
-                        !WINDOWS_RESERVED.iter().any(|r| upper == *r),
-                        "produced bare reserved stem from '{input}' (max_length={max_length}, preserve_ext={preserve_ext}): '{result}'"
-                    );
-                }
+                let stem = match result.find('.') {
+                    Some(pos) => &result[..pos],
+                    None => &result,
+                };
+                let upper = stem.to_uppercase();
+                prop_assert!(
+                    !WINDOWS_RESERVED.iter().any(|r| upper == *r),
+                    "produced bare reserved stem from '{input}' (max_length={max_length}, preserve_ext={preserve_ext}): '{result}'"
+                );
             }
+
+            /// #485/#487 invariant: over the full Unicode input space the result is never
+            /// empty, never a `"."` / `".."` directory reference, and carries no leading or
+            /// trailing dot — so a careless edit that regresses any of these fails here.
+            #[test]
+            fn never_empty_dotfile_or_directory_reference(
+                input in "\\PC{0,40}",
+                max_length in 1usize..50,
+                preserve_ext in proptest::bool::ANY,
+            ) {
+                let result = sanitize_filename(&input, "_", max_length, "universal", None, preserve_ext).unwrap();
+                prop_assert!(!result.is_empty(), "empty output for {input:?}");
+                prop_assert!(result != "." && result != "..", "directory reference {result:?} from {input:?}");
+                prop_assert!(!result.starts_with('.'), "leading dot {result:?} from {input:?}");
+                prop_assert!(!result.ends_with('.') && !result.ends_with(' '), "trailing dot/space {result:?} from {input:?}");
+            }
+
 
             /// max_length must always be respected, regardless of platform,
             /// preserve_extension, or reserved name handling.
@@ -630,6 +663,211 @@ mod tests {
                         result.len()
                     );
                 }
+            }
+        }
+    }
+
+    // #485/#487: the attacker-filename battery (path traversal, Unicode separator
+    // homoglyphs, control/NUL, RTLO/bidi, the ADS colon, dot hygiene, strips-to-empty,
+    // the separator-plus-dot-like class), plus the closure and idempotency invariants.
+    mod attacker_vectors {
+        use super::super::*;
+
+        fn sf(input: &str) -> String {
+            sanitize_filename(input, "_", 255, "universal", None, true).unwrap()
+        }
+
+        fn assert_safe(input: &str, out: &str) {
+            assert!(!out.is_empty(), "EMPTY output for {input:?}");
+            assert!(
+                out != "." && out != "..",
+                "directory reference {out:?} from {input:?}"
+            );
+            assert!(
+                !out.contains('/') && !out.contains('\\'),
+                "path separator survived: {out:?} from {input:?}"
+            );
+            assert!(
+                !out.contains(".."),
+                "traversal survived: {out:?} from {input:?}"
+            );
+            assert!(
+                !out.starts_with('.'),
+                "leading dot (dotfile) survived: {out:?} from {input:?}"
+            );
+            assert!(
+                !out.ends_with('.') && !out.ends_with(' '),
+                "trailing dot/space survived (Windows strips these): {out:?} from {input:?}"
+            );
+            assert!(
+                !out.chars().any(char::is_control),
+                "control char survived: {out:?} from {input:?}"
+            );
+            let stem = out.split('.').next().unwrap_or(out).to_uppercase();
+            assert!(
+                !WINDOWS_RESERVED.iter().any(|r| stem == *r),
+                "bare reserved device name survived: {out:?} from {input:?}"
+            );
+        }
+
+        fn battery() -> Vec<(&'static str, String)> {
+            vec![
+                ("traversal_unix", "../../etc/passwd".into()),
+                ("traversal_win", "..\\..\\Windows\\System32\\cmd.exe".into()),
+                ("traversal_mixed", "....//....//etc/passwd".into()),
+                ("abs_unix", "/etc/passwd".into()),
+                ("abs_win", "C:\\Windows\\System32".into()),
+                ("unc", "\\\\server\\share\\x".into()),
+                ("win_device_ns", "\\\\.\\PhysicalDrive0".into()),
+                ("fullwidth_solidus", format!("a{}b", '\u{FF0F}')),
+                ("fraction_slash", format!("a{}b", '\u{2044}')),
+                ("division_slash", format!("a{}b", '\u{2215}')),
+                ("fullwidth_revsolidus", format!("a{}b", '\u{FF3C}')),
+                (
+                    "fullwidth_dotdot_sol",
+                    format!("{}{}{}", '\u{FF0E}', '\u{FF0E}', '\u{FF0F}'),
+                ),
+                ("nul_byte", "safe\u{0}.png".into()),
+                ("newline", "a\nb.txt".into()),
+                ("carriage_return", "a\rb".into()),
+                ("escape", "a\u{1b}b".into()),
+                ("del", "a\u{7f}b".into()),
+                ("rtlo", format!("exploit{}gpj.exe", '\u{202E}')),
+                ("lro", format!("a{}b", '\u{202D}')),
+                ("rlo_lone", "\u{202E}".into()),
+                ("con", "CON".into()),
+                ("con_lc", "con".into()),
+                ("con_ext", "CON.txt".into()),
+                ("nul_ext", "nul.dat".into()),
+                ("com1", "COM1.txt".into()),
+                ("lpt9", "LPT9".into()),
+                ("con_trailing_dot", "CON.".into()),
+                ("con_trailing_space", "CON ".into()),
+                (
+                    "fullwidth_con",
+                    format!("{}{}{}", '\u{FF23}', '\u{FF2F}', '\u{FF2E}'),
+                ),
+                ("cyrillic_con", format!("{}ON", '\u{0421}')),
+                ("greek_omicron_con", format!("C{}N", '\u{039F}')),
+                ("ads_colon", "file.txt:secret".into()),
+                ("win_illegals", "a<b>:\"|?*".into()),
+                ("trailing_dots", "report...".into()),
+                ("trailing_space", "report ".into()),
+                ("leading_dot", ".bashrc".into()),
+                ("lone_dot", ".".into()),
+                ("lone_dotdot", "..".into()),
+                ("dots_and_spaces", ". . .".into()),
+                ("empty", String::new()),
+                ("nuls_only", "\u{0}\u{0}\u{0}".into()),
+                ("ctrl_only", "\u{1}\u{2}\u{1f}".into()),
+                ("spaces_only", "     ".into()),
+                ("seps_only", "/////".into()),
+                ("zwsp_only", format!("{}{}", '\u{200b}', '\u{200b}')),
+                ("very_long", format!("{}.txt", "a".repeat(1000))),
+                ("long_combining", format!("a{}", "\u{0301}".repeat(400))),
+                // #487 separator-plus-dot-like class: each must not yield "." and must be idempotent.
+                ("sep_middle_dot", "_\u{00B7}".into()),
+                ("sep_dot_above", "_\u{02D9}".into()),
+                ("sep_ano_teleia", "_\u{0387}".into()),
+                ("sep_armenian_stop", "_\u{0589}".into()),
+                ("sep_hebrew_sof_pasuq", "_\u{05C3}".into()),
+                ("sep_devanagari_danda", "_\u{0964}".into()),
+            ]
+        }
+
+        #[test]
+        fn attacker_battery_all_safe() {
+            for (name, input) in battery() {
+                let out = sf(&input);
+                assert_safe(name, &out);
+                assert!(
+                    out.len() <= 255,
+                    "over max_length: {} bytes from {name}",
+                    out.len()
+                );
+            }
+        }
+
+        #[test]
+        fn empty_input_never_returns_empty() {
+            assert_eq!(sf(""), "_");
+            assert_eq!(sf("     "), "_");
+            assert_eq!(sf("/////"), "_");
+            assert_eq!(sf("\u{0}\u{0}"), "_");
+        }
+
+        #[test]
+        fn never_returns_directory_reference() {
+            // #487: separator-then-dot reduces to a bare "." today; must fall back to "_".
+            assert_eq!(sf("_\u{00B7}"), "_"); // "_" + MIDDLE DOT -> "_.", stem stripped -> "." -> "_"
+            assert_eq!(sf("."), "_");
+            assert_eq!(sf(".."), "_");
+            for (_, input) in battery() {
+                let out = sf(&input);
+                assert!(
+                    out != "." && out != "..",
+                    "directory reference {out:?} from {input:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn no_leading_dot_dotfile() {
+            assert!(!sf("../../etc/passwd").starts_with('.'));
+            assert!(!sf("\\\\.\\PhysicalDrive0").starts_with('.'));
+            assert_eq!(sf(".bashrc"), "bashrc");
+        }
+
+        #[test]
+        fn no_trailing_dot_or_space() {
+            assert!(!sf("report...").ends_with('.'));
+            assert!(!sf("CON.").ends_with('.'));
+            assert!(!sf("report ").ends_with(' '));
+        }
+
+        #[test]
+        fn is_idempotent_over_the_battery() {
+            // #487 criterion 2: a sanitized name is a fixed point.
+            for (name, input) in battery() {
+                let once = sf(&input);
+                let twice = sf(&once);
+                assert_eq!(
+                    once, twice,
+                    "not idempotent on {name}: {once:?} -> {twice:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn unicode_separator_homoglyphs_do_not_resurface() {
+            use unicode_normalization::UnicodeNormalization;
+            for input in [
+                format!("a{}b", '\u{FF0F}'),
+                format!("a{}b", '\u{2044}'),
+                format!("a{}b", '\u{2215}'),
+            ] {
+                let out = sf(&input);
+                let nfkc: String = out.nfkc().collect();
+                assert!(
+                    !nfkc.contains('/') && !nfkc.contains('\\'),
+                    "NFKC of {out:?} reintroduced a separator"
+                );
+            }
+        }
+
+        #[test]
+        fn homoglyph_reserved_names_neutralized() {
+            for input in [
+                format!("{}{}{}", '\u{FF23}', '\u{FF2F}', '\u{FF2E}'),
+                format!("C{}N", '\u{039F}'),
+                format!("{}ON", '\u{0421}'),
+            ] {
+                let out = sf(&input);
+                let stem = out.split('.').next().unwrap_or(&out).to_uppercase();
+                assert!(
+                    !WINDOWS_RESERVED.iter().any(|r| stem == *r),
+                    "reserved survived: {out:?}"
+                );
             }
         }
     }

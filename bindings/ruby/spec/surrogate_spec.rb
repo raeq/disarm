@@ -31,7 +31,14 @@ RSpec.describe "Disarm surrogate / invalid-UTF-8 contract (#469, #472)" do
     ["embedded in actionable", utf8.call("PаyPal" + lone_hi + "  ‮ rld"), "PаyPal\u{FFFD}  ‮ rld"],
     ["well-formed pair", pair, "\u{1F600}"], # recombine, NOT "??"
     ["pair embedded", utf8.call("x" + pair + "y"), "x\u{1F600}y"],
-    ["lone then pair", utf8.call(lone_hi + pair), "\u{FFFD}\u{1F600}"]
+    ["lone then pair", utf8.call(lone_hi + pair), "\u{FFFD}\u{1F600}"],
+    # #472 review: non-surrogate malformed bytes (overlong forms, out-of-range 4-byte
+    # leads) are also rejected — one U+FFFD per byte not in a valid WTF-8 sequence, so
+    # an overlong cannot smuggle in the character it over-encodes.
+    ["overlong 2-byte slash", utf8.call("\xC0\xAF"), "\u{FFFD}\u{FFFD}"],
+    ["overlong 3-byte", utf8.call("\xE0\x80\xAF"), "\u{FFFD}\u{FFFD}\u{FFFD}"],
+    ["invalid 4-byte lead", utf8.call("\xF5\x80\x80\x80"), "\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}"],
+    ["malformed embedded in text", utf8.call("a\xC0\xAFb"), "a\u{FFFD}\u{FFFD}b"]
   ]
 
   entrypoints = {

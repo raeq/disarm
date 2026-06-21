@@ -69,7 +69,8 @@ fn map_err(e: &disarm_core::Error) -> Error {
 // *before* that validation and brings them to the same WTF-8 → UTF-8 contract the
 // Python and Node bindings honor: a well-formed high+low pair recombines into its
 // astral scalar, and each genuinely lone surrogate code unit (or non-decodable byte)
-// becomes exactly one `U+FFFD`. Valid UTF-8 takes a zero-copy-decode fast path.
+// becomes exactly one `U+FFFD`. Valid UTF-8 skips the WTF-8 decoder via a `from_utf8`
+// check (it still allocates the owned `String` magnus would have).
 
 /// Decode WTF-8 bytes to valid UTF-8: recombine surrogate pairs into astral scalars,
 /// map each lone surrogate — and any byte that is not part of a valid WTF-8 sequence —
@@ -82,8 +83,11 @@ fn wtf8_to_utf8(bytes: &[u8]) -> String {
         b.filter(|&&x| x & 0xC0 == 0x80)
             .map(|&x| u32::from(x & 0x3F))
     }
-    // Pass 1: decode to code points, allowing surrogate scalars; one U+FFFD per byte
-    // that does not begin a valid 1–4 byte WTF-8 sequence.
+    // Pass 1: decode to code points, allowing surrogate scalars. A byte that does not
+    // begin a *valid* 1–4 byte WTF-8 sequence — including an overlong encoding (e.g. the
+    // 2-byte `C0 AF` for `/`) or an out-of-range 4-byte lead (`F5..F7`, > U+10FFFF) —
+    // yields one U+FFFD and advances by a single byte, so the following bytes are
+    // re-examined individually rather than swallowed.
     let mut cps: Vec<u32> = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while let Some(&b) = bytes.get(i) {
@@ -93,11 +97,29 @@ fn wtf8_to_utf8(bytes: &[u8]) -> String {
         let (cp, len) = if b < 0x80 {
             (u32::from(b), 1)
         } else if let (0b110, Some(x1)) = (b >> 5, c1) {
-            ((u32::from(b & 0x1F) << 6) | x1, 2)
+            let cp = (u32::from(b & 0x1F) << 6) | x1;
+            // reject overlong (a 2-byte form for < U+0080 — lead C0/C1).
+            if cp >= 0x80 {
+                (cp, 2)
+            } else {
+                (0xFFFD, 1)
+            }
         } else if let (0b1110, Some(x1), Some(x2)) = (b >> 4, c1, c2) {
-            ((u32::from(b & 0x0F) << 12) | (x1 << 6) | x2, 3)
+            let cp = (u32::from(b & 0x0F) << 12) | (x1 << 6) | x2;
+            // reject overlong (< U+0800); surrogates U+D800..U+DFFF are valid WTF-8.
+            if cp >= 0x800 {
+                (cp, 3)
+            } else {
+                (0xFFFD, 1)
+            }
         } else if let (0b11110, Some(x1), Some(x2), Some(x3)) = (b >> 3, c1, c2, c3) {
-            ((u32::from(b & 0x07) << 18) | (x1 << 12) | (x2 << 6) | x3, 4)
+            let cp = (u32::from(b & 0x07) << 18) | (x1 << 12) | (x2 << 6) | x3;
+            // reject overlong (< U+10000) and out-of-range (> U+10FFFF — lead F5..F7).
+            if (0x1_0000..=0x10_FFFF).contains(&cp) {
+                (cp, 4)
+            } else {
+                (0xFFFD, 1)
+            }
         } else {
             (0xFFFD, 1)
         };

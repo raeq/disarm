@@ -302,3 +302,28 @@ def test_normalize_confusables_fold_is_form_invariant() -> None:
             continue  # benign passthrough — not a confusable in any form, may re-encode
         nfc_outs = {unicodedata.normalize("NFC", disarm.normalize_confusables(f)) for f in forms}
         assert len(nfc_outs) == 1, f"confusable fold diverges by form on U+{ord(c):04X}: {nfc_outs}"
+
+
+# #483: conjoining Hangul jamo (GC=Lo) decompose a multi-syllable run to per-jamo, which
+# romanized contiguously while the precomposed run got inter-syllable spacing. The
+# single-code-point sweeps above are structurally blind to it (a syllable is its own NFC;
+# the gap is a multi-syllable spacing difference), so these runs are the self-guard.
+HANGUL_RUNS = [
+    ("처리", "cheo ri"),  # CC98 B9AC, LV + LV
+    ("한글", "han geul"),  # D55C AE00, LVT + LV
+    ("서울특별시", "seo ul teug byeol si"),
+]
+
+
+@pytest.mark.parametrize("name", ["transliterate", "unidecode", "slugify"])
+@pytest.mark.parametrize("run,want", HANGUL_RUNS, ids=[w.replace(" ", "_") for _, w in HANGUL_RUNS])
+def test_hangul_romanization_is_form_invariant(name: str, run: str, want: str) -> None:
+    """A precomposed syllable run and its conjoining-jamo NFD must romanize identically —
+    and to the expected spaced reading (slugify maps the inter-syllable space to `-`), so
+    a *form-invariant* regression of the output is also caught."""
+    fn = getattr(disarm, name)
+    expected = want.replace(" ", "-") if name == "slugify" else want
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        outs = {fn(f) for f in _all_forms(run)}
+    assert outs == {expected}, f"{name} on Hangul {run!r}: {outs} != {{{expected!r}}}"

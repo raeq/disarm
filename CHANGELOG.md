@@ -16,6 +16,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-06-21
+
 ### Added
 
 - **Strip invisible & non-interchange code points in the security presets (#413).**

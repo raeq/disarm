@@ -162,6 +162,14 @@ mod tests {
         assert_eq!(chars("\u{05E9}\u{05C2}"), vec!['\u{05E9}', '\u{05C2}']);
         // the precomposed presentation form, with no following mark, is left intact.
         assert_eq!(chars("\u{FB2B}"), vec!['\u{FB2B}']);
+
+        // Same phenomenon, different script — and the residual the #479-review oracle
+        // could not see: Devanagari QA (U+0958) canonically decomposes to KA (U+0915) +
+        // nukta (U+093C) and is composition-excluded, so compose-only leaves the cluster
+        // decomposed. It does NOT reconstruct QA. Downstream this is exactly why
+        // `transliterate(KA + nukta)` degrades to "ka", where raw `क़` U+0958 → "qa":
+        // recovering an excluded singleton from its decomposition is what we must not do.
+        assert_eq!(chars("\u{0915}\u{093C}"), vec!['\u{0915}', '\u{093C}']);
     }
 
     #[test]

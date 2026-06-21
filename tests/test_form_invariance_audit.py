@@ -165,3 +165,169 @@ def test_transliterate_family_divergence_sweep(name: str) -> None:
             if fn(nfc) != fn(nfd):
                 diverging.append(cp)
     assert diverging == [], f"{name}: {len(diverging)} code points diverge NFC vs NFD"
+
+
+# ── The raw-vs-normalized blind spot (residual of compose-only design) ──
+#
+# The audit above compares the normal forms against EACH OTHER and never against the
+# raw, un-normalized precomposed input. For a composition-excluded singleton that gap
+# is real: the raw scalar carries information its canonical decomposition loses, so the
+# raw form recovers differently from EVERY normal form — and the normal forms all agree
+# with one another, so the form-invariance audit stays green and cannot see it.
+#
+# Devanagari QA (U+0958) is the canonical example: raw `क़` transliterates "qa", but its
+# decomposition KA (U+0915) + nukta (U+093C) is composition-excluded, so every normal
+# form is KA + nukta and degrades to "ka". This is ACCEPTED, not a bug to fix: composing
+# an excluded singleton back from its decomposition is exactly the Hebrew `שׂ` U+FB2B
+# regression (#477) in another script. The tests below make the residual visible and pin
+# it, so it cannot silently grow, and so a regression that degrades a *non-excluded*
+# code point (which would be a real bug) fails here.
+
+
+def _excluded_singletons(hi: int = 0x10000) -> list[str]:
+    """Composition-excluded code points: those whose NFC differs from the raw scalar
+    (a singleton/excluded canonical decomposition that NFC does not recompose). All the
+    residual sets below live in the BMP, so the default range captures them."""
+    return [
+        chr(c) for c in range(0x20, hi) if (ch := chr(c)) and unicodedata.normalize("NFC", ch) != ch
+    ]
+
+
+# Excluded singletons whose precomposed romanization is richer than their canonical
+# decomposition, so raw recovers differently from every normal form: Indic nukta letters
+# (Devanagari/Bengali/Gurmukhi/Oriya QA/ZA/FA/RRA…), Tibetan, Greek oxia, and Hebrew
+# presentation forms. Pinned exactly (these blocks are long-stable) so the set is a
+# precise regression guard, not a moving count.
+TRANSLIT_RAW_RESIDUAL = frozenset(
+    {
+        0x0958,
+        0x095B,
+        0x095E,
+        0x09DC,
+        0x09DD,
+        0x0A36,
+        0x0A5B,
+        0x0A5E,
+        0x0F43,
+        0x0F4D,
+        0x0F52,
+        0x0F57,
+        0x0F5C,
+        0x0F69,
+        0x0F73,
+        0x0F75,
+        0x0F76,
+        0x0F78,
+        0x0F81,
+        0x0F93,
+        0x0F9D,
+        0x0FA2,
+        0x0FA7,
+        0x0FAC,
+        0x0FB9,
+        0x1FEE,
+        0x1FFD,
+        0xFB1D,
+        0xFB1F,
+        0xFB2B,
+        0xFB2D,
+        0xFB2E,
+        0xFB2F,
+        0xFB30,
+        0xFB31,
+        0xFB35,
+        0xFB3A,
+        0xFB3B,
+        0xFB43,
+        0xFB44,
+        0xFB4B,
+    }
+)
+
+
+def test_transliterate_raw_vs_normalized_residual_is_pinned() -> None:
+    """The raw-vs-normalized blind spot the form-invariance audit cannot see: pin the
+    exact set of excluded singletons that transliterate differently raw vs normalized."""
+    residual = {
+        ord(c)
+        for c in _excluded_singletons()
+        if disarm.transliterate(c) != disarm.transliterate(unicodedata.normalize("NFC", c))
+    }
+    # Every member must be a composition-excluded singleton — a divergence anywhere else
+    # would be a real form-invariance regression, not the accepted residual.
+    assert all(unicodedata.normalize("NFC", chr(cp)) != chr(cp) for cp in residual)
+    assert residual == set(TRANSLIT_RAW_RESIDUAL), (
+        f"transliterate raw-vs-normalized residual changed: "
+        f"added {sorted(residual - TRANSLIT_RAW_RESIDUAL)}, "
+        f"removed {sorted(TRANSLIT_RAW_RESIDUAL - residual)}"
+    )
+
+
+def test_transliterate_excluded_singleton_representative() -> None:
+    """Spell the phenomenon out on Devanagari QA: raw recovers the precomposed letter,
+    every normal form decomposes and degrades, and the normal forms agree (so the
+    form-invariance audit is green on it)."""
+    qa = "क़"  # क़ DEVANAGARI LETTER QA
+    assert disarm.transliterate(qa) == "qa"
+    assert qa != unicodedata.normalize("NFC", qa), "QA must actually decompose under NFC"
+    degraded = {disarm.transliterate(unicodedata.normalize(f, qa)) for f in FORMS}
+    assert degraded == {"ka"}, f"every normal form should degrade QA to 'ka', got {degraded}"
+
+
+# `is_confusable` is also non-invariant raw-vs-NFC for these excluded singletons. Two
+# directions, both pinned:
+#   raw=True  -> NFC=False  (Kelvin U+212A -> "K", Greek question mark U+037E -> ";"):
+#     normalization RESOLVES the look-alike to the genuine character; flagging the raw
+#     spoof and not its resolved real form is correct.
+#   raw=False -> NFC=True   (Greek oxia, Hebrew presentation forms): the raw precomposed
+#     singleton is absent from the TR39 table, but its NFC base is a confusable, so the
+#     raw form evades detection. Narrow and low-relevance, and mitigated because the
+#     security presets normalize (NFKC) before any confusable check — but real, so pin
+#     it rather than let the audit's NFC==NFD==NFKD hide it.
+IS_CONFUSABLE_RAW_FLIPS = frozenset(
+    {
+        0x037E,
+        0x1F77,
+        0x1F79,
+        0x212A,
+        0xFB1D,
+        0xFB1F,
+        0xFB35,
+        0xFB38,
+        0xFB39,
+        0xFB41,
+        0xFB4B,
+    }
+)
+
+
+def test_is_confusable_raw_vs_normalized_flips_are_pinned() -> None:
+    flips = {
+        ord(c)
+        for c in _excluded_singletons()
+        if disarm.is_confusable(c) != disarm.is_confusable(unicodedata.normalize("NFC", c))
+    }
+    assert all(unicodedata.normalize("NFC", chr(cp)) != chr(cp) for cp in flips)
+    assert flips == set(IS_CONFUSABLE_RAW_FLIPS), (
+        f"is_confusable raw-vs-NFC flips changed: "
+        f"added {sorted(flips - IS_CONFUSABLE_RAW_FLIPS)}, "
+        f"removed {sorted(IS_CONFUSABLE_RAW_FLIPS - flips)}"
+    )
+
+
+def test_normalize_confusables_raw_divergence_is_bounded_to_excluded_singletons() -> None:
+    """`normalize_confusables` output also differs raw-vs-NFC (~1,114 code points over
+    the full range), but it is a *targeted fold*, not a normalizer: it leaves a
+    non-confusable in whatever form it arrived, so raw `क़` U+0958 stays U+0958 while NFC
+    is KA + nukta — different bytes, neither a fold. The security-relevant subset is the
+    detection flips pinned above. Assert here that every raw-vs-NFC output divergence is
+    confined to composition-excluded singletons, so no *non-excluded* code point folds
+    form-dependently (which would be a real evasion)."""
+    divergent = [
+        c
+        for c in _excluded_singletons()
+        if disarm.normalize_confusables(c)
+        != disarm.normalize_confusables(unicodedata.normalize("NFC", c))
+    ]
+    assert divergent, "expected a non-empty residual — the blind spot is real"
+    assert all(unicodedata.normalize("NFC", c) != c for c in divergent)

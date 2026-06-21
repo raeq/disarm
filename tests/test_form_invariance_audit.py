@@ -320,14 +320,20 @@ def test_normalize_confusables_raw_divergence_is_bounded_to_excluded_singletons(
     the full range), but it is a *targeted fold*, not a normalizer: it leaves a
     non-confusable in whatever form it arrived, so raw `क़` U+0958 stays U+0958 while NFC
     is KA + nukta — different bytes, neither a fold. The security-relevant subset is the
-    detection flips pinned above. Assert here that every raw-vs-NFC output divergence is
-    confined to composition-excluded singletons, so no *non-excluded* code point folds
-    form-dependently (which would be a real evasion)."""
+    detection flips pinned above. Scan the whole BMP (not just the excluded set, so the
+    guard is not circular) and assert every raw-vs-NFC output divergence is confined to a
+    composition-excluded singleton: a *non-excluded* code point that folded
+    form-dependently would be a real evasion (the fold is a pure function and a
+    non-excluded char is its own NFC, so the two calls would share an identical input)."""
     divergent = [
-        c
-        for c in _excluded_singletons()
-        if disarm.normalize_confusables(c)
+        cp
+        for cp in range(0x20, 0x10000)
+        if (c := chr(cp))
+        and disarm.normalize_confusables(c)
         != disarm.normalize_confusables(unicodedata.normalize("NFC", c))
     ]
     assert divergent, "expected a non-empty residual — the blind spot is real"
-    assert all(unicodedata.normalize("NFC", c) != c for c in divergent)
+    offenders = [hex(cp) for cp in divergent if unicodedata.normalize("NFC", chr(cp)) == chr(cp)]
+    assert not offenders, (
+        f"non-excluded code points fold form-dependently (real evasion): {offenders}"
+    )

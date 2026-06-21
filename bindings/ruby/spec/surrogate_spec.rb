@@ -15,8 +15,7 @@ require "disarm"
 # high+low pair recombines into its astral scalar, and each genuinely lone
 # surrogate code unit becomes exactly ONE U+FFFD. The reference outputs below are
 # spelled explicitly so the granularity is pinned and matches the other bindings.
-RSpec.describe "Disarm surrogate / invalid-UTF-8 contract (#469)",
-               skip: "blocked on the Ruby WTF-8->UTF-8 boundary decode (#472); spec is the target" do
+RSpec.describe "Disarm surrogate / invalid-UTF-8 contract (#469, #472)" do
   utf8 = ->(bytes) { bytes.dup.force_encoding("UTF-8") }
 
   lone_hi = utf8.call("\xED\xA0\xBD")          # U+D83D, lone

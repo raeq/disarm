@@ -59,11 +59,103 @@ fn map_err(e: &disarm_core::Error) -> Error {
     Error::new(class, e.to_string())
 }
 
+// ── Malformed-Unicode boundary (#469 / #472) ──────────────────────────────────
+//
+// Ruby has no "lone surrogate" scalar; the equivalent malformed input is a String
+// tagged UTF-8 whose bytes are not valid UTF-8 — typically WTF-8, where a surrogate
+// code point is the (forbidden) 3-byte sequence `ED A0–BF 80–BF`. magnus's
+// `String` conversion validates UTF-8 and raises `EncodingError` on such bytes, so
+// every entrypoint would reject it. [`Wtf8Text`] takes the raw `RString` bytes
+// *before* that validation and brings them to the same WTF-8 → UTF-8 contract the
+// Python and Node bindings honor: a well-formed high+low pair recombines into its
+// astral scalar, and each genuinely lone surrogate code unit (or non-decodable byte)
+// becomes exactly one `U+FFFD`. Valid UTF-8 takes a zero-copy-decode fast path.
+
+/// Decode WTF-8 bytes to valid UTF-8: recombine surrogate pairs into astral scalars,
+/// map each lone surrogate — and any byte that is not part of a valid WTF-8 sequence —
+/// to one `U+FFFD`. (Per code unit, not Ruby's per-byte `String#scrub`.)
+fn wtf8_to_utf8(bytes: &[u8]) -> String {
+    // A continuation byte (`10xx_xxxx`); its low 6 bits, or `None` if absent/not a
+    // continuation. Slice access is via `get` so the binding's no-panic gate holds.
+    #[inline]
+    fn cont(b: Option<&u8>) -> Option<u32> {
+        b.filter(|&&x| x & 0xC0 == 0x80)
+            .map(|&x| u32::from(x & 0x3F))
+    }
+    // Pass 1: decode to code points, allowing surrogate scalars; one U+FFFD per byte
+    // that does not begin a valid 1–4 byte WTF-8 sequence.
+    let mut cps: Vec<u32> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while let Some(&b) = bytes.get(i) {
+        let c1 = cont(bytes.get(i + 1));
+        let c2 = cont(bytes.get(i + 2));
+        let c3 = cont(bytes.get(i + 3));
+        let (cp, len) = if b < 0x80 {
+            (u32::from(b), 1)
+        } else if let (0b110, Some(x1)) = (b >> 5, c1) {
+            ((u32::from(b & 0x1F) << 6) | x1, 2)
+        } else if let (0b1110, Some(x1), Some(x2)) = (b >> 4, c1, c2) {
+            ((u32::from(b & 0x0F) << 12) | (x1 << 6) | x2, 3)
+        } else if let (0b11110, Some(x1), Some(x2), Some(x3)) = (b >> 3, c1, c2, c3) {
+            ((u32::from(b & 0x07) << 18) | (x1 << 12) | (x2 << 6) | x3, 4)
+        } else {
+            (0xFFFD, 1)
+        };
+        cps.push(cp);
+        i += len;
+    }
+    // Pass 2: recombine high+low surrogate pairs into the astral scalar; a lone
+    // surrogate becomes one U+FFFD.
+    let mut out = String::with_capacity(bytes.len());
+    let mut j = 0;
+    while let Some(&cp) = cps.get(j) {
+        let low = cps
+            .get(j + 1)
+            .copied()
+            .filter(|n| (0xDC00..=0xDFFF).contains(n));
+        if let (true, Some(lo)) = ((0xD800..=0xDBFF).contains(&cp), low) {
+            let astral = 0x1_0000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
+            out.push(char::from_u32(astral).unwrap_or('\u{FFFD}'));
+            j += 2;
+        } else {
+            out.push(char::from_u32(cp).unwrap_or('\u{FFFD}')); // surrogate -> None -> U+FFFD
+            j += 1;
+        }
+    }
+    out
+}
+
+/// A text argument decoded at the boundary with the WTF-8 → UTF-8 contract (#472).
+/// Used in place of `String` for every text parameter; `Deref<Target = str>` lets the
+/// existing `&text` call sites reach the core unchanged.
+struct Wtf8Text(String);
+
+impl std::ops::Deref for Wtf8Text {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl magnus::TryConvert for Wtf8Text {
+    fn try_convert(val: magnus::Value) -> Result<Self, Error> {
+        let s = magnus::RString::try_convert(val)?;
+        // SAFETY: the bytes are copied out immediately; no Ruby API runs between
+        // `as_slice` and `to_vec`, so the string cannot be moved or collected.
+        let bytes = unsafe { s.as_slice().to_vec() };
+        let decoded = match std::str::from_utf8(&bytes) {
+            Ok(valid) => valid.to_owned(),
+            Err(_) => wtf8_to_utf8(&bytes),
+        };
+        Ok(Wtf8Text(decoded))
+    }
+}
+
 // ── Transliteration ───────────────────────────────────────────────────────────
 
 /// `Disarm._transliterate(text)` — Unicode → ASCII with the default scheme (the
 /// common case; keeps the core's borrow-on-no-op fast path).
-fn transliterate(text: String) -> String {
+fn transliterate(text: Wtf8Text) -> String {
     api::transliterate(&text).into_owned()
 }
 
@@ -72,7 +164,11 @@ fn transliterate(text: String) -> String {
 /// `lang` is `nil` (no profile) or a code like `"uk"` (Київ → Kyiv); it composes
 /// with the scheme. The idiomatic layer routes the bare-default/no-lang case to
 /// `_transliterate` so this is only hit when at least one option is set.
-fn transliterate_opts(text: String, scheme: String, lang: Option<String>) -> Result<String, Error> {
+fn transliterate_opts(
+    text: Wtf8Text,
+    scheme: String,
+    lang: Option<String>,
+) -> Result<String, Error> {
     let mut builder = api::Transliterate::new();
     if scheme != "default" {
         let scheme: api::Scheme = scheme.parse().map_err(|e| map_err(&e))?;
@@ -87,24 +183,24 @@ fn transliterate_opts(text: String, scheme: String, lang: Option<String>) -> Res
 // ── Confusables (TR39) ────────────────────────────────────────────────────────
 
 /// `Disarm._normalize_confusables(text, "latin" | "cyrillic")`.
-fn normalize_confusables(text: String, target: String) -> Result<String, Error> {
+fn normalize_confusables(text: Wtf8Text, target: String) -> Result<String, Error> {
     let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
     Ok(api::normalize_confusables(&text, target).into_owned())
 }
 
 /// `Disarm._confusable?(text, "latin" | "cyrillic")`.
-fn is_confusable(text: String, target: String) -> Result<bool, Error> {
+fn is_confusable(text: Wtf8Text, target: String) -> Result<bool, Error> {
     let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
     Ok(api::is_confusable(&text, target))
 }
 
 // ── Canonicalization primitives ───────────────────────────────────────────────
 
-fn strip_accents(text: String) -> String {
+fn strip_accents(text: Wtf8Text) -> String {
     api::strip_accents(&text).into_owned()
 }
 
-fn fold_case(text: String) -> String {
+fn fold_case(text: Wtf8Text) -> String {
     api::fold_case(&text).into_owned()
 }
 
@@ -115,7 +211,7 @@ fn fold_case(text: String) -> String {
 /// core's `SlugConfig` exposes is reachable.
 #[allow(clippy::too_many_arguments)]
 fn slugify(
-    text: String,
+    text: Wtf8Text,
     separator: String,
     lowercase: bool,
     max_length: usize,
@@ -150,19 +246,19 @@ fn slugify(
 }
 
 /// `Disarm._demojize(text, strip_modifiers)`.
-fn demojize(text: String, strip_modifiers: bool) -> String {
+fn demojize(text: Wtf8Text, strip_modifiers: bool) -> String {
     api::demojize(&text, strip_modifiers)
 }
 
 // ── Security presets (fallible) ───────────────────────────────────────────────
 
-fn strip_obfuscation(text: String) -> Result<String, Error> {
+fn strip_obfuscation(text: Wtf8Text) -> Result<String, Error> {
     api::strip_obfuscation(&text)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
 
-fn canonicalize(text: String) -> Result<String, Error> {
+fn canonicalize(text: Wtf8Text) -> Result<String, Error> {
     api::canonicalize(&text)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
@@ -170,7 +266,7 @@ fn canonicalize(text: String) -> Result<String, Error> {
 
 /// `Disarm._search_key(text, lang)` — case/accent/script-insensitive lookup key.
 /// `lang` is `nil` (no profile) or a code like `"ru"`. Fails on an unknown `lang`.
-fn search_key(text: String, lang: Option<String>) -> Result<String, Error> {
+fn search_key(text: Wtf8Text, lang: Option<String>) -> Result<String, Error> {
     api::search_key(&text, lang.as_deref())
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
@@ -178,7 +274,7 @@ fn search_key(text: String, lang: Option<String>) -> Result<String, Error> {
 
 /// `Disarm._sort_key(text, lang)` — collation sort key (preserves base accented
 /// characters for correct ordering). Fails on an unknown `lang`.
-fn sort_key(text: String, lang: Option<String>) -> Result<String, Error> {
+fn sort_key(text: Wtf8Text, lang: Option<String>) -> Result<String, Error> {
     api::sort_key(&text, lang.as_deref())
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
@@ -186,7 +282,7 @@ fn sort_key(text: String, lang: Option<String>) -> Result<String, Error> {
 
 /// `Disarm._catalog_key(text, lang, strict_iso9)` — catalog deduplication key.
 /// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails on an unknown `lang`.
-fn catalog_key(text: String, lang: Option<String>, strict_iso9: bool) -> Result<String, Error> {
+fn catalog_key(text: Wtf8Text, lang: Option<String>, strict_iso9: bool) -> Result<String, Error> {
     api::catalog_key(&text, lang.as_deref(), strict_iso9)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
@@ -194,7 +290,7 @@ fn catalog_key(text: String, lang: Option<String>, strict_iso9: bool) -> Result<
 
 /// `Disarm._suspicious_hostname?(host)` — flags mixed-script / confusable IDN
 /// spoofs. A false result asserts nothing was *found*, not that the host is safe.
-fn suspicious_hostname(host: String) -> bool {
+fn suspicious_hostname(host: Wtf8Text) -> bool {
     // #362 made the Rust api return `HostnameAnalysis` (the verdict is its
     // `suspicious` field) instead of a `(bool, _)` tuple.
     api::is_suspicious_hostname(&host).suspicious
@@ -204,13 +300,13 @@ fn suspicious_hostname(host: String) -> bool {
 
 /// `Disarm._normalize(text, "NFC" | "NFD" | "NFKC" | "NFKD")`. The idiomatic
 /// layer upcases its `form:` symbol/string before forwarding.
-fn normalize(text: String, form: String) -> Result<String, Error> {
+fn normalize(text: Wtf8Text, form: String) -> Result<String, Error> {
     let form: api::NormalizationForm = form.parse().map_err(|e| map_err(&e))?;
     Ok(api::normalize(&text, form))
 }
 
 /// `Disarm._normalized?(text, form)`.
-fn is_normalized(text: String, form: String) -> Result<bool, Error> {
+fn is_normalized(text: Wtf8Text, form: String) -> Result<bool, Error> {
     let form: api::NormalizationForm = form.parse().map_err(|e| map_err(&e))?;
     Ok(api::is_normalized(&text, form))
 }
@@ -218,70 +314,70 @@ fn is_normalized(text: String, form: String) -> Result<bool, Error> {
 // ── Text cleaning (#375) ──────────────────────────────────────────────────────
 
 /// `Disarm._collapse_whitespace(text)` — fold whitespace only (#433).
-fn collapse_whitespace(text: String) -> String {
+fn collapse_whitespace(text: Wtf8Text) -> String {
     api::collapse_whitespace(&text)
 }
 
 /// `Disarm._strip_control_chars(text)` — remove C0/C1 controls (except tab/newline).
-fn strip_control_chars(text: String) -> String {
+fn strip_control_chars(text: Wtf8Text) -> String {
     api::strip_control_chars(&text)
 }
 
 /// `Disarm._strip_zero_width_chars(text)` — remove ZWSP/ZWNJ/ZWJ/word-joiner.
-fn strip_zero_width_chars(text: String) -> String {
+fn strip_zero_width_chars(text: Wtf8Text) -> String {
     api::strip_zero_width_chars(&text)
 }
 
 /// `Disarm._strip_bidi(text)` — remove Unicode bidirectional control characters.
-fn strip_bidi(text: String) -> String {
+fn strip_bidi(text: Wtf8Text) -> String {
     api::strip_bidi(&text)
 }
 
 /// `Disarm._strip_tags(text)` — strip the Unicode Tags block, keeping emoji flags (#413).
-fn strip_tags(text: String) -> String {
+fn strip_tags(text: Wtf8Text) -> String {
     api::strip_tags(&text)
 }
 
 /// `Disarm._strip_variation_selectors(text)` — strip every variation selector (#413).
-fn strip_variation_selectors(text: String) -> String {
+fn strip_variation_selectors(text: Wtf8Text) -> String {
     api::strip_variation_selectors(&text)
 }
 
 /// `Disarm._strip_noncharacters(text)` — strip every Unicode noncharacter (#413).
-fn strip_noncharacters(text: String) -> String {
+fn strip_noncharacters(text: Wtf8Text) -> String {
     api::strip_noncharacters(&text)
 }
 
 /// `Disarm._strip_pua(text)` — strip every Private Use Area code point (#413).
-fn strip_pua(text: String) -> String {
+fn strip_pua(text: Wtf8Text) -> String {
     api::strip_pua(&text)
 }
 
 /// `Disarm._strip_zalgo(text, max_marks)` — cap combining marks per base.
-fn strip_zalgo(text: String, max_marks: usize) -> String {
+fn strip_zalgo(text: Wtf8Text, max_marks: usize) -> String {
     api::strip_zalgo(&text, max_marks)
 }
 
 /// `Disarm._zalgo?(text, threshold)` — any base carrying > threshold marks.
-fn is_zalgo(text: String, threshold: usize) -> bool {
+fn is_zalgo(text: Wtf8Text, threshold: usize) -> bool {
     api::is_zalgo(&text, threshold)
 }
 
 // ── Grapheme clusters (#375) ──────────────────────────────────────────────────
 
 /// `Disarm._grapheme_len(text)` — count of user-perceived characters.
-fn grapheme_len(text: String) -> usize {
+fn grapheme_len(text: Wtf8Text) -> usize {
     api::grapheme_len(&text)
 }
 
 /// `Disarm._grapheme_split(text)` — split into grapheme-cluster strings.
-fn grapheme_split(text: String) -> Vec<String> {
+fn grapheme_split(text: Wtf8Text) -> Vec<String> {
     api::grapheme_split(&text)
 }
 
 /// `Disarm._grapheme_truncate(text, max_graphemes)` — truncate by graphemes,
 /// never mid-cluster.
-fn grapheme_truncate(text: String, max_graphemes: usize) -> String {
+fn grapheme_truncate(text: Wtf8Text, max_graphemes: usize) -> String {
     api::grapheme_truncate(&text, max_graphemes)
 }
 
@@ -293,7 +389,7 @@ fn grapheme_width(cluster: String, ambiguous_wide: bool) -> usize {
 
 /// `Disarm._terminal_width(text, ambiguous_wide)` — display columns of the whole
 /// string.
-fn terminal_width(text: String, ambiguous_wide: bool) -> usize {
+fn terminal_width(text: Wtf8Text, ambiguous_wide: bool) -> usize {
     api::terminal_width(&text, ambiguous_wide)
 }
 
@@ -303,7 +399,7 @@ fn terminal_width(text: String, ambiguous_wide: bool) -> usize {
 /// preserve_extension)` — fallible; `platform` is "universal" | "windows" | "posix".
 #[allow(clippy::too_many_arguments)]
 fn sanitize_filename(
-    text: String,
+    text: Wtf8Text,
     separator: String,
     max_length: usize,
     platform: String,
@@ -326,7 +422,7 @@ fn sanitize_filename(
 
 /// `Disarm._reverse_transliterate(text, lang)` — Latin → native; `lang` is
 /// "el" | "ru" | "uk".
-fn reverse_transliterate(text: String, lang: String) -> Result<String, Error> {
+fn reverse_transliterate(text: Wtf8Text, lang: String) -> Result<String, Error> {
     let lang: api::ReverseLang = lang.parse().map_err(|e| map_err(&e))?;
     Ok(api::reverse_transliterate(&text, lang))
 }
@@ -335,7 +431,7 @@ fn reverse_transliterate(text: String, lang: String) -> Result<String, Error> {
 /// romanization, as `[char, byte_offset]` pairs (the Ruby layer maps these to
 /// `{ char:, offset: }` hashes).
 fn find_untranslatable(
-    text: String,
+    text: Wtf8Text,
     scheme: String,
     lang: Option<String>,
 ) -> Result<Vec<(String, usize)>, Error> {
@@ -358,7 +454,7 @@ fn find_untranslatable(
 
 /// `Disarm._detect_scripts(text)` — Unicode scripts present, in first-appearance
 /// order (Common/Inherited excluded).
-fn detect_scripts(text: String) -> Vec<String> {
+fn detect_scripts(text: Wtf8Text) -> Vec<String> {
     api::detect_scripts(&text)
         .into_iter()
         .map(str::to_owned)
@@ -366,7 +462,7 @@ fn detect_scripts(text: String) -> Vec<String> {
 }
 
 /// `Disarm._is_mixed_script?(text)` — whether `text` mixes more than one script.
-fn is_mixed_script(text: String) -> bool {
+fn is_mixed_script(text: Wtf8Text) -> bool {
     api::is_mixed_script(&text)
 }
 
@@ -374,14 +470,14 @@ fn is_mixed_script(text: String) -> bool {
 /// and strong right-to-left characters (the "BiDi Swap" reorder precondition,
 /// #412). Fires on the real letters, no `U+202x` override; `false` is not a
 /// safety guarantee.
-fn has_bidi_conflict(text: String) -> bool {
+fn has_bidi_conflict(text: Wtf8Text) -> bool {
     api::has_bidi_conflict(&text)
 }
 
 /// `Disarm._inspect_auto_lang(text)` — `[script, chosen_lang, reason,
 /// discriminators_hit]` (the Ruby layer maps it to a hash). `script`/`chosen_lang`
 /// are nil when nothing was detected.
-fn inspect_auto_lang(text: String) -> (Option<String>, Option<String>, String, Vec<String>) {
+fn inspect_auto_lang(text: Wtf8Text) -> (Option<String>, Option<String>, String, Vec<String>) {
     let r = api::inspect_auto_lang(&text);
     (r.script, r.chosen_lang, r.reason, r.discriminators_hit)
 }
@@ -464,13 +560,13 @@ fn lexicon_new(words: Vec<String>) -> Lexicon {
 }
 
 /// `Disarm._has_anomalies?(text, lexicon)` — `lexicon` is an array of common words.
-fn has_anomalies(text: String, lexicon: Vec<String>) -> bool {
+fn has_anomalies(text: Wtf8Text, lexicon: Vec<String>) -> bool {
     api::has_anomalies(&text, &collect_lexicon(lexicon))
 }
 
 /// `Disarm._has_anomalies_lex(text, lexicon)` — the reuse path: takes a pre-built
 /// `Disarm::Lexicon`, so the `HashSet` is shared rather than rebuilt per call.
-fn has_anomalies_lex(text: String, lex: &Lexicon) -> bool {
+fn has_anomalies_lex(text: Wtf8Text, lex: &Lexicon) -> bool {
     api::has_anomalies(&text, &lex.inner)
 }
 
@@ -511,13 +607,13 @@ fn inspect_anomalies_impl(text: &str, lex: &HashSet<String>) -> AnomalyReportTup
 /// `Disarm._inspect_anomalies(text, lexicon)` — `[anomalous, kinds, findings,
 /// reason]` where each finding is `[kind, token, start, end, detail, reason]` (the
 /// Ruby layer maps it to a hash).
-fn inspect_anomalies(text: String, lexicon: Vec<String>) -> AnomalyReportTuple {
+fn inspect_anomalies(text: Wtf8Text, lexicon: Vec<String>) -> AnomalyReportTuple {
     inspect_anomalies_impl(&text, &collect_lexicon(lexicon))
 }
 
 /// `Disarm._inspect_anomalies_lex(text, lexicon)` — the reuse path: the same tuple
 /// shape as `inspect_anomalies`, but taking a pre-built `Disarm::Lexicon`.
-fn inspect_anomalies_lex(text: String, lex: &Lexicon) -> AnomalyReportTuple {
+fn inspect_anomalies_lex(text: Wtf8Text, lex: &Lexicon) -> AnomalyReportTuple {
     inspect_anomalies_impl(&text, &lex.inner)
 }
 
@@ -534,7 +630,7 @@ struct Pipeline {
 }
 
 /// `Disarm::Pipeline#process(text)` — run the pre-built pipeline over `text`.
-fn pipeline_process(rb_self: &Pipeline, text: String) -> Result<String, Error> {
+fn pipeline_process(rb_self: &Pipeline, text: Wtf8Text) -> Result<String, Error> {
     rb_self.inner.process(&text).map_err(|e| map_err(&e))
 }
 
@@ -631,7 +727,10 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     let lexicon = module.define_class("Lexicon", ruby.class_object())?;
     lexicon.define_singleton_method("new", function!(lexicon_new, 1))?;
     module.define_singleton_method("_has_anomalies_lex", function!(has_anomalies_lex, 2))?;
-    module.define_singleton_method("_inspect_anomalies_lex", function!(inspect_anomalies_lex, 2))?;
+    module.define_singleton_method(
+        "_inspect_anomalies_lex",
+        function!(inspect_anomalies_lex, 2),
+    )?;
 
     // Reusable pipeline handle (#404 phase 2): build the profile's steps once via
     // `Disarm.get_pipeline(profile)` (routed through the `_get_pipeline` shim) and

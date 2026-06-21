@@ -78,6 +78,9 @@ from disarm._boundary import (
     _strip_accents,
     _strip_accents_batch,
     _strip_log_injection,
+    # #476: the surrogate-boundary guard, for the class-based entrypoints (the module
+    # loop in _boundary wraps only free functions, not class methods).
+    _surrogate_safe,
     _terminal_width,
     _TextPipeline,
     # Core transforms (Rust implementations)
@@ -1779,6 +1782,7 @@ class Slugifier:
         # max_length, …) so it is URL-safe and length-bounded like real output.
         self._default: str | None = self._inner.slugify(default) if default is not None else None
 
+    @_surrogate_safe
     def __call__(self, text: str) -> str:
         slug: str = self._inner.slugify(text)
         if self._default is not None and not slug:
@@ -1854,6 +1858,7 @@ class UniqueSlugifier:
             Slugifier(**_cfg) if default is not None else None  # type: ignore[arg-type]
         )
 
+    @_surrogate_safe
     def __call__(self, text: str) -> str:
         probe = self._probe
         if probe is not None and self._default is not None and not probe(text):
@@ -1934,6 +1939,7 @@ class TextPipeline:
         self._inner = inner
         return self
 
+    @_surrogate_safe
     def __call__(self, text: str) -> str:
         return self._inner.process(text)
 

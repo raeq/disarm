@@ -80,3 +80,33 @@ for _name in dir(_core):
     )
 
 del _name, _obj
+
+
+# #476: `Lexicon([...])` crosses the str -> Rust boundary on *construction*, which the
+# module-level loop above (functions only) does not cover. `_core.Lexicon` is
+# `#[pyclass(frozen)]` and not subclassable, so wrap it with a metaclass proxy: the
+# proxy's `__call__` applies the same scrub-and-retry contract to construction, while
+# `__instancecheck__`/`__subclasscheck__` delegate to the real type so that
+# `isinstance(x, Lexicon)` — used by `has_anomalies` / `inspect_anomalies` to dispatch a
+# prebuilt handle vs an iterable — stays True for every real handle.
+class _LexiconMeta(type):
+    def __call__(cls, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return _core.Lexicon(*args, **kwargs)
+        except UnicodeEncodeError:
+            return _core.Lexicon(
+                *(_scrub(a) for a in args),
+                **{k: _scrub(v) for k, v in kwargs.items()},
+            )
+
+    def __instancecheck__(cls, instance: Any) -> bool:
+        return isinstance(instance, _core.Lexicon)
+
+    def __subclasscheck__(cls, subclass: type) -> bool:
+        return issubclass(subclass, _core.Lexicon)
+
+
+class Lexicon(metaclass=_LexiconMeta):
+    """Boundary-guarded handle for the Rust ``Lexicon`` (#469/#476): construction scrubs
+    WTF-8 -> UTF-8 on the boundary failure instead of raising, and ``isinstance`` against
+    it recognizes every real ``_core.Lexicon`` instance. Construct via ``Lexicon([...])``."""

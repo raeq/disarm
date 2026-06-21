@@ -372,7 +372,7 @@ fn transliterate_impl_inner<'a>(
     strict_iso9: bool,
     gost7034: bool,
     tones: bool,
-    untranslatable: Option<&mut Vec<(char, usize)>>,
+    mut untranslatable: Option<&mut Vec<(char, usize)>>,
     stop_on_first: bool,
 ) -> Cow<'a, str> {
     // Fast path: pure ASCII input needs no transliteration (and ASCII is always
@@ -383,32 +383,45 @@ fn transliterate_impl_inner<'a>(
         return Cow::Borrowed(text);
     }
 
-    // #477: compose-at-lookup at the boundary. A decomposed homoglyph (`і` U+0456 +
+    // #477 compose-at-lookup at the boundary. A decomposed homoglyph (`і` U+0456 +
     // combining diaeresis) must transliterate as its precomposed form (`ї` → "yi"), not
     // as the bare base, so the transform — and `find_untranslatable`, which drives the
     // same engine — is invariant to the input's normal form. Compose-only (never
-    // decomposes a composition-excluded singleton like `שׂ`); mark-free input (the
-    // common case) keeps the original borrow + zero-alloc path. See [`crate::compose`].
-    if !crate::compose::needs_composition(text) {
-        return transliterate_dispatch(
-            text,
-            lang,
-            error_mode,
-            replace_with,
-            strict_iso9,
-            gost7034,
-            tones,
-            untranslatable,
-            stop_on_first,
-        );
+    // decomposes a composition-excluded singleton like `שׂ`); see [`crate::compose`].
+    //
+    // Fused fast path (#477 perf): run the engine directly on the borrowed input with
+    // `detect_compose = true`. The engine bails (returns `None`) the instant it decodes a
+    // combining mark or conjoining jamo — composition has to run first. Detecting it off
+    // the scalar the engine already decoded removes the old `needs_composition` pre-scan,
+    // a *second* full decode of the whole string that every non-ASCII (mark-free) call
+    // used to pay. Mark-free input — the overwhelming common case — completes here in one
+    // pass.
+    let collector_start = untranslatable.as_ref().map(|c| c.len());
+    if let Some(out) = transliterate_dispatch(
+        text,
+        lang,
+        error_mode,
+        replace_with,
+        strict_iso9,
+        gost7034,
+        tones,
+        untranslatable.as_deref_mut(),
+        stop_on_first,
+        true,
+    ) {
+        return out;
     }
 
-    // Mark-bearing: build the composed buffer, recording each composed char's byte
-    // offset back into the caller's `text` (a cluster's chars all share the cluster
-    // start). The engine runs on `composed`, so its result is owned to return the `'a`
-    // lifetime, and any offsets a collector gathers are remapped from `composed` back to
-    // `text` — so `find_untranslatable` / strict-mode diagnostics still point at the
-    // original input, not the composed buffer (#479 review).
+    // A combining mark / jamo appeared, so the fast attempt bailed. Drop any partial
+    // entries it collected, then redo over the composed buffer, recording each composed
+    // char's byte offset back into `text` (a cluster's chars share the cluster start).
+    // The engine result is owned to return the `'a` lifetime, and collected offsets are
+    // remapped from `composed` back to `text` so `find_untranslatable` / strict-mode
+    // diagnostics still point at the original input (#479). `detect_compose` is false on
+    // this pass — a leftover lone mark in the composed buffer must not re-trigger a bail.
+    if let (Some(collector), Some(start)) = (untranslatable.as_deref_mut(), collector_start) {
+        collector.truncate(start);
+    }
     let mut composed = String::with_capacity(text.len());
     let mut origin: Vec<(usize, usize)> = Vec::new(); // (offset in `composed`, in `text`)
     for (ch, orig) in crate::compose::composed(text) {
@@ -429,7 +442,9 @@ fn transliterate_impl_inner<'a>(
                 tones,
                 Some(&mut *collector),
                 stop_on_first,
+                false,
             )
+            .expect("compose pass never bails (detect_compose = false)")
             .into_owned();
             for entry in &mut collector[start..] {
                 entry.1 = remap_composed_offset(entry.1, &origin);
@@ -447,7 +462,9 @@ fn transliterate_impl_inner<'a>(
                 tones,
                 None,
                 stop_on_first,
+                false,
             )
+            .expect("compose pass never bails (detect_compose = false)")
             .into_owned(),
         ),
     }
@@ -483,7 +500,8 @@ fn transliterate_dispatch<'a>(
     tones: bool,
     untranslatable: Option<&mut Vec<(char, usize)>>,
     stop_on_first: bool,
-) -> Cow<'a, str> {
+    detect_compose: bool,
+) -> Option<Cow<'a, str>> {
     // Resolve lang="auto" to detected language code.
     let resolved: Option<String>;
     let lang = if lang == Some("auto") {
@@ -524,6 +542,7 @@ fn transliterate_dispatch<'a>(
             tones,
             untranslatable,
             stop_on_first,
+            detect_compose,
         )
     } else if gost7034 {
         transliterate_run(
@@ -541,6 +560,7 @@ fn transliterate_dispatch<'a>(
             tones,
             untranslatable,
             stop_on_first,
+            detect_compose,
         )
     } else {
         let builtin_lang_map = lang.and_then(tables::resolve_lang_map);
@@ -560,6 +580,7 @@ fn transliterate_dispatch<'a>(
             tones,
             untranslatable,
             stop_on_first,
+            detect_compose,
         )
     }
 }
@@ -620,7 +641,8 @@ fn transliterate_run<'a, F>(
     tones: bool,
     mut untranslatable: Option<&mut Vec<(char, usize)>>,
     stop_on_first: bool,
-) -> Cow<'a, str>
+    detect_compose: bool,
+) -> Option<Cow<'a, str>>
 where
     F: Fn(char) -> Option<Cow<'static, str>>,
 {
@@ -674,6 +696,17 @@ where
             .expect("i is at a char boundary inside the string");
         let byte_offset = i;
         i += ch.len_utf8();
+
+        // #477 fusion: on the fast (borrowed-input) attempt, bail the moment a combining
+        // mark or conjoining jamo appears — composition must run first. Detecting it here,
+        // off the scalar we already decoded, replaces the separate `needs_composition`
+        // pre-scan (a second full decode of the whole string) for the common mark-free
+        // case. The caller discards this partial result and redoes the work over the
+        // composed buffer. `detect_compose` is false on that compose-buffer pass, so a
+        // leftover lone mark there does not re-trigger the bail.
+        if detect_compose && crate::compose::could_compose(ch) {
+            return None;
+        }
 
         let char_class = classify_char(ch);
         let is_cjk = matches!(
@@ -776,7 +809,7 @@ where
         }
     }
 
-    Cow::Owned(result)
+    Some(Cow::Owned(result))
 }
 
 /// Handle a character with no table mapping: attempt NFKC compatibility
@@ -855,7 +888,9 @@ fn handle_unmapped(
             tones,
             None,
             false,
-        );
+            false,
+        )
+        .expect("NFKC recovery pass never bails (detect_compose = false)");
         if !sub.is_empty() {
             result.push_str(&sub);
             *last_appended = sub.chars().next_back();

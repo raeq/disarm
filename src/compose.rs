@@ -69,8 +69,27 @@ pub(crate) fn compose_str(text: &str) -> std::borrow::Cow<'_, str> {
 /// position — (General_Category=Lo, which the mark test misses — #483). Input with
 /// neither (ASCII, CJK, lone precomposed letters) takes a borrow/identity fast path.
 pub(crate) fn needs_composition(text: &str) -> bool {
-    text.chars()
-        .any(|c| is_combining_mark(c) || (HANGUL_L_BASE..=HANGUL_L_LAST).contains(&(c as u32)))
+    text.chars().any(could_compose)
+}
+
+/// Per-char predicate for [`needs_composition`]: is `c` a combining mark (GC=Mark) or a
+/// conjoining Hangul **L** jamo? Behaviour-identical to `is_combining_mark(c) || L-jamo`,
+/// but with a cheap range fast-path over U+0000–U+058F — the dense Latin / Greek /
+/// Cyrillic / Armenian letter region that dominates real non-ASCII text. In that whole
+/// region a character is GC=Mark *only* inside two small sub-blocks (U+0300–036F
+/// Combining Diacritical Marks, U+0483–0489 Combining Cyrillic), and no conjoining jamo
+/// (those start at U+1100) can appear — so a couple of integer range checks settle it
+/// without the `is_combining_mark` Unicode-property **trie lookup**. Only U+0590 and
+/// above (Hebrew/Arabic/Indic marks, the Mc spacing vowels, jamo, …) pay the precise
+/// lookup. This is the per-character cost that the compose-at-lookup pre-scan (#477)
+/// otherwise adds to every non-ASCII transliterate/confusables call.
+#[inline]
+pub(crate) fn could_compose(c: char) -> bool {
+    let u = c as u32;
+    if u < 0x0590 {
+        return (0x0300..=0x036F).contains(&u) || (0x0483..=0x0489).contains(&u);
+    }
+    is_combining_mark(c) || (HANGUL_L_BASE..=HANGUL_L_LAST).contains(&u)
 }
 
 pub(crate) struct Composed<'a> {

@@ -145,7 +145,7 @@ produce on the sanitized string. The substituted `U+FFFD` is **terminal** — th
 neutralizes the malformed input, it does **not** recover the original bytes, so a
 token a surrogate was splitting stays split (`ba<lone>d` → `ba`U+FFFD`d`). Valid
 input, including astral characters, is unaffected. (All three bindings — Python,
-Node, and Ruby — honor this; Ruby's boundary decode landed in #472.)
+Node, and Ruby — honor this; Ruby's boundary decode landed in PR #490, closing #472.)
 
 ## Out of scope — by design, not bugs
 

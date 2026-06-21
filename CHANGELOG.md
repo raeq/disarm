@@ -332,7 +332,6 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 - **`normalize_confusables` is idempotent on an excluded singleton followed by an
   unrelated mark.** The compose-at-lookup pass (#481) recovered a composition-excluded
   precomposed singleton (`ড়` U+09DC = ড + nukta) only by a whole-cluster widening-map
-  precomposed singleton (`ড়` U+09DC = ড + nukta) only by a whole-cluster widening-map
   lookup. When such a singleton was followed by an *unrelated* combining mark (a visarga),
   the cluster's `.nfc()` decomposed the singleton (`ড় ◌ঃ` → ড nukta visarga) and the
   trailing mark made the lookup miss the 2-char `ড nukta` key — so it stayed decomposed.

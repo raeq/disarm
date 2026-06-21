@@ -837,7 +837,15 @@ fn handle_unmapped(
     // original char, avoiding a second decomposition pass.
     let nfkc_unchanged = decomposed.len() == ch.len_utf8() && decomposed.starts_with(ch);
     if !nfkc_unchanged {
-        let sub = transliterate_impl(
+        // Re-transliterate the NFKC decomposition through the engine *without*
+        // compose-at-lookup (#481, defense-in-depth). NFKC already maximally composes the
+        // canonical part, so any base+mark it leaves is a composition exclusion; routing
+        // back through `transliterate_impl` would let the widening map recompose it. The
+        // primary guard is the build-time gate (the map only composes toward scalars a
+        // recovery table maps, so an unmapped excluded composite is never rebuilt), but
+        // skipping the boundary compose here means a future map entry can't reintroduce
+        // the recovery loop either.
+        let sub = transliterate_dispatch(
             decomposed,
             lang,
             error_mode,
@@ -845,6 +853,8 @@ fn handle_unmapped(
             strict_iso9,
             gost7034,
             tones,
+            None,
+            false,
         );
         if !sub.is_empty() {
             result.push_str(&sub);
@@ -1603,11 +1613,22 @@ mod tests {
         let e_nfd = "e\u{0323}\u{0302}";
         assert_eq!(t(e_nfd), t("\u{1EC7}"));
 
-        // Compose-only must never *decompose*: the Hebrew presentation form שׂ (U+FB2B,
-        // composition-excluded) → "s". An NFC-first fix decomposed it to shin + sin dot
-        // and regressed the romanization; raw U+FB2B has no following mark, so
-        // compose-at-lookup leaves it untouched and the table entry stands.
+        // A bare presentation form is never decomposed (the #478 regression class): raw
+        // שׂ U+FB2B → "s", with no following mark to trigger a cluster.
         assert_eq!(t("\u{FB2B}"), "s");
+
+        // #481: a composition-EXCLUDED base+mark now composes via the widening map, so the
+        // decomposed form recovers the precomposed romanization. Devanagari KA U+0915 +
+        // nukta U+093C → QA U+0958 → "qa" (was the degraded "ka"); shin + sin dot → "s".
+        assert_eq!(t("\u{0915}\u{093C}"), "qa");
+        assert_eq!(t("\u{0958}"), "qa");
+        assert_eq!(t("\u{05E9}\u{05C2}"), "s");
+
+        // #481: a composition exclusion whose precomposed scalar is *unmapped* (FORKING
+        // U+2ADC = NONFORKING U+2ADD + U+0338) is gated out of the widening map, so the
+        // NFKC-recovery loop cannot form. This must terminate, not stack-overflow.
+        let _ = t("\u{2ADC}");
+        assert_eq!(t("\u{2ADD}\u{0338}"), t("\u{2ADC}"));
     }
 
     /// #479 review: composing at the boundary must not shift the byte offsets that

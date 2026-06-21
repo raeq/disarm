@@ -74,7 +74,14 @@ fn main() {
     // either were ever dropped, this build fails rather than the Layer-2 `.expect()`
     // panicking at runtime.
     {
-        let entries = read_char_str_tsv(&data_dir.join("confusables_to_latin.tsv"));
+        let mut entries = read_char_str_tsv(&data_dir.join("confusables_to_latin.tsv"));
+        // #481: a canonical singleton resolves as its target. Add the row only when the
+        // target itself folds (is already a confusable) — that is the real recovery gap
+        // (U+1F77 GREEK IOTA WITH OXIA should fold like its tonos form U+03AF). When the
+        // target does NOT fold, the singleton is a benign passthrough re-encoding (two
+        // encodings of the same non-Latin letter); minting a row there would put a
+        // non-Latin value in the to-Latin table and make the fold a partial normalizer.
+        inject_folding_singleton_rows(&data_dir.join("canonical_singletons.tsv"), &mut entries);
         assert!(
             entries.len() >= 1_000,
             "confusables_to_latin.tsv: expected ≥1,000 entries, got {}",
@@ -113,7 +120,8 @@ fn main() {
 
     // --- Confusables (Cyrillic target) ---
     {
-        let entries = read_char_str_tsv(&data_dir.join("confusables_to_cyrillic.tsv"));
+        let mut entries = read_char_str_tsv(&data_dir.join("confusables_to_cyrillic.tsv"));
+        inject_folding_singleton_rows(&data_dir.join("canonical_singletons.tsv"), &mut entries);
         assert!(
             !entries.is_empty(),
             "confusables_to_cyrillic.tsv: expected ≥1 entries, got 0",
@@ -121,6 +129,17 @@ fn main() {
         let code = build_char_str_map(&entries, "TO_CYRILLIC", "");
         fs::write(out_dir.join("confusables_to_cyrillic_phf.rs"), code).unwrap();
     }
+
+    // --- Excluded compositions (compose-at-lookup widening, #481) ---
+    // Base+mark composition exclusions (KA+nukta → QA, shin+sin-dot → U+FB2B) that
+    // canonical NFC does not recompose, so #479's compose-at-lookup misses them. Consulted
+    // in `compose.rs` after NFC of a cluster. Shared by confusables and transliterate.
+    generate_excluded_compositions_map(
+        &data_dir.join("excluded_compositions.tsv"),
+        &out_dir.join("excluded_compositions_phf.rs"),
+        "EXCLUDED_COMPOSITIONS",
+        "pub(crate)",
+    );
 
     // --- Emoji ---
     generate_char_str_map(
@@ -515,6 +534,72 @@ fn generate_char_str_map(tsv_path: &Path, out_path: &Path, name: &str, vis: &str
         panic!("Failed to create {}: {e}", out_path.display());
     }));
     file.write_all(code.as_bytes()).unwrap();
+}
+
+/// #481: inject "real" canonical-singleton rows into a char→str fold table. For each
+/// singleton `s → g` (from `canonical_singletons.tsv`), give `s` the same value as `g`
+/// **only when `g` already folds** (has an entry). That is the real recovery gap — the
+/// raw singleton should fold exactly as its canonical target (U+1F77 GREEK IOTA WITH
+/// OXIA → "i", like its tonos form U+03AF). When `g` does not fold, `s` is a benign
+/// passthrough re-encoding (same non-target letter, two encodings); a row there would
+/// put a foreign-script value in the table and turn the fold into a partial normalizer,
+/// so it is skipped (carved out in the form-invariance oracle instead). Never overrides
+/// a curated row.
+fn inject_folding_singleton_rows(singletons_path: &Path, entries: &mut BTreeMap<u32, String>) {
+    for (s_hex, g_hex) in read_str_str_tsv(singletons_path) {
+        let s = u32::from_str_radix(s_hex.trim(), 16)
+            .unwrap_or_else(|e| panic!("bad singleton hex '{s_hex}': {e}"));
+        let g = u32::from_str_radix(g_hex.trim(), 16)
+            .unwrap_or_else(|e| panic!("bad singleton hex '{g_hex}': {e}"));
+        if entries.contains_key(&s) {
+            continue;
+        }
+        if let Some(value) = entries.get(&g).cloned() {
+            entries.insert(s, value);
+        }
+    }
+}
+
+/// #481: generate the compose-at-lookup widening map — a `phf::Map<&'static str, char>`
+/// from a fully canonically-decomposed cluster (KA U+0915 + nukta U+093C) to its
+/// composition-**excluded** precomposed scalar (QA U+0958). `compose.rs` consults it
+/// after canonical NFC of a cluster: these clusters do not recompose under NFC (they are
+/// exclusions), so the table is the only way they reach the precomposed entry. The key is
+/// the decomposed string (the NFC of an excluded cluster equals its NFD), value the scalar.
+fn generate_excluded_compositions_map(tsv_path: &Path, out_path: &Path, name: &str, vis: &str) {
+    let raw = read_str_str_tsv(tsv_path);
+    let formatted: Vec<(String, String)> = raw
+        .iter()
+        .map(|(key_hex, val_hex)| {
+            let key: String = key_hex
+                .split_whitespace()
+                .map(|h| {
+                    let cp = u32::from_str_radix(h, 16)
+                        .unwrap_or_else(|e| panic!("bad decomp hex '{h}': {e}"));
+                    char::from_u32(cp).unwrap_or_else(|| panic!("invalid scalar U+{cp:04X}"))
+                })
+                .collect();
+            let cp = u32::from_str_radix(val_hex.trim(), 16)
+                .unwrap_or_else(|e| panic!("bad precomposed hex '{val_hex}': {e}"));
+            char::from_u32(cp).unwrap_or_else(|| panic!("invalid scalar U+{cp:04X}"));
+            (key, format!("'\\u{{{cp:04X}}}'"))
+        })
+        .collect();
+    let mut builder = phf_codegen::Map::<&str>::new();
+    for (key, val) in &formatted {
+        builder.entry(key.as_str(), val);
+    }
+    let vis_prefix = if vis.is_empty() {
+        String::new()
+    } else {
+        format!("{vis} ")
+    };
+    let code = format!(
+        "{vis_prefix}static {name}: phf::Map<&'static str, char> = {};\n",
+        builder.build()
+    );
+    fs::write(out_path, code)
+        .unwrap_or_else(|e| panic!("Failed to write {}: {e}", out_path.display()));
 }
 
 /// Generate a str→str map file.

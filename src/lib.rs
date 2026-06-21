@@ -116,6 +116,8 @@ pub use api::DisarmStr;
 // the PyO3 shims, but not part of the public crate surface (#42).
 pub(crate) mod anomalies;
 pub(crate) mod case_fold;
+// compose.rs `include!`s a generated phf::Map whose hash keys are long literals.
+#[allow(clippy::unreadable_literal)]
 pub(crate) mod compose;
 pub(crate) mod confusables;
 pub(crate) mod context;

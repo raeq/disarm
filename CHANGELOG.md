@@ -314,6 +314,27 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **Close the raw-vs-normalized residual the #477 oracle could not see (#481).** The
+  form-invariance audit compared the normal forms against each other but never against
+  the *raw* precomposed input, so a composition-**excluded** code point passed green
+  while still degrading: Devanagari `क़` U+0958 transliterated `"qa"` raw, but its
+  canonical decomposition KA + nukta is composition-excluded, so every normal form
+  degraded to `"ka"` (the mark dropped). Closed entirely with **build-time data, no
+  runtime canonicalization pass** (so the #478 decompose-then-recompose regression class
+  cannot recur): an *exclusion-inclusive* compose map widens #479's compose-at-lookup so
+  a base+mark exclusion reaches its precomposed scalar (KA+nukta → QA, shin+sin-dot →
+  `שׂ` U+FB2B, Tibetan vowel stacks, the Hebrew presentation forms), and the two real
+  Greek-oxia confusable singletons (U+1F77/U+1F79 → `i`/`o`) become char-table rows. The
+  map is gated on the precomposed target being mapped, which keeps an unmapped operator
+  (FORKING U+2ADC = NONFORKING + U+0338) from cycling with the NFKC recovery. The audit
+  now asserts `f(raw) == f(NFC) == f(NFD) == f(NFKD)` for the transliterate family and
+  confusable detection, with a small characterized tail (two Greek accent-punctuation
+  code points, and the benign spoof-resolutions where normalizing a look-alike to its
+  genuine character — Kelvin U+212A → `K` — flips detection). The ~1,027 non-target
+  singletons (`ά` U+1F71 vs U+03AC, the same Greek letter, neither a Latin confusable)
+  are deliberately left as benign re-encoding: `normalize_confusables` is a targeted
+  fold, not a normalizer.
+
 - **Confusable folding, detection, and transliteration are invariant to the input's
   normal form (#475, #477).** The confusables maps and the transliteration tables are
   keyed per code point on the *precomposed* form (`ї` U+0457 → `i` / `yi`), so a

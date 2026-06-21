@@ -75,12 +75,12 @@ pub(crate) fn normalize_confusables_cow<'a>(
     validate_target_script(target_script)?;
     let map = tables::resolve_confusable_map(target_script);
 
-    // #475/#477: a base + combining-mark cluster must fold as its precomposed form.
-    // Compose-at-lookup can only change something when a combining mark is present, so
-    // gate on that: mark-bearing input is folded into an owned buffer, while mark-free
-    // input (the common case — ASCII, CJK, precomposed letters) falls through to the
-    // single-pass borrow-on-no-op path, which never allocates on a no-op.
-    if crate::compose::has_combining_mark(text) {
+    // #475/#477: a base + combining-mark cluster (or a conjoining Hangul jamo run, #483)
+    // must fold as its precomposed form. Compose-at-lookup can only change something when
+    // such input is present, so gate on that: it is folded into an owned buffer, while
+    // input with neither (the common case — ASCII, CJK, precomposed letters) falls
+    // through to the single-pass borrow-on-no-op path, which never allocates on a no-op.
+    if crate::compose::needs_composition(text) {
         let mut out = String::with_capacity(text.len());
         for (ch, _) in crate::compose::composed(text) {
             match map.and_then(|m| m.get(&ch).copied()) {

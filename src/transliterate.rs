@@ -389,7 +389,7 @@ fn transliterate_impl_inner<'a>(
     // same engine — is invariant to the input's normal form. Compose-only (never
     // decomposes a composition-excluded singleton like `שׂ`); mark-free input (the
     // common case) keeps the original borrow + zero-alloc path. See [`crate::compose`].
-    if !crate::compose::has_combining_mark(text) {
+    if !crate::compose::needs_composition(text) {
         return transliterate_dispatch(
             text,
             lang,
@@ -1629,6 +1629,31 @@ mod tests {
         // NFKC-recovery loop cannot form. This must terminate, not stack-overflow.
         let _ = t("\u{2ADC}");
         assert_eq!(t("\u{2ADD}\u{0338}"), t("\u{2ADC}"));
+    }
+
+    /// #483: conjoining Hangul jamo (NFD) must romanize identically to the precomposed
+    /// syllables (NFC). The divergence is multi-syllable — the inter-syllable space — so
+    /// the test uses runs, not single syllables (`t("가")` == `t(NFD)` either way).
+    #[test]
+    fn transliterate_hangul_jamo_form_invariant() {
+        use unicode_normalization::UnicodeNormalization;
+        let t = |s: &str| {
+            transliterate_impl(s, None, ErrorMode::Ignore, "", false, false, false).into_owned()
+        };
+        // 처리 = U+CC98 U+B9AC (LV + LV); NFD = ᄎ ᅥ ᄅ ᅵ
+        for (precomposed, want) in [
+            ("\u{CC98}\u{B9AC}", "cheo ri"),
+            ("\u{D55C}\u{AE00}", "han geul"),
+        ] {
+            let nfd: String = precomposed.nfd().collect();
+            assert_ne!(precomposed, nfd.as_str(), "must decompose to jamo");
+            assert_eq!(t(precomposed), want);
+            assert_eq!(
+                t(&nfd),
+                want,
+                "jamo (NFD) must romanize like the precomposed run"
+            );
+        }
     }
 
     /// #479 review: composing at the boundary must not shift the byte offsets that

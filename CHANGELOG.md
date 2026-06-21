@@ -314,6 +314,20 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **Hangul romanization is invariant to the input's normal form (#483).** A precomposed
+  syllable run was romanized with inter-syllable spaces (`처리` → `"cheo ri"`), but the
+  same text decomposed to conjoining jamo (NFD) romanized contiguously (`"cheori"`), so
+  the output depended on the normal form. Conjoining jamo are `General_Category=Lo`, so
+  #479's `General_Category=Mark` compose-at-lookup gate never fired on them. The fix
+  composes an `L + V [+ T]` jamo run into its syllable by the standard Unicode index
+  arithmetic (no table, no normalization pass), gated on a cheap jamo range check, as a
+  sibling to the existing mark-composition path — so the decomposed form takes the same
+  per-code-point path as the precomposed one. `transliterate`, `slugify`, `unidecode`,
+  and `slugify_unicode` now agree across NFC/NFD/NFKD on Hangul; the precomposed output
+  (`"cheo ri"`) is unchanged. Partial jamo (a lone L, or `L + T` with no vowel) are left
+  alone. Cosmetic spacing only — both forms always recovered the same Korean reading;
+  this was the last NFC/NFD gap on the transliterate path.
+
 - **Close the raw-vs-normalized residual the #477 oracle could not see (#481).** The
   form-invariance audit compared the normal forms against each other but never against
   the *raw* precomposed input, so a composition-**excluded** code point passed green

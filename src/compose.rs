@@ -20,7 +20,10 @@
 //!   precomposed scalar through the build-time widening map (#481): canonical NFC alone
 //!   leaves it decomposed, so the map is consulted on the cluster's NFC string;
 //! * the **whole** cluster is composed (canonical order, multi-mark): Vietnamese `ệ`
-//!   (base + two marks) and polytonic Greek `ᾷ` reach their precomposed scalar.
+//!   (base + two marks) and polytonic Greek `ᾷ` reach their precomposed scalar;
+//! * conjoining Hangul jamo (`General_Category=Lo`, so the mark gate misses them) are
+//!   composed into syllables by pure arithmetic (#483), so a decomposed syllable run
+//!   romanizes like the precomposed one.
 
 use std::collections::VecDeque;
 
@@ -51,19 +54,21 @@ pub(crate) fn composed(text: &str) -> Composed<'_> {
 /// cluster": it lets a per-code-point engine see the precomposed form without ever
 /// decomposing a composition-excluded singleton.
 pub(crate) fn compose_str(text: &str) -> std::borrow::Cow<'_, str> {
-    if has_combining_mark(text) {
+    if needs_composition(text) {
         std::borrow::Cow::Owned(composed(text).map(|(c, _)| c).collect())
     } else {
         std::borrow::Cow::Borrowed(text)
     }
 }
 
-/// True if `text` contains a combining mark (General_Category=Mark) — the cheap gate
-/// that decides whether [`composed`] can change anything. Tests category, not ccc, so
-/// it also catches the spacing marks (Mc) in Brahmic two-part vowels. Mark-free input
-/// (ASCII, CJK, lone precomposed letters) takes a borrow/identity fast path instead.
-pub(crate) fn has_combining_mark(text: &str) -> bool {
-    text.chars().any(is_combining_mark)
+/// True if [`composed`] could change `text` — the cheap gate that decides whether to run
+/// the compose pass at all. Two triggers: a combining mark (General_Category=Mark, which
+/// also catches the spacing marks Mc in Brahmic two-part vowels), or a leading conjoining
+/// Hangul jamo (L, General_Category=Lo, which the mark test misses — #483). Input with
+/// neither (ASCII, CJK, lone precomposed letters) takes a borrow/identity fast path.
+pub(crate) fn needs_composition(text: &str) -> bool {
+    text.chars()
+        .any(|c| is_combining_mark(c) || (HANGUL_L_BASE..=HANGUL_L_LAST).contains(&(c as u32)))
 }
 
 pub(crate) struct Composed<'a> {
@@ -71,6 +76,52 @@ pub(crate) struct Composed<'a> {
     iter: std::iter::Peekable<std::str::CharIndices<'a>>,
     /// Chars of a composed cluster's NFC result, waiting to be yielded.
     pending: VecDeque<(char, usize)>,
+}
+
+// Conjoining Hangul jamo composition (#483). The L/V/T ranges and the syllable formula
+// are the standard Unicode algorithm (UAX #15 §16) — total over these ranges, a
+// bijection, so no table or validation is needed beyond the range checks. Scope is the
+// modern conjoining jamo only; archaic jamo (Extended-A/B) never appear in the NFD of a
+// standard precomposed syllable.
+const HANGUL_S_BASE: u32 = 0xAC00;
+const HANGUL_L_BASE: u32 = 0x1100;
+const HANGUL_L_LAST: u32 = 0x1112; // 19 leading consonants
+const HANGUL_V_BASE: u32 = 0x1161;
+const HANGUL_V_LAST: u32 = 0x1175; // 21 vowels
+const HANGUL_T_BASE: u32 = 0x11A7; // index 0 = no trailing consonant
+const HANGUL_T_FIRST: u32 = 0x11A8;
+const HANGUL_T_LAST: u32 = 0x11C2; // 27 trailing consonants
+const HANGUL_T_COUNT: u32 = 28;
+const HANGUL_N_COUNT: u32 = 21 * HANGUL_T_COUNT; // V_COUNT * T_COUNT = 588
+
+impl Composed<'_> {
+    /// If `l` is a leading jamo (L) followed by a vowel jamo (V), consume the V (and an
+    /// optional trailing jamo T) and return the composed syllable. Otherwise consume
+    /// nothing and return `None`, so a lone L — or an L not followed by a V — is yielded
+    /// verbatim by the caller. Pure arithmetic, gated on a cheap range check.
+    fn try_compose_hangul(&mut self, l: char) -> Option<char> {
+        let lc = l as u32;
+        if !(HANGUL_L_BASE..=HANGUL_L_LAST).contains(&lc) {
+            return None;
+        }
+        let vc = self.iter.peek()?.1 as u32;
+        if !(HANGUL_V_BASE..=HANGUL_V_LAST).contains(&vc) {
+            return None;
+        }
+        self.iter.next(); // consume V
+        let lv = HANGUL_S_BASE
+            + (lc - HANGUL_L_BASE) * HANGUL_N_COUNT
+            + (vc - HANGUL_V_BASE) * HANGUL_T_COUNT;
+        // Optional trailing consonant.
+        if let Some(&(_, t)) = self.iter.peek() {
+            let tc = t as u32;
+            if (HANGUL_T_FIRST..=HANGUL_T_LAST).contains(&tc) {
+                self.iter.next(); // consume T
+                return char::from_u32(lv + (tc - HANGUL_T_BASE));
+            }
+        }
+        char::from_u32(lv)
+    }
 }
 
 impl Iterator for Composed<'_> {
@@ -81,6 +132,15 @@ impl Iterator for Composed<'_> {
             return Some(item);
         }
         let (start, ch) = self.iter.next()?;
+
+        // #483: conjoining Hangul jamo are General_Category=Lo, so the GC=Mark gate below
+        // never fires on them. Compose an L+V[+T] run into its precomposed syllable by
+        // pure index arithmetic (no table, no reordering, no exclusions) so a decomposed
+        // syllable reaches the same per-code-point romanization path as the precomposed
+        // form. A partial run (lone L, L+T with no V) does not compose.
+        if let Some(syllable) = self.try_compose_hangul(ch) {
+            return Some((syllable, start));
+        }
 
         // A char anchors a cluster iff it is followed by a combining mark. The follower
         // test is General_Category=Mark, not ccc != 0: Brahmic two-part vowels compose a
@@ -205,5 +265,40 @@ mod tests {
     fn legitimate_accents_recompose_unchanged() {
         // café decomposed (e + ◌́) recomposes to é — a no-op for already-NFC callers.
         assert_eq!(chars("cafe\u{0301}"), vec!['c', 'a', 'f', 'é']);
+    }
+
+    #[test]
+    fn conjoining_hangul_jamo_compose_to_syllables() {
+        // #483: conjoining jamo are General_Category=Lo (so the GC=Mark gate never fires);
+        // compose them arithmetically into syllables.
+        // L+V → LV syllable: ᄀ U+1100 + ᅡ U+1161 → 가 U+AC00
+        assert_eq!(chars("\u{1100}\u{1161}"), vec!['\u{AC00}']);
+        // L+V+T → LVT syllable: ᄒ U+1112 + ᅡ U+1161 + ᆫ U+11AB → 한 U+D55C
+        assert_eq!(chars("\u{1112}\u{1161}\u{11AB}"), vec!['\u{D55C}']);
+        // multi-syllable run (처리 NFD = LV LV) → two precomposed syllables
+        assert_eq!(
+            chars("\u{110E}\u{1165}\u{1105}\u{1175}"),
+            vec!['\u{CC98}', '\u{B9AC}']
+        );
+    }
+
+    #[test]
+    fn partial_hangul_jamo_left_alone() {
+        // #483 criterion 4: a lone L, a lone V, or L+T without a V are not valid syllable
+        // sequences — leave them untouched.
+        assert_eq!(chars("\u{1100}"), vec!['\u{1100}']); // lone L
+        assert_eq!(chars("\u{1161}"), vec!['\u{1161}']); // lone V
+        assert_eq!(chars("\u{1100}\u{11AB}"), vec!['\u{1100}', '\u{11AB}']); // L + T, no V
+                                                                             // an L followed by a non-jamo letter stays separate
+        assert_eq!(chars("\u{1100}a"), vec!['\u{1100}', 'a']);
+    }
+
+    #[test]
+    fn compose_str_composes_conjoining_jamo() {
+        use std::borrow::Cow;
+        // the gate must trigger on jamo even though they are not combining marks
+        assert_eq!(compose_str("\u{1100}\u{1161}"), "\u{AC00}"); // ᄀ+ᅡ → 가
+                                                                 // jamo-free / mark-free input still borrows (hot path unchanged)
+        assert!(matches!(compose_str("hello"), Cow::Borrowed("hello")));
     }
 }

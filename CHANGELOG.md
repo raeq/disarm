@@ -314,6 +314,18 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`normalize_confusables` is idempotent on an excluded singleton followed by an
+  unrelated mark.** The compose-at-lookup pass (#481) recovered a composition-excluded
+  precomposed singleton (`ড়` U+09DC = ড + nukta) only by a whole-cluster widening-map
+  lookup. When such a singleton was followed by an *unrelated* combining mark (a visarga),
+  the cluster's `.nfc()` decomposed the singleton (`ড় ◌ঃ` → ড nukta visarga) and the
+  trailing mark made the lookup miss the 2-char `ড nukta` key — so it stayed decomposed.
+  The fold then oscillated (a bare `ড়` composes, `ড় + mark` decomposes), i.e.
+  `nc(nc(x)) != nc(x)`, surfaced by a `normalize_confusables_idempotent` proptest seed.
+  The lookup now matches the widening map by **greedy longest prefix** at each position in
+  the cluster (bounded by a build-time-emitted `EXCLUDED_COMPOSITIONS_MAX_KEY_CHARS`), so
+  the excluded head recomposes and any trailing marks are kept — idempotent and
+  form-invariant. The mark-free hot path and the common single-mark cluster are unchanged.
 - **`sanitize_filename` never returns an empty name or a `.` / `..` directory reference;
   leading/trailing dot hygiene (#485, #487).** Three correctness gaps with one root: the
   extension branch re-prepended `'.'` and was exempt from the stem's dot trim. (1) The

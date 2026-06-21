@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 8552119f4ebc8a196c687c2a3403be0ffb1f3d83e0fd5751f145a6b72986f164 # shrinks to s = "𑎋\u{113c2}"
+cc 6562c44dd33d92540658020e80f0bbbf3482edbee10790491188b288513ea061 # shrinks to s = "ড়ଃ"

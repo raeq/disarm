@@ -594,8 +594,16 @@ fn generate_excluded_compositions_map(tsv_path: &Path, out_path: &Path, name: &s
     } else {
         format!("{vis} ")
     };
+    // Longest key, in *chars* (base + marks), so the lookup-time greedy prefix scan can
+    // bound itself in lockstep with the data instead of hardcoding a magic number.
+    let max_key_chars = formatted
+        .iter()
+        .map(|(key, _)| key.chars().count())
+        .max()
+        .unwrap_or(0);
     let code = format!(
-        "{vis_prefix}static {name}: phf::Map<&'static str, char> = {};\n",
+        "{vis_prefix}static {name}: phf::Map<&'static str, char> = {};\n\
+         {vis_prefix}const {name}_MAX_KEY_CHARS: usize = {max_key_chars};\n",
         builder.build()
     );
     fs::write(out_path, code)

@@ -314,6 +314,23 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`sanitize_filename` never returns an empty name or a `.` / `..` directory reference;
+  leading/trailing dot hygiene (#485, #487).** Three correctness gaps with one root: the
+  extension branch re-prepended `'.'` and was exempt from the stem's dot trim. (1) The
+  empty string bypassed the never-empty fallback and returned `""` — `os.path.join(dir,
+  "")` targets the directory, a write-target footgun. (2) Trailing dots/spaces survived
+  (`"report..."` -> `"report."`, `"CON."` -> `"_CON."`), which Windows then silently
+  strips at the filesystem layer. (3) A separator-then-dot-like input reduced to a bare
+  `"."` (`"_" + U+00B7` -> `"."`), a current-directory reference. A shared `finalize_name`
+  now runs on the fully assembled name: it trims leading and trailing dots and spaces, and
+  falls back to `"_"` for an empty, `"."`, or `".."` result — so the output is always
+  non-empty, never a directory reference, and never a leading/trailing-dot dotfile, across
+  both return paths. A 50-case attacker battery (path traversal, Unicode separator
+  homoglyphs, control/NUL, RTLO/bidi, the ADS colon, dot hygiene, the separator-plus-dot
+  class) and non-emptiness/idempotency property tests lock the defenses in. (A separate
+  idempotency gap from the extension-split boundary moving between passes is tracked in
+  #488.)
+
 - **Hangul romanization is invariant to the input's normal form (#483).** A precomposed
   syllable run was romanized with inter-syllable spaces (`처리` → `"cheo ri"`), but the
   same text decomposed to conjoining jamo (NFD) romanized contiguously (`"cheori"`), so

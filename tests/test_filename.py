@@ -14,7 +14,9 @@ class TestSanitizeFilename:
         assert ".txt" in result
 
     def test_empty(self) -> None:
-        assert sanitize_filename("") == ""
+        # #485: empty input now uses the same never-empty "_" fallback every all-stripped
+        # input uses (an empty filename is a downstream write-target footgun).
+        assert sanitize_filename("") == "_"
 
     def test_illegal_chars(self) -> None:
         result = sanitize_filename("file:name*with?bad<chars>.txt")

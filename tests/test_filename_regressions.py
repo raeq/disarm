@@ -453,3 +453,37 @@ class TestFilenameInvariants:
             f"exceeds max_length {max_length} for reserved '{name}' "
             f"(preserve_extension={preserve_extension}): '{result}'"
         )
+
+
+class TestNeverEmptyNeverDirectoryReference:
+    """#485/#487: the public entrypoint never returns an empty name, a leading/trailing
+    dot, or a bare ``.`` / ``..`` directory reference (downstream write-target footguns)."""
+
+    @pytest.mark.parametrize(
+        "text",
+        ["", "   ", "/////", "\x00\x00", ".", "..", "_·", "_·", "_।"],
+    )
+    def test_strips_to_fallback_underscore(self, text: str) -> None:
+        # every input that reduces to nothing — or to a directory reference — yields "_"
+        assert sanitize_filename(text) == "_"
+
+    def test_no_empty_for_any_all_stripped_input(self) -> None:
+        for text in ["", "   ", "\x01\x02", "​​"]:
+            assert sanitize_filename(text) != ""
+
+    def test_no_leading_dot_dotfile(self) -> None:
+        assert not sanitize_filename("../../etc/passwd").startswith(".")
+        assert not sanitize_filename("\\\\.\\PhysicalDrive0").startswith(".")
+        assert sanitize_filename(".bashrc") == "bashrc"
+
+    def test_no_trailing_dot_or_space(self) -> None:
+        assert sanitize_filename("report...") == "report"
+        assert sanitize_filename("CON.") == "_CON"
+        assert not sanitize_filename("report ").endswith(" ")
+
+    def test_separator_then_dotlike_is_not_directory_reference(self) -> None:
+        # #487 headline: "_" + MIDDLE DOT transliterated to "_." reduced to a bare "."
+        for cp in (0x00B7, 0x02D9, 0x0387, 0x0589, 0x05C3, 0x0964):
+            out = sanitize_filename("_" + chr(cp))
+            assert out not in (".", ".."), f"directory reference from U+{cp:04X}: {out!r}"
+            assert sanitize_filename(out) == out, f"non-idempotent on U+{cp:04X}"

@@ -83,7 +83,7 @@ idna = "1"  # UTS#46 / punycode decoding for is_suspicious_hostname (#63)
 thiserror = "2.0.18"
 
 [build-dependencies]
-phf_codegen = "0.13"
+phf_codegen = "0.14"
 
 [dev-dependencies]
 proptest = "1"

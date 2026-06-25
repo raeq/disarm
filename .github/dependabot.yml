@@ -52,6 +52,17 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 2
     groups:
+      # phf + phf_codegen are a lockstep pair: phf_codegen generates the static
+      # map data in the exact binary layout the matching phf runtime reads back,
+      # so the two MUST move together. The default policy leaves *majors*
+      # ungrouped (one PR each), but for 0.x cargo crates a 0.13->0.14 bump IS a
+      # major, so without this group dependabot split the pair into two PRs
+      # (#501/#502) — each one a version skew that corrupts every PHF lookup and
+      # fails CI. This group has no `update-types` restriction, so it bundles the
+      # pair across patch/minor/major and keeps them in a single PR. Listed
+      # before the `cargo` catch-all because the first matching group wins.
+      phf:
+        patterns: ["phf", "phf_codegen"]
       cargo:
         patterns: ["*"]
         update-types:

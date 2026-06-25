@@ -279,7 +279,7 @@ fn main() {
     for (file_stem, const_name) in &reverse_tables {
         let tsv_path = data_dir.join(format!("{file_stem}.tsv"));
         let entries = read_str_str_tsv(&tsv_path);
-        // phf_codegen 0.13 retains the borrowed value until build(), so the formatted
+        // phf_codegen 0.14 retains the borrowed value until build(), so the formatted
         // literals must outlive the builder — collect them first.
         let formatted: Vec<(&str, String)> = entries
             .iter()
@@ -443,7 +443,7 @@ fn read_char_set_tsv(path: &Path) -> Vec<u32> {
 
 /// Build a `phf::Map<char, &'static str>` source string.
 fn build_char_str_map(entries: &BTreeMap<u32, String>, name: &str, vis: &str) -> String {
-    // phf_codegen 0.13 retains the borrowed value until build(); keep the formatted
+    // phf_codegen 0.14 retains the borrowed value until build(); keep the formatted
     // literals alive past the builder by collecting them first.
     let formatted: Vec<(char, String)> = entries
         .iter()
@@ -613,7 +613,7 @@ fn generate_excluded_compositions_map(tsv_path: &Path, out_path: &Path, name: &s
 /// Generate a str→str map file.
 fn generate_str_str_map(tsv_path: &Path, out_path: &Path, name: &str, vis: &str) {
     let entries = read_str_str_tsv(tsv_path);
-    // phf_codegen 0.13 retains the borrowed value until build(); collect the formatted
+    // phf_codegen 0.14 retains the borrowed value until build(); collect the formatted
     // literals so they outlive the builder.
     let formatted: Vec<(&str, String)> = entries
         .iter()

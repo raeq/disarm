@@ -435,7 +435,7 @@ jobs:
         run: cargo generate-lockfile
 
       - name: Run cargo deny
-        uses: EmbarkStudios/cargo-deny-action@8a45e1c7c9a95dfae3276e89a553705e40ae45a2  # v2.0.20
+        uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe  # v2.0.20
         with:
           # licenses / bans / sources only — RustSec advisories are owned by the
           # dedicated `cargo audit` job above (#260).

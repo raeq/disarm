@@ -51,7 +51,30 @@ updates:
       semver-major-days: 14
       semver-minor-days: 7
       semver-patch-days: 2
+    # phf 0.14 (and its phf_codegen/phf_shared/phf_generator family) moved to
+    # edition 2024 / rust-version 1.85, but this crate's shipped MSRV is 1.81
+    # (see `rust-version` in Cargo.toml). phf is a real runtime/build dependency
+    # — built by downstream consumers, unlike the dev-only criterion exception —
+    # so 0.14 would silently raise the consumer-facing MSRV. Hold at 0.13.x until
+    # we deliberately bump the MSRV; revisit by dropping this ignore. (See the
+    # closed migration attempt #509.)
+    ignore:
+      - dependency-name: "phf"
+        versions: [">=0.14"]
+      - dependency-name: "phf_codegen"
+        versions: [">=0.14"]
     groups:
+      # phf + phf_codegen are a lockstep pair: phf_codegen emits the static map
+      # data in the exact binary layout the matching phf runtime reads back, so
+      # the two MUST move together. The default policy leaves *majors* ungrouped
+      # (one PR each), and for 0.x cargo crates a 0.13->0.14 bump IS a major, so
+      # without this group dependabot split the pair into two PRs (#501/#502) —
+      # each a version skew that corrupts every PHF lookup and fails CI. This
+      # group has no `update-types` restriction, so once the MSRV hold above is
+      # lifted the pair bumps together in a single PR. Listed before the `cargo`
+      # catch-all because the first matching group wins.
+      phf:
+        patterns: ["phf", "phf_codegen"]
       cargo:
         patterns: ["*"]
         update-types:

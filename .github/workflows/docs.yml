@@ -61,7 +61,7 @@ jobs:
             --branch=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'main' }}
       - name: Surface preview URL on the PR
         if: github.event_name == 'pull_request' && steps.deploy.outputs.deployment-url != ''
-        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71  # v9.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           script: |
             const url = ${{ toJSON(steps.deploy.outputs.deployment-url) }};

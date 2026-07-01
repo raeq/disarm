@@ -32,8 +32,9 @@ jobs:
   # the requirement `disarm = ^0.<minor>`". Gate the build on this single upstream
   # job (issue #500 option 3, scoped within this workflow so the OIDC Trusted
   # Publisher filename is preserved) instead of polling once per matrix leg. Publish
-  # path only — on push/PR validation this job is skipped, and a skipped `needs:`
-  # dependency does not block `build`, so #374 in-repo-patched builds run unchanged.
+  # path only — this job is skipped on a push to main. `build` therefore guards its
+  # own `if:` so a *skipped* wait-for-core (push validation) still runs the build,
+  # while a *failed* one (core never landed) correctly blocks it (see `build.if`).
   wait-for-core:
     name: Wait for the published core
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
@@ -60,9 +61,14 @@ jobs:
 
   build:
     name: Build ${{ matrix.settings.target }}
-    # Gate on the core landing on crates.io (#500). On push/PR this dependency is
-    # skipped (see wait-for-core's `if:`), which does not block this job.
     needs: wait-for-core
+    # A default (`success()`) job is SKIPPED when a `needs:` dependency is skipped,
+    # so a plain `needs:` would suppress the push-to-main validation build (where
+    # wait-for-core is skipped). `!failure() && !cancelled()` runs this job when the
+    # gate SUCCEEDED (release/dispatch, core is up) or was SKIPPED (push, #374 patch
+    # path), but not when it FAILED (release, core never appeared in 10 min) — in
+    # which case `publish` (needs: build) is skipped too, so no half-baked publish.
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ${{ matrix.settings.host }}
     strategy:
       fail-fast: false

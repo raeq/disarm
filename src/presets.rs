@@ -850,9 +850,10 @@ pub(crate) fn ml_normalize<'a>(
         // 4. Strip accents (NFD decompose → remove combining marks → NFC)
         Step::StripAccents,
         // 4b. Re-run demojize after strip-accents (#498). A negated-relation symbol
-        //     (e.g. `≇` U+2247, NFKD = `≅` U+2245 + U+0338 overlay) is NOT in the
-        //     CLDR name table itself, so the step-2 demojize leaves it; step-4
-        //     strip-accents then drops the overlay and *exposes* the bare base
+        //     (e.g. `≇` U+2247, whose canonical NFD is `≅` U+2245 + U+0338 overlay)
+        //     is NOT in the CLDR name table itself, so the step-2 demojize leaves it;
+        //     the strip-accents step above (NFD decompose → drop combining marks →
+        //     NFC) then drops the overlay and *exposes* the bare base
         //     (`≅`), which IS named. Without this second pass that freshly-exposed
         //     base is only named on the following call — non-idempotent. The
         //     exposed bases name to plain ASCII ("approximately equal"), so a
@@ -2526,7 +2527,7 @@ mod tests {
             // there is no demojize at all. With "cldr" the demojize naming step runs
             // twice — once before transliterate (so emoji survive the Ignore-mode
             // transliterate) and once after strip-accents (#498), so both a base
-            // exposed by NFKD/strip-accents (`≇`→`≅`→"approximately equal") and any
+            // exposed by strip-accents' NFD (`≇`→`≅`→"approximately equal") and any
             // typographic punctuation inside a CLDR name (the U+2019 in "woman's
             // hat") are resolved within the first call. Pin idempotency across both
             // styles and the lang-present and lang-absent paths.
@@ -2542,9 +2543,10 @@ mod tests {
             }
 
             // Structural post-conditions that hold for ALL four conditional paths
-            // (lang present/absent × emoji_style cldr/none), since full idempotency
-            // is excluded above. Verifies the case-fold and whitespace-collapse stages
-            // actually took effect regardless of which conditional stages ran.
+            // (lang present/absent × emoji_style cldr/none), complementing the
+            // idempotency property above. Verifies the case-fold and
+            // whitespace-collapse stages actually took effect regardless of which
+            // conditional stages ran.
             #[test]
             fn ml_normalize_postconditions_all_modes(
                 s in adversarial(),

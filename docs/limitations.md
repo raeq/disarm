@@ -88,6 +88,7 @@ The `target` parameter enables Latin → native script conversion, but this is i
 
 - Russian soft sign Ь and hard sign Ъ → `""` forward
 - Example: `тьма` → `tma` → `тма` (soft sign lost)
+- Because the sign is dropped, distinct words can collide: `unidecode("Колыбелька") == unidecode("Колыбелка") == "Kolybelka"`. To preserve the distinction, use `transliterate(text, lang="ru")` (ь → `'`, ъ → `"`), which yields `Kolybel'ka` vs `Kolybelka`.
 
 **Digraph ambiguity.** Forward `сх` → `skh` but reverse `kh` → `х`; greedy scanning may not match the original segmentation.
 

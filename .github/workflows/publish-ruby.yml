@@ -93,6 +93,33 @@ jobs:
           - x64-mingw-ucrt
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Wait for the published core on crates.io (#500 release race)
+        # On `release: published`, this publisher fires in parallel with publish.yml
+        # (core → crates.io), but the cross-gem build resolves `disarm_core` as a
+        # REGISTRY dependency with NO [patch.crates-io] redirect (the #374 patch step
+        # in the `test` job runs ONLY on non-publish events). publish.yml pushes
+        # `disarm` to crates.io only after its Tier-3 gate + multi-platform wheels
+        # (several minutes), so an un-gated build starts first and dies with "failed
+        # to select a version for the requirement `disarm = ^0.<minor>`". Poll the
+        # crates.io SPARSE index for a non-yanked version satisfying the extension's
+        # requirement before building. Bounded wait; this job is release/dispatch-only
+        # already. The manifest is the extension crate's, not the gem-root workspace.
+        shell: bash
+        run: |
+          req="$(sed -nE 's/.*package = "disarm", version = "([0-9]+\.[0-9]+)".*/\1/p' bindings/ruby/ext/disarm/Cargo.toml | head -n1)"
+          if [ -z "$req" ]; then echo "::error::could not parse disarm_core version from bindings/ruby/ext/disarm/Cargo.toml"; exit 1; fi
+          esc="${req//./\\.}"
+          echo "Waiting for a non-yanked disarm $req.* on the crates.io sparse index…"
+          deadline=$((SECONDS + 600))
+          until curl -sf https://index.crates.io/di/sa/disarm | jq -r 'select(.yanked==false) | .vers' | grep -qE "^${esc}\.[0-9]+$"; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::disarm $req.* did not appear on crates.io within 10 minutes"; exit 1
+            fi
+            echo "  not yet; retrying in 15s…"; sleep 15
+          done
+          echo "disarm $req.* is available on crates.io."
+
       - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           ruby-version: "3.3"

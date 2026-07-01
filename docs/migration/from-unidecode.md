@@ -105,9 +105,9 @@ assert transliterate("Колыбелка",  lang="ru") == "Kolybelka"
 ```
 
 If you need distinctness-preserving (or lossless) Cyrillic, prefer
-`transliterate(text, lang="ru")` (or `"uk"`) over the generic `unidecode()`
-fold. See [Limitations](../limitations.md#lossy-by-design) for the full list of
-empty-string mappings.
+`transliterate(text, lang="ru")` (or `lang="uk"`) over the generic
+`unidecode()` fold. See [Limitations](../limitations.md#lossy-by-design) for
+more on lossy, empty-string mappings.
 
 ### License
 

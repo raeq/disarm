@@ -78,33 +78,25 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: ruby scripts/check_doc_ruby_examples.rb
 
-  cross-gems:
-    name: Build gem (${{ matrix.platform }})
+  # ── Wait for the published core on crates.io (#500 release race) ──
+  # On `release: published`, this publisher fires in parallel with publish.yml
+  # (core → crates.io), but the cross-gem build resolves `disarm_core` as a
+  # REGISTRY dependency with NO [patch.crates-io] redirect (the #374 patch step in
+  # the `test` job runs ONLY on non-publish events). publish.yml pushes `disarm` to
+  # crates.io only after its Tier-3 gate + multi-platform wheels (several minutes),
+  # so an un-gated build starts first and dies with "failed to select a version for
+  # the requirement `disarm = ^0.<minor>`". Gate the cross-gem build on this single
+  # upstream job (issue #500 option 3, scoped within this workflow so the OIDC
+  # Trusted Publisher filename is preserved) instead of polling once per matrix leg.
+  wait-for-core:
+    name: Wait for the published core
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - x86_64-linux
-          - aarch64-linux
-          - x86_64-darwin
-          - arm64-darwin
-          - x64-mingw-ucrt
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-
-      - name: Wait for the published core on crates.io (#500 release race)
-        # On `release: published`, this publisher fires in parallel with publish.yml
-        # (core → crates.io), but the cross-gem build resolves `disarm_core` as a
-        # REGISTRY dependency with NO [patch.crates-io] redirect (the #374 patch step
-        # in the `test` job runs ONLY on non-publish events). publish.yml pushes
-        # `disarm` to crates.io only after its Tier-3 gate + multi-platform wheels
-        # (several minutes), so an un-gated build starts first and dies with "failed
-        # to select a version for the requirement `disarm = ^0.<minor>`". Poll the
-        # crates.io SPARSE index for a non-yanked version satisfying the extension's
-        # requirement before building. Bounded wait; this job is release/dispatch-only
-        # already. The manifest is the extension crate's, not the gem-root workspace.
+      - name: Poll the crates.io sparse index for the target core version
+        # This job has no working-directory default, so the manifest is referenced
+        # by full path — the extension crate's, not the gem-root workspace.
         shell: bash
         run: |
           req="$(sed -nE 's/.*package = "disarm", version = "([0-9]+\.[0-9]+)".*/\1/p' bindings/ruby/ext/disarm/Cargo.toml | head -n1)"
@@ -120,6 +112,24 @@ jobs:
           done
           echo "disarm $req.* is available on crates.io."
 
+  cross-gems:
+    name: Build gem (${{ matrix.platform }})
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    # Gate on the core landing on crates.io (#500) — the cross-gem build resolves
+    # `disarm_core` from the registry unpatched on this path.
+    needs: wait-for-core
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - x86_64-linux
+          - aarch64-linux
+          - x86_64-darwin
+          - arm64-darwin
+          - x64-mingw-ucrt
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           ruby-version: "3.3"

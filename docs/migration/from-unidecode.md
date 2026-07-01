@@ -85,6 +85,30 @@ assert unidecode("北京") == 'bei jing'
 # disarm aims for more linguistically accurate results
 ```
 
+#### Cyrillic soft/hard signs collide distinct words
+
+`unidecode()` follows the **BGN/PCGN** romanization standard, which drops the
+Cyrillic soft sign (ь/Ь) and hard sign (ъ/Ъ) — they map to the empty string.
+This is intentional and standard-conformant, but it is **lossy**: two distinct
+words can fold to the same ASCII string.
+
+```python
+from disarm import unidecode, transliterate
+
+# Distinct place names collide under the lossy BGN/PCGN fold
+assert unidecode("Колыбелька") == "Kolybelka"
+assert unidecode("Колыбелка")  == "Kolybelka"   # same output — collision!
+
+# Use a language profile to preserve the distinction (ь → ', ъ → ")
+assert transliterate("Колыбелька", lang="ru") == "Kolybel'ka"
+assert transliterate("Колыбелка",  lang="ru") == "Kolybelka"
+```
+
+If you need distinctness-preserving (or lossless) Cyrillic, prefer
+`transliterate(text, lang="ru")` (or `lang="uk"`) over the generic
+`unidecode()` fold. See [Limitations](../limitations.md#lossy-by-design) for
+more on lossy, empty-string mappings.
+
 ### License
 
 | | Unidecode | text-unidecode | disarm |

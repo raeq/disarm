@@ -278,6 +278,16 @@ from disarm import unidecode
 assert unidecode("café") == 'cafe'
 ```
 
+!!! warning "`unidecode()` is a lossy ASCII fold"
+    Like reference Unidecode, `unidecode()` follows national romanization
+    standards (BGN/PCGN for Cyrillic), which drop information-bearing letters
+    such as the Russian soft sign (ь) and hard sign (ъ). Distinct words can
+    therefore collapse to the same output — e.g. both `Колыбелька` and
+    `Колыбелка` fold to `Kolybelka`. When you need to preserve such
+    distinctions, use `transliterate(text, lang="ru")` (which renders ь → `'`,
+    ъ → `"`) instead of the generic fold. See
+    [Migrating from Unidecode](../migration/from-unidecode.md#cyrillic-softhard-signs-collide-distinct-words).
+
 See [Migrating from Unidecode](../migration/from-unidecode.md) for details.
 
 ## Context-free vs context-aware

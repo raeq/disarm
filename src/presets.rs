@@ -849,6 +849,16 @@ pub(crate) fn ml_normalize<'a>(
         },
         // 4. Strip accents (NFD decompose → remove combining marks → NFC)
         Step::StripAccents,
+        // 4b. Re-run demojize after strip-accents (#498). A negated-relation symbol
+        //     (e.g. `≇` U+2247, whose canonical NFD is `≅` U+2245 + U+0338 overlay)
+        //     is NOT in the CLDR name table itself, so the step-2 demojize leaves it;
+        //     the strip-accents step above (NFD decompose → drop combining marks →
+        //     NFC) then drops the overlay and *exposes* the bare base
+        //     (`≅`), which IS named. Without this second pass that freshly-exposed
+        //     base is only named on the following call — non-idempotent. The
+        //     exposed bases name to plain ASCII ("approximately equal"), so a
+        //     single extra pass reaches the fixed point; no iteration is needed.
+        Step::Demojize { only_if_cldr: true },
         // 5. Unicode case folding (ß→ss, ﬁ→fi, etc.)
         Step::FoldCase,
         // 6. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
@@ -1944,6 +1954,74 @@ mod tests {
         assert_eq!(result, "filter");
     }
 
+    /// #498: `ml_normalize` ("cldr") must name a symbol base exposed by its own
+    /// NFKD/strip-accents step within the *same* call. `≇` U+2247 NEITHER
+    /// APPROXIMATELY NOR ACTUALLY EQUAL TO has NFKD = `≅` U+2245 APPROXIMATELY
+    /// EQUAL TO + U+0338 COMBINING LONG SOLIDUS OVERLAY; `strip_accents` drops
+    /// the overlay and exposes the bare `≅`, but the demojize naming step ran
+    /// *earlier* in the pipeline, so the freshly-exposed `≅` is named
+    /// ("approximately equal") only on a *second* call — i.e.
+    /// `f(x) != f(f(x))`. The single call must already equal both the stable
+    /// target and `ml_normalize("≅")`. Unlike the accepted CLDR-punctuation
+    /// non-idempotency (a name like "woman's hat" re-expands its apostrophe),
+    /// the target here is bare ASCII letters, so it *is* a true fixed point.
+    /// #498 (whole class): `ml_normalize` ("cldr") must name a symbol base
+    /// exposed by its own NFKD/strip-accents step within the *same* call.
+    ///
+    /// The `≇` U+2247 in the report is not unique: it is one of the "negated
+    /// relation" family, each a `<relation> + U+0338 COMBINING LONG SOLIDUS
+    /// OVERLAY` whose NFKD base is itself a CLDR-named symbol. `strip_accents`
+    /// drops the overlay and exposes the bare base (e.g. `≇`→`≅`), but the
+    /// demojize naming step ran *earlier* in the pipeline, so the freshly
+    /// exposed base is named only on a *second* call — `f(x) != f(f(x))`.
+    ///
+    /// All members below were enumerated by an exhaustive scan over every
+    /// Unicode scalar (NFKD strips a combining mark to expose a single base
+    /// scalar that demojize names). For each, the single call must already
+    /// equal both the stable name and `ml_normalize(<bare base>)`. Unlike the
+    /// accepted CLDR-punctuation non-idempotency (a name like "woman's hat"
+    /// re-expands its apostrophe), every target here is bare ASCII letters, so
+    /// each is a true fixed point.
+    #[test]
+    fn test_ml_normalize_idempotent_on_nfkd_exposed_symbol_class() {
+        // (input, bare NFKD base, stable name) — the complete scanned class.
+        for (input, base, name) in [
+            ("\u{2204}", "\u{2203}", "there exists"),            // ∄ → ∃
+            ("\u{220C}", "\u{220B}", "contains as member"),      // ∌ → ∋
+            ("\u{2224}", "\u{2223}", "divides"),                 // ∤ → ∣
+            ("\u{2226}", "\u{2225}", "parallel"),                // ∦ → ∥
+            ("\u{2241}", "\u{223C}", "tilde operator"),          // ≁ → ∼
+            ("\u{2244}", "\u{2243}", "asymptotically equal"),    // ≄ → ≃
+            ("\u{2247}", "\u{2245}", "approximately equal"),     // ≇ → ≅
+            ("\u{2249}", "\u{2248}", "almost equal"),            // ≉ → ≈
+            ("\u{2262}", "\u{2261}", "identical to"),            // ≢ → ≡
+            ("\u{2270}", "\u{2264}", "less-than or equal"),      // ≰ → ≤
+            ("\u{2271}", "\u{2265}", "greater-than or equal"),   // ≱ → ≥
+            ("\u{2275}", "\u{2273}", "greater-than equivalent"), // ≵ → ≳
+            ("\u{2280}", "\u{227A}", "precedes"),                // ⊀ → ≺
+            ("\u{2284}", "\u{2282}", "subset of"),               // ⊄ → ⊂
+            ("\u{2285}", "\u{2283}", "superset"),                // ⊅ → ⊃
+            ("\u{2288}", "\u{2286}", "subset equal"),            // ⊈ → ⊆
+            ("\u{2289}", "\u{2287}", "superset equal"),          // ⊉ → ⊇
+        ] {
+            let once = ml_normalize(input, None, "cldr").unwrap();
+            assert_eq!(
+                once, name,
+                "ml_normalize({input:?}) should name its NFKD-exposed base in one pass"
+            );
+            assert_eq!(
+                once,
+                ml_normalize(base, None, "cldr").unwrap(),
+                "ml_normalize({input:?}) should match its bare base {base:?}"
+            );
+            assert_eq!(
+                once,
+                ml_normalize(&once, None, "cldr").unwrap(),
+                "ml_normalize not idempotent on {input:?}"
+            );
+        }
+    }
+
     #[test]
     fn test_catalog_key_dedup() {
         let a = catalog_key("Café", None, false).unwrap();
@@ -2445,25 +2523,30 @@ mod tests {
                 prop_assert_eq!(&once, &twice);
             }
 
-            // ml_normalize is the one preset that is *not* a fixed point under the
-            // "cldr" emoji style: `demojize` expands typographic punctuation inside
-            // CLDR names (e.g. the U+2019 in "woman’s hat" → "right apostrophe") on a
-            // second pass. With emoji_style="none" there is no demojize, so it *is*
-            // idempotent — pin that across both the lang-present and lang-absent paths.
+            // ml_normalize is a fixed point under BOTH emoji styles. With "none"
+            // there is no demojize at all. With "cldr" the demojize naming step runs
+            // twice — once before transliterate (so emoji survive the Ignore-mode
+            // transliterate) and once after strip-accents (#498), so both a base
+            // exposed by strip-accents' NFD (`≇`→`≅`→"approximately equal") and any
+            // typographic punctuation inside a CLDR name (the U+2019 in "woman's
+            // hat") are resolved within the first call. Pin idempotency across both
+            // styles and the lang-present and lang-absent paths.
             #[test]
-            fn ml_normalize_idempotent_emoji_none(
+            fn ml_normalize_idempotent_both_styles(
                 s in adversarial(),
                 lang in prop::option::of(prop::sample::select(vec!["de", "ru", "ja"])),
+                style in prop::sample::select(vec!["cldr", "none"]),
             ) {
-                let once = ml_normalize(&s, lang, "none").unwrap();
-                let twice = ml_normalize(&once, lang, "none").unwrap();
+                let once = ml_normalize(&s, lang, style).unwrap();
+                let twice = ml_normalize(&once, lang, style).unwrap();
                 prop_assert_eq!(&once, &twice);
             }
 
             // Structural post-conditions that hold for ALL four conditional paths
-            // (lang present/absent × emoji_style cldr/none), since full idempotency
-            // is excluded above. Verifies the case-fold and whitespace-collapse stages
-            // actually took effect regardless of which conditional stages ran.
+            // (lang present/absent × emoji_style cldr/none), complementing the
+            // idempotency property above. Verifies the case-fold and
+            // whitespace-collapse stages actually took effect regardless of which
+            // conditional stages ran.
             #[test]
             fn ml_normalize_postconditions_all_modes(
                 s in adversarial(),

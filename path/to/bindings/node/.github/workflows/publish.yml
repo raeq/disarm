@@ -1,0 +1,28 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll for core crate
+        run: |
+          import requests
+          import time
+          timeout = 300  # 5 minutes
+          start_time = time.time()
+          while True:
+            response = requests.get('https://index.crates.io/di/sa/disarm')
+            if response.json()['version'] == '0.11':
+              break
+            if time.time() - start_time > timeout:
+              exit(1)
+            time.sleep(30)  # 30-second polling interval
+        shell: bash
+      - name: Build and publish
+        run: |
+          # Build and publish the binding
+          npm publish

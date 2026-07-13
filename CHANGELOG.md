@@ -16,6 +16,47 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-07-13
+
+### Fixed
+
+- **`ml_normalize` is now idempotent on NFKD-exposed symbol bases (#498).** The
+  `"cldr"` preset was non-idempotent on negated-relation symbols whose NFKD
+  decomposition strips a combining overlay to expose a nameable base (e.g. `≇`
+  U+2247 → `≅` U+2245 + U+0338 overlay). Because demojize ran before
+  accent-stripping, the freshly-exposed base was only named on a *second* call,
+  so `ml_normalize(x) != ml_normalize(ml_normalize(x))` across the enumerated
+  17-member negated-symbol class. A second CLDR demojize pass now runs right
+  after accent-stripping, so bases exposed within a call reach a true fixed
+  point in a single call.
+- **`normalize_confusables` is now idempotent and complete on confusable +
+  combining-mark input (#523).** Confusable folding and canonical composition
+  interact both ways — a fold can expose a composition (`¥`+◌̀ → `Y`+◌̀ → `Ỳ`) and
+  a composition can expose a new fold (`Ҫ`+◌̧ → `Ç` → `C`, since `Ç` is itself a
+  confusable) — so a single pass was not always a fixed point, and could even
+  leave a residual confusable in the output. The fold/compose pass now iterates
+  to a fixed point, restoring both idempotency and completeness. Guarded by a new
+  exhaustive Tier-3 test over every confusable × combining-mark pair (~9M).
+
+### Documentation
+
+- **Documented `unidecode()` Cyrillic soft/hard-sign collisions (#511).** The
+  compatibility `unidecode()` path maps the Cyrillic soft sign (ь) and hard sign
+  (ъ) to the empty string, so otherwise-distinct inputs can collide; the
+  limitation is now called out with a pointer to the script-aware
+  `transliterate(…, lang=…)` path that preserves them.
+
+### Internal
+
+- **Binding publishers are gated on the published core (#500).** The npm and
+  RubyGems publish jobs build their native addon/gem against `disarm` as a
+  crates.io dependency, so on a release they now wait for the core crate to land
+  on crates.io before building instead of racing it — removing the manual
+  re-run every prior release required. No library-behavior change.
+- **Held `phf`/`phf_codegen` at 0.13 to preserve MSRV 1.81 (#510).** phf 0.14
+  moves to edition 2024 / Rust 1.85; a dependabot group now keeps the pair in
+  lockstep and pins it below 0.14 until the MSRV is deliberately raised.
+
 ## [0.11.0] — 2026-06-21
 
 ### Performance

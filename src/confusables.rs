@@ -51,12 +51,39 @@ pub(crate) fn normalize_confusables(
     target_script: &str,
 ) -> Result<String, crate::ErrorRepr> {
     // Delegate to the borrowing form so the no-op fast path is shared by both public
-    // entrypoints (M-2): this eager API used to unconditionally allocate a
-    // `String::with_capacity(text.len())` and rebuild it even on pure-ASCII / already-
-    // folded input, while `_cow` already borrows-on-no-op. One `into_owned()` restores
-    // parity — a genuine fold still allocates once; a no-op only allocates in this final
-    // owned conversion (a copy of a borrow), not in a needless full rebuild.
-    Ok(normalize_confusables_cow(text, target_script)?.into_owned())
+    // entrypoints (M-2): `_cow` borrows-on-no-op, so pure-ASCII / already-folded input
+    // never allocates a rebuilt string — only this final owned conversion copies a borrow.
+    //
+    // Iterate to a fixed point (#522). Confusable folding and canonical composition
+    // interact *both* ways, so one pass is not always stable:
+    //   * a fold can expose a composition — `¥`+◌̀ folds to `Y`+◌̀, which composes to `Ỳ`;
+    //   * a composition can expose a *new* fold — `Ҫ`+◌̧ composes to `Ç`, itself a
+    //     confusable that folds to `C`.
+    // Re-running `_cow` (which composes-at-lookup on its input each pass) until the output
+    // stops changing makes the result idempotent by construction, and complete: the loop
+    // can only exit once no char folds, i.e. `is_confusable` is false. It converges in a
+    // few passes — every fold moves toward the ASCII-ish target script and composition
+    // only shrinks length, so no cycle is possible; the exhaustive (confusable × mark)
+    // idempotency test bounds the pass count. `MAX_PASSES` is a defensive cap far above
+    // the observed maximum; `debug_assert` catches any future table change that regresses.
+    const MAX_PASSES: usize = 8;
+    let mut cur = match normalize_confusables_cow(text, target_script)? {
+        // Borrowed ⇒ nothing folded ⇒ the input is already a fixed point (the common case).
+        std::borrow::Cow::Borrowed(s) => return Ok(s.to_owned()),
+        std::borrow::Cow::Owned(s) => s,
+    };
+    for _ in 0..MAX_PASSES {
+        match normalize_confusables_cow(&cur, target_script)? {
+            std::borrow::Cow::Borrowed(_) => return Ok(cur),
+            std::borrow::Cow::Owned(next) if next == cur => return Ok(cur),
+            std::borrow::Cow::Owned(next) => cur = next,
+        }
+    }
+    debug_assert!(
+        false,
+        "normalize_confusables did not converge in {MAX_PASSES} passes: {cur:?}"
+    );
+    Ok(cur)
 }
 
 /// Borrowing form of [`normalize_confusables`] (#352): returns `Cow::Borrowed`
@@ -159,6 +186,47 @@ pub(crate) fn is_confusable(text: &str, target_script: &str) -> Result<bool, cra
 
 #[cfg(test)]
 mod tests {
+
+    /// Tier-3 exhaustive gate for the fold/compose idempotency invariant (#522).
+    ///
+    /// The `\PC*` proptest below is a *random* walk, so the specific two-code-point
+    /// adjacency that breaks idempotency — a confusable base immediately followed by a
+    /// combining mark that composes with the *folded* base — is astronomically unlikely
+    /// to be generated, and indeed slipped through 1000-case runs until one unlucky CI
+    /// seed hit `¥\u{340}`. The bug class is *local* (base + mark), so it is bounded and
+    /// deterministically enumerable: cross every confusable source code point with every
+    /// combining mark and assert both invariants hold for every pair. This caught 61
+    /// residual failures that the one-shot recompose missed. `#[ignore]` (Tier 3): ~9M
+    /// pairs, a few seconds in release — too slow for per-PR CI, run pre-release.
+    #[test]
+    #[ignore = "exhaustive: ~9M (confusable × mark) pairs; run in Tier 3 / pre-release"]
+    fn exhaustive_fold_compose_idempotent_and_complete() {
+        use unicode_normalization::char::is_combining_mark;
+        let marks: Vec<char> = (0u32..=0x0010_FFFF)
+            .filter_map(char::from_u32)
+            .filter(|&c| is_combining_mark(c))
+            .collect();
+        for script in ["latin", "cyrillic"] {
+            let map = tables::resolve_confusable_map(script).unwrap();
+            for &base in map.keys() {
+                for &m in &marks {
+                    let s: String = [base, m].iter().collect();
+                    let once = normalize_confusables(&s, script).unwrap();
+                    let twice = normalize_confusables(&once, script).unwrap();
+                    assert_eq!(
+                        once, twice,
+                        "not idempotent: base U+{:04X} + mark U+{:04X} ({script})",
+                        base as u32, m as u32
+                    );
+                    assert!(
+                        !is_confusable(&once, script).unwrap(),
+                        "residual confusable after normalize: base U+{:04X} + mark U+{:04X} ({script}) → {once:?}",
+                        base as u32, m as u32
+                    );
+                }
+            }
+        }
+    }
     use super::*;
 
     #[test]
@@ -279,6 +347,46 @@ mod tests {
         assert_eq!(result, nfc);
     }
 
+    #[test]
+    fn normalize_confusables_idempotent_when_fold_and_compose_interact() {
+        // #522 regression, both interaction directions.
+        //
+        // (a) a fold exposes a composition. `¥` (U+00A5) folds to `Y`, carrying a combining
+        //     grave (U+0340, which canonically decomposes to U+0300). The cluster composes
+        //     to `¥`+U+0300 (yen has no precomposed grave); folding `¥`→`Y` leaves `Y`+U+0300,
+        //     which composes to `Ỳ` (U+1EF2) — a non-confusable, so that is the fixed point.
+        let once = normalize_confusables("\u{a5}\u{340}", "latin").unwrap();
+        assert_eq!(once, "\u{1ef2}"); // Ỳ
+        assert_eq!(normalize_confusables(&once, "latin").unwrap(), once);
+
+        // (b) a composition exposes a *new* fold. `Ҫ` (U+04AA) folds to `C`, carrying a
+        //     combining cedilla (U+0327); `C`+cedilla composes to `Ç` (U+00C7) — which is
+        //     *itself* a confusable that folds to `C`. Only iterating to a fixed point
+        //     reaches `C`; a single recompose would stop at the still-confusable `Ç`.
+        let once = normalize_confusables("\u{04AA}\u{0327}", "latin").unwrap();
+        assert_eq!(once, "C");
+        assert_eq!(normalize_confusables(&once, "latin").unwrap(), once);
+        assert!(!is_confusable(&once, "latin").unwrap());
+    }
+
+    #[test]
+    fn confusable_table_values_are_non_empty() {
+        // The fold never deletes content because every table value is non-empty — a
+        // lookup always yields at least one output char. Asserted directly over the
+        // tables (deterministic), replacing the former char-count proptest which no
+        // longer holds once fold∘compose iterates to a fixed point (#522).
+        for script in ["latin", "cyrillic"] {
+            let map = tables::resolve_confusable_map(script).unwrap();
+            for (&key, &value) in map.entries() {
+                assert!(
+                    !value.is_empty(),
+                    "empty confusable mapping for U+{:04X} ({script})",
+                    key as u32
+                );
+            }
+        }
+    }
+
     // ── Property-based tests ─────────────────────────────────────────
 
     mod proptest_properties {
@@ -312,22 +420,19 @@ mod tests {
                     s, normalized);
             }
 
-            /// The *fold* never drops characters — every table value is non-empty, so
-            /// each looked-up code point yields at least one output char. The count is
-            /// measured against the compose-at-lookup stream, not the raw input:
-            /// composing a base + combining-mark cluster (`і`+◌̈ → `ї`, #475/#477)
-            /// legitimately reduces the count by one grapheme before the fold, which is
-            /// exactly the form-invariant behaviour the dedicated tests assert. What
-            /// must never happen is the *fold* deleting content.
+            /// The fold never *annihilates* content: non-empty input yields non-empty
+            /// output. A stronger char-count guarantee (`result >= composed input`) no
+            /// longer holds since #522 — iterating fold∘compose to a fixed point can
+            /// legitimately shorten the string (`Ҫ`+◌̧ → `Ç` → `C`, the cedilla absorbed
+            /// then discarded because completeness forces the confusable `Ç` to fold to
+            /// `C`). The "no table value is empty" guarantee that underpinned the old
+            /// count check is asserted directly and deterministically by
+            /// [`confusable_table_values_are_non_empty`].
             #[test]
-            fn fold_never_drops_chars(s in "\\PC*") {
+            fn fold_never_annihilates_content(s in "\\PC+") {
                 let result = normalize_confusables(&s, "latin").unwrap();
-                let composed = crate::compose::composed(&s).count();
-                prop_assert!(
-                    result.chars().count() >= composed,
-                    "fold dropped chars: {:?} ({} composed) → {:?} ({} chars)",
-                    s, composed, result, result.chars().count()
-                );
+                prop_assert!(!result.is_empty(),
+                    "non-empty input {:?} normalized to empty", s);
             }
 
             /// normalize_confusables output is always valid UTF-8 (trivially

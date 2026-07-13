@@ -48,6 +48,14 @@ jobs:
         # re-checked on every release.
         run: cargo test --no-default-features --test exhaustive_grapheme -- --ignored
 
+      - name: Rust exhaustive lib-level domain tests (Tier 3)
+        # Ignored *lib* unit tests need internal (`pub(crate)`) table access, so they
+        # can't move to a `tests/exhaustive_*.rs` integration file. --release keeps the
+        # ~9M-pair sweeps to a few seconds. Covers the confusables fold∘compose
+        # idempotency+completeness gate (#522) and the presets non-ASCII fast-path sweep,
+        # both previously unreachable from this gate.
+        run: cargo test --no-default-features --release --lib -- --ignored
+
       - name: Install maturin
         # Pin to the same range as the project's build-system requirement
         # (pyproject: maturin>=1.13.3,<2) so a future maturin 2.x can't break the gate.

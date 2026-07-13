@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc 8552119f4ebc8a196c687c2a3403be0ffb1f3d83e0fd5751f145a6b72986f164 # shrinks to s = "𑎋\u{113c2}"
 cc 6562c44dd33d92540658020e80f0bbbf3482edbee10790491188b288513ea061 # shrinks to s = "ড়ଃ"
+cc af2c62f0b090f74ce7b99dead218a0a4883b4148622dd1a3ddc9640bd0147f1b # shrinks to s = "\u{a5}\u{340}" (#522)

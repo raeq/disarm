@@ -2460,6 +2460,64 @@ mod tests {
             })
         }
 
+        /// Tier-3 exhaustive gate for preset idempotency (#416/#467/#498/#523 class).
+        ///
+        /// The key presets are fixed points: `canonicalize(canonicalize(x)) ==
+        /// canonicalize(x)`, and likewise for `sort_key`/`search_key`/`catalog_key`/
+        /// `ml_normalize`. The `adversarial()` proptests sample `any::<char>()`; this
+        /// enumerates the two domains where non-idempotency actually lives. (1) Every
+        /// single code point — the #498 class (a base exposed by NFKD/strip that only
+        /// resolves on a second pass). (2) Every BMP base × every combining diacritical
+        /// (U+0300–036F) — the #523 class (a fold/transliterate output that composes with
+        /// a following mark, or a composition that exposes a new fold); BMP covers every
+        /// composable Latin/Greek/Cyrillic base, and the astral planes are covered by (1).
+        /// `#[ignore]` (Tier 3): ~1.1M scalars across 5 presets plus ~7.1M BMP base×mark
+        /// pairs across 2 presets, each checked twice — on the order of 40M preset calls,
+        /// a few seconds in release.
+        #[test]
+        #[ignore = "exhaustive: preset idempotency over code points + base×mark; Tier 3"]
+        fn exhaustive_preset_idempotency() {
+            // Generic (monomorphized) so the tens-of-millions of calls in the inner loops
+            // pay no vtable dispatch — Tier-3 runtime stays predictable.
+            fn idem<F: Fn(&str) -> String>(label: &str, f: F, s: &str) {
+                let once = f(s);
+                assert_eq!(once, f(&once), "{label} not idempotent on {s:?}");
+            }
+            let cat = |s: &str| catalog_key(s, None, false).unwrap().into_owned();
+            let ml = |s: &str| ml_normalize(s, None, "cldr").unwrap().into_owned();
+
+            // (1) every single code point, across the key presets.
+            for cp in 0u32..=0x0010_FFFF {
+                let Some(c) = char::from_u32(cp) else {
+                    continue;
+                };
+                let s = c.to_string();
+                idem(
+                    "canonicalize",
+                    |x| canonicalize(x).unwrap().into_owned(),
+                    &s,
+                );
+                idem("sort_key", |x| sort_key(x, None).unwrap().into_owned(), &s);
+                idem(
+                    "search_key",
+                    |x| search_key(x, None).unwrap().into_owned(),
+                    &s,
+                );
+                idem("catalog_key", cat, &s);
+                idem("ml_normalize", ml, &s);
+            }
+
+            // (2) every BMP base × every combining diacritical — the compose/fold class.
+            let marks: Vec<char> = (0x0300u32..=0x036F).filter_map(char::from_u32).collect();
+            for base in (0u32..=0xFFFF).filter_map(char::from_u32) {
+                for &m in &marks {
+                    let s: String = [base, m].iter().collect();
+                    idem("catalog_key", cat, &s);
+                    idem("ml_normalize", ml, &s);
+                }
+            }
+        }
+
         proptest! {
             #![proptest_config(ProptestConfig::with_cases(1000))]
 

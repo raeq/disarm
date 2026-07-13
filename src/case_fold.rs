@@ -386,6 +386,47 @@ mod tests {
         }
     }
 
+    /// Tier-3 exhaustive gate for the case-fold invariants over every code point.
+    ///
+    /// `fold_case` is a *per-code-point* transform (no composition, no cross-char
+    /// state), so a string's fold is exactly the concatenation of its chars' folds.
+    /// That makes single-code-point enumeration a **complete proof** for all inputs —
+    /// not the sampling the `\PC*` proptests below do. Cheap (~1.1M single chars), and
+    /// it catches any table entry whose folded form is not itself fully folded
+    /// (idempotency), reintroduces an ASCII uppercase, or maps to empty. `#[ignore]`
+    /// (Tier 3); run via the `--lib -- --ignored` step.
+    #[test]
+    #[ignore = "exhaustive: every code point through fold_case; run in Tier 3 / pre-release"]
+    fn exhaustive_fold_case_invariants() {
+        for cp in 0u32..=0x0010_FFFF {
+            let Some(ch) = char::from_u32(cp) else {
+                continue; // surrogates
+            };
+            let s = ch.to_string();
+            let once = fold_case_impl(&s);
+            // idempotent
+            assert_eq!(
+                once,
+                fold_case_impl(&once),
+                "fold_case not idempotent on U+{cp:04X}"
+            );
+            // never drops the char
+            assert!(!once.is_empty(), "fold_case emptied U+{cp:04X}");
+            // no residual ASCII uppercase
+            assert!(
+                !once.chars().any(|c| c.is_ascii_uppercase()),
+                "fold_case left ASCII uppercase for U+{cp:04X}: {once:?}"
+            );
+            // ASCII in ⇒ ASCII out
+            if ch.is_ascii() {
+                assert!(
+                    once.is_ascii(),
+                    "fold_case of ASCII U+{cp:04X} is non-ASCII"
+                );
+            }
+        }
+    }
+
     // ── Property-based tests ─────────────────────────────────────────
 
     mod proptest_properties {

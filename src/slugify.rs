@@ -1295,6 +1295,37 @@ mod tests {
         assert!(err.contains("[unclosed"), "pattern not echoed: {err}");
     }
 
+    /// Tier-3 exhaustive gate for the slug *codomain* over every code point.
+    ///
+    /// A slug's character set is a per-code-point property: every output char comes from
+    /// transliterating one input char to ASCII and slug-filtering it, so if every single
+    /// code point slugs to `[a-z0-9-]` (ASCII), so does every string. That makes this a
+    /// **complete proof** of `slugify_output_is_ascii` and the charset-membership half of
+    /// `slugify_output_charset`, where the `\PC*` proptests only sample. (The separator-
+    /// *position* rules — no leading/trailing/`--` — are cross-char and stay with the
+    /// proptests.) `#[ignore]` (Tier 3); run via `--lib -- --ignored`.
+    #[test]
+    #[ignore = "exhaustive: every code point through slugify; run in Tier 3 / pre-release"]
+    fn exhaustive_slug_codomain() {
+        let config = default_config();
+        for cp in 0u32..=0x0010_FFFF {
+            let Some(ch) = char::from_u32(cp) else {
+                continue; // surrogates
+            };
+            let result = slugify_impl(&ch.to_string(), &config);
+            assert!(
+                result.is_ascii(),
+                "non-ASCII slug for U+{cp:04X}: {result:?}"
+            );
+            for c in result.chars() {
+                assert!(
+                    c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-',
+                    "slug of U+{cp:04X} has out-of-charset {c:?}: {result:?}"
+                );
+            }
+        }
+    }
+
     mod proptest_properties {
         use super::*;
         use proptest::prelude::*;

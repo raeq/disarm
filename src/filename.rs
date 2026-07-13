@@ -492,6 +492,52 @@ mod tests {
         // Must be valid UTF-8 (implicit — Rust String guarantees this)
     }
 
+    /// Tier-3 exhaustive gate for `collapse_dot_sequences`.
+    ///
+    /// The collapse state machine turns purely on `.`-vs-not, so two exhaustive sweeps
+    /// prove it completely where the `\PC*` proptests sample: (1) every pattern over
+    /// {`.`, `a`} up to length 12, proving no `".."`, idempotency, and single-dot
+    /// preservation over every dot arrangement; and (2) every non-`.` code point is
+    /// preserved verbatim (per-char property). `#[ignore]` (Tier 3); run via
+    /// `--lib -- --ignored`.
+    #[test]
+    #[ignore = "exhaustive: collapse_dot_sequences over every dot pattern + code point; Tier 3"]
+    fn exhaustive_collapse_dot_sequences() {
+        // (1) every dot arrangement up to length 12.
+        let alphabet = ['.', 'a'];
+        let mut stack = vec![String::new()];
+        while let Some(s) = stack.pop() {
+            let once = collapse_dot_sequences(&s);
+            assert!(!once.contains(".."), "double dots from {s:?} → {once:?}");
+            assert_eq!(
+                once,
+                collapse_dot_sequences(&once),
+                "not idempotent on {s:?}"
+            );
+            if !s.contains("..") {
+                assert_eq!(once, s, "single-dot input altered: {s:?}");
+            }
+            if s.len() < 12 {
+                for &a in &alphabet {
+                    let mut n = s.clone();
+                    n.push(a);
+                    stack.push(n);
+                }
+            }
+        }
+        // (2) every non-dot code point passes through unchanged.
+        for cp in 0u32..=0x0010_FFFF {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            if c == '.' {
+                continue;
+            }
+            let s = c.to_string();
+            assert_eq!(collapse_dot_sequences(&s), s, "dropped non-dot U+{cp:04X}");
+        }
+    }
+
     mod proptest_properties {
         use super::*;
         use proptest::prelude::*;

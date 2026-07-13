@@ -257,6 +257,56 @@ mod tests {
         }
     }
 
+    /// Tier-3 exhaustive gate for the whitespace-collapse invariants (#433).
+    ///
+    /// `collapse_whitespace` treats every whitespace code point *uniformly* (any run of
+    /// fold-whitespace / blank-render collapses to one space, the ends are trimmed), so
+    /// its state machine turns on the whitespace-vs-not *pattern*. Two exhaustive sweeps
+    /// together pin it where the `\PC*` proptests only sample: (1) every code point in a
+    /// run context (`x␟c␟c␟y c z`), proving each is classified so runs collapse
+    /// idempotently with no `"  "` and trimmed ends; and (2) every pattern over {two
+    /// distinct whitespace chars, a non-ws letter} up to length 7, proving the
+    /// collapse/trim state machine on mixed runs and boundaries. `#[ignore]` (Tier 3);
+    /// run via `--lib -- --ignored`.
+    #[test]
+    #[ignore = "exhaustive: whitespace-collapse over every code point + patterns; Tier 3"]
+    fn exhaustive_collapse_whitespace() {
+        let check = |s: &str| {
+            let once = collapse_whitespace(s);
+            assert_eq!(once, collapse_whitespace(&once), "not idempotent on {s:?}");
+            assert!(!once.contains("  "), "double space from {s:?} → {once:?}");
+            if !once.is_empty() {
+                assert_ne!(once.as_bytes()[0], b' ', "leading space from {s:?}");
+                assert_ne!(
+                    *once.as_bytes().last().unwrap(),
+                    b' ',
+                    "trailing space {s:?}"
+                );
+            }
+        };
+        // (1) every code point in a collapsing run context.
+        for cp in 0u32..=0x0010_FFFF {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            check(&format!("x{c}{c}y{c}z"));
+        }
+        // (2) every pattern over {SPACE, NBSP, 'x'} up to length 7 (uniform ws handling
+        //     means two distinct ws chars suffice to exercise mixed runs).
+        let alphabet = [' ', '\u{00A0}', 'x'];
+        let mut stack = vec![String::new()];
+        while let Some(s) = stack.pop() {
+            check(&s);
+            if s.chars().count() < 7 {
+                for &a in &alphabet {
+                    let mut n = s.clone();
+                    n.push(a);
+                    stack.push(n);
+                }
+            }
+        }
+    }
+
     mod proptest_properties {
         use super::*;
         use proptest::prelude::*;

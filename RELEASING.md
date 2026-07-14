@@ -84,6 +84,34 @@ independently without anyone having to guess which core a binding wraps.
 > discipline within `0.x`, but our **major**-version semantics are defined above
 > (support status), not by API compatibility.
 
+### Where the version lives — bump all six
+
+A version bump touches **six** files. Missing one ships inconsistent metadata (the
+`0.11.1` PR initially left the last two stale — caught in review before publish):
+
+1. `Cargo.toml` — `version = "..."`
+2. `pyproject.toml` — `version = "..."`
+3. `bindings/node/package.json` — `"version": "..."`
+4. `bindings/ruby/lib/disarm/version.rb` — `VERSION = "..."`
+5. `CITATION.cff` — `version: "..."` (citation metadata; not near the manifests)
+6. `uv.lock` — the `disarm` editable entry; regenerate with `uv lock`, which bumps
+   only that entry with no dependency churn.
+
+Two things that look like versions but must **not** change: the
+`#[deprecated(since = "X")]` (Rust) and `.. deprecated:: X` (Python docstring) markers
+record the version in which something was *deprecated*, not the current release. The
+binding **glue** crates (`bindings/node/Cargo.toml`, `bindings/ruby/ext/disarm/Cargo.toml`)
+stay pinned at `version = "0.0.0"`; their
+`disarm_core = { package = "disarm", version = "0.<minor>" }` dependency uses a
+**minor-only** requirement, so a patch never touches them — only a minor bumps that pin.
+
+Before tagging, sweep for stray references and eyeball what is left (the surviving hits
+should only be the `deprecated` markers above):
+
+```sh
+grep -rn "<old-version>" --exclude=CHANGELOG.md . | grep -v deprecated
+```
+
 ## Bad releases
 
 A *bad release* is one that should not be used: a security vulnerability, data

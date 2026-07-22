@@ -42,7 +42,7 @@ jobs:
     outputs:
       perf: ${{ steps.f.outputs.perf }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
       - id: f
@@ -75,7 +75,7 @@ jobs:
             echo "::notice::No perf-relevant changes — gate trivially satisfied (required-check shim)."
           fi
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         if: needs.changes.outputs.perf == 'true'
         with:
           fetch-depth: 0 # need the merge-base and both code versions (V12)
@@ -134,7 +134,7 @@ jobs:
     permissions:
       contents: write # append to the perf-results branch (V19)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 

@@ -28,7 +28,7 @@ jobs:
       contents: read   # job-level perms replace workflow-level; checkout needs this
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -39,6 +39,6 @@ jobs:
       - name: List artifacts
         run: ls -lh dist/
       - name: Publish to PyPI (translit-rs)
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # release/v1
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247  # release/v1
         with:
           skip-existing: true

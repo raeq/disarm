@@ -102,13 +102,13 @@ final class NativeLoader {
         throw new DisarmException("unsupported CPU architecture for disarm native library: " + arch);
     }
 
-    /** Platform library filename, e.g. {@code libdisarm.dylib} / {@code disarm.dll}. */
+    /** Platform library filename, e.g. {@code libdisarm_jni.dylib} / {@code disarm_jni.dll}. */
     private static String libName() {
         String os = osToken();
         if (os.equals("windows")) {
-            return "disarm.dll";
+            return "disarm_jni.dll";
         }
-        return "libdisarm" + libSuffix();
+        return "libdisarm_jni" + libSuffix();
     }
 
     private static String libSuffix() {

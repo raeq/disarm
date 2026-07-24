@@ -18,10 +18,12 @@ license = "MIT"
 description = "JVM (JNI) bindings for disarm — Unicode confusable/text-security building blocks"
 
 [lib]
-# The JVM loads `libdisarm.{dylib,so}` / `disarm.dll`; the `NativeLoader` extracts
-# it from the JAR by this base name. Distinct from the crate/package name so the
-# `disarm_core::` import alias stays unambiguous.
-name = "disarm"
+# The JVM loads `libdisarm_jni.{dylib,so}` / `disarm_jni.dll`; the `NativeLoader`
+# extracts it from the JAR by this base name. The `_jni` suffix keeps the output
+# filename distinct from the core crate's own `libdisarm` cdylib (they otherwise
+# collide under the dev `[patch.crates-io]` redirect) — and the JNI symbol lookup
+# is by symbol name, independent of the shared-object filename.
+name = "disarm_jni"
 crate-type = ["cdylib"]
 
 [dependencies]

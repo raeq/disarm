@@ -457,10 +457,11 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java }}
 
-      - name: Build the native lib + run the coverage-gated suite against the local core
-        # `check` runs JUnit + the JaCoCo ≥90% line-coverage gate; the committed
-        # Gradle wrapper builds the JNI cdylib (cargoBuild) against the local core.
-        run: ./gradlew --no-daemon :disarm-java:check
+      - name: Build the native lib + run the coverage-gated suites against the local core
+        # `check` runs both modules — disarm-java (JUnit) and disarm-kotlin (kotlin
+        # .test) — plus their JaCoCo ≥90% line-coverage gates; the committed Gradle
+        # wrapper builds the JNI cdylib (cargoBuild) against the local core.
+        run: ./gradlew --no-daemon check
 
 
   cabi:

@@ -35,10 +35,9 @@ safer-ffi = "0.1"
 # `cargo test --features headers -- generate_headers` writes the C header.
 headers = ["safer-ffi/headers"]
 
-# DEV-ONLY: build against the in-repo core (offline, tracks unreleased changes).
-# The published binding ships WITHOUT this block; CI injects the redirect.
-[patch.crates-io]
-disarm = { path = "../.." }
+# NOTE: no committed `[patch.crates-io]` — the shipped manifest builds against the
+# PUBLISHED `disarm` core. CI injects `disarm = { path = "../.." }` to drift-gate
+# against the in-repo core; apply that redirect yourself to build vs a local core.
 
 [profile.release]
 lto = true

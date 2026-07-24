@@ -1,0 +1,48 @@
+# JNI native shim for the pure-Rust `disarm` core (JVM binding — Java/Kotlin).
+#
+# Mirrors the Node (bindings/node) and Ruby (bindings/ruby/ext/disarm) glue crates:
+# it wraps the published `disarm` crate — a REGISTRY dependency, never a path — so
+# the per-platform cross-build containers (which mount only this directory) can
+# fetch it. The core is imported under the alias `disarm_core` because the package
+# name `disarm` would clash with the shared-object name this crate emits.
+#
+# This is the RAW native shim (Layer A). The idiomatic Java surface lives in
+# ../disarm-java (Layer C-Java); idiomatic Kotlin will live in ../disarm-kotlin.
+[package]
+name = "disarm-jni"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+license = "MIT"
+description = "JVM (JNI) bindings for disarm — Unicode confusable/text-security building blocks"
+
+[lib]
+# The JVM loads `libdisarm.{dylib,so}` / `disarm.dll`; the `NativeLoader` extracts
+# it from the JAR by this base name. Distinct from the crate/package name so the
+# `disarm_core::` import alias stays unambiguous.
+name = "disarm"
+crate-type = ["cdylib"]
+
+[dependencies]
+# The pure-Rust core (default features = pyo3-free). A registry dep — not a path —
+# so the binding is self-contained and per-platform cross-builds (which mount only
+# this dir) can fetch it. Imported as `disarm_core` (package name `disarm` clashes
+# with this crate's shared-object name).
+disarm_core = { package = "disarm", version = "0.11", default-features = false }
+# Ergonomic, safe(ish) JNI over jni-sys. 0.22 is the current stable line and
+# supports the Java 21 floor (and forward). Unlike the core, this glue crate must
+# permit `unsafe` — the JNI ABI is inherently unsafe — but scoped to the boundary.
+jni = "0.22"
+
+# DEV-ONLY: build the shim against the in-repo core instead of the crates.io
+# release, so a spike/CI run needs no network and tracks unreleased core changes.
+# The published binding ships WITHOUT this block (like Node/Ruby); CI injects the
+# equivalent redirect. See .claude/CLAUDE.md ("apply its [patch.crates-io] redirect
+# first") and scripts/perf_lint.sh.
+[patch.crates-io]
+disarm = { path = "../../.." }
+
+[profile.release]
+lto = true
+strip = "symbols"

@@ -46,7 +46,9 @@
     )
 )]
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{LazyLock, RwLock};
 
 use disarm_core::api;
 use jni::errors::{Error as JniError, Result as JniResult};
@@ -818,10 +820,42 @@ pub extern "system" fn Java_com_disarm_internal_Native_listContextLangs<'l>(
 // ── Reusable handles (opaque jlong pointers) ────────────────────────────────────
 //
 // `Pipeline` and `Lexicon` compile/build once and are reused across calls, so the
-// build cost is paid a single time (matters for the perf mandate). The handle is a
-// boxed pointer returned as a `jlong`; the idiomatic Java wrapper is `AutoCloseable`
-// (and registers a `Cleaner`) so the box is freed exactly once. Deref of a handle
-// is `unsafe` — the Java lifecycle guarantees it is live and non-aliased.
+// build cost is paid a single time (matters for the perf mandate). Handles are
+// **opaque integer IDs into a safe registry** — NOT raw pointers — so the binding
+// needs no `unsafe` deref (the only remaining `unsafe` is the unavoidable
+// `#[unsafe(no_mangle)]` JNI export marker). A freed/unknown handle is a clean
+// thrown exception, not undefined behaviour. The idiomatic Java wrapper is
+// `AutoCloseable` (+ a `Cleaner` backstop) so each handle is freed exactly once.
+
+/// Registry of live pipelines, keyed by the opaque handle handed to Java.
+static PIPELINES: LazyLock<RwLock<HashMap<i64, api::Pipeline>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+/// Registry of live anomaly lexicons.
+static LEXICONS: LazyLock<RwLock<HashMap<i64, HashSet<String>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+/// Monotonic handle allocator (never reuses an ID, so a stale handle can't alias).
+static NEXT_HANDLE: AtomicI64 = AtomicI64::new(1);
+
+fn next_handle() -> i64 {
+    NEXT_HANDLE.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Acquire a write guard, recovering the map if a prior holder panicked (a poisoned
+/// lock is not a reason to abort a registry insert/remove).
+fn write_registry<V>(
+    lock: &RwLock<HashMap<i64, V>>,
+) -> std::sync::RwLockWriteGuard<'_, HashMap<i64, V>> {
+    lock.write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Acquire a read guard, recovering from poisoning as above.
+fn read_registry<V>(
+    lock: &RwLock<HashMap<i64, V>>,
+) -> std::sync::RwLockReadGuard<'_, HashMap<i64, V>> {
+    lock.read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 /// Compile a named-policy pipeline; returns an opaque handle (throws on unknown profile).
 #[unsafe(no_mangle)]
@@ -833,14 +867,18 @@ pub extern "system" fn Java_com_disarm_internal_Native_pipelineNew<'l>(
     env.with_env(|env| -> JniResult<jlong> {
         let profile = profile.mutf8_chars(env)?.to_string();
         match api::get_pipeline(&profile) {
-            Ok(p) => Ok(Box::into_raw(Box::new(p)) as jlong),
+            Ok(p) => {
+                let id = next_handle();
+                write_registry(&PIPELINES).insert(id, p);
+                Ok(id)
+            }
             Err(e) => Err(throw_core(env, &e)),
         }
     })
     .resolve::<Policy>()
 }
 
-/// Run a pipeline handle over `text` (throws on a processing error).
+/// Run a pipeline handle over `text` (throws on a processing error or stale handle).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_disarm_internal_Native_pipelineProcess<'l>(
     mut env: EnvUnowned<'l>,
@@ -850,9 +888,10 @@ pub extern "system" fn Java_com_disarm_internal_Native_pipelineProcess<'l>(
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
         let text = input.mutf8_chars(env)?.to_string();
-        // SAFETY: `handle` came from pipelineNew and is not yet freed; the Java
-        // Pipeline wrapper guarantees liveness and single-threaded non-aliasing.
-        let pipeline = unsafe { &*(handle as *const api::Pipeline) };
+        let registry = read_registry(&PIPELINES);
+        let Some(pipeline) = registry.get(&handle) else {
+            return Err(throw_invalid(env, "invalid or closed Pipeline handle"));
+        };
         match pipeline.process(&text) {
             Ok(s) => Ok(env.new_string(s)?.into()),
             Err(e) => Err(throw_core(env, &e)),
@@ -861,18 +900,14 @@ pub extern "system" fn Java_com_disarm_internal_Native_pipelineProcess<'l>(
     .resolve::<Policy>()
 }
 
-/// Free a pipeline handle. Idempotency is the caller's responsibility (the Java
-/// wrapper calls this exactly once).
+/// Free a pipeline handle (removing it from the registry). Idempotent.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_disarm_internal_Native_pipelineFree(
     _env: EnvUnowned,
     _class: JClass,
     handle: jlong,
 ) {
-    if handle != 0 {
-        // SAFETY: reclaim the Box created in pipelineNew; called exactly once.
-        drop(unsafe { Box::from_raw(handle as *mut api::Pipeline) });
-    }
+    write_registry(&PIPELINES).remove(&handle);
 }
 
 /// Build a reusable lexicon (anomaly wordlist); returns an opaque handle.
@@ -884,25 +919,25 @@ pub extern "system" fn Java_com_disarm_internal_Native_lexiconNew<'l>(
 ) -> jlong {
     env.with_env(|env| -> JniResult<jlong> {
         let set = api::lexicon(read_string_array(env, &words)?);
-        Ok(Box::into_raw(Box::new(set)) as jlong)
+        let id = next_handle();
+        write_registry(&LEXICONS).insert(id, set);
+        Ok(id)
     })
     .resolve::<Policy>()
 }
 
-/// Free a lexicon handle.
+/// Free a lexicon handle. Idempotent.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_disarm_internal_Native_lexiconFree(
     _env: EnvUnowned,
     _class: JClass,
     handle: jlong,
 ) {
-    if handle != 0 {
-        // SAFETY: reclaim the Box created in lexiconNew; called exactly once.
-        drop(unsafe { Box::from_raw(handle as *mut HashSet<String>) });
-    }
+    write_registry(&LEXICONS).remove(&handle);
 }
 
-/// Whether `text` trips any anomaly against a prebuilt lexicon handle.
+/// Whether `text` trips any anomaly against a prebuilt lexicon handle (throws on a
+/// stale handle).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_disarm_internal_Native_hasAnomalies<'l>(
     mut env: EnvUnowned<'l>,
@@ -912,8 +947,10 @@ pub extern "system" fn Java_com_disarm_internal_Native_hasAnomalies<'l>(
 ) -> jboolean {
     env.with_env(|env| -> JniResult<jboolean> {
         let text = input.mutf8_chars(env)?.to_string();
-        // SAFETY: `lexicon` came from lexiconNew and is not yet freed.
-        let set = unsafe { &*(lexicon as *const HashSet<String>) };
+        let registry = read_registry(&LEXICONS);
+        let Some(set) = registry.get(&lexicon) else {
+            return Err(throw_invalid(env, "invalid or closed Lexicon handle"));
+        };
         Ok(api::has_anomalies(&text, set))
     })
     .resolve::<Policy>()

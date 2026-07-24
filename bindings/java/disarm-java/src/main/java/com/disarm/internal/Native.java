@@ -125,4 +125,19 @@ public final class Native {
     public static native String[] listScripts();
 
     public static native String[] listContextLangs();
+
+    // ── Reusable handles (opaque jlong pointers) ───────────────────────────────
+    public static native long pipelineNew(String profile);
+
+    public static native String pipelineProcess(long handle, String text);
+
+    public static native void pipelineFree(long handle);
+
+    public static native long lexiconNew(String[] words);
+
+    public static native void lexiconFree(long handle);
+
+    public static native boolean hasAnomalies(String text, long lexicon);
+
+    public static native boolean hasAnomaliesWords(String text, String[] words);
 }

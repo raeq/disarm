@@ -46,6 +46,8 @@
     )
 )]
 
+use std::collections::HashSet;
+
 use disarm_core::api;
 use jni::errors::{Error as JniError, Result as JniResult};
 use jni::objects::{JClass, JObject, JObjectArray, JString};
@@ -781,7 +783,10 @@ pub extern "system" fn Java_com_disarm_internal_Native_detectScripts<'l>(
     input: JString<'l>,
 ) -> JObject<'l> {
     map_str_array(env, input, |t| {
-        api::detect_scripts(t).into_iter().map(str::to_owned).collect()
+        api::detect_scripts(t)
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
     })
 }
 
@@ -808,4 +813,124 @@ pub extern "system" fn Java_com_disarm_internal_Native_listContextLangs<'l>(
             .map(str::to_owned)
             .collect()
     })
+}
+
+// ── Reusable handles (opaque jlong pointers) ────────────────────────────────────
+//
+// `Pipeline` and `Lexicon` compile/build once and are reused across calls, so the
+// build cost is paid a single time (matters for the perf mandate). The handle is a
+// boxed pointer returned as a `jlong`; the idiomatic Java wrapper is `AutoCloseable`
+// (and registers a `Cleaner`) so the box is freed exactly once. Deref of a handle
+// is `unsafe` — the Java lifecycle guarantees it is live and non-aliased.
+
+/// Compile a named-policy pipeline; returns an opaque handle (throws on unknown profile).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_pipelineNew<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    profile: JString<'l>,
+) -> jlong {
+    env.with_env(|env| -> JniResult<jlong> {
+        let profile = profile.mutf8_chars(env)?.to_string();
+        match api::get_pipeline(&profile) {
+            Ok(p) => Ok(Box::into_raw(Box::new(p)) as jlong),
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
+/// Run a pipeline handle over `text` (throws on a processing error).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_pipelineProcess<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    handle: jlong,
+    input: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        // SAFETY: `handle` came from pipelineNew and is not yet freed; the Java
+        // Pipeline wrapper guarantees liveness and single-threaded non-aliasing.
+        let pipeline = unsafe { &*(handle as *const api::Pipeline) };
+        match pipeline.process(&text) {
+            Ok(s) => Ok(env.new_string(s)?.into()),
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
+/// Free a pipeline handle. Idempotency is the caller's responsibility (the Java
+/// wrapper calls this exactly once).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_pipelineFree(
+    _env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+) {
+    if handle != 0 {
+        // SAFETY: reclaim the Box created in pipelineNew; called exactly once.
+        drop(unsafe { Box::from_raw(handle as *mut api::Pipeline) });
+    }
+}
+
+/// Build a reusable lexicon (anomaly wordlist); returns an opaque handle.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_lexiconNew<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    words: JObjectArray<'l, JString<'l>>,
+) -> jlong {
+    env.with_env(|env| -> JniResult<jlong> {
+        let set = api::lexicon(read_string_array(env, &words)?);
+        Ok(Box::into_raw(Box::new(set)) as jlong)
+    })
+    .resolve::<Policy>()
+}
+
+/// Free a lexicon handle.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_lexiconFree(
+    _env: EnvUnowned,
+    _class: JClass,
+    handle: jlong,
+) {
+    if handle != 0 {
+        // SAFETY: reclaim the Box created in lexiconNew; called exactly once.
+        drop(unsafe { Box::from_raw(handle as *mut HashSet<String>) });
+    }
+}
+
+/// Whether `text` trips any anomaly against a prebuilt lexicon handle.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_hasAnomalies<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    lexicon: jlong,
+) -> jboolean {
+    env.with_env(|env| -> JniResult<jboolean> {
+        let text = input.mutf8_chars(env)?.to_string();
+        // SAFETY: `lexicon` came from lexiconNew and is not yet freed.
+        let set = unsafe { &*(lexicon as *const HashSet<String>) };
+        Ok(api::has_anomalies(&text, set))
+    })
+    .resolve::<Policy>()
+}
+
+/// Whether `text` trips any anomaly against an inline word list (per-call set build).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_hasAnomaliesWords<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    words: JObjectArray<'l, JString<'l>>,
+) -> jboolean {
+    env.with_env(|env| -> JniResult<jboolean> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let set = api::lexicon(read_string_array(env, &words)?);
+        Ok(api::has_anomalies(&text, &set))
+    })
+    .resolve::<Policy>()
 }

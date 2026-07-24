@@ -305,4 +305,30 @@ public final class Disarm {
     public static List<String> listContextLangs() {
         return List.of(Native.listContextLangs());
     }
+
+    // ── Reusable handles & anomalies ────────────────────────────────────────────
+
+    /**
+     * Build a reusable {@link Pipeline} for a named policy profile. Throws
+     * {@link DisarmInvalidArgumentException} on an unknown profile. The returned
+     * pipeline holds a native resource — close it (try-with-resources).
+     */
+    public static Pipeline getPipeline(String profile) {
+        Objects.requireNonNull(profile, "profile");
+        return new Pipeline(Native.pipelineNew(profile));
+    }
+
+    /** Whether {@code text} trips any anomaly against a word list (per-call set build). */
+    public static boolean hasAnomalies(String text, List<String> words) {
+        req(text);
+        Objects.requireNonNull(words, "words");
+        return Native.hasAnomaliesWords(text, words.toArray(new String[0]));
+    }
+
+    /** Whether {@code text} trips any anomaly against a prebuilt {@link Lexicon}. */
+    public static boolean hasAnomalies(String text, Lexicon lexicon) {
+        req(text);
+        Objects.requireNonNull(lexicon, "lexicon");
+        return Native.hasAnomalies(text, lexicon.handle());
+    }
 }

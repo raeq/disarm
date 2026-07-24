@@ -95,10 +95,19 @@ public final class Native {
 
     public static native long terminalWidth(String text, boolean ambiguousWide);
 
+    public static native String[] graphemeSplit(String text);
+
     // ── Hostname / script analysis ─────────────────────────────────────────────
     public static native boolean isSuspiciousHostname(String host);
 
     public static native boolean isMixedScript(String text);
 
     public static native boolean hasBidiConflict(String text);
+
+    public static native String[] detectScripts(String text);
+
+    // ── Metadata listings ──────────────────────────────────────────────────────
+    public static native String[] listScripts();
+
+    public static native String[] listContextLangs();
 }

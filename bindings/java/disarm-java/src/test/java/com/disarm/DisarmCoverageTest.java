@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -108,5 +109,31 @@ class DisarmCoverageTest {
     @Test
     void normalizeConfusablesToCyrillic() {
         assertTrue(Disarm.normalizeConfusables("abc", TargetScript.CYRILLIC) != null);
+    }
+
+    // ── Collection returns ──────────────────────────────────────────────────────
+
+    @Test
+    void graphemeSplitClusters() {
+        assertEquals(List.of("a", "b", "c"), Disarm.graphemeSplit("abc"));
+    }
+
+    @Test
+    void detectScriptsFindsBoth() {
+        List<String> scripts = Disarm.detectScripts("aа"); // Latin a + Cyrillic а
+        assertTrue(scripts.contains("Latin"), scripts.toString());
+        assertTrue(scripts.contains("Cyrillic"), scripts.toString());
+    }
+
+    @Test
+    void listScriptsAndContextLangsNonEmpty() {
+        assertTrue(Disarm.listScripts().contains("Latin"));
+        assertFalse(Disarm.listContextLangs().isEmpty());
+    }
+
+    @Test
+    void collectionNullArgsThrow() {
+        assertThrows(NullPointerException.class, () -> Disarm.graphemeSplit(null));
+        assertThrows(NullPointerException.class, () -> Disarm.detectScripts(null));
     }
 }

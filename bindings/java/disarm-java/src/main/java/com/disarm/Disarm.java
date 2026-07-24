@@ -1,6 +1,7 @@
 package com.disarm;
 
 import com.disarm.internal.Native;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -200,6 +201,11 @@ public final class Disarm {
         return Native.graphemeTruncate(req(text), maxGraphemes);
     }
 
+    /** Split {@code text} into its grapheme clusters, in order. */
+    public static List<String> graphemeSplit(String text) {
+        return List.of(Native.graphemeSplit(req(text)));
+    }
+
     /** Display width of a single grapheme cluster (narrow ambiguous). */
     public static long graphemeWidth(String cluster) {
         return graphemeWidth(cluster, false);
@@ -236,5 +242,22 @@ public final class Disarm {
     /** Whether {@code text} mixes strong LTR and strong RTL characters ("BiDi Swap" precondition). */
     public static boolean hasBidiConflict(String text) {
         return Native.hasBidiConflict(req(text));
+    }
+
+    /** The Unicode scripts present in {@code text}, in first-appearance order (UCD identifiers). */
+    public static List<String> detectScripts(String text) {
+        return List.of(Native.detectScripts(req(text)));
+    }
+
+    // ── Metadata listings ──────────────────────────────────────────────────────
+
+    /** Every Unicode script name known to the transliteration tables. */
+    public static List<String> listScripts() {
+        return List.of(Native.listScripts());
+    }
+
+    /** Every language code that has a context-aware transliteration profile. */
+    public static List<String> listContextLangs() {
+        return List.of(Native.listContextLangs());
     }
 }

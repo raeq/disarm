@@ -50,7 +50,7 @@ use disarm_core::api;
 use jni::errors::{Error as JniError, Result as JniResult};
 use jni::objects::{JClass, JObject, JString};
 use jni::strings::JNIString;
-use jni::sys::{jboolean, jlong};
+use jni::sys::{jboolean, jlong, jsize};
 use jni::{Env, EnvUnowned};
 
 /// The error/panic → Java-exception mapping used to `resolve` every entry point.
@@ -142,6 +142,39 @@ fn map_long<'l>(mut env: EnvUnowned<'l>, input: JString<'l>, f: impl FnOnce(&str
         Ok(f(&text))
     })
     .resolve::<Policy>()
+}
+
+/// `String -> String[]`, infallible.
+fn map_str_array<'l>(
+    mut env: EnvUnowned<'l>,
+    input: JString<'l>,
+    f: impl FnOnce(&str) -> Vec<String>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        new_string_array(env, &f(&text))
+    })
+    .resolve::<Policy>()
+}
+
+/// `() -> String[]`, infallible (metadata listings with no text argument).
+fn map_str_array_nullary<'l>(
+    mut env: EnvUnowned<'l>,
+    f: impl FnOnce() -> Vec<String>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> { new_string_array(env, &f()) })
+        .resolve::<Policy>()
+}
+
+/// Build a Java `String[]` from a slice of Rust strings.
+fn new_string_array<'l>(env: &mut Env<'l>, items: &[String]) -> JniResult<JObject<'l>> {
+    let len = jsize::try_from(items.len()).unwrap_or(jsize::MAX);
+    let array = env.new_object_array(len, JNIString::from("java/lang/String"), JObject::null())?;
+    for (i, s) in items.iter().enumerate() {
+        let element = env.new_string(s)?;
+        array.set_element(env, i, &element)?;
+    }
+    Ok(array.into())
 }
 
 /// Validate a size/threshold argument (JVM `long`, so negatives arrive intact
@@ -662,4 +695,53 @@ pub extern "system" fn Java_com_disarm_internal_Native_hasBidiConflict<'l>(
     input: JString<'l>,
 ) -> jboolean {
     map_bool(env, input, api::has_bidi_conflict)
+}
+
+// ── String-array returns ────────────────────────────────────────────────────────
+
+/// Split `text` into its grapheme clusters (user-perceived characters), in order.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_graphemeSplit<'l>(
+    env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+) -> JObject<'l> {
+    map_str_array(env, input, api::grapheme_split)
+}
+
+/// The Unicode scripts present, in first-appearance order (Common/Inherited excluded).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_detectScripts<'l>(
+    env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+) -> JObject<'l> {
+    map_str_array(env, input, |t| {
+        api::detect_scripts(t).into_iter().map(str::to_owned).collect()
+    })
+}
+
+/// Every Unicode script name known to the transliteration tables.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_listScripts<'l>(
+    env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+) -> JObject<'l> {
+    map_str_array_nullary(env, || {
+        api::list_scripts().into_iter().map(str::to_owned).collect()
+    })
+}
+
+/// Every language code that has a context-aware transliteration profile.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_disarm_internal_Native_listContextLangs<'l>(
+    env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+) -> JObject<'l> {
+    map_str_array_nullary(env, || {
+        api::list_context_langs()
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
+    })
 }

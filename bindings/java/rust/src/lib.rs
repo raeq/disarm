@@ -136,11 +136,7 @@ fn map_bool<'l>(
 }
 
 /// `String -> long`, infallible (widths / counts, cast from `usize`).
-fn map_long<'l>(
-    mut env: EnvUnowned<'l>,
-    input: JString<'l>,
-    f: impl FnOnce(&str) -> i64,
-) -> jlong {
+fn map_long<'l>(mut env: EnvUnowned<'l>, input: JString<'l>, f: impl FnOnce(&str) -> i64) -> jlong {
     env.with_env(|env| -> JniResult<jlong> {
         let text = input.mutf8_chars(env)?.to_string();
         Ok(f(&text))
@@ -201,7 +197,9 @@ pub extern "system" fn Java_com_disarm_internal_Native_reverseTransliterate<'l>(
         let text = input.mutf8_chars(env)?.to_string();
         let lang = lang.mutf8_chars(env)?.to_string();
         match lang.parse::<api::ReverseLang>() {
-            Ok(lang) => Ok(env.new_string(api::reverse_transliterate(&text, lang))?.into()),
+            Ok(lang) => Ok(env
+                .new_string(api::reverse_transliterate(&text, lang))?
+                .into()),
             Err(e) => Err(throw_core(env, &e)),
         }
     })
@@ -249,7 +247,7 @@ pub extern "system" fn Java_com_disarm_internal_Native_normalizeConfusables<'l>(
         let target = target.mutf8_chars(env)?.to_string();
         match target.parse::<api::TargetScript>() {
             Ok(target) => Ok(env
-                .new_string(api::normalize_confusables(&text, target).into_owned())?
+                .new_string(api::normalize_confusables(&text, target).as_ref())?
                 .into()),
             Err(e) => Err(throw_core(env, &e)),
         }
@@ -497,7 +495,7 @@ pub extern "system" fn Java_com_disarm_internal_Native_searchKey<'l>(
         let text = input.mutf8_chars(env)?.to_string();
         let lang = read_optional(env, &lang)?;
         match api::search_key(&text, lang.as_deref()) {
-            Ok(s) => Ok(env.new_string(s.into_owned())?.into()),
+            Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
             Err(e) => Err(throw_core(env, &e)),
         }
     })
@@ -515,7 +513,7 @@ pub extern "system" fn Java_com_disarm_internal_Native_sortKey<'l>(
         let text = input.mutf8_chars(env)?.to_string();
         let lang = read_optional(env, &lang)?;
         match api::sort_key(&text, lang.as_deref()) {
-            Ok(s) => Ok(env.new_string(s.into_owned())?.into()),
+            Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
             Err(e) => Err(throw_core(env, &e)),
         }
     })
@@ -535,7 +533,7 @@ pub extern "system" fn Java_com_disarm_internal_Native_catalogKey<'l>(
         let text = input.mutf8_chars(env)?.to_string();
         let lang = read_optional(env, &lang)?;
         match api::catalog_key(&text, lang.as_deref(), strict) {
-            Ok(s) => Ok(env.new_string(s.into_owned())?.into()),
+            Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
             Err(e) => Err(throw_core(env, &e)),
         }
     })

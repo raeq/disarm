@@ -1,5 +1,6 @@
 plugins {
     `java-library`
+    jacoco
 }
 
 group = "com.disarm"
@@ -84,4 +85,35 @@ tasks.test {
     testLogging {
         events("passed", "skipped", "failed")
     }
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+// ── Coverage (JaCoCo) ───────────────────────────────────────────────────────────
+
+jacoco {
+    toolVersion = "0.8.13" // supports the Java 21 class-file format
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.test)
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                minimum = "0.90".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }

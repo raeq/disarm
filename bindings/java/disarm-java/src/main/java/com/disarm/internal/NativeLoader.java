@@ -17,14 +17,14 @@ import java.util.Locale;
  *   <li><b>Dev override</b> — the {@code disarm.native.lib} system property or
  *       {@code DISARM_NATIVE_LIB} env var, an absolute path to a freshly built
  *       shared object. Lets a spike / local build point at
- *       {@code rust/target/release/libdisarm.dylib} with no packaging step.</li>
+ *       {@code rust/target/release/libdisarm_jni.dylib} with no packaging step.</li>
  *   <li><b>Bundled resource</b> — {@code /com/disarm/native/<os>-<arch>/<lib>}
  *       inside the JAR (the {@code sqlite-jdbc}/{@code jansi} fat-JAR model),
  *       extracted to a temp file and {@link System#load(String)}ed.</li>
  * </ol>
  *
- * <p>Idempotent: {@link #load()} runs the resolution once; callers just trigger
- * the {@code Native} class initializer.
+ * <p>Platform detection is factored into pure, package-private helpers so every
+ * OS/arch branch is unit-testable on any host.
  */
 final class NativeLoader {
 
@@ -36,18 +36,37 @@ final class NativeLoader {
         if (loaded) {
             return;
         }
+        System.load(resolveLibraryPath());
+        loaded = true;
+    }
 
-        String override = System.getProperty("disarm.native.lib");
-        if (override == null || override.isEmpty()) {
-            override = System.getenv("DISARM_NATIVE_LIB");
+    /**
+     * Resolve the absolute path of the native library to load: the dev override if
+     * set, otherwise the platform resource extracted to a temp file. Split out from
+     * {@link #load()} so both branches are testable without the (unrepeatable)
+     * {@link System#load} side effect.
+     */
+    static String resolveLibraryPath() {
+        String override = overridePath();
+        if (override != null) {
+            return override;
         }
-        if (override != null && !override.isEmpty()) {
-            System.load(override);
-            loaded = true;
-            return;
-        }
+        return extractBundledLibrary(resourcePath(osArch(), libFileName(osToken())))
+                .toAbsolutePath()
+                .toString();
+    }
 
-        String resource = resourcePath();
+    /** The dev-override library path from the property/env, or {@code null} if unset. */
+    static String overridePath() {
+        String p = System.getProperty("disarm.native.lib");
+        if (p == null || p.isEmpty()) {
+            p = System.getenv("DISARM_NATIVE_LIB");
+        }
+        return (p == null || p.isEmpty()) ? null : p;
+    }
+
+    /** Extract the classpath resource to a temp file and return its path. */
+    static Path extractBundledLibrary(String resource) {
         try (InputStream in = NativeLoader.class.getResourceAsStream(resource)) {
             if (in == null) {
                 throw new DisarmException(
@@ -57,28 +76,36 @@ final class NativeLoader {
                                 + "DISARM_NATIVE_LIB) to a built shared object, or use a JAR that "
                                 + "bundles the native library for this platform.");
             }
-            Path tmp = Files.createTempFile("libdisarm", libSuffix());
+            Path tmp = Files.createTempFile("libdisarm_jni", suffixOf(resource));
             tmp.toFile().deleteOnExit();
             Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING);
-            System.load(tmp.toAbsolutePath().toString());
-            loaded = true;
+            return tmp;
         } catch (IOException e) {
             throw new DisarmException("failed to extract the disarm native library: " + e, e);
         }
     }
 
-    /** Classpath resource path of the bundled library for the running platform. */
-    private static String resourcePath() {
-        return "/com/disarm/native/" + osArch() + "/" + libName();
+    /** Classpath resource path for the given {@code <os>-<arch>} tag and lib filename. */
+    static String resourcePath(String osArch, String libFileName) {
+        return "/com/disarm/native/" + osArch + "/" + libFileName;
     }
 
-    /** {@code <os>-<arch>} tag, e.g. {@code darwin-aarch64}, {@code linux-x86_64}. */
+    /** {@code <os>-<arch>} tag for the running platform, e.g. {@code darwin-aarch64}. */
     static String osArch() {
         return osToken() + "-" + archToken();
     }
 
     private static String osToken() {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        return osToken(System.getProperty("os.name", ""));
+    }
+
+    private static String archToken() {
+        return archToken(System.getProperty("os.arch", ""));
+    }
+
+    /** Normalize an {@code os.name} value to {@code darwin} / {@code windows} / {@code linux}. */
+    static String osToken(String osName) {
+        String os = osName.toLowerCase(Locale.ROOT);
         if (os.contains("mac") || os.contains("darwin")) {
             return "darwin";
         }
@@ -88,34 +115,33 @@ final class NativeLoader {
         if (os.contains("nux") || os.contains("nix")) {
             return "linux";
         }
-        throw new DisarmException("unsupported OS for disarm native library: " + os);
+        throw new DisarmException("unsupported OS for disarm native library: " + osName);
     }
 
-    private static String archToken() {
-        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
-        if (arch.equals("aarch64") || arch.equals("arm64")) {
+    /** Normalize an {@code os.arch} value to {@code aarch64} / {@code x86_64}. */
+    static String archToken(String arch) {
+        String a = arch.toLowerCase(Locale.ROOT);
+        if (a.equals("aarch64") || a.equals("arm64")) {
             return "aarch64";
         }
-        if (arch.equals("x86_64") || arch.equals("amd64")) {
+        if (a.equals("x86_64") || a.equals("amd64")) {
             return "x86_64";
         }
         throw new DisarmException("unsupported CPU architecture for disarm native library: " + arch);
     }
 
     /** Platform library filename, e.g. {@code libdisarm_jni.dylib} / {@code disarm_jni.dll}. */
-    private static String libName() {
-        String os = osToken();
-        if (os.equals("windows")) {
-            return "disarm_jni.dll";
-        }
-        return "libdisarm_jni" + libSuffix();
+    static String libFileName(String osToken) {
+        return switch (osToken) {
+            case "windows" -> "disarm_jni.dll";
+            case "darwin" -> "libdisarm_jni.dylib";
+            default -> "libdisarm_jni.so";
+        };
     }
 
-    private static String libSuffix() {
-        return switch (osToken()) {
-            case "darwin" -> ".dylib";
-            case "windows" -> ".dll";
-            default -> ".so";
-        };
+    /** The filename suffix (incl. dot) of a resource path, for the temp-file extension. */
+    private static String suffixOf(String resource) {
+        int dot = resource.lastIndexOf('.');
+        return dot < 0 ? "" : resource.substring(dot);
     }
 }

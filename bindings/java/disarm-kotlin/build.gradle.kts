@@ -1,6 +1,8 @@
 plugins {
-    kotlin("jvm") version "2.1.0"
+    kotlin("jvm") // version declared in the root build (applied here)
     jacoco
+    `maven-publish`
+    signing
 }
 
 group = "com.disarm"
@@ -8,6 +10,11 @@ version = "0.11.0" // lockstep with the core
 
 kotlin {
     jvmToolchain(21)
+}
+
+java {
+    withSourcesJar()
+    withJavadocJar() // empty (Kotlin uses KDoc); Central accepts it
 }
 
 repositories {
@@ -59,4 +66,54 @@ tasks.jacocoTestCoverageVerification {
 
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
+}
+
+// ── Publishing ──────────────────────────────────────────────────────────────────
+// A thin artifact that depends (api) on com.disarm:disarm, so consumers get the
+// native fat JAR transitively. The project() dependency is resolved to
+// com.disarm:disarm:<version> in the generated POM by Gradle's native maven-publish.
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+            artifactId = "disarm-kotlin"
+            pom {
+                name.set("disarm-kotlin")
+                description.set("Idiomatic Kotlin API for disarm — Unicode confusable / text-security building blocks")
+                url.set("https://github.com/raeq/disarm")
+                licenses {
+                    license {
+                        name.set("MIT License")
+                        url.set("https://opensource.org/licenses/MIT")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("raeq")
+                        name.set("Richard Quinn")
+                    }
+                }
+                scm {
+                    url.set("https://github.com/raeq/disarm")
+                    connection.set("scm:git:https://github.com/raeq/disarm.git")
+                    developerConnection.set("scm:git:ssh://git@github.com/raeq/disarm.git")
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "staging"
+            url = rootProject.layout.buildDirectory.dir("staging-deploy").get().asFile.toURI()
+        }
+    }
+}
+
+signing {
+    val signingKey = providers.gradleProperty("signingInMemoryKey").orNull
+    val signingPassword = providers.gradleProperty("signingInMemoryKeyPassword").orNull
+    if (signingKey != null) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign(publishing.publications["maven"])
+    }
 }

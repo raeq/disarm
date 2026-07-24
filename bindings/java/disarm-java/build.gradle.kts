@@ -1,6 +1,8 @@
 plugins {
     `java-library`
     jacoco
+    `maven-publish`
+    signing
 }
 
 group = "com.disarm"
@@ -58,7 +60,11 @@ val builtLibName: String = when {
     else -> "libdisarm_jni.so"
 }
 
-val cargoBuild by tasks.registering(Exec::class) {
+// Native libs are staged into build/nativeLib (NOT a source dir) and added to the
+// main JAR + test runtime classpath — never the -sources JAR (they are binaries).
+val nativeLibDir = layout.buildDirectory.dir("nativeLib")
+
+val cargoBuild = tasks.register<Exec>("cargoBuild") {
     group = "native"
     description = "Compile the Rust JNI cdylib (release) for the host platform."
     workingDir = rustDir.asFile
@@ -68,19 +74,27 @@ val cargoBuild by tasks.registering(Exec::class) {
     outputs.file(rustDir.dir("target/release").file(builtLibName))
 }
 
-val stageNativeLib by tasks.registering(Copy::class) {
+val stageNativeLib = tasks.register<Copy>("stageNativeLib") {
     group = "native"
-    description = "Stage the host cdylib into resources at /com/disarm/native/<os>-<arch>/."
+    description = "Stage the host cdylib into build/nativeLib/com/disarm/native/<os>-<arch>/."
     dependsOn(cargoBuild)
     from(rustDir.dir("target/release").file(builtLibName))
-    into(layout.projectDirectory.dir("src/main/resources/com/disarm/native/$hostOsArch"))
+    into(nativeLibDir.map { it.dir("com/disarm/native/$hostOsArch") })
 }
 
-tasks.named("processResources") {
-    dependsOn(stageNativeLib)
+// Release mode: CI stages all 5 prebuilt libs into build/nativeLib and passes
+// -Pdisarm.nativePrebuilt, so the fat JAR carries every platform; the host-only
+// cargo build is then skipped. Dev/CI-`check` builds the host lib as usual.
+val nativePrebuilt = providers.gradleProperty("disarm.nativePrebuilt").isPresent
+
+tasks.named<Jar>("jar") {
+    if (!nativePrebuilt) dependsOn(stageNativeLib)
+    from(nativeLibDir) // build/nativeLib/com/disarm/native/... -> jar's com/disarm/native/...
 }
 
 tasks.test {
+    if (!nativePrebuilt) dependsOn(stageNativeLib)
+    classpath += files(nativeLibDir) // NativeLoader resolves the lib from this resource root
     useJUnitPlatform()
     testLogging {
         events("passed", "skipped", "failed")
@@ -116,4 +130,62 @@ tasks.jacocoTestCoverageVerification {
 
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
+}
+
+// ── Publishing (Maven Central via the Sonatype Central Portal) ──────────────────
+//
+// The published `com.disarm:disarm` is the FAT JAR: the JNI shim's per-platform
+// native libraries live under /com/disarm/native/<os>-<arch>/ (the jar `from`
+// above), and the NativeLoader extracts + loads the right one at runtime (the
+// sqlite-jdbc model). `publish` writes signed, checksummed artifacts into a local
+// staging repo (build/staging-deploy) in Maven layout; the release workflow zips
+// that and uploads it to the Central Portal. `publishToMavenLocal` validates the
+// artifacts/POM locally without any credentials.
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+            artifactId = "disarm"
+            pom {
+                name.set("disarm")
+                description.set("Unicode confusable / text-security building blocks — JVM binding (native Rust core)")
+                url.set("https://github.com/raeq/disarm")
+                licenses {
+                    license {
+                        name.set("MIT License")
+                        url.set("https://opensource.org/licenses/MIT")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("raeq")
+                        name.set("Richard Quinn")
+                    }
+                }
+                scm {
+                    url.set("https://github.com/raeq/disarm")
+                    connection.set("scm:git:https://github.com/raeq/disarm.git")
+                    developerConnection.set("scm:git:ssh://git@github.com/raeq/disarm.git")
+                }
+            }
+        }
+    }
+    repositories {
+        // Local staging repo; the workflow bundles this and POSTs it to the Portal.
+        maven {
+            name = "staging"
+            url = rootProject.layout.buildDirectory.dir("staging-deploy").get().asFile.toURI()
+        }
+    }
+}
+
+// Sign only when a key is supplied (the release workflow). Local publish tasks run
+// unsigned so publishToMavenLocal works without GPG.
+signing {
+    val signingKey = providers.gradleProperty("signingInMemoryKey").orNull
+    val signingPassword = providers.gradleProperty("signingInMemoryKeyPassword").orNull
+    if (signingKey != null) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign(publishing.publications["maven"])
+    }
 }

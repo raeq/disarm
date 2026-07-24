@@ -147,6 +147,51 @@ public final class Disarm {
         return Native.isZalgo(req(text), threshold);
     }
 
+    // ── Slugs & filenames ──────────────────────────────────────────────────────
+
+    /** Generate a URL-safe slug with default options. */
+    public static String slugify(String text) {
+        return slugify(text, SlugOptions.builder().build());
+    }
+
+    /** Generate a URL-safe slug with explicit options. */
+    public static String slugify(String text, SlugOptions options) {
+        req(text);
+        Objects.requireNonNull(options, "options");
+        return Native.slugify(
+                text,
+                options.separator(),
+                options.lowercase(),
+                options.maxLength(),
+                options.wordBoundary(),
+                options.saveOrder(),
+                options.stopwords(),
+                options.allowUnicode(),
+                options.lang(),
+                options.entities(),
+                options.decimal(),
+                options.hexadecimal(),
+                options.safeChars());
+    }
+
+    /** Turn arbitrary text into a filesystem-safe filename with default options. */
+    public static String sanitizeFilename(String text) {
+        return sanitizeFilename(text, SanitizeFilenameOptions.builder().build());
+    }
+
+    /** Turn arbitrary text into a filesystem-safe filename with explicit options. */
+    public static String sanitizeFilename(String text, SanitizeFilenameOptions options) {
+        req(text);
+        Objects.requireNonNull(options, "options");
+        return Native.sanitizeFilename(
+                text,
+                options.separator(),
+                options.maxLength(),
+                options.platform().token(),
+                options.lang(),
+                options.preserveExtension());
+    }
+
     // ── Deobfuscation & security presets ───────────────────────────────────────
 
     public static String stripObfuscation(String text) {

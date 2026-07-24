@@ -86,6 +86,21 @@ public final class Native {
             String lang,
             boolean preserveExtension);
 
+    public static native String slugify(
+            String text,
+            String separator,
+            boolean lowercase,
+            long maxLength,
+            boolean wordBoundary,
+            boolean saveOrder,
+            String[] stopwords,
+            boolean allowUnicode,
+            String lang,
+            boolean entities,
+            boolean decimal,
+            boolean hexadecimal,
+            String safeChars);
+
     // ── Grapheme clusters ──────────────────────────────────────────────────────
     public static native long graphemeLen(String text);
 

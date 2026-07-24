@@ -48,7 +48,7 @@
 
 use disarm_core::api;
 use jni::errors::{Error as JniError, Result as JniResult};
-use jni::objects::{JClass, JObject, JString};
+use jni::objects::{JClass, JObject, JObjectArray, JString};
 use jni::strings::JNIString;
 use jni::sys::{jboolean, jlong, jsize};
 use jni::{Env, EnvUnowned};
@@ -164,6 +164,17 @@ fn map_str_array_nullary<'l>(
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> { new_string_array(env, &f()) })
         .resolve::<Policy>()
+}
+
+/// Decode a Java `String[]` argument into `Vec<String>`.
+fn read_string_array(env: &mut Env, arr: &JObjectArray<JString>) -> JniResult<Vec<String>> {
+    let len = arr.len(env)?;
+    let mut out = Vec::with_capacity(len);
+    for i in 0..len {
+        let element = arr.get_element(env, i)?;
+        out.push(element.mutf8_chars(env)?.to_string());
+    }
+    Ok(out)
 }
 
 /// Build a Java `String[]` from a slice of Rust strings.
@@ -611,6 +622,59 @@ pub extern "system" fn Java_com_disarm_internal_Native_sanitizeFilename<'l>(
             Ok(s) => Ok(env.new_string(s)?.into()),
             Err(e) => Err(throw_core(env, &e)),
         }
+    })
+    .resolve::<Policy>()
+}
+
+// ── Slugs ───────────────────────────────────────────────────────────────────────
+
+/// Generate a URL-safe slug. Mirrors the Node shim's flattened option surface; the
+/// idiomatic Java layer fills defaults before calling.
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)] // flattened SlugConfig, mirroring the Node shim
+pub extern "system" fn Java_com_disarm_internal_Native_slugify<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    separator: JString<'l>,
+    lowercase: jboolean,
+    max_length: jlong,
+    word_boundary: jboolean,
+    save_order: jboolean,
+    stopwords: JObjectArray<'l, JString<'l>>,
+    allow_unicode: jboolean,
+    lang: JString<'l>,
+    entities: jboolean,
+    decimal: jboolean,
+    hexadecimal: jboolean,
+    safe_chars: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let separator = separator.mutf8_chars(env)?.to_string();
+        let safe_chars = safe_chars.mutf8_chars(env)?.to_string();
+        let lang = read_optional(env, &lang)?;
+        let stopwords = read_string_array(env, &stopwords)?;
+        let max_length = match checked_size("maxLength", max_length) {
+            Ok(n) => n,
+            Err(msg) => return Err(throw_invalid(env, &msg)),
+        };
+        let mut config = api::SlugConfig::default()
+            .with_separator(separator)
+            .with_lowercase(lowercase)
+            .with_max_length(max_length)
+            .with_word_boundary(word_boundary)
+            .with_save_order(save_order)
+            .with_stopwords(stopwords)
+            .with_allow_unicode(allow_unicode)
+            .with_safe_chars(safe_chars);
+        if let Some(lang) = lang {
+            config = config.with_lang(lang);
+        }
+        config.entities = entities;
+        config.decimal = decimal;
+        config.hexadecimal = hexadecimal;
+        Ok(env.new_string(api::slugify(&text, &config))?.into())
     })
     .resolve::<Policy>()
 }

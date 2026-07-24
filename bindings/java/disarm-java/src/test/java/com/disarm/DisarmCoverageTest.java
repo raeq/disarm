@@ -136,4 +136,58 @@ class DisarmCoverageTest {
         assertThrows(NullPointerException.class, () -> Disarm.graphemeSplit(null));
         assertThrows(NullPointerException.class, () -> Disarm.detectScripts(null));
     }
+
+    // ── Slugs & filenames ───────────────────────────────────────────────────────
+
+    @Test
+    void slugifyDefault() {
+        assertEquals("hello-world", Disarm.slugify("Hello World"));
+    }
+
+    @Test
+    void slugifyTransliteratesAndLowercases() {
+        assertTrue(Disarm.slugify("Café Déjà").matches("[a-z0-9-]+"));
+    }
+
+    @Test
+    void slugifyWithOptions() {
+        String slug = Disarm.slugify(
+                "Alpha Beta Gamma",
+                SlugOptions.builder()
+                        .separator("_")
+                        .stopwords(List.of("beta"))
+                        .maxLength(40)
+                        .build());
+        assertFalse(slug.contains("beta"), slug);
+        assertTrue(slug.contains("_"), slug);
+    }
+
+    @Test
+    void sanitizeFilenameDefault() {
+        String name = Disarm.sanitizeFilename("my report.txt");
+        assertFalse(name.contains(" "), name);
+        assertTrue(name.endsWith(".txt"), name);
+    }
+
+    @Test
+    void sanitizeFilenameWithOptions() {
+        String name = Disarm.sanitizeFilename(
+                "My Résumé.pdf",
+                SanitizeFilenameOptions.builder()
+                        .separator("-")
+                        .platform(Platform.WINDOWS)
+                        .maxLength(64)
+                        .preserveExtension(true)
+                        .build());
+        assertFalse(name.isBlank());
+        assertTrue(name.endsWith(".pdf"), name);
+    }
+
+    @Test
+    void slugAndFilenameNullArgsThrow() {
+        assertThrows(NullPointerException.class, () -> Disarm.slugify(null));
+        assertThrows(NullPointerException.class, () -> Disarm.slugify("x", null));
+        assertThrows(NullPointerException.class, () -> Disarm.sanitizeFilename(null));
+        assertThrows(NullPointerException.class, () -> Disarm.sanitizeFilename("x", null));
+    }
 }

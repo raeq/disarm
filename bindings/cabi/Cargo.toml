@@ -1,0 +1,45 @@
+# C-ABI substrate for the pure-Rust `disarm` core.
+#
+# This is a FIRST-CLASS, standalone C ABI (not part of the JVM hot path — the JNI
+# binding calls the core directly). It is the shared foundation for a future iOS
+# (Swift / Kotlin-Native) binding, a Java 25+ Panama/FFM front-end, and any C/C++/
+# Go/Python-ctypes consumer. Like the other bindings it wraps the PUBLISHED `disarm`
+# crate (aliased `disarm_core`), never a path dep, so per-platform cross-builds are
+# self-contained.
+#
+# safer-ffi keeps this crate free of hand-written `unsafe`: `#[ffi_export]` and the
+# `char_p`/`repr_c` types contain the raw-pointer marshalling inside the macro (the
+# same way `jni_mangle` hides the JNI export unsafe in the Java binding), and the
+# `headers` feature emits the C header.
+[package]
+name = "disarm-cabi"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.81"
+publish = false
+license = "MIT"
+description = "C ABI for disarm — Unicode confusable/text-security building blocks"
+
+[lib]
+# Emit a dynamic lib (for dlopen / Panama / general C use) and a static lib (for
+# iOS / static linking). Named `disarm_ffi` so the output doesn't collide with the
+# core crate's own `libdisarm` cdylib under the dev `[patch.crates-io]` redirect.
+name = "disarm_ffi"
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[dependencies]
+disarm_core = { package = "disarm", version = "0.11", default-features = false }
+safer-ffi = "0.1"
+
+[features]
+# `cargo test --features headers -- generate_headers` writes the C header.
+headers = ["safer-ffi/headers"]
+
+# DEV-ONLY: build against the in-repo core (offline, tracks unreleased changes).
+# The published binding ships WITHOUT this block; CI injects the redirect.
+[patch.crates-io]
+disarm = { path = "../.." }
+
+[profile.release]
+lto = true
+strip = "symbols"

@@ -1,0 +1,9 @@
+# Rust build artifacts
+/target/
+
+# The C header is generated reproducibly:
+#   cargo test --features headers -- generate_headers
+disarm.h
+
+# Compiled smoke-test binaries
+*.o

@@ -55,10 +55,10 @@ use std::sync::{LazyLock, RwLock};
 
 use disarm_core::api;
 use jni::errors::{Error as JniError, Result as JniResult};
-use jni::objects::{JClass, JObject, JObjectArray, JString};
+use jni::objects::{JClass, JObject, JObjectArray, JString, JValue};
 use jni::strings::JNIString;
 use jni::sys::{jboolean, jlong, jsize};
-use jni::{Env, EnvUnowned, jni_mangle};
+use jni::{Env, EnvUnowned, jni_mangle, jni_sig};
 
 /// The error/panic → Java-exception mapping used to `resolve` every entry point.
 type Policy = jni::errors::ThrowRuntimeExAndDefault;
@@ -195,6 +195,45 @@ fn new_string_array<'l>(env: &mut Env<'l>, items: &[String]) -> JniResult<JObjec
     Ok(array.into())
 }
 
+/// Build a Java `Object[]` of class `class_name` from already-built element objects.
+fn new_object_array_of<'l>(
+    env: &mut Env<'l>,
+    class_name: &str,
+    items: &[JObject<'l>],
+) -> JniResult<JObject<'l>> {
+    let len = jsize::try_from(items.len()).unwrap_or(jsize::MAX);
+    let array = env.new_object_array(len, JNIString::from(class_name), JObject::null())?;
+    for (i, obj) in items.iter().enumerate() {
+        array.set_element(env, i, obj)?;
+    }
+    Ok(array.into())
+}
+
+/// Wrap an `Object[]` in an immutable `java.util.List` via `List.of(Object[])`.
+fn list_of<'l>(env: &mut Env<'l>, array: &JObject<'l>) -> JniResult<JObject<'l>> {
+    env.call_static_method(
+        JNIString::from("java/util/List"),
+        JNIString::from("of"),
+        jni_sig!("([Ljava/lang/Object;)Ljava/util/List;"),
+        &[JValue::Object(array)],
+    )?
+    .l()
+}
+
+/// Build an immutable `List<String>` from Rust strings.
+fn new_string_list<'l>(env: &mut Env<'l>, items: &[String]) -> JniResult<JObject<'l>> {
+    let array = new_string_array(env, items)?;
+    list_of(env, &array)
+}
+
+/// Build a Java `String`, or `null` for `None` (for nullable record components).
+fn opt_string<'l>(env: &mut Env<'l>, s: Option<&str>) -> JniResult<JObject<'l>> {
+    match s {
+        Some(v) => Ok(env.new_string(v)?.into()),
+        None => Ok(JObject::null()),
+    }
+}
+
 /// Validate a size/threshold argument (JVM `long`, so negatives arrive intact
 /// rather than wrapping) and narrow to `usize`, matching the Node/Ruby bindings.
 /// Returns the message to throw as `DisarmInvalidArgumentException` on failure.
@@ -281,6 +320,60 @@ fn read_optional(env: &Env, s: &JString) -> JniResult<Option<String>> {
     } else {
         Ok(Some(s.mutf8_chars(env)?.to_string()))
     }
+}
+
+/// Characters with no romanization, as a `List<Untranslatable(character, offset)>`
+/// in order. `scheme`/`lang` mirror `transliterateOpts`.
+#[jni_mangle("com.disarm.internal.Native")]
+pub fn findUntranslatable<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    scheme: JString<'l>,
+    lang: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let scheme = scheme.mutf8_chars(env)?.to_string();
+        let lang = read_optional(env, &lang)?;
+        let items = match build_find_untranslatable(&text, &scheme, lang.as_deref()) {
+            Ok(v) => v,
+            Err(e) => return Err(throw_core(env, &e)),
+        };
+        let mut objs = Vec::with_capacity(items.len());
+        for u in &items {
+            objs.push(new_untranslatable(env, u)?);
+        }
+        let array = new_object_array_of(env, "com/disarm/Untranslatable", &objs)?;
+        list_of(env, &array)
+    })
+    .resolve::<Policy>()
+}
+
+fn build_find_untranslatable(
+    text: &str,
+    scheme: &str,
+    lang: Option<&str>,
+) -> Result<Vec<api::Untranslatable>, disarm_core::Error> {
+    let mut b = api::Transliterate::new();
+    if scheme != "default" {
+        let scheme: api::Scheme = scheme.parse()?;
+        b = b.scheme(scheme);
+    }
+    if let Some(lang) = lang {
+        b = b.lang(lang);
+    }
+    Ok(b.find_untranslatable(text))
+}
+
+/// Construct a `com.disarm.Untranslatable` record.
+fn new_untranslatable<'l>(env: &mut Env<'l>, u: &api::Untranslatable) -> JniResult<JObject<'l>> {
+    let ch = env.new_string(u.ch.to_string())?;
+    env.new_object(
+        JNIString::from("com/disarm/Untranslatable"),
+        jni_sig!("(Ljava/lang/String;J)V"),
+        &[JValue::Object(&ch), JValue::Long(u.offset as jlong)],
+    )
 }
 
 // ── Confusables (TR39) ──────────────────────────────────────────────────────────
@@ -790,6 +883,101 @@ pub fn listContextLangs<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<
     })
 }
 
+// ── Metadata introspection (record returns) ─────────────────────────────────────
+
+/// Static facts about a language `code`; throws on an unknown code.
+#[jni_mangle("com.disarm.internal.Native")]
+pub fn langInfo<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, code: JString<'l>) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let code = code.mutf8_chars(env)?.to_string();
+        match api::lang_info(&code) {
+            Ok(m) => new_lang_meta(env, &m),
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
+/// Construct a `com.disarm.LangMeta` record.
+fn new_lang_meta<'l>(env: &mut Env<'l>, m: &api::LangMeta) -> JniResult<JObject<'l>> {
+    let name = env.new_string(m.name)?;
+    let script = env.new_string(m.script)?;
+    let region = env.new_string(m.region)?;
+    let context = env.new_string(m.context)?;
+    env.new_object(
+        JNIString::from("com/disarm/LangMeta"),
+        jni_sig!("(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"),
+        &[
+            JValue::Object(&name),
+            JValue::Object(&script),
+            JValue::Object(&region),
+            JValue::Object(&context),
+        ],
+    )
+}
+
+/// Static facts about a script by `name`; throws on an unknown name.
+#[jni_mangle("com.disarm.internal.Native")]
+pub fn scriptInfo<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    name: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let name = name.mutf8_chars(env)?.to_string();
+        match api::script_info(&name) {
+            Ok(m) => new_script_meta(env, &m),
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
+/// Construct a `com.disarm.ScriptMeta` record.
+fn new_script_meta<'l>(env: &mut Env<'l>, m: &api::ScriptMeta) -> JniResult<JObject<'l>> {
+    let name = env.new_string(m.name)?;
+    let default_lang = opt_string(env, m.default_lang)?;
+    let example = env.new_string(m.example)?;
+    env.new_object(
+        JNIString::from("com/disarm/ScriptMeta"),
+        jni_sig!("(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V"),
+        &[
+            JValue::Object(&name),
+            JValue::Object(&default_lang),
+            JValue::Object(&example),
+            JValue::Bool(m.context_aware),
+        ],
+    )
+}
+
+/// Explain how `lang: "auto"` detection resolves `text` (infallible).
+#[jni_mangle("com.disarm.internal.Native")]
+pub fn inspectAutoLang<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let r = api::inspect_auto_lang(&text);
+        let script = opt_string(env, r.script.as_deref())?;
+        let chosen_lang = opt_string(env, r.chosen_lang.as_deref())?;
+        let reason = env.new_string(&r.reason)?;
+        let discriminators = new_string_list(env, &r.discriminators_hit)?;
+        env.new_object(
+            JNIString::from("com/disarm/AutoLangInspection"),
+            jni_sig!("(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V"),
+            &[
+                JValue::Object(&script),
+                JValue::Object(&chosen_lang),
+                JValue::Object(&reason),
+                JValue::Object(&discriminators),
+            ],
+        )
+    })
+    .resolve::<Policy>()
+}
+
 // ── Reusable handles (opaque jlong pointers) ────────────────────────────────────
 //
 // `Pipeline` and `Lexicon` compile/build once and are reused across calls, so the
@@ -931,4 +1119,87 @@ pub fn hasAnomaliesWords<'l>(
         Ok(api::has_anomalies(&text, &set))
     })
     .resolve::<Policy>()
+}
+
+/// Full anomaly report against a prebuilt lexicon handle (throws on a stale handle).
+#[jni_mangle("com.disarm.internal.Native")]
+pub fn inspectAnomalies<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    lexicon: jlong,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        // Scope the read lock so it is released before building JNI objects.
+        let report = {
+            let registry = read_registry(&LEXICONS);
+            let Some(set) = registry.get(&lexicon) else {
+                return Err(throw_invalid(env, "invalid or closed Lexicon handle"));
+            };
+            api::inspect_anomalies(&text, set)
+        };
+        new_anomaly_report(env, &report)
+    })
+    .resolve::<Policy>()
+}
+
+/// Full anomaly report against an inline word list (per-call set build).
+#[jni_mangle("com.disarm.internal.Native")]
+pub fn inspectAnomaliesWords<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    words: JObjectArray<'l, JString<'l>>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let set = api::lexicon(read_string_array(env, &words)?);
+        let report = api::inspect_anomalies(&text, &set);
+        new_anomaly_report(env, &report)
+    })
+    .resolve::<Policy>()
+}
+
+/// Construct a `com.disarm.Finding` record.
+fn new_finding<'l>(env: &mut Env<'l>, f: &api::Finding) -> JniResult<JObject<'l>> {
+    let kind = env.new_string(f.kind.as_str())?;
+    let token = env.new_string(&f.token)?;
+    let detail = env.new_string(&f.detail)?;
+    let reason = env.new_string(f.reason())?;
+    env.new_object(
+        JNIString::from("com/disarm/Finding"),
+        jni_sig!("(Ljava/lang/String;Ljava/lang/String;JJLjava/lang/String;Ljava/lang/String;)V"),
+        &[
+            JValue::Object(&kind),
+            JValue::Object(&token),
+            JValue::Long(f.start as jlong),
+            JValue::Long(f.end as jlong),
+            JValue::Object(&detail),
+            JValue::Object(&reason),
+        ],
+    )
+}
+
+/// Construct a `com.disarm.AnomalyReport` record.
+fn new_anomaly_report<'l>(env: &mut Env<'l>, r: &api::AnomalyReport) -> JniResult<JObject<'l>> {
+    let kinds: Vec<String> = r.kinds.iter().map(|k| k.as_str().to_string()).collect();
+    let kinds_list = new_string_list(env, &kinds)?;
+    let mut finding_objs = Vec::with_capacity(r.findings.len());
+    for f in &r.findings {
+        finding_objs.push(new_finding(env, f)?);
+    }
+    let findings_array = new_object_array_of(env, "com/disarm/Finding", &finding_objs)?;
+    let findings_list = list_of(env, &findings_array)?;
+    let reason = opt_string(env, r.reason.as_deref())?;
+    env.new_object(
+        JNIString::from("com/disarm/AnomalyReport"),
+        jni_sig!("(ZLjava/util/List;Ljava/util/List;Ljava/lang/String;)V"),
+        &[
+            JValue::Bool(r.anomalous),
+            JValue::Object(&kinds_list),
+            JValue::Object(&findings_list),
+            JValue::Object(&reason),
+        ],
+    )
 }

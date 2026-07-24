@@ -331,4 +331,49 @@ public final class Disarm {
         Objects.requireNonNull(lexicon, "lexicon");
         return Native.hasAnomalies(text, lexicon.handle());
     }
+
+    /** Full anomaly report against a word list (per-call set build). */
+    public static AnomalyReport inspectAnomalies(String text, List<String> words) {
+        req(text);
+        Objects.requireNonNull(words, "words");
+        return Native.inspectAnomaliesWords(text, words.toArray(new String[0]));
+    }
+
+    /** Full anomaly report against a prebuilt {@link Lexicon}. */
+    public static AnomalyReport inspectAnomalies(String text, Lexicon lexicon) {
+        req(text);
+        Objects.requireNonNull(lexicon, "lexicon");
+        return Native.inspectAnomalies(text, lexicon.handle());
+    }
+
+    // ── Introspection & metadata ────────────────────────────────────────────────
+
+    /** Static facts about a language {@code code}; throws on an unknown code. */
+    public static LangMeta langInfo(String code) {
+        Objects.requireNonNull(code, "code");
+        return Native.langInfo(code);
+    }
+
+    /** Static facts about a script by {@code name}; throws on an unknown name. */
+    public static ScriptMeta scriptInfo(String name) {
+        Objects.requireNonNull(name, "name");
+        return Native.scriptInfo(name);
+    }
+
+    /** Explain how {@code lang: "auto"} detection resolves {@code text}. */
+    public static AutoLangInspection inspectAutoLang(String text) {
+        return Native.inspectAutoLang(req(text));
+    }
+
+    /** Characters with no transliteration under the default scheme, in order. */
+    public static List<Untranslatable> findUntranslatable(String text) {
+        return findUntranslatable(text, TransliterateOptions.builder().build());
+    }
+
+    /** Characters with no transliteration under the given options, in order. */
+    public static List<Untranslatable> findUntranslatable(String text, TransliterateOptions options) {
+        req(text);
+        Objects.requireNonNull(options, "options");
+        return Native.findUntranslatable(text, options.scheme(), options.lang());
+    }
 }

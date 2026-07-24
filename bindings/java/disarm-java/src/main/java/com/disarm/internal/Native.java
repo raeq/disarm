@@ -1,5 +1,12 @@
 package com.disarm.internal;
 
+import com.disarm.AnomalyReport;
+import com.disarm.AutoLangInspection;
+import com.disarm.LangMeta;
+import com.disarm.ScriptMeta;
+import com.disarm.Untranslatable;
+import java.util.List;
+
 /**
  * Raw JNI entry points — the thin native shim (Layer A/B boundary).
  *
@@ -140,4 +147,18 @@ public final class Native {
     public static native boolean hasAnomalies(String text, long lexicon);
 
     public static native boolean hasAnomaliesWords(String text, String[] words);
+
+    // ── Structured-report returns ──────────────────────────────────────────────
+    public static native LangMeta langInfo(String code);
+
+    public static native ScriptMeta scriptInfo(String name);
+
+    public static native AutoLangInspection inspectAutoLang(String text);
+
+    public static native List<Untranslatable> findUntranslatable(
+            String text, String scheme, String lang);
+
+    public static native AnomalyReport inspectAnomalies(String text, long lexicon);
+
+    public static native AnomalyReport inspectAnomaliesWords(String text, String[] words);
 }

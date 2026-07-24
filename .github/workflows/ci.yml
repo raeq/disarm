@@ -28,6 +28,8 @@ jobs:
       docs: ${{ steps.filter.outputs.docs }}
       ruby: ${{ steps.filter.outputs.ruby }}
       node: ${{ steps.filter.outputs.node }}
+      java: ${{ steps.filter.outputs.java }}
+      cabi: ${{ steps.filter.outputs.cabi }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
@@ -67,6 +69,22 @@ jobs:
               - 'Cargo.toml'
               - 'docs/**'
               - 'scripts/check_doc_node_examples.mjs'
+              - '.github/workflows/ci.yml'
+            # Same drift-gate rationale (#374): rebuild the Java binding when ITS
+            # code OR the core it wraps changes. The JNI shim + Gradle/JUnit suite
+            # (coverage-gated) run against the in-repo core.
+            java:
+              - 'bindings/java/**'
+              - 'src/**'
+              - 'build.rs'
+              - 'Cargo.toml'
+              - '.github/workflows/ci.yml'
+            # The C-ABI substrate (safer-ffi) wraps the same core; drift-gate it too.
+            cabi:
+              - 'bindings/cabi/**'
+              - 'src/**'
+              - 'build.rs'
+              - 'Cargo.toml'
               - '.github/workflows/ci.yml'
 
 
@@ -399,6 +417,88 @@ jobs:
         run: node scripts/check_doc_node_examples.mjs
 
 
+  java:
+    name: Java binding (JDK ${{ matrix.java }})
+    needs: changes
+    if: needs.changes.outputs.java == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 21 is the supported floor; the ABI-stable JNI lib loads on any 21+ JVM.
+        java: ["21"]
+    defaults:
+      run:
+        working-directory: bindings/java
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+
+      - name: Build the JNI shim against the in-repo core (#374 drift gate)
+        # Never committed (a relative-path patch would break release/packaging and
+        # collide with this redirect). Path is relative to bindings/java/rust.
+        working-directory: bindings/java/rust
+        run: printf '\n[patch.crates-io]\ndisarm = { path = "../../.." }\n' >> Cargo.toml
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
+        with:
+          workspaces: bindings/java/rust
+
+      - name: Allocation lint gate (JNI glue)
+        # Same ALLOC lints as the core, on the binding's Rust glue. The redirect
+        # above is in place so it builds vs the in-repo core. Run from the repo root.
+        working-directory: ${{ github.workspace }}
+        run: BINDING=bindings/java/rust bash scripts/perf_lint.sh
+
+      - uses: actions/setup-java@v4  # pin to a SHA on review (dependabot-managed)
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Build the native lib + run the coverage-gated suite against the local core
+        # `check` runs JUnit + the JaCoCo ≥90% line-coverage gate; the committed
+        # Gradle wrapper builds the JNI cdylib (cargoBuild) against the local core.
+        run: ./gradlew --no-daemon :disarm-java:check
+
+
+  cabi:
+    name: C ABI (safer-ffi)
+    needs: changes
+    if: needs.changes.outputs.cabi == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bindings/cabi
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+
+      - name: Build against the in-repo core (#374 drift gate)
+        run: printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
+        with:
+          workspaces: bindings/cabi
+
+      - name: Clippy (C-ABI glue)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build the library and generate the C header
+        run: |
+          cargo build --release
+          cargo test --features headers -- generate_headers
+
+      - name: C smoke test — link the cdylib and exercise the ABI
+        # Proves the header + ABI + ownership contract from C against the local core.
+        run: |
+          cc examples/smoke.c -I. -L target/release -ldisarm_ffi -o /tmp/disarm_smoke
+          LD_LIBRARY_PATH="$PWD/target/release" /tmp/disarm_smoke
+
+
   # ── Security audit (#105: cargo audit for RustSec advisories) ──
   # Runs on every PR and weekly. Cargo.lock is not committed (it is .gitignored
   # for this library), so generate it before auditing.
@@ -529,6 +629,48 @@ jobs:
             exit 1
           fi
           echo "Node binding OK against the local core"
+
+  java-ok:
+    name: Java checks passed
+    if: always()
+    needs: [changes, java]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          JAVA_CHANGED="${{ needs.changes.outputs.java }}"
+          JAVA_RESULT="${{ needs.java.result }}"
+
+          if [[ "$JAVA_CHANGED" != "true" ]]; then
+            echo "No binding/core changes — Java gate not required"
+            exit 0
+          fi
+
+          if [[ "$JAVA_RESULT" != "success" ]]; then
+            echo "java ($JAVA_RESULT) — the Java binding failed to build/test against the local core"
+            exit 1
+          fi
+          echo "Java binding OK against the local core"
+
+  cabi-ok:
+    name: C ABI checks passed
+    if: always()
+    needs: [changes, cabi]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          CABI_CHANGED="${{ needs.changes.outputs.cabi }}"
+          CABI_RESULT="${{ needs.cabi.result }}"
+
+          if [[ "$CABI_CHANGED" != "true" ]]; then
+            echo "No C-ABI/core changes — C ABI gate not required"
+            exit 0
+          fi
+
+          if [[ "$CABI_RESULT" != "success" ]]; then
+            echo "cabi ($CABI_RESULT) — the C ABI failed to build/smoke against the local core"
+            exit 1
+          fi
+          echo "C ABI OK against the local core"
 
   python-ok:
     name: Python checks passed

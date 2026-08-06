@@ -33,7 +33,7 @@ jobs:
       - name: Criterion benchmarks (short run)
         run: cargo bench --no-default-features --bench bench_core -- --warm-up-time 1 --measurement-time 2 --sample-size 10
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 

@@ -92,6 +92,8 @@ A version bump touches **eight** files. Missing one ships inconsistent metadata 
 1. `Cargo.toml` — `version = "..."`
 2. `pyproject.toml` — `version = "..."`
 3. `bindings/node/package.json` — `"version": "..."`
+   (also `bindings/node/package-lock.json` — **two** `"version"` fields, top-level and
+   `packages[""]`; bump both or run `npm install --package-lock-only`)
 4. `bindings/ruby/lib/disarm/version.rb` — `VERSION = "..."`
 5. `CITATION.cff` — `version: "..."` (citation metadata; not near the manifests)
 6. `uv.lock` — the `disarm` editable entry; regenerate with `uv lock`, which bumps

@@ -41,6 +41,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 - Routine dependency and CI-action updates (dependabot).
 
+## [0.11.1] — 2026-07-13
+
 ### Fixed
 
 - **`ml_normalize` is now idempotent on NFKD-exposed symbol bases (#498).** The

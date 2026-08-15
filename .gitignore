@@ -1,6 +1,9 @@
 # ── Literature full-text scratch (canonical copies live in the lit-graph store) ──
 /literature/
 
+# ── Local scratch (throwaway cargo probe projects, never committed) ──
+/segcheck/
+
 # ── Rust ──────────────────────────────────────────────
 /target/
 Cargo.lock

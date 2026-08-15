@@ -17,8 +17,45 @@ permissions:
   contents: read
 
 jobs:
+  # ── Wait for the published core on crates.io (#500 release race) ──
+  # On `release: published`, this publisher fires in parallel with publish.yml
+  # (core → crates.io). On the real publish path the `disarm_core` dep is a REGISTRY
+  # dependency (the #374 step patches to the in-repo core ONLY on non-publish events),
+  # and publish.yml pushes `disarm` only after its Tier-3 gate + wheels — so an
+  # un-gated build starts first and dies with "failed to select a version for the
+  # requirement `disarm = ^0.<minor>`" on a minor bump (v0.12.0 hit exactly this).
+  # Gate the build on this single upstream job, mirroring publish-node.yml. Publish
+  # path only — skipped on push, where `build` still runs (it guards its own `if:`).
+  wait-for-core:
+    name: Wait for the published core
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - name: Poll the crates.io sparse index for the target core version
+        shell: bash
+        run: |
+          req="$(sed -nE 's/.*package = "disarm", version = "([0-9]+\.[0-9]+)".*/\1/p' bindings/java/rust/Cargo.toml | head -n1)"
+          if [ -z "$req" ]; then echo "::error::could not parse disarm_core version from bindings/java/rust/Cargo.toml"; exit 1; fi
+          esc="${req//./\\.}"
+          echo "Waiting for a non-yanked disarm $req.* on the crates.io sparse index…"
+          deadline=$((SECONDS + 600))
+          until curl -sf https://index.crates.io/di/sa/disarm | jq -r 'select(.yanked==false) | .vers' | grep -qE "^${esc}\.[0-9]+$"; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::disarm $req.* did not appear on crates.io within 10 minutes"; exit 1
+            fi
+            echo "  not yet; retrying in 15s…"; sleep 15
+          done
+          echo "disarm $req.* is available on crates.io."
+
   build:
     name: Build ${{ matrix.settings.target }}
+    needs: wait-for-core
+    # A skipped wait-for-core (push validation, #374 patch path) must still run the
+    # build; a FAILED one (release, core never appeared in 10 min) blocks it, so
+    # `publish` (needs: build) is skipped too — no half-baked publish. Same rationale
+    # as publish-node.yml's `build`.
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ${{ matrix.settings.host }}
     strategy:
       fail-fast: false
@@ -101,6 +138,11 @@ jobs:
     needs: [build, tier3]
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # Records the publish in the Deployments tab (like crates-io/pypi/rubygems).
+    # Secrets stay repo-level — an environment with no env-scoped secrets falls
+    # through to the repo `MAVEN_GPG_*` / `CENTRAL_PORTAL_*` secrets, and a fresh
+    # environment carries no protection rules, so this adds tracking, not a gate.
+    environment: maven-central
     defaults:
       run:
         working-directory: bindings/java

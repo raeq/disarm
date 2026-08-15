@@ -28,6 +28,13 @@ permissions:
 jobs:
   test:
     name: Test (Ruby ${{ matrix.ruby }})
+    # On release/dispatch this job compiles the ext against the PUBLISHED core (the
+    # #374 patch is skipped), so it must wait for the core like `cross-gems` already
+    # does — v0.12.0 hit exactly this: `test` raced the core publish and died at
+    # `rake compile` ("failed to select a version for `disarm = ^0.12`"). Skip-safe
+    # `if:` so a skipped gate (push/PR, #374 patch path) still runs the tests.
+    needs: wait-for-core
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

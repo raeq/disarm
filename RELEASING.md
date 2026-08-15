@@ -84,10 +84,10 @@ independently without anyone having to guess which core a binding wraps.
 > discipline within `0.x`, but our **major**-version semantics are defined above
 > (support status), not by API compatibility.
 
-### Where the version lives — bump all six
+### Where the version lives — bump all eight
 
-A version bump touches **six** files. Missing one ships inconsistent metadata (the
-`0.11.1` PR initially left the last two stale — caught in review before publish):
+A version bump touches **eight** files. Missing one ships inconsistent metadata (the
+`0.11.1` PR initially left items 5–6 stale — caught in review before publish):
 
 1. `Cargo.toml` — `version = "..."`
 2. `pyproject.toml` — `version = "..."`
@@ -96,6 +96,13 @@ A version bump touches **six** files. Missing one ships inconsistent metadata (t
 5. `CITATION.cff` — `version: "..."` (citation metadata; not near the manifests)
 6. `uv.lock` — the `disarm` editable entry; regenerate with `uv lock`, which bumps
    only that entry with no dependency churn.
+7. `bindings/java/disarm-java/build.gradle.kts` — `version = "..."` (line ~9)
+8. `bindings/java/disarm-kotlin/build.gradle.kts` — `version = "..."` (line ~9)
+
+Items 7–8 are the **JVM binding** coordinates (`dev.disarm:disarm` / `disarm-kotlin`).
+The Gradle version is decoupled from the git tag — the publish workflow names the upload
+bundle from `github.ref_name`, but the artifact *version* is this hardcode — so a tag with
+a stale Gradle version silently publishes the wrong Maven version. Keep them lockstep.
 
 Two things that look like versions but must **not** change: the
 `#[deprecated(since = "X")]` (Rust) and `.. deprecated:: X` (Python docstring) markers

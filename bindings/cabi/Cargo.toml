@@ -28,7 +28,7 @@ name = "disarm_ffi"
 crate-type = ["cdylib", "staticlib", "lib"]
 
 [dependencies]
-disarm_core = { package = "disarm", version = "0.11", default-features = false }
+disarm_core = { package = "disarm", version = "0.12", default-features = false }
 safer-ffi = "0.1"
 
 [features]

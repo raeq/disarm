@@ -1,0 +1,54 @@
+# JNI native shim for the pure-Rust `disarm` core (JVM binding — Java/Kotlin).
+#
+# Mirrors the Node (bindings/node) and Ruby (bindings/ruby/ext/disarm) glue crates:
+# it wraps the published `disarm` crate — a REGISTRY dependency, never a path — so
+# the per-platform cross-build containers (which mount only this directory) can
+# fetch it. The core is imported under the alias `disarm_core` because the package
+# name `disarm` would clash with the shared-object name this crate emits.
+#
+# This is the RAW native shim (Layer A). The idiomatic Java surface lives in
+# ../disarm-java (Layer C-Java); idiomatic Kotlin will live in ../disarm-kotlin.
+[package]
+name = "disarm-jni"
+version = "0.0.0"
+# edition 2024 / MSRV 1.85 are *required* by the `jni` 0.22 dependency (itself
+# edition 2024 / rust-version 1.85), not chosen for a 2024-edition feature here.
+# This does NOT affect the core's shipped 1.81 MSRV: `disarm-jni` is an unpublished
+# (`publish = false`) binding crate — consumers get the JAR, never this crate — so
+# it is out of the core's MSRV contract, like the dev-only criterion (1.86) exception.
+edition = "2024"
+rust-version = "1.85"
+publish = false
+license = "MIT"
+description = "JVM (JNI) bindings for disarm — Unicode confusable/text-security building blocks"
+
+[lib]
+# The JVM loads `libdisarm_jni.{dylib,so}` / `disarm_jni.dll`; the `NativeLoader`
+# extracts it from the JAR by this base name. The `_jni` suffix keeps the output
+# filename distinct from the core crate's own `libdisarm` cdylib (they otherwise
+# collide under the dev `[patch.crates-io]` redirect) — and the JNI symbol lookup
+# is by symbol name, independent of the shared-object filename.
+name = "disarm_jni"
+crate-type = ["cdylib"]
+
+[dependencies]
+# The pure-Rust core (default features = pyo3-free). A registry dep — not a path —
+# so the binding is self-contained and per-platform cross-builds (which mount only
+# this dir) can fetch it. Imported as `disarm_core` (package name `disarm` clashes
+# with this crate's shared-object name).
+disarm_core = { package = "disarm", version = "0.11", default-features = false }
+# Ergonomic, safe JNI over jni-sys. 0.22 is the current stable line and supports
+# the Java 21 floor (and forward). Its `#[jni_mangle]` attribute and `with_env`
+# wrapper keep the FFI export/marshalling unsafe inside the crate's macros, so this
+# glue contains no hand-written `unsafe` (handles use a safe integer registry).
+jni = "0.22"
+
+# NOTE: no committed `[patch.crates-io]` — like the Node/Ruby bindings, the shipped
+# manifest builds against the PUBLISHED `disarm` core. CI injects a path redirect
+# (`disarm = { path = "../../.." }`) to drift-gate the binding against the in-repo
+# core (#374); to build the glue against your local core, apply that redirect first
+# (see .claude/CLAUDE.md and scripts/perf_lint.sh).
+
+[profile.release]
+lto = true
+strip = "symbols"

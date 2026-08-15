@@ -1,0 +1,12 @@
+# Rust build artifacts (JNI shim)
+rust/target/
+
+# Gradle / Java build outputs
+.gradle/
+build/
+**/build/
+out/
+*.class
+
+# Bundled native libraries staged into resources for packaging (built, not vcs'd)
+disarm-java/src/main/resources/dev/disarm/native/

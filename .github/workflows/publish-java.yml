@@ -1,0 +1,154 @@
+name: Java/Kotlin artifacts
+
+# Mirrors publish-node.yml / publish-ruby.yml for the JVM bindings. On push-to-main
+# the native libraries are built on all platforms as a validation gate (against the
+# in-repo core, #374); the actual publish runs on a GitHub release (or manual
+# dispatch): all five prebuilt libs are assembled into the fat JAR, signed, and the
+# staging bundle is uploaded to the Sonatype Central Portal.
+on:
+  push:
+    branches: [main]
+    paths: ["bindings/java/**", ".github/workflows/publish-java.yml"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.host }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            osarch: darwin-aarch64
+            lib: libdisarm_jni.dylib
+          - host: macos-latest
+            target: x86_64-apple-darwin
+            osarch: darwin-x86_64
+            lib: libdisarm_jni.dylib
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            osarch: linux-x86_64
+            lib: libdisarm_jni.so
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            osarch: linux-aarch64
+            lib: libdisarm_jni.so
+            # aarch64 Linux is cross-compiled from x86_64 with the GNU cross linker.
+            cross-linker: gcc-aarch64-linux-gnu
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            osarch: windows-x86_64
+            lib: disarm_jni.dll
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+
+      - name: Build against the in-repo core on non-publish events (#374 drift gate)
+        # On push-to-main the published core can lag the binding, so validation builds
+        # target the in-repo core. On release / dispatch (the real publish) we DON'T
+        # patch — the shipped native libs are built against the PUBLISHED core.
+        # Windows `run:` defaults to PowerShell; force bash for an identical append.
+        if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
+        shell: bash
+        working-directory: bindings/java/rust
+        run: printf '\n[patch.crates-io]\ndisarm = { path = "../../.." }\n' >> Cargo.toml
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+        with:
+          targets: ${{ matrix.settings.target }}
+
+      - name: Install the aarch64 cross linker (Linux arm64 only)
+        if: matrix.settings.cross-linker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.settings.cross-linker }}
+          mkdir -p ~/.cargo
+          printf '[target.aarch64-unknown-linux-gnu]\nlinker = "aarch64-linux-gnu-gcc"\n' >> ~/.cargo/config.toml
+
+      - name: Build the JNI native library
+        shell: bash
+        working-directory: bindings/java/rust
+        run: cargo build --release --target ${{ matrix.settings.target }}
+
+      - name: Collect the built library
+        shell: bash
+        run: |
+          mkdir -p out
+          cp "bindings/java/rust/target/${{ matrix.settings.target }}/release/${{ matrix.settings.lib }}" out/
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: native-${{ matrix.settings.osarch }}
+          path: out/${{ matrix.settings.lib }}
+          if-no-files-found: error
+
+  # ── Tier 3 release gate (#159) ──────────────────────────────────
+  # The JVM artifacts must not ship unless the same exhaustive + formal regimen that
+  # gates the other registries is green. Release/dispatch only.
+  tier3:
+    name: Tier 3 (exhaustive + formal)
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/tier3.yml
+
+  publish:
+    name: Publish to Maven Central (Central Portal)
+    needs: [build, tier3]
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bindings/java
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+
+      - uses: actions/setup-java@v4  # pin to a SHA on review (dependabot-managed)
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Download all per-platform native libraries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          pattern: native-*
+          path: bindings/java/artifacts
+
+      - name: Assemble the fat-JAR native layout (all 5 platforms)
+        # Each artifact `native-<os>-<arch>` holds one library; place it under the
+        # resource path the NativeLoader resolves. -Pdisarm.nativePrebuilt then skips
+        # the host-only cargo build so the JAR carries every platform.
+        run: |
+          DEST=disarm-java/build/nativeLib/dev/disarm/native
+          for d in artifacts/native-*; do
+            osarch="${d##*/native-}"
+            mkdir -p "$DEST/$osarch"
+            cp "$d"/* "$DEST/$osarch/"
+          done
+          echo "Staged native libraries:"; find "$DEST" -type f
+
+      - name: Publish signed artifacts to the staging repo
+        env:
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: ./gradlew --no-daemon -Pdisarm.nativePrebuilt publishAllPublicationsToStagingRepository
+
+      - name: Bundle + upload to the Sonatype Central Portal
+        env:
+          CENTRAL_USER: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
+          CENTRAL_PASS: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+        run: |
+          ( cd build/staging-deploy && zip -q -r ../central-bundle.zip dev )
+          AUTH=$(printf '%s:%s' "$CENTRAL_USER" "$CENTRAL_PASS" | base64)
+          HTTP=$(curl -sS -o response.txt -w '%{http_code}' \
+            -X POST "https://central.sonatype.com/api/v1/publisher/upload?name=disarm-${{ github.ref_name }}&publishingType=AUTOMATIC" \
+            -H "Authorization: Bearer $AUTH" \
+            -F "bundle=@build/central-bundle.zip")
+          echo "Central Portal responded HTTP $HTTP"
+          cat response.txt || true
+          # 201 Created = bundle accepted (validation + release proceed asynchronously).
+          if [ "$HTTP" != "201" ]; then echo "Central Portal upload failed"; exit 1; fi

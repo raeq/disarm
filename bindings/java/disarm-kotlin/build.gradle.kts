@@ -69,9 +69,9 @@ tasks.check {
 }
 
 // ── Publishing ──────────────────────────────────────────────────────────────────
-// A thin artifact that depends (api) on com.disarm:disarm, so consumers get the
+// A thin artifact that depends (api) on dev.disarm:disarm, so consumers get the
 // native fat JAR transitively. The project() dependency is resolved to
-// com.disarm:disarm:<version> in the generated POM by Gradle's native maven-publish.
+// dev.disarm:disarm:<version> in the generated POM by Gradle's native maven-publish.
 publishing {
     publications {
         create<MavenPublication>("maven") {

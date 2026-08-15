@@ -29,7 +29,7 @@ dependencies {
 // ── Native (Rust JNI) build + staging ───────────────────────────────────────────
 //
 // For a local/dev build we compile the host-platform cdylib and stage it into the
-// binding's resources at /com/disarm/native/<os>-<arch>/, exactly where the
+// binding's resources at /dev/disarm/native/<os>-<arch>/, exactly where the
 // production fat JAR will carry per-platform libraries — so tests exercise the real
 // NativeLoader resource-extraction path, not a dev override. Cross-platform fan-out
 // (all 5 targets) is a release-workflow concern (Phase 4).
@@ -76,10 +76,10 @@ val cargoBuild = tasks.register<Exec>("cargoBuild") {
 
 val stageNativeLib = tasks.register<Copy>("stageNativeLib") {
     group = "native"
-    description = "Stage the host cdylib into build/nativeLib/com/disarm/native/<os>-<arch>/."
+    description = "Stage the host cdylib into build/nativeLib/dev/disarm/native/<os>-<arch>/."
     dependsOn(cargoBuild)
     from(rustDir.dir("target/release").file(builtLibName))
-    into(nativeLibDir.map { it.dir("com/disarm/native/$hostOsArch") })
+    into(nativeLibDir.map { it.dir("dev/disarm/native/$hostOsArch") })
 }
 
 // Release mode: CI stages all 5 prebuilt libs into build/nativeLib and passes
@@ -89,7 +89,7 @@ val nativePrebuilt = providers.gradleProperty("disarm.nativePrebuilt").isPresent
 
 tasks.named<Jar>("jar") {
     if (!nativePrebuilt) dependsOn(stageNativeLib)
-    from(nativeLibDir) // build/nativeLib/com/disarm/native/... -> jar's com/disarm/native/...
+    from(nativeLibDir) // build/nativeLib/dev/disarm/native/... -> jar's dev/disarm/native/...
 }
 
 tasks.test {
@@ -134,8 +134,8 @@ tasks.check {
 
 // ── Publishing (Maven Central via the Sonatype Central Portal) ──────────────────
 //
-// The published `com.disarm:disarm` is the FAT JAR: the JNI shim's per-platform
-// native libraries live under /com/disarm/native/<os>-<arch>/ (the jar `from`
+// The published `dev.disarm:disarm` is the FAT JAR: the JNI shim's per-platform
+// native libraries live under /dev/disarm/native/<os>-<arch>/ (the jar `from`
 // above), and the NativeLoader extracts + loads the right one at runtime (the
 // sqlite-jdbc model). `publish` writes signed, checksummed artifacts into a local
 // staging repo (build/staging-deploy) in Maven layout; the release workflow zips

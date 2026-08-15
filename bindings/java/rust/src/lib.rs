@@ -8,8 +8,8 @@
 //! hierarchy — lives in the hand-written `../disarm-java` layer; idiomatic Kotlin
 //! will live in `../disarm-kotlin`.
 //!
-//! Naming: the `#[jni_mangle("com.disarm.internal.Native")]` attribute generates
-//! the `Java_com_disarm_internal_Native_<method>` export symbol from each function
+//! Naming: the `#[jni_mangle("dev.disarm.internal.Native")]` attribute generates
+//! the `Java_dev_disarm_internal_Native_<method>` export symbol from each function
 //! name (no hand-written `Java_*` names, no `#[unsafe(no_mangle)]`), keeping the
 //! export/`extern "system"` plumbing inside the macro — the same way the Node
 //! (napi) and Ruby (magnus) bindings hide it. Rust fn names are the camelCase Java
@@ -64,8 +64,8 @@ use jni::{Env, EnvUnowned, jni_mangle, jni_sig};
 type Policy = jni::errors::ThrowRuntimeExAndDefault;
 
 /// JVM binary names of the exception classes the idiomatic layer defines.
-const EX_INVALID: &str = "com/disarm/DisarmInvalidArgumentException";
-const EX_ERROR: &str = "com/disarm/DisarmException";
+const EX_INVALID: &str = "dev/disarm/DisarmInvalidArgumentException";
+const EX_ERROR: &str = "dev/disarm/DisarmException";
 
 /// Throw the Java exception matching a core error's kind and return the sentinel
 /// [`JniError::JavaException`] so `resolve` keeps the pending throw. If throwing
@@ -244,7 +244,7 @@ fn checked_size(name: &str, value: jlong) -> Result<usize, String> {
 // ── Transliteration ─────────────────────────────────────────────────────────────
 
 /// Unicode → ASCII with the default scheme (the borrow-on-no-op fast path).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn transliterate<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -255,7 +255,7 @@ pub fn transliterate<'l>(
 
 /// Transliterate with a scheme (`"default"` | `"strict_iso9"` | `"gost7034"`) and
 /// an optional language profile (`lang`, may be null), via the core's builder.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn transliterateOpts<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -276,7 +276,7 @@ pub fn transliterateOpts<'l>(
 }
 
 /// Reverse-transliterate Latin → native script. `lang` is `"el"` | `"ru"` | `"uk"`.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn reverseTransliterate<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -324,7 +324,7 @@ fn read_optional(env: &Env, s: &JString) -> JniResult<Option<String>> {
 
 /// Characters with no romanization, as a `List<Untranslatable(character, offset)>`
 /// in order. `scheme`/`lang` mirror `transliterateOpts`.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn findUntranslatable<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -344,7 +344,7 @@ pub fn findUntranslatable<'l>(
         for u in &items {
             objs.push(new_untranslatable(env, u)?);
         }
-        let array = new_object_array_of(env, "com/disarm/Untranslatable", &objs)?;
+        let array = new_object_array_of(env, "dev/disarm/Untranslatable", &objs)?;
         list_of(env, &array)
     })
     .resolve::<Policy>()
@@ -366,11 +366,11 @@ fn build_find_untranslatable(
     Ok(b.find_untranslatable(text))
 }
 
-/// Construct a `com.disarm.Untranslatable` record.
+/// Construct a `dev.disarm.Untranslatable` record.
 fn new_untranslatable<'l>(env: &mut Env<'l>, u: &api::Untranslatable) -> JniResult<JObject<'l>> {
     let ch = env.new_string(u.ch.to_string())?;
     env.new_object(
-        JNIString::from("com/disarm/Untranslatable"),
+        JNIString::from("dev/disarm/Untranslatable"),
         jni_sig!("(Ljava/lang/String;J)V"),
         &[JValue::Object(&ch), JValue::Long(u.offset as jlong)],
     )
@@ -379,7 +379,7 @@ fn new_untranslatable<'l>(env: &mut Env<'l>, u: &api::Untranslatable) -> JniResu
 // ── Confusables (TR39) ──────────────────────────────────────────────────────────
 
 /// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"`).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn normalizeConfusables<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -400,7 +400,7 @@ pub fn normalizeConfusables<'l>(
 }
 
 /// Whether `text` contains a character confusable with `target`.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn isConfusable<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -420,7 +420,7 @@ pub fn isConfusable<'l>(
 
 // ── Canonicalization primitives (infallible String → String) ────────────────────
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripAccents<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -429,13 +429,13 @@ pub fn stripAccents<'l>(
     map_str(env, input, |t| api::strip_accents(t).into_owned())
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn foldCase<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> JObject<'l> {
     map_str(env, input, |t| api::fold_case(t).into_owned())
 }
 
 /// Replace emoji with their plain names; `stripModifiers` drops skin-tone marks.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn demojize<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -449,7 +449,7 @@ pub fn demojize<'l>(
 // ── Normalization ───────────────────────────────────────────────────────────────
 
 /// Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn normalize<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -468,7 +468,7 @@ pub fn normalize<'l>(
 }
 
 /// Whether `text` is already in normalization `form`.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn isNormalized<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -488,7 +488,7 @@ pub fn isNormalized<'l>(
 
 // ── Text cleaning (infallible String → String) ──────────────────────────────────
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn collapseWhitespace<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -497,7 +497,7 @@ pub fn collapseWhitespace<'l>(
     map_str(env, input, api::collapse_whitespace)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripControlChars<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -506,7 +506,7 @@ pub fn stripControlChars<'l>(
     map_str(env, input, api::strip_control_chars)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripZeroWidthChars<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -515,17 +515,17 @@ pub fn stripZeroWidthChars<'l>(
     map_str(env, input, api::strip_zero_width_chars)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripBidi<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> JObject<'l> {
     map_str(env, input, api::strip_bidi)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripTags<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> JObject<'l> {
     map_str(env, input, api::strip_tags)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripVariationSelectors<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -534,7 +534,7 @@ pub fn stripVariationSelectors<'l>(
     map_str(env, input, api::strip_variation_selectors)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripNoncharacters<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -543,13 +543,13 @@ pub fn stripNoncharacters<'l>(
     map_str(env, input, api::strip_noncharacters)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripPua<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> JObject<'l> {
     map_str(env, input, api::strip_pua)
 }
 
 /// Collapse runs of combining marks to at most `maxMarks` per base ("de-zalgo").
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripZalgo<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -568,7 +568,7 @@ pub fn stripZalgo<'l>(
 }
 
 /// Whether `text` carries more than `threshold` combining marks on any base.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn isZalgo<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -588,7 +588,7 @@ pub fn isZalgo<'l>(
 
 // ── Deobfuscation & security presets (fallible) ─────────────────────────────────
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripObfuscation<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -599,7 +599,7 @@ pub fn stripObfuscation<'l>(
     })
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn canonicalize<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -612,7 +612,7 @@ pub fn canonicalize<'l>(
 
 // ── Key-derivation presets (fallible; `lang` may be null) ───────────────────────
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn searchKey<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -630,7 +630,7 @@ pub fn searchKey<'l>(
     .resolve::<Policy>()
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn sortKey<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -648,7 +648,7 @@ pub fn sortKey<'l>(
     .resolve::<Policy>()
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn catalogKey<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -670,7 +670,7 @@ pub fn catalogKey<'l>(
 
 /// Turn arbitrary text into a safe filename. `platform` is `"universal"` |
 /// `"windows"` | `"posix"`; `lang` may be null.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn sanitizeFilename<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -714,7 +714,7 @@ pub fn sanitizeFilename<'l>(
 
 /// Generate a URL-safe slug. Mirrors the Node shim's flattened option surface; the
 /// idiomatic Java layer fills defaults before calling.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 #[allow(clippy::too_many_arguments)] // flattened SlugConfig, mirroring the Node shim
 pub fn slugify<'l>(
     mut env: EnvUnowned<'l>,
@@ -765,12 +765,12 @@ pub fn slugify<'l>(
 
 // ── Grapheme clusters ───────────────────────────────────────────────────────────
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn graphemeLen<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> jlong {
     map_long(env, input, |t| api::grapheme_len(t) as jlong)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn graphemeTruncate<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -790,7 +790,7 @@ pub fn graphemeTruncate<'l>(
     .resolve::<Policy>()
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn graphemeWidth<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -801,7 +801,7 @@ pub fn graphemeWidth<'l>(
     map_long(env, cluster, |t| api::grapheme_width(t, wide) as jlong)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn terminalWidth<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -814,7 +814,7 @@ pub fn terminalWidth<'l>(
 
 // ── Hostname / script analysis (infallible String → bool) ───────────────────────
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn isSuspiciousHostname<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -823,12 +823,12 @@ pub fn isSuspiciousHostname<'l>(
     map_bool(env, input, |t| api::is_suspicious_hostname(t).suspicious)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn isMixedScript<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> jboolean {
     map_bool(env, input, api::is_mixed_script)
 }
 
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn hasBidiConflict<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -840,7 +840,7 @@ pub fn hasBidiConflict<'l>(
 // ── String-array returns ────────────────────────────────────────────────────────
 
 /// Split `text` into its grapheme clusters (user-perceived characters), in order.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn graphemeSplit<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -850,7 +850,7 @@ pub fn graphemeSplit<'l>(
 }
 
 /// The Unicode scripts present, in first-appearance order (Common/Inherited excluded).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn detectScripts<'l>(
     env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -865,7 +865,7 @@ pub fn detectScripts<'l>(
 }
 
 /// Every Unicode script name known to the transliteration tables.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn listScripts<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<'l> {
     map_str_array_nullary(env, || {
         api::list_scripts().into_iter().map(str::to_owned).collect()
@@ -873,7 +873,7 @@ pub fn listScripts<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<'l> {
 }
 
 /// Every language code that has a context-aware transliteration profile.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn listContextLangs<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<'l> {
     map_str_array_nullary(env, || {
         api::list_context_langs()
@@ -886,7 +886,7 @@ pub fn listContextLangs<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<
 // ── Metadata introspection (record returns) ─────────────────────────────────────
 
 /// Static facts about a language `code`; throws on an unknown code.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn langInfo<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, code: JString<'l>) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
         let code = code.mutf8_chars(env)?.to_string();
@@ -898,14 +898,14 @@ pub fn langInfo<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, code: JString<'
     .resolve::<Policy>()
 }
 
-/// Construct a `com.disarm.LangMeta` record.
+/// Construct a `dev.disarm.LangMeta` record.
 fn new_lang_meta<'l>(env: &mut Env<'l>, m: &api::LangMeta) -> JniResult<JObject<'l>> {
     let name = env.new_string(m.name)?;
     let script = env.new_string(m.script)?;
     let region = env.new_string(m.region)?;
     let context = env.new_string(m.context)?;
     env.new_object(
-        JNIString::from("com/disarm/LangMeta"),
+        JNIString::from("dev/disarm/LangMeta"),
         jni_sig!("(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"),
         &[
             JValue::Object(&name),
@@ -917,7 +917,7 @@ fn new_lang_meta<'l>(env: &mut Env<'l>, m: &api::LangMeta) -> JniResult<JObject<
 }
 
 /// Static facts about a script by `name`; throws on an unknown name.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn scriptInfo<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -933,13 +933,13 @@ pub fn scriptInfo<'l>(
     .resolve::<Policy>()
 }
 
-/// Construct a `com.disarm.ScriptMeta` record.
+/// Construct a `dev.disarm.ScriptMeta` record.
 fn new_script_meta<'l>(env: &mut Env<'l>, m: &api::ScriptMeta) -> JniResult<JObject<'l>> {
     let name = env.new_string(m.name)?;
     let default_lang = opt_string(env, m.default_lang)?;
     let example = env.new_string(m.example)?;
     env.new_object(
-        JNIString::from("com/disarm/ScriptMeta"),
+        JNIString::from("dev/disarm/ScriptMeta"),
         jni_sig!("(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V"),
         &[
             JValue::Object(&name),
@@ -951,7 +951,7 @@ fn new_script_meta<'l>(env: &mut Env<'l>, m: &api::ScriptMeta) -> JniResult<JObj
 }
 
 /// Explain how `lang: "auto"` detection resolves `text` (infallible).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn inspectAutoLang<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -965,7 +965,7 @@ pub fn inspectAutoLang<'l>(
         let reason = env.new_string(&r.reason)?;
         let discriminators = new_string_list(env, &r.discriminators_hit)?;
         env.new_object(
-            JNIString::from("com/disarm/AutoLangInspection"),
+            JNIString::from("dev/disarm/AutoLangInspection"),
             jni_sig!("(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V"),
             &[
                 JValue::Object(&script),
@@ -1019,7 +1019,7 @@ fn read_registry<V>(
 }
 
 /// Compile a named-policy pipeline; returns an opaque handle (throws on unknown profile).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn pipelineNew<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, profile: JString<'l>) -> jlong {
     env.with_env(|env| -> JniResult<jlong> {
         let profile = profile.mutf8_chars(env)?.to_string();
@@ -1036,7 +1036,7 @@ pub fn pipelineNew<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, profile: JSt
 }
 
 /// Run a pipeline handle over `text` (throws on a processing error or stale handle).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn pipelineProcess<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -1058,13 +1058,13 @@ pub fn pipelineProcess<'l>(
 }
 
 /// Free a pipeline handle (removing it from the registry). Idempotent.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn pipelineFree(_env: EnvUnowned, _class: JClass, handle: jlong) {
     write_registry(&PIPELINES).remove(&handle);
 }
 
 /// Build a reusable lexicon (anomaly wordlist); returns an opaque handle.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn lexiconNew<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -1080,14 +1080,14 @@ pub fn lexiconNew<'l>(
 }
 
 /// Free a lexicon handle. Idempotent.
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn lexiconFree(_env: EnvUnowned, _class: JClass, handle: jlong) {
     write_registry(&LEXICONS).remove(&handle);
 }
 
 /// Whether `text` trips any anomaly against a prebuilt lexicon handle (throws on a
 /// stale handle).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn hasAnomalies<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -1106,7 +1106,7 @@ pub fn hasAnomalies<'l>(
 }
 
 /// Whether `text` trips any anomaly against an inline word list (per-call set build).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn hasAnomaliesWords<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -1122,7 +1122,7 @@ pub fn hasAnomaliesWords<'l>(
 }
 
 /// Full anomaly report against a prebuilt lexicon handle (throws on a stale handle).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn inspectAnomalies<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -1145,7 +1145,7 @@ pub fn inspectAnomalies<'l>(
 }
 
 /// Full anomaly report against an inline word list (per-call set build).
-#[jni_mangle("com.disarm.internal.Native")]
+#[jni_mangle("dev.disarm.internal.Native")]
 pub fn inspectAnomaliesWords<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
@@ -1161,14 +1161,14 @@ pub fn inspectAnomaliesWords<'l>(
     .resolve::<Policy>()
 }
 
-/// Construct a `com.disarm.Finding` record.
+/// Construct a `dev.disarm.Finding` record.
 fn new_finding<'l>(env: &mut Env<'l>, f: &api::Finding) -> JniResult<JObject<'l>> {
     let kind = env.new_string(f.kind.as_str())?;
     let token = env.new_string(&f.token)?;
     let detail = env.new_string(&f.detail)?;
     let reason = env.new_string(f.reason())?;
     env.new_object(
-        JNIString::from("com/disarm/Finding"),
+        JNIString::from("dev/disarm/Finding"),
         jni_sig!("(Ljava/lang/String;Ljava/lang/String;JJLjava/lang/String;Ljava/lang/String;)V"),
         &[
             JValue::Object(&kind),
@@ -1181,7 +1181,7 @@ fn new_finding<'l>(env: &mut Env<'l>, f: &api::Finding) -> JniResult<JObject<'l>
     )
 }
 
-/// Construct a `com.disarm.AnomalyReport` record.
+/// Construct a `dev.disarm.AnomalyReport` record.
 fn new_anomaly_report<'l>(env: &mut Env<'l>, r: &api::AnomalyReport) -> JniResult<JObject<'l>> {
     let kinds: Vec<String> = r.kinds.iter().map(|k| k.as_str().to_string()).collect();
     let kinds_list = new_string_list(env, &kinds)?;
@@ -1189,11 +1189,11 @@ fn new_anomaly_report<'l>(env: &mut Env<'l>, r: &api::AnomalyReport) -> JniResul
     for f in &r.findings {
         finding_objs.push(new_finding(env, f)?);
     }
-    let findings_array = new_object_array_of(env, "com/disarm/Finding", &finding_objs)?;
+    let findings_array = new_object_array_of(env, "dev/disarm/Finding", &finding_objs)?;
     let findings_list = list_of(env, &findings_array)?;
     let reason = opt_string(env, r.reason.as_deref())?;
     env.new_object(
-        JNIString::from("com/disarm/AnomalyReport"),
+        JNIString::from("dev/disarm/AnomalyReport"),
         jni_sig!("(ZLjava/util/List;Ljava/util/List;Ljava/lang/String;)V"),
         &[
             JValue::Bool(r.anomalous),

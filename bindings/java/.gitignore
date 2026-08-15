@@ -9,4 +9,4 @@ out/
 *.class
 
 # Bundled native libraries staged into resources for packaging (built, not vcs'd)
-disarm-java/src/main/resources/com/disarm/native/
+disarm-java/src/main/resources/dev/disarm/native/

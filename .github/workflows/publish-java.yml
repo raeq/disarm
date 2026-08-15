@@ -123,7 +123,7 @@ jobs:
         # resource path the NativeLoader resolves. -Pdisarm.nativePrebuilt then skips
         # the host-only cargo build so the JAR carries every platform.
         run: |
-          DEST=disarm-java/build/nativeLib/com/disarm/native
+          DEST=disarm-java/build/nativeLib/dev/disarm/native
           for d in artifacts/native-*; do
             osarch="${d##*/native-}"
             mkdir -p "$DEST/$osarch"
@@ -142,7 +142,7 @@ jobs:
           CENTRAL_USER: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
           CENTRAL_PASS: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
         run: |
-          ( cd build/staging-deploy && zip -q -r ../central-bundle.zip com )
+          ( cd build/staging-deploy && zip -q -r ../central-bundle.zip dev )
           AUTH=$(printf '%s:%s' "$CENTRAL_USER" "$CENTRAL_PASS" | base64)
           HTTP=$(curl -sS -o response.txt -w '%{http_code}' \
             -X POST "https://central.sonatype.com/api/v1/publisher/upload?name=disarm-${{ github.ref_name }}&publishingType=AUTOMATIC" \

@@ -186,7 +186,9 @@ fn read_string_array(env: &mut Env, arr: &JObjectArray<JString>) -> JniResult<Ve
 
 /// Build a Java `String[]` from a slice of Rust strings.
 fn new_string_array<'l>(env: &mut Env<'l>, items: &[String]) -> JniResult<JObject<'l>> {
-    let len = jsize::try_from(items.len()).unwrap_or(jsize::MAX);
+    let Ok(len) = jsize::try_from(items.len()) else {
+        return Err(throw_invalid(env, "array length exceeds JNI jsize::MAX"));
+    };
     let array = env.new_object_array(len, JNIString::from("java/lang/String"), JObject::null())?;
     for (i, s) in items.iter().enumerate() {
         let element = env.new_string(s)?;
@@ -201,7 +203,9 @@ fn new_object_array_of<'l>(
     class_name: &str,
     items: &[JObject<'l>],
 ) -> JniResult<JObject<'l>> {
-    let len = jsize::try_from(items.len()).unwrap_or(jsize::MAX);
+    let Ok(len) = jsize::try_from(items.len()) else {
+        return Err(throw_invalid(env, "array length exceeds JNI jsize::MAX"));
+    };
     let array = env.new_object_array(len, JNIString::from(class_name), JObject::null())?;
     for (i, obj) in items.iter().enumerate() {
         array.set_element(env, i, obj)?;

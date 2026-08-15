@@ -11,6 +11,11 @@
 [package]
 name = "disarm-jni"
 version = "0.0.0"
+# edition 2024 / MSRV 1.85 are *required* by the `jni` 0.22 dependency (itself
+# edition 2024 / rust-version 1.85), not chosen for a 2024-edition feature here.
+# This does NOT affect the core's shipped 1.81 MSRV: `disarm-jni` is an unpublished
+# (`publish = false`) binding crate — consumers get the JAR, never this crate — so
+# it is out of the core's MSRV contract, like the dev-only criterion (1.86) exception.
 edition = "2024"
 rust-version = "1.85"
 publish = false

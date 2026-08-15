@@ -107,10 +107,12 @@ a stale Gradle version silently publishes the wrong Maven version. Keep them loc
 Two things that look like versions but must **not** change: the
 `#[deprecated(since = "X")]` (Rust) and `.. deprecated:: X` (Python docstring) markers
 record the version in which something was *deprecated*, not the current release. The
-binding **glue** crates (`bindings/node/Cargo.toml`, `bindings/ruby/ext/disarm/Cargo.toml`)
-stay pinned at `version = "0.0.0"`; their
-`disarm_core = { package = "disarm", version = "0.<minor>" }` dependency uses a
-**minor-only** requirement, so a patch never touches them — only a minor bumps that pin.
+binding **glue** crates (`bindings/node/Cargo.toml`, `bindings/ruby/ext/disarm/Cargo.toml`,
+`bindings/java/rust/Cargo.toml`, `bindings/cabi/Cargo.toml`) stay pinned at
+`version = "0.0.0"`; each one's `disarm_core = { package = "disarm", version = "0.<minor>" }`
+dependency uses a **minor-only** requirement, so a patch never touches them — but a **minor
+bumps all four pins** in lockstep with the core (leave them at the *old* minor until the new
+core is published, or the pre-publish build can't resolve the dependency).
 
 Before tagging, sweep for stray references and eyeball what is left (the surviving hits
 should only be the `deprecated` markers above):

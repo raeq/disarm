@@ -5,7 +5,7 @@ plugins {
     signing
 }
 
-group = "com.disarm"
+group = "dev.disarm"
 version = "0.11.0" // lockstep with the core
 
 kotlin {

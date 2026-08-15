@@ -16,6 +16,31 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-08-15
+
+### Added
+
+- **JVM bindings — Java + Kotlin, on Maven Central (#540, closes #43).** disarm now
+  ships to the JVM ecosystem: `dev.disarm:disarm` (idiomatic Java API, a fat JAR with
+  per-platform JNI native libraries for macOS/Linux/Windows on x86-64 and aarch64) and
+  `dev.disarm:disarm-kotlin` (extension functions + default arguments). The full core
+  surface is exposed — transliteration, confusable folding, slugify / `sanitizeFilename`,
+  reusable `Pipeline` and `Lexicon` handles, grapheme/script queries, and the structured
+  anomaly/inspection reports. As a new binding, this is a lockstep **minor** across every
+  registry (crates.io / PyPI / npm / RubyGems / Maven Central).
+- **First-class C-ABI substrate (`dev.disarm` `disarm-cabi` / `disarm_ffi`).** A reusable,
+  **unsafe-free** C ABI over the core (via `safer-ffi`), consumed by the JVM binding and
+  the basis for the forthcoming Go bindings (#47). The JNI layer and C ABI carry no
+  `unsafe` (safe handle registry, `jni_mangle`-generated exports).
+
+### Documentation
+
+- Documented the full set of version-bump sites a release touches (#525).
+
+### Internal
+
+- Routine dependency and CI-action updates (dependabot).
+
 ## [0.11.1] — 2026-07-13
 
 ### Fixed

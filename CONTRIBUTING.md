@@ -186,7 +186,7 @@ pytest -m formal
 # Docs site — --strict fails on broken internal links and missing-nav pages.
 # CI's docs.yml runs this too, but is path-filtered (docs/**, mkdocs.yml,
 # python/disarm/**), so a version-bump-only release PR never triggers it.
-pip install -r docs/requirements.txt
+pip install --require-hashes -r requirements/docs.txt
 mkdocs build --strict
 ```
 
@@ -213,9 +213,17 @@ mypy python/disarm --ignore-missing-imports
 ## Building documentation
 
 ```bash
-pip install -e ".[docs]"
+pip install --require-hashes -r requirements/docs.txt
 mkdocs serve              # local preview at http://127.0.0.1:8000
 mkdocs build              # build static site to site/
+```
+
+`requirements/docs.txt` is **generated** — the `[docs]` extra in `pyproject.toml` is the
+single source of truth, and the lockfile is compiled from it (same pattern as
+`requirements/bench.txt`). After changing the extra, regenerate:
+
+```bash
+uv pip compile pyproject.toml --extra docs --generate-hashes -o requirements/docs.txt
 ```
 
 ## Doc-test recipes

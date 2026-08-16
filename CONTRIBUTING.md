@@ -182,6 +182,12 @@ PYO3_PYTHON=$(which python3) cargo test --no-default-features \
 
 # Python formal invariant tests (12 tests)
 pytest -m formal
+
+# Docs site — --strict fails on broken internal links and missing-nav pages.
+# CI's docs.yml runs this too, but is path-filtered (docs/**, mkdocs.yml,
+# python/disarm/**), so a version-bump-only release PR never triggers it.
+pip install -r docs/requirements.txt
+mkdocs build --strict
 ```
 
 > **Please don't remove** `#[ignore]`, `@pytest.mark.formal`, or

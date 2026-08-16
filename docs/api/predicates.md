@@ -84,10 +84,15 @@ The second element of the tuple returned by `is_suspicious_hostname()`:
 
 | Attribute | Type | Description |
 |---|---|---|
-| `suspicious` | `bool` | `True` if a problem was detected (mixed-script or bundled-table confusable) |
+| `suspicious` | `bool` | `True` if any label is mixed-script, contains a Latin-confusable character, or the hostname has a bidi-direction conflict. An **any-character** confusable screen — it flags essentially every non-Latin hostname, so it is a *maximally conservative screen*, not a precise verdict |
 | `scripts` | `list[str]` | Unicode scripts found across all labels |
 | `mixed_script` | `bool` | `True` if any single label contains more than one script |
-| `has_confusables` | `bool` | `True` if confusable homoglyphs found |
+| `has_confusables` | `bool` | `True` if any label contains a Latin-confusable character |
+| `bidi_conflict` | `bool` | `True` if the decoded hostname mixes strong LTR and RTL characters (the "BiDi Swap" precondition); **folded into** `suspicious` |
+| `cross_label_script` | `bool` | `True` if the labels span more than one script; broader/noisier than `bidi_conflict` (fires on benign IDN ccTLDs like `google.рф`), so **not** folded into `suspicious` |
+| `label_scripts` | `list[list[str]]` | Per-label resolved scripts, left to right |
+| `whole_script_confusable` | `bool` | `True` if any label is single-script, non-Latin, whose confusable skeleton is entirely Latin (`аррӏе`→`apple`). A graded **signal, not a verdict** — **not** folded into `suspicious` (fires on `ру`→`py`, `оса`→`oca`) |
+| `label_whole_script_confusable` | `list[bool]` | Per-label whole-script-confusable flags, parallel to `label_scripts` (exclude the TLD label for the precise policy) |
 | `canonical` | `str` | Latin-normalized form of the hostname |
 
 ```python
@@ -98,6 +103,12 @@ suspicious, analysis = is_suspicious_hostname("google.com")
 
 suspicious, analysis = is_suspicious_hostname("gооgle.com")  # Cyrillic о's
 # suspicious = True, analysis.mixed_script = True, analysis.has_confusables = True
+
+# Whole-script spoof: an all-Cyrillic label whose skeleton is Latin
+suspicious, analysis = is_suspicious_hostname("аррӏе.com")
+# analysis.whole_script_confusable = True
+# analysis.label_whole_script_confusable = [True, False]  # spoof label, then the TLD
+# analysis.canonical = "apple.com"
 ```
 
-A hostname is flagged suspicious if any single label is mixed-script (draws on more than one Unicode script) or contains confusable homoglyphs. **A not-suspicious result is not a safety guarantee** — whole-script spoofs with no bundled-table confusable, and confusables outside the bundled table, are out of scope (see [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)); branch on the granular fields plus your own policy.
+`suspicious` is a **maximally conservative screen**: because the confusable check is an any-character test and the most frequent Cyrillic/Greek letters are TR39 confusables, it flags essentially every non-Latin hostname — `москва.рф` as readily as `аррӏе.com`. **A not-suspicious result is not a safety guarantee**, and a suspicious one is not a precise verdict. For whole-script spoofs, use `whole_script_confusable` / `label_whole_script_confusable`: the precise, low-false-positive policy is `whole_script_confusable(non-TLD label) ∧ (TLD is Latin/ASCII)`, applied by the caller — disarm deliberately does not model registrable boundaries (no PSL), and the irreducible `оса`-style case (a real word that skeletons to Latin) needs a caller-supplied protected-name list. See the [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md).

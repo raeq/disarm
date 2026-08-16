@@ -1165,7 +1165,10 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
     ``HostnameAnalysis`` with attributes:
 
     - ``suspicious``: bool — True if a problem was detected (mixed-script, a
-      bundled-table confusable, or a bidi-direction conflict).
+      bundled-table confusable, or a bidi-direction conflict). Because the
+      confusable check is an *any-character* screen, this flags essentially every
+      hostname with a non-Latin letter — legitimate (``москва.рф``) as well as
+      spoofs — so it is a **maximally conservative screen**, not a precise verdict.
     - ``scripts``: list[str] — Unicode scripts found across all labels.
     - ``mixed_script``: bool — True if any single label contains more than one script.
     - ``has_confusables``: bool — True if confusable homoglyphs found.
@@ -1177,6 +1180,15 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
       benign IDN ccTLDs like ``google.рф``), so it is **not** folded into
       ``suspicious``; exposed for caller policy.
     - ``label_scripts``: list[list[str]] — per-label resolved scripts, left to right.
+    - ``whole_script_confusable``: bool — True if any label is a *whole-script
+      confusable*: single-script, non-Latin, whose confusable skeleton is entirely
+      Latin (e.g. Cyrillic ``аррӏе`` → ``apple``). A graded **signal, not a
+      verdict** — on its own it fires on short non-Latin ccTLDs (``ру``→``py``) and
+      on real words (``оса``→``oca``), so it is **not** folded into ``suspicious``.
+    - ``label_whole_script_confusable``: list[bool] — per-label flags, parallel to
+      ``label_scripts``, so a caller can exclude the TLD label. The precise,
+      low-false-positive policy is ``wsc(non-TLD label) and TLD-is-Latin`` (plus a
+      caller-supplied protected-name list for the irreducible ``оса``-style case).
     - ``canonical``: str — Latin-normalized form of the hostname.
 
     A hostname is flagged suspicious if any single label is mixed-script
@@ -1189,11 +1201,10 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
 
     **A ``False`` (not-suspicious) result is not a safety guarantee.** It means
     only that no mixed-script label and no confusable *from the bundled TR39
-    table* was found. Whole-script spoofs that use no bundled-table confusable,
-    and confusables outside the bundled table, are out of scope (see the Threat
-    Model) and report not-suspicious. Base allow/deny decisions on the granular
-    findings plus your own policy — a detector can attest the presence of a
-    problem, never the absence of all problems.
+    table* was found. Confusables outside the bundled table are not detected and
+    report not-suspicious. Base allow/deny decisions on the granular findings
+    (including ``whole_script_confusable``) plus your own policy — a detector can
+    attest the presence of a problem, never the absence of all problems.
 
     Args:
         hostname: Hostname string to check (e.g. "example.com").

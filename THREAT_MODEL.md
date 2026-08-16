@@ -157,10 +157,21 @@ behavior, not a vulnerability:
   `confusables.txt` entries disarm does not bundle, and entirely novel/ML-discovered
   homoglyphs (e.g. Deng et al.'s 8,000+) — are **not** mapped. Normalization is
   enumerate-the-known; it cannot canonicalize the unknown.
-- **Whole-script / single-script spoofs.** A string composed *entirely* of one non-Latin
-  script that visually reads as Latin (e.g. an all-Cyrillic word) is **not mixed-script**
-  and may contain no table confusable; `is_suspicious_hostname` and `is_mixed_script` will not
-  flag it. Whole-script confusable detection is not implemented.
+- **Whole-script / single-script spoofs — surfaced as a signal; the precise verdict is
+  caller-side (#545).** A string composed *entirely* of one non-Latin script that visually
+  reads as Latin (e.g. an all-Cyrillic `аррӏе` → `apple`) is **not mixed-script**, and
+  `is_mixed_script` will not flag it. It is now **named** by `whole_script_confusable` /
+  `label_whole_script_confusable` on `HostnameAnalysis`: a per-label fact — single-script,
+  non-Latin, whose confusable skeleton is entirely Latin. This is a graded **signal, not a
+  verdict**, and is deliberately **not** folded into `suspicious`: on its own it fires on
+  short non-Latin ccTLDs (`ру`→`py`) and on real words whose every letter is a confusable
+  (`оса` "wasp" → `oca`). The precise, low-false-positive policy —
+  `whole_script_confusable(non-TLD label) ∧ Latin TLD` — is **caller-side**, because it needs
+  registrable-boundary (TLD) context that disarm does not model (no PSL), plus a
+  caller-supplied protected-name list for the **irreducible** class where a real word is
+  signal-identical to a spoof (`оса`). (`suspicious` itself, being an any-character confusable
+  screen, already reports `аррӏе.com` as suspicious today — but so it does every legitimate
+  non-Latin hostname, which is why it is a conservative screen, not a precise verdict.)
 - **Multi-character confusables.** Sequences confusable as a *group* rather than
   per-character — e.g. `rn` → `m`, `cl` → `d`, `vv` → `w` — are not detected or folded.
   Mapping is single-code-point only.
@@ -254,7 +265,9 @@ The scope above is grounded in the literature, not asserted:
   Latin** substitutions (85–88%), with IDN/Unicode a smaller but growing share. disarm's
   single-letter Latin confusable coverage of UTS#39 is complete and gated in CI
   (`tests/test_confusable_coverage.py`); `is_suspicious_hostname` addresses the mixed-script/IDN
-  case. Multi-character (`rn`→`m`) and whole-script spoofs remain out of scope (above).
+  case, and whole-script spoofs are surfaced as a named signal (`whole_script_confusable`,
+  #545) for callers to combine with a TLD policy. Multi-character (`rn`→`m`) spoofs remain
+  out of scope (above).
 
 References: Holgers, Watson & Gribble, "Cutting through the Confusion," USENIX 2006 ·
 Deng, Linsky & Wright, "Weaponizing Unicodes with Deep Learning," 2020 (arXiv:2010.04382) ·

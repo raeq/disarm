@@ -310,3 +310,52 @@ class TestBidiDirectionConflict:
         suspicious, d = is_suspicious_hostname("example.com")
         assert not suspicious
         assert not d.bidi_conflict and not d.cross_label_script
+
+
+class TestWholeScriptConfusable:
+    """#545: whole_script_confusable / label_whole_script_confusable — a graded
+    signal (NOT folded into suspicious) naming the whole-script-spoof mechanism."""
+
+    def test_attack_flagged(self):
+        # аррӏе.com: every letter of the non-Latin label is a confusable → skeleton
+        # "apple"; the non-TLD label is whole-script-confusable under a Latin TLD.
+        _, d = is_suspicious_hostname("аррӏе.com")
+        assert d.whole_script_confusable
+        assert d.label_whole_script_confusable == [True, False]
+        assert d.canonical == "apple.com"
+
+    def test_legit_non_latin_not_flagged(self):
+        # Genuine non-Latin domains: at least one letter survives the Latin skeleton
+        # in every label, so no label qualifies.
+        for host in ("москва.рф", "почта.рф", "госуслуги.рф", "αθήνα.gr", "אתר.קום", "例え.jp"):
+            _, d = is_suspicious_hostname(host)
+            assert not d.whole_script_confusable, (host, d.label_whole_script_confusable)
+
+    def test_known_fp_cctld(self):
+        # яндекс.ру — the short Cyrillic ccTLD `ру` skeletons to Latin `py`, so the
+        # top-level (any-label) bool over-fires. Documented graded-signal FP: the wsc
+        # label is the TLD, which a `wsc(non-TLD) ∧ latin-TLD` caller policy excludes.
+        _, d = is_suspicious_hostname("яндекс.ру")
+        assert d.label_whole_script_confusable == [False, True]
+        assert d.whole_script_confusable
+
+    def test_known_fp_real_word(self):
+        # оса.рф ("wasp") → skeleton `oca`: an irreducible label-level FP (signal-
+        # identical to a spoof). Pinned. The Cyrillic `.рф` TLD clears it under the
+        # caller policy.
+        _, d = is_suspicious_hostname("оса.рф")
+        assert d.label_whole_script_confusable == [True, False]
+        assert d.whole_script_confusable
+
+    def test_caller_policy_discriminates(self):
+        # The documented precise policy: a non-TLD label is whole-script-confusable
+        # AND the TLD (rightmost label) is Latin/ASCII. True only for the real attack.
+        def spoofs_latin_brand(host: str) -> bool:
+            _, d = is_suspicious_hostname(host)
+            tld_scripts = d.label_scripts[-1]
+            latin_tld = tld_scripts in ([], ["Latin"])
+            return latin_tld and any(d.label_whole_script_confusable[:-1])
+
+        assert spoofs_latin_brand("аррӏе.com")
+        for legit in ("москва.рф", "яндекс.ру", "оса.рф", "αθήνα.gr", "аррӏе.рф", "example.com"):
+            assert not spoofs_latin_brand(legit), legit

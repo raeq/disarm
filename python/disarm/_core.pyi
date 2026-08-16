@@ -30,6 +30,8 @@ class HostnameAnalysis:
     bidi_conflict: bool
     cross_label_script: bool
     label_scripts: list[list[str]]
+    whole_script_confusable: bool
+    label_whole_script_confusable: list[bool]
     canonical: str
 
 class Finding:

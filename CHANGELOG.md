@@ -16,6 +16,31 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Added
+
+- **Whole-script-confusable signal on `HostnameAnalysis` (#545).** Two additive
+  fields — `whole_script_confusable` (any label qualifies) and the per-label
+  `label_whole_script_confusable` — name the fact that discriminates a whole-script
+  spoof (`аррӏе.com` → skeleton `apple.com`, every letter a confusable) from a
+  genuine non-Latin domain (`москва.рф`, whose `м`/`к`/`в` survive the skeleton). A
+  label qualifies when it is single-script, non-Latin, and its confusable skeleton
+  is entirely Latin. It is a graded **signal, not a verdict**, and is deliberately
+  **not** folded into `suspicious`: on its own it fires on short non-Latin ccTLDs
+  (`ру`→`py`) and on real words whose every letter is a confusable (`оса`→`oca`).
+  The precise, low-false-positive policy — `whole_script_confusable(non-TLD label) ∧
+  Latin TLD` — is caller-side (disarm does not model registrable boundaries). Exposed
+  on the Rust and Python surfaces; the other bindings expose only `.suspicious` today
+  and are tracked separately (#549).
+
+### Documentation
+
+- Clarified that `is_suspicious_hostname`'s `suspicious` flag is a **maximally
+  conservative screen** (an any-character confusable test flags essentially every
+  non-Latin hostname), not a precise verdict, and moved whole-script confusables in
+  `THREAT_MODEL.md` from *out of scope* to a defined mechanism with its stated
+  irreducible false-positive class. Completed the `HostnameAnalysis` field table in
+  the predicates docs.
+
 ## [0.12.0] — 2026-08-15
 
 ### Added

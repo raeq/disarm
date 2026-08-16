@@ -242,6 +242,18 @@ pub struct HostnameAnalysis {
     /// Per-label resolved scripts, left to right (Common / Inherited excluded),
     /// so a caller can apply position-aware policy without re-parsing.
     pub label_scripts: Vec<Vec<String>>,
+    /// Whether any label is a *whole-script confusable* (#545): single-script,
+    /// non-Latin, with a confusable skeleton that is entirely Latin (e.g. Cyrillic
+    /// `аррӏе` → `apple`). A graded **signal, not a verdict** — on its own it fires
+    /// on short non-Latin ccTLDs (`ру`→`py`) and on real words (`оса`→`oca`), so it
+    /// is **not** folded into [`suspicious`](Self::suspicious). Combine
+    /// [`label_whole_script_confusable`](Self::label_whole_script_confusable) for
+    /// non-TLD labels with a Latin-TLD check for the precise policy.
+    pub whole_script_confusable: bool,
+    /// Per-label whole-script-confusable flags, parallel to
+    /// [`label_scripts`](Self::label_scripts) — lets a caller exclude the TLD label
+    /// when applying the `wsc(non-TLD) ∧ Latin-TLD` policy.
+    pub label_whole_script_confusable: Vec<bool>,
     /// The Latin-normalized (canonical) form of the hostname.
     pub canonical: String,
 }
@@ -277,6 +289,8 @@ pub fn is_suspicious_hostname(hostname: &str) -> HostnameAnalysis {
         bidi_conflict: core.bidi_conflict,
         cross_label_script: core.cross_label_script,
         label_scripts: core.label_scripts,
+        whole_script_confusable: core.whole_script_confusable,
+        label_whole_script_confusable: core.label_whole_script_confusable,
         canonical: core.canonical,
     }
 }

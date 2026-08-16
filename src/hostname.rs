@@ -58,6 +58,16 @@ pub(crate) struct HostnameAnalysis {
     pub(crate) cross_label_script: bool,
     /// Per-label resolved scripts, left to right (Common/Inherited excluded).
     pub(crate) label_scripts: Vec<Vec<String>>,
+    /// Whether any label is a whole-script confusable (#545): single-script,
+    /// non-Latin, with a confusable skeleton that is entirely Latin. A graded
+    /// SIGNAL, not a verdict — it fires on short non-Latin ccTLDs (`ру`→`py`) and
+    /// on real words whose every letter is a confusable (`оса`→`oca`) — so it is
+    /// deliberately NOT folded into `suspicious` (see the `is_suspicious_hostname`
+    /// docs). The precise caller policy is
+    /// `label_whole_script_confusable[non-TLD label] ∧ Latin TLD`.
+    pub(crate) whole_script_confusable: bool,
+    /// Per-label whole-script-confusable flags, parallel to `label_scripts`.
+    pub(crate) label_whole_script_confusable: Vec<bool>,
     /// The Latin-normalized (canonical) form of the hostname.
     pub(crate) canonical: String,
 }
@@ -76,7 +86,11 @@ pub(crate) struct HostnameAnalysis {
 ///   benign combinations (e.g. Latin + CJK) as well as spoofing ones — a caller
 ///   wanting a more permissive policy can inspect the `mixed_script`/`scripts`
 ///   fields.
-/// - It contains confusable characters that map to different Latin characters
+/// - Any label contains a character confusable with a Latin character. This is an
+///   *any-character* screen, so it flags essentially every hostname containing a
+///   non-Latin letter (the most frequent Cyrillic and Greek letters are TR39
+///   confusables) — legitimate ones (`москва.рф`) as well as spoofs. `suspicious`
+///   is therefore a **maximally conservative screen**, not a precise verdict.
 /// - The decoded hostname mixes strong left-to-right and strong right-to-left
 ///   characters (`bidi_conflict`, #412) — the "BiDi Swap" reorder precondition,
 ///   which `mixed_script` misses because the mixing is *across* labels. The
@@ -84,14 +98,26 @@ pub(crate) struct HostnameAnalysis {
 ///   (it fires on benign IDN ccTLDs like `google.рф`).
 /// - An ACE label fails to decode, or a confusable check errors (fail closed)
 ///
+/// **Whole-script confusables (#545).** `whole_script_confusable` (and the
+/// per-label `label_whole_script_confusable`) name the fact that discriminates a
+/// whole-script spoof (`аррӏе.com` → skeleton `apple.com`, every letter a
+/// confusable) from a genuine non-Latin domain (`москва.рф`, whose `м`/`к`/`в`
+/// survive the skeleton). It is a graded **signal, not a verdict**, and is
+/// deliberately NOT folded into `suspicious`: on its own it fires on short
+/// non-Latin ccTLDs (`ру`→`py`) and on real words that happen to skeleton to Latin
+/// (`оса`→`oca`). The precise, low-false-positive policy is caller-side —
+/// `label_whole_script_confusable[non-TLD label] ∧ (TLD is Latin/ASCII)` — because
+/// separating the last two classes needs registrable-boundary (TLD) context, which
+/// this library leaves to the caller, plus a caller-supplied protected-name list
+/// for the irreducible `оса`-style case.
+///
 /// Returns a tuple of (is_suspicious, analysis).
 ///
 /// **A `false` (not-suspicious) result is NOT a safety guarantee.** It means
 /// only that no mixed-script label and no confusable *from the bundled TR39
-/// table* was found. Per the THREAT_MODEL *Out of scope* section, whole-script
-/// spoofs that use no bundled-table confusable, and any confusable outside the
-/// bundled table, are not detected and will report not-suspicious. Base allow/
-/// deny decisions on the granular `scripts` / `mixed_script` / `has_confusables`
+/// table* was found. Confusables outside the bundled table are not detected and
+/// will report not-suspicious. Base allow/deny decisions on the granular
+/// `scripts` / `mixed_script` / `has_confusables` / `whole_script_confusable`
 /// fields plus your own policy — a detector can attest the *presence* of a
 /// problem, never the *absence* of all problems.
 pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis) {
@@ -112,6 +138,8 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
                 bidi_conflict: false,
                 cross_label_script: false,
                 label_scripts: Vec::new(),
+                whole_script_confusable: false,
+                label_whole_script_confusable: Vec::new(),
                 canonical: normalized,
             },
         );
@@ -125,6 +153,7 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
     let mut has_confusables = false;
     let mut decoded_labels: Vec<String> = Vec::new();
     let mut per_label_scripts: Vec<Vec<String>> = Vec::new();
+    let mut per_label_wsc: Vec<bool> = Vec::new();
 
     for raw_label in normalized.split('.') {
         // Empty labels arise from leading, trailing, or consecutive dots
@@ -134,6 +163,7 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
         if raw_label.is_empty() {
             decoded_labels.push(String::new());
             per_label_scripts.push(Vec::new());
+            per_label_wsc.push(false);
             continue;
         }
 
@@ -162,6 +192,21 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
         // Check scripts in this (decoded) label
         let label_scripts = scripts::detect_scripts(&label);
         per_label_scripts.push(label_scripts.iter().map(|s| (*s).to_string()).collect());
+
+        // Whole-script-confusable for this label (#545): single-script, non-Latin,
+        // and the confusable skeleton is entirely Latin. `detect_scripts` already
+        // drops Common/Inherited (digits, hyphen, combining marks), so a skeleton
+        // resolving to exactly `["Latin"]` means every non-neutral character folded
+        // to Latin. This is a graded SIGNAL, deliberately NOT folded into
+        // `suspicious` — it fires on short non-Latin ccTLDs (`ру`→`py`) and on real
+        // words whose every letter is a confusable (`оса`→`oca`). See the fn docs
+        // for the precise `wsc(non-TLD) ∧ Latin-TLD` caller policy.
+        let label_wsc = label_scripts.len() == 1 && label_scripts[0] != "Latin" && {
+            let skeleton = confusables::normalize_confusables(&label, "latin")
+                .unwrap_or_else(|_| label.clone());
+            matches!(scripts::detect_scripts(&skeleton).as_slice(), ["Latin"])
+        };
+        per_label_wsc.push(label_wsc);
 
         // Track all scripts seen (O(1) dedup via HashSet)
         for s in &label_scripts {
@@ -221,6 +266,10 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
     let canonical =
         confusables::normalize_confusables(&decoded_hostname, "latin").unwrap_or(decoded_hostname);
 
+    // Aggregate: any label is a whole-script confusable. Graded signal (§545 §5.1);
+    // NOT folded into `suspicious`.
+    let whole_script_confusable = per_label_wsc.iter().any(|&b| b);
+
     (
         suspicious,
         HostnameAnalysis {
@@ -231,6 +280,8 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
             bidi_conflict,
             cross_label_script,
             label_scripts: per_label_scripts,
+            whole_script_confusable,
+            label_whole_script_confusable: per_label_wsc,
             canonical,
         },
     )
@@ -260,9 +311,80 @@ mod tests {
 
     #[test]
     fn test_full_cyrillic_domain() {
-        // Fully Cyrillic domain — not mixed script, might have confusables
-        let (_, details) = is_suspicious_hostname("яндекс.ру");
-        assert!(!details.mixed_script);
+        // Fully Cyrillic domain (Yandex): not mixed-script. `suspicious` is true only
+        // via the any-character confusable screen (#545), not a real spoof — so the
+        // verdict is no longer discarded, it is explained by the whole-script signal.
+        let (_, d) = is_suspicious_hostname("яндекс.ру");
+        assert!(!d.mixed_script);
+        // Known graded-signal FP: the `яндекс` label is NOT whole-script-confusable
+        // (я, д survive the skeleton), but the short Cyrillic ccTLD `ру` skeletons to
+        // Latin `py`, so it IS — and the top-level (any-label) bool therefore fires.
+        // The caller's `wsc(non-TLD) ∧ latin-TLD` policy clears it: the only wsc label
+        // is the TLD, and the TLD is Cyrillic, not Latin.
+        assert_eq!(d.label_whole_script_confusable, vec![false, true]);
+        assert!(
+            d.whole_script_confusable,
+            "top-level bool over-fires on the `ру` ccTLD — the documented graded-signal FP"
+        );
+    }
+
+    #[test]
+    fn test_whole_script_confusable_attack() {
+        // аррӏе.com: an all-Cyrillic label whose every letter is a confusable — the
+        // skeleton is `apple`. The non-TLD label is whole-script-confusable and the
+        // TLD is Latin, so both the field and the caller policy flag it.
+        let (_, d) = is_suspicious_hostname("\u{0430}\u{0440}\u{0440}\u{04CF}\u{0435}.com");
+        assert!(d.whole_script_confusable);
+        assert_eq!(d.label_whole_script_confusable, vec![true, false]);
+        assert_eq!(d.canonical, "apple.com");
+    }
+
+    #[test]
+    fn test_whole_script_confusable_legit_domains_not_flagged() {
+        // Genuine non-Latin domains: at least one letter in every label survives the
+        // Latin skeleton, so NO label is whole-script-confusable. (Cyrillic, Greek,
+        // Hebrew, and mixed Han+Hiragana all covered.)
+        for host in [
+            "\u{043C}\u{043E}\u{0441}\u{043A}\u{0432}\u{0430}.\u{0440}\u{0444}", // москва.рф
+            "\u{043F}\u{043E}\u{0447}\u{0442}\u{0430}.\u{0440}\u{0444}",         // почта.рф
+            "\u{03B1}\u{03B8}\u{03AE}\u{03BD}\u{03B1}.gr", // αθήνα.gr (ή survives)
+            "\u{05D0}\u{05EA}\u{05E8}.\u{05E7}\u{05D5}\u{05DD}", // אתר.קום
+            "\u{4F8B}\u{3048}.jp",                         // 例え.jp (mixed-script label)
+        ] {
+            let (_, d) = is_suspicious_hostname(host);
+            assert!(
+                !d.whole_script_confusable,
+                "{host:?} must not be whole-script-confusable, got {:?}",
+                d.label_whole_script_confusable
+            );
+        }
+    }
+
+    #[test]
+    fn test_whole_script_confusable_known_fp_osa() {
+        // оса.рф ("wasp"): the `оса` label skeletons to Latin `oca`, so it IS
+        // whole-script-confusable — an IRREDUCIBLE false positive at the label level
+        // (signal-identical to а spoof; only a caller-supplied protected-name list can
+        // separate them). Pinned deliberately. The caller's `wsc(non-TLD) ∧ latin-TLD`
+        // policy still clears the full domain because the `.рф` TLD is Cyrillic.
+        let (_, d) = is_suspicious_hostname("\u{043E}\u{0441}\u{0430}.\u{0440}\u{0444}");
+        assert_eq!(d.label_whole_script_confusable, vec![true, false]);
+        assert!(d.whole_script_confusable);
+        assert!(!d.mixed_script);
+    }
+
+    #[test]
+    fn test_whole_script_confusable_spoof_under_cyrillic_tld() {
+        // аррӏе.рф: a Cyrillic spoof label under a Cyrillic ccTLD. The label IS
+        // whole-script-confusable, but the documented caller policy `wsc(non-TLD) ∧
+        // latin-TLD` does NOT flag it — correctly, since it is not claiming to be a
+        // Latin-web brand. A documented policy choice, verified here.
+        let (_, d) =
+            is_suspicious_hostname("\u{0430}\u{0440}\u{0440}\u{04CF}\u{0435}.\u{0440}\u{0444}");
+        assert!(d.label_whole_script_confusable[0]);
+        // The TLD label `рф` is not Latin, so a `wsc(non-TLD) ∧ latin-TLD` caller
+        // policy evaluates false even though the field is set.
+        assert_ne!(d.label_scripts.last().unwrap(), &vec!["Latin".to_string()]);
     }
 
     #[test]

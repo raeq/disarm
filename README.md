@@ -55,6 +55,14 @@ assert normalize_confusables("раypal") == 'paypal'
 # IDN / hostname spoofing check (flags the bad; a False result is not a safety guarantee)
 suspicious, analysis = is_suspicious_hostname("аpple.com")   # leading Cyrillic а
 # suspicious is True; analysis.has_confusables and analysis.mixed_script flag why
+
+# Whole-script spoof: an ALL-Cyrillic label that skeletons to a Latin brand (#545).
+# `suspicious` alone can't tell it from a real Russian domain (it flags both), but
+# whole_script_confusable names the discriminator — the per-label list lets a caller
+# apply the precise `wsc(non-TLD) and Latin-TLD` policy.
+_, a = is_suspicious_hostname("аррӏе.com")          # all-Cyrillic "apple"
+assert a.whole_script_confusable and a.canonical == "apple.com"
+assert a.label_whole_script_confusable == [True, False]   # spoof label, then the TLD
 ```
 
 ## Installation

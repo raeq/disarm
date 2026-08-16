@@ -401,6 +401,57 @@ pub fn is_suspicious_hostname(host: String) -> bool {
     api::is_suspicious_hostname(&host).suspicious
 }
 
+/// Findings from a hostname homoglyph analysis (#549). Factual signals only — a
+/// `suspicious == false` result is not a safety guarantee.
+#[napi(object)]
+pub struct HostnameAnalysis {
+    /// Overall verdict — a **maximally conservative screen** (any non-Latin
+    /// confusable trips it), not a precise verdict.
+    pub suspicious: bool,
+    /// Scripts across all labels, first-appearance order (Common/Inherited excluded).
+    pub scripts: Vec<String>,
+    /// Whether any single label mixes more than one script.
+    pub mixed_script: bool,
+    /// Whether any label contains a character confusable with a Latin one.
+    pub has_confusables: bool,
+    /// Whether the decoded hostname mixes strong LTR and RTL characters (the
+    /// "BiDi Swap" precondition). Folded into `suspicious`.
+    pub bidi_conflict: bool,
+    /// Whether the labels span more than one script. Broader/noisier than
+    /// `bidiConflict`; NOT folded into `suspicious`.
+    pub cross_label_script: bool,
+    /// Per-label resolved scripts, left to right.
+    pub label_scripts: Vec<Vec<String>>,
+    /// Whether any label is a whole-script confusable (single-script, non-Latin,
+    /// skeletoning to all-Latin, e.g. `аррӏе`→`apple`). A graded **signal, not a
+    /// verdict** — NOT folded into `suspicious` (fires on `ру`→`py`, `оса`→`oca`).
+    pub whole_script_confusable: bool,
+    /// Per-label whole-script-confusable flags, parallel to `labelScripts`.
+    pub label_whole_script_confusable: Vec<bool>,
+    /// The Latin-normalized (canonical) form of the hostname.
+    pub canonical: String,
+}
+
+/// Analyze a hostname for Unicode homoglyph spoofing, returning the full
+/// [`HostnameAnalysis`] (verdict + granular signals). `isSuspiciousHostname` is
+/// the boolean shorthand for `.suspicious`.
+#[napi]
+pub fn analyze_hostname(host: String) -> HostnameAnalysis {
+    let a = api::is_suspicious_hostname(&host);
+    HostnameAnalysis {
+        suspicious: a.suspicious,
+        scripts: a.scripts,
+        mixed_script: a.mixed_script,
+        has_confusables: a.has_confusables,
+        bidi_conflict: a.bidi_conflict,
+        cross_label_script: a.cross_label_script,
+        label_scripts: a.label_scripts,
+        whole_script_confusable: a.whole_script_confusable,
+        label_whole_script_confusable: a.label_whole_script_confusable,
+        canonical: a.canonical,
+    }
+}
+
 /// The Unicode scripts present, in first-appearance order (Common/Inherited
 /// excluded), as stable UCD identifiers.
 #[napi]

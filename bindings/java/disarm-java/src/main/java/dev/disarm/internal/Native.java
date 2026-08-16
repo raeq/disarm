@@ -2,6 +2,7 @@ package dev.disarm.internal;
 
 import dev.disarm.AnomalyReport;
 import dev.disarm.AutoLangInspection;
+import dev.disarm.HostnameAnalysis;
 import dev.disarm.LangMeta;
 import dev.disarm.ScriptMeta;
 import dev.disarm.Untranslatable;
@@ -121,6 +122,8 @@ public final class Native {
 
     // ── Hostname / script analysis ─────────────────────────────────────────────
     public static native boolean isSuspiciousHostname(String host);
+
+    public static native HostnameAnalysis analyzeHostname(String host);
 
     public static native boolean isMixedScript(String text);
 

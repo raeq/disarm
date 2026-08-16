@@ -16,9 +16,14 @@ import type {
   ScriptMeta,
   Finding as NativeFinding,
   AnomalyReport as NativeAnomalyReport,
+  HostnameAnalysis as NativeHostnameAnalysis,
 } from './binding'
 
 export type { Untranslatable, AutoLangInspection, LangMeta, ScriptMeta }
+
+/** Findings from {@link analyzeHostname}. `suspicious` is a maximally
+ * conservative screen, not a precise verdict (#549). */
+export type HostnameAnalysis = NativeHostnameAnalysis
 
 /**
  * A reusable, opaque lexicon handle (HAI-SDLC 6.1). `hasAnomalies` /
@@ -409,6 +414,15 @@ export function terminalWidth(text: string, options: { ambiguousWide?: boolean }
 /** Whether the hostname looks like a mixed-script / confusable IDN spoof (a `false` is not a safety guarantee). */
 export function isSuspiciousHostname(host: string): boolean {
   return native.isSuspiciousHostname(host)
+}
+
+/**
+ * Analyze a hostname for Unicode homoglyph spoofing, returning the full
+ * {@link HostnameAnalysis} (verdict + granular signals). `isSuspiciousHostname`
+ * is the boolean shorthand for `.suspicious`.
+ */
+export function analyzeHostname(host: string): HostnameAnalysis {
+  return native.analyzeHostname(host)
 }
 
 /** The Unicode scripts present, in first-appearance order (Common/Inherited excluded). */

@@ -286,6 +286,40 @@ isSuspiciousHostname('varonis.com.ו.קום') // => true   (BiDi Swap)
 isSuspiciousHostname('example.com') // => false
 ```
 
+### `analyzeHostname(host)`
+
+The full analysis behind `isSuspiciousHostname` — a `HostnameAnalysis` object with
+the verdict plus the granular signals. `suspicious` is a **maximally conservative
+screen** (an any-character confusable test flags essentially every non-Latin host),
+not a precise verdict.
+
+```ts
+interface HostnameAnalysis {
+  suspicious: boolean
+  scripts: string[]
+  mixedScript: boolean
+  hasConfusables: boolean
+  bidiConflict: boolean
+  crossLabelScript: boolean
+  labelScripts: string[][]
+  wholeScriptConfusable: boolean          // graded signal, NOT folded into `suspicious`
+  labelWholeScriptConfusable: boolean[]   // per-label, parallel to `labelScripts`
+  canonical: string
+}
+```
+
+```ts
+analyzeHostname('example.com').labelScripts // => [['Latin'], ['Latin']]
+// Whole-script spoof: an all-Cyrillic label skeletoning to a Latin brand.
+analyzeHostname('аррӏе.com').wholeScriptConfusable // => true
+analyzeHostname('аррӏе.com').labelWholeScriptConfusable // => [true, false]
+analyzeHostname('аррӏе.com').canonical // => 'apple.com'
+```
+
+`wholeScriptConfusable` is a graded **signal, not a verdict**: on its own it fires
+on short non-Latin ccTLDs (`ру`→`py`) and real words (`оса`→`oca`). The precise
+policy — `wholeScriptConfusable(non-TLD label) && Latin TLD` — is caller-side (#545).
+
 ### `inspectAutoLang(text)`
 
 Explain how `lang: 'auto'` detection resolves `text` — an object with `script` and

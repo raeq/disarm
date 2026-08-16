@@ -318,6 +318,42 @@ fn suspicious_hostname(host: Wtf8Text) -> bool {
     api::is_suspicious_hostname(&host).suspicious
 }
 
+/// The full `HostnameAnalysis` (#549) flattened into the tuple shape `lib/disarm.rb`
+/// maps to a named hash — same rationale as `AnomalyReportTuple` (avoid registering
+/// a Ruby class for an internal boundary). magnus converts the nested
+/// `Vec<Vec<String>>` and the `Vec<bool>` to nested Ruby arrays automatically.
+#[allow(clippy::type_complexity)]
+type HostnameAnalysisTuple = (
+    bool,             // suspicious
+    Vec<String>,      // scripts
+    bool,             // mixed_script
+    bool,             // has_confusables
+    bool,             // bidi_conflict
+    bool,             // cross_label_script
+    Vec<Vec<String>>, // label_scripts
+    bool,             // whole_script_confusable
+    Vec<bool>,        // label_whole_script_confusable
+    String,           // canonical
+);
+
+/// `Disarm._analyze_hostname(host)` — the full analysis behind the
+/// `suspicious_hostname?` predicate, as the tuple the Ruby layer maps to a hash.
+fn analyze_hostname(host: Wtf8Text) -> HostnameAnalysisTuple {
+    let a = api::is_suspicious_hostname(&host);
+    (
+        a.suspicious,
+        a.scripts,
+        a.mixed_script,
+        a.has_confusables,
+        a.bidi_conflict,
+        a.cross_label_script,
+        a.label_scripts,
+        a.whole_script_confusable,
+        a.label_whole_script_confusable,
+        a.canonical,
+    )
+}
+
 // ── Normalization (#375) ──────────────────────────────────────────────────────
 
 /// `Disarm._normalize(text, "NFC" | "NFD" | "NFKC" | "NFKD")`. The idiomatic
@@ -694,6 +730,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_strip_accents", function!(strip_accents, 1))?;
     module.define_singleton_method("_fold_case", function!(fold_case, 1))?;
     module.define_singleton_method("_suspicious_hostname?", function!(suspicious_hostname, 1))?;
+    module.define_singleton_method("_analyze_hostname", function!(analyze_hostname, 1))?;
 
     // Normalization + text-cleaning primitives (#375 parity backfill).
     module.define_singleton_method("_normalize", function!(normalize, 2))?;

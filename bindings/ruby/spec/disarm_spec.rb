@@ -112,6 +112,22 @@ RSpec.describe Disarm do
       # Latin subdomain stacked on a Hebrew (RTL) domain — folded into the verdict.
       expect(Disarm.suspicious_hostname?("varonis.com.ו.קום")).to be(true)
     end
+
+    it "returns the full HostnameAnalysis hash (#549)" do
+      clean = Disarm.analyze_hostname("example.com")
+      expect(clean[:suspicious]).to be(false)
+      expect(clean[:scripts]).to eq(["Latin"])
+      expect(clean[:label_scripts]).to eq([["Latin"], ["Latin"]]) # nested arrays
+      expect(clean[:whole_script_confusable]).to be(false)
+      expect(clean[:label_whole_script_confusable]).to eq([false, false]) # bool array
+      expect(clean[:canonical]).to eq("example.com")
+
+      # Whole-script spoof: all-Cyrillic label skeletoning to a Latin brand (#545).
+      spoof = Disarm.analyze_hostname("аррӏе.com")
+      expect(spoof[:whole_script_confusable]).to be(true)
+      expect(spoof[:label_whole_script_confusable]).to eq([true, false])
+      expect(spoof[:canonical]).to eq("apple.com")
+    end
   end
 
   describe "key derivation" do

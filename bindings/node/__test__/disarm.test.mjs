@@ -224,6 +224,26 @@ describe('script analysis', () => {
     // #412: a BiDi-Swap host (Latin sub on a Hebrew domain) is now flagged.
     expect(disarm.isSuspiciousHostname('varonis.com.ו.קום')).toBe(true)
   })
+  test('analyzeHostname — full analysis (#549)', () => {
+    const clean = disarm.analyzeHostname('example.com')
+    expect(clean.suspicious).toBe(false)
+    expect(clean.scripts).toEqual(['Latin'])
+    expect(clean.labelScripts).toEqual([['Latin'], ['Latin']]) // Vec<Vec<String>>
+    expect(clean.wholeScriptConfusable).toBe(false)
+    expect(clean.labelWholeScriptConfusable).toEqual([false, false]) // Vec<bool>
+    expect(clean.canonical).toBe('example.com')
+
+    // Whole-script spoof: all-Cyrillic label skeletoning to a Latin brand (#545).
+    const spoof = disarm.analyzeHostname('аррӏе.com')
+    expect(spoof.wholeScriptConfusable).toBe(true)
+    expect(spoof.labelWholeScriptConfusable).toEqual([true, false])
+    expect(spoof.canonical).toBe('apple.com')
+
+    // Mixed-script is a separate signal.
+    const mixed = disarm.analyzeHostname('pаypal.com')
+    expect(mixed.mixedScript).toBe(true)
+    expect(mixed.hasConfusables).toBe(true)
+  })
   test('inspectAutoLang', () => {
     const info = disarm.inspectAutoLang('Москва')
     expect(info.script).toBe('Cyrillic')

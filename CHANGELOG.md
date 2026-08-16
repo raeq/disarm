@@ -18,6 +18,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Full `HostnameAnalysis` across the Node, Ruby, and Java/Kotlin bindings (#549).**
+  A new `analyzeHostname` / `analyze_hostname` returns the complete analysis
+  (verdict + all granular signals, including `whole_script_confusable`) — previously
+  those bindings exposed only the `.suspicious` boolean. Node returns a
+  `HostnameAnalysis` object, Ruby a Hash, and Java/Kotlin a `dev.disarm.HostnameAnalysis`
+  record (the `List<List<String>>` `labelScripts` and `List<Boolean>`
+  `labelWholeScriptConfusable` are marshalled directly across the JNI boundary). The
+  boolean `isSuspiciousHostname` predicate is unchanged. Mirrors how the anomaly
+  report is already exposed; the C-ABI (scalar-only substrate) keeps its existing
+  hostname boolean and would gain the struct alongside a future Go binding.
 - **Whole-script-confusable signal on `HostnameAnalysis` (#545).** Two additive
   fields — `whole_script_confusable` (any label qualifies) and the per-label
   `label_whole_script_confusable` — name the fact that discriminates a whole-script

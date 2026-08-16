@@ -279,6 +279,15 @@ public final class Disarm {
         return Native.isSuspiciousHostname(Objects.requireNonNull(host, "host"));
     }
 
+    /**
+     * Analyze a hostname for Unicode homoglyph spoofing, returning the full
+     * {@link HostnameAnalysis} (verdict + granular signals). {@link #isSuspiciousHostname}
+     * is the boolean shorthand for {@link HostnameAnalysis#suspicious()}.
+     */
+    public static HostnameAnalysis analyzeHostname(String host) {
+        return Native.analyzeHostname(Objects.requireNonNull(host, "host"));
+    }
+
     /** Whether {@code text} mixes characters from more than one script. */
     public static boolean isMixedScript(String text) {
         return Native.isMixedScript(req(text));

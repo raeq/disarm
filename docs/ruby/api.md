@@ -199,6 +199,32 @@ Disarm.suspicious_hostname?("pаypal.com")          # => true
 Disarm.suspicious_hostname?("example.com")         # => false
 ```
 
+### `Disarm.analyze_hostname(host)`
+
+The full analysis behind `suspicious_hostname?`, as a Hash. `:suspicious` is a
+**maximally conservative screen** (an any-character confusable test flags essentially
+every non-Latin host), not a precise verdict — branch on the granular signals plus
+your own policy.
+
+```ruby
+Disarm.analyze_hostname("example.com")
+# => { suspicious: false, scripts: ["Latin"], mixed_script: false,
+#      has_confusables: false, bidi_conflict: false, cross_label_script: false,
+#      label_scripts: [["Latin"], ["Latin"]], whole_script_confusable: false,
+#      label_whole_script_confusable: [false, false], canonical: "example.com" }
+
+# All-Cyrillic label skeletoning to a Latin brand (#545):
+a = Disarm.analyze_hostname("аррӏе.com")
+a[:whole_script_confusable]             # => true
+a[:label_whole_script_confusable]       # => [true, false]  (spoof label, then the TLD)
+a[:canonical]                           # => "apple.com"
+```
+
+`:whole_script_confusable` is a graded **signal, not a verdict** — NOT folded into
+`:suspicious`. On its own it fires on short non-Latin ccTLDs (`ру`→`py`) and real
+words (`оса`→`oca`); the precise policy `whole_script_confusable(non-TLD) && Latin-TLD`
+is caller-side.
+
 ## Normalization
 
 ### `Disarm.normalize(text, form: :nfc)`

@@ -4,6 +4,7 @@ package dev.disarm.kotlin
 
 import dev.disarm.AnomalyReport
 import dev.disarm.AutoLangInspection
+import dev.disarm.HostnameAnalysis
 import dev.disarm.LangMeta
 import dev.disarm.Lexicon
 import dev.disarm.NormalizationForm
@@ -170,6 +171,9 @@ fun String.terminalWidth(ambiguousWide: Boolean = false): Long = JDisarm.termina
 // ── Hostname / script analysis ──────────────────────────────────────────────────
 
 fun String.isSuspiciousHostname(): Boolean = JDisarm.isSuspiciousHostname(this)
+
+/** Full hostname homoglyph analysis (#549) — verdict + granular signals. */
+fun String.analyzeHostname(): HostnameAnalysis = JDisarm.analyzeHostname(this)
 
 fun String.isMixedScript(): Boolean = JDisarm.isMixedScript(this)
 

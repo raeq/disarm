@@ -71,6 +71,27 @@ class StructuredReportsTest {
     }
 
     @Test
+    void analyzeHostnameReturnsFullAnalysis() {
+        HostnameAnalysis clean = Disarm.analyzeHostname("example.com");
+        assertFalse(clean.suspicious());
+        assertEquals(List.of("Latin"), clean.scripts());
+        // List<List<String>> and List<Boolean> marshalled across the JNI boundary.
+        assertEquals(List.of(List.of("Latin"), List.of("Latin")), clean.labelScripts());
+        assertFalse(clean.wholeScriptConfusable());
+        assertEquals(List.of(false, false), clean.labelWholeScriptConfusable());
+        assertEquals("example.com", clean.canonical());
+    }
+
+    @Test
+    void analyzeHostnameFlagsWholeScriptSpoof() {
+        // All-Cyrillic label аррӏе skeletoning to the Latin brand "apple" (#545).
+        HostnameAnalysis spoof = Disarm.analyzeHostname("аррӏе.com");
+        assertTrue(spoof.wholeScriptConfusable());
+        assertEquals(List.of(true, false), spoof.labelWholeScriptConfusable());
+        assertEquals("apple.com", spoof.canonical());
+    }
+
+    @Test
     void inspectAnomaliesViaReusableLexicon() {
         try (Lexicon lex = new Lexicon(List.of("free"))) {
             AnomalyReport r = Disarm.inspectAnomalies("hi​there", lex);

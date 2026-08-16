@@ -827,6 +827,22 @@ pub fn isSuspiciousHostname<'l>(
     map_bool(env, input, |t| api::is_suspicious_hostname(t).suspicious)
 }
 
+/// Full hostname homoglyph analysis (#549) as a `dev.disarm.HostnameAnalysis`
+/// record. `isSuspiciousHostname` is the boolean shorthand for `.suspicious`.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn analyzeHostname<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let host = input.mutf8_chars(env)?.to_string();
+        let analysis = api::is_suspicious_hostname(&host);
+        new_hostname_analysis(env, &analysis)
+    })
+    .resolve::<Policy>()
+}
+
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn isMixedScript<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> jboolean {
     map_bool(env, input, api::is_mixed_script)
@@ -1204,6 +1220,61 @@ fn new_anomaly_report<'l>(env: &mut Env<'l>, r: &api::AnomalyReport) -> JniResul
             JValue::Object(&kinds_list),
             JValue::Object(&findings_list),
             JValue::Object(&reason),
+        ],
+    )
+}
+
+/// Build an immutable `List<List<String>>` from nested Rust strings.
+fn new_string_list_list<'l>(env: &mut Env<'l>, items: &[Vec<String>]) -> JniResult<JObject<'l>> {
+    let mut inner = Vec::with_capacity(items.len());
+    for row in items {
+        inner.push(new_string_list(env, row)?);
+    }
+    let array = new_object_array_of(env, "java/util/List", &inner)?;
+    list_of(env, &array)
+}
+
+/// Build an immutable `List<Boolean>` from Rust bools (boxed via `Boolean.valueOf`).
+fn new_bool_list<'l>(env: &mut Env<'l>, items: &[bool]) -> JniResult<JObject<'l>> {
+    let mut boxed = Vec::with_capacity(items.len());
+    for &b in items {
+        let obj = env
+            .call_static_method(
+                JNIString::from("java/lang/Boolean"),
+                JNIString::from("valueOf"),
+                jni_sig!("(Z)Ljava/lang/Boolean;"),
+                &[JValue::Bool(b)],
+            )?
+            .l()?;
+        boxed.push(obj);
+    }
+    let array = new_object_array_of(env, "java/lang/Boolean", &boxed)?;
+    list_of(env, &array)
+}
+
+/// Construct a `dev.disarm.HostnameAnalysis` record (#549).
+fn new_hostname_analysis<'l>(
+    env: &mut Env<'l>,
+    a: &api::HostnameAnalysis,
+) -> JniResult<JObject<'l>> {
+    let scripts = new_string_list(env, &a.scripts)?;
+    let label_scripts = new_string_list_list(env, &a.label_scripts)?;
+    let label_wsc = new_bool_list(env, &a.label_whole_script_confusable)?;
+    let canonical = env.new_string(&a.canonical)?;
+    env.new_object(
+        JNIString::from("dev/disarm/HostnameAnalysis"),
+        jni_sig!("(ZLjava/util/List;ZZZZLjava/util/List;ZLjava/util/List;Ljava/lang/String;)V"),
+        &[
+            JValue::Bool(a.suspicious),
+            JValue::Object(&scripts),
+            JValue::Bool(a.mixed_script),
+            JValue::Bool(a.has_confusables),
+            JValue::Bool(a.bidi_conflict),
+            JValue::Bool(a.cross_label_script),
+            JValue::Object(&label_scripts),
+            JValue::Bool(a.whole_script_confusable),
+            JValue::Object(&label_wsc),
+            JValue::Object(&canonical),
         ],
     )
 }

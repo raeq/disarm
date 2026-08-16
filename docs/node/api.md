@@ -306,11 +306,14 @@ interface HostnameAnalysis {
   labelWholeScriptConfusable: boolean[]   // per-label, parallel to `labelScripts`
   canonical: string
 }
+```
 
-const a = analyzeHostname('аррӏе.com') // all-Cyrillic label skeletoning to a Latin brand
-a.wholeScriptConfusable // => true
-a.labelWholeScriptConfusable // => [true, false]  (spoof label, then the TLD)
-a.canonical // => 'apple.com'
+```ts
+analyzeHostname('example.com').labelScripts // => [['Latin'], ['Latin']]
+// Whole-script spoof: an all-Cyrillic label skeletoning to a Latin brand.
+analyzeHostname('аррӏе.com').wholeScriptConfusable // => true
+analyzeHostname('аррӏе.com').labelWholeScriptConfusable // => [true, false]
+analyzeHostname('аррӏе.com').canonical // => 'apple.com'
 ```
 
 `wholeScriptConfusable` is a graded **signal, not a verdict**: on its own it fires

@@ -214,10 +214,9 @@ Disarm.analyze_hostname("example.com")
 #      label_whole_script_confusable: [false, false], canonical: "example.com" }
 
 # All-Cyrillic label skeletoning to a Latin brand (#545):
-a = Disarm.analyze_hostname("аррӏе.com")
-a[:whole_script_confusable]             # => true
-a[:label_whole_script_confusable]       # => [true, false]  (spoof label, then the TLD)
-a[:canonical]                           # => "apple.com"
+Disarm.analyze_hostname("аррӏе.com")[:whole_script_confusable]        # => true
+Disarm.analyze_hostname("аррӏе.com")[:label_whole_script_confusable]  # => [true, false]
+Disarm.analyze_hostname("аррӏе.com")[:canonical]                      # => "apple.com"
 ```
 
 `:whole_script_confusable` is a graded **signal, not a verdict** — NOT folded into

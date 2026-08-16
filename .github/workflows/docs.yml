@@ -13,12 +13,14 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - "python/disarm/**"
+      - "requirements/docs.txt"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "docs/**"
       - "mkdocs.yml"
       - "python/disarm/**"
+      - "requirements/docs.txt"
       - ".github/workflows/docs.yml"
 
 permissions:
@@ -42,7 +44,9 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install docs dependencies
-        run: pip install -r docs/requirements.txt
+        # Hash-locked, compiled from the [docs] extra in pyproject.toml (the single
+        # source of truth) — same pattern as requirements/bench.txt in perf-gate.yml.
+        run: pip install --require-hashes -r requirements/docs.txt
       - name: Build site (strict)
         # --strict turns broken internal links / missing-nav pages into a failed
         # build, catching doc drift (same discipline as Sybil / check_doc_claims).

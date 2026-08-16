@@ -322,6 +322,7 @@ disarm is a fast, context-free Unicode text processing toolkit. It is not:
 - **A reversible encoding**: all operations are one-way lossy transformations
 - **An encoding oracle**: encoding detection is probabilistic and can be wrong, especially on short inputs
 - **A rendering engine**: grapheme cluster boundaries are defined by Unicode specification, not by what any particular font or terminal actually displays
+- **Affiliated with the DISARM disinformation framework**: the identically named [DISARM Foundation](https://www.disarm.foundation/) frameworks for Disinformation Analysis and Risk Management are an unrelated project
 
 ## Language detection limitations
 

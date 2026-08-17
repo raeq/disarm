@@ -250,10 +250,15 @@ expanding the bundled mapping data is exactly how this layer improves.
 
 The scope above is grounded in the literature, not asserted:
 
-- **Table-driven normalization is a layer, not a solution.** On *real* phishing text,
-  1:1 confusable-database lookup restores only ~35% of visually-perturbed words, versus
-  ~96% for a context-aware character model (Lee et al., *BitAbuse*, 2025). disarm is the
-  fast, deterministic first layer — not the whole defense.
+- **Table-driven normalization is a layer, not a solution — but disarm sits well above the
+  class baseline.** On *real* phishing text, generic 1:1 confusable-database lookup restores
+  only ~35% of visually-perturbed words, versus ~96% for a context-aware character model
+  (Lee et al., *BitAbuse*, 2025). Measured on that same corpus, disarm's `strip_obfuscation`
+  recovers **65.3%** word-level (v0.12.0, 325,580 rows; line-exact is only 5.8%, and 81.7%
+  of non-ASCII perturbation occurrences are folded) — roughly double the class baseline, but
+  short of the context-aware ceiling. disarm is the fast, deterministic first layer, not the
+  whole defense. Full report:
+  [`benchmarks/adversarial_eval/reports/bitabuse.md`](https://github.com/raeq/disarm/blob/main/benchmarks/adversarial_eval/reports/bitabuse.md).
 - **The confusable space is unbounded and mostly outside any standard.** Deng et al.
   (2020) used deep learning to find 8,000+ homoglyphs. Measured against disarm's bundled
   data: of their ~4,859 *letter* homoglyphs, only ~11% appear in the official TR39

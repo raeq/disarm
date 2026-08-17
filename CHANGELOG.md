@@ -28,6 +28,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   bundled Unicode/UTS#39 data versions in `docs/provenance.md` (+ provenance headers on the
   two confusables tables), and clarified that "removed in 1.0" refers to the RELEASING.md
   commercial-support milestone, not the next release.
+- **Surfaced disarm's measured BitAbuse recovery in the coverage docs (#543).** Re-ran the
+  adversarial-eval harness against the full corpus on v0.12.0 (325,580 rows) — `strip_obfuscation`
+  now recovers **65.3%** word-level (up from 64.1% on 0.6.3) with **81.7%** of non-ASCII
+  perturbation occurrences folded — and added disarm's own row to the coverage spectrum in
+  `docs/security/adversarial-defense.md` and `THREAT_MODEL.md` (previously only the ~35%
+  class baseline and ~96% ceiling appeared, inviting readers to transfer ~35% onto disarm).
+  The word-level metric is defined inline with line-exact (5.8%) stated alongside, and the
+  BitAbuse figure is explicitly separated from the near-identical TR39-space XMR = 0.634.
+  Retired the divergent pre-harness baseline in the benchmark README in favour of the
+  committed report, and documented a manual pre-release refresh cadence.
 
 ### Added
 

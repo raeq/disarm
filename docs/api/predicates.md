@@ -76,6 +76,11 @@ is_zalgo("a" + "\u0300" * 20)  # True
 
 ## is_suspicious_hostname
 
+!!! note "Renamed from `is_safe_hostname` in 0.9.1 — with the boolean **inverted**"
+    If you are upgrading from `is_safe_hostname`, the return value's polarity was flipped
+    (`safe` → `suspicious`); a mechanical rename silently reverses your allow/deny branch.
+    See the [Upgrading guide](../upgrading.md).
+
 ::: disarm.is_suspicious_hostname
 
 ### HostnameAnalysis

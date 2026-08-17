@@ -9,13 +9,18 @@ limitation**.
 
 ## Supported versions
 
-Security fixes are released against the latest `0.6.x` release on PyPI. Older minor
-series are not maintained.
+Security fixes are released against the **latest published minor series** — on PyPI and the
+other registries disarm ships to (crates.io, npm, RubyGems, Maven Central). Older minor
+series are not maintained; upgrade to the current minor to receive fixes.
 
 | Version | Supported |
 |---------|-----------|
-| 0.6.x   | Yes       |
-| < 0.6   | No        |
+| Latest published minor series | Yes |
+| Any older minor series        | No  |
+
+The window is stated as a **rule, not a pinned version**, so it cannot silently go stale on a
+release. For what a version number means and how releases are cut, see
+[RELEASING.md](https://github.com/raeq/disarm/blob/main/docs/RELEASING.md).
 
 ## Reporting a vulnerability
 

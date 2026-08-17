@@ -113,6 +113,7 @@ nav:
       - From confusable_homoglyphs: migration/from-confusable-homoglyphs.md
       - From pathvalidate: migration/from-pathvalidate.md
       - From anyascii: migration/from-anyascii.md
+  - Upgrading: upgrading.md
   - CLI: cli.md
   - Reference:
       - Language Reference: reference.md

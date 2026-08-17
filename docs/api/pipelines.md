@@ -13,6 +13,12 @@ Ready-to-use multi-step text processing pipelines. Each is a single compiled Rus
     | `display_clean` | `strip_format` |
     | `normalize_user_input` | `canonicalize_strict` |
 
+    **"1.0" here is the commercial-support milestone defined in
+    [RELEASING.md](../RELEASING.md), not the next release** — per that policy disarm
+    expects to stay below 1.0 for a long time, so these aliases are not going away
+    imminently. See the [Upgrading guide](../upgrading.md) for the full rename history
+    across versions, including the `is_safe_hostname` boolean-polarity inversion.
+
 ## canonicalize
 
 ::: disarm.canonicalize

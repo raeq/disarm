@@ -16,6 +16,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Documentation
+
+- **Upgrading guide + stability-contract clarifications (#546, #547, #548).** Added
+  `docs/upgrading.md` (a new top-level nav section, distinct from *Migration*) with the
+  cumulative table of public renames since 0.9 and a `!!! danger` note on the
+  `is_safe_hostname` → `is_suspicious_hostname` boolean-polarity inversion. Restated
+  `SECURITY.md`'s supported-version window as a self-maintaining rule (was the stale
+  `0.6.x`). Extended the semver data-change clause in `docs/RUST_API.md` to name the
+  security surfaces (`is_suspicious_hostname`, `normalize_confusables`, …), recorded the
+  bundled Unicode/UTS#39 data versions in `docs/provenance.md` (+ provenance headers on the
+  two confusables tables), and clarified that "removed in 1.0" refers to the RELEASING.md
+  commercial-support milestone, not the next release.
+
 ### Added
 
 - **Full `HostnameAnalysis` across the Node, Ruby, and Java/Kotlin bindings (#549).**
@@ -285,7 +298,7 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   corrupted legitimate input: URLs, file paths, and any `/`- or `\`-bearing
   string came back mangled (`"https://example.com/path"` →
   `"https:__example.com_path"`). The presets now pass separators through
-  verbatim. **Migration:** if you fed preset output straight into a filesystem
+  verbatim. **Upgrading:** if you fed preset output straight into a filesystem
   path, defend traversal at the sink instead — call `sanitize_filename` on the
   final path component, or validate against your own allowlist. A confusable
   fraction/division slash that NFKC folds to a real `/` is still *normalized* to

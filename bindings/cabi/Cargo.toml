@@ -30,6 +30,10 @@ crate-type = ["cdylib", "staticlib", "lib"]
 [dependencies]
 disarm_core = { package = "disarm", version = "0.12", default-features = false }
 safer-ffi = "0.1"
+# Structured reports (HostnameAnalysis, AnomalyReport, …) cross the C boundary as a
+# JSON string (#553): one transport, one free (`disarm_string_free`), trivially parsed
+# on the consumer side. serde_json is a cabi-only dep; the pure core carries no serde.
+serde_json = "1"
 
 [features]
 # `cargo test --features headers -- generate_headers` writes the C header.

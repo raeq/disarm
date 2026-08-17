@@ -47,6 +47,15 @@ int main(void) {
     printf("%-28s %-6s\n", "suspicious hostname", spoof ? "OK" : "FAIL");
     if (!spoof) failures++;
 
+    /* Structured report (JSON transport, #553): whole-script spoof аррӏе -> apple. */
+    char *analysis = disarm_analyze_hostname("аррӏе.com");
+    int json_ok = analysis
+        && strstr(analysis, "\"canonical\":\"apple.com\"")
+        && strstr(analysis, "\"whole_script_confusable\":true");
+    printf("%-28s %-6s\n", "analyze_hostname JSON", json_ok ? "OK" : "FAIL");
+    if (!json_ok) failures++;
+    disarm_string_free(analysis);
+
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");
         return 0;

@@ -16,6 +16,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-08-17
+
 ### Added
 
 - **Full `HostnameAnalysis` across the Node, Ruby, and Java/Kotlin bindings (#549).**

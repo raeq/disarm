@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.disarm"
-version = "0.12.0" // lockstep with the core
+version = "0.13.0" // lockstep with the core
 
 kotlin {
     jvmToolchain(21)

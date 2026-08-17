@@ -316,12 +316,16 @@ fn disarm_analyze_hostname(host: char_p::Ref<'_>) -> char_p::Box {
 
 /// Structural anomaly report for `text` as a JSON object (`anomalous`, `kinds`,
 /// `findings` [each `kind`/`token`/`start`/`end`/`detail`/`reason`], `reason`).
-/// Uses an empty lexicon — the structural branches (invisible, bidi, zalgo,
-/// mixed-script) fire without one; the word-list branches (leet, segmentation)
-/// need a lexicon and are left to the richer bindings.
+///
+/// `lexicon_json` is a JSON array of common words (e.g. `["free","account"]`),
+/// mirroring the array form the Node/Ruby bindings accept — it feeds the
+/// word-list branches (`leet`, `segmentation`). An empty string, `"[]"`, `"null"`,
+/// or malformed JSON means "no lexicon": the structural branches (invisible, bidi,
+/// zalgo, mixed-script) still fire, matching the other bindings' no-arg behaviour.
 #[ffi_export]
-fn disarm_inspect_anomalies(text: char_p::Ref<'_>) -> char_p::Box {
-    let report = api::inspect_anomalies(text.to_str(), &api::lexicon(Vec::<String>::new()));
+fn disarm_inspect_anomalies(text: char_p::Ref<'_>, lexicon_json: char_p::Ref<'_>) -> char_p::Box {
+    let words: Vec<String> = serde_json::from_str(lexicon_json.to_str()).unwrap_or_default();
+    let report = api::inspect_anomalies(text.to_str(), &api::lexicon(words));
     let findings: Vec<_> = report
         .findings
         .iter()

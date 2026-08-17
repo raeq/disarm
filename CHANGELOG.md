@@ -45,7 +45,9 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   points return their report as a JSON string (freed with the existing
   `disarm_string_free`): `disarm_analyze_hostname` (the full `HostnameAnalysis`,
   including `whole_script_confusable` / `label_whole_script_confusable`),
-  `disarm_inspect_anomalies` (per-finding `kind`/`token`/`start`/`end`/`detail`/`reason`),
+  `disarm_inspect_anomalies` (per-finding `kind`/`token`/`start`/`end`/`detail`/`reason`,
+  taking a JSON word-array lexicon so the `leet`/`segmentation` branches match the other
+  bindings, not just the structural ones),
   `disarm_inspect_auto_lang` (script + chosen language + discriminators), and the
   fallible `disarm_lang_info` / `disarm_script_info` metadata lookups. JSON is the
   one transport for every nested shape (`List<List<String>>`, `List<Boolean>`,

@@ -118,8 +118,11 @@ and by what normalization can do at all:
   | **disarm `strip_obfuscation`** (measured, v0.12.0, 325,580 rows) | **65.3%** |
   | Context-aware character model (ceiling) | ~96% |
 
-  **Metric:** *word-level recovery* = fraction of perturbed words restored to their clean
-  form — the like-for-like comparison with the literature's ~35%. **Line-exact recovery is
+  **Metric:** *word-level recovery* is **clean-word recall** — the fraction of the clean
+  text's words (multiset overlap) that survive in `strip_obfuscation(perturbed)`, scored
+  against the *canonicalized* clean text (`strip_obfuscation(clean)`) so both sides fold
+  identically. It is the same word-level family as the literature's ~35%, not exact-line
+  matching. **Line-exact recovery is
   only 5.8%**, because a single surviving out-of-scope codepoint anywhere on a line breaks
   exactness; a downstream matcher that needs exact lines must not plan around 65%. disarm
   folds **81.7%** of non-ASCII perturbation-character occurrences; of the codepoints that

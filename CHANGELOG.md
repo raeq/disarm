@@ -16,29 +16,6 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
-### Documentation
-
-- **Upgrading guide + stability-contract clarifications (#546, #547, #548).** Added
-  `docs/upgrading.md` (a new top-level nav section, distinct from *Migration*) with the
-  cumulative table of public renames since 0.9 and a `!!! danger` note on the
-  `is_safe_hostname` → `is_suspicious_hostname` boolean-polarity inversion. Restated
-  `SECURITY.md`'s supported-version window as a self-maintaining rule (was the stale
-  `0.6.x`). Extended the semver data-change clause in `docs/RUST_API.md` to name the
-  security surfaces (`is_suspicious_hostname`, `normalize_confusables`, …), recorded the
-  bundled Unicode/UTS#39 data versions in `docs/provenance.md` (+ provenance headers on the
-  two confusables tables), and clarified that "removed in 1.0" refers to the RELEASING.md
-  commercial-support milestone, not the next release.
-- **Surfaced disarm's measured BitAbuse recovery in the coverage docs (#543).** Re-ran the
-  adversarial-eval harness against the full corpus on v0.12.0 (325,580 rows) — `strip_obfuscation`
-  now recovers **65.3%** word-level (up from 64.1% on 0.6.3) with **81.7%** of non-ASCII
-  perturbation occurrences folded — and added disarm's own row to the coverage spectrum in
-  `docs/security/adversarial-defense.md` and `THREAT_MODEL.md` (previously only the ~35%
-  class baseline and ~96% ceiling appeared, inviting readers to transfer ~35% onto disarm).
-  The word-level metric is defined inline with line-exact (5.8%) stated alongside, and the
-  BitAbuse figure is explicitly separated from the near-identical TR39-space XMR = 0.634.
-  Retired the divergent pre-harness baseline in the benchmark README in favour of the
-  committed report, and documented a manual pre-release refresh cadence.
-
 ### Added
 
 - **Full `HostnameAnalysis` across the Node, Ruby, and Java/Kotlin bindings (#549).**
@@ -87,6 +64,26 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `THREAT_MODEL.md` from *out of scope* to a defined mechanism with its stated
   irreducible false-positive class. Completed the `HostnameAnalysis` field table in
   the predicates docs.
+- **Upgrading guide + stability-contract clarifications (#546, #547, #548).** Added
+  `docs/upgrading.md` (a new top-level nav section, distinct from *Migration*) with the
+  cumulative table of public renames since 0.9 and a `!!! danger` note on the
+  `is_safe_hostname` → `is_suspicious_hostname` boolean-polarity inversion. Restated
+  `SECURITY.md`'s supported-version window as a self-maintaining rule (was the stale
+  `0.6.x`). Extended the semver data-change clause in `docs/RUST_API.md` to name the
+  security surfaces (`is_suspicious_hostname`, `normalize_confusables`, …), recorded the
+  bundled Unicode/UTS#39 data versions in `docs/provenance.md` (+ provenance headers on the
+  two confusables tables), and clarified that "removed in 1.0" refers to the RELEASING.md
+  commercial-support milestone, not the next release.
+- **Surfaced disarm's measured BitAbuse recovery in the coverage docs (#543).** Re-ran the
+  adversarial-eval harness against the full corpus on v0.12.0 (325,580 rows) — `strip_obfuscation`
+  now recovers **65.3%** word-level (up from 64.1% on 0.6.3) with **81.7%** of non-ASCII
+  perturbation occurrences folded — and added disarm's own row to the coverage spectrum in
+  `docs/security/adversarial-defense.md` and `THREAT_MODEL.md` (previously only the ~35%
+  class baseline and ~96% ceiling appeared, inviting readers to transfer ~35% onto disarm).
+  The word-level metric is defined inline with line-exact (5.8%) stated alongside, and the
+  BitAbuse figure is explicitly separated from the near-identical TR39-space XMR = 0.634.
+  Retired the divergent pre-harness baseline in the benchmark README in favour of the
+  committed report, and documented a manual pre-release refresh cadence.
 
 ## [0.12.0] — 2026-08-15
 

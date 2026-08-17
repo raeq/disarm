@@ -65,10 +65,18 @@ The public enums (`ErrorKind`, `TargetScript`, `NormalizationForm`, …) are mar
 `#[non_exhaustive]` precisely so new variants are a minor, not major, change —
 always include a `_ =>` arm when matching them.
 
-Note: transliteration **output** is data-driven (Unicode tables, romanization
-standards). Output changes from table/standard updates are documented in the
-changelog but are **not** treated as semver-breaking — pin a version if you need
-byte-stable output.
+Note: **data-driven output is not semver-stable, and this covers the security
+surfaces too.** Both transliteration output (Unicode tables, romanization standards)
+*and* the confusable/security functions — `normalize_confusables`,
+`strip_obfuscation`, `is_suspicious_hostname`, and the `canonicalize*` presets —
+change behavior when the bundled Unicode / TR39 tables are updated, with no signature
+touched. For example, #336 extended `normalize_confusables` with cross-script
+pairs absent from upstream TR39 17.0, which changes what a deployed filter chain
+catches. Such changes are documented in the changelog but are **not** treated as
+semver-breaking. **Pin a version if you need byte-stable output — this applies to
+security-filter behavior (what `is_suspicious_hostname` flags), not just
+romanization.** The bundled data vintage per release is recorded in
+[provenance.md](provenance.md).
 
 ## MSRV
 

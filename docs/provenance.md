@@ -5,6 +5,29 @@ in disarm's transliteration tables. Its purpose is traceability: for any
 character→ASCII mapping, a reader should be able to identify which published
 romanization system it follows and where to verify it.
 
+## Bundled data versions
+
+disarm bundles snapshots of several Unicode standards. Because the tables are sourced
+independently, they do **not** all track the same Unicode version. Per the semver policy
+([RUST_API.md](RUST_API.md)), a bundled-table update can change what the security functions
+(`is_suspicious_hostname`, `normalize_confusables`, `strip_obfuscation`, the `canonicalize*`
+presets) do **without** a breaking-change bump — so the versions below are what you pin
+against for byte-stable behavior.
+
+| Surface / table | Standard | Version |
+|---|---|---|
+| Confusables — `confusables_to_latin.tsv`, `confusables_to_cyrillic.tsv` | Unicode **UTS&nbsp;#39** `confusables.txt` | **17.0.0**, plus disarm additions (#336) — see below |
+| Case folding — `case_folding.tsv` | Unicode `CaseFolding.txt` (status C&nbsp;+&nbsp;F) | **16.0** |
+| East Asian width — `char_width.tsv` | UCD `EastAsianWidth.txt` | **15.1.0** |
+| Emoji presentation — `emoji_presentation.tsv` | UCD `emoji-data.txt` | **15.1.0** |
+| Transliteration / romanization | per-block standards (the rest of this document) | mixed; conventional where no single published standard exists |
+
+**Deliberate divergence from upstream.** The confusables tables are *not* a verbatim UTS&nbsp;#39
+snapshot: #336 added high-confidence cross-script pairs that are correct but not present in
+`confusables.txt` 17.0. That divergence is itself part of what you pin to — a future release may
+fold these upstream or add more. When any bundled version moves, the change is recorded here and
+in the changelog.
+
 ## Methodology
 
 Provenance was determined by comparing disarm's actual per-character mappings

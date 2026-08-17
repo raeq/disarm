@@ -7,6 +7,13 @@ scattered datasets into one principled, repeatable evaluation.
 This is a **benchmark, not CI.** It pulls large external datasets over the
 network, so it lives outside the test gate — run it on demand.
 
+**Cadence (BitAbuse).** Because it is not a PR gate, the `bitabuse` report is refreshed as a
+**manual pre-release step** whenever confusable/normalization coverage has changed, and the
+published figures in `docs/security/adversarial-defense.md` and `THREAT_MODEL.md` are updated
+to match the report in the same change. The report carries a version stamp; treat it and those
+two docs pages as a set so they cannot drift apart again (they last diverged across the
+0.6.3 → 0.12.0 window).
+
 > **Guardrail (from #39/#40).** These corpora are **measuring instruments, never
 > optimization targets.** Do not add confusable mappings to improve a benchmark
 > number. Coverage grows only from authoritative sources (UTS#39 + transitive
@@ -58,13 +65,21 @@ maintainer-run.
   the full UTS#39 source set, not disarm's bundled subset, so a char that is in
   the standard but not yet mapped counts as an addressable miss, not novel.
 
-## Baseline (BitAbuse, established prior to this harness)
+## BitAbuse results
 
-- `strip_obfuscation` word-level recovery ≈ 68% (vs SimChar DB ≈ 35% in the
-  literature); line-exact ≈ 6%.
-- ~76% of non-ASCII perturbation-char occurrences folded; of the misses, ~106
-  distinct are in UTS#39 (addressable) and ~363 distinct are novel/Viper-synthetic
-  (out of scope).
+The committed report [`reports/bitabuse.md`](reports/bitabuse.md) is the **single canonical
+set of numbers** — regenerate it with `python -m benchmarks.adversarial_eval --corpus
+bitabuse --report reports/bitabuse.md`. As of **disarm 0.12.0** (full corpus, 325,580 rows):
+
+- `strip_obfuscation` word-level recovery **65.3%** (vs generic table lookup ≈ 35% in the
+  literature); line-exact **5.8%**.
+- **81.7%** of non-ASCII perturbation-char occurrences folded; of the misses, **54** distinct
+  are in UTS#39 (addressable) and **294** distinct are novel/out-of-scope.
+
+(An earlier, pre-harness estimate — ≈68% word / ~76% folded / ~106 addressable / ~363 novel —
+was retired: it was a separate measurement run against disarm 0.6.3, and coverage has grown
+across six minor releases since. Read the numbers from the report, not from prose that can
+drift.)
 
 Findings feed [#40](https://github.com/raeq/disarm/issues/40) (real-attacker
 confusables to verify and upstream) — not silent table edits.

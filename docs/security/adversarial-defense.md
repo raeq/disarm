@@ -106,9 +106,41 @@ and by what normalization can do at all:
   found 8,000+ homoglyphs with deep learning; measured against disarm's bundled data,
   ~89% of their *letter* homoglyphs are **not in TR39 at all**. A TR39-derived tool cannot
   canonicalize what TR39 does not list.
-- **Normalization alone is a partial defense on real text.** On real phishing,
-  table-driven confusable lookup restores only ~35% of perturbed words, vs ~96% for a
-  context-aware model ([Lee et al., *BitAbuse*, 2025](https://arxiv.org/abs/2502.05225)).
+- **Where disarm actually lands on real phishing text.** On the BitAbuse corpus of real
+  perturbed phishing lines ([Lee et al., 2025](https://arxiv.org/abs/2502.05225)), generic
+  table-driven lookup restores only ~35% of perturbed words and a context-aware character
+  model reaches ~96% (the honest ceiling). disarm's own measurement on the **same corpus**
+  sits between them, quantifying its position rather than leaving it to be inferred:
+
+  | Approach | Word-level recovery on BitAbuse |
+  |---|---|
+  | Generic 1:1 confusable-table lookup (class baseline) | ~35% |
+  | **disarm `strip_obfuscation`** (measured, v0.12.0, 325,580 rows) | **65.3%** |
+  | Context-aware character model (ceiling) | ~96% |
+
+  **Metric:** *word-level recovery* is **clean-word recall** — the fraction of the clean
+  text's words (multiset overlap) that survive in `strip_obfuscation(perturbed)`, scored
+  against the *canonicalized* clean text (`strip_obfuscation(clean)`) so both sides fold
+  identically. It is the same word-level family as the literature's ~35%, not exact-line
+  matching. **Line-exact recovery is
+  only 5.8%**, because a single surviving out-of-scope codepoint anywhere on a line breaks
+  exactness; a downstream matcher that needs exact lines must not plan around 65%. disarm
+  folds **81.7%** of non-ASCII perturbation-character occurrences; of the codepoints that
+  survive, 54 distinct are in UTS#39 (addressable) and 294 distinct are novel / out-of-scope
+  — most of what survives is outside any standard, and outside the tool's contract. Full
+  report: [`benchmarks/adversarial_eval/reports/bitabuse.md`](https://github.com/raeq/disarm/blob/main/benchmarks/adversarial_eval/reports/bitabuse.md).
+
+    !!! warning "Not the XMR figures above"
+        The **65.3%** here is *word-level recovery on the BitAbuse phishing corpus*. The
+        **XMR = 0.634** in [Evidence](#evidence) is *exact-match recovery over a broad
+        TR39-space sample* — a different metric on a different corpus. The numbers are nearly
+        identical and measure entirely different things; do not conflate them.
+
+    !!! note "Guardrail (#39/#40)"
+        The surviving-codepoint counts are **observations, not optimization targets.**
+        Addressable misses are candidates to verify and upstream via #40 — never silent
+        table edits.
+
   Use disarm as the fast, deterministic first layer — not the whole pipeline.
 
 Out of scope by design (not bugs): confusables outside the bundled table, whole-script

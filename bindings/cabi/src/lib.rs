@@ -11,8 +11,12 @@
 //! ownership to the caller, who must free it with [`disarm_string_free`]. Nullable
 //! arguments (e.g. `lang`) are passed as a NULL `char *`.
 //!
-//! This initial substrate covers the scalar transforms; the reusable handles and
-//! structured reports (already in the JNI binding) can be layered on as needed.
+//! Scalar transforms return a `char *` (or [`DisarmResult`]) directly. The
+//! **structured reports** — [`disarm_analyze_hostname`], [`disarm_inspect_anomalies`],
+//! [`disarm_inspect_auto_lang`], [`disarm_lang_info`], [`disarm_script_info`] (#553) —
+//! cross the boundary as a **JSON string** (still freed with [`disarm_string_free`]):
+//! one transport for every nested shape, trivially parsed by a Go/C/Swift consumer.
+//! The reusable handles from the JNI binding can still be layered on as needed.
 
 use disarm_core::api;
 use safer_ffi::prelude::*;
@@ -275,6 +279,124 @@ fn disarm_grapheme_len(text: char_p::Ref<'_>) -> u64 {
 #[ffi_export]
 fn disarm_terminal_width(text: char_p::Ref<'_>, ambiguous_wide: bool) -> u64 {
     api::terminal_width(text.to_str(), ambiguous_wide) as u64
+}
+
+// ── Structured reports (JSON transport, #553) ───────────────────────────────────
+//
+// Nested reports (Vec<Vec<String>>, Vec<Finding>, …) cross the C boundary as a JSON
+// string built with `serde_json::json!` — one transport for every shape, freed like
+// any other string via `disarm_string_free`. Consumers parse it with their language's
+// JSON library (Go `encoding/json`, cJSON, …). Infallible analyses return the JSON
+// directly; fallible lookups (`lang_info`/`script_info`) return a `DisarmResult` whose
+// `value` is the JSON.
+
+/// Full hostname homoglyph analysis as a JSON object (fields mirror the Rust/Node/
+/// Ruby/Java `HostnameAnalysis`: `suspicious`, `scripts`, `mixed_script`,
+/// `has_confusables`, `bidi_conflict`, `cross_label_script`, `label_scripts`,
+/// `whole_script_confusable`, `label_whole_script_confusable`, `canonical`).
+#[ffi_export]
+fn disarm_analyze_hostname(host: char_p::Ref<'_>) -> char_p::Box {
+    let a = api::is_suspicious_hostname(host.to_str());
+    to_c(
+        serde_json::json!({
+            "suspicious": a.suspicious,
+            "scripts": a.scripts,
+            "mixed_script": a.mixed_script,
+            "has_confusables": a.has_confusables,
+            "bidi_conflict": a.bidi_conflict,
+            "cross_label_script": a.cross_label_script,
+            "label_scripts": a.label_scripts,
+            "whole_script_confusable": a.whole_script_confusable,
+            "label_whole_script_confusable": a.label_whole_script_confusable,
+            "canonical": a.canonical,
+        })
+        .to_string(),
+    )
+}
+
+/// Structural anomaly report for `text` as a JSON object (`anomalous`, `kinds`,
+/// `findings` [each `kind`/`token`/`start`/`end`/`detail`/`reason`], `reason`).
+///
+/// `lexicon_json` is a JSON array of common words (e.g. `["free","account"]`),
+/// mirroring the array form the Node/Ruby bindings accept — it feeds the
+/// word-list branches (`leet`, `segmentation`). An empty string, `"[]"`, `"null"`,
+/// or malformed JSON means "no lexicon": the structural branches (invisible, bidi,
+/// zalgo, mixed-script) still fire, matching the other bindings' no-arg behaviour.
+#[ffi_export]
+fn disarm_inspect_anomalies(text: char_p::Ref<'_>, lexicon_json: char_p::Ref<'_>) -> char_p::Box {
+    let words: Vec<String> = serde_json::from_str(lexicon_json.to_str()).unwrap_or_default();
+    let report = api::inspect_anomalies(text.to_str(), &api::lexicon(words));
+    let findings: Vec<_> = report
+        .findings
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "kind": f.kind.as_str(),
+                "token": f.token,
+                "start": f.start,
+                "end": f.end,
+                "detail": f.detail,
+                "reason": f.reason(),
+            })
+        })
+        .collect();
+    to_c(
+        serde_json::json!({
+            "anomalous": report.anomalous,
+            "kinds": report.kinds.iter().map(|k| k.as_str()).collect::<Vec<_>>(),
+            "findings": findings,
+            "reason": report.reason,
+        })
+        .to_string(),
+    )
+}
+
+/// Auto-language inspection for `text` as a JSON object (`script`, `chosen_lang`,
+/// `reason`, `discriminators_hit`).
+#[ffi_export]
+fn disarm_inspect_auto_lang(text: char_p::Ref<'_>) -> char_p::Box {
+    let a = api::inspect_auto_lang(text.to_str());
+    to_c(
+        serde_json::json!({
+            "script": a.script,
+            "chosen_lang": a.chosen_lang,
+            "reason": a.reason,
+            "discriminators_hit": a.discriminators_hit,
+        })
+        .to_string(),
+    )
+}
+
+/// Metadata for a language code as JSON (`name`, `script`, `region`, `context`), or
+/// an error in the [`DisarmResult`] for an unknown code.
+#[ffi_export]
+fn disarm_lang_info(code: char_p::Ref<'_>) -> DisarmResult {
+    match api::lang_info(code.to_str()) {
+        Ok(m) => ok(serde_json::json!({
+            "name": m.name,
+            "script": m.script,
+            "region": m.region,
+            "context": m.context,
+        })
+        .to_string()),
+        Err(e) => err(&e),
+    }
+}
+
+/// Metadata for a script name as JSON (`name`, `default_lang`, `example`,
+/// `context_aware`), or an error in the [`DisarmResult`] for an unknown name.
+#[ffi_export]
+fn disarm_script_info(name: char_p::Ref<'_>) -> DisarmResult {
+    match api::script_info(name.to_str()) {
+        Ok(m) => ok(serde_json::json!({
+            "name": m.name,
+            "default_lang": m.default_lang,
+            "example": m.example,
+            "context_aware": m.context_aware,
+        })
+        .to_string()),
+        Err(e) => err(&e),
+    }
 }
 
 // ── Memory management ───────────────────────────────────────────────────────────

@@ -39,8 +39,22 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   record (the `List<List<String>>` `labelScripts` and `List<Boolean>`
   `labelWholeScriptConfusable` are marshalled directly across the JNI boundary). The
   boolean `isSuspiciousHostname` predicate is unchanged. Mirrors how the anomaly
-  report is already exposed; the C-ABI (scalar-only substrate) keeps its existing
-  hostname boolean and would gain the struct alongside a future Go binding.
+  report is already exposed. The C-ABI gains the matching structured entry points
+  in the same window (see below).
+- **Structured reports across the C-ABI (#553).** Five new `#[ffi_export]` entry
+  points return their report as a JSON string (freed with the existing
+  `disarm_string_free`): `disarm_analyze_hostname` (the full `HostnameAnalysis`,
+  including `whole_script_confusable` / `label_whole_script_confusable`),
+  `disarm_inspect_anomalies` (per-finding `kind`/`token`/`start`/`end`/`detail`/`reason`,
+  taking a JSON word-array lexicon so the `leet`/`segmentation` branches match the other
+  bindings, not just the structural ones),
+  `disarm_inspect_auto_lang` (script + chosen language + discriminators), and the
+  fallible `disarm_lang_info` / `disarm_script_info` metadata lookups. JSON is the
+  one transport for every nested shape (`List<List<String>>`, `List<Boolean>`,
+  optionals) — no `repr(C)` mirror structs, trivially parsed by any C/Go/Swift/
+  ctypes consumer. `serde_json` is a C-ABI-only dependency; the pure core still
+  carries no serde. The scalar predicates (`disarm_is_suspicious_hostname`, …) are
+  unchanged.
 - **Whole-script-confusable signal on `HostnameAnalysis` (#545).** Two additive
   fields — `whole_script_confusable` (any label qualifies) and the per-label
   `label_whole_script_confusable` — name the fact that discriminates a whole-script

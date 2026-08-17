@@ -47,6 +47,31 @@ int main(void) {
     printf("%-28s %-6s\n", "suspicious hostname", spoof ? "OK" : "FAIL");
     if (!spoof) failures++;
 
+    /* Structured report (JSON transport, #553): whole-script spoof аррӏе -> apple. */
+    char *analysis = disarm_analyze_hostname("аррӏе.com");
+    int json_ok = analysis
+        && strstr(analysis, "\"canonical\":\"apple.com\"")
+        && strstr(analysis, "\"whole_script_confusable\":true");
+    printf("%-28s %-6s\n", "analyze_hostname JSON", json_ok ? "OK" : "FAIL");
+    if (!json_ok) failures++;
+    disarm_string_free(analysis);
+
+    /* Anomaly report with a lexicon (#553): leet "fr33" -> "free" needs the wordlist. */
+    char *anom = disarm_inspect_anomalies("get fr33", "[\"free\"]");
+    int anom_ok = anom
+        && strstr(anom, "\"kind\":\"leet\"")
+        && strstr(anom, "\"detail\":\"free\"");
+    printf("%-28s %-6s\n", "inspect_anomalies leet", anom_ok ? "OK" : "FAIL");
+    if (!anom_ok) failures++;
+    disarm_string_free(anom);
+
+    /* Empty lexicon: same leet input is NOT reported (structural-only mode). */
+    char *anom0 = disarm_inspect_anomalies("get fr33", "");
+    int anom0_ok = anom0 && !strstr(anom0, "\"leet\"");
+    printf("%-28s %-6s\n", "inspect_anomalies no-lex", anom0_ok ? "OK" : "FAIL");
+    if (!anom0_ok) failures++;
+    disarm_string_free(anom0);
+
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");
         return 0;

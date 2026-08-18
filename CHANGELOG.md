@@ -16,6 +16,34 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Fixed
+
+- **16 confusable rows the generator was silently dropping (#558).**
+  `scripts/gen_confusables.py`'s `filter_latin_homoglyphs` pass required the TR39
+  prototype to be a single basic ASCII **letter**. That quietly excluded every
+  Latin-script letter whose prototype is an ASCII *digit* or *punctuation mark* — `Ʒ`→3,
+  `Ȣ`→8, `Ꝯ`→9, `ǃ`→!, `Ɂ`→?, `ꝸ`→&, `꞉`→:, `ꞌ`→' and eight more. Nothing distinguished
+  them from the `þ`→`p` / `ſ`→`f` rows already in the table except the category of the
+  target, so this was a table gap rather than a policy decision. The predicate is now
+  `is_basic_ascii_graphic` and the 16 rows are folded.
+
+  This is the *letter-impersonates-a-digit* direction only. The reverse — a digit source
+  folding to a look-alike letter — is still guarded by `enforce_digit_target` (#439);
+  `normalize_confusables("०")` remains `"0"`.
+
+  Whitespace is deliberately excluded from the widening: TR39 folds the whole Zs/Zl/Zp
+  family to a space, but `collapse_whitespace` already owns that from an explicit
+  core-defined set (#433), and a second copy in the confusables table would be a
+  divergent duplicate of the whitespace policy.
+
+  The remaining residue is now triaged and written down in
+  [`docs/provenance.md`](provenance.md) rather than inferred: 5 deliberate ASCII
+  skeleton divergences, 16 whitespace rows owned elsewhere, and ~4,300 sources whose
+  upstream target is non-Latin, for which a to-Latin table is the wrong home.
+  `unmapped_confusables()` (#563) makes the split recomputable at any time, so the
+  closed gap cannot silently reopen.
+
+
 ### Added
 
 - **The bundled `confusables.txt` version is readable at runtime (#560).** Nothing in

@@ -92,6 +92,24 @@ def is_basic_ascii_letter(cp: int) -> bool:
     return (0x0041 <= cp <= 0x005A) or (0x0061 <= cp <= 0x007A)
 
 
+def is_basic_ascii_graphic(cp: int) -> bool:
+    """True if codepoint is a printable, non-whitespace ASCII character (#558).
+
+    Widens :func:`is_basic_ascii_letter` to digits, punctuation, and symbols. A Latin
+    letter that impersonates an ASCII *digit* or *punctuation mark* — EZH `\u01b7` for `3`,
+    OU `\u0222` for `8`, SALTILLO `\ua78c` for an apostrophe — is the same class of
+    homoglyph as one impersonating a letter, and belongs in the to-Latin table for the
+    same reason.
+
+    Whitespace is deliberately excluded. TR39 folds the whole Zs/Zl/Zp family to a
+    space, but `collapse_whitespace` already owns that (it works from an explicit
+    core-defined set, #433), so duplicating those rows here would put a second,
+    divergent copy of the whitespace policy in the confusables table.
+    """
+    c = chr(cp)
+    return cp < 0x80 and c.isprintable() and not c.isspace()
+
+
 def is_cyrillic(cp: int) -> bool:
     """True if codepoint is in a Cyrillic block."""
     return (
@@ -441,14 +459,25 @@ def filter_via_classes(
 def filter_latin_homoglyphs(
     entries: list[tuple[int, list[int]]],
 ) -> list[tuple[int, str]]:
-    """Latin-script characters that are confusable with a *basic ASCII* letter.
+    """Latin-script characters that are confusable with a *basic ASCII* character.
 
     ``filter_direct`` skips every Latin-script source for the Latin target
     (``is_target(source_cp)`` is true), which drops genuine homoglyphs of ASCII
-    letters that happen to live in Latin Extended blocks — e.g. þ→p, ſ→f, ı→i,
+    characters that happen to live in Latin Extended blocks — e.g. þ→p, ſ→f, ı→i,
     ƒ→f, Ɩ→l. These must fold for confusable normalization. This pass recovers
     exactly that case: a non-ASCII Latin-script source whose TR39 prototype is a
-    single basic ASCII letter.
+    single basic ASCII graphic character.
+
+    #558: the prototype test was ``is_basic_ascii_letter``, which silently dropped
+    every Latin-script letter whose prototype is an ASCII *digit* or *punctuation
+    mark* — Ʒ→3, Ȣ→8, Ꝯ→9, ǃ→!, Ɂ→?, ꝸ→&, ꞉→:, ꞌ→' and 7 more. Nothing distinguished
+    those from þ→p except the category of the target, so they were a table gap rather
+    than a policy decision; the predicate is now ``is_basic_ascii_graphic``. Whitespace
+    stays out (see that function).
+
+    Note this is the *letter-impersonates-a-digit* direction. The reverse — a digit
+    source folding to a look-alike letter — is guarded separately by
+    :func:`enforce_digit_target` (#439) and is a different question.
     """
     result: dict[int, str] = {}
     for source_cp, target_cps in entries:
@@ -459,8 +488,8 @@ def filter_latin_homoglyphs(
         if 0x0030 <= source_cp <= 0x0039:
             continue  # digits
         cleaned = strip_combining(target_cps)
-        if len(cleaned) != 1 or not is_basic_ascii_letter(cleaned[0]):
-            continue  # prototype must be a single basic ASCII letter
+        if len(cleaned) != 1 or not is_basic_ascii_graphic(cleaned[0]):
+            continue  # prototype must be a single printable, non-space ASCII char
         target_str = fix_case_mismatch(source_cp, chr(cleaned[0]))
         if target_str == chr(source_cp):
             continue  # never self-map

@@ -132,7 +132,7 @@ maturin develop && pytest
 # Python
 ruff check . && ruff format --check .
 mypy python/disarm --ignore-missing-imports
-python scripts/audit_language_consistency.py
+python3 scripts/audit_language_consistency.py
 ```
 
 Acceptance gate (#38) — the pure dependency tree must carry no pyo3:
@@ -148,9 +148,9 @@ A prose change that documents a wrong result fails on its own PR, so run these
 whenever you touch `docs/`, a docstring, or a public signature:
 
 ```bash
-python scripts/check_doc_claims.py          # anti-rot doc-claim lint (#156)
-python scripts/check_doc_rust_examples.py   # Rust examples (#50)
-python scripts/run_doc_tests.py             # Python cookbook, per-file isolated
+python3 scripts/check_doc_claims.py          # anti-rot doc-claim lint (#156)
+python3 scripts/check_doc_rust_examples.py   # Rust examples (#50)
+python3 scripts/run_doc_tests.py             # Python cookbook, per-file isolated
 mkdocs build --strict                       # broken internal links, missing nav
 ```
 

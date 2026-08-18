@@ -83,8 +83,14 @@ def test_every_closed_row_is_a_latin_letter_impersonating_a_non_letter() -> None
     The widened predicate accepts an ASCII digit/punctuation prototype. If someone later
     widens it further — to whitespace, or to non-ASCII — this fails and asks why.
     """
+    # Measured, not guessed: 15 of the 16 are letters (Lu/Ll/Lo) and exactly one —
+    # U+A789 MODIFIER LETTER COLON — is `Sk`. Naming `Sk` rather than allowing all of
+    # `S*` keeps the invariant tight: a future row that is a general symbol, not a
+    # letter-like one, fails here and has to justify itself.
+    allowed = {"Lu", "Ll", "Lo", "Sk"}
     for source, target in CLOSED_GAP.items():
-        assert unicodedata.category(source).startswith(("L", "S")), source
+        category = unicodedata.category(source)
+        assert category in allowed, f"{source!r} has category {category}"
         assert target.isascii() and target.isprintable() and not target.isspace()
         assert not target.isalpha(), f"{target!r} is a letter; that case was already in"
 

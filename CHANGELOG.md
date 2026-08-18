@@ -37,7 +37,7 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   divergent duplicate of the whitespace policy.
 
   The remaining residue is now triaged and written down in
-  [`docs/provenance.md`](provenance.md) rather than inferred: 5 deliberate ASCII
+  `docs/provenance.md` rather than inferred: 5 deliberate ASCII
   skeleton divergences, 16 whitespace rows owned elsewhere, and ~4,300 sources whose
   upstream target is non-Latin, for which a to-Latin table is the wrong home.
   `unmapped_confusables()` (#563) makes the split recomputable at any time, so the

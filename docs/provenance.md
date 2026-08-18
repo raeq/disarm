@@ -68,7 +68,10 @@ to-Latin table.
 
 ### Triage of the unmapped residue (#558)
 
-Every upstream source the Latin table does not fold falls into one of three buckets. The
+Every upstream source the Latin table does not fold falls into one of three buckets —
+genuine table gap, deliberate divergence, or out of scope. The table below splits the
+out-of-scope bucket by *reason*, because the two reasons have nothing to do with each
+other and a reader chasing a specific codepoint needs to know which applies. The
 split is recomputable from the tables at any time — `unmapped_confusables()` gives the
 set, and `scripts/gen_confusables.py` gives the upstream target each source folds to —
 so this table is a summary of a derivation, not a hand-maintained list.

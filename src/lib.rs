@@ -332,6 +332,10 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // source instead of re-declaring the literal and risking silent drift (#200).
     m.add("_MAX_BATCH_SIZE", MAX_BATCH_SIZE)?;
 
+    // The bundled confusables.txt release (#560), read from the same const the Rust
+    // surface exposes so the Python wrapper never restates the number.
+    m.add("_CONFUSABLES_VERSION", api::CONFUSABLES_VERSION)?;
+
     Ok(())
 }
 

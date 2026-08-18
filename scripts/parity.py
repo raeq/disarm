@@ -95,6 +95,10 @@ ALIAS_OF = {  # Python-layer aliases / preset wrappers — fold into their targe
 }
 
 PROVIDED_VIA = {
+    # #560: a version is a constant, not an operation, so each language exposes it the
+    # way that language names constants. Python and Rust have real ones; the compiled
+    # bindings expose a nullary accessor because a native module cannot export a static.
+    "confusables_version": {"python": "disarm.CONFUSABLES_VERSION"},
     "reverse_transliterate": {"python": "transliterate(target=…)"},
     "strip_control_chars": {"python": "collapse_whitespace(strip_control=True) / get_pipeline()"},
     "strip_zero_width_chars": {

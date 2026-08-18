@@ -17,6 +17,9 @@ from disarm._types import (
 # Resource limits exposed by the Rust module (#200).
 _MAX_BATCH_SIZE: int
 
+# The bundled `confusables.txt` release, parsed from the TSV header at build time (#560).
+_CONFUSABLES_VERSION: str
+
 class DisarmError(ValueError): ...
 class InvalidArgumentError(DisarmError): ...
 class ResourceLimitError(DisarmError): ...

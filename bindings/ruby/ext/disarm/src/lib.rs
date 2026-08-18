@@ -577,6 +577,11 @@ fn script_info(name: String) -> Result<RHash, Error> {
     Ok(hash)
 }
 
+/// `Disarm._confusables_version` — the bundled `confusables.txt` release (#560).
+fn confusables_version() -> String {
+    api::CONFUSABLES_VERSION.to_owned()
+}
+
 /// `Disarm._list_scripts` — every script disarm knows, as stable UCD identifiers.
 fn list_scripts() -> Vec<String> {
     api::list_scripts().into_iter().map(str::to_owned).collect()
@@ -774,6 +779,10 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     // Metadata introspection (#404 phase 3 parity backfill).
     module.define_singleton_method("_lang_info", function!(lang_info, 1))?;
     module.define_singleton_method("_script_info", function!(script_info, 1))?;
+    module.define_singleton_method(
+        "_confusables_version",
+        function!(confusables_version, 0),
+    )?;
     module.define_singleton_method("_list_scripts", function!(list_scripts, 0))?;
     module.define_singleton_method("_list_context_langs", function!(list_context_langs, 0))?;
 

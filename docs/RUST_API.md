@@ -35,6 +35,11 @@ mutually-exclusive Cyrillic schemes into [`Scheme`] (so the illegal
 `fold_case`, `normalize_confusables`, …) return `Cow<'_, str>` and borrow on the
 unchanged path. Pure functions are `#[must_use]`.
 
+`api::CONFUSABLES_VERSION` (and `api::confusables_version()`) is a special case: the
+*item* is semver-governed like any other, but its **value** is bundled data and moves
+with a table refresh, which the semver policy already allows without a breaking bump.
+Do not pin behaviour to a specific value — read it, report it, compare it.
+
 Everything else is an implementation detail and carries **no** guarantee:
 
 - modules declared `pub(crate)` (the Layer-1 algorithm cores);

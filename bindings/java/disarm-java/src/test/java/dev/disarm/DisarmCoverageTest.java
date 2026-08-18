@@ -126,6 +126,12 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void confusablesVersionIsADottedNumericVersion() {
+        String v = Disarm.confusablesVersion();
+        assertTrue(v.matches("\\d+(\\.\\d+)+"), v);
+    }
+
+    @Test
     void listScriptsAndContextLangsNonEmpty() {
         assertTrue(Disarm.listScripts().contains("Latin"));
         assertFalse(Disarm.listContextLangs().isEmpty());

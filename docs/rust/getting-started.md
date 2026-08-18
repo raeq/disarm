@@ -41,6 +41,26 @@ assert!(scholarly.is_ascii());
 assert_eq!(api::strip_accents("café"), "cafe");
 ```
 
+## Bundled data version
+
+`disarm::api::CONFUSABLES_VERSION` (also available as
+`disarm::api::confusables_version()`) reports the Unicode `confusables.txt` release the
+bundled confusable tables were folded from:
+
+```rust
+assert!(disarm::api::CONFUSABLES_VERSION.starts_with("17."));
+```
+
+This is the **data** vintage, not the crate version, and the two move independently. A
+confusable fold is only as current as its table, so this is the number to compare when
+auditing exposure or benchmarking against another tool.
+
+It is deliberately not called a Unicode version: disarm's tables do not all track one
+release (case folding is 16.0, East Asian width 15.1.0 — see
+[Provenance](../provenance.md)), and the confusable tables also carry disarm's own
+cross-script additions, so they are a superset of the named release rather than a
+verbatim snapshot.
+
 ## Errors
 
 Fallible operations (`sanitize_filename`, `decode_to_utf8`,

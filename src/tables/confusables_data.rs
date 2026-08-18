@@ -1,7 +1,8 @@
 //! Unicode TR39 confusable character mappings (multi-target).
 //!
-//! Auto-generated from confusables.txt by scripts/gen_confusables.py.
-//! Version: 17.0.0
+//! Auto-generated from confusables.txt by scripts/gen_confusables.py. The upstream
+//! release is not restated here — [`CONFUSABLES_VERSION`] carries it, parsed from the
+//! TSV header by build.rs so there is exactly one place it can be wrong (#560).
 //!
 //! Contains ~2,063 non-Latin → Latin mappings and ~1,369 non-Cyrillic →
 //! Cyrillic mappings. Uses compile-time perfect hash maps (`phf`) for O(1)
@@ -19,6 +20,10 @@ include!(concat!(env!("OUT_DIR"), "/ascii_confusable_latin.rs"));
 
 // Non-Cyrillic → Cyrillic confusable mappings.
 include!(concat!(env!("OUT_DIR"), "/confusables_to_cyrillic_phf.rs"));
+
+// The upstream `confusables.txt` release both tables were folded from (#560), parsed
+// from the TSV header by build.rs rather than typed here a second time.
+include!(concat!(env!("OUT_DIR"), "/confusables_version.rs"));
 
 /// Look up a confusable mapping for a character to the target script.
 ///

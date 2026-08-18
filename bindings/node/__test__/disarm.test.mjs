@@ -260,6 +260,11 @@ describe('metadata introspection (#404)', () => {
   test('scriptInfo returns static facts about a script', () => {
     expect(disarm.scriptInfo('Coptic').defaultLang).toBe('cop')
   })
+  test('confusablesVersion reports a dotted numeric data version', () => {
+    const v = disarm.confusablesVersion()
+    expect(typeof v).toBe('string')
+    expect(v).toMatch(/^\d+(\.\d+)+$/)
+  })
   test('listScripts includes Latin and Common', () => {
     const scripts = disarm.listScripts()
     expect(scripts).toContain('Latin')

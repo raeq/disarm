@@ -470,6 +470,18 @@ export function scriptInfo(name: string): ScriptMeta {
   return call(() => native.scriptInfo(name))
 }
 
+/**
+ * The Unicode `confusables.txt` release the bundled confusable tables were folded
+ * from, e.g. `"17.0.0"`.
+ *
+ * Not a Unicode version for the library as a whole — disarm's case-folding and width
+ * tables track different releases (see docs/provenance.md). Use this to answer "is my
+ * confusables fold stale?" without inferring it from behaviour.
+ */
+export function confusablesVersion(): string {
+  return native.confusablesVersion()
+}
+
 /** Every Unicode script name known to the transliteration tables. */
 export function listScripts(): string[] {
   return native.listScripts()

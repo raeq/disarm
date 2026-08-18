@@ -65,6 +65,7 @@ from disarm._api import (
     transliterate,
 )
 from disarm._boundary import (
+    _CONFUSABLES_VERSION,
     AnomalyReport,
     DisarmError,
     Finding,
@@ -200,6 +201,18 @@ try:
 except _PackageNotFoundError:  # pragma: no cover - source checkout without an install
     __version__ = "0.0.0+unknown"
 
+# --- Bundled data version (#560) ---
+#
+# The Unicode `confusables.txt` release the bundled confusable tables were folded from.
+# Deliberately NOT named `UNICODE_VERSION`: disarm's tables do not all track one Unicode
+# release (case folding is 16.0, East Asian width 15.1.0 — see docs/provenance.md), so a
+# single `UNICODE_VERSION` would be wrong for three of the four. This constant answers
+# one question only: how current is the confusables fold?
+#
+# Read from the compiled core, which in turn reads it from the TSV header at build time,
+# so the number is never typed twice.
+CONFUSABLES_VERSION: str = _CONFUSABLES_VERSION
+
 # --- Compatibility aliases ---
 
 from disarm._compat import (  # noqa: E402, F401
@@ -221,6 +234,7 @@ from disarm._text import Text  # noqa: E402
 __all__ = [
     # Metadata
     "__version__",
+    "CONFUSABLES_VERSION",
     # Transforms
     "transliterate",
     "find_untranslatable",

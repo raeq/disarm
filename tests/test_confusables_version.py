@@ -73,6 +73,7 @@ def test_provenance_doc_names_the_same_version() -> None:
     assert f"**{disarm.CONFUSABLES_VERSION}**" in row, row
 
 
+@pytest.mark.skipif(not LATIN_TSV.exists(), reason="source checkout only")
 def test_distinct_from_the_package_version() -> None:
     """Data vintage and release number are different facts and move independently.
 

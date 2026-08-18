@@ -36,8 +36,7 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   There is deliberately **no** library-wide `UNICODE_VERSION`: disarm's bundled tables
   track different releases (confusables 17.0.0, case folding 16.0, East Asian width
   15.1.0), so one number would be wrong for three of the four. See
-  [`docs/provenance.md`](provenance.md) for the full table and the per-language
-  accessors.
+  `docs/provenance.md` for the full table and the per-language accessors.
 
 
 ## [0.13.0] — 2026-08-17

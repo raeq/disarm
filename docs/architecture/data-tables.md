@@ -24,7 +24,8 @@ The array occupies ~512 KB of static data in the `.rodata` section, which the OS
 
 ## PHF maps for specialized data
 
-Data that doesn't map cleanly to a flat array uses `phf::Map`:
+Data that doesn't map cleanly to a flat array uses `phf::Map` — or `phf::Set` where
+membership is the whole question and there is no value to store:
 
 | Table | Key type | Entries | Purpose |
 |---|---|---|---|

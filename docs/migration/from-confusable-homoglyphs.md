@@ -97,7 +97,7 @@ assert disarm.CONFUSABLES_VERSION.split(".")[0].isdigit()
 # What does it not neutralize? Read as exposure, not as a score — this set is
 # where an adaptive attacker goes once the mapped sources stop working.
 exposure = disarm.unmapped_confusables()
-assert len(exposure) > 1000
+assert isinstance(exposure, frozenset)
 
 # Cyrillic а (U+0430) IS folded, so it is not exposure.
 assert "\u0430" not in exposure

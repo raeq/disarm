@@ -242,7 +242,7 @@ does not recommend when diacritics carry meaning.
 | Your threat model | Reach for | It costs you |
 |---|---|---|
 | Homoglyph spoofing, and the text is a real name / address / prose | `normalize_confusables` | Nothing beyond the fold. Diacritics, case, and every non-confusable character survive. |
-| Homoglyph spoofing in an identifier or hostname | `is_suspicious_hostname` / `analyze_hostname` | Nothing — these report, they do not transform. |
+| Homoglyph spoofing in an identifier or hostname | `is_suspicious_hostname` (`analyzeHostname` in Node/Ruby/Java) | Nothing — these report, they do not transform. |
 | Untrusted input into a store or a key | `canonicalize_strict` | Invisibles, bidi, zalgo. Accents and case survive. |
 | Maximum deobfuscation of adversarial text | `strip_obfuscation` | **Accents** (`strip_accents`), plus zalgo, invisibles, bidi. `José` → `Jose`. |
 | Feeding an **uncased** model or tokenizer | `ml_normalize` | **Accents and case.** `José` → `jose`. |

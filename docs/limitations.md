@@ -203,7 +203,7 @@ The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/
 
 **disarm implication**: `normalize_confusables()`, `is_confusable()`, and `is_suspicious_hostname()` use the TR39 confusables table, which is the standard mitigation. However, confusable detection is necessarily conservative. Legitimate multilingual text (e.g., a Russian name in an otherwise English sentence) will trigger warnings. False positives are an inherent tradeoff of any confusable detection system.
 
-### The bundled table does not cover every confusable — and you can now measure which
+### The bundled table does not cover every confusable, and the gap is now measurable
 
 A TR39 fold is only as good as the table behind it, and disarm's to-Latin table is a
 *subset* of upstream `confusables.txt`: 6,565 sources upstream, ~2,181 rows bundled. The

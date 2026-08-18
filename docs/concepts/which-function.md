@@ -43,7 +43,7 @@ chose, not of confusable mapping.
 | Your threat model | Reach for | It costs you |
 |---|---|---|
 | Homoglyph spoofing in a name / address / prose | `normalize_confusables` | Nothing beyond the fold |
-| Homoglyph spoofing in an identifier or hostname | `is_suspicious_hostname` / `analyze_hostname` | Nothing — these report, they do not transform |
+| Homoglyph spoofing in an identifier or hostname | `is_suspicious_hostname` (`analyzeHostname` in Node/Ruby/Java) | Nothing — these report, they do not transform |
 | Untrusted input into a store or a key | `canonicalize_strict` | Invisibles, bidi, zalgo |
 | Maximum deobfuscation of adversarial text | `strip_obfuscation` | **Accents** |
 | Feeding an uncased model or tokenizer | `ml_normalize` | **Accents and case** |

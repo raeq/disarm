@@ -58,6 +58,38 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   Note `fold_case=False` restores case, not diacritics: `strip_accents` is a separate
   step and still runs, so `José` becomes `Jose`. See below.
 
+- **Confusables coverage introspection (#563).** `find_untranslatable` has existed for
+  transliteration since #184; there was no confusables analogue, so answering "which
+  sources does disarm not fold?" meant building a harness outside the library against a
+  cached copy of `confusables.txt`. Two read-only accessors now answer it from inside:
+
+  - `unmapped_confusables(target)` — every source in the bundled upstream file that the
+    chosen table does not fold, sorted.
+  - `find_unmapped_confusables(text, target)` — the same question for one input, in the
+    shape of `find_untranslatable`: `(char, byte_offset)` in order of appearance.
+
+  Both reach Rust, Python, Node, Ruby, Java/Kotlin, and the C ABI.
+
+  The denominator is generated: `scripts/gen_confusables.py` now emits
+  `src/tables/data/confusables_upstream_sources.tsv` (the source set it already read and
+  discarded), and build.rs turns it into a PHF set. The exposure set is **derived** at
+  runtime — upstream sources minus the resolved table's keys — so it cannot go stale
+  against the table it describes, and one denominator covers both targets. The existing
+  confusable TSVs regenerate byte-identically; this change is purely additive.
+
+  The per-input scan composes exactly as the fold does (#475/#477/#483), so a decomposed
+  homoglyph whose precomposed form is mapped counts as covered, and offsets anchor to
+  the caller's string rather than to the composed intermediate — matching
+  `find_untranslatable`'s guarantee.
+
+  Read the result as **exposure**, not as a score: a tool at 95% per-source coverage is
+  one query away from the other 5%, and this set is where an adaptive attacker goes.
+  Nothing is filtered out, which means the Latin set contains five ASCII characters
+  (`%`, `0`, `1`, `I`, `m`) — TR39 is a skeleton transform (m→rn, I/1→l, 0→O) and disarm
+  deliberately does not apply those rows, so a scan over ordinary English reports the
+  letter `m`. Documented on every surface; a coverage report that quietly drops rows
+  reads as coverage it does not have.
+
 ### Changed (breaking)
 
 - **`disarm::api::ml_normalize` gains a fourth parameter, `fold_case: bool`.** Rust

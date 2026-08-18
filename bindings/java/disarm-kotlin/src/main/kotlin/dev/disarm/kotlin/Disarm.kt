@@ -15,6 +15,7 @@ import dev.disarm.ScriptMeta
 import dev.disarm.SlugOptions
 import dev.disarm.TargetScript
 import dev.disarm.TransliterateOptions
+import dev.disarm.UnmappedConfusable
 import dev.disarm.Untranslatable
 import dev.disarm.Disarm as JDisarm
 
@@ -209,6 +210,15 @@ fun scriptInfo(name: String): ScriptMeta = JDisarm.scriptInfo(name)
  * Not a library-wide Unicode version — see `docs/provenance.md`.
  */
 fun confusablesVersion(): String = JDisarm.confusablesVersion()
+
+/** Every upstream confusable source the bundled [target] table does not fold (#563). */
+fun unmappedConfusables(target: TargetScript = TargetScript.LATIN): List<String> =
+    JDisarm.unmappedConfusables(target)
+
+/** Confusable sources in this string the bundled [target] table does not fold (#563). */
+fun String.findUnmappedConfusables(
+    target: TargetScript = TargetScript.LATIN,
+): List<UnmappedConfusable> = JDisarm.findUnmappedConfusables(this, target)
 
 fun listScripts(): List<String> = JDisarm.listScripts()
 

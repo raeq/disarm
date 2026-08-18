@@ -434,6 +434,30 @@ additions, so they are a superset of the named release, not a verbatim snapshot.
 Disarm.confusables_version                         # => "17.0.0"
 ```
 
+### `Disarm.unmapped_confusables` · `Disarm.find_unmapped_confusables`
+
+Coverage is not a score. A tool that folds 95% of known confusable sources is not 95%
+safe — it is one query away from the other 5%. These accessors report **exposure**: the
+sources disarm's bundled table does not fold, globally and for one input.
+
+Most of the set is out of scope rather than missing (a source folding to a non-Latin
+target does not belong in the to-Latin table), and it includes five ASCII characters —
+`%`, `0`, `1`, `I`, `m` — because TR39 is a skeleton transform (m→rn, I/1→l, 0→O) whose
+rows disarm deliberately does not apply. Nothing is filtered out: a coverage report that
+quietly drops rows reads as coverage it does not have.
+
+`find_unmapped_confusables` is the confusables analogue of `find_untranslatable` and
+shares its shape: `{ char:, offset: }` hashes with a byte offset, in order.
+
+```ruby
+unmapped = Disarm.unmapped_confusables           # => ["\u0025", "0", "1", ...]
+unmapped.include?("\u0430")                      # => false — Cyrillic а folds
+unmapped.include?("m")                           # => true  — TR39 skeleton source
+
+Disarm.find_unmapped_confusables("p\u0430ypal")  # => []
+Disarm.find_unmapped_confusables("am")           # => [{ char: "m", offset: 1 }]
+```
+
 ### `Disarm.list_scripts` · `Disarm.list_context_langs`
 
 Enumerate what disarm knows: `list_scripts` is every Unicode script as a stable

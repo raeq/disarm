@@ -386,6 +386,36 @@ public final class Disarm {
         return Native.inspectAutoLang(req(text));
     }
 
+    /**
+     * Every upstream confusable source the bundled {@code target} table does not fold.
+     *
+     * <p>Read as exposure, not as a score — this is where an adaptive attacker goes once
+     * the mapped sources stop working. It includes five ASCII characters
+     * ({@code %}, {@code 0}, {@code 1}, {@code I}, {@code m}): TR39 is a skeleton
+     * transform, and disarm deliberately does not apply those rows because folding a
+     * legitimate {@code m} to {@code rn} corrupts prose.
+     */
+    public static List<String> unmappedConfusables(TargetScript target) {
+        Objects.requireNonNull(target, "target");
+        return List.of(Native.unmappedConfusables(target.token()));
+    }
+
+    /**
+     * Confusable sources in {@code text} the bundled {@code target} table does not fold,
+     * in order — the confusables analogue of {@link #findUntranslatable(String)}, with
+     * the same byte-offset convention.
+     */
+    public static List<UnmappedConfusable> findUnmappedConfusables(String text, TargetScript target) {
+        req(text);
+        Objects.requireNonNull(target, "target");
+        return Native.findUnmappedConfusables(text, target.token());
+    }
+
+    /** {@link #findUnmappedConfusables(String, TargetScript)} against the Latin table. */
+    public static List<UnmappedConfusable> findUnmappedConfusables(String text) {
+        return findUnmappedConfusables(text, TargetScript.LATIN);
+    }
+
     /** Characters with no transliteration under the default scheme, in order. */
     public static List<Untranslatable> findUntranslatable(String text) {
         return findUntranslatable(text, TransliterateOptions.builder().build());

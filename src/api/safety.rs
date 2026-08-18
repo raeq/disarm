@@ -82,6 +82,86 @@ pub fn is_confusable(text: &str, target: TargetScript) -> bool {
         .expect("TargetScript always maps to a supported target script")
 }
 
+// ── Coverage introspection (#563) ────────────────────────────────────────────
+
+/// An upstream confusable source the bundled table does not fold, located in the
+/// input — an element of [`find_unmapped_confusables`].
+///
+/// Mirrors [`Untranslatable`](crate::api::Untranslatable), the transliteration
+/// analogue, field for field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct UnmappedConfusable {
+    /// The unmapped character.
+    pub ch: char,
+    /// Its byte offset in the input string.
+    pub offset: usize,
+}
+
+/// Every confusable source in the bundled upstream `confusables.txt` that disarm's
+/// `target` table does **not** fold, sorted by codepoint.
+///
+/// Read this as *exposure*, not as a score. The set is where an adaptive attacker
+/// goes once the mapped sources stop working, which is why the number matters more
+/// than a per-source coverage percentage measured on a static corpus.
+///
+/// Most of the set is out of scope rather than missing: a source that folds to a
+/// non-Latin target has no business in the to-Latin table. Cross-reference
+/// [`CONFUSABLES_VERSION`](crate::api::CONFUSABLES_VERSION) and `docs/provenance.md`
+/// before reading a given codepoint as a defect.
+///
+/// The result is derived from the same PHF the fold uses, so it cannot drift from
+/// the table's actual behaviour. Allocates on every call — it is an introspection
+/// entry point, not a hot path; hoist it if you need it per-request.
+///
+/// # The set includes five ASCII characters
+/// For [`TargetScript::Latin`] the residue contains `%`, `0`, `1`, `I` and `m`. That
+/// is not a bug and not an oversight. TR39 is a *skeleton* transform: it reduces `m`
+/// to `rn`, `I` and `1` to `l`, and `0` to `O`, so those five are sources in the
+/// upstream file. disarm does not apply those rows, because folding a legitimate ASCII
+/// `m` to `rn` corrupts prose — see the digit-policy and contraction issues.
+///
+/// The consequence is that a per-input scan over ordinary English **will** report the
+/// letter `m`. Nothing here filters it out: this API answers "what does the table not
+/// fold", and a coverage report that quietly drops rows reads as coverage it does not
+/// have. Filter on your own threat model at the call site.
+#[must_use]
+pub fn unmapped_confusables(target: TargetScript) -> Vec<char> {
+    // A `TargetScript` value can never name an unsupported script.
+    crate::confusables::unmapped_confusables(target.as_str())
+        .expect("TargetScript always maps to a supported target script")
+}
+
+/// Scan `text` for characters upstream marks as confusable that disarm's `target`
+/// table does not fold — the confusables analogue of
+/// [`Transliterate::find_untranslatable`](crate::api::Transliterate::find_untranslatable).
+///
+/// Returns one [`UnmappedConfusable`] per occurrence, in order of appearance.
+/// Composition runs exactly as it does in the fold (#475/#477/#483), so a
+/// *decomposed* homoglyph whose precomposed form is mapped counts as covered rather
+/// than as a gap — otherwise the report would disagree with what
+/// [`normalize_confusables`] actually does. Offsets anchor to the caller's `text`,
+/// never to the composed intermediate.
+///
+/// This is what turns the global exposure set above into something answerable against
+/// your own traffic.
+///
+/// ```
+/// use disarm::api::{find_unmapped_confusables, normalize_confusables, TargetScript};
+///
+/// // Cyrillic а IS folded, so it is not a gap.
+/// assert!(find_unmapped_confusables("p\u{0430}ypal", TargetScript::Latin).is_empty());
+/// assert_eq!(normalize_confusables("p\u{0430}ypal", TargetScript::Latin), "paypal");
+/// ```
+#[must_use]
+pub fn find_unmapped_confusables(text: &str, target: TargetScript) -> Vec<UnmappedConfusable> {
+    crate::confusables::find_unmapped_confusables(text, target.as_str())
+        .expect("TargetScript always maps to a supported target script")
+        .into_iter()
+        .map(|(ch, offset)| UnmappedConfusable { ch, offset })
+        .collect()
+}
+
 // ── Reverse transliteration (romanized Latin → native script) ────────────────
 
 /// Language for [`reverse_transliterate`] — the scripts disarm ships reverse

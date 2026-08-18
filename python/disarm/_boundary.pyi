@@ -72,6 +72,9 @@ from disarm._core import (
     _escape_html as _escape_html,
 )
 from disarm._core import (
+    _find_unmapped_confusables as _find_unmapped_confusables,
+)
+from disarm._core import (
     _find_untranslatable as _find_untranslatable,
 )
 from disarm._core import (
@@ -247,6 +250,9 @@ from disarm._core import (
 )
 from disarm._core import (
     _UniqueSlugifier as _UniqueSlugifier,
+)
+from disarm._core import (
+    _unmapped_confusables as _unmapped_confusables,
 )
 from disarm._core import (
     _validate_transliterate_args as _validate_transliterate_args,

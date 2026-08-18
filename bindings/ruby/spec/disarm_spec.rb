@@ -344,6 +344,22 @@ RSpec.describe Disarm do
       expect(version).to match(/\A\d+(\.\d+)+\z/)
     end
 
+    it "reports unfolded confusable sources as exposure" do
+      unmapped = Disarm.unmapped_confusables
+      expect(unmapped.size).to be > 1000
+      # Cyrillic а IS folded, so it is not exposure.
+      expect(unmapped).not_to include("\u0430")
+      # TR39 skeleton source m→rn, deliberately not applied.
+      expect(unmapped).to include("m")
+    end
+
+    it "scans text for unfolded confusable sources" do
+      # Cyrillic а folds, so the spoof is covered.
+      expect(Disarm.normalize_confusables("p\u0430ypal")).to eq("paypal")
+      expect(Disarm.find_unmapped_confusables("p\u0430ypal")).to eq([])
+      expect(Disarm.find_unmapped_confusables("am")).to eq([{ char: "m", offset: 1 }])
+    end
+
     it "lists the known scripts" do
       scripts = Disarm.list_scripts
       expect(scripts).to include("Latin")

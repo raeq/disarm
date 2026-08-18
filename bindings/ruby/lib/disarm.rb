@@ -314,6 +314,28 @@ module Disarm
       end
     end
 
+    # Every upstream confusable source the bundled table does not fold, as a sorted
+    # Array of single-character Strings (#563). An Array rather than a Set, matching
+    # `list_scripts` and avoiding a `require "set"` in the gem entrypoint.
+    #
+    # Read as exposure, not as a score — this is where an adaptive attacker goes once
+    # the mapped sources stop working. It includes five ASCII characters ("%", "0",
+    # "1", "I", "m"): TR39 is a skeleton transform, and disarm deliberately does not
+    # apply those rows because folding a legitimate "m" to "rn" corrupts prose.
+    def unmapped_confusables(target: :latin)
+      translate_errors { _unmapped_confusables(target.to_s) }
+    end
+
+    # Confusable sources in `text` the bundled table does not fold, as an Array of
+    # `{ char:, offset: }` hashes in order of appearance — the confusables analogue of
+    # `find_untranslatable`, with the same byte-offset convention (#563).
+    def find_unmapped_confusables(text, target: :latin)
+      translate_errors do
+        _find_unmapped_confusables(text, target.to_s)
+          .map { |ch, offset| { char: ch, offset: offset } }
+      end
+    end
+
     # The Unicode scripts present in `text`, in first-appearance order
     # (Common/Inherited excluded), as stable UCD identifiers (e.g. "Latin").
     def detect_scripts(text)

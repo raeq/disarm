@@ -165,6 +165,58 @@ pub(crate) fn normalize_confusables_into(
     Ok(())
 }
 
+// ── Coverage introspection (#563) ────────────────────────────────────────────────
+//
+// `find_untranslatable` has existed for transliteration since #184; there was no
+// confusables analogue, so the only way to ask "which sources go uncovered?" was to
+// rebuild the capability outside the library against a cached copy of the upstream
+// file. A defender needs the answer because that set is precisely where an adaptive
+// attacker moves: a tool at 0.949 per-source coverage is not 95% safe, it is one query
+// away from the other 5%.
+
+/// Every upstream confusable source the bundled `target_script` table does not map,
+/// sorted by codepoint.
+///
+/// # Valid `target_script` values
+/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
+pub(crate) fn unmapped_confusables(target_script: &str) -> Result<Vec<char>, crate::ErrorRepr> {
+    validate_target_script(target_script)?;
+    Ok(tables::unmapped_confusable_sources(target_script))
+}
+
+/// Scan `text` for characters upstream marks as confusable that the bundled
+/// `target_script` table does **not** fold, as `(char, byte_offset)` in order of
+/// appearance — the confusables analogue of `find_untranslatable`.
+///
+/// Composes at lookup exactly as the fold does (#475/#477/#483), so a decomposed
+/// homoglyph whose *precomposed* form is mapped is correctly reported as covered
+/// rather than as a gap. Offsets are anchored in the caller's `text`, never in the
+/// composed intermediate; a multi-mark cluster reports the cluster's start.
+///
+/// # Valid `target_script` values
+/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
+pub(crate) fn find_unmapped_confusables(
+    text: &str,
+    target_script: &str,
+) -> Result<Vec<(char, usize)>, crate::ErrorRepr> {
+    validate_target_script(target_script)?;
+    let map = tables::resolve_confusable_map(target_script);
+
+    let mut out = Vec::new();
+    // Always iterate through `composed`: it is identity on input with nothing to
+    // compose, and going through one path keeps this scan and the fold in lockstep by
+    // construction. A character is a gap iff the fold would leave it alone AND upstream
+    // considers it confusable — the second half is what separates "disarm does not
+    // touch this" from "disarm cannot neutralize this".
+    for (ch, offset) in crate::compose::composed(text) {
+        let mapped = map.is_some_and(|m| m.contains_key(&ch));
+        if !mapped && tables::is_upstream_confusable_source(ch) {
+            out.push((ch, offset));
+        }
+    }
+    Ok(out)
+}
+
 /// True if text contains any characters confusable with target-script characters.
 ///
 /// # Valid `target_script` values

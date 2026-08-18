@@ -79,6 +79,12 @@ operations:
       python: escape_html
       ruby: null
       node: null
+  - id: find_unmapped_confusables
+    names:
+      rust: find_unmapped_confusables
+      python: find_unmapped_confusables
+      ruby: find_unmapped_confusables
+      node: findUnmappedConfusables
   - id: find_untranslatable
     names:
       rust: null
@@ -421,6 +427,12 @@ operations:
       python: transliterate
       ruby: transliterate
       node: transliterate
+  - id: unmapped_confusables
+    names:
+      rust: unmapped_confusables
+      python: unmapped_confusables
+      ruby: unmapped_confusables
+      node: unmappedConfusables
   - id: ascii_fold
     alias_of: transliterate
     names:

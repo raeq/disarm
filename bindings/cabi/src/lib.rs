@@ -412,6 +412,49 @@ fn disarm_confusables_version() -> char_p::Box {
     to_c(api::CONFUSABLES_VERSION.to_owned())
 }
 
+// ── Coverage introspection (#563) ───────────────────────────────────────────────
+
+/// Every upstream confusable source the bundled `target` table does not fold, as a
+/// JSON array of single-character strings. Free with [`disarm_string_free`].
+///
+/// Read as exposure, not as a score. The set includes five ASCII characters
+/// (`%`, `0`, `1`, `I`, `m`): TR39 is a skeleton transform, and disarm deliberately
+/// does not apply those rows because folding a legitimate `m` to `rn` corrupts prose.
+#[ffi_export]
+fn disarm_unmapped_confusables(target: char_p::Ref<'_>) -> DisarmResult {
+    match target.to_str().parse::<api::TargetScript>() {
+        Ok(target) => {
+            let items: Vec<String> = api::unmapped_confusables(target)
+                .into_iter()
+                .map(String::from)
+                .collect();
+            ok(serde_json::json!(items).to_string())
+        }
+        Err(e) => err(&e),
+    }
+}
+
+/// Confusable sources in `text` the bundled `target` table does not fold, as a JSON
+/// array of `{"char": "…", "offset": N}` objects in order of appearance — the
+/// confusables analogue of `find_untranslatable`, with the same byte-offset
+/// convention. Free with [`disarm_string_free`].
+#[ffi_export]
+fn disarm_find_unmapped_confusables(
+    text: char_p::Ref<'_>,
+    target: char_p::Ref<'_>,
+) -> DisarmResult {
+    match target.to_str().parse::<api::TargetScript>() {
+        Ok(target) => {
+            let items: Vec<_> = api::find_unmapped_confusables(text.to_str(), target)
+                .into_iter()
+                .map(|u| serde_json::json!({ "char": u.ch.to_string(), "offset": u.offset }))
+                .collect();
+            ok(serde_json::json!(items).to_string())
+        }
+        Err(e) => err(&e),
+    }
+}
+
 // ── Memory management ───────────────────────────────────────────────────────────
 
 /// Free a string previously returned by any `disarm_*` function. NULL-safe: the

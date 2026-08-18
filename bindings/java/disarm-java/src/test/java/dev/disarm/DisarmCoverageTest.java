@@ -132,6 +132,24 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void unmappedConfusablesReportsExposure() {
+        List<String> unmapped = Disarm.unmappedConfusables(TargetScript.LATIN);
+        assertTrue(unmapped.size() > 1000, String.valueOf(unmapped.size()));
+        assertFalse(unmapped.contains("\u0430"), "Cyrillic a folds, so it is not exposure");
+        assertTrue(unmapped.contains("m"), "TR39 skeleton source m->rn is not applied");
+    }
+
+    @Test
+    void findUnmappedConfusablesAgreesWithTheFold() {
+        assertEquals("paypal", Disarm.normalizeConfusables("p\u0430ypal", TargetScript.LATIN));
+        assertTrue(Disarm.findUnmappedConfusables("p\u0430ypal").isEmpty());
+        List<UnmappedConfusable> hits = Disarm.findUnmappedConfusables("am");
+        assertEquals(1, hits.size());
+        assertEquals("m", hits.get(0).character());
+        assertEquals(1L, hits.get(0).offset());
+    }
+
+    @Test
     void listScriptsAndContextLangsNonEmpty() {
         assertTrue(Disarm.listScripts().contains("Latin"));
         assertFalse(Disarm.listContextLangs().isEmpty());

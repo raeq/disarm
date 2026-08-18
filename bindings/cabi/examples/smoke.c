@@ -80,6 +80,24 @@ int main(void) {
     if (!cv_ok) failures++;
     disarm_string_free(cv);
 
+    /* Coverage introspection (#563): a JSON array, and a scan that finds nothing on
+       a homoglyph the table DOES fold. */
+    DisarmResult_t unmapped = disarm_unmapped_confusables("latin");
+    int unmapped_ok = unmapped.value && unmapped.value[0] == '[' && strlen(unmapped.value) > 100;
+    printf("%-28s %-6s\n", "unmapped_confusables JSON", unmapped_ok ? "OK" : "FAIL");
+    if (!unmapped_ok) failures++;
+    disarm_string_free(unmapped.value);
+    disarm_string_free(unmapped.error);
+
+    /* Cyrillic а (U+0430, "\xd0\xb0") folds, so the scan reports an empty array. */
+    DisarmResult_t scan = disarm_find_unmapped_confusables("p\xd0\xb0ypal", "latin");
+    int scan_ok = scan.value && strcmp(scan.value, "[]") == 0;
+    printf("%-28s %-6s got=\"%s\"\n", "find_unmapped covered", scan_ok ? "OK" : "FAIL",
+           scan.value ? scan.value : "(null)");
+    if (!scan_ok) failures++;
+    disarm_string_free(scan.value);
+    disarm_string_free(scan.error);
+
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");
         return 0;

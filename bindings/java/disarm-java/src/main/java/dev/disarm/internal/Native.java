@@ -131,6 +131,11 @@ public final class Native {
 
     public static native String[] detectScripts(String text);
 
+    public static native String[] unmappedConfusables(String target);
+
+    public static native java.util.List<dev.disarm.UnmappedConfusable> findUnmappedConfusables(
+            String text, String target);
+
     // ── Metadata listings ──────────────────────────────────────────────────────
     public static native String confusablesVersion();
 

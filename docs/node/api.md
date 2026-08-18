@@ -361,6 +361,32 @@ additions, so they are a superset of the named release, not a verbatim snapshot.
 confusablesVersion() // => '17.0.0'
 ```
 
+### `unmappedConfusables(options?)` · `findUnmappedConfusables(text, options?)`
+
+Coverage is not a score. A tool that folds 95% of known confusable sources is not 95%
+safe — it is one query away from the other 5%. These accessors report **exposure**: the
+sources disarm's bundled table does not fold, globally and for one input.
+
+Most of the set is out of scope rather than missing (a source folding to a non-Latin
+target does not belong in the to-Latin table), and it includes five ASCII characters —
+`%`, `0`, `1`, `I`, `m` — because TR39 is a skeleton transform (m→rn, I/1→l, 0→O) whose
+rows disarm deliberately does not apply. Nothing is filtered out: a coverage report that
+quietly drops rows reads as coverage it does not have.
+
+`findUnmappedConfusables` is the confusables analogue of `findUntranslatable` and shares
+its shape: `{ char, offset }` with a byte offset, in order of appearance. Composition
+runs as it does in the fold, so a decomposed homoglyph whose precomposed form is mapped
+counts as covered.
+
+```ts
+const unmapped = unmappedConfusables() // Set<string>
+unmapped.has('\u0430') // => false — Cyrillic а folds, so it is covered
+unmapped.has('m') // => true — TR39 skeleton source, deliberately not applied
+
+findUnmappedConfusables('p\u0430ypal') // => [] — the spoof is recovered
+findUnmappedConfusables('am') // => [{ char: 'm', offset: 1 }]
+```
+
 ### `listScripts()` · `listContextLangs()`
 
 Enumerate, respectively, every Unicode script name known to the transliteration

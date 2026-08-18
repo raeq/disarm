@@ -304,6 +304,69 @@ Identify which Unicode scripts are present in a string:
 | `COMMON` | Digits, punctuation, whitespace |
 | `INHERITED` | Combining diacritical marks |
 
+## Knowing what is NOT covered
+
+Coverage is not a score. A tool that folds 95% of known confusable sources is not 95%
+safe — it is one query away from the other 5%, and an adaptive attacker will find that
+query. What matters for deployment is knowing *which* sources go uncovered.
+
+Two accessors answer that, both read-only over the compiled tables.
+
+`unmapped_confusables()` is the global set — every source in the bundled
+`confusables.txt` that disarm's table does not fold:
+
+```python
+from disarm import unmapped_confusables, normalize_confusables, find_unmapped_confusables
+
+unmapped = unmapped_confusables()
+
+# Cyrillic а (U+0430) folds, so it is covered — not exposure.
+assert normalize_confusables("\u0430") == "a"
+assert "\u0430" not in unmapped
+```
+
+`find_unmapped_confusables()` answers the same question about one input, and is the
+confusables analogue of [`find_untranslatable`](transliteration.md). It returns
+`(character, byte_offset)` pairs in order, the same convention:
+
+```python
+# A folded homoglyph is coverage, so the scan is silent on it.
+assert normalize_confusables("p\u0430ypal") == "paypal"
+assert find_unmapped_confusables("p\u0430ypal") == []
+
+assert find_unmapped_confusables("hello") == []
+```
+
+Composition runs exactly as it does in the fold, so a *decomposed* homoglyph whose
+precomposed form is mapped counts as covered — otherwise the report would disagree with
+what the transform actually does:
+
+```python
+assert normalize_confusables("\u0456\u0308") == "i"    # і + ◌̈ composes to ї, which folds
+assert find_unmapped_confusables("\u0456\u0308") == []
+```
+
+### Reading the result
+
+Most of the global set is **out of scope**, not missing. A source whose upstream target
+is non-Latin has no business in the to-Latin table, and the two bundled tables have
+genuinely different coverage — pass `target_script="cyrillic"` to ask about the other
+one. Check [`CONFUSABLES_VERSION`](../provenance.md) before reading any one codepoint as
+a defect.
+
+The set also contains five **ASCII** characters — `%`, `0`, `1`, `I` and `m`:
+
+```python
+assert sorted(c for c in unmapped if c.isascii()) == ["%", "0", "1", "I", "m"]
+```
+
+TR39 is a *skeleton* transform: it reduces `m` to `rn`, `I` and `1` to `l`, and `0` to
+`O`. Those rows make the five ASCII characters upstream sources. disarm does not apply
+them, because folding a legitimate ASCII `m` to `rn` corrupts prose. They are reported
+rather than filtered out — a coverage report that quietly drops rows reads as coverage it
+does not have — so a scan over ordinary English will report the letter `m`. Filter on
+your own threat model at the call site.
+
 ## Use cases
 
 ### Anti-phishing

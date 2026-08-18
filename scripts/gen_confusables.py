@@ -595,7 +595,7 @@ def write_upstream_sources(entries: list[tuple[int, list[int]]], path: Path) -> 
     """Write every source codepoint in upstream ``confusables.txt`` as a char-set TSV.
 
     #563: the generator reads the whole upstream file and then discards everything it
-    does not fold, so the coverage question — *which* confusable sources does the
+    does not fold, so the coverage question — *which confusable sources does the
     bundled table not map?* — could only be answered by a harness built outside the
     library against a cached copy of the same file. Emitting the source set here turns
     that into a generated table, and the discard set becomes a runtime derivation

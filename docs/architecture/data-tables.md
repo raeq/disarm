@@ -29,7 +29,7 @@ Data that doesn't map cleanly to a flat array uses `phf::Map`:
 | Table | Key type | Entries | Purpose |
 |---|---|---|---|
 | Hanzi pinyin | `char` | ~21K | CJK ideograph → pinyin |
-| Confusables (Latin) | `char` | ~2,165 | TR39 confusable → Latin |
+| Confusables (Latin) | `char` | ~2,181 | TR39 confusable → Latin |
 | Confusables (Cyrillic) | `char` | ~1,349 | TR39 confusable → Cyrillic |
 | Upstream confusable sources | `char` (set) | 6,565 | Coverage denominator (#563) |
 | Case folding | `char` | 1,557 | Unicode CaseFolding.txt |

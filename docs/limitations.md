@@ -206,7 +206,7 @@ The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/
 ### The bundled table does not cover every confusable — and you can now measure which
 
 A TR39 fold is only as good as the table behind it, and disarm's to-Latin table is a
-*subset* of upstream `confusables.txt`: 6,565 sources upstream, ~2,165 rows bundled. The
+*subset* of upstream `confusables.txt`: 6,565 sources upstream, ~2,181 rows bundled. The
 gap is mostly deliberate — a source whose upstream target is CJK, Arabic or Hangul does
 not belong in a to-Latin table — but "mostly deliberate" is not a claim a deployment
 should have to take on trust.

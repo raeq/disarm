@@ -379,9 +379,10 @@ runs as it does in the fold, so a decomposed homoglyph whose precomposed form is
 counts as covered.
 
 ```ts
-const unmapped = unmappedConfusables() // Set<string>
-unmapped.has('\u0430') // => false — Cyrillic а folds, so it is covered
-unmapped.has('m') // => true — TR39 skeleton source, deliberately not applied
+// Cyrillic а folds, so it is covered — not exposure.
+unmappedConfusables().has('\u0430') // => false
+// TR39 skeleton source m→rn, deliberately not applied.
+unmappedConfusables().has('m') // => true
 
 findUnmappedConfusables('p\u0430ypal') // => [] — the spoof is recovered
 findUnmappedConfusables('am') // => [{ char: 'm', offset: 1 }]

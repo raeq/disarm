@@ -132,6 +132,8 @@ public final class Native {
     public static native String[] detectScripts(String text);
 
     // ── Metadata listings ──────────────────────────────────────────────────────
+    public static native String confusablesVersion();
+
     public static native String[] listScripts();
 
     public static native String[] listContextLangs();

@@ -16,6 +16,29 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Added
+
+- **The bundled `confusables.txt` version is readable at runtime (#560).** Nothing in
+  the library reported which upstream release the confusable tables were folded from.
+  The number existed — in the TSV header and in `docs/provenance.md` — but both are
+  build-time artifacts, so a deployment could not answer "is my fold stale?" without
+  inferring it from behaviour. It is now exposed everywhere:
+  `disarm::api::CONFUSABLES_VERSION` (and `api::confusables_version()`) in Rust,
+  `disarm.CONFUSABLES_VERSION` in Python, `confusablesVersion()` in Node and
+  Java/Kotlin, `Disarm.confusables_version` in Ruby, and
+  `disarm_confusables_version()` in the C ABI.
+
+  `build.rs` parses the value out of the TSV header it already reads, so the constant
+  cannot drift from the data it describes, and the build fails if that header stops
+  naming a version. Both confusable tables are folded from one upstream release, which
+  `build.rs` asserts, so a single constant covers them.
+
+  There is deliberately **no** library-wide `UNICODE_VERSION`: disarm's bundled tables
+  track different releases (confusables 17.0.0, case folding 16.0, East Asian width
+  15.1.0), so one number would be wrong for three of the four. See
+  `docs/provenance.md` for the full table and the per-language accessors.
+
+
 ## [0.13.0] — 2026-08-17
 
 ### Added

@@ -22,6 +22,27 @@ against for byte-stable behavior.
 | Emoji presentation — `emoji_presentation.tsv` | UCD `emoji-data.txt` | **15.1.0** |
 | Transliteration / romanization | per-block standards (the rest of this document) | mixed; conventional where no single published standard exists |
 
+**Reading the confusables version at runtime (#560).** The row above is a build-time
+artifact; the same value is reachable from a running program, so a deployment can answer
+"is my fold stale?" without inferring it from behaviour:
+
+| Language | Accessor |
+|---|---|
+| Rust | `disarm::api::CONFUSABLES_VERSION` / `disarm::api::confusables_version()` |
+| Python | `disarm.CONFUSABLES_VERSION` |
+| Node | `confusablesVersion()` |
+| Ruby | `Disarm.confusables_version` |
+| Java / Kotlin | `Disarm.confusablesVersion()` |
+| C ABI | `disarm_confusables_version()` |
+
+The value is parsed out of the TSV header by `build.rs`, so it cannot drift from the
+data it describes — the build fails if that header stops naming a version. It covers
+both confusable tables, which `build.rs` asserts are folded from one upstream release.
+
+Note there is deliberately **no** library-wide `UNICODE_VERSION`: as the table above
+shows, the four bundled surfaces track different releases, so a single number would be
+wrong for three of them.
+
 **Deliberate divergence from upstream.** The confusables tables are *not* a verbatim UTS&nbsp;#39
 snapshot: #336 added high-confidence cross-script pairs that are correct but not present in
 `confusables.txt` 17.0. That divergence is itself part of what you pin to — a future release may

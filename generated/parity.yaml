@@ -31,6 +31,12 @@ operations:
       python: collapse_whitespace
       ruby: collapse_whitespace
       node: collapseWhitespace
+  - id: confusables_version
+    names:
+      rust: confusables_version
+      python: { provided_via: "disarm.CONFUSABLES_VERSION" }
+      ruby: confusables_version
+      node: confusablesVersion
   - id: decode_to_utf8
     names:
       rust: decode_to_utf8

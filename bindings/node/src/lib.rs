@@ -556,6 +556,15 @@ pub fn script_info(name: String) -> Result<ScriptMeta, NapiError> {
     })
 }
 
+/// The Unicode `confusables.txt` release the bundled confusable tables were folded
+/// from (#560). Deliberately not called a "Unicode version": disarm's other tables
+/// track different releases (see docs/provenance.md), so this answers one question —
+/// how current is the confusables fold?
+#[napi]
+pub fn confusables_version() -> String {
+    api::CONFUSABLES_VERSION.to_owned()
+}
+
 /// Every Unicode script name known to the transliteration tables.
 #[napi]
 pub fn list_scripts() -> Vec<String> {

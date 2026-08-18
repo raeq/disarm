@@ -345,6 +345,22 @@ scriptInfo('Cyrillic').defaultLang // => 'ru'
 scriptInfo('Greek').example // => 'Ελληνικά'
 ```
 
+### `confusablesVersion()`
+
+The Unicode `confusables.txt` release the bundled confusable tables were folded
+from. This is the **data** vintage, not the library version, and the two move
+independently: a confusable fold is only as current as its table, so this is the number
+to compare when auditing exposure or benchmarking disarm against another tool.
+
+It is deliberately not called a Unicode version — disarm's tables do not all track one
+release (case folding is 16.0, East Asian width 15.1.0; see
+[Provenance](../provenance.md)). The tables also carry disarm's own cross-script
+additions, so they are a superset of the named release, not a verbatim snapshot.
+
+```ts
+confusablesVersion() // => '17.0.0'
+```
+
 ### `listScripts()` · `listContextLangs()`
 
 Enumerate, respectively, every Unicode script name known to the transliteration

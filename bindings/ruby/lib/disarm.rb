@@ -356,6 +356,13 @@ module Disarm
       translate_errors { _script_info(name.to_s) }
     end
 
+    # The Unicode `confusables.txt` release the bundled confusable tables were folded
+    # from, e.g. "17.0.0". Not a Unicode version for the library as a whole — the
+    # case-folding and width tables track different releases (see docs/provenance.md).
+    def confusables_version
+      translate_errors { _confusables_version }
+    end
+
     # Every script disarm knows, as stable UCD script identifiers (includes
     # "Common"/"Inherited"), sorted by name.
     def list_scripts

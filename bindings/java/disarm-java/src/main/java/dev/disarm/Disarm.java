@@ -305,6 +305,18 @@ public final class Disarm {
 
     // ── Metadata listings ──────────────────────────────────────────────────────
 
+    /**
+     * The Unicode {@code confusables.txt} release the bundled confusable tables were
+     * folded from, e.g. {@code "17.0.0"}.
+     *
+     * <p>Not a Unicode version for the library as a whole: the case-folding and width
+     * tables track different releases (see {@code docs/provenance.md}). Use this to
+     * answer "is my confusables fold stale?" without inferring it from behaviour.
+     */
+    public static String confusablesVersion() {
+        return Native.confusablesVersion();
+    }
+
     /** Every Unicode script name known to the transliteration tables. */
     public static List<String> listScripts() {
         return List.of(Native.listScripts());

@@ -338,6 +338,12 @@ RSpec.describe Disarm do
       expect(Disarm.script_info("Coptic")[:default_lang]).to eq("cop")
     end
 
+    it "reports the bundled confusables.txt version" do
+      version = Disarm.confusables_version
+      expect(version).to be_a(String)
+      expect(version).to match(/\A\d+(\.\d+)+\z/)
+    end
+
     it "lists the known scripts" do
       scripts = Disarm.list_scripts
       expect(scripts).to include("Latin")

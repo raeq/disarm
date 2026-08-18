@@ -12,6 +12,9 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 
 from disarm._core import (
+    _CONFUSABLES_VERSION as _CONFUSABLES_VERSION,
+)
+from disarm._core import (
     _MAX_BATCH_SIZE as _MAX_BATCH_SIZE,
 )
 from disarm._core import (

@@ -72,6 +72,14 @@ int main(void) {
     if (!anom0_ok) failures++;
     disarm_string_free(anom0);
 
+    /* Bundled data version (#560): a dotted numeric string, not the crate version. */
+    char *cv = disarm_confusables_version();
+    int cv_ok = cv && cv[0] >= '0' && cv[0] <= '9' && strchr(cv, '.') != NULL;
+    printf("%-28s %-6s got=\"%s\"\n", "confusables_version", cv_ok ? "OK" : "FAIL",
+           cv ? cv : "(null)");
+    if (!cv_ok) failures++;
+    disarm_string_free(cv);
+
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");
         return 0;

@@ -203,6 +203,13 @@ fun langInfo(code: String): LangMeta = JDisarm.langInfo(code)
 
 fun scriptInfo(name: String): ScriptMeta = JDisarm.scriptInfo(name)
 
+/**
+ * The Unicode `confusables.txt` release the bundled confusable tables were folded from.
+ *
+ * Not a library-wide Unicode version — see `docs/provenance.md`.
+ */
+fun confusablesVersion(): String = JDisarm.confusablesVersion()
+
 fun listScripts(): List<String> = JDisarm.listScripts()
 
 fun listContextLangs(): List<String> = JDisarm.listContextLangs()

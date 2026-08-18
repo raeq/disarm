@@ -34,6 +34,7 @@ from disarm import (
 EXPECTED_ALL = {
     # Metadata
     "__version__",
+    "CONFUSABLES_VERSION",
     # Core transforms
     "transliterate",
     "find_untranslatable",

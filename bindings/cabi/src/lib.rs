@@ -399,6 +399,19 @@ fn disarm_script_info(name: char_p::Ref<'_>) -> DisarmResult {
     }
 }
 
+// ── Bundled data versions ───────────────────────────────────────────────────────
+
+/// The Unicode `confusables.txt` release the bundled confusable tables were folded
+/// from, e.g. `"17.0.0"` (#560). Free the result with [`disarm_string_free`].
+///
+/// Not a Unicode version for the library as a whole: disarm's case-folding and width
+/// tables track different releases (see `docs/provenance.md`). This answers one
+/// question — how current is the confusables fold?
+#[ffi_export]
+fn disarm_confusables_version() -> char_p::Box {
+    to_c(api::CONFUSABLES_VERSION.to_owned())
+}
+
 // ── Memory management ───────────────────────────────────────────────────────────
 
 /// Free a string previously returned by any `disarm_*` function. NULL-safe: the

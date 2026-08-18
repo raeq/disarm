@@ -164,6 +164,12 @@ fn map_str_array<'l>(
     .resolve::<Policy>()
 }
 
+/// `() -> String`, infallible (bundled-data version constants, no text argument).
+fn map_string_nullary<'l>(mut env: EnvUnowned<'l>, f: impl FnOnce() -> String) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> { Ok(env.new_string(f())?.into()) })
+        .resolve::<Policy>()
+}
+
 /// `() -> String[]`, infallible (metadata listings with no text argument).
 fn map_str_array_nullary<'l>(
     mut env: EnvUnowned<'l>,
@@ -882,6 +888,13 @@ pub fn detectScripts<'l>(
             .map(str::to_owned)
             .collect()
     })
+}
+
+/// The Unicode `confusables.txt` release the bundled confusable tables were folded
+/// from (#560). Not a library-wide Unicode version — see docs/provenance.md.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn confusablesVersion<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<'l> {
+    map_string_nullary(env, || disarm_core::api::CONFUSABLES_VERSION.to_owned())
 }
 
 /// Every Unicode script name known to the transliteration tables.

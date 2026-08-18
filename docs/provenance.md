@@ -66,6 +66,57 @@ Read the result as exposure, not as a score, and note that most of it is out of 
 rather than missing: a source that folds to a non-Latin target does not belong in the
 to-Latin table.
 
+### Triage of the unmapped residue (#558)
+
+Every upstream source the Latin table does not fold falls into one of three buckets —
+genuine table gap, deliberate divergence, or out of scope. The table below splits the
+out-of-scope bucket by *reason*, because the two reasons have nothing to do with each
+other and a reader chasing a specific codepoint needs to know which applies. The
+split is recomputable from the tables at any time — `unmapped_confusables()` gives the
+set, and `scripts/gen_confusables.py` gives the upstream target each source folds to —
+so this table is a summary of a derivation, not a hand-maintained list.
+
+| Bucket | Count | Disposition |
+|---|---:|---|
+| Genuine table gap | 16 | **Closed.** Latin letters whose TR39 prototype is an ASCII digit or punctuation mark. |
+| Deliberate divergence | 5 | Kept. The ASCII skeleton rows: `%`, `0`, `1`, `I`, `m`. |
+| Out of scope — whitespace | 16 | Kept. Owned by `collapse_whitespace`. |
+| Out of scope — non-Latin target | ~4,300 | Kept. A to-Latin table is the wrong home. |
+
+**Bucket 1 — closed.** `filter_latin_homoglyphs` required the TR39 prototype to be a
+single basic ASCII **letter**, so a Latin-script letter impersonating an ASCII *digit* or
+*punctuation mark* never entered the table. Nothing distinguished those rows from the
+`þ`→`p` / `ſ`→`f` rows already present except the category of the target, which makes it
+a gap rather than a policy decision. The predicate is now `is_basic_ascii_graphic` and
+16 rows joined the table:
+
+`Ƨ`→2, `Ʒ`→3, `ƻ`→2, `Ƽ`→5, `ǃ`→!, `Ȝ`→3, `Ȣ`→8, `ȣ`→8, `Ɂ`→?, `Ꝛ`→2, `Ꝫ`→3, `Ꝯ`→9,
+`ꝸ`→&, `꞉`→:, `ꞌ`→', `Ɜ`→3.
+
+This is the *letter-impersonates-a-digit* direction. The reverse — a digit source folding
+to a look-alike letter — is guarded separately and is a different question.
+
+**Bucket 2 — deliberate divergence.** TR39 is a *skeleton* transform, so `%`, `0`, `1`,
+`I` and `m` are upstream sources (m→rn, I/1→l, 0→O, %→º/₀). disarm does not apply those
+rows: folding a legitimate ASCII `m` to `rn` breaks `earnings`, `turnip` and `born`, and
+folding `0` to the letter `O` corrupts numbers. They remain visible in
+`unmapped_confusables()` rather than being filtered — a coverage report that hides a
+divergence reads as coverage it does not have.
+
+**Bucket 3 — out of scope.** Two kinds. The 16 whitespace rows (U+00A0, U+1680,
+U+2000–200A, U+2028, U+2029, U+202F, U+205F → space) belong to `collapse_whitespace`,
+which works from an explicit core-defined set; a second copy in the confusables table
+would be a divergent duplicate of the whitespace policy. The remaining ~4,300 sources
+fold to a non-Latin target — CJK, Arabic, Hangul and the like — and a to-Latin table is
+the wrong home for them. Ask about the other table with
+`unmapped_confusables(target_script="cyrillic")`.
+
+Two further classes sit inside the non-Latin-target count and are worth naming, because
+they look like Latin misses at a glance: 214 sources whose prototype is a *different
+accented Latin letter* (`Ě`→`Ĕ`, `Ǎ`→`Ă`), which is accent substitution rather than
+recovery to Latin, and 74 whose prototype is a multi-character Latin string (`Æ`→`AE`,
+`Œ`→`OE`), which is the same prose-corrupting expansion as the `m`→`rn` case.
+
 **Deliberate divergence from upstream.** The confusables tables are *not* a verbatim UTS&nbsp;#39
 snapshot: #336 added high-confidence cross-script pairs that are correct but not present in
 `confusables.txt` 17.0. That divergence is itself part of what you pin to — a future release may

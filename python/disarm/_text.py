@@ -279,13 +279,19 @@ class Text:
         *,
         lang: str | None = None,
         emoji: str = "cldr",
+        fold_case: bool = True,
     ) -> Text:
         """Apply the ml_normalize precompiled pipeline.
 
         NFKC → emoji→text → [transliterate] → strip_accents →
-        fold_case → collapse_whitespace.
+        [fold_case] → collapse_whitespace.
+
+        ``fold_case=False`` drops the fold step for a cased downstream model (#559);
+        every other stage still runs, so accents are still stripped.
         """
-        return Text(self._t().ml_normalize(self._value, lang=lang, emoji=emoji))
+        return Text(
+            self._t().ml_normalize(self._value, lang=lang, emoji=emoji, fold_case=fold_case)
+        )
 
     def strip_format(self) -> Text:
         """Apply the strip_format precompiled pipeline.

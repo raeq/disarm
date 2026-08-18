@@ -831,10 +831,11 @@ pub(crate) fn ml_normalize<'a>(
     text: &'a str,
     lang: Option<&str>,
     emoji_style: &str,
+    fold_case: bool,
 ) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
-    const STEPS: &[Step] = &[
+    const STEPS: &[Step; 9] = &[
         // 1. NFKC normalization
         Step::Nfkc,
         // 2. Emoji → text (CLDR short names) when emoji_style == "cldr".
@@ -866,6 +867,12 @@ pub(crate) fn ml_normalize<'a>(
         Step::StripZeroWidth,
         Step::CollapseWs,
     ];
+    // #559: the `fold_case=false` variant, DERIVED from `STEPS` rather than written
+    // out a second time — the two lists cannot drift, and `without_fold_case` const-
+    // asserts that exactly one `FoldCase` was removed, so reordering or dropping the
+    // step above fails the build instead of silently changing what the flag does.
+    const STEPS_NO_FOLD: [Step; 8] = without_fold_case(STEPS);
+
     crate::transliterate::validate_lang(lang)?;
     // Validate emoji_style — only two modes are supported.
     if !matches!(emoji_style, "cldr" | "none") {
@@ -873,8 +880,9 @@ pub(crate) fn ml_normalize<'a>(
             got: emoji_style.to_owned(),
         });
     }
+    let steps: &[Step] = if fold_case { STEPS } else { &STEPS_NO_FOLD };
     run(
-        STEPS,
+        steps,
         text,
         &PresetCtx {
             lang,
@@ -882,6 +890,31 @@ pub(crate) fn ml_normalize<'a>(
             emoji_cldr: emoji_style == "cldr",
         },
     )
+}
+
+/// Drop the single [`Step::FoldCase`] from a 9-step preset list, in `const` context.
+///
+/// Backs `ml_normalize`'s `fold_case=false` mode (#559). Deriving the shorter list from
+/// the longer one — instead of maintaining two literals — means an edit to the pipeline
+/// automatically reaches both, and the assertion below turns "someone removed or
+/// duplicated `FoldCase`" into a build failure rather than a behaviour change nobody
+/// notices. `Step::Nfkc` is only the array's initial filler; every slot is overwritten.
+const fn without_fold_case(steps: &[Step; 9]) -> [Step; 8] {
+    let mut out = [Step::Nfkc; 8];
+    let mut read = 0;
+    let mut write = 0;
+    while read < steps.len() {
+        if !matches!(steps[read], Step::FoldCase) {
+            out[write] = steps[read];
+            write += 1;
+        }
+        read += 1;
+    }
+    assert!(
+        write == 8,
+        "ml_normalize's step list must contain exactly one Step::FoldCase"
+    );
+    out
 }
 
 /// Library catalog key generation pipeline.
@@ -1366,11 +1399,11 @@ mod tests {
             ),
             (
                 "ml_normalize_cldr",
-                Box::new(|s| ml_normalize(s, None, "cldr").unwrap().into_owned()),
+                Box::new(|s| ml_normalize(s, None, "cldr", true).unwrap().into_owned()),
             ),
             (
                 "ml_normalize_none",
-                Box::new(|s| ml_normalize(s, None, "none").unwrap().into_owned()),
+                Box::new(|s| ml_normalize(s, None, "none", true).unwrap().into_owned()),
             ),
         ]
     }
@@ -1681,7 +1714,7 @@ mod tests {
         );
         assert_eq!(sort_key("Über ИМЯ", None).unwrap(), "\u{fc}ber imya");
         assert_eq!(
-            ml_normalize("Café \u{1F600} ИМЯ", Some("ru"), "cldr").unwrap(),
+            ml_normalize("Café \u{1F600} ИМЯ", Some("ru"), "cldr", true).unwrap(),
             "cafe grinning face imya"
         );
         assert_eq!(
@@ -1944,13 +1977,121 @@ mod tests {
 
     #[test]
     fn test_ml_normalize_basic() {
-        let result = ml_normalize("Café Résumé", None, "cldr").unwrap();
+        let result = ml_normalize("Café Résumé", None, "cldr", true).unwrap();
         assert_eq!(result, "cafe resume");
+    }
+
+    // ── #559: the fold_case switch ───────────────────────────────────────────
+
+    /// The default is unchanged. Every existing caller keeps the folding behaviour.
+    #[test]
+    fn ml_normalize_folds_case_by_default() {
+        assert_eq!(
+            ml_normalize("José Martínez", None, "cldr", true).unwrap(),
+            "jose martinez"
+        );
+    }
+
+    /// `fold_case=false` keeps capitals. Note it does NOT keep diacritics —
+    /// `strip_accents` is a separate step and still runs (that distinction is the
+    /// subject of #564).
+    #[test]
+    fn ml_normalize_without_fold_case_keeps_capitals_not_accents() {
+        assert_eq!(
+            ml_normalize("José Martínez", None, "cldr", false).unwrap(),
+            "Jose Martinez"
+        );
+    }
+
+    /// The flag must change exactly one thing. Every other stage — NFKC, demojize,
+    /// transliterate, strip-accents, control/zero-width stripping, whitespace
+    /// folding — has to behave identically, so the only difference between the two
+    /// outputs is case. Comparing the unfolded output's own case fold against the
+    /// folded output proves that directly, on input that exercises each stage.
+    #[test]
+    fn ml_normalize_fold_case_changes_only_case() {
+        for input in [
+            "José Martínez",
+            "MÜNCHEN Straße",
+            "Hi \u{1F600} THERE",
+            "\u{FB01}LTER",       // ligature ﬁ via NFKC
+            "A\u{200B}B\tC   D",  // zero-width + control + whitespace
+            "Ｆｕｌｌｗｉｄｔｈ", // NFKC width fold
+            "café \u{2247} X",    // #498 exposed-base demojize
+            "",
+        ] {
+            let folded = ml_normalize(input, None, "cldr", true).unwrap();
+            let unfolded = ml_normalize(input, None, "cldr", false).unwrap();
+            assert_eq!(
+                crate::api::fold_case(&unfolded),
+                folded,
+                "fold_case changed something other than case for {input:?}: \
+                 folded={folded:?} unfolded={unfolded:?}"
+            );
+        }
+    }
+
+    /// Transliteration still runs with the flag off — `lang` is orthogonal to case.
+    #[test]
+    fn ml_normalize_without_fold_case_still_transliterates() {
+        assert_eq!(
+            ml_normalize("MÜNCHEN Straße", Some("de"), "cldr", false).unwrap(),
+            "MUeNCHEN Strasse"
+        );
+    }
+
+    /// Both modes must stay idempotent — dropping a step must not break the fixed
+    /// point the preset promises.
+    #[test]
+    fn ml_normalize_idempotent_without_fold_case() {
+        for input in ["José Martínez", "MÜNCHEN", "Hi \u{1F600}", "a\u{200B}b  c"] {
+            let once = ml_normalize(input, None, "cldr", false).unwrap();
+            let twice = ml_normalize(&once, None, "cldr", false).unwrap();
+            assert_eq!(once, twice, "not idempotent for {input:?}");
+        }
+    }
+
+    /// Argument validation is not skipped on the no-fold path.
+    #[test]
+    fn ml_normalize_validates_arguments_in_both_modes() {
+        for fold in [true, false] {
+            assert!(ml_normalize("x", None, "bogus", fold).is_err());
+            assert!(ml_normalize("x", Some("zzz"), "cldr", fold).is_err());
+        }
+    }
+
+    /// The derived no-fold list must be the folded list minus exactly the fold step.
+    /// `without_fold_case` const-asserts the count; this pins the *content*, so a
+    /// reordering that happened to keep the length would still be caught.
+    #[test]
+    fn no_fold_step_list_is_the_folded_list_minus_fold_case() {
+        const FULL: &[Step; 9] = &[
+            Step::Nfkc,
+            Step::Demojize { only_if_cldr: true },
+            Step::Transliterate {
+                mode: crate::ErrorMode::Ignore,
+                only_if_lang: true,
+            },
+            Step::StripAccents,
+            Step::Demojize { only_if_cldr: true },
+            Step::FoldCase,
+            Step::StripControl,
+            Step::StripZeroWidth,
+            Step::CollapseWs,
+        ];
+        let derived = without_fold_case(FULL);
+        let expected: Vec<_> = FULL
+            .iter()
+            .filter(|s| !matches!(s, Step::FoldCase))
+            .map(std::mem::discriminant)
+            .collect();
+        let got: Vec<_> = derived.iter().map(std::mem::discriminant).collect();
+        assert_eq!(got, expected);
     }
 
     #[test]
     fn test_ml_normalize_ligature() {
-        let result = ml_normalize("\u{FB01}lter", None, "cldr").unwrap();
+        let result = ml_normalize("\u{FB01}lter", None, "cldr", true).unwrap();
         assert_eq!(result, "filter");
     }
 
@@ -1962,7 +2103,7 @@ mod tests {
     /// *earlier* in the pipeline, so the freshly-exposed `≅` is named
     /// ("approximately equal") only on a *second* call — i.e.
     /// `f(x) != f(f(x))`. The single call must already equal both the stable
-    /// target and `ml_normalize("≅")`. Unlike the accepted CLDR-punctuation
+    /// target and `ml_normalize("≅", true)`. Unlike the accepted CLDR-punctuation
     /// non-idempotency (a name like "woman's hat" re-expands its apostrophe),
     /// the target here is bare ASCII letters, so it *is* a true fixed point.
     /// #498 (whole class): `ml_normalize` ("cldr") must name a symbol base
@@ -2004,19 +2145,19 @@ mod tests {
             ("\u{2288}", "\u{2286}", "subset equal"),            // ⊈ → ⊆
             ("\u{2289}", "\u{2287}", "superset equal"),          // ⊉ → ⊇
         ] {
-            let once = ml_normalize(input, None, "cldr").unwrap();
+            let once = ml_normalize(input, None, "cldr", true).unwrap();
             assert_eq!(
                 once, name,
                 "ml_normalize({input:?}) should name its NFKD-exposed base in one pass"
             );
             assert_eq!(
                 once,
-                ml_normalize(base, None, "cldr").unwrap(),
+                ml_normalize(base, None, "cldr", true).unwrap(),
                 "ml_normalize({input:?}) should match its bare base {base:?}"
             );
             assert_eq!(
                 once,
-                ml_normalize(&once, None, "cldr").unwrap(),
+                ml_normalize(&once, None, "cldr", true).unwrap(),
                 "ml_normalize not idempotent on {input:?}"
             );
         }
@@ -2484,7 +2625,7 @@ mod tests {
                 assert_eq!(once, f(&once), "{label} not idempotent on {s:?}");
             }
             let cat = |s: &str| catalog_key(s, None, false).unwrap().into_owned();
-            let ml = |s: &str| ml_normalize(s, None, "cldr").unwrap().into_owned();
+            let ml = |s: &str| ml_normalize(s, None, "cldr", true).unwrap().into_owned();
 
             // (1) every single code point, across the key presets.
             for cp in 0u32..=0x0010_FFFF {
@@ -2595,8 +2736,8 @@ mod tests {
                 lang in prop::option::of(prop::sample::select(vec!["de", "ru", "ja"])),
                 style in prop::sample::select(vec!["cldr", "none"]),
             ) {
-                let once = ml_normalize(&s, lang, style).unwrap();
-                let twice = ml_normalize(&once, lang, style).unwrap();
+                let once = ml_normalize(&s, lang, style, true).unwrap();
+                let twice = ml_normalize(&once, lang, style, true).unwrap();
                 prop_assert_eq!(&once, &twice);
             }
 
@@ -2611,7 +2752,7 @@ mod tests {
                 lang in prop::option::of(prop::sample::select(vec!["de", "ru", "ja"])),
                 style in prop::sample::select(vec!["cldr", "none"]),
             ) {
-                let out = ml_normalize(&s, lang, style).unwrap();
+                let out = ml_normalize(&s, lang, style, true).unwrap();
                 // fold_case ran (after demojize/transliterate) and nothing after it
                 // re-introduces case, so the output is a fixed point of fold_case.
                 // (Asserting "no uppercase" would be wrong: fold_case's table does

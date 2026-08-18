@@ -203,6 +203,86 @@ its exact signature (e.g. Rust's `normalize_confusables` takes an explicit
 non-confusable characters). If you also need ASCII romanization, chain
 `transliterate()` afterwards.
 
+## What each entry point costs you
+
+Recovery is not free. Every entry point above is a *bundle* of steps, and some of
+those steps are destructive on text that was never an attack. Picking the widest
+bundle by default trades fidelity you may need for recovery you may not.
+
+The clearest case is accented Latin. `normalize_confusables` preserves it;
+`strip_obfuscation` does not — at identical homoglyph recovery:
+
+```python
+from disarm import normalize_confusables, strip_obfuscation
+
+# A legitimate name. The confusable primitive leaves it alone.
+assert normalize_confusables("José Martínez") == "José Martínez"
+assert strip_obfuscation("José Martínez") == "Jose Martinez"
+
+assert normalize_confusables("naïve café") == "naïve café"
+assert strip_obfuscation("naïve café") == "naive cafe"
+
+# An actual homoglyph attack — Cyrillic а (U+0430). Both recover it.
+assert normalize_confusables("pаypаl") == "paypal"
+assert strip_obfuscation("pаypаl") == "paypal"
+```
+
+The reason is structural, and worth stating plainly because it is easy to read the
+difference as a defect in the confusable mapping: **the `strip_accents` step lives in
+the `strip_obfuscation` bundle, not in the confusable primitive.** Accent destruction is
+a property of the bundle you chose. It is not something TR39 folding does.
+
+This matters when reading any benchmark that scores disarm on accented-Latin fidelity.
+A cell reporting total loss is measuring `strip_obfuscation`, and the
+recovery-versus-fidelity trade-off it implies was taken on a configuration this page
+does not recommend when diacritics carry meaning.
+
+### Threat model → entry point → cost
+
+| Your threat model | Reach for | It costs you |
+|---|---|---|
+| Homoglyph spoofing, and the text is a real name / address / prose | `normalize_confusables` | Nothing beyond the fold. Diacritics, case, and every non-confusable character survive. |
+| Homoglyph spoofing in an identifier or hostname | `is_suspicious_hostname` / `analyze_hostname` | Nothing — these report, they do not transform. |
+| Untrusted input into a store or a key | `canonicalize_strict` | Invisibles, bidi, zalgo. Accents and case survive. |
+| Maximum deobfuscation of adversarial text | `strip_obfuscation` | **Accents** (`strip_accents`), plus zalgo, invisibles, bidi. `José` → `Jose`. |
+| Feeding an **uncased** model or tokenizer | `ml_normalize` | **Accents and case.** `José` → `jose`. |
+| Feeding a **cased** model or tokenizer | `ml_normalize(fold_case=False)` | Accents only. `José` → `Jose`. |
+
+Two of these bundles bake in a destructive step, and both now name the way out:
+
+* `strip_obfuscation` strips accents. There is no switch — that is what the bundle is
+  for. When you need recovery *and* diacritics, the primitive is
+  `normalize_confusables`, which is the row above.
+* `ml_normalize` folds case. Since #559 it takes `fold_case=False`, which drops that one
+  step and leaves the rest of the pipeline intact. Use it in front of a cased model:
+  folding cannot be undone downstream, and an uncased evaluation harness cannot measure
+  what it cost.
+
+```python
+from disarm import ml_normalize
+
+assert ml_normalize("José Martínez") == "jose martinez"
+assert ml_normalize("José Martínez", fold_case=False) == "Jose Martinez"
+```
+
+Note `fold_case=False` restores case, not diacritics — `strip_accents` is still in the
+pipeline, which is why the second line reads `Jose` and not `José`. The two knobs are
+deliberately separate: case and accents are different losses with different downstream
+consequences.
+
+One more thing `ml_normalize` does **not** do: fold confusables. Its pipeline has no
+TR39 step, so it is not a homoglyph defence at any `fold_case` setting.
+
+```python
+# Cyrillic С (U+0421) survives ml_normalize at either setting …
+assert ml_normalize("fuСk", fold_case=False) == "fuСk"
+# … and is recovered by the confusable primitive.
+assert normalize_confusables("fuСk") == "fuCk"
+```
+
+Combine them when a model needs both: `normalize_confusables` first, then
+`ml_normalize`.
+
 ## See also
 
 - [Confusable Detection](../user-guide/confusables.md) — the user guide for TR39 mapping

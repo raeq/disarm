@@ -49,11 +49,31 @@ the script is preserved:
     ```rust
     use disarm::api;
 
-    // ml_normalize(text, lang, emoji_style) — lang=None preserves the script
-    assert_eq!(api::ml_normalize("CAFÉ", None, "cldr").unwrap(), "cafe");
-    assert_eq!(api::ml_normalize("Привет", None, "cldr").unwrap(), "привет");        // stays Cyrillic, normalized
-    assert_eq!(api::ml_normalize("Café — RÉSUMÉ 🎉", None, "cldr").unwrap(), "cafe em dash resume party popper");
+    // ml_normalize(text, lang, emoji_style, fold_case) — lang=None preserves the script
+    assert_eq!(api::ml_normalize("CAFÉ", None, "cldr", true).unwrap(), "cafe");
+    assert_eq!(api::ml_normalize("Привет", None, "cldr", true).unwrap(), "привет");        // stays Cyrillic, normalized
+    assert_eq!(api::ml_normalize("Café — RÉSUMÉ 🎉", None, "cldr", true).unwrap(), "cafe em dash resume party popper");
+
+    // fold_case=false keeps capitals for a cased model (#559).
+    assert_eq!(api::ml_normalize("CAFÉ", None, "cldr", false).unwrap(), "CAFE");
     ```
+
+!!! warning "Case folding is on by default — turn it off for a cased model"
+
+    `ml_normalize` folds case, which suits the uncased tokenizers most pipelines use.
+    In front of a **cased** model it is a measurable loss, and one an uncased
+    evaluation harness cannot see: the fold happens before the model, so the harness
+    scores text that has already lost the signal. Pass `fold_case=False` to drop that
+    one step and keep every other stage:
+
+    ```python
+    assert ml_normalize("José Martínez") == "jose martinez"
+    assert ml_normalize("José Martínez", fold_case=False) == "Jose Martinez"
+    ```
+
+    Accents still go — `strip_accents` is a separate step. If diacritics must survive
+    too, use `normalize_confusables` instead and skip the bundle; see
+    [what each entry point costs you](../security/adversarial-defense.md#what-each-entry-point-costs-you).
 
 **Romanize to ASCII.** `transliterate` (and the `rag_ingest` preset) map
 non-Latin scripts to a shared Latin representation, which tends to tokenize into

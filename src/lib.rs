@@ -234,6 +234,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(py::confusables::_is_confusable, m)?)?;
+    m.add_function(wrap_pyfunction!(py::confusables::_unmapped_confusables, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        py::confusables::_find_unmapped_confusables,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(py::encoders::_escape_html, m)?)?;
     m.add_function(wrap_pyfunction!(py::encoders::_percent_encode, m)?)?;
     m.add_function(wrap_pyfunction!(py::filename::_sanitize_filename, m)?)?;

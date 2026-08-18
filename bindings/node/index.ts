@@ -11,6 +11,7 @@ import * as native from './binding'
 import { Lexicon, Pipeline } from './binding'
 import type {
   Untranslatable,
+  UnmappedConfusable,
   AutoLangInspection,
   LangMeta,
   ScriptMeta,
@@ -19,7 +20,7 @@ import type {
   HostnameAnalysis as NativeHostnameAnalysis,
 } from './binding'
 
-export type { Untranslatable, AutoLangInspection, LangMeta, ScriptMeta }
+export type { Untranslatable, UnmappedConfusable, AutoLangInspection, LangMeta, ScriptMeta }
 
 /** Findings from {@link analyzeHostname}. `suspicious` is a maximally
  * conservative screen, not a precise verdict (#549). */
@@ -160,6 +161,30 @@ export function normalizeConfusables(
 /** Whether `text` contains a character confusable with `target` (default `'latin'`). */
 export function isConfusable(text: string, options: { target?: TargetScript } = {}): boolean {
   return call(() => native.isConfusable(text, options.target ?? 'latin'))
+}
+
+/**
+ * Every upstream confusable source the bundled `target` table does not fold.
+ *
+ * Read as exposure, not as a score — this is where an adaptive attacker goes when the
+ * mapped sources stop working. Note it includes five ASCII characters (`%`, `0`, `1`,
+ * `I`, `m`): TR39 is a skeleton transform, and disarm deliberately does not apply those
+ * rows because folding a legitimate `m` to `rn` corrupts prose.
+ */
+export function unmappedConfusables(options: { target?: TargetScript } = {}): Set<string> {
+  return new Set(call(() => native.unmappedConfusables(options.target ?? 'latin')))
+}
+
+/**
+ * Confusable sources in `text` the bundled `target` table does not fold, as
+ * `{ char, offset }` (byte offset), in order — the confusables analogue of
+ * {@link findUntranslatable}.
+ */
+export function findUnmappedConfusables(
+  text: string,
+  options: { target?: TargetScript } = {},
+): UnmappedConfusable[] {
+  return call(() => native.findUnmappedConfusables(text, options.target ?? 'latin'))
 }
 
 // ── Slugs ───────────────────────────────────────────────────────────────────

@@ -157,6 +157,31 @@ fn main() {
         .unwrap();
     }
 
+    // --- Upstream confusable sources (coverage introspection, #563) ---
+    // Every SOURCE codepoint in the bundled upstream `confusables.txt` — the
+    // denominator for "which confusables does disarm not fold?". Not a mapping: the
+    // answer is derived at runtime as `these sources MINUS the target table's keys`,
+    // so it stays correct when either table gains a row and there is no second
+    // artifact to keep in sync.
+    {
+        let sources = read_char_set_tsv(&data_dir.join("confusables_upstream_sources.tsv"));
+        // The bundled 17.0.0 file has 6,565 sources. Guard the order of magnitude so a
+        // truncated or half-written regeneration fails the build rather than silently
+        // shrinking reported exposure — an under-reported gap is worse than no gap
+        // report at all, because it reads as coverage.
+        assert!(
+            sources.len() >= 5_000,
+            "confusables_upstream_sources.tsv: expected ≥5,000 sources, got {}",
+            sources.len()
+        );
+        generate_char_set(
+            &data_dir.join("confusables_upstream_sources.tsv"),
+            &out_dir.join("confusables_upstream_sources_phf.rs"),
+            "UPSTREAM_CONFUSABLE_SOURCES",
+            "",
+        );
+    }
+
     // --- Excluded compositions (compose-at-lookup widening, #481) ---
     // Base+mark composition exclusions (KA+nukta → QA, shin+sin-dot → U+FB2B) that
     // canonical NFC does not recompose, so #479's compose-at-lookup misses them. Consulted

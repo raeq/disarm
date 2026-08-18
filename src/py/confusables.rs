@@ -23,3 +23,34 @@ pub fn _normalize_confusables(text: &str, target_script: &str) -> PyResult<Strin
 pub fn _is_confusable(text: &str, target_script: &str) -> PyResult<bool> {
     Ok(crate::confusables::is_confusable(text, target_script)?)
 }
+
+/// Every upstream confusable source the bundled table does not fold (#563).
+///
+/// Returns a sorted list of single-character strings; the Python wrapper freezes it
+/// into a `frozenset`.
+#[pyfunction]
+#[pyo3(signature = (*, target_script="latin"))]
+pub fn _unmapped_confusables(target_script: &str) -> PyResult<Vec<String>> {
+    Ok(crate::confusables::unmapped_confusables(target_script)?
+        .into_iter()
+        .map(String::from)
+        .collect())
+}
+
+/// Scan `text` for upstream confusable sources the bundled table does not fold (#563).
+///
+/// Returns `(char, byte_offset)` pairs in order of appearance — the same convention
+/// as `find_untranslatable`, which also reports byte offsets.
+#[pyfunction]
+#[pyo3(signature = (text, *, target_script="latin"))]
+pub fn _find_unmapped_confusables(
+    text: &str,
+    target_script: &str,
+) -> PyResult<Vec<(String, usize)>> {
+    Ok(
+        crate::confusables::find_unmapped_confusables(text, target_script)?
+            .into_iter()
+            .map(|(ch, offset)| (ch.to_string(), offset))
+            .collect(),
+    )
+}

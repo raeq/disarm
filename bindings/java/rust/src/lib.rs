@@ -409,6 +409,61 @@ pub fn normalizeConfusables<'l>(
     .resolve::<Policy>()
 }
 
+/// Every upstream confusable source the bundled `target` table does not fold (#563).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn unmappedConfusables<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    target: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let target = target.mutf8_chars(env)?.to_string();
+        match target.parse::<api::TargetScript>() {
+            Ok(target) => {
+                let items: Vec<String> = api::unmapped_confusables(target)
+                    .into_iter()
+                    .map(String::from)
+                    .collect();
+                new_string_array(env, &items)
+            }
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
+/// Confusable sources in `text` the bundled `target` table does not fold, as a
+/// `List<UnmappedConfusable(character, offset)>` in order (#563).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn findUnmappedConfusables<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    target: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let target = target.mutf8_chars(env)?.to_string();
+        let target = match target.parse::<api::TargetScript>() {
+            Ok(t) => t,
+            Err(e) => return Err(throw_core(env, &e)),
+        };
+        let items = api::find_unmapped_confusables(&text, target);
+        let mut objs = Vec::with_capacity(items.len());
+        for u in &items {
+            let ch = env.new_string(u.ch.to_string())?;
+            objs.push(env.new_object(
+                JNIString::from("dev/disarm/UnmappedConfusable"),
+                jni_sig!("(Ljava/lang/String;J)V"),
+                &[JValue::Object(&ch), JValue::Long(u.offset as jlong)],
+            )?);
+        }
+        let array = new_object_array_of(env, "dev/disarm/UnmappedConfusable", &objs)?;
+        list_of(env, &array)
+    })
+    .resolve::<Policy>()
+}
+
 /// Whether `text` contains a character confusable with `target`.
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn isConfusable<'l>(

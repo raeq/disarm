@@ -47,6 +47,18 @@ See [Language Detection](../user-guide/language-detection.md#inspecting-detectio
 
 ---
 
+## unmapped_confusables
+
+::: disarm.unmapped_confusables
+
+---
+
+## find_unmapped_confusables
+
+::: disarm.find_unmapped_confusables
+
+---
+
 ## is_ascii
 
 ::: disarm.is_ascii

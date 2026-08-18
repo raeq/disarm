@@ -25,6 +25,45 @@ include!(concat!(env!("OUT_DIR"), "/confusables_to_cyrillic_phf.rs"));
 // from the TSV header by build.rs rather than typed here a second time.
 include!(concat!(env!("OUT_DIR"), "/confusables_version.rs"));
 
+// Every source codepoint in the upstream confusables.txt (#563). The coverage
+// denominator — see `unmapped_sources`.
+include!(concat!(
+    env!("OUT_DIR"),
+    "/confusables_upstream_sources_phf.rs"
+));
+
+/// True if `ch` is a confusable **source** in the bundled upstream `confusables.txt`,
+/// whether or not disarm's tables fold it (#563).
+///
+/// Pair with [`lookup`] to answer the coverage question: a character that is an
+/// upstream source but has no mapping for the chosen target is one disarm does not
+/// neutralize — which is exactly where an adaptive attacker goes next.
+#[inline]
+pub fn is_upstream_source(ch: char) -> bool {
+    UPSTREAM_CONFUSABLE_SOURCES.contains(&ch)
+}
+
+/// Every upstream confusable source the `target_script` table does not map, sorted.
+///
+/// Derived rather than stored: the answer is the upstream source set minus the
+/// resolved table's keys, so it cannot drift from the table it describes, and one
+/// generated denominator serves both targets. Returns an empty vec for an unknown
+/// script (callers validate first).
+pub fn unmapped_sources(target_script: &str) -> Vec<char> {
+    let Some(map) = resolve_map(target_script) else {
+        return Vec::new();
+    };
+    let mut out: Vec<char> = UPSTREAM_CONFUSABLE_SOURCES
+        .iter()
+        .copied()
+        .filter(|ch| !map.contains_key(ch))
+        .collect();
+    // PHF iteration order is the hash order. Sort so the API is deterministic across
+    // builds — a caller diffing two releases' exposure sets needs a stable order.
+    out.sort_unstable();
+    out
+}
+
 /// Look up a confusable mapping for a character to the target script.
 ///
 /// Returns the target-script equivalent if the character is a known

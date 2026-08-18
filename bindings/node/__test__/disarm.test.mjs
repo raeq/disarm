@@ -265,6 +265,21 @@ describe('metadata introspection (#404)', () => {
     expect(typeof v).toBe('string')
     expect(v).toMatch(/^\d+(\.\d+)+$/)
   })
+  test('unmappedConfusables reports exposure, not coverage', () => {
+    const unmapped = disarm.unmappedConfusables()
+    expect(unmapped.size).toBeGreaterThan(1000)
+    // Cyrillic а IS folded, so it is not exposure.
+    expect(unmapped.has('\u0430')).toBe(false)
+    // TR39 skeleton source m→rn, deliberately not applied.
+    expect(unmapped.has('m')).toBe(true)
+  })
+  test('findUnmappedConfusables agrees with the fold', () => {
+    // Cyrillic а folds to a, so the spoof is covered — nothing to report.
+    expect(disarm.normalizeConfusables('p\u0430ypal')).toBe('paypal')
+    expect(disarm.findUnmappedConfusables('p\u0430ypal')).toEqual([])
+    // 'm' is a skeleton source the table does not fold; offset is a byte offset.
+    expect(disarm.findUnmappedConfusables('am')).toEqual([{ char: 'm', offset: 1 }])
+  })
   test('listScripts includes Latin and Common', () => {
     const scripts = disarm.listScripts()
     expect(scripts).toContain('Latin')

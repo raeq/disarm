@@ -43,6 +43,29 @@ Note there is deliberately **no** library-wide `UNICODE_VERSION`: as the table a
 shows, the four bundled surfaces track different releases, so a single number would be
 wrong for three of them.
 
+**Measuring the divergence (#563).** The gap between the upstream file and the bundled
+tables is queryable at runtime, so it does not have to be reconstructed from a cached
+copy of `confusables.txt`:
+
+| Language | Global exposure set | Per-input scan |
+|---|---|---|
+| Rust | `api::unmapped_confusables(target)` | `api::find_unmapped_confusables(text, target)` |
+| Python | `disarm.unmapped_confusables()` | `disarm.find_unmapped_confusables(text)` |
+| Node | `unmappedConfusables()` | `findUnmappedConfusables(text)` |
+| Ruby | `Disarm.unmapped_confusables` | `Disarm.find_unmapped_confusables(text)` |
+| Java / Kotlin | `Disarm.unmappedConfusables(target)` | `Disarm.findUnmappedConfusables(text)` |
+| C ABI | `disarm_unmapped_confusables(target)` | `disarm_find_unmapped_confusables(text, target)` |
+
+The denominator — every source codepoint in the upstream file — is emitted by
+`scripts/gen_confusables.py` as `src/tables/data/confusables_upstream_sources.tsv`; the
+generator already read the file and discarded what it did not fold. The exposure set
+itself is *derived* at runtime (upstream sources minus the resolved table's keys), so it
+cannot drift from the table it describes and one denominator serves both targets.
+
+Read the result as exposure, not as a score, and note that most of it is out of scope
+rather than missing: a source that folds to a non-Latin target does not belong in the
+to-Latin table.
+
 **Deliberate divergence from upstream.** The confusables tables are *not* a verbatim UTS&nbsp;#39
 snapshot: #336 added high-confidence cross-script pairs that are correct but not present in
 `confusables.txt` 17.0. That divergence is itself part of what you pin to — a future release may

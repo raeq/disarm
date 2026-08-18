@@ -25,6 +25,7 @@ from disarm._api import (
     detect_encoding,
     detect_scripts,
     escape_html,
+    find_unmapped_confusables,
     find_untranslatable,
     fold_case,
     grapheme_len,
@@ -63,6 +64,7 @@ from disarm._api import (
     strip_log_injection,
     terminal_width,
     transliterate,
+    unmapped_confusables,
 )
 from disarm._boundary import (
     _CONFUSABLES_VERSION,
@@ -238,6 +240,7 @@ __all__ = [
     # Transforms
     "transliterate",
     "find_untranslatable",
+    "find_unmapped_confusables",
     "dedup_batch",
     "make_cached_transliterator",
     "CachedTransliterator",
@@ -301,6 +304,7 @@ __all__ = [
     "is_mixed_script",
     "has_bidi_conflict",
     "is_confusable",
+    "unmapped_confusables",
     "is_ascii",
     "is_normalized",
     # Preset metadata

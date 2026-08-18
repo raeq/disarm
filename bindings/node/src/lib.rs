@@ -155,6 +155,42 @@ pub fn is_confusable(text: String, target: String) -> Result<bool, NapiError> {
     Ok(api::is_confusable(&text, target))
 }
 
+/// An upstream confusable source the bundled table does not fold, located in the
+/// input (#563). Mirrors `Untranslatable`, its transliteration analogue.
+#[napi(object)]
+pub struct UnmappedConfusable {
+    /// The unmapped character.
+    pub char: String,
+    /// Its byte offset in the input string.
+    pub offset: i64,
+}
+
+/// Every upstream confusable source the bundled `target` table does not fold (#563).
+#[napi]
+pub fn unmapped_confusables(target: String) -> Result<Vec<String>, NapiError> {
+    let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
+    Ok(api::unmapped_confusables(target)
+        .into_iter()
+        .map(String::from)
+        .collect())
+}
+
+/// Scan `text` for confusable sources the bundled `target` table does not fold (#563).
+#[napi]
+pub fn find_unmapped_confusables(
+    text: String,
+    target: String,
+) -> Result<Vec<UnmappedConfusable>, NapiError> {
+    let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
+    Ok(api::find_unmapped_confusables(&text, target)
+        .into_iter()
+        .map(|u| UnmappedConfusable {
+            char: u.ch.to_string(),
+            offset: u.offset as i64,
+        })
+        .collect())
+}
+
 // ── Slugs ─────────────────────────────────────────────────────────────────────
 
 /// The full slug option surface (the TS layer fills defaults before calling).

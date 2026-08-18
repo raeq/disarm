@@ -61,6 +61,28 @@ release (case folding is 16.0, East Asian width 15.1.0 — see
 cross-script additions, so they are a superset of the named release rather than a
 verbatim snapshot.
 
+## Coverage introspection
+
+Coverage is not a score. A tool that folds 95% of known confusable sources is not 95%
+safe — it is one query away from the other 5%. These accessors report **exposure**: the
+sources disarm's bundled table does not fold, globally and for one input.
+
+Most of the set is out of scope rather than missing (a source folding to a non-Latin
+target does not belong in the to-Latin table), and it includes five ASCII characters —
+`%`, `0`, `1`, `I`, `m` — because TR39 is a skeleton transform (m→rn, I/1→l, 0→O) whose
+rows disarm deliberately does not apply. Nothing is filtered out: a coverage report that
+quietly drops rows reads as coverage it does not have.
+
+```rust
+use disarm::api::{find_unmapped_confusables, unmapped_confusables, TargetScript};
+
+let exposure = unmapped_confusables(TargetScript::Latin);   // sorted Vec<char>
+assert!(!exposure.contains(&'\u{0430}'));                    // Cyrillic а folds
+assert!(exposure.contains(&'m'));                            // TR39 skeleton source
+
+// The per-input scan mirrors `Transliterate::find_untranslatable`.
+assert!(find_unmapped_confusables("p\u{0430}ypal", TargetScript::Latin).is_empty());
+```
 ## Errors
 
 Fallible operations (`sanitize_filename`, `decode_to_utf8`,

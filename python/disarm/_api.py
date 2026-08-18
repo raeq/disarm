@@ -32,6 +32,7 @@ from disarm._boundary import (
     # Predicates
     _detect_scripts,
     _escape_html,
+    _find_unmapped_confusables,
     # Untranslatable scan (#184)
     _find_untranslatable,
     _fold_case,
@@ -92,6 +93,7 @@ from disarm._boundary import (
     _transliterate_context,
     _transliterate_entry,
     _UniqueSlugifier,
+    _unmapped_confusables,
     # Semantic argument-combination validation (single source of truth, #231)
     _validate_transliterate_args,
 )
@@ -1700,6 +1702,82 @@ def is_confusable(
             stacklevel=2,
         )
     return _is_confusable(text, target_script=target_script)
+
+
+def unmapped_confusables(*, target_script: str = "latin") -> frozenset[str]:
+    """Every upstream confusable source disarm's bundled table does not fold (#563).
+
+    Read this as **exposure**, not as a score. A tool at 95% per-source coverage is not
+    95% safe — it is one query away from the other 5%, and this set is where an adaptive
+    attacker goes when the mapped sources stop working.
+
+    Most of the set is out of scope rather than missing: a source whose upstream target
+    is non-Latin has no business in the to-Latin table. Cross-reference
+    :data:`disarm.CONFUSABLES_VERSION` and ``docs/provenance.md`` before reading any one
+    codepoint as a defect.
+
+    The set includes five ASCII characters — ``%``, ``0``, ``1``, ``I`` and ``m``. TR39
+    is a *skeleton* transform (m→rn, I/1→l, 0→O), so those are upstream sources; disarm
+    does not apply those rows because folding a legitimate ASCII ``m`` to ``rn`` corrupts
+    prose. Nothing is filtered out here: a coverage report that quietly drops rows reads
+    as coverage it does not have.
+
+    Args:
+        target_script: Which bundled table to report against — ``"latin"`` (default)
+            or ``"cyrillic"``. The two have genuinely different coverage.
+
+    Returns:
+        A frozenset of single-character strings.
+
+    Raises:
+        InvalidArgumentError: If *target_script* is not a supported script.
+
+    Examples:
+        >>> unmapped = unmapped_confusables()
+        >>> "\u0430" in unmapped  # Cyrillic а IS folded, so it is not exposure
+        False
+        >>> "m" in unmapped  # TR39 skeleton source m→rn, deliberately not applied
+        True
+    """
+    return frozenset(_unmapped_confusables(target_script=target_script))
+
+
+def find_unmapped_confusables(text: str, *, target_script: str = "latin") -> list[tuple[str, int]]:
+    """Find confusable sources in *text* that disarm's table does not fold (#563).
+
+    The confusables analogue of :func:`find_untranslatable`, and it follows the same
+    convention: ``(character, byte_offset)`` pairs in order of appearance. This is what
+    turns :func:`unmapped_confusables` from a global number into something answerable
+    against your own traffic.
+
+    Composition runs exactly as it does in :func:`normalize_confusables`, so a
+    *decomposed* homoglyph whose precomposed form is mapped counts as covered rather
+    than as a gap — otherwise the report would disagree with what the transform does.
+    Offsets are anchored in *text*, never in the composed intermediate.
+
+    Ordinary English will report the letter ``m``; see :func:`unmapped_confusables` for
+    why that is deliberate.
+
+    Args:
+        text: Input Unicode string.
+        target_script: Which bundled table to report against (default ``"latin"``).
+
+    Returns:
+        List of ``(char, byte_offset)`` for each unmapped confusable source.
+
+    Raises:
+        TypeError: If *text* is not a ``str``.
+        InvalidArgumentError: If *target_script* is not a supported script.
+
+    Examples:
+        >>> find_unmapped_confusables("p\u0430ypal")  # Cyrillic а folds — covered
+        []
+        >>> find_unmapped_confusables("hello")
+        []
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"find_unmapped_confusables() expects str, got {type(text).__name__}")
+    return _find_unmapped_confusables(text, target_script=target_script)
 
 
 def is_ascii(text: str) -> bool:

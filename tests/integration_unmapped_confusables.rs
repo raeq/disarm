@@ -1,0 +1,192 @@
+//! #563 — coverage introspection over the bundled confusable tables.
+//!
+//! `find_untranslatable` has existed for transliteration since #184; there was no
+//! confusables analogue, so answering "which sources go uncovered?" meant rebuilding
+//! the capability outside the library against a cached copy of the upstream file. That
+//! harness should not have had to exist.
+//!
+//! Both accessors are derived from the same PHF the fold consults, so the assertions
+//! below are written against `normalize_confusables`' actual behaviour wherever
+//! possible rather than against a hardcoded expectation.
+
+use disarm::api::{
+    find_unmapped_confusables, normalize_confusables, unmapped_confusables, TargetScript,
+};
+
+const LATIN: TargetScript = TargetScript::Latin;
+const CYR: TargetScript = TargetScript::Cyrillic;
+
+// ── unmapped_confusables: the global exposure set ────────────────────────────
+
+#[test]
+fn exposure_set_is_non_empty_and_sorted() {
+    let latin = unmapped_confusables(LATIN);
+    assert!(
+        !latin.is_empty(),
+        "the bundled table does not fold everything"
+    );
+    assert!(
+        latin.windows(2).all(|w| w[0] < w[1]),
+        "must be sorted and duplicate-free so two releases can be diffed"
+    );
+}
+
+#[test]
+fn exposure_set_is_deterministic_across_calls() {
+    // The underlying PHF iterates in hash order; the sort is what makes this stable.
+    assert_eq!(unmapped_confusables(LATIN), unmapped_confusables(LATIN));
+}
+
+/// The defining property: nothing in the exposure set is folded by the table it is
+/// reported against. Checked against the *transform*, not against the table, so a
+/// divergence between the two would fail here.
+#[test]
+fn nothing_in_the_exposure_set_actually_folds() {
+    for &ch in &unmapped_confusables(LATIN) {
+        let s = ch.to_string();
+        assert_eq!(
+            normalize_confusables(&s, LATIN),
+            s,
+            "U+{:04X} is reported unmapped but the fold rewrites it",
+            ch as u32
+        );
+    }
+}
+
+/// The converse: a source the table *does* fold must not appear in the set. Cyrillic а
+/// (U+0430) is the canonical mapped homoglyph.
+#[test]
+fn mapped_sources_are_absent_from_the_exposure_set() {
+    let latin = unmapped_confusables(LATIN);
+    for ch in ['\u{0430}', '\u{0435}', '\u{043E}'] {
+        assert!(
+            !latin.contains(&ch),
+            "U+{:04X} folds, so it is not exposure",
+            ch as u32
+        );
+    }
+}
+
+/// The two targets have genuinely different coverage — a single set would be wrong.
+#[test]
+fn the_two_targets_report_different_sets() {
+    assert_ne!(unmapped_confusables(LATIN), unmapped_confusables(CYR));
+}
+
+/// Pins the ASCII residue documented on the API (#563).
+///
+/// TR39 is a skeleton transform, so `%`, `0`, `1`, `I` and `m` are upstream *sources*
+/// (m→rn, I/1→l, 0→O, %→º/₀). disarm does not apply those rows — folding a legitimate
+/// ASCII `m` to `rn` corrupts prose — so they are reported, and a per-input scan over
+/// ordinary English will hit `m`. Documented behaviour, not a defect; this test makes
+/// any change to that set deliberate. The digit and contraction issues are where the
+/// policy question actually lives.
+#[test]
+fn ascii_residue_is_exactly_the_five_documented_skeleton_sources() {
+    let ascii: Vec<char> = unmapped_confusables(LATIN)
+        .into_iter()
+        .filter(char::is_ascii)
+        .collect();
+    assert_eq!(ascii, vec!['%', '0', '1', 'I', 'm']);
+}
+
+// ── find_unmapped_confusables: the per-input scan ────────────────────────────
+
+#[test]
+fn clean_ascii_without_skeleton_sources_reports_nothing() {
+    assert!(find_unmapped_confusables("hello", LATIN).is_empty());
+    assert!(find_unmapped_confusables("", LATIN).is_empty());
+}
+
+/// A folded homoglyph is coverage, not a gap — the scan must agree with the transform.
+#[test]
+fn a_mapped_homoglyph_is_not_reported() {
+    let spoof = "p\u{0430}yp\u{0430}l";
+    assert_eq!(normalize_confusables(spoof, LATIN), "paypal");
+    assert!(find_unmapped_confusables(spoof, LATIN).is_empty());
+}
+
+/// Offsets anchor to the caller's string, and occurrences come out in order.
+#[test]
+fn offsets_are_byte_offsets_in_the_caller_string() {
+    // 'a'(1) + 'm'(1) — the skeleton source — then a non-source, then 'm' again.
+    let text = "am\u{0430}xm";
+    let found = find_unmapped_confusables(text, LATIN);
+    let hits: Vec<(char, usize)> = found.iter().map(|u| (u.ch, u.offset)).collect();
+    assert_eq!(hits, vec![('m', 1), ('m', 5)]);
+    // Every reported offset is a real char boundary carrying the reported char.
+    for (ch, offset) in hits {
+        assert!(text.is_char_boundary(offset));
+        assert_eq!(text[offset..].chars().next(), Some(ch));
+    }
+}
+
+/// #475/#477 parity: a *decomposed* homoglyph whose precomposed form is mapped must
+/// count as covered, exactly as the fold treats it. Reporting the bare base as a gap
+/// would make the coverage number disagree with what `normalize_confusables` does.
+#[test]
+fn decomposed_homoglyph_is_covered_not_reported() {
+    // і U+0456 + combining diaeresis U+0308 composes to ї U+0457, which folds to "i".
+    let decomposed = "\u{0456}\u{0308}";
+    assert_eq!(normalize_confusables(decomposed, LATIN), "i");
+    assert!(find_unmapped_confusables(decomposed, LATIN).is_empty());
+}
+
+/// Offsets stay anchored to the original text even when composition ran, so a report
+/// on decomposed input can still be sliced against the caller's string. Mirrors
+/// `find_untranslatable_offsets_are_in_original_text` (#479 review).
+#[test]
+fn offsets_survive_composition() {
+    // і+◌̈ (composes, covered) then 'm' (a skeleton source). The 'm' sits at byte
+    // 'і'(2) + '◌̈'(2) = 4.
+    let text = "\u{0456}\u{0308}m";
+    let found = find_unmapped_confusables(text, LATIN);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].ch, 'm');
+    assert_eq!(found[0].offset, 4);
+    assert_eq!(text[found[0].offset..].chars().next(), Some('m'));
+}
+
+/// The scan and the global set must answer the same question. Every character the
+/// scan reports has to be a member of the exposure set, and every non-reported
+/// character must not be.
+#[test]
+fn scan_agrees_with_the_global_set() {
+    let exposure = unmapped_confusables(LATIN);
+    let sample: String = exposure.iter().take(200).collect();
+    let reported: Vec<char> = find_unmapped_confusables(&sample, LATIN)
+        .into_iter()
+        .map(|u| u.ch)
+        .collect();
+    // Some of the sample may compose with a neighbour (combining marks are in the set),
+    // so this is a subset relation, not equality — but nothing may be reported that is
+    // outside the global set.
+    for ch in &reported {
+        assert!(
+            exposure.contains(ch),
+            "scan reported U+{:04X}, absent from the global set",
+            *ch as u32
+        );
+    }
+    assert!(!reported.is_empty());
+}
+
+/// Never panics and never reports a character that is not in the input.
+#[test]
+fn scan_is_sound_on_mixed_input() {
+    for text in [
+        "hello world",
+        "p\u{0430}ypal.com",
+        "\u{1F980}\u{200B}\u{0301}",
+        "Ｆｕｌｌｗｉｄｔｈ",
+        "\u{1100}\u{1161}\u{11A8}", // conjoining Hangul jamo (#483)
+        "a\u{0301}\u{0302}\u{0303}b",
+    ] {
+        for target in [LATIN, CYR] {
+            for hit in find_unmapped_confusables(text, target) {
+                assert!(text.is_char_boundary(hit.offset));
+                assert!(hit.offset < text.len());
+            }
+        }
+    }
+}

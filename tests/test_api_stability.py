@@ -102,6 +102,8 @@ EXPECTED_ALL = {
     "is_mixed_script",
     "has_bidi_conflict",
     "is_confusable",
+    "unmapped_confusables",
+    "find_unmapped_confusables",
     "is_ascii",
     "is_normalized",
     # Pipeline management
@@ -404,6 +406,8 @@ CORE_FUNCTION_PARAMS = {
     "is_mixed_script": ["text"],
     "has_bidi_conflict": ["text"],
     "is_confusable": ["text", "target_script", "greedy", "preferred_aliases"],
+    "unmapped_confusables": ["target_script"],
+    "find_unmapped_confusables": ["text", "target_script"],
     "is_ascii": ["text"],
     "is_normalized": ["text", "form"],
     # Pipeline management

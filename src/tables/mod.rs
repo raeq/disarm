@@ -445,6 +445,19 @@ pub fn resolve_confusable_map(
     confusables_data::resolve_map(target_script)
 }
 
+/// True if `ch` is a confusable source in the bundled upstream `confusables.txt`,
+/// whether or not disarm's tables fold it (#563).
+#[inline]
+pub fn is_upstream_confusable_source(ch: char) -> bool {
+    confusables_data::is_upstream_source(ch)
+}
+
+/// Every upstream confusable source the `target_script` table does not map, sorted
+/// (#563). Empty for an unknown script.
+pub fn unmapped_confusable_sources(target_script: &str) -> Vec<char> {
+    confusables_data::unmapped_sources(target_script)
+}
+
 /// Return all available language codes.
 pub fn list_langs() -> Vec<String> {
     let mut langs: Vec<String> = BUILTIN_LANGS.iter().map(|s| (*s).to_string()).collect();

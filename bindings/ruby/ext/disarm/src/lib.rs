@@ -216,6 +216,30 @@ fn is_confusable(text: Wtf8Text, target: String) -> Result<bool, Error> {
     Ok(api::is_confusable(&text, target))
 }
 
+/// `Disarm._unmapped_confusables(target)` — every upstream confusable source the
+/// bundled table does not fold (#563).
+fn unmapped_confusables(target: String) -> Result<Vec<String>, Error> {
+    let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
+    Ok(api::unmapped_confusables(target)
+        .into_iter()
+        .map(String::from)
+        .collect())
+}
+
+/// `Disarm._find_unmapped_confusables(text, target)` — unfolded confusable sources in
+/// `text`, as `[char, byte_offset]` pairs (the Ruby layer maps these to
+/// `{ char:, offset: }` hashes, matching `find_untranslatable`).
+fn find_unmapped_confusables(
+    text: Wtf8Text,
+    target: String,
+) -> Result<Vec<(String, usize)>, Error> {
+    let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
+    Ok(api::find_unmapped_confusables(&text, target)
+        .into_iter()
+        .map(|u| (u.ch.to_string(), u.offset))
+        .collect())
+}
+
 // ── Canonicalization primitives ───────────────────────────────────────────────
 
 fn strip_accents(text: Wtf8Text) -> String {
@@ -771,6 +795,14 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         function!(reverse_transliterate, 2),
     )?;
     module.define_singleton_method("_find_untranslatable", function!(find_untranslatable, 3))?;
+    module.define_singleton_method(
+        "_unmapped_confusables",
+        function!(unmapped_confusables, 1),
+    )?;
+    module.define_singleton_method(
+        "_find_unmapped_confusables",
+        function!(find_unmapped_confusables, 2),
+    )?;
     module.define_singleton_method("_detect_scripts", function!(detect_scripts, 1))?;
     module.define_singleton_method("_is_mixed_script?", function!(is_mixed_script, 1))?;
     module.define_singleton_method("_has_bidi_conflict?", function!(has_bidi_conflict, 1))?;

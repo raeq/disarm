@@ -94,7 +94,7 @@ def ml_normalize(
     """ML/NLP text normalization pipeline.
 
     Pipeline: NFKC → emoji→text → [transliterate] → strip_accents →
-              [fold_case] → collapse_whitespace
+              [fold_case] → strip_control → strip_zero_width → collapse_whitespace
 
     Produces clean, accent-free text suitable for tokenizers, embeddings, and
     feature extraction. Emoji are expanded to their CLDR short-name descriptions.

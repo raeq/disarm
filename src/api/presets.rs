@@ -38,7 +38,7 @@ pub fn security_clean(text: &str) -> Result<Cow<'_, str>, Error> {
 }
 
 /// ML/NLP text normalization: NFKC → emoji→text → transliterate → strip accents →
-/// [case fold] → collapse whitespace.
+/// [case fold] → strip control → strip zero-width → collapse whitespace.
 ///
 /// `lang` selects the transliteration table (`None` skips transliteration).
 /// `emoji_style` is `"cldr"` (expand emoji to CLDR short names) or `"none"`

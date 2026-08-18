@@ -905,6 +905,14 @@ const fn without_fold_case(steps: &[Step; 9]) -> [Step; 8] {
     let mut write = 0;
     while read < steps.len() {
         if !matches!(steps[read], Step::FoldCase) {
+            // Check before the write, not after the loop: with zero `FoldCase` steps
+            // the 9th write would hit `out[8]` and abort const-eval with a generic
+            // out-of-bounds panic, hiding the reason. Assert here so the message the
+            // maintainer sees names the actual invariant.
+            assert!(
+                write < 8,
+                "ml_normalize's step list must contain exactly one Step::FoldCase"
+            );
             out[write] = steps[read];
             write += 1;
         }
@@ -2103,7 +2111,7 @@ mod tests {
     /// *earlier* in the pipeline, so the freshly-exposed `≅` is named
     /// ("approximately equal") only on a *second* call — i.e.
     /// `f(x) != f(f(x))`. The single call must already equal both the stable
-    /// target and `ml_normalize("≅", true)`. Unlike the accepted CLDR-punctuation
+    /// target and `ml_normalize("≅", None, "cldr", true)`. Unlike the accepted CLDR-punctuation
     /// non-idempotency (a name like "woman's hat" re-expands its apostrophe),
     /// the target here is bare ASCII letters, so it *is* a true fixed point.
     /// #498 (whole class): `ml_normalize` ("cldr") must name a symbol base

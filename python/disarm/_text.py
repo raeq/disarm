@@ -284,7 +284,7 @@ class Text:
         """Apply the ml_normalize precompiled pipeline.
 
         NFKC → emoji→text → [transliterate] → strip_accents →
-        [fold_case] → collapse_whitespace.
+        [fold_case] → strip_control → strip_zero_width → collapse_whitespace.
 
         ``fold_case=False`` drops the fold step for a cased downstream model (#559);
         every other stage still runs, so accents are still stripped.

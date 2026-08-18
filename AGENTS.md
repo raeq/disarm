@@ -141,6 +141,67 @@ Acceptance gate (#38) — the pure dependency tree must carry no pyo3:
 cargo tree -e no-dev | grep -qi pyo3 && echo "pyo3 leaked!" && exit 1 || true
 ```
 
+### Doc gates
+
+CI executes the examples in `docs/` against the freshly built library, per language.
+A prose change that documents a wrong result fails on its own PR, so run these
+whenever you touch `docs/`, a docstring, or a public signature:
+
+```bash
+python scripts/check_doc_claims.py          # anti-rot doc-claim lint (#156)
+python scripts/check_doc_rust_examples.py   # Rust examples (#50)
+python scripts/run_doc_tests.py             # Python cookbook, per-file isolated
+mkdocs build --strict                       # broken internal links, missing nav
+```
+
+`mkdocs build --strict` resolves links **relative to the docs site**, so a
+`docs/`-prefixed link that works on GitHub fails here and vice versa. The
+CHANGELOG convention is to name a doc path as inline code with no link, which
+reads correctly in both places.
+
+### Binding gates
+
+Each binding is built against the **in-repo** core, not the published crate, via a
+CI-injected `[patch.crates-io]` redirect (#374 drift gate). Without it you are
+testing your change against the last release and a new core API will not resolve.
+Inject it the same way CI does — append to the manifest, run, then revert:
+
+```bash
+# Node — the redirect goes in bindings/node/Cargo.toml
+cd bindings/node
+printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml
+npm ci && npm run lint && npm run build:debug && npm test
+cd ../.. && node scripts/check_doc_node_examples.mjs   # runs from the repo root
+git checkout bindings/node/Cargo.toml
+
+# Ruby — the redirect goes in the GEM ROOT workspace manifest, not ext/disarm
+cd bindings/ruby
+printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml
+bundle exec rake compile && bundle exec rspec && bundle exec rubocop
+cd ../.. && ruby scripts/check_doc_ruby_examples.rb
+git checkout bindings/ruby/Cargo.toml
+
+# C ABI — redirect in bindings/cabi/Cargo.toml; then the C smoke test
+# Java/Kotlin — redirect in bindings/java/rust/Cargo.toml; then ./gradlew test
+```
+
+`scripts/check_doc_node_examples.mjs` evaluates each `// =>` line as a
+**standalone expression** — there is no shared scope between lines, so a `const`
+bound on one line is not visible to the next. Inline the call on every asserted
+line.
+
+A cheap first pass, when you only changed a core signature and want to know
+whether the glue still compiles, is `cargo check` in each binding directory with
+the redirect applied. That catches the common breakage without a toolchain for
+every language.
+
+### Sign-off
+
+`DCO sign-off` is a **required** status check: every non-merge commit needs a
+`Signed-off-by:` trailer matching its author. Use `git commit -s`, or
+`git rebase --signoff origin/main` for commits already made. An AI assistant must
+never add that trailer — see CONTRIBUTING.md → "Attribute the assistant".
+
 ## Context dictionaries (Arabic / Persian / Hebrew)
 
 Enable `transliterate(text, context=True)` for abjad scripts. **Not committed** —

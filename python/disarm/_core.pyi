@@ -219,6 +219,7 @@ def _ml_normalize(
     *,
     lang: str | None = None,
     emoji_style: str = ...,
+    fold_case: bool = ...,
 ) -> str: ...
 def _catalog_key(
     text: str,

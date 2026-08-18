@@ -104,6 +104,35 @@ Replace confusable characters with their target-script equivalents:
     normalizeConfusables('Ηellο') // => 'Hello'
     ```
 
+### It keeps your diacritics
+
+`normalize_confusables` maps confusable characters and touches nothing else. Accented
+Latin is not confusable with anything, so it comes through intact — which makes this the
+right primitive when the text is a real name and a homoglyph attack is still possible:
+
+```python
+from disarm import normalize_confusables, strip_obfuscation
+
+assert normalize_confusables("José Martínez") == "José Martínez"
+assert normalize_confusables("naïve café") == "naïve café"
+
+# …while still recovering the attack. Cyrillic а, U+0430:
+assert normalize_confusables("pаypаl") == "paypal"
+```
+
+The wider `strip_obfuscation` bundle recovers the same attack but also runs
+`strip_accents`, so it does not preserve the name:
+
+```python
+assert strip_obfuscation("pаypаl") == "paypal"          # same recovery
+assert strip_obfuscation("José Martínez") == "Jose Martinez"   # different fidelity
+```
+
+Neither is wrong; they answer different questions. Accent destruction is a property of
+the bundle, not of confusable mapping. See
+[what each entry point costs you](../security/adversarial-defense.md#what-each-entry-point-costs-you)
+for the full threat-model-to-entry-point table.
+
 ### Target script
 
 By default, confusables are normalized to Latin. You can specify a different target script to normalize *towards* that script instead:

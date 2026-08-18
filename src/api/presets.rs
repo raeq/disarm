@@ -38,19 +38,40 @@ pub fn security_clean(text: &str) -> Result<Cow<'_, str>, Error> {
 }
 
 /// ML/NLP text normalization: NFKC → emoji→text → transliterate → strip accents →
-/// case fold → collapse whitespace.
+/// [case fold] → strip control → strip zero-width → collapse whitespace.
 ///
 /// `lang` selects the transliteration table (`None` skips transliteration).
 /// `emoji_style` is `"cldr"` (expand emoji to CLDR short names) or `"none"`
 /// (leave emoji as-is). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
 /// on an unknown `lang` or an unsupported `emoji_style`.
+///
+/// # Case
+/// `fold_case` (`true` for the historical behaviour) controls the fold step only;
+/// every other stage runs either way. Pass `false` when the downstream model is
+/// **cased** — case folding is destructive and cannot be undone downstream, and an
+/// uncased evaluation harness cannot measure what it costs. This is the one preset
+/// where folding is a side effect rather than the purpose: `catalog_key`,
+/// `search_key`, and `sort_key` fold because a key must collide, so they have no
+/// such switch.
+///
+/// Note `fold_case=false` is not "preserve the input's case" — `strip_accents`
+/// still runs, so `José` becomes `Jose`, keeping the capital. Reach for
+/// [`normalize_confusables`](crate::api::normalize_confusables) if diacritics must
+/// survive too.
+///
+/// ```
+/// use disarm::api::ml_normalize;
+/// assert_eq!(ml_normalize("José Martínez", None, "cldr", true).unwrap(), "jose martinez");
+/// assert_eq!(ml_normalize("José Martínez", None, "cldr", false).unwrap(), "Jose Martinez");
+/// ```
 #[inline]
 pub fn ml_normalize<'a>(
     text: &'a str,
     lang: Option<&str>,
     emoji_style: &str,
+    fold_case: bool,
 ) -> Result<Cow<'a, str>, Error> {
-    crate::presets::ml_normalize(text, lang, emoji_style).map_err(Error::from)
+    crate::presets::ml_normalize(text, lang, emoji_style, fold_case).map_err(Error::from)
 }
 
 /// Library catalog deduplication key: NFKC → strip bidi → case fold →

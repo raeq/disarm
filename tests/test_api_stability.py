@@ -359,7 +359,7 @@ CORE_FUNCTION_PARAMS = {
     "set_emoji_provider": ["provider"],
     # Precompiled pipelines
     "canonicalize": ["text"],
-    "ml_normalize": ["text", "lang", "emoji"],
+    "ml_normalize": ["text", "lang", "emoji", "fold_case"],
     "catalog_key": ["text", "lang", "strict_iso9"],
     "strip_format": ["text"],
     "search_key": ["text", "lang"],
@@ -510,7 +510,7 @@ CLASS_METHODS = {
         "strip_bidi": [],
         "canonicalize": [],
         "security_clean": [],
-        "ml_normalize": ["lang", "emoji"],
+        "ml_normalize": ["lang", "emoji", "fold_case"],
         "strip_format": [],
         "display_clean": [],
         "grapheme_truncate": ["max_graphemes"],

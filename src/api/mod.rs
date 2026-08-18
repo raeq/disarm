@@ -323,7 +323,7 @@ mod tests {
         assert_eq!(sort_key("Москва", None).unwrap(), "moskva");
         assert_eq!(catalog_key("Café", None, false).unwrap(), "cafe");
         // ml_normalize lowercases, strips accents.
-        assert_eq!(ml_normalize("Café", None, "cldr").unwrap(), "cafe");
+        assert_eq!(ml_normalize("Café", None, "cldr", true).unwrap(), "cafe");
         // Infallible presets.
         assert_eq!(strip_format("hello   world"), "hello world");
         assert_eq!(strip_bidi("pass\u{00AD}word"), "password");
@@ -336,7 +336,7 @@ mod tests {
             crate::ErrorKind::InvalidArgument
         );
         assert_eq!(
-            ml_normalize("x", None, "bogus").unwrap_err().kind(),
+            ml_normalize("x", None, "bogus", true).unwrap_err().kind(),
             crate::ErrorKind::InvalidArgument
         );
     }

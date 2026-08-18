@@ -50,6 +50,10 @@ from disarm import ml_normalize
 assert ml_normalize("Café RÉSUMÉ") == 'cafe resume'
 assert ml_normalize("München", lang="de") == 'muenchen'
 assert ml_normalize("I ❤️ Python 🐍") == 'i red heart python snake'
+
+# fold_case=False drops the case fold for a cased downstream model (#559);
+# every other stage — including strip_accents — still runs.
+assert ml_normalize("José Martínez", fold_case=False) == 'Jose Martinez'
 ```
 
 ---

@@ -89,15 +89,26 @@ def ml_normalize(
     *,
     lang: str | None = None,
     emoji: str = "cldr",
+    fold_case: bool = True,
 ) -> str:
     """ML/NLP text normalization pipeline.
 
     Pipeline: NFKC → emoji→text → [transliterate] → strip_accents →
-              fold_case → collapse_whitespace
+              [fold_case] → strip_control → strip_zero_width → collapse_whitespace
 
-    Produces clean, accent-free, lowercased text suitable for tokenizers,
-    embeddings, and feature extraction. Emoji are expanded to their CLDR
-    short-name descriptions.
+    Produces clean, accent-free text suitable for tokenizers, embeddings, and
+    feature extraction. Emoji are expanded to their CLDR short-name descriptions.
+
+    Case folding is on by default. Turn it off for a **cased** downstream model:
+    folding is destructive and cannot be undone later in the chain, and an uncased
+    evaluation harness cannot measure what it costs. This is the one preset where
+    folding is a side effect rather than the point — :func:`catalog_key`,
+    :func:`search_key`, and :func:`sort_key` fold because a key has to collide, so
+    they have no such switch.
+
+    ``fold_case=False`` does not mean "preserve the input untouched": *strip_accents*
+    still runs, so ``José`` becomes ``Jose`` with the capital kept. Use
+    :func:`normalize_confusables` when diacritics must survive as well.
 
     Args:
         text: Input Unicode string.
@@ -105,9 +116,12 @@ def ml_normalize(
         emoji: Emoji handling mode.
                ``"cldr"`` — expand emoji to CLDR short names (default).
                ``"none"`` — leave emoji characters unchanged.
+        fold_case: Apply Unicode case folding (default ``True``, the historical
+               behaviour). ``False`` drops that one step and leaves every other
+               stage unchanged.
 
     Returns:
-        Clean, accent-free, lowercased text.
+        Clean, accent-free text — lowercased unless *fold_case* is ``False``.
 
     Raises:
         InvalidArgumentError: If *emoji* is not ``"cldr"`` or ``"none"``.
@@ -118,8 +132,10 @@ def ml_normalize(
         'cafe resume'
         >>> ml_normalize("München", lang="de")
         'muenchen'
+        >>> ml_normalize("José Martínez", fold_case=False)
+        'Jose Martinez'
     """
-    return _ml_normalize(text, lang=lang, emoji_style=emoji)
+    return _ml_normalize(text, lang=lang, emoji_style=emoji, fold_case=fold_case)
 
 
 def catalog_key(

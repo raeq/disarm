@@ -38,6 +38,54 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   15.1.0), so one number would be wrong for three of the four. See
   `docs/provenance.md` for the full table and the per-language accessors.
 
+- **`ml_normalize` takes `fold_case=False` (#559).** The preset folds case
+  deliberately, and that is defensible — most tokenizers are uncased. What was missing
+  was a way to turn it off for one call. A caller who wants everything else the preset
+  does (NFKC, demojize, transliterate, strip-accents, control and zero-width removal,
+  whitespace folding) in front of a **cased** model now has a route to it. The fold is
+  destructive and cannot be undone downstream, and an uncased evaluation harness cannot
+  measure what it costs.
+
+  Default `true`/`True`, so existing behaviour is unchanged. The flag drops
+  `Step::FoldCase` and nothing else; the no-fold step list is *derived* from the folded
+  one by a `const fn`, so the two cannot drift, and a build-time assertion fires if the
+  pipeline ever stops containing exactly one fold step.
+
+  `ml_normalize` is Rust + Python only (Node/Ruby/Java/C-ABI do not expose it — a
+  standing scope decision recorded in `scripts/parity.py`), so the flag reaches
+  `disarm::api::ml_normalize`, `disarm.ml_normalize`, and `Text.ml_normalize`.
+
+  Note `fold_case=False` restores case, not diacritics: `strip_accents` is a separate
+  step and still runs, so `José` becomes `Jose`. See below.
+
+### Changed (breaking)
+
+- **`disarm::api::ml_normalize` gains a fourth parameter, `fold_case: bool`.** Rust
+  callers must add `true` to keep the current behaviour:
+  `ml_normalize(text, lang, emoji_style)` → `ml_normalize(text, lang, emoji_style, true)`.
+  Python, which takes it as a keyword with a default, is unaffected. (#559)
+
+### Documentation
+
+- **Accented-Latin fidelity is a `strip_obfuscation` property, not a confusables
+  property (#564).** `normalize_confusables` preserves accented Latin where
+  `strip_obfuscation` destroys it, at identical homoglyph recovery — because
+  `strip_accents` sits in the `strip_obfuscation` *bundle*, not in the confusable
+  primitive. Nothing in the docs said so, so a reader could reasonably conclude that
+  disarm destroys accented Latin as a matter of course, and a benchmark cell measuring
+  the bundle could be read as measuring the fold.
+
+  `docs/security/adversarial-defense.md` gains a "What each entry point costs you"
+  section: the worked comparison, the structural explanation, and a threat-model →
+  entry-point → cost table covering all six entry points. The confusables user guide
+  gains the short version with a cross-link. Both are doctested, and
+  `tests/test_accented_latin_fidelity.py` pins the claims — including that the loss is
+  attributable to `strip_accents` specifically, and that `ml_normalize` folds no
+  confusables at any `fold_case` setting, so it is not a homoglyph defence.
+
+  Filed and fixed together with #559 because both have the same shape: a destructive
+  step baked into a bundle with no documented route to the non-destructive path.
+
 
 ## [0.13.0] — 2026-08-17
 

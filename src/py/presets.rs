@@ -21,12 +21,17 @@ pub fn _canonicalize(text: &str) -> PyResult<String> {
 
 /// ML/NLP text normalization pipeline.
 ///
-/// Pipeline: NFKC → emoji→text → transliterate → strip_accents → fold_case →
-/// collapse_whitespace.
+/// Pipeline: NFKC → emoji→text → transliterate → strip_accents → [fold_case] →
+/// collapse_whitespace. `fold_case=False` drops the fold step only (#559).
 #[pyfunction]
-#[pyo3(signature = (text, *, lang=None, emoji_style="cldr"))]
-pub fn _ml_normalize(text: &str, lang: Option<&str>, emoji_style: &str) -> PyResult<String> {
-    Ok(crate::presets::ml_normalize(text, lang, emoji_style)?.into_owned())
+#[pyo3(signature = (text, *, lang=None, emoji_style="cldr", fold_case=true))]
+pub fn _ml_normalize(
+    text: &str,
+    lang: Option<&str>,
+    emoji_style: &str,
+    fold_case: bool,
+) -> PyResult<String> {
+    Ok(crate::presets::ml_normalize(text, lang, emoji_style, fold_case)?.into_owned())
 }
 
 /// Library catalog key generation pipeline.

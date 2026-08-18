@@ -228,6 +228,48 @@ assert prepare_for_llm("pаypаl") == "paypal"            # guardrail
 assert prepare_for_llm("Москва", romanize=True) == "Moskva"      # ingestion
 ```
 
+## Case, and what folding it costs a cased model
+
+The `ml_normalize` preset folds case. That suits the uncased tokenizers most pipelines
+use, and it is the right default. In front of a **cased** model it is a measurable loss,
+and one an uncased evaluation harness cannot see — the fold happens before the model, so
+the harness scores text that has already lost the signal.
+
+`fold_case=False` drops that one step and leaves every other stage running:
+
+```python
+from disarm import ml_normalize, normalize_confusables
+
+assert ml_normalize("José Martínez") == "jose martinez"
+assert ml_normalize("José Martínez", fold_case=False) == "Jose Martinez"
+```
+
+Two things to be clear about before reaching for it.
+
+**It restores case, not diacritics.** `strip_accents` is a separate step and still runs,
+which is why the second line reads `Jose` and not `José`. If the diacritics also have to
+survive, `ml_normalize` is the wrong entry point — use `normalize_confusables`, which
+folds homoglyphs and touches nothing else:
+
+```python
+assert normalize_confusables("José Martínez") == "José Martínez"
+```
+
+**`ml_normalize` is not a homoglyph defence.** Its pipeline has no TR39 step, so it
+recovers nothing at either setting. This is the trap the name invites:
+
+```python
+# Cyrillic С (U+0421) survives ml_normalize either way …
+assert ml_normalize("fu\u0421k", fold_case=False) == "fu\u0421k"
+# … and is recovered by the confusable primitive.
+assert normalize_confusables("fu\u0421k") == "fuCk"
+```
+
+Put `normalize_confusables` (or the `llm_guardrail` profile) in front of `ml_normalize`
+when a cased model needs both. The full threat-model-to-entry-point table, with what
+each choice costs, is in
+[what each entry point costs you](../security/adversarial-defense.md#what-each-entry-point-costs-you).
+
 ## Which path, and when NOT to use disarm
 
 Being explicit about the path is what earns credibility with this audience —

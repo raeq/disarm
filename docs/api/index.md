@@ -16,6 +16,26 @@ Complete reference for all public functions, classes, and types in disarm.
 | [Language Profiles](language-profiles.md) | Language listing and registration |
 | [Exceptions](exceptions.md) | DisarmError |
 
+## Module constants
+
+```python
+import disarm
+
+# The installed distribution's version.
+assert isinstance(disarm.__version__, str)
+
+# The Unicode `confusables.txt` release the bundled confusable tables were folded
+# from. This is the *data* vintage and moves independently of the release number —
+# a confusable fold is only as current as its table.
+assert disarm.CONFUSABLES_VERSION.count(".") >= 1
+assert all(part.isdigit() for part in disarm.CONFUSABLES_VERSION.split("."))
+```
+
+Deliberately not named `UNICODE_VERSION`: disarm's bundled tables do not all track one
+Unicode release (case folding is 16.0, East Asian width 15.1.0), so a library-wide name
+would be wrong for most of them. See [Provenance](../provenance.md) for the full table
+and the accessor in every binding.
+
 ## Import convention
 
 All public symbols are available from the top-level package:

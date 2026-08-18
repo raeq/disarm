@@ -203,9 +203,38 @@ The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/
 
 **disarm implication**: `normalize_confusables()`, `is_confusable()`, and `is_suspicious_hostname()` use the TR39 confusables table, which is the standard mitigation. However, confusable detection is necessarily conservative. Legitimate multilingual text (e.g., a Russian name in an otherwise English sentence) will trigger warnings. False positives are an inherent tradeoff of any confusable detection system.
 
+### The bundled table does not cover every confusable, and the gap is now measurable
+
+A TR39 fold is only as good as the table behind it, and disarm's to-Latin table is a
+*subset* of upstream `confusables.txt`: 6,565 sources upstream, ~2,181 rows bundled. The
+gap is mostly deliberate — a source whose upstream target is CJK, Arabic or Hangul does
+not belong in a to-Latin table — but "mostly deliberate" is not a claim a deployment
+should have to take on trust.
+
+Since #563 the residue is queryable rather than inferred. `unmapped_confusables()`
+returns every upstream source the chosen table does not fold, and
+`find_unmapped_confusables(text)` answers the same question for one input, in the shape
+of `find_untranslatable`. `CONFUSABLES_VERSION` reports which upstream release the tables
+were folded from.
+
+Read the result as **exposure**, not as a score. A tool at 95% per-source coverage is not
+95% safe; it is one query away from the other 5%, and that residue is exactly where an
+adaptive attacker goes. The published coverage figures are measured on a *static*
+benchmark and measure no adaptivity at all.
+
+Two things to know before reading any single codepoint as a defect: most of the set folds
+to a non-Latin target and is out of scope, and the set includes five ASCII characters
+(`%`, `0`, `1`, `I`, `m`) because TR39 is a *skeleton* transform whose `m`→`rn`, `I`/`1`→`l`
+and `0`→`O` rows disarm deliberately does not apply — folding a legitimate `m` to `rn`
+corrupts prose. Nothing is filtered out of the report: a coverage number that quietly
+drops rows reads as coverage it does not have. See
+[Knowing what is NOT covered](user-guide/confusables.md#knowing-what-is-not-covered) and
+[Provenance](provenance.md).
+
 ### Mixed-script detection is heuristic
 
-`is_mixed_script()` reports whether multiple scripts are present in a string. It does not assess whether the mixing is benign (e.g., Latin punctuation in Arabic text, which is universal) or malicious (Cyrillic spoofing Latin). The `is_suspicious_hostname()` function applies stricter heuristics, but a not-suspicious result is a best-effort judgment, not a safety guarantee — it cannot certify the absence of all spoofing (whole-script spoofs and out-of-table confusables are out of scope).
+`is_mixed_script()` reports whether multiple scripts are present in a string. It does not assess whether the mixing is benign (e.g., Latin punctuation in Arabic text, which is universal) or malicious (Cyrillic spoofing Latin). The `is_suspicious_hostname()` function applies stricter heuristics, but a not-suspicious result is a best-effort judgment, not a safety guarantee — it cannot certify the absence of all spoofing (whole-script spoofs and out-of-table confusables are out of scope — the out-of-table
+set is enumerable via `unmapped_confusables()`, see above).
 
 ## Bidirectional Text Security
 

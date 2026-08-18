@@ -77,4 +77,37 @@ detect_scripts("Неllo")     # [Script.CYRILLIC, Script.LATIN]
 - `normalize_confusables()` — actually replace confusables, not just detect them
 - `detect_scripts()` — returns `Script` enum values
 - `TextPipeline(confusables=True)` — integrate confusable normalization into a processing pipeline
+- `unmapped_confusables()` / `find_unmapped_confusables()` — report which TR39 sources the
+  bundled table does **not** fold, globally and for one input
+- `CONFUSABLES_VERSION` — the `confusables.txt` release the tables were folded from
 - Rust implementation — see [performance benchmarks](../performance.md)
+
+### Knowing your coverage
+
+`confusable_homoglyphs` gives no way to ask how current its table is, or which sources it
+misses. Both questions are answerable here, which matters when you are replacing a
+security control and need to state what the replacement does not catch:
+
+```python
+import disarm
+
+# How current is the fold?
+assert disarm.CONFUSABLES_VERSION.split(".")[0].isdigit()
+
+# What does it not neutralize? Read as exposure, not as a score — this set is
+# where an adaptive attacker goes once the mapped sources stop working.
+exposure = disarm.unmapped_confusables()
+assert len(exposure) > 1000
+
+# Cyrillic а (U+0430) IS folded, so it is not exposure.
+assert "\u0430" not in exposure
+assert disarm.normalize_confusables("p\u0430ypal") == "paypal"
+
+# The same question against one input, in `find_untranslatable`'s shape.
+assert disarm.find_unmapped_confusables("p\u0430ypal") == []
+```
+
+Most of that set is out of scope rather than missing (a source folding to a non-Latin
+target does not belong in a to-Latin table), and it includes five ASCII characters
+because TR39 is a *skeleton* transform. See
+[Knowing what is NOT covered](../user-guide/confusables.md#knowing-what-is-not-covered).

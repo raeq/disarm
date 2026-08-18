@@ -31,6 +31,35 @@ This is the right tool for
 catalog keys, slugs, and search indexing — but it is **not** a security control,
 because it leaves a look-alike spoof intact.
 
+## What your choice costs you
+
+Picking the visual path still leaves a second decision, because the entry points are
+*bundles* and some of their steps are destructive on text that was never an attack.
+`normalize_confusables` folds homoglyphs and touches nothing else; `strip_obfuscation`
+recovers the same attack but also strips accents, so `José Martínez` becomes
+`Jose Martinez`. Neither is wrong — accent destruction is a property of the bundle you
+chose, not of confusable mapping.
+
+| Your threat model | Reach for | It costs you |
+|---|---|---|
+| Homoglyph spoofing in a name / address / prose | `normalize_confusables` | Nothing beyond the fold |
+| Homoglyph spoofing in an identifier or hostname | `is_suspicious_hostname` / `analyze_hostname` | Nothing — these report, they do not transform |
+| Untrusted input into a store or a key | `canonicalize_strict` | Invisibles, bidi, zalgo |
+| Maximum deobfuscation of adversarial text | `strip_obfuscation` | **Accents** |
+| Feeding an uncased model or tokenizer | `ml_normalize` | **Accents and case** |
+| Feeding a cased model or tokenizer | `ml_normalize(fold_case=False)` | Accents only |
+
+The worked comparison is in
+[what each entry point costs you](../security/adversarial-defense.md#what-each-entry-point-costs-you).
+
+## Knowing what the visual path misses
+
+Neither mapping is complete, and the visual one has a bounded, enumerable gap.
+`unmapped_confusables()` returns every TR39 source the bundled table does not fold, and
+`find_unmapped_confusables(text)` answers it for one input. Treat the result as exposure
+rather than a score — see
+[Knowing what is NOT covered](../user-guide/confusables.md#knowing-what-is-not-covered).
+
 ## Rule of thumb
 
 > If the goal is **"is this text trying to fool a human or a matcher?"**, use the

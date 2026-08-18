@@ -29,13 +29,30 @@ Data that doesn't map cleanly to a flat array uses `phf::Map`:
 | Table | Key type | Entries | Purpose |
 |---|---|---|---|
 | Hanzi pinyin | `char` | ~21K | CJK ideograph → pinyin |
-| Confusables | `char` | ~6K | TR39 confusable → Latin |
+| Confusables (Latin) | `char` | ~2,165 | TR39 confusable → Latin |
+| Confusables (Cyrillic) | `char` | ~1,349 | TR39 confusable → Cyrillic |
+| Upstream confusable sources | `char` (set) | 6,565 | Coverage denominator (#563) |
 | Case folding | `char` | 1,557 | Unicode CaseFolding.txt |
 | Emoji single | `char` | 1,727 | Single-codepoint emoji → name |
 | Emoji multi | `&str` | 2,553 | Multi-codepoint sequences → name |
 | Language tables | `char` | varies | 16 language-specific overrides |
 
 All PHF lookups are O(1) with zero runtime allocation.
+
+### The coverage denominator is a set, not a map
+
+`UPSTREAM_CONFUSABLE_SOURCES` holds every *source* codepoint in the bundled upstream
+`confusables.txt` — the whole 6,565, not just the ones that survive folding.
+`scripts/gen_confusables.py` already read that file and discarded what it could not fold;
+emitting the discard-inclusive source set turns "which confusables does disarm not fold?"
+into a question the library can answer about itself.
+
+The answer is **derived, not stored**: `unmapped_confusables(target)` is the source set
+minus the resolved target map's keys, computed per call. That is deliberate. One
+denominator serves both target tables, closing a gap in either table automatically
+shrinks the reported exposure, and there is no second artifact that can go stale against
+the table it describes. It costs an allocation and a sort per call, which is the right
+trade for an introspection entry point that is never on a hot path.
 
 ## Hangul romanization
 

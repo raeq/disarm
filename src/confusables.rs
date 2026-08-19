@@ -28,8 +28,12 @@ fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
 
 /// Resolve one character under the chosen digit policy (#561).
 ///
-/// The override map is consulted **first** and only under `tr39`, so the default path is
-/// byte-identical to the pre-#561 lookup and pays nothing.
+/// The override map is consulted only under `tr39`. The numeric path therefore costs one
+/// predictable, loop-invariant `bool` test per lookup and never touches the override map
+/// — not literally free, but the branch predicts perfectly and the map probe (the part
+/// that would actually cost something) is skipped entirely. Splitting the fold into two
+/// loops to remove the test was considered and rejected: it duplicates the borrow-on-no-op
+/// logic for a branch that is already free in practice.
 #[inline]
 fn lookup_with_policy(
     map: Option<&'static phf::Map<char, &'static str>>,

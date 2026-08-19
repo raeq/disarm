@@ -1,0 +1,36 @@
+# Contraction rules (#562) — multi-codepoint SOURCE -> single-codepoint target.
+#
+# The confusable tables map one codepoint to one-or-more (expansion: 0271 -> "rn").
+# This file is the other direction: an ASCII digraph that can impersonate a single
+# ASCII letter. The source column is a STRING, not a hex codepoint, which is why this
+# could not live in confusables_to_latin.tsv — that file's format cannot express a
+# multi-codepoint source.
+#
+# SCOPE: consulted ONLY by the hostname path, and only when the caller opts in with
+# `contractions=True`. It is not reachable from normalize_confusables. Unconditional
+# contraction is worse than none — "rn" -> "m" is right for "arnazon" and wrong for
+# "earnings", "turnip" and "born" — so it needs a threat model that tolerates false
+# positives and text with no running prose in it. A general-text contraction mode, if
+# it ever lands, is a separate issue with its own disambiguation story.
+#
+# PROVENANCE, per row. Kept deliberately short: every rule is a false-positive source,
+# so the bar is "documented real-world IDN technique", not "plausible".
+#
+#   rn -> m   UPSTREAM. TR39 confusables.txt reduces m to the sequence "rn"
+#             (U+006D ; 0072 006E), and 17 distinct upstream sources fold TO "rn",
+#             making it by far the dominant multi-character target in the file.
+#             Inverting that row is the one contraction TR39 itself sanctions.
+#
+#   vv -> w   disarm addition. Not in TR39. Named in #562 and long-documented in IDN
+#             homograph literature; the shape is identical to rn/m (two narrow glyphs
+#             reading as one wide one) and it is the second-most-cited example after it.
+#
+#   cl -> d   disarm addition. Not in TR39. Same shape, and the third commonly cited
+#             ASCII digraph attack. Included because "clropbox" is a real registered
+#             pattern; excluded from any default path for the same reason as the others.
+#
+# Rules whose output feeds another rule's input are FORBIDDEN — that would make the
+# transform non-idempotent. build.rs asserts no target appears inside any source.
+rn	m
+vv	w
+cl	d

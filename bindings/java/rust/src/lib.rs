@@ -925,10 +925,11 @@ pub fn analyzeHostname<'l>(
     mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
     input: JString<'l>,
+    contractions: jboolean,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
         let host = input.mutf8_chars(env)?.to_string();
-        let analysis = api::is_suspicious_hostname(&host);
+        let analysis = api::analyze_hostname_with(&host, contractions);
         new_hostname_analysis(env, &analysis)
     })
     .resolve::<Policy>()

@@ -293,6 +293,17 @@ describe('metadata introspection (#404)', () => {
   test('mlNormalize rejects a bad emojiStyle', () => {
     expect(() => disarm.mlNormalize('x', { emojiStyle: 'bogus' })).toThrow()
   })
+  test('analyzeHostname contractions is off by default', () => {
+    expect(disarm.analyzeHostname('arnazon.com').canonical).toBe('arnazon.com')
+  })
+  test('analyzeHostname contractions recovers the digraph spoof', () => {
+    expect(disarm.analyzeHostname('arnazon.com', { contractions: true }).canonical).toBe(
+      'amazon.com',
+    )
+    // Leftmost-longest, and never across a label boundary.
+    expect(disarm.analyzeHostname('vvv.com', { contractions: true }).canonical).toBe('wv.com')
+    expect(disarm.analyzeHostname('var.net', { contractions: true }).canonical).toBe('var.net')
+  })
   test('unmappedConfusables reports exposure, not coverage', () => {
     const unmapped = disarm.unmappedConfusables()
     expect(unmapped.size).toBeGreaterThan(1000)

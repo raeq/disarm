@@ -367,8 +367,8 @@ type HostnameAnalysisTuple = (
 
 /// `Disarm._analyze_hostname(host)` — the full analysis behind the
 /// `suspicious_hostname?` predicate, as the tuple the Ruby layer maps to a hash.
-fn analyze_hostname(host: Wtf8Text) -> HostnameAnalysisTuple {
-    let a = api::is_suspicious_hostname(&host);
+fn analyze_hostname(host: Wtf8Text, contractions: bool) -> HostnameAnalysisTuple {
+    let a = api::analyze_hostname_with(&host, contractions);
     (
         a.suspicious,
         a.scripts,
@@ -776,7 +776,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_strip_accents", function!(strip_accents, 1))?;
     module.define_singleton_method("_fold_case", function!(fold_case, 1))?;
     module.define_singleton_method("_suspicious_hostname?", function!(suspicious_hostname, 1))?;
-    module.define_singleton_method("_analyze_hostname", function!(analyze_hostname, 1))?;
+    module.define_singleton_method("_analyze_hostname", function!(analyze_hostname, 2))?;
 
     // Normalization + text-cleaning primitives (#375 parity backfill).
     module.define_singleton_method("_normalize", function!(normalize, 2))?;

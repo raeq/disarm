@@ -58,6 +58,35 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `Disarm.ml_normalize` (Ruby), `String.mlNormalize` (Kotlin extension), and
   `disarm_ml_normalize` (C ABI), each with the `fold_case` switch from #559.
 
+- **Multi-codepoint confusable sources — contraction (#562).** The confusable tables map
+  one codepoint to one-or-more (`0271` → `rn`), so *expansion* always worked.
+  *Contraction* — recognising that `rn` may stand in for `m` — could not be expressed at
+  all: the source column of both TSVs is a single hex codepoint in every data row. This
+  was a schema change before it was a data change.
+
+  `is_suspicious_hostname(host, contractions=True)` /
+  `api::analyze_hostname_with(host, true)` now folds ASCII digraphs that can impersonate a
+  single letter into the canonical form, so `arnazon.com` canonicalizes to `amazon.com`.
+  Reaches Python, Rust, Node, Ruby, Java/Kotlin, and the C ABI.
+
+  **Off by default and confined to the hostname path.** Unconditional contraction is worse
+  than none: `rn` → `m` is right for `arnazon` and wrong for `earnings`, `turnip`, `born`.
+  A hostname is the one place where the threat model justifies those false positives and
+  there is no running prose to corrupt. It is not reachable from `normalize_confusables`
+  at any setting; a general-text mode would need its own disambiguation story.
+
+  Three rules, each with recorded provenance: `rn` → `m` is the one TR39 itself sanctions
+  (it reduces `m` to the sequence `rn`, and 17 sources fold *to* `rn`, the dominant
+  multi-character target in the file); `vv` → `w` and `cl` → `d` are disarm additions from
+  the IDN homograph literature. Every rule is a false-positive source, so the bar is
+  "documented real-world technique", not "plausible".
+
+  Matching is **leftmost-longest** over an Aho-Corasick automaton (reusing the dependency
+  #242 already brought in), and applied **per label**, so a digraph can never form across
+  a dot. One pass is a fixed point by construction: `build.rs` asserts no rule's output
+  occurs inside any rule's input, so a pass cannot expose a fresh match, and a data edit
+  that introduced such a chain fails the build.
+
   Argument style follows each ecosystem: an options object in Node/TypeScript, keyword
   arguments in Ruby, a `MlNormalizeOptions` builder in Java (mirroring the existing
   `TransliterateOptions`), default parameters on the Kotlin extension, and positional

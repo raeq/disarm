@@ -442,7 +442,35 @@ pub struct HostnameAnalysis {
 /// can attest the *presence* of a problem, never the *absence* of all problems.
 #[must_use]
 pub fn is_suspicious_hostname(hostname: &str) -> HostnameAnalysis {
-    let (_, core) = crate::hostname::is_suspicious_hostname(hostname);
+    analyze_hostname_with(hostname, false)
+}
+
+/// [`is_suspicious_hostname`] with the #562 contraction rules selectable.
+///
+/// `contractions = true` additionally folds ASCII digraphs that can impersonate a single
+/// letter — `rn`→`m`, `vv`→`w`, `cl`→`d` — into
+/// [`canonical`](HostnameAnalysis::canonical), so `arnazon.com` canonicalizes to
+/// `amazon.com`.
+///
+/// **Off by default, and deliberately confined to hostnames.** Unconditional contraction
+/// is worse than none: `rn`→`m` is right for `arnazon` and wrong for `earnings`,
+/// `turnip`, `born`. A hostname is the one place where the threat model justifies those
+/// false positives and where there is no running prose to corrupt. It is not reachable
+/// from [`normalize_confusables`] at all.
+///
+/// Matching is leftmost-longest over an Aho-Corasick automaton, and applied per label so
+/// a digraph can never form across a dot. The rule set is validated at build time to
+/// contain no chains, which is what makes one pass a fixed point.
+///
+/// ```
+/// use disarm::api::analyze_hostname_with;
+///
+/// assert_eq!(analyze_hostname_with("arnazon.com", true).canonical, "amazon.com");
+/// assert_eq!(analyze_hostname_with("arnazon.com", false).canonical, "arnazon.com");
+/// ```
+#[must_use]
+pub fn analyze_hostname_with(hostname: &str, contractions: bool) -> HostnameAnalysis {
+    let (_, core) = crate::hostname::is_suspicious_hostname_opts(hostname, contractions);
     HostnameAnalysis {
         suspicious: core.suspicious,
         scripts: core.scripts,

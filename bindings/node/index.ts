@@ -491,8 +491,11 @@ export function isSuspiciousHostname(host: string): boolean {
  * {@link HostnameAnalysis} (verdict + granular signals). `isSuspiciousHostname`
  * is the boolean shorthand for `.suspicious`.
  */
-export function analyzeHostname(host: string): HostnameAnalysis {
-  return native.analyzeHostname(host)
+export function analyzeHostname(
+  host: string,
+  options: { contractions?: boolean } = {},
+): HostnameAnalysis {
+  return call(() => native.analyzeHostname(host, options.contractions ?? false))
 }
 
 /** The Unicode scripts present, in first-appearance order (Common/Inherited excluded). */

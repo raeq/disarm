@@ -169,6 +169,14 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void hostnameContractionsAreOptIn() {
+        assertEquals("arnazon.com", Disarm.analyzeHostname("arnazon.com").canonical());
+        assertEquals("amazon.com", Disarm.analyzeHostname("arnazon.com", true).canonical());
+        assertEquals("wv.com", Disarm.analyzeHostname("vvv.com", true).canonical());
+        assertEquals("var.net", Disarm.analyzeHostname("var.net", true).canonical());
+    }
+
+    @Test
     void unmappedConfusablesReportsExposure() {
         List<String> unmapped = Disarm.unmappedConfusables(TargetScript.LATIN);
         assertTrue(unmapped.size() > 1000, String.valueOf(unmapped.size()));

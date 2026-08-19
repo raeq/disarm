@@ -326,8 +326,8 @@ fn disarm_terminal_width(text: char_p::Ref<'_>, ambiguous_wide: bool) -> u64 {
 /// `has_confusables`, `bidi_conflict`, `cross_label_script`, `label_scripts`,
 /// `whole_script_confusable`, `label_whole_script_confusable`, `canonical`).
 #[ffi_export]
-fn disarm_analyze_hostname(host: char_p::Ref<'_>) -> char_p::Box {
-    let a = api::is_suspicious_hostname(host.to_str());
+fn disarm_analyze_hostname(host: char_p::Ref<'_>, contractions: bool) -> char_p::Box {
+    let a = api::analyze_hostname_with(host.to_str(), contractions);
     to_c(
         serde_json::json!({
             "suspicious": a.suspicious,

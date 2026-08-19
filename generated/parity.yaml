@@ -1,6 +1,12 @@
 # disarm parity manifest (v2 seed). symbol | {provided_via:…} | {alias_of:…} | null(gap).
 # Python=__all__, Rust=pub fn + pub use re-exports, Ruby=def lines, Node=export function.
 operations:
+  - id: analyze_hostname_with
+    names:
+      rust: analyze_hostname_with
+      python: null
+      ruby: null
+      node: null
   - id: canonicalize
     names:
       rust: canonicalize

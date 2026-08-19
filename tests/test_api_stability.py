@@ -387,7 +387,7 @@ CORE_FUNCTION_PARAMS = {
     "grapheme_width": ["cluster", "ambiguous_wide"],
     "terminal_width": ["text", "ambiguous_wide"],
     # Hostname
-    "is_suspicious_hostname": ["hostname"],
+    "is_suspicious_hostname": ["hostname", "contractions"],
     # Anomaly detection (#389)
     "has_anomalies": ["text", "lexicon"],
     "inspect_anomalies": ["text", "lexicon"],

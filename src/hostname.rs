@@ -120,7 +120,18 @@ pub(crate) struct HostnameAnalysis {
 /// `scripts` / `mixed_script` / `has_confusables` / `whole_script_confusable`
 /// fields plus your own policy — a detector can attest the *presence* of a
 /// problem, never the *absence* of all problems.
-pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis) {
+/// [`is_suspicious_hostname`] with the #562 contraction rules selectable.
+///
+/// `contractions` folds ASCII digraphs that can impersonate a single letter — `rn`→`m`,
+/// `vv`→`w`, `cl`→`d` — into the canonical form, so `arnazon.com` canonicalizes to
+/// `amazon.com`. Off by default and deliberately confined to this path: unconditional
+/// contraction is worse than none (it breaks `earnings`, `turnip`, `born`), and a
+/// hostname is the one place where the threat model justifies the false positives and
+/// there is no running prose to corrupt.
+pub(crate) fn is_suspicious_hostname_opts(
+    hostname: &str,
+    contractions: bool,
+) -> (bool, HostnameAnalysis) {
     // 1. NFKC normalize
     let normalized: String = hostname.nfkc().collect();
 
@@ -266,8 +277,24 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
         suspicious = true;
     }
 
+    // Hostname analysis keeps the NUMERIC digit policy (#561): a spoofed label is judged
+    // on what a reader sees, and a Devanagari zero reads as a zero. The TR39 skeleton
+    // policy is for benchmark comparison, not for this verdict.
     let canonical = confusables::normalize_confusables(&decoded_hostname, "latin", "numeric")
         .unwrap_or(decoded_hostname);
+    // #562: contraction runs AFTER the cross-script fold, so a label carrying both a
+    // Cyrillic homoglyph and an ASCII digraph (`аrnazon`) resolves both. Applied per
+    // label so a digraph can never form across a dot — the `r` ending one label and the
+    // `n` starting the next are not adjacent glyphs to a reader.
+    let canonical = if contractions {
+        canonical
+            .split('.')
+            .map(|label| crate::contraction::contract(label).into_owned())
+            .collect::<Vec<_>>()
+            .join(".")
+    } else {
+        canonical
+    };
 
     // Aggregate: any label is a whole-script confusable. Graded signal (§545 §5.1);
     // NOT folded into `suspicious`.
@@ -296,7 +323,7 @@ mod tests {
 
     #[test]
     fn test_clean_hostname_not_suspicious() {
-        let (suspicious, details) = is_suspicious_hostname("paypal.com");
+        let (suspicious, details) = is_suspicious_hostname_opts("paypal.com", false);
         assert!(!suspicious);
         assert!(!details.has_confusables);
         assert!(!details.mixed_script);
@@ -305,7 +332,7 @@ mod tests {
     #[test]
     fn test_cyrillic_spoof() {
         // Cyrillic а and р mixed with Latin
-        let (suspicious, details) = is_suspicious_hostname("\u{0440}\u{0430}ypal.com");
+        let (suspicious, details) = is_suspicious_hostname_opts("\u{0440}\u{0430}ypal.com", false);
         assert!(suspicious);
         assert!(details.has_confusables);
         assert!(details.mixed_script);
@@ -317,7 +344,7 @@ mod tests {
         // Fully Cyrillic domain (Yandex): not mixed-script. `suspicious` is true only
         // via the any-character confusable screen (#545), not a real spoof — so the
         // verdict is no longer discarded, it is explained by the whole-script signal.
-        let (_, d) = is_suspicious_hostname("яндекс.ру");
+        let (_, d) = is_suspicious_hostname_opts("яндекс.ру", false);
         assert!(!d.mixed_script);
         // Known graded-signal FP: the `яндекс` label is NOT whole-script-confusable
         // (я, д survive the skeleton), but the short Cyrillic ccTLD `ру` skeletons to
@@ -336,7 +363,8 @@ mod tests {
         // аррӏе.com: an all-Cyrillic label whose every letter is a confusable — the
         // skeleton is `apple`. The non-TLD label is whole-script-confusable and the
         // TLD is Latin, so both the field and the caller policy flag it.
-        let (_, d) = is_suspicious_hostname("\u{0430}\u{0440}\u{0440}\u{04CF}\u{0435}.com");
+        let (_, d) =
+            is_suspicious_hostname_opts("\u{0430}\u{0440}\u{0440}\u{04CF}\u{0435}.com", false);
         assert!(d.whole_script_confusable);
         assert_eq!(d.label_whole_script_confusable, vec![true, false]);
         assert_eq!(d.canonical, "apple.com");
@@ -354,7 +382,7 @@ mod tests {
             "\u{05D0}\u{05EA}\u{05E8}.\u{05E7}\u{05D5}\u{05DD}", // אתר.קום
             "\u{4F8B}\u{3048}.jp",                         // 例え.jp (mixed-script label)
         ] {
-            let (_, d) = is_suspicious_hostname(host);
+            let (_, d) = is_suspicious_hostname_opts(host, false);
             assert!(
                 !d.whole_script_confusable,
                 "{host:?} must not be whole-script-confusable, got {:?}",
@@ -370,7 +398,8 @@ mod tests {
         // (signal-identical to а spoof; only a caller-supplied protected-name list can
         // separate them). Pinned deliberately. The caller's `wsc(non-TLD) ∧ latin-TLD`
         // policy still clears the full domain because the `.рф` TLD is Cyrillic.
-        let (_, d) = is_suspicious_hostname("\u{043E}\u{0441}\u{0430}.\u{0440}\u{0444}");
+        let (_, d) =
+            is_suspicious_hostname_opts("\u{043E}\u{0441}\u{0430}.\u{0440}\u{0444}", false);
         assert_eq!(d.label_whole_script_confusable, vec![true, false]);
         assert!(d.whole_script_confusable);
         assert!(!d.mixed_script);
@@ -382,8 +411,10 @@ mod tests {
         // whole-script-confusable, but the documented caller policy `wsc(non-TLD) ∧
         // latin-TLD` does NOT flag it — correctly, since it is not claiming to be a
         // Latin-web brand. A documented policy choice, verified here.
-        let (_, d) =
-            is_suspicious_hostname("\u{0430}\u{0440}\u{0440}\u{04CF}\u{0435}.\u{0440}\u{0444}");
+        let (_, d) = is_suspicious_hostname_opts(
+            "\u{0430}\u{0440}\u{0440}\u{04CF}\u{0435}.\u{0440}\u{0444}",
+            false,
+        );
         assert!(d.label_whole_script_confusable[0]);
         // The TLD label `рф` is not Latin, so a `wsc(non-TLD) ∧ latin-TLD` caller
         // policy evaluates false even though the field is set.
@@ -397,7 +428,7 @@ mod tests {
         // report not-suspicious, because the old rule only flagged Latin-paired
         // high-risk combinations. The conservative policy now flags any
         // mixed-script label as suspicious.
-        let (suspicious, details) = is_suspicious_hostname("\u{044F}\u{03C8}.com");
+        let (suspicious, details) = is_suspicious_hostname_opts("\u{044F}\u{03C8}.com", false);
         assert!(suspicious, "mixed Cyrillic+Greek label must be suspicious");
         assert!(details.mixed_script);
         // The mixed-script rule — not the confusable check — is what catches
@@ -417,7 +448,7 @@ mod tests {
         // label, not a homoglyph spoof, so it is correctly reported
         // not-suspicious. The point of #63 is that the label is now *decoded and
         // analysed*, not that every xn-- label is flagged.
-        let (suspicious, _) = is_suspicious_hostname("xn--n3h.com");
+        let (suspicious, _) = is_suspicious_hostname_opts("xn--n3h.com", false);
         assert!(!suspicious);
     }
 
@@ -433,7 +464,7 @@ mod tests {
             "expected an xn-- label, got {ace:?}"
         );
         let hostname = format!("{ace}.com");
-        let (suspicious, details) = is_suspicious_hostname(&hostname);
+        let (suspicious, details) = is_suspicious_hostname_opts(&hostname, false);
         assert!(
             suspicious,
             "Cyrillic homograph in ACE form {hostname:?} must be suspicious"
@@ -443,7 +474,7 @@ mod tests {
 
     #[test]
     fn test_ipv6_loopback_not_suspicious() {
-        let (suspicious, details) = is_suspicious_hostname("[::1]");
+        let (suspicious, details) = is_suspicious_hostname_opts("[::1]", false);
         assert!(!suspicious);
         assert!(!details.mixed_script);
         assert!(!details.has_confusables);
@@ -451,7 +482,7 @@ mod tests {
 
     #[test]
     fn test_ipv6_full_not_suspicious() {
-        let (suspicious, details) = is_suspicious_hostname("[2001:db8::1]");
+        let (suspicious, details) = is_suspicious_hostname_opts("[2001:db8::1]", false);
         assert!(!suspicious);
         assert!(details.scripts.is_empty());
     }
@@ -464,7 +495,7 @@ mod tests {
         // the BiDi-Swap shape. mixed_script stays false (each label is single
         // script), but bidi_conflict fires and drives suspicious=true.
         let (suspicious, d) =
-            is_suspicious_hostname("varonis.com.\u{05D5}.\u{05E7}\u{05D5}\u{05DD}");
+            is_suspicious_hostname_opts("varonis.com.\u{05D5}.\u{05E7}\u{05D5}\u{05DD}", false);
         assert!(suspicious);
         assert!(
             d.bidi_conflict,
@@ -480,7 +511,7 @@ mod tests {
     #[test]
     fn test_bidi_conflict_intra_label() {
         // The intra-label case: "varonisו.com" — one label mixes Latin + Hebrew.
-        let (suspicious, d) = is_suspicious_hostname("varonis\u{05D5}.com");
+        let (suspicious, d) = is_suspicious_hostname_opts("varonis\u{05D5}.com", false);
         assert!(suspicious);
         assert!(d.bidi_conflict);
     }
@@ -490,7 +521,7 @@ mod tests {
         // "google.рф": Latin label under a Cyrillic ccTLD. Both scripts are LTR,
         // so there is NO direction conflict (cross_label_script is true but does
         // not flip suspicious on its own).
-        let (_, d) = is_suspicious_hostname("google.\u{0440}\u{0444}");
+        let (_, d) = is_suspicious_hostname_opts("google.\u{0440}\u{0444}", false);
         assert!(!d.bidi_conflict);
         assert!(d.cross_label_script);
     }
@@ -499,14 +530,15 @@ mod tests {
     fn test_all_rtl_hostname_no_direction_conflict() {
         // "אתר.קום": a legitimately all-Hebrew domain — single direction (RTL),
         // so bidi_conflict is false and cross_label_script is false.
-        let (_, d) = is_suspicious_hostname("\u{05D0}\u{05EA}\u{05E8}.\u{05E7}\u{05D5}\u{05DD}");
+        let (_, d) =
+            is_suspicious_hostname_opts("\u{05D0}\u{05EA}\u{05E8}.\u{05E7}\u{05D5}\u{05DD}", false);
         assert!(!d.bidi_conflict);
         assert!(!d.cross_label_script);
     }
 
     #[test]
     fn test_ascii_hostname_no_new_signals() {
-        let (suspicious, d) = is_suspicious_hostname("example.com");
+        let (suspicious, d) = is_suspicious_hostname_opts("example.com", false);
         assert!(!suspicious);
         assert!(!d.bidi_conflict);
         assert!(!d.cross_label_script);
@@ -520,7 +552,7 @@ mod tests {
     fn test_bidi_conflict_on_decoded_punycode() {
         // xn--9db.xn--9dbq2a decodes to Hebrew ו.קום — all-RTL after decode, so
         // bidi_conflict is false, exactly as for the literal Hebrew form.
-        let (_, d) = is_suspicious_hostname("xn--9db.xn--9dbq2a");
+        let (_, d) = is_suspicious_hostname_opts("xn--9db.xn--9dbq2a", false);
         assert!(!d.bidi_conflict);
     }
 }

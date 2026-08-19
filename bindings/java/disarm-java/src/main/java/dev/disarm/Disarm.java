@@ -299,7 +299,21 @@ public final class Disarm {
      * is the boolean shorthand for {@link HostnameAnalysis#suspicious()}.
      */
     public static HostnameAnalysis analyzeHostname(String host) {
-        return Native.analyzeHostname(Objects.requireNonNull(host, "host"));
+        return analyzeHostname(host, false);
+    }
+
+    /**
+     * Full hostname homoglyph analysis, optionally folding ASCII digraphs that can
+     * impersonate a single letter — {@code rn} to {@code m}, {@code vv} to {@code w},
+     * {@code cl} to {@code d} — into {@code canonical}, so {@code arnazon.com}
+     * canonicalizes to {@code amazon.com} (#562).
+     *
+     * <p><b>Off by default and confined to hostnames.</b> Unconditional contraction is
+     * worse than none: {@code rn} to {@code m} is right for {@code arnazon} and wrong for
+     * {@code earnings}, {@code turnip}, {@code born}.
+     */
+    public static HostnameAnalysis analyzeHostname(String host, boolean contractions) {
+        return Native.analyzeHostname(Objects.requireNonNull(host, "host"), contractions);
     }
 
     /** Whether {@code text} mixes characters from more than one script. */

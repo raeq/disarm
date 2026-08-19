@@ -48,7 +48,7 @@ int main(void) {
     if (!spoof) failures++;
 
     /* Structured report (JSON transport, #553): whole-script spoof аррӏе -> apple. */
-    char *analysis = disarm_analyze_hostname("аррӏе.com");
+    char *analysis = disarm_analyze_hostname("аррӏе.com", false);
     int json_ok = analysis
         && strstr(analysis, "\"canonical\":\"apple.com\"")
         && strstr(analysis, "\"whole_script_confusable\":true");
@@ -119,6 +119,19 @@ int main(void) {
     check("ml_normalize keep case", mlk.value, "Jose Martinez");
     disarm_string_free(mlk.value);
     disarm_string_free(mlk.error);
+
+    /* #562 contraction: off by default, recovers the digraph spoof when enabled. */
+    char *c_off = disarm_analyze_hostname("arnazon.com", false);
+    int c_off_ok = c_off && strstr(c_off, "\"canonical\":\"arnazon.com\"") != NULL;
+    printf("%-28s %-6s\n", "contraction off", c_off_ok ? "OK" : "FAIL");
+    if (!c_off_ok) failures++;
+    disarm_string_free(c_off);
+
+    char *c_on = disarm_analyze_hostname("arnazon.com", true);
+    int c_on_ok = c_on && strstr(c_on, "\"canonical\":\"amazon.com\"") != NULL;
+    printf("%-28s %-6s\n", "contraction on", c_on_ok ? "OK" : "FAIL");
+    if (!c_on_ok) failures++;
+    disarm_string_free(c_on);
 
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");

@@ -452,7 +452,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: BINDING=bindings/java/rust bash scripts/perf_lint.sh
 
-      - uses: actions/setup-java@v4  # pin to a SHA on review (dependabot-managed)
+      - uses: actions/setup-java@v5  # pin to a SHA on review (dependabot-managed)
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}

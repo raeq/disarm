@@ -63,10 +63,92 @@ impl std::str::FromStr for TargetScript {
 /// supported script.
 #[must_use]
 pub fn normalize_confusables(text: &str, target: TargetScript) -> Cow<'_, str> {
-    // The only error path of the Layer-1 fn is an unsupported target *string*;
-    // a `TargetScript` value can never produce one, so this is unreachable.
-    crate::confusables::normalize_confusables_cow(text, target.as_str())
-        .expect("TargetScript always maps to a supported target script")
+    normalize_confusables_with(text, target, DigitPolicy::Numeric)
+}
+
+/// How the fold treats non-Latin **digits** (#561).
+///
+/// disarm and upstream TR39 disagree on ~45 rows, and both readings are defensible. The
+/// divergence used to be fixed in the table with no way to select the other side, which
+/// read as a defect to anyone scoring disarm against a TR39-derived benchmark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum DigitPolicy {
+    /// A non-Latin digit folds to the ASCII **digit** — `०` → `0`. The default, and the
+    /// right reading for prose: a Devanagari zero in running text is a zero, and turning
+    /// it into a letter corrupts the number.
+    #[default]
+    Numeric,
+    /// Upstream TR39's targets, which fold several digits to a Latin **letter** — `०` →
+    /// `o`, `೦` → `O`, `١` → `l`. Correct for an identifier *skeleton*, whose only job is
+    /// to make two confusable identifiers collide; it does not care whether the collision
+    /// target reads sensibly. Select this when comparing against a TR39-derived benchmark.
+    Tr39,
+}
+
+impl DigitPolicy {
+    /// The canonical token (`"numeric"` / `"tr39"`) the bindings pass across the boundary.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DigitPolicy::Numeric => "numeric",
+            DigitPolicy::Tr39 => "tr39",
+        }
+    }
+}
+
+impl std::str::FromStr for DigitPolicy {
+    type Err = Error;
+
+    /// Parse `"numeric"` / `"tr39"`.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "numeric" => Ok(Self::Numeric),
+            "tr39" => Ok(Self::Tr39),
+            _ => Err(Error::from(crate::ErrorRepr::InvalidDigitPolicy {
+                got: s.to_owned(),
+            })),
+        }
+    }
+}
+
+impl std::fmt::Display for DigitPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// [`normalize_confusables`] with an explicit [`DigitPolicy`].
+///
+/// Kept as a separate entry point rather than a third parameter on
+/// [`normalize_confusables`]: that function is the crate's most-used security primitive,
+/// and the policy is a rarely-exercised option, so widening it would tax every call site
+/// for something almost none of them set.
+///
+/// ```
+/// use disarm::api::{normalize_confusables_with, DigitPolicy, TargetScript};
+///
+/// // Devanagari zeros. Numeric keeps the number; tr39 makes the skeleton collide.
+/// let spoof = "g\u{0966}\u{0966}gle";
+/// assert_eq!(
+///     normalize_confusables_with(spoof, TargetScript::Latin, DigitPolicy::Numeric),
+///     "g00gle"
+/// );
+/// assert_eq!(
+///     normalize_confusables_with(spoof, TargetScript::Latin, DigitPolicy::Tr39),
+///     "google"
+/// );
+/// ```
+#[must_use]
+pub fn normalize_confusables_with(
+    text: &str,
+    target: TargetScript,
+    digit_policy: DigitPolicy,
+) -> Cow<'_, str> {
+    // The only error paths of the Layer-1 fn are unsupported target/policy *strings*;
+    // neither enum can produce one, so this is unreachable.
+    crate::confusables::normalize_confusables_cow(text, target.as_str(), digit_policy.as_str())
+        .expect("TargetScript and DigitPolicy always map to supported tokens")
 }
 
 /// True if `text` contains any character confusable with a `target`-script

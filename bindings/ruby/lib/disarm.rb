@@ -54,8 +54,15 @@ module Disarm
     end
 
     # Fold cross-script confusables toward `target:` (:latin or :cyrillic).
-    def normalize_confusables(text, target: :latin)
-      translate_errors { _normalize_confusables(text, target.to_s) }
+    #
+    # `digit_policy:` selects how non-Latin DIGITS fold (#561). `:numeric` (default)
+    # sends them to the ASCII digit — `०` becomes `0` — which is right for prose, where
+    # a Devanagari zero really is a zero. `:tr39` uses upstream's targets, which send
+    # several to a Latin letter (`०` → `o`); that is what an identifier *skeleton*
+    # wants, since its only job is to make two confusable identifiers collide. The two
+    # differ on ~45 rows and agree everywhere else.
+    def normalize_confusables(text, target: :latin, digit_policy: :numeric)
+      translate_errors { _normalize_confusables(text, target.to_s, digit_policy.to_s) }
     end
 
     # Whether `text` contains a character confusable with `target:` (:latin or

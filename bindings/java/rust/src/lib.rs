@@ -395,16 +395,23 @@ pub fn normalizeConfusables<'l>(
     _class: JClass<'l>,
     input: JString<'l>,
     target: JString<'l>,
+    digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
         let text = input.mutf8_chars(env)?.to_string();
         let target = target.mutf8_chars(env)?.to_string();
-        match target.parse::<api::TargetScript>() {
-            Ok(target) => Ok(env
-                .new_string(api::normalize_confusables(&text, target).as_ref())?
-                .into()),
-            Err(e) => Err(throw_core(env, &e)),
-        }
+        let digit_policy = digit_policy.mutf8_chars(env)?.to_string();
+        let target = match target.parse::<api::TargetScript>() {
+            Ok(t) => t,
+            Err(e) => return Err(throw_core(env, &e)),
+        };
+        let digit_policy = match digit_policy.parse::<api::DigitPolicy>() {
+            Ok(d) => d,
+            Err(e) => return Err(throw_core(env, &e)),
+        };
+        Ok(env
+            .new_string(api::normalize_confusables_with(&text, target, digit_policy).as_ref())?
+            .into())
     })
     .resolve::<Policy>()
 }

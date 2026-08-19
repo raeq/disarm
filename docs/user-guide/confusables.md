@@ -133,6 +133,38 @@ the bundle, not of confusable mapping. See
 [what each entry point costs you](../security/adversarial-defense.md#what-each-entry-point-costs-you)
 for the full threat-model-to-entry-point table.
 
+### Digit policy
+
+disarm folds a non-Latin digit to the ASCII **digit**; upstream TR39 folds several of them
+to a Latin **letter** — `०` to `o`, `೦` to `O`, `١` to `l`. Neither is wrong. disarm's
+reading is right for prose, where a Devanagari zero really is a zero and folding it to a
+letter corrupts the number. TR39's is right for an identifier *skeleton*, whose only job
+is to make two confusable identifiers collide; it does not care whether the collision
+target reads sensibly.
+
+The two differ on about 45 rows and agree on everything else. Reach for `tr39` when
+comparing against a TR39-derived benchmark, and leave the default alone for text.
+
+```python
+from disarm import normalize_confusables
+
+# Devanagari zeros. Numeric keeps the number; tr39 makes the skeleton collide.
+assert normalize_confusables("g००gle") == "g00gle"
+assert normalize_confusables("g००gle", digit_policy="tr39") == "google"
+
+# Arabic-Indic 5 and 0: the number 50, or the skeleton "o."
+assert normalize_confusables("٥٠") == "50"
+assert normalize_confusables("٥٠", digit_policy="tr39") == "o."
+
+# Everything outside those rows is identical under both.
+assert normalize_confusables("pаypal", digit_policy="tr39") == "paypal"
+```
+
+The presets (`canonicalize`, `catalog_key`, `search_key`, …) have no such switch and
+always fold numerically: they serve prose and keys, where the numeric reading is
+unambiguously right. Hostname analysis is likewise unaffected — changing the skeleton it
+compares against would silently change what `is_suspicious_hostname` flags.
+
 ### Target script
 
 By default, confusables are normalized to Latin. You can specify a different target script to normalize *towards* that script instead:

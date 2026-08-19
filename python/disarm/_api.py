@@ -699,6 +699,7 @@ def normalize_confusables(
     text: str,
     *,
     target_script: str = "latin",
+    digit_policy: str = "numeric",
 ) -> str:
     """Replace Unicode confusable homoglyphs with target-script equivalents.
 
@@ -711,12 +712,24 @@ def normalize_confusables(
         target_script: Script to normalize toward. Supported values:
             ``"latin"`` (default, ~2,063 mappings) and ``"cyrillic"``
             (~1,369 mappings).
+        digit_policy: How non-Latin **digits** fold (#561).
+
+            ``"numeric"`` (default) sends them to the ASCII digit — ``०`` becomes
+            ``0`` — which is the right reading for prose, where a Devanagari zero
+            really is a zero and folding it to a letter corrupts the number.
+
+            ``"tr39"`` uses upstream's targets, which send several digits to a Latin
+            *letter* (``०`` → ``o``, ``೦`` → ``O``, ``١`` → ``l``). That is what an
+            identifier *skeleton* wants: its only job is to make two confusable
+            identifiers collide, and it does not care whether the collision target
+            reads sensibly. Reach for it when comparing against a TR39-derived
+            benchmark. The two policies differ on ~45 rows and agree everywhere else.
 
     Returns:
         String with confusable characters replaced by target-script equivalents.
 
     Raises:
-        DisarmError: If *target_script* is not a supported value.
+        DisarmError: If *target_script* or *digit_policy* is not a supported value.
 
     Examples:
         >>> normalize_confusables("Ηello")  # Greek Η looks like Latin H
@@ -725,10 +738,14 @@ def normalize_confusables(
         'paypal'
         >>> normalize_confusables("paypal", target_script="cyrillic")
         'раура\u04cf'
+        >>> normalize_confusables("g००gle")  # Devanagari zeros stay numeric
+        'g00gle'
+        >>> normalize_confusables("g००gle", digit_policy="tr39")  # …or collide
+        'google'
     """
     if not isinstance(text, str):
         raise TypeError(f"normalize_confusables() expects str, got {type(text).__name__}")
-    return _normalize_confusables(text, target_script=target_script)
+    return _normalize_confusables(text, target_script=target_script, digit_policy=digit_policy)
 
 
 def sanitize_filename(

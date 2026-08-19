@@ -205,9 +205,14 @@ fn transliterate_opts(
 // ── Confusables (TR39) ────────────────────────────────────────────────────────
 
 /// `Disarm._normalize_confusables(text, "latin" | "cyrillic")`.
-fn normalize_confusables(text: Wtf8Text, target: String) -> Result<String, Error> {
+fn normalize_confusables(
+    text: Wtf8Text,
+    target: String,
+    digit_policy: String,
+) -> Result<String, Error> {
     let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
-    Ok(api::normalize_confusables(&text, target).into_owned())
+    let digit_policy: api::DigitPolicy = digit_policy.parse().map_err(|e| map_err(&e))?;
+    Ok(api::normalize_confusables_with(&text, target, digit_policy).into_owned())
 }
 
 /// `Disarm._confusable?(text, "latin" | "cyrillic")`.
@@ -740,7 +745,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_transliterate_opts", function!(transliterate_opts, 3))?;
     module.define_singleton_method(
         "_normalize_confusables",
-        function!(normalize_confusables, 2),
+        function!(normalize_confusables, 3),
     )?;
     module.define_singleton_method("_confusable?", function!(is_confusable, 2))?;
     module.define_singleton_method("_slugify", function!(slugify, 13))?;

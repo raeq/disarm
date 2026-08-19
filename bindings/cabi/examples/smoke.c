@@ -98,6 +98,17 @@ int main(void) {
     disarm_string_free(scan.value);
     disarm_string_free(scan.error);
 
+    /* #561 digit policy: Devanagari zeros stay numeric by default, collide under tr39. */
+    DisarmResult_t dn = disarm_normalize_confusables("g\xe0\xa5\xa6\xe0\xa5\xa6gle", "latin", "numeric");
+    check("digit policy numeric", dn.value, "g00gle");
+    disarm_string_free(dn.value);
+    disarm_string_free(dn.error);
+
+    DisarmResult_t dt = disarm_normalize_confusables("g\xe0\xa5\xa6\xe0\xa5\xa6gle", "latin", "tr39");
+    check("digit policy tr39", dt.value, "google");
+    disarm_string_free(dt.value);
+    disarm_string_free(dt.error);
+
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");
         return 0;

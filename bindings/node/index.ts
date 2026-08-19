@@ -109,6 +109,15 @@ function call<T>(fn: () => T): T {
 export type Scheme = 'default' | 'strict_iso9' | 'gost7034'
 /** Confusable-folding target script. */
 export type TargetScript = 'latin' | 'cyrillic'
+
+/**
+ * How the fold treats non-Latin digits.
+ *
+ * `'numeric'` (default) sends them to the ASCII digit — `०` becomes `0` — which is right
+ * for prose. `'tr39'` uses upstream's targets, which send several to a Latin letter
+ * (`०` → `o`), which is what an identifier *skeleton* wants. They differ on ~45 rows.
+ */
+export type DigitPolicy = 'numeric' | 'tr39'
 /** Unicode normalization form. */
 export type NormalizationForm = 'NFC' | 'NFD' | 'NFKC' | 'NFKD'
 /** Filename-safety platform ruleset. */
@@ -153,9 +162,11 @@ export function findUntranslatable(
 /** Fold cross-script confusables toward `target` (default `'latin'`). */
 export function normalizeConfusables(
   text: string,
-  options: { target?: TargetScript } = {},
+  options: { target?: TargetScript; digitPolicy?: DigitPolicy } = {},
 ): string {
-  return call(() => native.normalizeConfusables(text, options.target ?? 'latin'))
+  return call(() =>
+    native.normalizeConfusables(text, options.target ?? 'latin', options.digitPolicy ?? 'numeric'),
+  )
 }
 
 /** Whether `text` contains a character confusable with `target` (default `'latin'`). */

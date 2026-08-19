@@ -25,12 +25,25 @@ include!(concat!(env!("OUT_DIR"), "/confusables_to_cyrillic_phf.rs"));
 // from the TSV header by build.rs rather than typed here a second time.
 include!(concat!(env!("OUT_DIR"), "/confusables_version.rs"));
 
+// Digit-policy overrides (#561): TR39's target for the rows where disarm diverges.
+include!(concat!(env!("OUT_DIR"), "/confusables_digit_tr39_phf.rs"));
+
 // Every source codepoint in the upstream confusables.txt (#563). The coverage
 // denominator — see `unmapped_sources`.
 include!(concat!(
     env!("OUT_DIR"),
     "/confusables_upstream_sources_phf.rs"
 ));
+
+/// TR39's target for `ch`, when disarm's own table diverges from it on digit policy
+/// (#561). `None` means the two agree and the main table's value stands.
+///
+/// Consulted only under `digit_policy = "tr39"`; the default numeric policy never reaches
+/// this map, so it costs nothing on the common path.
+#[inline]
+pub fn digit_tr39_override(ch: char) -> Option<&'static str> {
+    DIGIT_TR39.get(&ch).copied()
+}
 
 /// True if `ch` is a confusable **source** in the bundled upstream `confusables.txt`,
 /// whether or not disarm's tables fold it (#563).

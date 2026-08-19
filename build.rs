@@ -157,6 +157,28 @@ fn main() {
         .unwrap();
     }
 
+    // --- Digit-policy overrides (#561) ---
+    // The rows where disarm folds a non-Latin digit to the ASCII DIGIT and TR39 folds it
+    // to a letter. An override SET, not a second table: the two policies agree on every
+    // other row, so shipping one table plus ~45 overrides makes it impossible for them to
+    // drift where they agree.
+    {
+        let entries = read_char_str_tsv(&data_dir.join("confusables_digit_tr39.tsv"));
+        assert!(
+            !entries.is_empty(),
+            "confusables_digit_tr39.tsv: expected ≥1 override, got 0 — \
+             regenerate with scripts/gen_confusables.py"
+        );
+        for (&cp, value) in &entries {
+            assert!(
+                !value.is_empty(),
+                "confusables_digit_tr39.tsv: empty target for U+{cp:04X}"
+            );
+        }
+        let code = build_char_str_map(&entries, "DIGIT_TR39", "");
+        fs::write(out_dir.join("confusables_digit_tr39_phf.rs"), code).unwrap();
+    }
+
     // --- Upstream confusable sources (coverage introspection, #563) ---
     // Every SOURCE codepoint in the bundled upstream `confusables.txt` — the
     // denominator for "which confusables does disarm not fold?". Not a mapping: the

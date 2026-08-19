@@ -143,9 +143,14 @@ pub struct Untranslatable {
 
 /// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"`).
 #[napi]
-pub fn normalize_confusables(text: String, target: String) -> Result<String, NapiError> {
+pub fn normalize_confusables(
+    text: String,
+    target: String,
+    digit_policy: String,
+) -> Result<String, NapiError> {
     let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
-    Ok(api::normalize_confusables(&text, target).into_owned())
+    let digit_policy: api::DigitPolicy = digit_policy.parse().map_err(|e| map_err(&e))?;
+    Ok(api::normalize_confusables_with(&text, target, digit_policy).into_owned())
 }
 
 /// Whether `text` contains a character confusable with `target`.

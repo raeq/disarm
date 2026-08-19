@@ -109,11 +109,20 @@ fn build_transliterate(
 
 /// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"`).
 #[ffi_export]
-fn disarm_normalize_confusables(text: char_p::Ref<'_>, target: char_p::Ref<'_>) -> DisarmResult {
-    match target.to_str().parse::<api::TargetScript>() {
-        Ok(t) => ok(api::normalize_confusables(text.to_str(), t).into_owned()),
-        Err(e) => err(&e),
-    }
+fn disarm_normalize_confusables(
+    text: char_p::Ref<'_>,
+    target: char_p::Ref<'_>,
+    digit_policy: char_p::Ref<'_>,
+) -> DisarmResult {
+    let target = match target.to_str().parse::<api::TargetScript>() {
+        Ok(t) => t,
+        Err(e) => return err(&e),
+    };
+    let digit_policy = match digit_policy.to_str().parse::<api::DigitPolicy>() {
+        Ok(d) => d,
+        Err(e) => return err(&e),
+    };
+    ok(api::normalize_confusables_with(text.to_str(), target, digit_policy).into_owned())
 }
 
 /// Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.

@@ -16,6 +16,41 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Added
+
+- **Selectable digit-mapping policy (#561).** disarm folds a non-Latin digit to the ASCII
+  **digit**; upstream TR39 folds several of them to a Latin **letter** (`०` → `o`, `೦` →
+  `O`, `١` → `l`). Neither is wrong — numeric is right for prose, where a Devanagari zero
+  really is a zero, and the letter is right for an identifier *skeleton*, whose only job
+  is to make two confusable identifiers collide. The divergence was fixed in the table
+  with no way to select the other side, so it read as a defect to anyone scoring disarm
+  against a TR39-derived benchmark and cost points silently.
+
+  `digit_policy` now selects it: `"numeric"` (default, unchanged behaviour) or `"tr39"`.
+  Reaches Python (`normalize_confusables(..., digit_policy=…)` and `Text`), Rust
+  (`api::normalize_confusables_with` + the `DigitPolicy` enum), Node (`digitPolicy`
+  option), Ruby (`digit_policy:` keyword), Java/Kotlin (`DigitPolicy` enum), and the
+  C ABI.
+
+  The Rust surface adds a *second function* rather than a third parameter on
+  `normalize_confusables`: that is the crate's most-used security primitive and the policy
+  is rarely set, so widening it would tax every call site for something almost none of
+  them need. `normalize_confusables(text, target)` is unchanged.
+
+  The divergent rows are **generated**, not hand-maintained:
+  `scripts/gen_confusables.py` already computes both sides — it makes this exact choice at
+  generation time via `enforce_digit_target` (#439) — so the discarded alternative is now
+  emitted as `src/tables/data/confusables_digit_tr39.tsv` (45 rows) and build.rs turns it
+  into an override PHF. An override *set* rather than a second full table, so the two
+  policies cannot drift on the rows they agree on, which is all but 45 of them.
+
+  Scope: the policy is a property of the `normalize_confusables` entry point only. The
+  presets (`canonicalize`, `catalog_key`, `search_key`, …) serve prose and keys, where
+  numeric is unambiguously right, so they have no switch. Hostname analysis also stays
+  numeric — selecting TR39 there would silently change what `is_suspicious_hostname`
+  flags, which is a security-behaviour change and belongs in its own issue.
+
+
 ### Fixed
 
 - **16 confusable rows the generator was silently dropping (#558).**

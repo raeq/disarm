@@ -51,11 +51,25 @@ public final class Disarm {
 
     // ── Confusables ────────────────────────────────────────────────────────────
 
-    /** Fold cross-script confusables toward {@code target}. */
+    /** Fold cross-script confusables toward {@code target}, with the numeric digit policy. */
     public static String normalizeConfusables(String text, TargetScript target) {
+        return normalizeConfusables(text, target, DigitPolicy.NUMERIC);
+    }
+
+    /**
+     * Fold cross-script confusables toward {@code target}, choosing how non-Latin digits
+     * fold.
+     *
+     * <p>{@link DigitPolicy#NUMERIC} is right for prose; {@link DigitPolicy#TR39} is what
+     * an identifier skeleton wants. The two differ on about 45 rows and agree everywhere
+     * else.
+     */
+    public static String normalizeConfusables(
+            String text, TargetScript target, DigitPolicy digitPolicy) {
         req(text);
         Objects.requireNonNull(target, "target");
-        return Native.normalizeConfusables(text, target.token());
+        Objects.requireNonNull(digitPolicy, "digitPolicy");
+        return Native.normalizeConfusables(text, target.token(), digitPolicy.token());
     }
 
     /** Whether {@code text} contains a character confusable with {@code target}. */

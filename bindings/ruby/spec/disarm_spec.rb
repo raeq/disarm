@@ -344,6 +344,20 @@ RSpec.describe Disarm do
       expect(version).to match(/\A\d+(\.\d+)+\z/)
     end
 
+    it "selects the digit reading via digit_policy" do
+      expect(Disarm.normalize_confusables("g\u{0966}\u{0966}gle")).to eq("g00gle")
+      expect(
+        Disarm.normalize_confusables("g\u{0966}\u{0966}gle", digit_policy: :tr39)
+      ).to eq("google")
+      expect(Disarm.normalize_confusables("p\u{0430}ypal", digit_policy: :tr39)).to eq("paypal")
+    end
+
+    it "raises on a bad digit_policy" do
+      expect do
+        Disarm.normalize_confusables("x", digit_policy: :skeleton)
+      end.to raise_error(Disarm::InvalidArgument)
+    end
+
     it "reports unfolded confusable sources as exposure" do
       unmapped = Disarm.unmapped_confusables
       expect(unmapped.size).to be > 1000

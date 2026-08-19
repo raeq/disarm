@@ -132,6 +132,18 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void digitPolicySelectsTheDigitReading() {
+        String spoof = "g\u0966\u0966gle";
+        assertEquals("g00gle", Disarm.normalizeConfusables(spoof, TargetScript.LATIN));
+        assertEquals(
+                "google",
+                Disarm.normalizeConfusables(spoof, TargetScript.LATIN, DigitPolicy.TR39));
+        assertEquals(
+                "paypal",
+                Disarm.normalizeConfusables("p\u0430ypal", TargetScript.LATIN, DigitPolicy.TR39));
+    }
+
+    @Test
     void unmappedConfusablesReportsExposure() {
         List<String> unmapped = Disarm.unmappedConfusables(TargetScript.LATIN);
         assertTrue(unmapped.size() > 1000, String.valueOf(unmapped.size()));

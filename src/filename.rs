@@ -188,6 +188,29 @@ pub(crate) fn sanitize_filename(
     // reintroduce ".." sequences after transliteration.
     let transliterated = collapse_dot_sequences(&transliterated);
 
+    // #570: trim trailing dots and spaces BEFORE choosing the extension boundary.
+    //
+    // `finalize_name` trims them off the *assembled* name at the end, which is too late:
+    // the split below takes the LAST dot, so a trailing `.` becomes the "extension" and
+    // an earlier dot stays inside the stem. Once `finalize_name` removes that trailing
+    // dot, a second call splits at the earlier dot instead — and a separator that had
+    // been mid-stem is now stem-trailing, where the trailing-separator rule strips it.
+    // `sanitize_filename("a*.b.")` gave "a_.b", then "a.b". Two systems that sanitize a
+    // different number of times derived different names from one input, defeating dedup.
+    //
+    // Trimming here makes the boundary the split sees the same one the output will have,
+    // so the first pass already lands on the fixed point. `finalize_name` still runs and
+    // is still needed — the extension branch re-prepends `'.'` and can reintroduce a
+    // trailing dot (a bare `"."` extension), and it owns the empty / "." / ".." fallback.
+    let transliterated = {
+        let trimmed = transliterated.trim_end_matches(['.', ' ']);
+        if trimmed.len() == transliterated.len() {
+            transliterated
+        } else {
+            trimmed.to_owned()
+        }
+    };
+
     // Split extension if preserving
     let (stem, ext) = if preserve_extension {
         match transliterated.rfind('.') {
@@ -340,6 +363,51 @@ mod tests {
     #[test]
     fn test_collapse_no_dots() {
         assert_eq!(collapse_dot_sequences("hello world"), "hello world");
+    }
+
+    /// #570: the first pass must already be the fixed point.
+    ///
+    /// The trailing-dot trim used to run in `finalize_name`, after the extension split it
+    /// invalidates: `"a*.b."` split at the LAST dot (stem `a*.b`, ext `.`), the trim then
+    /// removed that dot, and a second call split at the earlier dot instead — turning a
+    /// mid-stem separator into a stem-trailing one, which then got stripped.
+    #[test]
+    fn sanitize_filename_first_pass_is_the_fixed_point() {
+        let f = |s: &str| sanitize_filename(s, "_", 255, "universal", None, true).unwrap();
+        for input in [
+            "a*.b.",        // literal trailing dot
+            "a*.b..",       // two of them
+            "0*.0\u{00B7}", // middle dot transliterates to '.'
+            "a*.b\u{2026}", // ellipsis transliterates to '...'
+            "ab*.c.",
+            "x<.y\u{00B7}",
+            "a?.b.",
+        ] {
+            let once = f(input);
+            let twice = f(&once);
+            assert_eq!(twice, once, "not idempotent for {input:?}");
+        }
+    }
+
+    /// Cases that were already stable must stay stable — several of them were wrongly
+    /// described as broken when the issue was first filed.
+    #[test]
+    fn sanitize_filename_stable_cases_unchanged_by_570() {
+        let f = |s: &str| sanitize_filename(s, "_", 255, "universal", None, true).unwrap();
+        assert_eq!(f("0*.0"), "0.0");
+        assert_eq!(f("a*.b"), "a.b");
+        assert_eq!(f("a_.b"), "a.b");
+        assert_eq!(f("a*b\u{00B7}"), "a_b");
+        assert_eq!(f("*.b."), "b");
+    }
+
+    /// The reported falsifying example, pinned by value.
+    #[test]
+    fn sanitize_filename_570_repro() {
+        assert_eq!(
+            sanitize_filename("0*.0\u{00B7}", "_", 255, "universal", None, true).unwrap(),
+            "0.0"
+        );
     }
 
     #[test]

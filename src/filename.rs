@@ -203,12 +203,12 @@ pub(crate) fn sanitize_filename(
     // is still needed — the extension branch re-prepends `'.'` and can reintroduce a
     // trailing dot (a bare `"."` extension), and it owns the empty / "." / ".." fallback.
     let transliterated = {
-        let trimmed = transliterated.trim_end_matches(['.', ' ']);
-        if trimmed.len() == transliterated.len() {
-            transliterated
-        } else {
-            trimmed.to_owned()
-        }
+        // Truncate in place rather than re-owning the trimmed slice: the trim only ever
+        // shortens, so there is no reason to allocate a second String for it.
+        let mut owned = transliterated;
+        let keep = owned.trim_end_matches(['.', ' ']).len();
+        owned.truncate(keep);
+        owned
     };
 
     // Split extension if preserving

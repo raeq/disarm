@@ -4,6 +4,7 @@ package dev.disarm.kotlin
 
 import dev.disarm.AnomalyReport
 import dev.disarm.AutoLangInspection
+import dev.disarm.DigitPolicy
 import dev.disarm.HostnameAnalysis
 import dev.disarm.LangMeta
 import dev.disarm.Lexicon
@@ -52,7 +53,10 @@ fun String.findUntranslatable(scheme: Scheme = Scheme.DEFAULT, lang: String? = n
 
 // ── Confusables ─────────────────────────────────────────────────────────────────
 
-fun String.normalizeConfusables(target: TargetScript): String = JDisarm.normalizeConfusables(this, target)
+fun String.normalizeConfusables(
+    target: TargetScript,
+    digitPolicy: DigitPolicy = DigitPolicy.NUMERIC,
+): String = JDisarm.normalizeConfusables(this, target, digitPolicy)
 
 fun String.isConfusable(target: TargetScript): Boolean = JDisarm.isConfusable(this, target)
 

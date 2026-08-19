@@ -247,6 +247,12 @@ operations:
       python: normalize_confusables
       ruby: normalize_confusables
       node: normalizeConfusables
+  - id: normalize_confusables_with
+    names:
+      rust: normalize_confusables_with
+      python: null
+      ruby: null
+      node: null
   - id: normalize_user_input
     names:
       rust: normalize_user_input

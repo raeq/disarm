@@ -38,7 +38,8 @@ public final class Native {
     public static native String reverseTransliterate(String text, String lang);
 
     // ── Confusables ────────────────────────────────────────────────────────────
-    public static native String normalizeConfusables(String text, String target);
+    public static native String normalizeConfusables(
+            String text, String target, String digitPolicy);
 
     public static native boolean isConfusable(String text, String target);
 

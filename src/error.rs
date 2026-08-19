@@ -104,6 +104,13 @@ pub(crate) enum ErrorRepr {
         got: String,
     },
 
+    /// Invalid `digit_policy` for confusables functions (#561).
+    #[error("digit_policy must be 'numeric' or 'tr39', got '{got}'")]
+    InvalidDigitPolicy {
+        /// The offending value.
+        got: String,
+    },
+
     /// Invalid transliteration scheme string (`Scheme::from_str`, #352).
     #[error("scheme must be 'default', 'strict_iso9', or 'gost7034', got '{got}'")]
     InvalidScheme {
@@ -453,6 +460,7 @@ impl ErrorRepr {
             ErrorRepr::InvalidEmojiStyle { .. } => "invalid_emoji_style",
             ErrorRepr::InvalidPlatform { .. } => "invalid_platform",
             ErrorRepr::InvalidTargetScript { .. } => "invalid_target_script",
+            ErrorRepr::InvalidDigitPolicy { .. } => "invalid_digit_policy",
             ErrorRepr::InvalidScheme { .. } => "invalid_scheme",
             ErrorRepr::InvalidUrlComponent { .. } => "invalid_url_component",
             ErrorRepr::InvalidReverseLang { .. } => "invalid_reverse_lang",
@@ -552,6 +560,7 @@ impl From<ErrorRepr> for pyo3::PyErr {
             | ErrorRepr::InvalidEmojiStyle { .. }
             | ErrorRepr::InvalidPlatform { .. }
             | ErrorRepr::InvalidTargetScript { .. }
+            | ErrorRepr::InvalidDigitPolicy { .. }
             | ErrorRepr::InvalidScheme { .. }
             | ErrorRepr::InvalidUrlComponent { .. }
             | ErrorRepr::InvalidReverseLang { .. }
@@ -651,6 +660,7 @@ impl Error {
             | ErrorRepr::InvalidEmojiStyle { .. }
             | ErrorRepr::InvalidPlatform { .. }
             | ErrorRepr::InvalidTargetScript { .. }
+            | ErrorRepr::InvalidDigitPolicy { .. }
             | ErrorRepr::InvalidScheme { .. }
             | ErrorRepr::InvalidUrlComponent { .. }
             | ErrorRepr::InvalidReverseLang { .. }

@@ -9,11 +9,16 @@ use pyo3::prelude::*;
 
 /// Replace Unicode confusable homoglyphs with target-script equivalents.
 #[pyfunction]
-#[pyo3(signature = (text, *, target_script="latin"))]
-pub fn _normalize_confusables(text: &str, target_script: &str) -> PyResult<String> {
+#[pyo3(signature = (text, *, target_script="latin", digit_policy="numeric"))]
+pub fn _normalize_confusables(
+    text: &str,
+    target_script: &str,
+    digit_policy: &str,
+) -> PyResult<String> {
     Ok(crate::confusables::normalize_confusables(
         text,
         target_script,
+        digit_policy,
     )?)
 }
 

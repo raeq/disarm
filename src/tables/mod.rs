@@ -445,6 +445,13 @@ pub fn resolve_confusable_map(
     confusables_data::resolve_map(target_script)
 }
 
+/// TR39's target for `ch` where disarm's digit policy diverges (#561); `None` when the
+/// two agree.
+#[inline]
+pub fn confusable_digit_tr39_override(ch: char) -> Option<&'static str> {
+    confusables_data::digit_tr39_override(ch)
+}
+
 /// True if `ch` is a confusable source in the bundled upstream `confusables.txt`,
 /// whether or not disarm's tables fold it (#563).
 #[inline]

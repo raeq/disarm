@@ -265,6 +265,16 @@ describe('metadata introspection (#404)', () => {
     expect(typeof v).toBe('string')
     expect(v).toMatch(/^\d+(\.\d+)+$/)
   })
+  test('normalizeConfusables digitPolicy selects the digit reading', () => {
+    // Devanagari zeros: numeric keeps the number, tr39 makes the skeleton collide.
+    expect(disarm.normalizeConfusables('g\u0966\u0966gle')).toBe('g00gle')
+    expect(disarm.normalizeConfusables('g\u0966\u0966gle', { digitPolicy: 'tr39' })).toBe('google')
+    // Everything outside the ~45 divergent rows is identical under both.
+    expect(disarm.normalizeConfusables('p\u0430ypal', { digitPolicy: 'tr39' })).toBe('paypal')
+  })
+  test('normalizeConfusables rejects a bad digitPolicy', () => {
+    expect(() => disarm.normalizeConfusables('x', { digitPolicy: 'skeleton' })).toThrow()
+  })
   test('unmappedConfusables reports exposure, not coverage', () => {
     const unmapped = disarm.unmappedConfusables()
     expect(unmapped.size).toBeGreaterThan(1000)

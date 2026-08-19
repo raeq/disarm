@@ -434,6 +434,23 @@ additions, so they are a superset of the named release, not a verbatim snapshot.
 Disarm.confusables_version                         # => "17.0.0"
 ```
 
+### `Disarm.normalize_confusables` — digit policy
+
+disarm folds a non-Latin digit to the ASCII **digit**; upstream TR39 folds several of them
+to a Latin **letter** — `०` to `o`, `೦` to `O`, `١` to `l`. Neither is wrong. disarm's
+reading is right for prose, where a Devanagari zero really is a zero and folding it to a
+letter corrupts the number. TR39's is right for an identifier *skeleton*, whose only job
+is to make two confusable identifiers collide; it does not care whether the collision
+target reads sensibly.
+
+The two differ on about 45 rows and agree on everything else. Reach for `tr39` when
+comparing against a TR39-derived benchmark, and leave the default alone for text.
+
+```ruby
+Disarm.normalize_confusables("g\u{0966}\u{0966}gle")                      # => "g00gle"
+Disarm.normalize_confusables("g\u{0966}\u{0966}gle", digit_policy: :tr39) # => "google"
+```
+
 ### `Disarm.unmapped_confusables` · `Disarm.find_unmapped_confusables`
 
 Coverage is not a score. A tool that folds 95% of known confusable sources is not 95%

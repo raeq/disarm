@@ -114,9 +114,19 @@ class Text:
         """Unicode normalization (NFC, NFD, NFKC, NFKD)."""
         return Text(self._t().normalize(self._value, form=form))
 
-    def normalize_confusables(self, *, target_script: str = "latin") -> Text:
-        """Replace confusable homoglyphs with target-script equivalents."""
-        return Text(self._t().normalize_confusables(self._value, target_script=target_script))
+    def normalize_confusables(
+        self, *, target_script: str = "latin", digit_policy: str = "numeric"
+    ) -> Text:
+        """Replace confusable homoglyphs with target-script equivalents.
+
+        ``digit_policy="tr39"`` selects upstream's digit targets, which fold several
+        non-Latin digits to a Latin letter instead of the ASCII digit (#561).
+        """
+        return Text(
+            self._t().normalize_confusables(
+                self._value, target_script=target_script, digit_policy=digit_policy
+            )
+        )
 
     def strip_accents(self) -> Text:
         """Remove diacritical marks, preserving base characters."""

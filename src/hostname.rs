@@ -202,7 +202,10 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
         // words whose every letter is a confusable (`оса`→`oca`). See the fn docs
         // for the precise `wsc(non-TLD) ∧ Latin-TLD` caller policy.
         let label_wsc = label_scripts.len() == 1 && label_scripts[0] != "Latin" && {
-            let skeleton = confusables::normalize_confusables(&label, "latin")
+            // "numeric" (#561): hostname analysis keeps disarm's digit reading. Selecting
+            // the TR39 policy here would silently change what `is_suspicious_hostname`
+            // flags, which is a security-behaviour change and belongs in its own issue.
+            let skeleton = confusables::normalize_confusables(&label, "latin", "numeric")
                 .unwrap_or_else(|_| label.clone());
             matches!(scripts::detect_scripts(&skeleton).as_slice(), ["Latin"])
         };
@@ -263,8 +266,8 @@ pub(crate) fn is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis)
         suspicious = true;
     }
 
-    let canonical =
-        confusables::normalize_confusables(&decoded_hostname, "latin").unwrap_or(decoded_hostname);
+    let canonical = confusables::normalize_confusables(&decoded_hostname, "latin", "numeric")
+        .unwrap_or(decoded_hostname);
 
     // Aggregate: any label is a whole-script confusable. Graded signal (§545 §5.1);
     // NOT folded into `suspicious`.

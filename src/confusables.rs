@@ -11,6 +11,43 @@
 
 use crate::tables;
 
+/// Validate the `digit_policy` parameter (#561).
+///
+/// `"numeric"` (default) keeps disarm's reading: a non-Latin digit folds to the ASCII
+/// digit, so a number in running prose stays a number. `"tr39"` selects upstream's, which
+/// folds several digits to a Latin letter (Devanagari zero → `o`) — correct for an
+/// identifier skeleton, where the only job is to make two confusable identifiers collide.
+fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
+    match digit_policy {
+        "numeric" | "tr39" => Ok(()),
+        _ => Err(crate::ErrorRepr::InvalidDigitPolicy {
+            got: digit_policy.to_owned(),
+        }),
+    }
+}
+
+/// Resolve one character under the chosen digit policy (#561).
+///
+/// The override map is consulted only under `tr39`. The numeric path therefore costs one
+/// predictable, loop-invariant `bool` test per lookup and never touches the override map
+/// — not literally free, but the branch predicts perfectly and the map probe (the part
+/// that would actually cost something) is skipped entirely. Splitting the fold into two
+/// loops to remove the test was considered and rejected: it duplicates the borrow-on-no-op
+/// logic for a branch that is already free in practice.
+#[inline]
+fn lookup_with_policy(
+    map: Option<&'static phf::Map<char, &'static str>>,
+    ch: char,
+    tr39_digits: bool,
+) -> Option<&'static str> {
+    if tr39_digits {
+        if let Some(over) = crate::tables::confusable_digit_tr39_override(ch) {
+            return Some(over);
+        }
+    }
+    map.and_then(|m| m.get(&ch).copied())
+}
+
 /// Validate the `target_script` parameter.
 ///
 /// Supported values: `"latin"`, `"cyrillic"`.
@@ -49,6 +86,7 @@ fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
 pub(crate) fn normalize_confusables(
     text: &str,
     target_script: &str,
+    digit_policy: &str,
 ) -> Result<String, crate::ErrorRepr> {
     // Delegate to the borrowing form so the no-op fast path is shared by both public
     // entrypoints (M-2): `_cow` borrows-on-no-op, so pure-ASCII / already-folded input
@@ -67,13 +105,13 @@ pub(crate) fn normalize_confusables(
     // idempotency test bounds the pass count. `MAX_PASSES` is a defensive cap far above
     // the observed maximum; `debug_assert` catches any future table change that regresses.
     const MAX_PASSES: usize = 8;
-    let mut cur = match normalize_confusables_cow(text, target_script)? {
+    let mut cur = match normalize_confusables_cow(text, target_script, digit_policy)? {
         // Borrowed ⇒ nothing folded ⇒ the input is already a fixed point (the common case).
         std::borrow::Cow::Borrowed(s) => return Ok(s.to_owned()),
         std::borrow::Cow::Owned(s) => s,
     };
     for _ in 0..MAX_PASSES {
-        match normalize_confusables_cow(&cur, target_script)? {
+        match normalize_confusables_cow(&cur, target_script, digit_policy)? {
             std::borrow::Cow::Borrowed(_) => return Ok(cur),
             std::borrow::Cow::Owned(next) if next == cur => return Ok(cur),
             std::borrow::Cow::Owned(next) => cur = next,
@@ -93,11 +131,15 @@ pub(crate) fn normalize_confusables(
 pub(crate) fn normalize_confusables_cow<'a>(
     text: &'a str,
     target_script: &str,
+    digit_policy: &str,
 ) -> Result<std::borrow::Cow<'a, str>, crate::ErrorRepr> {
     use std::borrow::Cow;
 
     validate_target_script(target_script)?;
+    validate_digit_policy(digit_policy)?;
     let map = tables::resolve_confusable_map(target_script);
+    // Resolved once, not per character: the default path must not pay for the option.
+    let tr39_digits = digit_policy == "tr39";
 
     // #475/#477: a base + combining-mark cluster (or a conjoining Hangul jamo run, #483)
     // must fold as its precomposed form. Compose-at-lookup can only change something when
@@ -111,7 +153,7 @@ pub(crate) fn normalize_confusables_cow<'a>(
     if !text.is_ascii() && crate::compose::needs_composition(text) {
         let mut out = String::with_capacity(text.len());
         for (ch, _) in crate::compose::composed(text) {
-            match map.and_then(|m| m.get(&ch).copied()) {
+            match lookup_with_policy(map, ch, tr39_digits) {
                 Some(replacement) => out.push_str(replacement),
                 None => out.push(ch),
             }
@@ -120,13 +162,13 @@ pub(crate) fn normalize_confusables_cow<'a>(
     }
 
     for (i, ch) in text.char_indices() {
-        if let Some(replacement) = map.and_then(|m| m.get(&ch).copied()) {
+        if let Some(replacement) = lookup_with_policy(map, ch, tr39_digits) {
             // First fold found: copy the borrowed prefix, then fold the rest.
             let mut out = String::with_capacity(text.len());
             out.push_str(&text[..i]);
             out.push_str(replacement);
             for ch in text[i + ch.len_utf8()..].chars() {
-                match map.and_then(|m| m.get(&ch).copied()) {
+                match lookup_with_policy(map, ch, tr39_digits) {
                     Some(replacement) => out.push_str(replacement),
                     None => out.push(ch),
                 }
@@ -263,8 +305,8 @@ mod tests {
             for &base in map.keys() {
                 for &m in &marks {
                     let s: String = [base, m].iter().collect();
-                    let once = normalize_confusables(&s, script).unwrap();
-                    let twice = normalize_confusables(&once, script).unwrap();
+                    let once = normalize_confusables(&s, script, "numeric").unwrap();
+                    let twice = normalize_confusables(&once, script, "numeric").unwrap();
                     assert_eq!(
                         once, twice,
                         "not idempotent: base U+{:04X} + mark U+{:04X} ({script})",
@@ -284,19 +326,19 @@ mod tests {
     #[test]
     fn test_normalize_confusables_cyrillic() {
         // Cyrillic 'а' (U+0430) → Latin 'a'
-        let result = normalize_confusables("\u{0430}", "latin").unwrap();
+        let result = normalize_confusables("\u{0430}", "latin", "numeric").unwrap();
         assert_eq!(result, "a");
     }
 
     #[test]
     fn test_normalize_confusables_passthrough() {
-        let result = normalize_confusables("hello", "latin").unwrap();
+        let result = normalize_confusables("hello", "latin", "numeric").unwrap();
         assert_eq!(result, "hello");
     }
 
     #[test]
     fn test_normalize_confusables_empty() {
-        let result = normalize_confusables("", "latin").unwrap();
+        let result = normalize_confusables("", "latin", "numeric").unwrap();
         assert_eq!(result, "");
     }
 
@@ -326,8 +368,8 @@ mod tests {
             let nfd: String = std::iter::once(ch).nfd().collect();
             assert_ne!(nfc, nfd, "{ch:?} must actually decompose for this test");
             assert_eq!(
-                normalize_confusables(&nfc, "latin").unwrap(),
-                normalize_confusables(&nfd, "latin").unwrap(),
+                normalize_confusables(&nfc, "latin", "numeric").unwrap(),
+                normalize_confusables(&nfd, "latin", "numeric").unwrap(),
                 "fold not form-invariant on {ch:?}"
             );
             assert_eq!(
@@ -341,8 +383,14 @@ mod tests {
     #[test]
     fn nfc_form_preserves_existing_output() {
         // Already-NFC / ASCII input is unchanged by compose-at-lookup (mark-free gate).
-        assert_eq!(normalize_confusables("\u{0430}ll", "latin").unwrap(), "all");
-        assert_eq!(normalize_confusables("hello", "latin").unwrap(), "hello");
+        assert_eq!(
+            normalize_confusables("\u{0430}ll", "latin", "numeric").unwrap(),
+            "all"
+        );
+        assert_eq!(
+            normalize_confusables("hello", "latin", "numeric").unwrap(),
+            "hello"
+        );
     }
 
     #[test]
@@ -353,11 +401,11 @@ mod tests {
         // rather than staying split, so both forms agree on U+FB2B — form-invariant, and
         // neither is a Latin confusable, so both pass through to the same scalar.
         assert_eq!(
-            normalize_confusables("\u{FB2B}", "latin").unwrap(),
+            normalize_confusables("\u{FB2B}", "latin", "numeric").unwrap(),
             "\u{FB2B}"
         );
         assert_eq!(
-            normalize_confusables("\u{05E9}\u{05C2}", "latin").unwrap(),
+            normalize_confusables("\u{05E9}\u{05C2}", "latin", "numeric").unwrap(),
             "\u{FB2B}"
         );
     }
@@ -384,7 +432,7 @@ mod tests {
     fn test_normalize_confusables_mixed_long() {
         // String with confusable Cyrillic chars interspersed with ASCII
         let input = "h\u{0435}ll\u{043E} w\u{043E}rld"; // Cyrillic е and о
-        let result = normalize_confusables(input, "latin").unwrap();
+        let result = normalize_confusables(input, "latin", "numeric").unwrap();
         // Cyrillic е→e, о→o
         assert_eq!(result, "hello world");
     }
@@ -394,7 +442,7 @@ mod tests {
         // Confusable lookup operates on individual codepoints; NFC and NFD
         // should both work (combining marks aren't confusable targets).
         let nfc = "\u{00e9}"; // é as single codepoint
-        let result = normalize_confusables(nfc, "latin").unwrap();
+        let result = normalize_confusables(nfc, "latin", "numeric").unwrap();
         // é is not a confusable — it should pass through unchanged
         assert_eq!(result, nfc);
     }
@@ -407,17 +455,23 @@ mod tests {
         //     grave (U+0340, which canonically decomposes to U+0300). The cluster composes
         //     to `¥`+U+0300 (yen has no precomposed grave); folding `¥`→`Y` leaves `Y`+U+0300,
         //     which composes to `Ỳ` (U+1EF2) — a non-confusable, so that is the fixed point.
-        let once = normalize_confusables("\u{a5}\u{340}", "latin").unwrap();
+        let once = normalize_confusables("\u{a5}\u{340}", "latin", "numeric").unwrap();
         assert_eq!(once, "\u{1ef2}"); // Ỳ
-        assert_eq!(normalize_confusables(&once, "latin").unwrap(), once);
+        assert_eq!(
+            normalize_confusables(&once, "latin", "numeric").unwrap(),
+            once
+        );
 
         // (b) a composition exposes a *new* fold. `Ҫ` (U+04AA) folds to `C`, carrying a
         //     combining cedilla (U+0327); `C`+cedilla composes to `Ç` (U+00C7) — which is
         //     *itself* a confusable that folds to `C`. Only iterating to a fixed point
         //     reaches `C`; a single recompose would stop at the still-confusable `Ç`.
-        let once = normalize_confusables("\u{04AA}\u{0327}", "latin").unwrap();
+        let once = normalize_confusables("\u{04AA}\u{0327}", "latin", "numeric").unwrap();
         assert_eq!(once, "C");
-        assert_eq!(normalize_confusables(&once, "latin").unwrap(), once);
+        assert_eq!(
+            normalize_confusables(&once, "latin", "numeric").unwrap(),
+            once
+        );
         assert!(!is_confusable(&once, "latin").unwrap());
     }
 
@@ -454,8 +508,8 @@ mod tests {
             /// characters are never themselves confusable.
             #[test]
             fn normalize_confusables_idempotent(s in "\\PC*") {
-                let once = normalize_confusables(&s, "latin").unwrap();
-                let twice = normalize_confusables(&once, "latin").unwrap();
+                let once = normalize_confusables(&s, "latin", "numeric").unwrap();
+                let twice = normalize_confusables(&once, "latin", "numeric").unwrap();
                 prop_assert_eq!(&once, &twice,
                     "normalize_confusables is not idempotent on: {:?}", s);
             }
@@ -465,7 +519,7 @@ mod tests {
             /// no confusable characters survive normalization.
             #[test]
             fn normalized_is_not_confusable(s in "\\PC*") {
-                let normalized = normalize_confusables(&s, "latin").unwrap();
+                let normalized = normalize_confusables(&s, "latin", "numeric").unwrap();
                 let still_confusable = is_confusable(&normalized, "latin").unwrap();
                 prop_assert!(!still_confusable,
                     "is_confusable returned true after normalize_confusables on: {:?} → {:?}",
@@ -482,7 +536,7 @@ mod tests {
             /// [`confusable_table_values_are_non_empty`].
             #[test]
             fn fold_never_annihilates_content(s in "\\PC+") {
-                let result = normalize_confusables(&s, "latin").unwrap();
+                let result = normalize_confusables(&s, "latin", "numeric").unwrap();
                 prop_assert!(!result.is_empty(),
                     "non-empty input {:?} normalized to empty", s);
             }
@@ -491,7 +545,7 @@ mod tests {
             /// true since we return String, but this catches memory corruption).
             #[test]
             fn normalize_confusables_valid_utf8(s in "\\PC*") {
-                let result = normalize_confusables(&s, "latin").unwrap();
+                let result = normalize_confusables(&s, "latin", "numeric").unwrap();
                 // If this compiles and doesn't panic, the result is valid UTF-8.
                 let _ = result.len(); // forces evaluation
             }

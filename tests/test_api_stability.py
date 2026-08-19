@@ -336,7 +336,7 @@ CORE_FUNCTION_PARAMS = {
         "default",
     ],
     "normalize": ["text", "form"],
-    "normalize_confusables": ["text", "target_script"],
+    "normalize_confusables": ["text", "target_script", "digit_policy"],
     "sanitize_filename": [
         "text",
         "separator",
@@ -473,7 +473,7 @@ CLASS_METHODS = {
     "Text": {
         "__init__": ["text"],
         "normalize": ["form"],
-        "normalize_confusables": ["target_script"],
+        "normalize_confusables": ["target_script", "digit_policy"],
         "strip_accents": [],
         "transliterate": [
             "lang",

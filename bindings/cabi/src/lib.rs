@@ -110,10 +110,41 @@ fn build_transliterate(
 /// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"`).
 #[ffi_export]
 fn disarm_normalize_confusables(text: char_p::Ref<'_>, target: char_p::Ref<'_>) -> DisarmResult {
-    match target.to_str().parse::<api::TargetScript>() {
-        Ok(t) => ok(api::normalize_confusables(text.to_str(), t).into_owned()),
-        Err(e) => err(&e),
-    }
+    disarm_normalize_confusables_opts(text, target, c_numeric())
+}
+
+/// The `"numeric"` token, as a borrowed C string, for the default-policy shim above.
+fn c_numeric() -> char_p::Ref<'static> {
+    // A `&'static CStr`-backed token; `char_p::Ref` borrows it for the call.
+    const NUMERIC: &str = "numeric\0";
+    char_p::Ref::from(
+        std::ffi::CStr::from_bytes_with_nul(NUMERIC.as_bytes())
+            .expect("literal is NUL-terminated and NUL-free"),
+    )
+}
+
+/// [`disarm_normalize_confusables`] with an explicit `digit_policy` (#561).
+///
+/// `digit_policy` is `"numeric"` (disarm's reading: a non-Latin digit folds to the ASCII
+/// digit) or `"tr39"` (upstream's, which folds several to a Latin letter). Added as an
+/// `_opts` variant rather than by widening the existing entry point, so the two-argument
+/// symbol keeps its ABI for callers already linked against it — the same shape
+/// `disarm_transliterate` / `disarm_transliterate_opts` already use in this file.
+#[ffi_export]
+fn disarm_normalize_confusables_opts(
+    text: char_p::Ref<'_>,
+    target: char_p::Ref<'_>,
+    digit_policy: char_p::Ref<'_>,
+) -> DisarmResult {
+    let target = match target.to_str().parse::<api::TargetScript>() {
+        Ok(t) => t,
+        Err(e) => return err(&e),
+    };
+    let digit_policy = match digit_policy.to_str().parse::<api::DigitPolicy>() {
+        Ok(d) => d,
+        Err(e) => return err(&e),
+    };
+    ok(api::normalize_confusables_with(text.to_str(), target, digit_policy).into_owned())
 }
 
 /// Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.

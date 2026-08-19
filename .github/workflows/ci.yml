@@ -431,7 +431,7 @@ jobs:
       run:
         working-directory: bindings/java
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
       - name: Build the JNI shim against the in-repo core (#374 drift gate)
         # Never committed (a relative-path patch would break release/packaging and
@@ -473,7 +473,7 @@ jobs:
       run:
         working-directory: bindings/cabi
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
       - name: Build against the in-repo core (#374 drift gate)
         run: printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml

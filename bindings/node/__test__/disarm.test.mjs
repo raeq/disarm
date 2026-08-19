@@ -275,6 +275,24 @@ describe('metadata introspection (#404)', () => {
   test('normalizeConfusables rejects a bad digitPolicy', () => {
     expect(() => disarm.normalizeConfusables('x', { digitPolicy: 'skeleton' })).toThrow()
   })
+  test('mlNormalize folds case by default', () => {
+    expect(disarm.mlNormalize('José Martínez')).toBe('jose martinez')
+    expect(disarm.mlNormalize('Café RÉSUMÉ')).toBe('cafe resume')
+  })
+  test('mlNormalize foldCase:false keeps capitals but not accents', () => {
+    expect(disarm.mlNormalize('José Martínez', { foldCase: false })).toBe('Jose Martinez')
+  })
+  test('mlNormalize honours lang and emojiStyle', () => {
+    expect(disarm.mlNormalize('MÜNCHEN Straße', { lang: 'de' })).toBe('muenchen strasse')
+    expect(disarm.mlNormalize('Hi \u{1F600}', { emojiStyle: 'none' })).toBe('hi \u{1F600}')
+    expect(disarm.mlNormalize('Hi \u{1F600}', { emojiStyle: 'none', foldCase: false })).toBe(
+      'Hi \u{1F600}',
+    )
+    expect(disarm.mlNormalize('Hi \u{1F600}')).toBe('hi grinning face')
+  })
+  test('mlNormalize rejects a bad emojiStyle', () => {
+    expect(() => disarm.mlNormalize('x', { emojiStyle: 'bogus' })).toThrow()
+  })
   test('unmappedConfusables reports exposure, not coverage', () => {
     const unmapped = disarm.unmappedConfusables()
     expect(unmapped.size).toBeGreaterThan(1000)

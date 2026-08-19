@@ -356,6 +356,27 @@ RSpec.describe Disarm do
       expect do
         Disarm.normalize_confusables("x", digit_policy: :skeleton)
       end.to raise_error(Disarm::InvalidArgument)
+
+    it "ml-normalizes with case folding by default" do
+      expect(Disarm.ml_normalize("José Martínez")).to eq("jose martinez")
+      expect(Disarm.ml_normalize("Café RÉSUMÉ")).to eq("cafe resume")
+    end
+
+    it "keeps capitals when fold_case is false" do
+      expect(Disarm.ml_normalize("José Martínez", fold_case: false)).to eq("Jose Martinez")
+    end
+
+    it "honours lang and emoji_style in ml_normalize" do
+      expect(Disarm.ml_normalize("MÜNCHEN Straße", lang: "de")).to eq("muenchen strasse")
+      # emoji_style controls emoji expansion only — case folding is still on by default.
+      expect(Disarm.ml_normalize("Hi \u{1F600}", emoji_style: "none")).to eq("hi \u{1F600}")
+      expect(
+        Disarm.ml_normalize("Hi \u{1F600}", emoji_style: "none", fold_case: false)
+      ).to eq("Hi \u{1F600}")
+    end
+
+    it "raises on a bad emoji_style" do
+      expect { Disarm.ml_normalize("x", emoji_style: "bogus") }.to raise_error(Disarm::InvalidArgument)
     end
 
     it "reports unfolded confusable sources as exposure" do

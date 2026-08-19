@@ -418,6 +418,40 @@ export function catalogKey(
   return call(() => native.catalogKey(text, options.lang ?? undefined, options.strictIso9 ?? false))
 }
 
+/** Options for {@link mlNormalize}. */
+export interface MlNormalizeOptions {
+  /** Language code selecting the transliteration table; omit for none. */
+  lang?: string
+  /** `'cldr'` (default) expands emoji to CLDR short names; `'none'` leaves them. */
+  emojiStyle?: 'cldr' | 'none'
+  /**
+   * Apply Unicode case folding (default `true`).
+   *
+   * Pass `false` in front of a **cased** model: folding is destructive, cannot be undone
+   * downstream, and an uncased evaluation harness cannot measure what it cost. It
+   * restores case, not diacritics — accents are still stripped.
+   */
+  foldCase?: boolean
+}
+
+/**
+ * ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
+ * [case fold] → strip control → strip zero-width → collapse whitespace.
+ *
+ * Note this folds no confusables — it is not a homoglyph defence at any setting. Put
+ * {@link normalizeConfusables} in front of it when a model needs both.
+ */
+export function mlNormalize(text: string, options: MlNormalizeOptions = {}): string {
+  return call(() =>
+    native.mlNormalize(
+      text,
+      options.lang ?? undefined,
+      options.emojiStyle ?? 'cldr',
+      options.foldCase ?? true,
+    ),
+  )
+}
+
 // ── Grapheme clusters ───────────────────────────────────────────────────────
 
 /** Number of grapheme clusters (user-perceived characters). */

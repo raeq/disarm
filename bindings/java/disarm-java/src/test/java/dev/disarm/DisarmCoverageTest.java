@@ -144,6 +144,31 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void mlNormalizeFoldsCaseByDefault() {
+        assertEquals("jose martinez", Disarm.mlNormalize("Jos\u00E9 Mart\u00EDnez"));
+    }
+
+    @Test
+    void mlNormalizeCanKeepCase() {
+        MlNormalizeOptions opts = MlNormalizeOptions.builder().foldCase(false).build();
+        assertEquals("Jose Martinez", Disarm.mlNormalize("Jos\u00E9 Mart\u00EDnez", opts));
+    }
+
+    @Test
+    void mlNormalizeHonoursLangAndEmoji() {
+        MlNormalizeOptions de = MlNormalizeOptions.builder().lang("de").build();
+        assertEquals("muenchen strasse", Disarm.mlNormalize("M\u00DCNCHEN Stra\u00DFe", de));
+        MlNormalizeOptions none = MlNormalizeOptions.builder().emojiStyle("none").build();
+        assertEquals("hi \uD83D\uDE00", Disarm.mlNormalize("Hi \uD83D\uDE00", none));
+    }
+
+    @Test
+    void mlNormalizeRejectsBadEmojiStyle() {
+        MlNormalizeOptions bad = MlNormalizeOptions.builder().emojiStyle("bogus").build();
+        assertThrows(DisarmInvalidArgumentException.class, () -> Disarm.mlNormalize("x", bad));
+    }
+
+    @Test
     void unmappedConfusablesReportsExposure() {
         List<String> unmapped = Disarm.unmappedConfusables(TargetScript.LATIN);
         assertTrue(unmapped.size() > 1000, String.valueOf(unmapped.size()));

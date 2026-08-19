@@ -5,9 +5,9 @@ The surface is a set of named exports from the `disarm` package plus the
 TypeScript wrapper over the pure-Rust core (no Python): options are passed as an
 object with the core's defaults, scheme/target tokens are typed string unions,
 and bad input throws `DisarmInvalidArgument`. The binding is a deliberate
-**subset** of the core — `mlNormalize` and the fluent `Text` builder are not
-surfaced yet (the `canonicalize` / `stripObfuscation` presets and the
-`getPipeline` policy registry are; see [Stability](#stability)).
+**subset** of the core — the fluent `Text` builder is not surfaced yet (the
+`canonicalize` / `stripObfuscation` / `mlNormalize` presets and the `getPipeline`
+policy registry are; see [Stability](#stability)).
 
 For install and a five-line tour, start with
 [disarm for Node.js](getting-started.md). The shared, language-neutral
@@ -378,6 +378,27 @@ normalizeConfusables('g\u0966\u0966gle') // => 'g00gle'
 normalizeConfusables('g\u0966\u0966gle', { digitPolicy: 'tr39' }) // => 'google'
 ```
 
+### `mlNormalize(text, options?)`
+
+ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents → [case fold] →
+strip control → strip zero-width → collapse whitespace. Produces clean, accent-free text
+for tokenizers, embeddings, and feature extraction.
+
+`foldCase` defaults to `true`, which suits the uncased tokenizers most pipelines use. Pass
+`false` in front of a **cased** model: the fold is destructive, cannot be undone
+downstream, and an uncased evaluation harness cannot measure what it cost. It restores
+case, not diacritics — `stripAccents` is a separate step and still runs.
+
+This folds **no** confusables, so it is not a homoglyph defence at any setting. Put
+`normalizeConfusables` in front of it when a model needs both.
+
+```ts
+mlNormalize('José Martínez') // => 'jose martinez'
+mlNormalize('José Martínez', { foldCase: false }) // => 'Jose Martinez'
+mlNormalize('MÜNCHEN Straße', { lang: 'de' }) // => 'muenchen strasse'
+mlNormalize('Hi 😀', { emojiStyle: 'none', foldCase: false }) // => 'Hi 😀'
+```
+
 ### `unmappedConfusables(options?)` · `findUnmappedConfusables(text, options?)`
 
 Coverage is not a score. A tool that folds 95% of known confusable sources is not 95%
@@ -504,7 +525,7 @@ standards) and can change across releases without being treated as a breaking
 change.
 
 Not yet surfaced (compose the primitives, or reach for another binding): the
-`mlNormalize` / `stripFormat` presets, the fluent `Text` builder, and the output
+`stripFormat` preset, the fluent `Text` builder, and the output
 encoders / encoding family (`escapeHtml`, `percentEncode`, `stripLogInjection`,
 `detectEncoding`, `decodeToUtf8`). In particular `stripLogInjection` — a
 security-relevant control — is **not** available here; neutralize log-injection

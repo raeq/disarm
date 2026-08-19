@@ -109,6 +109,17 @@ int main(void) {
     disarm_string_free(dt.value);
     disarm_string_free(dt.error);
 
+    /* ml_normalize: default folds case; fold_case=false keeps capitals, not accents. */
+    DisarmResult_t mlf = disarm_ml_normalize("Jos\xc3\xa9 Mart\xc3\xadnez", NULL, "cldr", true);
+    check("ml_normalize fold", mlf.value, "jose martinez");
+    disarm_string_free(mlf.value);
+    disarm_string_free(mlf.error);
+
+    DisarmResult_t mlk = disarm_ml_normalize("Jos\xc3\xa9 Mart\xc3\xadnez", NULL, "cldr", false);
+    check("ml_normalize keep case", mlk.value, "Jose Martinez");
+    disarm_string_free(mlk.value);
+    disarm_string_free(mlk.error);
+
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");
         return 0;

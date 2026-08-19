@@ -537,6 +537,18 @@ fn find_untranslatable(
         .collect())
 }
 
+/// `Disarm._ml_normalize(text, lang, emoji_style, fold_case)` — the ML/NLP preset.
+fn ml_normalize(
+    text: Wtf8Text,
+    lang: Option<String>,
+    emoji_style: String,
+    fold_case: bool,
+) -> Result<String, Error> {
+    api::ml_normalize(&text, lang.as_deref(), &emoji_style, fold_case)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
+}
+
 // ── Script analysis (#375) ────────────────────────────────────────────────────
 
 /// `Disarm._detect_scripts(text)` — Unicode scripts present, in first-appearance
@@ -808,6 +820,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         "_find_unmapped_confusables",
         function!(find_unmapped_confusables, 2),
     )?;
+    module.define_singleton_method("_ml_normalize", function!(ml_normalize, 4))?;
     module.define_singleton_method("_detect_scripts", function!(detect_scripts, 1))?;
     module.define_singleton_method("_is_mixed_script?", function!(is_mixed_script, 1))?;
     module.define_singleton_method("_has_bidi_conflict?", function!(has_bidi_conflict, 1))?;

@@ -110,6 +110,9 @@ PROVIDED_VIA = {
 #  * dedup_batch / make_cached_transliterator are Python-idiomatic performance
 #    helpers (Node/Ruby use native map / the Lexicon-style handle idiom);
 #  * set_emoji_provider is global-state mutation + an FFI callback (#404).
+# `ml_normalize` was here until it reached every binding — it is the ML/NLP entry point,
+# so a scope decision that kept it Python-only made disarm unusable from a Node or JVM
+# model pipeline. Removed rather than annotated: it is now covered everywhere.
 SCOPE_REVIEW = {
     "register_lang",
     "register_replacements",
@@ -127,7 +130,6 @@ SCOPE_REVIEW = {
     "is_ascii",
     "list_profiles",
     "display_clean",
-    "ml_normalize",
     "normalize_user_input",
     "dedup_batch",
     "make_cached_transliterator",

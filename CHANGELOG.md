@@ -50,29 +50,22 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   numeric — selecting TR39 there would silently change what `is_suspicious_hostname`
   flags, which is a security-behaviour change and belongs in its own issue.
 
+- **`ml_normalize` reaches every binding.** It was Rust + Python only, recorded in
+  `scripts/parity.py` as a deliberate scope decision. That decision does not survive
+  contact with what the preset is *for*: it is the ML/NLP entry point, so keeping it
+  Python-only meant a Node or JVM model pipeline could not use disarm for the thing
+  disarm built it to do. Now exposed as `mlNormalize` (Node, Java/Kotlin),
+  `Disarm.ml_normalize` (Ruby), `String.mlNormalize` (Kotlin extension), and
+  `disarm_ml_normalize` (C ABI), each with the `fold_case` switch from #559.
 
-### Fixed
+  Argument style follows each ecosystem: an options object in Node/TypeScript, keyword
+  arguments in Ruby, a `MlNormalizeOptions` builder in Java (mirroring the existing
+  `TransliterateOptions`), default parameters on the Kotlin extension, and positional
+  arguments with a nullable `lang` in the C ABI.
 
-- **`sanitize_filename` is now a fixed point on the first pass (#570).** The trailing-dot
-  trim ran in `finalize_name`, *after* the extension split it invalidates. Input ending in
-  a `.` — literal, or produced by transliteration (`·` U+00B7, `…` U+2026) — had that dot
-  taken as the "extension", leaving an earlier dot inside the stem; trimming it then moved
-  the boundary, so the next call split elsewhere and stripped a separator that had become
-  stem-trailing. `sanitize_filename("a*.b.")` gave `"a_.b"`, then `"a.b"`.
+  `ml_normalize` is removed from `SCOPE_REVIEW` in `scripts/parity.py`; the op now reads
+  ✓ across rust/python/ruby/node in the parity matrix.
 
-  The trim now runs before the split, so the boundary the split sees is the one the output
-  has. `finalize_name` is unchanged and still required — the extension branch re-prepends
-  `'.'`, and it owns the empty / `"."` / `".."` fallback.
-
-  The guarantee asserted is stronger than idempotence: a caller sanitizes *once*, so if
-  the first pass returned something a second pass would change, the single-pass answer was
-  already wrong. Two systems sanitizing a different number of times derived different
-  filenames from one input, which defeats dedup on sanitized names.
-
-  Found by the Hypothesis tier, which ran nowhere automatic — see the nightly workflow
-  below.
-
-### Added
 
 - **Nightly Hypothesis run (`.github/workflows/nightly-hypothesis.yml`).** Tier 2 is
   excluded from PR CI on purpose (~440 tests, non-deterministic, slow) and is not in the
@@ -87,35 +80,6 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
   Deliberately **not** a required check and **not** in the publish path: a probabilistic
   suite must never be able to block a security release. It reports; a human triages.
-
-
-- **16 confusable rows the generator was silently dropping (#558).**
-  `scripts/gen_confusables.py`'s `filter_latin_homoglyphs` pass required the TR39
-  prototype to be a single basic ASCII **letter**. That quietly excluded every
-  Latin-script letter whose prototype is an ASCII *digit* or *punctuation mark* — `Ʒ`→3,
-  `Ȣ`→8, `Ꝯ`→9, `ǃ`→!, `Ɂ`→?, `ꝸ`→&, `꞉`→:, `ꞌ`→' and eight more. Nothing distinguished
-  them from the `þ`→`p` / `ſ`→`f` rows already in the table except the category of the
-  target, so this was a table gap rather than a policy decision. The predicate is now
-  `is_basic_ascii_graphic` and the 16 rows are folded.
-
-  This is the *letter-impersonates-a-digit* direction only. The reverse — a digit source
-  folding to a look-alike letter — is still guarded by `enforce_digit_target` (#439);
-  `normalize_confusables("०")` remains `"0"`.
-
-  Whitespace is deliberately excluded from the widening: TR39 folds the whole Zs/Zl/Zp
-  family to a space, but `collapse_whitespace` already owns that from an explicit
-  core-defined set (#433), and a second copy in the confusables table would be a
-  divergent duplicate of the whitespace policy.
-
-  The remaining residue is now triaged and written down in
-  `docs/provenance.md` rather than inferred: 5 deliberate ASCII
-  skeleton divergences, 16 whitespace rows owned elsewhere, and ~4,300 sources whose
-  upstream target is non-Latin, for which a to-Latin table is the wrong home.
-  `unmapped_confusables()` (#563) makes the split recomputable at any time, so the
-  closed gap cannot silently reopen.
-
-
-### Added
 
 - **The bundled `confusables.txt` version is readable at runtime (#560).** Nothing in
   the library reported which upstream release the confusable tables were folded from.
@@ -196,6 +160,57 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `ml_normalize(text, lang, emoji_style)` → `ml_normalize(text, lang, emoji_style, true)`.
   Python, which takes it as a keyword with a default, is unaffected. (#559)
 
+### Fixed
+
+- **`sanitize_filename` is now a fixed point on the first pass (#570).** The trailing-dot
+  trim ran in `finalize_name`, *after* the extension split it invalidates. Input ending in
+  a `.` — literal, or produced by transliteration (`·` U+00B7, `…` U+2026) — had that dot
+  taken as the "extension", leaving an earlier dot inside the stem; trimming it then moved
+  the boundary, so the next call split elsewhere and stripped a separator that had become
+  stem-trailing. `sanitize_filename("a*.b.")` gave `"a_.b"`, then `"a.b"`.
+
+  The trim now runs before the split, so the boundary the split sees is the one the output
+  has. `finalize_name` is unchanged and still required — the extension branch re-prepends
+  `'.'`, and it owns the empty / `"."` / `".."` fallback.
+
+  The guarantee asserted is stronger than idempotence: a caller sanitizes *once*, so if
+  the first pass returned something a second pass would change, the single-pass answer was
+  already wrong. Two systems sanitizing a different number of times derived different
+  filenames from one input, which defeats dedup on sanitized names.
+
+  Found by the Hypothesis tier, which ran nowhere automatic — see the nightly workflow
+  below.
+
+- **Restored a Kotlin test lost in a rebase.** `DisarmKtTest.coverageIntrospection`, added
+  with the coverage-introspection API (#563), was silently dropped when that branch was
+  rebased through a 14-file conflict. The Kotlin *source* survived, so nothing failed to
+  compile and the loss was invisible until the JVM surface was audited for this change.
+
+- **16 confusable rows the generator was silently dropping (#558).**
+  `scripts/gen_confusables.py`'s `filter_latin_homoglyphs` pass required the TR39
+  prototype to be a single basic ASCII **letter**. That quietly excluded every
+  Latin-script letter whose prototype is an ASCII *digit* or *punctuation mark* — `Ʒ`→3,
+  `Ȣ`→8, `Ꝯ`→9, `ǃ`→!, `Ɂ`→?, `ꝸ`→&, `꞉`→:, `ꞌ`→' and eight more. Nothing distinguished
+  them from the `þ`→`p` / `ſ`→`f` rows already in the table except the category of the
+  target, so this was a table gap rather than a policy decision. The predicate is now
+  `is_basic_ascii_graphic` and the 16 rows are folded.
+
+  This is the *letter-impersonates-a-digit* direction only. The reverse — a digit source
+  folding to a look-alike letter — is still guarded by `enforce_digit_target` (#439);
+  `normalize_confusables("०")` remains `"0"`.
+
+  Whitespace is deliberately excluded from the widening: TR39 folds the whole Zs/Zl/Zp
+  family to a space, but `collapse_whitespace` already owns that from an explicit
+  core-defined set (#433), and a second copy in the confusables table would be a
+  divergent duplicate of the whitespace policy.
+
+  The remaining residue is now triaged and written down in
+  `docs/provenance.md` rather than inferred: 5 deliberate ASCII
+  skeleton divergences, 16 whitespace rows owned elsewhere, and ~4,300 sources whose
+  upstream target is non-Latin, for which a to-Latin table is the wrong home.
+  `unmapped_confusables()` (#563) makes the split recomputable at any time, so the
+  closed gap cannot silently reopen.
+
 ### Documentation
 
 - **Accented-Latin fidelity is a `strip_obfuscation` property, not a confusables
@@ -216,7 +231,6 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
   Filed and fixed together with #559 because both have the same shape: a destructive
   step baked into a bundle with no documented route to the non-destructive path.
-
 
 ## [0.13.0] — 2026-08-17
 

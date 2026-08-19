@@ -401,6 +401,28 @@ public final class Disarm {
     }
 
     /**
+     * ML/NLP normalization with every default: CLDR emoji expansion, no transliteration
+     * language, case folding on.
+     */
+    public static String mlNormalize(String text) {
+        return mlNormalize(text, MlNormalizeOptions.defaults());
+    }
+
+    /**
+     * ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
+     * [case fold] → strip control → strip zero-width → collapse whitespace.
+     *
+     * <p>Folds no confusables, so it is <b>not</b> a homoglyph defence at any setting;
+     * compose it after {@link #normalizeConfusables(String, TargetScript)} when a model
+     * needs both.
+     */
+    public static String mlNormalize(String text, MlNormalizeOptions options) {
+        req(text);
+        Objects.requireNonNull(options, "options");
+        return Native.mlNormalize(text, options.lang(), options.emojiStyle(), options.foldCase());
+    }
+
+    /**
      * Every upstream confusable source the bundled {@code target} table does not fold.
      *
      * <p>Read as exposure, not as a score — this is where an adaptive attacker goes once

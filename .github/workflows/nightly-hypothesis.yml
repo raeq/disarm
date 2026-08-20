@@ -1,0 +1,155 @@
+name: Nightly Hypothesis
+
+# Tier 2 (property-based / fuzz) runs nowhere automatic. It is excluded from PR CI on
+# purpose — ~440 tests, non-deterministic, and slow enough to be a bad fit for a gate that
+# has to be fast — and it is not part of the Tier-3 release gate either. The consequence
+# showed up as #570: `sanitize_filename` was not idempotent, the Hypothesis oracle was the
+# only thing that could see it, and it sat undetected until a developer happened to run
+# the full suite locally.
+#
+# This closes that gap without slowing anything down. It runs on a schedule, with a
+# deliberately LARGER example budget than a developer would use locally, so each night
+# explores input space no single local run reaches. A failure opens an issue rather than
+# emailing into the void — the point is that a rare falsifying example survives being
+# found.
+#
+# Deliberately NOT a required check and NOT wired into the publish path: a probabilistic
+# suite must never be able to block a security release. It reports; a human triages.
+
+on:
+  schedule:
+    # 03:17 UTC — off the hour to avoid the GitHub-wide cron stampede, which delays runs.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      oracle_maxex:
+        description: "ORACLE_MAXEX — examples per adversarial-oracle property (local default 2000)"
+        required: false
+        default: "20000"
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  # A long nightly must not pile up if one overruns into the next.
+  group: nightly-hypothesis
+  cancel-in-progress: false
+
+jobs:
+  hypothesis:
+    name: Hypothesis (Tier 2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
+
+      - name: Install maturin
+        # Same pin as tier3.yml / pyproject's build-system requirement.
+        run: pip install "maturin[patchelf]>=1.13.3,<2"
+
+      - name: Build wheel and install
+        run: |
+          maturin build --release --out dist
+          pip install ".[test]"
+          pip install --force-reinstall --no-deps dist/*.whl
+
+      - name: Run the Hypothesis tier
+        id: hypothesis
+        env:
+          # The only env-tunable budget in the suite: tests/test_adversarial_oracle.py
+          # reads ORACLE_MAXEX (local default 2000). 10x it here — searching harder than
+          # any single developer run is the entire point of a nightly, and this is the
+          # suite that found #570. Every other Hypothesis test pins its own max_examples
+          # per test, so nothing else is scalable from outside; those get their extra
+          # coverage from the random seed below rather than a bigger budget.
+          ORACLE_MAXEX: ${{ github.event.inputs.oracle_maxex || '20000' }}
+        run: |
+          # --hypothesis-seed=random is what makes consecutive nights explore different
+          # input space instead of replaying one deterministic sweep. The seed of a
+          # failing run is printed in the output and reproduces it exactly.
+          pytest -m hypothesis --hypothesis-seed=random --tb=short -q 2>&1 | tee hypothesis.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload the log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: hypothesis-log
+          path: hypothesis.log
+          retention-days: 30
+
+      - name: Open an issue on failure
+        if: failure()
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            let log = '';
+            try {
+              log = fs.readFileSync('hypothesis.log', 'utf8').slice(-8000);
+            } catch (e) {
+              log = '(log unavailable)';
+            }
+            const title = 'Nightly Hypothesis run failed';
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+                        `/actions/runs/${context.runId}`;
+            const body = [
+              `The nightly Tier-2 (Hypothesis) run failed on \`${context.sha.slice(0, 7)}\`.`,
+              '',
+              'Hypothesis prints a **falsifying example** for each failure — that example is',
+              'the bug report. Reproduce it locally before changing anything:',
+              '',
+              '```bash',
+              'pytest -m hypothesis -k <test_name>',
+              '```',
+              '',
+              `[Full run](${url}) · the complete log is attached to that run as an artifact.`,
+              '',
+              '<details><summary>Tail of the log</summary>',
+              '',
+              '```',
+              log,
+              '```',
+              '',
+              '</details>',
+              '',
+              'This is a probabilistic suite: a failure here is a real counterexample, not',
+              'flake. It is not a required check and does not block a release — triage it',
+              'like any other bug report.',
+            ].join('\n');
+
+            // One rolling issue rather than a new one every night: a repeatedly-failing
+            // property would otherwise bury the tracker.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'nightly-hypothesis',
+            });
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                labels: ['bug', 'nightly-hypothesis'],
+                body,
+              });
+            }

@@ -53,6 +53,42 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`sanitize_filename` is now a fixed point on the first pass (#570).** The trailing-dot
+  trim ran in `finalize_name`, *after* the extension split it invalidates. Input ending in
+  a `.` — literal, or produced by transliteration (`·` U+00B7, `…` U+2026) — had that dot
+  taken as the "extension", leaving an earlier dot inside the stem; trimming it then moved
+  the boundary, so the next call split elsewhere and stripped a separator that had become
+  stem-trailing. `sanitize_filename("a*.b.")` gave `"a_.b"`, then `"a.b"`.
+
+  The trim now runs before the split, so the boundary the split sees is the one the output
+  has. `finalize_name` is unchanged and still required — the extension branch re-prepends
+  `'.'`, and it owns the empty / `"."` / `".."` fallback.
+
+  The guarantee asserted is stronger than idempotence: a caller sanitizes *once*, so if
+  the first pass returned something a second pass would change, the single-pass answer was
+  already wrong. Two systems sanitizing a different number of times derived different
+  filenames from one input, which defeats dedup on sanitized names.
+
+  Found by the Hypothesis tier, which ran nowhere automatic — see the nightly workflow
+  below.
+
+### Added
+
+- **Nightly Hypothesis run (`.github/workflows/nightly-hypothesis.yml`).** Tier 2 is
+  excluded from PR CI on purpose (~440 tests, non-deterministic, slow) and is not in the
+  Tier-3 release gate either, so it ran only when a developer happened to run the full
+  suite locally. #570 sat undetected in exactly that gap.
+
+  Runs at 03:17 UTC and on demand, with `--hypothesis-seed=random` so consecutive nights
+  explore different input space, and `ORACLE_MAXEX=20000` — 10× the local default — for
+  the adversarial-oracle suite, the one env-tunable budget in the tier and the suite that
+  found #570. A failure opens (or comments on) a single rolling issue rather than
+  disappearing into a run log.
+
+  Deliberately **not** a required check and **not** in the publish path: a probabilistic
+  suite must never be able to block a security release. It reports; a human triages.
+
+
 - **16 confusable rows the generator was silently dropping (#558).**
   `scripts/gen_confusables.py`'s `filter_latin_homoglyphs` pass required the TR39
   prototype to be a single basic ASCII **letter**. That quietly excluded every

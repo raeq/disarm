@@ -50,6 +50,11 @@ exactly what turns one cycle into three.
   Java exception) over the core's `ErrorKind` — never raw strings or the host
   language's bare `RuntimeError`/`Error`.
 
+- [ ] **ABI/API additions are additive.** For the C ABI specifically, an exported
+  function's signature is frozen once released: widening it breaks every linked caller.
+  Add an `_opts` variant and keep the original delegating to it. The committed
+  `bindings/cabi/disarm.h` makes any change show up as a diff (#580).
+
 ### Docs & tests (idiomatic and first-class, not an afterthought)
 - [ ] **README in the ecosystem's voice.** Install via *its* package manager; every
   example in *its* idiom; nothing copied verbatim from the Python README.

@@ -493,6 +493,22 @@ jobs:
           cargo build --release
           cargo test --features headers -- generate_headers
 
+      - name: C header drift gate (#580)
+        # The header IS the ABI contract. The smoke test below regenerates it and
+        # compiles against it in the same breath, so a signature change plus a matching
+        # call-site change is self-consistent and passes — that is how a 2-arg
+        # disarm_normalize_confusables became 3-arg on #574 with every check green.
+        # Diff the freshly generated header against the committed one so any ABI change
+        # is a visible diff someone has to approve. Runs here because this job already
+        # has the toolchain and the [patch.crates-io] redirect in place.
+        run: |
+          git diff --exit-code -- disarm.h || {
+            echo "::error::bindings/cabi/disarm.h is out of date with the C ABI."
+            echo "Regenerate it, then check the diff is ADDITIVE — widening an exported"
+            echo "function breaks every linked caller; add an _opts variant instead."
+            exit 1
+          }
+
       - name: C smoke test — link the cdylib and exercise the ABI
         # Proves the header + ABI + ownership contract from C against the local core.
         run: |

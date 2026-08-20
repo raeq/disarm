@@ -18,6 +18,27 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **The C header is committed and drift-gated (#580).** `bindings/cabi/disarm.h` was
+  gitignored and regenerated inside the CI step that then compiled `smoke.c` against it.
+  Both sides therefore moved together: a signature change plus a matching call-site
+  change was self-consistent and passed. That is how a widened
+  `disarm_normalize_confusables` (2 args → 3) reached review on #574 with every check
+  green — a human reading the diff caught it, no test did.
+
+  The header is now a committed baseline, the same way `src/metadata.rs` and
+  `generated/parity.yaml` are committed and drift-checked rather than regenerated blind.
+  CI diffs the regenerated header against it in the `cabi` job, so every ABI change is a
+  visible diff someone has to approve. A second test pins the arity of the entry points
+  that shipped before 0.14, so a widening fails by name rather than as one line in a
+  346-line diff.
+
+  The gate does not judge whether a change is breaking — it makes changes visible.
+  Deciding that a diff is additive (a new `_opts` entry point) rather than breaking (a
+  widened signature) stays the reviewer's job.
+
+
+### Added
+
 - **Selectable digit-mapping policy (#561).** disarm folds a non-Latin digit to the ASCII
   **digit**; upstream TR39 folds several of them to a Latin **letter** (`०` → `o`, `೦` →
   `O`, `١` → `l`). Neither is wrong — numeric is right for prose, where a Devanagari zero

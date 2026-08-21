@@ -1,9 +1,15 @@
 # Rust build artifacts
 /target/
 
-# The C header is generated reproducibly:
+# disarm.h is generated reproducibly:
 #   cargo test --features headers -- generate_headers
-disarm.h
+#
+# It is COMMITTED, not ignored (#580). The header IS the C ABI contract, and a
+# generated-and-discarded header cannot be diffed — the smoke test regenerates it and
+# compiles against it in the same step, so a signature change plus a matching call-site
+# change is self-consistent and passes. Committing the header makes every ABI change a
+# visible diff a human has to approve, the same way src/metadata.rs and
+# generated/parity.yaml are committed and drift-checked rather than regenerated blind.
 
 # Compiled smoke-test binaries
 *.o

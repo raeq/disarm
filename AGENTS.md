@@ -195,6 +195,30 @@ whether the glue still compiles, is `cargo check` in each binding directory with
 the redirect applied. That catches the common breakage without a toolchain for
 every language.
 
+### The C ABI is a committed contract
+
+`bindings/cabi/disarm.h` is generated, and **committed** (#580). Regenerating it is part
+of any change to the C surface:
+
+```bash
+cd bindings/cabi
+printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml
+cargo test --features headers -- generate_headers
+git checkout Cargo.toml && git add disarm.h
+```
+
+Then read the diff. **Additive is fine; widening is not.** Adding a parameter to an
+exported function breaks every caller already linked against the library — they fail at
+link time, and a rebuild fails to compile. Add a new `_opts` entry point and keep the
+original delegating to it, the shape `disarm_transliterate` / `disarm_transliterate_opts`
+and `disarm_normalize_confusables` / `_opts` already use.
+
+The smoke test does **not** catch this: it regenerates the header and compiles `smoke.c`
+against it in the same step, so a signature change plus a matching call-site change is
+self-consistent and passes. That is how a widened `disarm_normalize_confusables` reached
+review on #574 with every check green. The committed header is what makes the change
+visible.
+
 ### Sign-off
 
 `DCO sign-off` is a **required** status check: every non-merge commit needs a

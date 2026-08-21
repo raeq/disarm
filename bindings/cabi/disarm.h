@@ -23,6 +23,27 @@ char *
 disarm_analyze_hostname (
     char const * host);
 
+
+#include <stdbool.h>
+
+/** \brief
+ *  [`disarm_analyze_hostname`] with the opt-in digraph contraction pass (#562).
+ *
+ *  `contractions = true` additionally folds the ASCII digraphs (`rn`→`m`, `vv`→`w`,
+ *  `cl`→`d`) per label, so `arnazon.com` canonicalizes to `amazon.com`. It changes
+ *  `canonical` only — the `suspicious` verdict is unaffected, because an all-ASCII label
+ *  carries no mixed-script or cross-script evidence. Compare `canonical` against your own
+ *  brand list.
+ *
+ *  Separate entry point rather than a widened `disarm_analyze_hostname`: that symbol
+ *  shipped in 0.13.0 and callers are linked against its 1-argument form. Same shape as
+ *  `disarm_transliterate` / `_opts` and `disarm_normalize_confusables` / `_opts`.
+ */
+char *
+disarm_analyze_hostname_opts (
+    char const * host,
+    bool contractions);
+
 /** \brief
  *  Result of a fallible transform: exactly one of `value` / `error` is non-NULL.
  *  The caller frees whichever is set with [`disarm_string_free`].
@@ -45,9 +66,6 @@ typedef struct DisarmResult {
 DisarmResult_t
 disarm_canonicalize (
     char const * text);
-
-
-#include <stdbool.h>
 
 /** \brief
  *  Library-catalog dedup key; `lang` may be NULL, `strict_iso9` selects ISO 9:1995.
@@ -164,6 +182,22 @@ disarm_is_suspicious_hostname (
 DisarmResult_t
 disarm_lang_info (
     char const * code);
+
+/** \brief
+ *  ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
+ *  [case fold] → strip control → strip zero-width → collapse whitespace.
+ *
+ *  `lang` is nullable (NULL = no transliteration). `emoji_style` is `"cldr"` or
+ *  `"none"`. `fold_case` drops the case-fold step when false — pass false in front of a
+ *  CASED model; it restores case, not diacritics. Folds no confusables, so it is not a
+ *  homoglyph defence at any setting.
+ */
+DisarmResult_t
+disarm_ml_normalize (
+    char const * text,
+    char const * lang,
+    char const * emoji_style,
+    bool fold_case);
 
 /** \brief
  *  Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.

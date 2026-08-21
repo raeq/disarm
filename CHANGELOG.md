@@ -37,7 +37,6 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   widened signature) stays the reviewer's job.
 
 
-### Added
 
 - **Selectable digit-mapping policy (#561).** disarm folds a non-Latin digit to the ASCII
   **digit**; upstream TR39 folds several of them to a Latin **letter** (`०` → `o`, `೦` →
@@ -211,6 +210,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   Python, which takes it as a keyword with a default, is unaffected. (#559)
 
 ### Fixed
+
+- **Restored the 1-argument `disarm_analyze_hostname` C ABI (#580).** #562 widened it to
+  take `contractions`, but that symbol shipped in 0.13.0 and callers are linked against
+  the 1-argument form — widening it breaks them at link time. The contraction pass moved
+  to a new `disarm_analyze_hostname_opts(host, contractions)`, with the original
+  delegating to it, matching `disarm_transliterate` / `_opts` and
+  `disarm_normalize_confusables` / `_opts`.
+
+  Found by the header drift gate added in this same change, on its first real run against
+  a moved `main` — which is the argument for the gate. Nothing else in CI could see it:
+  the smoke test regenerates the header and compiles against it in one step, so a widened
+  signature plus a matching call-site change is self-consistent and passes.
+
 
 - **`sanitize_filename` is now a fixed point on the first pass (#570).** The trailing-dot
   trim ran in `finalize_name`, *after* the extension split it invalidates. Input ending in

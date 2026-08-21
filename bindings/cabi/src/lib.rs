@@ -326,7 +326,23 @@ fn disarm_terminal_width(text: char_p::Ref<'_>, ambiguous_wide: bool) -> u64 {
 /// `has_confusables`, `bidi_conflict`, `cross_label_script`, `label_scripts`,
 /// `whole_script_confusable`, `label_whole_script_confusable`, `canonical`).
 #[ffi_export]
-fn disarm_analyze_hostname(host: char_p::Ref<'_>, contractions: bool) -> char_p::Box {
+fn disarm_analyze_hostname(host: char_p::Ref<'_>) -> char_p::Box {
+    disarm_analyze_hostname_opts(host, false)
+}
+
+/// [`disarm_analyze_hostname`] with the opt-in digraph contraction pass (#562).
+///
+/// `contractions = true` additionally folds the ASCII digraphs (`rn`→`m`, `vv`→`w`,
+/// `cl`→`d`) per label, so `arnazon.com` canonicalizes to `amazon.com`. It changes
+/// `canonical` only — the `suspicious` verdict is unaffected, because an all-ASCII label
+/// carries no mixed-script or cross-script evidence. Compare `canonical` against your own
+/// brand list.
+///
+/// Separate entry point rather than a widened `disarm_analyze_hostname`: that symbol
+/// shipped in 0.13.0 and callers are linked against its 1-argument form. Same shape as
+/// `disarm_transliterate` / `_opts` and `disarm_normalize_confusables` / `_opts`.
+#[ffi_export]
+fn disarm_analyze_hostname_opts(host: char_p::Ref<'_>, contractions: bool) -> char_p::Box {
     let a = api::analyze_hostname_with(host.to_str(), contractions);
     to_c(
         serde_json::json!({

@@ -26,11 +26,17 @@ on:
   # the same authority the pre-merge one did.
   push:
     branches: [main]
+    # MUST stay in lockstep with the `perf-relevant` grep in the `changes` job
+    # below. If this list is narrower, a merge touching only the difference never
+    # starts the workflow and is silently never measured on main — which is the
+    # one guarantee that justifies making the PR run opt-in.
     paths:
       - "src/**"
       - "benchmarks/**"
+      - "examples/**"
       - "Cargo.toml"
       - "build.rs"
+      - "requirements/bench.txt"
       - ".github/workflows/perf-gate.yml"
 
 concurrency:
@@ -95,18 +101,27 @@ jobs:
           # `perf=false` leaves the required check reporting as a no-op shim — a
           # SKIPPED required job reads as missing rather than satisfied and would
           # block every merge (see the header note).
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            reason="not a pull request (main/manual) — always measured"
-            run=$touched
+          # Order matters: "is there anything to measure?" is asked FIRST, because
+          # it overrides everything else. Asking the event/label questions first
+          # produced a notice that contradicted the outcome — a docs-only PR
+          # carrying the `perf` label was correctly skipped but reported "'perf'
+          # label present", and a docs-only push to main reported "always
+          # measured" while skipping.
+          if [ "$touched" != "true" ]; then
+            reason="no perf-relevant files changed — nothing to measure"
+            run=false
+          elif [ "${{ github.event_name }}" != "pull_request" ]; then
+            reason="push to main — always measured"
+            run=true
           elif [ "${{ contains(github.event.pull_request.labels.*.name, 'perf') }}" = "true" ]; then
             reason="'perf' label present"
-            run=$touched
+            run=true
           elif git diff --name-only "$base" HEAD \
                | grep -qE '^(benchmarks/|\.github/workflows/perf-gate\.yml$)'; then
             reason="benchmarks or the gate itself changed"
-            run=$touched
+            run=true
           else
-            reason="no 'perf' label — add it to measure this PR"
+            reason="perf-relevant files changed but the 'perf' label is absent — add it to measure this PR"
             run=false
           fi
 

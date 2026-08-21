@@ -356,6 +356,7 @@ RSpec.describe Disarm do
       expect do
         Disarm.normalize_confusables("x", digit_policy: :skeleton)
       end.to raise_error(Disarm::InvalidArgument)
+    end
 
     it "ml-normalizes with case folding by default" do
       expect(Disarm.ml_normalize("José Martínez")).to eq("jose martinez")

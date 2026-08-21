@@ -56,12 +56,21 @@ def _regenerate(dest: pathlib.Path) -> str:
         )
         assert proc.returncode == 0, f"header generation failed:\n{proc.stderr}"
         produced = HEADER.read_text(encoding="utf-8")
+        # Inside the `try` so `produced` is provably bound at every use, and so a
+        # reader does not have to reason about whether the `finally` can fall through
+        # to a use of it. The restore below runs either way.
+        dest.write_text(produced, encoding="utf-8")
+        return produced
     finally:
-        manifest.write_text(original, encoding="utf-8")
-        if saved is not None:
-            HEADER.write_text(saved, encoding="utf-8")
-    dest.write_text(produced, encoding="utf-8")
-    return produced
+        # Best-effort restore. Guard it so a failure here cannot replace the real
+        # exception — a generation failure must surface as itself, not as whatever
+        # went wrong putting the manifest back.
+        try:
+            manifest.write_text(original, encoding="utf-8")
+            if saved is not None:
+                HEADER.write_text(saved, encoding="utf-8")
+        except OSError:  # pragma: no cover - the original error is the useful one
+            pass
 
 
 @pytest.mark.slow

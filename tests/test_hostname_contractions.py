@@ -21,6 +21,20 @@ import disarm
 # ── off by default ───────────────────────────────────────────────────────────
 
 
+def test_contraction_changes_canonical_not_the_verdict() -> None:
+    """The option is a canonicalization signal, not a verdict.
+
+    `arnazon.com` is all-ASCII Latin — no mixed script, no cross-script confusable — so
+    there is no evidence for a suspicious verdict, and disarm does not know `amazon` is a
+    brand. A caller branching on the boolean sees nothing change; the signal is in
+    `canonical`, to compare against their own allow list. Pinned because it is the most
+    likely way to misuse the flag.
+    """
+    suspicious, analysis = disarm.is_suspicious_hostname("arnazon.com", contractions=True)
+    assert suspicious is False
+    assert analysis.canonical == "amazon.com"
+
+
 def test_off_by_default() -> None:
     """The whole safety argument rests on this."""
     _suspicious, analysis = disarm.is_suspicious_hostname("arnazon.com")

@@ -355,6 +355,25 @@ _s, on = is_suspicious_hostname("arnazon.com", contractions=True)
 assert on.canonical == "amazon.com"
 ```
 
+### It changes `canonical`, not the verdict
+
+`contractions=True` does **not** make the boolean flip. `arnazon.com` is all-ASCII Latin:
+there is no mixed script and no cross-script confusable, so there is no evidence for a
+"suspicious" verdict, and disarm does not know that `amazon` is a brand worth
+impersonating.
+
+```python
+suspicious, analysis = is_suspicious_hostname("arnazon.com", contractions=True)
+assert suspicious is False
+assert analysis.canonical == "amazon.com"
+```
+
+The signal is in `canonical`. Compare it against your own brand or allow list — that is
+the comparison the option exists to make possible. Branching on the boolean alone will
+see nothing change, which is the same
+[reports-a-fact, not-a-verdict](../security/adversarial-defense.md) split the rest of the
+hostname surface follows.
+
 ### Why it is not a default, and not in `normalize_confusables`
 
 Unconditional contraction is **worse than none**. `rn` → `m` is right for `arnazon` and

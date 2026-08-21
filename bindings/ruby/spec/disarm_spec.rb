@@ -356,6 +356,7 @@ RSpec.describe Disarm do
       expect do
         Disarm.normalize_confusables("x", digit_policy: :skeleton)
       end.to raise_error(Disarm::InvalidArgument)
+    end
 
     it "leaves contractions off by default" do
       expect(Disarm.analyze_hostname("arnazon.com")[:canonical]).to eq("arnazon.com")

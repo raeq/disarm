@@ -19,6 +19,19 @@ on:
     # and don't need the run. (No `paths:` filter — see the header note: a
     # required check must report on every PR targeting main.)
     branches: [main]
+  # The expensive measurement is opt-in per PR (see the `changes` job) but
+  # unconditional here, so every commit landing on main is measured even when its
+  # PR skipped it — a regression is caught at merge instead of before it, and
+  # iai's estimated-cycles metric is deterministic, so a post-merge run carries
+  # the same authority the pre-merge one did.
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "benchmarks/**"
+      - "Cargo.toml"
+      - "build.rs"
+      - ".github/workflows/perf-gate.yml"
 
 concurrency:
   group: perf-gate-${{ github.ref }}
@@ -47,14 +60,63 @@ jobs:
           fetch-depth: 0
       - id: f
         run: |
-          base="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          # On a pull_request, diff against the merge base with the target branch.
+          # On a push to main there is no `base_ref` — compare against the commit
+          # before the push, falling back to HEAD~1 for the first push of a branch.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          else
+            base="${{ github.event.before }}"
+            if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              base="$(git rev-parse HEAD~1)"
+            fi
+          fi
           if git diff --name-only "$base" HEAD \
              | grep -qE '^(src/|benchmarks/|examples/|Cargo\.toml$|build\.rs$|requirements/bench\.txt$|\.github/workflows/perf-gate\.yml$)'; then
+            touched=true
+          else
+            touched=false
+          fi
+
+          # Touching perf-relevant files is necessary but no longer sufficient
+          # (Actions spend). This job is the most expensive thing in the repo —
+          # ~22 billed minutes, more than the whole of ci.yml — and it fired on
+          # every push to every PR touching `src/`, i.e. every code PR. In one
+          # 48-hour window that was 38 runs and roughly half the Linux bill.
+          #
+          # The measurement is unchanged; only WHEN it runs on a PR:
+          #   * the PR carries the `perf` label — opt in when you expect to move
+          #     the numbers, or want proof that you did not;
+          #   * the PR edits benchmarks/ or this workflow, where the gate is
+          #     itself the thing under test.
+          # Pushes to main always run it (see the `on:` block), so nothing
+          # reaches a release unmeasured.
+          #
+          # `perf=false` leaves the required check reporting as a no-op shim — a
+          # SKIPPED required job reads as missing rather than satisfied and would
+          # block every merge (see the header note).
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            reason="not a pull request (main/manual) — always measured"
+            run=$touched
+          elif [ "${{ contains(github.event.pull_request.labels.*.name, 'perf') }}" = "true" ]; then
+            reason="'perf' label present"
+            run=$touched
+          elif git diff --name-only "$base" HEAD \
+               | grep -qE '^(benchmarks/|\.github/workflows/perf-gate\.yml$)'; then
+            reason="benchmarks or the gate itself changed"
+            run=$touched
+          else
+            reason="no 'perf' label — add it to measure this PR"
+            run=false
+          fi
+
+          if [ "$run" = "true" ]; then
             echo "perf=true" >> "$GITHUB_OUTPUT"
-            echo "Perf-relevant files changed → gate will run."
+            echo "Running the estimated-cycles gate ($reason)."
           else
             echo "perf=false" >> "$GITHUB_OUTPUT"
-            echo "No perf-relevant files changed → gate is a no-op shim."
+            echo "::notice title=Perf gate skipped::$reason. It runs unconditionally on \
+            pushes to main, so main is always measured."
           fi
 
   # ── Hard, deterministic, directional gate (V10–V12) ──────────────────────

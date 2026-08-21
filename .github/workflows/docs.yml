@@ -38,6 +38,16 @@ jobs:
       contents: read
       deployments: write
       pull-requests: write
+    env:
+      # A PR from Dependabot or a fork runs with a restricted token and NO repository
+      # secrets, so the deploy below cannot authenticate and the whole job used to go
+      # red — discarding the `mkdocs build --strict` result, which is the part that
+      # actually gates doc quality and which runs fine there. A permanently-red check on
+      # every dependency bump teaches people to ignore red.
+      #
+      # The `secrets` context is not available in a step-level `if:`, so surface
+      # reachability here as a plain string and branch on `env` instead.
+      HAS_CLOUDFLARE_CREDENTIALS: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7
@@ -51,8 +61,20 @@ jobs:
         # --strict turns broken internal links / missing-nav pages into a failed
         # build, catching doc drift (same discipline as Sybil / check_doc_claims).
         run: mkdocs build --strict
+      - name: Skip the deploy when credentials are unreachable
+        if: env.HAS_CLOUDFLARE_CREDENTIALS != 'true'
+        # Say so out loud. A silently-skipped deploy looks identical to a successful one
+        # on the checks list, and the difference matters when you are waiting for a
+        # preview URL that is never going to arrive.
+        run: |
+          echo "::notice title=Docs preview skipped::No Cloudflare credentials are \
+          available to this run (Dependabot and fork pull requests do not receive \
+          repository secrets). The site was still built with --strict, which is the \
+          check that gates doc quality; only publishing the preview was skipped."
+
       - name: Deploy to Cloudflare Pages
         id: deploy
+        if: env.HAS_CLOUDFLARE_CREDENTIALS == 'true'
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4.0.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -64,7 +86,10 @@ jobs:
             --project-name=disarm-docs
             --branch=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'main' }}
       - name: Surface preview URL on the PR
-        if: github.event_name == 'pull_request' && steps.deploy.outputs.deployment-url != ''
+        if: >-
+          env.HAS_CLOUDFLARE_CREDENTIALS == 'true'
+          && github.event_name == 'pull_request'
+          && steps.deploy.outputs.deployment-url != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           script: |

@@ -451,6 +451,26 @@ Disarm.normalize_confusables("g\u{0966}\u{0966}gle")                      # => "
 Disarm.normalize_confusables("g\u{0966}\u{0966}gle", digit_policy: :tr39) # => "google"
 ```
 
+### `Disarm.ml_normalize`
+
+ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents → [case fold] →
+strip control → strip zero-width → collapse whitespace.
+
+`fold_case:` defaults to `true`, which suits the uncased tokenizers most pipelines use.
+Pass `false` in front of a **cased** model — folding is destructive, cannot be undone
+downstream, and an uncased evaluation harness cannot measure what it cost. It restores
+case, not diacritics: accents are still stripped.
+
+Folds **no** confusables, so it is not a homoglyph defence at any setting; compose it
+after `normalize_confusables` when a model needs both.
+
+```ruby
+Disarm.ml_normalize("José Martínez")                        # => "jose martinez"
+Disarm.ml_normalize("José Martínez", fold_case: false)      # => "Jose Martinez"
+Disarm.ml_normalize("MÜNCHEN Straße", lang: "de")           # => "muenchen strasse"
+Disarm.ml_normalize("Hi 😀", emoji_style: "none")            # => "hi 😀"
+```
+
 ### `Disarm.unmapped_confusables` · `Disarm.find_unmapped_confusables`
 
 Coverage is not a score. A tool that folds 95% of known confusable sources is not 95%
@@ -561,7 +581,7 @@ change. Pin a version if you need byte-stable output.
 **Not surfaced in this binding** (Python-only for now — compose the primitives,
 or use the Python package): the output encoders / encoding family
 (`escape_html`, `percent_encode`, `strip_log_injection`, `detect_encoding`,
-`decode_to_utf8`), the `ml_normalize` / `strip_format` / `canonicalize_strict`
-presets, and the `list_profiles` / `list_langs` / `is_ascii` helpers. In
+`decode_to_utf8`), the `strip_format` / `canonicalize_strict` presets, and the
+`list_profiles` / `list_langs` / `is_ascii` helpers. In
 particular, `strip_log_injection` is a security-relevant control that is **not**
 available here — neutralize log-injection at the sink, or use the Python binding.

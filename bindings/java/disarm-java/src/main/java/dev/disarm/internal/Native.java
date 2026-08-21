@@ -132,6 +132,9 @@ public final class Native {
 
     public static native String[] detectScripts(String text);
 
+    public static native String mlNormalize(
+            String text, String lang, String emojiStyle, boolean foldCase);
+
     public static native String[] unmappedConfusables(String target);
 
     public static native java.util.List<dev.disarm.UnmappedConfusable> findUnmappedConfusables(

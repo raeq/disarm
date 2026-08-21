@@ -343,6 +343,19 @@ module Disarm
       end
     end
 
+    # ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
+    # [case fold] → strip control → strip zero-width → collapse whitespace.
+    #
+    # `fold_case:` defaults to true. Pass false in front of a CASED model — folding is
+    # destructive, cannot be undone downstream, and an uncased evaluation harness cannot
+    # measure what it cost. It restores case, not diacritics: accents are still stripped.
+    #
+    # Folds no confusables, so it is not a homoglyph defence at any setting; compose it
+    # after `normalize_confusables` when a model needs both.
+    def ml_normalize(text, lang: nil, emoji_style: "cldr", fold_case: true)
+      translate_errors { _ml_normalize(text, lang&.to_s, emoji_style.to_s, fold_case) }
+    end
+
     # The Unicode scripts present in `text`, in first-appearance order
     # (Common/Inherited excluded), as stable UCD identifiers (e.g. "Latin").
     def detect_scripts(text)

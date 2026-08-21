@@ -416,6 +416,29 @@ pub fn normalizeConfusables<'l>(
     .resolve::<Policy>()
 }
 
+/// ML/NLP normalization preset. `lang` and `emojiStyle` may be null / "cldr";
+/// `foldCase` drops the case-fold step when false.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn mlNormalize<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    lang: JString<'l>,
+    emoji_style: JString<'l>,
+    fold_case: jboolean,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let lang = read_optional(env, &lang)?;
+        let emoji_style = emoji_style.mutf8_chars(env)?.to_string();
+        match api::ml_normalize(&text, lang.as_deref(), &emoji_style, fold_case) {
+            Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
 /// Every upstream confusable source the bundled `target` table does not fold (#563).
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn unmappedConfusables<'l>(

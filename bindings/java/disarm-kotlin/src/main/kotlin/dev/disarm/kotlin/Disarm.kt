@@ -8,6 +8,7 @@ import dev.disarm.DigitPolicy
 import dev.disarm.HostnameAnalysis
 import dev.disarm.LangMeta
 import dev.disarm.Lexicon
+import dev.disarm.MlNormalizeOptions
 import dev.disarm.NormalizationForm
 import dev.disarm.Pipeline
 import dev.disarm.Platform
@@ -214,6 +215,23 @@ fun scriptInfo(name: String): ScriptMeta = JDisarm.scriptInfo(name)
  * Not a library-wide Unicode version — see `docs/provenance.md`.
  */
 fun confusablesVersion(): String = JDisarm.confusablesVersion()
+
+/**
+ * ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents → [case fold]
+ * → strip control → strip zero-width → collapse whitespace.
+ *
+ * [foldCase] defaults to true; pass false in front of a **cased** model. It restores
+ * case, not diacritics — accents are still stripped. Folds no confusables, so it is not a
+ * homoglyph defence at any setting.
+ */
+fun String.mlNormalize(
+    lang: String? = null,
+    emojiStyle: String = "cldr",
+    foldCase: Boolean = true,
+): String = JDisarm.mlNormalize(
+    this,
+    MlNormalizeOptions.builder().lang(lang).emojiStyle(emojiStyle).foldCase(foldCase).build(),
+)
 
 /** Every upstream confusable source the bundled [target] table does not fold (#563). */
 fun unmappedConfusables(target: TargetScript = TargetScript.LATIN): List<String> =

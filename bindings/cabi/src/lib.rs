@@ -443,6 +443,31 @@ fn disarm_confusables_version() -> char_p::Box {
     to_c(api::CONFUSABLES_VERSION.to_owned())
 }
 
+/// ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
+/// [case fold] → strip control → strip zero-width → collapse whitespace.
+///
+/// `lang` is nullable (NULL = no transliteration). `emoji_style` is `"cldr"` or
+/// `"none"`. `fold_case` drops the case-fold step when false — pass false in front of a
+/// CASED model; it restores case, not diacritics. Folds no confusables, so it is not a
+/// homoglyph defence at any setting.
+#[ffi_export]
+fn disarm_ml_normalize(
+    text: char_p::Ref<'_>,
+    lang: Option<char_p::Ref<'_>>,
+    emoji_style: char_p::Ref<'_>,
+    fold_case: bool,
+) -> DisarmResult {
+    match api::ml_normalize(
+        text.to_str(),
+        opt_str(lang),
+        emoji_style.to_str(),
+        fold_case,
+    ) {
+        Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
 // ── Coverage introspection (#563) ───────────────────────────────────────────────
 
 /// Every upstream confusable source the bundled `target` table does not fold, as a

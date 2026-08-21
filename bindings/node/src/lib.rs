@@ -403,6 +403,24 @@ pub fn catalog_key(
         .map_err(|e| map_err(&e))
 }
 
+/// ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
+/// [case fold] → strip control → strip zero-width → collapse whitespace.
+///
+/// `fold_case` defaults to `true`. Pass `false` in front of a CASED model: the fold is
+/// destructive, cannot be undone downstream, and an uncased evaluation harness cannot
+/// measure what it cost. It restores case, not diacritics — `strip_accents` still runs.
+#[napi]
+pub fn ml_normalize(
+    text: String,
+    lang: Option<String>,
+    emoji_style: String,
+    fold_case: bool,
+) -> Result<String, NapiError> {
+    api::ml_normalize(&text, lang.as_deref(), &emoji_style, fold_case)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
+}
+
 // ── Grapheme clusters ─────────────────────────────────────────────────────────
 
 #[napi]

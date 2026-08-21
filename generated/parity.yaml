@@ -233,8 +233,8 @@ operations:
     names:
       rust: ml_normalize
       python: ml_normalize
-      ruby: null
-      node: null
+      ruby: ml_normalize
+      node: mlNormalize
   - id: normalize
     names:
       rust: normalize

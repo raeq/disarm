@@ -58,6 +58,14 @@ jobs:
               - 'build.rs'
               - 'Cargo.toml'
               - '.github/workflows/ci.yml'
+              # `docs/**` matches the Node filter below: the Ruby `# =>` doc
+              # examples re-validate against the freshly-built LOCAL-core gem when
+              # a usage tab or the API page changes. Previously only
+              # publish-ruby.yml covered that, by running its whole gem pipeline on
+              # every docs PR — a 4.7-minute job for a check this one already owns,
+              # and one that tested the PUBLISHED core rather than the PR's.
+              - 'docs/**'
+              - 'scripts/check_doc_ruby_examples.rb'
             # Same drift-gate rationale as `ruby` (#374): rebuild the Node binding
             # when ITS code OR the CORE it wraps changes (#44). `docs/**` is included
             # so the Node `// =>` doc examples re-validate against the built addon
@@ -290,7 +298,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["3.1", "3.2", "3.3"]  # the range magnus 0.7 supports
+        # magnus 0.7 supports 3.1-3.3, and all three are exercised — but not on
+        # every PR push. A PR runs the FLOOR (3.1): a magnus/rb-sys incompatibility
+        # shows up at the oldest supported version, not the newest, so one version
+        # catches the realistic break for a third of the minutes. Pushes to main
+        # run the full range, so nothing reaches a release unverified across it,
+        # and publish-ruby.yml re-runs all three before the gem is built.
+        ruby: ${{ github.event_name == 'pull_request' && fromJSON('["3.1"]') || fromJSON('["3.1","3.2","3.3"]') }}
     env:
       # bundler-cache runs at the repo root (no Gemfile there) unless pointed at
       # the gem's Gemfile; GITHUB_TOKEN authenticates the cargo-cache tooling.
@@ -559,164 +573,74 @@ jobs:
           command: check licenses bans sources
 
 
-  # ── Status gates (always run, for branch protection) ────────────
-  # These MUST run on every PR so branch protection checks report.
-  # On doc-only PRs, lint/test are skipped — gates pass on those.
-  # The RustSec audit, however, blocks merge on EVERY PR (#195): an advisory can
-  # land on a dependency without any code change here.
-  rust-ok:
-    name: Rust checks passed
+  # ── Status gate (always runs, for branch protection) ────────────
+  # ONE job, not one per language. GitHub bills every job rounded UP to the
+  # nearest minute, so six aggregators that each finish in ~3 seconds were billed
+  # as six full minutes per run — about a third of this workflow's billable time
+  # spent on runner spin-up for jobs that only read `needs.*.result`.
+  #
+  # Collapsing them costs no signal: each language's verdict is still computed
+  # from the same inputs and reported by name in the log, and any one failure
+  # fails the gate. What changes is that branch protection now requires a single
+  # `All checks passed` context instead of six.
+  #
+  # On a doc-only PR the language jobs are skipped and their gates pass — the
+  # per-language `*_CHANGED` guards below preserve that exactly as before. The
+  # RustSec audit and the supply-chain policy are the two exceptions that block
+  # merge on EVERY PR (#195/#260): an advisory or a license change can land on a
+  # dependency without any code change here.
+  all-ok:
+    name: All checks passed
     if: always()
-    needs: [changes, lint, test, cargo-audit, cargo-deny]
+    needs: [changes, lint, test, doc-tests, cargo-audit, cargo-deny, ruby, node, java, cabi]
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          CODE="${{ needs.changes.outputs.code }}"
-          LINT="${{ needs.lint.result }}"
-          TEST="${{ needs.test.result }}"
-          AUDIT="${{ needs['cargo-audit'].result }}"
-          DENY="${{ needs['cargo-deny'].result }}"
-
-          # A RustSec advisory blocks merge regardless of code changes (#195).
-          if [[ "$AUDIT" != "success" ]]; then
-            echo "cargo audit ($AUDIT) — an outstanding RustSec advisory blocks merge"
-            exit 1
-          fi
-
-          # A supply-chain policy violation (license/ban/source) blocks merge on
-          # every PR (#260): a dependency's license or source can change without
-          # any code change here.
-          if [[ "$DENY" != "success" ]]; then
-            echo "cargo deny ($DENY) — a supply-chain policy violation blocks merge"
-            exit 1
-          fi
-
-          if [[ "$CODE" != "true" ]]; then
-            echo "No code changes — skipping lint/test gate"
-            exit 0
-          fi
-
-          if [[ "$LINT" != "success" || "$TEST" != "success" ]]; then
-            echo "lint ($LINT) or test ($TEST) failed"
-            exit 1
-          fi
-
-  ruby-ok:
-    name: Ruby checks passed
-    if: always()
-    needs: [changes, ruby]
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          RUBY_CHANGED="${{ needs.changes.outputs.ruby }}"
-          RUBY_RESULT="${{ needs.ruby.result }}"
-
-          # On a PR that touches neither the binding nor the core, the ruby job
-          # is skipped — the gate passes (nothing to verify).
-          if [[ "$RUBY_CHANGED" != "true" ]]; then
-            echo "No binding/core changes — Ruby gate not required"
-            exit 0
-          fi
-
-          # The binding (or the core it wraps) changed: the build+RSpec against
-          # the local core must have passed (#374).
-          if [[ "$RUBY_RESULT" != "success" ]]; then
-            echo "ruby ($RUBY_RESULT) — the Ruby binding failed to build/spec against the local core"
-            exit 1
-          fi
-          echo "Ruby binding OK against the local core"
-
-  node-ok:
-    name: Node checks passed
-    if: always()
-    needs: [changes, node]
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          NODE_CHANGED="${{ needs.changes.outputs.node }}"
-          NODE_RESULT="${{ needs.node.result }}"
-
-          if [[ "$NODE_CHANGED" != "true" ]]; then
-            echo "No binding/core changes — Node gate not required"
-            exit 0
-          fi
-
-          if [[ "$NODE_RESULT" != "success" ]]; then
-            echo "node ($NODE_RESULT) — the Node binding failed to build/test against the local core"
-            exit 1
-          fi
-          echo "Node binding OK against the local core"
-
-  java-ok:
-    name: Java checks passed
-    if: always()
-    needs: [changes, java]
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          JAVA_CHANGED="${{ needs.changes.outputs.java }}"
-          JAVA_RESULT="${{ needs.java.result }}"
-
-          if [[ "$JAVA_CHANGED" != "true" ]]; then
-            echo "No binding/core changes — Java gate not required"
-            exit 0
-          fi
-
-          if [[ "$JAVA_RESULT" != "success" ]]; then
-            echo "java ($JAVA_RESULT) — the Java binding failed to build/test against the local core"
-            exit 1
-          fi
-          echo "Java binding OK against the local core"
-
-  cabi-ok:
-    name: C ABI checks passed
-    if: always()
-    needs: [changes, cabi]
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          CABI_CHANGED="${{ needs.changes.outputs.cabi }}"
-          CABI_RESULT="${{ needs.cabi.result }}"
-
-          if [[ "$CABI_CHANGED" != "true" ]]; then
-            echo "No C-ABI/core changes — C ABI gate not required"
-            exit 0
-          fi
-
-          if [[ "$CABI_RESULT" != "success" ]]; then
-            echo "cabi ($CABI_RESULT) — the C ABI failed to build/smoke against the local core"
-            exit 1
-          fi
-          echo "C ABI OK against the local core"
-
-  python-ok:
-    name: Python checks passed
-    if: always()
-    needs: [changes, lint, test, doc-tests]
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
+      - name: Evaluate every language gate
+        run: |
           CODE="${{ needs.changes.outputs.code }}"
           DOCS="${{ needs.changes.outputs.docs }}"
           LINT="${{ needs.lint.result }}"
           TEST="${{ needs.test.result }}"
           DOCTESTS="${{ needs['doc-tests'].result }}"
+          AUDIT="${{ needs['cargo-audit'].result }}"
+          DENY="${{ needs['cargo-deny'].result }}"
 
-          # Cookbook doc-tests run on code OR docs changes (#154); a doc example
-          # can break from either. Block merge if they ran and did not pass.
+          failed=0
+          fail() { echo "::error title=$1::$2"; failed=1; }
+
+          # ── Always-on gates ────────────────────────────────────────────────
+          # An advisory or a supply-chain policy violation can appear without any
+          # code change in this PR, so these block merge unconditionally.
+          [[ "$AUDIT" == "success" ]] || fail "cargo audit" "RustSec advisory outstanding ($AUDIT)"
+          [[ "$DENY"  == "success" ]] || fail "cargo deny"  "supply-chain policy violation ($DENY)"
+
+          # ── Rust + Python ──────────────────────────────────────────────────
           if [[ "$CODE" == "true" || "$DOCS" == "true" ]]; then
-            if [[ "$DOCTESTS" != "success" ]]; then
-              echo "doc-tests ($DOCTESTS) failed"
-              exit 1
+            [[ "$DOCTESTS" == "success" ]] || fail "doc-tests" "cookbook doc-tests failed ($DOCTESTS)"
+          fi
+          if [[ "$CODE" == "true" ]]; then
+            [[ "$LINT" == "success" ]] || fail "lint" "lint/format failed ($LINT)"
+            [[ "$TEST" == "success" ]] || fail "test" "tests failed ($TEST)"
+          else
+            echo "No code changes — lint/test not required"
+          fi
+
+          # ── Bindings ───────────────────────────────────────────────────────
+          # Each is required only when the binding or the core it wraps changed
+          # (#374 drift gate); otherwise the job is skipped and the gate passes.
+          check_binding() {
+            local label="$1" changed="$2" result="$3"
+            if [[ "$changed" != "true" ]]; then
+              echo "$label: no binding/core changes — not required"
+            elif [[ "$result" != "success" ]]; then
+              fail "$label" "failed to build/test against the local core ($result)"
+            else
+              echo "$label: OK against the local core"
             fi
-          fi
+          }
+          check_binding Ruby "${{ needs.changes.outputs.ruby }}" "${{ needs.ruby.result }}"
+          check_binding Node "${{ needs.changes.outputs.node }}" "${{ needs.node.result }}"
+          check_binding Java "${{ needs.changes.outputs.java }}" "${{ needs.java.result }}"
+          check_binding "C ABI" "${{ needs.changes.outputs.cabi }}" "${{ needs.cabi.result }}"
 
-          if [[ "$CODE" != "true" ]]; then
-            echo "No code changes — skipping lint/test checks"
-            exit 0
-          fi
-
-          if [[ "$LINT" != "success" || "$TEST" != "success" ]]; then
-            echo "lint ($LINT) or test ($TEST) failed"
-            exit 1
-          fi
+          exit "$failed"

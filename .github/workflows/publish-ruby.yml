@@ -13,11 +13,19 @@ on:
     branches: [main]
     paths: ["bindings/ruby/**", "docs/**", "scripts/check_doc_ruby_examples.rb", ".github/workflows/publish-ruby.yml"]
   pull_request:
-    # docs/** is included so the Ruby `# =>` doc examples (#50) are re-validated
-    # against the built binding when a usage tab changes. Only the `test` job
-    # runs on a PR (cross-gems/publish are gated to `release`), so this stays
-    # cheap-ish — and bundler/cargo caches make the rebuild fast.
-    paths: ["bindings/ruby/**", "docs/**", "scripts/check_doc_ruby_examples.rb", ".github/workflows/publish-ruby.yml"]
+    # `docs/**` used to be here so the Ruby `# =>` doc examples (#50) re-validated
+    # when a usage tab changed. That fired this whole gem pipeline on every docs
+    # PR — 32 times in one 48-hour window, ~4.7 billed minutes each — to run a
+    # check ci.yml's `ruby` job can do in one, and it tested the PUBLISHED core
+    # rather than the PR's, so it could not catch core drift anyway.
+    #
+    # ci.yml's ruby filter now carries `docs/**` and the doc-example script, so
+    # that gate still runs on every docs PR — once, and against the local core.
+    # What remains here is the question only this workflow answers: does the gem
+    # build and pass against the PUBLISHED core? That is a release concern, so it
+    # runs on push to main and on release, plus PRs touching the binding or this
+    # workflow.
+    paths: ["bindings/ruby/**", ".github/workflows/publish-ruby.yml"]
   release:
     types: [published]
   workflow_dispatch:

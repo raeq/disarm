@@ -495,8 +495,8 @@ pub struct HostnameAnalysis {
 /// [`HostnameAnalysis`] (verdict + granular signals). `isSuspiciousHostname` is
 /// the boolean shorthand for `.suspicious`.
 #[napi]
-pub fn analyze_hostname(host: String) -> HostnameAnalysis {
-    let a = api::is_suspicious_hostname(&host);
+pub fn analyze_hostname(host: String, contractions: bool) -> HostnameAnalysis {
+    let a = api::analyze_hostname_with(&host, contractions);
     HostnameAnalysis {
         suspicious: a.suspicious,
         scripts: a.scripts,

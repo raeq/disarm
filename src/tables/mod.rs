@@ -452,6 +452,13 @@ pub fn confusable_digit_tr39_override(ch: char) -> Option<&'static str> {
     confusables_data::digit_tr39_override(ch)
 }
 
+/// The contraction rule set (#562): ASCII digraph to single ASCII letter. Consulted only
+/// by the hostname path, and only when the caller opts in.
+#[inline]
+pub fn contraction_rules() -> &'static [(&'static str, &'static str)] {
+    confusables_data::CONTRACTIONS
+}
+
 /// True if `ch` is a confusable source in the bundled upstream `confusables.txt`,
 /// whether or not disarm's tables fold it (#563).
 #[inline]

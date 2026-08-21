@@ -336,6 +336,87 @@ Identify which Unicode scripts are present in a string:
 | `COMMON` | Digits, punctuation, whitespace |
 | `INHERITED` | Combining diacritical marks |
 
+## Contraction: when two letters impersonate one
+
+The confusable tables map one codepoint to one-or-more, so **expansion** has always
+worked. **Contraction** — recognising that `rn` may stand in for `m` — could not be
+expressed at all, because the source column of both tables is a single hex codepoint in
+every row. That made it a schema change before it was a data change.
+
+It now exists, and it is **off by default and confined to hostname analysis**:
+
+```python
+from disarm import is_suspicious_hostname
+
+_s, off = is_suspicious_hostname("arnazon.com")
+assert off.canonical == "arnazon.com"
+
+_s, on = is_suspicious_hostname("arnazon.com", contractions=True)
+assert on.canonical == "amazon.com"
+```
+
+### It changes `canonical`, not the verdict
+
+`contractions=True` does **not** make the boolean flip. `arnazon.com` is all-ASCII Latin:
+there is no mixed script and no cross-script confusable, so there is no evidence for a
+"suspicious" verdict, and disarm does not know that `amazon` is a brand worth
+impersonating.
+
+```python
+suspicious, analysis = is_suspicious_hostname("arnazon.com", contractions=True)
+assert suspicious is False
+assert analysis.canonical == "amazon.com"
+```
+
+The signal is in `canonical`. Compare it against your own brand or allow list — that is
+the comparison the option exists to make possible. Branching on the boolean alone will
+see nothing change, which is the same
+[reports-a-fact, not-a-verdict](../security/adversarial-defense.md) split the rest of the
+hostname surface follows.
+
+### Why it is not a default, and not in `normalize_confusables`
+
+Unconditional contraction is **worse than none**. `rn` → `m` is right for `arnazon` and
+wrong for `earnings`, `turnip`, and `born`:
+
+```python
+from disarm import normalize_confusables
+
+# The general fold never contracts, at any setting.
+assert normalize_confusables("earnings") == "earnings"
+assert normalize_confusables("arnazon") == "arnazon"
+```
+
+A hostname is the one place where the threat model justifies those false positives and
+where there is no running prose to corrupt. A general-text contraction mode, if it ever
+lands, needs its own disambiguation story.
+
+### The rules, and why there are only three
+
+| Rule | Provenance |
+|---|---|
+| `rn` → `m` | Upstream. TR39 reduces `m` to the sequence `rn`, and 17 distinct sources fold *to* `rn` — the dominant multi-character target in the file. |
+| `vv` → `w` | disarm addition. Not in TR39; long-documented in IDN homograph literature. |
+| `cl` → `d` | disarm addition. Not in TR39; the third commonly-cited ASCII digraph attack. |
+
+Every rule is a false-positive source, so the bar is "documented real-world technique",
+not "plausible".
+
+Matching is **leftmost-longest** over an Aho-Corasick automaton, and applied **per label**,
+so a digraph can never form across a dot:
+
+```python
+_s, a = is_suspicious_hostname("vvv.com", contractions=True)
+assert a.canonical == "wv.com"          # leftmost wins, never "vw"
+
+_s, b = is_suspicious_hostname("var.net", contractions=True)
+assert b.canonical == "var.net"         # the r and n are in different labels
+```
+
+One pass is a fixed point by construction: `build.rs` asserts no rule's output occurs
+inside any rule's input, so a pass can never expose a fresh match. A data edit that
+introduced such a chain would fail the build.
+
 ## Knowing what is NOT covered
 
 Coverage is not a score. A tool that folds 95% of known confusable sources is not 95%

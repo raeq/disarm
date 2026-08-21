@@ -124,7 +124,7 @@ public final class Native {
     // ── Hostname / script analysis ─────────────────────────────────────────────
     public static native boolean isSuspiciousHostname(String host);
 
-    public static native HostnameAnalysis analyzeHostname(String host);
+    public static native HostnameAnalysis analyzeHostname(String host, boolean contractions);
 
     public static native boolean isMixedScript(String text);
 

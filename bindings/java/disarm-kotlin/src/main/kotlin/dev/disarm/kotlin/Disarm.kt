@@ -179,7 +179,8 @@ fun String.terminalWidth(ambiguousWide: Boolean = false): Long = JDisarm.termina
 fun String.isSuspiciousHostname(): Boolean = JDisarm.isSuspiciousHostname(this)
 
 /** Full hostname homoglyph analysis (#549) — verdict + granular signals. */
-fun String.analyzeHostname(): HostnameAnalysis = JDisarm.analyzeHostname(this)
+fun String.analyzeHostname(contractions: Boolean = false): HostnameAnalysis =
+    JDisarm.analyzeHostname(this, contractions)
 
 fun String.isMixedScript(): Boolean = JDisarm.isMixedScript(this)
 

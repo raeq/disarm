@@ -61,10 +61,10 @@ impl From<crate::api::HostnameAnalysis> for HostnameAnalysis {
 
 /// `is_suspicious_hostname(hostname) -> (bool, HostnameAnalysis)`
 #[pyfunction]
-#[pyo3(signature = (hostname,))]
-pub fn _is_suspicious_hostname(hostname: &str) -> (bool, HostnameAnalysis) {
+#[pyo3(signature = (hostname, *, contractions=false))]
+pub fn _is_suspicious_hostname(hostname: &str, contractions: bool) -> (bool, HostnameAnalysis) {
     // The Python surface keeps its (bool, analysis) tuple shape; the Rust api now
     // returns the analysis alone, with the verdict on its `suspicious` field.
-    let analysis = crate::api::is_suspicious_hostname(hostname);
+    let analysis = crate::api::analyze_hostname_with(hostname, contractions);
     (analysis.suspicious, analysis.into())
 }

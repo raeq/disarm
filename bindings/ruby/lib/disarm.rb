@@ -174,11 +174,11 @@ module Disarm
     # :label_scripts, :whole_script_confusable, :label_whole_script_confusable,
     # :canonical. `:whole_script_confusable` is a graded signal, NOT folded into
     # `:suspicious` (see #545).
-    def analyze_hostname(host)
+    def analyze_hostname(host, contractions: false)
       suspicious, scripts, mixed_script, has_confusables, bidi_conflict,
         cross_label_script, label_scripts, whole_script_confusable,
         label_whole_script_confusable, canonical =
-        translate_errors { _analyze_hostname(host) }
+        translate_errors { _analyze_hostname(host, contractions) }
       {
         suspicious:,
         scripts:,

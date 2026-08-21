@@ -1177,7 +1177,9 @@ def grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int:
 # --- Hostname safety ---
 
 
-def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
+def is_suspicious_hostname(
+    hostname: str, *, contractions: bool = False
+) -> tuple[bool, HostnameAnalysis]:
     """Flag a hostname as *suspicious* for Unicode homoglyph spoofing.
 
     Returns ``(suspicious, analysis)`` where ``analysis`` is a
@@ -1227,6 +1229,19 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
 
     Args:
         hostname: Hostname string to check (e.g. "example.com").
+        contractions: Also fold ASCII digraphs that can impersonate a single letter
+            — ``rn`` to ``m``, ``vv`` to ``w``, ``cl`` to ``d`` — into ``canonical``,
+            so ``arnazon.com`` canonicalizes to ``amazon.com`` (#562).
+
+            **Off by default, and deliberately confined to hostnames.** Unconditional
+            contraction is worse than none: ``rn`` to ``m`` is right for ``arnazon``
+            and wrong for ``earnings``, ``turnip`` and ``born``. A hostname is the one
+            place where the threat model justifies those false positives and there is
+            no running prose to corrupt, so this is not reachable from
+            :func:`normalize_confusables` at all.
+
+            Matching is leftmost-longest, and applied per label, so a digraph can never
+            form across a dot.
 
     Returns:
         Tuple of (suspicious, analysis) where analysis is a HostnameAnalysis.
@@ -1237,8 +1252,11 @@ def is_suspicious_hostname(hostname: str) -> tuple[bool, HostnameAnalysis]:
         False
         >>> analysis.canonical
         'google.com'
+        >>> _s, a = is_suspicious_hostname("arnazon.com", contractions=True)
+        >>> a.canonical
+        'amazon.com'
     """
-    return _is_suspicious_hostname(hostname)
+    return _is_suspicious_hostname(hostname, contractions=contractions)
 
 
 # --- Anomaly detection (#389) ---

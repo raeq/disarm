@@ -358,6 +358,18 @@ RSpec.describe Disarm do
       end.to raise_error(Disarm::InvalidArgument)
     end
 
+    it "leaves contractions off by default" do
+      expect(Disarm.analyze_hostname("arnazon.com")[:canonical]).to eq("arnazon.com")
+    end
+
+    it "recovers the digraph spoof when contractions are enabled" do
+      expect(
+        Disarm.analyze_hostname("arnazon.com", contractions: true)[:canonical]
+      ).to eq("amazon.com")
+      expect(Disarm.analyze_hostname("vvv.com", contractions: true)[:canonical]).to eq("wv.com")
+      expect(Disarm.analyze_hostname("var.net", contractions: true)[:canonical]).to eq("var.net")
+    end
+
     it "ml-normalizes with case folding by default" do
       expect(Disarm.ml_normalize("José Martínez")).to eq("jose martinez")
       expect(Disarm.ml_normalize("Café RÉSUMÉ")).to eq("cafe resume")

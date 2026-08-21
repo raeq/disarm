@@ -28,6 +28,9 @@ include!(concat!(env!("OUT_DIR"), "/confusables_version.rs"));
 // Digit-policy overrides (#561): TR39's target for the rows where disarm diverges.
 include!(concat!(env!("OUT_DIR"), "/confusables_digit_tr39_phf.rs"));
 
+// Contraction rules (#562): ASCII digraph -> single ASCII letter, hostname path only.
+include!(concat!(env!("OUT_DIR"), "/confusables_contractions.rs"));
+
 // Every source codepoint in the upstream confusables.txt (#563). The coverage
 // denominator — see `unmapped_sources`.
 include!(concat!(

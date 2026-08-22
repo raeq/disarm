@@ -70,6 +70,15 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   numeric — selecting TR39 there would silently change what `is_suspicious_hostname`
   flags, which is a security-behaviour change and belongs in its own issue.
 
+  Scope, second axis: `"tr39"` applies to the **Latin** target only; with any other
+  target script it is a no-op and the fold behaves exactly as `"numeric"`. The override
+  set is generated from the Latin table and its values are TR39's Latin-script targets,
+  so consulting it under `target_script = "cyrillic"` emitted Latin letters into a
+  Cyrillic skeleton (`०` folded to `o`, not `0`) and invented folds for sources the
+  Cyrillic table deliberately has no row for. Three of those leaked outputs (`Ʌ`, `o`,
+  `rn`) are themselves confusable with Cyrillic, so the fold did not even reach a fixed
+  point.
+
 - **`ml_normalize` reaches every binding.** It was Rust + Python only, recorded in
   `scripts/parity.py` as a deliberate scope decision. That decision does not survive
   contact with what the preset is *for*: it is the ML/NLP entry point, so keeping it

@@ -99,7 +99,37 @@ fn both_policies_are_idempotent() {
 /// change what `is_suspicious_hostname` flags, which is a security-behaviour change.
 #[test]
 fn hostname_analysis_is_unaffected() {
-    let analysis = disarm::api::is_suspicious_hostname("g\u{0966}\u{0966}gle.com");
-    // Whatever the verdict, it must match the numeric-policy skeleton, not the TR39 one.
-    assert!(!analysis.canonical.contains("google"));
+    let host = "g\u{0966}\u{0966}gle.com";
+    let analysis = disarm::api::is_suspicious_hostname(host);
+    // The canonical form is the numeric-policy skeleton, verbatim — not the TR39 one.
+    assert_eq!(
+        analysis.canonical,
+        normalize_confusables_with(host, LATIN, DigitPolicy::Numeric)
+    );
+    assert_ne!(
+        analysis.canonical,
+        normalize_confusables_with(host, LATIN, DigitPolicy::Tr39)
+    );
+}
+
+/// The override set holds TR39's *Latin* targets, so the policy is Latin-only: under any
+/// other target it must be a no-op, not a source of Latin letters in a Cyrillic skeleton
+/// (and not a fold for sources the Cyrillic table has no row for at all).
+#[test]
+fn the_policy_is_scoped_to_the_latin_target() {
+    const CYRILLIC: TargetScript = TargetScript::Cyrillic;
+    for text in [
+        "\u{0966}",  // Devanagari zero — a Cyrillic row exists (→ "0")
+        "\u{0668}",  // Arabic-Indic eight — a Cyrillic row exists (→ "8")
+        "\u{0660}",  // Arabic-Indic zero — NO Cyrillic row; must pass through
+        "\u{2079}",  // superscript nine — NO Cyrillic row; must pass through
+        "\u{118E3}", // Warang Citi three — NO Cyrillic row; must pass through
+        "hello",
+    ] {
+        assert_eq!(
+            normalize_confusables_with(text, CYRILLIC, DigitPolicy::Numeric),
+            normalize_confusables_with(text, CYRILLIC, DigitPolicy::Tr39),
+            "digit policy changed the Cyrillic fold of {text:?}"
+        );
+    }
 }

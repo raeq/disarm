@@ -725,6 +725,10 @@ def normalize_confusables(
             reads sensibly. Reach for it when comparing against a TR39-derived
             benchmark. The two policies differ on ~45 rows and agree everywhere else.
 
+            Scoped to the Latin target: the override rows are generated from the
+            Latin table and carry TR39's Latin-script targets, so with
+            ``target_script="cyrillic"`` this is a no-op.
+
     Returns:
         String with confusable characters replaced by target-script equivalents.
 

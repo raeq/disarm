@@ -373,6 +373,11 @@ target reads sensibly.
 The two differ on about 45 rows and agree on everything else. Reach for `tr39` when
 comparing against a TR39-derived benchmark, and leave the default alone for text.
 
+The policy is scoped to the Latin target. The override rows are generated from the
+Latin table and carry TR39's Latin-script targets, so they mean nothing for another
+script — with the target set to Cyrillic the policy is a no-op and the fold stays
+numeric.
+
 ```ts
 normalizeConfusables('g\u0966\u0966gle') // => 'g00gle'
 normalizeConfusables('g\u0966\u0966gle', { digitPolicy: 'tr39' }) // => 'google'

@@ -61,17 +61,29 @@ jobs:
         # --strict turns broken internal links / missing-nav pages into a failed
         # build, catching doc drift (same discipline as Sybil / check_doc_claims).
         run: mkdocs build --strict
+      - name: Fail when a run that should have credentials does not
+        # Only a Dependabot or fork pull request is *expected* to run without secrets.
+        # Anywhere else — a push to main above all — an empty secret means it was
+        # rotated, renamed or deleted, and skipping the deploy there would park a green
+        # check over a production site that has quietly stopped updating. Fail loudly,
+        # which is what this job did before the skip below existed.
+        if: github.event_name != 'pull_request' && env.HAS_CLOUDFLARE_CREDENTIALS != 'true'
+        run: |
+          echo "::error title=Docs deploy credentials missing::CLOUDFLARE_API_TOKEN \
+          and/or CLOUDFLARE_ACCOUNT_ID are empty on a run that is entitled to them. The \
+          site built fine, but it cannot be published — check the repository secrets."
+          exit 1
       - name: Skip the deploy when credentials are unreachable
-        if: env.HAS_CLOUDFLARE_CREDENTIALS != 'true'
-        # Say so out loud. A silently-skipped deploy looks identical to a successful one
-        # on the checks list, and the difference matters when you are waiting for a
-        # preview URL that is never going to arrive.
+        if: github.event_name == 'pull_request' && env.HAS_CLOUDFLARE_CREDENTIALS != 'true'
+        # Say so out loud. A skipped deploy is indistinguishable from a completed one on
+        # the checks list, so the run summary's annotation is where the difference gets
+        # recorded — and it matters to anyone waiting on a preview URL that is never
+        # going to arrive.
         run: |
           echo "::notice title=Docs preview skipped::No Cloudflare credentials are \
           available to this run (Dependabot and fork pull requests do not receive \
           repository secrets). The site was still built with --strict, which is the \
           check that gates doc quality; only publishing the preview was skipped."
-
       - name: Deploy to Cloudflare Pages
         id: deploy
         if: env.HAS_CLOUDFLARE_CREDENTIALS == 'true'
@@ -86,10 +98,9 @@ jobs:
             --project-name=disarm-docs
             --branch=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'main' }}
       - name: Surface preview URL on the PR
-        if: >-
-          env.HAS_CLOUDFLARE_CREDENTIALS == 'true'
-          && github.event_name == 'pull_request'
-          && steps.deploy.outputs.deployment-url != ''
+        # A skipped step has no outputs, so an empty `deployment-url` already covers the
+        # no-credentials case; no second credential test is needed here.
+        if: github.event_name == 'pull_request' && steps.deploy.outputs.deployment-url != ''
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           script: |

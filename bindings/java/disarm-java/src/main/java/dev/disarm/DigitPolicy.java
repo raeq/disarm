@@ -22,6 +22,10 @@ public enum DigitPolicy {
      * {@code ०} to {@code o}, {@code ೦} to {@code O}, {@code ١} to {@code l}. Correct for
      * an identifier <i>skeleton</i>, whose only job is to make two confusable identifiers
      * collide; it does not care whether the collision target reads sensibly.
+     *
+     * <p>Scoped to {@link TargetScript#LATIN}: the override rows are generated from the
+     * Latin table and carry TR39's Latin-script targets, so with
+     * {@link TargetScript#CYRILLIC} this policy is a no-op.
      */
     TR39("tr39");
 

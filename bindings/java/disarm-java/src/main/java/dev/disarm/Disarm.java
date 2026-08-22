@@ -62,7 +62,8 @@ public final class Disarm {
      *
      * <p>{@link DigitPolicy#NUMERIC} is right for prose; {@link DigitPolicy#TR39} is what
      * an identifier skeleton wants. The two differ on about 45 rows and agree everywhere
-     * else.
+     * else. {@link DigitPolicy#TR39} applies to {@link TargetScript#LATIN} only; with any
+     * other target it is a no-op.
      */
     public static String normalizeConfusables(
             String text, TargetScript target, DigitPolicy digitPolicy) {

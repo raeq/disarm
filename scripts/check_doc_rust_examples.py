@@ -58,9 +58,23 @@ def _unwrap(lines: list[str]) -> list[str]:
     return kept
 
 
+#: `docs/plans/` is gitignored working notes (`.gitignore`, "Plans (local working
+#: notes)"). It never exists in CI, so a sketch there — pseudo-code, `/* paste literal */`
+#: placeholders — turns this gate red for one developer while CI stays green, which is
+#: the worst shape a gate can take. Skip it; the same exclusion is in the Node, Ruby and
+#: claim scanners.
+_LOCAL_ONLY = ("plans",)
+
+
+def _skipped(md: pathlib.Path) -> bool:
+    return md.relative_to(DOCS).parts[0] in _LOCAL_ONLY
+
+
 def _blocks() -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
     for md in sorted(DOCS.rglob("*.md")):
+        if _skipped(md):
+            continue
         text = md.read_text(encoding="utf-8")
         for m in _FENCE.finditer(text):
             preceding = text[: m.start()].rstrip()

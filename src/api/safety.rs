@@ -83,6 +83,11 @@ pub enum DigitPolicy {
     /// `o`, `೦` → `O`, `١` → `l`. Correct for an identifier *skeleton*, whose only job is
     /// to make two confusable identifiers collide; it does not care whether the collision
     /// target reads sensibly. Select this when comparing against a TR39-derived benchmark.
+    ///
+    /// The override rows are generated from the Latin table and carry TR39's
+    /// Latin-script targets, so this policy applies to [`TargetScript::Latin`] only;
+    /// with any other target it is a no-op and the fold behaves exactly as
+    /// [`DigitPolicy::Numeric`].
     Tr39,
 }
 

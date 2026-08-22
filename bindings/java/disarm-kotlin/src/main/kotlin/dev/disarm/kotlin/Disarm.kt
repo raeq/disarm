@@ -54,6 +54,11 @@ fun String.findUntranslatable(scheme: Scheme = Scheme.DEFAULT, lang: String? = n
 
 // ── Confusables ─────────────────────────────────────────────────────────────────
 
+/**
+ * Fold cross-script confusables toward [target]. [DigitPolicy.NUMERIC] is right for prose;
+ * [DigitPolicy.TR39] is what an identifier skeleton wants, and applies to
+ * [TargetScript.LATIN] only — with any other target it is a no-op.
+ */
 fun String.normalizeConfusables(
     target: TargetScript,
     digitPolicy: DigitPolicy = DigitPolicy.NUMERIC,

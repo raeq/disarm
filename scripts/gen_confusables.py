@@ -748,8 +748,10 @@ def main() -> None:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
+    by_script: dict[str, list[tuple[int, str]]] = {}
     for script_name in SCRIPTS:
         mappings = generate_mappings(entries, script_name, supplement.get(script_name, {}))
+        by_script[script_name] = mappings
         out_path = args.output_dir / f"confusables_to_{script_name}.tsv"
         write_tsv(mappings, out_path, script_name)
         print(
@@ -758,8 +760,9 @@ def main() -> None:
         )
 
     # #561: the digit-policy override set — the alternative target the generator
-    # discards when it enforces the numeric digit rule.
-    latin_map = dict(generate_mappings(entries, "latin", supplement.get("latin", {})))
+    # discards when it enforces the numeric digit rule. Reuses the Latin mapping the
+    # loop above already built rather than running the whole Latin pipeline twice.
+    latin_map = dict(by_script["latin"])
     overrides_path = args.output_dir / "confusables_digit_tr39.tsv"
     n_overrides = write_digit_tr39_overrides(entries, latin_map, overrides_path)
     print(

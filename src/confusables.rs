@@ -15,8 +15,11 @@ use crate::tables;
 ///
 /// `"numeric"` (default) keeps disarm's reading: a non-Latin digit folds to the ASCII
 /// digit, so a number in running prose stays a number. `"tr39"` selects upstream's, which
-/// folds several digits to a Latin letter (Devanagari zero → `o`) — correct for an
+/// folds most of them to a Latin letter (Devanagari zero → `o`) — correct for an
 /// identifier skeleton, where the only job is to make two confusable identifiers collide.
+/// Three of the 45 divergent rows do not land on a letter: `٠` and `۰` fold to `.`, and
+/// `𑣣` folds to the two characters `rn`. A skeleton feeding a label- or path-shaped key
+/// has to allow for that extra `.`.
 /// Safety bound on the confusables fixed-point loop, shared by the owned and borrowing
 /// forms. Far above the observed maximum; the `debug_assert` on the way out catches any
 /// future table change that regresses convergence.

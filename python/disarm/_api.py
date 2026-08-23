@@ -718,12 +718,15 @@ def normalize_confusables(
             ``0`` — which is the right reading for prose, where a Devanagari zero
             really is a zero and folding it to a letter corrupts the number.
 
-            ``"tr39"`` uses upstream's targets, which send several digits to a Latin
-            *letter* (``०`` → ``o``, ``೦`` → ``O``, ``١`` → ``l``). That is what an
+            ``"tr39"`` uses upstream's targets, which send most of these digits to a
+            Latin *letter* (``०`` → ``o``, ``೦`` → ``O``, ``١`` → ``l``). Three of the
+            45 rows do not land on a letter: ``٠`` and ``۰`` fold to ``.``, and ``𑣣``
+            folds to the two characters ``rn`` — which matters if the result feeds a
+            label- or path-shaped key. That is what an
             identifier *skeleton* wants: its only job is to make two confusable
             identifiers collide, and it does not care whether the collision target
             reads sensibly. Reach for it when comparing against a TR39-derived
-            benchmark. The two policies differ on 46 rows and agree everywhere else.
+            benchmark. The two policies differ on 45 rows and agree everywhere else.
 
             Scoped to the Latin target: the override rows are generated from the
             Latin table and carry TR39's Latin-script targets, so with

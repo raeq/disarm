@@ -59,7 +59,7 @@ fn tr39_policy_makes_the_skeleton_collide() {
     );
 }
 
-/// The policy must be surgical: everything outside the 46 divergent rows is untouched.
+/// The policy must be surgical: everything outside the 45 divergent rows is untouched.
 #[test]
 fn the_policy_touches_only_the_divergent_rows() {
     for text in [
@@ -95,22 +95,25 @@ fn both_policies_are_idempotent() {
     }
 }
 
-/// #590: `⁰` reaching the table gave it a divergence to record, exactly like `⁹`.
-/// Upstream sends SUPERSCRIPT ZERO to `º` and SUPERSCRIPT NINE to `ꝰ`; the numeric
-/// reading sends both to their ASCII digit. The two rows must stay symmetric — an
-/// asymmetry here is what #590 was.
+/// #590: `⁰` and `⁹` are the only two superscript digits upstream TR39 carries — it
+/// lists visual lookalikes, and no letter resembles a superscript four. Under the
+/// numeric reading they are exact twins, and #590 was an asymmetry there.
+///
+/// Under `tr39` they legitimately differ, and #587 is why: a divergence is recorded
+/// only when upstream's target has an ASCII form. `⁰`'s does (`º` → `o`); `⁹`'s does
+/// not (`ꝰ` U+A770 has no clear representative), so that row is dropped and `tr39`
+/// falls back to numeric for it. The asymmetry is a stated consequence of the
+/// contract now, not an accident of which block a target happened to live in.
 #[test]
-fn the_two_superscript_digits_diverge_symmetrically() {
-    for (input, numeric, tr39) in [("\u{2070}", "0", "\u{00BA}"), ("\u{2079}", "9", "\u{A770}")] {
-        assert_eq!(
-            normalize_confusables_with(input, LATIN, DigitPolicy::Numeric),
-            numeric
-        );
-        assert_eq!(
-            normalize_confusables_with(input, LATIN, DigitPolicy::Tr39),
-            tr39
-        );
-    }
+fn the_two_superscript_digits_agree_under_numeric() {
+    assert_eq!(
+        normalize_confusables_with("\u{2070}", LATIN, DigitPolicy::Numeric),
+        "0"
+    );
+    assert_eq!(
+        normalize_confusables_with("\u{2079}", LATIN, DigitPolicy::Numeric),
+        "9"
+    );
 }
 
 /// Hostname analysis deliberately stays numeric — selecting TR39 there would silently
@@ -150,4 +153,45 @@ fn the_policy_is_scoped_to_the_latin_target() {
             "digit policy changed the Cyrillic fold of {text:?}"
         );
     }
+}
+
+// ── #587: the override values honour the ASCII contract ──────────────────────
+//
+// `write_digit_tr39_overrides` took upstream's raw target with only `strip_combining`
+// applied, bypassing the `ASCII_FOLD` pass every value in the main Latin table goes
+// through. #341 made ASCII the contract for that table; the override set was written
+// later and never joined it, so `digit_policy="tr39"` reintroduced exactly the
+// non-ASCII residue #341 had removed.
+
+/// TR39 routes the Arabic-Indic eights through `Ʌ` (U+0245), which the main pipeline
+/// folds to `a`. The override set must agree — TR39 puts `٨ ۸ Λ Ꟛ` in one confusable
+/// class, and a skeleton that returns a different string for each defeats its purpose.
+#[test]
+fn tr39_targets_are_ascii_folded_like_the_main_table() {
+    for src in ["\u{0668}", "\u{06F8}"] {
+        assert_eq!(
+            normalize_confusables_with(src, LATIN, DigitPolicy::Tr39),
+            "a"
+        );
+    }
+    // U+2070 routes through `º` (U+00BA), which folds to `o`.
+    assert_eq!(
+        normalize_confusables_with("\u{2070}", LATIN, DigitPolicy::Tr39),
+        "o"
+    );
+}
+
+/// `ꝰ` (U+A770 MODIFIER LETTER US) has no clear ASCII representative, so the
+/// divergence cannot be expressed under the contract. Rather than ship a non-ASCII
+/// value, the row is dropped and `tr39` falls back to the numeric reading.
+#[test]
+fn a_divergence_with_no_ascii_form_falls_back_to_numeric() {
+    assert_eq!(
+        normalize_confusables_with("\u{2079}", LATIN, DigitPolicy::Tr39),
+        "9"
+    );
+    assert_eq!(
+        normalize_confusables_with("\u{2079}", LATIN, DigitPolicy::Numeric),
+        "9"
+    );
 }

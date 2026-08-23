@@ -174,6 +174,17 @@ fn main() {
                 !value.is_empty(),
                 "confusables_digit_tr39.tsv: empty target for U+{cp:04X}"
             );
+            // #587: this set was written after #341 made ASCII the contract for the
+            // Latin tables, and never joined it — TR39's raw targets put `Ʌ` (U+0245)
+            // and `º` (U+00BA) straight back. The generator now runs each override
+            // through ASCII_FOLD and drops any row whose divergence has no ASCII form,
+            // so the invariant is real and worth asserting rather than assumed.
+            assert!(
+                value.is_ascii(),
+                "confusables_digit_tr39.tsv: non-ASCII target {value:?} for \
+                 U+{cp:04X}; the override set is ASCII only (#341/#587). Regenerate \
+                 with scripts/gen_confusables.py, which folds or drops such a row."
+            );
         }
         let code = build_char_str_map(&entries, "DIGIT_TR39", "");
         fs::write(out_dir.join("confusables_digit_tr39_phf.rs"), code).unwrap();

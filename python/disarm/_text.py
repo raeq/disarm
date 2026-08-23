@@ -119,9 +119,11 @@ class Text:
     ) -> Text:
         """Replace confusable homoglyphs with target-script equivalents.
 
-        ``digit_policy="tr39"`` selects upstream's digit targets, which fold several
-        non-Latin digits to a Latin letter instead of the ASCII digit (#561). Scoped
-        to ``target_script="latin"``; with any other target it is a no-op.
+        ``digit_policy="tr39"`` selects upstream's digit targets, which fold most
+        non-Latin digits to a Latin letter instead of the ASCII digit (#561). Three of
+        the 45 rows land elsewhere: two fold to ``.`` and one to the two characters
+        ``rn``. Scoped to ``target_script="latin"``; with any other target it is a
+        no-op.
         """
         return Text(
             self._t().normalize_confusables(

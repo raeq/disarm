@@ -58,9 +58,10 @@ module Disarm
     # `digit_policy:` selects how non-Latin DIGITS fold (#561). `:numeric` (default)
     # sends them to the ASCII digit — `०` becomes `0` — which is right for prose, where
     # a Devanagari zero really is a zero. `:tr39` uses upstream's targets, which send
-    # several to a Latin letter (`०` → `o`); that is what an identifier *skeleton*
+    # most of them to a Latin letter (`०` → `o`; three of the 45 rows fold to `.` or
+    # to the two characters `rn` instead); that is what an identifier *skeleton*
     # wants, since its only job is to make two confusable identifiers collide. The two
-    # differ on 46 rows and agree everywhere else. Scoped to `target: :latin` — the
+    # differ on 45 rows and agree everywhere else. Scoped to `target: :latin` — the
     # override rows are generated from the Latin table and carry TR39's Latin-script
     # targets, so with `target: :cyrillic` it is a no-op.
     def normalize_confusables(text, target: :latin, digit_policy: :numeric)

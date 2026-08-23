@@ -220,6 +220,43 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The `tr39` digit-policy overrides now honour the ASCII contract (#587).** #341 made
+  ASCII the contract for the Latin confusable tables. The override set was written later,
+  for #561, and never joined it: `write_digit_tr39_overrides` took upstream's raw target
+  with only `strip_combining` applied, bypassing the `ASCII_FOLD` pass every value in the
+  main table goes through. So `digit_policy="tr39"` put back exactly the residue #341 had
+  removed.
+
+  Four of the 46 rows carried a non-ASCII value. Three had a clear ASCII representative
+  and now use it:
+
+  | source | TR39 target | now |
+  |---|---|---|
+  | `٨` U+0668 | `Ʌ` U+0245 | `a` |
+  | `۸` U+06F8 | `Ʌ` U+0245 | `a` |
+  | `⁰` U+2070 | `º` U+00BA | `o` |
+
+  This was not only cosmetic. TR39 puts `٨ ۸ Λ Ꟛ` in **one** confusable class, and the
+  un-folded value made the class stop colliding: `٨` gave `Ʌ`, `Λ` gave `A`, `Ꟛ` gave
+  itself. Three skeletons for one class defeats the only thing a skeleton is for. After
+  the fix the class reads `a`, `a`, `A`, `Ꟛ` — the digits now collide with the lambda
+  case-insensitively. `Ꟛ` (U+A7DA) is still unmapped, for an unrelated reason:
+  `filter_latin_homoglyphs` only recovers a Latin-script source whose prototype is basic
+  ASCII, and `Ʌ` is not, so that row is dropped before `ASCII_FOLD` is ever consulted.
+  That is its own gap, not this one.
+
+  The fourth, `⁹` → `ꝰ` (U+A770 MODIFIER LETTER US), has no clear ASCII representative.
+  Rather than ship the residue, the row is dropped and `tr39` falls back to the numeric
+  reading for that codepoint, so `⁹` folds to `9` under both policies. The override set
+  is 45 rows, every value ASCII, and `build.rs` now asserts it — the assertion the sibling
+  table blocks already carried and this one did not.
+
+  The documentation claim is corrected too. Every surface said `tr39` "folds several
+  digits to a Latin letter"; three of the 45 rows do not land on a letter — `٠` and `۰`
+  fold to `.`, and `𑣣` folds to the two characters `rn`. That is now stated wherever the
+  policy is documented, because a caller building a label- or path-shaped key needs to
+  know a delimiter can appear.
+
 - **`normalize_confusables` now reaches a fixed point in every binding, not just Python
   (#586).** 0.11.1 shipped #523 as "`normalize_confusables` is now idempotent and complete
   on confusable + combining-mark input". That was true of one of the two call paths.

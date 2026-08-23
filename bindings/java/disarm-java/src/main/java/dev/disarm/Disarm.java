@@ -61,7 +61,7 @@ public final class Disarm {
      * fold.
      *
      * <p>{@link DigitPolicy#NUMERIC} is right for prose; {@link DigitPolicy#TR39} is what
-     * an identifier skeleton wants. The two differ on 46 rows and agree everywhere
+     * an identifier skeleton wants. The two differ on 45 rows and agree everywhere
      * else. {@link DigitPolicy#TR39} applies to {@link TargetScript#LATIN} only; with any
      * other target it is a no-op.
      */

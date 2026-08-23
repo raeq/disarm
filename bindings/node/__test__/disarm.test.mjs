@@ -283,7 +283,7 @@ describe('metadata introspection (#404)', () => {
     // Devanagari zeros: numeric keeps the number, tr39 makes the skeleton collide.
     expect(disarm.normalizeConfusables('g\u0966\u0966gle')).toBe('g00gle')
     expect(disarm.normalizeConfusables('g\u0966\u0966gle', { digitPolicy: 'tr39' })).toBe('google')
-    // Everything outside the 46 divergent rows is identical under both.
+    // Everything outside the 45 divergent rows is identical under both.
     expect(disarm.normalizeConfusables('p\u0430ypal', { digitPolicy: 'tr39' })).toBe('paypal')
   })
   test('normalizeConfusables rejects a bad digitPolicy', () => {

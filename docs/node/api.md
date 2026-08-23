@@ -363,14 +363,19 @@ confusablesVersion() // => '17.0.0'
 
 ### `normalizeConfusables(text, options?)` — digit policy
 
-disarm folds a non-Latin digit to the ASCII **digit**; upstream TR39 folds several of them
+disarm folds a non-Latin digit to the ASCII **digit**; upstream TR39 folds most of them
 to a Latin **letter** — `०` to `o`, `೦` to `O`, `١` to `l`. Neither is wrong. disarm's
 reading is right for prose, where a Devanagari zero really is a zero and folding it to a
 letter corrupts the number. TR39's is right for an identifier *skeleton*, whose only job
 is to make two confusable identifiers collide; it does not care whether the collision
 target reads sensibly.
+Three of the 45 divergent rows do not land on a letter: `٠` (U+0660) and `۰` (U+06F0)
+fold to `.`, and `𑣣` (U+118E3) folds to the two characters `rn`. If the skeleton feeds a
+label- or path-shaped key, that extra `.` changes its structure. Every value in the
+override set is ASCII — `build.rs` asserts it — so nothing else needs guarding.
 
-The two differ on 46 rows and agree on everything else. Reach for `tr39` when
+
+The two differ on 45 rows and agree on everything else. Reach for `tr39` when
 comparing against a TR39-derived benchmark, and leave the default alone for text.
 
 The policy is scoped to the Latin target. The override rows are generated from the

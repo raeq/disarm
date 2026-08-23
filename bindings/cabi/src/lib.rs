@@ -120,7 +120,8 @@ fn disarm_normalize_confusables(text: char_p::Ref<'_>, target: char_p::Ref<'_>) 
 /// [`disarm_normalize_confusables`] with an explicit `digit_policy` (#561).
 ///
 /// `digit_policy` is `"numeric"` (disarm's reading: a non-Latin digit folds to the ASCII
-/// digit) or `"tr39"` (upstream's, which folds several to a Latin letter). `"tr39"` is
+/// digit) or `"tr39"` (upstream's, which folds most of them to a Latin letter; three of
+/// the 45 rows are not — two fold to `.` and one to the two characters `rn`). `"tr39"` is
 /// scoped to `target = "latin"`: the override rows are generated from the Latin table and
 /// carry TR39's Latin-script targets, so with any other target it is a no-op. Added as an
 /// `_opts` variant rather than by widening the existing entry point, so the two-argument

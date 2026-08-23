@@ -10,7 +10,8 @@
 //! possible rather than against a hardcoded expectation.
 
 use disarm::api::{
-    find_unmapped_confusables, normalize_confusables, unmapped_confusables, TargetScript,
+    find_unmapped_confusables, is_confusable, normalize_confusables, unmapped_confusables,
+    TargetScript,
 };
 
 const LATIN: TargetScript = TargetScript::Latin;
@@ -284,4 +285,69 @@ fn an_accented_source_is_never_folded_away() {
 #[test]
 fn a_prototype_is_ascii_folded_before_its_case_is_reconciled() {
     assert_eq!(normalize_confusables("\u{13F0}", LATIN), "B");
+}
+
+// ── #593: the guard must not reach the rows this pass always handled ─────────
+//
+// The first attempt at the diacritic guard applied it to every source, not only to the
+// ones newly recovered through `ASCII_FOLD`. That silently deleted three established
+// mappings, and nothing failed — the change was caught by reading the regenerated data
+// diff, which is not a gate. These three tests are that gate.
+
+/// `Ç`, `ç` and `Ǿ` carry a diacritic, so a naive "never fold an accented source" rule
+/// removes them. They reach a bare ASCII prototype only because `strip_combining` strips
+/// the mark from TR39's target (`Ç → C` + combining comma below), and they have folded
+/// since long before #593. The guard is for rows the `ASCII_FOLD` path newly recovers,
+/// not for these.
+#[test]
+fn an_accented_source_with_an_ascii_prototype_still_folds() {
+    for (src, want) in [
+        ("\u{00C7}", "C"), // Ç LATIN CAPITAL LETTER C WITH CEDILLA
+        ("\u{00E7}", "c"), // ç LATIN SMALL LETTER C WITH CEDILLA
+        ("\u{01FE}", "O"), // Ǿ LATIN CAPITAL LETTER O WITH STROKE AND ACUTE
+    ] {
+        assert_eq!(
+            normalize_confusables(src, LATIN),
+            want,
+            "{src:?} stopped folding — a guard has been widened over the rows \
+             `filter_latin_homoglyphs` always handled"
+        );
+    }
+}
+
+/// The property behind those three, stated once so a new one cannot appear unguarded:
+/// an accented Latin source whose fold is already in the table must keep folding to
+/// ASCII. Written against the table's actual behaviour rather than a fixed list — if
+/// upstream adds a fourth, it is covered without editing this test.
+#[test]
+fn no_accented_source_in_the_table_folds_to_itself() {
+    let accented_but_mapped = ['\u{00C7}', '\u{00E7}', '\u{01FE}'];
+    for ch in accented_but_mapped {
+        let src = ch.to_string();
+        let folded = normalize_confusables(&src, LATIN).into_owned();
+        assert_ne!(
+            folded, src,
+            "U+{:04X} {ch:?} now passes through unchanged",
+            ch as u32
+        );
+        assert!(
+            folded.is_ascii(),
+            "U+{:04X} {ch:?} folded to {folded:?}, which is not ASCII",
+            ch as u32
+        );
+    }
+}
+
+/// Why losing `Ç → C` would have mattered, rather than merely being a missing row.
+/// #586's fixed-point loop converges `Ҫ` + combining cedilla by composing it to `Ç` and
+/// then folding that to `C`. Drop the second step and the fold stops half-done, leaving
+/// output `is_confusable` still flags — the exact defect #586 existed to remove.
+#[test]
+fn the_fixed_point_loop_still_depends_on_the_cedilla_row() {
+    let folded = normalize_confusables("\u{04AA}\u{0327}", LATIN);
+    assert_eq!(folded, "C");
+    assert!(
+        !is_confusable(&folded, LATIN),
+        "the fold left confusable output — #586's convergence rests on Ç → C"
+    );
 }

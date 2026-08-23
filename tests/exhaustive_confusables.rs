@@ -19,8 +19,12 @@ use disarm::api::{self, DigitPolicy, TargetScript};
 /// fold can expose a composition and vice versa. U+0327 is the one from #586.
 const MARKS: &[char] = ['\u{0300}', '\u{0301}', '\u{0308}', '\u{0327}'].as_slice();
 
+/// The whole BMP, surrogates excluded. ASCII is deliberately **in**: the Latin table
+/// maps ASCII sources (`|`→`l`, `"`→`\'\'`, `` ` ``→`\'`), so an ASCII base is not
+/// identity even for the Latin target, and an ASCII base carrying a composing mark is
+/// exactly the shape this file exists to check.
 fn bmp_bases() -> impl Iterator<Item = char> {
-    (0x0080_u32..=0xFFFF)
+    (0x0000_u32..=0xFFFF)
         .filter(|cp| !(0xD800..=0xDFFF).contains(cp))
         .filter_map(char::from_u32)
 }
@@ -60,20 +64,27 @@ fn exhaustive_marked_base_idempotence() {
 /// This is the property that makes the result usable as a comparison skeleton, and the
 /// one a single pass cannot provide: the loop can only exit once nothing folds, which is
 /// the same condition `is_confusable` tests.
+///
+/// Swept under both digit policies, because `Tr39` reads a different table. Its overrides carry
+/// upstream's raw targets, which are not all ASCII (`\u{A770}`) and not all letters
+/// (`.`, `rn`) — see #587. None of them is itself a confusable source, so completeness
+/// holds on that path too, and this pins that rather than assuming it.
 #[test]
 #[ignore = "exhaustive: slow, run with --ignored"]
 fn exhaustive_folded_output_is_never_confusable() {
     let mut failures = Vec::new();
     for target in [TargetScript::Latin, TargetScript::Cyrillic] {
-        for base in bmp_bases() {
-            for &mark in MARKS {
-                let input = format!("{base}{mark}");
-                let folded = api::normalize_confusables(&input, target);
-                if api::is_confusable(&folded, target) {
-                    failures.push(format!(
-                        "U+{:04X}+U+{:04X} {target:?}: folded to {folded:?}, still confusable",
-                        base as u32, mark as u32
-                    ));
+        for policy in [DigitPolicy::Numeric, DigitPolicy::Tr39] {
+            for base in bmp_bases() {
+                for &mark in MARKS {
+                    let input = format!("{base}{mark}");
+                    let folded = api::normalize_confusables_with(&input, target, policy);
+                    if api::is_confusable(&folded, target) {
+                        failures.push(format!(
+                            "U+{:04X}+U+{:04X} {target:?}/{policy:?}: folded to {folded:?}, still confusable",
+                            base as u32, mark as u32
+                        ));
+                    }
                 }
             }
         }

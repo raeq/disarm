@@ -181,7 +181,9 @@ fn main() {
             // so the invariant is real and worth asserting rather than assumed.
             assert!(
                 value.is_ascii(),
-                "confusables_digit_tr39.tsv: non-ASCII target {value:?} for U+{cp:04X} —                  the override set carries ASCII only (#341/#587). Regenerate with                  scripts/gen_confusables.py, which folds or drops such a row."
+                "confusables_digit_tr39.tsv: non-ASCII target {value:?} for \
+                 U+{cp:04X}; the override set is ASCII only (#341/#587). Regenerate \
+                 with scripts/gen_confusables.py, which folds or drops such a row."
             );
         }
         let code = build_char_str_map(&entries, "DIGIT_TR39", "");

@@ -38,6 +38,7 @@ typealias Scheme = TransliterateOptions.Scheme
 // ── Transliteration ─────────────────────────────────────────────────────────────
 
 /** Unicode → ASCII. With defaults this is the borrow-on-no-op fast path. */
+@JvmOverloads
 fun String.transliterate(scheme: Scheme = Scheme.DEFAULT, lang: String? = null): String =
     if (scheme == Scheme.DEFAULT && lang == null) {
         JDisarm.transliterate(this)
@@ -49,6 +50,7 @@ fun String.transliterate(scheme: Scheme = Scheme.DEFAULT, lang: String? = null):
 fun String.reverseTransliterate(lang: String): String = JDisarm.reverseTransliterate(this, lang)
 
 /** Characters with no romanization, in order. */
+@JvmOverloads
 fun String.findUntranslatable(scheme: Scheme = Scheme.DEFAULT, lang: String? = null): List<Untranslatable> =
     JDisarm.findUntranslatable(this, TransliterateOptions.builder().scheme(scheme).lang(lang).build())
 
@@ -59,6 +61,7 @@ fun String.findUntranslatable(scheme: Scheme = Scheme.DEFAULT, lang: String? = n
  * [DigitPolicy.TR39] is what an identifier skeleton wants, and applies to
  * [TargetScript.LATIN] only — with any other target it is a no-op.
  */
+@JvmOverloads
 fun String.normalizeConfusables(
     target: TargetScript,
     digitPolicy: DigitPolicy = DigitPolicy.NUMERIC,
@@ -72,6 +75,7 @@ fun String.stripAccents(): String = JDisarm.stripAccents(this)
 
 fun String.foldCase(): String = JDisarm.foldCase(this)
 
+@JvmOverloads
 fun String.demojize(stripModifiers: Boolean = false): String = JDisarm.demojize(this, stripModifiers)
 
 // ── Normalization ───────────────────────────────────────────────────────────────
@@ -108,15 +112,19 @@ fun String.stripObfuscation(): String = JDisarm.stripObfuscation(this)
 
 fun String.canonicalize(): String = JDisarm.canonicalize(this)
 
+@JvmOverloads
 fun String.searchKey(lang: String? = null): String = JDisarm.searchKey(this, lang)
 
+@JvmOverloads
 fun String.sortKey(lang: String? = null): String = JDisarm.sortKey(this, lang)
 
+@JvmOverloads
 fun String.catalogKey(lang: String? = null, strictIso9: Boolean = false): String =
     JDisarm.catalogKey(this, lang, strictIso9)
 
 // ── Slugs & filenames (option builders → default arguments) ─────────────────────
 
+@JvmOverloads
 fun String.slugify(
     separator: String = "-",
     lowercase: Boolean = true,
@@ -149,6 +157,7 @@ fun String.slugify(
             .build(),
     )
 
+@JvmOverloads
 fun String.sanitizeFilename(
     separator: String = "_",
     maxLength: Int = 255,
@@ -175,8 +184,10 @@ fun String.graphemeSplit(): List<String> = JDisarm.graphemeSplit(this)
 
 fun String.graphemeTruncate(maxGraphemes: Int): String = JDisarm.graphemeTruncate(this, maxGraphemes)
 
+@JvmOverloads
 fun String.graphemeWidth(ambiguousWide: Boolean = false): Long = JDisarm.graphemeWidth(this, ambiguousWide)
 
+@JvmOverloads
 fun String.terminalWidth(ambiguousWide: Boolean = false): Long = JDisarm.terminalWidth(this, ambiguousWide)
 
 // ── Hostname / script analysis ──────────────────────────────────────────────────
@@ -184,6 +195,7 @@ fun String.terminalWidth(ambiguousWide: Boolean = false): Long = JDisarm.termina
 fun String.isSuspiciousHostname(): Boolean = JDisarm.isSuspiciousHostname(this)
 
 /** Full hostname homoglyph analysis (#549) — verdict + granular signals. */
+@JvmOverloads
 fun String.analyzeHostname(contractions: Boolean = false): HostnameAnalysis =
     JDisarm.analyzeHostname(this, contractions)
 
@@ -197,10 +209,12 @@ fun String.inspectAutoLang(): AutoLangInspection = JDisarm.inspectAutoLang(this)
 
 // ── Anomalies (reusable Lexicon works with `use { }`) ───────────────────────────
 
+@JvmOverloads
 fun String.hasAnomalies(words: List<String> = emptyList()): Boolean = JDisarm.hasAnomalies(this, words)
 
 fun String.hasAnomalies(lexicon: Lexicon): Boolean = JDisarm.hasAnomalies(this, lexicon)
 
+@JvmOverloads
 fun String.inspectAnomalies(words: List<String> = emptyList()): AnomalyReport =
     JDisarm.inspectAnomalies(this, words)
 
@@ -230,6 +244,7 @@ fun confusablesVersion(): String = JDisarm.confusablesVersion()
  * case, not diacritics — accents are still stripped. Folds no confusables, so it is not a
  * homoglyph defence at any setting.
  */
+@JvmOverloads
 fun String.mlNormalize(
     lang: String? = null,
     emojiStyle: String = "cldr",
@@ -240,10 +255,12 @@ fun String.mlNormalize(
 )
 
 /** Every upstream confusable source the bundled [target] table does not fold (#563). */
+@JvmOverloads
 fun unmappedConfusables(target: TargetScript = TargetScript.LATIN): List<String> =
     JDisarm.unmappedConfusables(target)
 
 /** Confusable sources in this string the bundled [target] table does not fold (#563). */
+@JvmOverloads
 fun String.findUnmappedConfusables(
     target: TargetScript = TargetScript.LATIN,
 ): List<UnmappedConfusable> = JDisarm.findUnmappedConfusables(this, target)

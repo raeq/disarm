@@ -462,8 +462,10 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 - **The four drift gates are described in one place.** `CONTRIBUTING.md` → *Drift gates*
   now names what each guards and when it fails: the committed `disarm.h` (#580), the 11
   documented row counts in `test_doc_table_counts.py` (#591), the `build.rs` ASCII
-  assertions now covering the `tr39` overrides (#587), and `JvmSignatureTest` over the
-  published Kotlin JVM signatures (#588). Two of them read a *build product* rather than
+  assertions (extended to the `tr39` overrides earlier in this release by #587), and
+  `JvmSignatureTest` over the published Kotlin JVM signatures (#588). Each entry names the
+  CI check that reports it, so a red run leads straight to the gate. Documentation only —
+  no gate changes behaviour here. Two of them read a *build product* rather than
   source text, which is why they catch what source-level assertions miss.
 
   It also records the habit those gates exist to enforce: when you regenerate a table,

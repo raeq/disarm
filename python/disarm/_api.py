@@ -710,7 +710,7 @@ def normalize_confusables(
     Args:
         text: Input string potentially containing homoglyphs.
         target_script: Script to normalize toward. Supported values:
-            ``"latin"`` (default, 2,183 mappings) and ``"cyrillic"``
+            ``"latin"`` (default, 2,189 mappings) and ``"cyrillic"``
             (1,349 mappings).
         digit_policy: How non-Latin **digits** fold (#561).
 

@@ -183,3 +183,64 @@ fn emoji() {
     // Built-in CLDR demojize (the custom Python provider is binding-only).
     assert_eq!(api::demojize("hi", false), "hi");
 }
+
+// ── #586: the Layer-2 surface must converge, like Python already does ────────────
+//
+// `confusables::normalize_confusables` (the String form the PyO3 shim calls) iterates
+// to a fixed point (#522). `api::normalize_confusables_with` called the single-pass
+// `_cow` form instead, and every non-Python binding — Node, Ruby, Java, Kotlin, the C
+// ABI — reaches the API through it. So the security primitive answered differently
+// depending on which language you called it from, and the non-Python answer could
+// still be confusable with the target script.
+
+/// A fold exposing a composition: `¥`+◌̀ folds to `Y`+◌̀, which composes to `Ỳ`.
+#[test]
+fn normalize_confusables_composes_what_a_fold_exposes() {
+    assert_eq!(
+        api::normalize_confusables("\u{00A5}\u{0300}", api::TargetScript::Latin),
+        "\u{1EF2}"
+    );
+}
+
+/// A composition exposing a fold: `Ҫ`+◌̧ composes to `Ç`, itself a confusable → `C`.
+#[test]
+fn normalize_confusables_folds_what_a_composition_exposes() {
+    assert_eq!(
+        api::normalize_confusables("\u{04AA}\u{0327}", api::TargetScript::Latin),
+        "C"
+    );
+}
+
+/// The property that makes the output usable as a comparison skeleton: whatever comes
+/// back must not itself be confusable with the target script.
+#[test]
+fn normalize_confusables_output_is_never_confusable() {
+    for input in ["\u{04AA}\u{0327}", "\u{00A5}\u{0300}", "p\u{0430}ypal"] {
+        let folded = api::normalize_confusables(input, api::TargetScript::Latin);
+        assert!(
+            !api::is_confusable(&folded, api::TargetScript::Latin),
+            "{input:?} folded to {folded:?}, which is still confusable"
+        );
+    }
+}
+
+/// `f(f(x)) == f(x)` on the Layer-2 path, under both digit policies and both targets.
+#[test]
+fn normalize_confusables_is_idempotent() {
+    for target in [api::TargetScript::Latin, api::TargetScript::Cyrillic] {
+        for policy in [api::DigitPolicy::Numeric, api::DigitPolicy::Tr39] {
+            for input in [
+                "\u{04AA}\u{0327}",
+                "\u{00A5}\u{0300}",
+                "g\u{0966}\u{0966}gle",
+            ] {
+                let once = api::normalize_confusables_with(input, target, policy);
+                let twice = api::normalize_confusables_with(&once, target, policy);
+                assert_eq!(
+                    once, twice,
+                    "{input:?} not idempotent for {target:?}/{policy:?}"
+                );
+            }
+        }
+    }
+}

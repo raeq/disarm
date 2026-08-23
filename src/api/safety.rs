@@ -58,6 +58,12 @@ impl std::str::FromStr for TargetScript {
 /// homoglyph (`і` + combining diaeresis) folds the same as its composed `ї`, instead
 /// of leaving the mark and letting an attacker evade the fold by decomposing.
 ///
+/// The fold iterates to a fixed point (#522/#586), so the result is idempotent —
+/// `f(f(x)) == f(x)` — and complete: [`is_confusable`] is always false for the output.
+/// One pass is not enough, because folding and canonical composition expose work for
+/// each other in both directions (`¥`+◌̀ → `Y`+◌̀ → `Ỳ`, and `Ҫ`+◌̧ → `Ç` → `C`).
+/// Completeness is what makes the result usable as a comparison skeleton.
+///
 /// Returns `Cow::Borrowed` when the input is already NFC and nothing folds (zero
 /// allocation), `Cow::Owned` otherwise. Infallible: a [`TargetScript`] is always a
 /// supported script.
@@ -152,8 +158,18 @@ pub fn normalize_confusables_with(
 ) -> Cow<'_, str> {
     // The only error paths of the Layer-1 fn are unsupported target/policy *strings*;
     // neither enum can produce one, so this is unreachable.
-    crate::confusables::normalize_confusables_cow(text, target.as_str(), digit_policy.as_str())
-        .expect("TargetScript and DigitPolicy always map to supported tokens")
+    //
+    // #586: the *fixed-point* form, not the single-pass `_cow`. Folding and canonical
+    // composition expose work for each other, so one pass can return output that
+    // `is_confusable` still flags — and every non-Python binding reaches the API through
+    // here, so a single pass made the same call answer differently per language. Borrows
+    // on a no-op exactly as `_cow` does, so the common case still never allocates.
+    crate::confusables::normalize_confusables_fixed_cow(
+        text,
+        target.as_str(),
+        digit_policy.as_str(),
+    )
+    .expect("TargetScript and DigitPolicy always map to supported tokens")
 }
 
 /// True if `text` contains any character confusable with a `target`-script

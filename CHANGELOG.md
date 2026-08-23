@@ -220,6 +220,39 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`normalize_confusables` now reaches a fixed point in every binding, not just Python
+  (#586).** 0.11.1 shipped #523 as "`normalize_confusables` is now idempotent and complete
+  on confusable + combining-mark input". That was true of one of the two call paths.
+  #361 had already wired the public Rust API to the single-pass `normalize_confusables_cow`
+  a month earlier; #523 added the fixed-point loop to the owned Layer-1 form and its tests,
+  and never touched `src/api/safety.rs`. Python reaches the core through the fixed path.
+  Rust, Node, Ruby, Java, Kotlin and the C ABI reach it through the other one.
+
+  So the same call answered differently depending on the language, and the non-Python
+  answer could still be confusable:
+
+  | Input | Before, outside Python | Python, and now everywhere |
+  |---|---|---|
+  | `U+04AA U+0327` | `U+0043 U+0327` — `is_confusable` says **true** | `U+0043` |
+  | `U+00A5 U+0300` | `U+0059 U+0300` | `U+1EF2` |
+
+  For a primitive whose whole job is producing a skeleton two identifiers can be compared
+  on, returning output that the library's own detector still flags is the failure that
+  matters. An exhaustive sweep of the BMP crossed with composing marks finds **28** base
+  characters affected, not just the two above.
+
+  Layer 1 gains `normalize_confusables_fixed_cow`, the borrowing form of the fixed-point
+  fold, and the public API calls it. The owned form now delegates to it rather than
+  carrying a second copy of the loop, so there is one implementation to keep correct. The
+  borrow-on-no-op guarantee (#352) is unchanged: input with nothing to fold is already a
+  fixed point, so the common case still never allocates.
+
+  Guarded at every level: spot cases on the Layer-2 API, parity tests in the Node, Ruby,
+  Java, Kotlin and C-ABI suites, and a Tier-3 sweep over the BMP × composing marks for
+  both idempotence and residual confusability. The Tier-3 entry is deliberately separate
+  from #523's lib-level sweep, because that sweep tests Layer 1 — testing the layer below
+  the one the bindings call is how this survived a year.
+
 - **`⁰` and `ᵒ` now fold; a block-range gap had been dropping them (#590).**
   `is_latin_or_common` in `gen_confusables.py` enumerates Latin block ranges and jumps
   from `0x007F` to `0x00C0`, leaving `U+0080–U+00BF` uncovered. `º` (U+00BA) is category

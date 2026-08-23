@@ -43,6 +43,25 @@ RSpec.describe Disarm do
       expect(Disarm.normalize_confusables("раypal", target: :latin)).to eq("paypal")
     end
 
+    # #586: the fold iterates to a fixed point rather than stopping after one pass.
+    # Every non-Python binding reaches the core through the same Rust entry point, so
+    # a single pass made this call answer differently from Python for the same input.
+    it "reaches a fixed point when a fold exposes a composition" do
+      # ¥ + U+0300 folds to Y + U+0300, which composes to Ỳ.
+      expect(Disarm.normalize_confusables("\u00A5\u0300")).to eq("\u1EF2")
+    end
+
+    it "reaches a fixed point when a composition exposes a fold" do
+      # Ҫ + U+0327 composes to Ç, itself a confusable that folds to C.
+      expect(Disarm.normalize_confusables("\u04AA\u0327")).to eq("C")
+    end
+
+    it "never returns output that is itself confusable" do
+      ["\u04AA\u0327", "\u00A5\u0300", "p\u0430ypal"].each do |input|
+        expect(Disarm.confusable?(Disarm.normalize_confusables(input))).to be(false)
+      end
+    end
+
     it "raises Disarm::InvalidArgument on an invalid target script" do
       expect { Disarm.normalize_confusables("x", target: :greek) }
         .to raise_error(Disarm::InvalidArgument)

@@ -31,6 +31,24 @@ class DisarmKtTest {
         assertTrue("аpple".isConfusable(TargetScript.LATIN))
     }
 
+    // #586: the fold iterates to a fixed point rather than stopping after one pass. Every
+    // non-Python binding reaches the core through the same Rust entry point, so a single
+    // pass made this call answer differently from Python for the same input.
+    @Test
+    fun confusablesReachAFixedPoint() {
+        // A fold exposes a composition: ¥ + U+0300 folds to Y + U+0300, composing to Ỳ.
+        assertEquals("\u1EF2", "\u00A5\u0300".normalizeConfusables(TargetScript.LATIN))
+        // A composition exposes a fold: Ҫ + U+0327 composes to Ç, a confusable, then C.
+        assertEquals("C", "\u04AA\u0327".normalizeConfusables(TargetScript.LATIN))
+    }
+
+    @Test
+    fun confusableFoldOutputIsNeverItselfConfusable() {
+        for (input in listOf("\u04AA\u0327", "\u00A5\u0300", "p\u0430ypal")) {
+            assertFalse(input.normalizeConfusables(TargetScript.LATIN).isConfusable(TargetScript.LATIN))
+        }
+    }
+
     @Test
     fun canonicalizationPrimitives() {
         assertEquals("cafe", "café".stripAccents())

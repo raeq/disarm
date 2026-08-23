@@ -30,6 +30,20 @@ describe('confusables', () => {
     expect(disarm.isConfusable('pаypal')).toBe(true)
     expect(disarm.isConfusable('paypal')).toBe(false)
   })
+  // #586: the fold iterates to a fixed point rather than stopping after one pass.
+  // Every non-Python binding reaches the core through the same Rust entry point, so a
+  // single pass made this call answer differently from Python for the same input.
+  test('normalizeConfusables reaches a fixed point', () => {
+    // A fold exposes a composition: ¥ + ◌̀ folds to Y + ◌̀, which composes to Ỳ.
+    expect(disarm.normalizeConfusables('\u00A5\u0300')).toBe('\u1EF2')
+    // A composition exposes a fold: Ҫ + ◌̧ composes to Ç, itself a confusable → C.
+    expect(disarm.normalizeConfusables('\u04AA\u0327')).toBe('C')
+  })
+  test('normalizeConfusables output is never itself confusable', () => {
+    for (const input of ['\u04AA\u0327', '\u00A5\u0300', 'p\u0430ypal']) {
+      expect(disarm.isConfusable(disarm.normalizeConfusables(input))).toBe(false)
+    }
+  })
 })
 
 describe('slugify', () => {

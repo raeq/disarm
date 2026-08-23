@@ -17,6 +17,11 @@ use crate::tables;
 /// digit, so a number in running prose stays a number. `"tr39"` selects upstream's, which
 /// folds several digits to a Latin letter (Devanagari zero → `o`) — correct for an
 /// identifier skeleton, where the only job is to make two confusable identifiers collide.
+/// Safety bound on the confusables fixed-point loop, shared by the owned and borrowing
+/// forms. Far above the observed maximum; the `debug_assert` on the way out catches any
+/// future table change that regresses convergence.
+const MAX_CONFUSABLE_PASSES: usize = 8;
+
 fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
     match digit_policy {
         "numeric" | "tr39" => Ok(()),
@@ -94,40 +99,11 @@ pub(crate) fn normalize_confusables(
     target_script: &str,
     digit_policy: &str,
 ) -> Result<String, crate::ErrorRepr> {
-    // Delegate to the borrowing form so the no-op fast path is shared by both public
-    // entrypoints (M-2): `_cow` borrows-on-no-op, so pure-ASCII / already-folded input
-    // never allocates a rebuilt string — only this final owned conversion copies a borrow.
-    //
-    // Iterate to a fixed point (#522). Confusable folding and canonical composition
-    // interact *both* ways, so one pass is not always stable:
-    //   * a fold can expose a composition — `¥`+◌̀ folds to `Y`+◌̀, which composes to `Ỳ`;
-    //   * a composition can expose a *new* fold — `Ҫ`+◌̧ composes to `Ç`, itself a
-    //     confusable that folds to `C`.
-    // Re-running `_cow` (which composes-at-lookup on its input each pass) until the output
-    // stops changing makes the result idempotent by construction, and complete: the loop
-    // can only exit once no char folds, i.e. `is_confusable` is false. It converges in a
-    // few passes — every fold moves toward the ASCII-ish target script and composition
-    // only shrinks length, so no cycle is possible; the exhaustive (confusable × mark)
-    // idempotency test bounds the pass count. `MAX_PASSES` is a defensive cap far above
-    // the observed maximum; `debug_assert` catches any future table change that regresses.
-    const MAX_PASSES: usize = 8;
-    let mut cur = match normalize_confusables_cow(text, target_script, digit_policy)? {
-        // Borrowed ⇒ nothing folded ⇒ the input is already a fixed point (the common case).
-        std::borrow::Cow::Borrowed(s) => return Ok(s.to_owned()),
-        std::borrow::Cow::Owned(s) => s,
-    };
-    for _ in 0..MAX_PASSES {
-        match normalize_confusables_cow(&cur, target_script, digit_policy)? {
-            std::borrow::Cow::Borrowed(_) => return Ok(cur),
-            std::borrow::Cow::Owned(next) if next == cur => return Ok(cur),
-            std::borrow::Cow::Owned(next) => cur = next,
-        }
-    }
-    debug_assert!(
-        false,
-        "normalize_confusables did not converge in {MAX_PASSES} passes: {cur:?}"
-    );
-    Ok(cur)
+    // Owned wrapper over the borrowing fixed-point form, which is where the loop and its
+    // rationale live. `_fixed_cow` borrows on a no-op (#352), so pure-ASCII or
+    // already-folded input never allocates a rebuilt string — only this final owned
+    // conversion copies a borrow.
+    Ok(normalize_confusables_fixed_cow(text, target_script, digit_policy)?.into_owned())
 }
 
 /// Borrowing form of [`normalize_confusables`] (#352): returns `Cow::Borrowed`
@@ -185,6 +161,54 @@ pub(crate) fn normalize_confusables_cow<'a>(
         }
     }
     Ok(Cow::Borrowed(text))
+}
+
+/// [`normalize_confusables_cow`] iterated to a fixed point (#522) — the borrowing form
+/// of [`normalize_confusables`], and the one every public surface must call.
+///
+/// Confusable folding and canonical composition expose work for each other in *both*
+/// directions, so one pass is not stable:
+///   * a fold can expose a composition — `¥`+◌̀ folds to `Y`+◌̀, which composes to `Ỳ`;
+///   * a composition can expose a *new* fold — `Ҫ`+◌̧ composes to `Ç`, itself a
+///     confusable that folds to `C`.
+///
+/// Re-running `_cow` (which composes-at-lookup on its input each pass) until the output
+/// stops changing makes the result idempotent by construction, and complete: the loop can
+/// only exit once no char folds, i.e. `is_confusable` is false. That completeness is the
+/// point — #586 was the Layer-2 API calling the single-pass form, so `normalize` returned
+/// strings that `is_confusable` still flagged, and the five non-Python bindings all
+/// inherited it.
+///
+/// It converges in a few passes: every fold moves toward the ASCII-ish target script and
+/// composition only shrinks length, so no cycle is possible, and the exhaustive
+/// (confusable × mark) idempotency test bounds the pass count.
+///
+/// Borrows on a no-op exactly as `_cow` does (#352): input with nothing to fold is
+/// already a fixed point, so the common case still never allocates.
+pub(crate) fn normalize_confusables_fixed_cow<'a>(
+    text: &'a str,
+    target_script: &str,
+    digit_policy: &str,
+) -> Result<std::borrow::Cow<'a, str>, crate::ErrorRepr> {
+    let mut cur = match normalize_confusables_cow(text, target_script, digit_policy)? {
+        // Borrowed ⇒ nothing folded ⇒ the input is already a fixed point (the common case).
+        std::borrow::Cow::Borrowed(s) => return Ok(std::borrow::Cow::Borrowed(s)),
+        std::borrow::Cow::Owned(s) => s,
+    };
+    for _ in 0..MAX_CONFUSABLE_PASSES {
+        match normalize_confusables_cow(&cur, target_script, digit_policy)? {
+            std::borrow::Cow::Borrowed(_) => return Ok(std::borrow::Cow::Owned(cur)),
+            std::borrow::Cow::Owned(next) if next == cur => {
+                return Ok(std::borrow::Cow::Owned(cur));
+            }
+            std::borrow::Cow::Owned(next) => cur = next,
+        }
+    }
+    debug_assert!(
+        false,
+        "normalize_confusables did not converge in {MAX_CONFUSABLE_PASSES} passes: {cur:?}"
+    );
+    Ok(std::borrow::Cow::Owned(cur))
 }
 
 /// In-place form of [`normalize_confusables`] writing into `out` (cleared

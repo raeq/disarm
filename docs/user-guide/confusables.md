@@ -104,6 +104,22 @@ Replace confusable characters with their target-script equivalents:
     normalizeConfusables('Ηellο') // => 'Hello'
     ```
 
+### The result is a fixed point
+
+Folding runs until nothing more changes, so `normalize_confusables` is idempotent and
+its output is never itself confusable. That second property is the one that matters:
+the fold exists to produce a skeleton two identifiers can be compared on, and a skeleton
+the library's own detector still flags is no use for that.
+
+One pass is not enough, because folding and canonical composition expose work for each
+other in both directions. A fold can expose a composition — `¥` + U+0300 folds to `Y` +
+U+0300, which composes to `Ỳ`. A composition can expose a fold — `Ҫ` + U+0327 composes
+to `Ç`, itself a confusable, which folds to `C`.
+
+The guarantee holds identically in every binding. It has not always: until #586 the
+loop ran only on the path Python uses, so the same call returned a half-folded,
+still-confusable result in Rust, Node, Ruby, Java, Kotlin and the C ABI.
+
 ### It keeps your diacritics
 
 `normalize_confusables` maps confusable characters and touches nothing else. Accented

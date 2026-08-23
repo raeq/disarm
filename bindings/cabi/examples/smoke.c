@@ -109,6 +109,22 @@ int main(void) {
     disarm_string_free(dt.value);
     disarm_string_free(dt.error);
 
+    /* #586: the fold iterates to a fixed point rather than stopping after one pass.
+       A fold exposes a composition: U+00A5 + U+0300 folds to Y + U+0300, which
+       composes to U+1EF2. A single pass returned the decomposed "Y\u0300". */
+    DisarmResult_t fp1 = disarm_normalize_confusables("\xc2\xa5\xcc\x80", "latin");
+    check("fixed point: fold exposes composition", fp1.value, "\xe1\xbb\xb2");
+    disarm_string_free(fp1.value);
+    disarm_string_free(fp1.error);
+
+    /* And the other direction: U+04AA + U+0327 composes to C-cedilla, itself a
+       confusable, which folds to "C". A single pass returned "C\u0327", which
+       disarm_is_confusable still reported as confusable. */
+    DisarmResult_t fp2 = disarm_normalize_confusables("\xd2\xaa\xcc\xa7", "latin");
+    check("fixed point: composition exposes fold", fp2.value, "C");
+    disarm_string_free(fp2.value);
+    disarm_string_free(fp2.error);
+
     /* ml_normalize: default folds case; fold_case=false keeps capitals, not accents. */
     DisarmResult_t mlf = disarm_ml_normalize("Jos\xc3\xa9 Mart\xc3\xadnez", NULL, "cldr", true);
     check("ml_normalize fold", mlf.value, "jose martinez");

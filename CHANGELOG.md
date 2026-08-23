@@ -250,7 +250,14 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   Every documented count was re-measured against the regenerated tables rather than
   adjusted by hand, which turned up two that were already stale before this change —
   the Latin table was described as `~2,063` mappings (actual 2,183) and the Cyrillic as
-  `~1,369` (actual 1,349). Both corrected across the Rust, Python and docs surfaces.
+  `~1,369` (actual 1,349).
+
+  `tests/test_doc_table_counts.py` existed to prevent exactly that drift, and the two
+  files it gates were accurate. The three surfaces carrying the same figure were not
+  gated, and had drifted by 118 rows unnoticed: `src/tables/confusables_data.rs`,
+  `python/disarm/_api.py`, and the target-script table in the confusables user guide.
+  All three are now gated against the same source of truth, taking the check from 5
+  figures to 11.
 
 - **Restored the 1-argument `disarm_analyze_hostname` C ABI (#580).** #562 widened it to
   take `contractions`, but that symbol shipped in 0.13.0 and callers are linked against

@@ -23,7 +23,13 @@ require "disarm"
 checked = 0
 failures = []
 
+# docs/plans/ is gitignored working notes, absent in CI. Scanning it turns this gate
+# red for one developer while CI stays green.
+local_only = File.join(root, "docs", "plans")
+
 Dir.glob(File.join(root, "docs", "**", "*.md")).sort.each do |md|
+  next if md.start_with?("#{local_only}/")
+
   File.read(md).scan(/^[ \t]*```ruby\n(.*?)\n[ \t]*```/m) do |(block)|
     block.each_line do |raw|
       line = raw.strip

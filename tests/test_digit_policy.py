@@ -115,10 +115,19 @@ def test_idempotent_under_both_policies(policy: str) -> None:
         assert disarm.normalize_confusables(once, digit_policy=policy) == once
 
 
-@pytest.mark.parametrize("policy", ["numeric", "tr39"])
-def test_works_with_the_cyrillic_target(policy: str) -> None:
-    out = disarm.normalize_confusables("hello", target_script="cyrillic", digit_policy=policy)
-    assert isinstance(out, str)
+def test_cyrillic_target_ignores_the_digit_policy() -> None:
+    """Scope pin: the override set carries TR39's *Latin* targets.
+
+    They are meaningless for a Cyrillic fold, so selecting ``tr39`` must not leak a Latin
+    letter into a Cyrillic skeleton (``० → o``), and must not invent a fold for a source
+    the Cyrillic table deliberately has no row for (``٠``, ``⁹``, ``𑣣`` all pass through).
+    """
+    for text in ("hello", "\u0966", "\u0660", "\u0668", "\u2079", "\U000118e3"):
+        assert disarm.normalize_confusables(
+            text, target_script="cyrillic"
+        ) == disarm.normalize_confusables(text, target_script="cyrillic", digit_policy="tr39"), (
+            f"digit policy changed the Cyrillic fold of {text!r}"
+        )
 
 
 def test_presets_are_unaffected() -> None:
@@ -133,9 +142,14 @@ def test_presets_are_unaffected() -> None:
 
 
 def test_is_confusable_is_unaffected() -> None:
-    """Detection asks whether a row exists, not what it maps to."""
-    assert disarm.is_confusable("०") == disarm.is_confusable("०")
+    """Detection asks whether a row exists, not what it maps to.
+
+    Both policies fold U+0966, so it is confusable either way; a purely ASCII string is
+    confusable under neither. `is_confusable` therefore needs no policy parameter.
+    """
     assert disarm.is_confusable("०") is True
+    assert disarm.is_confusable("g००gle") is True
+    assert disarm.is_confusable("google") is False
 
 
 # ── the override set is generated, not hand-maintained ───────────────────────

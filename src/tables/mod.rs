@@ -447,6 +447,11 @@ pub fn resolve_confusable_map(
 
 /// TR39's target for `ch` where disarm's digit policy diverges (#561); `None` when the
 /// two agree.
+///
+/// The set is generated from the **Latin** table and its values are TR39's Latin-script
+/// targets, so it is only meaningful for `target_script = "latin"`. Callers must gate on
+/// the target script — consulting it for another one emits Latin characters into a
+/// non-Latin skeleton and invents folds for sources that table has no row for.
 #[inline]
 pub fn confusable_digit_tr39_override(ch: char) -> Option<&'static str> {
     confusables_data::digit_tr39_override(ch)

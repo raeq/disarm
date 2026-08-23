@@ -28,12 +28,18 @@ fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
 
 /// Resolve one character under the chosen digit policy (#561).
 ///
-/// The override map is consulted only under `tr39`. The numeric path therefore costs one
-/// predictable, loop-invariant `bool` test per lookup and never touches the override map
-/// — not literally free, but the branch predicts perfectly and the map probe (the part
-/// that would actually cost something) is skipped entirely. Splitting the fold into two
-/// loops to remove the test was considered and rejected: it duplicates the borrow-on-no-op
-/// logic for a branch that is already free in practice.
+/// `tr39_digits` is `digit_policy == "tr39" && target_script == "latin"`: the override set
+/// is generated from the **Latin** table and its values are TR39's Latin targets, so it is
+/// meaningless — and actively wrong — for any other target. Consulting it under
+/// `target_script = "cyrillic"` would emit a Latin letter into a Cyrillic skeleton, and
+/// would invent folds for sources the Cyrillic table deliberately has no row for.
+///
+/// The override map is consulted only when that flag is set. The numeric path therefore
+/// costs one predictable, loop-invariant `bool` test per lookup and never touches the
+/// override map — not literally free, but the branch predicts perfectly and the map probe
+/// (the part that would actually cost something) is skipped entirely. Splitting the fold
+/// into two loops to remove the test was considered and rejected: it duplicates the
+/// borrow-on-no-op logic for a branch that is already free in practice.
 #[inline]
 fn lookup_with_policy(
     map: Option<&'static phf::Map<char, &'static str>>,
@@ -139,7 +145,9 @@ pub(crate) fn normalize_confusables_cow<'a>(
     validate_digit_policy(digit_policy)?;
     let map = tables::resolve_confusable_map(target_script);
     // Resolved once, not per character: the default path must not pay for the option.
-    let tr39_digits = digit_policy == "tr39";
+    // Latin-only: the override set carries TR39's *Latin* targets, so it must never be
+    // consulted for another target script (see `lookup_with_policy`).
+    let tr39_digits = digit_policy == "tr39" && target_script == "latin";
 
     // #475/#477: a base + combining-mark cluster (or a conjoining Hangul jamo run, #483)
     // must fold as its precomposed form. Compose-at-lookup can only change something when

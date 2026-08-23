@@ -29,12 +29,17 @@ const disarm = require(join(root, 'bindings', 'node', 'index.js'))
 const names = Object.keys(disarm)
 const vals = Object.values(disarm)
 
+// docs/plans/ is gitignored working notes, absent in CI. Scanning it turns this gate
+// red for one developer while CI stays green — the worst shape a gate can take.
+const LOCAL_ONLY = new Set(['plans'])
+
 function markdownFiles(dir) {
   const out = []
   for (const entry of readdirSync(dir)) {
     const p = join(dir, entry)
-    if (statSync(p).isDirectory()) out.push(...markdownFiles(p))
-    else if (p.endsWith('.md')) out.push(p)
+    if (statSync(p).isDirectory()) {
+      if (!LOCAL_ONLY.has(entry)) out.push(...markdownFiles(p))
+    } else if (p.endsWith('.md')) out.push(p)
   }
   return out
 }

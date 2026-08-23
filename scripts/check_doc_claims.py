@@ -57,9 +57,12 @@ def offenders_in(path: Path) -> list[tuple[int, str]]:
 
 def main(argv: list[str]) -> int:
     if argv:
+        # An explicit path was asked for, so scan it even under docs/plans/.
         files = [Path(a) for a in argv]
     else:
-        files = sorted(Path("docs").rglob("*.md"))
+        # docs/plans/ is gitignored working notes, absent in CI. Scanning it turns
+        # this gate red for one developer while CI stays green.
+        files = sorted(p for p in Path("docs").rglob("*.md") if p.parts[1:2] != ("plans",))
 
     total = 0
     for path in files:

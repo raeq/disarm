@@ -219,7 +219,9 @@ disarm_normalize_confusables (
  *  [`disarm_normalize_confusables`] with an explicit `digit_policy` (#561).
  *
  *  `digit_policy` is `"numeric"` (disarm's reading: a non-Latin digit folds to the ASCII
- *  digit) or `"tr39"` (upstream's, which folds several to a Latin letter). Added as an
+ *  digit) or `"tr39"` (upstream's, which folds several to a Latin letter). `"tr39"` is
+ *  scoped to `target = "latin"`: the override rows are generated from the Latin table and
+ *  carry TR39's Latin-script targets, so with any other target it is a no-op. Added as an
  *  `_opts` variant rather than by widening the existing entry point, so the two-argument
  *  symbol keeps its ABI for callers already linked against it — the same shape
  *  `disarm_transliterate` / `disarm_transliterate_opts` already use in this file.

@@ -60,7 +60,9 @@ module Disarm
     # a Devanagari zero really is a zero. `:tr39` uses upstream's targets, which send
     # several to a Latin letter (`०` → `o`); that is what an identifier *skeleton*
     # wants, since its only job is to make two confusable identifiers collide. The two
-    # differ on ~45 rows and agree everywhere else.
+    # differ on ~45 rows and agree everywhere else. Scoped to `target: :latin` — the
+    # override rows are generated from the Latin table and carry TR39's Latin-script
+    # targets, so with `target: :cyrillic` it is a no-op.
     def normalize_confusables(text, target: :latin, digit_policy: :numeric)
       translate_errors { _normalize_confusables(text, target.to_s, digit_policy.to_s) }
     end

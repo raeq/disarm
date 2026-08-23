@@ -110,23 +110,19 @@ fn build_transliterate(
 /// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"`).
 #[ffi_export]
 fn disarm_normalize_confusables(text: char_p::Ref<'_>, target: char_p::Ref<'_>) -> DisarmResult {
-    disarm_normalize_confusables_opts(text, target, c_numeric())
-}
-
-/// The `"numeric"` token, as a borrowed C string, for the default-policy shim above.
-fn c_numeric() -> char_p::Ref<'static> {
-    // A `&'static CStr`-backed token; `char_p::Ref` borrows it for the call.
-    const NUMERIC: &str = "numeric\0";
-    char_p::Ref::from(
-        std::ffi::CStr::from_bytes_with_nul(NUMERIC.as_bytes())
-            .expect("literal is NUL-terminated and NUL-free"),
+    build_normalize_confusables(
+        text.to_str(),
+        target.to_str(),
+        api::DigitPolicy::Numeric.as_str(),
     )
 }
 
 /// [`disarm_normalize_confusables`] with an explicit `digit_policy` (#561).
 ///
 /// `digit_policy` is `"numeric"` (disarm's reading: a non-Latin digit folds to the ASCII
-/// digit) or `"tr39"` (upstream's, which folds several to a Latin letter). Added as an
+/// digit) or `"tr39"` (upstream's, which folds several to a Latin letter). `"tr39"` is
+/// scoped to `target = "latin"`: the override rows are generated from the Latin table and
+/// carry TR39's Latin-script targets, so with any other target it is a no-op. Added as an
 /// `_opts` variant rather than by widening the existing entry point, so the two-argument
 /// symbol keeps its ABI for callers already linked against it — the same shape
 /// `disarm_transliterate` / `disarm_transliterate_opts` already use in this file.
@@ -136,15 +132,23 @@ fn disarm_normalize_confusables_opts(
     target: char_p::Ref<'_>,
     digit_policy: char_p::Ref<'_>,
 ) -> DisarmResult {
-    let target = match target.to_str().parse::<api::TargetScript>() {
+    build_normalize_confusables(text.to_str(), target.to_str(), digit_policy.to_str())
+}
+
+/// Shared body of the two entry points above: parse both tokens (target first, so the
+/// `_opts` form reports the same error as the two-argument form on a bad target), then
+/// fold. Mirrors `build_transliterate` — the default-policy shim passes the canonical
+/// token straight from the enum rather than minting a C string to parse back.
+fn build_normalize_confusables(text: &str, target: &str, digit_policy: &str) -> DisarmResult {
+    let target = match target.parse::<api::TargetScript>() {
         Ok(t) => t,
         Err(e) => return err(&e),
     };
-    let digit_policy = match digit_policy.to_str().parse::<api::DigitPolicy>() {
+    let digit_policy = match digit_policy.parse::<api::DigitPolicy>() {
         Ok(d) => d,
         Err(e) => return err(&e),
     };
-    ok(api::normalize_confusables_with(text.to_str(), target, digit_policy).into_owned())
+    ok(api::normalize_confusables_with(text, target, digit_policy).into_owned())
 }
 
 /// Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.

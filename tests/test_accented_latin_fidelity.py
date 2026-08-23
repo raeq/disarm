@@ -89,3 +89,45 @@ def test_the_two_knobs_are_independent() -> None:
     assert disarm.ml_normalize(text, fold_case=False) == "Jose Martinez"  # loses accents
     assert disarm.strip_obfuscation(text) == "Jose Martinez"  # loses accents
     assert disarm.normalize_confusables(text) == text  # loses neither
+
+
+# ── #597: German sharp S, both cases ─────────────────────────────────────────
+#
+# The fixture above uses lowercase `Straße`, which is why it did not catch #595
+# turning `ẞ` (U+1E9E, the capital sharp S — official German orthography since 2017)
+# into `B`: STRAẞE folded to STRABE. The lowercase letter was preserved throughout,
+# so the suite stayed green while uppercase German was being corrupted.
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        pytest.param("STRAẞE", "STRASSE", id="capital-sharp-s-street"),
+        pytest.param("GROẞ", "GROSS", id="capital-sharp-s-gross"),
+        pytest.param("FUẞBALL", "FUSSBALL", id="capital-sharp-s-football"),
+    ],
+)
+def test_capital_sharp_s_uppercases_rather_than_folding_to_a_lookalike(
+    text: str, expected: str
+) -> None:
+    """`ß`.upper() is the two-character `SS`, and that is correct German: STRAẞE and
+    STRASSE are the same word, so folding to `SS` makes them collide — which is what a
+    skeleton is for. Folding the prototype `ß` to `b` first threw the case mapping away
+    and produced STRABE, a word in no language."""
+    assert disarm.normalize_confusables(text) == expected
+
+
+def test_lowercase_sharp_s_is_left_alone() -> None:
+    """The asymmetry is deliberate. `ß` is a fold *target* — `ẞ`, `ꞵ` and `Ꟗ` reach ASCII
+    through it — and folding the source itself would turn Straße into Strasse, changing a
+    name. `strip_obfuscation` is the tool for that; see the module docstring."""
+    assert disarm.normalize_confusables("Straße") == "Straße"
+    assert disarm.normalize_confusables("Müller Straße") == "Müller Straße"
+
+
+def test_cherokee_ye_still_folds_to_its_shape_not_to_ss() -> None:
+    """The counter-case that keeps the rule honest. `Ᏸ` (U+13F0) also reaches the `ß`
+    prototype, but it is a Cherokee letter shaped like `B` with no case expansion of its
+    own, so it must fold to `B`. If it ever reads `SS`, the multi-character case mapping
+    is being applied where no case mapping exists."""
+    assert disarm.normalize_confusables("Ᏸ") == "B"

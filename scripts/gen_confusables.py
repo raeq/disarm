@@ -49,6 +49,7 @@ DATA_UNICODE_VERSION = "17.0.0"
 MIN_UNICODE_VERSION = "16.0.0"
 # Measured cross-script supplement folded with priority over TR39 (#342/#343).
 BUNDLED_SUPPLEMENT = Path(__file__).resolve().parent.parent / "data" / "confusables_supplement.tsv"
+BUNDLED_ATTESTED = Path(__file__).resolve().parent.parent / "data" / "confusables_attested.tsv"
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +326,45 @@ def load_supplement(path: Path) -> dict[str, dict[int, str]]:
     return overrides
 
 
+def load_attested(path: Path) -> dict[str, dict[int, str]]:
+    """Parse confusables_attested.tsv into per-target override maps (#597).
+
+    Same shape as :func:`load_supplement` and merged with it, but a separate FILE
+    because the admission criteria differ: the supplement is cross-script pairs from a
+    measured confusable-vision dataset above a danger threshold, while these are
+    codepoints attested in real attacker text (the BitAbuse BitCore subset) that TR39
+    does not list as sources at all. 18 of them are Latin folding to Latin.
+
+    Columns are source, latin, cyrillic, tier, occ, note. The extra three are provenance
+    and are validated, not consumed: a row that cannot say which tier it belongs to has
+    no business in a security-critical table.
+    """
+    overrides: dict[str, dict[int, str]] = {"latin": {}, "cyrillic": {}}
+    valid_tiers = {"1", "2a", "2b"}
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.rstrip("\n")
+        if not line or line.lstrip().startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 5:
+            raise ValueError(
+                f"{path.name}:{lineno}: malformed attested row (need >=5 tab-separated "
+                f"columns: source, latin, cyrillic, tier, occ): {raw!r}"
+            )
+        cp = int(parts[0].strip(), 16)
+        tier = parts[3].strip()
+        if tier not in valid_tiers:
+            raise ValueError(
+                f"{path.name}:{lineno}: tier {tier!r} is not one of {sorted(valid_tiers)} "
+                f"— tier 1 is optical, 2a positional, 2b convention (#597)"
+            )
+        for target, cell in (("latin", parts[1]), ("cyrillic", parts[2])):
+            value = cell.strip()
+            if value and value != "-":
+                overrides[target][cp] = value
+    return overrides
+
+
 # ---------------------------------------------------------------------------
 # Filtering
 # ---------------------------------------------------------------------------
@@ -546,10 +586,19 @@ def filter_latin_homoglyphs(
         # `strip_combining` removed the mark from TR39's target, and they have folded to
         # `C`/`c`/`O` since long before #593 — #586's fixed-point loop is built on
         # `Ç → C`. Widening the guard over them would be a silent regression, not a fix.
-        # Fold to ASCII *before* reconciling case. `fix_case_mismatch` uppercases, and
-        # `ß`.upper() is the two-character `SS`, which then escapes `ASCII_FOLD` because
-        # that only fires on a single char — how Cherokee YE (a B-shape) ended up as `SS`.
-        target_str = fix_case_mismatch(source_cp, ASCII_FOLD.get(prototype, prototype))
+        # Fold to ASCII *before* reconciling case. `fix_case_mismatch` uppercases, and a
+        # single-char fold would otherwise be produced from a glyph whose own case mapping
+        # is richer — that is how Cherokee YE (a B-shape) came out as `SS` before #593.
+        #
+        # But a genuine multi-character case mapping wins, and `ẞ` is why. `ß`.upper() is
+        # the two-character `SS`, which is correct German: STRAẞE and STRASSE are the same
+        # word, so folding to `SS` makes them collide — the whole point of a skeleton.
+        # Folding `ß`→`b` first threw that away and turned STRAẞE into STRABE (#597).
+        cased = fix_case_mismatch(source_cp, prototype)
+        if len(cased) > 1 and cased.isascii():
+            target_str = cased
+        else:
+            target_str = fix_case_mismatch(source_cp, ASCII_FOLD.get(prototype, prototype))
         if target_str == chr(source_cp):
             continue  # never self-map
         result[source_cp] = target_str
@@ -816,9 +865,16 @@ def main() -> None:
     print(f"Parsed {len(entries)} total entries", file=sys.stderr)
 
     supplement = load_supplement(BUNDLED_SUPPLEMENT)
+    attested = load_attested(BUNDLED_ATTESTED)
+    # #597: merged into one override map. Both are applied with priority over the
+    # TR39-derived mappings; the files are separate because their admission criteria and
+    # provenance are, not because the pipeline treats them differently.
+    for script_key in ("latin", "cyrillic"):
+        supplement[script_key].update(attested[script_key])
     print(
-        f"Loaded supplement: {len(supplement['latin'])} latin + "
-        f"{len(supplement['cyrillic'])} cyrillic overrides (#342/#343)",
+        f"Loaded overrides: {len(supplement['latin'])} latin + "
+        f"{len(supplement['cyrillic'])} cyrillic "
+        f"(#342/#343 supplement + {len(attested['latin'])} attested rows, #597)",
         file=sys.stderr,
     )
 

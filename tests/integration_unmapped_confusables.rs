@@ -249,15 +249,23 @@ fn the_lambda_class_collides() {
     }
 }
 
-/// The other five recoveries. Each prototype is a non-ASCII Latin-extended glyph that
+/// The other four recoveries. Each prototype is a non-ASCII Latin-extended glyph that
 /// `ASCII_FOLD` maps to a basic-ASCII representative.
+///
+/// The two uppercase sharp-S sources land on `SS`, not `B`. This test asserted `B` when
+/// #593 landed, and that was wrong: `ß`.to_uppercase() is the two-character `SS`, which
+/// is correct German — STRAẞE and STRASSE are the same word, so folding to `SS` makes
+/// them collide, which is the whole point of a skeleton. Folding the prototype to `b`
+/// first threw the case mapping away and turned STRAẞE into STRABE (#597). A genuine
+/// multi-character case mapping now wins over `ASCII_FOLD`; `Ᏸ` (U+13F0) is the
+/// counter-case, since it has no case expansion and still folds to its shape, `B`.
 #[test]
 fn prototypes_ascii_fold_already_covers_are_recovered() {
     for (src, want) in [
-        ("\u{1E9E}", "B"), // ẞ → ß → B
-        ("\u{A7D6}", "B"), // Ꟗ → ß → B
-        ("\u{A7B5}", "b"), // ꞵ → ß → b
-        ("\u{A76B}", "z"), // ꝫ → ȝ → z
+        ("\u{1E9E}", "SS"), // ẞ → ß → SS  (capital sharp S; ß uppercases to SS)
+        ("\u{A7D6}", "SS"), // Ꟗ → ß → SS  (Middle Scots S, same prototype)
+        ("\u{A7B5}", "b"),  // ꞵ → ß → b   (lowercase source, no case expansion)
+        ("\u{A76B}", "z"),  // ꝫ → ȝ → z
     ] {
         assert_eq!(normalize_confusables(src, LATIN), want, "{src:?}");
     }

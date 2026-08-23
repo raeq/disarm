@@ -220,6 +220,44 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **Six Latin homoglyphs now fold, and the Latin lambdas collide with the Greek one
+  (#593).** `filter_latin_homoglyphs` recovers a Latin-script source whose TR39 prototype
+  is a single basic-ASCII graphic. `ASCII_FOLD` runs later, in `generate_mappings`, so a
+  row whose prototype that table already knows was discarded before it could be consulted
+  — the same shape as #587 and #590: a filter dropping a row before the pass that would
+  have made it valid.
+
+  | source | prototype | now |
+  |---|---|---|
+  | `ẞ` U+1E9E | `ß` | `B` |
+  | `Ꟗ` U+A7D6 | `ß` | `B` |
+  | `ꞵ` U+A7B5 | `ß` | `b` |
+  | `ꝫ` U+A76B | `ȝ` | `z` |
+  | `Ꟛ` U+A7DA | `Ʌ` | `A` |
+  | `Ƛ` U+A7DC | `Ʌ` | `A` |
+
+  TR39 puts `٨ ۸ Λ Ꟛ` in one confusable class, and the Latin lambdas did not collide with
+  the Greek one they are defined to be confusable with — the class had three distinct
+  skeletons. It reads `A` throughout now.
+
+  **Two candidates are deliberately excluded.** `ţ` (U+0163) and `ț` (U+021B) reach the
+  same prototype, but folding them strips a cedilla and a comma-below; `ț` is ordinary
+  Romanian orthography, and `normalize_confusables` promises accented Latin comes through
+  intact. The guard tests the source's own canonical decomposition rather than a
+  codepoint list, so a future `confusables.txt` cannot smuggle a new accented source past
+  it. It applies only to the rows this pass newly recovers: `Ç`, `ç` and `Ǿ` reach a bare
+  ASCII prototype only because `strip_combining` removed the mark from TR39's target, and
+  they have folded since long before this — #586's fixed-point loop is built on `Ç → C`.
+
+- **Cherokee YE folds to `B`, not `SS` (#593).** `fix_case_mismatch` uppercased the
+  prototype before `ASCII_FOLD` could see it, and `ß`.upper() is the two-character `SS`,
+  which then escaped the fold because that only fires on a single character. In a table
+  about *visual* confusability, `Ᏸ` (U+13F0) is a B-shape. Both call sites now fold to
+  ASCII before reconciling case; the blast radius was measured at this one row.
+
+  Latin table 2,183 → 2,189 mappings. The count gate added in #591 caught all five
+  documented figures immediately, which is what it was for.
+
 - **The Kotlin extensions keep their published JVM signatures (#588).** A Kotlin default
   argument compiles to one JVM method plus a synthetic `$default` bridge, not to an
   overload per arity. Adding a defaulted parameter therefore *deletes* the signature that

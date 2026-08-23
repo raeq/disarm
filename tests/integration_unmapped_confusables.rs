@@ -229,3 +229,59 @@ fn the_rows_targeting_the_ordinal_indicator_are_covered() {
         );
     }
 }
+
+// ── #593: prototypes ASCII_FOLD already covers ───────────────────────────────
+//
+// `filter_latin_homoglyphs` recovers a Latin-script source whose TR39 prototype is a
+// single basic-ASCII graphic. `ASCII_FOLD` runs later, in `generate_mappings`, so a row
+// whose prototype that table already knows was discarded before it could be consulted —
+// the same shape as #590 and #587: a filter dropping a row before the pass that would
+// have made it valid.
+
+/// The one that surfaced it. TR39 puts `٨ ۸ Λ Ꟛ` in a single confusable class, and the
+/// Latin lambdas did not collide with the Greek one they are defined to be confusable
+/// with — the class had three distinct skeletons.
+#[test]
+fn the_lambda_class_collides() {
+    for src in ["\u{039B}", "\u{A7DA}", "\u{A7DC}"] {
+        assert_eq!(normalize_confusables(src, LATIN), "A", "{src:?}");
+    }
+}
+
+/// The other five recoveries. Each prototype is a non-ASCII Latin-extended glyph that
+/// `ASCII_FOLD` maps to a basic-ASCII representative.
+#[test]
+fn prototypes_ascii_fold_already_covers_are_recovered() {
+    for (src, want) in [
+        ("\u{1E9E}", "B"), // ẞ → ß → B
+        ("\u{A7D6}", "B"), // Ꟗ → ß → B
+        ("\u{A7B5}", "b"), // ꞵ → ß → b
+        ("\u{A76B}", "z"), // ꝫ → ȝ → z
+    ] {
+        assert_eq!(normalize_confusables(src, LATIN), want, "{src:?}");
+    }
+}
+
+/// The guard. `ţ` and `ț` reach the same prototype, but folding them strips a cedilla
+/// and a comma-below — `ț` is ordinary Romanian orthography. `normalize_confusables`
+/// promises accented Latin comes through intact, so an accented source stays unmapped
+/// however foldable its prototype is. `strip_obfuscation` is the tool for that job.
+#[test]
+fn an_accented_source_is_never_folded_away() {
+    for src in ["\u{0163}", "\u{021B}"] {
+        assert_eq!(
+            normalize_confusables(src, LATIN),
+            src,
+            "{src:?} lost a diacritic"
+        );
+    }
+}
+
+/// `fix_case_mismatch` uppercased the prototype before `ASCII_FOLD` could see it, and
+/// `ß`.to_uppercase() is the two-character `SS`, which then escaped the fold because
+/// that only fires on a single char. This table is about *visual* confusability and
+/// Cherokee YE is a B-shape, so `SS` was never the right answer.
+#[test]
+fn a_prototype_is_ascii_folded_before_its_case_is_reconciled() {
+    assert_eq!(normalize_confusables("\u{13F0}", LATIN), "B");
+}

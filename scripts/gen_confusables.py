@@ -101,6 +101,23 @@ def is_latin_or_common(cp: int) -> bool:
     )
 
 
+def strips_a_diacritic(cp: int) -> bool:
+    """True if folding this source to a bare letter would remove a combining mark (#593).
+
+    `normalize_confusables` promises accented Latin comes through intact — that is what
+    makes it the right primitive when the text is a real name. `ţ` (U+0163) and `ț`
+    (U+021B) both reach TR39's `ƫ` prototype, which `ASCII_FOLD` resolves to `t`, so
+    recovering them would silently strip a cedilla and a comma-below. `ț` is ordinary
+    Romanian orthography. `strip_obfuscation` is the tool for that job (#564).
+
+    Detected from the source's own canonical decomposition rather than a codepoint list,
+    so a future confusables.txt cannot smuggle a new accented source past it.
+    """
+    return any(
+        unicodedata.category(ch).startswith("M") for ch in unicodedata.normalize("NFD", chr(cp))
+    )
+
+
 def is_basic_ascii_letter(cp: int) -> bool:
     """True if codepoint is a basic ASCII letter A-Z / a-z (already canonical)."""
     return (0x0041 <= cp <= 0x005A) or (0x0061 <= cp <= 0x007A)
@@ -384,7 +401,13 @@ def filter_direct(
         target_str = "".join(chr(cp) for cp in cleaned_cps)
         if not target_str.strip():
             continue
-        target_str = fix_case_mismatch(source_cp, target_str)
+        # #593: ASCII-fold before reconciling case, for the same reason as
+        # `filter_latin_homoglyphs`. `fix_case_mismatch` uppercases, and `ß`.upper() is
+        # the two-character `SS`, which then escapes the `ASCII_FOLD` pass in
+        # `generate_mappings` because that only fires on a single character. That is how
+        # Cherokee YE (U+13F0), a B-shape, came out as `SS` in a table about *visual*
+        # confusability. Blast radius measured: this row and no other.
+        target_str = fix_case_mismatch(source_cp, ASCII_FOLD.get(target_str, target_str))
         guarded = enforce_digit_target(source_cp, target_str)
         if guarded is None:
             continue
@@ -504,9 +527,29 @@ def filter_latin_homoglyphs(
         if 0x0030 <= source_cp <= 0x0039:
             continue  # digits
         cleaned = strip_combining(target_cps)
-        if len(cleaned) != 1 or not is_basic_ascii_graphic(cleaned[0]):
-            continue  # prototype must be a single printable, non-space ASCII char
-        target_str = fix_case_mismatch(source_cp, chr(cleaned[0]))
+        if len(cleaned) != 1:
+            continue  # prototype must be a single character
+        prototype = chr(cleaned[0])
+        # #593: accept a prototype `ASCII_FOLD` can resolve, not only one that is already
+        # basic ASCII. `ASCII_FOLD` runs later, in `generate_mappings`, so gating on raw
+        # ASCII here discarded rows before that table was ever consulted — Ꟛ→Ʌ among them,
+        # which left the Latin lambdas not colliding with the Greek one TR39 says they are
+        # confusable with.
+        already_ascii = is_basic_ascii_graphic(cleaned[0])
+        if not already_ascii:
+            if prototype not in ASCII_FOLD:
+                continue  # no ASCII representative, and none derivable
+            if strips_a_diacritic(source_cp):
+                continue  # folding would remove a mark; accented Latin stays (#593)
+        # The diacritic guard applies to the rows this pass newly recovers, NOT to the
+        # ones it always handled. `Ç`/`ç`/`Ǿ` reach a bare ASCII prototype only because
+        # `strip_combining` removed the mark from TR39's target, and they have folded to
+        # `C`/`c`/`O` since long before #593 — #586's fixed-point loop is built on
+        # `Ç → C`. Widening the guard over them would be a silent regression, not a fix.
+        # Fold to ASCII *before* reconciling case. `fix_case_mismatch` uppercases, and
+        # `ß`.upper() is the two-character `SS`, which then escapes `ASCII_FOLD` because
+        # that only fires on a single char — how Cherokee YE (a B-shape) ended up as `SS`.
+        target_str = fix_case_mismatch(source_cp, ASCII_FOLD.get(prototype, prototype))
         if target_str == chr(source_cp):
             continue  # never self-map
         result[source_cp] = target_str

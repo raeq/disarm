@@ -68,7 +68,7 @@ pub fn normalize_confusables(text: &str, target: TargetScript) -> Cow<'_, str> {
 
 /// How the fold treats non-Latin **digits** (#561).
 ///
-/// disarm and upstream TR39 disagree on ~45 rows, and both readings are defensible. The
+/// disarm and upstream TR39 disagree on 46 rows, and both readings are defensible. The
 /// divergence used to be fixed in the table with no way to select the other side, which
 /// read as a defect to anyone scoring disarm against a TR39-derived benchmark.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]

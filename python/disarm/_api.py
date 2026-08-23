@@ -710,8 +710,8 @@ def normalize_confusables(
     Args:
         text: Input string potentially containing homoglyphs.
         target_script: Script to normalize toward. Supported values:
-            ``"latin"`` (default, ~2,063 mappings) and ``"cyrillic"``
-            (~1,369 mappings).
+            ``"latin"`` (default, 2,183 mappings) and ``"cyrillic"``
+            (1,349 mappings).
         digit_policy: How non-Latin **digits** fold (#561).
 
             ``"numeric"`` (default) sends them to the ASCII digit — ``०`` becomes
@@ -723,7 +723,7 @@ def normalize_confusables(
             identifier *skeleton* wants: its only job is to make two confusable
             identifiers collide, and it does not care whether the collision target
             reads sensibly. Reach for it when comparing against a TR39-derived
-            benchmark. The two policies differ on ~45 rows and agree everywhere else.
+            benchmark. The two policies differ on 46 rows and agree everywhere else.
 
             Scoped to the Latin target: the override rows are generated from the
             Latin table and carry TR39's Latin-script targets, so with

@@ -115,7 +115,7 @@ export type TargetScript = 'latin' | 'cyrillic'
  *
  * `'numeric'` (default) sends them to the ASCII digit — `०` becomes `0` — which is right
  * for prose. `'tr39'` uses upstream's targets, which send several to a Latin letter
- * (`०` → `o`), which is what an identifier *skeleton* wants. They differ on ~45 rows.
+ * (`०` → `o`), which is what an identifier *skeleton* wants. They differ on 46 rows.
  *
  * Scoped to `target: 'latin'`: the override rows are generated from the Latin table and
  * carry TR39's Latin-script targets, so with `target: 'cyrillic'` the option is a no-op.

@@ -4,7 +4,7 @@ package dev.disarm;
  * How {@link Disarm#normalizeConfusables(String, TargetScript, DigitPolicy)} treats
  * non-Latin <b>digits</b>.
  *
- * <p>disarm and upstream TR39 disagree on about 45 rows, and both readings are
+ * <p>disarm and upstream TR39 disagree on 46 rows, and both readings are
  * defensible. The divergence used to be fixed in the table with no way to select the
  * other side, which read as a defect to anyone scoring disarm against a TR39-derived
  * benchmark.

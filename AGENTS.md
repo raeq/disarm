@@ -69,7 +69,14 @@ Three tiers (full detail in **CONTRIBUTING.md → "Test architecture"**):
 - **Rust unit + integration**: ~630 tests — `cargo test --no-default-features`
 - **Python pytest**: ~2,200 deterministic tests —
   `pytest -m "not formal and not hypothesis"`
-- **build.rs compile-time assertions**: always-on, zero runtime cost
+- **build.rs compile-time assertions**: always-on, zero runtime cost — generated
+  table values must be ASCII, including the `tr39` digit-policy overrides (#587)
+- **Drift gates**: four checks compare a generated or published artifact against its
+  source of truth rather than testing behaviour — the committed `disarm.h` (#580),
+  `tests/test_doc_table_counts.py` over 11 documented row counts (#591), the build.rs
+  ASCII assertions (#587), and `JvmSignatureTest` over the published Kotlin JVM
+  signatures (#588). Two read a *build product*, not source text, which is why they
+  catch what source-level assertions miss. Detail in CONTRIBUTING.md → "Drift gates"
 
 ### Tier 2: Hypothesis / property-based (developer worktree only)
 - ~440 tests marked `@pytest.mark.hypothesis` — property/fuzz testing across the
@@ -81,6 +88,11 @@ Three tiers (full detail in **CONTRIBUTING.md → "Test architecture"**):
 - **Rust exhaustive domain tests**: 16 tests marked `#[ignore]` (all 11,172
   Hangul syllables, full BMP, all CJK ideographs, 15 Indic blocks) —
   `cargo test --no-default-features --test exhaustive_transliterate -- --ignored`
+- **Rust exhaustive confusables**: the BMP crossed with composing marks on the
+  Layer-2 API, for idempotence and residual confusability (#586) —
+  `cargo test --no-default-features --release --test exhaustive_confusables -- --ignored`.
+  Deliberately separate from the lib-level sweep, which tests Layer 1: testing the
+  layer beneath the one the bindings call is how #586 went unnoticed for a year
 - **Python formal invariant tests**: 12 tests marked `@pytest.mark.formal`
   (invariants I1–I7) — `pytest -m formal`
 
@@ -107,8 +119,9 @@ branch protection.
 3. `gh pr create --repo raeq/disarm`
 4. Resolve **every** review thread — GitHub's "Require conversation resolution
    before merging" blocks the merge while any thread is open
-5. Wait for required checks ("Rust checks passed", "Python checks passed") to go
-   green
+5. Wait for the required checks — "All checks passed", "DCO sign-off" and "iai
+   estimated-cycles gate" — to go green. "All checks passed" is a roll-up of the
+   whole matrix (#583); the former per-language contexts no longer exist
 6. Merge
 
 Never push directly to `main` — it will be rejected.

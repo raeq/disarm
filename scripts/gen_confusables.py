@@ -74,10 +74,24 @@ def is_latin(cp: int) -> bool:
     )
 
 
+#: The three Latin *letters* in Latin-1 Supplement below U+00C0 (#590). The block
+#: ranges below jump 0x007F → 0x00C0, so this stretch reads as non-Latin — but ª and º
+#: are category Lo with Script=Latin, and µ is Ll. Admitting the whole 0x0080–0x00BF
+#: range instead would pull in 58 rows targeting punctuation and symbols (·, °, ¶, ©),
+#: whose non-ASCII targets #341 exists to keep out. Only the letters belong.
+#:
+#: `is_latin` (the SOURCE-side predicate) carries the identical gap. Measured: closing
+#: it there changes nothing, because no upstream row uses ª/µ/º as a source. Left alone
+#: rather than changed blind — if a future confusables.txt adds such a row, this note
+#: is the pointer.
+LATIN1_LETTERS = frozenset({0x00AA, 0x00B5, 0x00BA})  # ª µ º
+
+
 def is_latin_or_common(cp: int) -> bool:
     """True if codepoint is Latin script, ASCII Common, or combining mark."""
     return (
         (0x0000 <= cp <= 0x007F)  # Basic Latin (ASCII)
+        or cp in LATIN1_LETTERS  # ª µ º — Latin letters the block ranges skip (#590)
         or (0x00C0 <= cp <= 0x024F)  # Latin Extended-A/B
         or (0x1E00 <= cp <= 0x1EFF)  # Latin Extended Additional
         or (0x2C60 <= cp <= 0x2C7F)  # Latin Extended-C
@@ -168,6 +182,8 @@ ASCII_FOLD: dict[str, str] = {
     # 'e'-shaped, not 'c'-shaped — so the class folds to e, the #336 decision.
     "ꞓ": "e",
     "Ꞓ": "e",  # LATIN (CAPITAL) LETTER C WITH BAR — epsilon/open-e class (#336)
+    "ª": "a",  # FEMININE ORDINAL INDICATOR — NFKC is 'a' (#590)
+    "º": "o",  # MASCULINE ORDINAL INDICATOR — NFKC is 'o' (#590)
     "ĸ": "k",  # LATIN SMALL LETTER KRA
     "ß": "b",  # LATIN SMALL LETTER SHARP S (#336)
     "ǝ": "e",

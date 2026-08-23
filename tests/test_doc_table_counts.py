@@ -72,9 +72,48 @@ CASES = [
     ),
     pytest.param(
         Path("docs/limitations.md"),
-        r"~([\d,]+) rows bundled",
+        r"~?([\d,]+) rows bundled",
         "confusables_to_latin.tsv",
         id="limitations-latin",
+    ),
+    # #590: the two files above were gated and stayed accurate. Three other surfaces
+    # quote the same Latin figure and were not, so they drifted to ~2,063 — 118 rows
+    # stale — without anything noticing. Gate them at the same source of truth.
+    pytest.param(
+        Path("src/tables/confusables_data.rs"),
+        r"Contains ~?([\d,]+) non-Latin",
+        "confusables_to_latin.tsv",
+        id="crate-docs-latin",
+    ),
+    pytest.param(
+        Path("src/tables/confusables_data.rs"),
+        r"and ~?([\d,]+) non-Cyrillic",
+        "confusables_to_cyrillic.tsv",
+        id="crate-docs-cyrillic",
+    ),
+    pytest.param(
+        Path("python/disarm/_api.py"),
+        r"default, ~?([\d,]+) mappings",
+        "confusables_to_latin.tsv",
+        id="python-docstring-latin",
+    ),
+    pytest.param(
+        Path("python/disarm/_api.py"),
+        r"\(~?([\d,]+) mappings\)",
+        "confusables_to_cyrillic.tsv",
+        id="python-docstring-cyrillic",
+    ),
+    pytest.param(
+        Path("docs/user-guide/confusables.md"),
+        r"`\"latin\"` \(default\) \| ~?([\d,]+)",
+        "confusables_to_latin.tsv",
+        id="user-guide-latin",
+    ),
+    pytest.param(
+        Path("docs/user-guide/confusables.md"),
+        r"`\"cyrillic\"` \| ~?([\d,]+)",
+        "confusables_to_cyrillic.tsv",
+        id="user-guide-cyrillic",
     ),
 ]
 

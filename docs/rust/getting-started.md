@@ -70,7 +70,7 @@ letter corrupts the number. TR39's is right for an identifier *skeleton*, whose 
 is to make two confusable identifiers collide; it does not care whether the collision
 target reads sensibly.
 
-The two differ on about 45 rows and agree on everything else. Reach for `tr39` when
+The two differ on 46 rows and agree on everything else. Reach for `tr39` when
 comparing against a TR39-derived benchmark, and leave the default alone for text.
 
 The policy is scoped to the Latin target. The override rows are generated from the

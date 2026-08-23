@@ -220,6 +220,45 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`⁰` and `ᵒ` now fold; a block-range gap had been dropping them (#590).**
+  `is_latin_or_common` in `gen_confusables.py` enumerates Latin block ranges and jumps
+  from `0x007F` to `0x00C0`, leaving `U+0080–U+00BF` uncovered. `º` (U+00BA) is category
+  `Lo` with `Script=Latin` and lives in that hole, so `filter_direct` read it as a
+  non-Latin target and discarded both upstream rows pointing at it.
+
+  The symptom was an asymmetry between the only two superscript digits upstream TR39
+  carries — it lists visual lookalikes, and no letter resembles a superscript four:
+
+  | | before | now |
+  |---|---|---|
+  | `⁰` U+2070 | unmapped, passed through | `0` (numeric), `º` (tr39) |
+  | `⁹` U+2079 | `9` (numeric), `ꝰ` (tr39) | unchanged |
+
+  `⁹` targets `ꝰ` in Latin Extended-D, so its row survived and the `#89` digit rule
+  rewrote it to the ASCII digit. `⁰` was discarded before that rule could run. With the
+  row restored, `⁰` gains a `tr39` override too, so the pair is now symmetric.
+
+  The fix admits only the three Latin **letters** in the gap — `ª` `µ` `º` — and gives
+  `ASCII_FOLD` the two ordinal indicators, keeping #341's ASCII contract. Opening the
+  whole range instead would pull in 58 rows targeting punctuation and symbols (`·`, `°`,
+  `¶`, `©`), which is what that contract exists to prevent. `is_latin`, the source-side
+  predicate, has the identical gap; closing it there was measured to change nothing,
+  since no upstream row uses those three as a source, so it is documented rather than
+  changed blind.
+
+  Table sizes move accordingly: Latin 2,181 → 2,183 mappings, `tr39` overrides 45 → 46.
+  Every documented count was re-measured against the regenerated tables rather than
+  adjusted by hand, which turned up two that were already stale before this change —
+  the Latin table was described as `~2,063` mappings (actual 2,183) and the Cyrillic as
+  `~1,369` (actual 1,349).
+
+  `tests/test_doc_table_counts.py` existed to prevent exactly that drift, and the two
+  files it gates were accurate. The three surfaces carrying the same figure were not
+  gated, and had drifted by 118 rows unnoticed: `src/tables/confusables_data.rs`,
+  `python/disarm/_api.py`, and the target-script table in the confusables user guide.
+  All three are now gated against the same source of truth, taking the check from 5
+  figures to 11.
+
 - **Restored the 1-argument `disarm_analyze_hostname` C ABI (#580).** #562 widened it to
   take `contractions`, but that symbol shipped in 0.13.0 and callers are linked against
   the 1-argument form — widening it breaks them at link time. The contraction pass moved

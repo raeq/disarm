@@ -59,7 +59,7 @@ fn tr39_policy_makes_the_skeleton_collide() {
     );
 }
 
-/// The policy must be surgical: everything outside the ~45 divergent rows is untouched.
+/// The policy must be surgical: everything outside the 46 divergent rows is untouched.
 #[test]
 fn the_policy_touches_only_the_divergent_rows() {
     for text in [
@@ -92,6 +92,24 @@ fn both_policies_are_idempotent() {
             let twice = normalize_confusables_with(&once, LATIN, policy);
             assert_eq!(twice, once, "{policy:?} not idempotent on {text:?}");
         }
+    }
+}
+
+/// #590: `⁰` reaching the table gave it a divergence to record, exactly like `⁹`.
+/// Upstream sends SUPERSCRIPT ZERO to `º` and SUPERSCRIPT NINE to `ꝰ`; the numeric
+/// reading sends both to their ASCII digit. The two rows must stay symmetric — an
+/// asymmetry here is what #590 was.
+#[test]
+fn the_two_superscript_digits_diverge_symmetrically() {
+    for (input, numeric, tr39) in [("\u{2070}", "0", "\u{00BA}"), ("\u{2079}", "9", "\u{A770}")] {
+        assert_eq!(
+            normalize_confusables_with(input, LATIN, DigitPolicy::Numeric),
+            numeric
+        );
+        assert_eq!(
+            normalize_confusables_with(input, LATIN, DigitPolicy::Tr39),
+            tr39
+        );
     }
 }
 

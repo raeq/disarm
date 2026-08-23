@@ -190,3 +190,42 @@ fn scan_is_sound_on_mixed_input() {
         }
     }
 }
+
+// ── #590: the Latin-1 Supplement block gap ───────────────────────────────────
+//
+// `is_latin_or_common` in `scripts/gen_confusables.py` enumerates Latin block ranges
+// and jumps from 0x007F straight to 0x00C0, leaving U+0080–U+00BF uncovered. `º`
+// (U+00BA, category Lo, Script=Latin) lives in that hole, so `filter_direct` read it as
+// a non-Latin target and discarded both upstream rows that point at it.
+
+/// `⁰` and `⁹` are the only two superscript digits upstream TR39 carries — it lists
+/// visual lookalikes, and no letter resembles a superscript four. They are structural
+/// twins, so they must behave alike. `⁹` targets `ꝰ` in Latin Extended-D and survived
+/// to be rewritten to the ASCII digit; `⁰` targets `º` and was dropped before the
+/// digit rule could see it.
+#[test]
+fn superscript_zero_folds_like_superscript_nine() {
+    assert_eq!(normalize_confusables("\u{2079}", LATIN), "9");
+    assert_eq!(normalize_confusables("\u{2070}", LATIN), "0");
+}
+
+/// The other row that targeted `º`: MODIFIER LETTER SMALL O. Its upstream target is a
+/// letter, not a digit, so it folds to ASCII `o` rather than through the digit rule.
+#[test]
+fn modifier_letter_small_o_folds_to_ascii_o() {
+    assert_eq!(normalize_confusables("\u{1D52}", LATIN), "o");
+}
+
+/// The visible symptom: both were reported as uncovered exposure, which is what
+/// `unmapped_confusables` exists to surface.
+#[test]
+fn the_rows_targeting_the_ordinal_indicator_are_covered() {
+    let latin = unmapped_confusables(LATIN);
+    for ch in ['\u{2070}', '\u{1D52}'] {
+        assert!(
+            !latin.contains(&ch),
+            "U+{:04X} {ch:?} is still reported unmapped",
+            ch as u32
+        );
+    }
+}

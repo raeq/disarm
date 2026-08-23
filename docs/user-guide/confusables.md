@@ -142,7 +142,7 @@ letter corrupts the number. TR39's is right for an identifier *skeleton*, whose 
 is to make two confusable identifiers collide; it does not care whether the collision
 target reads sensibly.
 
-The two differ on about 45 rows and agree on everything else. Reach for `tr39` when
+The two differ on 46 rows and agree on everything else. Reach for `tr39` when
 comparing against a TR39-derived benchmark, and leave the default alone for text.
 
 The policy is scoped to the Latin target. The override rows are generated from the
@@ -209,8 +209,8 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
 | Target | Mappings | Description |
 |--------|----------|-------------|
-| `"latin"` (default) | ~2,063 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
-| `"cyrillic"` | ~1,369 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
+| `"latin"` (default) | 2,183 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
+| `"cyrillic"` | 1,349 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
 
 Characters without a confusable equivalent in the target script pass through unchanged. This is pure visual mapping — not transliteration. Latin `f` has no Cyrillic lookalike, so it stays as `f`.
 

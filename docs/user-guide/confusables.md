@@ -6,13 +6,14 @@ disarm implements Unicode TR39 confusable detection and normalization with multi
 
 Two smaller sets are layered on top of the generated table. `confusables_supplement.tsv`
 adds cross-script pairs TR39 leaves without a shared prototype (#336/#342). Since #597,
-`confusables_attested.tsv` adds 32 codepoints **attested in real attacker text** — mined
+`confusables_attested.tsv` adds 31 codepoints **attested in real attacker text** — mined
 from the BitCore subset of the BitAbuse corpus — that TR39 does not list as sources at
-all. Most are optical twins of a Latin letter (`ɴ`→`n`, `ʍ`→`m`, `ʀ`→`r`). Nine are not:
-they are glyphs an attacker used *positionally* rather than because they look like the
-letter (`ժ`→`d`, `ᚱ`→`r`, `Ⴝ`→`s`), so for those rows the rule is **observed attacker
-substitution**, which is wider than visual confusability. Unicode would not accept them
-upstream, and they are marked as tier `2a`/`2b` in that file.
+all. Twenty-three are optical twins of a Latin letter (`ɴ`→`n`, `ʍ`→`m`, `ʀ`→`r`). Eight
+are not: seven are glyphs an attacker used *positionally* rather than because they look
+like the letter (`ժ`→`d`, `ᚱ`→`r`, `Ⴝ`→`s`), and one is a reading convention (`щ`→`w`).
+For those rows the rule is **observed attacker substitution**, which is wider than visual
+confusability. Unicode would not accept them upstream, and they are marked tier `2a` and
+`2b` in that file.
 
 ## Detecting confusables
 

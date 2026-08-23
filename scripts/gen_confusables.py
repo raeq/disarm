@@ -358,6 +358,18 @@ def load_attested(path: Path) -> dict[str, dict[int, str]]:
                 f"{path.name}:{lineno}: tier {tier!r} is not one of {sorted(valid_tiers)} "
                 f"— tier 1 is optical, 2a positional, 2b convention (#597)"
             )
+        # `occ` is provenance, not input to the fold, but a row that cannot state its
+        # attestation count has not been mined — it has been guessed. Parse it so a
+        # malformed one fails here rather than shipping unnoticed.
+        occ = parts[4].strip()
+        try:
+            if int(occ) < 0:
+                raise ValueError
+        except ValueError:
+            raise ValueError(
+                f"{path.name}:{lineno}: occ {occ!r} is not a non-negative integer — it is "
+                f"the BitCore occurrence count that justifies the row (#597)"
+            ) from None
         for target, cell in (("latin", parts[1]), ("cyrillic", parts[2])):
             value = cell.strip()
             if value and value != "-":

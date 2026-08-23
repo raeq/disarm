@@ -89,7 +89,7 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 
 | Mechanism | Definition |
 |---|---|
-| `normalize_confusables` / `is_confusable` | Map characters in the **bundled confusable table** to a chosen target script (Latin/Cyrillic). That table is TR39 plus two additive sets: cross-script pairs TR39 leaves unpaired (#336/#342), and codepoints attested in real attacker text that TR39 does not list at all (#597) — nine of which are *positional* substitutions rather than visual look-alikes. Coverage is exactly that table — see *Out of scope*. |
+| `normalize_confusables` / `is_confusable` | Map characters in the **bundled confusable table** to a chosen target script (Latin/Cyrillic). That table is TR39 plus two additive sets: cross-script pairs TR39 leaves unpaired (#336/#342), and 31 codepoints attested in real attacker text that TR39 does not list at all (#597), of which 23 are optical look-alikes, seven are *positional* substitutions and one is a reading convention. Coverage is exactly that table — see *Out of scope*. |
 | `strip_bidi` | Remove the UAX#9 bidi formatting/isolate/override code points enumerated in the implementation. |
 | `strip_zalgo` / `is_zalgo` | Remove or detect runs of combining marks above a configurable threshold. |
 | zero-width / invisible stripping | Remove the enumerated zero-width and invisible code points. |

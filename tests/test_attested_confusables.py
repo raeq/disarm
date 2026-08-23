@@ -99,11 +99,12 @@ def test_the_cyrillic_target_is_untouched() -> None:
     """Seven of these sources already fold under ``target_script="cyrillic"``. The
     attested file sets the Latin column only; those mappings must survive."""
     for source, expected in [
-        ("ʍ", "м"),  # ʍ → м
-        ("ĸ", "к"),  # ĸ → к
-        ("ʜ", "н"),  # ʜ → н
-        ("ʙ", "в"),  # ʙ → в
-        ("ƅ", "ь"),  # ƅ → ь
-        ("Ʌ", "Л"),  # Ʌ → Л
+        ("ʍ", "м"),  # U+028D → U+043C
+        ("ĸ", "к"),  # U+0138 → U+043A
+        ("ʜ", "н"),  # U+029C → U+043D
+        ("ɢ", "ԍ"),  # U+0262 → U+050D CYRILLIC SMALL LETTER KOMI SJE
+        ("ʙ", "в"),  # U+0299 → U+0432
+        ("ƅ", "ь"),  # U+0185 → U+044C
+        ("Ʌ", "Л"),  # U+0245 → U+041B
     ]:
         assert normalize_confusables(source, target_script="cyrillic") == expected

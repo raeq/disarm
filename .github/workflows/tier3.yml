@@ -48,6 +48,14 @@ jobs:
         # re-checked on every release.
         run: cargo test --no-default-features --test exhaustive_grapheme -- --ignored
 
+      - name: Rust exhaustive confusables fixed-point tests (Tier 3, #586)
+        # The lib-level sweep below covers the Layer-1 fold. This one covers the
+        # *public* Layer-2 API, which is the surface every non-Python binding calls —
+        # and which #523 left on a single pass while fixing Layer 1. Sweeps the BMP
+        # crossed with composing marks for idempotence and for output that is still
+        # confusable.
+        run: cargo test --no-default-features --release --test exhaustive_confusables -- --ignored
+
       - name: Rust exhaustive lib-level domain tests (Tier 3)
         # Ignored *lib* unit tests need internal (`pub(crate)`) table access, so they
         # can't move to a `tests/exhaustive_*.rs` integration file. --release keeps the

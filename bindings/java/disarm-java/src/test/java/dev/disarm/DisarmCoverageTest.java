@@ -111,6 +111,25 @@ class DisarmCoverageTest {
         assertTrue(Disarm.normalizeConfusables("abc", TargetScript.CYRILLIC) != null);
     }
 
+    // #586: the fold iterates to a fixed point rather than stopping after one pass. Every
+    // non-Python binding reaches the core through the same Rust entry point, so a single
+    // pass made this call answer differently from Python for the same input.
+    @Test
+    void normalizeConfusablesReachesAFixedPoint() {
+        // A fold exposes a composition: ¥ + U+0300 folds to Y + U+0300, composing to Ỳ.
+        assertEquals("\u1EF2", Disarm.normalizeConfusables("\u00A5\u0300", TargetScript.LATIN));
+        // A composition exposes a fold: Ҫ + U+0327 composes to Ç, a confusable, then C.
+        assertEquals("C", Disarm.normalizeConfusables("\u04AA\u0327", TargetScript.LATIN));
+    }
+
+    @Test
+    void normalizeConfusablesOutputIsNeverItselfConfusable() {
+        for (String input : new String[] {"\u04AA\u0327", "\u00A5\u0300", "p\u0430ypal"}) {
+            String folded = Disarm.normalizeConfusables(input, TargetScript.LATIN);
+            assertFalse(Disarm.isConfusable(folded, TargetScript.LATIN), input);
+        }
+    }
+
     // ── Collection returns ──────────────────────────────────────────────────────
 
     @Test

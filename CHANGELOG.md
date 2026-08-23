@@ -452,6 +452,32 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **The required status checks are named correctly again.** `CONTRIBUTING.md`, `AGENTS.md`
+  and `SECURITY.md` told contributors to wait for *"Rust checks passed"* and *"Python
+  checks passed"*. #583 collapsed those contexts into a single roll-up, so neither exists:
+  branch protection requires **"All checks passed"**, **"DCO sign-off"** and **"iai
+  estimated-cycles gate"**. A contributor following the old text waits for a check that
+  will never report.
+
+- **The four drift gates are described in one place.** `CONTRIBUTING.md` → *Drift gates*
+  now names what each guards and when it fails: the committed `disarm.h` (#580), the 11
+  documented row counts in `test_doc_table_counts.py` (#591), the `build.rs` ASCII
+  assertions (extended to the `tr39` overrides earlier in this release by #587), and
+  `JvmSignatureTest` over the published Kotlin JVM signatures (#588). Each entry names the
+  CI check that reports it, so a red run leads straight to the gate. Documentation only —
+  no gate changes behaviour here. Two of them read a *build product* rather than
+  source text, which is why they catch what source-level assertions miss.
+
+  It also records the habit those gates exist to enforce: when you regenerate a table,
+  read the data diff, not just the test output. A generator change can silently *remove*
+  rows and leave the suite green — which is how an over-broad filter deleted `Ç → C`
+  during #593.
+
+- **The Tier 3 listing matches `tier3.yml` again.** `CONTRIBUTING.md` documented two of
+  the five steps the workflow runs; `exhaustive_grapheme` (#174), `exhaustive_confusables`
+  (#586) and the lib-level ignored sweep were missing. `AGENTS.md` gained the confusables
+  entry and the note on why it is deliberately separate from the Layer-1 sweep.
+
 - **Accented-Latin fidelity is a `strip_obfuscation` property, not a confusables
   property (#564).** `normalize_confusables` preserves accented Latin where
   `strip_obfuscation` destroys it, at identical homoglyph recovery — because

@@ -157,8 +157,30 @@ pytest -m "not formal and not hypothesis"
 ```
 
 `build.rs` compile-time assertions are always on at zero runtime cost: they assert that
-every transliteration table value is ASCII and that entry counts match expectations. If
-one fails, `cargo build` fails.
+every transliteration table value is ASCII, that the `tr39` digit-policy override values
+are ASCII (#587), and that entry counts match expectations. If one fails, `cargo build`
+fails.
+
+#### Drift gates
+
+Four checks in Tier 1 guard something a normal test cannot: they compare a *generated or
+published artifact* against the source of truth, so they fail when the two drift apart
+rather than when behaviour is wrong. Each exists because the drift they catch happened.
+
+| Gate | Guards | Fails when |
+|---|---|---|
+| `bindings/cabi/disarm.h` diff (`C ABI (safer-ffi)` job) | The committed C header | An exported signature changes without the header being regenerated (#580) |
+| `tests/test_doc_table_counts.py` | 11 documented row counts across 5 files | A table is regenerated and prose still quotes the old figure (#591) |
+| `build.rs` ASCII assertions | Generated table values | A generated value is non-ASCII, against #341's contract (#587) |
+| `JvmSignatureTest` (`Java binding (JDK …)` job) | Published JVM signatures | A Kotlin default argument deletes an arity that shipped (#588) |
+
+Two of them read a build product rather than source text, which is the point:
+`JvmSignatureTest` reflects over the compiled facade, and the header gate diffs the
+regenerated header. Source-level assertions would not have caught either defect.
+
+**When you regenerate a table, read the data diff, not just the test output.** A change to
+`gen_confusables.py` can silently *remove* rows, and a passing suite does not prove it
+did not — that is how an over-broad filter deleted `Ç → C` during #593.
 
 ### Tier 2 — Hypothesis / property-based (developer worktree)
 
@@ -172,13 +194,28 @@ pytest -m hypothesis      # (plain `pytest` includes these by default)
 ### Tier 3 — Formal / pre-release (gated, opt-in)
 
 Exhaustive enumeration — every Hangul syllable (11,172), the full BMP (63,488 code
-points), all CJK ideographs, 15 Indic blocks — plus the seven formalized invariants
-(I1–I7).
+points) both bare and crossed with composing marks, all CJK ideographs, 15 Indic blocks
+— plus the seven formalized invariants (I1–I7). `.github/workflows/tier3.yml` runs the
+same set.
 
 ```bash
 # Rust exhaustive domain tests (16 tests, marked #[ignore])
 PYO3_PYTHON=$(which python3) cargo test --no-default-features \
   --test exhaustive_transliterate -- --ignored
+
+# Grapheme-boundary integrity across the same domain (#174).
+cargo test --no-default-features --test exhaustive_grapheme -- --ignored
+
+# Confusables on the Layer-2 API: the BMP crossed with composing marks, checked for
+# idempotence and for output that is still confusable (#586). Deliberately separate
+# from the lib-level sweep below, which tests Layer 1 — testing the layer beneath the
+# one the bindings call is how #586 survived a year. --release keeps it near 1s.
+cargo test --no-default-features --release \
+  --test exhaustive_confusables -- --ignored
+
+# Lib-level ignored tests: the Layer-1 fold∘compose gate (#522) and the presets
+# non-ASCII fast-path sweep, both unreachable from an integration test.
+cargo test --no-default-features --release --lib -- --ignored
 
 # Python formal invariant tests (12 tests)
 pytest -m formal
@@ -355,8 +392,10 @@ protection.
 3. Run Tier 1 locally (tests + linters) and confirm it's green.
 4. **Sign off** your commits (`git commit -s`) — see [Sign your work](#sign-your-work-developer-certificate-of-origin) above.
 5. Open a pull request describing **what** changed and **why**. Link any related issue.
-6. Wait for the required status checks — **"Rust checks passed"**, **"Python checks
-   passed"**, and **"DCO sign-off"** — to go green.
+6. Wait for the required status checks — **"All checks passed"**, **"DCO sign-off"**
+   and **"iai estimated-cycles gate"** — to go green. The first is a single roll-up:
+   #583 collapsed the former per-language contexts into it, so one green tick now
+   stands for the whole Rust, Python, binding and doc matrix.
 
 A PR that arrives with a passing CI run and a focused test is the easiest kind to
 review and merge. Thank you for contributing.

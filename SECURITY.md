@@ -93,7 +93,7 @@ What is attested for consumers of the published artifacts, and how to verify it:
 - **Dependency policy gate (CI).** Every PR runs `cargo audit` (RustSec advisories)
   and `cargo deny check licenses bans sources` (license allow-list, banned/wildcard
   crates, and registry/source restrictions — only crates.io is trusted). Both are
-  part of the required *Rust checks passed* merge gate. The policy lives in
+  part of the required *All checks passed* merge gate. The policy lives in
   `deny.toml`.
 - **SBOM.** Each GitHub Release carries a CycloneDX software bill of materials
   (`*.cdx.json`) of the full Rust dependency graph, so downstream users can

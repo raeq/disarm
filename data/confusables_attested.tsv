@@ -1,0 +1,81 @@
+# confusables_attested.tsv — real-attacker confusable mappings NOT in TR39 (#597).
+#
+# TR39 lists pairs that are *visually* confusable. Miss-mining the BitCore subset of
+# the BitAbuse corpus (Lee et al., NAACL Findings 2025) with `benchmarks/adversarial_eval`
+# surfaced codepoints that real attackers substitute for basic-Latin letters and that
+# TR39 does not list as SOURCES at all, so normalize_confusables() left them unfolded.
+#
+# Why a separate file from confusables_supplement.tsv: that file declares itself
+# "cross-script confusable mappings NOT in TR39" and pins its provenance to one measured
+# dataset at a stated threshold (confusable-vision, danger >= 0.97, the OQ3 decision on
+# #336). 18 of the sources here are Latin folding to Latin, and none comes from that
+# dataset. Two admission criteria, two provenance stories, two files.
+#
+# Provenance: attestation in the BitAbuse *BitCore* subset (real attacker text), with the
+# intended letter recovered by positional alignment against ground truth. Occurrence and
+# row counts are per-codepoint BitCore figures from the #597 mining run (disarm 0.12.0,
+# full 325,580-row corpus). The synthetic BitViper tail — 254 further codepoints,
+# 733,029 occurrences — is EXCLUDED by construction, per the #39/#40 guardrail that these
+# corpora are measuring instruments, never optimization targets. No row here is justified
+# by a benchmark score.
+#
+# CONTRACT NOTE. Tier 1 rows are optical: genuine shape-twins of a Latin letter. Tier 2a
+# rows are POSITIONAL — an attacker reached for an Armenian/Georgian/runic glyph by
+# position in the word, not because it looks like the letter. Admitting them widens this
+# table's contract from "visual confusable" to "observed attacker substitution". That is a
+# deliberate decision recorded on #597; Unicode would not accept the 2a rows upstream.
+#
+# EXCLUDED. U+00DF ß was proposed as tier 2b (#597) and is deliberately NOT here.
+# It is ordinary German orthography, and folding it to `b` turns "Müller Straße" into
+# "Müller Strabe" — caught by tests/test_accented_latin_fidelity.py. Same class as the
+# Romanian ț that #593 guards: a live letter in a major language is not a confusable
+# source, however much it resembles one. Note the asymmetry this leaves — ẞ, ꞵ and Ꟗ fold
+# through ß as their TR39 prototype (#595) while ß itself does not. That is intended: the
+# prototype is a fold TARGET there, not a source.
+#
+# CASE NOTE. Six rows fold an uppercase source to a lowercase target (Ƿ Ʌ Ա Ⴝ Ⴍ Ⴓ),
+# which no generated row does — the generated pipeline reconciles case to the source via
+# fix_case_mismatch, and rows in this file bypass it. The attested form is kept, because
+# the evidence is the letter the attacker meant, not its case.
+#
+# Columns (tab-separated):
+#   source   hex codepoint of the attested source character
+#   latin    latin-target fold ("-" = no latin override; keep the generated value)
+#   cyrillic cyrillic-target fold ("-" = no cyrillic override; SEVEN of these sources
+#            already have a generated cyrillic mapping, which must not be disturbed)
+#   tier     1 = optical · 2a = positional · 2b = convention
+#   occ      BitCore occurrences (informative; never an admission criterion on its own)
+#   note     glyph, Unicode name, and the intended letter
+#
+# source	latin	cyrillic	tier	occ	note
+0274	n	-	1	4576	ɴ LATIN LETTER SMALL CAPITAL N → n
+028D	m	-	1	846	ʍ LATIN SMALL LETTER TURNED W → m
+027E	r	-	1	515	ɾ LATIN SMALL LETTER R WITH FISHHOOK → r
+04A5	h	-	1	442	ҥ CYRILLIC SMALL LIGATURE EN GHE → h
+0138	k	-	1	315	ĸ LATIN SMALL LETTER KRA → k
+0280	r	-	1	216	ʀ LATIN LETTER SMALL CAPITAL R → r
+01F7	p	-	1	207	Ƿ LATIN CAPITAL LETTER WYNN → p
+0449	w	-	2b	204	щ CYRILLIC SMALL LETTER SHCHA → w
+029C	h	-	1	203	ʜ LATIN LETTER SMALL CAPITAL H → h
+056A	d	-	2a	190	ժ ARMENIAN SMALL LETTER ZHE → d
+029F	l	-	1	189	ʟ LATIN LETTER SMALL CAPITAL L → l
+16B1	r	-	2a	181	ᚱ RUNIC LETTER RAIDO RAD REID R → r
+03BC	u	-	1	143	μ GREEK SMALL LETTER MU → u
+0262	g	-	1	137	ɢ LATIN LETTER SMALL CAPITAL G → g
+0531	u	-	2a	116	Ա ARMENIAN CAPITAL LETTER AYB → u
+10BD	s	-	2a	113	Ⴝ GEORGIAN CAPITAL LETTER CHAR → s
+04A1	k	-	1	95	ҡ CYRILLIC SMALL LETTER BASHKIR KA → k
+0299	b	-	1	66	ʙ LATIN LETTER SMALL CAPITAL B → b
+0185	b	-	1	32	ƅ LATIN SMALL LETTER TONE SIX → b
+04B3	x	-	1	31	ҳ CYRILLIC SMALL LETTER HA WITH DESCENDER → x
+048F	p	-	1	19	ҏ CYRILLIC SMALL LETTER ER WITH TICK → p
+10AD	q	-	2a	10	Ⴍ GEORGIAN CAPITAL LETTER ON → q
+10B3	q	-	2a	10	Ⴓ GEORGIAN CAPITAL LETTER UN → q
+029D	j	-	1	7	ʝ LATIN SMALL LETTER J WITH CROSSED-TAIL → j
+028C	a	-	1	6	ʌ LATIN SMALL LETTER TURNED V → a
+0245	a	-	1	5	Ʌ LATIN CAPITAL LETTER TURNED V → a
+16D2	b	-	2a	4	ᛒ RUNIC LETTER BERKANAN BEORC BJARKAN B → b
+1D07	e	-	1	1	ᴇ LATIN LETTER SMALL CAPITAL E → e
+027A	i	-	1	1	ɺ LATIN SMALL LETTER TURNED R WITH LONG LEG → i
+0284	f	-	1	1	ʄ LATIN SMALL LETTER DOTLESS J WITH STROKE AND HOOK → f
+00B5	u	-	1	0	µ MICRO SIGN → u

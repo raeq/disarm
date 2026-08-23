@@ -4,6 +4,17 @@ Unicode confusables (homoglyphs) are characters from different scripts that look
 
 disarm implements Unicode TR39 confusable detection and normalization with multi-target script support, auto-generated from the official [Unicode TR39 confusables.txt](https://www.unicode.org/Public/security/latest/confusables.txt) (version 17.0.0). The tables cover Cyrillic, Greek, Armenian, Georgian, CJK compatibility, mathematical symbols, fullwidth forms, and other visually confusable characters. Mappings are based on visual similarity, not phonetic equivalence.
 
+Two smaller sets are layered on top of the generated table. `confusables_supplement.tsv`
+adds cross-script pairs TR39 leaves without a shared prototype (#336/#342). Since #597,
+`confusables_attested.tsv` adds 31 codepoints **attested in real attacker text** — mined
+from the BitCore subset of the BitAbuse corpus — that TR39 does not list as sources at
+all. Twenty-three are optical twins of a Latin letter (`ɴ`→`n`, `ʍ`→`m`, `ʀ`→`r`). Eight
+are not: seven are glyphs an attacker used *positionally* rather than because they look
+like the letter (`ժ`→`d`, `ᚱ`→`r`, `Ⴝ`→`s`), and one is a reading convention (`щ`→`w`).
+For those rows the rule is **observed attacker substitution**, which is wider than visual
+confusability. Unicode would not accept them upstream, and they are marked tier `2a` and
+`2b` in that file.
+
 ## Detecting confusables
 
 === "Python"
@@ -230,7 +241,7 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
 | Target | Mappings | Description |
 |--------|----------|-------------|
-| `"latin"` (default) | 2,189 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
+| `"latin"` (default) | 2,220 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
 | `"cyrillic"` | 1,349 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
 
 Characters without a confusable equivalent in the target script pass through unchanged. This is pure visual mapping — not transliteration. Latin `f` has no Cyrillic lookalike, so it stays as `f`.

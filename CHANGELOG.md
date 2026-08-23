@@ -18,6 +18,41 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **31 real-attacker confusable mappings TR39 does not carry (#597).** Miss-mining the
+  **BitCore** subset of the BitAbuse corpus (Lee et al., NAACL Findings 2025) with
+  `benchmarks/adversarial_eval` surfaced codepoints that attackers substitute for
+  basic-Latin letters and that TR39 does not list as sources at all, so
+  `normalize_confusables` left them unfolded. `ɴ`→`n` alone accounts for 4,576 real
+  occurrences; the top three (`ɴ`, `ʍ`, `ɾ`) are 74% of the Tier-1 mass.
+
+  They arrive in a **new file**, `data/confusables_attested.tsv`, not in
+  `confusables_supplement.tsv`. That file declares itself *cross-script* and pins its
+  provenance to one measured dataset above a stated danger threshold (#336); 18 of these
+  sources are Latin folding to Latin, and none comes from that dataset. Two admission
+  criteria, two provenance stories, two files — the generator merges them, but the audit
+  trails stay separate.
+
+  **The contract widens, and that is deliberate.** Tier 1 (23 rows) are optical twins.
+  Tier 2a (7) are *positional* — an attacker reached for an Armenian, Georgian or runic
+  glyph by its place in the word, not because it resembles the letter — and Tier 2b (1) is convention. Admitting 2a means this table now encodes **observed attacker
+  substitution**, which is wider than visual confusability; Unicode would not accept
+  those rows upstream. The tier is recorded per row, and the widened rule is stated in
+  `docs/user-guide/confusables.md` and `THREAT_MODEL.md` rather than left implicit.
+
+  Two details worth knowing. `µ` U+00B5 is folded alongside `μ` U+03BC, because NFKC maps
+  one to the other and folding only one would make the result depend on the input's
+  normalization form. And six rows fold an **uppercase** source to a lowercase target
+  (`Ƿ Ʌ Ա Ⴝ Ⴍ Ⴓ`), which no generated row does — the generated pipeline reconciles case to
+  the source and these bypass it. The attested form is kept, because the evidence is the
+  letter the attacker meant, not its case.
+
+  Per the #39/#40 guardrail the corpora are measuring instruments, never optimization
+  targets: the synthetic BitViper tail — 254 further codepoints, 733,029 occurrences,
+  98.5% of all novel misses — is excluded by construction, and no row is justified by a
+  benchmark score. Latin table 2,189 → 2,220 mappings; the Cyrillic table is untouched,
+  since seven of these sources already fold there and the new rows set the Latin column
+  only.
+
 - **The C header is committed and drift-gated (#580).** `bindings/cabi/disarm.h` was
   gitignored and regenerated inside the CI step that then compiled `smoke.c` against it.
   Both sides therefore moved together: a signature change plus a matching call-site
@@ -219,6 +254,23 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   Python, which takes it as a keyword with a default, is unaffected. (#559)
 
 ### Fixed
+
+- **`ẞ` uppercases to `SS`, not `B` — German is no longer corrupted (#597).** #595
+  recovered `ẞ` (U+1E9E, the capital sharp S — official German orthography since 2017)
+  by folding its TR39 prototype `ß` through `ASCII_FOLD` to `b`, then reconciling case.
+  That produced `B`, so `STRAẞE` became `STRABE`, `GROẞ` became `GROB` and `FUẞBALL`
+  became `FUBBALL`.
+
+  `ß`.to_uppercase() is the two-character `SS`, and that is the right answer: STRAẞE and
+  STRASSE are the same word, so folding to `SS` makes them collide — which is what a
+  skeleton is for. A genuine multi-character case mapping now wins over `ASCII_FOLD`.
+  Two rows move, `ẞ` and `Ꟗ` (Middle Scots S, same prototype). `Ᏸ` U+13F0 is the
+  counter-case that keeps the rule honest: a Cherokee letter shaped like `B` with no case
+  expansion of its own, so it still folds to `B`.
+
+  `tests/test_accented_latin_fidelity.py` missed this because its German fixture is
+  lowercase `Straße`, which was preserved throughout. It now carries the uppercase forms,
+  the lowercase asymmetry, and the Cherokee counter-case.
 
 - **Six Latin homoglyphs now fold, and the Latin lambdas collide with the Greek one
   (#593).** `filter_latin_homoglyphs` recovers a Latin-script source whose TR39 prototype

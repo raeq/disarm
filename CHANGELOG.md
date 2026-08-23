@@ -220,6 +220,27 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The Kotlin extensions keep their published JVM signatures (#588).** A Kotlin default
+  argument compiles to one JVM method plus a synthetic `$default` bridge, not to an
+  overload per arity. Adding a defaulted parameter therefore *deletes* the signature that
+  shipped, and anything compiled against the previous artifact gets `NoSuchMethodError` —
+  Java callers, and Kotlin callers that have not been recompiled.
+
+  It had happened twice, unnoticed both times. `dev.disarm:disarm-kotlin:0.13.0` published
+  `normalizeConfusables(String, TargetScript)` and `analyzeHostname(String)`; #574 and #562
+  each added a default and removed one. #562 made the identical break in the C ABI, where
+  it *was* caught and reverted by #580 — the C surface has a committed, drift-gated header
+  and this one had nothing.
+
+  All seventeen public extensions with default arguments now carry `@JvmOverloads`, which
+  restores both lost signatures and preserves every arity from here on. `JvmSignatureTest`
+  is the gate: it reads the compiled facade by reflection rather than the source text, so
+  adding a parameter without the annotation turns it red. The policy is recorded in
+  `BINDINGS.md`.
+
+  The cost is generated methods rather than maintained ones — `slugify` has twelve
+  defaults and emits thirteen arities, taking the facade to 105 public static methods.
+
 - **The `tr39` digit-policy overrides now honour the ASCII contract (#587).** #341 made
   ASCII the contract for the Latin confusable tables. The override set was written later,
   for #561, and never joined it: `write_digit_tr39_overrides` took upstream's raw target

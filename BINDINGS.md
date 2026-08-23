@@ -105,6 +105,27 @@ Per [RELEASING.md](RELEASING.md), a fix touching one binding may ship as a per-r
 component can drift while the `0.MINOR` feature set stays identical. When that drift gets
 confusing, update the *Wraps core* column above rather than forcing no-op releases.
 
+### JVM signature stability (#588)
+
+Every public Kotlin function with a default argument carries **`@JvmOverloads`**. This is
+not stylistic. A Kotlin default compiles to one JVM method plus a synthetic `$default`
+bridge, not to an overload per arity, so **adding a defaulted parameter deletes the
+signature that shipped** — anything compiled against the previous artifact gets
+`NoSuchMethodError`, Java callers and un-recompiled Kotlin callers alike.
+
+It happened twice before anyone noticed. `disarm-kotlin:0.13.0` published
+`normalizeConfusables(String, TargetScript)` and `analyzeHostname(String)`; #574 and #562
+each added a default and removed one. #562 made the identical break in the C ABI, where it
+*was* caught and reverted by #580 — that surface has a committed, drift-gated header, and
+this one had nothing.
+
+`JvmSignatureTest` is now the equivalent gate. It reads the compiled facade by reflection
+rather than the source text, and fails when any defaulted function exposes only its widest
+arity. Adding a parameter without `@JvmOverloads` turns it red.
+
+The cost is generated methods, not maintained ones: `slugify` has twelve defaults and so
+emits thirteen arities. That is the price of the guarantee, and it is paid by the compiler.
+
 ## Per-language conventions
 
 Starting points, not mandates — pick the binding tech the ecosystem actually trusts at

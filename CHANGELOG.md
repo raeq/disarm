@@ -18,6 +18,36 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **CVE validation suite (`tests/test_cve_vectors.py`, `docs/security/cve-validation.md`).**
+  The docs encourage security use; nothing checked that against a named attack. Eleven
+  published CVEs are now reconstructed from the vector each one describes and asserted
+  against disarm's real behaviour, in the CI gate: Trojan Source bidi and homoglyph
+  identifiers (CVE-2021-42574 / CVE-2021-42694), Django's Unicode case-transform account
+  takeover (CVE-2019-19844), git's ignorable-codepoint `.git` equivalence (CVE-2014-9390),
+  Firefox's dotless-i address-bar spoof (CVE-2017-7832), urllib's leading-blank blocklist
+  bypass (CVE-2023-24329), NFKC netloc misparse (CVE-2019-9636), and four ML/LLM
+  input-handling CVEs (CVE-2025-32711, CVE-2024-5184, CVE-2024-5565, CVE-2023-29374).
+
+  **Four rows are out-of-scope negatives, and that is the point.** A suite that recorded
+  only wins would quietly convert THREAT_MODEL.md's "no guarantee that any class of attack
+  is fully neutralized" into a coverage claim. The negatives are asserted so the limits
+  cannot drift into untested marketing — including `TestFullwidthUnmaskingHazard`, which
+  pins the case where canonicalizing in the *wrong* pipeline position makes an attack
+  worse (`＿＿ｉｍｐｏｒｔ＿＿` becomes executable ASCII under NFKC).
+
+  Three findings came out of measuring rather than assuming. `has_bidi_conflict()` is
+  correctly False for every Trojan Source payload — they are ASCII plus controls, with no
+  strong RTL run — so it is not the detector for that family. `collapse_whitespace()`
+  leaves a leading NUL, so it does not close CVE-2023-24329 on its own. And the
+  CVE-2019-19844 collision class (non-ASCII codepoints whose `.upper()` is pure ASCII) is
+  exactly ten members wide, walked exhaustively over all of Unicode in ~0.2s: nine fold at
+  `canonicalize_strict`, and `ß` closes only under `fold_case`.
+
+  `ml_normalize()` passes all twelve bidi controls, PUA, and homoglyphs through unchanged
+  — it is a tokenizer-hygiene preset, not a screen. The `llm_guardrail` and `rag_ingest`
+  profiles are the entry points for untrusted text, and that is now asserted rather than
+  implied.
+
 - **31 real-attacker confusable mappings TR39 does not carry (#597).** Miss-mining the
   **BitCore** subset of the BitAbuse corpus (Lee et al., NAACL Findings 2025) with
   `benchmarks/adversarial_eval` surfaced codepoints that attackers substitute for

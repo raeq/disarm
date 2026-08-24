@@ -61,6 +61,7 @@ nav:
   - Concepts:
       - Which function do I want?: concepts/which-function.md
       - Adversarial-Text Defense: security/adversarial-defense.md
+      - CVE Validation: security/cve-validation.md
       - Threat Model: THREAT_MODEL.md
   - Guide:
       - Confusable Detection: user-guide/confusables.md

@@ -1182,13 +1182,21 @@ class TestSafeEvalBlocklistOrdering:
 class TestRegistryIntegrity:
     """The registry is the published claim; keep it honest."""
 
+    #: CVE IDs are "CVE-YYYY-NNNN+", with at least four sequence digits.
+    ID_SHAPE = re.compile(r"^CVE-(?P<year>\d{4})-(?P<sequence>\d{4,})$")
+
     def test_ids_are_unique_and_well_formed(self) -> None:
+        """Shape is matched before it is taken apart.
+
+        Splitting first meant a malformed ID raised ValueError on the tuple
+        unpack instead of failing as an assertion, so the report named the
+        wrong problem.
+        """
         assert len(BY_ID) == len(REGISTRY)
         for cve in REGISTRY:
-            year, num = cve.id.removeprefix("CVE-").split("-")
-            assert cve.id.startswith("CVE-")
-            assert 1999 <= int(year) <= 2100
-            assert num.isdigit()
+            match = self.ID_SHAPE.match(cve.id)
+            assert match is not None, f"malformed CVE ID: {cve.id!r}"
+            assert 1999 <= int(match.group("year")) <= 2100, cve.id
 
     def test_dispositions_are_from_the_vocabulary(self) -> None:
         for cve in REGISTRY:
@@ -1233,7 +1241,7 @@ class TestRegistryIntegrity:
         """
         for cve in REGISTRY:
             assert cve.cvss_version in {"v2.0", "v3.0", "v3.1"}, cve.id
-            assert 0.0 < cve.cvss <= 10.0, cve.id
+            assert 0.0 <= cve.cvss <= 10.0, cve.id  # 0.0 is a valid CVSS score
 
     def test_suite_covers_every_registry_row(self) -> None:
         """Every registered CVE must be named in a test body, so a row cannot
@@ -1268,7 +1276,9 @@ class TestDocsMatrixDrift:
     softened in the Markdown alone.
     """
 
-    DOC = Path(__file__).resolve().parent.parent / "docs" / "security" / "cve-validation.md"
+    ROOT = Path(__file__).resolve().parent.parent
+    DOC = ROOT / "docs" / "security" / "cve-validation.md"
+    THREAT_MODEL = ROOT / "THREAT_MODEL.md"
 
     #: "| [CVE-x](url) | title | 9.8 (v3.1) | Neutralized | `f`, `g` |"
     ROW = re.compile(
@@ -1308,6 +1318,31 @@ class TestDocsMatrixDrift:
             or m.group("version") != BY_ID[cve_id].cvss_version
         ]
         assert not mismatches, mismatches
+
+    def test_threat_model_counts_match_the_registry(self) -> None:
+        """THREAT_MODEL.md quotes both totals in prose. Prose goes stale.
+
+        This is the exact defect review caught on #607: the matrix grew from
+        eleven rows to twenty and the CHANGELOG and docs page were updated,
+        while the third place the number lived was not. Counting it here is
+        cheaper than remembering it.
+        """
+        text = self.THREAT_MODEL.read_text(encoding="utf-8")
+        claim = re.search(
+            r"reconstructs the vector described in each of (?P<total>\d+) published CVEs"
+            r".{0,200}?including the (?P<negatives>\d+) it does",
+            text,
+            flags=re.DOTALL,
+        )
+        assert claim is not None, "THREAT_MODEL.md no longer states the CVE counts"
+
+        negatives = sum(1 for c in REGISTRY if OUT_OF_SCOPE in c.dispositions)
+        assert int(claim.group("total")) == len(REGISTRY), (
+            f"THREAT_MODEL.md says {claim.group('total')} CVEs, registry has {len(REGISTRY)}"
+        )
+        assert int(claim.group("negatives")) == negatives, (
+            f"THREAT_MODEL.md says {claim.group('negatives')} negatives, registry has {negatives}"
+        )
 
     def test_documented_disposition_matches_the_registry(self) -> None:
         """The wording is derived, not approximated — no softening in Markdown."""

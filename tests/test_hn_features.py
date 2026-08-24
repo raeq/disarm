@@ -1,6 +1,10 @@
 """Tests for features inspired by HN Unicode discussion: grapheme clusters,
 hostname safety, NFC in filenames, and encoding detection."""
 
+import re
+import unicodedata
+from pathlib import Path
+
 import pytest
 
 from disarm import (
@@ -371,6 +375,79 @@ class TestInvisibleCharacters:
         assert misread_as not in d.scripts
         assert d.scripts == ["Latin"]
         assert not d.mixed_script
+
+
+class TestInvisibleSetDoesNotDriftFromItsDocs:
+    """Drift gate: the set is spelled out in prose in three places (#605 review).
+
+    ``src/api/safety.rs``, ``python/disarm/_api.py`` and ``docs/api/predicates.md``
+    each enumerate the code points ``has_invisible`` covers, and none of them was
+    checked against the implementation. Review caught the Rust doc comment
+    omitting ``U+180E`` after ``is_zero_width`` had already gained it — the
+    documentation and the behaviour disagreed and the suite stayed green.
+
+    So the set is *derived* from behaviour here, then compared to what each file
+    claims. Probing every ``Cf``/``Zs`` code point costs ~0.3s, which buys an
+    exhaustive gate rather than a sampled one.
+    """
+
+    #: The set as documented. Kept literal so a change has to be deliberate.
+    DOCUMENTED = frozenset(
+        {0x200B, 0x200C, 0x200D, 0x2060, 0x2061, 0x2062, 0x2063, 0x2064, 0xFEFF, 0x180E}
+    )
+
+    ROOT = Path(__file__).resolve().parent.parent
+    #: Every file whose prose enumerates the set.
+    PROSE = (
+        ROOT / "src" / "api" / "safety.rs",
+        ROOT / "python" / "disarm" / "_api.py",
+        ROOT / "docs" / "api" / "predicates.md",
+    )
+
+    @staticmethod
+    def _derive() -> frozenset:
+        """Every code point the hostname screen actually reports as invisible."""
+        found = set()
+        for cp in range(0x110000):
+            ch = chr(cp)
+            if unicodedata.category(ch) not in ("Cf", "Zs"):
+                continue
+            try:
+                _, analysis = is_suspicious_hostname(f"paypal{ch}.evil.com")
+            except DisarmError:
+                continue
+            if analysis.has_invisible:
+                found.add(cp)
+        return frozenset(found)
+
+    def test_behaviour_matches_the_documented_set(self):
+        derived = self._derive()
+        assert derived == self.DOCUMENTED, {
+            "flagged but undocumented": sorted(f"U+{c:04X}" for c in derived - self.DOCUMENTED),
+            "documented but not flagged": sorted(f"U+{c:04X}" for c in self.DOCUMENTED - derived),
+        }
+
+    @pytest.mark.parametrize("path", PROSE, ids=lambda p: p.name)
+    def test_prose_enumerates_the_whole_set(self, path):
+        """Each file must name every code point, ranges expanded.
+
+        ``U+200B``–``U+200D`` and ``U+2060``–``U+2064`` are written as ranges, so
+        the endpoints are what appear literally; the interior points are covered
+        by the range and are not required to appear on their own.
+        """
+        text = path.read_text(encoding="utf-8")
+        named = {int(m, 16) for m in re.findall(r"U\+([0-9A-Fa-f]{4,6})", text)}
+        # Endpoints of the two documented ranges, plus the two singletons.
+        required = {0x200B, 0x200D, 0x2060, 0x2064, 0xFEFF, 0x180E}
+        missing = sorted(f"U+{c:04X}" for c in required - named)
+        assert not missing, f"{path.name} omits {missing}"
+
+    def test_invisibles_and_bidi_controls_do_not_overlap(self):
+        """The two fields are documented as disjoint. Checked, not asserted in prose."""
+        for cp in sorted(self.DOCUMENTED):
+            _, analysis = is_suspicious_hostname(f"paypal{chr(cp)}.evil.com")
+            assert analysis.has_invisible, f"U+{cp:04X}"
+            assert not analysis.bidi_control, f"U+{cp:04X} claimed by both fields"
 
 
 class TestBidiControlCharacters:

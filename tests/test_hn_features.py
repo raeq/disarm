@@ -361,11 +361,21 @@ class TestBidiControlCharacters:
         _, swap = is_suspicious_hostname("varonis.com.ו.קום")
         assert swap.bidi_conflict and not swap.bidi_control
 
-    def test_clean_hostnames_unaffected(self):
-        for host in ("paypal.com", "example.co.uk", "google.рф", "אתר.קום"):
-            _, d = is_suspicious_hostname(host)
-            assert not d.bidi_control, host
-            assert d.canonical == d.canonical  # canonical still produced
+    # Canonical forms pinned to their measured values: the confusable fold still
+    # runs on a clean host (`рф` -> `pф`, `קום` -> `קlם`), so this also guards
+    # against the #603 strip being applied where nothing should change.
+    CLEAN = [
+        ("paypal.com", "paypal.com"),
+        ("example.co.uk", "example.co.uk"),
+        ("google.рф", "google.pф"),
+        ("אתר.קום", "אתר.קlם"),
+    ]
+
+    @pytest.mark.parametrize(("host", "expected_canonical"), CLEAN)
+    def test_clean_hostnames_unaffected(self, host, expected_canonical):
+        _, d = is_suspicious_hostname(host)
+        assert not d.bidi_control
+        assert d.canonical == expected_canonical
 
     def test_ace_path_still_fails_closed(self):
         # The wire form was never the gap — the decode already rejected it. Guard

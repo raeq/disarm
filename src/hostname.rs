@@ -274,7 +274,7 @@ pub(crate) fn is_suspicious_hostname_opts(
     }
 
     // Generate canonical Latin form from the decoded labels.
-    let decoded_hostname = decoded_labels.join(".");
+    let mut decoded_hostname = decoded_labels.join(".");
 
     // Direction conflict (#412): the decoded hostname mixes strong-LTR and
     // strong-RTL characters — the "BiDi Swap" precondition. Computed on the same
@@ -296,15 +296,17 @@ pub(crate) fn is_suspicious_hostname_opts(
     // set with no legitimate-use tradeoff. The ACE path already rejects them via
     // `idna::domain_to_unicode`; this covers the literal-Unicode label, which reaches
     // the pass-through arm above and was never inspected.
+    //
+    // Strip them before canonicalization too, so `canonical` cannot carry an override
+    // into a caller's display path — the sharper half of #603: a caller who screened the
+    // name, was told it was clean, and then rendered `canonical` rendered the spoof.
+    // `retain` edits in place and only runs when something is actually there to remove,
+    // so the clean path (every real hostname) neither allocates nor rescans.
     let bidi_control = scripts::has_bidi_control(&decoded_hostname);
     if bidi_control {
         suspicious = true;
+        decoded_hostname.retain(|c| !scripts::is_bidi_control(c));
     }
-
-    // Strip them before canonicalization so `canonical` cannot carry an override into
-    // a caller's display path. This is the sharper half of #603: a caller who screened
-    // the name, was told it was clean, and then rendered `canonical` rendered the spoof.
-    let decoded_hostname = scripts::strip_bidi_controls(&decoded_hostname).into_owned();
 
     // Hostname analysis keeps the NUMERIC digit policy (#561): a spoofed label is judged
     // on what a reader sees, and a Devanagari zero reads as a zero. The TR39 skeleton
@@ -628,20 +630,6 @@ mod tests {
                 0
             );
         }
-    }
-
-    #[test]
-    fn bidi_control_borrows_when_absent() {
-        // `strip_bidi_controls` must not allocate on the overwhelmingly common
-        // clean path.
-        assert!(matches!(
-            crate::scripts::strip_bidi_controls("paypal.com"),
-            std::borrow::Cow::Borrowed(_)
-        ));
-        assert!(matches!(
-            crate::scripts::strip_bidi_controls("paypal\u{202E}moc.com"),
-            std::borrow::Cow::Owned(_)
-        ));
     }
 
     #[test]

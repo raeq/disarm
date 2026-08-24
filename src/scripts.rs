@@ -404,16 +404,6 @@ pub(crate) fn has_bidi_control(text: &str) -> bool {
     text.chars().any(is_bidi_control)
 }
 
-/// Remove every [`is_bidi_control`] character from `text`, borrowing when there is
-/// nothing to remove.
-pub(crate) fn strip_bidi_controls(text: &str) -> std::borrow::Cow<'_, str> {
-    if has_bidi_control(text) {
-        std::borrow::Cow::Owned(text.chars().filter(|&c| !is_bidi_control(c)).collect())
-    } else {
-        std::borrow::Cow::Borrowed(text)
-    }
-}
-
 /// Map a detected script name to a default language code (ISO 639-1 where one
 /// exists, otherwise ISO 639-3 — e.g. `chr`, `cop`, `vai`, `tzm`).
 ///

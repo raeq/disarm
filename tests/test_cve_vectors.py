@@ -10,13 +10,15 @@ file is derived from a CVE's prose, a blog post, or an expectation of what a
 preset "should" do. Where a measurement contradicted the obvious guess, the
 measurement won and the guess is recorded as a comment.
 
-Three dispositions, and all three are asserted:
+Three dispositions, all three in use, and a row may carry more than one:
 
 ``NEUTRALIZED``
     A named disarm entry point removes the vector or recovers the clean form.
 
 ``DETECTED``
-    disarm flags the input but does not rewrite it — the caller decides.
+    disarm flags the input but does not rewrite it — the caller decides. Most
+    rows are both neutralized and detected, which is why this is a set per row
+    rather than one string.
 
 ``OUT_OF_SCOPE``
     disarm does **not** stop this, and is not supposed to. The assertion is a
@@ -50,6 +52,7 @@ import disarm
 from disarm import (
     canonicalize,
     canonicalize_strict,
+    catalog_key,
     collapse_whitespace,
     detect_scripts,
     fold_case,
@@ -63,9 +66,12 @@ from disarm import (
     ml_normalize,
     normalize,
     normalize_confusables,
+    sanitize_filename,
     search_key,
+    slugify_filename,
     strip_bidi,
     strip_format,
+    strip_log_injection,
     strip_obfuscation,
     strip_pua,
     strip_tags,
@@ -90,21 +96,44 @@ class CVE:
     title: str
     cwe: str
     cvss: float
-    disposition: str
+    #: The CVSS revision the score is quoted from. NVD carries only v2.0 for
+    #: pre-2016 CVEs, and the two scales are not comparable — a bare number
+    #: mixing them across one column would be a quiet apples-to-oranges claim.
+    cvss_version: str
+    #: A row is frequently more than one thing at once: a vector disarm folds
+    #: *and* flags is both neutralized and detected. One string per row could
+    #: only record whichever the author thought mattered more.
+    dispositions: frozenset[str]
     #: The disarm entry points that produce the asserted behaviour. Empty for
     #: out-of-scope rows — there is nothing that handles them.
     entry_points: tuple[str, ...]
     reference: str
 
+    @property
+    def rendered(self) -> str:
+        """How the docs matrix must spell this row's disposition."""
+        return DISPOSITION_LABELS[self.dispositions]
+
+
+#: The exact strings the published matrix uses. Keeping the mapping here rather
+#: than in the Markdown is what lets `TestDocsMatrixDrift` compare the two.
+DISPOSITION_LABELS: dict[frozenset[str], str] = {
+    frozenset({NEUTRALIZED}): "Neutralized",
+    frozenset({DETECTED}): "Detected only",
+    frozenset({NEUTRALIZED, DETECTED}): "Neutralized + detected",
+    frozenset({OUT_OF_SCOPE}): "Out of scope",
+}
+
 
 REGISTRY: tuple[CVE, ...] = (
-    # -- Unicode text confusion: disarm's core scope ------------------------
+    # -- Source-code and identifier confusion -------------------------------
     CVE(
         id="CVE-2021-42574",
         title="Trojan Source — bidi reordering of source code",
         cwe="CWE-94",
         cvss=8.3,
-        disposition=NEUTRALIZED,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         entry_points=("strip_bidi", "strip_format", "canonicalize", "strip_obfuscation"),
         reference="https://trojansource.codes",
     ),
@@ -113,34 +142,81 @@ REGISTRY: tuple[CVE, ...] = (
         title="Trojan Source — homoglyph identifiers",
         cwe="CWE-1007",
         cvss=8.3,
-        disposition=NEUTRALIZED,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         entry_points=("normalize_confusables", "canonicalize", "strip_obfuscation"),
         reference="https://trojansource.codes",
     ),
+    # -- Identity and account takeover --------------------------------------
     CVE(
         id="CVE-2019-19844",
         title="Django account takeover via Unicode case transformation",
         cwe="CWE-640",
         cvss=9.8,
-        disposition=NEUTRALIZED,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
         entry_points=("canonicalize_strict", "fold_case", "search_key"),
         reference="https://www.djangoproject.com/weblog/2019/dec/18/security-releases/",
     ),
+    CVE(
+        id="CVE-2013-7236",
+        title="Simple Machines Forum — user impersonation via homoglyph username",
+        cwe="CWE-1007",
+        cvss=7.5,
+        cvss_version="v2.0",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        entry_points=("search_key", "catalog_key", "canonicalize", "is_confusable"),
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2013-7236",
+    ),
+    CVE(
+        id="CVE-2020-12063",
+        title="Postfix package — sender spoofing via homoglyph address (vendor-disputed)",
+        cwe="CWE-1007",
+        cvss=5.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        entry_points=("normalize_confusables", "search_key", "is_mixed_script"),
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2020-12063",
+    ),
+    # -- Filesystem and path confusion --------------------------------------
     CVE(
         id="CVE-2014-9390",
         title="git — .git path equivalence via ignorable code points",
         cwe="CWE-20",
         cvss=9.8,
-        disposition=NEUTRALIZED,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         entry_points=("strip_format", "canonicalize", "strip_obfuscation"),
         reference="https://github.com/blog/1938-git-client-vulnerability-announced",
     ),
+    CVE(
+        id="CVE-2009-3376",
+        title="Firefox — download filename extension spoof via RLO",
+        cwe="CWE-1007",
+        cvss=9.3,
+        cvss_version="v2.0",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        entry_points=("sanitize_filename", "strip_bidi", "canonicalize", "slugify_filename"),
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2009-3376",
+    ),
+    CVE(
+        id="CVE-2023-33955",
+        title="MinIO Console — filename masking via RLO",
+        cwe="CWE-1007",
+        cvss=5.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        entry_points=("sanitize_filename", "strip_bidi", "canonicalize"),
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-33955",
+    ),
+    # -- Hostname and URL confusion -----------------------------------------
     CVE(
         id="CVE-2017-7832",
         title="Firefox — dotless-i address-bar spoof evading punycode display",
         cwe="CWE-1007",
         cvss=5.3,
-        disposition=NEUTRALIZED,
+        cvss_version="v3.0",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         entry_points=("canonicalize", "normalize_confusables", "is_suspicious_hostname"),
         reference="https://www.mozilla.org/security/advisories/mfsa2017-24/",
     ),
@@ -149,7 +225,8 @@ REGISTRY: tuple[CVE, ...] = (
         title="Python urllib.parse — blocklist bypass via leading blank characters",
         cwe="CWE-20",
         cvss=7.5,
-        disposition=NEUTRALIZED,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
         entry_points=("canonicalize", "strip_obfuscation"),
         reference="https://github.com/python/cpython/issues/102153",
     ),
@@ -158,9 +235,31 @@ REGISTRY: tuple[CVE, ...] = (
         title="Python urlsplit — netloc misparse under NFKC normalization",
         cwe="CWE-172",
         cvss=9.8,
-        disposition=OUT_OF_SCOPE,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
         entry_points=(),
         reference="https://bugs.python.org/issue36216",
+    ),
+    # -- Terminal control and log injection ---------------------------------
+    CVE(
+        id="CVE-2008-2383",
+        title="xterm — command execution via DECRQSS escape sequence",
+        cwe="CWE-94",
+        cvss=9.3,
+        cvss_version="v2.0",
+        dispositions=frozenset({NEUTRALIZED}),
+        entry_points=("strip_log_injection", "canonicalize", "strip_obfuscation"),
+        reference="https://www.debian.org/security/2009/dsa-1694",
+    ),
+    CVE(
+        id="CVE-2019-9535",
+        title="iTerm2 — command execution via tmux control-mode output",
+        cwe="CWE-74",
+        cvss=9.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        entry_points=("strip_log_injection", "canonicalize"),
+        reference="https://blog.mozilla.org/security/2019/10/09/iterm2-critical-issue-moss-audit/",
     ),
     # -- ML / LLM input handling --------------------------------------------
     CVE(
@@ -168,7 +267,8 @@ REGISTRY: tuple[CVE, ...] = (
         title="Microsoft 365 Copilot (EchoLeak) — AI command injection",
         cwe="CWE-74",
         cvss=9.3,
-        disposition=NEUTRALIZED,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
         entry_points=("strip_tags", "llm_guardrail", "canonicalize", "strip_obfuscation"),
         reference="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-32711",
     ),
@@ -177,7 +277,8 @@ REGISTRY: tuple[CVE, ...] = (
         title="EmailGPT — prompt injection via untrusted message text",
         cwe="CWE-74",
         cvss=9.1,
-        disposition=OUT_OF_SCOPE,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
         entry_points=(),
         reference="https://www.synopsys.com/blogs/software-security/cyrc-advisory-prompt-injection-emailgpt.html",
     ),
@@ -186,7 +287,8 @@ REGISTRY: tuple[CVE, ...] = (
         title="Vanna.AI — prompt injection to arbitrary Python execution",
         cwe="CWE-94",
         cvss=8.1,
-        disposition=OUT_OF_SCOPE,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
         entry_points=(),
         reference="https://research.jfrog.com/vulnerabilities/vanna-prompt-injection-rce-jfsa-2024-001034449/",
     ),
@@ -195,11 +297,43 @@ REGISTRY: tuple[CVE, ...] = (
         title="LangChain LLMMathChain — prompt injection to Python exec",
         cwe="CWE-74",
         cvss=9.8,
-        disposition=OUT_OF_SCOPE,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
         entry_points=(),
         reference="https://github.com/hwchase17/langchain/issues/1026",
     ),
+    CVE(
+        id="CVE-2023-36258",
+        title="LangChain — arbitrary code execution via os.system / exec / eval",
+        cwe="CWE-94",
+        cvss=9.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        entry_points=(),
+        reference="https://github.com/hwchase17/langchain/issues/5872",
+    ),
+    CVE(
+        id="CVE-2024-3098",
+        title="llama_index — safe_eval bypass from insufficient input validation",
+        cwe="CWE-94",
+        cvss=9.8,
+        cvss_version="v3.0",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        entry_points=(),
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2024-3098",
+    ),
+    CVE(
+        id="CVE-2023-32786",
+        title="LangChain — prompt injection to arbitrary URL retrieval (SSRF)",
+        cwe="CWE-74",
+        cvss=7.5,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        entry_points=(),
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-32786",
+    ),
 )
+
 
 BY_ID = {c.id: c for c in REGISTRY}
 
@@ -781,6 +915,266 @@ class TestFullwidthUnmaskingHazard:
 
 
 # ---------------------------------------------------------------------------
+# CVE-2013-7236 / CVE-2020-12063 — homoglyph impersonation of an identity
+# ---------------------------------------------------------------------------
+# CVE-2013-7236 (NVD): "Simple Machines Forum (SMF) 2.0.6, 1.1.19, and earlier
+# allows remote attackers to impersonate arbitrary users via a Unicode homoglyph
+# character in a username."
+#
+# CVE-2020-12063 (NVD): a Postfix package "could allow an attacker to send an
+# email from an arbitrary-looking sender via a homoglyph attack, as demonstrated
+# by the similarity of \xce\xbf to the 'o' character" — U+03BF GREEK SMALL
+# LETTER OMICRON. **The Postfix developers dispute this classification**,
+# arguing that blocking non-exact spoofs is outside the software's design scope.
+# That dispute is exactly THREAT_MODEL.md's "vulnerability vs. known limitation"
+# distinction, and it is why the row is kept: the disagreement is about whose
+# layer owns the check, not about whether the substitution works.
+
+#: (genuine identity, homoglyph impersonation).
+IDENTITY_PAIRS = [
+    ("admin", "аdmin"),  # CYRILLIC SMALL LETTER A
+    ("moderator", "moderatоr"),  # CYRILLIC SMALL LETTER O
+    ("Administrator", "Аdministrator"),  # CYRILLIC CAPITAL LETTER A
+]
+
+#: The Postfix vector, spelled with the code point NVD names.
+GENUINE_SENDER = "boss@example.com"
+SPOOFED_SENDER = "b\u03bfss@example.com"
+
+
+class TestHomoglyphIdentityImpersonation:
+    """CVE-2013-7236, CVE-2020-12063 — NEUTRALIZED by the collision keys."""
+
+    @pytest.mark.parametrize("genuine,spoof", IDENTITY_PAIRS, ids=[p[0] for p in IDENTITY_PAIRS])
+    def test_keys_collide_so_registration_can_be_refused(self, genuine: str, spoof: str) -> None:
+        """The defense is a *collision*, which is the opposite of the email case.
+
+        For CVE-2019-19844 the fix was to make two spellings resolve to one
+        identity. Here the fix is to notice that they already do, and refuse
+        the second registration. Same key, opposite policy — disarm supplies
+        the key, the caller owns the decision.
+        """
+        assert spoof != genuine
+        assert search_key(spoof) == search_key(genuine)
+        assert catalog_key(spoof) == catalog_key(genuine)
+
+    @pytest.mark.parametrize("genuine,spoof", IDENTITY_PAIRS, ids=[p[0] for p in IDENTITY_PAIRS])
+    def test_detected_without_rewriting(self, genuine: str, spoof: str) -> None:
+        assert is_confusable(spoof) is True
+        assert is_confusable(genuine) is False
+
+    def test_postfix_greek_omicron_sender(self) -> None:
+        assert SPOOFED_SENDER.encode("utf-8")[1:3] == b"\xce\xbf"  # the CVE's bytes
+        assert SPOOFED_SENDER != GENUINE_SENDER
+        assert normalize_confusables(SPOOFED_SENDER) == GENUINE_SENDER
+        assert search_key(SPOOFED_SENDER) == search_key(GENUINE_SENDER)
+        assert is_mixed_script(SPOOFED_SENDER) is True
+        assert disarm.Script.GREEK in detect_scripts(SPOOFED_SENDER)
+
+
+# ---------------------------------------------------------------------------
+# CVE-2009-3376 / CVE-2023-33955 — RLO filename extension spoofing
+# ---------------------------------------------------------------------------
+# CVE-2009-3376 (NVD): Firefox "does not properly handle a right-to-left
+# override (aka RLO or U+202E) Unicode character in a download filename, which
+# allows remote attackers to spoof file extensions via a crafted filename, as
+# demonstrated by displaying a non-executable extension for an executable file."
+#
+# CVE-2023-33955 (NVD): in MinIO Console, "Unicode RIGHT-TO-LEFT OVERRIDE
+# characters can be used to mask the original filename."
+#
+# The same primitive is MITRE ATT&CK T1036.002, still in active use.
+
+#: (crafted filename, what it renders as, the extension that actually runs).
+RLO_FILENAMES = [
+    ("photo_high_re\u202egnp.js", "photo_high_resj.png", ".js"),
+    ("March 25 \u202excod.scr", "March 25 rcs.docx", ".scr"),
+    ("report\u202efdp.exe", "reportexe.pdf", ".exe"),
+]
+
+
+class TestRloFilenameSpoof:
+    """CVE-2009-3376, CVE-2023-33955 — NEUTRALIZED and DETECTED."""
+
+    @pytest.mark.parametrize("crafted,_renders,real_ext", RLO_FILENAMES, ids=lambda x: str(x)[:18])
+    def test_the_spoof_is_real(self, crafted: str, _renders: str, real_ext: str) -> None:
+        """Guard: the dangerous extension must genuinely be the trailing one."""
+        assert "\u202e" in crafted
+        assert crafted.endswith(real_ext)
+
+    @pytest.mark.parametrize("crafted,_renders,real_ext", RLO_FILENAMES, ids=lambda x: str(x)[:18])
+    @pytest.mark.parametrize(
+        "defense",
+        [sanitize_filename, strip_bidi, canonicalize, strip_obfuscation],
+        ids=lambda f: f.__name__,
+    )
+    def test_override_never_survives(
+        self, defense, crafted: str, _renders: str, real_ext: str
+    ) -> None:
+        """Once the override is gone, the name renders as what it executes."""
+        out = defense(crafted)
+        assert "\u202e" not in out
+        assert out.endswith(real_ext), out
+
+    @pytest.mark.parametrize("crafted,_renders,_ext", RLO_FILENAMES, ids=lambda x: str(x)[:18])
+    def test_detected(self, crafted: str, _renders: str, _ext: str) -> None:
+        assert has_anomalies(crafted) is True
+        assert "bidi" in inspect_anomalies(crafted).kinds
+
+    def test_sanitize_filename_does_not_restore_the_intended_name(self) -> None:
+        """MEASURED LIMIT, and an easy one to overclaim.
+
+        Stripping the override does not reconstruct what the attacker *wanted*
+        the file to be called. ``photo_high_re<RLO>gnp.js`` becomes
+        ``photo_high_regnp.js`` — not ``photo_high_res.png``, which never
+        existed. What disarm restores is the agreement between the rendered
+        name and the real extension, which is the property the CVE broke.
+        """
+        assert sanitize_filename("photo_high_re\u202egnp.js") == "photo_high_regnp.js"
+
+    def test_slugify_filename_also_drops_the_override(self) -> None:
+        """Asserted apart from the parametrized set: ``slugify_filename`` is a
+        ``Slugify`` instance, not a function, so it has no ``__name__`` for
+        pytest to build an id from."""
+        for crafted, _renders, real_ext in RLO_FILENAMES:
+            out = slugify_filename(crafted)
+            assert "\u202e" not in out
+            assert out.endswith(real_ext), out
+
+
+# ---------------------------------------------------------------------------
+# CVE-2008-2383 / CVE-2019-9535 — terminal control sequences
+# ---------------------------------------------------------------------------
+# CVE-2008-2383 (NVD): "CRLF injection vulnerability in xterm allows
+# user-assisted attackers to execute arbitrary commands via LF (aka \n)
+# characters surrounding a command name within a Device Control Request Status
+# String (DECRQSS) escape sequence in a text file."
+#
+# CVE-2019-9535 (NVD/Mozilla): iTerm2's tmux control-mode integration allowed
+# command execution through attacker-controlled terminal *output* — cat a file,
+# lose the box.
+#
+# Both are the same shape: untrusted bytes reach a terminal that treats some of
+# them as commands. The fix is to neutralize the introducers before display.
+
+#: The DECRQSS form the CVE names: ESC P $ q ... ESC \, with LF around a command.
+DECRQSS_ATTACK = "\x1bP$q\nrm -rf ~\n\x1b\\"
+#: iTerm2 tmux control mode is entered by a DCS sequence in the output stream.
+TMUX_ATTACK = "\x1bP1000p%output %1 malicious\x1b\\"
+
+#: Every introducer these attacks need.
+TERMINAL_CONTROLS = ["\x1b", "\r", "\n", "\x07", "\x00"]
+
+
+class TestTerminalControlSequences:
+    """CVE-2008-2383, CVE-2019-9535 — NEUTRALIZED by strip_log_injection."""
+
+    @pytest.mark.parametrize(
+        "attack",
+        [
+            DECRQSS_ATTACK,
+            TMUX_ATTACK,
+            "\x1b]0;pwned\x07",
+            "\x1b[31mred\x1b[0m",
+            "entry\nforged line",
+        ],
+        ids=["decrqss", "tmux", "osc-title", "sgr", "log-forge"],
+    )
+    def test_no_introducer_survives(self, attack: str) -> None:
+        for defense in (strip_log_injection, canonicalize, strip_obfuscation):
+            out = defense(attack)
+            leaked = [ch for ch in TERMINAL_CONTROLS if ch in out]
+            assert not leaked, f"{defense.__name__} left {[hex(ord(c)) for c in leaked]}"
+
+    def test_strip_log_injection_substitutes_rather_than_deletes(self) -> None:
+        """A measured behavioural difference worth knowing before you pick one.
+
+        ``strip_log_injection`` replaces each control with U+FFFD, so offsets
+        and length are preserved and a redaction stays visible in the log.
+        ``canonicalize`` removes them outright. For a log line the substitution
+        is usually what you want; for a comparison key it is not.
+        """
+        out = strip_log_injection(DECRQSS_ATTACK)
+        assert len(out) == len(DECRQSS_ATTACK)
+        assert "\ufffd" in out
+        assert "\ufffd" not in canonicalize(DECRQSS_ATTACK)
+        assert len(canonicalize(DECRQSS_ATTACK)) < len(DECRQSS_ATTACK)
+
+    def test_the_words_survive_and_that_is_correct(self) -> None:
+        """OUT-OF-SCOPE NEGATIVE: the payload text is not the vulnerability.
+
+        ``rm -rf ~`` is still in the output, and must be — it is ordinary text
+        until a terminal is told to execute it. disarm removes the *telling*,
+        not the string. A caller that expected the command to disappear has
+        misread what the defense does.
+        """
+        assert "rm -rf ~" in strip_log_injection(DECRQSS_ATTACK)
+        assert "rm -rf ~" in canonicalize(DECRQSS_ATTACK)
+
+
+# ---------------------------------------------------------------------------
+# CVE-2023-36258 / CVE-2024-3098 / CVE-2023-32786 — more model-output sinks
+# ---------------------------------------------------------------------------
+# CVE-2023-36258 (NVD): "An issue in LangChain before 0.0.236 allows an attacker
+# to execute arbitrary code because Python code with os.system, exec, or eval
+# can be used."
+#
+# CVE-2024-3098 (NVD): llama_index's "exec_utils class safe_eval function allows
+# prompt injection leading to arbitrary code execution due to insufficient input
+# validation", bypassing the CVE-2023-39662 mitigation.
+#
+# CVE-2023-32786 (NVD): "Langchain through 0.0.155 prompt injection permits
+# attackers to retrieve data from arbitrary URLs."
+#
+# All three are OUT OF SCOPE. They are listed because "insufficient input
+# validation" reads like something a normalizer fixes, and it is not — the sink
+# is an evaluator, and the CVE-2024-3098 row shows canonicalization pointed at
+# a blocklist making the problem *worse*.
+
+
+class TestSafeEvalBlocklistOrdering:
+    """CVE-2024-3098 — an allow/deny list and NFKC must not be misordered.
+
+    A ``safe_eval`` guard that rejects source containing ``__import__`` sees
+    nothing to reject in the fullwidth spelling. Canonicalize *after* that check
+    and the guard has approved a string that then becomes the very token it was
+    screening for.
+    """
+
+    def test_blocklist_misses_the_fullwidth_spelling(self) -> None:
+        fullwidth = "\uff3f\uff3f\uff49\uff4d\uff50\uff4f\uff52\uff54\uff3f\uff3f"
+        assert "__import__" not in fullwidth  # a naive blocklist passes it
+        assert canonicalize(fullwidth) == "__import__"  # and disarm makes it real
+
+    def test_canonicalize_first_gives_the_guard_the_real_token(self) -> None:
+        """The same two steps in the safe order."""
+        fullwidth = "\uff3f\uff3f\uff49\uff4d\uff50\uff4f\uff52\uff54\uff3f\uff3f"
+        assert "__import__" in canonicalize(fullwidth)
+
+    @pytest.mark.parametrize(
+        "payload",
+        ["os.system('id')", "eval('1+1')", "exec(open('/etc/passwd').read())"],
+        ids=["os-system", "eval", "exec"],
+    )
+    def test_langchain_payloads_pass_through_untouched(self, payload: str) -> None:
+        """CVE-2023-36258: nothing here is a code-execution defense."""
+        assert canonicalize(payload) == payload
+        assert strip_obfuscation(payload) == payload
+        assert ml_normalize(payload) == payload
+
+    def test_ssrf_url_retrieval_is_not_a_text_problem(self) -> None:
+        """CVE-2023-32786: canonicalizing a URL does not stop a model fetching it.
+
+        disarm can make two spellings of a host compare equal, which helps an
+        allowlist. It has no opinion on whether the fetch should happen, and
+        the CVE is about the fetch.
+        """
+        url = "https://attacker.example.net/exfil"
+        assert canonicalize(url) == url
+        assert strip_obfuscation(url) == url
+
+
+# ---------------------------------------------------------------------------
 # Registry integrity
 # ---------------------------------------------------------------------------
 
@@ -798,13 +1192,26 @@ class TestRegistryIntegrity:
 
     def test_dispositions_are_from_the_vocabulary(self) -> None:
         for cve in REGISTRY:
-            assert cve.disposition in DISPOSITIONS, cve.id
+            assert cve.dispositions, f"{cve.id}: no disposition"
+            assert cve.dispositions <= DISPOSITIONS, cve.id
+
+    def test_out_of_scope_is_exclusive(self) -> None:
+        """A row cannot be both handled and not handled."""
+        for cve in REGISTRY:
+            if OUT_OF_SCOPE in cve.dispositions:
+                assert cve.dispositions == frozenset({OUT_OF_SCOPE}), cve.id
+
+    def test_every_combination_renders(self) -> None:
+        """A disposition set with no label would crash the drift check rather
+        than fail it, which is a worse failure."""
+        for cve in REGISTRY:
+            assert cve.rendered in DISPOSITION_LABELS.values(), cve.id
 
     def test_out_of_scope_rows_name_no_entry_point(self) -> None:
         """An out-of-scope row that lists a defense is a contradiction — it
-        would read as coverage in the generated table."""
+        would read as coverage in the published table."""
         for cve in REGISTRY:
-            if cve.disposition == OUT_OF_SCOPE:
+            if OUT_OF_SCOPE in cve.dispositions:
                 assert cve.entry_points == (), cve.id
             else:
                 assert cve.entry_points, cve.id
@@ -816,38 +1223,71 @@ class TestRegistryIntegrity:
             for name in cve.entry_points:
                 assert hasattr(disarm, name) or name in profiles, f"{cve.id}: {name}"
 
+    def test_cvss_versions_are_labelled(self) -> None:
+        """v2.0 and v3.x are different scales, so the column says which it quotes.
+
+        There is no "old CVEs are v2" rule to lean on, and assuming one was
+        wrong here: NVD backfilled a v3.1 score for CVE-2014-9390 (9.8) while
+        leaving CVE-2013-7236 and CVE-2009-3376 v2.0-only. Each row records
+        what NVD actually returns for it.
+        """
+        for cve in REGISTRY:
+            assert cve.cvss_version in {"v2.0", "v3.0", "v3.1"}, cve.id
+            assert 0.0 < cve.cvss <= 10.0, cve.id
+
     def test_suite_covers_every_registry_row(self) -> None:
-        """Every registered CVE must be named in a test docstring or comment,
-        so a row cannot be added to the table without a test behind it."""
+        """Every registered CVE must be named in a test body, so a row cannot
+        be added to the published table without a test behind it."""
         source = Path(__file__).read_text(encoding="utf-8")
         for cve in REGISTRY:
-            # Once in the registry, at least once more in the test body.
+            # Once in the registry, at least once more below it.
             assert source.count(cve.id) >= 2, f"{cve.id} has a registry row but no test"
 
     def test_both_outcomes_are_represented(self) -> None:
         """A suite with no negatives is a brochure."""
-        outcomes = {c.disposition for c in REGISTRY}
+        outcomes = set().union(*(c.dispositions for c in REGISTRY))
         assert NEUTRALIZED in outcomes
+        assert DETECTED in outcomes
         assert OUT_OF_SCOPE in outcomes
+
+    def test_negatives_are_a_real_share_of_the_matrix(self) -> None:
+        """Pinned deliberately low-bar: this guards against the suite quietly
+        becoming all-wins as rows are added, not against any particular ratio."""
+        negatives = sum(1 for c in REGISTRY if OUT_OF_SCOPE in c.dispositions)
+        assert negatives >= 4, f"only {negatives} out-of-scope rows"
 
 
 class TestDocsMatrixDrift:
-    """The published matrix and this registry must name the same CVEs.
+    """The published matrix and this registry must agree.
 
-    ``docs/security/cve-validation.md`` renders the registry as a table that
-    readers will treat as the coverage claim. The two drift the moment someone
-    edits one — same failure mode `test_doc_table_counts.py` was written for,
-    so it gets the same kind of guard.
+    ``docs/security/cve-validation.md`` renders the registry as a table readers
+    will treat as the coverage claim. The two drift the moment someone edits
+    one — the same failure mode `test_doc_table_counts.py` was written for, so
+    it gets the same kind of guard. The disposition wording is *derived* from
+    ``DISPOSITION_LABELS`` rather than matched loosely, so a row cannot be
+    softened in the Markdown alone.
     """
 
     DOC = Path(__file__).resolve().parent.parent / "docs" / "security" / "cve-validation.md"
+
+    #: "| [CVE-x](url) | title | 9.8 (v3.1) | Neutralized | `f`, `g` |"
+    ROW = re.compile(
+        r"^\|\s*\[(?P<id>CVE-\d{4}-\d+)\][^|]*\|"
+        r"[^|]*\|"
+        r"\s*(?P<score>[\d.]+)\s*\((?P<version>v[\d.]+)\)\s*\|"
+        r"\s*(?P<disposition>[^|]+?)\s*\|",
+        flags=re.MULTILINE,
+    )
+
+    def _rows(self) -> dict[str, re.Match[str]]:
+        text = self.DOC.read_text(encoding="utf-8")
+        return {m.group("id"): m for m in self.ROW.finditer(text)}
 
     def test_doc_page_exists(self) -> None:
         assert self.DOC.is_file(), f"missing {self.DOC}"
 
     def test_matrix_rows_match_the_registry(self) -> None:
         text = self.DOC.read_text(encoding="utf-8")
-        # Table rows only: "| [CVE-YYYY-NNNN](...) | ..."
         in_table = set(re.findall(r"^\|\s*\[(CVE-\d{4}-\d+)\]", text, flags=re.MULTILINE))
         registered = set(BY_ID)
         assert in_table == registered, {
@@ -855,27 +1295,25 @@ class TestDocsMatrixDrift:
             "registered but undocumented": sorted(registered - in_table),
         }
 
+    def test_every_row_parses(self) -> None:
+        """A row the regex cannot read is a row the other checks skip."""
+        rows = self._rows()
+        assert set(rows) == set(BY_ID), sorted(set(BY_ID) - set(rows))
+
     def test_documented_cvss_matches_the_registry(self) -> None:
-        text = self.DOC.read_text(encoding="utf-8")
-        rows = re.findall(
-            r"^\|\s*\[(CVE-\d{4}-\d+)\][^|]*\|[^|]*\|\s*([\d.]+)\s*\|",
-            text,
-            flags=re.MULTILINE,
-        )
-        assert len(rows) == len(REGISTRY), f"parsed {len(rows)} rows, expected {len(REGISTRY)}"
         mismatches = [
-            (cve_id, float(score), BY_ID[cve_id].cvss)
-            for cve_id, score in rows
-            if float(score) != BY_ID[cve_id].cvss
+            (cve_id, m.group("score"), m.group("version"), BY_ID[cve_id].cvss)
+            for cve_id, m in self._rows().items()
+            if float(m.group("score")) != BY_ID[cve_id].cvss
+            or m.group("version") != BY_ID[cve_id].cvss_version
         ]
         assert not mismatches, mismatches
 
-    def test_out_of_scope_rows_say_so_in_the_table(self) -> None:
-        """A row disarm does not cover must read that way to a skimmer."""
-        text = self.DOC.read_text(encoding="utf-8")
-        for cve in REGISTRY:
-            if cve.disposition != OUT_OF_SCOPE:
-                continue
-            row = re.search(rf"^\|\s*\[{cve.id}\].*$", text, flags=re.MULTILINE)
-            assert row is not None, cve.id
-            assert "Out of scope" in row.group(0), f"{cve.id}: {row.group(0)}"
+    def test_documented_disposition_matches_the_registry(self) -> None:
+        """The wording is derived, not approximated — no softening in Markdown."""
+        mismatches = [
+            (cve_id, m.group("disposition"), BY_ID[cve_id].rendered)
+            for cve_id, m in self._rows().items()
+            if m.group("disposition").strip("* ") != BY_ID[cve_id].rendered
+        ]
+        assert not mismatches, mismatches

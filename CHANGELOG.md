@@ -19,34 +19,48 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 ### Added
 
 - **CVE validation suite (`tests/test_cve_vectors.py`, `docs/security/cve-validation.md`).**
-  The docs encourage security use; nothing checked that against a named attack. Eleven
+  The docs encourage security use; nothing checked that against a named attack. Twenty
   published CVEs are now reconstructed from the vector each one describes and asserted
-  against disarm's real behaviour, in the CI gate: Trojan Source bidi and homoglyph
-  identifiers (CVE-2021-42574 / CVE-2021-42694), Django's Unicode case-transform account
-  takeover (CVE-2019-19844), git's ignorable-codepoint `.git` equivalence (CVE-2014-9390),
-  Firefox's dotless-i address-bar spoof (CVE-2017-7832), urllib's leading-blank blocklist
-  bypass (CVE-2023-24329), NFKC netloc misparse (CVE-2019-9636), and four ML/LLM
-  input-handling CVEs (CVE-2025-32711, CVE-2024-5184, CVE-2024-5565, CVE-2023-29374).
+  against disarm's real behaviour, in the CI gate, across six classes:
 
-  **Four rows are out-of-scope negatives, and that is the point.** A suite that recorded
+  | Class | CVEs |
+  |---|---|
+  | Source code and identifiers | CVE-2021-42574, CVE-2021-42694 |
+  | Identity and account takeover | CVE-2019-19844, CVE-2013-7236, CVE-2020-12063 |
+  | Filesystem and paths | CVE-2014-9390, CVE-2009-3376, CVE-2023-33955 |
+  | Hostnames and URLs | CVE-2017-7832, CVE-2023-24329, CVE-2019-9636 |
+  | Terminal output and logs | CVE-2008-2383, CVE-2019-9535 |
+  | ML / LLM input | CVE-2025-32711, CVE-2024-5184, CVE-2024-5565, CVE-2023-29374, CVE-2023-36258, CVE-2024-3098, CVE-2023-32786 |
+
+  **Seven rows are out-of-scope negatives, and that is the point.** A suite that recorded
   only wins would quietly convert THREAT_MODEL.md's "no guarantee that any class of attack
   is fully neutralized" into a coverage claim. The negatives are asserted so the limits
-  cannot drift into untested marketing — including `TestFullwidthUnmaskingHazard`, which
-  pins the case where canonicalizing in the *wrong* pipeline position makes an attack
-  worse (`＿＿ｉｍｐｏｒｔ＿＿` becomes executable ASCII under NFKC).
+  cannot drift into untested marketing — including two rows where canonicalizing in the
+  *wrong* pipeline position makes an attack worse: `＿＿ｉｍｐｏｒｔ＿＿` becomes executable
+  ASCII under NFKC (CVE-2024-3098's `safe_eval` blocklist), and `＃` becomes a real `#`
+  that moves where a host ends (CVE-2019-9636).
 
-  Three findings came out of measuring rather than assuming. `has_bidi_conflict()` is
+  Four findings came out of measuring rather than assuming. `has_bidi_conflict()` is
   correctly False for every Trojan Source payload — they are ASCII plus controls, with no
   strong RTL run — so it is not the detector for that family. `collapse_whitespace()`
-  leaves a leading NUL, so it does not close CVE-2023-24329 on its own. And the
-  CVE-2019-19844 collision class (non-ASCII codepoints whose `.upper()` is pure ASCII) is
-  exactly ten members wide, walked exhaustively over all of Unicode in ~0.2s: nine fold at
-  `canonicalize_strict`, and `ß` closes only under `fold_case`.
+  leaves a leading NUL, so it does not close CVE-2023-24329 on its own. `ᴀ` (U+1D00) has
+  no uppercase mapping at all, so it is not a CVE-2019-19844 vector despite looking like
+  the obvious one; the real collision class (non-ASCII code points whose `.upper()` is
+  pure ASCII) is exactly ten members wide, walked exhaustively over all of Unicode in
+  ~0.2s, and nine fold at `canonicalize_strict` while `ß` closes only under `fold_case`.
+  And there is no "old CVEs are CVSS v2" rule: NVD backfilled a v3.1 score for
+  CVE-2014-9390 while leaving CVE-2013-7236 and CVE-2009-3376 v2.0-only, so each row
+  records the revision it quotes.
 
   `ml_normalize()` passes all twelve bidi controls, PUA, and homoglyphs through unchanged
   — it is a tokenizer-hygiene preset, not a screen. The `llm_guardrail` and `rag_ingest`
   profiles are the entry points for untrusted text, and that is now asserted rather than
   implied.
+
+  The suite is mutation-checked: neutering any of nine entry points turns it red, so no
+  assertion passes vacuously. `TestDocsMatrixDrift` derives the published table's scores
+  and disposition wording from the registry, so a row cannot be softened in Markdown
+  alone.
 
 - **31 real-attacker confusable mappings TR39 does not carry (#597).** Miss-mining the
   **BitCore** subset of the BitAbuse corpus (Lee et al., NAACL Findings 2025) with

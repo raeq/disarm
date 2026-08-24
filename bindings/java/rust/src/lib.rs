@@ -1362,7 +1362,7 @@ fn new_hostname_analysis<'l>(
     let canonical = env.new_string(&a.canonical)?;
     env.new_object(
         JNIString::from("dev/disarm/HostnameAnalysis"),
-        jni_sig!("(ZLjava/util/List;ZZZZZLjava/util/List;ZLjava/util/List;Ljava/lang/String;)V"),
+        jni_sig!("(ZLjava/util/List;ZZZZZZLjava/util/List;ZLjava/util/List;Ljava/lang/String;)V"),
         &[
             JValue::Bool(a.suspicious),
             JValue::Object(&scripts),
@@ -1370,6 +1370,7 @@ fn new_hostname_analysis<'l>(
             JValue::Bool(a.has_confusables),
             JValue::Bool(a.bidi_conflict),
             JValue::Bool(a.bidi_control),
+            JValue::Bool(a.has_invisible),
             JValue::Bool(a.cross_label_script),
             JValue::Object(&label_scripts),
             JValue::Bool(a.whole_script_confusable),

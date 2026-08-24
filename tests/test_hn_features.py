@@ -312,6 +312,67 @@ class TestBidiDirectionConflict:
         assert not d.bidi_conflict and not d.cross_label_script
 
 
+class TestInvisibleCharacters:
+    """#605: has_invisible — zero-width and format characters that carry no
+    direction, so #603's bidi_control cannot see them either."""
+
+    def test_zero_width_space_is_flagged(self):
+        suspicious, d = is_suspicious_hostname("paypal\u200b.evil.com")
+        assert suspicious
+        assert d.has_invisible
+
+    def test_zero_width_space_never_survives_into_canonical(self):
+        _, d = is_suspicious_hostname("paypal\u200b.evil.com")
+        assert d.canonical == "paypal.evil.com"
+
+    # ZWNJ/ZWJ are flagged unconditionally: IDNA2008 CONTEXTJ permits them only in
+    # narrow joining contexts a spoof screen has no reason to honour.
+    INVISIBLES = [
+        "\u200b",  # ZWSP
+        "\u200c",  # ZWNJ
+        "\u200d",  # ZWJ
+        "\u2060",  # WJ
+        "\u2061",  # FUNCTION APPLICATION
+        "\u2062",  # INVISIBLE TIMES
+        "\u2063",  # INVISIBLE SEPARATOR
+        "\u2064",  # INVISIBLE PLUS
+        "\ufeff",  # BOM
+    ]
+
+    @pytest.mark.parametrize("invisible", INVISIBLES)
+    def test_every_invisible_is_flagged(self, invisible):
+        suspicious, d = is_suspicious_hostname(f"paypal{invisible}.evil.com")
+        assert suspicious
+        assert d.has_invisible
+
+    @pytest.mark.parametrize("invisible", INVISIBLES)
+    def test_no_invisible_survives_into_canonical(self, invisible):
+        _, d = is_suspicious_hostname(f"paypal{invisible}.evil.com")
+        assert invisible not in d.canonical
+
+    def test_mongolian_vowel_separator_is_invisible_not_a_script(self):
+        # U+180E was reclassified Zs -> Cf in Unicode 6.3. It is invisible, and it
+        # is not evidence that a hostname contains Mongolian.
+        suspicious, d = is_suspicious_hostname("paypal\u180e.evil.com")
+        assert suspicious
+        assert d.has_invisible
+        assert "\u180e" not in d.canonical
+
+    @pytest.mark.parametrize(
+        ("host", "misread_as"),
+        [("paypal\ufeff.evil.com", "Arabic"), ("paypal\u180e.evil.com", "Mongolian")],
+    )
+    def test_invisible_is_not_reported_as_a_script(self, host, misread_as):
+        # #605: U+FEFF sits in the Arabic Presentation Forms block and U+180E in the
+        # Mongolian block, so the script detector read each as a letter and
+        # mixed_script fired. A caller keying policy on `scripts` was told this
+        # ASCII-looking host contained Arabic.
+        _, d = is_suspicious_hostname(host)
+        assert misread_as not in d.scripts
+        assert d.scripts == ["Latin"]
+        assert not d.mixed_script
+
+
 class TestBidiControlCharacters:
     """#603: bidi_control — the UAX #9 format characters bidi_conflict cannot see."""
 

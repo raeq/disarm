@@ -156,6 +156,23 @@ RSpec.describe Disarm do
       expect(rlo[:canonical]).to eq("paypalmoc.evil.com")
 
       expect(clean[:bidi_control]).to be(false)
+
+      # Zero-width / invisible-format character (#605): flagged, and removed before
+      # any other field is computed, so it reaches neither :scripts nor :canonical.
+      zwsp = Disarm.analyze_hostname("paypal\u200B.evil.com")
+      expect(zwsp[:suspicious]).to be(true)
+      expect(zwsp[:has_invisible]).to be(true)
+      expect(zwsp[:bidi_control]).to be(false) # disjoint signals
+      expect(zwsp[:canonical]).to eq("paypal.evil.com")
+
+      # U+FEFF lives in the Arabic Presentation Forms block; it must not be read
+      # as evidence the host contains Arabic.
+      bom = Disarm.analyze_hostname("paypal\uFEFF.evil.com")
+      expect(bom[:has_invisible]).to be(true)
+      expect(bom[:scripts]).to eq(["Latin"])
+      expect(bom[:mixed_script]).to be(false)
+
+      expect(clean[:has_invisible]).to be(false)
     end
   end
 

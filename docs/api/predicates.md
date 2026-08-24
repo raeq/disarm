@@ -101,12 +101,13 @@ The second element of the tuple returned by `is_suspicious_hostname()`:
 
 | Attribute | Type | Description |
 |---|---|---|
-| `suspicious` | `bool` | `True` if any label is mixed-script, contains a Latin-confusable character, or the hostname has a bidi-direction conflict or a bidi control character. An **any-character** confusable screen — it flags essentially every non-Latin hostname, so it is a *maximally conservative screen*, not a precise verdict |
+| `suspicious` | `bool` | `True` if any label is mixed-script, contains a Latin-confusable character, or the hostname has a bidi-direction conflict, a bidi control character, or a zero-width/invisible character. An **any-character** confusable screen — it flags essentially every non-Latin hostname, so it is a *maximally conservative screen*, not a precise verdict |
 | `scripts` | `list[str]` | Unicode scripts found across all labels |
 | `mixed_script` | `bool` | `True` if any single label contains more than one script |
 | `has_confusables` | `bool` | `True` if any label contains a Latin-confusable character |
 | `bidi_conflict` | `bool` | `True` if the decoded hostname mixes strong LTR and RTL characters (the "BiDi Swap" precondition); **folded into** `suspicious` |
 | `bidi_control` | `bool` | `True` if the decoded hostname carries a UAX #9 bidi control character — override (`U+202D`/`U+202E`), embedding (`U+202A`–`U+202C`), isolate (`U+2066`–`U+2069`) or directional mark (`U+200E`/`U+200F`/`U+061C`). Disjoint from `bidi_conflict`, which reads strong-direction *letters* only. **Folded into** `suspicious`; the characters are stripped from `canonical` |
+| `has_invisible` | `bool` | `True` if the decoded hostname carries a zero-width or invisible-format character — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF`, `U+180E`. Disjoint from `bidi_control`: these carry no direction at all. **Folded into** `suspicious`, and removed before any other field is computed, so they never reach `scripts`, `mixed_script` or `canonical` |
 | `cross_label_script` | `bool` | `True` if the labels span more than one script; broader/noisier than `bidi_conflict` (fires on benign IDN ccTLDs like `google.рф`), so **not** folded into `suspicious` |
 | `label_scripts` | `list[list[str]]` | Per-label resolved scripts, left to right |
 | `whole_script_confusable` | `bool` | `True` if any label is single-script, non-Latin, whose confusable skeleton is entirely Latin (`аррӏе`→`apple`). A graded **signal, not a verdict** — **not** folded into `suspicious` (fires on `ру`→`py`, `оса`→`oca`) |

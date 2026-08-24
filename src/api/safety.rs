@@ -427,6 +427,15 @@ pub struct HostnameAnalysis {
     /// [`suspicious`](Self::suspicious) and the characters are stripped from
     /// [`canonical`](Self::canonical).
     pub bidi_control: bool,
+    /// Whether the decoded hostname contains a zero-width or invisible-format
+    /// character — `U+200B`\u2013`U+200D`, `U+2060`\u2013`U+2064` or `U+FEFF` (#605).
+    ///
+    /// Disjoint from [`bidi_control`](Self::bidi_control): these carry no direction at
+    /// all, so neither that field nor [`bidi_conflict`](Self::bidi_conflict) can see
+    /// them. IDNA2008 disallows them, so this is folded into
+    /// [`suspicious`](Self::suspicious) and the characters are stripped from
+    /// [`canonical`](Self::canonical).
+    pub has_invisible: bool,
     /// Whether the labels resolve to more than one distinct script (Common /
     /// Inherited excluded). Broader and noisier than [`bidi_conflict`](Self::bidi_conflict)
     /// — it fires on benign IDN-ccTLD patterns like `google.рф` — so it is
@@ -509,6 +518,7 @@ pub fn analyze_hostname_with(hostname: &str, contractions: bool) -> HostnameAnal
         has_confusables: core.has_confusables,
         bidi_conflict: core.bidi_conflict,
         bidi_control: core.bidi_control,
+        has_invisible: core.has_invisible,
         cross_label_script: core.cross_label_script,
         label_scripts: core.label_scripts,
         whole_script_confusable: core.whole_script_confusable,

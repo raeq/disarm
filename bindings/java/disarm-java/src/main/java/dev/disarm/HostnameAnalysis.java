@@ -22,6 +22,11 @@ import java.util.List;
  *                                   embedding, isolate or directional mark (#603). Disjoint from
  *                                   {@code bidiConflict}, which reads strong-direction letters only.
  *                                   Folded into {@code suspicious}; stripped from {@code canonical}.
+ * @param hasInvisible               whether the host carries a zero-width or invisible-format character
+ *                                   (#605). Disjoint from {@code bidiControl} — these carry no direction
+ *                                   at all. Folded into {@code suspicious}; removed before any other
+ *                                   field is computed, so they never reach {@code scripts} or
+ *                                   {@code canonical}.
  * @param crossLabelScript           whether the labels span more than one script (not folded in)
  * @param labelScripts               per-label resolved scripts, left to right
  * @param wholeScriptConfusable      whether any label is single-script, non-Latin, skeletoning to all-Latin (a signal, not folded in)
@@ -35,6 +40,7 @@ public record HostnameAnalysis(
         boolean hasConfusables,
         boolean bidiConflict,
         boolean bidiControl,
+        boolean hasInvisible,
         boolean crossLabelScript,
         List<List<String>> labelScripts,
         boolean wholeScriptConfusable,

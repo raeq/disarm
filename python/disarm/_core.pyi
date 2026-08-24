@@ -32,6 +32,7 @@ class HostnameAnalysis:
     has_confusables: bool
     bidi_conflict: bool
     bidi_control: bool
+    has_invisible: bool
     cross_label_script: bool
     label_scripts: list[list[str]]
     whole_script_confusable: bool

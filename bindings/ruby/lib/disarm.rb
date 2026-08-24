@@ -163,7 +163,9 @@ module Disarm
 
     # Whether the hostname looks like a mixed-script / confusable / bidi-reorder
     # IDN spoof. Flags a mixed-script label, a Latin confusable, or a
-    # bidi-direction conflict (see #bidi_conflict?, the "BiDi Swap" precondition).
+    # bidi-direction conflict (see #bidi_conflict?, the "BiDi Swap" precondition),
+    # or a UAX #9 bidi control character (#603 — the RLO spoof, which the direction
+    # conflict is blind to).
     # A false result asserts nothing was *found*, not that the host is safe.
     def suspicious_hostname?(host)
       translate_errors { _suspicious_hostname?(host) }
@@ -173,13 +175,13 @@ module Disarm
     # as a Hash. `:suspicious` is a maximally conservative screen (an any-character
     # confusable test flags essentially every non-Latin host), not a precise verdict;
     # branch on the granular signals plus your own policy. Keys: :suspicious,
-    # :scripts, :mixed_script, :has_confusables, :bidi_conflict, :cross_label_script,
+    # :scripts, :mixed_script, :has_confusables, :bidi_conflict, :bidi_control, :cross_label_script,
     # :label_scripts, :whole_script_confusable, :label_whole_script_confusable,
     # :canonical. `:whole_script_confusable` is a graded signal, NOT folded into
     # `:suspicious` (see #545).
     def analyze_hostname(host, contractions: false)
       suspicious, scripts, mixed_script, has_confusables, bidi_conflict,
-        cross_label_script, label_scripts, whole_script_confusable,
+        bidi_control, cross_label_script, label_scripts, whole_script_confusable,
         label_whole_script_confusable, canonical =
         translate_errors { _analyze_hostname(host, contractions) }
       {
@@ -188,6 +190,7 @@ module Disarm
         mixed_script:,
         has_confusables:,
         bidi_conflict:,
+        bidi_control:,
         cross_label_script:,
         label_scripts:,
         whole_script_confusable:,

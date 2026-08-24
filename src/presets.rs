@@ -698,6 +698,13 @@ pub(crate) fn strip_bidi_into(text: &str, out: &mut String) {
 
 #[inline]
 fn is_bidi_or_format(ch: char) -> bool {
+    // ── UAX #9 §3.3.2 bidi formatting characters ───────
+    // Defined once, in `crate::scripts::is_bidi_control`, so this set and the
+    // hostname screen (#603) cannot drift apart.
+    if crate::scripts::is_bidi_control(ch) {
+        return true;
+    }
+
     // ── Soft hyphen ─────────────────────────────────────
     // Not a bidi char per se, but invisible and used to split keywords.
     if ch == '\u{00AD}' {
@@ -710,30 +717,7 @@ fn is_bidi_or_format(ch: char) -> bool {
     // invisible/format characters; strip them here too so strip_bidi /
     // strip_format don't leave them behind (they were previously only handled
     // as transliteration-table entries).
-    if matches!(ch, '\u{206A}'..='\u{206F}' | '\u{FFF9}'..='\u{FFFB}') {
-        return true;
-    }
-
-    // ── UAX #9 §3.3.2 bidi formatting characters ───────
-    // Grouped by Unicode version for auditability.
-    matches!(
-        ch,
-        // Unicode 1.0 – marks
-        '\u{200E}'             // LRM  Left-to-Right Mark
-        | '\u{200F}'           // RLM  Right-to-Left Mark
-        // Unicode 1.0 – explicit embeddings / overrides
-        | '\u{202A}'           // LRE  Left-to-Right Embedding
-        | '\u{202B}'           // RLE  Right-to-Left Embedding
-        | '\u{202C}'           // PDF  Pop Directional Formatting
-        | '\u{202D}'           // LRO  Left-to-Right Override
-        | '\u{202E}'           // RLO  Right-to-Left Override
-        // Unicode 6.3 – isolates + Arabic Letter Mark
-        | '\u{061C}'           // ALM  Arabic Letter Mark
-        | '\u{2066}'           // LRI  Left-to-Right Isolate
-        | '\u{2067}'           // RLI  Right-to-Left Isolate
-        | '\u{2068}'           // FSI  First Strong Isolate
-        | '\u{2069}' // PDI  Pop Directional Isolate
-    )
+    matches!(ch, '\u{206A}'..='\u{206F}' | '\u{FFF9}'..='\u{FFFB}')
 }
 
 // ---------------------------------------------------------------------------

@@ -18,6 +18,10 @@ import java.util.List;
  * @param mixedScript                whether any single label mixes more than one script
  * @param hasConfusables             whether any label contains a Latin-confusable character
  * @param bidiConflict               whether the host mixes strong LTR and RTL (folded into {@code suspicious})
+ * @param bidiControl                whether the host carries a UAX #9 bidi control character — override,
+ *                                   embedding, isolate or directional mark (#603). Disjoint from
+ *                                   {@code bidiConflict}, which reads strong-direction letters only.
+ *                                   Folded into {@code suspicious}; stripped from {@code canonical}.
  * @param crossLabelScript           whether the labels span more than one script (not folded in)
  * @param labelScripts               per-label resolved scripts, left to right
  * @param wholeScriptConfusable      whether any label is single-script, non-Latin, skeletoning to all-Latin (a signal, not folded in)
@@ -30,6 +34,7 @@ public record HostnameAnalysis(
         boolean mixedScript,
         boolean hasConfusables,
         boolean bidiConflict,
+        boolean bidiControl,
         boolean crossLabelScript,
         List<List<String>> labelScripts,
         boolean wholeScriptConfusable,

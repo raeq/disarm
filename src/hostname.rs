@@ -53,6 +53,10 @@ pub(crate) struct HostnameAnalysis {
     /// Whether the decoded hostname mixes strong LTR and strong RTL characters
     /// (Bidi-reorder / "BiDi Swap" precondition). Folded into `suspicious`.
     pub(crate) bidi_conflict: bool,
+    /// Whether the decoded hostname contains a UAX #9 bidi control character
+    /// (#603). Disjoint from `bidi_conflict`, which reads only strong-direction
+    /// letters. Folded into `suspicious`, and stripped from `canonical`.
+    pub(crate) bidi_control: bool,
     /// Whether the labels span more than one distinct script (Common/Inherited
     /// excluded). Broader than `bidi_conflict`; NOT folded into `suspicious`.
     pub(crate) cross_label_script: bool,
@@ -96,6 +100,12 @@ pub(crate) struct HostnameAnalysis {
 ///   which `mixed_script` misses because the mixing is *across* labels. The
 ///   broader `cross_label_script` fact is exposed but deliberately NOT folded in
 ///   (it fires on benign IDN ccTLDs like `google.рф`).
+/// - The decoded hostname contains a UAX #9 bidi control character (`bidi_control`,
+///   #603) — an override, embedding, isolate or directional mark. This is disjoint
+///   from `bidi_conflict`: the latter reads strong-direction *letters* and is blind
+///   to `paypal<U+202E>moc.evil.com`. IDNA2008 disallows every character in the set,
+///   so the screen fails closed on all of them; they are also stripped from
+///   `canonical` so it cannot carry an override into a caller's display path.
 /// - An ACE label fails to decode, or a confusable check errors (fail closed)
 ///
 /// **Whole-script confusables (#545).** `whole_script_confusable` (and the
@@ -147,6 +157,7 @@ pub(crate) fn is_suspicious_hostname_opts(
                 mixed_script: false,
                 has_confusables: false,
                 bidi_conflict: false,
+                bidi_control: false,
                 cross_label_script: false,
                 label_scripts: Vec::new(),
                 whole_script_confusable: false,
@@ -263,7 +274,7 @@ pub(crate) fn is_suspicious_hostname_opts(
     }
 
     // Generate canonical Latin form from the decoded labels.
-    let decoded_hostname = decoded_labels.join(".");
+    let mut decoded_hostname = decoded_labels.join(".");
 
     // Direction conflict (#412): the decoded hostname mixes strong-LTR and
     // strong-RTL characters — the "BiDi Swap" precondition. Computed on the same
@@ -275,6 +286,26 @@ pub(crate) fn is_suspicious_hostname_opts(
     let cross_label_script = all_scripts.len() > 1;
     if bidi_conflict {
         suspicious = true;
+    }
+
+    // Bidi CONTROL characters (#603): U+202A-U+202E, U+2066-U+2069, U+200E/U+200F,
+    // U+061C. `bidi_conflict` above reads strong-direction *letters* only, so it is
+    // blind to `paypal<RLO>moc.evil.com` — the best-known bidi spoof there is. Every
+    // one of these is DISALLOWED by IDNA2008 (RFC 5892), so a hostname carrying one
+    // is malformed whatever its intent, and the screen can fail closed on the whole
+    // set with no legitimate-use tradeoff. The ACE path already rejects them via
+    // `idna::domain_to_unicode`; this covers the literal-Unicode label, which reaches
+    // the pass-through arm above and was never inspected.
+    //
+    // Strip them before canonicalization too, so `canonical` cannot carry an override
+    // into a caller's display path — the sharper half of #603: a caller who screened the
+    // name, was told it was clean, and then rendered `canonical` rendered the spoof.
+    // `retain` edits in place and only runs when something is actually there to remove,
+    // so the clean path (every real hostname) neither allocates nor rescans.
+    let bidi_control = scripts::has_bidi_control(&decoded_hostname);
+    if bidi_control {
+        suspicious = true;
+        decoded_hostname.retain(|c| !scripts::is_bidi_control(c));
     }
 
     // Hostname analysis keeps the NUMERIC digit policy (#561): a spoofed label is judged
@@ -308,6 +339,7 @@ pub(crate) fn is_suspicious_hostname_opts(
             mixed_script: has_mixed,
             has_confusables,
             bidi_conflict,
+            bidi_control,
             cross_label_script,
             label_scripts: per_label_scripts,
             whole_script_confusable,
@@ -546,6 +578,58 @@ mod tests {
             d.label_scripts,
             vec![vec!["Latin".to_string()], vec!["Latin".to_string()]]
         );
+    }
+
+    #[test]
+    fn bidi_controls_are_flagged_and_stripped_from_canonical() {
+        // #603: every UAX #9 bidi control must flag, and none may survive into
+        // `canonical` — a caller who renders that field would render the spoof.
+        for c in [
+            '\u{200E}', '\u{200F}', '\u{061C}', '\u{202A}', '\u{202B}', '\u{202C}', '\u{202D}',
+            '\u{202E}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}',
+        ] {
+            let host = format!("paypal{c}moc.evil.com");
+            let (suspicious, d) = is_suspicious_hostname_opts(&host, false);
+            assert!(suspicious, "U+{:04X} must flag suspicious", c as u32);
+            assert!(d.bidi_control, "U+{:04X} must set bidi_control", c as u32);
+            assert!(
+                !d.canonical.contains(c),
+                "U+{:04X} must not survive into canonical (got {:?})",
+                c as u32,
+                d.canonical
+            );
+        }
+    }
+
+    #[test]
+    fn bidi_control_is_disjoint_from_bidi_conflict() {
+        // The two fields answer different questions (#599). The RLO spoof has a
+        // control and no conflict; the "BiDi Swap" has a conflict and no control.
+        let (_, rlo) = is_suspicious_hostname_opts("paypal\u{202E}moc.evil.com", false);
+        assert!(rlo.bidi_control && !rlo.bidi_conflict);
+
+        let (_, swap) =
+            is_suspicious_hostname_opts("varonis.com.\u{05D5}.\u{05E7}\u{05D5}\u{05DD}", false);
+        assert!(swap.bidi_conflict && !swap.bidi_control);
+    }
+
+    #[test]
+    fn clean_hostname_sets_no_bidi_control() {
+        for host in [
+            "paypal.com",
+            "\u{043C}\u{043E}\u{0441}\u{043A}\u{0432}\u{0430}.\u{0440}\u{0444}",
+            "example.co.uk",
+        ] {
+            let (_, d) = is_suspicious_hostname_opts(host, false);
+            assert!(!d.bidi_control, "{host} must not set bidi_control");
+            assert_eq!(
+                d.canonical
+                    .chars()
+                    .filter(|c| crate::scripts::is_bidi_control(*c))
+                    .count(),
+                0
+            );
+        }
     }
 
     #[test]

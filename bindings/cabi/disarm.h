@@ -16,7 +16,7 @@ extern "C" {
 /** \brief
  *  Full hostname homoglyph analysis as a JSON object (fields mirror the Rust/Node/
  *  Ruby/Java `HostnameAnalysis`: `suspicious`, `scripts`, `mixed_script`,
- *  `has_confusables`, `bidi_conflict`, `cross_label_script`, `label_scripts`,
+ *  `has_confusables`, `bidi_conflict`, `bidi_control`, `cross_label_script`, `label_scripts`,
  *  `whole_script_confusable`, `label_whole_script_confusable`, `canonical`).
  */
 char *

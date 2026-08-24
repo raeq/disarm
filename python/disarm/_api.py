@@ -1203,6 +1203,13 @@ def is_suspicious_hostname(
     - ``bidi_conflict``: bool — True if the decoded hostname mixes strong
       left-to-right and strong right-to-left characters (the "BiDi Swap" reorder
       precondition). Folded into ``suspicious``.
+    - ``bidi_control``: bool — True if the decoded hostname carries a UAX #9 bidi
+      control character: an override (``U+202D``/``U+202E``), embedding
+      (``U+202A``\u2013``U+202C``), isolate (``U+2066``\u2013``U+2069``) or directional
+      mark (``U+200E``/``U+200F``/``U+061C``). Disjoint from ``bidi_conflict``, which
+      reads strong-direction *letters* only and is therefore blind to the RLO
+      extension spoof. IDNA2008 disallows every character in the set, so this is
+      folded into ``suspicious`` and the characters are stripped from ``canonical``.
     - ``cross_label_script``: bool — True if the labels span more than one
       distinct script. Broader and noisier than ``bidi_conflict`` (it fires on
       benign IDN ccTLDs like ``google.рф``), so it is **not** folded into
@@ -1222,7 +1229,8 @@ def is_suspicious_hostname(
     A hostname is flagged suspicious if any single label is mixed-script
     (draws on more than one Unicode script, excluding Common/Inherited),
     contains confusable homoglyphs, or has a bidi-direction conflict
-    (``bidi_conflict``). The mixed-script rule is conservative and fails closed:
+    (``bidi_conflict``), or carries a bidi control character (``bidi_control``).
+    The mixed-script rule is conservative and fails closed:
     it flags benign combinations such as Latin+CJK as well as spoofing ones, so a
     caller wanting a more permissive policy can inspect the ``mixed_script`` and
     ``scripts`` fields and decide for itself.

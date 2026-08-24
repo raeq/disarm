@@ -476,6 +476,11 @@ pub struct HostnameAnalysis {
     /// Whether the decoded hostname mixes strong LTR and RTL characters (the
     /// "BiDi Swap" precondition). Folded into `suspicious`.
     pub bidi_conflict: bool,
+    /// Whether the decoded hostname contains a UAX #9 bidi control character —
+    /// override, embedding, isolate or directional mark (#603). Disjoint from
+    /// `bidiConflict`, which reads strong-direction letters only. Folded into
+    /// `suspicious`; the characters are stripped from `canonical`.
+    pub bidi_control: bool,
     /// Whether the labels span more than one script. Broader/noisier than
     /// `bidiConflict`; NOT folded into `suspicious`.
     pub cross_label_script: bool,
@@ -503,6 +508,7 @@ pub fn analyze_hostname(host: String, contractions: bool) -> HostnameAnalysis {
         mixed_script: a.mixed_script,
         has_confusables: a.has_confusables,
         bidi_conflict: a.bidi_conflict,
+        bidi_control: a.bidi_control,
         cross_label_script: a.cross_label_script,
         label_scripts: a.label_scripts,
         whole_script_confusable: a.whole_script_confusable,

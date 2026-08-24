@@ -166,6 +166,15 @@ class DisarmKtTest {
         val spoof = "аррӏе.com".analyzeHostname()
         assertTrue(spoof.wholeScriptConfusable)
         assertEquals("apple.com", spoof.canonical)
+
+        // Bidi control character (#603): flagged, and stripped from the canonical
+        // form so a caller rendering that field cannot render the spoof.
+        val rlo = "paypal\u202Emoc.evil.com".analyzeHostname()
+        assertTrue(rlo.suspicious)
+        assertTrue(rlo.bidiControl)
+        assertFalse(rlo.bidiConflict) // disjoint signals
+        assertEquals("paypalmoc.evil.com", rlo.canonical)
+        assertFalse(clean.bidiControl)
     }
 
     @Test

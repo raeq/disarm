@@ -257,6 +257,15 @@ describe('script analysis', () => {
     const mixed = disarm.analyzeHostname('pаypal.com')
     expect(mixed.mixedScript).toBe(true)
     expect(mixed.hasConfusables).toBe(true)
+
+    // Bidi control character (#603): flagged, and stripped from the canonical form
+    // so a caller rendering that field cannot render the spoof.
+    const rlo = disarm.analyzeHostname('paypal\u202Emoc.evil.com')
+    expect(rlo.suspicious).toBe(true)
+    expect(rlo.bidiControl).toBe(true)
+    expect(rlo.bidiConflict).toBe(false) // disjoint signals
+    expect(rlo.canonical).toBe('paypalmoc.evil.com')
+    expect(clean.bidiControl).toBe(false)
   })
   test('inspectAutoLang', () => {
     const info = disarm.inspectAutoLang('Москва')

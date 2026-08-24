@@ -146,6 +146,16 @@ RSpec.describe Disarm do
       expect(spoof[:whole_script_confusable]).to be(true)
       expect(spoof[:label_whole_script_confusable]).to eq([true, false])
       expect(spoof[:canonical]).to eq("apple.com")
+
+      # Bidi control character (#603): flagged, and stripped from the canonical form
+      # so a caller rendering that field cannot render the spoof.
+      rlo = Disarm.analyze_hostname("paypal\u202Emoc.evil.com")
+      expect(rlo[:suspicious]).to be(true)
+      expect(rlo[:bidi_control]).to be(true)
+      expect(rlo[:bidi_conflict]).to be(false) # disjoint signals
+      expect(rlo[:canonical]).to eq("paypalmoc.evil.com")
+
+      expect(clean[:bidi_control]).to be(false)
     end
   end
 

@@ -258,7 +258,7 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 - **`is_suspicious_hostname()` now catches zero-width and invisible characters, and no
   longer reports a phantom script for them (#605).** Sibling of #603, for the characters
   that carry no direction at all — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF` and
-  `U+180E`. Twelve of fourteen passed the screen clean and **all fourteen** survived into
+  `U+180E`. Eight of the ten passed the screen clean, and **all ten** survived into
   `canonical`.
 
   The two that did flag were flagging for the wrong reason. `U+FEFF` sits in the Arabic

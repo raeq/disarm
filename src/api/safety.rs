@@ -428,7 +428,7 @@ pub struct HostnameAnalysis {
     /// [`canonical`](Self::canonical).
     pub bidi_control: bool,
     /// Whether the decoded hostname contains a zero-width or invisible-format
-    /// character — `U+200B`\u2013`U+200D`, `U+2060`\u2013`U+2064` or `U+FEFF` (#605).
+    /// character — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF` or `U+180E` (#605).
     ///
     /// Disjoint from [`bidi_control`](Self::bidi_control): these carry no direction at
     /// all, so neither that field nor [`bidi_conflict`](Self::bidi_conflict) can see

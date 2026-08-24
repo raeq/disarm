@@ -359,6 +359,7 @@ type HostnameAnalysisTuple = (
     bool,             // has_confusables
     bool,             // bidi_conflict
     bool,             // bidi_control
+    bool,             // has_invisible
     bool,             // cross_label_script
     Vec<Vec<String>>, // label_scripts
     bool,             // whole_script_confusable
@@ -377,6 +378,7 @@ fn analyze_hostname(host: Wtf8Text, contractions: bool) -> HostnameAnalysisTuple
         a.has_confusables,
         a.bidi_conflict,
         a.bidi_control,
+        a.has_invisible,
         a.cross_label_script,
         a.label_scripts,
         a.whole_script_confusable,

@@ -255,6 +255,30 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`is_suspicious_hostname()` now catches zero-width and invisible characters, and no
+  longer reports a phantom script for them (#605).** Sibling of #603, for the characters
+  that carry no direction at all — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF` and
+  `U+180E`. Eight of the ten passed the screen clean, and **all ten** survived into
+  `canonical`.
+
+  The two that did flag were flagging for the wrong reason. `U+FEFF` sits in the Arabic
+  Presentation Forms block and `U+180E` in the Mongolian block, so the script detector
+  read each as a letter: `paypal<BOM>.evil.com` reported `scripts=['Latin', 'Arabic']`
+  and `mixed_script=True`. Right verdict, wrong evidence — and any caller keying policy
+  on `scripts` was told an ASCII-looking hostname contained Arabic.
+
+  A new `HostnameAnalysis.has_invisible` reports the finding and is folded into
+  `suspicious`. It is additive and disjoint from `bidi_control` (#603). The characters
+  are removed **per label, before script analysis**, not on the joined hostname
+  afterwards — so `scripts`, `mixed_script`, `has_confusables` and `canonical` are all
+  computed on what a reader actually sees, and the phantom-script bug is fixed by
+  construction rather than special-cased.
+
+  `U+200C` ZWNJ and `U+200D` ZWJ are flagged unconditionally. IDNA2008 CONTEXTJ permits
+  them only in narrow joining contexts that a spoof screen has no reason to honour.
+
+  Exposed across all six surfaces (Rust core, Python, Node, Ruby, Java/Kotlin, C ABI).
+
 - **`is_suspicious_hostname()` now catches bidi control characters, and `canonical` no
   longer carries them (#603).** Every UAX #9 bidi control — the overrides
   `U+202D`/`U+202E`, the embeddings `U+202A`–`U+202C`, the isolates

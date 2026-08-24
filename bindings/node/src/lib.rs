@@ -481,6 +481,12 @@ pub struct HostnameAnalysis {
     /// `bidiConflict`, which reads strong-direction letters only. Folded into
     /// `suspicious`; the characters are stripped from `canonical`.
     pub bidi_control: bool,
+    /// Whether the decoded hostname contains a zero-width or invisible-format
+    /// character — `U+200B`-`U+200D`, `U+2060`-`U+2064`, `U+FEFF`, `U+180E` (#605).
+    /// Disjoint from `bidiControl`: these carry no direction at all. Folded into
+    /// `suspicious`; the characters are stripped before any other field is computed,
+    /// so they never reach `scripts`, `mixedScript` or `canonical`.
+    pub has_invisible: bool,
     /// Whether the labels span more than one script. Broader/noisier than
     /// `bidiConflict`; NOT folded into `suspicious`.
     pub cross_label_script: bool,
@@ -509,6 +515,7 @@ pub fn analyze_hostname(host: String, contractions: bool) -> HostnameAnalysis {
         has_confusables: a.has_confusables,
         bidi_conflict: a.bidi_conflict,
         bidi_control: a.bidi_control,
+        has_invisible: a.has_invisible,
         cross_label_script: a.cross_label_script,
         label_scripts: a.label_scripts,
         whole_script_confusable: a.whole_script_confusable,

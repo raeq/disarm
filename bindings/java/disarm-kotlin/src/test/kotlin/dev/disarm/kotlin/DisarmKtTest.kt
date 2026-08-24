@@ -175,6 +175,23 @@ class DisarmKtTest {
         assertFalse(rlo.bidiConflict) // disjoint signals
         assertEquals("paypalmoc.evil.com", rlo.canonical)
         assertFalse(clean.bidiControl)
+
+        // Zero-width / invisible-format character (#605): flagged, and removed before
+        // any other field is computed, so it reaches neither scripts nor canonical.
+        val zwsp = "paypal\u200B.evil.com".analyzeHostname()
+        assertTrue(zwsp.suspicious)
+        assertTrue(zwsp.hasInvisible)
+        assertFalse(zwsp.bidiControl) // disjoint signals
+        assertEquals("paypal.evil.com", zwsp.canonical)
+
+        // U+FEFF lives in the Arabic Presentation Forms block; it must not be read
+        // as evidence the host contains Arabic.
+        val bom = "paypal\uFEFF.evil.com".analyzeHostname()
+        assertTrue(bom.hasInvisible)
+        assertEquals(listOf("Latin"), bom.scripts)
+        assertFalse(bom.mixedScript)
+
+        assertFalse(clean.hasInvisible)
     }
 
     @Test

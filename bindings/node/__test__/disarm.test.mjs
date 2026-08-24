@@ -266,6 +266,23 @@ describe('script analysis', () => {
     expect(rlo.bidiConflict).toBe(false) // disjoint signals
     expect(rlo.canonical).toBe('paypalmoc.evil.com')
     expect(clean.bidiControl).toBe(false)
+
+    // Zero-width / invisible-format character (#605): flagged, and removed before
+    // any other field is computed, so it reaches neither scripts nor canonical.
+    const zwsp = disarm.analyzeHostname('paypal\u200B.evil.com')
+    expect(zwsp.suspicious).toBe(true)
+    expect(zwsp.hasInvisible).toBe(true)
+    expect(zwsp.bidiControl).toBe(false) // disjoint signals
+    expect(zwsp.canonical).toBe('paypal.evil.com')
+
+    // U+FEFF lives in the Arabic Presentation Forms block; it must not be read
+    // as evidence the host contains Arabic.
+    const bom = disarm.analyzeHostname('paypal\uFEFF.evil.com')
+    expect(bom.hasInvisible).toBe(true)
+    expect(bom.scripts).toEqual(['Latin'])
+    expect(bom.mixedScript).toBe(false)
+
+    expect(clean.hasInvisible).toBe(false)
   })
   test('inspectAutoLang', () => {
     const info = disarm.inspectAutoLang('Москва')

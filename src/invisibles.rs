@@ -60,6 +60,28 @@ pub(crate) fn is_pua(ch: char) -> bool {
     matches!(ch, '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{FFFFD}' | '\u{100000}'..='\u{10FFFD}')
 }
 
+/// Zero-width and invisible-format characters that carry no direction, so
+/// [`crate::scripts::is_bidi_control`] does not cover them (#605).
+///
+/// Deliberately excludes the bidi controls themselves: `is_bidi_control` is the
+/// single definition of that set, and a hostname carrying one is already reported
+/// through `bidi_control` (#603). The two predicates partition the format space
+/// rather than overlap.
+#[inline]
+pub(crate) fn is_zero_width(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{200B}'                 // ZWSP  Zero Width Space
+        | '\u{200C}'               // ZWNJ  Zero Width Non-Joiner
+        | '\u{200D}'               // ZWJ   Zero Width Joiner
+        | '\u{2060}'               // WJ    Word Joiner
+        | '\u{2061}'
+            ..='\u{2064}'  // FUNCTION APPLICATION .. INVISIBLE PLUS
+        | '\u{FEFF}'               // BOM   Zero Width No-Break Space
+        | '\u{180E}' // MVS   Mongolian Vowel Separator (Zs -> Cf in Unicode 6.3)
+    )
+}
+
 /// Combining Grapheme Joiner — invisible; blocks normalization/collation and so
 /// splits a confusable/denylisted run while staying unseen.
 const CGJ: char = '\u{034F}';

@@ -1,6 +1,6 @@
 use unicode_normalization::UnicodeNormalization;
 
-use crate::{confusables, scripts};
+use crate::{confusables, invisibles, scripts};
 
 /// Check if a bracketed string is a valid IPv6 literal per RFC 3986 §3.2.2.
 ///
@@ -57,6 +57,10 @@ pub(crate) struct HostnameAnalysis {
     /// (#603). Disjoint from `bidi_conflict`, which reads only strong-direction
     /// letters. Folded into `suspicious`, and stripped from `canonical`.
     pub(crate) bidi_control: bool,
+    /// Whether the decoded hostname contains a zero-width or invisible-format
+    /// character (#605). Disjoint from `bidi_control`. Folded into `suspicious`,
+    /// and stripped from `canonical`.
+    pub(crate) has_invisible: bool,
     /// Whether the labels span more than one distinct script (Common/Inherited
     /// excluded). Broader than `bidi_conflict`; NOT folded into `suspicious`.
     pub(crate) cross_label_script: bool,
@@ -158,6 +162,7 @@ pub(crate) fn is_suspicious_hostname_opts(
                 has_confusables: false,
                 bidi_conflict: false,
                 bidi_control: false,
+                has_invisible: false,
                 cross_label_script: false,
                 label_scripts: Vec::new(),
                 whole_script_confusable: false,
@@ -173,6 +178,7 @@ pub(crate) fn is_suspicious_hostname_opts(
     let mut seen_scripts: std::collections::HashSet<&str> = std::collections::HashSet::new();
     let mut has_mixed = false;
     let mut has_confusables = false;
+    let mut has_invisible = false;
     let mut decoded_labels: Vec<String> = Vec::new();
     let mut per_label_scripts: Vec<Vec<String>> = Vec::new();
     let mut per_label_wsc: Vec<bool> = Vec::new();
@@ -200,7 +206,7 @@ pub(crate) fn is_suspicious_hostname_opts(
         // decode below rather than slipping past as an inert ASCII label.
         let is_ace =
             raw_label.len() >= 4 && raw_label.as_bytes()[..4].eq_ignore_ascii_case(b"xn--");
-        let label: String = if is_ace {
+        let mut label: String = if is_ace {
             let (unicode, result) = idna::domain_to_unicode(raw_label);
             if result.is_err() {
                 suspicious = true;
@@ -209,6 +215,17 @@ pub(crate) fn is_suspicious_hostname_opts(
         } else {
             raw_label.to_string()
         };
+        // Zero-width / invisible-format characters (#605). Removed HERE, before script
+        // analysis, rather than later on the joined hostname: U+FEFF sits in the Arabic
+        // Presentation Forms block and U+180E in the Mongolian block, so leaving them in
+        // makes `detect_scripts` report a script the reader cannot see and `mixed_script`
+        // fire on an ASCII-looking host. Stripping first means nothing downstream —
+        // scripts, mixed_script, confusables, canonical — ever sees them.
+        if label.chars().any(invisibles::is_zero_width) {
+            has_invisible = true;
+            label.retain(|c| !invisibles::is_zero_width(c));
+        }
+
         decoded_labels.push(label.clone());
 
         // Check scripts in this (decoded) label
@@ -308,6 +325,13 @@ pub(crate) fn is_suspicious_hostname_opts(
         decoded_hostname.retain(|c| !scripts::is_bidi_control(c));
     }
 
+    // #605: folded into the verdict for the same reason as #603 — IDNA2008 disallows
+    // the whole set, so a hostname carrying one is malformed whatever its intent. The
+    // characters were already removed per label above.
+    if has_invisible {
+        suspicious = true;
+    }
+
     // Hostname analysis keeps the NUMERIC digit policy (#561): a spoofed label is judged
     // on what a reader sees, and a Devanagari zero reads as a zero. The TR39 skeleton
     // policy is for benchmark comparison, not for this verdict.
@@ -340,6 +364,7 @@ pub(crate) fn is_suspicious_hostname_opts(
             has_confusables,
             bidi_conflict,
             bidi_control,
+            has_invisible,
             cross_label_script,
             label_scripts: per_label_scripts,
             whole_script_confusable,

@@ -328,7 +328,7 @@ fn disarm_terminal_width(text: char_p::Ref<'_>, ambiguous_wide: bool) -> u64 {
 
 /// Full hostname homoglyph analysis as a JSON object (fields mirror the Rust/Node/
 /// Ruby/Java `HostnameAnalysis`: `suspicious`, `scripts`, `mixed_script`,
-/// `has_confusables`, `bidi_conflict`, `bidi_control`, `cross_label_script`, `label_scripts`,
+/// `has_confusables`, `bidi_conflict`, `bidi_control`, `has_invisible`, `cross_label_script`, `label_scripts`,
 /// `whole_script_confusable`, `label_whole_script_confusable`, `canonical`).
 #[ffi_export]
 fn disarm_analyze_hostname(host: char_p::Ref<'_>) -> char_p::Box {
@@ -357,6 +357,7 @@ fn disarm_analyze_hostname_opts(host: char_p::Ref<'_>, contractions: bool) -> ch
             "has_confusables": a.has_confusables,
             "bidi_conflict": a.bidi_conflict,
             "bidi_control": a.bidi_control,
+            "has_invisible": a.has_invisible,
             "cross_label_script": a.cross_label_script,
             "label_scripts": a.label_scripts,
             "whole_script_confusable": a.whole_script_confusable,

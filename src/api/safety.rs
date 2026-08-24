@@ -417,6 +417,16 @@ pub struct HostnameAnalysis {
     /// right-to-left characters — the precondition for Bidi display-reordering
     /// ("BiDi Swap"). This is folded into [`suspicious`](Self::suspicious).
     pub bidi_conflict: bool,
+    /// Whether the decoded hostname contains a UAX #9 bidi control character —
+    /// an override (`U+202D`/`U+202E`), embedding (`U+202A`–`U+202C`), isolate
+    /// (`U+2066`–`U+2069`) or directional mark (`U+200E`/`U+200F`/`U+061C`) (#603).
+    ///
+    /// Disjoint from [`bidi_conflict`](Self::bidi_conflict), which reads strong-direction
+    /// *letters* only and is therefore blind to `paypal\u{202E}moc.evil.com`. IDNA2008
+    /// (RFC 5892) disallows every character in the set, so this is folded into
+    /// [`suspicious`](Self::suspicious) and the characters are stripped from
+    /// [`canonical`](Self::canonical).
+    pub bidi_control: bool,
     /// Whether the labels resolve to more than one distinct script (Common /
     /// Inherited excluded). Broader and noisier than [`bidi_conflict`](Self::bidi_conflict)
     /// — it fires on benign IDN-ccTLD patterns like `google.рф` — so it is
@@ -498,6 +508,7 @@ pub fn analyze_hostname_with(hostname: &str, contractions: bool) -> HostnameAnal
         mixed_script: core.mixed_script,
         has_confusables: core.has_confusables,
         bidi_conflict: core.bidi_conflict,
+        bidi_control: core.bidi_control,
         cross_label_script: core.cross_label_script,
         label_scripts: core.label_scripts,
         whole_script_confusable: core.whole_script_confusable,

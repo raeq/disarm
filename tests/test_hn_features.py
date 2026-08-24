@@ -312,6 +312,68 @@ class TestBidiDirectionConflict:
         assert not d.bidi_conflict and not d.cross_label_script
 
 
+class TestBidiControlCharacters:
+    """#603: bidi_control — the UAX #9 format characters bidi_conflict cannot see."""
+
+    # Overrides, embeddings, isolates and directional marks. IDNA2008 (RFC 5892)
+    # disallows every one, so the screen fails closed on the whole set.
+    CONTROLS = [
+        "\u200e",
+        "\u200f",
+        "\u061c",  # LRM, RLM, ALM
+        "\u202a",
+        "\u202b",
+        "\u202c",  # LRE, RLE, PDF
+        "\u202d",
+        "\u202e",  # LRO, RLO
+        "\u2066",
+        "\u2067",
+        "\u2068",
+        "\u2069",  # LRI, RLI, FSI, PDI
+    ]
+
+    @pytest.mark.parametrize("control", CONTROLS)
+    def test_control_is_flagged(self, control):
+        suspicious, d = is_suspicious_hostname(f"paypal{control}moc.evil.com")
+        assert suspicious
+        assert d.bidi_control
+
+    @pytest.mark.parametrize("control", CONTROLS)
+    def test_control_never_survives_into_canonical(self, control):
+        # The sharper half of #603: a caller told the name was clean must not be
+        # handed a canonical form that still renders the spoof.
+        _, d = is_suspicious_hostname(f"paypal{control}moc.evil.com")
+        assert control not in d.canonical
+
+    def test_rlo_extension_spoof(self):
+        # The exact report from #603.
+        suspicious, d = is_suspicious_hostname("paypal\u202emoc.evil.com")
+        assert suspicious
+        assert d.bidi_control
+        assert d.canonical == "paypalmoc.evil.com"
+
+    def test_disjoint_from_bidi_conflict(self):
+        # The RLO spoof has a control and no direction conflict; the "BiDi Swap"
+        # has a direction conflict and no control. Neither field subsumes the other.
+        _, rlo = is_suspicious_hostname("paypal\u202emoc.evil.com")
+        assert rlo.bidi_control and not rlo.bidi_conflict
+
+        _, swap = is_suspicious_hostname("varonis.com.ו.קום")
+        assert swap.bidi_conflict and not swap.bidi_control
+
+    def test_clean_hostnames_unaffected(self):
+        for host in ("paypal.com", "example.co.uk", "google.рф", "אתר.קום"):
+            _, d = is_suspicious_hostname(host)
+            assert not d.bidi_control, host
+            assert d.canonical == d.canonical  # canonical still produced
+
+    def test_ace_path_still_fails_closed(self):
+        # The wire form was never the gap — the decode already rejected it. Guard
+        # against a fix that accidentally relaxes it.
+        suspicious, _ = is_suspicious_hostname("xn--paypalmoc-lh0e.evil.com")
+        assert suspicious
+
+
 class TestWholeScriptConfusable:
     """#545: whole_script_confusable / label_whole_script_confusable — a graded
     signal (NOT folded into suspicious) naming the whole-script-spoof mechanism."""

@@ -255,6 +255,31 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`is_suspicious_hostname()` now catches bidi control characters, and `canonical` no
+  longer carries them (#603).** Every UAX #9 bidi control — the overrides
+  `U+202D`/`U+202E`, the embeddings `U+202A`–`U+202C`, the isolates
+  `U+2066`–`U+2069` and the marks `U+200E`/`U+200F`/`U+061C` — passed the hostname
+  screen clean, `paypal<RLO>moc.evil.com` among them. The verdict was derived entirely
+  from `bidi_conflict` (#412), which reads strong-direction **letters** and is
+  structurally blind to a format character.
+
+  The ACE path was never affected: `idna::domain_to_unicode` rejects these codepoints
+  and the decode failure already failed closed. What slipped through was the
+  literal-Unicode label, which reached the pass-through arm uninspected — exactly the
+  form a hostname takes in a log line, a mail header or a UI label, where the name never
+  resolves and the display spoof is the whole attack.
+
+  Two changes. A new `HostnameAnalysis.bidi_control` field reports the finding and is
+  folded into `suspicious`; it is **additive** and disjoint from `bidi_conflict`, whose
+  #412 meaning is unchanged (a string can set either, both or neither). And the controls
+  are stripped before `canonical` is built, so a caller who screens a hostname and then
+  renders that field can no longer render the spoof they were told was absent.
+
+  Exposed across all six surfaces (Rust core, Python, Node, Ruby, Java/Kotlin, C ABI).
+  The character set is now defined **once**, in `scripts::is_bidi_control`;
+  `presets::is_bidi_or_format` was refactored to build on it rather than keep a second
+  copy, so the hostname screen and `strip_bidi` cannot drift apart.
+
 - **`ẞ` uppercases to `SS`, not `B` — German is no longer corrupted (#597).** #595
   recovered `ẞ` (U+1E9E, the capital sharp S — official German orthography since 2017)
   by folding its TR39 prototype `ß` through `ASCII_FOLD` to `b`, then reconciling case.

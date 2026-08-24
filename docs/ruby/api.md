@@ -209,7 +209,8 @@ your own policy.
 ```ruby
 Disarm.analyze_hostname("example.com")
 # => { suspicious: false, scripts: ["Latin"], mixed_script: false,
-#      has_confusables: false, bidi_conflict: false, cross_label_script: false,
+#      has_confusables: false, bidi_conflict: false, bidi_control: false,
+#      cross_label_script: false,
 #      label_scripts: [["Latin"], ["Latin"]], whole_script_confusable: false,
 #      label_whole_script_confusable: [false, false], canonical: "example.com" }
 

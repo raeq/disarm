@@ -366,6 +366,54 @@ pub(crate) fn has_bidi_conflict(text: &str) -> bool {
     false
 }
 
+/// The explicit bidirectional formatting characters of UAX #9 §2.6–2.7: the
+/// implicit marks (`U+200E` LRM, `U+200F` RLM, `U+061C` ALM), the embeddings and
+/// overrides (`U+202A`–`U+202E`) and the isolates (`U+2066`–`U+2069`).
+///
+/// This is the **single definition** of the set for the crate.
+/// [`crate::presets::is_bidi_or_format`] builds on it by adding the soft hyphen and
+/// the deprecated format controls, so the two cannot drift apart.
+pub(crate) fn is_bidi_control(ch: char) -> bool {
+    matches!(
+        ch,
+        // Unicode 1.0 — implicit marks
+        '\u{200E}'             // LRM  Left-to-Right Mark
+        | '\u{200F}'           // RLM  Right-to-Left Mark
+        // Unicode 1.0 — explicit embeddings / overrides
+        | '\u{202A}'           // LRE  Left-to-Right Embedding
+        | '\u{202B}'           // RLE  Right-to-Left Embedding
+        | '\u{202C}'           // PDF  Pop Directional Formatting
+        | '\u{202D}'           // LRO  Left-to-Right Override
+        | '\u{202E}'           // RLO  Right-to-Left Override
+        // Unicode 6.3 — Arabic Letter Mark + isolates
+        | '\u{061C}'           // ALM  Arabic Letter Mark
+        | '\u{2066}'           // LRI  Left-to-Right Isolate
+        | '\u{2067}'           // RLI  Right-to-Left Isolate
+        | '\u{2068}'           // FSI  First Strong Isolate
+        | '\u{2069}' // PDI  Pop Directional Isolate
+    )
+}
+
+/// True iff `text` contains at least one [`is_bidi_control`] character.
+///
+/// This is the *override* half of the bidi picture and is disjoint from
+/// [`has_bidi_conflict`], which reads only strong-direction **letters**. A string
+/// can satisfy either, both, or neither: `"invoice\u{202E}gpj.exe"` has a control
+/// and no conflict, `"varonis.com.\u{05D5}"` has a conflict and no control (#599).
+pub(crate) fn has_bidi_control(text: &str) -> bool {
+    text.chars().any(is_bidi_control)
+}
+
+/// Remove every [`is_bidi_control`] character from `text`, borrowing when there is
+/// nothing to remove.
+pub(crate) fn strip_bidi_controls(text: &str) -> std::borrow::Cow<'_, str> {
+    if has_bidi_control(text) {
+        std::borrow::Cow::Owned(text.chars().filter(|&c| !is_bidi_control(c)).collect())
+    } else {
+        std::borrow::Cow::Borrowed(text)
+    }
+}
+
 /// Map a detected script name to a default language code (ISO 639-1 where one
 /// exists, otherwise ISO 639-3 — e.g. `chr`, `cop`, `vai`, `tzm`).
 ///

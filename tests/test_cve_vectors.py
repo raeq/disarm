@@ -1380,37 +1380,58 @@ class TestDetectionHasNoSuperset:
     whether to *alert*, never whether to *clean*.
     """
 
-    #: Vectors no detector in the panel reports. Pinned, so closing one shows up
-    #: here as a failure to celebrate rather than a silent improvement.
-    UNDETECTED = {
+    #: In-scope rows no detector in the panel reports — the ones that matter,
+    #: because a defender would reasonably expect a screen to catch them.
+    #: Pinned, so closing one shows up here as a failure to celebrate rather
+    #: than as a silent improvement nobody notices.
+    UNDETECTED_IN_SCOPE = {
         "CVE-2023-24329",  # a leading NUL is not an anomaly kind
         "CVE-2008-2383",  # nor is an escape sequence
         "CVE-2019-9535",
         "CVE-2025-32711",  # nor is the Tags block
-        "CVE-2019-9636",  # nor is compatibility-fold unmasking
     }
 
-    def test_no_single_detector_covers_the_matrix(self) -> None:
-        for name, predicate in DETECTOR_PANEL.items():
-            silent = [c.id for c in REGISTRY if not predicate(c.probe)]
-            assert silent, f"{name} unexpectedly covers everything"
+    @staticmethod
+    def _fires(cve: CVE) -> bool:
+        return any(predicate(cve.probe) for predicate in DETECTOR_PANEL.values())
 
-    def test_the_union_still_misses_five(self) -> None:
-        undetected = {
-            cve.id
-            for cve in REGISTRY
-            if not any(predicate(cve.probe) for predicate in DETECTOR_PANEL.values())
+    def test_each_detector_covers_only_part_of_the_matrix(self) -> None:
+        """Per-detector coverage, pinned. A bare "it misses something" would pass
+        for any predicate; the counts make a change visible."""
+        coverage = {
+            name: sum(1 for c in REGISTRY if predicate(c.probe))
+            for name, predicate in DETECTOR_PANEL.items()
         }
-        # The prompt-injection rows are plain text with nothing to detect; they
-        # are out of scope for detection by definition, so exclude them and look
-        # at the rows a defender would expect a screen to catch.
-        in_scope = {c.id for c in REGISTRY if OUT_OF_SCOPE not in c.dispositions}
-        expected = self.UNDETECTED & (in_scope | {"CVE-2019-9636"})
-        assert undetected & in_scope == expected - {"CVE-2019-9636"}, sorted(undetected & in_scope)
+        assert coverage == {
+            "has_anomalies": 7,
+            "is_confusable": 6,
+            "is_mixed_script": 3,
+            "has_bidi_conflict": 0,
+            "is_zalgo": 0,
+        }, coverage
+        assert all(n < len(REGISTRY) for n in coverage.values())
+
+    def test_the_union_misses_four_in_scope_rows(self) -> None:
+        """Not one weak predicate — every predicate, together, still misses these."""
+        undetected = {
+            c.id for c in REGISTRY if OUT_OF_SCOPE not in c.dispositions and not self._fires(c)
+        }
+        assert undetected == self.UNDETECTED_IN_SCOPE, sorted(undetected)
+
+    def test_nfkc_unmasking_is_silent_too(self) -> None:
+        """CVE-2019-9636 is out of scope *and* undetected, which is the worst pair.
+
+        Listed apart from the four above because its disposition already says
+        disarm does not handle it; the point here is that nothing reports it
+        either, so there is no signal to act on.
+        """
+        assert not self._fires(BY_ID["CVE-2019-9636"])
 
     def test_stripping_covers_what_detection_misses(self) -> None:
         """The payoff: every vector no detector sees is still neutralized."""
-        for cve in sorted(self.UNDETECTED & set(NEUTRALIZABLE)):
+        missed = self.UNDETECTED_IN_SCOPE & set(NEUTRALIZABLE)
+        assert missed == self.UNDETECTED_IN_SCOPE, "a pinned row stopped being neutralizable"
+        for cve in sorted(missed):
             assert _handles(canonicalize, cve), cve
 
 

@@ -18,6 +18,41 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **CVE matrix: comparator columns, split entry-point roles, and a measured "one call"
+  answer (#607 follow-up).** Three gaps in the published matrix, all of them the kind that
+  make a table look more useful than it is.
+
+  **`canonicalize` is the single call, and that is now measured rather than recommended.**
+  The matrix said which entry point handles which CVE; a defender's actual question is
+  which call to make when the attack is unknown. `canonicalize` handles all thirteen
+  neutralizable vectors, as do `canonicalize_strict`, `strip_obfuscation` and the
+  `llm_guardrail` / `rag_ingest` profiles. `strip_format` handles eight — it has no
+  confusable step, so every row needing a fold survives it. Every score is pinned in
+  `TestOneCallSuperset`.
+
+  **Detection has no such answer, and the asymmetry is the point.** No detector covers the
+  matrix, and neither does all of them together: `CVE-2023-24329`, `CVE-2008-2383`,
+  `CVE-2019-9535`, `CVE-2025-32711` and `CVE-2019-9636` are silent to every one. All five
+  are still neutralized by `canonicalize`, which settles the pipeline question — clean
+  unconditionally, and use the detectors to decide whether to *alert*, never whether to
+  *clean*. A pipeline that screens first and cleans only what it flagged forwards those
+  five untouched.
+
+  **Neutralizers and detectors are separate fields.** They were one `entry_points` list,
+  which read as though any name on it would defend the row. `CVE-2019-19844` is the
+  clearest case: its neutralizers detect nothing and its only detector rewrites nothing —
+  and it was mislabelled *Neutralized* when it is also *Detected*. Each row's detector list
+  is now **derived**, not written: the suite runs the row's vector through every detector
+  and asserts the list matches what fired.
+
+  **Comparator columns.** `benchmarks/cve_comparators.py` runs disarm, `decancer` and
+  `unidecode` over the same vectors under one predicate, and regenerates the published
+  table. disarm 13/13, `decancer` 8/13, `unidecode` 10/13 — but the score is the least
+  interesting part. `unidecode` maps by sound, so its homoglyph passes are decided by which
+  homoglyph the attacker picked (`рroduсt` → `rrodust`, not `product`); `decancer` reorders
+  bidi text rather than stripping it, leaving `U+202E` in the output. `decancer-py==0.4.1`
+  joins the `bench` extra.
+
 - **CVE validation suite (`tests/test_cve_vectors.py`, `docs/security/cve-validation.md`).**
   The docs encourage security use; nothing checked that against a named attack. Twenty
   published CVEs are now reconstructed from the vector each one describes and asserted

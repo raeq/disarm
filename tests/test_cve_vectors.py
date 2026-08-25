@@ -63,6 +63,7 @@ from disarm import (
     is_confusable,
     is_mixed_script,
     is_suspicious_hostname,
+    is_zalgo,
     ml_normalize,
     normalize,
     normalize_confusables,
@@ -104,15 +105,41 @@ class CVE:
     #: *and* flags is both neutralized and detected. One string per row could
     #: only record whichever the author thought mattered more.
     dispositions: frozenset[str]
-    #: The disarm entry points that produce the asserted behaviour. Empty for
-    #: out-of-scope rows — there is nothing that handles them.
-    entry_points: tuple[str, ...]
+    #: Entry points that **rewrite** the input so the vector is gone.
+    neutralizers: tuple[str, ...]
+    #: Entry points that **flag** the input without rewriting it. Kept apart from
+    #: *neutralizers* because the two are not interchangeable and were previously
+    #: mixed in one list, which read as though any of them would defend the row.
+    #: The members drawn from :data:`DETECTOR_PANEL` are derived, not asserted —
+    #: see ``test_detectors_are_exactly_those_that_fire``. Surface-specific
+    #: detectors such as ``is_suspicious_hostname`` are listed here too but sit
+    #: outside the panel, since they only apply to one shape of input.
+    detectors: tuple[str, ...]
+    #: One representative attack string, used to derive *detectors*.
+    probe: str
     reference: str
+
+    @property
+    def entry_points(self) -> tuple[str, ...]:
+        """Everything named for this row, in either role."""
+        return self.neutralizers + self.detectors
 
     @property
     def rendered(self) -> str:
         """How the docs matrix must spell this row's disposition."""
         return DISPOSITION_LABELS[self.dispositions]
+
+
+#: The general-purpose text detectors, checked as a panel. ``is_suspicious_hostname``
+#: is deliberately absent: it only answers for hostname-shaped input, and scoring it
+#: against a filename or a source line would manufacture coverage that is not there.
+DETECTOR_PANEL: dict[str, object] = {
+    "has_anomalies": has_anomalies,
+    "is_confusable": is_confusable,
+    "is_mixed_script": is_mixed_script,
+    "has_bidi_conflict": has_bidi_conflict,
+    "is_zalgo": is_zalgo,
+}
 
 
 #: The exact strings the published matrix uses. Keeping the mapping here rather
@@ -123,219 +150,6 @@ DISPOSITION_LABELS: dict[frozenset[str], str] = {
     frozenset({NEUTRALIZED, DETECTED}): "Neutralized + detected",
     frozenset({OUT_OF_SCOPE}): "Out of scope",
 }
-
-
-REGISTRY: tuple[CVE, ...] = (
-    # -- Source-code and identifier confusion -------------------------------
-    CVE(
-        id="CVE-2021-42574",
-        title="Trojan Source — bidi reordering of source code",
-        cwe="CWE-94",
-        cvss=8.3,
-        cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED, DETECTED}),
-        entry_points=("strip_bidi", "strip_format", "canonicalize", "strip_obfuscation"),
-        reference="https://trojansource.codes",
-    ),
-    CVE(
-        id="CVE-2021-42694",
-        title="Trojan Source — homoglyph identifiers",
-        cwe="CWE-1007",
-        cvss=8.3,
-        cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED, DETECTED}),
-        entry_points=("normalize_confusables", "canonicalize", "strip_obfuscation"),
-        reference="https://trojansource.codes",
-    ),
-    # -- Identity and account takeover --------------------------------------
-    CVE(
-        id="CVE-2019-19844",
-        title="Django account takeover via Unicode case transformation",
-        cwe="CWE-640",
-        cvss=9.8,
-        cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
-        entry_points=("canonicalize_strict", "fold_case", "search_key"),
-        reference="https://www.djangoproject.com/weblog/2019/dec/18/security-releases/",
-    ),
-    CVE(
-        id="CVE-2013-7236",
-        title="Simple Machines Forum — user impersonation via homoglyph username",
-        cwe="CWE-1007",
-        cvss=7.5,
-        cvss_version="v2.0",
-        dispositions=frozenset({NEUTRALIZED, DETECTED}),
-        entry_points=("search_key", "catalog_key", "canonicalize", "is_confusable"),
-        reference="https://nvd.nist.gov/vuln/detail/CVE-2013-7236",
-    ),
-    CVE(
-        id="CVE-2020-12063",
-        title="Postfix package — sender spoofing via homoglyph address (vendor-disputed)",
-        cwe="CWE-1007",
-        cvss=5.3,
-        cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED, DETECTED}),
-        entry_points=("normalize_confusables", "search_key", "is_mixed_script"),
-        reference="https://nvd.nist.gov/vuln/detail/CVE-2020-12063",
-    ),
-    # -- Filesystem and path confusion --------------------------------------
-    CVE(
-        id="CVE-2014-9390",
-        title="git — .git path equivalence via ignorable code points",
-        cwe="CWE-20",
-        cvss=9.8,
-        cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED, DETECTED}),
-        entry_points=("strip_format", "canonicalize", "strip_obfuscation"),
-        reference="https://github.com/blog/1938-git-client-vulnerability-announced",
-    ),
-    CVE(
-        id="CVE-2009-3376",
-        title="Firefox — download filename extension spoof via RLO",
-        cwe="CWE-1007",
-        cvss=9.3,
-        cvss_version="v2.0",
-        dispositions=frozenset({NEUTRALIZED, DETECTED}),
-        entry_points=("sanitize_filename", "strip_bidi", "canonicalize", "slugify_filename"),
-        reference="https://nvd.nist.gov/vuln/detail/CVE-2009-3376",
-    ),
-    CVE(
-        id="CVE-2023-33955",
-        title="MinIO Console — filename masking via RLO",
-        cwe="CWE-1007",
-        cvss=5.3,
-        cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED, DETECTED}),
-        entry_points=("sanitize_filename", "strip_bidi", "canonicalize"),
-        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-33955",
-    ),
-    # -- Hostname and URL confusion -----------------------------------------
-    CVE(
-        id="CVE-2017-7832",
-        title="Firefox — dotless-i address-bar spoof evading punycode display",
-        cwe="CWE-1007",
-        cvss=5.3,
-        cvss_version="v3.0",
-        dispositions=frozenset({NEUTRALIZED, DETECTED}),
-        entry_points=("canonicalize", "normalize_confusables", "is_suspicious_hostname"),
-        reference="https://www.mozilla.org/security/advisories/mfsa2017-24/",
-    ),
-    CVE(
-        id="CVE-2023-24329",
-        title="Python urllib.parse — blocklist bypass via leading blank characters",
-        cwe="CWE-20",
-        cvss=7.5,
-        cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
-        entry_points=("canonicalize", "strip_obfuscation"),
-        reference="https://github.com/python/cpython/issues/102153",
-    ),
-    CVE(
-        id="CVE-2019-9636",
-        title="Python urlsplit — netloc misparse under NFKC normalization",
-        cwe="CWE-172",
-        cvss=9.8,
-        cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
-        entry_points=(),
-        reference="https://bugs.python.org/issue36216",
-    ),
-    # -- Terminal control and log injection ---------------------------------
-    CVE(
-        id="CVE-2008-2383",
-        title="xterm — command execution via DECRQSS escape sequence",
-        cwe="CWE-94",
-        cvss=9.3,
-        cvss_version="v2.0",
-        dispositions=frozenset({NEUTRALIZED}),
-        entry_points=("strip_log_injection", "canonicalize", "strip_obfuscation"),
-        reference="https://www.debian.org/security/2009/dsa-1694",
-    ),
-    CVE(
-        id="CVE-2019-9535",
-        title="iTerm2 — command execution via tmux control-mode output",
-        cwe="CWE-74",
-        cvss=9.8,
-        cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
-        entry_points=("strip_log_injection", "canonicalize"),
-        reference="https://blog.mozilla.org/security/2019/10/09/iterm2-critical-issue-moss-audit/",
-    ),
-    # -- ML / LLM input handling --------------------------------------------
-    CVE(
-        id="CVE-2025-32711",
-        title="Microsoft 365 Copilot (EchoLeak) — AI command injection",
-        cwe="CWE-74",
-        cvss=9.3,
-        cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
-        entry_points=("strip_tags", "llm_guardrail", "canonicalize", "strip_obfuscation"),
-        reference="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-32711",
-    ),
-    CVE(
-        id="CVE-2024-5184",
-        title="EmailGPT — prompt injection via untrusted message text",
-        cwe="CWE-74",
-        cvss=9.1,
-        cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
-        entry_points=(),
-        reference="https://www.synopsys.com/blogs/software-security/cyrc-advisory-prompt-injection-emailgpt.html",
-    ),
-    CVE(
-        id="CVE-2024-5565",
-        title="Vanna.AI — prompt injection to arbitrary Python execution",
-        cwe="CWE-94",
-        cvss=8.1,
-        cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
-        entry_points=(),
-        reference="https://research.jfrog.com/vulnerabilities/vanna-prompt-injection-rce-jfsa-2024-001034449/",
-    ),
-    CVE(
-        id="CVE-2023-29374",
-        title="LangChain LLMMathChain — prompt injection to Python exec",
-        cwe="CWE-74",
-        cvss=9.8,
-        cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
-        entry_points=(),
-        reference="https://github.com/hwchase17/langchain/issues/1026",
-    ),
-    CVE(
-        id="CVE-2023-36258",
-        title="LangChain — arbitrary code execution via os.system / exec / eval",
-        cwe="CWE-94",
-        cvss=9.8,
-        cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
-        entry_points=(),
-        reference="https://github.com/hwchase17/langchain/issues/5872",
-    ),
-    CVE(
-        id="CVE-2024-3098",
-        title="llama_index — safe_eval bypass from insufficient input validation",
-        cwe="CWE-94",
-        cvss=9.8,
-        cvss_version="v3.0",
-        dispositions=frozenset({OUT_OF_SCOPE}),
-        entry_points=(),
-        reference="https://nvd.nist.gov/vuln/detail/CVE-2024-3098",
-    ),
-    CVE(
-        id="CVE-2023-32786",
-        title="LangChain — prompt injection to arbitrary URL retrieval (SSRF)",
-        cwe="CWE-74",
-        cvss=7.5,
-        cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
-        entry_points=(),
-        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-32786",
-    ),
-)
-
-
-BY_ID = {c.id: c for c in REGISTRY}
 
 
 # ---------------------------------------------------------------------------
@@ -1132,6 +946,11 @@ class TestTerminalControlSequences:
 # a blocklist making the problem *worse*.
 
 
+#: ``__import__`` spelled in fullwidth forms. Inert to a blocklist that greps for
+#: the ASCII token, and turned into that exact token by NFKC.
+FULLWIDTH_IMPORT = "\uff3f\uff3f\uff49\uff4d\uff50\uff4f\uff52\uff54\uff3f\uff3f"
+
+
 class TestSafeEvalBlocklistOrdering:
     """CVE-2024-3098 — an allow/deny list and NFKC must not be misordered.
 
@@ -1142,13 +961,13 @@ class TestSafeEvalBlocklistOrdering:
     """
 
     def test_blocklist_misses_the_fullwidth_spelling(self) -> None:
-        fullwidth = "\uff3f\uff3f\uff49\uff4d\uff50\uff4f\uff52\uff54\uff3f\uff3f"
+        fullwidth = FULLWIDTH_IMPORT
         assert "__import__" not in fullwidth  # a naive blocklist passes it
         assert canonicalize(fullwidth) == "__import__"  # and disarm makes it real
 
     def test_canonicalize_first_gives_the_guard_the_real_token(self) -> None:
         """The same two steps in the safe order."""
-        fullwidth = "\uff3f\uff3f\uff49\uff4d\uff50\uff4f\uff52\uff54\uff3f\uff3f"
+        fullwidth = FULLWIDTH_IMPORT
         assert "__import__" in canonicalize(fullwidth)
 
     @pytest.mark.parametrize(
@@ -1172,6 +991,427 @@ class TestSafeEvalBlocklistOrdering:
         url = "https://attacker.example.net/exfil"
         assert canonicalize(url) == url
         assert strip_obfuscation(url) == url
+
+
+# ---------------------------------------------------------------------------
+# The registry
+# ---------------------------------------------------------------------------
+# Defined here, below the vectors, so each row can point `probe` at the same
+# string its tests use rather than at a second copy that could drift from it.
+
+REGISTRY: tuple[CVE, ...] = (
+    # -- Source-code and identifier confusion -------------------------------
+    CVE(
+        id="CVE-2021-42574",
+        title="Trojan Source — bidi reordering of source code",
+        cwe="CWE-94",
+        cvss=8.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("strip_bidi", "strip_format", "canonicalize", "strip_obfuscation"),
+        detectors=("has_anomalies", "inspect_anomalies"),
+        probe=TROJAN_C,
+        reference="https://trojansource.codes",
+    ),
+    CVE(
+        id="CVE-2021-42694",
+        title="Trojan Source — homoglyph identifiers",
+        cwe="CWE-1007",
+        cvss=8.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("normalize_confusables", "canonicalize", "strip_obfuscation"),
+        detectors=("has_anomalies", "is_confusable", "is_mixed_script"),
+        probe="isАdmin",
+        reference="https://trojansource.codes",
+    ),
+    # -- Identity and account takeover --------------------------------------
+    CVE(
+        id="CVE-2019-19844",
+        title="Django account takeover via Unicode case transformation",
+        cwe="CWE-640",
+        cvss=9.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("canonicalize_strict", "fold_case", "search_key"),
+        detectors=("is_confusable",),
+        probe=ATTACKER_EMAIL,
+        reference="https://www.djangoproject.com/weblog/2019/dec/18/security-releases/",
+    ),
+    CVE(
+        id="CVE-2013-7236",
+        title="Simple Machines Forum — user impersonation via homoglyph username",
+        cwe="CWE-1007",
+        cvss=7.5,
+        cvss_version="v2.0",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("search_key", "catalog_key", "canonicalize"),
+        detectors=("has_anomalies", "is_confusable", "is_mixed_script"),
+        probe="аdmin",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2013-7236",
+    ),
+    CVE(
+        id="CVE-2020-12063",
+        title="Postfix package — sender spoofing via homoglyph address (vendor-disputed)",
+        cwe="CWE-1007",
+        cvss=5.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("normalize_confusables", "search_key"),
+        detectors=("has_anomalies", "is_confusable", "is_mixed_script"),
+        probe=SPOOFED_SENDER,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2020-12063",
+    ),
+    # -- Filesystem and path confusion --------------------------------------
+    CVE(
+        id="CVE-2014-9390",
+        title="git — .git path equivalence via ignorable code points",
+        cwe="CWE-20",
+        cvss=9.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("strip_format", "canonicalize", "strip_obfuscation"),
+        detectors=("has_anomalies",),
+        probe=".g\u200cit/config",
+        reference="https://github.com/blog/1938-git-client-vulnerability-announced",
+    ),
+    CVE(
+        id="CVE-2009-3376",
+        title="Firefox — download filename extension spoof via RLO",
+        cwe="CWE-1007",
+        cvss=9.3,
+        cvss_version="v2.0",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("sanitize_filename", "strip_bidi", "canonicalize", "slugify_filename"),
+        detectors=("has_anomalies", "inspect_anomalies"),
+        probe="photo_high_re\u202egnp.js",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2009-3376",
+    ),
+    CVE(
+        id="CVE-2023-33955",
+        title="MinIO Console — filename masking via RLO",
+        cwe="CWE-1007",
+        cvss=5.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("sanitize_filename", "strip_bidi", "canonicalize"),
+        detectors=("has_anomalies", "inspect_anomalies"),
+        probe="report\u202efdp.exe",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-33955",
+    ),
+    # -- Hostname and URL confusion -----------------------------------------
+    CVE(
+        id="CVE-2017-7832",
+        title="Firefox — dotless-i address-bar spoof evading punycode display",
+        cwe="CWE-1007",
+        cvss=5.3,
+        cvss_version="v3.0",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("canonicalize", "normalize_confusables"),
+        detectors=("is_confusable", "is_suspicious_hostname"),
+        probe=SPOOF_HOST,
+        reference="https://www.mozilla.org/security/advisories/mfsa2017-24/",
+    ),
+    CVE(
+        id="CVE-2023-24329",
+        title="Python urllib.parse — blocklist bypass via leading blank characters",
+        cwe="CWE-20",
+        cvss=7.5,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("canonicalize", "strip_obfuscation"),
+        detectors=(),
+        probe="\x00" + BLOCKED_URL,
+        reference="https://github.com/python/cpython/issues/102153",
+    ),
+    CVE(
+        id="CVE-2019-9636",
+        title="Python urlsplit — netloc misparse under NFKC normalization",
+        cwe="CWE-172",
+        cvss=9.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe=NFKC_MASKED_URL,
+        reference="https://bugs.python.org/issue36216",
+    ),
+    # -- Terminal control and log injection ---------------------------------
+    CVE(
+        id="CVE-2008-2383",
+        title="xterm — command execution via DECRQSS escape sequence",
+        cwe="CWE-94",
+        cvss=9.3,
+        cvss_version="v2.0",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("strip_log_injection", "canonicalize", "strip_obfuscation"),
+        detectors=(),
+        probe=DECRQSS_ATTACK,
+        reference="https://www.debian.org/security/2009/dsa-1694",
+    ),
+    CVE(
+        id="CVE-2019-9535",
+        title="iTerm2 — command execution via tmux control-mode output",
+        cwe="CWE-74",
+        cvss=9.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("strip_log_injection", "canonicalize"),
+        detectors=(),
+        probe=TMUX_ATTACK,
+        reference="https://blog.mozilla.org/security/2019/10/09/iterm2-critical-issue-moss-audit/",
+    ),
+    # -- ML / LLM input handling --------------------------------------------
+    CVE(
+        id="CVE-2025-32711",
+        title="Microsoft 365 Copilot (EchoLeak) — AI command injection",
+        cwe="CWE-74",
+        cvss=9.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("strip_tags", "llm_guardrail", "canonicalize", "strip_obfuscation"),
+        detectors=(),
+        probe=SMUGGLED,
+        reference="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-32711",
+    ),
+    CVE(
+        id="CVE-2024-5184",
+        title="EmailGPT — prompt injection via untrusted message text",
+        cwe="CWE-74",
+        cvss=9.1,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe=INJECTION,
+        reference="https://www.synopsys.com/blogs/software-security/cyrc-advisory-prompt-injection-emailgpt.html",
+    ),
+    CVE(
+        id="CVE-2024-5565",
+        title="Vanna.AI — prompt injection to arbitrary Python execution",
+        cwe="CWE-94",
+        cvss=8.1,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe="__import__('os').system('id')",
+        reference="https://research.jfrog.com/vulnerabilities/vanna-prompt-injection-rce-jfsa-2024-001034449/",
+    ),
+    CVE(
+        id="CVE-2023-29374",
+        title="LangChain LLMMathChain — prompt injection to Python exec",
+        cwe="CWE-74",
+        cvss=9.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe="eval('1+1')",
+        reference="https://github.com/hwchase17/langchain/issues/1026",
+    ),
+    CVE(
+        id="CVE-2023-36258",
+        title="LangChain — arbitrary code execution via os.system / exec / eval",
+        cwe="CWE-94",
+        cvss=9.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe="os.system('id')",
+        reference="https://github.com/hwchase17/langchain/issues/5872",
+    ),
+    CVE(
+        id="CVE-2024-3098",
+        title="llama_index — safe_eval bypass from insufficient input validation",
+        cwe="CWE-94",
+        cvss=9.8,
+        cvss_version="v3.0",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe=FULLWIDTH_IMPORT,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2024-3098",
+    ),
+    CVE(
+        id="CVE-2023-32786",
+        title="LangChain — prompt injection to arbitrary URL retrieval (SSRF)",
+        cwe="CWE-74",
+        cvss=7.5,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe="https://attacker.example.net/exfil",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-32786",
+    ),
+)
+
+
+BY_ID = {c.id: c for c in REGISTRY}
+
+
+# ---------------------------------------------------------------------------
+# Which call do I make?
+# ---------------------------------------------------------------------------
+
+#: Every entry point a defender might reasonably reach for as their one call.
+CANDIDATE_ONE_CALLS = {
+    "canonicalize": canonicalize,
+    "canonicalize_strict": canonicalize_strict,
+    "strip_obfuscation": strip_obfuscation,
+    "strip_format": strip_format,
+    "llm_guardrail": get_pipeline("llm_guardrail"),
+    "rag_ingest": get_pipeline("rag_ingest"),
+}
+
+#: (cve, attack, benign) — handled when ``P(attack) == P(benign)``, casefolded.
+#: Casefolded because two of the candidates fold case by design; penalizing them
+#: for it would measure a preference, not a defense.
+COLLAPSE_VECTORS = [
+    ("CVE-2021-42694", "isАdmin", "isAdmin"),
+    ("CVE-2019-19844", ATTACKER_EMAIL, VICTIM_EMAIL),
+    ("CVE-2013-7236", "аdmin", "admin"),
+    ("CVE-2020-12063", SPOOFED_SENDER, GENUINE_SENDER),
+    ("CVE-2014-9390", ".g\u200cit/config", ".git/config"),
+    ("CVE-2017-7832", SPOOF_HOST, GENUINE_HOST),
+    ("CVE-2023-24329", "\x00" + BLOCKED_URL, BLOCKED_URL),
+]
+
+#: (cve, attack, predicate) — handled when the primitive is gone.
+REMOVAL_VECTORS = [
+    ("CVE-2021-42574", TROJAN_C, lambda o: not any(c in o for c in BIDI_CONTROLS)),
+    (
+        "CVE-2009-3376",
+        "photo_high_re\u202egnp.js",
+        lambda o: "\u202e" not in o and o.casefold().endswith(".js"),
+    ),
+    (
+        "CVE-2023-33955",
+        "report\u202efdp.exe",
+        lambda o: "\u202e" not in o and o.casefold().endswith(".exe"),
+    ),
+    ("CVE-2008-2383", DECRQSS_ATTACK, lambda o: not any(c in o for c in TERMINAL_CONTROLS)),
+    ("CVE-2019-9535", TMUX_ATTACK, lambda o: not any(c in o for c in TERMINAL_CONTROLS)),
+    (
+        "CVE-2025-32711",
+        SMUGGLED,
+        lambda o: not any(0xE0000 <= ord(c) <= 0xE007F for c in o),
+    ),
+]
+
+NEUTRALIZABLE = [c for c, _, _ in COLLAPSE_VECTORS] + [c for c, _, _ in REMOVAL_VECTORS]
+
+
+def _handles(fn, cve: str) -> bool:
+    """Does *fn* handle *cve*'s vector, by the same rule for every candidate?"""
+    for name, attack, benign in COLLAPSE_VECTORS:
+        if name == cve:
+            return fn(attack).casefold() == fn(benign).casefold()
+    for name, attack, predicate in REMOVAL_VECTORS:
+        if name == cve:
+            return bool(predicate(fn(attack)))
+    raise AssertionError(f"{cve} has no vector")
+
+
+class TestOneCallSuperset:
+    """ "Which call do I make if I don't know the attack?" — measured, not asserted.
+
+    Every other section here answers "does *this* entry point handle *this*
+    CVE". A defender picking a pipeline has the harder question, and a matrix
+    of thirteen right answers is no use if choosing between them requires
+    already knowing which attack is coming.
+    """
+
+    @pytest.mark.parametrize("cve", NEUTRALIZABLE)
+    def test_canonicalize_handles_every_neutralizable_vector(self, cve: str) -> None:
+        """``canonicalize`` is the single call. This is what makes that true.
+
+        Not a claim about the Unicode space — it is thirteen vectors — but it is
+        the claim the docs page makes, so it is the claim that gets gated.
+        """
+        assert _handles(canonicalize, cve), cve
+
+    def test_the_narrow_presets_are_narrow(self) -> None:
+        """MEASURED: ``strip_format`` is not a substitute, and shouldn't be read as one.
+
+        It strips format characters, so it clears the bidi, invisible and
+        terminal rows and leaves every row that needs confusable folding. Named
+        for its mechanism, exactly as THREAT_MODEL.md requires — but a caller who
+        reads "strip_format" as "strip the bad stuff" gets half a defense.
+        """
+        handled = {cve for cve in NEUTRALIZABLE if _handles(strip_format, cve)}
+        missed = set(NEUTRALIZABLE) - handled
+        assert missed == {
+            "CVE-2021-42694",
+            "CVE-2019-19844",
+            "CVE-2013-7236",
+            "CVE-2020-12063",
+            "CVE-2017-7832",
+        }, sorted(missed)
+
+    def test_the_full_ranking_is_recorded(self) -> None:
+        """Pins every candidate's score so a regression names itself."""
+        scores = {
+            name: sum(_handles(fn, cve) for cve in NEUTRALIZABLE)
+            for name, fn in CANDIDATE_ONE_CALLS.items()
+        }
+        total = len(NEUTRALIZABLE)
+        assert scores == {
+            "canonicalize": total,
+            "canonicalize_strict": total,
+            "strip_obfuscation": total,
+            "llm_guardrail": total,
+            "rag_ingest": total,
+            "strip_format": total - 5,
+        }, scores
+
+
+class TestDetectionHasNoSuperset:
+    """The asymmetry, and the reason the advice is "strip, don't screen".
+
+    Neutralization has a safe default. Detection does not — and not because one
+    predicate is weaker than another: **no combination of them** covers the
+    matrix. Five vectors are silent to every detector disarm exposes.
+
+    So a pipeline that screens first and only cleans what it flagged forwards
+    those five untouched. Clean unconditionally; use the detectors to decide
+    whether to *alert*, never whether to *clean*.
+    """
+
+    #: Vectors no detector in the panel reports. Pinned, so closing one shows up
+    #: here as a failure to celebrate rather than a silent improvement.
+    UNDETECTED = {
+        "CVE-2023-24329",  # a leading NUL is not an anomaly kind
+        "CVE-2008-2383",  # nor is an escape sequence
+        "CVE-2019-9535",
+        "CVE-2025-32711",  # nor is the Tags block
+        "CVE-2019-9636",  # nor is compatibility-fold unmasking
+    }
+
+    def test_no_single_detector_covers_the_matrix(self) -> None:
+        for name, predicate in DETECTOR_PANEL.items():
+            silent = [c.id for c in REGISTRY if not predicate(c.probe)]
+            assert silent, f"{name} unexpectedly covers everything"
+
+    def test_the_union_still_misses_five(self) -> None:
+        undetected = {
+            cve.id
+            for cve in REGISTRY
+            if not any(predicate(cve.probe) for predicate in DETECTOR_PANEL.values())
+        }
+        # The prompt-injection rows are plain text with nothing to detect; they
+        # are out of scope for detection by definition, so exclude them and look
+        # at the rows a defender would expect a screen to catch.
+        in_scope = {c.id for c in REGISTRY if OUT_OF_SCOPE not in c.dispositions}
+        expected = self.UNDETECTED & (in_scope | {"CVE-2019-9636"})
+        assert undetected & in_scope == expected - {"CVE-2019-9636"}, sorted(undetected & in_scope)
+
+    def test_stripping_covers_what_detection_misses(self) -> None:
+        """The payoff: every vector no detector sees is still neutralized."""
+        for cve in sorted(self.UNDETECTED & set(NEUTRALIZABLE)):
+            assert _handles(canonicalize, cve), cve
 
 
 # ---------------------------------------------------------------------------
@@ -1224,6 +1464,44 @@ class TestRegistryIntegrity:
             else:
                 assert cve.entry_points, cve.id
 
+    def test_detectors_are_exactly_those_that_fire(self) -> None:
+        """The detector list is derived from behaviour, not written by hand.
+
+        The two roles were one list before, which read as though any name on it
+        would defend the row — including for CVE-2019-19844, whose only detector
+        is ``is_confusable`` and whose neutralizers detect nothing.
+
+        Only panel members are compared. Surface-specific detectors like
+        ``is_suspicious_hostname`` may also be listed and are checked in the
+        per-CVE classes instead, since running them on input they were not
+        written for would invent coverage.
+        """
+        for cve in REGISTRY:
+            fired = {name for name, pred in DETECTOR_PANEL.items() if pred(cve.probe)}
+            claimed = set(cve.detectors) & set(DETECTOR_PANEL)
+            if OUT_OF_SCOPE in cve.dispositions:
+                # A predicate may fire incidentally on an out-of-scope probe --
+                # is_confusable sees the fullwidth forms in CVE-2024-3098 -- but
+                # noticing a character is not defending the CVE, so nothing is
+                # claimed and nothing is compared.
+                assert claimed == set(), cve.id
+                continue
+            assert claimed == fired, (cve.id, sorted(claimed), sorted(fired))
+
+    def test_detected_rows_name_a_detector_and_others_do_not(self) -> None:
+        """DETECTED in the disposition and an empty detector list contradict."""
+        for cve in REGISTRY:
+            if DETECTED in cve.dispositions:
+                assert cve.detectors, cve.id
+            else:
+                assert not cve.detectors, cve.id
+
+    def test_roles_do_not_overlap(self) -> None:
+        """A name is a rewriter or a reporter, never counted as both."""
+        for cve in REGISTRY:
+            both = set(cve.neutralizers) & set(cve.detectors)
+            assert not both, (cve.id, sorted(both))
+
     def test_named_entry_points_exist(self) -> None:
         """Guard against a renamed function silently emptying the claim."""
         profiles = set(disarm.list_profiles())
@@ -1263,6 +1541,29 @@ class TestRegistryIntegrity:
         becoming all-wins as rows are added, not against any particular ratio."""
         negatives = sum(1 for c in REGISTRY if OUT_OF_SCOPE in c.dispositions)
         assert negatives >= 4, f"only {negatives} out-of-scope rows"
+
+
+class TestComparatorCorpusDrift:
+    """``benchmarks/cve_comparators.py`` must compare the rows this file neutralizes.
+
+    The benchmark writes its own vectors on purpose — two independent
+    reconstructions of the same CVE cross-check each other — but the *set* of
+    CVEs has to stay aligned, or the published comparator table silently stops
+    covering a row the matrix claims.
+    """
+
+    def test_comparator_covers_every_neutralizable_row(self) -> None:
+        from benchmarks.cve_comparators import COVERED
+
+        assert COVERED == set(NEUTRALIZABLE), {
+            "compared but not neutralizable here": sorted(COVERED - set(NEUTRALIZABLE)),
+            "neutralizable but not compared": sorted(set(NEUTRALIZABLE) - COVERED),
+        }
+
+    def test_comparator_rows_are_registered_cves(self) -> None:
+        from benchmarks.cve_comparators import COVERED
+
+        assert COVERED <= set(BY_ID), sorted(COVERED - set(BY_ID))
 
 
 class TestDocsMatrixDrift:

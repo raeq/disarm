@@ -245,6 +245,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::filename::_sanitize_filename, m)?)?;
     m.add_function(wrap_pyfunction!(py::case_fold::_fold_case, m)?)?;
     m.add_function(wrap_pyfunction!(py::whitespace::_collapse_whitespace, m)?)?;
+    m.add_function(wrap_pyfunction!(py::whitespace::_strip_control_chars, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        py::whitespace::_strip_zero_width_chars,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(py::scripts::_detect_scripts, m)?)?;
     m.add_function(wrap_pyfunction!(py::scripts::_is_mixed_script, m)?)?;
     m.add_function(wrap_pyfunction!(py::scripts::_has_bidi_conflict, m)?)?;

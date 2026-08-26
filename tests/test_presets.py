@@ -748,13 +748,21 @@ class TestEmptyMappingIsNotUnmapped:
         assert search_key("Пьеса") == "pesa"
 
     def test_no_code_point_leaks_through_the_key_presets(self):
-        """Full-range scan, the predicate from the issue. Expected count: zero."""
-        leaked = [
-            cp
-            for cp in range(0x20, 0x110000)
-            if transliterate("a" + chr(cp) + "b") == "ab"
-            and chr(cp) in search_key("a" + chr(cp) + "b")
-        ]
+        """Full-range scan, the predicate from the issue. Expected count: zero.
+
+        `chr` and the probe are bound once per code point rather than rebuilt for
+        each of the three uses, and the surrogate range is skipped for consistency
+        with the other full-range scans in the suite — a lone surrogate is not a
+        transliteration input, it is an encoding error.
+        """
+        leaked = []
+        for cp in range(0x20, 0x110000):
+            if 0xD800 <= cp <= 0xDFFF:
+                continue
+            ch = chr(cp)
+            probe = f"a{ch}b"
+            if transliterate(probe) == "ab" and ch in search_key(probe):
+                leaked.append(cp)
         assert leaked == [], [f"U+{c:04X}" for c in leaked[:20]]
 
     def test_genuinely_unmapped_characters_are_still_preserved(self):

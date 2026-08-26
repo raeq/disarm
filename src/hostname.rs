@@ -2,6 +2,32 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::{confusables, invisibles, scripts};
 
+/// Every invisible class a hostname label may not legitimately contain (#605, #610).
+///
+/// The union of the zero-width set with the four class predicates
+/// [`invisibles::is_tag`], [`invisibles::is_variation_selector`],
+/// [`invisibles::is_noncharacter`] and [`invisibles::is_pua`].
+///
+/// RFC 5892 puts the four classes #610 added in DISALLOWED outright, which is what
+/// justifies folding PUA and the variation selectors in here — both have legitimate
+/// uses in ordinary text, so a general-text detector needs a separate argument for
+/// them. The zero-width set is not uniformly disallowed: `U+200C`/`U+200D` are
+/// CONTEXTJ, permitted in the specific joining contexts RFC 5892 Appendix A.1/A.2
+/// describe. This screen flags them anyway (#605), because a spoof screen has no
+/// reason to honour a context rule it cannot verify, and that is a deliberate policy
+/// rather than a reading of the RFC.
+///
+/// Deliberately excludes the UAX #9 bidi controls: those are
+/// [`scripts::is_bidi_control`] and are reported through `bidi_control` (#603), so the
+/// two predicates partition the space rather than overlap.
+fn is_invisible_in_hostname(ch: char) -> bool {
+    invisibles::is_zero_width(ch)
+        || invisibles::is_tag(ch)
+        || invisibles::is_variation_selector(ch)
+        || invisibles::is_noncharacter(ch)
+        || invisibles::is_pua(ch)
+}
+
 /// Check if a bracketed string is a valid IPv6 literal per RFC 3986 §3.2.2.
 ///
 /// Requires: starts with `[`, ends with `]`, content contains `:`,
@@ -215,15 +241,25 @@ pub(crate) fn is_suspicious_hostname_opts(
         } else {
             raw_label.to_string()
         };
-        // Zero-width / invisible-format characters (#605). Removed HERE, before script
-        // analysis, rather than later on the joined hostname: U+FEFF sits in the Arabic
-        // Presentation Forms block and U+180E in the Mongolian block, so leaving them in
-        // makes `detect_scripts` report a script the reader cannot see and `mixed_script`
-        // fire on an ASCII-looking host. Stripping first means nothing downstream —
-        // scripts, mixed_script, confusables, canonical — ever sees them.
-        if label.chars().any(invisibles::is_zero_width) {
+        // Invisible characters of every class (#605, widened by #610). Removed HERE,
+        // before script analysis, rather than later on the joined hostname: U+FEFF sits
+        // in the Arabic Presentation Forms block, U+180E in the Mongolian block and
+        // U+FDD0 in the Arabic Presentation Forms range, so leaving them in makes
+        // `detect_scripts` report a script the reader cannot see and `mixed_script` fire
+        // on an ASCII-looking host. Stripping first means nothing downstream — scripts,
+        // mixed_script, confusables, canonical — ever sees them.
+        //
+        // RFC 5892 puts the four classes #610 added in DISALLOWED outright, so a hostname
+        // carrying one is malformed whatever its intent and the screen fails closed. That
+        // is why PUA and the variation selectors are included here but would need a
+        // separate argument in a general-text detector, where both have legitimate uses.
+        // ZWNJ/ZWJ are the exception: CONTEXTJ, so conditionally permitted. Flagging them
+        // is a policy choice (#605), not something the RFC settles.
+        // The tag block is the ASCII-smuggling channel: U+E0061-U+E007A spell arbitrary
+        // Latin invisibly, so returning them in `canonical` would launder the payload.
+        if label.chars().any(is_invisible_in_hostname) {
             has_invisible = true;
-            label.retain(|c| !invisibles::is_zero_width(c));
+            label.retain(|c| !is_invisible_in_hostname(c));
         }
 
         decoded_labels.push(label.clone());

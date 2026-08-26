@@ -493,6 +493,37 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`is_suspicious_hostname()` now catches tags, variation selectors, noncharacters
+  and PUA, and stops reporting a noncharacter as Arabic (#610).** Third in the
+  sequence after #603 (bidi controls) and #605 (zero-width). 17 of 18 sampled
+  code points passed the screen clean and **all 18** survived into `canonical`.
+
+  The one that did flag was flagging for the wrong reason, and it is the #605 bug in
+  a class #605 did not cover: `U+FDD0` sits in the Arabic Presentation Forms range,
+  so the script detector read it as a letter and `paypal<U+FDD0>.evil.com` reported
+  `scripts=['Latin', 'Arabic']` with `mixed_script=True`. Widening the existing
+  per-label strip fixes that by construction rather than by special case, because
+  the strip already runs before `detect_scripts`.
+
+  Reported on the **existing** `has_invisible` field rather than four new ones, so no
+  binding payload changes: no new field on the Ruby positional tuple and no change to
+  the Java `jni_sig!` string. `is_invisible_in_hostname` composes the four class
+  predicates that `src/invisibles.rs` already carried.
+
+  Private use and the variation selectors are included because RFC 5892 puts all four
+  of the classes added here in DISALLOWED outright. (The pre-existing zero-width set is
+  not uniformly disallowed — `U+200C`/`U+200D` are CONTEXTJ, conditionally permitted —
+  and flagging those remains the deliberate fail-closed policy #605 chose, not a reading
+  of the RFC.) Both have legitimate uses in ordinary text, so
+  a general-text detector needs its own argument for them; that is tracked separately.
+  Measured against the full suite including the adversarial-oracle clean corpus: no
+  false positives.
+
+  The tag block is the reason this is a security fix rather than tidying.
+  `U+E0061`–`U+E007A` spell arbitrary Latin invisibly, and the screen previously
+  called such a hostname clean *and* returned the payload intact in `canonical` — the
+  combination that turns a detector into a laundering step.
+
 - **`PRESETS["ml_normalize"]` was missing two of the nine steps it claims to describe
   (#600).** `PRESETS` is a hand-maintained Python mirror of the `const STEPS` arrays in
   `src/presets.rs`; nothing executes it, and it had drifted. The mirror listed seven

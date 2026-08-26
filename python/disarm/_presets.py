@@ -696,7 +696,9 @@ other:
 
 * ``PRESETS`` (this dict) — *preset* pipelines: fixed, ordered sequences of
   cleaning/normalization steps exposed as the ``canonicalize``,
-  ``ml_normalize``, ``canonicalize_strict`` … helpers. Defined here, in Python.
+  ``ml_normalize``, ``canonicalize_strict`` … helpers. Defined in the Rust core
+  (``src/presets.rs``); this dict is a hand-maintained **mirror** of those step
+  lists for introspection, and nothing executes it.
 * Policy *profiles* (see :func:`list_profiles` / :func:`get_pipeline`) —
   parameter sets for transliteration workflows (e.g.
   ``scholarly_cyrillic_iso9``). Defined in the Rust core (``src/pipeline.rs``).

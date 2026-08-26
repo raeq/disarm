@@ -290,8 +290,15 @@ assert [c for c in BIDI if c in ml_normalize(f"a{c}b")] == list(BIDI)
 assert ml_normalize("Summarize.\U000f0000") == "summarize.\U000f0000"
 ```
 
-It does remove the Unicode Tags block and zero-width fragmentation, which is what makes
-the coverage look more complete than it is.
+It does remove zero-width fragmentation, and most of the Tags block — but not all of it.
+`U+E0061`–`U+E007A` and the cancel tag go, because the emoji step consumes tag sequences;
+`U+E0001` LANGUAGE TAG survives. Partial coverage of a class is what makes the whole look
+more complete than it is.
+
+```python
+assert ml_normalize("Summarize.\U000e0061") == "summarize."      # tag letter: removed
+assert ml_normalize("Summarize.\U000e0001") != "summarize."      # LANGUAGE TAG: survives
+```
 
 None of this makes `ml_normalize` broken. It is a tokenizer-hygiene preset, and
 `THREAT_MODEL.md` never lists it as a security mechanism. But the name reads as "the

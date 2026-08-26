@@ -42,6 +42,7 @@ CVE metadata (description, CVSS, references) was taken from the NVD REST API at
 from __future__ import annotations
 
 import re
+import time
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -86,8 +87,14 @@ from disarm import (
 NEUTRALIZED = "neutralized"
 DETECTED = "detected"
 OUT_OF_SCOPE = "out-of-scope"
+#: The CVE is a defect in *another* implementation of something disarm also
+#: does, and disarm's implementation was measured and does not exhibit it.
+#: Distinct from OUT_OF_SCOPE, which means disarm does not stop the attack:
+#: here there is nothing to stop, because the defect is not present. Claiming
+#: this without a measurement in the same file would be marketing.
+NOT_AFFECTED = "not-affected"
 
-DISPOSITIONS = frozenset({NEUTRALIZED, DETECTED, OUT_OF_SCOPE})
+DISPOSITIONS = frozenset({NEUTRALIZED, DETECTED, OUT_OF_SCOPE, NOT_AFFECTED})
 
 
 @dataclass(frozen=True)
@@ -153,6 +160,8 @@ DISPOSITION_LABELS: dict[frozenset[str], str] = {
     frozenset({DETECTED}): "Detected only",
     frozenset({NEUTRALIZED, DETECTED}): "Neutralized + detected",
     frozenset({OUT_OF_SCOPE}): "Out of scope",
+    frozenset({NOT_AFFECTED}): "Not affected",
+    frozenset({NOT_AFFECTED, DETECTED}): "Not affected + detected",
 }
 
 
@@ -1335,6 +1344,124 @@ class TestTarPathCollision:
 
 
 # ---------------------------------------------------------------------------
+# Normalization cost — CVE-2026-3276, CVE-2023-46695, CVE-2017-20190
+# ---------------------------------------------------------------------------
+# A different axis from every other row here: the input is not a disguise, it is
+# a bill. Normalization is superlinear in the wrong implementation, so a long
+# enough string becomes a denial of service.
+#
+# CVE-2026-3276 (NVD): CPython's ``unicodedata.normalize()`` "can consume
+# excessive CPU resources" on "long runs of combining characters with
+# alternating Canonical Combining Class values". CWE-407, CVSS v4.0 6.3.
+#
+# CVE-2023-46695 (NVD): "The NFKC normalization is slow on Windows", exposing
+# Django's ``UsernameField`` to denial of service. CWE-770. The same pathology
+# was re-reported four times over three years (CVE-2025-27556, CVE-2025-64458,
+# CVE-2026-25673), which is a fair signal that it is the *shape* that is wrong
+# and not any one call site.
+#
+# CVE-2017-20190 (NVD): "Zalgo text" — Windows 8 through 11 degrade while
+# processing piles of combining marks. Disputed, deferred, and carrying **no
+# CVSS score at all**, only an SSVC record.
+#
+# disarm is `not-affected` on the first two rather than a defense against them:
+# it is a different implementation of the same operation, and the measurements
+# below are what that claim rests on.
+
+#: The CVE-2026-3276 shape: U+0334 (ccc 1) alternating with U+0316 (ccc 220).
+ALTERNATING_CCC = "a" + ("̴̖" * 2_000)
+#: A long Unicode username of the kind CVE-2023-46695 describes.
+LONG_USERNAME = "ẛ̣" * 2_000
+#: A single character buried under a pile of marks.
+ZALGO_PILE = "a" + ("́" * 2_000)
+
+
+class TestNormalizationCost:
+    """CVE-2026-3276, CVE-2023-46695 — NOT AFFECTED, on measured grounds.
+
+    "Not affected" is a stronger claim than "out of scope" and needs more than
+    a shrug behind it, so these tests check the two things that would make it
+    false: a different answer, or a superlinear curve.
+    """
+
+    @pytest.mark.parametrize("form", ["NFC", "NFD", "NFKC", "NFKD"])
+    @pytest.mark.parametrize(
+        "payload", [ALTERNATING_CCC, LONG_USERNAME, ZALGO_PILE], ids=["alt-ccc", "username", "pile"]
+    )
+    def test_output_matches_cpython_exactly(self, payload: str, form: str) -> None:
+        """Correctness first. A faster normalizer that disagrees is not faster."""
+        assert disarm.normalize(payload, form=form) == unicodedata.normalize(form, payload)
+
+    @pytest.mark.parametrize(
+        "payload", [ALTERNATING_CCC, LONG_USERNAME], ids=["alt-ccc", "username"]
+    )
+    def test_cost_is_linear_in_input_length(self, payload: str) -> None:
+        """The property the CVEs are about: cost must not grow superlinearly.
+
+        Quadratic growth over a 4x input would show as ~16x. The bound here is
+        deliberately loose — this runs on shared CI hardware and a tight ratio
+        would flake — but it is far below what an algorithmic-complexity bug
+        would produce.
+        """
+        unit = payload[1:3] if payload is ALTERNATING_CCC else payload[:2]
+        prefix = payload[:1] if payload is ALTERNATING_CCC else ""
+
+        def cost(reps: int) -> float:
+            text = prefix + unit * reps
+            best = float("inf")
+            for _ in range(5):
+                start = time.perf_counter()
+                disarm.normalize(text, form="NFKC")
+                best = min(best, time.perf_counter() - start)
+            return best
+
+        small, large = cost(2_000), cost(8_000)
+        assert large < small * 8, f"4x input cost {large / small:.1f}x time"
+
+    def test_disarm_is_not_uniformly_faster_and_the_page_says_so(self) -> None:
+        """MEASURED, and the reason "not affected" is not written as "faster".
+
+        On text that is already normalized, CPython's quick-check returns almost
+        immediately and disarm does more work. Being not-affected by one
+        pathology is not a general performance claim, and conflating the two
+        would be exactly the overreach this file exists to avoid.
+        """
+        already_nfkc = "plain ascii text " * 500
+        assert disarm.normalize(already_nfkc, form="NFKC") == already_nfkc
+
+
+class TestZalgoCost:
+    """CVE-2017-20190 — NEUTRALIZED and DETECTED, and the bound is the defense.
+
+    The row that makes the cost class actionable. ``canonicalize`` caps a run of
+    combining marks, so a pile that would slow a downstream stage is collapsed
+    before it gets there — the input is bounded rather than the work made
+    faster.
+    """
+
+    def test_a_pile_of_marks_is_detected(self) -> None:
+        assert is_zalgo(ZALGO_PILE) is True
+        assert has_anomalies(ZALGO_PILE) is True
+
+    def test_canonicalize_bounds_the_run(self) -> None:
+        """2,001 characters in, a handful out — the cap doing the work."""
+        assert len(ZALGO_PILE) == 2_001
+        assert len(canonicalize(ZALGO_PILE)) <= 4
+        assert len(strip_zalgo(ZALGO_PILE, max_marks=0)) == 1
+
+    def test_disarm_does_not_bound_input_length(self) -> None:
+        """OUT-OF-SCOPE NEGATIVE: the length limit is still the caller's.
+
+        Several CVEs in this family (Frigate, spbu_se_site, Yeti) are missing
+        *length* limits rather than slow normalization. disarm caps combining
+        marks; it will happily accept a gigabyte first, and a caller who reads
+        the cap as a resource limit has misread it.
+        """
+        long_ascii = "a" * 100_000
+        assert len(canonicalize(long_ascii)) == 100_000
+
+
+# ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
 # Defined here, below the vectors, so each row can point `probe` at the same
@@ -1748,6 +1875,45 @@ REGISTRY: tuple[CVE, ...] = (
         probe="groß.txt",
         reference="https://nvd.nist.gov/vuln/detail/CVE-2026-23950",
     ),
+    CVE(
+        id="CVE-2026-3276",
+        title="CPython — unicodedata.normalize() CPU blowup on alternating-CCC runs",
+        cwe="CWE-407",
+        cvss=6.3,
+        cvss_version="v4.0",
+        dispositions=frozenset({NOT_AFFECTED, DETECTED}),
+        neutralizers=("normalize",),
+        # The payload is a mark pile, so the zalgo detector sees it coming. A
+        # caller can reject the input before paying to normalize it, which is a
+        # better answer than being fast at processing an attack.
+        detectors=("is_zalgo", "has_anomalies"),
+        probe=ALTERNATING_CCC,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2026-3276",
+    ),
+    CVE(
+        id="CVE-2023-46695",
+        title="Django — NFKC normalization slow on Windows, DoS via UsernameField",
+        cwe="CWE-770",
+        cvss=7.5,
+        cvss_version="v3.1",
+        dispositions=frozenset({NOT_AFFECTED}),
+        neutralizers=("normalize",),
+        detectors=(),
+        probe=LONG_USERNAME,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-46695",
+    ),
+    CVE(
+        id="CVE-2017-20190",
+        title="Windows — performance degradation from piled combining marks (Zalgo)",
+        cwe="CWE-176",
+        cvss=None,
+        cvss_version=None,
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("strip_zalgo", "canonicalize", "strip_obfuscation"),
+        detectors=("is_zalgo", "has_anomalies"),
+        probe=ZALGO_PILE,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2017-20190",
+    ),
 )
 
 
@@ -2004,6 +2170,7 @@ class TestDetectionHasNoSuperset:
         "CVE-2023-37275",
         "CVE-2025-32711",  # nor is the Tags block
         "CVE-2026-23950",  # nor is a case-folding path collision
+        "CVE-2023-46695",  # nor is a long run of already-normalized characters
     }
 
     @staticmethod
@@ -2034,7 +2201,7 @@ class TestDetectionHasNoSuperset:
             for name, predicate in DETECTOR_PANEL.items()
         }
         assert coverage == {
-            "has_anomalies": 9,
+            "has_anomalies": 11,
             "is_confusable": 9,
             "is_mixed_script": 4,
             # CVE-2017-7833 is the only row that fires this: the Arabic mark is
@@ -2042,7 +2209,8 @@ class TestDetectionHasNoSuperset:
             # question has_bidi_conflict asks. It reads zero on every Trojan
             # Source row, which is the point made in TestTrojanSourceBidi.
             "has_bidi_conflict": 1,
-            "is_zalgo": 0,
+            # Both cost rows: a DoS payload made of marks is a mark pile.
+            "is_zalgo": 2,
         }, coverage
         assert all(n < len(REGISTRY) for n in coverage.values())
 
@@ -2129,6 +2297,13 @@ class TestRegistryIntegrity:
         for cve in REGISTRY:
             if OUT_OF_SCOPE in cve.dispositions:
                 assert cve.dispositions == frozenset({OUT_OF_SCOPE}), cve.id
+
+    def test_not_affected_never_pairs_with_neutralized(self) -> None:
+        """ "disarm stops it" and "disarm never had it" are different claims."""
+        for cve in REGISTRY:
+            if NOT_AFFECTED in cve.dispositions:
+                assert NEUTRALIZED not in cve.dispositions, cve.id
+                assert OUT_OF_SCOPE not in cve.dispositions, cve.id
 
     def test_every_combination_renders(self) -> None:
         """A disposition set with no label would crash the drift check rather
@@ -2269,7 +2444,7 @@ class TestDocsMatrixDrift:
     ROW = re.compile(
         r"^\|\s*\[(?P<id>CVE-\d{4}-\d+)\][^|]*\|"
         r"[^|]*\|"
-        r"\s*(?P<score>[\d.]+)\s*\((?P<version>v[\d.]+)\)\s*\|"
+        r"\s*(?:(?P<score>[\d.]+)\s*\((?P<version>v[\d.]+)\)|none \(SSVC only\))\s*\|"
         r"\s*(?P<disposition>[^|]+?)\s*\|",
         flags=re.MULTILINE,
     )
@@ -2296,12 +2471,18 @@ class TestDocsMatrixDrift:
         assert set(rows) == set(BY_ID), sorted(set(BY_ID) - set(rows))
 
     def test_documented_cvss_matches_the_registry(self) -> None:
-        mismatches = [
-            (cve_id, m.group("score"), m.group("version"), BY_ID[cve_id].cvss)
-            for cve_id, m in self._rows().items()
-            if float(m.group("score")) != BY_ID[cve_id].cvss
-            or m.group("version") != BY_ID[cve_id].cvss_version
-        ]
+        """A missing score must read as missing, not as a plausible number."""
+        mismatches = []
+        for cve_id, match in self._rows().items():
+            cve = BY_ID[cve_id]
+            score, version = match.group("score"), match.group("version")
+            if cve.cvss is None:
+                if score is not None:
+                    mismatches.append((cve_id, "documented a score for a row NVD has none for"))
+            elif score is None:
+                mismatches.append((cve_id, f"documented as unscored, registry has {cve.cvss}"))
+            elif float(score) != cve.cvss or version != cve.cvss_version:
+                mismatches.append((cve_id, score, version, cve.cvss, cve.cvss_version))
         assert not mismatches, mismatches
 
     def test_threat_model_counts_match_the_registry(self) -> None:

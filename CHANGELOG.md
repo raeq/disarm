@@ -18,6 +18,32 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Normalization cost as a CVE class, and a fourth disposition to describe it (33 → 36).**
+  CVE-2026-3276 (CPython `unicodedata.normalize()` on alternating-CCC runs, CWE-407),
+  CVE-2023-46695 (Django NFKC on Windows, re-reported three times since) and
+  CVE-2017-20190 ("Zalgo text", disputed, deferred, and carrying **no CVSS score at all** —
+  only SSVC).
+
+  The input here is not a disguise, it is a bill, and the existing vocabulary could not say
+  what disarm's relationship to it is. `not-affected` now means *the CVE is a defect in
+  another implementation of something disarm also does, and disarm's implementation was
+  measured and does not have it* — distinct from `out-of-scope`, which means disarm does
+  not stop the attack. It is a stronger claim, so it is gated: identical output to CPython
+  across all four forms, and a linear-cost bound.
+
+  **disarm is not uniformly faster, and the page says so.** Over nine input shapes at
+  20,000 characters it runs between 6× faster (CJK compatibility ideographs) and 10×
+  *slower* (already-normalized text, where CPython's quick-check short-circuits and disarm
+  does more work). An earlier informal measurement suggested a ~700× margin; that was a
+  cold-start artefact and does not survive best-of-N timing.
+
+  **The bound is the actual defense.** `canonicalize` collapses a 2,000-mark pile to at
+  most four characters, and `is_zalgo` flags the CVE-2026-3276 payload too — rejecting the
+  input costs less than normalizing it quickly. What disarm does **not** do is bound input
+  length, which is what the Frigate/Yeti/spbu_se_site CVEs in this family are actually
+  about; `test_disarm_does_not_bound_input_length` pins that distinction so the cap is not
+  misread as a resource limit.
+
 - **Eleven more CVEs, in the classes the matrix was thinnest on (22 → 33).**
 
   | Class | Added |

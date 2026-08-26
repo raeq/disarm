@@ -15,8 +15,17 @@ the caller — it never claims intent.
 
 ## Detected classes
 
-Eight branches fire, in order; the first six need no lexicon and are
-script-agnostic, so they port across writing systems.
+Eight branches fire. Six need no lexicon — only `leet` and `segmentation` do.
+
+The table below is grouped by kind, not by evaluation order. `control` is checked
+**first**, ahead of the ASCII fast-path, because `NUL`, `ESC`, `BEL` and `DEL` are
+themselves ASCII: a check placed after that fast-path would never see the vectors it
+exists for. The remaining branches split on `!tok.is_ascii()`, so `invisible`, `bidi`,
+`zalgo`, `bidi_mixed` and `mixed_script` only run on non-ASCII tokens, and `leet` and
+`segmentation` run last on everything.
+
+Most branches are script-agnostic and port across writing systems. `mixed_script` is the
+exception — it is anchored on Latin, and fires on Latin combined with Cyrillic or Greek.
 
 | Kind | Fires on | Spared (false-positive guards) |
 |---|---|---|

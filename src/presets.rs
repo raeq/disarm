@@ -1750,6 +1750,34 @@ mod tests {
         assert_eq!(out, "I red heart euro 5");
     }
 
+    /// A skipped row must not fuse onto the emoji name before it (#614 review).
+    ///
+    /// The separator decision has to look at what the character will BECOME. `\u{20AC}`
+    /// is not alphanumeric, but TR39 folds it to `e`, so emitting it bare after a name
+    /// produced "woman's hat" + "e" -> "woman's hate" once the fold ran — a word present
+    /// in neither the input nor any emoji name.
+    #[test]
+    fn a_skipped_row_does_not_fuse_onto_the_preceding_name() {
+        for (input, expected) in [
+            ("\u{1F452}\u{20AC}", "woman's hat e"),
+            ("\u{1F452}\u{2211}", "woman's hat s"),
+            ("\u{1F452}\u{2200}", "woman's hat a"),
+        ] {
+            assert_eq!(strip_obfuscation(input).unwrap(), expected, "{input:?}");
+        }
+        // A punctuation target takes no separator, matching every other
+        // non-alphanumeric emitted here.
+        assert_eq!(
+            strip_obfuscation("\u{1F452}\u{2010}").unwrap(),
+            "woman's hat-"
+        );
+        // And the spaced form agrees with the unspaced one.
+        assert_eq!(
+            strip_obfuscation("\u{1F452}\u{20AC}").unwrap(),
+            strip_obfuscation("\u{1F452} \u{20AC}").unwrap()
+        );
+    }
+
     /// The reason the steps were NOT reordered: punctuation inside an emoji *name*
     /// still has to be folded by the confusable pass, or the preset is not idempotent.
     #[test]

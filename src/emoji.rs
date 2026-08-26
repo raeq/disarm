@@ -363,7 +363,16 @@ pub fn demojize_rust_into(
         // #614: hand this code point to the confusable fold instead of naming it.
         // Emitted verbatim, so the later `confusables` step sees it.
         if skip_tr39_claimed && crate::tables::is_tr39_claimed_emoji_row(ch) {
-            if last_was_emoji && ch.is_alphanumeric() {
+            // The separator decision has to look at what this character will BECOME,
+            // not what it is. `\u{20AC}` is not alphanumeric, but TR39 folds it to `e`,
+            // so emitting it bare after an emoji name produced `"woman's hat"` + `"e"`
+            // -> `"woman's hate"` once the fold ran: a word that was in neither the
+            // input nor any name. `\u{2211}` -> `s` and `\u{2200}` -> `a` do the same.
+            // Punctuation targets (`\u{2010}` -> `-`) still take no separator, matching
+            // how every other non-alphanumeric is emitted here.
+            let becomes_alphanumeric = crate::tables::lookup_confusable(ch, "latin")
+                .is_some_and(|t| t.starts_with(char::is_alphanumeric));
+            if last_was_emoji && (ch.is_alphanumeric() || becomes_alphanumeric) {
                 result.push(' ');
             }
             result.push(ch);

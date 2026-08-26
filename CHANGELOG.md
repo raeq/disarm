@@ -532,6 +532,68 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   the `as_str` arms out of `src/anomalies.rs` and compares them to the union, plus a
   second test asserting every kind is reachable from some input.
 
+- **`PRESETS["ml_normalize"]` was missing two of the nine steps it claims to describe
+  (#600).** `PRESETS` is a hand-maintained Python mirror of the `const STEPS` arrays in
+  `src/presets.rs`; nothing executes it, and it had drifted. The mirror listed seven
+  steps, omitting the `transliterate` step and the second `demojize` that #498 added
+  after `strip_accents`. `test_preset_steps_exact` did not catch it because it compares
+  the mirror against a literal in the test file, and both were written from the same
+  wrong reading — so the test pinned the drift instead of detecting it. Mirror and test
+  are now correct against Rust.
+
+  `list_profiles()` also said presets are "step-lists defined in Python". They are
+  defined in Rust. That sentence is how the drift went unnoticed, so it is corrected
+  too, and a comment on `PRESETS` now states what the dict is and what it is not.
+
+  A structural gate that parses the Rust arrays is **not** part of this change: the step
+  lists use composite variants (`FixedPoint`, `ConfusablesNfcFixedPoint`) that the
+  mirror flattens, so a real gate needs per-preset expansion rules and deserves its own
+  issue rather than a fragile parser bolted on here.
+
+- **Documentation: three functions whose names promise more than they check.**
+  - `has_bidi_conflict` now says plainly that it is **not** the RLO check (#599). It
+    reads letters, so `"invoice\u202Egpj.exe"` returns `False` — the two conditions are
+    disjoint and a string can satisfy either, both or neither. The docstrings route to
+    `inspect_anomalies` (kind `bidi`) for detection and `strip_bidi` for removal, and
+    note that `strip_bidi` does *not* close the real-letter case, because there is no
+    format character to remove. `docs/concepts/which-function.md` gains the two bidi rows
+    its threat-model table lacked; its only previous mention of bidi was in a *cost*
+    column, so the page could not answer "how do I detect a bidi attack".
+  - `get_pipeline()` now states that profile names and `PRESETS` keys are disjoint
+    namespaces, so `get_pipeline("canonicalize")` raising is expected rather than a bug
+    (#600).
+  - `ml_normalize`'s documented limits stopped at homoglyphs. They now cover the other
+    two: all twelve bidi controls and every PUA code point pass through unchanged (#608).
+    `strip_control` handles `Cc`; bidi controls are `Cf`. No behaviour change — the
+    preset is tokenizer hygiene, and `llm_guardrail` / `rag_ingest` already exist for
+    untrusted input.
+
+- **Python can now call `strip_control_chars` and `strip_zero_width_chars` directly
+  (#616).** They already existed in the Rust core (`disarm::api`) and in the C ABI,
+  Java/Kotlin, Node and Ruby bindings. Python was the only surface without them, so
+  control-stripping there meant constructing a `TextPipeline` rather than calling a
+  function — unlike the ten sibling `strip_*` operations, four of which
+  (`strip_tags`, `strip_pua`, `strip_noncharacters`, `strip_variation_selectors`) are
+  narrower and are plain functions. Both are now exported, and `Text` gains the
+  matching fluent methods.
+
+  The parity matrix recorded the gap as deliberate and named the substitute as
+  `collapse_whitespace(strip_control=True)` — a signature that has never existed;
+  `collapse_whitespace` takes only `text`. That record lived in `PROVIDED_VIA` in
+  `scripts/parity.py`, so anyone consulting the matrix for the Python equivalent was
+  sent to a `TypeError`. Both entries are removed and the matrix regenerated.
+
+- **`collapse_whitespace` gains a property test covering control characters.** The
+  existing `no_leading_trailing_whitespace` property draws from `\PC*`, which
+  excludes controls, so the trim invariant was never tested against them. It holds:
+  measured exhaustively over the cross product of whitespace, controls and letters
+  for lengths 1–4, and over 200,000 random strings, with zero cases where the output
+  starts or ends with whitespace. Reported as a trim bug in #612; that report was
+  wrong and is retracted there. What looked like a defeated trim is the space
+  *between* a leading control and the word, which is interior by the same rule that
+  makes `"a\u{0}b"` keep both of its spaces. No behaviour change — the test closes
+  the coverage gap that made the question open.
+
 - **`is_suspicious_hostname()` now catches zero-width and invisible characters, and no
   longer reports a phantom script for them (#605).** Sibling of #603, for the characters
   that carry no direction at all — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF` and

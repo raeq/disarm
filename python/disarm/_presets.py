@@ -525,6 +525,17 @@ def strip_zalgo(text: str, *, max_marks: int = 2) -> str:
 
 
 # --- Preset pipeline metadata ---
+#
+# The step recipes behind the top-level functions: `PRESETS["canonicalize"]` is what
+# `canonicalize()` runs. These keys are NOT policy-profile names — the two namespaces
+# are disjoint, so `get_pipeline("canonicalize")` raises and `PRESETS["rag_ingest"]`
+# is a KeyError. Profiles live behind `get_pipeline()` / `list_profiles()` (#600).
+#
+# This dict is a hand-maintained MIRROR of the `const STEPS` arrays in
+# `src/presets.rs`. Nothing executes it — it exists for introspection and docs. It has
+# drifted before (`ml_normalize` was missing `transliterate` and the #498 second
+# `demojize`), so when you change a step list in Rust, change it here in the same
+# commit and check `tests/test_mutant_killers.py::test_preset_steps_exact`.
 
 PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "canonicalize": [
@@ -555,7 +566,16 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "ml_normalize": [
         ("normalize", "NFKC"),
         ("demojize", "cldr"),
+        # Only when a `lang` is set, and in Ignore mode: ML pipelines want clean
+        # ASCII-ish output, so an unmapped character is dropped, not preserved.
+        ("transliterate", None),
         ("strip_accents", None),
+        # #498: a second demojize AFTER strip_accents. A negated-relation symbol
+        # (`≇` U+2247) is not in the CLDR name table, so the first pass leaves it;
+        # strip_accents drops the overlay and exposes the bare base (`≅`), which IS
+        # named. Without this pass that base is only named on the following call —
+        # non-idempotent.
+        ("demojize", "cldr"),
         ("fold_case", None),
         # #433: explicit strip steps (was fused into collapse_whitespace).
         ("strip_control", None),
@@ -676,7 +696,9 @@ other:
 
 * ``PRESETS`` (this dict) — *preset* pipelines: fixed, ordered sequences of
   cleaning/normalization steps exposed as the ``canonicalize``,
-  ``ml_normalize``, ``canonicalize_strict`` … helpers. Defined here, in Python.
+  ``ml_normalize``, ``canonicalize_strict`` … helpers. Defined in the Rust core
+  (``src/presets.rs``); this dict is a hand-maintained **mirror** of those step
+  lists for introspection, and nothing executes it.
 * Policy *profiles* (see :func:`list_profiles` / :func:`get_pipeline`) —
   parameter sets for transliteration workflows (e.g.
   ``scholarly_cyrillic_iso9``). Defined in the Rust core (``src/pipeline.rs``).
@@ -710,6 +732,13 @@ def get_pipeline(profile: str) -> TextPipeline:
     and application workflows.  Each call returns a fresh ``TextPipeline``
     instance.
 
+    .. note::
+       A *profile* name is not a :data:`PRESETS` key, and the two sets are
+       disjoint — ``get_pipeline("canonicalize")`` raises. :data:`PRESETS` holds
+       the step recipes behind the top-level functions (``canonicalize``,
+       ``search_key``, …); profiles are ready-made policy pipelines named for a
+       workflow. Call :func:`list_profiles` for the valid values here.
+
     Args:
         profile: Profile name (see :func:`list_profiles`).
 
@@ -732,9 +761,14 @@ def list_profiles() -> list[str]:
 
     Policy profiles (consumed by :func:`get_pipeline`) are distinct from the
     *preset* pipelines in :data:`PRESETS`: profiles are transliteration
-    parameter sets defined in the Rust core, whereas presets are fixed cleaning
-    step-lists defined in Python. A profile name is not a valid preset name and
-    vice versa.
+    parameter sets, whereas presets are the fixed cleaning step-lists behind the
+    top-level functions. A profile name is not a valid preset name and vice
+    versa.
+
+    Both are defined in the Rust core. :data:`PRESETS` is a hand-maintained
+    Python *mirror* of those step lists for introspection — nothing executes it,
+    so treat it as documentation of what Rust runs rather than as the source of
+    truth.
 
     Returns:
         Sorted list of profile name strings.

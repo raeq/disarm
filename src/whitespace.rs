@@ -169,6 +169,14 @@ pub(crate) fn is_zero_width(ch: char) -> bool {
 mod tests {
     use super::*;
 
+    /// Controls are still never DELETED — that is `strip_control_chars`' job, and
+    /// deleting here would join the tokens either side.
+    #[test]
+    fn controls_are_preserved_not_deleted() {
+        assert_eq!(collapse_whitespace("a\u{0}b"), "a\u{0}b");
+        assert_eq!(collapse_whitespace("a \u{0} b"), "a \u{0} b");
+    }
+
     #[test]
     fn test_collapse_whitespace() {
         assert_eq!(collapse_whitespace("hello   world"), "hello world");
@@ -355,6 +363,26 @@ mod tests {
                 let once = collapse_whitespace(&s);
                 let twice = collapse_whitespace(&once);
                 prop_assert_eq!(&once, &twice);
+            }
+
+            /// The trim invariant holds when CONTROLS are in the mix too.
+            ///
+            /// `no_leading_trailing_whitespace` above draws from `\PC*`, which
+            /// excludes controls, so it never covered this. A control is content
+            /// for run-collapsing — `"a \u{0} b"` keeps both spaces — and the
+            /// question that leaves open is whether one at an edge can strand
+            /// whitespace outside it. It cannot: the leading run is dropped before
+            /// the control is emitted, and the trailing truncate runs after.
+            /// Measured over the full cross product of these classes (#612).
+            #[test]
+            fn no_edge_whitespace_even_with_controls(
+                s in r"[ab\u{00e9}\x20\x09\x0a\u{00a0}\u{3000}\x00\x07\x1b\x7f\u{0080}\u{009f}]{0,16}"
+            ) {
+                let result = collapse_whitespace(&s);
+                if !result.is_empty() {
+                    prop_assert_ne!(result.chars().next().unwrap(), ' ');
+                    prop_assert_ne!(result.chars().next_back().unwrap(), ' ');
+                }
             }
         }
     }

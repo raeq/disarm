@@ -8,8 +8,11 @@ Fixes over v0 (per external review):
     (v0 ignored re-exports -> has_anomalies/inspect_anomalies false nulls).
   * Ruby surface  = real `def` lines in bindings/ruby/lib/disarm.rb.
   * Schema gains `alias_of` and `provided_via` so folded/aliased ops are not
-    mislabelled as gaps (reverse_transliterate via transliterate(target=...),
-    strip_control_chars/strip_zero_width_chars via the pipeline, etc.).
+    mislabelled as gaps (reverse_transliterate via transliterate(target=...)).
+    Use `provided_via` only for a route that is real and callable: the entries
+    for strip_control_chars/strip_zero_width_chars named
+    `collapse_whitespace(strip_control=True)`, a signature that never existed,
+    which hid the gap until #616 exported both from Python.
 Caveat: Python+Rust are verified against the real public surface; Ruby is parsed
 from source defs (reliable) and Node from `export function` (reliable), but
 neither is runtime-introspected (no toolchain) — finalize with
@@ -100,10 +103,6 @@ PROVIDED_VIA = {
     # bindings expose a nullary accessor because a native module cannot export a static.
     "confusables_version": {"python": "disarm.CONFUSABLES_VERSION"},
     "reverse_transliterate": {"python": "transliterate(target=…)"},
-    "strip_control_chars": {"python": "collapse_whitespace(strip_control=True) / get_pipeline()"},
-    "strip_zero_width_chars": {
-        "python": "collapse_whitespace(strip_zero_width=True) / get_pipeline()"
-    },
 }
 # Deliberate scope decisions for Ruby/Node — not blind backfill:
 #  * registration mutates process-global state; encoders are sink-context tools;

@@ -50,6 +50,12 @@ class Text:
     def collapse_whitespace(self) -> Text:
         """Fold whitespace runs to single ASCII spaces (fold-only, #433)."""
         ...
+    def strip_control_chars(self) -> Text:
+        """Remove control characters that are not whitespace (#433)."""
+        ...
+    def strip_zero_width_chars(self) -> Text:
+        """Remove zero-width characters (ZWSP, ZWNJ, ZWJ, word joiner, BOM)."""
+        ...
     def slugify(
         self,
         *,

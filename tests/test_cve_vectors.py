@@ -2461,7 +2461,7 @@ class TestComparatorCorpusDrift:
         """
         from benchmarks.cve_comparators import COVERED
 
-        unexplained = []
+        unexplained, malformed = [], []
         for cve in REGISTRY:
             if cve.id in COVERED:
                 continue
@@ -2469,9 +2469,21 @@ class TestComparatorCorpusDrift:
                 continue  # nothing neutralizes it, so there is nothing to compare
             if NOT_AFFECTED in cve.dispositions:
                 continue  # a cost property, not a transformation
-            if not cve.neutralizers:
-                continue  # detected only
-            unexplained.append(cve.id)
+            if NEUTRALIZED in cve.dispositions:
+                # Claims to be neutralized and is not compared. No exemption.
+                unexplained.append(cve.id)
+                continue
+            # The only remaining exemption is detected-only, and a row has to
+            # *be* that rather than merely look like it. Reading an empty
+            # `neutralizers` as "detected only" would let a row with the wrong
+            # dispositions skip the gate silently — which is the exact failure
+            # this test was added to stop, one level further in.
+            if DETECTED not in cve.dispositions or not cve.detectors:
+                malformed.append(
+                    (cve.id, sorted(cve.dispositions), cve.neutralizers, cve.detectors)
+                )
+
+        assert not malformed, f"rows exempted as detected-only that are not: {malformed}"
         assert not unexplained, f"comparable rows missing from the corpus: {sorted(unexplained)}"
 
     def test_the_documented_vector_count_matches_the_corpus(self) -> None:

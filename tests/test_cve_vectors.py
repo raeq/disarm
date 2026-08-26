@@ -51,11 +51,13 @@ import pytest
 
 import disarm
 from disarm import (
+    DisarmError,
     canonicalize,
     canonicalize_strict,
     catalog_key,
     collapse_whitespace,
     detect_scripts,
+    escape_html,
     fold_case,
     get_pipeline,
     has_anomalies,
@@ -1475,6 +1477,257 @@ class TestZalgoCost:
 
 
 # ---------------------------------------------------------------------------
+# Byte-level decoding: overlong UTF-8 and invalid multibyte sequences
+# ---------------------------------------------------------------------------
+# The first rows on this page that are about *bytes* rather than code points.
+# Every other vector arrives as text that already decoded; these are attacks on
+# the decoder itself.
+#
+# CVE-2024-46954 (NVD): "An issue was discovered in decode_utf8 in
+# base/gp_utf8.c in Artifex Ghostscript before 10.04.0. Overlong UTF-8 encoding
+# leads to possible ../ directory traversal." CWE-22. CVE-2025-46646 is the
+# incomplete fix for it, which is a fair measure of how easy this is to get
+# wrong twice.
+#
+# CVE-2026-44288 (NVD): protobufjs accepted "overlong UTF-8 byte sequences and
+# decod[ed] them to canonical characters instead of replacing them", letting an
+# attacker "bypass application-level security checks". CWE-176. That sentence
+# names the correct behaviour, which is what makes it measurable here.
+#
+# CVE-2009-4142 (NVD): PHP's htmlspecialchars mishandled "(1) overlong UTF-8
+# sequences, (2) invalid Shift_JIS sequences, and (3) invalid EUC-JP sequences"
+# placed before special characters, producing XSS.
+
+#: `../` written as three overlong two-byte sequences. A decoder that accepts
+#: them yields a real traversal; one that rejects them yields replacement
+#: characters and no traversal.
+OVERLONG_TRAVERSAL = b"\xc0\xae\xc0\xae\xc0\xaf"
+#: The two-byte overlong solidus on its own.
+OVERLONG_SOLIDUS = b"\xc0\xaf"
+#: An invalid Shift_JIS lead byte ahead of a payload — CVE-2009-4142's shape.
+INVALID_SJIS = b"\x81\x00<script>"
+
+
+class TestOverlongAndInvalidSequences:
+    """CVE-2024-46954, CVE-2026-44288, CVE-2009-4142 — NOT AFFECTED, measured.
+
+    "Not affected" is the strongest claim in this file's vocabulary, so it is
+    worth being explicit about what is being claimed: disarm's decoder is a
+    different implementation of the operation these CVEs are defects in, and it
+    was run against their inputs.
+    """
+
+    @pytest.mark.parametrize(
+        "raw",
+        [OVERLONG_TRAVERSAL, OVERLONG_SOLIDUS, b"\xe0\x80\xaf", b"\xf0\x80\x80\xaf", b"\xc0\x80"],
+        ids=["traversal", "2-byte", "3-byte", "4-byte", "modified-utf8-nul"],
+    )
+    def test_overlong_sequences_never_decode_to_their_short_form(self, raw: bytes) -> None:
+        """The whole bug in one assertion: no real character comes out."""
+        text, had_errors = disarm.decode_to_utf8(raw, encoding="utf-8")
+        assert had_errors is True
+        assert set(text) == {"\ufffd"}, text
+        assert "/" not in text
+        assert "\x00" not in text
+
+    def test_the_traversal_never_materializes(self) -> None:
+        """CVE-2024-46954 concretely: no `../` is produced."""
+        text, _ = disarm.decode_to_utf8(OVERLONG_TRAVERSAL, encoding="utf-8")
+        assert ".." not in text
+        assert "../" not in text
+
+    def test_strict_refuses_rather_than_returning_a_lossy_string(self) -> None:
+        """A caller who cannot tolerate substitution gets an error instead."""
+        with pytest.raises(DisarmError):
+            disarm.decode_to_utf8(OVERLONG_SOLIDUS, encoding="utf-8", strict=True)
+
+    @pytest.mark.parametrize(
+        "raw,encoding",
+        [(INVALID_SJIS, "shift_jis"), (b"\xc0\xaf<script>", "utf-8")],
+        ids=["invalid-sjis", "overlong-utf8"],
+    )
+    def test_a_bad_lead_byte_does_not_swallow_the_next_character(
+        self, raw: bytes, encoding: str
+    ) -> None:
+        """CVE-2009-4142 end to end, because the CVE is about *escaping*.
+
+        PHP's bug was that decoding and escaping happened in one pass, so an
+        invalid lead byte consumed the following `<` and `htmlspecialchars`
+        never saw a character to escape. Asserting only that the decode is
+        lossy would miss the point — the claim has to run to the sink.
+
+        disarm separates the two stages, and that separation is the reason this
+        does not reproduce: the decoder substitutes and keeps the `<`, and
+        `escape_html` then escapes it.
+        """
+        text, had_errors = disarm.decode_to_utf8(raw, encoding=encoding)
+        assert had_errors is True
+        assert "<script>" in text  # the decoder did not eat it
+        assert "&lt;script&gt;" in escape_html(text)  # and the sink still escapes it
+
+    def test_the_decoder_reports_rather_than_silently_substituting(self) -> None:
+        """`had_errors` is the reporting channel, and it is not decoration.
+
+        CVE-2026-44288's consumer was doing byte inspection and trusting the
+        decode. A caller can distinguish "decoded cleanly" from "decoded with
+        substitutions" without re-scanning the output for U+FFFD, which would
+        false-positive on text that legitimately contains one.
+        """
+        clean, clean_errors = disarm.decode_to_utf8(b"/etc/passwd", encoding="utf-8")
+        assert (clean, clean_errors) == ("/etc/passwd", False)
+        assert disarm.decode_to_utf8("\ufffd".encode(), encoding="utf-8") == ("\ufffd", False)
+
+
+# ---------------------------------------------------------------------------
+# Lone surrogates — CVE-2022-31116, CVE-2025-64439, CVE-2008-4066
+# ---------------------------------------------------------------------------
+# CVE-2022-31116 (NVD): UltraJSON "improperly decoded escaped surrogate
+# characters not part of proper surrogate pairs", causing "potential key
+# confusion and value overwriting in dictionaries". CWE-670.
+#
+# CVE-2025-64439 (NVD): LangGraph's JsonPlusSerializer — "When illegal Unicode
+# surrogate values cause msgpack serialization to fail, the system falls back to
+# JSON deserialization", which is deserialization of untrusted data. CWE-502,
+# CVSS v4.0 7.4. A Unicode edge case reached RCE through an error path.
+#
+# CVE-2008-4066 (NVD): Firefox — "HTML-escaped low surrogate characters that are
+# ignored by the HTML parser", e.g. `jav&#56325;ascript`, bypassing XSS filters.
+
+#: A lone high surrogate, the shape that breaks a UTF-8 encoder downstream.
+LONE_HIGH_SURROGATE = "a\ud800b"
+#: A lone low surrogate inside what would be a dictionary key.
+LONE_LOW_SURROGATE = "key\udc00value"
+#: CVE-2008-4066's vector: the surrogate arrives as an HTML numeric reference.
+HTML_ESCAPED_SURROGATE = "jav&#56325;ascript:alert(1)"
+
+
+class TestLoneSurrogates:
+    """CVE-2022-31116, CVE-2025-64439 — NEUTRALIZED by substitution."""
+
+    @pytest.mark.parametrize("text", [LONE_HIGH_SURROGATE, LONE_LOW_SURROGATE], ids=["high", "low"])
+    @pytest.mark.parametrize(
+        "defense",
+        [canonicalize, canonicalize_strict, strip_obfuscation],
+        ids=lambda f: f.__name__,
+    )
+    def test_no_lone_surrogate_survives(self, defense, text: str) -> None:
+        out = defense(text)
+        assert not any(0xD800 <= ord(ch) <= 0xDFFF for ch in out), out
+
+    def test_the_key_confusion_is_what_gets_prevented(self) -> None:
+        """CVE-2022-31116: two distinct keys collapsing into one slot.
+
+        Substituting rather than dropping matters here. A dropped surrogate
+        would make ``key<U+DC00>value`` and ``keyvalue`` collide, which is the
+        bug rather than the fix; U+FFFD keeps them distinct.
+        """
+        assert canonicalize(LONE_LOW_SURROGATE) != canonicalize("keyvalue")
+
+    def test_a_valid_pair_is_left_alone(self) -> None:
+        """Guard: substitution must not touch astral characters."""
+        assert canonicalize("𐀀") == "𐀀"
+        assert canonicalize("𝄞 clef") == "𝄞 clef"
+
+    def test_html_escaped_surrogates_are_not_disarms_job(self) -> None:
+        """OUT-OF-SCOPE NEGATIVE for CVE-2008-4066.
+
+        The surrogate arrives as `&#56325;`, an HTML numeric character
+        reference. disarm does not parse HTML and does not decode entities, so
+        the string is ordinary ASCII to it and passes through unchanged. An
+        HTML sanitizer owns this; THREAT_MODEL.md says so under *Out of scope*.
+        """
+        assert canonicalize(HTML_ESCAPED_SURROGATE) == HTML_ESCAPED_SURROGATE
+        assert strip_obfuscation(HTML_ESCAPED_SURROGATE) == HTML_ESCAPED_SURROGATE
+        # escape_html escapes the ampersand, which is the correct output-side
+        # answer and a different job from the input-side one.
+        assert escape_html(HTML_ESCAPED_SURROGATE).startswith("jav&amp;#56325;")
+
+
+# ---------------------------------------------------------------------------
+# Full-width evasion of a security product — CVE-2007-2688, CVE-2001-0669
+# ---------------------------------------------------------------------------
+# CVE-2007-2688 (NVD): Cisco IPS and IOS Firewall/IPS "fail to properly process
+# certain full-width and half-width Unicode character encodings, potentially
+# allowing attackers to bypass HTTP traffic detection". CVSS v2.0 7.8. Check
+# Point (CVE-2007-2689) and IBM ISS Proventia (CVE-2007-2690) were the same bug
+# in the same month, which is the interesting part: three vendors shipped the
+# same missing normalization step.
+#
+# CVE-2001-0669 (NVD): Snort, Cisco Secure IDS, Dragon Sensor and ISS RealSecure
+# evaded by "%u" Unicode encoding of ASCII in HTTP URLs.
+#
+# These are THREAT_MODEL.md's ordering rule, eighteen years early: the products
+# matched before they normalized, so the payload they were looking for was not
+# the payload on the wire.
+
+FULLWIDTH_SCRIPT = "＜script＞alert(1)＜/script＞"
+PERCENT_U_SCRIPT = "%u003cscript%u003e"
+
+
+class TestFullWidthEvasion:
+    """CVE-2007-2688 — NEUTRALIZED, and it is the same fold as the hazard test.
+
+    ``canonicalize`` folding ``＜`` to ``<`` is listed under *Out of scope* in
+    THREAT_MODEL.md as metacharacter unmasking, and pinned as a hazard in
+    ``TestFullwidthUnmaskingHazard``. Both are true, and which one applies is
+    decided entirely by pipeline position: folding before a *detector* is the
+    fix, and folding before an *output sink* is the hazard.
+    """
+
+    def test_the_evasion_works_against_a_literal_matcher(self) -> None:
+        assert "<script>" not in FULLWIDTH_SCRIPT
+
+    def test_normalizing_first_restores_what_the_matcher_looks_for(self) -> None:
+        assert canonicalize(FULLWIDTH_SCRIPT) == "<script>alert(1)</script>"
+        assert canonicalize("ＳＥＬＥＣＴ＊ＦＲＯＭ") == "SELECT*FROM"
+        assert canonicalize("／ｅｔｃ／ｐａｓｓｗｄ") == "/etc/passwd"
+
+    def test_percent_u_encoding_is_out_of_scope(self) -> None:
+        """OUT-OF-SCOPE NEGATIVE for CVE-2001-0669.
+
+        ``%u003c`` is a Microsoft URL-encoding extension, not a Unicode
+        representation of anything — the bytes on the wire are ASCII ``%``,
+        ``u``, ``0``… disarm has no URL decoder and correctly leaves it alone.
+        Decoding has to happen in the URL layer before disarm sees the text,
+        which is the same ordering rule the row above is about.
+        """
+        assert canonicalize(PERCENT_U_SCRIPT) == PERCENT_U_SCRIPT
+        assert strip_obfuscation(PERCENT_U_SCRIPT) == PERCENT_U_SCRIPT
+
+
+class TestEncodingLayersDisarmDoesNotOwn:
+    """CVE-2022-3782, CVE-2006-2753 — OUT OF SCOPE, for two different reasons.
+
+    Both are encoding attacks, and neither is a Unicode attack. They are here so
+    the boundary is drawn on the page rather than left for a reader to discover
+    by trying.
+    """
+
+    def test_double_url_encoding_is_the_url_layers_job(self) -> None:
+        """CVE-2022-3782 (Keycloak, 9.1): `%252e` is `%2e` is `.`.
+
+        disarm exposes ``percent_encode`` and no decoder at all, deliberately:
+        deciding how many times to decode is a property of the protocol stack,
+        and a library that guessed would create the very ambiguity the CVE is
+        about.
+        """
+        assert canonicalize("%252e%252e%252fadmin") == "%252e%252e%252fadmin"
+        assert not hasattr(disarm, "percent_decode")
+
+    def test_multibyte_escape_bypass_is_not_an_injection_defense(self) -> None:
+        """CVE-2006-2753 (MySQL, 7.5): a trailing byte swallows the escape.
+
+        In SJIS/BIG5/GBK a multibyte character can end in 0x5C, so an escaping
+        routine that appends a backslash produces a valid character instead of
+        an escape. The fix is a charset-aware escaper or parameterized queries.
+        THREAT_MODEL.md: disarm performs no SQL quoting and never replaces one.
+        """
+        payload = "\u00bf' OR 1=1"
+        assert canonicalize(payload) == payload
+        assert strip_obfuscation(payload) == payload
+
+
+# ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
 # Defined here, below the vectors, so each row can point `probe` at the same
@@ -1927,6 +2180,126 @@ REGISTRY: tuple[CVE, ...] = (
         probe=ZALGO_PILE,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2017-20190",
     ),
+    CVE(
+        id="CVE-2024-46954",
+        title="Ghostscript — overlong UTF-8 decoded to a real ../ traversal",
+        cwe="CWE-22",
+        cvss=7.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({NOT_AFFECTED}),
+        neutralizers=("decode_to_utf8",),
+        detectors=(),
+        probe="\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2024-46954",
+    ),
+    CVE(
+        id="CVE-2026-44288",
+        title="protobufjs — overlong UTF-8 decoded to canonical characters",
+        cwe="CWE-176",
+        cvss=5.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({NOT_AFFECTED}),
+        neutralizers=("decode_to_utf8",),
+        detectors=(),
+        probe="\ufffd\ufffd",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2026-44288",
+    ),
+    CVE(
+        id="CVE-2009-4142",
+        title="PHP htmlspecialchars — overlong UTF-8 and invalid Shift_JIS/EUC-JP",
+        cwe="CWE-79",
+        cvss=4.3,
+        cvss_version="v2.0",
+        dispositions=frozenset({NOT_AFFECTED, DETECTED}),
+        neutralizers=("decode_to_utf8",),
+        detectors=("has_anomalies",),
+        probe="\ufffd\x00<script>",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2009-4142",
+    ),
+    CVE(
+        id="CVE-2022-31116",
+        title="UltraJSON — lone surrogates causing dictionary key confusion",
+        cwe="CWE-670",
+        cvss=7.5,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("canonicalize", "canonicalize_strict", "strip_obfuscation"),
+        detectors=(),
+        probe=LONE_LOW_SURROGATE,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2022-31116",
+    ),
+    CVE(
+        id="CVE-2025-64439",
+        title="LangGraph — illegal surrogates falling back to insecure deserialization",
+        cwe="CWE-502",
+        cvss=7.4,
+        cvss_version="v4.0",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("canonicalize", "canonicalize_strict", "strip_obfuscation"),
+        detectors=(),
+        probe=LONE_HIGH_SURROGATE,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2025-64439",
+    ),
+    CVE(
+        id="CVE-2008-4066",
+        title="Firefox — HTML-escaped low surrogate ignored by the parser",
+        cwe="CWE-79",
+        cvss=4.3,
+        cvss_version="v2.0",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe=HTML_ESCAPED_SURROGATE,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2008-4066",
+    ),
+    CVE(
+        id="CVE-2007-2688",
+        title="Cisco IPS — HTTP detection evaded by full-width Unicode",
+        cwe="CWE-20",
+        cvss=7.8,
+        cvss_version="v2.0",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("canonicalize", "canonicalize_strict", "strip_obfuscation"),
+        detectors=(),
+        probe=FULLWIDTH_SCRIPT,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2007-2688",
+    ),
+    CVE(
+        id="CVE-2001-0669",
+        title="Snort, Cisco IDS, Dragon, RealSecure — evaded by %u encoding",
+        cwe="CWE-20",
+        cvss=7.5,
+        cvss_version="v2.0",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe=PERCENT_U_SCRIPT,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2001-0669",
+    ),
+    CVE(
+        id="CVE-2022-3782",
+        title="Keycloak — path traversal via double URL encoding",
+        cwe="CWE-22",
+        cvss=9.1,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe="%252e%252e%252fadmin",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2022-3782",
+    ),
+    CVE(
+        id="CVE-2006-2753",
+        title="MySQL — mysql_real_escape_string bypassed by multibyte charsets",
+        cwe="CWE-20",
+        cvss=7.5,
+        cvss_version="v2.0",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe="\u00bf' OR 1=1",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2006-2753",
+    ),
 )
 
 
@@ -1961,7 +2334,13 @@ COLLAPSE_VECTORS = [
     ("CVE-2017-5383", ALT_HYPHEN_HOST, ASCII_HYPHEN_HOST),
     ("CVE-2023-24329", "\x00" + BLOCKED_URL, BLOCKED_URL),
     ("CVE-2019-11721", KRA_HOST, KRA_GENUINE),
+    ("CVE-2007-2688", FULLWIDTH_SCRIPT, "<script>alert(1)</script>"),
 ]
+
+
+def _no_surrogate(text: str) -> bool:
+    return not any(0xD800 <= ord(ch) <= 0xDFFF for ch in text)
+
 
 #: (cve, attack, predicate) — handled when the primitive is gone.
 REMOVAL_VECTORS = [
@@ -1988,6 +2367,8 @@ REMOVAL_VECTORS = [
     ("CVE-2023-43620", CROC_FILENAME, lambda o: not any(c in o for c in TERMINAL_CONTROLS)),
     ("CVE-2023-37275", AUTOGPT_OUTPUT, lambda o: not any(c in o for c in TERMINAL_CONTROLS)),
     ("CVE-2017-20190", ZALGO_PILE, lambda o: len(o) <= 4),
+    ("CVE-2022-31116", LONE_LOW_SURROGATE, _no_surrogate),
+    ("CVE-2025-64439", LONE_HIGH_SURROGATE, _no_surrogate),
 ]
 
 NEUTRALIZABLE = [c for c, _, _ in COLLAPSE_VECTORS] + [c for c, _, _ in REMOVAL_VECTORS]
@@ -2172,6 +2553,7 @@ class TestOneCall:
             "CVE-2017-5383",
             "CVE-2017-20190",
             "CVE-2019-11721",
+            "CVE-2007-2688",
         }, sorted(missed)
 
 
@@ -2195,12 +2577,23 @@ class TestDetectionHasNoSuperset:
         "CVE-2025-32711",  # the Tags block is not an anomaly kind
         "CVE-2026-23950",  # nor is a case-folding path collision
         "CVE-2023-46695",  # nor is a long run of already-normalized characters
+        # The whole encoding class is silent too — see TestOverlongAndInvalid-
+        # Sequences and TestLoneSurrogates. Every one is neutralized and none
+        # is reported.
+        "CVE-2022-31116",
+        "CVE-2025-64439",
+        "CVE-2007-2688",
+        # The byte-level rows: not-affected, and nothing reports them either.
+        # `decode_to_utf8` returns `had_errors`, which is a return value rather
+        # than one of the panel predicates.
+        "CVE-2024-46954",
+        "CVE-2026-44288",
     }
-    #: Closed by the ``control`` anomaly kind (#612). Kept as a record of what the
-    #: set used to be, because the shape of the remaining three is the interesting
-    #: part: each needs a *comparison* (a fold collision, a length budget, a table
-    #: lookup), not the presence of a character, which is why one more character
-    #: class will not close them.
+    #: Closed by the ``control`` anomaly kind (#612). Kept as a record, because the
+    #: shape of what remains is the interesting part: every row still undetected
+    #: needs a *comparison* — a fold collision, a length budget, a decode result —
+    #: rather than the presence of a character, which is why one more character
+    #: class will not close any of them.
     CLOSED_BY_THE_CONTROL_KIND = {
         "CVE-2023-24329",  # a leading NUL
         "CVE-2008-2383",  # an escape sequence …
@@ -2209,6 +2602,9 @@ class TestDetectionHasNoSuperset:
         "CVE-2024-52005",
         "CVE-2023-43620",
         "CVE-2023-37275",
+        # Not a terminal row: its probe is a NUL-byte injection, so the same branch
+        # reports it. The other two byte-level rows carry no control and stay silent.
+        "CVE-2009-4142",
     }
 
     @staticmethod
@@ -2240,8 +2636,9 @@ class TestDetectionHasNoSuperset:
         }
         assert coverage == {
             # 11 before #612 added the `control` kind, which closed the seven
-            # terminal-control and leading-NUL rows in one branch.
-            "has_anomalies": 18,
+            # terminal-control and leading-NUL rows in one branch — plus
+            # CVE-2009-4142, whose probe is itself a NUL-byte injection.
+            "has_anomalies": 19,
             "is_confusable": 9,
             "is_mixed_script": 4,
             # CVE-2017-7833 is the only row that fires this: the Arabic mark is

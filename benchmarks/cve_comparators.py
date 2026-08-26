@@ -55,6 +55,10 @@ def _has_tag_chars(text: str) -> bool:
     return any(0xE0000 <= ord(ch) <= 0xE007F for ch in text)
 
 
+def _no_surrogates(text: str) -> bool:
+    return not any(0xD800 <= ord(ch) <= 0xDFFF for ch in text)
+
+
 def _no_bidi(text: str) -> bool:
     return not any(ch in text for ch in BIDI)
 
@@ -83,6 +87,7 @@ COLLAPSE: list[tuple[str, str, str]] = [
     # clear this one — its key builders do — so it is comparable without being
     # part of the canonicalizer-clearable set.
     ("CVE-2026-23950", "groß.txt", "gross.txt"),
+    ("CVE-2007-2688", "＜script＞alert(1)＜/script＞", "<script>alert(1)</script>"),
 ]
 
 #: (cve, attack, predicate) — handled when the primitive is gone from the output.
@@ -136,6 +141,11 @@ REMOVAL: list[tuple[str, str, Callable[[str], bool]]] = [
     # A pile of marks, bounded rather than removed: the defense is that the run
     # cannot reach a downstream stage, not that the base character goes away.
     ("CVE-2017-20190", "a" + ("\u0301" * 2_000), lambda out: len(out) <= 4),
+    # decancer raises on these: it is Rust-backed and takes &str, so a lone
+    # surrogate cannot cross the boundary at all. _apply turns that into a
+    # non-result, which is the right score — it did not handle the input.
+    ("CVE-2022-31116", "key\udc00value", _no_surrogates),
+    ("CVE-2025-64439", "a\ud800b", _no_surrogates),
 ]
 
 #: Rows whose neutralizer in the matrix is neither of the two fixed disarm

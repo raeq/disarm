@@ -180,6 +180,18 @@ class Text:
         than being deleted, so ``"a\\rb"`` becomes ``"a b"``."""
         return Text(self._t().collapse_whitespace(self._value))
 
+    def strip_control_chars(self) -> Text:
+        """Remove control characters that are not whitespace (#433).
+
+        The controls :meth:`collapse_whitespace` folds — TAB, LF, VT, FF, CR, the
+        information separators and NEL — are preserved so the fold can turn them
+        into a space; deleting them would join the tokens either side."""
+        return Text(self._t().strip_control_chars(self._value))
+
+    def strip_zero_width_chars(self) -> Text:
+        """Remove zero-width characters (ZWSP, ZWNJ, ZWJ, word joiner, BOM, …)."""
+        return Text(self._t().strip_zero_width_chars(self._value))
+
     def slugify(
         self,
         *,

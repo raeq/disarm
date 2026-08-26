@@ -18,6 +18,39 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Ten CVEs on encoding rather than code points, and the survey method behind them
+  (36 → 46 rows).** Found by sweeping NVD across the operations disarm performs, then
+  verified one ID at a time.
+
+  | Class | Added |
+  |---|---|
+  | Overlong / invalid byte sequences | CVE-2024-46954, CVE-2026-44288, CVE-2009-4142 |
+  | Lone surrogates | CVE-2022-31116, CVE-2025-64439, CVE-2008-4066 |
+  | Full-width evasion of a detector | CVE-2007-2688, CVE-2001-0669 |
+  | Encoding layers disarm does not own | CVE-2022-3782, CVE-2006-2753 |
+
+  **The byte-level rows are the first on the page whose input is not a `str`.**
+  `decode_to_utf8` replaces overlong sequences rather than decoding them, so the
+  Ghostscript traversal never materializes and `strict=True` refuses outright.
+  CVE-2026-44288 names the correct behaviour exactly — protobufjs decoded overlong
+  sequences "to canonical characters instead of replacing them" — which is what makes
+  `not-affected` measurable rather than asserted.
+
+  **CVE-2025-64439 is a Unicode edge case reaching RCE through an error path**: illegal
+  surrogates made msgpack serialization fail in LangGraph, and the fallback was JSON
+  deserialization of untrusted data. disarm substitutes rather than drops, which is what
+  keeps `key<U+DC00>value` from colliding with `keyvalue` — the CVE-2022-31116 shape.
+
+  **CVE-2007-2688 is the Threat Model's ordering rule eighteen years early.** Cisco IPS,
+  Check Point and IBM ISS Proventia all shipped the same missing normalization step in the
+  same month. It is also the same fold `TestFullwidthUnmaskingHazard` pins as a hazard —
+  both readings are correct, and pipeline position decides which applies.
+
+  `docs/security/cve-validation.md` now records **how rows are found**: the NVD sweeps by
+  mechanism rather than by product, the per-ID verification that caught CVE-2017-20190
+  having no CVSS at all, and the non-CVE research that informed rows — Paul Butler on
+  variation-selector smuggling, and the CoreText Telugu crash.
+
 - **The comparator table no longer contradicts the matrix.** CVE-2026-23950 rendered as
   `Neutralized` in the matrix and as `no` under both disarm columns in the comparison a
   hundred lines below, because the comparison scores every row against two *fixed* disarm
@@ -495,6 +528,32 @@ compatibility (see [RELEASING.md](RELEASING.md)).
     `strip_control` handles `Cc`; bidi controls are `Cf`. No behaviour change — the
     preset is tokenizer hygiene, and `llm_guardrail` / `rag_ingest` already exist for
     untrusted input.
+
+- **Python can now call `strip_control_chars` and `strip_zero_width_chars` directly
+  (#616).** They already existed in the Rust core (`disarm::api`) and in the C ABI,
+  Java/Kotlin, Node and Ruby bindings. Python was the only surface without them, so
+  control-stripping there meant constructing a `TextPipeline` rather than calling a
+  function — unlike the ten sibling `strip_*` operations, four of which
+  (`strip_tags`, `strip_pua`, `strip_noncharacters`, `strip_variation_selectors`) are
+  narrower and are plain functions. Both are now exported, and `Text` gains the
+  matching fluent methods.
+
+  The parity matrix recorded the gap as deliberate and named the substitute as
+  `collapse_whitespace(strip_control=True)` — a signature that has never existed;
+  `collapse_whitespace` takes only `text`. That record lived in `PROVIDED_VIA` in
+  `scripts/parity.py`, so anyone consulting the matrix for the Python equivalent was
+  sent to a `TypeError`. Both entries are removed and the matrix regenerated.
+
+- **`collapse_whitespace` gains a property test covering control characters.** The
+  existing `no_leading_trailing_whitespace` property draws from `\PC*`, which
+  excludes controls, so the trim invariant was never tested against them. It holds:
+  measured exhaustively over the cross product of whitespace, controls and letters
+  for lengths 1–4, and over 200,000 random strings, with zero cases where the output
+  starts or ends with whitespace. Reported as a trim bug in #612; that report was
+  wrong and is retracted there. What looked like a defeated trim is the space
+  *between* a leading control and the word, which is interior by the same rule that
+  makes `"a\u{0}b"` keep both of its spaces. No behaviour change — the test closes
+  the coverage gap that made the question open.
 
 - **`is_suspicious_hostname()` now catches zero-width and invisible characters, and no
   longer reports a phantom script for them (#605).** Sibling of #603, for the characters

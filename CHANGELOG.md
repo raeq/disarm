@@ -460,6 +460,45 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **A new `control` anomaly kind — `has_anomalies` goes from 11 CVE rows to 18 (#612).**
+  A non-whitespace control (`NUL`, `ESC`, `BEL`, `DEL`, the C1 block) is never
+  legitimate in text, and nothing reported one. `strip_control_chars` has removed them
+  since #433, so the transform existed and the detector did not.
+
+  The reason they were invisible is worth recording: the introducers are plain ASCII, so
+  the ASCII fast path in the token classifier — which exists because the invisible, bidi,
+  zalgo and mixed-script branches can only fire above `U+007F` — skipped them entirely.
+  The new branch runs before that gate.
+
+  **Presence, not position.** #612 framed this as an "edge" question because it started
+  from whitespace trimming, but a control hides things wherever it sits: the last
+  character of `"malicious\u001b\\"` is a backslash, so an edge-only rule would call
+  that token clean while the escape introducer sits one place in.
+
+  The whitespace-class controls are excluded, reusing `is_fold_whitespace` rather than
+  restating the set. TAB, LF, VT, FF, CR, `U+001C`–`U+001F` and NEL are real separators
+  that `collapse_whitespace` folds to a space, and flagging them would fire on every
+  multi-line string.
+
+  This closes seven rows that `docs/security/cve-validation.md` listed as reported by
+  nothing: CVE-2023-24329 (leading NUL) and the whole terminal-control class
+  (CVE-2008-2383, CVE-2019-9535, CVE-2025-55754, CVE-2024-52005, CVE-2023-43620,
+  CVE-2023-37275). The three that remain undetected are a different shape — a fold
+  collision, a length budget, a table lookup — so no further character class will close
+  them, and the page now says so.
+
+  Deliberately *not* added: leading/trailing whitespace detection, which #612 also asked
+  for. `inspect_anomalies` documents itself as flagging characters "disguising a real
+  word", and padding disguises nothing; a kind for it would fire on ordinary text.
+
+- **The Node `AnomalyKind` union shipped without `bidi_mixed`.** It was added to the Rust
+  enum in #412 and never mirrored, so a TypeScript caller matching on it got a type error
+  for a kind the library really returns. Nothing caught it, because the value crosses
+  napi as a bare `String` and `index.ts` casts. Node is the only binding that restates
+  the set — every other surface passes it through as a string — so a drift gate now reads
+  the `as_str` arms out of `src/anomalies.rs` and compares them to the union, plus a
+  second test asserting every kind is reachable from some input.
+
 - **`is_suspicious_hostname()` now catches zero-width and invisible characters, and no
   longer reports a phantom script for them (#605).** Sibling of #603, for the characters
   that carry no direction at all — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF` and

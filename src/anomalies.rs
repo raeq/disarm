@@ -70,6 +70,15 @@ pub enum AnomalyKind {
     Leet,
     /// Dense separators splitting single letters into a real word (`v.i.a.g.r.a`).
     Segmentation,
+    /// A non-whitespace control character (`NUL`, `ESC`, `BEL`, `DEL`, the C1 block).
+    ///
+    /// Never legitimate in text, and the introducer for terminal-escape injection
+    /// (CVE-2008-2383, CVE-2019-9535) and leading-blank blocklist bypass
+    /// (CVE-2023-24329). The whitespace-class controls — TAB, LF, VT, FF, CR, the
+    /// information separators `U+001C`–`U+001F`, NEL — are excluded: they are real
+    /// separators that [`crate::whitespace::collapse_whitespace`] folds to a space,
+    /// so flagging them would fire on ordinary multi-line text (#612).
+    Control,
 }
 
 impl AnomalyKind {
@@ -84,6 +93,7 @@ impl AnomalyKind {
             AnomalyKind::BidiMixed => "bidi_mixed",
             AnomalyKind::Leet => "leet",
             AnomalyKind::Segmentation => "segmentation",
+            AnomalyKind::Control => "control",
         }
     }
 }
@@ -134,6 +144,9 @@ impl Finding {
             }
             AnomalyKind::Segmentation => {
                 format!("{:?} splits the word {:?}", self.token, self.detail)
+            }
+            AnomalyKind::Control => {
+                format!("{:?} contains the control character {}", self.token, self.detail)
             }
         }
     }
@@ -337,6 +350,27 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     // `core` (token with wrapping punctuation trimmed) is needed by both the mixed-script
     // branch and the leet/segmentation branches; compute it once.
     let core = tok.trim_matches(|c: char| WRAP.contains(&c));
+
+    // Non-whitespace controls (#612). Checked BEFORE the ASCII fast-path below, because
+    // NUL, ESC, BEL and DEL are all ASCII — a pure-ASCII token skips that whole block, so
+    // a check placed inside it would never see the vectors this exists for.
+    //
+    // Presence, not position. #612 framed this as an "edge" question because it started
+    // from whitespace trimming, but a control hides things wherever it sits: the last
+    // character of `"malicious\u{1b}\\"` is a backslash, so an edge-only rule would call
+    // that token clean while the escape introducer sits one place in.
+    //
+    // The whitespace-class controls are excluded via `is_fold_whitespace` — TAB, LF, VT,
+    // FF, CR, `U+001C`-`U+001F` and NEL are real separators that `collapse_whitespace`
+    // folds to a space, and flagging them would fire on ordinary multi-line text. That is
+    // the same split `strip_control_chars` has drawn since #433, reused rather than
+    // restated so the two cannot drift.
+    if let Some(c) = tok
+        .chars()
+        .find(|&c| c.is_control() && !crate::whitespace::is_fold_whitespace(c))
+    {
+        return Some(mk(AnomalyKind::Control, codepoint(c)));
+    }
 
     // ASCII fast-path: the invisible / bidi / zalgo / mixed-script branches can only fire
     // above U+007F, so a pure-ASCII token skips every script and zalgo call.

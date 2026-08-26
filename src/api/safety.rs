@@ -438,10 +438,13 @@ pub struct HostnameAnalysis {
     ///
     /// Disjoint from [`bidi_control`](Self::bidi_control): these carry no direction at
     /// all, so neither that field nor [`bidi_conflict`](Self::bidi_conflict) can see
-    /// them. IDNA2008 (RFC 5892) disallows every class, which is what justifies
-    /// including private use and the variation selectors here — both have legitimate
-    /// uses in ordinary text, so a general-text detector would need its own argument
-    /// for them. Folded into [`suspicious`](Self::suspicious); the characters are
+    /// them. RFC 5892 puts the tag, variation-selector, noncharacter and private-use
+    /// classes in DISALLOWED outright, which is what justifies including private use
+    /// and the variation selectors here — both have legitimate uses in ordinary text,
+    /// so a general-text detector would need its own argument for them. `U+200C` and
+    /// `U+200D` are the exception: CONTEXTJ, so conditionally permitted. This screen
+    /// flags them anyway, which is a deliberate fail-closed policy (#605) rather than
+    /// something the RFC settles. Folded into [`suspicious`](Self::suspicious); the characters are
     /// removed per label *before* any other field is computed, so they never reach
     /// [`scripts`](Self::scripts), [`mixed_script`](Self::mixed_script) or
     /// [`canonical`](Self::canonical).

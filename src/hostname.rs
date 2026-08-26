@@ -6,10 +6,16 @@ use crate::{confusables, invisibles, scripts};
 ///
 /// The union of the zero-width set with the four class predicates
 /// [`invisibles::is_tag`], [`invisibles::is_variation_selector`],
-/// [`invisibles::is_noncharacter`] and [`invisibles::is_pua`]. IDNA2008 (RFC 5892)
-/// disallows all of them, which is what justifies folding PUA and the variation
-/// selectors in here — both have legitimate uses in ordinary text, so a general-text
-/// detector needs a separate argument for them.
+/// [`invisibles::is_noncharacter`] and [`invisibles::is_pua`].
+///
+/// RFC 5892 puts the four classes #610 added in DISALLOWED outright, which is what
+/// justifies folding PUA and the variation selectors in here — both have legitimate
+/// uses in ordinary text, so a general-text detector needs a separate argument for
+/// them. The zero-width set is not uniformly disallowed: `U+200C`/`U+200D` are
+/// CONTEXTJ, permitted in the specific joining contexts RFC 5892 Appendix A.1/A.2
+/// describe. This screen flags them anyway (#605), because a spoof screen has no
+/// reason to honour a context rule it cannot verify, and that is a deliberate policy
+/// rather than a reading of the RFC.
 ///
 /// Deliberately excludes the UAX #9 bidi controls: those are
 /// [`scripts::is_bidi_control`] and are reported through `bidi_control` (#603), so the
@@ -243,10 +249,12 @@ pub(crate) fn is_suspicious_hostname_opts(
         // on an ASCII-looking host. Stripping first means nothing downstream — scripts,
         // mixed_script, confusables, canonical — ever sees them.
         //
-        // IDNA2008 (RFC 5892) disallows every class below, so a hostname carrying one is
-        // malformed whatever its intent and the screen can fail closed on all of them.
-        // That is why PUA and the variation selectors are included here but would need a
+        // RFC 5892 puts the four classes #610 added in DISALLOWED outright, so a hostname
+        // carrying one is malformed whatever its intent and the screen fails closed. That
+        // is why PUA and the variation selectors are included here but would need a
         // separate argument in a general-text detector, where both have legitimate uses.
+        // ZWNJ/ZWJ are the exception: CONTEXTJ, so conditionally permitted. Flagging them
+        // is a policy choice (#605), not something the RFC settles.
         // The tag block is the ASCII-smuggling channel: U+E0061-U+E007A spell arbitrary
         // Latin invisibly, so returning them in `canonical` would launder the payload.
         if label.chars().any(is_invisible_in_hostname) {

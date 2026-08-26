@@ -477,8 +477,11 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   the Java `jni_sig!` string. `is_invisible_in_hostname` composes the four class
   predicates that `src/invisibles.rs` already carried.
 
-  Private use and the variation selectors are included because IDNA2008 (RFC 5892)
-  disallows every class in a hostname. Both have legitimate uses in ordinary text, so
+  Private use and the variation selectors are included because RFC 5892 puts all four
+  of the classes added here in DISALLOWED outright. (The pre-existing zero-width set is
+  not uniformly disallowed — `U+200C`/`U+200D` are CONTEXTJ, conditionally permitted —
+  and flagging those remains the deliberate fail-closed policy #605 chose, not a reading
+  of the RFC.) Both have legitimate uses in ordinary text, so
   a general-text detector needs its own argument for them; that is tracked separately.
   Measured against the full suite including the adversarial-oracle clean corpus: no
   false positives.

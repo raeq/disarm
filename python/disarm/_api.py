@@ -1217,8 +1217,11 @@ def is_suspicious_hostname(
       noncharacter (``U+FDD0``-``U+FDEF`` and the last two of every plane), or
       private use (``U+E000``-``U+F8FF``, planes 15 and 16). Disjoint from
       ``bidi_control`` — these carry no direction at all, so neither bidi field can
-      see them. IDNA2008 disallows every class, which is what justifies including
-      private use and variation selectors here. Folded into ``suspicious``. They are
+      see them. RFC 5892 puts the tag, variation-selector, noncharacter and
+      private-use classes in DISALLOWED outright, which is what justifies including
+      private use and variation selectors here. ``U+200C``/``U+200D`` are the
+      exception — CONTEXTJ, so conditionally permitted; the screen flags them anyway
+      as a deliberate fail-closed policy. Folded into ``suspicious``. They are
       removed per label *before* any other field is computed, so a hostname whose
       only non-ASCII is an invisible no longer reports a phantom script (``U+FEFF``
       sits in the Arabic Presentation Forms block, ``U+FDD0`` in its range).

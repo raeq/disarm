@@ -524,6 +524,42 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   called such a hostname clean *and* returned the payload intact in `canonical` — the
   combination that turns a detector into a laundering step.
 
+- **`PRESETS["ml_normalize"]` was missing two of the nine steps it claims to describe
+  (#600).** `PRESETS` is a hand-maintained Python mirror of the `const STEPS` arrays in
+  `src/presets.rs`; nothing executes it, and it had drifted. The mirror listed seven
+  steps, omitting the `transliterate` step and the second `demojize` that #498 added
+  after `strip_accents`. `test_preset_steps_exact` did not catch it because it compares
+  the mirror against a literal in the test file, and both were written from the same
+  wrong reading — so the test pinned the drift instead of detecting it. Mirror and test
+  are now correct against Rust.
+
+  `list_profiles()` also said presets are "step-lists defined in Python". They are
+  defined in Rust. That sentence is how the drift went unnoticed, so it is corrected
+  too, and a comment on `PRESETS` now states what the dict is and what it is not.
+
+  A structural gate that parses the Rust arrays is **not** part of this change: the step
+  lists use composite variants (`FixedPoint`, `ConfusablesNfcFixedPoint`) that the
+  mirror flattens, so a real gate needs per-preset expansion rules and deserves its own
+  issue rather than a fragile parser bolted on here.
+
+- **Documentation: three functions whose names promise more than they check.**
+  - `has_bidi_conflict` now says plainly that it is **not** the RLO check (#599). It
+    reads letters, so `"invoice\u202Egpj.exe"` returns `False` — the two conditions are
+    disjoint and a string can satisfy either, both or neither. The docstrings route to
+    `inspect_anomalies` (kind `bidi`) for detection and `strip_bidi` for removal, and
+    note that `strip_bidi` does *not* close the real-letter case, because there is no
+    format character to remove. `docs/concepts/which-function.md` gains the two bidi rows
+    its threat-model table lacked; its only previous mention of bidi was in a *cost*
+    column, so the page could not answer "how do I detect a bidi attack".
+  - `get_pipeline()` now states that profile names and `PRESETS` keys are disjoint
+    namespaces, so `get_pipeline("canonicalize")` raising is expected rather than a bug
+    (#600).
+  - `ml_normalize`'s documented limits stopped at homoglyphs. They now cover the other
+    two: all twelve bidi controls and every PUA code point pass through unchanged (#608).
+    `strip_control` handles `Cc`; bidi controls are `Cf`. No behaviour change — the
+    preset is tokenizer hygiene, and `llm_guardrail` / `rag_ingest` already exist for
+    untrusted input.
+
 - **Python can now call `strip_control_chars` and `strip_zero_width_chars` directly
   (#616).** They already existed in the Rust core (`disarm::api`) and in the C ABI,
   Java/Kotlin, Node and Ruby bindings. Python was the only surface without them, so

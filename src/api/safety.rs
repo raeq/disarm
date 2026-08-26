@@ -357,6 +357,26 @@ pub fn is_mixed_script(text: &str) -> bool {
 /// CJK/… are left-to-right; Hebrew/Arabic/Syriac/Thaana/N'Ko are right-to-left;
 /// digits, punctuation and combining marks are neutral and never create a
 /// conflict on their own. A `false` result is **not** a safety guarantee.
+///
+/// # This is not the RLO check (#599)
+///
+/// Because it reads letters, it is structurally blind to the `U+202x` overrides.
+/// `"invoice\u{202E}gpj.exe"` — the classic extension spoof — returns `false`
+/// here. The two conditions are **disjoint**: a string can satisfy either, both,
+/// or neither.
+///
+/// | input | `has_bidi_conflict` | [`inspect_anomalies`] kind |
+/// |---|---|---|
+/// | `"invoice\u{202E}gpj.exe"` | `false` | `bidi` |
+/// | `"varonis.com.\u{05D5}"` | `true` | `bidi_mixed` |
+///
+/// To cover an override instead: detect it with [`inspect_anomalies`] (kind
+/// `bidi`), and remove it with [`strip_bidi`]. Note [`strip_bidi`] does **not**
+/// close this function's case — on a real-letter conflict it returns the input
+/// unchanged, because there is no format character to remove.
+///
+/// [`inspect_anomalies`]: crate::api::inspect_anomalies
+/// [`strip_bidi`]: crate::api::strip_bidi
 #[must_use]
 pub fn has_bidi_conflict(text: &str) -> bool {
     crate::scripts::has_bidi_conflict(text)

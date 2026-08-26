@@ -324,7 +324,9 @@ class TestPipelineStepTuples:
                 [
                     ("normalize", "NFKC"),
                     ("demojize", "cldr"),
+                    ("transliterate", None),  # only_if_lang, Ignore mode
                     ("strip_accents", None),
+                    ("demojize", "cldr"),  # #498: names the base strip_accents exposes
                     ("fold_case", None),
                     ("strip_control", None),
                     ("strip_zero_width", None),

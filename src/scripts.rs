@@ -350,6 +350,18 @@ pub(crate) fn strong_dir(ch: char) -> Option<StrongDir> {
 /// involved, so [`crate::whitespace`]-style override stripping is a no-op on it.
 /// A `false` result is not a safety guarantee — it only means no strong-LTR and
 /// strong-RTL letters coexist in this string.
+///
+/// # This is not the RLO check
+///
+/// It reads **letters**, so it is structurally blind to the U+202x overrides —
+/// `"invoice\u{202E}gpj.exe"`, the best-known bidi spoof, returns `false` here
+/// (#599). The two conditions are disjoint and a string can satisfy either, both
+/// or neither. For an override:
+///
+/// - detect with [`has_bidi_control`], or [`crate::anomalies`] kind `bidi`;
+/// - remove with `strip_bidi`.
+///
+/// [`has_bidi_control`]: crate::scripts::has_bidi_control
 pub(crate) fn has_bidi_conflict(text: &str) -> bool {
     let mut ltr = false;
     let mut rtl = false;

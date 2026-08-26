@@ -270,6 +270,44 @@ when a cased model needs both. The full threat-model-to-entry-point table, with 
 each choice costs, is in
 [what each entry point costs you](../security/adversarial-defense.md#what-each-entry-point-costs-you).
 
+### Two more gaps behind the same name
+
+Homoglyphs are the best-known of `ml_normalize`'s blind spots, not the only ones. Its
+pipeline is NFKC, emoji, transliterate, strip_accents, emoji, fold_case, strip_control,
+strip_zero_width, collapse_whitespace. `strip_control` covers the C0 and C1 controls,
+which are category `Cc`. Bidi controls are `Cf`, so they fall straight through, and
+nothing in the list touches the Private Use Area.
+
+```python
+BIDI = "".join(chr(c) for c in
+               (0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+                0x2066, 0x2067, 0x2068, 0x2069, 0x200E, 0x200F, 0x061C))
+
+# All twelve bidi controls survive.
+assert [c for c in BIDI if c in ml_normalize(f"a{c}b")] == list(BIDI)
+
+# So does a PUA code point.
+assert ml_normalize("Summarize.\U000f0000") == "summarize.\U000f0000"
+```
+
+It does remove the Unicode Tags block and zero-width fragmentation, which is what makes
+the coverage look more complete than it is.
+
+None of this makes `ml_normalize` broken. It is a tokenizer-hygiene preset, and
+`THREAT_MODEL.md` never lists it as a security mechanism. But the name reads as "the
+preset for ML input", which is exactly the pipeline position where a surviving bidi
+control or PUA code point matters. Reach for a profile when the text is untrusted.
+
+```python
+from disarm import get_pipeline
+
+guardrail = get_pipeline("llm_guardrail")
+assert not any(c in guardrail(f"a{c}b") for c in BIDI)   # bidi handled
+assert guardrail("Summarize.\U000f0000") == "summarize.\U000f0000"  # PUA still not
+
+assert get_pipeline("rag_ingest")("Summarize.\U000f0000") == "Summarize."  # PUA handled
+```
+
 ## Which path, and when NOT to use disarm
 
 Being explicit about the path is what earns credibility with this audience —

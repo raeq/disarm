@@ -1697,6 +1697,18 @@ def has_bidi_conflict(text: str) -> bool:
 
     A ``False`` result is **not** a safety guarantee.
 
+    .. warning::
+       **This is not the RLO check.** Because it reads *letters*, it is
+       structurally blind to the ``U+202x`` overrides — the classic extension
+       spoof ``"invoice\\u202Egpj.exe"`` returns ``False`` here. The two
+       conditions are disjoint; a string can satisfy either, both, or neither.
+
+       To cover an override instead, use :func:`inspect_anomalies` (kind
+       ``bidi``) to detect and :func:`strip_bidi` to remove. Note
+       :func:`strip_bidi` does *not* close this function's case: on a real-letter
+       conflict it returns the input unchanged, because there is no format
+       character to remove.
+
     Args:
         text: Input string.
 
@@ -1708,6 +1720,10 @@ def has_bidi_conflict(text: str) -> bool:
         False
         >>> has_bidi_conflict("helloא")  # Latin + Hebrew
         True
+        >>> has_bidi_conflict("invoice\\u202Egpj.exe")  # RLO override, not letters
+        False
+        >>> inspect_anomalies("invoice\\u202Egpj.exe").kinds  # this is the check
+        ['bidi']
     """
     return _has_bidi_conflict(text)
 

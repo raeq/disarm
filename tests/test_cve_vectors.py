@@ -1392,10 +1392,19 @@ class TestNormalizationCost:
         """Correctness first. A faster normalizer that disagrees is not faster."""
         assert disarm.normalize(payload, form=form) == unicodedata.normalize(form, payload)
 
-    @pytest.mark.parametrize(
-        "payload", [ALTERNATING_CCC, LONG_USERNAME], ids=["alt-ccc", "username"]
-    )
-    def test_cost_is_linear_in_input_length(self, payload: str) -> None:
+    #: (prefix, repeating unit) for each payload, so the growth test can build
+    #: its own inputs. Recovering these by slicing the finished payload and
+    #: branching on ``payload is ALTERNATING_CCC`` was the first version, and it
+    #: was wrong: identity is not guaranteed for equal strings, so a wrong
+    #: branch would have silently measured the wrong unit and left the bound
+    #: meaningless rather than failing.
+    GROWTH_SHAPES = [
+        pytest.param("a", "̴̖", id="alt-ccc"),
+        pytest.param("", "ẛ̣", id="username"),
+    ]
+
+    @pytest.mark.parametrize("prefix,unit", GROWTH_SHAPES)
+    def test_cost_is_linear_in_input_length(self, prefix: str, unit: str) -> None:
         """The property the CVEs are about: cost must not grow superlinearly.
 
         Quadratic growth over a 4x input would show as ~16x. The bound here is
@@ -1403,8 +1412,6 @@ class TestNormalizationCost:
         would flake — but it is far below what an algorithmic-complexity bug
         would produce.
         """
-        unit = payload[1:3] if payload is ALTERNATING_CCC else payload[:2]
-        prefix = payload[:1] if payload is ALTERNATING_CCC else ""
 
         def cost(reps: int) -> float:
             text = prefix + unit * reps
@@ -1417,6 +1424,12 @@ class TestNormalizationCost:
 
         small, large = cost(2_000), cost(8_000)
         assert large < small * 8, f"4x input cost {large / small:.1f}x time"
+
+    @pytest.mark.parametrize("prefix,unit", GROWTH_SHAPES)
+    def test_growth_shapes_rebuild_the_declared_payloads(self, prefix: str, unit: str) -> None:
+        """Guard: the parts must still compose into the payloads they came from,
+        or the growth test is measuring something the registry does not cover."""
+        assert prefix + unit * 2_000 in {ALTERNATING_CCC, LONG_USERNAME}
 
     def test_disarm_is_not_uniformly_faster_and_the_page_says_so(self) -> None:
         """MEASURED, and the reason "not affected" is not written as "faster".
@@ -2418,6 +2431,24 @@ class TestComparatorCorpusDrift:
             "compared but not neutralizable here": sorted(COVERED - set(NEUTRALIZABLE)),
             "neutralizable but not compared": sorted(set(NEUTRALIZABLE) - COVERED),
         }
+
+    def test_the_documented_vector_count_matches_the_corpus(self) -> None:
+        """The comparator page states its own size in prose, and prose goes stale.
+
+        This is the third count on this page to drift — after the two in
+        THREAT_MODEL.md — so it gets the same treatment: parsed and compared
+        rather than remembered. The figure matters here because the sentence
+        around it is explicitly a *non*-coverage claim, and a wrong number
+        undermines exactly the modesty it exists to express.
+        """
+        from benchmarks.cve_comparators import COVERED
+
+        text = TestDocsMatrixDrift.DOC.read_text(encoding="utf-8")
+        match = re.search(r"These (?P<count>\d+) vectors are a spot check", text)
+        assert match is not None, "the comparator page no longer states its vector count"
+        assert int(match.group("count")) == len(COVERED), (
+            f"page says {match.group('count')}, corpus has {len(COVERED)}"
+        )
 
     def test_comparator_rows_are_registered_cves(self) -> None:
         from benchmarks.cve_comparators import COVERED

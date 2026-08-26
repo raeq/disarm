@@ -207,6 +207,9 @@ from disarm._core import (
     _strip_bidi as _strip_bidi,
 )
 from disarm._core import (
+    _strip_control_chars as _strip_control_chars,
+)
+from disarm._core import (
     _strip_format as _strip_format,
 )
 from disarm._core import (
@@ -229,6 +232,9 @@ from disarm._core import (
 )
 from disarm._core import (
     _strip_zalgo as _strip_zalgo,
+)
+from disarm._core import (
+    _strip_zero_width_chars as _strip_zero_width_chars,
 )
 from disarm._core import (
     _terminal_width as _terminal_width,

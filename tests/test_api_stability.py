@@ -46,6 +46,8 @@ EXPECTED_ALL = {
     "normalize_confusables",
     "sanitize_filename",
     "strip_accents",
+    "strip_control_chars",
+    "strip_zero_width_chars",
     "fold_case",
     "collapse_whitespace",
     "demojize",
@@ -350,6 +352,8 @@ CORE_FUNCTION_PARAMS = {
     "strip_accents": ["text"],
     "fold_case": ["text"],
     "collapse_whitespace": ["text"],
+    "strip_control_chars": ["text"],
+    "strip_zero_width_chars": ["text"],
     "demojize": [
         "text",
         "strip_modifiers",
@@ -487,6 +491,8 @@ CLASS_METHODS = {
         ],
         "fold_case": [],
         "collapse_whitespace": [],
+        "strip_control_chars": [],
+        "strip_zero_width_chars": [],
         "slugify": [
             "separator",
             "lowercase",

@@ -493,6 +493,32 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **Python can now call `strip_control_chars` and `strip_zero_width_chars` directly
+  (#616).** They already existed in the Rust core (`disarm::api`) and in the C ABI,
+  Java/Kotlin, Node and Ruby bindings. Python was the only surface without them, so
+  control-stripping there meant constructing a `TextPipeline` rather than calling a
+  function — unlike the ten sibling `strip_*` operations, four of which
+  (`strip_tags`, `strip_pua`, `strip_noncharacters`, `strip_variation_selectors`) are
+  narrower and are plain functions. Both are now exported, and `Text` gains the
+  matching fluent methods.
+
+  The parity matrix recorded the gap as deliberate and named the substitute as
+  `collapse_whitespace(strip_control=True)` — a signature that has never existed;
+  `collapse_whitespace` takes only `text`. That record lived in `PROVIDED_VIA` in
+  `scripts/parity.py`, so anyone consulting the matrix for the Python equivalent was
+  sent to a `TypeError`. Both entries are removed and the matrix regenerated.
+
+- **`collapse_whitespace` gains a property test covering control characters.** The
+  existing `no_leading_trailing_whitespace` property draws from `\PC*`, which
+  excludes controls, so the trim invariant was never tested against them. It holds:
+  measured exhaustively over the cross product of whitespace, controls and letters
+  for lengths 1–4, and over 200,000 random strings, with zero cases where the output
+  starts or ends with whitespace. Reported as a trim bug in #612; that report was
+  wrong and is retracted there. What looked like a defeated trim is the space
+  *between* a leading control and the word, which is interior by the same rule that
+  makes `"a\u{0}b"` keep both of its spaces. No behaviour change — the test closes
+  the coverage gap that made the question open.
+
 - **`is_suspicious_hostname()` now catches zero-width and invisible characters, and no
   longer reports a phantom script for them (#605).** Sibling of #603, for the characters
   that carry no direction at all — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF` and

@@ -9,7 +9,7 @@
 //!   - str→str maps:  `key\tvalue`
 //!   - char sets:      `HEXCODEPOINT`
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
@@ -288,6 +288,56 @@ fn main() {
         "EMOJI_SINGLE",
         "pub",
     );
+    // --- Emoji rows the TR39 confusable table also claims (#614) ---
+    // 49 code points appear in BOTH emoji_single.tsv and confusables_to_latin.tsv, and
+    // they are mostly not emoji at all: typographic punctuation (`2010 hyphen`, the
+    // apostrophes and quotes, `2026 ellipsis`), currency (`20AC euro`), math operators
+    // and the CJK tortoise-shell brackets. They reach the emoji table from CLDR
+    // `annotationsDerived`, which names non-emoji characters.
+    //
+    // Both entries are legitimate. `demojize("I ❤ €5")` -> "I red heart euro 5" is
+    // exactly what that function is for. What is wrong is which table wins inside a
+    // COMPARISON preset: `strip_obfuscation("€xample.com")` named the euro sign instead
+    // of folding it, so the spoof and the genuine string stopped being equal rather than
+    // becoming equal, and CVE-2017-5383 survived a preset documented as maximum-strength
+    // deobfuscation.
+    //
+    // Derived as an INTERSECTION rather than read from a curated file, so it cannot drift
+    // out of date the way a hand-written override list would. The count is asserted: a
+    // future emoji-table refresh that claims another confusable source fails the build
+    // with this message instead of silently widening the gap.
+    {
+        let emoji = read_char_str_tsv(&data_dir.join("emoji_single.tsv"));
+        let confusable = read_char_str_tsv(&data_dir.join("confusables_to_latin.tsv"));
+        let overlap: BTreeSet<u32> = emoji
+            .keys()
+            .filter(|cp| confusable.contains_key(cp))
+            .copied()
+            .collect();
+        assert_eq!(
+            overlap.len(),
+            49,
+            "emoji_single.tsv ∩ confusables_to_latin.tsv changed: expected the 49 rows \
+             reviewed in #614, found {}. A new row means a confusable source is now \
+             named instead of folded inside strip_obfuscation. Review it, then update \
+             this count.",
+            overlap.len()
+        );
+        let mut code = String::from(
+            "/// Code points claimed by BOTH the emoji name table and the TR39 confusable\n\
+             /// table (#614). Skipped by `demojize` inside comparison presets so the fold\n\
+             /// wins; standalone `demojize` still names them.\n\
+             pub(crate) static EMOJI_ROWS_TR39_ALSO_CLAIMS: phf::Set<u32> = ",
+        );
+        let mut set = phf_codegen::Set::new();
+        for cp in &overlap {
+            set.entry(*cp);
+        }
+        code.push_str(&set.build().to_string());
+        code.push_str(";\n");
+        fs::write(out_dir.join("emoji_tr39_overlap_phf.rs"), code).unwrap();
+    }
+
     // Production matcher (#242 item 4): compact code-point trie.
     generate_emoji_trie(
         &data_dir.join("emoji_multi.tsv"),

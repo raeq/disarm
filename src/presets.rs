@@ -77,8 +77,14 @@ enum Step {
     /// (`ᴔ`→`ǝo`, then `ǝ`→`e`); and the maps chain. Looping the whole core makes
     /// the preset idempotent. The inner list must not itself contain `FixedPoint`.
     FixedPoint(&'static [Step]),
+    /// #615: drop a combining mark whose own script differs from its base's.
+    /// `canonicalize_strict` only — see `zalgo::strip_cross_script_marks`.
+    StripCrossScriptMarks,
     Demojize {
         only_if_cldr: bool,
+        /// #614: leave the 49 rows TR39 also claims for the confusable step to fold.
+        /// Set by comparison presets only; standalone `demojize` still names them.
+        skip_tr39_claimed: bool,
     },
 }
 
@@ -227,11 +233,18 @@ fn apply_into(
                 Ok(true)
             }
         }
-        Step::Demojize { only_if_cldr } => {
+        Step::StripCrossScriptMarks => {
+            zalgo::strip_cross_script_marks_into(input, out);
+            Ok(true)
+        }
+        Step::Demojize {
+            only_if_cldr,
+            skip_tr39_claimed,
+        } => {
             if only_if_cldr && !ctx.emoji_cldr {
                 return Ok(false);
             }
-            emoji::demojize_rust_into(input, false, out);
+            emoji::demojize_rust_into(input, false, skip_tr39_claimed, out);
             Ok(true)
         }
     }
@@ -338,6 +351,11 @@ impl Actionable {
                     m.marks = true;
                     m.strip_accents = true;
                 }
+                // #615: touches combining marks only, and never a base character. It
+                // does NOT set `strip_accents`: that flag means "every mark goes", and
+                // this step keeps `Inherited` marks — the fast path must not treat a
+                // preset carrying it as one that flattens `café`.
+                Step::StripCrossScriptMarks => m.marks = true,
                 Step::StripBidi => m.bidi = true,
                 Step::StripZeroWidth => m.zero_width = true,
                 Step::StripInvisible(_) => m.invisible = true,
@@ -823,7 +841,10 @@ pub(crate) fn ml_normalize<'a>(
         // 1. NFKC normalization
         Step::Nfkc,
         // 2. Emoji → text (CLDR short names) when emoji_style == "cldr".
-        Step::Demojize { only_if_cldr: true },
+        Step::Demojize {
+            only_if_cldr: true,
+            skip_tr39_claimed: false,
+        },
         // 3. Transliterate if lang is set (e.g. "de" for ü→ue, "ja" for kana).
         //    Use Ignore mode: ML pipelines need clean ASCII-ish output, so
         //    characters with no mapping (e.g. katakana ー) should be dropped
@@ -843,7 +864,10 @@ pub(crate) fn ml_normalize<'a>(
         //     base is only named on the following call — non-idempotent. The
         //     exposed bases name to plain ASCII ("approximately equal"), so a
         //     single extra pass reaches the fixed point; no iteration is needed.
-        Step::Demojize { only_if_cldr: true },
+        Step::Demojize {
+            only_if_cldr: true,
+            skip_tr39_claimed: false,
+        },
         // 5. Unicode case folding (ß→ss, ﬁ→fi, etc.)
         Step::FoldCase,
         // 6. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
@@ -1263,6 +1287,19 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
         //    pass would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping makes the preset a
         //    true fixed point — see `canonicalize` for the full rationale.
         Step::ConfusablesNfcFixedPoint("latin"),
+        // 4b. Drop a mark whose own script differs from its base's (#615,
+        //     CVE-2017-7833). The zalgo cap above is a COUNT, and by count one Arabic
+        //     shadda is indistinguishable from one acute accent, so no threshold
+        //     removes the spoof and keeps `café`.
+        //
+        //     Placed AFTER the confusable fold, not before, and that ordering is
+        //     load-bearing: the fold rewrites the BASE, so a mark that matched its
+        //     base beforehand can stop matching afterwards. `а` (Cyrillic) + U+0489
+        //     (Cyrillic mark) agrees on the first pass, then the fold makes the base
+        //     Latin `a` and the next pass strips the mark — f(f(x)) != f(x), which
+        //     `canonicalize_strict_idempotent` catches. Deciding against the FINAL
+        //     base script is the only stable point.
+        Step::StripCrossScriptMarks,
         // 5. Fold whitespace (#433: fold-only — control/zero-width were already
         //    stripped explicitly above, before the zalgo cap, per #121). The line
         //    controls now fold to a space instead of being deleted, so `a\rb` → `a b`.
@@ -1324,6 +1361,8 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
         // 5. Demojize — expand emoji to text names with spacing
         Step::Demojize {
             only_if_cldr: false,
+            // #614: this is a comparison preset, so the TR39 fold wins over the name.
+            skip_tr39_claimed: true,
         },
         // 5b. Strip the #413 smuggling / non-interchange classes. Runs AFTER demojize
         //     so the emoji pass sees flags/presentation selectors intact; whatever
@@ -1678,6 +1717,81 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// #614: inside a comparison preset the TR39 fold wins over the emoji name.
+    #[test]
+    fn strip_obfuscation_folds_the_rows_tr39_also_claims() {
+        // CVE-2017-5383. The euro sign is not an emoji; it reaches the emoji table
+        // from CLDR annotationsDerived, which names non-emoji characters.
+        assert_eq!(
+            strip_obfuscation("\u{20AC}xample.com").unwrap(),
+            "example.com"
+        );
+        // Every glyph the CVE names now collapses onto its ASCII form.
+        for spoof in [
+            "ex\u{2010}ample.com",
+            "ex\u{2011}ample.com",
+            "ex\u{2212}ample.com",
+        ] {
+            assert_eq!(
+                strip_obfuscation(spoof).unwrap(),
+                strip_obfuscation("ex-ample.com").unwrap(),
+                "{spoof:?}"
+            );
+        }
+    }
+
+    /// The skip is scoped: standalone `demojize` still names them.
+    #[test]
+    fn standalone_demojize_still_names_the_claimed_rows() {
+        let mut out = String::new();
+        crate::emoji::demojize_rust_into("I \u{2764} \u{20AC}5", false, false, &mut out);
+        assert_eq!(out, "I red heart euro 5");
+    }
+
+    /// The reason the steps were NOT reordered: punctuation inside an emoji *name*
+    /// still has to be folded by the confusable pass, or the preset is not idempotent.
+    #[test]
+    fn emoji_name_punctuation_is_still_folded() {
+        let once = strip_obfuscation("\u{1F452}").unwrap();
+        assert_eq!(once, "woman's hat");
+        assert_eq!(strip_obfuscation(&once).unwrap(), once);
+    }
+
+    /// #615: a mark whose own script differs from its base's is the CVE-2017-7833
+    /// shape, and only `canonicalize_strict` removes it.
+    #[test]
+    fn canonicalize_strict_drops_a_cross_script_mark() {
+        // U+0651 ARABIC SHADDA on a Latin base.
+        assert_eq!(
+            canonicalize_strict("exa\u{651}mple.com").unwrap(),
+            canonicalize_strict("example.com").unwrap()
+        );
+        // U+0E31 THAI MAI HAN AKAT — ccc == 0, so a combining-class test would miss it.
+        assert_eq!(
+            canonicalize_strict("exa\u{E31}mple.com").unwrap(),
+            canonicalize_strict("example.com").unwrap()
+        );
+    }
+
+    /// An `Inherited` mark attaches to anything, so ordinary diacritics survive.
+    #[test]
+    fn canonicalize_strict_keeps_ordinary_diacritics() {
+        for text in ["caf\u{e9}", "na\u{ef}ve", "Vi\u{1ec7}t Nam"] {
+            assert_eq!(canonicalize_strict(text).unwrap(), text, "{text:?}");
+        }
+    }
+
+    /// `canonicalize` deliberately does NOT get the rule — it is destructive for
+    /// scholarly transliteration, so it stays behind the stricter contract.
+    #[test]
+    fn canonicalize_does_not_get_the_cross_script_rule() {
+        let eclipsed = "exa\u{651}mple.com";
+        assert_ne!(
+            canonicalize(eclipsed).unwrap(),
+            canonicalize("example.com").unwrap()
+        );
     }
 
     #[test]
@@ -2059,13 +2173,19 @@ mod tests {
     fn no_fold_step_list_is_the_folded_list_minus_fold_case() {
         const FULL: &[Step; 9] = &[
             Step::Nfkc,
-            Step::Demojize { only_if_cldr: true },
+            Step::Demojize {
+                only_if_cldr: true,
+                skip_tr39_claimed: false,
+            },
             Step::Transliterate {
                 mode: crate::ErrorMode::Ignore,
                 only_if_lang: true,
             },
             Step::StripAccents,
-            Step::Demojize { only_if_cldr: true },
+            Step::Demojize {
+                only_if_cldr: true,
+                skip_tr39_claimed: false,
+            },
             Step::FoldCase,
             Step::StripControl,
             Step::StripZeroWidth,

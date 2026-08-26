@@ -761,15 +761,22 @@ where
             last_was_indic_consonant = false;
         }
 
-        // An empty-string mapping means "this character has no ASCII
-        // representation — drop it."  In preserve mode, honour the user's
-        // request to keep the original character instead of silently
-        // discarding it.
-        let is_mapped = match mapped.as_deref() {
-            Some(s) if !s.is_empty() => true,
-            Some(_) => error_mode != ErrorMode::Preserve, // empty → preserve keeps original
-            None => false,
-        };
+        // An empty-string mapping means "this character has no ASCII representation —
+        // drop it". That is a decision the table already made, so it is *mapped*, and
+        // every error mode honours it (#602).
+        //
+        // `Preserve` used to except itself here, on the reading that an empty mapping is
+        // a kind of failure the user asked to keep. It is not: `ErrorMode` governs what
+        // happens to characters the table has nothing to say about, and this one has an
+        // explicit entry. The exception made `search_key`/`catalog_key`/`sort_key` (the
+        // three `Preserve` callers) keep 134 code points that `transliterate()` deletes,
+        // while `TextPipeline(transliterate=True)` — which passes `Ignore` — dropped them
+        // correctly. `catalog_key` then ran confusables over the leak, folding a Cyrillic
+        // soft sign onto Latin `b` and turning `Пьеса` into `pbesa`.
+        //
+        // Genuinely unmapped characters (`None`) still reach `handle_unmapped`, so
+        // `Preserve` keeps doing its job for them.
+        let is_mapped = mapped.is_some();
 
         if is_mapped {
             let s = mapped.as_deref().unwrap();
@@ -1957,14 +1964,27 @@ mod tests {
                 );
             }
 
-            /// With ErrorMode::Preserve, non-empty printable input produces
-            /// non-empty output (every char either maps or is kept verbatim).
-            /// Excludes combining marks (\p{M}) which legitimately map to empty
-            /// when not attached to a base character.
+            /// `Preserve` never yields less text than `Ignore`.
+            ///
+            /// This used to assert `Preserve` output is simply non-empty, which held
+            /// only because `Preserve` excepted itself from the table's empty mappings
+            /// — the #602 bug. It could not have been true in general anyway: a string
+            /// of nothing but empty-mapped characters (`"\u{044C}"`) legitimately
+            /// transliterates to nothing, which is why the generator had to exclude
+            /// `\p{M}` before.
+            ///
+            /// The invariant that actually defines the mode is comparative. `Ignore`
+            /// drops both the unmapped and the empty-mapped; `Preserve` differs only in
+            /// keeping the unmapped verbatim. So its output can never be shorter, and
+            /// no generator exclusions are needed to say so.
             #[test]
-            fn transliterate_preserve_nonempty(s in "[^\\s\\p{M}]{1,50}") {
-                let result = transliterate_impl(&s, None, ErrorMode::Preserve, "", false, false, false);
-                prop_assert!(!result.is_empty());
+            fn transliterate_preserve_keeps_at_least_as_much_as_ignore(s in "\\PC{1,50}") {
+                let preserve = transliterate_impl(&s, None, ErrorMode::Preserve, "", false, false, false);
+                let ignore = transliterate_impl(&s, None, ErrorMode::Ignore, "", false, false, false);
+                prop_assert!(
+                    preserve.chars().count() >= ignore.chars().count(),
+                    "preserve {preserve:?} shorter than ignore {ignore:?} for {s:?}"
+                );
             }
 
             /// strip_accents is idempotent.

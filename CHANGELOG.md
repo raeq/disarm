@@ -524,6 +524,30 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   called such a hostname clean *and* returned the payload intact in `canonical` — the
   combination that turns a detector into a laundering step.
 
+- **`search_key`, `catalog_key` and `sort_key` no longer keep 134 characters that
+  `transliterate()` deletes (#602).** A character the table maps to the empty string is
+  not *unknown* — it is a decision the table already made, "this has no ASCII form, drop
+  it". `ErrorMode::Preserve` was excepting itself from those mappings on the reading that
+  an empty mapping is a kind of failure the caller asked to keep, so the three presets
+  that pass `Preserve` kept the characters verbatim while
+  `TextPipeline(transliterate=True)`, which passes `Ignore`, dropped them correctly.
+
+  `catalog_key` made it worse by running the confusable fold *after* transliteration, so
+  a leaked Cyrillic soft sign was folded onto Latin `b`: `Пьеса` became `pbesa`, a key
+  containing a letter that appears in neither the input nor its romanisation. It is now
+  `pesa`.
+
+  `ErrorMode` still governs what happens to characters the table has nothing to say
+  about, so a genuinely unmapped code point is preserved exactly as before. Verified by
+  a full-range scan reproducing the issue's own predicate: zero leaks remain.
+
+  One property test asserted that `Preserve` never returns empty output. That held only
+  because of the exception removed here, and could not have been true in general — a
+  string of nothing but empty-mapped characters legitimately transliterates to nothing,
+  which is why its generator already had to exclude combining marks. It is restated as
+  the invariant that actually defines the mode: `Preserve` output is never shorter than
+  `Ignore` output, which needs no generator exclusions at all.
+
 - **`PRESETS["ml_normalize"]` was missing two of the nine steps it claims to describe
   (#600).** `PRESETS` is a hand-maintained Python mirror of the `const STEPS` arrays in
   `src/presets.rs`; nothing executes it, and it had drifted. The mirror listed seven

@@ -493,6 +493,59 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The two CVE rows behind "no single call" are closed, and they had to close together
+  (#614, #615).** Each was one of the exactly two vectors that made
+  `docs/security/cve-validation.md` say no entry point cleared everything, so fixing one
+  alone would have left the other failing and forced the guidance to be rewritten twice.
+
+  **#614 — `strip_obfuscation` named confusables instead of folding them.** 49 code
+  points appear in both `emoji_single.tsv` and `confusables_to_latin.tsv`, and most are
+  not emoji: typographic punctuation, currency, math operators, CJK brackets. They reach
+  the emoji table from CLDR `annotationsDerived`, which names non-emoji characters.
+  `strip_obfuscation("€xample.com")` produced `"euro xample.com"`, so the spoof and the
+  genuine host stopped being equal rather than becoming equal — CVE-2017-5383 surviving a
+  preset documented as maximum-strength deobfuscation.
+
+  **Not fixed the way the issue proposed.** Reordering the confusable fold before
+  `demojize` would break idempotency: punctuation inside emoji *names* (the `’` in
+  "woman’s hat") has to be folded by the confusable pass. That ordering is documented
+  three times and pinned by `tests/test_presets.py`. Instead the overlap is derived at
+  build time as an intersection of the two tables — so it cannot drift the way a curated
+  list would — and `demojize` skips those rows inside comparison presets only. Standalone
+  `demojize("I ❤ €5")` still returns `"I red heart euro 5"`, which is what that function
+  is for. `build.rs` asserts the count is 49, so a table refresh that claims another
+  confusable source fails the build instead of widening the gap silently.
+
+  **#615 — `canonicalize` cannot cap its way out of an eclipsing mark.** The anti-zalgo
+  step is a *count*, and by count one Arabic shadda is indistinguishable from one acute
+  accent, so no threshold removes CVE-2017-7833's spoof and keeps `café`. The
+  discriminator that works was already in disarm's script data: strip a combining mark
+  whose own Script is a *specific* script differing from its base's, and keep `Inherited`
+  marks, which attach to anything. That is UTS #39's mixed-script reasoning applied per
+  grapheme rather than per string.
+
+  It runs in `canonicalize_strict` **only**. The rule is destructive for scholarly
+  transliteration, IPA and linguistic transcription, where marks from one script
+  legitimately sit on bases of another — the corpus least able to notice. `canonicalize`
+  is deliberately still one short, and there is a test asserting that rather than leaving
+  it implied. Verified against nine legitimate samples in five scripts, including Arabic
+  *with* its own vowel marks: all pass through completely unchanged.
+
+  The step sits **after** the confusable fold, and that ordering is load-bearing. Placed
+  before it, `а` (Cyrillic) + `U+0489` (Cyrillic mark) agrees on the first pass, then the
+  fold rewrites the base to Latin `a` and the next pass strips the mark — `f(f(x)) !=
+  f(x)`. The property test `canonicalize_strict_idempotent` caught it; deciding against
+  the *final* base script is the only stable point.
+
+  `canonicalize_strict` and `strip_obfuscation` now each clear the whole matrix, so
+  `TestOneCall`'s guard is inverted rather than deleted: it asserted that closing a gap
+  should fail loudly, it did, and it now asserts the two sufficient entry points stay
+  sufficient while every other one stays short. The published advice is unchanged and its
+  reason has moved — from "nothing suffices" to "the two that suffice are the two most
+  destructive ones", which is the same conclusion for a caller who has to forward the
+  text they cleaned.
+
+
 - **`is_suspicious_hostname()` now catches tags, variation selectors, noncharacters
   and PUA, and stops reporting a noncharacter as Arabic (#610).** Third in the
   sequence after #603 (bidi controls) and #605 (zero-width). 17 of 18 sampled

@@ -803,6 +803,16 @@ pub fn lookup_emoji_single(ch: char) -> Option<&'static str> {
     emoji_data::EMOJI_SINGLE.get(&ch).copied()
 }
 
+/// Whether the TR39 confusable table also claims this emoji row (#614).
+///
+/// The set is derived at build time as the intersection of the two tables, and
+/// `build.rs` asserts its size, so a table refresh that claims another confusable
+/// source fails the build rather than silently widening the gap.
+#[inline]
+pub fn is_tr39_claimed_emoji_row(ch: char) -> bool {
+    emoji_data::EMOJI_ROWS_TR39_ALSO_CLAIMS.contains(&(ch as u32))
+}
+
 /// Look up a multi-codepoint emoji sequence by its hex-underscore key (O(1) PHF).
 /// **Test-only**: the production matcher walks the code-point trie
 /// (`match_emoji_sequence`); this is retained as the equivalence oracle (#242

@@ -973,9 +973,14 @@ def strip_control_chars(text: str) -> str:
 def strip_zero_width_chars(text: str) -> str:
     """Remove zero-width characters.
 
-    Deletes the zero-width set — ZWSP, ZWNJ, ZWJ, the word joiner, the invisible
-    operators and the BOM — which render as nothing and are used to fragment a
-    token so it evades a denylist while looking unchanged.
+    Deletes the zero-width set, which renders as nothing and is used to fragment a
+    token so it evades a denylist while looking unchanged. The set is exactly:
+
+    - ``U+200B``–``U+200D`` — ZWSP, ZWNJ, ZWJ
+    - ``U+2060``–``U+2064`` — word joiner and the invisible operators
+    - ``U+FEFF`` — BOM / zero-width no-break space
+    - ``U+180E`` — Mongolian vowel separator (reclassified ``Zs`` → ``Cf`` in
+      Unicode 6.3, so it is a format character despite the name)
 
     Args:
         text: Input string.

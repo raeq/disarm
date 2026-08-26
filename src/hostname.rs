@@ -2,6 +2,26 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::{confusables, invisibles, scripts};
 
+/// Every invisible class a hostname label may not legitimately contain (#605, #610).
+///
+/// The union of the zero-width set with the four class predicates
+/// [`invisibles::is_tag`], [`invisibles::is_variation_selector`],
+/// [`invisibles::is_noncharacter`] and [`invisibles::is_pua`]. IDNA2008 (RFC 5892)
+/// disallows all of them, which is what justifies folding PUA and the variation
+/// selectors in here — both have legitimate uses in ordinary text, so a general-text
+/// detector needs a separate argument for them.
+///
+/// Deliberately excludes the UAX #9 bidi controls: those are
+/// [`scripts::is_bidi_control`] and are reported through `bidi_control` (#603), so the
+/// two predicates partition the space rather than overlap.
+fn is_invisible_in_hostname(ch: char) -> bool {
+    invisibles::is_zero_width(ch)
+        || invisibles::is_tag(ch)
+        || invisibles::is_variation_selector(ch)
+        || invisibles::is_noncharacter(ch)
+        || invisibles::is_pua(ch)
+}
+
 /// Check if a bracketed string is a valid IPv6 literal per RFC 3986 §3.2.2.
 ///
 /// Requires: starts with `[`, ends with `]`, content contains `:`,
@@ -215,15 +235,23 @@ pub(crate) fn is_suspicious_hostname_opts(
         } else {
             raw_label.to_string()
         };
-        // Zero-width / invisible-format characters (#605). Removed HERE, before script
-        // analysis, rather than later on the joined hostname: U+FEFF sits in the Arabic
-        // Presentation Forms block and U+180E in the Mongolian block, so leaving them in
-        // makes `detect_scripts` report a script the reader cannot see and `mixed_script`
-        // fire on an ASCII-looking host. Stripping first means nothing downstream —
-        // scripts, mixed_script, confusables, canonical — ever sees them.
-        if label.chars().any(invisibles::is_zero_width) {
+        // Invisible characters of every class (#605, widened by #610). Removed HERE,
+        // before script analysis, rather than later on the joined hostname: U+FEFF sits
+        // in the Arabic Presentation Forms block, U+180E in the Mongolian block and
+        // U+FDD0 in the Arabic Presentation Forms range, so leaving them in makes
+        // `detect_scripts` report a script the reader cannot see and `mixed_script` fire
+        // on an ASCII-looking host. Stripping first means nothing downstream — scripts,
+        // mixed_script, confusables, canonical — ever sees them.
+        //
+        // IDNA2008 (RFC 5892) disallows every class below, so a hostname carrying one is
+        // malformed whatever its intent and the screen can fail closed on all of them.
+        // That is why PUA and the variation selectors are included here but would need a
+        // separate argument in a general-text detector, where both have legitimate uses.
+        // The tag block is the ASCII-smuggling channel: U+E0061-U+E007A spell arbitrary
+        // Latin invisibly, so returning them in `canonical` would launder the payload.
+        if label.chars().any(is_invisible_in_hostname) {
             has_invisible = true;
-            label.retain(|c| !invisibles::is_zero_width(c));
+            label.retain(|c| !is_invisible_in_hostname(c));
         }
 
         decoded_labels.push(label.clone());

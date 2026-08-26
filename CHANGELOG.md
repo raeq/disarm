@@ -460,6 +460,34 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`is_suspicious_hostname()` now catches tags, variation selectors, noncharacters
+  and PUA, and stops reporting a noncharacter as Arabic (#610).** Third in the
+  sequence after #603 (bidi controls) and #605 (zero-width). 17 of 18 sampled
+  code points passed the screen clean and **all 18** survived into `canonical`.
+
+  The one that did flag was flagging for the wrong reason, and it is the #605 bug in
+  a class #605 did not cover: `U+FDD0` sits in the Arabic Presentation Forms range,
+  so the script detector read it as a letter and `paypal<U+FDD0>.evil.com` reported
+  `scripts=['Latin', 'Arabic']` with `mixed_script=True`. Widening the existing
+  per-label strip fixes that by construction rather than by special case, because
+  the strip already runs before `detect_scripts`.
+
+  Reported on the **existing** `has_invisible` field rather than four new ones, so no
+  binding payload changes: no new field on the Ruby positional tuple and no change to
+  the Java `jni_sig!` string. `is_invisible_in_hostname` composes the four class
+  predicates that `src/invisibles.rs` already carried.
+
+  Private use and the variation selectors are included because IDNA2008 (RFC 5892)
+  disallows every class in a hostname. Both have legitimate uses in ordinary text, so
+  a general-text detector needs its own argument for them; that is tracked separately.
+  Measured against the full suite including the adversarial-oracle clean corpus: no
+  false positives.
+
+  The tag block is the reason this is a security fix rather than tidying.
+  `U+E0061`–`U+E007A` spell arbitrary Latin invisibly, and the screen previously
+  called such a hostname clean *and* returned the payload intact in `canonical` — the
+  combination that turns a detector into a laundering step.
+
 - **`is_suspicious_hostname()` now catches zero-width and invisible characters, and no
   longer reports a phantom script for them (#605).** Sibling of #603, for the characters
   that carry no direction at all — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF` and

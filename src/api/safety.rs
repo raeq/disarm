@@ -427,13 +427,23 @@ pub struct HostnameAnalysis {
     /// [`suspicious`](Self::suspicious) and the characters are stripped from
     /// [`canonical`](Self::canonical).
     pub bidi_control: bool,
-    /// Whether the decoded hostname contains a zero-width or invisible-format
-    /// character — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF` or `U+180E` (#605).
+    /// Whether the decoded hostname contains an invisible character of any class
+    /// (#605, widened by #610):
+    ///
+    /// - **zero-width** — `U+200B`–`U+200D`, `U+2060`–`U+2064`, `U+FEFF`, `U+180E`
+    /// - **tag** — `U+E0000`–`U+E007F`, the ASCII-smuggling channel
+    /// - **variation selector** — `U+FE00`–`U+FE0F`, `U+E0100`–`U+E01EF`
+    /// - **noncharacter** — `U+FDD0`–`U+FDEF` and the last two of every plane
+    /// - **private use** — `U+E000`–`U+F8FF`, plane 15 and plane 16
     ///
     /// Disjoint from [`bidi_control`](Self::bidi_control): these carry no direction at
     /// all, so neither that field nor [`bidi_conflict`](Self::bidi_conflict) can see
-    /// them. IDNA2008 disallows them, so this is folded into
-    /// [`suspicious`](Self::suspicious) and the characters are stripped from
+    /// them. IDNA2008 (RFC 5892) disallows every class, which is what justifies
+    /// including private use and the variation selectors here — both have legitimate
+    /// uses in ordinary text, so a general-text detector would need its own argument
+    /// for them. Folded into [`suspicious`](Self::suspicious); the characters are
+    /// removed per label *before* any other field is computed, so they never reach
+    /// [`scripts`](Self::scripts), [`mixed_script`](Self::mixed_script) or
     /// [`canonical`](Self::canonical).
     pub has_invisible: bool,
     /// Whether the labels resolve to more than one distinct script (Common /

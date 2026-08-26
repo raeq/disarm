@@ -1210,13 +1210,18 @@ def is_suspicious_hostname(
       reads strong-direction *letters* only and is therefore blind to the RLO
       extension spoof. IDNA2008 disallows every character in the set, so this is
       folded into ``suspicious`` and the characters are stripped from ``canonical``.
-    - ``has_invisible``: bool — True if the decoded hostname carries a zero-width or
-      invisible-format character: ``U+200B``-``U+200D``, ``U+2060``-``U+2064``,
-      ``U+FEFF`` or ``U+180E``. Disjoint from ``bidi_control`` — these carry no
-      direction at all, so neither bidi field can see them. Folded into
-      ``suspicious``. They are removed *before* any other field is computed, so a
-      hostname whose only non-ASCII is an invisible no longer reports a phantom
-      script (``U+FEFF`` sits in the Arabic Presentation Forms block).
+    - ``has_invisible``: bool — True if the decoded hostname carries an invisible
+      character of any class: zero-width (``U+200B``-``U+200D``,
+      ``U+2060``-``U+2064``, ``U+FEFF``, ``U+180E``), tag (``U+E0000``-``U+E007F``),
+      variation selector (``U+FE00``-``U+FE0F``, ``U+E0100``-``U+E01EF``),
+      noncharacter (``U+FDD0``-``U+FDEF`` and the last two of every plane), or
+      private use (``U+E000``-``U+F8FF``, planes 15 and 16). Disjoint from
+      ``bidi_control`` — these carry no direction at all, so neither bidi field can
+      see them. IDNA2008 disallows every class, which is what justifies including
+      private use and variation selectors here. Folded into ``suspicious``. They are
+      removed per label *before* any other field is computed, so a hostname whose
+      only non-ASCII is an invisible no longer reports a phantom script (``U+FEFF``
+      sits in the Arabic Presentation Forms block, ``U+FDD0`` in its range).
     - ``cross_label_script``: bool — True if the labels span more than one
       distinct script. Broader and noisier than ``bidi_conflict`` (it fires on
       benign IDN ccTLDs like ``google.рф``), so it is **not** folded into

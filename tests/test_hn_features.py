@@ -391,10 +391,28 @@ class TestInvisibleSetDoesNotDriftFromItsDocs:
     exhaustive gate rather than a sampled one.
     """
 
-    #: The set as documented. Kept literal so a change has to be deliberate.
-    DOCUMENTED = frozenset(
+    #: The zero-width singletons (#605). Literal so a change has to be deliberate.
+    ZERO_WIDTH = frozenset(
         {0x200B, 0x200C, 0x200D, 0x2060, 0x2061, 0x2062, 0x2063, 0x2064, 0xFEFF, 0x180E}
     )
+    #: Unicode Tags block (#610). A range, because it is one.
+    TAG_BLOCK = range(0xE0000, 0xE0080)
+
+    @classmethod
+    def documented(cls) -> frozenset:
+        """The expected set, restricted to what :meth:`_derive` can afford to probe.
+
+        #610 widened the screen to four more classes, and three of them sit outside
+        ``Cf``/``Zs``: variation selectors are ``Mn``, noncharacters ``Cn``, PUA
+        ``Co``. Probing those exhaustively means ~138k round trips into Rust (PUA
+        alone is 137,468 code points), which is minutes, not the 0.3s this gate is
+        worth. So this stays exhaustive over the format space it can afford and
+        ``TestRemainingInvisibleClasses`` covers the other three by representative
+        member — stated here rather than left as an unexplained gap.
+        """
+        return frozenset(cls.ZERO_WIDTH) | {
+            cp for cp in cls.TAG_BLOCK if unicodedata.category(chr(cp)) in ("Cf", "Zs")
+        }
 
     ROOT = Path(__file__).resolve().parent.parent
     #: Every file whose prose enumerates the set.
@@ -422,9 +440,10 @@ class TestInvisibleSetDoesNotDriftFromItsDocs:
 
     def test_behaviour_matches_the_documented_set(self):
         derived = self._derive()
-        assert derived == self.DOCUMENTED, {
-            "flagged but undocumented": sorted(f"U+{c:04X}" for c in derived - self.DOCUMENTED),
-            "documented but not flagged": sorted(f"U+{c:04X}" for c in self.DOCUMENTED - derived),
+        documented = self.documented()
+        assert derived == documented, {
+            "flagged but undocumented": sorted(f"U+{c:04X}" for c in derived - documented),
+            "documented but not flagged": sorted(f"U+{c:04X}" for c in documented - derived),
         }
 
     @pytest.mark.parametrize("path", PROSE, ids=lambda p: p.name)
@@ -437,14 +456,33 @@ class TestInvisibleSetDoesNotDriftFromItsDocs:
         """
         text = path.read_text(encoding="utf-8")
         named = {int(m, 16) for m in re.findall(r"U\+([0-9A-Fa-f]{4,6})", text)}
-        # Endpoints of the two documented ranges, plus the two singletons.
-        required = {0x200B, 0x200D, 0x2060, 0x2064, 0xFEFF, 0x180E}
+        # Endpoints of every documented range, plus the singletons. #610 added the
+        # tag / variation-selector / noncharacter / PUA classes, so each file has to
+        # name those too — that is the drift this gate exists to catch.
+        required = {
+            0x200B,
+            0x200D,
+            0x2060,
+            0x2064,
+            0xFEFF,
+            0x180E,  # zero-width
+            0xE0000,
+            0xE007F,  # tag block
+            0xFE00,
+            0xFE0F,
+            0xE0100,
+            0xE01EF,  # variation selectors
+            0xFDD0,
+            0xFDEF,  # noncharacters
+            0xE000,
+            0xF8FF,  # private use (BMP; the plane ranges are named in prose)
+        }
         missing = sorted(f"U+{c:04X}" for c in required - named)
         assert not missing, f"{path.name} omits {missing}"
 
     def test_invisibles_and_bidi_controls_do_not_overlap(self):
         """The two fields are documented as disjoint. Checked, not asserted in prose."""
-        for cp in sorted(self.DOCUMENTED):
+        for cp in sorted(self.ZERO_WIDTH):
             _, analysis = is_suspicious_hostname(f"paypal{chr(cp)}.evil.com")
             assert analysis.has_invisible, f"U+{cp:04X}"
             assert not analysis.bidi_control, f"U+{cp:04X} claimed by both fields"
@@ -520,6 +558,53 @@ class TestBidiControlCharacters:
         # against a fix that accidentally relaxes it.
         suspicious, _ = is_suspicious_hostname("xn--paypalmoc-lh0e.evil.com")
         assert suspicious
+
+
+class TestRemainingInvisibleClasses:
+    """#610: tags, variation selectors, noncharacters and PUA — the classes
+    #605's zero-width set did not reach."""
+
+    CLASSES = [
+        ("tag", "\U000e0001"),
+        ("tag", "\U000e0061"),
+        ("tag", "\U000e007f"),
+        ("variation-selector", "\ufe00"),
+        ("variation-selector", "\ufe0f"),
+        ("variation-selector", "\U000e0100"),
+        ("noncharacter", "\ufdd0"),
+        ("noncharacter", "\ufffe"),
+        ("noncharacter", "\U0001ffff"),
+        ("pua", "\ue000"),
+        ("pua", "\uf8ff"),
+        ("pua", "\U000f0000"),
+    ]
+
+    @pytest.mark.parametrize(("klass", "ch"), CLASSES)
+    def test_class_is_flagged(self, klass, ch):
+        suspicious, d = is_suspicious_hostname(f"paypal{ch}.evil.com")
+        assert suspicious, klass
+        assert d.has_invisible, klass
+
+    @pytest.mark.parametrize(("klass", "ch"), CLASSES)
+    def test_class_never_survives_into_canonical(self, klass, ch):
+        _, d = is_suspicious_hostname(f"paypal{ch}.evil.com")
+        assert ch not in d.canonical, klass
+
+    def test_noncharacter_is_not_reported_as_arabic(self):
+        # The #605 phantom-script bug, in a class #605 did not cover. U+FDD0 sits
+        # in the Arabic Presentation Forms range, so the script detector read it
+        # as a letter and mixed_script fired on an ASCII-looking hostname.
+        _, d = is_suspicious_hostname("paypal\ufdd0.evil.com")
+        assert d.scripts == ["Latin"]
+        assert not d.mixed_script
+
+    def test_tag_payload_does_not_reach_canonical(self):
+        # U+E0061-U+E007A spell arbitrary Latin text invisibly. A screen that
+        # returns them in `canonical` launders the payload.
+        secret = "".join(chr(0xE0000 + ord(c)) for c in "evil")
+        _, d = is_suspicious_hostname(f"paypal{secret}.com")
+        assert d.has_invisible
+        assert all(c not in d.canonical for c in secret)
 
 
 class TestWholeScriptConfusable:

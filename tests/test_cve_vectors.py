@@ -1541,16 +1541,29 @@ class TestOverlongAndInvalidSequences:
         with pytest.raises(DisarmError):
             disarm.decode_to_utf8(OVERLONG_SOLIDUS, encoding="utf-8", strict=True)
 
-    def test_invalid_multibyte_lead_bytes_do_not_swallow_the_payload(self) -> None:
-        """CVE-2009-4142: the trick is a bad lead byte eating the next byte.
+    @pytest.mark.parametrize(
+        "raw,encoding",
+        [(INVALID_SJIS, "shift_jis"), (b"\xc0\xaf<script>", "utf-8")],
+        ids=["invalid-sjis", "overlong-utf8"],
+    )
+    def test_a_bad_lead_byte_does_not_swallow_the_next_character(
+        self, raw: bytes, encoding: str
+    ) -> None:
+        """CVE-2009-4142 end to end, because the CVE is about *escaping*.
 
-        If the invalid lead consumed `<`, the escaping that follows would never
-        see a special character. It does not — the payload stays intact and
-        visible to whatever escapes next.
+        PHP's bug was that decoding and escaping happened in one pass, so an
+        invalid lead byte consumed the following `<` and `htmlspecialchars`
+        never saw a character to escape. Asserting only that the decode is
+        lossy would miss the point — the claim has to run to the sink.
+
+        disarm separates the two stages, and that separation is the reason this
+        does not reproduce: the decoder substitutes and keeps the `<`, and
+        `escape_html` then escapes it.
         """
-        text, had_errors = disarm.decode_to_utf8(INVALID_SJIS, encoding="shift_jis")
+        text, had_errors = disarm.decode_to_utf8(raw, encoding=encoding)
         assert had_errors is True
-        assert "<script>" in text
+        assert "<script>" in text  # the decoder did not eat it
+        assert "&lt;script&gt;" in escape_html(text)  # and the sink still escapes it
 
     def test_the_decoder_reports_rather_than_silently_substituting(self) -> None:
         """`had_errors` is the reporting channel, and it is not decoration.

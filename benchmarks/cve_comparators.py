@@ -157,12 +157,23 @@ NAMED_ELSEWHERE: dict[str, str] = {
 COVERED = frozenset([c for c, _, _ in COLLAPSE] + [c for c, _, _ in REMOVAL])
 
 
+#: The disarm entry points every row is scored against. Fixed rather than chosen
+#: per row: decancer and unidecode each expose exactly one entry point, so
+#: letting disarm pick whichever function suits a row would be a flattering
+#: comparison rather than a like-for-like one. Rows the matrix neutralizes with
+#: something else are marked instead — see :data:`NAMED_ELSEWHERE`.
+#:
+#: Separate from :func:`build_tools` so a caller that only needs the names does
+#: not trigger its optional imports or its stderr notes.
+DISARM_COLUMNS: dict[str, Callable[[str], str]] = {
+    "disarm.canonicalize": disarm.canonicalize,
+    "disarm.strip_obfuscation": disarm.strip_obfuscation,
+}
+
+
 def build_tools() -> dict[str, Callable[[str], str]]:
     """The tools, or as many as are installed. Missing ones are reported, not faked."""
-    tools: dict[str, Callable[[str], str]] = {
-        "disarm.canonicalize": disarm.canonicalize,
-        "disarm.strip_obfuscation": disarm.strip_obfuscation,
-    }
+    tools: dict[str, Callable[[str], str]] = dict(DISARM_COLUMNS)
     try:
         import decancer_py
 

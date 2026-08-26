@@ -68,6 +68,8 @@ COLLAPSE: list[tuple[str, str, str]] = [
     ("CVE-2020-12063", "bοss@example.com", "boss@example.com"),
     ("CVE-2014-9390", ".g‌it/config", ".git/config"),
     ("CVE-2017-7832", "mı́guel.example", "míguel.example"),
+    ("CVE-2017-7833", "exaّmple.com", "example.com"),
+    ("CVE-2017-5383", "ex‐ample.com", "ex-ample.com"),
     ("CVE-2023-24329", "\x00https://evil.example.net", "https://evil.example.net"),
 ]
 

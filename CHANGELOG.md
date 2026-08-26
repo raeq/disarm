@@ -18,6 +18,32 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Corrected: there is no single call that neutralizes every vector (#609 follow-up).**
+  The CVE page said `canonicalize` was the one call to make when the attack is unknown.
+  That was wrong, and its gate could not catch it, because every vector in the matrix at
+  the time happened to be one `canonicalize` handles.
+
+  **CVE-2017-7833** (Firefox, 5.3) is the vector that breaks it: a single Arabic vowel mark
+  riding a Latin letter. One mark sits below the zalgo threshold, so `is_zalgo` correctly
+  returns `False`, and `canonicalize` *caps* combining marks rather than removing them
+  (#429) — so the spoof never collapses onto the genuine host.
+
+  **CVE-2017-5383** (Firefox, 5.3) is the mirror image, and rules out the obvious
+  replacement. `strip_obfuscation` removes the mark, but renders punctuation confusables as
+  their *names* — `U+2010 HYPHEN` becomes the word "hyphen" — so it never folds to ASCII
+  `-`. Neither preset dominates the other and they fail on different inputs, so "5/6 each,
+  pick either" is the wrong read.
+
+  Measured across the matrix plus both, **no entry point clears everything**. `catalog_key`
+  comes closest — the only one carrying both a confusable step and `strip_accents` — and it
+  has no format-stripping step, so the Tags block of CVE-2025-32711 goes straight through.
+  The answer is a composition: `canonicalize(strip_zalgo(text, max_marks=0))`.
+
+  `TestOneCall` now gates both halves, including a test that **fails if any single entry
+  point ever does become sufficient**, so the guidance is revisited rather than left stale.
+  `has_bidi_conflict` also stops reading zero: CVE-2017-7833's Arabic mark beside Latin
+  letters is exactly the strong-direction mix it asks about.
+
 - **CVE matrix: comparator columns, split entry-point roles, and a measured "one call"
   answer (#607 follow-up).** Three gaps in the published matrix, all of them the kind that
   make a table look more useful than it is.

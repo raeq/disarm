@@ -251,7 +251,7 @@ expanding the bundled mapping data is exactly how this layer improves.
 The scope above is grounded in the literature, not asserted:
 
 - **The scope above is also tested against named CVEs.** [`tests/test_cve_vectors.py`](https://github.com/raeq/disarm/blob/main/tests/test_cve_vectors.py)
-  reconstructs the vector described in each of 20 published CVEs and asserts what
+  reconstructs the vector described in each of 22 published CVEs and asserts what
   disarm does with it — including the 7 it does **not** handle, whose negatives are
   pinned so the limits stay tested rather than merely stated. Rendered as a matrix in
   [`docs/security/cve-validation.md`](https://github.com/raeq/disarm/blob/main/docs/security/cve-validation.md).

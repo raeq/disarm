@@ -126,6 +126,63 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
     out.extend(filtered.nfc());
 }
 
+/// Remove a combining mark whose own script is a *specific* script differing from the
+/// script of the base it attaches to (#615, CVE-2017-7833).
+///
+/// The CVE is domain spoofing "through the combination of Arabic and Indic vowel marker
+/// characters with Latin characters", which "can obscure non-Latin characters in domain
+/// names, making them invisible to most users while avoiding punycode encoding".
+///
+/// `strip_zalgo`'s cap cannot reach it. That is a **count**, and by count one Arabic
+/// shadda is indistinguishable from one acute accent, so no threshold removes the spoof
+/// and keeps `café`. The discriminator the count lacks is already in disarm's script
+/// data:
+///
+/// | mark | `detect_char_script` | |
+/// |---|---|---|
+/// | `U+0301` COMBINING ACUTE | `Inherited` | a legitimate diacritic — kept |
+/// | `U+0651` ARABIC SHADDA | `Arabic` | the CVE's vector — stripped off a Latin base |
+/// | `U+0E31` THAI MAI HAN AKAT | `Thai` | likewise |
+///
+/// This is UTS #39's mixed-script reasoning applied at the grapheme level rather than
+/// across the whole string. A mark whose script is `Inherited` attaches to anything and
+/// is never touched, which is why `café`, `naïve`, `Việt Nam` and Arabic *with* its own
+/// vowel marks all pass through unchanged.
+///
+/// Deliberately **not** in `canonicalize`, and not public. Scholarly transliteration, IPA
+/// and linguistic transcription legitimately place marks from one script on bases of
+/// another, and a strip that fires on those would be destructive in exactly the corpus
+/// least able to notice. `canonicalize_strict` is where a caller has already accepted a
+/// stricter contract.
+///
+/// Only the in-place form exists: the preset runner reuses one scratch buffer across
+/// steps (#236 item 7), so an owned wrapper would have no caller.
+pub(crate) fn strip_cross_script_marks_into(text: &str, out: &mut String) {
+    out.clear();
+    out.reserve(text.len());
+    // The script of the most recent non-mark character — what a mark attaches to.
+    let mut base_script: Option<&'static str> = None;
+    for ch in text.chars() {
+        if is_combining_mark(ch) {
+            let mark_script = crate::scripts::detect_char_script(ch);
+            // `Inherited` means "takes the script of its base", so it can never
+            // conflict. `Common` marks (rare) are treated the same way.
+            let specific = mark_script != "Inherited" && mark_script != "Common";
+            if specific && base_script.is_some_and(|b| b != mark_script) {
+                continue; // cross-script mark on a foreign base — the CVE's shape
+            }
+            out.push(ch);
+            continue;
+        }
+        base_script = match crate::scripts::detect_char_script(ch) {
+            // Punctuation, digits and whitespace do not re-anchor the base script.
+            "Common" | "Inherited" => base_script,
+            s => Some(s),
+        };
+        out.push(ch);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

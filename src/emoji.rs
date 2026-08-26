@@ -319,13 +319,30 @@ pub(crate) fn pad_emoji_replacement(result: &mut String, text: &str) {
 /// materialising the full input for non-ASCII text.
 pub fn demojize_rust(text: &str, strip_modifiers: bool) -> String {
     let mut out = String::new();
-    demojize_rust_into(text, strip_modifiers, &mut out);
+    demojize_rust_into(text, strip_modifiers, false, &mut out);
     out
 }
 
 /// In-place form of [`demojize_rust`] writing into `result` (cleared first), so
 /// the pipeline can reuse one buffer across steps (#236 item 7).
-pub fn demojize_rust_into(text: &str, strip_modifiers: bool, result: &mut String) {
+/// `skip_tr39_claimed` (#614): leave the 49 code points the TR39 confusable table
+/// also claims for the confusable step to fold, instead of naming them here.
+///
+/// Set only by comparison presets. `strip_obfuscation("\u{20AC}xample.com")` named the
+/// euro sign — "euro xample.com" — so the spoof and the genuine string stopped being
+/// equal rather than becoming equal, and CVE-2017-5383 survived a preset documented as
+/// maximum-strength deobfuscation. Standalone `demojize` still names them, because
+/// `demojize("I \u{2764} \u{20AC}5")` -> "I red heart euro 5" is what that function is for.
+///
+/// Skipping here rather than reordering the steps is deliberate: `normalize_confusables`
+/// runs *after* `demojize` so typographic punctuation inside emoji names (the `\u{2019}`
+/// in "woman\u{2019}s hat") is folded too, and swapping them would break idempotency.
+pub fn demojize_rust_into(
+    text: &str,
+    strip_modifiers: bool,
+    skip_tr39_claimed: bool,
+    result: &mut String,
+) {
     result.clear();
     // Fast path: pure-ASCII text cannot contain emoji.
     if text.is_ascii() {
@@ -339,6 +356,27 @@ pub fn demojize_rust_into(text: &str, strip_modifiers: bool, result: &mut String
 
     while let Some(ch) = win.current() {
         if ch == VS16 || ch == VS15 || ch == ZWJ {
+            win.advance(1);
+            continue;
+        }
+
+        // #614: hand this code point to the confusable fold instead of naming it.
+        // Emitted verbatim, so the later `confusables` step sees it.
+        if skip_tr39_claimed && crate::tables::is_tr39_claimed_emoji_row(ch) {
+            // The separator decision has to look at what this character will BECOME,
+            // not what it is. `\u{20AC}` is not alphanumeric, but TR39 folds it to `e`,
+            // so emitting it bare after an emoji name produced `"woman's hat"` + `"e"`
+            // -> `"woman's hate"` once the fold ran: a word that was in neither the
+            // input nor any name. `\u{2211}` -> `s` and `\u{2200}` -> `a` do the same.
+            // Punctuation targets (`\u{2010}` -> `-`) still take no separator, matching
+            // how every other non-alphanumeric is emitted here.
+            let becomes_alphanumeric = crate::tables::lookup_confusable(ch, "latin")
+                .is_some_and(|t| t.starts_with(char::is_alphanumeric));
+            if last_was_emoji && (ch.is_alphanumeric() || becomes_alphanumeric) {
+                result.push(' ');
+            }
+            result.push(ch);
+            last_was_emoji = false;
             win.advance(1);
             continue;
         }

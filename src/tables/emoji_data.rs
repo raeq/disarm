@@ -6,6 +6,7 @@
 
 // Single-codepoint emoji to short name (1727 entries).
 include!(concat!(env!("OUT_DIR"), "/emoji_single_phf.rs"));
+include!(concat!(env!("OUT_DIR"), "/emoji_tr39_overlap_phf.rs"));
 
 // Multi-codepoint emoji sequences (2553 entries) as a compact code-point trie
 // (#242 item 4): the production matcher walks `EMOJI_MULTI_TRIE_*` directly,

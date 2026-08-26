@@ -56,6 +56,7 @@ from disarm import (
     canonicalize_strict,
     catalog_key,
     collapse_whitespace,
+    demojize,
     detect_scripts,
     escape_html,
     fold_case,
@@ -1058,16 +1059,25 @@ class TestAlternativeHyphens:
         assert canonicalize(spoof) == ascii_form
         assert is_confusable(spoof) is True
 
-    def test_strip_obfuscation_names_them_instead_of_folding(self) -> None:
-        """MEASURED LIMIT: the deobfuscation preset is the wrong tool here.
+    def test_strip_obfuscation_folds_them(self) -> None:
+        """Inverted by #614. Kept, rather than deleted, so a regression fails loudly.
 
-        Naming a glyph is useful when a human has to read what was removed. It
-        is useless for comparison, because the spoof and the genuine host stop
-        being equal rather than becoming equal.
+        This asserted the opposite until the emoji step learned to skip the 49 code
+        points the TR39 table also claims: `strip_obfuscation` named the glyph
+        ("ex hyphen ample.com"), so the spoof and the genuine host stopped being equal
+        rather than becoming equal — useless for comparison, in a preset documented as
+        maximum-strength deobfuscation.
         """
-        assert strip_obfuscation("ex‐ample.com") == "ex hyphen ample.com"
-        assert strip_obfuscation("ex-ample.com") == "ex-ample.com"
-        assert strip_obfuscation("ex‐ample.com") != strip_obfuscation("ex-ample.com")
+        assert strip_obfuscation("ex‐ample.com") == strip_obfuscation("ex-ample.com")
+        assert strip_obfuscation("€xample.com") == "example.com"
+
+    def test_standalone_demojize_still_names_them(self) -> None:
+        """The skip is scoped to comparison presets, and that scoping is the point.
+
+        `demojize("I ❤ €5")` -> "I red heart euro 5" is exactly what that function is
+        for; only the preset whose job is collision needs the fold to win.
+        """
+        assert demojize("I ❤ €5") == "I red heart euro 5"
 
 
 class TestCombiningMarkEclipse:
@@ -1085,18 +1095,47 @@ class TestCombiningMarkEclipse:
         assert is_zalgo(ECLIPSED_HOST) is False
         assert has_anomalies(ECLIPSED_HOST) is True
 
-    def test_canonicalize_does_not_neutralize_it(self) -> None:
-        """MEASURED LIMIT — and it corrects guidance this page used to give.
+    def test_canonicalize_still_does_not_neutralize_it(self) -> None:
+        """``canonicalize`` is deliberately unchanged by #615.
 
-        ``canonicalize`` *caps* combining marks (#429) rather than removing
-        them, so a single mark survives and the spoof does not collapse onto the
-        genuine host. The matrix previously contained no vector of this shape,
-        which is how "canonicalize is the one call" came to be published.
+        It *caps* combining marks (#429) rather than removing them, so a single mark
+        survives and the spoof does not collapse onto the genuine host. The cap cannot
+        be made to reach this: by count, one Arabic shadda is indistinguishable from
+        one acute accent, so no threshold removes the spoof and keeps ``café``.
+
+        The discriminator that does work — the mark's own Script — is destructive for
+        scholarly transliteration, IPA and linguistic transcription, where cross-script
+        marks are legitimate. So it lives in ``canonicalize_strict``, where the caller
+        has accepted a stricter contract, and not here.
         """
         assert canonicalize(ECLIPSED_HOST) == ECLIPSED_HOST
         assert canonicalize(ECLIPSED_HOST) != canonicalize(PLAIN_HOST)
-        assert canonicalize_strict(ECLIPSED_HOST) != canonicalize_strict(PLAIN_HOST)
         assert strip_format(ECLIPSED_HOST) == ECLIPSED_HOST
+
+    def test_canonicalize_strict_neutralizes_it(self) -> None:
+        """Inverted by #615, and the reason the two-call composition is now history."""
+        assert canonicalize_strict(ECLIPSED_HOST) == canonicalize_strict(PLAIN_HOST)
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "café",
+            "naïve résumé",
+            "Việt Nam",
+            "مُحَمَّد",  # Arabic WITH its own vowel marks — the likeliest false positive
+            "ภาษาไทย",
+            "हिन्दी",
+        ],
+    )
+    def test_ordinary_diacritics_survive_the_strict_preset(self, text: str) -> None:
+        """The false-positive question, asked of the corpus most likely to fail it.
+
+        Each passes through completely unchanged, marks included. The rule keys on the
+        mark's own Script: an ``Inherited`` mark attaches to anything and is never
+        touched, and a mark whose script matches its base is not cross-script. Only a
+        *specific* script differing from the base fires, which is the CVE's shape.
+        """
+        assert canonicalize_strict(text) == text
 
     @pytest.mark.parametrize(
         "defense",
@@ -2460,15 +2499,22 @@ class TestOneCall:
         missed = {cve for cve in NEUTRALIZABLE if not _handles(catalog_key, cve)}
         assert missed == {"CVE-2025-32711"}, sorted(missed)
 
-    def test_the_two_near_misses_fail_on_opposite_vectors(self) -> None:
-        """The heart of it: neither preset dominates, and each fails alone.
+    def test_the_mirror_pair_is_closed(self) -> None:
+        """Inverted by #614 and #615, which is why they had to land together.
 
-        Averaging these two into "5/6 each, pick either" would be the wrong
-        read — they do not fail on the same input, so neither is a safe default
-        and the pair is not interchangeable.
+        These two used to fail on *opposite* vectors — the heart of the "no single
+        call" argument. `strip_obfuscation` named a confusable instead of folding it
+        (CVE-2017-5383); `canonicalize` capped combining marks by count, which cannot
+        tell an Arabic shadda from an acute accent (CVE-2017-7833). Each issue closed
+        one, so landing one alone would have left the other still failing and forced
+        this page to be rewritten twice.
+
+        `canonicalize` is deliberately still short by one: #615's rule is destructive
+        for scholarly transliteration, so it went to `canonicalize_strict` only.
         """
+        assert set(self.RANKING_VECTORS) - self._score(strip_obfuscation) == set()
+        assert set(self.RANKING_VECTORS) - self._score(canonicalize_strict) == set()
         assert set(self.RANKING_VECTORS) - self._score(canonicalize) == {"CVE-2017-7833"}
-        assert set(self.RANKING_VECTORS) - self._score(strip_obfuscation) == {"CVE-2017-5383"}
 
     def test_the_two_call_composition_clears_them_all(self) -> None:
         """The non-destructive answer, for text that has to be forwarded."""
@@ -2490,18 +2536,39 @@ class TestOneCall:
         scores = {name: len(self._score(fn)) for name, fn in candidates.items()}
         assert scores == {
             "catalog_key": 6,
+            # Still 5, deliberately: #615's rule went to canonicalize_strict only,
+            # because it is destructive for scholarly transliteration and IPA.
             "canonicalize": 5,
-            "canonicalize_strict": 5,
-            "strip_obfuscation": 5,
+            "canonicalize_strict": 6,  # 5 before #615
+            "strip_obfuscation": 6,  # 5 before #614
             "search_key": 5,
             "normalize_confusables": 4,
             "strip_format": 1,
             "ml_normalize": 2,
         }, scores
 
-    def test_no_single_entry_point_clears_everything(self) -> None:
-        """The claim the page now makes, gated so it cannot quietly stop being true."""
+    def test_the_two_sufficient_entry_points_still_are(self) -> None:
+        """Inverted by #614/#615. Until then this asserted the opposite.
+
+        It read `assert missed, f"{name} now clears everything — update the guidance"`,
+        written so that closing a gap would fail loudly rather than leave the published
+        advice stale. It did exactly that, and this is the rewrite it asked for.
+
+        Two entry points now clear the whole matrix, and the pairing is not a
+        coincidence: both carry a confusable fold *and* something that removes a
+        combining mark. Everything else is still short, so "clean unconditionally"
+        survives as advice — the reason has just moved from "nothing suffices" to
+        "only these two do, and they are the most destructive ones".
+        """
         everything = set(NEUTRALIZABLE) | set(self.RANKING_VECTORS)
+        sufficient = {
+            "canonicalize_strict": canonicalize_strict,
+            "strip_obfuscation": strip_obfuscation,
+        }
+        for name, fn in sufficient.items():
+            missed = {c for c in everything if not self._clears_any(fn, c)}
+            assert not missed, f"{name} no longer clears everything: {sorted(missed)}"
+
         candidates = {
             "catalog_key": catalog_key,
             "canonicalize": canonicalize,
@@ -2515,8 +2582,10 @@ class TestOneCall:
             "rag_ingest": get_pipeline("rag_ingest"),
         }
         for name, fn in candidates.items():
+            if name in sufficient:
+                continue
             missed = {c for c in everything if not self._clears_any(fn, c)}
-            assert missed, f"{name} now clears everything — update the guidance"
+            assert missed, f"{name} now clears everything too — update the guidance"
 
     @pytest.mark.parametrize("cve", NEUTRALIZABLE)
     def test_the_composition_clears_the_whole_matrix(self, cve: str) -> None:

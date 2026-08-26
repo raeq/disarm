@@ -262,7 +262,7 @@ impl Pipeline {
             crate::presets::strip_bidi_into(input, out);
             Ok(true)
         } else if step == PipelineSteps::DEMOJIZE {
-            emoji::demojize_rust_into(input, false, out);
+            emoji::demojize_rust_into(input, false, false, out);
             Ok(true)
         } else if step == PipelineSteps::STRIP_ACCENTS {
             transliterate::strip_accents_into(input, out);

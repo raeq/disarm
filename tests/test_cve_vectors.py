@@ -1881,9 +1881,9 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-20",
         cvss=7.5,
         cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("canonicalize", "strip_obfuscation"),
-        detectors=(),
+        detectors=("has_anomalies",),
         probe="\x00" + BLOCKED_URL,
         reference="https://github.com/python/cpython/issues/102153",
     ),
@@ -1906,9 +1906,9 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-94",
         cvss=9.3,
         cvss_version="v2.0",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("strip_log_injection", "canonicalize", "strip_obfuscation"),
-        detectors=(),
+        detectors=("has_anomalies",),
         probe=DECRQSS_ATTACK,
         reference="https://www.debian.org/security/2009/dsa-1694",
     ),
@@ -1918,9 +1918,9 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-74",
         cvss=9.8,
         cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("strip_log_injection", "canonicalize"),
-        detectors=(),
+        detectors=("has_anomalies",),
         probe=TMUX_ATTACK,
         reference="https://blog.mozilla.org/security/2019/10/09/iterm2-critical-issue-moss-audit/",
     ),
@@ -2063,9 +2063,9 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-150",
         cvss=9.6,
         cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("strip_log_injection", "canonicalize", "strip_obfuscation"),
-        detectors=(),
+        detectors=("has_anomalies",),
         probe=TOMCAT_LOG_LINE,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2025-55754",
     ),
@@ -2075,9 +2075,9 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-116",
         cvss=8.8,
         cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("strip_log_injection", "canonicalize", "strip_obfuscation"),
-        detectors=(),
+        detectors=("has_anomalies",),
         probe=GIT_SIDEBAND,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2024-52005",
     ),
@@ -2087,9 +2087,9 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-116",
         cvss=7.8,
         cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("sanitize_filename", "strip_log_injection", "canonicalize"),
-        detectors=(),
+        detectors=("has_anomalies",),
         probe=CROC_FILENAME,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2023-43620",
     ),
@@ -2099,9 +2099,9 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-117",
         cvss=4.3,
         cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("strip_log_injection", "canonicalize"),
-        detectors=(),
+        detectors=("has_anomalies",),
         probe=AUTOGPT_OUTPUT,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2023-37275",
     ),
@@ -2210,9 +2210,9 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-79",
         cvss=4.3,
         cvss_version="v2.0",
-        dispositions=frozenset({NOT_AFFECTED}),
+        dispositions=frozenset({NOT_AFFECTED, DETECTED}),
         neutralizers=("decode_to_utf8",),
-        detectors=(),
+        detectors=("has_anomalies",),
         probe="\ufffd\x00<script>",
         reference="https://nvd.nist.gov/vuln/detail/CVE-2009-4142",
     ),
@@ -2574,14 +2574,7 @@ class TestDetectionHasNoSuperset:
     #: Pinned, so closing one shows up here as a failure to celebrate rather
     #: than as a silent improvement nobody notices.
     UNDETECTED_IN_SCOPE = {
-        "CVE-2023-24329",  # a leading NUL is not an anomaly kind
-        "CVE-2008-2383",  # nor is an escape sequence …
-        "CVE-2019-9535",
-        "CVE-2025-55754",  # … and the whole terminal-control class with it
-        "CVE-2024-52005",
-        "CVE-2023-43620",
-        "CVE-2023-37275",
-        "CVE-2025-32711",  # nor is the Tags block
+        "CVE-2025-32711",  # the Tags block is not an anomaly kind
         "CVE-2026-23950",  # nor is a case-folding path collision
         "CVE-2023-46695",  # nor is a long run of already-normalized characters
         # The whole encoding class is silent too — see TestOverlongAndInvalid-
@@ -2595,6 +2588,22 @@ class TestDetectionHasNoSuperset:
         # than one of the panel predicates.
         "CVE-2024-46954",
         "CVE-2026-44288",
+    }
+    #: Closed by the ``control`` anomaly kind (#612). Kept as a record, because the
+    #: shape of what remains is the interesting part: every row still undetected
+    #: needs a *comparison* — a fold collision, a length budget, a decode result —
+    #: rather than the presence of a character, which is why one more character
+    #: class will not close any of them.
+    CLOSED_BY_THE_CONTROL_KIND = {
+        "CVE-2023-24329",  # a leading NUL
+        "CVE-2008-2383",  # an escape sequence …
+        "CVE-2019-9535",
+        "CVE-2025-55754",  # … and the whole terminal-control class with it
+        "CVE-2024-52005",
+        "CVE-2023-43620",
+        "CVE-2023-37275",
+        # Not a terminal row: its probe is a NUL-byte injection, so the same branch
+        # reports it. The other two byte-level rows carry no control and stay silent.
         "CVE-2009-4142",
     }
 
@@ -2626,7 +2635,10 @@ class TestDetectionHasNoSuperset:
             for name, predicate in DETECTOR_PANEL.items()
         }
         assert coverage == {
-            "has_anomalies": 11,
+            # 11 before #612 added the `control` kind, which closed the seven
+            # terminal-control and leading-NUL rows in one branch — plus
+            # CVE-2009-4142, whose probe is itself a NUL-byte injection.
+            "has_anomalies": 19,
             "is_confusable": 9,
             "is_mixed_script": 4,
             # CVE-2017-7833 is the only row that fires this: the Arabic mark is
@@ -2650,8 +2662,14 @@ class TestDetectionHasNoSuperset:
         undetected = self._undetected()
         assert undetected == self.UNDETECTED_IN_SCOPE, sorted(undetected)
 
-    def test_no_detector_reports_any_terminal_control_row(self) -> None:
-        """The class-level statement, kept separate so it fails on its own."""
+    def test_every_terminal_control_row_is_now_reported(self) -> None:
+        """Inverted by #612. Kept, rather than deleted, so it fails if this regresses.
+
+        Until the ``control`` anomaly kind existed, this asserted the opposite: that
+        no detector reported any of these rows. That was the sharpest instance of the
+        asymmetry this class describes — the introducers are plain ASCII controls, so
+        the ASCII fast path in ``classify`` skipped them entirely.
+        """
         terminal = {
             "CVE-2008-2383",
             "CVE-2019-9535",
@@ -2660,9 +2678,10 @@ class TestDetectionHasNoSuperset:
             "CVE-2023-43620",
             "CVE-2023-37275",
         }
-        assert terminal <= self.UNDETECTED_IN_SCOPE
+        assert terminal <= self.CLOSED_BY_THE_CONTROL_KIND
+        assert not (terminal & self.UNDETECTED_IN_SCOPE)
         for cve_id in sorted(terminal):
-            assert not self._fires(BY_ID[cve_id]), cve_id
+            assert self._fires(BY_ID[cve_id]), cve_id
 
     def test_nfkc_unmasking_is_silent_too(self) -> None:
         """CVE-2019-9636 is out of scope *and* undetected, which is the worst pair.

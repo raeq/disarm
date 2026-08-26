@@ -15,8 +15,17 @@ the caller — it never claims intent.
 
 ## Detected classes
 
-Six branches fire, in order; the first four need no lexicon and are
-script-agnostic, so they port across writing systems.
+Eight branches fire. Six need no lexicon — only `leet` and `segmentation` do.
+
+The table below is grouped by kind, not by evaluation order. `control` is checked
+**first**, ahead of the ASCII fast-path, because `NUL`, `ESC`, `BEL` and `DEL` are
+themselves ASCII: a check placed after that fast-path would never see the vectors it
+exists for. The remaining branches split on `!tok.is_ascii()`, so `invisible`, `bidi`,
+`zalgo`, `bidi_mixed` and `mixed_script` only run on non-ASCII tokens, and `leet` and
+`segmentation` run last on everything.
+
+Most branches are script-agnostic and port across writing systems. `mixed_script` is the
+exception — it is anchored on Latin, and fires on Latin combined with Cyrillic or Greek.
 
 | Kind | Fires on | Spared (false-positive guards) |
 |---|---|---|
@@ -27,6 +36,7 @@ script-agnostic, so they port across writing systems.
 | `bidi_mixed` | one token mixes strong left-to-right and strong right-to-left **letters** (`varonisו`), which can visually reorder ("BiDi Swap") — no `U+202x` override (that is `bidi`) | single-direction text (all-LTR or all-RTL); digits are neutral |
 | `leet` | every out-of-place char substitutes a letter and the result is a common word (`fr33` → `free`) | a literal number that maps to no letter (`win32`, `Power5`, `21st`, `3pm`) |
 | `segmentation` | dense separators splitting single letters into a real word (`v.i.a.g.r.a`) | multi-letter parts (`6-foot-6`); a lone separator (`e-mail`) |
+| `control` | a non-whitespace control anywhere in the token — `NUL`, `ESC`, `BEL`, `DEL`, the C1 block. Never legitimate in text, and the introducer for terminal-escape injection and leading-blank blocklist bypass | the whitespace-class controls (TAB, LF, VT, FF, CR, `U+001C`–`U+001F`, NEL), which are real separators `collapse_whitespace` folds to a space |
 
 The **leet** and **segmentation** branches take a caller-supplied **lexicon** — a
 set of common words for the language being protected. The defining rule: a real

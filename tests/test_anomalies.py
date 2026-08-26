@@ -4,6 +4,9 @@ The exhaustive per-branch coverage lives in the Rust core (src/anomalies.rs);
 these tests verify the binding wiring, the lexicon contract, and the report shape.
 """
 
+import re
+from pathlib import Path
+
 import disarm
 from disarm import AnomalyReport, Finding, Lexicon, has_anomalies, inspect_anomalies
 
@@ -195,3 +198,110 @@ def test_bidi_mixed_catches_non_latin_rtl_mix():
 def test_bidi_mixed_quiet_on_same_direction():
     # Latin + Cyrillic are both LTR — still mixed_script, not bidi_mixed.
     assert inspect_anomalies("paypаl", set()).kinds == ["mixed_script"]
+
+
+class TestControlCharacters:
+    """#612: a non-whitespace control is never legitimate in text, and nothing saw it.
+
+    ``strip_control_chars`` has removed these since #433, but no detector reported
+    them, so ``docs/security/cve-validation.md`` listed a leading NUL and a terminal
+    escape sequence among the vectors nothing flags.
+
+    The whitespace-class controls (TAB, LF, VT, FF, CR, the information separators,
+    NEL) are excluded: they are real separators, ``collapse_whitespace`` folds them
+    to a space, and flagging them would fire on ordinary multi-line text.
+    """
+
+    def test_leading_nul_is_flagged(self):
+        # CVE-2023-24329 — urllib.parse blocklist bypass via a leading blank.
+        assert "control" in inspect_anomalies("\x00https://evil.example.net").kinds
+        assert has_anomalies("\x00https://evil.example.net")
+
+    def test_terminal_escape_is_flagged(self):
+        # CVE-2008-2383 (xterm DECRQSS) and CVE-2019-9535 (iTerm2 tmux mode).
+        assert "control" in inspect_anomalies("\x1bP$q\nrm -rf ~\n\x1b\\").kinds
+        assert "control" in inspect_anomalies("\x1bP1000p%output %1 malicious\x1b\\").kinds
+
+    def test_control_is_flagged_away_from_the_edges(self):
+        # The reason this is presence rather than position: the last character here
+        # is a backslash, so an edge-only rule would report this token clean.
+        assert "control" in inspect_anomalies("malicious\x1b\\").kinds
+
+    def test_whitespace_controls_are_not_flagged(self):
+        # These are separators. collapse_whitespace folds them; flagging them would
+        # fire on every multi-line string.
+        for ch in ("\t", "\n", "\r", "\x0b", "\x0c", "\x1c", "\x1f", "\x85"):
+            assert not has_anomalies(f"hello{ch}world"), repr(ch)
+
+    def test_ordinary_text_is_not_flagged(self):
+        for s in ("hello world", "  padded  ", "Café déjà vu", "line one\nline two"):
+            assert "control" not in inspect_anomalies(s).kinds, s
+
+    def test_del_and_c1_are_flagged(self):
+        assert "control" in inspect_anomalies("hello\x7fworld").kinds
+        assert "control" in inspect_anomalies("hello\x9fworld").kinds
+
+    def test_finding_records_the_codepoint(self):
+        findings = inspect_anomalies("\x00https://evil.example.net").findings
+        control = [f for f in findings if f.kind == "control"]
+        assert control, findings
+        assert "U+0000" in control[0].detail
+
+
+class TestAnomalyKindDoesNotDriftFromTheBindings:
+    """Drift gate: the kind set is declared twice and nothing compared them.
+
+    ``AnomalyKind`` is a Rust enum whose ``as_str`` arms are the wire format. It
+    crosses every FFI boundary as a bare ``String``, so PyO3, Ruby, Java and the C
+    ABI need no per-kind code and cannot drift. Node is the exception: it
+    hand-mirrors the set as a TypeScript string union so ``Finding.kind`` is typed
+    rather than ``string``.
+
+    That union shipped without ``bidi_mixed`` from #412 until #612 — a Node caller
+    matching on it got a type error for a kind the library really returns, and
+    nothing caught it, because the value crosses napi as a ``String`` and
+    ``index.ts`` casts.
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent
+    RUST = ROOT / "src" / "anomalies.rs"
+    NODE = ROOT / "bindings" / "node" / "index.ts"
+
+    def _rust_kinds(self) -> set[str]:
+        """The ``as_str`` arms — the wire format, read from its definition."""
+        body = self.RUST.read_text(encoding="utf-8")
+        block = re.search(r"pub fn as_str\(self\) -> &'static str \{.*?\n    \}", body, re.S)
+        assert block, "as_str() not found — update this gate"
+        return set(re.findall(r'=> "([a-z_]+)"', block.group(0)))
+
+    def _node_kinds(self) -> set[str]:
+        text = self.NODE.read_text(encoding="utf-8")
+        union = re.search(r"export type AnomalyKind = ([^\n]+)", text)
+        assert union, "AnomalyKind union not found — update this gate"
+        return set(re.findall(r"'([a-z_]+)'", union.group(1)))
+
+    def test_node_union_matches_the_rust_wire_format(self):
+        rust, node = self._rust_kinds(), self._node_kinds()
+        assert rust == node, {
+            "in Rust, missing from the TS union": sorted(rust - node),
+            "in the TS union, not a real kind": sorted(node - rust),
+        }
+
+    def test_every_kind_is_reachable(self):
+        """A kind nothing can produce is worse than a missing one — it is a lie."""
+        samples = {
+            "invisible": "pay\u200bpal",
+            "bidi": "user\u202etxt.exe",
+            "bidi_mixed": "varonis\u05d5",
+            "zalgo": "a\u0301\u0301\u0301\u0301",
+            "mixed_script": "p\u0430ypal",
+            "leet": "fr33",
+            "segmentation": "v.i.a.g.r.a",
+            "control": "\x00evil",
+        }
+        assert set(samples) == self._rust_kinds(), "sample set is stale"
+        # `leet` and `segmentation` are lexicon-gated by design, so they need one.
+        lex = {"free", "viagra"}
+        for kind, text in samples.items():
+            kinds = inspect_anomalies(text, lex).kinds
+            assert kind in kinds, f"{kind} unreachable via {text!r} (got {kinds})"

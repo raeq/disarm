@@ -1960,6 +1960,7 @@ COLLAPSE_VECTORS = [
     ("CVE-2017-7833", ECLIPSED_HOST, PLAIN_HOST),
     ("CVE-2017-5383", ALT_HYPHEN_HOST, ASCII_HYPHEN_HOST),
     ("CVE-2023-24329", "\x00" + BLOCKED_URL, BLOCKED_URL),
+    ("CVE-2019-11721", KRA_HOST, KRA_GENUINE),
 ]
 
 #: (cve, attack, predicate) — handled when the primitive is gone.
@@ -1982,9 +1983,24 @@ REMOVAL_VECTORS = [
         SMUGGLED,
         lambda o: not any(0xE0000 <= ord(c) <= 0xE007F for c in o),
     ),
+    ("CVE-2025-55754", TOMCAT_LOG_LINE, lambda o: not any(c in o for c in TERMINAL_CONTROLS)),
+    ("CVE-2024-52005", GIT_SIDEBAND, lambda o: not any(c in o for c in TERMINAL_CONTROLS)),
+    ("CVE-2023-43620", CROC_FILENAME, lambda o: not any(c in o for c in TERMINAL_CONTROLS)),
+    ("CVE-2023-37275", AUTOGPT_OUTPUT, lambda o: not any(c in o for c in TERMINAL_CONTROLS)),
+    ("CVE-2017-20190", ZALGO_PILE, lambda o: len(o) <= 4),
 ]
 
 NEUTRALIZABLE = [c for c, _, _ in COLLAPSE_VECTORS] + [c for c, _, _ in REMOVAL_VECTORS]
+
+#: Rows a *key builder* clears but no canonicalizer does, so they can be compared
+#: against other tools without belonging to the canonicalizer-clearable set.
+#: CVE-2026-23950 is the sharp-s path collision: folding it inside the confusable
+#: table would rewrite ordinary German, so `fold_case` owns it and `canonicalize`
+#: deliberately leaves it alone.
+KEY_BUILDER_ONLY = ["CVE-2026-23950"]
+
+#: What the comparator benchmark is expected to cover.
+COMPARABLE = NEUTRALIZABLE + KEY_BUILDER_ONLY
 
 
 def _handles(fn, cve: str) -> bool:
@@ -2154,6 +2170,8 @@ class TestOneCall:
             "CVE-2017-7832",
             "CVE-2017-7833",
             "CVE-2017-5383",
+            "CVE-2017-20190",
+            "CVE-2019-11721",
         }, sorted(missed)
 
 
@@ -2424,13 +2442,49 @@ class TestComparatorCorpusDrift:
     covering a row the matrix claims.
     """
 
-    def test_comparator_covers_every_neutralizable_row(self) -> None:
+    def test_comparator_covers_every_comparable_row(self) -> None:
         from benchmarks.cve_comparators import COVERED
 
-        assert COVERED == set(NEUTRALIZABLE), {
-            "compared but not neutralizable here": sorted(COVERED - set(NEUTRALIZABLE)),
-            "neutralizable but not compared": sorted(set(NEUTRALIZABLE) - COVERED),
+        assert COVERED == set(COMPARABLE), {
+            "compared but not comparable here": sorted(COVERED - set(COMPARABLE)),
+            "comparable but not compared": sorted(set(COMPARABLE) - COVERED),
         }
+
+    def test_every_registry_row_is_compared_or_has_a_reason_not_to(self) -> None:
+        """No row may silently sit out of the comparison.
+
+        The corpus stopped growing once while the matrix did not, and the gate
+        at the time only checked the two sets against each other rather than
+        against the registry — so 21 rows fell out of the comparison without
+        anything failing. Each row must now be compared, or fall into a named
+        category that explains why it cannot be.
+        """
+        from benchmarks.cve_comparators import COVERED
+
+        unexplained, malformed = [], []
+        for cve in REGISTRY:
+            if cve.id in COVERED:
+                continue
+            if OUT_OF_SCOPE in cve.dispositions:
+                continue  # nothing neutralizes it, so there is nothing to compare
+            if NOT_AFFECTED in cve.dispositions:
+                continue  # a cost property, not a transformation
+            if NEUTRALIZED in cve.dispositions:
+                # Claims to be neutralized and is not compared. No exemption.
+                unexplained.append(cve.id)
+                continue
+            # The only remaining exemption is detected-only, and a row has to
+            # *be* that rather than merely look like it. Reading an empty
+            # `neutralizers` as "detected only" would let a row with the wrong
+            # dispositions skip the gate silently — which is the exact failure
+            # this test was added to stop, one level further in.
+            if DETECTED not in cve.dispositions or not cve.detectors:
+                malformed.append(
+                    (cve.id, sorted(cve.dispositions), cve.neutralizers, cve.detectors)
+                )
+
+        assert not malformed, f"rows exempted as detected-only that are not: {malformed}"
+        assert not unexplained, f"comparable rows missing from the corpus: {sorted(unexplained)}"
 
     def test_the_documented_vector_count_matches_the_corpus(self) -> None:
         """The comparator page states its own size in prose, and prose goes stale.

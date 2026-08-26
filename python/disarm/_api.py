@@ -80,7 +80,9 @@ from disarm._boundary import (
     _slugify_batch,
     _strip_accents,
     _strip_accents_batch,
+    _strip_control_chars,
     _strip_log_injection,
+    _strip_zero_width_chars,
     # #476: the surrogate-boundary guard, for the class-based entrypoints (the module
     # loop in _boundary wraps only free functions, not class methods).
     _surrogate_safe,
@@ -912,10 +914,10 @@ def collapse_whitespace(text: str) -> str:
     Folds **whitespace only** (#433): the line controls (TAB/LF/VT/FF/CR), the
     information separators (U+001C–U+001F), NEL, the ``Zs``/``Zl``/``Zp`` spaces,
     and the blank-rendering set (Braille blank, the Hangul fillers) each fold to a
-    single space. It does **not** delete control or zero-width characters — to do
-    that, run a :class:`TextPipeline` with the ``strip_control`` /
-    ``strip_zero_width`` steps (the ``canonicalize`` / ``canonicalize_strict``
-    presets already do).
+    single space. It does **not** delete control or zero-width characters — for
+    that, call :func:`strip_control_chars` / :func:`strip_zero_width_chars`, or
+    use a preset that sequences them ahead of the fold (``canonicalize`` and
+    ``canonicalize_strict`` both do).
 
     Folding the line controls (rather than deleting them) means a carriage return
     between two tokens becomes a space, never a silent join: ``"a\\rb"`` →
@@ -938,6 +940,58 @@ def collapse_whitespace(text: str) -> str:
     if not isinstance(text, str):
         raise TypeError(f"collapse_whitespace() expects str, got {type(text).__name__}")
     return _collapse_whitespace(text)
+
+
+def strip_control_chars(text: str) -> str:
+    """Remove control characters that are **not** whitespace (#433).
+
+    Deletes every C0/C1 control (NUL, BEL, ESC, DEL, the C1 block) *except* the
+    ones :func:`collapse_whitespace` folds — TAB, LF, VT, FF, CR, the information
+    separators ``U+001C``–``U+001F``, and NEL. Those are preserved here so the
+    fold can turn them into a space; deleting them would join the tokens either
+    side, which is the invisible-join hazard the split exists to avoid.
+
+    Pair it with :func:`collapse_whitespace` when you want both, in that order.
+
+    Args:
+        text: Input string.
+
+    Returns:
+        String with non-whitespace controls removed.
+
+    Examples:
+        >>> strip_control_chars("a\\x00b\\x07c")
+        'abc'
+        >>> strip_control_chars("a\\rb")  # CR preserved for the fold to handle
+        'a\\rb'
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"strip_control_chars() expects str, got {type(text).__name__}")
+    return _strip_control_chars(text)
+
+
+def strip_zero_width_chars(text: str) -> str:
+    """Remove zero-width characters.
+
+    Deletes the zero-width set — ZWSP, ZWNJ, ZWJ, the word joiner, the invisible
+    operators and the BOM — which render as nothing and are used to fragment a
+    token so it evades a denylist while looking unchanged.
+
+    Args:
+        text: Input string.
+
+    Returns:
+        String with zero-width characters removed.
+
+    Examples:
+        >>> strip_zero_width_chars("pay\\u200bpal")
+        'paypal'
+        >>> strip_zero_width_chars("a\\ufeffb")
+        'ab'
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"strip_zero_width_chars() expects str, got {type(text).__name__}")
+    return _strip_zero_width_chars(text)
 
 
 def demojize(

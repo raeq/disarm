@@ -49,6 +49,12 @@ FORM_PRESERVING = {
     "strip_variation_selectors",
     "strip_noncharacters",
     "collapse_whitespace",
+    # #616: same category as the strips above — each deletes one character class
+    # and touches nothing else, so `ї` stays decomposed if it arrived decomposed.
+    # Neither is a recovery entrypoint; compose them with a preset when you want
+    # boundary normalization as well.
+    "strip_control_chars",
+    "strip_zero_width_chars",
     "escape_html",
     "strip_log_injection",
     "demojize",

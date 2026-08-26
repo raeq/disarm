@@ -370,7 +370,7 @@ operations:
   - id: strip_control_chars
     names:
       rust: strip_control_chars
-      python: { provided_via: "collapse_whitespace(strip_control=True) / get_pipeline()" }
+      python: strip_control_chars
       ruby: strip_control_chars
       node: stripControlChars
   - id: strip_format
@@ -424,7 +424,7 @@ operations:
   - id: strip_zero_width_chars
     names:
       rust: strip_zero_width_chars
-      python: { provided_via: "collapse_whitespace(strip_zero_width=True) / get_pipeline()" }
+      python: strip_zero_width_chars
       ruby: strip_zero_width_chars
       node: stripZeroWidthChars
   - id: terminal_width

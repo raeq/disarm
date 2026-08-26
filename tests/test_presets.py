@@ -6,15 +6,19 @@ import pytest
 
 from disarm import (
     DisarmError,
+    Text,
     canonicalize,
     canonicalize_strict,
     catalog_key,
+    collapse_whitespace,
     ml_normalize,
     search_key,
     sort_key,
     strip_bidi,
+    strip_control_chars,
     strip_format,
     strip_obfuscation,
+    strip_zero_width_chars,
     transliterate,
 )
 
@@ -773,3 +777,68 @@ class TestEmptyMappingIsNotUnmapped:
         """
         assert "[?]" in transliterate("a㐀b")
         assert "㐀" in search_key("a㐀b")
+
+
+class TestStripControlAndZeroWidthBehaviour:
+    """#616: the two newly-exported entrypoints, checked by behaviour.
+
+    They were covered only by the API-surface audits, which assert a name and a
+    signature and nothing about what the function does. These pin the character
+    sets and, more importantly, the *split* between them — the reason there are two
+    functions rather than one.
+    """
+
+    #: Removed by strip_control_chars: every control that is not a separator.
+    CONTROLS_REMOVED = ["\x00", "\x07", "\x08", "\x1b", "\x7f", "\x80", "\x9f"]
+    #: Preserved by it: the whitespace-class controls collapse_whitespace folds.
+    CONTROLS_KEPT = ["\t", "\n", "\x0b", "\x0c", "\r", "\x1c", "\x1f", "\x85"]
+    #: The whole zero-width set, U+180E included.
+    ZERO_WIDTH = [
+        "\u200b",
+        "\u200c",
+        "\u200d",
+        "\u2060",
+        "\u2061",
+        "\u2062",
+        "\u2063",
+        "\u2064",
+        "\ufeff",
+        "\u180e",
+    ]
+
+    @pytest.mark.parametrize("ch", CONTROLS_REMOVED)
+    def test_non_whitespace_controls_are_removed(self, ch):
+        assert strip_control_chars(f"a{ch}b") == "ab"
+
+    @pytest.mark.parametrize("ch", CONTROLS_KEPT)
+    def test_whitespace_controls_are_preserved(self, ch):
+        """Deleting these would join the tokens either side — the #433 contract."""
+        assert strip_control_chars(f"a{ch}b") == f"a{ch}b"
+
+    @pytest.mark.parametrize("ch", ZERO_WIDTH)
+    def test_zero_width_characters_are_removed(self, ch):
+        assert strip_zero_width_chars(f"pay{ch}pal") == "paypal"
+
+    def test_the_two_functions_do_not_overlap(self):
+        """Each leaves the other's set alone, which is why both exist."""
+        for ch in self.ZERO_WIDTH:
+            assert strip_control_chars(f"a{ch}b") == f"a{ch}b", ch
+        for ch in self.CONTROLS_REMOVED:
+            assert strip_zero_width_chars(f"a{ch}b") == f"a{ch}b", ch
+
+    def test_ordinary_text_is_untouched(self):
+        for s in ("hello world", "Café déjà vu", "Привет мир", "a\tb\nc"):
+            assert strip_control_chars(s) == s
+            assert strip_zero_width_chars(s) == s
+
+    def test_composition_matches_canonicalize(self):
+        """The documented recipe: strip controls, then fold whitespace."""
+        messy = "  \x00 hello \x7f  "
+        assert collapse_whitespace(strip_control_chars(messy)) == "hello"
+        assert canonicalize(messy) == "hello"
+
+    def test_text_methods_mirror_the_functions(self):
+        assert str(Text("a\x00b").strip_control_chars()) == "ab"
+        assert str(Text("pay\u200bpal").strip_zero_width_chars()) == "paypal"
+        # Fluent chaining is the point of the Text wrapper.
+        assert str(Text("  \x00 hi \x7f  ").strip_control_chars().collapse_whitespace()) == "hi"

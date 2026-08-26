@@ -18,6 +18,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **The comparator table no longer contradicts the matrix.** CVE-2026-23950 rendered as
+  `Neutralized` in the matrix and as `no` under both disarm columns in the comparison a
+  hundred lines below, because the comparison scores every row against two *fixed* disarm
+  entry points and that row is neutralized by `fold_case`.
+
+  The columns stay fixed on purpose — `decancer` and `unidecode` each expose exactly one
+  entry point, so letting disarm pick a different function per row would flatter it.
+  Instead the three rows whose matrix neutralizer is neither fixed column now carry a †
+  naming the function that does own them, so a `no` reads as *not this function* rather
+  than *not disarm*. `test_named_elsewhere_matches_the_registry` derives that set from the
+  registry rather than trusting the benchmark's copy, and also checks the named function
+  is one the row actually lists.
+
 - **Comparator corpus caught up with the matrix, and gated against falling behind again
   (15 → 22 of 36 rows).** The corpus stopped growing when the matrix went from 20 to 36
   rows, and the drift gate at the time only compared it against `NEUTRALIZABLE` — which

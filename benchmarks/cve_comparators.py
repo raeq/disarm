@@ -138,16 +138,42 @@ REMOVAL: list[tuple[str, str, Callable[[str], bool]]] = [
     ("CVE-2017-20190", "a" + ("\u0301" * 2_000), lambda out: len(out) <= 4),
 ]
 
+#: Rows whose neutralizer in the matrix is neither of the two fixed disarm
+#: columns below. The columns are fixed on purpose — decancer and unidecode each
+#: expose exactly one entry point, so letting disarm pick a different function
+#: per row would flatter it. But a bare `no` then reads as "disarm cannot do
+#: this" when the matrix says otherwise a hundred lines further up, so these
+#: rows carry a marker naming the function that does own them.
+#:
+#: Kept here rather than imported from the registry to avoid a benchmark ->
+#: tests dependency; `TestComparatorCorpusDrift` asserts the two agree.
+NAMED_ELSEWHERE: dict[str, str] = {
+    "CVE-2019-19844": "canonicalize_strict",
+    "CVE-2020-12063": "normalize_confusables",
+    "CVE-2026-23950": "fold_case",
+}
+
 #: Every CVE this comparison covers. Gated against the test registry.
 COVERED = frozenset([c for c, _, _ in COLLAPSE] + [c for c, _, _ in REMOVAL])
 
 
+#: The disarm entry points every row is scored against. Fixed rather than chosen
+#: per row: decancer and unidecode each expose exactly one entry point, so
+#: letting disarm pick whichever function suits a row would be a flattering
+#: comparison rather than a like-for-like one. Rows the matrix neutralizes with
+#: something else are marked instead — see :data:`NAMED_ELSEWHERE`.
+#:
+#: Separate from :func:`build_tools` so a caller that only needs the names does
+#: not trigger its optional imports or its stderr notes.
+DISARM_COLUMNS: dict[str, Callable[[str], str]] = {
+    "disarm.canonicalize": disarm.canonicalize,
+    "disarm.strip_obfuscation": disarm.strip_obfuscation,
+}
+
+
 def build_tools() -> dict[str, Callable[[str], str]]:
     """The tools, or as many as are installed. Missing ones are reported, not faked."""
-    tools: dict[str, Callable[[str], str]] = {
-        "disarm.canonicalize": disarm.canonicalize,
-        "disarm.strip_obfuscation": disarm.strip_obfuscation,
-    }
+    tools: dict[str, Callable[[str], str]] = dict(DISARM_COLUMNS)
     try:
         import decancer_py
 
@@ -232,9 +258,20 @@ def render_markdown(tools, results) -> str:
     out.append("|---|" + "---|" * len(names))
     for cve in sorted(results):
         cells = " | ".join("yes" if results[cve][n] else "**no**" for n in names)
-        out.append(f"| {cve} | {cells} |")
+        marker = " †" if cve in NAMED_ELSEWHERE else ""
+        out.append(f"| {cve}{marker} | {cells} |")
     scores = " | ".join(f"**{sum(results[c][n] for c in results)}/{len(results)}**" for n in names)
     out.append(f"| **Handled** | {scores} |")
+    marked = sorted(NAMED_ELSEWHERE)
+    if marked:
+        out.append("")
+        out.append(
+            "† The matrix neutralizes these rows with an entry point that is not one of "
+            "the two disarm columns above, so a `no` here means *not this function* "
+            "rather than *not disarm*: "
+            + ", ".join(f"{cve} → `{NAMED_ELSEWHERE[cve]}`" for cve in marked)
+            + "."
+        )
     return "\n".join(out)
 
 

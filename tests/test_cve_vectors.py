@@ -2486,6 +2486,33 @@ class TestComparatorCorpusDrift:
         assert not malformed, f"rows exempted as detected-only that are not: {malformed}"
         assert not unexplained, f"comparable rows missing from the corpus: {sorted(unexplained)}"
 
+    def test_named_elsewhere_matches_the_registry(self) -> None:
+        """The comparator's footnote must name the rows the registry names.
+
+        The benchmark keeps its own copy so it does not have to import from
+        `tests`, which makes it a second list that can drift — the failure this
+        whole class exists for. So it is checked against the registry rather
+        than trusted, and the named function has to be one the row actually
+        lists as a neutralizer.
+        """
+        from benchmarks.cve_comparators import COVERED, DISARM_COLUMNS, NAMED_ELSEWHERE
+
+        # DISARM_COLUMNS rather than build_tools(): the latter attempts the
+        # bench-only imports and prints a note per missing one, which this test
+        # has no use for and CI would see on every run.
+        fixed = {name.split(".")[-1] for name in DISARM_COLUMNS}
+        expected = {cve_id for cve_id in COVERED if not (set(BY_ID[cve_id].neutralizers) & fixed)}
+        assert set(NAMED_ELSEWHERE) == expected, {
+            "marked but the fixed columns do own it": sorted(set(NAMED_ELSEWHERE) - expected),
+            "unmarked but owned elsewhere": sorted(expected - set(NAMED_ELSEWHERE)),
+        }
+        wrong = {
+            cve_id: named
+            for cve_id, named in NAMED_ELSEWHERE.items()
+            if named not in BY_ID[cve_id].neutralizers
+        }
+        assert not wrong, f"footnote names a function the row does not list: {wrong}"
+
     def test_the_documented_vector_count_matches_the_corpus(self) -> None:
         """The comparator page states its own size in prose, and prose goes stale.
 

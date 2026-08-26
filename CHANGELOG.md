@@ -493,6 +493,61 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`is_suspicious_hostname()` now catches tags, variation selectors, noncharacters
+  and PUA, and stops reporting a noncharacter as Arabic (#610).** Third in the
+  sequence after #603 (bidi controls) and #605 (zero-width). 17 of 18 sampled
+  code points passed the screen clean and **all 18** survived into `canonical`.
+
+  The one that did flag was flagging for the wrong reason, and it is the #605 bug in
+  a class #605 did not cover: `U+FDD0` sits in the Arabic Presentation Forms range,
+  so the script detector read it as a letter and `paypal<U+FDD0>.evil.com` reported
+  `scripts=['Latin', 'Arabic']` with `mixed_script=True`. Widening the existing
+  per-label strip fixes that by construction rather than by special case, because
+  the strip already runs before `detect_scripts`.
+
+  Reported on the **existing** `has_invisible` field rather than four new ones, so no
+  binding payload changes: no new field on the Ruby positional tuple and no change to
+  the Java `jni_sig!` string. `is_invisible_in_hostname` composes the four class
+  predicates that `src/invisibles.rs` already carried.
+
+  Private use and the variation selectors are included because RFC 5892 puts all four
+  of the classes added here in DISALLOWED outright. (The pre-existing zero-width set is
+  not uniformly disallowed — `U+200C`/`U+200D` are CONTEXTJ, conditionally permitted —
+  and flagging those remains the deliberate fail-closed policy #605 chose, not a reading
+  of the RFC.) Both have legitimate uses in ordinary text, so
+  a general-text detector needs its own argument for them; that is tracked separately.
+  Measured against the full suite including the adversarial-oracle clean corpus: no
+  false positives.
+
+  The tag block is the reason this is a security fix rather than tidying.
+  `U+E0061`–`U+E007A` spell arbitrary Latin invisibly, and the screen previously
+  called such a hostname clean *and* returned the payload intact in `canonical` — the
+  combination that turns a detector into a laundering step.
+
+- **`search_key`, `catalog_key` and `sort_key` no longer keep 134 characters that
+  `transliterate()` deletes (#602).** A character the table maps to the empty string is
+  not *unknown* — it is a decision the table already made, "this has no ASCII form, drop
+  it". `ErrorMode::Preserve` was excepting itself from those mappings on the reading that
+  an empty mapping is a kind of failure the caller asked to keep, so the three presets
+  that pass `Preserve` kept the characters verbatim while
+  `TextPipeline(transliterate=True)`, which passes `Ignore`, dropped them correctly.
+
+  `catalog_key` made it worse by running the confusable fold *after* transliteration, so
+  a leaked Cyrillic soft sign was folded onto Latin `b`: `Пьеса` became `pbesa`, a key
+  containing a letter that appears in neither the input nor its romanisation. It is now
+  `pesa`.
+
+  `ErrorMode` still governs what happens to characters the table has nothing to say
+  about, so a genuinely unmapped code point is preserved exactly as before. Verified by
+  a full-range scan reproducing the issue's own predicate: zero leaks remain.
+
+  One property test asserted that `Preserve` never returns empty output. That held only
+  because of the exception removed here, and could not have been true in general — a
+  string of nothing but empty-mapped characters legitimately transliterates to nothing,
+  which is why its generator already had to exclude combining marks. It is restated as
+  the invariant that actually defines the mode: `Preserve` output is never shorter than
+  `Ignore` output, which needs no generator exclusions at all.
+
 - **A new `control` anomaly kind — `has_anomalies` goes from 11 CVE rows to 18 (#612).**
   A non-whitespace control (`NUL`, `ESC`, `BEL`, `DEL`, the C1 block) is never
   legitimate in text, and nothing reported one. `strip_control_chars` has removed them

@@ -19,6 +19,7 @@ from disarm import (
     strip_format,
     strip_obfuscation,
     strip_zero_width_chars,
+    transliterate,
 )
 
 # ===== canonicalize =====
@@ -722,6 +723,60 @@ class TestSecurityCleanZalgoCap:
             assert canonicalize(once) == once, f"not idempotent on {text!r}: {once!r}"
 
         check()
+
+
+class TestEmptyMappingIsNotUnmapped:
+    """#602: a character the table maps to "" is DELIBERATELY dropped, not unknown.
+
+    ``search_key``/``catalog_key``/``sort_key`` transliterate in ``ErrorMode::Preserve``
+    so an unknown character survives rather than vanishing. That mode was also being
+    applied to characters with an explicit empty mapping — "this has no ASCII form,
+    drop it" — so 134 code points that ``transliterate()`` deletes were kept verbatim
+    by the three key presets. ``TextPipeline(transliterate=True)`` uses ``Ignore`` and
+    dropped them correctly, which is what made the divergence visible.
+    """
+
+    def test_soft_sign_does_not_survive_the_key_presets(self):
+        assert transliterate("съезд") == "sezd"
+        assert search_key("съезд") == "sezd"
+        assert catalog_key("съезд") == "sezd"
+        assert sort_key("съезд") == "sezd"
+
+    def test_leaked_soft_sign_is_not_folded_onto_a_latin_letter(self):
+        """The sharpest symptom: catalog_key runs confusables AFTER transliterate.
+
+        A leaked U+044C was folded onto Latin ``b``, so ``Пьеса`` became ``pbesa`` —
+        a key containing a letter that is in neither the input nor its romanisation.
+        """
+        assert catalog_key("Пьеса") == "pesa"
+        assert search_key("Пьеса") == "pesa"
+
+    def test_no_code_point_leaks_through_the_key_presets(self):
+        """Full-range scan, the predicate from the issue. Expected count: zero.
+
+        `chr` and the probe are bound once per code point rather than rebuilt for
+        each of the three uses, and the surrogate range is skipped for consistency
+        with the other full-range scans in the suite — a lone surrogate is not a
+        transliteration input, it is an encoding error.
+        """
+        leaked = []
+        for cp in range(0x20, 0x110000):
+            if 0xD800 <= cp <= 0xDFFF:
+                continue
+            ch = chr(cp)
+            probe = f"a{ch}b"
+            if transliterate(probe) == "ab" and ch in search_key(probe):
+                leaked.append(cp)
+        assert leaked == [], [f"U+{c:04X}" for c in leaked[:20]]
+
+    def test_genuinely_unmapped_characters_are_still_preserved(self):
+        """The mode still does its job — this is a scoped fix, not a mode change.
+
+        U+3400 has no table entry at all, so ``Preserve`` must keep it. Only the
+        *present-and-empty* case changes.
+        """
+        assert "[?]" in transliterate("a㐀b")
+        assert "㐀" in search_key("a㐀b")
 
 
 class TestStripControlAndZeroWidthBehaviour:

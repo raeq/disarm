@@ -18,6 +18,34 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Comparator corpus caught up with the matrix, and gated against falling behind again
+  (15 → 22 of 36 rows).** The corpus stopped growing when the matrix went from 20 to 36
+  rows, and the drift gate at the time only compared it against `NEUTRALIZABLE` — which
+  had stopped growing too. Both sides moved together, so nothing failed and 21 rows fell
+  out of the comparison silently.
+
+  Seven comparable rows are now compared: the four terminal-control CVEs (CVE-2025-55754,
+  CVE-2024-52005, CVE-2023-43620, CVE-2023-37275), the zalgo row (CVE-2017-20190), the
+  Latin kra (CVE-2019-11721) and the sharp-s path collision (CVE-2026-23950).
+
+  **The other 14 are named rather than left unexplained**: 11 out of scope (nothing
+  neutralizes them, so nothing to compare), 2 not-affected (a cost property, not a
+  transformation), 1 detected without being neutralized.
+  `test_every_registry_row_is_compared_or_has_a_reason_not_to` now checks each row against
+  the registry rather than against another list that can drift with it.
+
+  **A flaw in the comparison predicate came out of adding the sharp-s row.** The harness
+  neutralized case with `str.casefold()`, which performs Unicode full case folding — and
+  therefore maps `ß` to `ss` itself. Every tool would have passed CVE-2026-23950 by
+  measuring Python rather than the tool. Switched to `str.lower()`, which leaves `ß` alone;
+  no other row changed.
+
+  Scores on the widened corpus: `canonicalize` and `strip_obfuscation` 20/22, `decancer`
+  16/22, `unidecode` 14/22. The single row where disarm reads `no` and `unidecode` reads
+  `yes` is CVE-2026-23950, and it is a deliberate refusal — folding `ß` in the confusable
+  table would rewrite ordinary German, so the key builders own that collision. The page
+  says so next to the table.
+
 - **Normalization cost as a CVE class, and a fourth disposition to describe it (33 → 36).**
   CVE-2026-3276 (CPython `unicodedata.normalize()` on alternating-CCC runs, CWE-407),
   CVE-2023-46695 (Django NFKC on Windows, re-reported three times since) and

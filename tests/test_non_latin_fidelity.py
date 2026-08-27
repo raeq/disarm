@@ -40,7 +40,9 @@ SAMPLES = [
     ("gujarati", "ગુજરાતી", "the name of the Gujarati language"),
     ("khmer", "ភាសាខ្មែរ", "Khmer for 'Khmer language'"),
     ("arabic", "العربية", "Arabic for 'Arabic'"),
-    ("persian", "می‌خواهم", "Persian for 'I want', with the required ZWNJ"),
+    # The ZWNJ is escaped for the same reason as the ZWNJ constant below: invisible
+    # in a diff, and this sample exists precisely to carry it.
+    ("persian", "می\u200cخواهم", "Persian for 'I want', with the required ZWNJ"),
     ("hebrew", "עברית", "Hebrew for 'Hebrew'"),
     ("greek", "Ελληνικά", "Greek for 'Greek'"),
     ("thai", "ภาษาไทย", "Thai for 'Thai language'"),
@@ -148,8 +150,8 @@ def test_the_confusable_primitive_is_not_what_removes_them(text: str) -> None:
 def test_the_primitive_itself_splices_latin_into_non_latin(text: str) -> None:
     folded = disarm.normalize_confusables(text)
     assert folded != text, "the primitive is not the safe escape hatch here"
-    assert any(c.isascii() and c.isalpha() or c == "'" for c in folded), (
-        "expected Latin/ASCII spliced into the output"
+    assert any((c.isascii() and c.isalpha()) or c == "'" for c in folded), (
+        "expected an ASCII letter or apostrophe spliced into the output"
     )
 
 
@@ -220,7 +222,10 @@ def test_the_damage_cannot_be_scoped_away_by_looking_for_latin() -> None:
 # ── Mechanism 3: the ZWNJ Persian requires ───────────────────────────
 
 
-ZWNJ = "‌"
+#: Escaped rather than written literally: it is invisible, so a literal is easy to
+#: delete by accident and impossible to see in a diff — which would silently turn
+#: every assertion below into a tautology (review on #636).
+ZWNJ = "\u200c"
 
 
 @pytest.mark.parametrize(

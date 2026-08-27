@@ -75,6 +75,14 @@ fun String.stripAccents(): String = JDisarm.stripAccents(this)
 
 fun String.foldCase(): String = JDisarm.foldCase(this)
 
+/**
+ * Whether this value is a stable identity key under case folding — whether [foldCase]
+ * and `lowercase()` agree on it. `false` means some other string folds to the same
+ * value, the collision node-tar hit in CVE-2026-23950. A fact about the string, not
+ * suspicion: `groß` is an ordinary German word.
+ */
+fun String.isCaseFoldStable(): Boolean = JDisarm.isCaseFoldStable(this)
+
 @JvmOverloads
 fun String.demojize(stripModifiers: Boolean = false): String = JDisarm.demojize(this, stripModifiers)
 

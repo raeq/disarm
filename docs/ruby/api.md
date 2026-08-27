@@ -101,6 +101,20 @@ Disarm.fold_case("HELLO")                          # => "hello"
 Disarm.fold_case("Straße")                         # => "strasse"
 ```
 
+### `Disarm.case_fold_stable?(text)`
+
+Whether `fold_case` and `String#downcase` agree on `text`, so it is a stable
+identity key. `false` means some other string folds to the same value, which is
+the collision node-tar's `PathReservations` guard missed in CVE-2026-23950. Ask
+it before a name becomes a key; a `false` is a fact about the string rather than
+a report of an attack, since `groß` is an ordinary German word.
+
+```ruby
+Disarm.case_fold_stable?("gross.txt")              # => true
+Disarm.case_fold_stable?("groß.txt")               # => false, folds to gross.txt
+Disarm.case_fold_stable?("ΟΔΟΣ")                   # => false, downcases to οδος
+```
+
 ### `Disarm.demojize(text, strip_modifiers: false)`
 
 Replace emoji with their plain names. `strip_modifiers:` drops skin-tone /

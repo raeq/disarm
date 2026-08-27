@@ -6,7 +6,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from disarm import fold_case
+from disarm import fold_case, is_case_fold_stable
 from disarm._text import Text
 
 # ── ASCII fast path ──────────────────────────────────────────────────
@@ -303,6 +303,122 @@ class TestTextBuilder:
 
     def test_fold_case_ligatures(self) -> None:
         assert Text("ﬁnd").fold_case().value == "find"
+
+    def test_is_case_fold_stable_method(self) -> None:
+        assert Text("gross.txt").is_case_fold_stable() is True
+        assert Text("groß.txt").is_case_fold_stable() is False
+
+
+# ── Fold stability (#619) ────────────────────────────────────────────
+
+
+class TestCaseFoldStability:
+    """``is_case_fold_stable(x)`` answers ``fold_case(x) == x.lower()``.
+
+    A ``False`` says some *other* string folds to the same value, so keying a
+    table on this one can collide. It is a statement about the string, not about
+    intent — every case below is ordinary text in some language.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "",
+            "gross.txt",
+            "admin@example.com",
+            "café résumé naïve",
+            "Москва",
+            "你好世界",
+            "ΣΑΒΒΑΤΟ",  # capital sigma, but not word-final
+            "İstanbul",  # fold and lower both give i + U+0307
+        ],
+    )
+    def test_ordinary_text_is_stable(self, text: str) -> None:
+        assert is_case_fold_stable(text) is True
+
+    @pytest.mark.parametrize(
+        ("text", "why"),
+        [
+            ("groß.txt", "CVE-2026-23950: collides with gross.txt"),
+            ("ſtraße", "long s and eszett"),
+            ("ﬁle", "ligature: collides with file"),
+            ("ẛ", "U+1E9B folds to ṡ and lowercases to itself"),
+            ("µm", "micro sign folds to Greek mu"),
+            ("Ꭰ", "Cherokee folds small→capital, so the capital moves too"),
+            ("ꭰ", "…and so does the small form"),
+            ("ΟΔΟΣ", "Greek final sigma: lowercases to οδος, folds to οδοσ"),
+        ],
+    )
+    def test_the_collision_classes_are_unstable(self, text: str, why: str) -> None:
+        assert is_case_fold_stable(text) is False, why
+
+    def test_the_answer_is_about_the_string_not_its_characters(self) -> None:
+        """Why a per-character lookup table would be wrong, measured.
+
+        ``Σ`` agrees with itself in isolation — its fold and its lowercase are
+        both ``σ`` — so a per-character table calls every one of these stable.
+        The whole-string answer is the correct one, because ``str.lower()``
+        applies the Final_Sigma context rule and case folding has none.
+        """
+        assert fold_case("ΟΔΟΣ") == "οδοσ"
+        assert "ΟΔΟΣ".lower() == "οδος"
+        assert is_case_fold_stable("Σ") is True
+        assert is_case_fold_stable("ΟΔΟΣ") is False
+
+    def test_str_casefold_is_the_wrong_comparison_basis(self) -> None:
+        """The trap the docstring names, pinned.
+
+        ``str.casefold()`` performs the very transform under test, so a
+        predicate written against it answers ``stable`` for everything. disarm's
+        fold agrees with CPython's casefold on all of these, which is exactly
+        what makes the substitution silent.
+        """
+        for text in ["groß.txt", "ſtraße", "ﬁle", "gross.txt"]:
+            assert fold_case(text) == text.casefold(), text
+            assert is_case_fold_stable(text) == (fold_case(text) == text.lower())
+
+    def test_rejects_non_str(self) -> None:
+        with pytest.raises(TypeError, match="expects str"):
+            is_case_fold_stable(42)  # type: ignore[arg-type]
+
+    def test_a_lone_surrogate_answers_for_its_scrubbed_form(self) -> None:
+        """#469's boundary contract, applied here.
+
+        A lone surrogate has no UTF-8 encoding, so it never reaches Rust: the
+        boundary replaces it with U+FFFD and the predicate answers for that.
+        ``fold_case(x) == x.lower()`` computed in Python answers for the
+        surrogate instead and disagrees, which is a decode artifact rather than
+        a fold property.
+        """
+        assert is_case_fold_stable("a\ud800b") is True
+        assert fold_case("a\ud800b") == "a�b"
+
+    def test_disagreements_with_the_python_one_liner_are_data_version_gaps(self) -> None:
+        """MEASURED, and the caveat the docstring states.
+
+        disarm answers with its own CaseFolding table against the lowercase
+        mapping compiled into the crate. ``fold_case(x) == x.lower()`` written in
+        Python substitutes *CPython's* Unicode version for the second half, and
+        the two Unicode versions are rarely the same — this file's
+        ``TestAgainstPythonCasefold`` already navigates the same skew from the
+        other side.
+
+        The invariant that survives a version bump in either direction: wherever
+        the two disagree, one of them sees no case mapping for that code point at
+        all. There is no code point where both know a mapping and they still
+        disagree — that would be a real defect rather than a data gap.
+        """
+        contested = []
+        for cp in range(0x80, 0x110000):
+            if 0xD800 <= cp <= 0xDFFF:
+                continue  # surrogates cannot cross the boundary
+            ch = chr(cp)
+            if is_case_fold_stable(ch) == (fold_case(ch) == ch.lower()):
+                continue
+            if ch.lower() == ch or fold_case(ch) == ch:
+                continue  # one side has no mapping: a data-version gap
+            contested.append(f"U+{cp:04X}")
+        assert not contested, contested
 
 
 # ── Casefold correctness against Python's str.casefold() ─────────────

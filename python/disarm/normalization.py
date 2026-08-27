@@ -12,6 +12,7 @@ Usage::
 from disarm import (
     collapse_whitespace,
     fold_case,
+    is_case_fold_stable,
     is_normalized,
     normalize,
     strip_accents,
@@ -20,6 +21,7 @@ from disarm import (
 __all__ = [
     "collapse_whitespace",
     "fold_case",
+    "is_case_fold_stable",
     "is_normalized",
     "normalize",
     "strip_accents",

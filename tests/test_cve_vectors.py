@@ -64,6 +64,7 @@ from disarm import (
     has_anomalies,
     has_bidi_conflict,
     inspect_anomalies,
+    is_case_fold_stable,
     is_confusable,
     is_mixed_script,
     is_suspicious_hostname,
@@ -325,17 +326,10 @@ class TestDjangoCaseTransformTakeover:
         left for the reset token to be delivered to."""
         assert defense(ATTACKER_EMAIL) == defense(VICTIM_EMAIL)
 
-    def test_upper_collision_class_is_closed(self) -> None:
-        """Exhaustive: the whole Unicode space, not a sample.
-
-        The CVE's collision class is exactly *"non-ASCII code points whose
-        ``.upper()`` is pure ASCII"*. There are ten of them. ``fold_case``
-        composed with ``canonicalize_strict`` maps every one to the same ASCII
-        its uppercase form implies, so the class is closed with no residue.
-
-        Runs in ~0.2s, which buys an exhaustive gate for the price of a
-        sampled one.
-        """
+    @staticmethod
+    def _upper_collision_class() -> list[tuple[str, str]]:
+        """The CVE's collision class: non-ASCII code points whose ``.upper()`` is
+        pure ASCII. Exhaustive over the whole Unicode space, ~0.2s."""
         ascii_upper = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
         collisions = []
         for cp in range(0x80, 0x110000):
@@ -343,6 +337,19 @@ class TestDjangoCaseTransformTakeover:
             up = ch.upper()
             if up and up != ch and all(c in ascii_upper for c in up):
                 collisions.append((ch, up))
+        return collisions
+
+    def test_upper_collision_class_is_closed(self) -> None:
+        """Exhaustive: the whole Unicode space, not a sample.
+
+        There are ten members. ``fold_case`` composed with
+        ``canonicalize_strict`` maps every one to the same ASCII its uppercase
+        form implies, so the class is closed with no residue.
+
+        Runs in ~0.2s, which buys an exhaustive gate for the price of a
+        sampled one.
+        """
+        collisions = self._upper_collision_class()
 
         # Pinned: a Unicode data bump that changes this count should be seen.
         assert len(collisions) == 10, [f"U+{ord(c):04X}" for c, _ in collisions]
@@ -368,6 +375,24 @@ class TestDjangoCaseTransformTakeover:
         assert canonicalize_strict("ß") == "ß"
         assert fold_case("ß") == "ss"
         assert search_key("ß@example.com") == search_key("ss@example.com")
+
+    def test_fold_stability_does_not_report_this_row(self) -> None:
+        """MEASURED LIMIT, and a correction to how #619 was framed.
+
+        The issue pairs this CVE with CVE-2026-23950 as two rows turning on one
+        precondition. Nine of the ten sources in the collision class above are
+        fold-unstable, so for those the pairing holds — but this row's probe uses
+        the tenth, ``U+0131`` DOTLESS I, which folds to itself *and* lowercases
+        to itself. It collides through ``.upper()`` instead, which is a different
+        question, so ``is_case_fold_stable`` is silent here and the row's
+        detector stays ``is_confusable`` alone.
+        """
+        assert is_case_fold_stable(ATTACKER_EMAIL) is True
+        assert fold_case("ı") == "ı" == "ı".lower()
+        assert "ı".upper() == "I"
+
+        unstable = [ch for ch, _ in self._upper_collision_class() if not is_case_fold_stable(ch)]
+        assert len(unstable) == 9, [f"U+{ord(c):04X}" for c in unstable]
 
 
 # ---------------------------------------------------------------------------
@@ -1383,6 +1408,53 @@ class TestTarPathCollision:
         assert canonicalize_strict("groß.txt") == "groß.txt"
         assert strip_obfuscation("groß.txt") == "groß.txt"
 
+    def test_the_precondition_is_reportable_even_though_the_collision_is_not(self) -> None:
+        """#619: this row's *Detected by* column, and the shape of what it claims.
+
+        The collision is a property of a **pair** of names, and every disarm
+        detector is a single-string predicate, so nothing here can say
+        ``groß.txt`` collides with ``gross.txt`` — that is #620's job. What is a
+        single-string property, and what node-tar's ``PathReservations`` guard
+        needed, is the *precondition*: this name does not fold to its own
+        lowercase, so some other name may fold to the same key.
+        """
+        assert is_case_fold_stable("groß.txt") is False
+        assert is_case_fold_stable("gross.txt") is True
+
+    def test_the_predicate_is_a_fact_and_not_an_accusation(self) -> None:
+        """Why it stays out of ``DETECTOR_PANEL`` and out of ``has_anomalies``.
+
+        ``groß.txt`` is an ordinary German filename. Folding the predicate into
+        the anomaly report would flag ordinary German, ordinary Greek and every
+        Latin ligature as suspicious, which would be both noisy and the wrong
+        claim. The panel is silent on this row, and that stays measured rather
+        than assumed.
+        """
+        assert not has_anomalies("groß.txt")
+        assert not any(pred("groß.txt") for pred in DETECTOR_PANEL.values())
+
+    def test_the_class_is_wider_than_the_eszett(self) -> None:
+        """The reason it is worth a function rather than a one-liner per caller.
+
+        ``ß`` is the member everyone knows. The class it belongs to also holds
+        the long s, every Latin ligature, the micro sign and the whole of
+        Cherokee (whose fold runs small→capital, so both cases move), and a
+        caller has to know all of that before the one-liner is worth writing.
+        """
+        for name in ["groß", "ſtraße", "ﬁle", "µm", "Ꭰ", "ꭰ"]:
+            assert not is_case_fold_stable(name), name
+
+    def test_str_casefold_is_the_trap_the_comparison_avoids(self) -> None:
+        """MEASURED: ``str.casefold()`` is the wrong basis, and silently so.
+
+        Casefolding performs the very transform under test, so a predicate
+        written against it answers ``stable`` for every string in Unicode. #617
+        walked into this exact substitution in the comparator harness.
+        """
+        for name in ["groß.txt", "ſtraße", "ﬁle", "gross.txt"]:
+            assert fold_case(name) == name.casefold(), name
+        assert is_case_fold_stable("groß.txt") != (fold_case("groß.txt") == "groß.txt".casefold())
+
 
 # ---------------------------------------------------------------------------
 # Normalization cost — CVE-2026-3276, CVE-2023-46695, CVE-2017-20190
@@ -2174,9 +2246,12 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-176",
         cvss=5.9,
         cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("fold_case", "search_key", "catalog_key"),
-        detectors=(),
+        # Outside DETECTOR_PANEL on purpose (#619): the panel members report an
+        # anomaly, and this one reports a property of an ordinary German
+        # filename. Asserted in TestTarPathCollision instead.
+        detectors=("is_case_fold_stable",),
         probe="groß.txt",
         reference="https://nvd.nist.gov/vuln/detail/CVE-2026-23950",
     ),
@@ -2631,10 +2706,10 @@ class TestDetectionHasNoSuperset:
 
     Neutralization has a safe default. Detection does not — and not because one
     predicate is weaker than another: **no combination of them** covers the
-    matrix. Five vectors are silent to every detector disarm exposes.
+    matrix. Seven vectors are silent to every detector disarm exposes.
 
     So a pipeline that screens first and only cleans what it flagged forwards
-    those five untouched. Clean unconditionally; use the detectors to decide
+    those seven untouched. Clean unconditionally; use the detectors to decide
     whether to *alert*, never whether to *clean*.
     """
 
@@ -2644,7 +2719,6 @@ class TestDetectionHasNoSuperset:
     #: than as a silent improvement nobody notices.
     UNDETECTED_IN_SCOPE = {
         "CVE-2025-32711",  # the Tags block is not an anomaly kind
-        "CVE-2026-23950",  # nor is a case-folding path collision
         "CVE-2023-46695",  # nor is a long run of already-normalized characters
         # The whole encoding class is silent too — see TestOverlongAndInvalid-
         # Sequences and TestLoneSurrogates. Every one is neutralized and none
@@ -2658,6 +2732,16 @@ class TestDetectionHasNoSuperset:
         "CVE-2024-46954",
         "CVE-2026-44288",
     }
+    #: Closed by ``is_case_fold_stable`` (#619), by a route this class had ruled
+    #: out. The standing claim is that each remaining row needs a *comparison*
+    #: between two strings, and for the collision itself that is still true —
+    #: nothing here can say ``groß.txt`` collides with ``gross.txt``. What was
+    #: wrong is treating the comparison as the only reportable part: the
+    #: *precondition* is a single-string property, and it is the part a
+    #: reservation table needs. Whether the length-budget and decode-result rows
+    #: have a reportable precondition too is open.
+    CLOSED_BY_FOLD_STABILITY = {"CVE-2026-23950"}
+
     #: Closed by the ``control`` anomaly kind (#612). Kept as a record, because the
     #: shape of what remains is the interesting part: every row still undetected
     #: needs a *comparison* — a fold collision, a length budget, a decode result —
@@ -2752,6 +2836,22 @@ class TestDetectionHasNoSuperset:
         for cve_id in sorted(terminal):
             assert self._fires(BY_ID[cve_id]), cve_id
 
+    def test_the_fold_collision_row_is_now_reported(self) -> None:
+        """Inverted by #619, the same way and for a different reason.
+
+        The panel is still silent on it and should be — ``is_case_fold_stable``
+        is not an anomaly claim — so this row is reported by a named
+        single-string detector rather than by the panel, exactly as
+        CVE-2023-4399 is reported by the hostname screen.
+        """
+        assert self.CLOSED_BY_FOLD_STABILITY == {"CVE-2026-23950"}
+        for cve_id in sorted(self.CLOSED_BY_FOLD_STABILITY):
+            cve = BY_ID[cve_id]
+            assert cve_id not in self.UNDETECTED_IN_SCOPE
+            assert not self._fires(cve), f"{cve_id} should stay out of the panel"
+            assert cve.detectors == ("is_case_fold_stable",)
+            assert not is_case_fold_stable(cve.probe)
+
     def test_nfkc_unmasking_is_silent_too(self) -> None:
         """CVE-2019-9636 is out of scope *and* undetected, which is the worst pair.
 
@@ -2764,8 +2864,9 @@ class TestDetectionHasNoSuperset:
     def test_stripping_covers_what_detection_misses(self) -> None:
         """The payoff: every vector no detector sees is still neutralized."""
         measurable = self.UNDETECTED_IN_SCOPE & set(NEUTRALIZABLE)
-        # Not every undetected row has a collapse/removal vector — CVE-2026-23950
-        # is neutralized by a key builder, which the _handles rule does not model.
+        # Not every undetected row has a collapse/removal vector — the encoding
+        # rows are neutralized at decode time, which the _handles rule does not
+        # model, so the intersection is narrower than the set.
         assert measurable, "no undetected row is measurable any more"
         for cve in sorted(measurable):
             assert _handles(canonicalize, cve), cve
@@ -3034,14 +3135,21 @@ class TestDocsMatrixDrift:
     DOC = ROOT / "docs" / "security" / "cve-validation.md"
     THREAT_MODEL = ROOT / "THREAT_MODEL.md"
 
-    #: "| [CVE-x](url) | title | 9.8 (v3.1) | Neutralized | `f`, `g` |"
+    #: "| [CVE-x](url) | title | 9.8 (v3.1) | Neutralized | `f`, `g` | `h` |"
     ROW = re.compile(
         r"^\|\s*\[(?P<id>CVE-\d{4}-\d+)\][^|]*\|"
         r"[^|]*\|"
         r"\s*(?:(?P<score>[\d.]+)\s*\((?P<version>v[\d.]+)\)|none \(SSVC only\))\s*\|"
-        r"\s*(?P<disposition>[^|]+?)\s*\|",
+        r"\s*(?P<disposition>[^|]+?)\s*\|"
+        r"\s*(?P<neutralizers>[^|]*?)\s*\|"
+        r"\s*(?P<detectors>[^|]*?)\s*\|",
         flags=re.MULTILINE,
     )
+
+    @staticmethod
+    def _cell(text: str) -> tuple[str, ...]:
+        """The entry points named in one cell. An em dash means none."""
+        return tuple(re.findall(r"`([^`]+)`", text))
 
     def _rows(self) -> dict[str, re.Match[str]]:
         text = self.DOC.read_text(encoding="utf-8")
@@ -3111,4 +3219,25 @@ class TestDocsMatrixDrift:
             for cve_id, m in self._rows().items()
             if m.group("disposition").strip("* ") != BY_ID[cve_id].rendered
         ]
+        assert not mismatches, mismatches
+
+    def test_documented_entry_points_match_the_registry(self) -> None:
+        """The two right-hand columns are the answer to "what do I call?".
+
+        The disposition check above already stops a row being softened, but it
+        says nothing about the function names beside it — a typo, a stale name
+        after a rename, or a detector added to the registry and not to the page
+        all passed. That is the same gap `test_documented_cvss_matches_the_registry`
+        exists to close one column to the left, so it gets the same treatment.
+        """
+        mismatches = []
+        for cve_id, match in self._rows().items():
+            cve = BY_ID[cve_id]
+            for column, claimed in (
+                ("neutralizers", cve.neutralizers),
+                ("detectors", cve.detectors),
+            ):
+                documented = self._cell(match.group(column))
+                if documented != claimed:
+                    mismatches.append((cve_id, column, documented, claimed))
         assert not mismatches, mismatches

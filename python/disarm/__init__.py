@@ -37,6 +37,7 @@ from disarm._api import (
     inspect_anomalies,
     inspect_auto_lang,
     is_ascii,
+    is_case_fold_stable,
     is_confusable,
     is_mixed_script,
     is_normalized,
@@ -310,6 +311,7 @@ __all__ = [
     "is_confusable",
     "unmapped_confusables",
     "is_ascii",
+    "is_case_fold_stable",
     "is_normalized",
     # Preset metadata
     "PRESETS",

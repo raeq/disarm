@@ -18,6 +18,42 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`is_case_fold_stable` — ask whether a value is a stable identity key before you key a
+  table on it (#619).** Answers `fold_case(x) == x.lower()`. A `False` says some *other*
+  string folds to the same value, which is the precondition node-tar's `PathReservations`
+  guard missed in CVE-2026-23950: `groß.txt` and `gross.txt` are one path on a
+  case-insensitive filesystem. Available in Rust (`api::is_case_fold_stable`, and on
+  `DisarmStr`), Python (`is_case_fold_stable`, `Text.is_case_fold_stable`), Node
+  (`isCaseFoldStable`), Ruby (`Disarm.case_fold_stable?`), the C ABI and Java.
+
+  **It states a fact about the string, not suspicion.** `groß` is an ordinary German word
+  and `ﬁle` an ordinary ligature, so the predicate reads `True` for ordinary text and is
+  deliberately kept out of `has_anomalies` and out of the CVE detector panel — folding it
+  in would flag ordinary German and every Greek word ending in sigma. What to do about a
+  `False` is the caller's decision: reserve both forms, reject the name, or key the table
+  on `fold_case` rather than `str.lower()`.
+
+  **`str.lower()` is the comparison basis and `str.casefold()` is not.** Casefolding
+  performs the very transform under test, so a predicate written against it answers
+  `True` for every string in Unicode — the substitution #617 already made once, now
+  pinned by a test.
+
+  **Not a per-character table, because a per-character table is wrong for Greek.**
+  `ΟΔΟΣ` ("street") lowercases to `οδος` and folds to `οδοσ`, yet `Σ` agrees with itself
+  in isolation; `U+03A3` is the only code point in Unicode whose lowercase mapping depends
+  on its neighbours, which a Tier-3 test asserts by enumeration rather than by assertion.
+  The implementation is allocation-free for anything that contains no capital sigma —
+  ASCII short-circuits, everything else scans the folding table in place — and falls back
+  to the exact string comparison for the rest, so it cannot drift from what `fold_case`
+  actually does.
+
+  CVE-2026-23950's *Detected by* column stops reading `—`. The collision itself is still a
+  property of a pair of names and no single-string predicate can report it (#620 tracks
+  that); the precondition is what moved. **Measured limit:** the issue paired this with
+  CVE-2019-19844, and that half does not hold — that row's probe turns on `U+0131` DOTLESS
+  I, which folds *and* lowercases to itself and collides through `.upper()` instead, so
+  the predicate is silent on it.
+
 - **Ten CVEs on encoding rather than code points, and the survey method behind them
   (36 → 46 rows).** Found by sweeping NVD across the operations disarm performs, then
   verified one ID at a time.

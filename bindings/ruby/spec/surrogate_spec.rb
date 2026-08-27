@@ -47,6 +47,7 @@ RSpec.describe "Disarm surrogate / invalid-UTF-8 contract (#469, #472)" do
     "transliterate" => ->(s) { Disarm.transliterate(s) },
     "strip_accents" => ->(s) { Disarm.strip_accents(s) },
     "fold_case" => ->(s) { Disarm.fold_case(s) },
+    "case_fold_stable?" => ->(s) { Disarm.case_fold_stable?(s) },
     "search_key" => ->(s) { Disarm.search_key(s) },
     "sort_key" => ->(s) { Disarm.sort_key(s) },
     "catalog_key" => ->(s) { Disarm.catalog_key(s) }

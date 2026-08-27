@@ -53,6 +53,8 @@ class DisarmKtTest {
     fun canonicalizationPrimitives() {
         assertEquals("cafe", "café".stripAccents())
         assertEquals("hello", "Hello".foldCase())
+        assertTrue("gross.txt".isCaseFoldStable())
+        assertFalse("groß.txt".isCaseFoldStable())
         assertFalse("😀".demojize().isBlank())
         assertFalse("👍🏽".demojize(stripModifiers = true).isBlank())
     }

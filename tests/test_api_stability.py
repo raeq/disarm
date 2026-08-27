@@ -107,6 +107,7 @@ EXPECTED_ALL = {
     "unmapped_confusables",
     "find_unmapped_confusables",
     "is_ascii",
+    "is_case_fold_stable",
     "is_normalized",
     # Pipeline management
     "PRESETS",

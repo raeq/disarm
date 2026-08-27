@@ -162,6 +162,14 @@ disarm_inspect_auto_lang (
     char const * text);
 
 /** \brief
+ *  Whether case folding and simple lowercasing agree, so `text` is a stable
+ *  identity key ("groß.txt" is not; "gross.txt" is).
+ */
+bool
+disarm_is_case_fold_stable (
+    char const * text);
+
+/** \brief
  *  Whether `text` mixes characters from more than one script.
  */
 bool

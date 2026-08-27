@@ -49,6 +49,7 @@ from disarm._boundary import (
     _inspect_anomalies_lex,
     _inspect_auto_lang,
     _is_ascii,
+    _is_case_fold_stable,
     _is_confusable,
     _is_mixed_script,
     _is_normalized,
@@ -906,6 +907,55 @@ def fold_case(text: str) -> str:
 
 #: Alias for :func:`fold_case` — matches ``str.casefold()`` naming for drop-in use.
 casefold = fold_case
+
+
+def is_case_fold_stable(text: str) -> bool:
+    """True if ``text`` is a stable identity key under case folding.
+
+    Answers ``fold_case(text) == text.lower()``.  A ``False`` result says some
+    *other* string folds to the same value, so a table keyed on this one can
+    collide — ``groß.txt`` and ``gross.txt`` are the pair node-tar collided on
+    (CVE-2026-23950), and ``ſtraße``/``straße`` and ``ﬁle``/``file`` are the same
+    shape.  Roughly 2,000 code points behave this way, including every Latin
+    ligature, ``ẛ``, the micro sign, and all of Cherokee (whose fold direction
+    runs small→capital, so both cases move).
+
+    **This is a fact about the string, not an accusation.**  ``groß`` is an
+    ordinary German word, so a ``False`` here is not a report of an attack and
+    the predicate is deliberately kept out of :func:`has_anomalies`.  What to do
+    about it is the caller's decision: reserve both forms, reject the name, or
+    key the table on :func:`fold_case` rather than ``str.lower()``.
+
+    ``str.lower()`` is the correct comparison basis and ``str.casefold()`` is
+    not: casefolding performs the very transform under test, so a predicate
+    written against it is ``True`` everywhere.
+
+    Answers about disarm's own folding table (Unicode 16.0), so it also reports
+    ``False`` for characters your Python's ``str.lower()`` knows about and that
+    table does not — which is a collision hazard for the same reason.
+
+    A ``True`` result is **not** a uniqueness guarantee: two distinct stable
+    strings can still collide under some *other* normalization.
+
+    Args:
+        text: Input string.
+
+    Returns:
+        True if full case folding and simple lowercasing agree on ``text``.
+
+    Examples:
+        >>> is_case_fold_stable("gross.txt")
+        True
+        >>> is_case_fold_stable("groß.txt")
+        False
+        >>> is_case_fold_stable("ΟΔΟΣ")  # Greek final sigma: οδος vs οδοσ
+        False
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"is_case_fold_stable() expects str, got {type(text).__name__}")
+    if text.isascii():
+        return True
+    return _is_case_fold_stable(text)
 
 
 def collapse_whitespace(text: str) -> str:

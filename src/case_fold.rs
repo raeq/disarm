@@ -99,6 +99,63 @@ pub(crate) fn fold_case_into(text: &str, result: &mut String) {
     }
 }
 
+/// True when full case folding and simple lowercasing agree on `text`, i.e.
+/// `fold_case(text) == text.to_lowercase()`.
+///
+/// A `false` answer says the value is **not a stable identity key**: some other
+/// string folds to the same thing, so keying a table on it can collide. `groß`
+/// and `gross` are the canonical pair (CVE-2026-23950), `ſtraße` and `straße`
+/// the less obvious one. Nothing about a `false` is an accusation — `groß.txt`
+/// is an ordinary German filename — which is why the question is phrased as a
+/// property of the string rather than as suspicion, and why it stays out of
+/// [`crate::api::has_anomalies`].
+///
+/// Comparing against `str::to_lowercase` is the point. Comparing against
+/// `str::to_uppercase` answers a different question, and comparing against
+/// `char::to_lowercase` per character is wrong for Greek (below); comparing
+/// against a case *fold* is not a comparison at all, since that performs the
+/// very transform under test and the predicate collapses to `true` everywhere.
+///
+/// Three paths, in cost order:
+/// 1. Pure ASCII is always stable — ASCII folds and lowercases identically.
+/// 2. Per-character scan against the folding table, allocation-free.
+/// 3. Exact whole-string comparison, reached only when `U+03A3` is present.
+///
+/// Step 3 exists because `str::to_lowercase` applies the Final_Sigma context
+/// rule and case folding has no context rule at all: `ΟΔΟΣ` lowercases to
+/// `οδος` and folds to `οδοσ`, although `Σ` agrees with itself in isolation and
+/// so passes step 2. `U+03A3` is the only code point in Unicode whose lowercase
+/// mapping depends on its neighbours (asserted exhaustively by
+/// `only_sigma_has_a_context_sensitive_lowercase`), so the allocating path is
+/// reached only by text containing a capital sigma. Step 2 notes the sigma as it
+/// passes rather than re-scanning for it, so the whole predicate is one pass.
+pub(crate) fn is_case_fold_stable_impl(text: &str) -> bool {
+    // ASCII folds and lowercases identically, so no ASCII string can be
+    // unstable — pinned over all 128 by `ascii_folds_and_lowercases_identically`.
+    if text.is_ascii() {
+        return true;
+    }
+
+    let mut saw_capital_sigma = false;
+    for ch in text.chars() {
+        saw_capital_sigma |= ch == '\u{03A3}';
+        let agrees = match case_folding_data::lookup(ch) {
+            Some(folded) => folded.chars().eq(ch.to_lowercase()),
+            // Absent from the folding table ⇒ the character folds to itself.
+            None => std::iter::once(ch).eq(ch.to_lowercase()),
+        };
+        if !agrees {
+            return false;
+        }
+    }
+
+    if saw_capital_sigma {
+        let lowered = text.to_lowercase();
+        return fold_case_cow(text).as_ref() == lowered.as_str();
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,6 +484,150 @@ mod tests {
         }
     }
 
+    // ── Fold stability (#619) ────────────────────────────────────────
+
+    #[test]
+    fn ordinary_text_is_stable() {
+        for s in [
+            "",
+            "gross.txt",
+            "admin@example.com",
+            "café résumé naïve",
+            "Москва",
+            "你好世界",
+            "🎉 party",
+            "Σ",       // capital sigma alone lowercases to σ, which is its fold
+            "ΣΑΒΒΑΤΟ", // …and medially too
+            "ΑΒΓΔ",
+            // MEASURED, and the counter-intuitive one: U+0130 is the textbook
+            // case-mapping oddity, but both sides expand it the same way —
+            // fold and lowercase agree on `i` + U+0307, so it is a stable key.
+            "İstanbul",
+        ] {
+            assert!(is_case_fold_stable_impl(s), "{s:?} reported unstable");
+        }
+    }
+
+    #[test]
+    fn the_collision_classes_are_unstable() {
+        for s in [
+            "groß.txt", // CVE-2026-23950: collides with gross.txt
+            "ſtraße",   // long s and eszett, one string, two collisions
+            "ﬁle",      // ligature: collides with file
+            "ẛ",        // U+1E9B folds to ṡ, lowercases to itself
+            "\u{13A0}", // Cherokee folds small→capital, so both cases move
+            "\u{AB70}",
+            "µ", // micro sign folds to Greek mu
+        ] {
+            assert!(!is_case_fold_stable_impl(s), "{s:?} reported stable");
+        }
+    }
+
+    #[test]
+    fn final_sigma_is_the_reason_the_answer_is_not_per_character() {
+        // Both words end in Σ, whose *lowercase* is context-sensitive (ς at the
+        // end of a word, σ elsewhere) while its *fold* is not. A per-character
+        // table would call these stable and under-report every Greek word
+        // ending in sigma — ΟΔΟΣ is Greek for "street".
+        assert_eq!(fold_case_impl("ΟΔΟΣ"), "οδοσ");
+        assert_eq!("ΟΔΟΣ".to_lowercase(), "οδος");
+        assert!(!is_case_fold_stable_impl("ΟΔΟΣ"));
+        assert!(!is_case_fold_stable_impl("ΣΟΦΟΣ"));
+    }
+
+    #[test]
+    fn the_predicate_is_exactly_the_comparison_it_claims_to_be() {
+        // Not a reimplementation of the rule: the spelled-out comparison and the
+        // fast-path version must agree, or the fast paths have drifted.
+        for s in [
+            "",
+            "abc",
+            "ABC",
+            "groß",
+            "gross",
+            "ΟΔΟΣ",
+            "ΣΑΒΒΑΤΟ",
+            "Σ",
+            "ﬁle",
+            "café",
+            "Ꭰꭰ",
+            "İstanbul",
+            "ΑΣΣΟΣ",
+            "aΣ",
+            "Σa",
+            "ß Σ",
+        ] {
+            assert_eq!(
+                is_case_fold_stable_impl(s),
+                fold_case_impl(s) == s.to_lowercase(),
+                "fast path disagrees with the definition on {s:?}"
+            );
+        }
+    }
+
+    /// The premise of the ASCII bypass, checked against the definition rather
+    /// than against the bypass. Asserting that the function returns `true` for
+    /// ASCII would only re-read the early return; what has to hold is that
+    /// folding and lowercasing genuinely agree on every ASCII code point, which
+    /// is what makes skipping the scan safe. Cheap enough to run in Tier 1.
+    #[test]
+    fn ascii_folds_and_lowercases_identically() {
+        for cp in 0u32..0x80 {
+            let s = char::from_u32(cp).unwrap().to_string();
+            assert_eq!(
+                fold_case_impl(&s),
+                s.to_lowercase(),
+                "ASCII U+{cp:04X} folds and lowercases differently"
+            );
+            assert!(is_case_fold_stable_impl(&s));
+        }
+    }
+
+    /// Tier-3 gate for the step-3 guard: `U+03A3` is the *only* code point whose
+    /// lowercase mapping depends on context, so it is the only one that can make
+    /// the whole-string answer differ from the per-character one.
+    ///
+    /// Anchored to the property rather than to the character: if a future Unicode
+    /// version gives a second code point a context-sensitive lowercase, this
+    /// fails rather than the predicate quietly under-reporting it.
+    #[test]
+    #[ignore = "exhaustive: every code point in three positions; run in Tier 3 / pre-release"]
+    fn only_sigma_has_a_context_sensitive_lowercase() {
+        let mut context_sensitive = Vec::new();
+        for cp in 0u32..=0x0010_FFFF {
+            let Some(ch) = char::from_u32(cp) else {
+                continue; // surrogates
+            };
+            let alone = ch.to_string().to_lowercase();
+            let per_char: String = ch.to_lowercase().collect();
+            let medial = format!("a{ch}a").to_lowercase();
+            let last = format!("a{ch}").to_lowercase();
+            if alone != per_char || medial != format!("a{alone}a") || last != format!("a{alone}") {
+                context_sensitive.push(format!("U+{cp:04X}"));
+            }
+        }
+        assert_eq!(context_sensitive, ["U+03A3"]);
+    }
+
+    /// Tier-3 gate: the predicate agrees with its own definition over every code
+    /// point, so the ASCII bypass and the table scan cannot drift from
+    /// `fold_case(x) == x.to_lowercase()`.
+    #[test]
+    #[ignore = "exhaustive: every code point through is_case_fold_stable; run in Tier 3 / pre-release"]
+    fn exhaustive_agrees_with_the_definition() {
+        for cp in 0u32..=0x0010_FFFF {
+            let Some(ch) = char::from_u32(cp) else {
+                continue; // surrogates
+            };
+            let s = ch.to_string();
+            assert_eq!(
+                is_case_fold_stable_impl(&s),
+                fold_case_impl(&s) == s.to_lowercase(),
+                "disagreement on U+{cp:04X}"
+            );
+        }
+    }
+
     // ── Property-based tests ─────────────────────────────────────────
 
     mod proptest_properties {
@@ -469,6 +670,24 @@ mod tests {
                     s.chars().count(),
                     result.chars().count()
                 );
+            }
+
+            /// The fast paths never disagree with the rule they optimize (#619).
+            #[test]
+            fn is_case_fold_stable_matches_the_definition(s in "\\PC*") {
+                prop_assert_eq!(
+                    is_case_fold_stable_impl(&s),
+                    fold_case_impl(&s) == s.to_lowercase()
+                );
+            }
+
+            /// A stable string's fold is its lowercase, which is what makes the
+            /// answer worth asking for: the caller can key on either.
+            #[test]
+            fn stable_means_the_two_keys_agree(s in "\\PC*") {
+                if is_case_fold_stable_impl(&s) {
+                    prop_assert_eq!(fold_case_impl(&s), s.to_lowercase());
+                }
             }
 
             /// Pure ASCII input stays pure ASCII after folding.

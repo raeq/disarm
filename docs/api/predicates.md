@@ -65,6 +65,30 @@ See [Language Detection](../user-guide/language-detection.md#inspecting-detectio
 
 ---
 
+## is_case_fold_stable
+
+::: disarm.is_case_fold_stable
+
+```python
+from disarm import is_case_fold_stable
+
+is_case_fold_stable("gross.txt")   # True
+is_case_fold_stable("groß.txt")    # False — folds to gross.txt, so the two collide
+is_case_fold_stable("ﬁle")         # False — folds to file
+is_case_fold_stable("ΟΔΟΣ")        # False — lowercases to οδος, folds to οδοσ
+```
+
+Use it before a name becomes a key: a reservation table, a username registry, an
+extraction path. `False` says the value shares its folded form with some other
+string, which is the precondition node-tar's `PathReservations` guard missed in
+CVE-2026-23950. It says nothing about intent, since `groß` is an ordinary German
+word, so the predicate is kept out of
+[anomaly detection](../user-guide/anomaly-detection.md) and the response is the
+caller's to choose: reserve both forms, reject the name, or key the table on
+[`fold_case`](transforms.md#fold_case) instead of `str.lower()`.
+
+---
+
 ## is_normalized
 
 ::: disarm.is_normalized

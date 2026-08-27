@@ -48,6 +48,8 @@ public final class Native {
 
     public static native String foldCase(String text);
 
+    public static native boolean isCaseFoldStable(String text);
+
     public static native String demojize(String text, boolean stripModifiers);
 
     // ── Normalization ──────────────────────────────────────────────────────────

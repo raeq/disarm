@@ -43,6 +43,8 @@ fn text_cleanup() {
     assert!(!api::is_zalgo("hi", 3));
     assert_eq!(api::strip_zalgo("a", 2), "a");
     assert_eq!(api::fold_case("ß"), "ss");
+    assert!(api::is_case_fold_stable("gross.txt"));
+    assert!(!api::is_case_fold_stable("groß.txt"));
 }
 
 #[test]

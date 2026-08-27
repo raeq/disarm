@@ -120,6 +120,15 @@ RSpec.describe Disarm do
     it "case-folds" do
       expect(Disarm.fold_case("HELLO")).to eq("hello")
     end
+
+    it "reports whether a value is a stable key under case folding" do
+      expect(Disarm.case_fold_stable?("gross.txt")).to be(true)
+      # The pair node-tar collided on (CVE-2026-23950).
+      expect(Disarm.case_fold_stable?("groß.txt")).to be(false)
+      # Greek final sigma — the whole-string answer, not a per-character one.
+      expect(Disarm.case_fold_stable?("ΟΔΟΣ")).to be(false)
+      expect(Disarm.case_fold_stable?("ΣΑΒΒΑΤΟ")).to be(true)
+    end
   end
 
   describe "security" do

@@ -83,6 +83,8 @@ fn disarm_str_extension_trait() {
     );
     assert_eq!("café".strip_accents(), "cafe");
     assert_eq!("HELLO".fold_case(), "hello");
+    assert!("gross.txt".is_case_fold_stable());
+    assert!(!"groß.txt".is_case_fold_stable());
     assert_eq!("Москва".transliterate(), "Moskva");
     assert!("p\u{0430}ypal.com".is_suspicious_hostname().suspicious);
     assert!("hello".strip_obfuscation().is_ok());

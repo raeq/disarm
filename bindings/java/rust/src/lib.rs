@@ -529,6 +529,21 @@ pub fn foldCase<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>)
     map_str(env, input, |t| api::fold_case(t).into_owned())
 }
 
+/// Whether case folding and simple lowercasing agree, so `text` is a stable
+/// identity key ("groß.txt" is not; "gross.txt" is).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn isCaseFoldStable<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+) -> jboolean {
+    env.with_env(|env| -> JniResult<jboolean> {
+        let text = input.mutf8_chars(env)?.to_string();
+        Ok(api::is_case_fold_stable(&text))
+    })
+    .resolve::<Policy>()
+}
+
 /// Replace emoji with their plain names; `stripModifiers` drops skin-tone marks.
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn demojize<'l>(

@@ -16,6 +16,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-08-28
+
 ### Upgrade notes
 
 - **Stored keys move. If you persist the output of `search_key`, `catalog_key` or

@@ -283,19 +283,27 @@ is **ignored with only a warning** and the build then fails against the publishe
 | ruby | `bindings/ruby/Cargo.toml` (**workspace root**) | `../..` |
 | java | `bindings/java/rust/Cargo.toml` | `../../..` |
 
-```bash
-# with the redirect in place for each, from the repo root:
-BINDING=<dir> bash scripts/perf_lint.sh                 # allocation gate on the glue
+Run every line from the repo root. Each is a **subshell** so the `cd` does not leak into
+the next one — chaining bare `cd`s here silently runs the second binding's commands inside
+the first binding's directory.
 
-cd bindings/ruby  && bundle exec rubocop && bundle exec rake compile && bundle exec rspec
-cd bindings/node  && npx biome check . && npm run build:debug && npm test
-cd bindings/java  && ./gradlew test --offline
+```bash
+# Allocation gate on the glue. BINDING is a PATH the script cd's into, not a short name.
+BINDING=bindings/node       bash scripts/perf_lint.sh
+BINDING=bindings/ruby/ext/disarm bash scripts/perf_lint.sh
+BINDING=bindings/cabi       bash scripts/perf_lint.sh
+BINDING=bindings/java/rust  bash scripts/perf_lint.sh
+
+( cd bindings/ruby && bundle exec rubocop && bundle exec rake compile && bundle exec rspec )
+( cd bindings/node && npx biome check . && npm run build:debug && npm test )
+( cd bindings/java && ./gradlew test --offline )
 
 # The C ABI: smoke.c is the ONLY behavioural coverage that crate has — CI never runs
 # `cargo test` there, so a Rust #[test] in it would be compiled and never executed.
-cd bindings/cabi  && cargo build --release \
+( cd bindings/cabi \
+  && cargo build --release \
   && cc examples/smoke.c -I. -L target/release -ldisarm_ffi -o /tmp/disarm_smoke \
-  && LD_LIBRARY_PATH="$PWD/target/release" /tmp/disarm_smoke
+  && LD_LIBRARY_PATH="$PWD/target/release" /tmp/disarm_smoke )
 ```
 
 **Restore every manifest afterwards** (`git checkout -- <manifest>`). A committed

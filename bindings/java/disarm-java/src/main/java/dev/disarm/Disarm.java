@@ -90,6 +90,18 @@ public final class Disarm {
         return Native.foldCase(req(text));
     }
 
+    /**
+     * Whether {@code text} is a stable identity key under case folding — whether
+     * {@link #foldCase} and {@code String.toLowerCase()} agree on it.
+     *
+     * <p>{@code false} means some other string folds to the same value, so a table keyed on
+     * this one can collide: {@code "groß.txt"} and {@code "gross.txt"} are the pair node-tar
+     * collided on (CVE-2026-23950). It states a fact about the string, not suspicion.
+     */
+    public static boolean isCaseFoldStable(String text) {
+        return Native.isCaseFoldStable(req(text));
+    }
+
     /** Replace emoji with their plain names (skin-tone modifiers preserved). */
     public static String demojize(String text) {
         return demojize(text, false);

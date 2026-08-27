@@ -59,6 +59,11 @@ pub trait DisarmStr: AsRef<str> {
     fn fold_case(&self) -> Cow<'_, str> {
         fold_case(self.as_ref())
     }
+    /// See [`is_case_fold_stable`].
+    #[must_use]
+    fn is_case_fold_stable(&self) -> bool {
+        is_case_fold_stable(self.as_ref())
+    }
     /// See [`strip_accents`].
     #[must_use]
     fn strip_accents(&self) -> Cow<'_, str> {

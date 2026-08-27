@@ -175,6 +175,13 @@ fn disarm_fold_case(text: char_p::Ref<'_>) -> char_p::Box {
     to_c(api::fold_case(text.to_str()).into_owned())
 }
 
+/// Whether case folding and simple lowercasing agree, so `text` is a stable
+/// identity key ("groß.txt" is not; "gross.txt" is).
+#[ffi_export]
+fn disarm_is_case_fold_stable(text: char_p::Ref<'_>) -> bool {
+    api::is_case_fold_stable(text.to_str())
+}
+
 /// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks.
 #[ffi_export]
 fn disarm_demojize(text: char_p::Ref<'_>, strip_modifiers: bool) -> char_p::Box {

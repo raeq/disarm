@@ -249,6 +249,13 @@ pub fn fold_case(text: String) -> String {
     api::fold_case(&text).into_owned()
 }
 
+/// Whether case folding and simple lowercasing agree, so the value is a stable
+/// identity key (#619).
+#[napi]
+pub fn is_case_fold_stable(text: String) -> bool {
+    api::is_case_fold_stable(&text)
+}
+
 /// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks.
 #[napi]
 pub fn demojize(text: String, strip_modifiers: bool) -> String {

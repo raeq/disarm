@@ -63,6 +63,7 @@ def camel_to_snake(s):
 
 
 RUBY_PRED = {
+    "case_fold_stable": "is_case_fold_stable",
     "normalized": "is_normalized",
     "mixed_script": "is_mixed_script",
     "bidi_conflict": "has_bidi_conflict",

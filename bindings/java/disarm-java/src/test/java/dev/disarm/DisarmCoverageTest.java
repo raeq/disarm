@@ -47,6 +47,13 @@ class DisarmCoverageTest {
         assertEquals("ab", Disarm.stripPua("ab")); // Private Use Area
     }
 
+    @Test
+    void isCaseFoldStable() {
+        assertTrue(Disarm.isCaseFoldStable("gross.txt"));
+        assertFalse(Disarm.isCaseFoldStable("groß.txt")); // collides with gross.txt
+        assertThrows(NullPointerException.class, () -> Disarm.isCaseFoldStable(null));
+    }
+
     // ── Overloads with explicit optional arguments ──────────────────────────────
 
     @Test

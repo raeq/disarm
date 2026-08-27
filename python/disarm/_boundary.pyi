@@ -117,6 +117,9 @@ from disarm._core import (
     _is_ascii as _is_ascii,
 )
 from disarm._core import (
+    _is_case_fold_stable as _is_case_fold_stable,
+)
+from disarm._core import (
     _is_confusable as _is_confusable,
 )
 from disarm._core import (

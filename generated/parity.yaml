@@ -163,6 +163,12 @@ operations:
       python: is_ascii
       ruby: null
       node: null
+  - id: is_case_fold_stable
+    names:
+      rust: is_case_fold_stable
+      python: is_case_fold_stable
+      ruby: case_fold_stable?
+      node: isCaseFoldStable
   - id: is_confusable
     names:
       rust: is_confusable

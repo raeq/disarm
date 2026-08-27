@@ -121,6 +121,34 @@ pub fn fold_case(text: &str) -> Cow<'_, str> {
     crate::case_fold::fold_case_cow(text)
 }
 
+/// True when `text` is a stable identity key under case folding — when
+/// [`fold_case`] and `str::to_lowercase` agree on it (#619).
+///
+/// `false` means some *other* string folds to the same value, so a table keyed
+/// on this one can collide: `groß`/`gross` (CVE-2026-23950), `ſtraße`/`straße`,
+/// `ﬁle`/`file`. Every member of that class is ordinary text in some language,
+/// so this reports a fact about the string and not suspicion, and it is
+/// deliberately **not** folded into [`crate::api::has_anomalies`].
+///
+/// It compares disarm's bundled CaseFolding table against the `to_lowercase`
+/// compiled into the crate, and those two carry their own Unicode versions. A
+/// code point one of them has no mapping for reads `false`, which is the right
+/// answer for the same reason: the two functions disagree on it, so the two
+/// keys disagree on it.
+///
+/// A `true` answer is not a promise the value is unique; two distinct stable
+/// strings can still be equal after some *other* normalization step.
+///
+/// ```
+/// use disarm::api;
+/// assert!(api::is_case_fold_stable("gross.txt"));
+/// assert!(!api::is_case_fold_stable("groß.txt"));
+/// ```
+#[must_use]
+pub fn is_case_fold_stable(text: &str) -> bool {
+    crate::case_fold::is_case_fold_stable_impl(text)
+}
+
 // ── Grapheme clusters (UAX #29) ──────────────────────────────────────────────
 
 /// Number of user-perceived characters (extended grapheme clusters): `"👩‍👩‍👧‍👦"` → 1.

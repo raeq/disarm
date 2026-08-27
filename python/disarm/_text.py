@@ -373,6 +373,12 @@ class Text:
         """True if all characters are U+0000–U+007F."""
         return self._t().is_ascii(self._value)
 
+    def is_case_fold_stable(self) -> bool:
+        """True if full case folding and ``str.lower()`` agree, so the value is a
+        stable identity key. ``False`` means another string folds to the same
+        thing (``groß.txt`` / ``gross.txt``) — a fact, not an accusation."""
+        return self._t().is_case_fold_stable(self._value)
+
     def is_normalized(self, *, form: NormalizationForm = "NFC") -> bool:
         """True if already in the specified normalization form."""
         return self._t().is_normalized(self._value, form=form)

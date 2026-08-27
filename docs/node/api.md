@@ -112,6 +112,20 @@ foldCase('Straße') // => 'strasse'
 demojize('Café ☕') // => 'Café hot beverage'
 ```
 
+### `isCaseFoldStable(text)`
+
+Whether `foldCase` and `String.toLowerCase()` agree on `text`, so it is a stable
+identity key. `false` means some other string folds to the same value, which is
+the collision node-tar's `PathReservations` guard missed in CVE-2026-23950. Ask
+it before a name becomes a key; a `false` is a fact about the string rather than
+a report of an attack, since `groß` is an ordinary German word.
+
+```ts
+isCaseFoldStable('gross.txt') // => true
+isCaseFoldStable('groß.txt') // => false, folds to gross.txt
+isCaseFoldStable('ΟΔΟΣ') // => false, lowercases to οδος and folds to οδοσ
+```
+
 ## Normalization
 
 ### `normalize(text, options?)` · `isNormalized(text, options?)`

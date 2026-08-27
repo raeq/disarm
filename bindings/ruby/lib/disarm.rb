@@ -161,6 +161,15 @@ module Disarm
       translate_errors { _fold_case(text) }
     end
 
+    # Whether `text` is a stable identity key under case folding — whether
+    # `fold_case` and `String#downcase` agree on it (#619). A false result means
+    # some other string folds to the same value, so a table keyed on this one can
+    # collide: "groß.txt" and "gross.txt" are the pair node-tar collided on
+    # (CVE-2026-23950). It is a fact about the string, not an accusation.
+    def case_fold_stable?(text)
+      translate_errors { _is_case_fold_stable?(text) }
+    end
+
     # Whether the hostname looks like a mixed-script / confusable / bidi-reorder
     # IDN spoof. Flags a mixed-script label, a Latin confusable, or a
     # bidi-direction conflict (see #bidi_conflict?, the "BiDi Swap" precondition),

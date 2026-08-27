@@ -254,6 +254,20 @@ export function foldCase(text: string): string {
   return native.foldCase(text)
 }
 
+/**
+ * Whether `text` is a stable identity key under case folding — that is, whether
+ * {@link foldCase} and `String.toLowerCase()` agree on it (#619).
+ *
+ * `false` means some *other* string folds to the same value, so a table keyed on
+ * this one can collide: `'groß.txt'` and `'gross.txt'` are the pair node-tar
+ * collided on (CVE-2026-23950). It is a fact about the string and not an
+ * accusation — `groß` is an ordinary German word — so it is deliberately not
+ * folded into {@link hasAnomalies}.
+ */
+export function isCaseFoldStable(text: string): boolean {
+  return native.isCaseFoldStable(text)
+}
+
 /** Replace emoji with their plain names. `stripModifiers` drops skin-tone/variation marks. */
 export function demojize(text: string, options: { stripModifiers?: boolean } = {}): string {
   return native.demojize(text, options.stripModifiers ?? false)

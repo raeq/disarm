@@ -61,6 +61,14 @@ describe('slugify', () => {
 describe('canonicalization', () => {
   test('stripAccents', () => expect(disarm.stripAccents('café')).toBe('cafe'))
   test('foldCase', () => expect(disarm.foldCase('HELLO')).toBe('hello'))
+  test('isCaseFoldStable', () => {
+    expect(disarm.isCaseFoldStable('gross.txt')).toBe(true)
+    // The pair node-tar collided on: both sides reduce to gross.txt.
+    expect(disarm.isCaseFoldStable('groß.txt')).toBe(false)
+    // Greek final sigma — the whole-string answer, not a per-character one.
+    expect(disarm.isCaseFoldStable('ΟΔΟΣ')).toBe(false)
+    expect(disarm.isCaseFoldStable('ΣΑΒΒΑΤΟ')).toBe(true)
+  })
   test('demojize', () => expect(disarm.demojize('hi 👍')).toBe('hi thumbs up'))
 })
 

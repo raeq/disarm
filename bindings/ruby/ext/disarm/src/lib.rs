@@ -255,6 +255,12 @@ fn fold_case(text: Wtf8Text) -> String {
     api::fold_case(&text).into_owned()
 }
 
+/// `Disarm._is_case_fold_stable?(text)` — whether case folding and simple
+/// lowercasing agree, so the value is a stable identity key (#619).
+fn is_case_fold_stable(text: Wtf8Text) -> bool {
+    api::is_case_fold_stable(&text)
+}
+
 /// `Disarm._slugify(text, …)` — the full slug option surface, positional. The
 /// Ruby layer maps its keyword arguments (with the core's documented defaults)
 /// onto this order. `regex_pattern` and `replacements` are intentionally not
@@ -779,6 +785,10 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     // keeping `rescue Disarm::Error` exhaustive across the whole public surface.
     module.define_singleton_method("_strip_accents", function!(strip_accents, 1))?;
     module.define_singleton_method("_fold_case", function!(fold_case, 1))?;
+    module.define_singleton_method(
+        "_is_case_fold_stable?",
+        function!(is_case_fold_stable, 1),
+    )?;
     module.define_singleton_method("_suspicious_hostname?", function!(suspicious_hostname, 1))?;
     module.define_singleton_method("_analyze_hostname", function!(analyze_hostname, 2))?;
 

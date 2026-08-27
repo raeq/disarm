@@ -13,7 +13,7 @@
 //! and passes its token down here.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ErrorRepr;
 
@@ -88,11 +88,23 @@ pub(crate) fn find_key_collisions(
     let mut groups: Vec<KeyCollision> = Vec::new();
     let mut slot_of: HashMap<String, usize> = HashMap::new();
 
+    // Distinctness is tracked ONCE, globally, rather than by scanning the group
+    // a value would join. `reduce` is a pure function of (value, key, lang) and
+    // the last two are fixed for the call, so one value always reduces to one key
+    // and therefore belongs to one group — a value seen anywhere before is a
+    // repeat of itself, never a new member of some other group. Scanning the
+    // group instead is O(n²) on the input this function is most likely to be
+    // handed under attack: a large batch that all reduces to a single key
+    // (review on #635). Borrowing `&str` from the caller's slice means the set
+    // costs no allocation at all.
+    let mut seen_values: HashSet<&str> = HashSet::with_capacity(values.len());
+
     for (index, value) in values.iter().enumerate() {
         let reduced = reduce(value, key, lang)?;
+        let first_sighting = seen_values.insert(value);
         if let Some(&slot) = slot_of.get(reduced.as_ref()) {
             let group = &mut groups[slot];
-            if !group.values.iter().any(|seen| seen == value) {
+            if first_sighting {
                 group.values.push((*value).to_owned());
             }
             group.indices.push(index);
@@ -266,14 +278,54 @@ mod tests {
         // German transliteration turns ö into oe, so `Müller` and `Mueller`
         // collide under a de search key and do not under the default.
         let names = &["Müller", "Mueller"];
-        assert!(
-            find_key_collisions(names, "search_key", Some("de"))
-                .unwrap()
-                .len()
-                == 1
-        );
+        let de = find_key_collisions(names, "search_key", Some("de")).unwrap();
+        assert_eq!(de.len(), 1);
         assert!(find_key_collisions(names, "search_key", None)
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn one_key_for_the_whole_batch_stays_linear() {
+        // The adversarial shape, and the one a hostile batch would actually take:
+        // 20,000 DISTINCT values that all reduce to a single key. Every case
+        // spelling of a 15-letter word folds to the same lowercase form, so the
+        // group grows to 20,000 members.
+        //
+        // Checking membership by scanning the group is ~200M string comparisons
+        // here and is instant with a set, so the size is the guard: a
+        // reintroduced O(n²) check turns this test from milliseconds into minutes
+        // rather than into a flaky timing assertion (review on #635).
+        const WORD: &str = "reservationkeys";
+        const COUNT: u32 = 20_000;
+        // One distinct spelling per bit pattern, so the word has to be long
+        // enough to have COUNT of them — 14 letters silently yields 16,384 and
+        // the group is smaller than the test claims to build.
+        assert!(1u32 << WORD.len() >= COUNT, "WORD too short for COUNT");
+        let owned: Vec<String> = (0..COUNT)
+            .map(|mask| {
+                WORD.chars()
+                    .enumerate()
+                    .map(|(i, c)| {
+                        if mask >> i & 1 == 1 {
+                            c.to_ascii_uppercase()
+                        } else {
+                            c
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        let values: Vec<&str> = owned.iter().map(String::as_str).collect();
+
+        let found = find_key_collisions(&values, FOLD, None).unwrap();
+        assert_eq!(found.len(), 1, "one key, so one group");
+        assert_eq!(found[0].key, WORD);
+        assert_eq!(
+            found[0].values.len(),
+            COUNT as usize,
+            "every spelling is distinct"
+        );
+        assert_eq!(found[0].indices.len(), COUNT as usize);
     }
 }

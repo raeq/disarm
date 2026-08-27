@@ -86,15 +86,23 @@ class TestTransliterateProperties:
 
     @given(text=unicode_text)
     @settings(max_examples=200)
-    def test_transliterate_preserve_keeps_all_chars(self, text: str) -> None:
-        """With errors='preserve', every input character appears in the output
-        (either transliterated or preserved verbatim), so the output is never
-        shorter than the input in character count when no CJK space-insertion
-        occurs.  We verify the weaker property: output is never empty when
-        input is non-empty."""
+    def test_transliterate_preserve_never_drops_what_ignore_keeps(self, text: str) -> None:
+        """``errors='preserve'`` keeps the untranslatable characters that
+        ``errors='ignore'`` drops, and is otherwise identical, so it can only ever
+        produce more output — never less.
+
+        This assertion used to read "non-empty input gives non-empty output", and
+        it is false: ``translit_default.tsv`` maps ``U+00AD`` SOFT HYPHEN to the
+        **empty string** on purpose, and ``str.strip()`` does not remove it, so the
+        `assume` guard let it through. Hypothesis found it eventually, as it was
+        always going to. ``preserve`` governs *untranslatable* characters; it does
+        not resurrect a deliberate deletion, and U+00AD is the only code point
+        below U+0300 with that combination.
+        """
         assume(len(text.strip()) > 0)
-        result = transliterate(text, errors="preserve")
-        assert len(result) > 0
+        preserved = transliterate(text, errors="preserve")
+        ignored = transliterate(text, errors="ignore")
+        assert len(preserved) >= len(ignored)
 
 
 # ---------------------------------------------------------------------------

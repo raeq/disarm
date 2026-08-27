@@ -13,21 +13,39 @@ asks for and the one a caller re-implementing the loop has to get right.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 import disarm
 from disarm import KeyCollision, find_key_collisions
 
-#: Every reducer the function accepts. Derived from the error message rather than
-#: transcribed, so adding a seventh cannot leave this list behind.
-KEY_FORMS = (
-    "fold_case",
-    "search_key",
-    "catalog_key",
-    "canonicalize",
-    "canonicalize_strict",
-    "normalize_confusables",
-)
+
+def _accepted_key_forms() -> tuple[str, ...]:
+    """The reducers the function accepts, read out of its own rejection message.
+
+    Derived rather than transcribed (review on #635, which caught this comment
+    claiming a derivation the code did not do): a seventh key added to the enum
+    updates the message, and every parametrized test below follows it. A
+    hand-written copy here would quietly stop covering the new one.
+    """
+    try:
+        find_key_collisions(["x"], key="")
+    except disarm.InvalidArgumentError as exc:
+        offered = str(exc).split(", got ")[0]
+        return tuple(re.findall(r"'([a-z_]+)'", offered))
+    raise AssertionError("an empty key must be rejected")
+
+
+#: Every reducer the function accepts.
+KEY_FORMS = _accepted_key_forms()
+
+
+def test_the_derived_key_form_list_is_not_vacuous() -> None:
+    """Guard the derivation itself: a message reword that stops matching would
+    silently empty every parametrized test in this file."""
+    assert len(KEY_FORMS) == 6, KEY_FORMS
+    assert "fold_case" in KEY_FORMS
 
 
 class TestTheNodeTarCase:

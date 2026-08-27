@@ -125,7 +125,7 @@ RSpec.describe Disarm do
       found = Disarm.find_key_collisions(%w[groß.txt gross.txt other.txt], key: "fold_case")
       expect(found.length).to eq(1)
       expect(found[0][:key]).to eq("gross.txt")
-      expect(found[0][:values]).to eq(["groß.txt", "gross.txt"])
+      expect(found[0][:values]).to eq(%w[groß.txt gross.txt])
       expect(found[0][:indices]).to eq([0, 1])
     end
 
@@ -135,16 +135,16 @@ RSpec.describe Disarm do
     end
 
     it "lets the reducer decide what collides" do
-      names = ["groß", "gross", "admin", "аdmin"]
+      names = %w[groß gross admin аdmin]
       expect(Disarm.find_key_collisions(names, key: "fold_case")[0][:values])
-        .to eq(["groß", "gross"])
+        .to eq(%w[groß gross])
       expect(Disarm.find_key_collisions(names, key: "canonicalize")[0][:values])
-        .to eq(["admin", "аdmin"])
+        .to eq(%w[admin аdmin])
       expect(Disarm.find_key_collisions(names, key: "search_key").length).to eq(2)
     end
 
     it "passes lang to the keys that take one" do
-      pair = ["Müller", "Mueller"]
+      pair = %w[Müller Mueller]
       expect(Disarm.find_key_collisions(pair, key: "search_key", lang: "de").length).to eq(1)
       expect(Disarm.find_key_collisions(pair, key: "search_key")).to eq([])
     end

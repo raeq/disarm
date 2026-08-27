@@ -103,6 +103,26 @@ disarm_demojize (
     bool strip_modifiers);
 
 /** \brief
+ *  Which of `values_json` are the same name under `key` (#620), as a JSON array of
+ *  objects (`key`, `values`, `indices`).
+ *
+ *  `values_json` is a JSON array of strings — the set to check. `key` names the
+ *  reducer: `"fold_case"`, `"search_key"`, `"catalog_key"`, `"canonicalize"`,
+ *  `"canonicalize_strict"` or `"normalize_confusables"`. There is no default,
+ *  because a stronger key finds more collisions and the choice is the caller's
+ *  policy. `lang` may be NULL and reaches `search_key` / `catalog_key` only.
+ *
+ *  A group is reported only when two or more **distinct** inputs share a key.
+ *  Malformed `values_json` is an error rather than an empty set, so a caller
+ *  cannot read a parse failure as "no collisions".
+ */
+DisarmResult_t
+disarm_find_key_collisions (
+    char const * values_json,
+    char const * key,
+    char const * lang);
+
+/** \brief
  *  Confusable sources in `text` the bundled `target` table does not fold, as a JSON
  *  array of `{"char": "…", "offset": N}` objects in order of appearance — the
  *  confusables analogue of `find_untranslatable`, with the same byte-offset

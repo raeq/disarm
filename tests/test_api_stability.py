@@ -106,6 +106,8 @@ EXPECTED_ALL = {
     "is_confusable",
     "unmapped_confusables",
     "find_unmapped_confusables",
+    "find_key_collisions",
+    "KeyCollision",
     "is_ascii",
     "is_case_fold_stable",
     "is_normalized",

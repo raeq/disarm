@@ -270,6 +270,7 @@ _SURROGATE_EXEMPT_CLASSES = {
     "AnomalyReport",  # result object
     "Finding",  # result object
     "HostnameAnalysis",  # result object
+    "KeyCollision",  # result object (#620)
     "LangMeta",
     "ScriptMeta",
     "Component",

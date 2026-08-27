@@ -117,6 +117,7 @@ pub use api::DisarmStr;
 // the PyO3 shims, but not part of the public crate surface (#42).
 pub(crate) mod anomalies;
 pub(crate) mod case_fold;
+pub(crate) mod collisions;
 // compose.rs `include!`s a generated phf::Map whose hash keys are long literals.
 #[allow(clippy::unreadable_literal)]
 pub(crate) mod compose;
@@ -245,6 +246,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::filename::_sanitize_filename, m)?)?;
     m.add_function(wrap_pyfunction!(py::case_fold::_fold_case, m)?)?;
     m.add_function(wrap_pyfunction!(py::case_fold::_is_case_fold_stable, m)?)?;
+    m.add_function(wrap_pyfunction!(py::collisions::_find_key_collisions, m)?)?;
     m.add_function(wrap_pyfunction!(py::whitespace::_collapse_whitespace, m)?)?;
     m.add_function(wrap_pyfunction!(py::whitespace::_strip_control_chars, m)?)?;
     m.add_function(wrap_pyfunction!(
@@ -314,6 +316,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<py::anomalies::AnomalyReport>()?;
     m.add_class::<py::anomalies::Finding>()?;
     m.add_class::<py::anomalies::Lexicon>()?;
+    m.add_class::<py::collisions::KeyCollision>()?;
 
     // Encoding detection
     m.add_function(wrap_pyfunction!(py::encoding::_detect_encoding, m)?)?;

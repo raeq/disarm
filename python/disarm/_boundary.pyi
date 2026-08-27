@@ -33,6 +33,9 @@ from disarm._core import (
     InvalidArgumentError as InvalidArgumentError,
 )
 from disarm._core import (
+    KeyCollision as KeyCollision,
+)
+from disarm._core import (
     Lexicon as Lexicon,
 )
 from disarm._core import (
@@ -70,6 +73,9 @@ from disarm._core import (
 )
 from disarm._core import (
     _escape_html as _escape_html,
+)
+from disarm._core import (
+    _find_key_collisions as _find_key_collisions,
 )
 from disarm._core import (
     _find_unmapped_confusables as _find_unmapped_confusables,

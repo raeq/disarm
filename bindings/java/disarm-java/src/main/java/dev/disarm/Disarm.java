@@ -102,6 +102,34 @@ public final class Disarm {
         return Native.isCaseFoldStable(req(text));
     }
 
+    /**
+     * Which of {@code values} are the same name under {@code key}.
+     *
+     * <p>Every other disarm detector is a single-string predicate, and a collision is not a
+     * property of a single string — {@code "groß.txt"} is an ordinary German filename, and
+     * {@code "аdmin"} is only a problem next to {@code "admin"}. This is the set-shaped
+     * question node-tar's {@code PathReservations} guard failed to ask (CVE-2026-23950).
+     *
+     * <p>{@code key} is one of {@code "fold_case"}, {@code "search_key"},
+     * {@code "catalog_key"}, {@code "canonicalize"}, {@code "canonicalize_strict"},
+     * {@code "normalize_confusables"}. There is no default: a stronger key finds more
+     * collisions, including ones nobody attacked, so the choice is the policy.
+     *
+     * @param values the set to check; order is preserved in the report
+     * @param key    which reducer builds the keys
+     * @param lang   language hint for {@code search_key} / {@code catalog_key}, or null
+     */
+    public static List<KeyCollision> findKeyCollisions(List<String> values, String key, String lang) {
+        Objects.requireNonNull(values, "values");
+        Objects.requireNonNull(key, "key");
+        return Native.findKeyCollisions(values.toArray(new String[0]), key, lang);
+    }
+
+    /** {@link #findKeyCollisions(List, String, String)} with no language hint. */
+    public static List<KeyCollision> findKeyCollisions(List<String> values, String key) {
+        return findKeyCollisions(values, key, null);
+    }
+
     /** Replace emoji with their plain names (skin-tone modifiers preserved). */
     public static String demojize(String text) {
         return demojize(text, false);

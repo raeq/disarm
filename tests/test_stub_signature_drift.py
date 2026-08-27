@@ -62,6 +62,8 @@ SKIP = frozenset(
         # Anomaly detection result objects (#389), return-only like HostnameAnalysis
         "AnomalyReport",
         "Finding",
+        # Collision report object (#620), return-only like the two above
+        "KeyCollision",
     }
 )
 

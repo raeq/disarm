@@ -55,6 +55,10 @@ class DisarmKtTest {
         assertEquals("hello", "Hello".foldCase())
         assertTrue("gross.txt".isCaseFoldStable())
         assertFalse("groß.txt".isCaseFoldStable())
+        val found = listOf("groß.txt", "gross.txt", "other.txt").findKeyCollisions("fold_case")
+        assertEquals(1, found.size)
+        assertEquals(listOf("groß.txt", "gross.txt"), found[0].values())
+        assertEquals(listOf(0L, 1L), found[0].indices())
         assertFalse("😀".demojize().isBlank())
         assertFalse("👍🏽".demojize(stripModifiers = true).isBlank())
     }

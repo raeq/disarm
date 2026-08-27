@@ -50,6 +50,9 @@ public final class Native {
 
     public static native boolean isCaseFoldStable(String text);
 
+    public static native java.util.List<dev.disarm.KeyCollision> findKeyCollisions(
+            String[] values, String key, String lang);
+
     public static native String demojize(String text, boolean stripModifiers);
 
     // ── Normalization ──────────────────────────────────────────────────────────

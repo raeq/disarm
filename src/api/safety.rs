@@ -718,6 +718,155 @@ pub fn strip_log_injection<'a>(
     ))
 }
 
+// ── Key collisions across a set (#620) ──────────────────────────────────────
+
+/// Which reducer [`find_key_collisions`] builds its keys with.
+///
+/// **The choice is the policy**, and there is deliberately no default. Each
+/// reducer draws a different line, and picking one for the caller would mean
+/// picking their threat model for them — measured against the four collision
+/// CVEs in `docs/security/cve-validation.md`:
+///
+/// | key | 2026-23950 | 2019-19844 | 2013-7236 | 2020-12063 |
+/// |---|---|---|---|---|
+/// | [`FoldCase`](Self::FoldCase) | ✓ | | | |
+/// | [`SearchKey`](Self::SearchKey) | ✓ | ✓ | ✓ | ✓ |
+/// | [`CatalogKey`](Self::CatalogKey) | ✓ | ✓ | ✓ | ✓ |
+/// | [`Canonicalize`](Self::Canonicalize) | | ✓ | ✓ | ✓ |
+/// | [`CanonicalizeStrict`](Self::CanonicalizeStrict) | | ✓ | ✓ | ✓ |
+/// | [`NormalizeConfusables`](Self::NormalizeConfusables) | | ✓ | ✓ | ✓ |
+///
+/// A stronger reducer finds more collisions, including ones nobody attacked:
+/// `search_key` collides `Muller` with `Müller` and `Ivan` with `Иван`. That is
+/// not a false positive — they really are one key — it is the cost of the key you
+/// chose. Pinned by `test_the_reducer_is_the_policy`.
+///
+/// `sort_key` is absent on purpose: a sort key exists *to* collide, since that is
+/// how equal-sorting items group, so reporting its collisions would be noise
+/// rather than signal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum KeyForm {
+    /// [`crate::api::fold_case`] — full Unicode case folding. The narrowest of
+    /// the six and the one CVE-2026-23950 needs: it collides `groß.txt` with
+    /// `gross.txt` for a case-insensitive filesystem, and folds no homoglyphs, so
+    /// a Cyrillic `а` stays Cyrillic.
+    FoldCase,
+    /// [`crate::api::search_key`] — the identity key. Transliterates, folds
+    /// confusables, strips accents and folds case, so it collides every published
+    /// pair in the table above. Reach for it when the question is "is this the
+    /// same person / account / sender?".
+    SearchKey,
+    /// [`crate::api::catalog_key`] — the bibliographic key, at its default
+    /// `strict_iso9 = false`. Same coverage as [`SearchKey`](Self::SearchKey) on
+    /// the CVE rows, different romanization choices.
+    CatalogKey,
+    /// [`crate::api::canonicalize`] — folds homoglyphs and strips the invisible
+    /// classes, and leaves `ß` alone because it is a real German letter. The
+    /// complement of [`FoldCase`](Self::FoldCase) rather than a superset of it.
+    Canonicalize,
+    /// [`crate::api::canonicalize_strict`] — as above plus the eclipsing-mark
+    /// rule (#615). Destructive for scholarly transliteration and IPA; see that
+    /// function's caveat before using it as a registry key.
+    CanonicalizeStrict,
+    /// [`crate::api::normalize_confusables`] against
+    /// [`TargetScript::Latin`](TargetScript::Latin) — the TR39 skeleton alone, no
+    /// case fold and no accent strip. The narrowest homoglyph reducer.
+    NormalizeConfusables,
+}
+
+impl KeyForm {
+    /// The canonical token the bindings pass across the boundary.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            KeyForm::FoldCase => "fold_case",
+            KeyForm::SearchKey => "search_key",
+            KeyForm::CatalogKey => "catalog_key",
+            KeyForm::Canonicalize => "canonicalize",
+            KeyForm::CanonicalizeStrict => "canonicalize_strict",
+            KeyForm::NormalizeConfusables => "normalize_confusables",
+        }
+    }
+}
+
+impl std::str::FromStr for KeyForm {
+    type Err = Error;
+
+    /// Parse a [`KeyForm`] token — the reducer's own function name.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "fold_case" => Ok(Self::FoldCase),
+            "search_key" => Ok(Self::SearchKey),
+            "catalog_key" => Ok(Self::CatalogKey),
+            "canonicalize" => Ok(Self::Canonicalize),
+            "canonicalize_strict" => Ok(Self::CanonicalizeStrict),
+            "normalize_confusables" => Ok(Self::NormalizeConfusables),
+            _ => Err(Error::from(crate::ErrorRepr::InvalidKeyForm {
+                got: s.to_owned(),
+            })),
+        }
+    }
+}
+
+impl std::fmt::Display for KeyForm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+pub use crate::collisions::KeyCollision;
+
+/// Which of `values` reduce to the same identity key under `key` (#620).
+///
+/// Every other disarm detector is a single-string predicate, and a collision is
+/// not a property of a single string — `groß.txt` is an ordinary German filename,
+/// and `аdmin` is only a problem next to `admin`. This is the set-shaped
+/// question: **given these names, which of them are the same name?**
+///
+/// That is what node-tar's `PathReservations` guard failed to ask before
+/// extracting two paths in parallel (CVE-2026-23950), and what a registry has to
+/// ask before accepting a second `admin` (CVE-2013-7236). Note the two want
+/// opposite policies from the same answer — one refuses the batch, the other
+/// refuses the registration — so this reports and decides nothing.
+///
+/// Reducing and grouping happen in one pass over one reducer, so the report
+/// cannot disagree with the collapse it describes. A group is returned only when
+/// it holds **two or more distinct inputs**; the same string twice is the same
+/// name twice. Groups come back in order of the first index that participates.
+///
+/// `lang` reaches [`SearchKey`](KeyForm::SearchKey) and
+/// [`CatalogKey`](KeyForm::CatalogKey), whose romanization is language-dependent,
+/// and is ignored by the rest. Under `lang = Some("de")`, `Müller` and `Mueller`
+/// are one key; under the default they are two.
+///
+/// # Errors
+///
+/// [`ErrorKind::ResourceLimit`] if `values` exceeds the batch cap
+/// ([`crate::MAX_BATCH_SIZE`]), and [`ErrorKind::InvalidArgument`] if a reducer
+/// rejects an input.
+///
+/// ```
+/// use disarm::api::{self, KeyForm};
+/// let found = api::find_key_collisions(
+///     &["groß.txt", "gross.txt", "other.txt"],
+///     KeyForm::FoldCase,
+///     None,
+/// ).unwrap();
+/// assert_eq!(found.len(), 1);
+/// assert_eq!(found[0].key, "gross.txt");
+/// assert_eq!(found[0].values, ["groß.txt", "gross.txt"]);
+/// assert_eq!(found[0].indices, [0, 1]);
+/// ```
+pub fn find_key_collisions<S: AsRef<str>>(
+    values: &[S],
+    key: KeyForm,
+    lang: Option<&str>,
+) -> Result<Vec<KeyCollision>, Error> {
+    let borrowed: Vec<&str> = values.iter().map(AsRef::as_ref).collect();
+    crate::collisions::find_key_collisions(&borrowed, key.as_str(), lang).map_err(Error::from)
+}
+
 // ── Anomaly detection ───────────────────────────────────────────────────────
 
 pub use crate::anomalies::{

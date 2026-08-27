@@ -6,6 +6,7 @@ import dev.disarm.AnomalyReport
 import dev.disarm.AutoLangInspection
 import dev.disarm.DigitPolicy
 import dev.disarm.HostnameAnalysis
+import dev.disarm.KeyCollision
 import dev.disarm.LangMeta
 import dev.disarm.Lexicon
 import dev.disarm.MlNormalizeOptions
@@ -82,6 +83,21 @@ fun String.foldCase(): String = JDisarm.foldCase(this)
  * suspicion: `groß` is an ordinary German word.
  */
 fun String.isCaseFoldStable(): Boolean = JDisarm.isCaseFoldStable(this)
+
+/**
+ * Which of these values are the same name under [key].
+ *
+ * A collision is not a property of a single string — `groß.txt` is an ordinary German
+ * filename, and `аdmin` is only a problem next to `admin`. This is the set-shaped question
+ * node-tar's `PathReservations` guard failed to ask (CVE-2026-23950).
+ *
+ * [key] is one of `fold_case`, `search_key`, `catalog_key`, `canonicalize`,
+ * `canonicalize_strict`, `normalize_confusables`. There is no default: a stronger key finds
+ * more collisions, including ones nobody attacked, so the choice is the policy.
+ */
+@JvmOverloads
+fun List<String>.findKeyCollisions(key: String, lang: String? = null): List<KeyCollision> =
+    JDisarm.findKeyCollisions(this, key, lang)
 
 @JvmOverloads
 fun String.demojize(stripModifiers: Boolean = false): String = JDisarm.demojize(this, stripModifiers)

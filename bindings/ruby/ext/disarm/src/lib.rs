@@ -261,6 +261,25 @@ fn is_case_fold_stable(text: Wtf8Text) -> bool {
     api::is_case_fold_stable(&text)
 }
 
+/// `Disarm._find_key_collisions(values, key, lang)` — which values share an
+/// identity key (#620), as the tuple list `lib/disarm.rb` maps to named hashes.
+/// Same rationale as `AnomalyReportTuple`: a tuple beats registering a Ruby class
+/// for an internal boundary.
+type KeyCollisionTuple = (String, Vec<String>, Vec<usize>);
+
+fn find_key_collisions(
+    values: Vec<String>,
+    key: String,
+    lang: Option<String>,
+) -> Result<Vec<KeyCollisionTuple>, Error> {
+    let key: api::KeyForm = key.parse().map_err(|e| map_err(&e))?;
+    Ok(api::find_key_collisions(&values, key, lang.as_deref())
+        .map_err(|e| map_err(&e))?
+        .into_iter()
+        .map(|c| (c.key, c.values, c.indices))
+        .collect())
+}
+
 /// `Disarm._slugify(text, …)` — the full slug option surface, positional. The
 /// Ruby layer maps its keyword arguments (with the core's documented defaults)
 /// onto this order. `regex_pattern` and `replacements` are intentionally not
@@ -789,6 +808,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         "_is_case_fold_stable?",
         function!(is_case_fold_stable, 1),
     )?;
+    module.define_singleton_method("_find_key_collisions", function!(find_key_collisions, 3))?;
     module.define_singleton_method("_suspicious_hostname?", function!(suspicious_hostname, 1))?;
     module.define_singleton_method("_analyze_hostname", function!(analyze_hostname, 2))?;
 

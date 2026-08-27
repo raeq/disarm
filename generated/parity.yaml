@@ -85,6 +85,12 @@ operations:
       python: escape_html
       ruby: null
       node: null
+  - id: find_key_collisions
+    names:
+      rust: find_key_collisions
+      python: find_key_collisions
+      ruby: find_key_collisions
+      node: findKeyCollisions
   - id: find_unmapped_confusables
     names:
       rust: find_unmapped_confusables

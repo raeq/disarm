@@ -136,6 +136,35 @@ int main(void) {
     disarm_string_free(mlk.value);
     disarm_string_free(mlk.error);
 
+    /* #620 key collisions: the set-shaped question, JSON transport.
+       "gro\xc3\x9f.txt" and "gross.txt" are one name under a case fold. */
+    DisarmResult_t coll = disarm_find_key_collisions(
+        "[\"gro\xc3\x9f.txt\",\"gross.txt\",\"other.txt\"]", "fold_case", NULL);
+    int coll_ok = coll.value && !coll.error
+        && strstr(coll.value, "\"key\":\"gross.txt\"")
+        && strstr(coll.value, "\"indices\":[0,1]");
+    printf("%-28s %-6s\n", "key collisions JSON", coll_ok ? "OK" : "FAIL");
+    if (!coll_ok) failures++;
+    disarm_string_free(coll.value);
+    disarm_string_free(coll.error);
+
+    /* No default reducer: an unknown key is an error, never a silent fallback. */
+    DisarmResult_t coll_bad = disarm_find_key_collisions("[\"a\"]", "lower", NULL);
+    int coll_bad_ok = !coll_bad.value && coll_bad.error;
+    printf("%-28s %-6s\n", "key collisions bad key", coll_bad_ok ? "OK" : "FAIL");
+    if (!coll_bad_ok) failures++;
+    disarm_string_free(coll_bad.value);
+    disarm_string_free(coll_bad.error);
+
+    /* Malformed input is an error, NOT an empty set — "no collisions" must never
+       be what a caller reads out of a parse failure. */
+    DisarmResult_t coll_junk = disarm_find_key_collisions("not json", "fold_case", NULL);
+    int coll_junk_ok = !coll_junk.value && coll_junk.error;
+    printf("%-28s %-6s\n", "key collisions bad json", coll_junk_ok ? "OK" : "FAIL");
+    if (!coll_junk_ok) failures++;
+    disarm_string_free(coll_junk.value);
+    disarm_string_free(coll_junk.error);
+
     /* #562 contraction: off by default, recovers the digraph spoof when enabled. */
     char *c_off = disarm_analyze_hostname_opts("arnazon.com", false);
     int c_off_ok = c_off && strstr(c_off, "\"canonical\":\"arnazon.com\"") != NULL;

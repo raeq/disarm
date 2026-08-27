@@ -131,10 +131,11 @@ pub fn fold_case(text: &str) -> Cow<'_, str> {
 /// deliberately **not** folded into [`crate::api::has_anomalies`].
 ///
 /// It compares disarm's bundled CaseFolding table against the `to_lowercase`
-/// compiled into the crate, and those two carry their own Unicode versions. A
-/// code point one of them has no mapping for reads `false`, which is the right
-/// answer for the same reason: the two functions disagree on it, so the two
-/// keys disagree on it.
+/// compiled into the crate, and those two carry their own Unicode versions. The
+/// answer turns on whether the two *results* differ, so a code point only one of
+/// them has a mapping for reads `false` — the right answer for the same reason,
+/// since two functions that disagree build two keys that disagree. A code point
+/// neither has a mapping for is left alone by both and reads `true`.
 ///
 /// A `true` answer is not a promise the value is unique; two distinct stable
 /// strings can still be equal after some *other* normalization step.

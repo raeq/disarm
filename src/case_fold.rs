@@ -127,15 +127,18 @@ pub(crate) fn fold_case_into(text: &str, result: &mut String) {
 /// so passes step 2. `U+03A3` is the only code point in Unicode whose lowercase
 /// mapping depends on its neighbours (asserted exhaustively by
 /// `only_sigma_has_a_context_sensitive_lowercase`), so the allocating path is
-/// reached only by text containing a capital sigma.
+/// reached only by text containing a capital sigma. Step 2 notes the sigma as it
+/// passes rather than re-scanning for it, so the whole predicate is one pass.
 pub(crate) fn is_case_fold_stable_impl(text: &str) -> bool {
     // ASCII folds and lowercases identically, so no ASCII string can be
-    // unstable — pinned exhaustively by `ascii_is_always_stable`.
+    // unstable — pinned over all 128 by `ascii_folds_and_lowercases_identically`.
     if text.is_ascii() {
         return true;
     }
 
+    let mut saw_capital_sigma = false;
     for ch in text.chars() {
+        saw_capital_sigma |= ch == '\u{03A3}';
         let agrees = match case_folding_data::lookup(ch) {
             Some(folded) => folded.chars().eq(ch.to_lowercase()),
             // Absent from the folding table ⇒ the character folds to itself.
@@ -146,7 +149,7 @@ pub(crate) fn is_case_fold_stable_impl(text: &str) -> bool {
         }
     }
 
-    if text.contains('\u{03A3}') {
+    if saw_capital_sigma {
         let lowered = text.to_lowercase();
         return fold_case_cow(text).as_ref() == lowered.as_str();
     }

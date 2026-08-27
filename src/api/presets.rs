@@ -21,6 +21,12 @@ use crate::Error;
 ///
 /// The name describes the mechanism (Unicode canonicalization for matching), not
 /// a safety guarantee: this is **not** an output sanitizer — encode at the sink.
+///
+/// **Scoped to identifiers, not body text** (#624). The confusable fold runs
+/// toward Latin, so it rewrites non-Latin text that has a Latin lookalike: Arabic
+/// alef becomes `l`, Hebrew yod becomes `'`, `Ελληνικά` comes back as `Eλλnvikά`.
+/// It also removes `U+200C`, which Persian orthography requires. Nothing flags
+/// this first, because ordinary Persian is not an anomaly. See `docs/limitations.md`.
 #[inline]
 pub fn canonicalize(text: &str) -> Result<Cow<'_, str>, Error> {
     crate::presets::canonicalize(text).map_err(Error::from)
@@ -142,6 +148,12 @@ pub fn strip_bidi(text: &str) -> String {
 ///
 /// Not an output sanitizer (no HTML/JS/SQL escaping). Fallible only through the
 /// fixed-target confusables stage; the [`Result`] keeps the surface uniform.
+///
+/// **Scoped to identifiers, not body text** (#624). The confusable fold runs
+/// toward Latin, so it rewrites non-Latin text that has a Latin lookalike: Arabic
+/// alef becomes `l`, Hebrew yod becomes `'`, `Ελληνικά` comes back as `Eλλnvikά`.
+/// It also removes `U+200C`, which Persian orthography requires. Nothing flags
+/// this first, because ordinary Persian is not an anomaly. See `docs/limitations.md`.
 #[inline]
 pub fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, Error> {
     crate::presets::canonicalize_strict(text).map_err(Error::from)
@@ -167,6 +179,15 @@ pub fn normalize_user_input(text: &str) -> Result<Cow<'_, str>, Error> {
 ///
 /// Fallible only through the fixed-target confusables stage; the [`Result`] keeps
 /// the surface uniform.
+///
+/// **Scoped to identifiers, not body text** (#624), and the most destructive of
+/// the presets for it. The mark strip takes Indic vowel signs along with Latin
+/// accents — both are category `Mn`, but in an Indic script the mark carries the
+/// vowel, so `বাংলা` becomes `বল`, which is not a word. The confusable fold then
+/// rewrites non-Latin text that has a Latin lookalike: Arabic alef becomes `l`,
+/// Hebrew yod becomes `'`, `Ελληνικά` comes back as `Eλλnvikά`. `U+200C`, which
+/// Persian orthography requires, goes too. Nothing flags any of it first, because
+/// ordinary Bengali is not an anomaly. See `docs/limitations.md`.
 #[inline]
 pub fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, Error> {
     crate::presets::strip_obfuscation(text).map_err(Error::from)

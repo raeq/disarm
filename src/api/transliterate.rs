@@ -11,6 +11,13 @@ use std::collections::HashMap;
 /// Remove diacritical marks while preserving base characters (NFD → strip
 /// combining marks → NFC). For example `"café"` → `"cafe"`.
 ///
+/// **Destructive for Indic scripts, and not in the way "accent" suggests** (#624).
+/// A Latin acute and a Devanagari vowel sign are both general category `Mn`, so
+/// both go — but in Latin an `Mn` is decoration and in an Indic script it carries
+/// the vowel. `José` → `Jose` stays readable; `বাংলা` → `বল` is not a word. Scope
+/// this to identifiers, filenames and search keys rather than to body text in
+/// Devanagari, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati or Khmer.
+///
 /// Returns `Cow::Borrowed` when there are no accents to strip (zero allocation).
 #[must_use]
 pub fn strip_accents(text: &str) -> Cow<'_, str> {

@@ -250,6 +250,101 @@ Beyond source code, bidi overrides can disguise malicious filenames. The sequenc
 
 Arabic, Hebrew, and other right-to-left scripts legitimately use bidi formatting characters for correct display of mixed-direction text. `strip_bidi()` is designed for security contexts (usernames, filenames, URL display) where bidi overrides are dangerous. It should not be applied to body text in languages that require bidi formatting.
 
+## Non-Latin Text and the Destructive Presets
+
+### The `strip_bidi` caveat applies to two more steps, and harder
+
+The caveat above — *designed for security contexts, should not be applied to body text*
+— is the right one for `strip_bidi`, and it is equally right for two other destructive
+steps that never carried it. All three are doing exactly what they say. The gap is that
+nothing told a caller which kind of text to point them at.
+
+The key builders are excluded from all of this. `search_key`, `catalog_key` and
+`sort_key` change every sample below, and that is the point of a key: it exists to make
+two spellings collide (see [`find_key_collisions`](api/predicates.md#find_key_collisions)).
+They are documented as keys, not as cleaners.
+
+### `strip_accents` deletes Indic vowel signs
+
+A Latin acute and a Devanagari vowel sign are both general category `Mn`. In Latin an
+`Mn` is decoration; in an Indic script it carries the vowel, and removing it does not
+degrade the word so much as dismantle it.
+
+```python
+strip_accents("José")    # 'Jose'   — readable, one accent lost
+strip_accents("বাংলা")    # 'বল'     — the name of the Bengali language, 5 codepoints to 2
+strip_accents("हिन्दी")    # 'हनद'    — the word "Hindi"
+strip_accents("జ్ఞానం")   # 'జఞన'    — Telugu for "knowledge"
+```
+
+The measurable difference is length. Removing an accent from precomposed Latin or Greek
+keeps the code point count (`Ελληνικά` → `Ελληνικα`); removing an Indic vowel sign
+shortens the word, because the sign is a code point of its own. `strip_accents` sits in
+the `strip_obfuscation` and `ml_normalize` bundles, which is how it reaches callers who
+did not ask for it — the structure #564 already documented for accented Latin.
+
+### The to-Latin confusable fold splices Latin into non-Latin text
+
+`normalize_confusables(text, target_script="latin")` means *fold toward Latin*, and it
+does so wherever the bundled TR39 table has a mapping — including inside text that is
+wholly non-Latin, where there is no Latin for a homoglyph to be confused with.
+
+```python
+normalize_confusables("العربية")   # 'lلعربية'    Arabic alef → Latin l
+normalize_confusables("עברית")     # "עבר'ת"      Hebrew yod → apostrophe
+normalize_confusables("Ελληνικά")  # 'Eλλnvikά'   half folded, half not
+normalize_confusables("జ్ఞానం")     # 'జ్ఞానo'      Telugu anusvara → o
+```
+
+How much of a block is in scope varies a lot: 22 of the 256 Arabic code points fold to
+ASCII, 12 of 112 Hebrew, and 65 of 144 Greek.
+
+**This one has no escape hatch.** For accented Latin, a caller who wants homoglyph
+folding without the accent loss can call the primitive instead of the bundle. Here the
+primitive *is* the destructive step, so that route does not exist, and `target_script`
+selects which script to fold toward rather than whether to fold. A caller who needs to
+know about homoglyphs without rewriting the text should use
+[`is_confusable`](api/predicates.md#is_confusable) or
+[`find_unmapped_confusables`](api/predicates.md#find_unmapped_confusables) and leave the
+text alone.
+
+The Greek result is the least useful shape of the three. A fully folded word would at
+least be searchable as Latin; `Eλλnvikά` is a word in no script and matches nothing in
+either.
+
+**Why the fold is not simply skipped for non-Latin input.** The obvious scoping rule —
+skip the fold when the text contains no Latin, since there is no Latin for a homoglyph to
+be confused with — looks free, because every CVE probe that needs the fold does contain
+Latin. It is not free. Latin is the *pivot* alphabet here rather than the threat: two
+non-Latin scripts are made to collide by folding both toward it. Cyrillic `оо` and Greek
+`οο` contain no Latin, are different strings, and meet only because both fold to `oo`.
+Under a presence-of-Latin gate, registering one spelling and impersonating the other would
+go unnoticed. So the damage to non-Latin body text is the cost of having a pivot at all,
+which is why this page documents the scope instead of the behaviour changing.
+
+### Format-character removal takes the ZWNJ that Persian requires
+
+`U+200C` ZERO WIDTH NON-JOINER is not decoration in Persian — it separates the parts of a
+word and its absence changes the rendering. It is also meaningful in several Indic
+scripts. Every preset that removes format characters removes it, `strip_format` included.
+
+```python
+canonicalize("می‌خواهم")   # the ZWNJ is gone; Persian for "I want"
+```
+
+### Nothing warns you first
+
+`has_anomalies` and `is_mixed_script` are both silent on every sample above, and they are
+**correct** to be: this is ordinary text, not an attack. The consequence is that a
+pipeline which screens first and cleans only what it flagged gets no signal before the
+damage. The choice has to be made from context — what kind of text is this? — rather than
+from detector output. See [CVE Validation](security/cve-validation.md) for the scope
+qualifier on the *clean unconditionally* rule.
+
+These claims are held by `tests/test_non_latin_fidelity.py`, which derives the affected
+sets from behaviour rather than listing them, so a table refresh cannot quietly move a
+script out of this page.
+
 ## Grapheme Cluster Segmentation
 
 ### User-perceived character ≠ codepoint

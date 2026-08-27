@@ -16,6 +16,81 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Upgrade notes
+
+- **Stored keys move. If you persist the output of `search_key`, `catalog_key` or
+  `sort_key`, this release is a reindex event.** Nothing about the API changed; the
+  bundled tables and the presets built on them did. A key you wrote to disk last year
+  will no longer compare equal to one you compute today, and no exception will tell you.
+
+  `docs/RUST_API.md` states the general principle — data-driven output is not
+  semver-stable — but its list names `normalize_confusables`, `strip_obfuscation`,
+  `is_suspicious_hostname` and the `canonicalize*` presets, and **not** the three key
+  builders. Whether their output carries a stability guarantee is open (#644). Until it
+  is answered, treat this section as the statement of record for what moved.
+
+  Measured against the published `0.13.0` wheel in a clean virtualenv, over 5,030
+  inputs — real words in 13 scripts plus random samples across `U+0020`–`U+2FFF`:
+
+  | function | outputs changed | % of corpus |
+  |---|---|---|
+  | `sort_key` | 497 | 9.9% |
+  | `canonicalize_strict` | 491 | 9.8% |
+  | `search_key` | 206 | 4.1% |
+  | `catalog_key` | 206 | 4.1% |
+  | `strip_obfuscation` | 137 | 2.7% |
+  | `canonicalize` | 53 | 1.1% |
+  | `normalize_confusables` | 49 | 1.0% |
+  | `transliterate`, `slugify`, `ml_normalize`, `fold_case` | **0** | — |
+
+  The last row is the useful one: the four entry points most likely to be holding a
+  stored value are byte-identical to `0.13.0` on this corpus. If you key on
+  `transliterate` or `slugify`, you have nothing to do.
+
+  **What moved, and why each is deliberate:**
+
+  - The key builders stopped leaking 134 characters that `transliterate()` deletes
+    (#602). A Cyrillic soft sign was surviving into a supposedly-Latin key, and
+    `catalog_key` then folded it onto Latin `b`. Russian words containing `ъ` or `ь`
+    are the visible case: `search_key("подъезд")` was `podъezd` and is now `podezd`;
+    `catalog_key("Пьеса")` was `pbesa` and is now `pesa`.
+  - 153 code points now reduce to an **empty** key where they previously reduced to a
+    non-empty one — 59 of them letters, including the Cyrillic hard and soft signs.
+    A character the table maps to nothing has no ASCII form; that is the table's
+    decision, now applied consistently.
+  - `canonicalize_strict` gained the eclipsing-mark rule (#615): a combining mark whose
+    own script differs from its base's is now dropped, which is what closes
+    CVE-2017-7833. That rule is why it moves as far as it does — 9.8%, second only to
+    `sort_key` in the table above, and the largest move of any non-key entry point. The
+    idempotency defect #638 fixed was introduced *and* fixed inside this cycle, so it
+    never reached a release — if you are upgrading from `0.13.0` you were never exposed
+    to it, and `canonicalize_strict("C҉̧")` was already stable there.
+  - The confusable table **gained** rows. 31 are attacker-observed mappings TR39 does
+    not carry (#597); the rest were being discarded at generation time by a filter that
+    ran before the pass which would have made them valid (#593, #595). The visible one
+    is the capital sharp S: `normalize_confusables("STRAẞE")` was `STRAẞE` on `0.13.0`
+    — unfolded — and is now `STRASSE`, so `STRAẞE` and `STRASSE` finally collide, which
+    is what a skeleton is for. Anything keyed on a word containing `ẞ`, `Ꟗ` or `ꞵ` moves.
+
+  **Deciding whether it affects you** — run this against your own corpus rather than
+  trusting the percentages above, which are a property of the sample:
+
+  ```python
+  # in a venv holding the OLD version, dump keys for your real values
+  import disarm, json
+  json.dump({s: disarm.search_key(s) for s in my_values}, open("before.json", "w"))
+
+  # then upgrade and compare
+  before = json.load(open("before.json"))
+  moved = [s for s, k in before.items() if disarm.search_key(s) != k]
+  ```
+
+  If `moved` is empty you can upgrade in place. Otherwise re-derive the stored keys
+  before comparing new ones against them; there is no migration path that converts an
+  old key into a new one, because the change is a re-romanisation and not a mapping.
+
+  Keys computed and compared **within one process** are unaffected either way.
+
 ### Added
 
 - **`find_key_collisions` — which of these names are the same name (#620).** The first

@@ -842,9 +842,10 @@ pub use crate::collisions::KeyCollision;
 ///
 /// # Errors
 ///
-/// [`ErrorKind::ResourceLimit`] if `values` exceeds the batch cap
-/// ([`crate::MAX_BATCH_SIZE`]), and [`ErrorKind::InvalidArgument`] if a reducer
-/// rejects an input.
+/// [`crate::ErrorKind::ResourceLimit`] if `values` exceeds the batch cap — the same
+/// one every other batch entry point enforces, so the figure lives in one place and
+/// is deliberately not repeated here — and [`crate::ErrorKind::InvalidArgument`] if a
+/// reducer rejects an input.
 ///
 /// ```
 /// use disarm::api::{self, KeyForm};

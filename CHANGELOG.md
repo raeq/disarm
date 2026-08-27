@@ -1113,6 +1113,62 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **Documented what the cleaning presets do to non-Latin text, and settled whether the
+  confusable fold should be scoped (#624).** `docs/limitations.md` carried the right
+  caveat for exactly one destructive step — *designed for security contexts, should not
+  be applied to body text* — and the two others never got it. No behaviour changed; what
+  changed is that a caller can now find out before pointing one at a sentence.
+
+  Three mechanisms, orthogonal, measured on 13 scripts:
+
+  | | what it does | which samples |
+  |---|---|---|
+  | `strip_accents` | deletes Indic vowel signs and viramas | Devanagari, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Khmer |
+  | to-Latin confusable fold | splices Latin letters in | Arabic, Persian, Hebrew, Greek, Telugu, Malayalam |
+  | format-character strip | removes the ZWNJ Persian requires | Persian |
+
+  A Latin acute and a Devanagari vowel sign are both category `Mn`, so `strip_accents`
+  removes both — but in Latin an `Mn` is decoration and in an Indic script it carries the
+  vowel. `José` → `Jose` is readable; `বাংলা` → `বল` is not a word. The measurable
+  difference is length: removing an accent from precomposed Latin *or Greek* keeps the
+  code point count, removing an Indic vowel sign shortens the word.
+
+  **#564's escape hatch does not exist for six of these samples.** For accented Latin a
+  caller can reach past the bundle to `normalize_confusables` and keep the accents. For
+  Arabic, Persian, Hebrew, Greek, Telugu and Malayalam the *primitive* is the destructive
+  step: `العربية` → `lلعربية`, `עברית` → `עבר'ת`, `Ελληνικά` → `Eλλnvikά`, `జ్ఞానం` →
+  `జ్ఞానo`. 22 Arabic code points fold to ASCII, 12 Hebrew, 65 Greek.
+
+  **The fold stays unconditional, and that is now a measured decision rather than an open
+  question.** The issue asked whether `canonicalize` should fold non-Latin toward Latin at
+  all. Skipping the fold when the input contains no Latin looks free — every CVE probe
+  that needs it contains Latin — but Latin is the *pivot* alphabet, not the threat. Cyrillic
+  `оо` and Greek `οο` contain no Latin, are different strings, and collide only because
+  both fold to `oo`. A presence-of-Latin gate would let one impersonate the other.
+
+  Also: `has_anomalies` and `is_mixed_script` are silent on every sample, correctly —
+  ordinary Telugu is not an attack — so a screen-then-clean pipeline gets no warning
+  first. The *clean unconditionally* rule on the CVE page is now scoped to identifiers,
+  hostnames, filenames and log lines, where every row on that page lives.
+
+  `strip_obfuscation`'s docstring already said "non-Latin scripts that have no Latin
+  confusable equivalent pass through unchanged", which is true and reads as reassurance
+  while excluding exactly the case that bites. It now says what the exclusion covers.
+  Caveats added to `strip_accents`, `canonicalize`, `canonicalize_strict` and
+  `strip_obfuscation` on both the Rust and Python surfaces.
+
+  Held by `tests/test_non_latin_fidelity.py`, which **derives** the affected sets from
+  behaviour rather than listing them — a hand-written list had already gone stale while
+  the file was being written, missing that Malayalam's anusvara folds to `o` exactly as
+  Telugu's does.
+
+- **`cargo doc` is warning-free again.** Six broken rustdoc links, three of them added by
+  #620's `find_key_collisions` — `ErrorKind` is not in scope inside `api`, and
+  `MAX_BATCH_SIZE` is `pub(crate)`, so the published docs.rs page had dead links. `cargo doc`
+  is not a CI step, which is why nothing caught them. The other three predate #620 and are
+  the identical defect (public docs pointing at `crate::hostname::` / `crate::whitespace::`
+  private paths instead of the `crate::api::` re-exports); repointed while in the area.
+
 - **The required status checks are named correctly again.** `CONTRIBUTING.md`, `AGENTS.md`
   and `SECURITY.md` told contributors to wait for *"Rust checks passed"* and *"Python
   checks passed"*. #583 collapsed those contexts into a single roll-up, so neither exists:

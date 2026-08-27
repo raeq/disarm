@@ -46,6 +46,14 @@ def canonicalize(text: str) -> str:
     dangerous bidi overrides and soft hyphens, then normalizes whitespace
     (collapsing runs, stripping control chars and zero-width injections).
 
+    **Scoped to identifiers, not body text** (#624). The confusable fold runs toward
+    Latin, so it rewrites non-Latin text that has a Latin lookalike — Arabic alef
+    becomes ``l``, Hebrew yod becomes ``'``, and ``Ελληνικά`` comes back as
+    ``Eλλnvikά``. It also removes ``U+200C``, which Persian orthography requires.
+    Nothing flags this first, because ordinary Persian is not an anomaly. Use it on
+    usernames, hostnames, filenames and log lines; see :doc:`Limitations </limitations>`
+    before pointing it at a sentence.
+
     .. warning::
        Canonicalizes Unicode for *comparison*; it is **not** an output
        sanitizer and provides no XSS/HTML/SQL/injection protection. The NFKC
@@ -389,6 +397,14 @@ def canonicalize_strict(text: str) -> str:
        auto-escaping, DOMPurify, parameterized queries). Run this *before* that
        encoder, never instead of it. The name predates this clarification.
 
+    **Scoped to identifiers, not body text** (#624). The confusable fold runs toward
+    Latin, so it rewrites non-Latin text that has a Latin lookalike — Arabic alef
+    becomes ``l``, Hebrew yod becomes ``'``, and ``Ελληνικά`` comes back as
+    ``Eλλnvikά``. It also removes ``U+200C``, which Persian orthography requires.
+    Nothing flags this first, because ordinary Persian is not an anomaly. Use it on
+    usernames, hostnames, filenames and log lines; see :doc:`Limitations </limitations>`
+    before pointing it at a sentence.
+
     Preserves the original script (no transliteration) while neutralizing
     Unicode-level attack vectors: zalgo stacking, homoglyph spoofing, bidi
     overrides, zero-width injections, and control characters.
@@ -446,6 +462,20 @@ def strip_obfuscation(text: str) -> str:
     **Does not transliterate.** Non-Latin scripts that have no Latin
     confusable equivalent pass through unchanged. Chain with
     ``transliterate()`` explicitly if you also need romanization.
+
+    Read the exclusion in that sentence literally: the scripts that *do* have a
+    Latin confusable equivalent are rewritten. 22 Arabic code points, 12 Hebrew and
+    65 Greek fold to ASCII, so wholly non-Latin text comes back with Latin letters
+    in it. This preset also strips combining marks, which takes Indic vowel signs
+    along with Latin accents — ``বাংলা`` becomes ``বল``, which is not a word.
+
+    **Scoped to identifiers, not body text** (#624). The confusable fold runs toward
+    Latin, so it rewrites non-Latin text that has a Latin lookalike — Arabic alef
+    becomes ``l``, Hebrew yod becomes ``'``, and ``Ελληνικά`` comes back as
+    ``Eλλnvikά``. It also removes ``U+200C``, which Persian orthography requires.
+    Nothing flags this first, because ordinary Persian is not an anomaly. Use it on
+    usernames, hostnames, filenames and log lines; see :doc:`Limitations </limitations>`
+    before pointing it at a sentence.
 
     **Preserves case.** Case is not deception — proper nouns, acronyms,
     and sentence boundaries are meaningful. Chain with ``fold_case()``

@@ -844,6 +844,14 @@ def strip_accents(text: str | list[str]) -> str | list[str]:
     NFD decompose → strip combining marks → NFC recompose.
     Accepts a single string or a list of strings.
 
+    **Destructive for Indic scripts, and not in the way "accent" suggests** (#624).
+    A Latin acute and a Devanagari vowel sign are both general category ``Mn``, so
+    both are removed — but in Latin an ``Mn`` is decoration and in an Indic script
+    it carries the vowel. ``José`` → ``Jose`` is readable; ``বাংলা`` → ``বল`` is not
+    a word. Use this for identifiers, filenames and search keys; not for body text
+    in Devanagari, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati or Khmer.
+    See :doc:`Limitations </limitations>`.
+
     Args:
         text: Input string, or list of strings for batch processing.
 

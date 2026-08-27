@@ -76,7 +76,7 @@ pub enum AnomalyKind {
     /// (CVE-2008-2383, CVE-2019-9535) and leading-blank blocklist bypass
     /// (CVE-2023-24329). The whitespace-class controls — TAB, LF, VT, FF, CR, the
     /// information separators `U+001C`–`U+001F`, NEL — are excluded: they are real
-    /// separators that [`crate::whitespace::collapse_whitespace`] folds to a space,
+    /// separators that [`crate::api::collapse_whitespace`] folds to a space,
     /// so flagging them would fire on ordinary multi-line text (#612).
     Control,
 }
@@ -152,7 +152,7 @@ impl Finding {
     }
 }
 
-/// Structured result, parallel to [`crate::hostname::HostnameAnalysis`].
+/// Structured result, parallel to [`crate::api::HostnameAnalysis`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnomalyReport {
     /// Whether any token tripped (the same value [`has_anomalies`] returns).
@@ -551,7 +551,7 @@ pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
 }
 
 /// Full analysis: every finding with its span and a plain-language reason. Parallel to
-/// [`crate::hostname::HostnameAnalysis`].
+/// [`crate::api::HostnameAnalysis`].
 #[must_use]
 pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport {
     let tokens = split_tokens(text);

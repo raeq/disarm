@@ -20,15 +20,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 - **Stored keys move. If you persist the output of `search_key`, `catalog_key` or
   `sort_key`, this release is a reindex event.** Nothing about the API changed; the
-  bundled tables and the presets built on them did, and that is covered by the
-  data-driven-output clause in `docs/RUST_API.md`. It is called out here because a
-  key you wrote to disk last year will no longer compare equal to one you compute
-  today, and no exception will tell you.
+  bundled tables and the presets built on them did. A key you wrote to disk last year
+  will no longer compare equal to one you compute today, and no exception will tell you.
+
+  `docs/RUST_API.md` states the general principle — data-driven output is not
+  semver-stable — but its list names `normalize_confusables`, `strip_obfuscation`,
+  `is_suspicious_hostname` and the `canonicalize*` presets, and **not** the three key
+  builders. Whether their output carries a stability guarantee is open (#644). Until it
+  is answered, treat this section as the statement of record for what moved.
 
   Measured against the published `0.13.0` wheel in a clean virtualenv, over 5,030
   inputs — real words in 13 scripts plus random samples across `U+0020`–`U+2FFF`:
 
-  | function | outputs changed | |
+  | function | outputs changed | % of corpus |
   |---|---|---|
   | `sort_key` | 497 | 9.9% |
   | `canonicalize_strict` | 491 | 9.8% |
@@ -56,7 +60,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
     decision, now applied consistently.
   - `canonicalize_strict` gained the eclipsing-mark rule (#615): a combining mark whose
     own script differs from its base's is now dropped, which is what closes
-    CVE-2017-7833. That rule is why this preset moves furthest of the seven. The
+    CVE-2017-7833. That rule is why it moves as far as it does — 9.8%, second only to
+    `sort_key` in the table above, and the largest move of any non-key entry point. The
     idempotency defect #638 fixed was introduced *and* fixed inside this cycle, so it
     never reached a release — if you are upgrading from `0.13.0` you were never exposed
     to it, and `canonicalize_strict("C҉̧")` was already stable there.

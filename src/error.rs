@@ -111,6 +111,16 @@ pub(crate) enum ErrorRepr {
         got: String,
     },
 
+    /// Invalid `key` for [`crate::api::find_key_collisions`] (#620).
+    #[error(
+        "key must be 'fold_case', 'search_key', 'catalog_key', 'canonicalize', \
+         'canonicalize_strict', or 'normalize_confusables', got '{got}'"
+    )]
+    InvalidKeyForm {
+        /// The offending value.
+        got: String,
+    },
+
     /// Invalid transliteration scheme string (`Scheme::from_str`, #352).
     #[error("scheme must be 'default', 'strict_iso9', or 'gost7034', got '{got}'")]
     InvalidScheme {
@@ -461,6 +471,7 @@ impl ErrorRepr {
             ErrorRepr::InvalidPlatform { .. } => "invalid_platform",
             ErrorRepr::InvalidTargetScript { .. } => "invalid_target_script",
             ErrorRepr::InvalidDigitPolicy { .. } => "invalid_digit_policy",
+            ErrorRepr::InvalidKeyForm { .. } => "invalid_key_form",
             ErrorRepr::InvalidScheme { .. } => "invalid_scheme",
             ErrorRepr::InvalidUrlComponent { .. } => "invalid_url_component",
             ErrorRepr::InvalidReverseLang { .. } => "invalid_reverse_lang",
@@ -561,6 +572,7 @@ impl From<ErrorRepr> for pyo3::PyErr {
             | ErrorRepr::InvalidPlatform { .. }
             | ErrorRepr::InvalidTargetScript { .. }
             | ErrorRepr::InvalidDigitPolicy { .. }
+            | ErrorRepr::InvalidKeyForm { .. }
             | ErrorRepr::InvalidScheme { .. }
             | ErrorRepr::InvalidUrlComponent { .. }
             | ErrorRepr::InvalidReverseLang { .. }
@@ -661,6 +673,7 @@ impl Error {
             | ErrorRepr::InvalidPlatform { .. }
             | ErrorRepr::InvalidTargetScript { .. }
             | ErrorRepr::InvalidDigitPolicy { .. }
+            | ErrorRepr::InvalidKeyForm { .. }
             | ErrorRepr::InvalidScheme { .. }
             | ErrorRepr::InvalidUrlComponent { .. }
             | ErrorRepr::InvalidReverseLang { .. }

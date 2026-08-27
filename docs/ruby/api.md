@@ -115,6 +115,32 @@ Disarm.case_fold_stable?("groß.txt")               # => false, folds to gross.t
 Disarm.case_fold_stable?("ΟΔΟΣ")                   # => false, downcases to οδος
 ```
 
+### `Disarm.find_key_collisions(values, key:, lang: nil)`
+
+Which of `values` are the same name under `key:` — the set-shaped question, and the
+one node-tar's `PathReservations` guard failed to ask before extracting two paths in
+parallel (CVE-2026-23950). Returns an array of hashes with `:key` (the shared reduced
+form), `:values` (the distinct inputs, first-appearance order) and `:indices` (every
+position, ascending).
+
+`key:` is one of `"fold_case"`, `"search_key"`, `"catalog_key"`, `"canonicalize"`,
+`"canonicalize_strict"`, `"normalize_confusables"`. There is no default, because a
+stronger key finds more collisions — `search_key` collides `Muller` with `Müller` —
+so the choice is the policy. `lang:` reaches `search_key` and `catalog_key`.
+
+A group is reported only when two or more **distinct** inputs share a key; the same
+name twice is the same name twice.
+
+```ruby
+Disarm.find_key_collisions(%w[groß.txt gross.txt other.txt], key: "fold_case")
+# => [{ key: "gross.txt", values: ["groß.txt", "gross.txt"], indices: [0, 1] }]
+
+Disarm.find_key_collisions(["admin", "аdmin"], key: "canonicalize")
+# => [{ key: "admin", values: ["admin", "аdmin"], indices: [0, 1] }]
+
+Disarm.find_key_collisions(%w[a.txt b.txt], key: "fold_case")   # => []
+```
+
 ### `Disarm.demojize(text, strip_modifiers: false)`
 
 Replace emoji with their plain names. `strip_modifiers:` drops skin-tone /

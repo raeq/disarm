@@ -18,6 +18,49 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`find_key_collisions` — which of these names are the same name (#620).** The first
+  disarm entry point that takes a *collection*. Every other detector is a single-string
+  predicate, and a collision is not a property of a single string: `groß.txt` is an
+  ordinary German filename, and `аdmin` is only a problem next to `admin`. This is the
+  question node-tar's `PathReservations` guard failed to ask before extracting two paths
+  into one slot in parallel (CVE-2026-23950), and the one a registry has to ask before
+  accepting a second `admin` (CVE-2013-7236). Available in Rust
+  (`api::find_key_collisions`, `api::KeyForm`, `api::KeyCollision`), Python, Node
+  (`findKeyCollisions`), Ruby (`Disarm.find_key_collisions`), the C ABI and Java/Kotlin.
+
+  **The reducer is the policy, and there is no default.** Measured against the four
+  collision rows in `docs/security/cve-validation.md`:
+
+  | key | 2026-23950 | 2019-19844 | 2013-7236 | 2020-12063 |
+  |---|---|---|---|---|
+  | `fold_case` | yes | | | |
+  | `search_key` | yes | yes | yes | yes |
+  | `catalog_key` | yes | yes | yes | yes |
+  | `canonicalize` | | yes | yes | yes |
+  | `canonicalize_strict` | | yes | yes | yes |
+  | `normalize_confusables` | | yes | yes | yes |
+
+  A stronger key finds more collisions, including ones nobody attacked: `search_key`
+  collides `Muller` with `Müller` and `Ivan` with `Иван`. That is not a false positive —
+  they really are one key — it is the cost of the key you chose, and choosing it for the
+  caller would be choosing their threat model. `sort_key` is deliberately absent: a sort
+  key exists *to* collide, so reporting its collisions would be noise.
+
+  **Not `dedup_batch(report=True)`, which the issue offered as the alternative.** That
+  helper dedups on the *raw* input as a performance optimisation and never collapses
+  `groß.txt` into `gross.txt`'s slot — the collision in the issue's example comes from
+  `transliterate`, not from the dedup — so a report bolted onto it would carry one fixed
+  reducer and miss three of the four rows above. It is also Python-only by a documented
+  scope decision, and node-tar is a Node package.
+
+  The report cannot disagree with the collapse it describes, because both come from one
+  pass over one reducer. A group is returned only when it holds two or more **distinct**
+  inputs: the same string twice is the same name twice, which a reservation table already
+  handles. Groups come back in first-appearance order rather than in hash order.
+
+  `is_case_fold_stable` (#619) remains the single-string half — it says a name *may*
+  collide, never with what. This says with what.
+
 - **`is_case_fold_stable` — ask whether a value is a stable identity key before you key a
   table on it (#619).** Answers `fold_case(x) == x.lower()`. A `False` says some *other*
   string folds to the same value, which is the precondition node-tar's `PathReservations`

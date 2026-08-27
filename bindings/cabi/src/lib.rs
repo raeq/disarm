@@ -412,6 +412,56 @@ fn disarm_inspect_anomalies(text: char_p::Ref<'_>, lexicon_json: char_p::Ref<'_>
     )
 }
 
+/// Which of `values_json` are the same name under `key` (#620), as a JSON array of
+/// objects (`key`, `values`, `indices`).
+///
+/// `values_json` is a JSON array of strings — the set to check. `key` names the
+/// reducer: `"fold_case"`, `"search_key"`, `"catalog_key"`, `"canonicalize"`,
+/// `"canonicalize_strict"` or `"normalize_confusables"`. There is no default,
+/// because a stronger key finds more collisions and the choice is the caller's
+/// policy. `lang` may be NULL and reaches `search_key` / `catalog_key` only.
+///
+/// A group is reported only when two or more **distinct** inputs share a key.
+/// Malformed `values_json` is an error rather than an empty set, so a caller
+/// cannot read a parse failure as "no collisions".
+#[ffi_export]
+fn disarm_find_key_collisions(
+    values_json: char_p::Ref<'_>,
+    key: char_p::Ref<'_>,
+    lang: Option<char_p::Ref<'_>>,
+) -> DisarmResult {
+    // Parse the key first: an unknown token is a real core `Error` with the
+    // canonical message, and reporting it before the JSON means a caller who got
+    // both wrong is told about the one they can fix from the docs.
+    let key: api::KeyForm = match key.to_str().parse() {
+        Ok(k) => k,
+        Err(e) => return err(&e),
+    };
+    // A parse failure is NOT an empty set: reading "malformed input" as "no
+    // collisions" is the exact confusion this function exists to prevent, so it
+    // is reported as an error string rather than as a clean result.
+    let Ok(values) = serde_json::from_str::<Vec<String>>(values_json.to_str()) else {
+        return DisarmResult {
+            value: None,
+            error: Some(to_c(
+                "values_json must be a JSON array of strings".to_owned(),
+            )),
+        };
+    };
+    match api::find_key_collisions(&values, key, opt_str(lang)) {
+        Ok(found) => ok(serde_json::json!(found
+            .iter()
+            .map(|c| serde_json::json!({
+                "key": c.key,
+                "values": c.values,
+                "indices": c.indices,
+            }))
+            .collect::<Vec<_>>())
+        .to_string()),
+        Err(e) => err(&e),
+    }
+}
+
 /// Auto-language inspection for `text` as a JSON object (`script`, `chosen_lang`,
 /// `reason`, `discriminators_hit`).
 #[ffi_export]

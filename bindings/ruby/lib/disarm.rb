@@ -170,6 +170,29 @@ module Disarm
       translate_errors { _is_case_fold_stable?(text) }
     end
 
+    # Which of `values` are the same name under `key` (#620).
+    #
+    # Every other disarm detector is a single-string predicate, and a collision is
+    # not a property of a single string — "groß.txt" is an ordinary German filename,
+    # and "аdmin" is only a problem next to "admin". This is the set-shaped question
+    # node-tar's PathReservations guard failed to ask (CVE-2026-23950).
+    #
+    # `key:` is one of "fold_case", "search_key", "catalog_key", "canonicalize",
+    # "canonicalize_strict", "normalize_confusables". There is no default: a stronger
+    # key finds more collisions, including ones nobody attacked ("search_key" collides
+    # "Muller" with "Müller"), so the choice is the policy.
+    #
+    # A group is reported only when two or more DISTINCT inputs share a key; the same
+    # name twice is the same name twice. `lang:` reaches "search_key" and
+    # "catalog_key" and is ignored by the rest.
+    #
+    # Returns an array of hashes with `:key`, `:values` (distinct, first-appearance
+    # order) and `:indices` (every position, ascending — not parallel to `:values`).
+    def find_key_collisions(values, key:, lang: nil)
+      translate_errors { _find_key_collisions(values, key.to_s, lang&.to_s) }
+        .map { |k, vals, idx| { key: k, values: vals, indices: idx } }
+    end
+
     # Whether the hostname looks like a mixed-script / confusable / bidi-reorder
     # IDN spoof. Flags a mixed-script label, a Latin confusable, or a
     # bidi-direction conflict (see #bidi_conflict?, the "BiDi Swap" precondition),

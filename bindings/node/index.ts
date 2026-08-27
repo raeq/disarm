@@ -13,6 +13,7 @@ import type {
   Untranslatable,
   UnmappedConfusable,
   AutoLangInspection,
+  KeyCollision,
   LangMeta,
   ScriptMeta,
   Finding as NativeFinding,
@@ -20,7 +21,14 @@ import type {
   HostnameAnalysis as NativeHostnameAnalysis,
 } from './binding'
 
-export type { Untranslatable, UnmappedConfusable, AutoLangInspection, LangMeta, ScriptMeta }
+export type {
+  Untranslatable,
+  UnmappedConfusable,
+  AutoLangInspection,
+  KeyCollision,
+  LangMeta,
+  ScriptMeta,
+}
 
 /** Findings from {@link analyzeHostname}. `suspicious` is a maximally
  * conservative screen, not a precise verdict (#549). */
@@ -266,6 +274,40 @@ export function foldCase(text: string): string {
  */
 export function isCaseFoldStable(text: string): boolean {
   return native.isCaseFoldStable(text)
+}
+
+/** Which reducer {@link findKeyCollisions} builds its keys with. No default: the
+ * choice is the policy. */
+export type CollisionKey =
+  | 'fold_case'
+  | 'search_key'
+  | 'catalog_key'
+  | 'canonicalize'
+  | 'canonicalize_strict'
+  | 'normalize_confusables'
+
+/**
+ * Which of `values` are the same name under `key` (#620).
+ *
+ * Every other disarm detector is a single-string predicate, and a collision is not
+ * a property of a single string — `groß.txt` is an ordinary German filename, and
+ * `аdmin` is only a problem next to `admin`. This is the set-shaped question that
+ * node-tar's `PathReservations` guard failed to ask before extracting two paths in
+ * parallel (CVE-2026-23950).
+ *
+ * A stronger `key` finds more collisions, including ones nobody attacked:
+ * `search_key` collides `Muller` with `Müller`. That is the cost of the key you
+ * chose, not a false positive. A group is reported only when two or more *distinct*
+ * inputs share a key; the same name twice is the same name twice.
+ *
+ * `options.lang` reaches `search_key` and `catalog_key` and is ignored by the rest.
+ */
+export function findKeyCollisions(
+  values: string[],
+  key: CollisionKey,
+  options: { lang?: string } = {},
+): KeyCollision[] {
+  return call(() => native.findKeyCollisions(values, key, options.lang))
 }
 
 /** Replace emoji with their plain names. `stripModifiers` drops skin-tone/variation marks. */

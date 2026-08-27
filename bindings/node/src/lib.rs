@@ -256,6 +256,42 @@ pub fn is_case_fold_stable(text: String) -> bool {
     api::is_case_fold_stable(&text)
 }
 
+/// One group of distinct inputs that reduce to the same key (#620).
+#[napi(object)]
+pub struct KeyCollision {
+    /// The reduced form every member of the group shares.
+    pub key: String,
+    /// The distinct inputs that reduce to it, in order of first appearance.
+    pub values: Vec<String>,
+    /// Every position in the input array that belongs to this group, ascending.
+    /// Not parallel to `values`: a value repeated verbatim appears once there and
+    /// once per occurrence here.
+    pub indices: Vec<i64>,
+}
+
+/// Which of `values` reduce to the same identity key under `key` (#620).
+///
+/// `key` is one of `"fold_case"`, `"search_key"`, `"catalog_key"`,
+/// `"canonicalize"`, `"canonicalize_strict"`, `"normalize_confusables"`. There is
+/// no default: the choice is the policy.
+#[napi]
+pub fn find_key_collisions(
+    values: Vec<String>,
+    key: String,
+    lang: Option<String>,
+) -> Result<Vec<KeyCollision>, NapiError> {
+    let key: api::KeyForm = key.parse().map_err(|e| map_err(&e))?;
+    Ok(api::find_key_collisions(&values, key, lang.as_deref())
+        .map_err(|e| map_err(&e))?
+        .into_iter()
+        .map(|c| KeyCollision {
+            key: c.key,
+            values: c.values,
+            indices: c.indices.into_iter().map(|i| i as i64).collect(),
+        })
+        .collect())
+}
+
 /// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks.
 #[napi]
 pub fn demojize(text: String, strip_modifiers: bool) -> String {

@@ -9,6 +9,7 @@
 
 pub mod anomalies;
 pub mod case_fold;
+pub mod collisions;
 pub mod confusables;
 pub mod emoji;
 pub mod encoders;

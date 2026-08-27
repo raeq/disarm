@@ -59,6 +59,7 @@ from disarm import (
     demojize,
     detect_scripts,
     escape_html,
+    find_key_collisions,
     fold_case,
     get_pipeline,
     has_anomalies,
@@ -818,6 +819,26 @@ class TestHomoglyphIdentityImpersonation:
         assert is_confusable(spoof) is True
         assert is_confusable(genuine) is False
 
+    @pytest.mark.parametrize("genuine,spoof", IDENTITY_PAIRS, ids=[p[0] for p in IDENTITY_PAIRS])
+    def test_the_registry_can_notice_before_it_accepts(self, genuine: str, spoof: str) -> None:
+        """#620: the class docstring above says the fix is to *notice* that the two
+        already resolve to one identity. Until now nothing in disarm could say so —
+        every detector took one string, and "these two are the same name" needs two.
+        """
+        (group,) = find_key_collisions([genuine, spoof], key="search_key")
+        assert group.values == [genuine, spoof]
+        assert group.key == search_key(genuine)
+
+    def test_the_reducer_choice_is_the_policy_here_too(self) -> None:
+        """MEASURED, and the reason ``find_key_collisions`` has no default key.
+
+        ``fold_case`` is the right reducer for the node-tar filesystem case and the
+        wrong one here: it folds no homoglyphs, so a Cyrillic ``а`` stays Cyrillic
+        and the impersonation goes unreported.
+        """
+        assert find_key_collisions(["admin", "аdmin"], key="fold_case") == []
+        assert len(find_key_collisions(["admin", "аdmin"], key="canonicalize")) == 1
+
     def test_postfix_greek_omicron_sender(self) -> None:
         assert SPOOFED_SENDER.encode("utf-8")[1:3] == b"\xce\xbf"  # the CVE's bytes
         assert SPOOFED_SENDER != GENUINE_SENDER
@@ -1443,6 +1464,22 @@ class TestTarPathCollision:
         """
         for name in ["groß", "ſtraße", "ﬁle", "µm", "Ꭰ", "ꭰ"]:
             assert not is_case_fold_stable(name), name
+
+    def test_the_collision_itself_is_now_reportable(self) -> None:
+        """#620 closes the half #619 could not.
+
+        ``is_case_fold_stable`` answers about one string, so it can say
+        ``groß.txt`` *may* collide and never which name it collides with. That
+        needs a set, and ``find_key_collisions`` takes one — this is the exact
+        check node-tar's ``PathReservations`` guard was missing before it
+        extracted two paths into one slot in parallel.
+        """
+        entries = ["harmless.txt", "groß.txt", "other.txt", "gross.txt"]
+        (group,) = find_key_collisions(entries, key="fold_case")
+        assert group.key == "gross.txt"
+        assert group.values == ["groß.txt", "gross.txt"]
+        assert group.indices == [1, 3]
+        assert find_key_collisions(["a.txt", "b.txt"], key="fold_case") == []
 
     def test_str_casefold_is_the_trap_the_comparison_avoids(self) -> None:
         """MEASURED: ``str.casefold()`` is the wrong basis, and silently so.

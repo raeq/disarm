@@ -72,6 +72,35 @@ describe('canonicalization', () => {
   test('demojize', () => expect(disarm.demojize('hi 👍')).toBe('hi thumbs up'))
 })
 
+describe('key collisions (#620)', () => {
+  test('the node-tar pair is reported', () => {
+    const found = disarm.findKeyCollisions(['groß.txt', 'gross.txt', 'other.txt'], 'fold_case')
+    expect(found).toHaveLength(1)
+    expect(found[0].key).toBe('gross.txt')
+    expect(found[0].values).toEqual(['groß.txt', 'gross.txt'])
+    expect(found[0].indices).toEqual([0, 1])
+  })
+  test('a clean set reports nothing, and one name twice is not a collision', () => {
+    expect(disarm.findKeyCollisions(['a.txt', 'b.txt'], 'fold_case')).toEqual([])
+    expect(disarm.findKeyCollisions(['a.txt', 'a.txt'], 'fold_case')).toEqual([])
+  })
+  test('the reducer is the policy', () => {
+    const names = ['groß', 'gross', 'admin', 'аdmin']
+    expect(disarm.findKeyCollisions(names, 'fold_case')[0].values).toEqual(['groß', 'gross'])
+    expect(disarm.findKeyCollisions(names, 'canonicalize')[0].values).toEqual(['admin', 'аdmin'])
+    expect(disarm.findKeyCollisions(names, 'search_key')).toHaveLength(2)
+  })
+  test('lang reaches the keys that take one', () => {
+    expect(
+      disarm.findKeyCollisions(['Müller', 'Mueller'], 'search_key', { lang: 'de' }),
+    ).toHaveLength(1)
+    expect(disarm.findKeyCollisions(['Müller', 'Mueller'], 'search_key')).toEqual([])
+  })
+  test('an unknown key is refused rather than defaulted', () => {
+    expect(() => disarm.findKeyCollisions(['a'], 'lower')).toThrow()
+  })
+})
+
 describe('normalization', () => {
   test('default NFC leaves the ligature; NFKC decomposes it', () => {
     expect(disarm.normalize('ﬁ')).toBe('ﬁ')

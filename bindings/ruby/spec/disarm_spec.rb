@@ -121,6 +121,39 @@ RSpec.describe Disarm do
       expect(Disarm.fold_case("HELLO")).to eq("hello")
     end
 
+    it "reports which values are the same name under a key" do
+      found = Disarm.find_key_collisions(%w[groß.txt gross.txt other.txt], key: "fold_case")
+      expect(found.length).to eq(1)
+      expect(found[0][:key]).to eq("gross.txt")
+      expect(found[0][:values]).to eq(%w[groß.txt gross.txt])
+      expect(found[0][:indices]).to eq([0, 1])
+    end
+
+    it "reports nothing for a clean set, or for one name twice" do
+      expect(Disarm.find_key_collisions(%w[a.txt b.txt], key: "fold_case")).to eq([])
+      expect(Disarm.find_key_collisions(%w[a.txt a.txt], key: "fold_case")).to eq([])
+    end
+
+    it "lets the reducer decide what collides" do
+      names = %w[groß gross admin аdmin]
+      expect(Disarm.find_key_collisions(names, key: "fold_case")[0][:values])
+        .to eq(%w[groß gross])
+      expect(Disarm.find_key_collisions(names, key: "canonicalize")[0][:values])
+        .to eq(%w[admin аdmin])
+      expect(Disarm.find_key_collisions(names, key: "search_key").length).to eq(2)
+    end
+
+    it "passes lang to the keys that take one" do
+      pair = %w[Müller Mueller]
+      expect(Disarm.find_key_collisions(pair, key: "search_key", lang: "de").length).to eq(1)
+      expect(Disarm.find_key_collisions(pair, key: "search_key")).to eq([])
+    end
+
+    it "refuses an unknown key rather than defaulting" do
+      expect { Disarm.find_key_collisions(["a"], key: "lower") }
+        .to raise_error(Disarm::InvalidArgument)
+    end
+
     it "reports whether a value is a stable key under case folding" do
       expect(Disarm.case_fold_stable?("gross.txt")).to be(true)
       # The pair node-tar collided on (CVE-2026-23950).

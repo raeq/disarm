@@ -20,6 +20,8 @@ from disarm._boundary import (
     HostnameAnalysis,
     # Exception hierarchy (#183): base + categorised subclasses
     InvalidArgumentError,
+    # Collision report object (#620)
+    KeyCollision,
     # Reusable anomaly lexicon handle (HAI-SDLC 6.1)
     Lexicon,
     ResourceLimitError,
@@ -32,6 +34,7 @@ from disarm._boundary import (
     # Predicates
     _detect_scripts,
     _escape_html,
+    _find_key_collisions,
     _find_unmapped_confusables,
     # Untranslatable scan (#184)
     _find_untranslatable,
@@ -1969,6 +1972,94 @@ def find_unmapped_confusables(text: str, *, target_script: str = "latin") -> lis
     if not isinstance(text, str):
         raise TypeError(f"find_unmapped_confusables() expects str, got {type(text).__name__}")
     return _find_unmapped_confusables(text, target_script=target_script)
+
+
+def find_key_collisions(
+    values: list[str],
+    *,
+    key: str,
+    lang: str | None = None,
+) -> list[KeyCollision]:
+    """Which of *values* reduce to the same identity key (#620).
+
+    Every other disarm detector is a single-string predicate, and a collision is
+    not a property of a single string — ``groß.txt`` is an ordinary German
+    filename, and ``аdmin`` is only a problem next to ``admin``. This is the
+    set-shaped question: **given these names, which of them are the same name?**
+
+    That is what node-tar's ``PathReservations`` guard failed to ask before
+    extracting two paths in parallel (CVE-2026-23950), and what a registry has to
+    ask before accepting a second ``admin`` (CVE-2013-7236). The two want opposite
+    policies from the same answer — one refuses the batch, the other refuses the
+    registration — so this reports and decides nothing.
+
+    **Choosing *key* is choosing the policy**, and there is no default. Measured
+    against the four collision CVEs in the validation matrix:
+
+    ============================ ========== ========== ========= =========
+    key                          2026-23950 2019-19844 2013-7236 2020-12063
+    ============================ ========== ========== ========= =========
+    ``"fold_case"``              yes        --         --        --
+    ``"search_key"``             yes        yes        yes       yes
+    ``"catalog_key"``            yes        yes        yes       yes
+    ``"canonicalize"``           --         yes        yes       yes
+    ``"canonicalize_strict"``    --         yes        yes       yes
+    ``"normalize_confusables"``  --         yes        yes       yes
+    ============================ ========== ========== ========= =========
+
+    A stronger key finds more collisions, including ones nobody attacked:
+    ``search_key`` collides ``Muller`` with ``Müller`` and ``Ivan`` with ``Иван``.
+    That is not a false positive — they really are one key — it is the cost of the
+    key you chose. ``sort_key`` is deliberately not offered: a sort key exists *to*
+    collide, so reporting its collisions would be noise.
+
+    Reducing and grouping happen in one pass over one reducer, so the report
+    cannot disagree with the collapse it describes. A group is returned only when
+    it holds **two or more distinct inputs** — the same string twice is the same
+    name twice, which a reservation table already handles.
+
+    Args:
+        values: The set to check. Order is preserved in the report; the batch cap
+            is the same 100,000 every other batch entry point uses.
+        key: Which reducer builds the keys — one of ``"fold_case"``,
+            ``"search_key"``, ``"catalog_key"``, ``"canonicalize"``,
+            ``"canonicalize_strict"``, ``"normalize_confusables"``.
+        lang: Language hint, reaching ``search_key`` and ``catalog_key``, whose
+            romanization is language-dependent; ignored by the rest. Under
+            ``lang="de"``, ``Müller`` and ``Mueller`` are one key.
+
+    Returns:
+        A :class:`KeyCollision` per colliding group, in order of the first index
+        that participates. Each has ``key`` (the shared reduced form), ``values``
+        (the distinct inputs, first-appearance order) and ``indices`` (every
+        position, ascending — not parallel to ``values``).
+
+    Raises:
+        TypeError: If *values* is not a list of ``str``.
+        InvalidArgumentError: If *key* is not one of the six.
+        ResourceLimitError: If *values* exceeds the batch cap.
+
+    Examples:
+        >>> found = find_key_collisions(
+        ...     ["groß.txt", "gross.txt", "other.txt"], key="fold_case"
+        ... )
+        >>> found[0].key
+        'gross.txt'
+        >>> found[0].values
+        ['groß.txt', 'gross.txt']
+        >>> found[0].indices
+        [0, 1]
+        >>> find_key_collisions(["a.txt", "b.txt"], key="fold_case")
+        []
+    """
+    if not isinstance(values, list):
+        raise TypeError(f"find_key_collisions() expects list[str], got {type(values).__name__}")
+    for value in values:
+        if not isinstance(value, str):
+            raise TypeError(
+                f"find_key_collisions() expects list[str], got {type(value).__name__} in the list"
+            )
+    return _find_key_collisions(values, key=key, lang=lang)
 
 
 def is_ascii(text: str) -> bool:

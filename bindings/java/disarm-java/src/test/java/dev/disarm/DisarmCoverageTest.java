@@ -48,6 +48,24 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void findKeyCollisions() {
+        List<KeyCollision> found =
+                Disarm.findKeyCollisions(List.of("groß.txt", "gross.txt", "other.txt"), "fold_case");
+        assertEquals(1, found.size());
+        assertEquals("gross.txt", found.get(0).key());
+        assertEquals(List.of("groß.txt", "gross.txt"), found.get(0).values());
+        assertEquals(List.of(0L, 1L), found.get(0).indices());
+        // The reducer is the policy: fold_case sees the eszett, canonicalize the homoglyph.
+        assertEquals(
+                List.of("admin", "аdmin"),
+                Disarm.findKeyCollisions(List.of("admin", "аdmin"), "canonicalize").get(0).values());
+        assertTrue(Disarm.findKeyCollisions(List.of("a.txt", "b.txt"), "fold_case").isEmpty());
+        assertThrows(
+                DisarmInvalidArgumentException.class,
+                () -> Disarm.findKeyCollisions(List.of("a"), "lower"));
+    }
+
+    @Test
     void isCaseFoldStable() {
         assertTrue(Disarm.isCaseFoldStable("gross.txt"));
         assertFalse(Disarm.isCaseFoldStable("groß.txt")); // collides with gross.txt

@@ -544,6 +544,40 @@ pub fn isCaseFoldStable<'l>(
     .resolve::<Policy>()
 }
 
+/// Which of `values` are the same name under `key` (#620). `key` is one of
+/// `fold_case`, `search_key`, `catalog_key`, `canonicalize`, `canonicalize_strict`,
+/// `normalize_confusables`; there is no default, because the choice is the policy.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn findKeyCollisions<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    values: JObjectArray<'l, JString<'l>>,
+    key: JString<'l>,
+    lang: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let values = read_string_array(env, &values)?;
+        let key = key.mutf8_chars(env)?.to_string();
+        let key: api::KeyForm = match key.parse() {
+            Ok(k) => k,
+            Err(e) => return Err(throw_core(env, &e)),
+        };
+        let lang = read_optional(env, &lang)?;
+        match api::find_key_collisions(&values, key, lang.as_deref()) {
+            Ok(found) => {
+                let mut objs = Vec::with_capacity(found.len());
+                for c in &found {
+                    objs.push(new_key_collision(env, c)?);
+                }
+                let array = new_object_array_of(env, "dev/disarm/KeyCollision", &objs)?;
+                list_of(env, &array)
+            }
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
 /// Replace emoji with their plain names; `stripModifiers` drops skin-tone marks.
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn demojize<'l>(
@@ -1334,6 +1368,40 @@ fn new_anomaly_report<'l>(env: &mut Env<'l>, r: &api::AnomalyReport) -> JniResul
             JValue::Object(&kinds_list),
             JValue::Object(&findings_list),
             JValue::Object(&reason),
+        ],
+    )
+}
+
+/// Build an immutable `List<Long>` from Rust indices.
+fn new_long_list<'l>(env: &mut Env<'l>, items: &[usize]) -> JniResult<JObject<'l>> {
+    let mut boxed = Vec::with_capacity(items.len());
+    for &n in items {
+        let obj = env
+            .call_static_method(
+                JNIString::from("java/lang/Long"),
+                JNIString::from("valueOf"),
+                jni_sig!("(J)Ljava/lang/Long;"),
+                &[JValue::Long(n as jlong)],
+            )?
+            .l()?;
+        boxed.push(obj);
+    }
+    let array = new_object_array_of(env, "java/lang/Long", &boxed)?;
+    list_of(env, &array)
+}
+
+/// Construct a `dev.disarm.KeyCollision` record.
+fn new_key_collision<'l>(env: &mut Env<'l>, c: &api::KeyCollision) -> JniResult<JObject<'l>> {
+    let key = env.new_string(&c.key)?;
+    let values = new_string_list(env, &c.values)?;
+    let indices = new_long_list(env, &c.indices)?;
+    env.new_object(
+        JNIString::from("dev/disarm/KeyCollision"),
+        jni_sig!("(Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V"),
+        &[
+            JValue::Object(&key),
+            JValue::Object(&values),
+            JValue::Object(&indices),
         ],
     )
 }

@@ -65,6 +65,45 @@ See [Language Detection](../user-guide/language-detection.md#inspecting-detectio
 
 ---
 
+## find_key_collisions
+
+::: disarm.find_key_collisions
+
+```python
+from disarm import find_key_collisions
+
+find_key_collisions(["groß.txt", "gross.txt", "other.txt"], key="fold_case")
+# [KeyCollision(key="gross.txt", values=["groß.txt", "gross.txt"], indices=[0, 1])]
+
+find_key_collisions(["admin", "аdmin"], key="canonicalize")
+# [KeyCollision(key="admin", values=["admin", "аdmin"], indices=[0, 1])]
+
+find_key_collisions(["a.txt", "b.txt"], key="fold_case")
+# []
+```
+
+Every other function on this page answers about one string. This one answers about
+a set, because a collision is not a property of a single string: `groß.txt` is an
+ordinary German filename, and `аdmin` is only a problem next to `admin`. It is the
+question node-tar's `PathReservations` guard failed to ask before extracting two
+paths in parallel (CVE-2026-23950), and the one a registry has to ask before
+accepting a second `admin` (CVE-2013-7236). Those two want opposite policies from
+the same answer — refuse the batch, or refuse the registration — so the function
+reports and decides nothing.
+
+Each result is a `KeyCollision` with three fields:
+
+| Field | Meaning |
+|---|---|
+| `key` | The reduced form every member of the group shares. |
+| `values` | The distinct inputs that reduce to it, in order of first appearance. |
+| `indices` | Every position in the input list, ascending. Not parallel to `values`: a value repeated verbatim appears once there and once per occurrence here. |
+
+A group is reported only when it holds two or more *distinct* inputs. The same
+name twice is the same name twice, which a reservation table already handles.
+
+---
+
 ## is_case_fold_stable
 
 ::: disarm.is_case_fold_stable

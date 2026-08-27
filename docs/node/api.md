@@ -126,6 +126,32 @@ isCaseFoldStable('groß.txt') // => false, folds to gross.txt
 isCaseFoldStable('ΟΔΟΣ') // => false, lowercases to οδος and folds to οδοσ
 ```
 
+### `findKeyCollisions(values, key, options?)`
+
+Which of `values` are the same name under `key` — the set-shaped question, and the
+one node-tar's `PathReservations` guard failed to ask before extracting two paths in
+parallel (CVE-2026-23950). Returns a `KeyCollision[]`, each with `key` (the shared
+reduced form), `values` (the distinct inputs, first-appearance order) and `indices`
+(every position, ascending).
+
+`key` is one of `'fold_case'`, `'search_key'`, `'catalog_key'`, `'canonicalize'`,
+`'canonicalize_strict'`, `'normalize_confusables'`. There is no default, because a
+stronger key finds more collisions — `search_key` collides `Muller` with `Müller` —
+so the choice is the policy. `options.lang` reaches `search_key` and `catalog_key`.
+
+A group is reported only when two or more **distinct** inputs share a key; the same
+name twice is the same name twice.
+
+```ts
+findKeyCollisions(['groß.txt', 'gross.txt', 'other.txt'], 'fold_case')
+// => [{ key: 'gross.txt', values: ['groß.txt', 'gross.txt'], indices: [0, 1] }]
+
+findKeyCollisions(['admin', 'аdmin'], 'canonicalize')
+// => [{ key: 'admin', values: ['admin', 'аdmin'], indices: [0, 1] }]
+
+findKeyCollisions(['a.txt', 'b.txt'], 'fold_case') // => []
+```
+
 ## Normalization
 
 ### `normalize(text, options?)` · `isNormalized(text, options?)`

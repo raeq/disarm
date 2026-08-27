@@ -16,6 +16,42 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`canonicalize_strict` was not idempotent (#638).** `f(f(x)) != f(x)` for a class of
+  inputs #615 created. `canonicalize_strict("C҉̧")` returned `Ç`, and applying it again
+  returned `C` — a comparison key that depends on how many times you applied it, which is
+  the one thing a comparison preset must not have.
+
+  **`U+0489` has ccc 0, which makes it a *starter*:** it blocks `C` + `U+0327` from
+  composing, so the confusable fold's fixed point correctly finds nothing to do. The #615
+  cross-script mark strip then removes it — a Cyrillic mark on a Latin base is exactly its
+  target — leaving the two adjacent, and the terminal NFC composes them into `Ç`, which
+  folds to `C`. One pass too late.
+
+  So the two steps expose work for each other in **both** directions. #615 reasoned about
+  one: the fold rewrites the base, so a mark that matched beforehand can stop matching
+  afterwards, which is why the strip goes second. This is the other: the strip removes
+  marks, which can expose a composition the fold has already finished with. Neither
+  ordering is a fixed point alone, so they now iterate together. It converges because
+  every pass either folds a character or deletes a mark, and neither is undone.
+
+  Measured: `canonicalize_strict` only — `canonicalize` and `strip_obfuscation` have no
+  cross-script mark step. 474 code points reach the shape in the `C` + X + cedilla probe
+  alone; they are the composition-blocking starters that are also script-specific marks
+  (`U+0488`, `U+0489`, the Thaana vowel signs, and others). Verified over ~6.8M probes of
+  base × code point × mark, with zero non-idempotent results.
+
+  Found by `canonicalize_strict_idempotent` on CI, at 569 successes — the same proptest
+  that caught #615's first ordering attempt. The failing seed is now committed so it fails
+  deterministically rather than randomly.
+
+  Implemented as a dedicated pipeline step rather than the generic `FixedPoint`
+  combinator, which allocates per inner step per pass and took `canonicalize_strict` from
+  6 allocations per call to 12 — `preset_alloc_count` refused it. The dedicated step
+  reuses buffers and exits after the first strip when the strip changed nothing, so text
+  with no cross-script mark (essentially all text) pays nothing for the loop.
+
 ### Added
 
 - **`find_key_collisions` — which of these names are the same name (#620).** The first

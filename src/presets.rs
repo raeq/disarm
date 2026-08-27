@@ -69,6 +69,10 @@ enum Step {
     TranslitPreservingLatin,
     Confusables(&'static str),
     ConfusablesNfcFixedPoint(&'static str),
+    /// The confusables→NFC fixed point and the #615 cross-script mark strip,
+    /// iterated *together* (#638). Neither is a fixed point in the presence of the
+    /// other; see `canonicalize_strict` for why, and for the convergence argument.
+    ConfusablesMarkFixedPoint(&'static str),
     /// Iterate an inner step list to a fixed point (#467). The catalog key's
     /// romanization core (`transliterate → confusables → strip_accents`) is not a
     /// fixed point in a single pass: `strip_accents` can drop the U+0338 overlay of
@@ -77,9 +81,6 @@ enum Step {
     /// (`ᴔ`→`ǝo`, then `ǝ`→`e`); and the maps chain. Looping the whole core makes
     /// the preset idempotent. The inner list must not itself contain `FixedPoint`.
     FixedPoint(&'static [Step]),
-    /// #615: drop a combining mark whose own script differs from its base's.
-    /// `canonicalize_strict` only — see `zalgo::strip_cross_script_marks`.
-    StripCrossScriptMarks,
     Demojize {
         only_if_cldr: bool,
         /// #614: leave the 49 rows TR39 also claims for the confusable step to fold.
@@ -212,6 +213,49 @@ fn apply_into(
                 Ok(true)
             }
         }
+        Step::ConfusablesMarkFixedPoint(target) => {
+            // #638. The generic `FixedPoint` combinator would do this, but it
+            // allocates a fresh `String` per inner step per pass and pushed
+            // `canonicalize_strict` from 6 allocations per call to 12, which
+            // `preset_alloc_count` refuses. This mirrors `ConfusablesNfcFixedPoint`'s
+            // buffer reuse and, crucially, exits after the FIRST strip when the strip
+            // changed nothing — which is every input with no cross-script mark, i.e.
+            // essentially all of them. The loop is only paid for by text that
+            // actually triggers the interaction.
+            let mut cur = input.to_owned();
+            let mut conf = String::new();
+            let mut nxt = String::new();
+            let mut stripped = String::new();
+            for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
+                // Inner fold-to-fixed-point, same shape as ConfusablesNfcFixedPoint.
+                let mut cur_is_nfc = false;
+                for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
+                    confusables::normalize_confusables_into(&cur, target, &mut conf)?;
+                    if conf == cur && cur_is_nfc {
+                        break;
+                    }
+                    crate::normalize::normalize_into(&conf, "NFC", &mut nxt)?;
+                    if nxt == cur {
+                        break;
+                    }
+                    std::mem::swap(&mut cur, &mut nxt);
+                    cur_is_nfc = true;
+                }
+                zalgo::strip_cross_script_marks_into(&cur, &mut stripped);
+                if stripped == cur {
+                    // Nothing was removed, so nothing new can be exposed: the pair is
+                    // already at its fixed point and the outer loop has no work.
+                    break;
+                }
+                std::mem::swap(&mut cur, &mut stripped);
+            }
+            if cur == input {
+                Ok(false)
+            } else {
+                *out = cur;
+                Ok(true)
+            }
+        }
         Step::FixedPoint(inner) => {
             // #467: apply the inner sub-pipeline repeatedly until its output
             // stabilizes. Each pass runs `inner` once via the same ping-pong as
@@ -232,10 +276,6 @@ fn apply_into(
                 *out = cur;
                 Ok(true)
             }
-        }
-        Step::StripCrossScriptMarks => {
-            zalgo::strip_cross_script_marks_into(input, out);
-            Ok(true)
         }
         Step::Demojize {
             only_if_cldr,
@@ -303,7 +343,9 @@ impl Actionable {
                 Step::StripControl => m.controls = true,
                 Step::CollapseWs => m.collapse_ws = true,
                 Step::FoldCase => m.fold_case = true,
-                Step::Confusables(target) | Step::ConfusablesNfcFixedPoint(target) => {
+                Step::Confusables(target)
+                | Step::ConfusablesNfcFixedPoint(target)
+                | Step::ConfusablesMarkFixedPoint(target) => {
                     // The guard's confusable-source check is Latin-specific (the
                     // ASCII set is generated from confusables_to_latin.tsv and the
                     // non-ASCII check uses `resolve_confusable_map("latin")`). Other
@@ -318,6 +360,12 @@ impl Actionable {
                          target-aware first"
                     );
                     m.confusables = true;
+                    // #615/#638: `ConfusablesMarkFixedPoint` also strips cross-script
+                    // marks. That touches combining marks only, never a base, and it
+                    // deliberately does NOT set `strip_accents` — that flag means
+                    // "every mark goes", and the rule keeps `Inherited` marks, so the
+                    // fast path must not treat this preset as one that flattens `café`.
+                    // `m.marks` below covers it.
                     // The confusables fold composes base+mark clusters at lookup (#475),
                     // so it acts on a decomposed homoglyph (`і`+◌̈ → folds like `ї`).
                     // Mark `m.marks` to match that behaviour (L-2): every shipped preset
@@ -351,11 +399,6 @@ impl Actionable {
                     m.marks = true;
                     m.strip_accents = true;
                 }
-                // #615: touches combining marks only, and never a base character. It
-                // does NOT set `strip_accents`: that flag means "every mark goes", and
-                // this step keeps `Inherited` marks — the fast path must not treat a
-                // preset carrying it as one that flattens `café`.
-                Step::StripCrossScriptMarks => m.marks = true,
                 Step::StripBidi => m.bidi = true,
                 Step::StripZeroWidth => m.zero_width = true,
                 Step::StripInvisible(_) => m.invisible = true,
@@ -1286,20 +1329,31 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
         //    fold and recompose via NFC, re-creating a foldable composed char the next
         //    pass would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping makes the preset a
         //    true fixed point — see `canonicalize` for the full rationale.
-        Step::ConfusablesNfcFixedPoint("latin"),
-        // 4b. Drop a mark whose own script differs from its base's (#615,
-        //     CVE-2017-7833). The zalgo cap above is a COUNT, and by count one Arabic
-        //     shadda is indistinguishable from one acute accent, so no threshold
-        //     removes the spoof and keeps `café`.
+        // 4 + 4b. The confusable fold and the #615 cross-script mark strip, iterated
+        //     TOGETHER to a fixed point (#638). Each is a fixed point on its own and
+        //     the pair was not, because they expose work for each other in both
+        //     directions:
         //
-        //     Placed AFTER the confusable fold, not before, and that ordering is
-        //     load-bearing: the fold rewrites the BASE, so a mark that matched its
-        //     base beforehand can stop matching afterwards. `а` (Cyrillic) + U+0489
-        //     (Cyrillic mark) agrees on the first pass, then the fold makes the base
-        //     Latin `a` and the next pass strips the mark — f(f(x)) != f(x), which
-        //     `canonicalize_strict_idempotent` catches. Deciding against the FINAL
-        //     base script is the only stable point.
-        Step::StripCrossScriptMarks,
+        //     — the fold rewrites the BASE, so a mark that matched its base beforehand
+        //       can stop matching afterwards. `а` (Cyrillic) + U+0489 (Cyrillic mark)
+        //       agrees before the fold and not after it, which is why #615 put the
+        //       strip second: deciding against the FINAL base script is the only
+        //       stable point.
+        //     — and the strip removes marks, which can expose a COMPOSITION the fold
+        //       has already finished with. `U+0489` has ccc 0, so it is a starter and
+        //       blocks `C`+`U+0327` from composing; remove it and the terminal NFC
+        //       makes `Ç`, which folds to `C` — one pass too late. 474 code points
+        //       reach that shape and `canonicalize_strict_idempotent` found one.
+        //
+        //     Neither ordering is a fixed point alone, so the pair loops. It converges
+        //     for the same reason the inner fold does: every pass either folds a
+        //     character or deletes a mark, and neither is undone.
+        //
+        //     4b's rule itself (drop a mark whose own script differs from its base's,
+        //     #615, CVE-2017-7833): the zalgo cap above is a COUNT, and by count one
+        //     Arabic shadda is indistinguishable from one acute accent, so no
+        //     threshold removes the spoof and keeps `café`.
+        Step::ConfusablesMarkFixedPoint("latin"),
         // 5. Fold whitespace (#433: fold-only — control/zero-width were already
         //    stripped explicitly above, before the zalgo cap, per #121). The line
         //    controls now fold to a space instead of being deleted, so `a\rb` → `a b`.
@@ -1808,6 +1862,46 @@ mod tests {
     fn canonicalize_strict_keeps_ordinary_diacritics() {
         for text in ["caf\u{e9}", "na\u{ef}ve", "Vi\u{1ec7}t Nam"] {
             assert_eq!(canonicalize_strict(text).unwrap(), text, "{text:?}");
+        }
+    }
+
+    /// #638: stripping the mark can expose a COMPOSITION the fold already finished
+    /// with, so the two steps have to iterate together.
+    ///
+    /// `U+0489` has ccc 0, which makes it a *starter*: it blocks `C` + `U+0327` from
+    /// composing, so the fold's fixed point correctly finds nothing to do. Removing it
+    /// leaves the two adjacent, the terminal NFC composes them into `Ç`, and `Ç` folds
+    /// to `C` — one pass too late. The preset returned `Ç` and then `C`, which is a
+    /// comparison key that depends on how many times you applied it.
+    #[test]
+    fn canonicalize_strict_folds_what_the_mark_strip_exposes() {
+        for (input, expected) in [("C\u{489}\u{327}", "C"), ("c\u{489}\u{327}", "c")] {
+            let once = canonicalize_strict(input).unwrap();
+            assert_eq!(once, expected, "{input:?}");
+            assert_eq!(
+                canonicalize_strict(&once).unwrap(),
+                once,
+                "{input:?} is not a fixed point"
+            );
+        }
+    }
+
+    /// The blocking starter is not a curiosity: 474 code points reach that shape in
+    /// the `C` + X + cedilla probe alone. Sampled here rather than swept, because the
+    /// exhaustive form belongs in the proptest that found it.
+    #[test]
+    fn the_blocking_starters_are_a_class_not_one_character() {
+        // U+0488 COMBINING CYRILLIC HUNDRED THOUSANDS SIGN, and a Thaana vowel sign —
+        // both ccc 0, both script-specific, both removed by the #615 rule.
+        for blocker in ['\u{488}', '\u{489}', '\u{7A6}', '\u{7AF}'] {
+            let input = format!("C{blocker}\u{327}");
+            let once = canonicalize_strict(&input).unwrap();
+            assert_eq!(
+                canonicalize_strict(&once).unwrap(),
+                once,
+                "U+{:04X} leaves a non-fixed point",
+                blocker as u32
+            );
         }
     }
 

@@ -31,13 +31,26 @@ README="$ROOT/README.md"
 NAV="$ROOT/docs/_index_nav.md"
 OUTPUT="$ROOT/docs/index.md"
 
+# Reject anything that is not exactly `--check` or nothing at all. A typo must
+# not fall through to the write path: this script overwrites docs/index.md, and
+# `--chekc` silently regenerating the file it was asked to verify is the one
+# failure mode that would defeat the point of having a --check at all.
 CHECK=0
-if [[ "${1:-}" == "--check" ]]; then
-    CHECK=1
-elif [[ $# -gt 0 ]]; then
-    echo "usage: $0 [--check]" >&2
-    exit 2
-fi
+case $# in
+    0) ;;
+    1)
+        if [[ "$1" == "--check" ]]; then
+            CHECK=1
+        else
+            echo "usage: $0 [--check]" >&2
+            exit 2
+        fi
+        ;;
+    *)
+        echo "usage: $0 [--check]  (takes at most one argument, got $#: $*)" >&2
+        exit 2
+        ;;
+esac
 
 if [[ ! -f "$README" ]]; then
     echo "ERROR: README.md not found at $README" >&2

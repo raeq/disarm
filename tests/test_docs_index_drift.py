@@ -33,6 +33,11 @@ from pathlib import Path
 
 import pytest
 
+#: Every test here shells out to the generator, which is a bash script. Skipping
+#: only the ones that obviously need a shell would leave the rest erroring on
+#: Windows before any skip applied, so the mark is module-wide.
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the generator is a bash script")
+
 ROOT = Path(__file__).resolve().parent.parent
 GENERATOR = ROOT / "scripts" / "generate_docs_index.sh"
 README = ROOT / "README.md"
@@ -96,10 +101,25 @@ def test_the_check_can_actually_fail() -> None:
     assert _run_check().returncode == 0, "the README was not restored"
 
 
-def test_the_generator_refuses_an_unknown_argument() -> None:
-    """`--chekc` must not silently overwrite the file it was asked to verify."""
+@pytest.mark.parametrize(
+    "args",
+    [
+        pytest.param(["--not-a-flag"], id="unknown-flag"),
+        pytest.param(["--chekc"], id="typo-of-check"),
+        pytest.param(["--check", "--extra"], id="check-plus-junk"),
+        pytest.param(["--check", "--check"], id="check-twice"),
+    ],
+)
+def test_the_generator_refuses_bad_arguments(args: list[str]) -> None:
+    """A typo must not fall through to the write path.
+
+    This script overwrites ``docs/index.md``. ``--chekc`` silently regenerating
+    the file it was asked to *verify* is the one failure that would defeat the
+    point of having a ``--check``, and ``--check --extra`` ignoring the extra
+    argument is the same hazard one keystroke further away.
+    """
     result = subprocess.run(  # noqa: S603 — fixed argv, no shell
-        ["bash", str(GENERATOR), "--not-a-flag"],
+        ["bash", str(GENERATOR), *args],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -107,6 +127,7 @@ def test_the_generator_refuses_an_unknown_argument() -> None:
         check=False,
     )
     assert result.returncode == 2, result
+    assert "usage:" in result.stderr
 
 
 class TestReadmeExamplesAreExecutedTransitively:
@@ -132,7 +153,6 @@ class TestReadmeExamplesAreExecutedTransitively:
         )
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="the generator is a bash script")
 def test_running_the_generator_is_idempotent() -> None:
     """Two runs in a row must not produce two different files.
 

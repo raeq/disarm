@@ -117,11 +117,15 @@ _EXCLUDED_DIRS = frozenset({"reviews", "plans", "__pycache__"})
 #: when a listed name starts resolving, and ``test_every_gap_is_actually_named_by
 #: _the_docs`` fails when the page that named it is gone.
 _KNOWN_GAPS: dict[str, str] = {
-    # #660 — `LANG_AUTO` is defined in `disarm._enums` and is the only `LANG_*`
-    # constant missing from the package's export list, while three doc blocks
-    # tell readers to `from disarm import LANG_AUTO`. Exporting a name is a new
-    # capability, so the fix is a minor rather than this patch.
-    "disarm.LANG_AUTO": "#660 — documented constant is never re-exported from `disarm`",
+    # Empty, and worth keeping empty. Both original entries are gone: the
+    # `disarm.emoji` plugin API left with the page that documented it (#655), and
+    # `LANG_AUTO` left when the pages stopped telling readers to import a name the
+    # package does not export (#660 — the export itself is a capability, so it
+    # waits for a minor).
+    #
+    # An entry may only go in here with an open issue number. `main` fails when a
+    # listed name starts resolving, and a test fails when the page that named it
+    # is gone, so the list shrinks rather than accumulating.
 }
 
 

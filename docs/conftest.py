@@ -51,7 +51,6 @@ EXECUTED_RECIPES = [
     "api/language-profiles.md",
     "api/pipelines.md",
     "api/transforms.md",
-    "architecture/emoji-plugins.md",
     "migration/from-anyascii.md",
     "migration/from-confusable-homoglyphs.md",
     "migration/from-pathvalidate.md",

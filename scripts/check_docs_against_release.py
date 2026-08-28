@@ -117,12 +117,6 @@ _EXCLUDED_DIRS = frozenset({"reviews", "plans", "__pycache__"})
 #: when a listed name starts resolving, and ``test_every_gap_is_actually_named_by
 #: _the_docs`` fails when the page that named it is gone.
 _KNOWN_GAPS: dict[str, str] = {
-    # #655 — `docs/architecture/emoji-plugins.md` documents a plugin system that
-    # has never shipped: no `disarm.emoji` module, and no `disarm-emoji-*`
-    # package on PyPI. The page is being deleted or bannered under #655.
-    "disarm.emoji": "#655 — documents a plugin system that never shipped",
-    "disarm.emoji.FileProvider": "#655 — documents a plugin system that never shipped",
-    "disarm.emoji.ChainProvider": "#655 — documents a plugin system that never shipped",
     # #660 — `LANG_AUTO` is defined in `disarm._enums` and is the only `LANG_*`
     # constant missing from the package's export list, while three doc blocks
     # tell readers to `from disarm import LANG_AUTO`. Exporting a name is a new

@@ -450,8 +450,7 @@ Internal design documentation for contributors and advanced users.
 - **[Transliteration Engine](architecture/transliteration-engine.md)** — PHF lookup, language table chain, Indic virama handling
 - **[Data Tables](architecture/data-tables.md)** — TSV format, build.rs code generation, compile-time PHF
 - **[Pipeline](architecture/pipeline.md)** — TextPipeline internals, execution order, step bitflags
-- **[Emoji Engine](architecture/emoji-engine.md)** — Emoji detection, provider system, pure-Rust path
-- **[Emoji Plugins](architecture/emoji-plugins.md)** — EmojiProvider protocol, custom providers
+- **[Emoji Engine](architecture/emoji-engine.md)** — Emoji detection, the `EmojiProvider` protocol and custom providers, pure-Rust path
 - **[Security](architecture/security.md)** — Confusable detection, hostname validation, bidi stripping
 - **[Performance](architecture/performance.md)** — Optimization strategies, PHF tables, batch amortization
 - **[Testing & Guarantees](architecture/testing-guarantees.md)** — Test philosophy, property-based testing, security invariants, CI matrix

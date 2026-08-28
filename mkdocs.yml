@@ -108,7 +108,6 @@ nav:
       - TextPipeline: architecture/pipeline.md
       - Performance Optimization: architecture/performance.md
       - Security & Hostnames: architecture/security.md
-      - Emoji Plugin System: architecture/emoji-plugins.md
       - Testing & Guarantees: architecture/testing-guarantees.md
       - Exhaustive Testing: formal-verification.md
       - Transliteration Comparison: architecture/transliteration-comparison.md

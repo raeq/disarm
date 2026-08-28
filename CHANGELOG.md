@@ -102,6 +102,28 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   open work on #644, and `KEY_SCHEMA_VERSION` (#645) is the signal a consumer could assert
   in their own CI. The document says plainly that neither exists yet.
 
+- **`docs/architecture/emoji-plugins.md` is deleted; it documented a plugin system that
+  never shipped (#655).** The page named five pip packages with sizes, a `disarm.emoji`
+  module with `FileProvider` and `ChainProvider`, and a `disarm-emoji-pack` CLI. None of it
+  exists, on `main` or on PyPI, and the page sat in `architecture/` alongside descriptive
+  pages with nothing to tell a reader which it was. Its only marker was a
+  `<!--- skip: next -->` comment, invisible in the rendered page — the one place a reader
+  never looks.
+
+  The shipped provider API is unaffected and was already documented elsewhere:
+  `EmojiProvider` in `docs/api/enums.md`, `set_emoji_provider` in `docs/api/transforms.md`,
+  and the per-call → global → built-in resolution order in
+  `docs/architecture/emoji-engine.md`. That page gains the deleted one's scope statements
+  (no emojize, no rendering, no sentiment scoring, no platform rendering history, no
+  versioned emoji data) plus a note on the bundled CLDR vintage.
+
+  The unbuilt design is preserved in #662 rather than thrown away: versioned emoji provider
+  packages, a file-based provider, and chaining for mixed-era corpora, which is the piece
+  with no workaround today.
+
+  Found independently by the drift gate added in #641 on its first run, which is why three
+  of its four allowlisted gaps are now gone.
+
 ## [0.14.0] — 2026-08-28
 
 ### Upgrade notes

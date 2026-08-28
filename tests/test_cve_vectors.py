@@ -562,16 +562,22 @@ class TestNfkcNetlocUnmasking:
         """
         assert canonicalize(NFKC_MASKED_URL) != NFKC_MASKED_URL
 
-    def test_not_reported_as_an_anomaly(self) -> None:
-        """OUT-OF-SCOPE NEGATIVE: there is no detector for this.
+    def test_it_is_now_reported_even_though_it_is_still_out_of_scope(self) -> None:
+        """INVERTED by #633, and the distinction is the point.
 
-        ``has_anomalies`` covers invisible, bidi, zalgo, mixed-script, leet and
-        segmentation. Compatibility-fold unmasking is none of those, so the
-        input is reported clean. A pipeline that uses ``has_anomalies`` as its
-        URL screen gets no signal here.
+        This asserted the opposite until the ``compat_fold`` kind existed:
+        compatibility-fold unmasking was none of the anomaly kinds, so a pipeline
+        using ``has_anomalies`` as its URL screen got no signal at all.
+
+        It now gets one. That does **not** move the row in scope — disarm still
+        does not parse URLs and cannot stop this — but a caller who screens before
+        deciding is no longer told the input is clean. Detecting what you cannot
+        neutralize is the most useful thing a detector does on an out-of-scope row.
         """
-        assert has_anomalies(NFKC_MASKED_URL) is False
-        assert inspect_anomalies(NFKC_MASKED_URL).kinds == []
+        assert has_anomalies(NFKC_MASKED_URL) is True
+        assert inspect_anomalies(NFKC_MASKED_URL).kinds == ["compat_fold"]
+        # Still out of scope: nothing here claims to defend it.
+        assert BY_ID["CVE-2019-9636"].dispositions == frozenset({OUT_OF_SCOPE})
 
 
 # ---------------------------------------------------------------------------
@@ -2409,9 +2415,11 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-20",
         cvss=7.8,
         cvss_version="v2.0",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("canonicalize", "canonicalize_strict", "strip_obfuscation"),
-        detectors=(),
+        # #633: the compat_fold kind. The probe is fullwidth spelled around
+        # ASCII, which is exactly the shape that rule is for.
+        detectors=("has_anomalies",),
         probe=FULLWIDTH_SCRIPT,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2007-2688",
     ),
@@ -2743,10 +2751,10 @@ class TestDetectionHasNoSuperset:
 
     Neutralization has a safe default. Detection does not — and not because one
     predicate is weaker than another: **no combination of them** covers the
-    matrix. Seven vectors are silent to every detector disarm exposes.
+    matrix. Six vectors are silent to every detector disarm exposes.
 
     So a pipeline that screens first and only cleans what it flagged forwards
-    those seven untouched. Clean unconditionally; use the detectors to decide
+    those six untouched. Clean unconditionally; use the detectors to decide
     whether to *alert*, never whether to *clean*.
     """
 
@@ -2762,13 +2770,20 @@ class TestDetectionHasNoSuperset:
         # is reported.
         "CVE-2022-31116",
         "CVE-2025-64439",
-        "CVE-2007-2688",
         # The byte-level rows: not-affected, and nothing reports them either.
         # `decode_to_utf8` returns `had_errors`, which is a return value rather
         # than one of the panel predicates.
         "CVE-2024-46954",
         "CVE-2026-44288",
     }
+    #: Closed by the ``compat_fold`` kind (#633) — the last row on the page that a
+    #: character class could close, and the one #612's closing text said could not be:
+    #: it argued the remainder each needed a *comparison* rather than the presence of a
+    #: character. That was right about the others and wrong about this one. A
+    #: compatibility fold is checkable per token — compare the token to its NFKC form —
+    #: and what made it hard was never detection but false positives.
+    CLOSED_BY_COMPAT_FOLD = {"CVE-2007-2688"}
+
     #: Closed by ``is_case_fold_stable`` (#619), by a route this class had ruled
     #: out. The standing claim is that each remaining row needs a *comparison*
     #: between two strings, and for the collision itself that is still true —
@@ -2825,10 +2840,13 @@ class TestDetectionHasNoSuperset:
             for name, predicate in DETECTOR_PANEL.items()
         }
         assert coverage == {
-            # 11 before #612 added the `control` kind, which closed the seven
-            # terminal-control and leading-NUL rows in one branch — plus
-            # CVE-2009-4142, whose probe is itself a NUL-byte injection.
-            "has_anomalies": 19,
+            # 11 before #612 added the `control` kind (seven terminal-control and
+            # leading-NUL rows in one branch, plus CVE-2009-4142, whose probe is
+            # itself a NUL-byte injection), then 19 before #633 added `compat_fold`.
+            # That kind reaches five rows, and four of them are OUT OF SCOPE — it
+            # gives a signal on vectors disarm does not claim to stop, which is the
+            # most useful thing a detector can do for a row nothing neutralizes.
+            "has_anomalies": 24,
             "is_confusable": 9,
             "is_mixed_script": 4,
             # CVE-2017-7833 is the only row that fires this: the Arabic mark is
@@ -2889,14 +2907,18 @@ class TestDetectionHasNoSuperset:
             assert cve.detectors == ("is_case_fold_stable",)
             assert not is_case_fold_stable(cve.probe)
 
-    def test_nfkc_unmasking_is_silent_too(self) -> None:
-        """CVE-2019-9636 is out of scope *and* undetected, which is the worst pair.
+    def test_nfkc_unmasking_is_now_reported_though_still_out_of_scope(self) -> None:
+        """INVERTED by #633. It used to be the worst pair — out of scope *and*
+        undetected, so a caller got neither a defence nor a warning.
 
-        Listed apart from the four above because its disposition already says
-        disarm does not handle it; the point here is that nothing reports it
-        either, so there is no signal to act on.
+        The disposition has not moved and should not: disarm does not parse URLs and
+        cannot stop this. What changed is that a pipeline screening before it decides
+        is no longer told the input is clean. Four out-of-scope rows gained a signal
+        this way, which is the only thing a detector can offer a row nothing
+        neutralizes.
         """
-        assert not self._fires(BY_ID["CVE-2019-9636"])
+        assert self._fires(BY_ID["CVE-2019-9636"])
+        assert BY_ID["CVE-2019-9636"].dispositions == frozenset({OUT_OF_SCOPE})
 
     def test_stripping_covers_what_detection_misses(self) -> None:
         """The payoff: every vector no detector sees is still neutralized."""

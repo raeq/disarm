@@ -160,7 +160,7 @@ reading that diff would have thought *reindex*.
 Checked against the published `0.13.0` wheel, the gate reports the movement it was
 built for:
 
-| function | rows changed of 22,878 | |
+| function | rows changed | share of 22,878 |
 | --- | ---: | ---: |
 | `sort_key` | 3,026 | 13.23% |
 | `canonicalize_strict` | 604 | 2.64% |

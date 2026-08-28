@@ -83,7 +83,7 @@ found things a derived corpus would not have.
 
 ### Its licence is not the repository's
 
-| | |
+| what | terms |
 |---|---|
 | Source | Wikipedia, 41 language editions. Article titles retrieved through the MediaWiki API and tokenised into individual word forms. |
 | `corpus.txt` | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), per the Wikipedia [terms of use](https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use) |

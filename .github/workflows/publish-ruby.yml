@@ -215,8 +215,36 @@ jobs:
       - name: gem push
         run: |
           set -uo pipefail
+          command -v jq >/dev/null || { echo "::error::jq is not available"; exit 1; }
+
+          # Without nullglob an empty pkg/ iterates the literal string "pkg/*.gem",
+          # which would push a non-existent file and then probe the registry with a
+          # version and platform parsed out of the glob itself.
+          shopt -s nullglob
+          gems=(pkg/*.gem)
+          if [ ${#gems[@]} -eq 0 ]; then
+            echo "::error::no gems in pkg/ — the cross-gem artifacts did not download"
+            exit 1
+          fi
+
+          # Three outcomes, not two: live, absent, and could-not-tell. Collapsing the
+          # third into "absent" would report a network blip as a failed push and say
+          # so in the log, which is the misleading half.
+          registry_has() {
+            local version=$1 platform=$2 attempt out
+            for attempt in 1 2 3; do
+              if out=$(curl -sSf --max-time 30 "https://rubygems.org/api/v1/versions/disarm.json" 2>/dev/null); then
+                printf '%s' "$out" | jq -e --arg v "$version" --arg p "$platform" \
+                  'any(.[]; .number == $v and .platform == $p)' >/dev/null && return 0
+                return 1
+              fi
+              sleep $((attempt * 5))
+            done
+            return 2
+          }
+
           failed=0
-          for g in pkg/*.gem; do
+          for g in "${gems[@]}"; do
             if gem push "$g"; then
               continue
             fi
@@ -226,13 +254,13 @@ jobs:
             platform=${rest#*-}                     # x86_64-linux
             [ "$platform" = "$version" ] && platform=ruby
             echo "push failed for $base; asking rubygems.org whether it is already live"
-            if curl -sSf "https://rubygems.org/api/v1/versions/disarm.json" \
-                 | jq -e --arg v "$version" --arg p "$platform" \
-                     'any(.[]; .number == $v and .platform == $p)' >/dev/null; then
-              echo "  $version ($platform) is already published — continuing"
-            else
-              echo "  $version ($platform) is NOT on the registry — real failure"
-              failed=1
-            fi
+            registry_has "$version" "$platform"
+            case $? in
+              0) echo "  $version ($platform) is already published — continuing" ;;
+              1) echo "::error::$version ($platform) is not on rubygems.org — the push genuinely failed"
+                 failed=1 ;;
+              2) echo "::error::could not reach rubygems.org after 3 attempts to check $version ($platform); not assuming either way"
+                 failed=1 ;;
+            esac
           done
           exit $failed

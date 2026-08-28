@@ -66,6 +66,42 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   No published artifact was affected: `publish.yml` has always passed `--release` to
   `maturin-action`, so every wheel on PyPI is an optimized build.
 
+### Documentation
+
+- **Key-builder output now carries a stated stability contract (#644).** `0.14.0`'s
+  Upgrade notes said *"Whether their output carries a stability guarantee is open
+  (#644)"* after a release that moved `search_key`, `catalog_key` and `sort_key`. The
+  answer, now written into `docs/RUST_API.md`, `RELEASING.md` and the three docstrings on
+  both the Python and Rust surfaces:
+
+  > **A patch release never changes key-builder output. A minor release may.**
+
+  `docs/RUST_API.md`'s data-driven-output clause named `normalize_confusables`,
+  `strip_obfuscation`, `is_suspicious_hostname` and the `canonicalize*` presets, and not
+  the three functions whose entire purpose is to produce a value you store. They are named
+  now, with a *Key stability* section covering what a consumer does at each upgrade.
+
+  The rule is a description rather than a new constraint. Measured across every version
+  disarm has published, on 12,285 fixed inputs (`U+0020`–`U+2FFF` plus a word list in 13
+  scripts), each release installed from PyPI into a clean virtualenv:
+
+  | transition | | `search_key` | `catalog_key` | `sort_key` |
+  |---|---|---:|---:|---:|
+  | `0.9.0` → `0.9.1` | patch | 0 | 0 | 0 |
+  | `0.9.1` → `0.10.0` | minor | 0 | 19 | 0 |
+  | `0.10.0` → `0.11.0` | minor | 62 | 73 | 1021 |
+  | `0.11.0` → `0.11.1` | patch | 0 | 0 | 0 |
+  | `0.11.1` → `0.12.0` | minor | 0 | 0 | 0 |
+  | `0.12.0` → `0.13.0` | minor | 0 | 0 | 0 |
+  | `0.13.0` → `0.14.0` | minor | 147 | 148 | 416 |
+
+  Both patch releases moved nothing; three of five minors moved nothing either, which is
+  why a consumer could not tell the two apart from outside.
+
+  The golden-corpus gate that would enforce this rather than leaving it to review is still
+  open work on #644, and `KEY_SCHEMA_VERSION` (#645) is the signal a consumer could assert
+  in their own CI. The document says plainly that neither exists yet.
+
 ## [0.14.0] — 2026-08-28
 
 ### Upgrade notes

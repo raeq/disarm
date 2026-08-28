@@ -25,6 +25,18 @@ that we expect to occupy for a long time, the rules are:
 Three-component. The bucket for **bug fixes, cleanups, documentation improvements, and
 other minor things**. A point release never introduces a new capability.
 
+A point release also never changes the output of `search_key`, `catalog_key` or
+`sort_key` (#644). Those three exist to produce a value a consumer **stores** and
+compares later, so a change to them is a reindex event on somebody's production data,
+and a bucket labelled "bug fixes and cleanups" is the wrong place for one. A fix that
+moves a key waits for the next minor and is written up in that release's *Upgrade
+notes* — which is what `0.14.0` did for #602. The full contract, with the measurements
+behind it, is in [RUST_API.md](https://docs.disarm.dev/RUST_API.html#key-stability-what-a-stored-key-is-worth) — an absolute link because this file is
+read both from the repository root and, through a symlink, as a page on the docs site.
+
+This is a constraint on *this* project, not a general one: every other data-driven
+output listed in that document may move in a patch.
+
 ### Minor / feature release — `0.6`, `0.7`, `0.8` (a future `0.22`, `0.37`)
 
 Two-component. The bucket for **new capabilities or major internal refactorings** — for

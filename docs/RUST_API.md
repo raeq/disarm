@@ -71,17 +71,84 @@ The public enums (`ErrorKind`, `TargetScript`, `NormalizationForm`, …) are mar
 always include a `_ =>` arm when matching them.
 
 Note: **data-driven output is not semver-stable, and this covers the security
-surfaces too.** Both transliteration output (Unicode tables, romanization standards)
-*and* the confusable/security functions — `normalize_confusables`,
-`strip_obfuscation`, `is_suspicious_hostname`, and the `canonicalize*` presets —
-change behavior when the bundled Unicode / TR39 tables are updated, with no signature
-touched. For example, #336 extended `normalize_confusables` with cross-script
-pairs absent from upstream TR39 17.0, which changes what a deployed filter chain
-catches. Such changes are documented in the changelog but are **not** treated as
-semver-breaking. **Pin a version if you need byte-stable output — this applies to
-security-filter behavior (what `is_suspicious_hostname` flags), not just
-romanization.** The bundled data vintage per release is recorded in
-[provenance.md](provenance.md).
+surfaces and the key builders too.** Transliteration output (Unicode tables,
+romanization standards), the confusable/security functions —
+`normalize_confusables`, `strip_obfuscation`, `is_suspicious_hostname`, and the
+`canonicalize*` presets — **and the three key builders `search_key`,
+`catalog_key` and `sort_key`** all change behavior when the bundled Unicode /
+TR39 tables are updated, with no signature touched. For example, #336 extended
+`normalize_confusables` with cross-script pairs absent from upstream TR39 17.0,
+which changes what a deployed filter chain catches. Such changes are documented
+in the changelog but are **not** treated as semver-breaking. **Pin a version if
+you need byte-stable output — this applies to security-filter behavior (what
+`is_suspicious_hostname` flags), not just romanization.** The bundled data
+vintage per release is recorded in [provenance.md](provenance.md).
+
+## Key stability — what a stored key is worth
+
+`search_key`, `catalog_key` and `sort_key` exist to produce a value you **store**
+and compare later, so "not semver-stable" costs more for them than for a function
+whose output you look at once. Until #644 the clause above named four other things
+and not these three, which left the question open. It is answered here:
+
+> **A patch release never changes key-builder output. A minor release may.**
+
+That is the contract, and it is what a consumer can plan against:
+
+| upgrade | what it means |
+| --- | --- |
+| `0.14.0` → `0.14.3` | Nothing to do. A key you stored still compares equal. |
+| `0.14.x` → `0.15.0` | Read the changelog's **Upgrade notes** first. Treat it as a possible reindex until they say otherwise. |
+
+The same rule holds in every binding, because they all wrap one core.
+
+### This is what has always happened
+
+Measured across every version disarm has published, on 12,285 fixed inputs — the
+code points `U+0020`–`U+2FFF` plus a word list in 13 scripts — with each release
+installed from PyPI into a clean virtualenv:
+
+| transition | | `search_key` | `catalog_key` | `sort_key` |
+| --- | --- | ---: | ---: | ---: |
+| `0.9.0` → `0.9.1` | patch | 0 | 0 | 0 |
+| `0.9.1` → `0.10.0` | minor | 0 | 19 | 0 |
+| `0.10.0` → `0.11.0` | minor | 62 | 73 | 1021 |
+| `0.11.0` → `0.11.1` | patch | 0 | 0 | 0 |
+| `0.11.1` → `0.12.0` | minor | 0 | 0 | 0 |
+| `0.12.0` → `0.13.0` | minor | 0 | 0 | 0 |
+| `0.13.0` → `0.14.0` | minor | 147 | 148 | 416 |
+
+Both patch releases moved nothing. Three of the five minors moved nothing either
+— which is the reason a consumer could not tell the difference from outside, and
+the reason the rule has to be written down rather than inferred.
+
+### The rate understates it, because the characters are common
+
+`0.13.0` → `0.14.0` reads as 1.2% of code points. At word level it is most of a
+Cyrillic index, because the Russian soft and hard signs are in the changed set:
+
+| word | `search_key` on `0.13.0` | on `0.14.0` |
+| --- | --- | --- |
+| `подъезд` | `podъezd` | `podezd` |
+| `Игорь` | `igorь` | `igor` |
+| `Соловьёв` | `solovьyov` | `solovyov` |
+
+`adolf` is right and `adolьf` was wrong — the key builders had stopped applying
+134 empty table mappings that `transliterate()` honours (#602). Nobody should
+want that reverted, which is exactly why the cadence matters: a consumer cannot
+tell a release that fixes their keys from one that leaves them alone, and both
+are correct behaviour.
+
+### How the rule is kept
+
+Today, by review: a change to the key path is visible in the diff, and moving
+keys is a decision a reviewer has to make deliberately. That is weaker than the
+rest of this document, where claims are gated. The golden-corpus fixture that
+turns it into a gate — recompute every key over a fixed corpus, fail on any
+change, regenerate only as a reviewed act — is the remaining work on #644, and
+`KEY_SCHEMA_VERSION` (#645) is the signal a consumer could assert in their own CI.
+Neither exists yet. Until they do, the statement above is a policy the project
+holds itself to, not one a machine enforces.
 
 ## MSRV
 

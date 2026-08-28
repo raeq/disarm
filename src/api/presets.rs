@@ -85,6 +85,12 @@ pub fn ml_normalize<'a>(
 ///
 /// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails
 /// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) on an unknown `lang`.
+///
+/// # Stability
+/// A patch release never changes this function's output; a minor release may,
+/// and is a possible reindex event (#644). Read a minor's *Upgrade notes* before
+/// deploying it against stored keys. The contract, and what has moved so far, is
+/// in `docs/RUST_API.md` under *Key stability*.
 #[inline]
 pub fn catalog_key<'a>(
     text: &'a str,
@@ -97,6 +103,12 @@ pub fn catalog_key<'a>(
 /// Case/accent/script-insensitive search lookup key (like [`catalog_key`] without
 /// confusable folding). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
 /// on an unknown `lang`.
+///
+/// # Stability
+/// A patch release never changes this function's output; a minor release may,
+/// and is a possible reindex event (#644). Read a minor's *Upgrade notes* before
+/// deploying it against stored keys. The contract, and what has moved so far, is
+/// in `docs/RUST_API.md` under *Key stability*.
 #[inline]
 pub fn search_key<'a>(text: &'a str, lang: Option<&str>) -> Result<Cow<'a, str>, Error> {
     crate::presets::search_key(text, lang).map_err(Error::from)
@@ -105,6 +117,12 @@ pub fn search_key<'a>(text: &'a str, lang: Option<&str>) -> Result<Cow<'a, str>,
 /// Collation sort key (like [`search_key`] but preserves base accented characters
 /// for correct ordering). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
 /// on an unknown `lang`.
+///
+/// # Stability
+/// A patch release never changes this function's output; a minor release may,
+/// and is a possible reindex event (#644). Read a minor's *Upgrade notes* before
+/// deploying it against stored keys. The contract, and what has moved so far, is
+/// in `docs/RUST_API.md` under *Key stability*.
 #[inline]
 pub fn sort_key<'a>(text: &'a str, lang: Option<&str>) -> Result<Cow<'a, str>, Error> {
     crate::presets::sort_key(text, lang).map_err(Error::from)

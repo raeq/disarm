@@ -51,9 +51,10 @@ speculative "there may be a buffer overflow / use-after-free here" with no repro
 no triggering input, and an author who can't answer follow-up questions is not a report
 we can act on, and we will close it without an extended back-and-forth. This library
 forbids `unsafe` crate-wide, and no-panic and linear-time behaviour are covered by
-27 `proptest` properties on every pull request and 23 Hypothesis fuzz tests over
-arbitrary text and bytes, with 19 falsifying examples pinned in committed
-regression corpora. So memory-safety claims in particular need a concrete trigger.
+property-based tests: 166 `proptest` properties on every pull request, 23 Hypothesis
+fuzz tests over arbitrary text and bytes nightly, and 19 falsifying examples pinned
+across 6 committed regression corpora. So memory-safety claims in particular need a
+concrete trigger.
 
 If you're not sure whether your finding is a vulnerability or an out-of-scope
 limitation, that's fine — say so, and lean toward reporting. We would rather triage a

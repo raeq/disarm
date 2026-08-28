@@ -307,10 +307,10 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
   The part that made this more than housekeeping: `SECURITY.md` told vulnerability
   reporters the library "is exhaustively fuzzed", in the paragraph that sets the bar for a
-  report. It now names what actually runs — 27 `proptest` properties on every pull request
-  and 23 Hypothesis fuzz tests over arbitrary text and bytes, with 19 falsifying examples
-  pinned in committed regression corpora. That is a stronger claim than the old one, and a
-  true one.
+  report. It now names what actually runs — 166 `proptest` properties on every pull request,
+  23 Hypothesis fuzz tests over arbitrary text and bytes nightly, and 19 falsifying examples
+  pinned across 6 committed regression corpora. That is a stronger claim than the old one,
+  and unlike it, one a reader who checks will find.
 
   `THREAT_MODEL.md`'s "fuzzed and tested for no-panic and linear behavior on hostile bytes
   (#78)" needed no change: it refers to `tests/test_encoding_fuzz.py`, which runs.

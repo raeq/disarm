@@ -76,16 +76,35 @@ EXECUTED_RECIPES = [
     "user-guide/transliteration.md",
 ]
 
+#: The execute-only tier (#656). These pages' ``python`` blocks are run, and a
+#: block that raises fails the suite — but they assert nothing, so they claim
+#: nothing. That is the whole difference from the list above.
+#:
+#: The ratchet is about *assertions*, and this tier does not weaken it: a page
+#: still joins ``EXECUTED_RECIPES`` only once its examples assert. What it gets
+#: rid of is the third state, where a page had ``python`` blocks and nothing ran
+#: them at all, so a signature change broke a published example in silence.
+#:
+#: Before this list, eight pages under ``docs/`` were in that state.
+EXECUTE_ONLY_RECIPES = [
+    "api/encoding.md",
+    "api/exceptions.md",
+    "api/index.md",
+    "api/predicates.md",
+    "architecture/pipeline.md",
+    "limitations.md",
+    "migration/index.md",
+]
+
 pytest_collect_file = Sybil(
     parsers=[
         PythonCodeBlockParser(),
         SkipParser(),
     ],
-    # `Path.match` is suffix-based, so a bare "index.md" pattern also matches
-    # api/index.md and migration/index.md — exclude those (they are not on the
-    # allowlist).
-    excludes=["api/index.md", "migration/index.md"],
     setup=_reset_global_state,
     teardown=_reset_global_state,
-    patterns=EXECUTED_RECIPES,
+    # `Path.match` is suffix-based, so a bare "index.md" pattern also matches
+    # api/index.md and migration/index.md. Both are now in the execute-only tier,
+    # so that over-match is what we want rather than something to exclude.
+    patterns=EXECUTED_RECIPES + EXECUTE_ONLY_RECIPES,
 ).pytest()

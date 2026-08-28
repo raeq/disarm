@@ -466,11 +466,23 @@ Rules:
 - **Skip** a block that is intentionally not runnable (e.g. pseudo-code or a
   shell transcript mislabelled `python`) with `<!--- skip: next -->`.
 
-**Enabling a page.** A page is executed only once it is on the allowlist in
-`docs/conftest.py` (the `EXECUTED_RECIPES` list). Convert its examples to
-asserts, add the path, and confirm `pytest docs/` is green. This is a deliberate
-ratchet: un-converted pages stay visibly unguarded until their claims are
-asserted.
+**Enabling a page.** Two lists in `docs/conftest.py`, and the difference is what
+the page claims:
+
+| list | blocks run | assertions checked | use it when |
+|---|---|---|---|
+| `EXECUTED_RECIPES` | yes | yes | the examples assert their outputs |
+| `EXECUTE_ONLY_RECIPES` | yes | nothing to check | the examples only need to not raise |
+
+The ratchet is about *assertions* and is unchanged: a page joins
+`EXECUTED_RECIPES` only once its examples assert rather than decorate with `# =>`.
+What the second list removed (#656) is the third state — a page with `python`
+blocks that **nothing ran at all**, so a signature change broke a published
+example in silence. Eight pages were in it.
+
+`tests/test_doc_recipe_coverage.py` keeps that state gone: a page with a `python`
+block and no listing fails there. Add the page to a list rather than widening the
+exclusion.
 
 ### `README.md` is the source; `docs/index.md` is generated (#656)
 

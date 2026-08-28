@@ -41,18 +41,27 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DOCS = REPO_ROOT / "docs"
 
 
+#: The two lists in docs/conftest.py, in the order they should run. Both are
+#: executed the same way; the difference is what the pages claim (#656).
+_LISTS = ("EXECUTED_RECIPES", "EXECUTE_ONLY_RECIPES")
+
+
 def _load_allowlist() -> list[str]:
-    """Read EXECUTED_RECIPES from docs/conftest.py without importing it."""
+    """Read both recipe lists from docs/conftest.py without importing it."""
     import ast
 
     source = (DOCS / "conftest.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
+    found: dict[str, list[str]] = {}
     for node in tree.body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "EXECUTED_RECIPES" for t in node.targets
-        ):
-            return list(ast.literal_eval(node.value))
-    raise SystemExit("EXECUTED_RECIPES not found in docs/conftest.py")
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id in _LISTS:
+                    found[target.id] = list(ast.literal_eval(node.value))
+    missing = [name for name in _LISTS if name not in found]
+    if missing:
+        raise SystemExit(f"{', '.join(missing)} not found in docs/conftest.py")
+    return [rel for name in _LISTS for rel in found[name]]
 
 
 def _run_one(rel: str, argv: list[str]) -> tuple[str, int, str]:

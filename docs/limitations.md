@@ -270,6 +270,10 @@ A Latin acute and a Devanagari vowel sign are both general category `Mn`. In Lat
 `Mn` is decoration; in an Indic script it carries the vowel, and removing it does not
 degrade the word so much as dismantle it.
 
+<!--- invisible-code-block: python
+from disarm import canonicalize, normalize_confusables, strip_accents
+-->
+
 ```python
 strip_accents("José")    # 'Jose'   — readable, one accent lost
 strip_accents("বাংলা")    # 'বল'     — the name of the Bengali language, 5 codepoints to 2

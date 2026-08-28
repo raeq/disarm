@@ -30,6 +30,7 @@ That's 8 transitive dependencies, 4 different licenses (including GPL), and 8 di
 
 disarm replaces all of them with one import:
 
+<!--- skip: next -->
 ```python
 # Before: 8 imports
 from unidecode import unidecode

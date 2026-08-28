@@ -79,6 +79,7 @@ See [Classes → Compatibility aliases](classes.md#compatibility-aliases-awesome
 
 disarm is fully typed. A `py.typed` marker file and `.pyi` stub files are included for mypy and pyright support.
 
+<!--- skip: next -->
 ```python
 # All functions have full type annotations
 reveal_type(transliterate("test"))  # str

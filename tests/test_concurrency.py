@@ -197,10 +197,22 @@ import pytest  # noqa: E402
 from disarm import normalize, slugify, transliterate  # noqa: E402
 
 # A batch big enough that the Rust compute dominates thread/setup overhead.
-_BIG = ["Москва Αθήνα 北京 café résumé" * 20] * 40_000
+#
+# Sized down from 40_000 (21.6M characters) in #658, where these two tests were
+# 112.6s of CI's 129s Python job — 87% of it. The assertion is a *ratio*, so the
+# batch only has to be large enough that per-call overhead does not blur it.
+# Measured across sizes on a release build, the speedup is flat at ~1.8x from
+# 21.6M characters all the way down to 0.5M, against a 1.3x threshold.
+#
+# 4.3M is deliberately not the smallest that works. A smaller batch amortises
+# thread setup less well, and CI runners have fewer cores and noisier neighbours
+# than the machine this was measured on, so the margin buys robustness rather
+# than speed that is already won: 21.6M -> 4.3M and rounds 5 -> 3 takes the pair
+# from ~112s to under a second.
+_BIG = ["Москва Αθήνα 北京 café résumé" * 20] * 8_000
 
 
-def _best_of(fn, rounds: int = 5) -> float:
+def _best_of(fn, rounds: int = 3) -> float:
     best = float("inf")
     for _ in range(rounds):
         start = time.perf_counter()
@@ -209,7 +221,7 @@ def _best_of(fn, rounds: int = 5) -> float:
     return best
 
 
-def _concurrent(fn, threads: int, rounds: int = 5) -> float:
+def _concurrent(fn, threads: int, rounds: int = 3) -> float:
     best = float("inf")
     for _ in range(rounds):
         workers = [threading.Thread(target=fn) for _ in range(threads)]

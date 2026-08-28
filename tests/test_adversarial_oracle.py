@@ -45,7 +45,27 @@ from hypothesis import strategies as st
 import disarm
 
 # Dev-tier property suite: excluded from CI's fast lane, run with `pytest -m hypothesis`.
-pytestmark = pytest.mark.hypothesis
+#
+# The deprecation filter is the second half of the mark (#658). This module runs
+# every transform over every generated input, and three of them —
+# `security_clean`, `display_clean`, `normalize_user_input` — are deprecated
+# aliases that warn on each call. That produced 42,457 DeprecationWarnings on a
+# full local run: a wall of output that buried anything else in the summary,
+# including warnings worth reading.
+#
+# Filtered here rather than globally, and only these three by name. A blanket
+# `-W ignore::DeprecationWarning` would also silence deprecations from
+# dependencies, which are the ones a maintainer wants to see. The aliases are
+# exercised on purpose — they are public until 1.0, so their behaviour under
+# adversarial input is exactly as interesting as the functions they forward to.
+pytestmark = [
+    pytest.mark.hypothesis,
+    pytest.mark.filterwarnings(
+        "ignore:security_clean is deprecated:DeprecationWarning",
+        "ignore:display_clean is deprecated:DeprecationWarning",
+        "ignore:normalize_user_input is deprecated:DeprecationWarning",
+    ),
+]
 
 # --- input space ----------------------------------------------------------
 # Full Unicode scalar values incl. astral, excluding surrogates (Python str

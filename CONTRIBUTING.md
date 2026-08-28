@@ -170,13 +170,20 @@ release. Please run at least Tier 1 locally before opening a PR.
 What every PR must pass. Mirrors `.github/workflows/ci.yml`.
 
 ```bash
-# Rust unit + integration (~630 tests).
+# Rust unit + integration (~1,025 tests across 23 binaries plus 12 doctests).
 # --no-default-features disables the Python-linking extension-module feature.
 PYO3_PYTHON=$(which python3) cargo test --no-default-features
 
-# Python deterministic tests (~2,200), excluding the slow/non-deterministic tiers.
-pytest -m "not formal and not hypothesis"
+# Python deterministic tests (~4,490). This is what bare `pytest` runs: since #658
+# the default selection is CI's selection, so a green local run means the same
+# thing a green CI run does.
+pytest
 ```
+
+Counts were stale in both directions before #658 and are worth stating measured
+rather than approximated, because they are how a reader notices a tier stopped
+running. The three opt-in tiers below are excluded from the default by `addopts`
+and each is one command away.
 
 `build.rs` compile-time assertions are always on at zero runtime cost: they assert that
 every transliteration table value is ASCII, that the `tr39` digit-policy override values
@@ -204,14 +211,55 @@ regenerated header. Source-level assertions would not have caught either defect.
 `gen_confusables.py` can silently *remove* rows, and a passing suite does not prove it
 did not — that is how an over-broad filter deleted `Ç → C` during #593.
 
-### Tier 2 — Hypothesis / property-based (developer worktree)
+### Tier 2 — Hypothesis / property-based (opt-in)
 
-Property-based / fuzz tests (~440) across the Unicode input space. Excluded from CI
-because they are slow (~40s), non-deterministic, and costly.
+Property-based / fuzz tests across the Unicode input space. **587 tests, ~67s on a
+release build** — the figures here read "~440 / ~40s" until #658 measured them.
 
 ```bash
-pytest -m hypothesis      # (plain `pytest` includes these by default)
+pytest -m hypothesis
 ```
+
+Bare `pytest` used to include these, which meant a contributor paid the tier on
+every local run while no CI job ran it. `nightly-hypothesis.yml` runs it at 03:17
+UTC with `--hypothesis-seed=random` and a 10× oracle budget, which explores more
+input space than one more fixed-seed pass ever did. Run it locally when you touch
+the input-handling boundary; the nightly is the safety net.
+
+### Tier 2b — Expensive, opt-in (`slow`)
+
+```bash
+pytest -m slow
+```
+
+The `slow` marker existed, described itself as deselectable, and nothing deselected
+it (#658) — so it had no effect and everyone paid it. Both things it covers are
+gated elsewhere:
+
+- `test_cabi_header_drift` mirrors the `cabi` CI job and skips under `CI`. It costs
+  a cold `cargo` build — about 25s — on the first run after a Rust change, and it
+  appends a `[patch.crates-io]` block to `bindings/cabi/Cargo.toml` that an
+  interrupted run leaves behind.
+- `test_performance_claims`' ratio floors need the pinned comparators from the
+  `bench` extra and skip without them. They also fail against a debug
+  `maturin develop` build, which is a false alarm rather than a regression.
+
+### Running the suite in parallel
+
+`pytest-xdist` is in the `test` extra:
+
+```bash
+pytest -n 2 --dist loadfile
+```
+
+**`--dist loadfile` is not optional.** `register_lang` mutates process-global state
+that cannot be undone, so tests must stay grouped by file; per-file distribution
+preserves that and nothing failed under it.
+
+Measured after the #658 fixes, on a 10-core machine: serial 6.1s, `-n 2` 4.9s,
+`-n 4` 5.0s, `-n auto` 5.4s. `auto` is *worse* than `-n 2` — once the suite is
+short enough, worker startup dominates. CI keeps the serial command for the same
+reason: the ~1s saved does not pay for installing the plugin.
 
 ### Tier 3 — Formal / pre-release (gated, opt-in)
 

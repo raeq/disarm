@@ -199,5 +199,40 @@ jobs:
           ruby-version: "3.3"
       - name: Configure RubyGems credentials (OIDC trusted publishing)
         uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+      # A partial publish is the case this has to survive. RubyGems can accept a
+      # gem and still time the client out ("did not finish pushing"), and the
+      # step runs under `bash -e`, so the v0.14.1 release aborted mid-loop with
+      # four of five platforms live and `x86_64-linux` never attempted. Plain
+      # re-running could not repair it: the retry died on the first gem that was
+      # already published, before reaching the missing one — so the
+      # workflow_dispatch recovery path this job documents did not work in the
+      # one situation it exists for.
+      #
+      # Now a push that fails is checked against the registry rather than
+      # abandoned. Already-live is not an error; anything else still fails the
+      # job. The registry is the authority instead of the error text, which
+      # RubyGems phrases several ways.
       - name: gem push
-        run: for g in pkg/*.gem; do gem push "$g"; done
+        run: |
+          set -uo pipefail
+          failed=0
+          for g in pkg/*.gem; do
+            if gem push "$g"; then
+              continue
+            fi
+            base=$(basename "$g" .gem)              # disarm-0.14.1-x86_64-linux
+            rest=${base#disarm-}                    # 0.14.1-x86_64-linux
+            version=${rest%%-*}                     # 0.14.1
+            platform=${rest#*-}                     # x86_64-linux
+            [ "$platform" = "$version" ] && platform=ruby
+            echo "push failed for $base; asking rubygems.org whether it is already live"
+            if curl -sSf "https://rubygems.org/api/v1/versions/disarm.json" \
+                 | jq -e --arg v "$version" --arg p "$platform" \
+                     'any(.[]; .number == $v and .platform == $p)' >/dev/null; then
+              echo "  $version ($platform) is already published — continuing"
+            else
+              echo "  $version ($platform) is NOT on the registry — real failure"
+              failed=1
+            fi
+          done
+          exit $failed

@@ -487,6 +487,42 @@ Sybil on every CI run. In sync, the README's examples are asserted; out of sync,
 they are not. So a README example is written to the same standard as any other
 recipe: assert outputs, never decorate them with `# =>`.
 
+### Key-builder output is gated (#644)
+
+`search_key`, `catalog_key` and `sort_key` produce values a consumer **stores**
+and compares later, so a change to them is a reindex event on somebody's
+production data. `docs/RUST_API.md` states the contract — *a patch release never
+changes key-builder output; a minor release may* — and
+`tests/test_key_stability.py` holds it.
+
+If it fails, **read the diff before doing anything else.** It prints a
+per-function count and a sample of what moved:
+
+```
+search_key: 267 of 22878 changed (1.17%)
+    'подъезд'
+      was 'podъezd'
+      now 'podezd'
+```
+
+Then decide. If the movement is intended:
+
+```bash
+python scripts/gen_key_fixture.py     # rewrite the expected values
+```
+
+Commit the regenerated fixture **in the same change**, write it up in the
+release's *Upgrade notes*, and cut that release as a **minor**. Regenerating to
+make the test go green without reading the diff is the one use the script does
+not have.
+
+Review does not substitute for this. `0.14.0` moved `search_key` on 4.1% of a
+5,030-input corpus, and the change responsible (#602) was a correctness fix whose
+diff said nothing about keys.
+
+The corpus is not reproducible and its licence is not MIT; both are recorded in
+`tests/fixtures/key_stability/README.md`.
+
 ### Does the artifact work? (#667, #669)
 
 Every step above tests your worktree. It contains untracked files, generated

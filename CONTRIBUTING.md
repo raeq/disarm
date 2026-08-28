@@ -386,6 +386,34 @@ asserts, add the path, and confirm `pytest docs/` is green. This is a deliberate
 ratchet: un-converted pages stay visibly unguarded until their claims are
 asserted.
 
+### The docs describe `main`; the reader executes a tag (#641)
+
+Every gate above runs against the branch. The site deploys from `main` on each
+push, but `pip install disarm` gives a reader the newest **tag**. At the worst
+point those were 68 commits apart, and `docs/security/cve-validation.md` named
+five entry points that raised `AttributeError` on the release it described.
+
+Two things now cover that gap:
+
+- A `mkdocs` hook stamps every page with the commit it was built from and the
+  published version (`scripts/mkdocs_build_banner.py`). Nothing to do when
+  writing docs; it is mentioned here so nobody deletes it as decoration.
+- A weekly job resolves every `disarm` name the docs use against the newest
+  published wheel. Run it yourself against any build:
+
+  ```bash
+  python scripts/check_docs_against_release.py
+  ```
+
+  A **red run means documented API has outrun the last release** — cut one, or
+  correct the page. It is deliberately not a pull-request gate: documentation
+  ships with the feature it documents, so during that window the gap is correct
+  and a PR gate would block every feature branch.
+
+  Names it cannot fix are listed in `_KNOWN_GAPS`, each against an open issue.
+  An entry may only go in with an issue number, and the script fails if a listed
+  name starts resolving — so the list shrinks rather than accumulating.
+
 ### Per-language usage tabs (Rust & Ruby)
 
 User-guide pages show usage in `pymdownx.tabbed` tabs — `=== "Python"` /

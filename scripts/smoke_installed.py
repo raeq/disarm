@@ -60,15 +60,26 @@ def main() -> int:
         return 1
     print(f"  ok    import disarm  ({disarm.__file__})")
 
-    # Running from inside the checkout means `python` may have imported the source
-    # tree rather than the installed package, and every check below would pass
-    # without an install existing at all.
-    here = Path.cwd().resolve()
+    # A source tree reachable on sys.path — through the working directory, or
+    # through PYTHONPATH, or through anything else — shadows the installed
+    # package, and every check below would then pass without an install existing.
+    #
+    # Anchored on *this script's* location rather than the working directory.
+    # A cwd-based check passes whenever cwd is outside the repository, which is
+    # exactly how CI invokes it, so PYTHONPATH pointing at the checkout would
+    # have walked straight through.
+    checkout = Path(__file__).resolve().parent.parent
     module = Path(disarm.__file__).resolve()
     check(
-        "imported from an installed location, not the checkout",
-        "site-packages" in module.parts or here not in module.parents,
-        f"imported {module} while cwd is {here}; run this from outside the source tree",
+        "not imported from the checkout",
+        checkout not in module.parents,
+        f"imported {module}, which is inside {checkout} — a source tree is "
+        "shadowing the installed package, so nothing below tests an install",
+    )
+    check(
+        "imported from an installed location",
+        any(part in {"site-packages", "dist-packages"} for part in module.parts),
+        f"imported {module}, which is not in site-packages or dist-packages",
     )
 
     # --- the version ---------------------------------------------------------
@@ -136,7 +147,7 @@ def main() -> int:
         for failure in FAILURES:
             print(f"  - {failure}")
         return 1
-    print(f"all {len(surfaces) + 4} checks passed against disarm {version}")
+    print(f"all {len(surfaces) + 5} checks passed against disarm {version}")
     return 0
 
 

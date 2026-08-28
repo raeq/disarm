@@ -64,15 +64,19 @@ def test_it_imports_disarm_lazily() -> None:
     function, where it can be caught.
     """
     tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
-    module_level = {
-        alias.name.split(".")[0]
-        for node in tree.body
-        if isinstance(node, ast.Import)
-        for alias in node.names
-    }
+    module_level: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            module_level |= {alias.name.split(".")[0] for alias in node.names}
+        # `from disarm import canonicalize` binds at module level too, and
+        # scanning only ast.Import would miss it — the same failure one keyword
+        # away.
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            module_level.add(node.module.split(".")[0])
     assert "disarm" not in module_level, (
-        "`import disarm` at module level makes a missing install a bare traceback "
-        "instead of the script's own reported failure"
+        "importing disarm at module level — with `import` or `from … import` — "
+        "makes a missing install a bare traceback instead of the script's own "
+        "reported failure"
     )
 
 

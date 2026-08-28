@@ -72,13 +72,23 @@ jobs:
           echo "exported $(find "$RUNNER_TEMP/tracked" -type f | wc -l) tracked files"
 
       - name: Install it the way a person cloning main would
-        run: pip install "$RUNNER_TEMP/tracked"
+        # Into a virtualenv holding nothing else, not the runner's global
+        # environment. The runner image ships a long list of preinstalled
+        # packages, any of which would satisfy a dependency this project failed
+        # to declare — which is one of the two failures this workflow exists to
+        # catch, so installing where they are present would hide it.
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --upgrade pip
+          "$RUNNER_TEMP/venv/bin/pip" install "$RUNNER_TEMP/tracked"
+          "$RUNNER_TEMP/venv/bin/pip" list
 
       - name: Import and exercise it, from outside the checkout
-        # cd out of both the checkout and the export, so neither `python/disarm`
-        # can shadow the installed package.
+        # cd out of both the checkout and the export. The script also anchors its
+        # own shadowing check on its location rather than on the cwd, so this is
+        # belt and braces rather than the whole guard.
         working-directory: ${{ runner.temp }}
-        run: python "$GITHUB_WORKSPACE/scripts/smoke_installed.py"
+        run: "$RUNNER_TEMP/venv/bin/python $GITHUB_WORKSPACE/scripts/smoke_installed.py"
 
   artifacts:
     name: ${{ matrix.artifact }} installs and imports

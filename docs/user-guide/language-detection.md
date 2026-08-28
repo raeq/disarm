@@ -398,6 +398,7 @@ from disarm import (
 
 # Functions
 transliterate("Київ", lang="auto")
+slugify("Київ", lang="auto")
 catalog_key("Москва", lang="auto")
 search_key("Straße", lang="auto")
 sort_key("Війна і мир", lang="auto")

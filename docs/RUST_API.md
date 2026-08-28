@@ -76,7 +76,10 @@ romanization standards), the confusable/security functions —
 `normalize_confusables`, `strip_obfuscation`, `is_suspicious_hostname`, and the
 `canonicalize*` presets — **and the three key builders `search_key`,
 `catalog_key` and `sort_key`** all change behavior when the bundled Unicode /
-TR39 tables are updated, with no signature touched. For example, #336 extended
+TR39 tables are updated, with no signature touched. *When* they are allowed to
+change differs: everything named here may move in any release, except the three
+key builders, which are confined to minor releases by the contract in the next
+section. For example, #336 extended
 `normalize_confusables` with cross-script pairs absent from upstream TR39 17.0,
 which changes what a deployed filter chain catches. Such changes are documented
 in the changelog but are **not** treated as semver-breaking. **Pin a version if
@@ -124,8 +127,9 @@ the reason the rule has to be written down rather than inferred.
 
 ### The rate understates it, because the characters are common
 
-`0.13.0` → `0.14.0` reads as 1.2% of code points. At word level it is most of a
-Cyrillic index, because the Russian soft and hard signs are in the changed set:
+`0.13.0` → `0.14.0` reads as 1.2% of the 12,285 probes. At word level it is most
+of a Cyrillic index, because the Russian soft and hard signs are in the changed
+set:
 
 | word | `search_key` on `0.13.0` | on `0.14.0` |
 | --- | --- | --- |

@@ -232,12 +232,20 @@ jobs:
         # (0.06 + 0.32 + 0.24). In release they take 0.07s but need a whole second
         # build profile, which costs far more than the 0.55s it saves.
         #
+        # One invocation with three `--test` flags rather than three invocations:
+        # each `cargo test` repeats metadata resolution before running anything,
+        # and #658 measured that dispatch at roughly 10s of `cargo test`'s 21.7s
+        # warm wall across 23 process starts. Measured here, 0.70s -> 0.60s warm,
+        # and the gap is wider on a cold runner.
+        #
         # `exhaustive_confusables` stays in tier3.yml: 1.14s even in release, and
         # unlike these three it needs the release profile to stay that quick.
         run: |
-          cargo test --no-default-features --test exhaustive_transliterate -- --ignored
-          cargo test --no-default-features --test exhaustive_grapheme -- --ignored
-          cargo test --no-default-features --test width_conformance -- --ignored
+          cargo test --no-default-features \
+            --test exhaustive_transliterate \
+            --test exhaustive_grapheme \
+            --test width_conformance \
+            -- --ignored
 
       - name: Install maturin
         run: pip install maturin[patchelf]

@@ -431,6 +431,25 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   the CVE page cannot be followed there as written — and the parity matrix does not track
   the JVM at all, which is why nothing had noticed.
 
+- **Four doc sites told readers to import a name the package does not export (#660).**
+  `LANG_AUTO` is defined in `disarm._enums` and is the one `LANG_*` value of 84 that
+  `disarm/__init__.py` never re-exports, so `from disarm import LANG_AUTO` raises
+  `ImportError` on every released version. One of the pages framed it as the *type-safe*
+  option, which is the opposite of what it is.
+
+  The pages now pass `lang="auto"`, which works and which the same pages already showed
+  alongside it, and each says why the constant is absent. Exporting a name is a new
+  capability, and no other binding has an equivalent, so the export itself waits for a
+  minor release — #660 stays open for it with the lockstep constraint recorded.
+
+  Two of the blocks carried `<!--- skip: next -->`, which is why nothing caught this. Both
+  now run under Sybil, verified by planting an assertion failure and watching it fail.
+
+  With this the drift gate's allowlist is **empty**: every `disarm` name the documentation
+  uses resolves on the published wheel, with no exceptions carried. The two original
+  entries left the way the ratchet intends — one with the page that documented it (#655),
+  one when the pages stopped making the claim.
+
 ## [0.14.0] — 2026-08-28
 
 ### Upgrade notes

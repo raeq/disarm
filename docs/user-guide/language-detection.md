@@ -390,11 +390,10 @@ transliterate("Софія", lang="auto")  # Defaults to Russian (no Bulgarian di
 
 `lang="auto"` works with all disarm entry points:
 
-<!--- skip: next -->
 ```python
 from disarm import (
     transliterate, slugify, catalog_key, search_key, sort_key,
-    TextPipeline, Slugifier, Text, LANG_AUTO,
+    TextPipeline, Slugifier, Text,
 )
 
 # Functions
@@ -409,9 +408,6 @@ slug = Slugifier(lang="auto")
 
 # Text builder
 Text("Київ").transliterate(lang="auto").value
-
-# Type-safe constant
-transliterate("Москва", lang=LANG_AUTO)
 ```
 
 ---

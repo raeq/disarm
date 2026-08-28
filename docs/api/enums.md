@@ -239,7 +239,9 @@ from disarm import LANG_DE, LANG_FR, LANG_ES  # etc.
 
 ### Auto-detection
 
-`LANG_AUTO` — pass as `lang="auto"` to auto-detect the language from the dominant non-Latin script in the input text. See [Language Support](../user-guide/language-support.md#auto-detecting-language-from-script) for the full script-to-language mapping.
+Pass `lang="auto"` to auto-detect the language from the dominant non-Latin script in the input text. See [Language Support](../user-guide/language-support.md#auto-detecting-language-from-script) for the full script-to-language mapping.
+
+There is no importable `LANG_AUTO` constant. It exists in `disarm._enums` and is the one `LANG_*` value of 84 the package does not re-export, so `from disarm import LANG_AUTO` raises `ImportError` — see [#660](https://github.com/raeq/disarm/issues/660).
 
 ## Introspection
 

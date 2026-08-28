@@ -269,9 +269,8 @@ Reverse transliteration uses greedy longest-match scanning to handle digraphs an
 
 When you don't know the language of the input text, pass `lang="auto"` to automatically detect the dominant non-Latin script and select the appropriate language profile:
 
-<!--- skip: next -->
 ```python
-from disarm import transliterate, slugify, LANG_AUTO
+from disarm import transliterate, slugify
 
 # Detects Cyrillic → uses Russian ("ru") profile
 transliterate("Москва", lang="auto")         # "Moskva"
@@ -371,14 +370,17 @@ assert transliterate("Москва", lang="auto") == 'Moskva'
 
 For scripts that remain ambiguous after discrimination (Devanagari, Han), pass an explicit language code when accuracy matters.
 
-!!! tip
-    Use the `LANG_AUTO` constant for type safety:
+!!! note "There is no importable `LANG_AUTO` constant"
+    `LANG_AUTO` exists in `disarm._enums` and is the one `LANG_*` value of 84 that
+    the package does not re-export, so `from disarm import LANG_AUTO` raises
+    `ImportError` on every released version. Pass the string:
 
-<!--- skip: next -->
-```python
-from disarm import LANG_AUTO, transliterate
-transliterate("Москва", lang=LANG_AUTO)
-```
+    ```python
+    transliterate("Москва", lang="auto")
+    ```
+
+    Tracked in [#660](https://github.com/raeq/disarm/issues/660). Exporting a name
+    is a new capability, so the fix is a minor release rather than a patch.
 
 ## Using language profiles
 

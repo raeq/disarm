@@ -1,6 +1,6 @@
 """Precompiled pipeline presets and named policy profiles.
 
-These compose the public transforms in :mod:`disarm._api` (and the Rust
+These compose the public transforms in `_api` (and the Rust
 backend) into ready-made canonicalization pipelines.  Re-exported from the
 ``disarm`` package root.
 """
@@ -36,6 +36,9 @@ from disarm._boundary import (
 def canonicalize(text: str) -> str:
     """Canonicalize text for security-sensitive comparison.
 
+    For **cleaning untrusted input before comparison**, this is the entry point.
+    It does not make text safe to emit; encode at the sink.
+
     Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
     strip_control → strip_zero_width → collapse_whitespace → cap combining marks
     (anti-zalgo, #429) → NFC → confusables → NFC (the confusable fold is
@@ -51,16 +54,16 @@ def canonicalize(text: str) -> str:
     becomes ``l``, Hebrew yod becomes ``'``, and ``Ελληνικά`` comes back as
     ``Eλλnvikά``. It also removes ``U+200C``, which Persian orthography requires.
     Nothing flags this first, because ordinary Persian is not an anomaly. Use it on
-    usernames, hostnames, filenames and log lines; see :doc:`Limitations </limitations>`
+    usernames, hostnames, filenames and log lines; see `Limitations` (docs/limitations.md)
     before pointing it at a sentence.
 
-    .. warning::
-       Canonicalizes Unicode for *comparison*; it is **not** an output
-       sanitizer and provides no XSS/HTML/SQL/injection protection. The NFKC
-       step maps fullwidth lookalikes to live ASCII metacharacters by design
-       (``＜`` → ``<``), so the output may be *more* important to context-encode
-       on the way out, not less. Encode at the sink; never emit this result
-       into markup or a query unescaped.
+    Warning:
+        Canonicalizes Unicode for *comparison*; it is **not** an output
+        sanitizer and provides no XSS/HTML/SQL/injection protection. The NFKC
+        step maps fullwidth lookalikes to live ASCII metacharacters by design
+        (``＜`` → ``<``), so the output may be *more* important to context-encode
+        on the way out, not less. Encode at the sink; never emit this result
+        into markup or a query unescaped.
 
     Args:
         text: Input string (user-submitted, network-received, etc.).
@@ -78,11 +81,11 @@ def canonicalize(text: str) -> str:
 
 
 def security_clean(text: str) -> str:
-    """Deprecated alias for :func:`canonicalize`.
+    """Deprecated alias for `canonicalize`.
 
-    .. deprecated:: 0.11.0
-       The ``*_clean`` name overpromised safety (see ``THREAT_MODEL.md``). Use
-       :func:`canonicalize`. This alias is removed in 1.0.
+    Deprecated:
+        Since 0.11.0. The ``*_clean`` name overpromised safety (see ``THREAT_MODEL.md``). Use
+        `canonicalize`. This alias is removed in 1.0.
     """
     warnings.warn(
         "security_clean is deprecated; use canonicalize (removed in 1.0)",
@@ -110,13 +113,22 @@ def ml_normalize(
     Case folding is on by default. Turn it off for a **cased** downstream model:
     folding is destructive and cannot be undone later in the chain, and an uncased
     evaluation harness cannot measure what it costs. This is the one preset where
-    folding is a side effect rather than the point — :func:`catalog_key`,
-    :func:`search_key`, and :func:`sort_key` fold because a key has to collide, so
+    folding is a side effect rather than the point — `catalog_key`,
+    `search_key`, and `sort_key` fold because a key has to collide, so
     they have no such switch.
 
     ``fold_case=False`` does not mean "preserve the input untouched": *strip_accents*
     still runs, so ``José`` becomes ``Jose`` with the capital kept. Use
-    :func:`normalize_confusables` when diacritics must survive as well.
+    `normalize_confusables` when diacritics must survive as well.
+
+    Warning:
+        **Not a security preset.** It assumes trusted input, and the name
+        describes a use case rather than an operation, which is the one way to
+        pick it by mistake. Bidi controls, private-use characters and homoglyphs
+        all pass straight through: a right-to-left override survives, and
+        Cyrillic ``аpple`` does not fold onto ``apple``. For anything
+        user-supplied reach for `canonicalize`, or
+        ``get_pipeline("llm_guardrail")`` when the text is headed for a model.
 
     Args:
         text: Input Unicode string.
@@ -159,6 +171,15 @@ def catalog_key(
 
     Produces a canonical deduplication key for bibliographic titles.
 
+    Warning:
+        **The confusable fold runs after transliteration, so it rarely sees a
+        homoglyph.** Cyrillic and Greek lookalikes do collide with their Latin
+        spellings, but through romanization rather than the fold. Anything that
+        romanizes to something other than its lookalike is consumed before the
+        fold can act: Cherokee ``Ꮃ`` *looks* like ``W`` and romanizes to ``la``,
+        so ``Ꮃorld`` keys as ``laorld``. Private-use characters survive into the
+        key. This builds a key; screen adversarial input separately.
+
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
         minor upgrade may, and is a possible reindex event (#644). Read the
@@ -197,11 +218,11 @@ def strip_format(text: str) -> str:
     malicious content), soft hyphens, control characters, and zero-width
     injections, then collapses runs of whitespace to single spaces.
 
-    .. warning::
-       "Display-safe" means *visual* hygiene (no bidi reordering, no invisible
-       injections) — **not** markup-safe. This does no HTML escaping and does
-       not strip ``<``, ``>``, ``&``. When rendering into HTML, still escape at
-       the template/output layer; disarm is not an XSS defense.
+    Warning:
+        "Display-safe" means *visual* hygiene (no bidi reordering, no invisible
+        injections) — **not** markup-safe. This does no HTML escaping and does
+        not strip ``<``, ``>``, ``&``. When rendering into HTML, still escape at
+        the template/output layer; disarm is not an XSS defense.
 
     Args:
         text: Input string (user-submitted content).
@@ -220,11 +241,11 @@ def strip_format(text: str) -> str:
 
 
 def display_clean(text: str) -> str:
-    """Deprecated alias for :func:`strip_format`.
+    """Deprecated alias for `strip_format`.
 
-    .. deprecated:: 0.11.0
-       ``display_clean`` implied markup-safety it does not provide (see
-       ``THREAT_MODEL.md``). Use :func:`strip_format`. Removed in 1.0.
+    Deprecated:
+        Since 0.11.0. ``display_clean`` implied markup-safety it does not provide (see
+        ``THREAT_MODEL.md``). Use `strip_format`. Removed in 1.0.
     """
     warnings.warn(
         "display_clean is deprecated; use strip_format (removed in 1.0)",
@@ -245,8 +266,19 @@ def search_key(
               collapse_whitespace
 
     Produces a case-insensitive, accent-insensitive, script-insensitive
-    lookup key.  Like :func:`catalog_key` but without confusable
+    lookup key.  Like `catalog_key` but without confusable
     normalization — lighter and faster for search indexes.
+
+    Warning:
+        **Homoglyph collisions here are a side effect of transliteration, not a
+        confusable fold.** There is no confusables step in this pipeline.
+        Cyrillic ``аpple`` and Greek ``gοogle`` do collide with their Latin
+        spellings, because those letters romanize to ``a`` and ``o`` — but a
+        lookalike that romanizes to something else does not. Cherokee ``Ꮃ``
+        *looks* like ``W`` and romanizes to ``la``, so ``Ꮃorld`` keys as
+        ``laorld`` and never meets ``world``. Private-use characters survive into
+        the key unchanged. This builds a key; screen adversarial input separately
+        with `is_confusable` or `has_anomalies`.
 
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
@@ -283,13 +315,13 @@ def sort_key(
     Pipeline: NFKC → strip_bidi → fold_case → transliterate-non-Latin →
     fold_case → collapse_whitespace
 
-    A case-insensitive collation key that, unlike :func:`search_key`,
+    A case-insensitive collation key that, unlike `search_key`,
     **preserves base accented characters** rather than folding them away.
     It keeps the accent so accented and unaccented forms stay distinct
     (``"Über"`` folds to ``"über"``, not ``"uber"``) and the accent survives
     for a locale-aware collator. Non-Latin scripts are still folded to a
     consistent Latin form (``"Война"`` → ``"voyna"``) so cross-script titles
-    interfile. This is the collation counterpart to :func:`search_key`, which
+    interfile. This is the collation counterpart to `search_key`, which
     folds accents away for exact-match lookup — the two are deliberately *not*
     interchangeable for accented Latin input.
 
@@ -303,6 +335,13 @@ def sort_key(
     transliteration of non-Latin runs; an accented Latin letter is never expanded
     by a language profile here (e.g. ``sort_key("Über", lang="de")`` is
     ``"über"``, whereas ``search_key("Über", lang="de")`` is ``"ueber"``).
+
+    Warning:
+        **No confusable fold.** As with `search_key`, any homoglyph
+        collision is a side effect of transliteration: Cherokee ``Ꮃ`` romanizes
+        to ``la`` rather than folding onto the ``W`` it resembles, and
+        private-use characters survive into the key. This produces a collation
+        key, not a screen.
 
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
@@ -408,22 +447,22 @@ def strip_pua(text: str) -> str:
 def canonicalize_strict(text: str) -> str:
     """Strict Unicode canonicalization of user input — **not** an injection defense.
 
-    .. warning::
-       This normalizes Unicode; it does **not** make text safe to emit into
-       HTML, JS, URLs, SQL, or shells. It performs no escaping and does not
-       strip ``<``, ``>``, ``&`` — ``<script>alert(1)</script>`` passes through
-       unchanged, and the NFKC step can *surface* ASCII metacharacters from
-       fullwidth lookalikes (``＜script＞`` → ``<script>``). This is **not** XSS
-       or injection protection: encode at the output sink (framework
-       auto-escaping, DOMPurify, parameterized queries). Run this *before* that
-       encoder, never instead of it. The name predates this clarification.
+    Warning:
+        This normalizes Unicode; it does **not** make text safe to emit into
+        HTML, JS, URLs, SQL, or shells. It performs no escaping and does not
+        strip ``<``, ``>``, ``&`` — ``<script>alert(1)</script>`` passes through
+        unchanged, and the NFKC step can *surface* ASCII metacharacters from
+        fullwidth lookalikes (``＜script＞`` → ``<script>``). This is **not** XSS
+        or injection protection: encode at the output sink (framework
+        auto-escaping, DOMPurify, parameterized queries). Run this *before* that
+        encoder, never instead of it. The name predates this clarification.
 
     **Scoped to identifiers, not body text** (#624). The confusable fold runs toward
     Latin, so it rewrites non-Latin text that has a Latin lookalike — Arabic alef
     becomes ``l``, Hebrew yod becomes ``'``, and ``Ελληνικά`` comes back as
     ``Eλλnvikά``. It also removes ``U+200C``, which Persian orthography requires.
     Nothing flags this first, because ordinary Persian is not an anomaly. Use it on
-    usernames, hostnames, filenames and log lines; see :doc:`Limitations </limitations>`
+    usernames, hostnames, filenames and log lines; see `Limitations` (docs/limitations.md)
     before pointing it at a sentence.
 
     Preserves the original script (no transliteration) while neutralizing
@@ -455,11 +494,11 @@ def canonicalize_strict(text: str) -> str:
 
 
 def normalize_user_input(text: str) -> str:
-    """Deprecated alias for :func:`canonicalize_strict`.
+    """Deprecated alias for `canonicalize_strict`.
 
-    .. deprecated:: 0.11.0
-       The old name predated the canonicalize/sanitize distinction in
-       ``THREAT_MODEL.md``. Use :func:`canonicalize_strict`. Removed in 1.0.
+    Deprecated:
+        Since 0.11.0. The old name predated the canonicalize/sanitize distinction in
+        ``THREAT_MODEL.md``. Use `canonicalize_strict`. Removed in 1.0.
     """
     warnings.warn(
         "normalize_user_input is deprecated; use canonicalize_strict (removed in 1.0)",
@@ -476,9 +515,12 @@ def strip_obfuscation(text: str) -> str:
     injection, and bidi attacks. Uses TR39 confusable mapping (visual
     similarity) — Cyrillic р→p, с→c, В→B — not phonetic transliteration.
 
-    **Not an output sanitizer.** Resolves *Unicode* obfuscation only; performs
-    no HTML/JS/SQL escaping and does not strip ``<``, ``>``, ``&``. Encode at
-    the output sink — this is not XSS or injection protection.
+    Warning:
+        **Not an output sanitizer.** Resolves *Unicode* obfuscation only; performs
+        no HTML/JS/SQL escaping and does not strip ``<``, ``>``, ``&``. The NFKC
+        step folds fullwidth ``＜`` to a live ``<``, so the output can be *more*
+        important to encode than the input. Encode at the output sink — this is
+        not XSS or injection protection.
 
     **Does not transliterate.** Non-Latin scripts that have no Latin
     confusable equivalent pass through unchanged. Chain with
@@ -495,7 +537,7 @@ def strip_obfuscation(text: str) -> str:
     becomes ``l``, Hebrew yod becomes ``'``, and ``Ελληνικά`` comes back as
     ``Eλλnvikά``. It also removes ``U+200C``, which Persian orthography requires.
     Nothing flags this first, because ordinary Persian is not an anomaly. Use it on
-    usernames, hostnames, filenames and log lines; see :doc:`Limitations </limitations>`
+    usernames, hostnames, filenames and log lines; see `Limitations` (docs/limitations.md)
     before pointing it at a sentence.
 
     **Preserves case.** Case is not deception — proper nouns, acronyms,
@@ -561,7 +603,7 @@ def strip_zalgo(text: str, *, max_marks: int = 2) -> str:
         text: Input string (may contain zalgo abuse).
         max_marks: Maximum combining marks to keep per base character
             (default: ``2``).  Set to ``0`` to strip all combining marks
-            (equivalent to :func:`strip_accents`).
+            (equivalent to `strip_accents`).
 
     Returns:
         String with excess combining marks removed.
@@ -750,12 +792,12 @@ other:
   ``ml_normalize``, ``canonicalize_strict`` … helpers. Defined in the Rust core
   (``src/presets.rs``); this dict is a hand-maintained **mirror** of those step
   lists for introspection, and nothing executes it.
-* Policy *profiles* (see :func:`list_profiles` / :func:`get_pipeline`) —
+* Policy *profiles* (see `list_profiles` / `get_pipeline`) —
   parameter sets for transliteration workflows (e.g.
   ``scholarly_cyrillic_iso9``). Defined in the Rust core (``src/pipeline.rs``).
 
 A name from one registry is **not** valid in the other: pass profile names to
-:func:`get_pipeline`, and use the keys here to look up preset step lists.
+`get_pipeline`, and use the keys here to look up preset step lists.
 
 The deprecated preset names (``security_clean``, ``display_clean``,
 ``normalize_user_input``) remain valid keys through the 0.11 deprecation cycle
@@ -783,15 +825,15 @@ def get_pipeline(profile: str) -> TextPipeline:
     and application workflows.  Each call returns a fresh ``TextPipeline``
     instance.
 
-    .. note::
-       A *profile* name is not a :data:`PRESETS` key, and the two sets are
-       disjoint — ``get_pipeline("canonicalize")`` raises. :data:`PRESETS` holds
-       the step recipes behind the top-level functions (``canonicalize``,
-       ``search_key``, …); profiles are ready-made policy pipelines named for a
-       workflow. Call :func:`list_profiles` for the valid values here.
+    Note:
+        A *profile* name is not a `PRESETS` key, and the two sets are
+        disjoint — ``get_pipeline("canonicalize")`` raises. `PRESETS` holds
+        the step recipes behind the top-level functions (``canonicalize``,
+        ``search_key``, …); profiles are ready-made policy pipelines named for a
+        workflow. Call `list_profiles` for the valid values here.
 
     Args:
-        profile: Profile name (see :func:`list_profiles`).
+        profile: Profile name (see `list_profiles`).
 
     Returns:
         A configured ``TextPipeline``.
@@ -810,13 +852,13 @@ def get_pipeline(profile: str) -> TextPipeline:
 def list_profiles() -> list[str]:
     """Return sorted names of available policy *profiles*.
 
-    Policy profiles (consumed by :func:`get_pipeline`) are distinct from the
-    *preset* pipelines in :data:`PRESETS`: profiles are transliteration
+    Policy profiles (consumed by `get_pipeline`) are distinct from the
+    *preset* pipelines in `PRESETS`: profiles are transliteration
     parameter sets, whereas presets are the fixed cleaning step-lists behind the
     top-level functions. A profile name is not a valid preset name and vice
     versa.
 
-    Both are defined in the Rust core. :data:`PRESETS` is a hand-maintained
+    Both are defined in the Rust core. `PRESETS` is a hand-maintained
     Python *mirror* of those step lists for introspection — nothing executes it,
     so treat it as documentation of what Rust runs rather than as the source of
     truth.

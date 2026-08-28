@@ -211,7 +211,7 @@ def _transliterate_dispatch(
     by sound/standard (Cyrillic ``р`` → ``r``, BGN/PCGN by default), so it will
     *not* reverse a homoglyph spoof — it leaves a look-alike substitution
     readable. To fold visual look-alikes for homoglyph defense (Cyrillic
-    ``р`` → ``p``), use :func:`normalize_confusables` or :func:`strip_obfuscation`
+    ``р`` → ``p``), use `normalize_confusables` or `strip_obfuscation`
     instead.
 
     Accepts a single string or a list of strings. When a list is passed,
@@ -230,7 +230,7 @@ def _transliterate_dispatch(
               None uses best-effort default tables.
         target: Target language code for *reverse* transliteration
                 (romanized Latin → native script). Mutually exclusive with
-                *lang*. Use :func:`reverse_langs` to list supported languages.
+                *lang*. Use `reverse_langs` to list supported languages.
         errors: How to handle untransliterable characters.
                 "replace" — substitute with *replace_with*.
                 "ignore" — silently drop.
@@ -238,7 +238,7 @@ def _transliterate_dispatch(
                 "strict" — raise ``DisarmError`` on the first untranslatable
                 character, reporting it and its byte offset (#184). Forward-only:
                 not supported with ``context=True`` or ``target=...``. Use
-                :func:`find_untranslatable` to get *all* of them without raising.
+                `find_untranslatable` to get *all* of them without raising.
         replace_with: Replacement string when errors="replace". An empty string
                       (``""``) is equivalent to ``errors="ignore"`` — the
                       character is silently dropped. This matches the behaviour
@@ -404,17 +404,17 @@ def find_untranslatable(
     """Find every character in *text* that has no transliteration (#184).
 
     Returns a list of ``(character, byte_offset)`` pairs, in order of
-    appearance — the exact set that :func:`transliterate` would replace, drop,
+    appearance — the exact set that `transliterate` would replace, drop,
     or preserve (and that ``errors="strict"`` raises on the first of). Pure-ASCII
     input, or input that fully transliterates, returns an empty list.
 
-    Global :func:`register_replacements` are applied first (so a replaced
+    Global `register_replacements` are applied first (so a replaced
     character is not reported), so the offsets are relative to the
     post-replacement text.
 
     Args:
         text: Input Unicode string.
-        lang: Language code (same meaning as in :func:`transliterate`).
+        lang: Language code (same meaning as in `transliterate`).
         strict_iso9: Use the scholarly ASCII Cyrillic table.
         gost7034: Use GOST R 7.0.34 transliteration.
         tones: Consider toned-pinyin coverage for CJK characters.
@@ -553,7 +553,7 @@ def slugify(
         lowercase: Convert to lowercase.
         max_length: Maximum slug length in bytes (0 = unlimited).
             With ``allow_unicode=True``, multi-byte characters count as
-            2–4 bytes each — use :func:`grapheme_truncate` for
+            2–4 bytes each — use `grapheme_truncate` for
             character-aware limiting.
         word_boundary: When truncating via max_length, cut at word boundaries.
         save_order: When ``True``, only leading and trailing stopwords are
@@ -723,6 +723,15 @@ def normalize_confusables(
     equivalent in the target script pass through unchanged (visual mapping
     only, not transliteration).
 
+    Warning:
+        **Folds confusables and nothing else.** Bidi controls, zero-width
+        characters, control characters and private-use characters all pass
+        through untouched — a right-to-left override goes in and comes back out.
+        This is the first thing an API search for *homoglyph* finds, so it is
+        worth saying plainly: it is one transform, not a screen. Use
+        `canonicalize` or `strip_obfuscation` when the input is
+        untrusted rather than merely mixed-script.
+
     Args:
         text: Input string potentially containing homoglyphs.
         target_script: Script to normalize toward. Supported values:
@@ -860,7 +869,7 @@ def strip_accents(text: str | list[str]) -> str | list[str]:
     it carries the vowel. ``José`` → ``Jose`` is readable; ``বাংলা`` → ``বল`` is not
     a word. Use this for identifiers, filenames and search keys; not for body text
     in Devanagari, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati or Khmer.
-    See :doc:`Limitations </limitations>`.
+    See `Limitations` (docs/limitations.md).
 
     Args:
         text: Input string, or list of strings for batch processing.
@@ -884,7 +893,7 @@ def strip_accents(text: str | list[str]) -> str | list[str]:
     return _strip_accents(text)
 
 
-#: Alias for :func:`strip_accents` — common name in sklearn and ML ecosystems.
+#: Alias for `strip_accents` — common name in sklearn and ML ecosystems.
 remove_accents = strip_accents
 
 
@@ -926,7 +935,7 @@ def fold_case(text: str) -> str:
     return _fold_case(text)
 
 
-#: Alias for :func:`fold_case` — matches ``str.casefold()`` naming for drop-in use.
+#: Alias for `fold_case` — matches ``str.casefold()`` naming for drop-in use.
 casefold = fold_case
 
 
@@ -943,9 +952,9 @@ def is_case_fold_stable(text: str) -> bool:
 
     **This is a fact about the string, not an accusation.**  ``groß`` is an
     ordinary German word, so a ``False`` here is not a report of an attack and
-    the predicate is deliberately kept out of :func:`has_anomalies`.  What to do
+    the predicate is deliberately kept out of `has_anomalies`.  What to do
     about it is the caller's decision: reserve both forms, reject the name, or
-    key the table on :func:`fold_case` rather than ``str.lower()``.
+    key the table on `fold_case` rather than ``str.lower()``.
 
     ``str.lower()`` is the correct comparison basis and ``str.casefold()`` is
     not: casefolding performs the very transform under test, so a predicate
@@ -986,7 +995,7 @@ def collapse_whitespace(text: str) -> str:
     information separators (U+001C–U+001F), NEL, the ``Zs``/``Zl``/``Zp`` spaces,
     and the blank-rendering set (Braille blank, the Hangul fillers) each fold to a
     single space. It does **not** delete control or zero-width characters — for
-    that, call :func:`strip_control_chars` / :func:`strip_zero_width_chars`, or
+    that, call `strip_control_chars` / `strip_zero_width_chars`, or
     use a preset that sequences them ahead of the fold (``canonicalize`` and
     ``canonicalize_strict`` both do).
 
@@ -1017,12 +1026,12 @@ def strip_control_chars(text: str) -> str:
     """Remove control characters that are **not** whitespace (#433).
 
     Deletes every C0/C1 control (NUL, BEL, ESC, DEL, the C1 block) *except* the
-    ones :func:`collapse_whitespace` folds — TAB, LF, VT, FF, CR, the information
+    ones `collapse_whitespace` folds — TAB, LF, VT, FF, CR, the information
     separators ``U+001C``–``U+001F``, and NEL. Those are preserved here so the
     fold can turn them into a space; deleting them would join the tokens either
     side, which is the invisible-join hazard the split exists to avoid.
 
-    Pair it with :func:`collapse_whitespace` when you want both, in that order.
+    Pair it with `collapse_whitespace` when you want both, in that order.
 
     Args:
         text: Input string.
@@ -1094,7 +1103,7 @@ def demojize(
                 "ignore" — silently drop.
                 "preserve" — keep the original emoji.
         replace_with: Replacement string when errors="replace".
-        provider: An object implementing the :class:`EmojiProvider` protocol.
+        provider: An object implementing the `EmojiProvider` protocol.
             Overrides the global provider for this call.
             None uses the global provider or the built-in default.
         delimiters: ``emoji`` library compatibility — ignored, with a
@@ -1139,11 +1148,11 @@ def demojize(
 def set_emoji_provider(provider: EmojiProvider | None = None) -> None:
     """Set a global emoji provider for all demojize calls.
 
-    The provider must implement the :class:`EmojiProvider` protocol.
+    The provider must implement the `EmojiProvider` protocol.
 
     Pass None to reset to the built-in default (latest English CLDR).
 
-    .. note::
+    Note:
         **Sequence-length cap (#199).** The provider's ``lookup()`` is offered a
         look-ahead window of at most **9 codepoints** — the length of the longest
         built-in CLDR emoji sequence. A provider cannot match a sequence longer
@@ -1155,7 +1164,7 @@ def set_emoji_provider(provider: EmojiProvider | None = None) -> None:
         separately and do not count toward the 9.
 
     Args:
-        provider: An object implementing the :class:`EmojiProvider` protocol,
+        provider: An object implementing the `EmojiProvider` protocol,
             or None to reset to the built-in default.
 
     Examples:
@@ -1277,7 +1286,7 @@ def terminal_width(text: str, *, ambiguous_wide: bool = False) -> int:
 
 
 def grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int:
-    """Column width of a single grapheme cluster (see :func:`terminal_width`).
+    """Column width of a single grapheme cluster (see `terminal_width`).
 
     Pass a single grapheme cluster. The width is that of the **first scalar**
     (the base): 0 for a combining/zero-width base, 2 for a wide or
@@ -1291,7 +1300,7 @@ def grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int:
     more than the leading cluster, the extra scalars are *not* added to the
     width — but they are not blindly discarded either: a trailing presentation
     selector or keycap anywhere in the argument still affects the result per the
-    rule above. For arbitrary (multi-cluster) strings use :func:`terminal_width`.
+    rule above. For arbitrary (multi-cluster) strings use `terminal_width`.
 
     Args:
         cluster: A single grapheme cluster.
@@ -1399,7 +1408,7 @@ def is_suspicious_hostname(
             and wrong for ``earnings``, ``turnip`` and ``born``. A hostname is the one
             place where the threat model justifies those false positives and there is
             no running prose to corrupt, so this is not reachable from
-            :func:`normalize_confusables` at all.
+            `normalize_confusables` at all.
 
             Matching is leftmost-longest, and applied per label, so a digraph can never
             form across a dot.
@@ -1428,7 +1437,7 @@ def has_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> 
 
     Reports a *technical fact* — a cross-script homoglyph, leet, segmentation, a
     zero-width / bidi control, or zalgo — and leaves the malicious-or-not judgement
-    to the caller, exactly as :func:`is_suspicious_hostname` does for hostnames.
+    to the caller, exactly as `is_suspicious_hostname` does for hostnames.
 
     ``lexicon`` is a set of common words for the language being protected; it is
     used only by the leet and segmentation branches.  The invisible, bidi, zalgo,
@@ -1439,13 +1448,13 @@ def has_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> 
 
     **Reusing a large lexicon (HAI-SDLC 6.1).** Passing a raw collection rebuilds
     an internal set on every call. When calling this in a loop with a large
-    lexicon, build a :class:`Lexicon` once and pass it instead — the set is built
+    lexicon, build a `Lexicon` once and pass it instead — the set is built
     a single time and reused across calls, with identical results.
 
     Args:
         text: Input text.
         lexicon: Common-word collection (set, list, …) for the target language,
-            *or* a prebuilt :class:`Lexicon` handle, used only by the leet and
+            *or* a prebuilt `Lexicon` handle, used only by the leet and
             segmentation branches.  When ``None`` (the default) or an empty
             iterable, those two branches are effectively disabled; all other
             branches still run.
@@ -1472,10 +1481,10 @@ def has_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> 
 def inspect_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> AnomalyReport:
     """Full anomaly analysis: every finding with its span and a plain-language reason.
 
-    Parallel to :func:`is_suspicious_hostname`'s ``HostnameAnalysis``. Returns an
+    Parallel to `is_suspicious_hostname`'s ``HostnameAnalysis``. Returns an
     ``AnomalyReport`` with attributes:
 
-    - ``anomalous``: bool — the same value :func:`has_anomalies` returns.
+    - ``anomalous``: bool — the same value `has_anomalies` returns.
     - ``kinds``: list[str] — the anomaly kinds that fired, in first-appearance
       order (``"invisible"``, ``"bidi"``, ``"zalgo"``, ``"mixed_script"``,
       ``"leet"``, ``"segmentation"``).
@@ -1483,18 +1492,18 @@ def inspect_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None)
       (byte offsets), ``detail``, and a plain-language ``reason``.
     - ``reason``: str | None — the first finding's reason.
 
-    The ``lexicon`` is optional (see :func:`has_anomalies`).  When omitted, the
+    The ``lexicon`` is optional (see `has_anomalies`).  When omitted, the
     invisible, bidi, zalgo, and mixed-script branches still run; only leet and
     segmentation detection requires a lexicon.
 
-    **Reusing a large lexicon (HAI-SDLC 6.1).** As with :func:`has_anomalies`,
-    pass a prebuilt :class:`Lexicon` to avoid rebuilding the internal set on every
+    **Reusing a large lexicon (HAI-SDLC 6.1).** As with `has_anomalies`,
+    pass a prebuilt `Lexicon` to avoid rebuilding the internal set on every
     call when looping over a large lexicon.
 
     Args:
         text: Input text.
         lexicon: Common-word collection (set, list, …) *or* a prebuilt
-            :class:`Lexicon` handle (see :func:`has_anomalies`).
+            `Lexicon` handle (see `has_anomalies`).
             Defaults to ``None`` (empty — leet/segmentation branches disabled).
 
     Returns:
@@ -1551,7 +1560,7 @@ def percent_encode(text: str, *, component: Component) -> str:
     The input is UTF-8 encoded first, then every byte outside the component's
     safe set becomes ``%XX`` (``e`` with an accent -> ``%C3%A9``); the output is
     pure ASCII. ``component`` is required because the safe set depends on where
-    the value is placed (:class:`Component`: ``PATH``/``SEGMENT``/``QUERY``/
+    the value is placed (`Component`: ``PATH``/``SEGMENT``/``QUERY``/
     ``FORM``; ``FORM`` uses ``application/x-www-form-urlencoded`` space -> ``+``).
 
     Percent-encoding is **not** a defense against ``javascript:``/``data:``
@@ -1593,7 +1602,7 @@ def strip_log_injection(text: str, *, replacement: str = "\ufffd", keep_tab: boo
     Idempotent; the output never contains a raw CR/LF/ESC. This makes a log line
     safe to *write*, not safe to later *render as HTML*: it is **not** an
     HTML/SQL output sanitizer (it preserves ``< > &`` -- encode those at the log
-    *viewer* with :func:`escape_html`), and **not** a defense against
+    *viewer* with `escape_html`), and **not** a defense against
     logging-framework interpolation (log4shell). See the Threat Model.
 
     Args:
@@ -1710,7 +1719,7 @@ def decode_to_utf8(
             low-quality detections — to require high-quality input, pass the
             encoding explicitly rather than relying on this threshold. Pass
             ``0.0`` to be explicit about accepting any guess.
-        strict: When ``True``, raise :class:`DisarmError` instead of silently
+        strict: When ``True``, raise `DisarmError` instead of silently
             returning ``had_errors=True`` if the input contains byte sequences
             that decode to the U+FFFD replacement character (#189). Use this to
             turn lossy decodes — a common silent-data-loss source — into a hard
@@ -1754,7 +1763,7 @@ def detect_scripts(text: str) -> list[Script]:
         text: Input string.
 
     Returns:
-        List of :class:`Script` enum values, ordered by first appearance.
+        List of `Script` enum values, ordered by first appearance.
 
     Examples:
         >>> detect_scripts("Hello")
@@ -1835,17 +1844,17 @@ def has_bidi_conflict(text: str) -> bool:
 
     A ``False`` result is **not** a safety guarantee.
 
-    .. warning::
-       **This is not the RLO check.** Because it reads *letters*, it is
-       structurally blind to the ``U+202x`` overrides — the classic extension
-       spoof ``"invoice\\u202Egpj.exe"`` returns ``False`` here. The two
-       conditions are disjoint; a string can satisfy either, both, or neither.
+    Warning:
+        **This is not the RLO check.** Because it reads *letters*, it is
+        structurally blind to the ``U+202x`` overrides — the classic extension
+        spoof ``"invoice\\u202Egpj.exe"`` returns ``False`` here. The two
+        conditions are disjoint; a string can satisfy either, both, or neither.
 
-       To cover an override instead, use :func:`inspect_anomalies` (kind
-       ``bidi``) to detect and :func:`strip_bidi` to remove. Note
-       :func:`strip_bidi` does *not* close this function's case: on a real-letter
-       conflict it returns the input unchanged, because there is no format
-       character to remove.
+        To cover an override instead, use `inspect_anomalies` (kind
+        ``bidi``) to detect and `strip_bidi` to remove. Note
+        `strip_bidi` does *not* close this function's case: on a real-letter
+        conflict it returns the input unchanged, because there is no format
+        character to remove.
 
     Args:
         text: Input string.
@@ -1925,7 +1934,7 @@ def unmapped_confusables(*, target_script: str = "latin") -> frozenset[str]:
 
     Most of the set is out of scope rather than missing: a source whose upstream target
     is non-Latin has no business in the to-Latin table. Cross-reference
-    :data:`disarm.CONFUSABLES_VERSION` and ``docs/provenance.md`` before reading any one
+    `CONFUSABLES_VERSION` and ``docs/provenance.md`` before reading any one
     codepoint as a defect.
 
     The set includes five ASCII characters — ``%``, ``0``, ``1``, ``I`` and ``m``. TR39
@@ -1957,17 +1966,17 @@ def unmapped_confusables(*, target_script: str = "latin") -> frozenset[str]:
 def find_unmapped_confusables(text: str, *, target_script: str = "latin") -> list[tuple[str, int]]:
     """Find confusable sources in *text* that disarm's table does not fold (#563).
 
-    The confusables analogue of :func:`find_untranslatable`, and it follows the same
+    The confusables analogue of `find_untranslatable`, and it follows the same
     convention: ``(character, byte_offset)`` pairs in order of appearance. This is what
-    turns :func:`unmapped_confusables` from a global number into something answerable
+    turns `unmapped_confusables` from a global number into something answerable
     against your own traffic.
 
-    Composition runs exactly as it does in :func:`normalize_confusables`, so a
+    Composition runs exactly as it does in `normalize_confusables`, so a
     *decomposed* homoglyph whose precomposed form is mapped counts as covered rather
     than as a gap — otherwise the report would disagree with what the transform does.
     Offsets are anchored in *text*, never in the composed intermediate.
 
-    Ordinary English will report the letter ``m``; see :func:`unmapped_confusables` for
+    Ordinary English will report the letter ``m``; see `unmapped_confusables` for
     why that is deliberate.
 
     Args:
@@ -2047,7 +2056,7 @@ def find_key_collisions(
             ``lang="de"``, ``Müller`` and ``Mueller`` are one key.
 
     Returns:
-        A :class:`KeyCollision` per colliding group, in order of the first index
+        A `KeyCollision` per colliding group, in order of the first index
         that participates. Each has ``key`` (the shared reduced form), ``values``
         (the distinct inputs, first-appearance order) and ``indices`` (every
         position, ascending — not parallel to ``values``).
@@ -2285,7 +2294,7 @@ class TextPipeline:
 
     This constructor takes individual step flags only; there is **no**
     ``preset=`` argument. To obtain a pre-configured pipeline for a named policy
-    profile (e.g. ``scholarly_cyrillic_iso9``), call :func:`get_pipeline`
+    profile (e.g. ``scholarly_cyrillic_iso9``), call `get_pipeline`
     instead — it returns a ready-to-use ``TextPipeline``.
 
     Examples:
@@ -2424,8 +2433,8 @@ def list_scripts() -> list[str]:
 def list_context_langs() -> list[str]:
     """Return language codes that support context-aware transliteration.
 
-    These languages benefit from ``context=True`` in :func:`transliterate`.
-    Each entry has a ``context`` field in its :func:`lang_info` metadata
+    These languages benefit from ``context=True`` in `transliterate`.
+    Each entry has a ``context`` field in its `lang_info` metadata
     indicating the level of support: ``"full"`` or ``"partial"``.
 
     Returns:
@@ -2447,7 +2456,7 @@ def lang_info(code: str) -> LangMeta:
         code: Language code (e.g. ``"de"``, ``"cop"``, ``"ban"``).
 
     Returns:
-        A :class:`LangMeta` dict with ``name``, ``script``, ``region``, and
+        A `LangMeta` dict with ``name``, ``script``, ``region``, and
         ``context`` keys (``context`` is ``"full"``, ``"partial"``, or
         ``"none"``).
 
@@ -2467,10 +2476,10 @@ def script_info(script: str | Script) -> ScriptMeta:
     """Return metadata for a Unicode script.
 
     Args:
-        script: Script name (e.g. ``"Coptic"``) or :class:`Script` enum value.
+        script: Script name (e.g. ``"Coptic"``) or `Script` enum value.
 
     Returns:
-        A :class:`ScriptMeta` dict with ``name``, ``default_lang``, ``example``,
+        A `ScriptMeta` dict with ``name``, ``default_lang``, ``example``,
         and ``context_aware`` keys.
 
     Raises:
@@ -2501,21 +2510,21 @@ def _bump_registration_generation() -> None:
 def register_lang(code: str, mappings: dict[str, str]) -> None:
     """Register or override a transliteration mapping for a language code.
 
-    .. warning::
+    Warning:
         This mutates **process-global** state consulted by every
         ``transliterate``/``slugify``/``catalog_key``/… call in the interpreter.
         Treat it as startup-only / single-writer configuration: do **not** call
         it from request-handling or library code in a multi-tenant process, where
         it would silently alter every other caller's output. Call
-        :func:`seal_registrations` after startup to make further changes raise.
+        `seal_registrations` after startup to make further changes raise.
 
-    .. note::
+    Note:
         Mappings keyed on **ASCII** characters do not apply to pure-ASCII input.
         The core takes a fast path that returns all-ASCII text unchanged before
         consulting language tables (ASCII is the transliteration *target*, so it
         is normally identity). Language profiles are meant for non-ASCII source
         characters (e.g. ``ä``→``ae``). To remap an ASCII character, use
-        :func:`register_replacements` instead — its keys run as a pre-pass that
+        `register_replacements` instead — its keys run as a pre-pass that
         executes ahead of the ASCII fast path and therefore do apply.
 
     Args:
@@ -2539,8 +2548,8 @@ def register_replacements(replacements: dict[str, str]) -> None:
     """Register global pre-transliteration replacements.
 
     New entries are merged into the existing table. Existing keys are
-    silently overwritten. Use :func:`clear_replacements` to wipe the
-    table, or :func:`remove_replacement` to remove a single key.
+    silently overwritten. Use `clear_replacements` to wipe the
+    table, or `remove_replacement` to remove a single key.
 
     Replacements are applied to the input as a left-to-right pre-pass *before*
     the main transliteration tables, using longest-match-at-each-position
@@ -2548,10 +2557,10 @@ def register_replacements(replacements: dict[str, str]) -> None:
     output is not re-scanned, so replacements never cascade). Keys may be
     multi-character and may be ASCII.
 
-    .. warning::
-        Like :func:`register_lang`, this mutates **process-global** state shared
+    Warning:
+        Like `register_lang`, this mutates **process-global** state shared
         by every caller. Treat it as startup-only / single-writer configuration
-        and call :func:`seal_registrations` afterwards in multi-tenant processes.
+        and call `seal_registrations` afterwards in multi-tenant processes.
 
     Args:
         replacements: Dict of source→replacement string mappings, applied
@@ -2603,9 +2612,9 @@ def clear_replacements() -> None:
 def seal_registrations() -> None:
     """Freeze the global registration tables (languages + replacements).
 
-    After this is called, :func:`register_lang`, :func:`register_replacements`,
-    :func:`remove_replacement`, and :func:`clear_replacements` raise
-    :class:`DisarmError`. This is a one-way security latch (#64): the
+    After this is called, `register_lang`, `register_replacements`,
+    `remove_replacement`, and `clear_replacements` raise
+    `DisarmError`. This is a one-way security latch (#64): the
     registration APIs mutate **process-global** state that every
     ``transliterate``/``slugify``/``catalog_key``/... call shares, so in a
     multi-tenant or web context an imported library or request handler could
@@ -2627,7 +2636,7 @@ def seal_registrations() -> None:
 
 
 def registrations_sealed() -> bool:
-    """Return True if :func:`seal_registrations` has been called."""
+    """Return True if `seal_registrations` has been called."""
     return _registrations_sealed()
 
 
@@ -2653,8 +2662,8 @@ def dedup_batch(
     large win when values repeat — categorical columns such as city, author,
     publisher, or country — and is **stateless**: it holds no cache, so there is
     nothing to invalidate and every call reflects the *current* global tables.
-    (Its output still depends on :func:`register_lang` /
-    :func:`register_replacements` like any call — it simply cannot go stale.)
+    (Its output still depends on `register_lang` /
+    `register_replacements` like any call — it simply cannot go stale.)
 
     Unique values are batched in chunks of 100,000 (the batch-size cap), so this
     also works for unique sets larger than a single ``transliterate`` call allows.
@@ -2662,7 +2671,7 @@ def dedup_batch(
     Args:
         texts: List of input strings (repeats expected). Order is preserved.
         lang, target, errors, replace_with, strict_iso9, gost7034, tones,
-            context: Same meaning as :func:`transliterate`; applied to every value.
+            context: Same meaning as `transliterate`; applied to every value.
 
     Returns:
         List of transliterations aligned 1:1 with *texts*.
@@ -2698,7 +2707,7 @@ def dedup_batch(
 
 class CachedTransliterator(Protocol):
     """A cached single-string transliterator (the result of
-    :func:`make_cached_transliterator`) that also exposes the underlying
+    `make_cached_transliterator`) that also exposes the underlying
     ``functools.lru_cache`` controls."""
 
     def __call__(self, text: str) -> str: ...
@@ -2730,11 +2739,11 @@ def make_cached_transliterator(
     *maxsize*; ``None`` = unbounded). Use it for a long-running process that
     transliterates many *repeated* single values over time with the same options
     — i.e. when you do **not** have the full list up front (otherwise prefer
-    :func:`dedup_batch`, which is stateless and faster for bulk).
+    `dedup_batch`, which is stateless and faster for bulk).
 
     The cache **self-invalidates**: the next call after any
-    :func:`register_lang`, :func:`register_replacements`,
-    :func:`remove_replacement`, or :func:`clear_replacements` clears it, so it
+    `register_lang`, `register_replacements`,
+    `remove_replacement`, or `clear_replacements` clears it, so it
     never serves results that pre-date a table change.
 
     Transliteration options are fixed at construction time (build one cached

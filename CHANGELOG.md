@@ -219,6 +219,57 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   Two pages read "`analyzeHostname` in Node/Ruby/Java". Ruby spells it `analyze_hostname`,
   and Kotlin was missing. Both corrected.
 
+- **Nine transforms now say what they do not do, measured rather than asserted (#653).**
+  Only three carried a scope warning. The six that did not include `ml_normalize`, which
+  passes bidi controls, private-use characters and homoglyphs straight through and is
+  picked by name for exactly the job it does not do.
+
+  Each new warning states something measured on the published wheel, not a general
+  caution. The sharpest is the key builders': their homoglyph collisions are a side
+  effect of transliteration rather than a confusable fold, so a lookalike whose script
+  romanizes to something other than its lookalike does not collide at all. Cherokee `Ꮃ`
+  *looks* like `W` and romanizes to `la`, so `Ꮃorld` keys as `laorld` and never meets
+  `world` — in `catalog_key` too, whose confusable step runs after transliteration and
+  never sees the character.
+
+  One correction to the issue: `strip_obfuscation` was counted among the six that do not
+  warn. It is the best-documented function of the nine; its statements were bold
+  paragraphs rather than admonitions, which is what the survey was detecting. Its
+  markup-safety paragraph is promoted to a `Warning:` so it renders as one.
+
+- **`has_anomalies` at the seam is documented (#653).** Running it on the *output* of a
+  transform reports whether that transform left something behind, needs no new API, and
+  appeared nowhere in the docs. `docs/user-guide/anomaly-detection.md` now shows it with
+  asserted examples, and states the caveat that makes it usable: a true result means you
+  chose the wrong function, a false result means nothing. At the reported 42.6% recall it
+  is a useful alarm and a useless all-clear, and a reader who wires it into CI as an
+  acceptance test will read "clean" on most of what is not.
+
+- **13 reST directives and 120 reST roles rendered as literal text (#664).** mkdocstrings
+  is configured `docstring_style: google`, under which `.. warning::` renders as those
+  exact characters and `` :func:`x` `` renders the literal `:func:`. Fifty-six of the
+  roles reached the built site that way, across seven API pages. One of them was
+  `strip_format`'s markup-safety warning — a threat-model statement rendered as an
+  ordinary paragraph with a stray directive at the front.
+
+  Converted to `Warning:` / `Note:` / `Deprecated:` sections and plain code spans, both of
+  which render on the site *and* read correctly under `help()`.
+  `tests/test_docstring_conventions.py` holds the convention, and checks its own patterns
+  still match the forms they are for, so it cannot lapse into passing vacuously.
+  `RELEASING.md` no longer tells contributors to write `.. deprecated:: X`.
+
+- **The naming rule is written down (#654).** *A public name may describe the operation,
+  never the outcome.* `canonicalize`, not `clean`. It was being followed and re-argued
+  each time someone proposed `clean()`; `CONTRIBUTING.md` now carries it, with the reason
+  (NFKC unmasking makes output *more* dangerous to emit, so a name promising safety would
+  be actively wrong) and the one shipped exception recorded — `ml_normalize` is named for
+  a use case, which is why its docstring carries the warning above.
+
+  `canonicalize` also gains the sentence that closes the one real findability gap: *"For
+  cleaning untrusted input before comparison, this is the entry point. It does not make
+  text safe to emit; encode at the sink."* It contains `clean`, `untrusted` and `safe`,
+  the three words a searcher uses, and promises none of them.
+
 ## [0.14.0] — 2026-08-28
 
 ### Upgrade notes

@@ -17,7 +17,7 @@ class NF(enum.Enum):
     """Unicode normalization form constants.
 
     Provides an enum alternative to the string literals accepted by
-    :func:`~disarm.normalize` and :func:`~disarm.is_normalized`.
+    `normalize` and `is_normalized`.
 
     Members:
         C: Canonical Composition (NFC).
@@ -42,7 +42,7 @@ class EmojiProvider(Protocol):
     """Protocol for custom emoji name providers.
 
     Implement this protocol to supply your own emoji-to-text mappings
-    for :func:`~disarm.demojize` and :func:`~disarm.set_emoji_provider`.
+    for `demojize` and `set_emoji_provider`.
 
     Example::
 
@@ -66,7 +66,7 @@ class EmojiProvider(Protocol):
                       At most **9 codepoints** are ever offered — the longest
                       built-in CLDR sequence; sequences longer than 9 codepoints
                       cannot be matched by a custom provider (#199). See
-                      :func:`~disarm.set_emoji_provider`.
+                      `set_emoji_provider`.
 
         Returns:
             The text name to substitute, or None if this provider

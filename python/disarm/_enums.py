@@ -101,7 +101,7 @@ class Script(enum.Enum):
 
 
 class Component(enum.Enum):
-    """URL component for :func:`disarm.percent_encode`.
+    """URL component for `percent_encode`.
 
     Selects the RFC 3986 safe set; the encoding differs by where the value is
     placed, so the component must be stated explicitly (there is no default).

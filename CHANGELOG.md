@@ -109,6 +109,39 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   running a hostname predicate over a source-code probe would manufacture coverage. A
   companion test fails if a claim ever names something neither table knows how to check.
 
+- **`docs/index.md` had drifted from the README it is generated from, in both directions
+  (#656).** The file carries a "do not edit directly" banner and is produced by
+  `scripts/generate_docs_index.sh` from `README.md` + `docs/_index_nav.md`. Nothing ran the
+  generator and nothing checked its output, so the banner was the only thing holding the
+  line.
+
+  Two *Features* bullets existed only in the generated file, where the next run would have
+  deleted them. A Node.js *Getting Started* entry, a whole-script-spoof example and a
+  coverage-residue note existed only in the sources and had never reached the published
+  site. The second kind is the one that reads as working: the change appears on GitHub, and
+  the docs site quietly does not move.
+
+  Both reconciled — the orphaned bullets moved into `README.md`, everything else
+  regenerated — and `scripts/generate_docs_index.sh --check` now fails when the three files
+  disagree. It runs in CI's `doc-tests` job rather than `test`, because `test` is gated on
+  a path filter that does not include `**.md`, so a README-only pull request would have
+  skipped it.
+
+  **This is also what executes the README.** All ten of its `python` blocks land in
+  `docs/index.md`, which is first on `EXECUTED_RECIPES` and runs under Sybil on every CI
+  run. In sync, the most-read file in the project has its examples asserted; out of sync,
+  it does not. `tests/test_docs_index_drift.py` pins both halves, including that the check
+  can fail and that the generator is idempotent.
+
+- **`README.md` opened with the wrong function (#656).** Its first runnable block reached
+  for `strip_obfuscation`, `normalize_confusables` and `is_suspicious_hostname` — three
+  narrow tools — while most readers arrive wanting to clean untrusted input, which is
+  `canonicalize`. That name appeared in no runnable block anywhere near the top.
+
+  `canonicalize` now leads the block and the *Which function do I want?* table, with the
+  specialists below it. Being in a generated, executed page, both new lines are asserted
+  rather than decorative.
+
 ### Documentation
 
 - **Key-builder output now carries a stated stability contract (#644).** `0.14.0`'s

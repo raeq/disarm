@@ -408,6 +408,32 @@ asserts, add the path, and confirm `pytest docs/` is green. This is a deliberate
 ratchet: un-converted pages stay visibly unguarded until their claims are
 asserted.
 
+### `README.md` is the source; `docs/index.md` is generated (#656)
+
+Do not edit `docs/index.md`. It is produced by `scripts/generate_docs_index.sh`
+from `README.md` plus `docs/_index_nav.md`, which rewrites the `(docs/…)` link
+prefixes and appends the site navigation. Edit one of the two sources and
+regenerate:
+
+```bash
+bash scripts/generate_docs_index.sh           # write it
+bash scripts/generate_docs_index.sh --check   # fail if it is out of date
+```
+
+The banner at the top of the file said this already, and it did not hold. Before
+the `--check` gate existed the file had drifted **both ways at once**: two
+*Features* bullets lived only in the generated file, where the next run would have
+deleted them, and a Node.js nav entry, a whole-script-spoof example and a
+coverage-residue note lived only in the sources and had never reached the site.
+The second kind is the dangerous one — the change appears on GitHub, so it looks
+applied.
+
+**This is also what executes the README.** Every `python` block in `README.md`
+lands in `docs/index.md`, which is first on `EXECUTED_RECIPES` and runs under
+Sybil on every CI run. In sync, the README's examples are asserted; out of sync,
+they are not. So a README example is written to the same standard as any other
+recipe: assert outputs, never decorate them with `# =>`.
+
 ### The docs describe `main`; the reader executes a tag (#641)
 
 Every gate above runs against the branch. The site deploys from `main` on each

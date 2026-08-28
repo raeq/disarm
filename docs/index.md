@@ -32,6 +32,8 @@ disarm's `normalize_confusables()` / `strip_obfuscation()` implement *visual* co
 
 On the original curated cut (18 hand-curated Cyrillic look-alike pairs) disarm reproduces **XMR = 1.000** exactly — a labeled sanity check, not the headline. `ftfy` was statistically equivalent to no preprocessing; `unidecode` *degraded* accuracy on invisible-character attacks. Details: **[Adversarial-Text Defense](security/adversarial-defense.md)** (paper *"Fire Extinguishers Full of Gasoline"*; XMR metric: [Zenodo 10.5281/zenodo.20618323](https://doi.org/10.5281/zenodo.20618323)).
 
+> **Measure the residue, don't infer it.** ~95% per-source coverage is not "95% safe" — it is one query away from the other 5%, and that residue is where an adaptive attacker goes. `unmapped_confusables()` returns every TR39 source the bundled table does *not* fold and `find_unmapped_confusables(text)` answers it for one input, so the gap is enumerable rather than assumed; `CONFUSABLES_VERSION` reports which `confusables.txt` release the tables were folded from. See [Knowing what is NOT covered](user-guide/confusables.md#knowing-what-is-not-covered).
+
 > **Scope.** disarm is a **defense-in-depth layer, not a complete control.** It canonicalizes the confusables it bundles (TR39) and strips the format characters it enumerates; it does not promise to stop any attack class, and the confusable space is far larger than any table. See the **[Threat Model](THREAT_MODEL.md)** for what is and isn't in scope.
 >
 > **Not an output sanitizer.** disarm normalizes *input*; it does **not** make text safe to emit into HTML, JS, URLs, SQL, or shells. It performs no escaping and does not strip `<`, `>`, `&` — `<script>alert(1)</script>` passes through unchanged, and NFKC normalization can even *surface* ASCII metacharacters from fullwidth lookalikes (`＜script＞` → `<script>`). disarm is **not** an XSS or injection defense and never replaces one: encode at the output sink (framework auto-escaping, DOMPurify, parameterized queries). Run disarm *before* those, as the Unicode layer they don't cover.
@@ -42,6 +44,7 @@ The most common confusion is reaching for `transliterate()` to defend against ho
 
 | If you want to… | Use | Mapping | Example |
 |---|---|---|---|
+| **Clean untrusted input before comparing it** | `canonicalize()` | the whole pipeline | `‮example​.com` → `example.com` |
 | **Defend against homoglyph / look-alike spoofing** | `normalize_confusables()`, `strip_obfuscation()` | **visual** (TR39) | Cyrillic `р` → Latin **`p`** |
 | **Romanize text to readable ASCII** | `transliterate()` | **phonetic** (BGN/PCGN, ISO 9, GOST) | Cyrillic `р` → Latin **`r`**; `Київ` → `Kyiv` (`uk` profile) |
 | **Flag spoofed hostnames / IDNs** | `is_suspicious_hostname()` | analysis (no rewrite) | `аpple.com` → suspicious |
@@ -49,8 +52,20 @@ The most common confusion is reaching for `transliterate()` to defend against ho
 `transliterate()` is a *romanizer*, not a security control: it maps by sound/standard, so it will turn a Cyrillic `р` into `r` and leave the spoof readable. For homoglyph defense, always use the visual (TR39) functions in row 1.
 
 ```python
-from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
+from disarm import (
+    canonicalize,
+    is_suspicious_hostname,
+    normalize_confusables,
+    strip_obfuscation,
+)
 
+# Start here for untrusted input: one call that folds homoglyphs *and* removes
+# bidi overrides, zero-width characters and control characters. It canonicalizes
+# for comparison; it does not make text safe to emit — encode at the sink.
+assert canonicalize("\u202eexample\u200b.com") == "example.com"
+assert canonicalize("Ηello Ꮤorld") == "Hello World"     # Greek Η, Cherokee Ꮤ
+
+# The narrower functions, when you know which single problem you have.
 # Fold Cyrillic look-alikes to their Latin prototypes (TR39 visual mapping)
 assert strip_obfuscation("рroduсt") == 'product'
 assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
@@ -60,6 +75,14 @@ assert normalize_confusables("раypal") == 'paypal'
 # IDN / hostname spoofing check (flags the bad; a False result is not a safety guarantee)
 suspicious, analysis = is_suspicious_hostname("аpple.com")   # leading Cyrillic а
 # suspicious is True; analysis.has_confusables and analysis.mixed_script flag why
+
+# Whole-script spoof: an ALL-Cyrillic label that skeletons to a Latin brand (#545).
+# `suspicious` alone can't tell it from a real Russian domain (it flags both), but
+# whole_script_confusable names the discriminator — the per-label list lets a caller
+# apply the precise `wsc(non-TLD) and Latin-TLD` policy.
+_, a = is_suspicious_hostname("аррӏе.com")          # all-Cyrillic "apple"
+assert a.whole_script_confusable and a.canonical == "apple.com"
+assert a.label_whole_script_confusable == [True, False]   # spoof label, then the TLD
 ```
 
 ## Installation
@@ -400,12 +423,12 @@ See [formal-verification.md](formal-verification.md) for details.
 
 Core concepts and usage for each feature area.
 
-- **Getting Started** — install + quickstart for [Python](python/getting-started.md) · [Rust](rust/getting-started.md) · [Ruby](ruby/getting-started.md)
+- **Getting Started** — install + quickstart for [Python](python/getting-started.md) · [Rust](rust/getting-started.md) · [Ruby](ruby/getting-started.md) · [Node.js](node/getting-started.md)
 - **[Adversarial-Text Defense](security/adversarial-defense.md)** — TR39 visual confusable mapping vs phonetic transliteration, the XMR benchmark, and why it matters
 - **[Transliteration](user-guide/transliteration.md)** — Unicode → ASCII with language profiles, plus reverse (Latin → native script)
 - **[Slugification](user-guide/slugification.md)** — URL-safe slug generation, drop-in python-slugify replacement
 - **[Normalization](user-guide/normalization.md)** — NFC / NFD / NFKC / NFKD Unicode normalization
-- **[Confusable Detection](user-guide/confusables.md)** — TR39 homoglyph detection and normalization
+- **[Confusable Detection](user-guide/confusables.md)** — TR39 homoglyph detection and normalization, and which sources the bundled table does not cover
 - **[Filename Sanitization](user-guide/filenames.md)** — Cross-platform safe filenames
 - **[Text Cleaning](user-guide/text-cleaning.md)** — Accent stripping, case folding, whitespace collapse
 - **[Grapheme Clusters](user-guide/graphemes.md)** — User-perceived character counting, splitting, and truncation
@@ -429,7 +452,7 @@ Complete function signatures, parameters, and return types.
 - **[Core Transforms](api/transforms.md)** — `transliterate`, `slugify`, `normalize`, `sanitize_filename`, `strip_accents`, `strip_zalgo`, `fold_case`, `collapse_whitespace`, `demojize`, `strip_bidi` (all accept `str` or `list[str]`)
 - **[Precompiled Pipelines](api/pipelines.md)** — `canonicalize`, `ml_normalize`, `catalog_key`, `strip_format`, `search_key`, `sort_key`, `canonicalize_strict`, `PRESETS`, `get_pipeline`, `list_profiles`
 - **[Classes](api/classes.md)** — `Text`, `Slugifier`, `UniqueSlugifier`, `TextPipeline`, compatibility aliases
-- **[Predicates](api/predicates.md)** — `detect_scripts`, `inspect_auto_lang`, `is_mixed_script`, `is_confusable`, `is_ascii`, `is_normalized`, `is_zalgo`, `is_suspicious_hostname`
+- **[Predicates & introspection](api/predicates.md)** — `detect_scripts`, `inspect_auto_lang`, `is_mixed_script`, `is_confusable`, `is_ascii`, `is_normalized`, `is_zalgo`, `is_suspicious_hostname`, `unmapped_confusables`, `find_unmapped_confusables`
 - **[Grapheme Clusters](api/graphemes.md)** — `grapheme_len`, `grapheme_split`, `grapheme_truncate`
 - **[Encoding Detection](api/encoding.md)** — `detect_encoding`, `decode_to_utf8`
 - **[Language Profiles](api/language-profiles.md)** — `list_langs`, `register_lang`, `register_replacements`

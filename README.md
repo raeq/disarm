@@ -41,6 +41,7 @@ The most common confusion is reaching for `transliterate()` to defend against ho
 
 | If you want to… | Use | Mapping | Example |
 |---|---|---|---|
+| **Clean untrusted input before comparing it** | `canonicalize()` | the whole pipeline | `‮example​.com` → `example.com` |
 | **Defend against homoglyph / look-alike spoofing** | `normalize_confusables()`, `strip_obfuscation()` | **visual** (TR39) | Cyrillic `р` → Latin **`p`** |
 | **Romanize text to readable ASCII** | `transliterate()` | **phonetic** (BGN/PCGN, ISO 9, GOST) | Cyrillic `р` → Latin **`r`**; `Київ` → `Kyiv` (`uk` profile) |
 | **Flag spoofed hostnames / IDNs** | `is_suspicious_hostname()` | analysis (no rewrite) | `аpple.com` → suspicious |
@@ -48,8 +49,20 @@ The most common confusion is reaching for `transliterate()` to defend against ho
 `transliterate()` is a *romanizer*, not a security control: it maps by sound/standard, so it will turn a Cyrillic `р` into `r` and leave the spoof readable. For homoglyph defense, always use the visual (TR39) functions in row 1.
 
 ```python
-from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
+from disarm import (
+    canonicalize,
+    is_suspicious_hostname,
+    normalize_confusables,
+    strip_obfuscation,
+)
 
+# Start here for untrusted input: one call that folds homoglyphs *and* removes
+# bidi overrides, zero-width characters and control characters. It canonicalizes
+# for comparison; it does not make text safe to emit — encode at the sink.
+assert canonicalize("\u202eexample\u200b.com") == "example.com"
+assert canonicalize("Ηello Ꮤorld") == "Hello World"     # Greek Η, Cherokee Ꮤ
+
+# The narrower functions, when you know which single problem you have.
 # Fold Cyrillic look-alikes to their Latin prototypes (TR39 visual mapping)
 assert strip_obfuscation("рroduсt") == 'product'
 assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
@@ -165,6 +178,8 @@ whole dependency graph) — that ceiling is the application's call.
 - **[Confusable & homoglyph analysis (TR39)](docs/security/adversarial-defense.md)**: visual [confusable mapping](docs/user-guide/confusables.md), bidi-control / zalgo / zero-width / invisible-character stripping, and the `strip_obfuscation` pipeline (defense-in-depth — see the [Threat Model](THREAT_MODEL.md))
 - **[Canonicalization pipelines](docs/api/pipelines.md)**: `canonicalize`, `canonicalize_strict`, `catalog_key`, `search_key`, `sort_key`, `strip_format`, `ml_normalize` for common workflows
 - **[LLM / RAG pipelines](docs/user-guide/llm-pipelines.md)**: guardrail matching (`llm_guardrail`) and ingestion (`rag_ingest`) profiles — deterministic deobfuscation and ASCII-index normalisation for LLM stacks
+- **[Coverage introspection](docs/user-guide/confusables.md#knowing-what-is-not-covered)**: `unmapped_confusables()` and `find_unmapped_confusables()` report which TR39 sources the bundled table does **not** fold — exposure you can measure against your own traffic, not a score
+- **Bundled-data version**: `disarm.CONFUSABLES_VERSION` reports the `confusables.txt` release the tables were folded from, so a deployment can answer "am I stale?" without inferring it from behaviour ([provenance](docs/provenance.md))
 - **[Hostname / IDN analysis](docs/api/predicates.md#is_suspicious_hostname)**: mixed-script and confusable detection for domains
 - **[Standards-based transliteration](docs/user-guide/transliteration.md)**: best-in-class Latin / Cyrillic / Greek with ISO 9-style ASCII (`strict_iso9`), GOST R 7.0.34, and BGN/PCGN, plus [reverse transliteration](docs/user-guide/language-support.md#reverse-transliteration) (Russian, Ukrainian, Greek)
 - **[Text normalization](docs/user-guide/normalization.md)**: NFC/NFD/NFKC/NFKD, full Unicode case folding (1,557 CaseFolding.txt mappings via PHF), [whitespace collapse](docs/user-guide/text-cleaning.md)

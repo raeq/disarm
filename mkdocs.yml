@@ -33,6 +33,12 @@ plugins:
             separate_signature: true
             docstring_style: google
 
+# Every page is stamped with the commit it was built from and the version a
+# reader can install (#641). The site deploys on every push to main; the package
+# deploys on a tag, and nothing on the page used to say those were different.
+hooks:
+  - scripts/mkdocs_build_banner.py
+
 markdown_extensions:
   - admonition
   - tables

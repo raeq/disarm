@@ -16,6 +16,36 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Added
+
+- **Every documentation page now says which commit it was built from, and which version
+  you can install (#641).** The site deploys from `main` on every push; the package comes
+  from the newest tag. At the worst point those were 68 commits apart, and
+  `docs/security/cve-validation.md` named five entry points that raised `AttributeError`
+  on the release it was describing — `is_case_fold_stable`, `find_key_collisions`,
+  `unmapped_confusables`, `find_unmapped_confusables` and `CONFUSABLES_VERSION`.
+
+  A `mkdocs` hook (`scripts/mkdocs_build_banner.py`) stamps the banner onto all 91 pages.
+  The version comes from PyPI when the docs workflow can reach it and from
+  `pyproject.toml` otherwise, so a local `mkdocs serve` shows the same banner a deploy
+  does.
+
+- **A scheduled job that checks the documentation against the published wheel (#641).**
+  `scripts/check_docs_against_release.py` collects every `disarm` name the docs use
+  (imports and attribute access in Python blocks, `::: disarm.x` mkdocstrings directives,
+  inline code spans in prose) and fails when one of them does not exist in the installed
+  package. Run against `0.13.0` it reproduces all five names above; against `0.14.0` it
+  is clean.
+
+  It runs weekly rather than on pull requests, because documentation ships with the
+  feature it documents and a PR gate would block every feature branch for doing that
+  correctly. A red run means documented API has outrun the last release.
+
+  Two gaps are allowlisted, each against an open issue: the `disarm.emoji` plugin API that
+  has never shipped (#655), and `LANG_AUTO`, the one `LANG_*` constant of 84 that the
+  package never re-exports even though three doc blocks tell readers to import it (#660,
+  found by this gate on its first run).
+
 ### Fixed
 
 - **Four CI workflows built a dev-profile wheel and then tested it (#658).** `maturin

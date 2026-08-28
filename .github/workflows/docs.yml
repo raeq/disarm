@@ -57,6 +57,27 @@ jobs:
         # Hash-locked, compiled from the [docs] extra in pyproject.toml (the single
         # source of truth) — same pattern as requirements/bench.txt in perf-gate.yml.
         run: pip install --require-hashes -r requirements/docs.txt
+      - name: Resolve what the build banner should say (#641)
+        # scripts/mkdocs_build_banner.py stamps every page with the commit it was
+        # built from and the version a reader can install. It works both out
+        # without help — git for the commit, pyproject.toml for the version — but
+        # PyPI is the authority on what is actually published, and pyproject is
+        # only a proxy that goes stale inside a release PR. Ask PyPI, and fall
+        # through to the hook's own fallbacks if it cannot be reached: a docs
+        # deploy must not depend on a third party being up.
+        run: |
+          echo "DISARM_DOCS_COMMIT=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          released=$(curl -fsS --max-time 10 https://pypi.org/pypi/disarm/json \
+            | python -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])' \
+            2>/dev/null) || released=""
+          if [ -n "$released" ]; then
+            echo "DISARM_DOCS_RELEASE=${released}" >> "$GITHUB_ENV"
+            echo "::notice title=Docs banner::Built from ${GITHUB_SHA:0:7}; newest release ${released}"
+          else
+            echo "::warning title=Docs banner::PyPI did not answer; the banner falls \
+            back to the version in pyproject.toml"
+          fi
+
       - name: Build site (strict)
         # --strict turns broken internal links / missing-nav pages into a failed
         # build, catching doc drift (same discipline as Sybil / check_doc_claims).

@@ -1,0 +1,54 @@
+name: Docs vs release
+
+# The docs site deploys from `main` on every push (docs.yml); the package a
+# reader installs comes from the newest tag. Everything that gates `docs/` —
+# TestDocsMatrixDrift, Sybil, check_doc_claims, mkdocs --strict — runs against
+# `main`, so nothing compared the pages to the artifact. At the worst point
+# `main` was 68 commits ahead of v0.13.0 and docs/security/cve-validation.md
+# named five entry points that raised AttributeError on the release it was
+# describing (#641).
+#
+# Scheduled rather than run on pull requests, deliberately. Documentation ships
+# with the feature it documents (RELEASING.md), so between a feature merging and
+# the next release the gap is *correct*, and a PR gate would block every feature
+# branch for doing the right thing. A red run here means documented API has
+# outrun the last release: cut one, or correct the page.
+#
+# The extractor itself is unit-tested in tests/test_docs_release_drift.py, which
+# runs in ordinary PR CI. This job supplies the thing that test cannot — a real
+# published wheel.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Monday 06:00 UTC, an hour after ci.yml's RustSec scan
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-release-drift
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: Documented names vs the published wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install the newest published wheel
+        # No checkout build and no maturin on purpose: the artifact under test is
+        # exactly what `pip install disarm` gives a reader, not a local rebuild
+        # of the branch. `--upgrade` on a clean runner resolves to the newest
+        # non-prerelease version on PyPI.
+        run: |
+          pip install --upgrade disarm
+          python -c "import disarm; print('checking against disarm', disarm.__version__)"
+
+      - name: Every documented name must exist in the release
+        run: python scripts/check_docs_against_release.py

@@ -41,10 +41,12 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   feature it documents and a PR gate would block every feature branch for doing that
   correctly. A red run means documented API has outrun the last release.
 
-  Two gaps are allowlisted, each against an open issue: the `disarm.emoji` plugin API that
-  has never shipped (#655), and `LANG_AUTO`, the one `LANG_*` constant of 84 that the
-  package never re-exports even though three doc blocks tell readers to import it (#660,
-  found by this gate on its first run).
+  Names it cannot fix are allowlisted, and only against an open issue. The gate fails when
+  a listed name starts resolving, and a test fails when the page that named it is gone, so
+  the list shrinks rather than accumulating — it did so in this same release. What remains
+  is `LANG_AUTO`, the one `LANG_*` constant of 84 that the package never re-exports even
+  though three doc blocks tell readers to import it (#660, found by this gate on its first
+  run).
 
 ### Fixed
 
@@ -101,6 +103,28 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   The golden-corpus gate that would enforce this rather than leaving it to review is still
   open work on #644, and `KEY_SCHEMA_VERSION` (#645) is the signal a consumer could assert
   in their own CI. The document says plainly that neither exists yet.
+
+- **`docs/architecture/emoji-plugins.md` is deleted; it documented a plugin system that
+  never shipped (#655).** The page named five pip packages with sizes, a `disarm.emoji`
+  module with `FileProvider` and `ChainProvider`, and a `disarm-emoji-pack` CLI. None of it
+  exists, on `main` or on PyPI, and the page sat in `architecture/` alongside descriptive
+  pages with nothing to tell a reader which it was. Its only marker was a
+  `<!--- skip: next -->` comment, invisible in the rendered page — the one place a reader
+  never looks.
+
+  The shipped provider API is unaffected and was already documented elsewhere:
+  `EmojiProvider` in `docs/api/enums.md`, `set_emoji_provider` in `docs/api/transforms.md`,
+  and the per-call → global → built-in resolution order in
+  `docs/architecture/emoji-engine.md`. That page gains the deleted one's scope statements
+  (no emojize, no rendering, no sentiment scoring, no platform rendering history, no
+  versioned emoji data) plus a note on the bundled CLDR vintage.
+
+  The unbuilt design is preserved in #662 rather than thrown away: versioned emoji provider
+  packages, a file-based provider, and chaining for mixed-era corpora, which is the piece
+  with no workaround today.
+
+  Found independently by the drift gate added in #641 on its first run. Deleting the page
+  took its allowlist entries with it, leaving only #660.
 
 ## [0.14.0] — 2026-08-28
 

@@ -45,3 +45,17 @@ Codepoints in emoji ranges (`is_emoji_codepoint`) that don't match any table ent
 ## Pure-Rust path
 
 `demojize_rust()` is a separate function that skips all Python provider logic and GIL interaction. It is used by `TextPipeline.process()` when the `demojize=True` step is enabled, ensuring that pipeline execution stays entirely within Rust. Unknown emoji are silently dropped (equivalent to `errors="ignore"`) in this path.
+
+## What the emoji engine does not do
+
+These are deliberate omissions rather than gaps, and each is recorded here so a reader does not have to guess which it is.
+
+- **No emojize** (text → emoji). It is the inverse operation and out of scope: disarm's transforms are lossy by design.
+- **No rendering or display.** The engine operates on codepoint sequences, never glyphs.
+- **No sentiment scoring.** Mapping emoji to sentiment is an NLP task. A provider returns textual descriptions and nothing else.
+- **No platform-specific rendering history.** 🔫 maps to "water pistol" per current CLDR, regardless of how it rendered on a given platform in 2015.
+- **No versioned emoji data.** disarm ships the latest English CLDR short names, so a historical corpus is annotated with today's names. A caller who needs Emoji 12.0 semantics has to supply their own provider; a packaged answer is the design in #662.
+
+## Bundled data
+
+Built-in annotations come from Unicode CLDR emoji short names — the canonical label per emoji, which is what `demojize()` returns. CLDR keywords (`"face"`, `"grin"`) are not used. CLDR is released under the Unicode License, which is compatible with MIT; the bundled vintage per release is recorded in [provenance.md](../provenance.md).

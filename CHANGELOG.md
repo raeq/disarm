@@ -48,6 +48,33 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   though three doc blocks tell readers to import it (#660, found by this gate on its first
   run).
 
+- **Nothing checked that an installed artifact imports and runs; now two jobs do (#667,
+  #669).** Every existing gate tested a development environment. CI built a wheel,
+  installed it, then installed the project again from source with its test extras on top,
+  so what pytest imported afterwards was not reliably the wheel that was built and the
+  wheel was never imported alone. The local pre-push gate uses `maturin develop`, which
+  produces no distributable artifact at all.
+
+  `scripts/smoke_installed.py` is the shared body: import `disarm`, assert `__version__`
+  is not the `"0.0.0+unknown"` missing-metadata fallback, call one function per public
+  surface, and pin the one documented path that raises on every released artifact
+  (`transliterate(..., context=True)`, whose message names `bootstrap_dicts.sh`). It
+  imports nothing outside the standard library, so it runs in a virtualenv holding the
+  artifact and nothing else — the environment in which a missing runtime dependency is
+  detectable at all. It also refuses to pass when a source tree shadows the install, which
+  is how such a check silently tests nothing.
+
+  `.github/workflows/smoke.yml` runs it twice. The **tracked-tree** job exports
+  `git archive HEAD`, installs it and runs the smoke body, on every push to `main` with no
+  paths filter — `ci.yml` triggers on `pull_request` only, so the commit that lands was
+  the one commit nothing built. The **artifacts** job builds a wheel and an sdist and
+  installs each into a clean virtualenv; the sdist had no coverage anywhere, having been
+  built at publish time and never installed.
+
+  Verified locally before landing, against real installs rather than in principle: the
+  sdist builds from source and passes all 14 checks, and so does the tracked tree. Both
+  were sound, so the gates encode a true invariant rather than papering over a break.
+
 ### Fixed
 
 - **Four CI workflows built a dev-profile wheel and then tested it (#658).** `maturin

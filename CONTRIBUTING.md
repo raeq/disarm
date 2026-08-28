@@ -434,6 +434,37 @@ Sybil on every CI run. In sync, the README's examples are asserted; out of sync,
 they are not. So a README example is written to the same standard as any other
 recipe: assert outputs, never decorate them with `# =>`.
 
+### Does the artifact work? (#667, #669)
+
+Every step above tests your worktree. It contains untracked files, generated
+artefacts, a populated `target/` and whatever `.gitignore` hides — so a file
+present locally and absent from the commit is invisible to all of it. And
+`maturin develop` produces no distributable artifact at all, so nothing before a
+push touches installability.
+
+Two checks close that, sharing one body (`scripts/smoke_installed.py`):
+
+```bash
+# The tracked tree — exactly what someone fetching this commit receives.
+tmp=$(mktemp -d) && git archive HEAD | tar -x -C "$tmp"
+python -m venv "$tmp/venv" && "$tmp/venv/bin/pip" install "$tmp"
+(cd "$tmp" && "$tmp/venv/bin/python" "$OLDPWD/scripts/smoke_installed.py")
+
+# The sdist — the artifact CI does not cover either, until #667's job runs.
+maturin sdist --out "$tmp/dist"
+python -m venv "$tmp/sv" && "$tmp/sv/bin/pip" install --no-binary disarm "$tmp"/dist/*.tar.gz
+(cd "$tmp" && "$tmp/sv/bin/python" "$OLDPWD/scripts/smoke_installed.py")
+```
+
+Run them from **outside** the checkout, as above. A source tree on `sys.path`
+shadows the installed package and the check passes without testing an install —
+the failure it exists to find. The script says so if it happens.
+
+These cost a full compile each, which is too slow per commit and about right per
+push. `.github/workflows/smoke.yml` runs both in CI: the tracked-tree job on
+every push to `main` with **no** paths filter, since the point is that it runs on
+every commit that lands.
+
 ### The docs describe `main`; the reader executes a tag (#641)
 
 Every gate above runs against the branch. The site deploys from `main` on each

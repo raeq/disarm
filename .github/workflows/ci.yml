@@ -216,6 +216,29 @@ jobs:
       - name: Rust tests
         run: cargo test --no-default-features
 
+      - name: Cheap exhaustive targets (#658)
+        # Three of the four `#[ignore]`d exhaustive targets are near-free, and
+        # they cover the full BMP, every Hangul syllable, all CJK ideographs, 15
+        # Indic blocks, grapheme-boundary integrity, and every Unicode scalar for
+        # width bounds. Running them only at release meant a regression in any of
+        # that surfaced on the release PR rather than on the one that caused it —
+        # and the reason recorded for that placement was cost.
+        #
+        # `width_conformance` had it worse: it appeared in no workflow and in no
+        # documented gate, so nothing had ever run it at all.
+        #
+        # Debug, not release, and deliberately so. The step above already built
+        # this profile, so these binaries are compiled; the tests then take 0.62s
+        # (0.06 + 0.32 + 0.24). In release they take 0.07s but need a whole second
+        # build profile, which costs far more than the 0.55s it saves.
+        #
+        # `exhaustive_confusables` stays in tier3.yml: 1.14s even in release, and
+        # unlike these three it needs the release profile to stay that quick.
+        run: |
+          cargo test --no-default-features --test exhaustive_transliterate -- --ignored
+          cargo test --no-default-features --test exhaustive_grapheme -- --ignored
+          cargo test --no-default-features --test width_conformance -- --ignored
+
       - name: Install maturin
         run: pip install maturin[patchelf]
 

@@ -159,6 +159,13 @@ def catalog_key(
 
     Produces a canonical deduplication key for bibliographic titles.
 
+    Note:
+        **Stability.** A patch upgrade never changes this function's output; a
+        minor upgrade may, and is a possible reindex event (#644). Read the
+        *Upgrade notes* of any minor release before deploying it against stored
+        keys. The contract, and what has moved so far, is in ``docs/RUST_API.md``
+        under *Key stability*.
+
     Args:
         text: Input title or heading.
         lang: Language code for transliteration (e.g. "ru", "ja").
@@ -241,6 +248,13 @@ def search_key(
     lookup key.  Like :func:`catalog_key` but without confusable
     normalization — lighter and faster for search indexes.
 
+    Note:
+        **Stability.** A patch upgrade never changes this function's output; a
+        minor upgrade may, and is a possible reindex event (#644). Read the
+        *Upgrade notes* of any minor release before deploying it against stored
+        keys. The contract, and what has moved so far, is in ``docs/RUST_API.md``
+        under *Key stability*.
+
     Args:
         text: Input text to generate a search key from.
         lang: Language code for transliteration (e.g. "ru", "de").
@@ -289,6 +303,13 @@ def sort_key(
     transliteration of non-Latin runs; an accented Latin letter is never expanded
     by a language profile here (e.g. ``sort_key("Über", lang="de")`` is
     ``"über"``, whereas ``search_key("Über", lang="de")`` is ``"ueber"``).
+
+    Note:
+        **Stability.** A patch upgrade never changes this function's output; a
+        minor upgrade may, and is a possible reindex event (#644). Read the
+        *Upgrade notes* of any minor release before deploying it against stored
+        keys. The contract, and what has moved so far, is in ``docs/RUST_API.md``
+        under *Key stability*.
 
     Args:
         text: Input text to generate a sort key from.

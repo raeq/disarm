@@ -26,8 +26,6 @@ import subprocess  # noqa: S404 — reading our own git metadata, no user input
 from pathlib import Path
 from typing import Any
 
-import tomllib
-
 _ROOT = Path(__file__).resolve().parent.parent
 
 #: The banner is about the gap between the site and the released package, which
@@ -38,6 +36,9 @@ _SKIP_PAGES = frozenset({"CHANGELOG.md"})
 #: Matches the first ATX H1 so the banner lands under the page title rather than
 #: above it. Pages that open with something else get it prepended.
 _FIRST_H1 = re.compile(r"^# .*$", re.MULTILINE)
+
+#: ``version = "0.14.0"`` inside a TOML table.
+_TOML_VERSION = re.compile(r'^version\s*=\s*"([^"]+)"')
 
 
 def _git(*args: str) -> str | None:
@@ -84,11 +85,32 @@ def _released_version() -> str | None:
     if value:
         return value
     try:
-        data = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError):
+        text = (_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    except OSError:
         return None
-    version = data.get("project", {}).get("version")
-    return str(version) if version else None
+    return _project_version(text)
+
+
+def _project_version(pyproject: str) -> str | None:
+    """``project.version`` from ``pyproject.toml``, scanned rather than parsed.
+
+    ``tomllib`` is Python 3.11+ and this project's floor is 3.10
+    (``requires-python``), so a contributor on 3.10 running ``mkdocs serve``
+    would take an ``ImportError`` before the build started. One key from one
+    known table does not need a parser; walking to the ``[project]`` header is
+    what keeps a ``version`` in some other table from being picked up.
+    """
+    in_project = False
+    for line in pyproject.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_project = stripped == "[project]"
+            continue
+        if in_project:
+            match = _TOML_VERSION.match(stripped)
+            if match:
+                return match.group(1)
+    return None
 
 
 def _banner(commit: str | None, released: str | None) -> str | None:

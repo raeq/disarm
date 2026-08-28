@@ -46,8 +46,14 @@ jobs:
         # exactly what `pip install disarm` gives a reader, not a local rebuild
         # of the branch. `--upgrade` on a clean runner resolves to the newest
         # non-prerelease version on PyPI.
+        #
+        # `--only-binary :all:` is what makes "wheel" true. Without it pip is free
+        # to fall back to the sdist when no wheel matches the runner, and it would
+        # then build the Rust core from source — a slow, confusing failure that
+        # tests the checkout's ancestor rather than the published artifact. Failing
+        # on a missing wheel is the better outcome: it is itself a release bug.
         run: |
-          pip install --upgrade disarm
+          pip install --upgrade --only-binary :all: disarm
           python -c "import disarm; print('checking against disarm', disarm.__version__)"
 
       - name: Every documented name must exist in the release

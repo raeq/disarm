@@ -13,6 +13,7 @@ found, and the near-misses that must not be.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import re
 from pathlib import Path
@@ -21,14 +22,20 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 
-# Import the checker directly (it lives in scripts/, not on the path) — same
-# idiom as tests/test_excluded_compositions_sync.py.
-_spec = importlib.util.spec_from_file_location(
-    "check_docs_against_release", REPO / "scripts" / "check_docs_against_release.py"
-)
-assert _spec and _spec.loader
-checker = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(checker)
+# Import the two scripts directly (they live in scripts/, not on the path) —
+# same idiom as tests/test_excluded_compositions_sync.py.
+
+
+def _load(name: str):  # noqa: ANN202 — a module object
+    spec = importlib.util.spec_from_file_location(name, REPO / "scripts" / f"{name}.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+checker = _load("check_docs_against_release")
+banner = _load("mkdocs_build_banner")
 
 
 def _names(markdown: str) -> set[str]:
@@ -192,3 +199,89 @@ class TestKnownGapsRatchet:
         documented = {r.dotted for r in refs}
         for name in checker._KNOWN_GAPS:
             assert name in documented, f"{name} is allowlisted but no page names it"
+
+
+class TestReferenceLocation:
+    """`--root` may name a path the repo does not contain."""
+
+    def test_a_path_outside_the_repo_does_not_raise(self) -> None:
+        """`Path.relative_to` raises rather than falling back, so an out-of-tree
+        `--root` used to crash the report instead of printing it."""
+        ref = checker.Reference("disarm.canonicalize", Path("/elsewhere/readme.md"), 7, "code")
+        assert ref.where == "/elsewhere/readme.md:7"
+
+    def test_a_path_inside_the_repo_is_reported_relative(self) -> None:
+        ref = checker.Reference("disarm.canonicalize", REPO / "docs" / "index.md", 12, "code")
+        assert ref.where == "docs/index.md:12"
+
+
+class TestBannerProvenance:
+    """The banner's two facts, and the fallbacks that keep a docs build working."""
+
+    def test_the_project_version_is_read_from_pyproject(self) -> None:
+        assert banner._released_version() is not None
+
+    def test_only_the_project_table_counts(self) -> None:
+        """A `version` in `[tool.something]` is not the package version."""
+        toml = '[tool.poetry]\nversion = "9.9.9"\n\n[project]\nversion = "1.2.3"\n'
+        assert banner._project_version(toml) == "1.2.3"
+
+    def test_a_missing_project_version_is_none_not_a_crash(self) -> None:
+        assert banner._project_version('[tool.x]\nversion = "9.9.9"\n') is None
+
+    def test_it_does_not_need_tomllib(self) -> None:
+        """`tomllib` is 3.11+; `requires-python` is >=3.10, so a contributor on
+        3.10 would take an ImportError before the docs build even started."""
+        tree = ast.parse((REPO / "scripts" / "mkdocs_build_banner.py").read_text(encoding="utf-8"))
+        imported: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported |= {a.name.split(".")[0] for a in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module.split(".")[0])
+        assert "tomllib" not in imported
+        assert "tomli" not in imported
+
+    def test_an_environment_override_wins(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """CI asks PyPI, which is the authority; pyproject is only the fallback."""
+        monkeypatch.setenv("DISARM_DOCS_RELEASE", "9.9.9")
+        assert banner._released_version() == "9.9.9"
+        monkeypatch.setenv("DISARM_DOCS_COMMIT", "deadbeefcafe")
+        assert banner._build_commit() == "deadbee"
+
+    def test_no_facts_means_no_banner(self) -> None:
+        """Better to say nothing than to render an admonition full of blanks."""
+        assert banner._banner(None, None) is None
+
+    def test_the_banner_names_both_facts(self) -> None:
+        text = banner._banner("abc1234", "0.14.0")
+        assert text is not None
+        assert "abc1234" in text
+        assert "0.14.0" in text
+        assert text.startswith("!!! info")
+
+
+class TestBannerPlacement:
+    """Where the banner lands, and where it must not."""
+
+    class _Page:
+        def __init__(self, src_uri: str) -> None:
+            self.file = type("F", (), {"src_uri": src_uri})()
+
+    def _render(self, markdown: str, src_uri: str, monkeypatch: pytest.MonkeyPatch) -> str:
+        monkeypatch.setattr(banner, "_BANNER", "BANNER\n\n")
+        return banner.on_page_markdown(markdown, self._Page(src_uri), None, None)
+
+    def test_it_lands_under_the_first_h1(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        out = self._render("# Title\n\nBody text.\n", "guide.md", monkeypatch)
+        assert out.startswith("# Title\n\nBANNER")
+        assert "Body text." in out
+
+    def test_a_page_with_no_h1_gets_it_first(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        out = self._render("Body only.\n", "guide.md", monkeypatch)
+        assert out.startswith("BANNER")
+
+    def test_the_changelog_is_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Every line of it is already a version statement."""
+        source = "# Changelog\n\nStuff.\n"
+        assert self._render(source, "CHANGELOG.md", monkeypatch) == source

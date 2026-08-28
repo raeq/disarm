@@ -144,7 +144,12 @@ class Reference:
 
     @property
     def where(self) -> str:
-        rel = self.path.relative_to(_REPO_ROOT) if self.path.is_absolute() else self.path
+        # `--root` can name a path outside the repo, and `relative_to` raises
+        # rather than returning an absolute path when it cannot make one.
+        try:
+            rel: Path | str = self.path.relative_to(_REPO_ROOT)
+        except ValueError:
+            rel = self.path
         return f"{rel}:{self.line}"
 
 

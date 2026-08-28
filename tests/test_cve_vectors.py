@@ -165,8 +165,33 @@ DISPOSITION_LABELS: dict[frozenset[str], str] = {
     frozenset({DETECTED}): "Detected only",
     frozenset({NEUTRALIZED, DETECTED}): "Neutralized + detected",
     frozenset({OUT_OF_SCOPE}): "Out of scope",
+    #: Out of scope *and* reported. disarm neutralizes nothing here, but a caller
+    #: who screens before deciding is told the input is not clean — which is the
+    #: whole reason to screen. `{NOT_AFFECTED, DETECTED}` had a label from the
+    #: start and this did not, which is what kept six rows rendering a dash (#665).
+    frozenset({OUT_OF_SCOPE, DETECTED}): "Out of scope + detected",
     frozenset({NOT_AFFECTED}): "Not affected",
     frozenset({NOT_AFFECTED, DETECTED}): "Not affected + detected",
+}
+
+
+#: Detectors that answer for **one shape of input** rather than for text in
+#: general, so they are not in `DETECTOR_PANEL`: running them over every probe
+#: would manufacture coverage that is not there. They still make claims, and the
+#: claims are still checked — see `test_surface_detectors_fire_where_claimed`.
+#:
+#: Each entry says what *firing* means for it, because they do not all report the
+#: same way and one of them reports by returning ``False``.
+SURFACE_DETECTORS: dict[str, object] = {
+    #: Returns ``(suspicious, analysis)``; the verdict is the first element.
+    "is_suspicious_hostname": lambda s: is_suspicious_hostname(s)[0],
+    #: The panel's `has_anomalies` with the kinds attached.
+    "inspect_anomalies": lambda s: inspect_anomalies(s).anomalous,
+    #: Signals a problem by returning ``False``. `groß.txt` is *not* case-fold
+    #: stable, and that instability is the precondition CVE-2026-23950 needs — so
+    #: falsity is the detection here, and it is the only predicate on this page
+    #: for which that is true.
+    "is_case_fold_stable": lambda s: not is_case_fold_stable(s),
 }
 
 
@@ -573,11 +598,19 @@ class TestNfkcNetlocUnmasking:
         does not parse URLs and cannot stop this — but a caller who screens before
         deciding is no longer told the input is clean. Detecting what you cannot
         neutralize is the most useful thing a detector does on an out-of-scope row.
+
+        The disposition records that as of #665. It asserted a bare
+        ``{OUT_OF_SCOPE}`` for a year while this test's own name said the row was
+        reported, so the page rendered a dash in the *Detected by* column for a
+        signal the library was already emitting.
         """
         assert has_anomalies(NFKC_MASKED_URL) is True
         assert inspect_anomalies(NFKC_MASKED_URL).kinds == ["compat_fold"]
-        # Still out of scope: nothing here claims to defend it.
-        assert BY_ID["CVE-2019-9636"].dispositions == frozenset({OUT_OF_SCOPE})
+        # Out of scope and reported: nothing here claims to defend it, and a
+        # screen run beforehand still says the input is not what it looks like.
+        assert BY_ID["CVE-2019-9636"].dispositions == frozenset({OUT_OF_SCOPE, DETECTED})
+        assert BY_ID["CVE-2019-9636"].neutralizers == ()
+        assert BY_ID["CVE-2019-9636"].detectors == ("has_anomalies",)
 
 
 # ---------------------------------------------------------------------------
@@ -2047,9 +2080,12 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-172",
         cvss=9.8,
         cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
+        dispositions=frozenset({OUT_OF_SCOPE, DETECTED}),
         neutralizers=(),
-        detectors=(),
+        #: `＃` U+FF03 folds to `#` under NFKC, which is the CVE. `compat_fold`
+        #: (#633) reports exactly that, so a caller screening the URL before
+        #: parsing it is told the input is not what it looks like.
+        detectors=("has_anomalies",),
         probe=NFKC_MASKED_URL,
         reference="https://bugs.python.org/issue36216",
     ),
@@ -2145,9 +2181,12 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-94",
         cvss=9.8,
         cvss_version="v3.0",
-        dispositions=frozenset({OUT_OF_SCOPE}),
+        dispositions=frozenset({OUT_OF_SCOPE, DETECTED}),
         neutralizers=(),
-        detectors=(),
+        #: The probe is wholly fullwidth, so `compat_fold` correctly stays silent
+        #: (it needs an ASCII letter beside the folding character). `is_confusable`
+        #: reports the fullwidth forms, which are the evasion.
+        detectors=("is_confusable",),
         probe=FULLWIDTH_IMPORT,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2024-3098",
     ),
@@ -2169,9 +2208,11 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-434",
         cvss=8.1,
         cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
+        dispositions=frozenset({OUT_OF_SCOPE, DETECTED}),
         neutralizers=(),
-        detectors=(),
+        #: The leading ZWSP is the bypass. The `invisible` kind has reported it
+        #: since before 0.14.0; the row simply never recorded it.
+        detectors=("has_anomalies",),
         probe=ZWSP_HTACCESS,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2026-28289",
     ),
@@ -2181,9 +2222,11 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-176",
         cvss=7.3,
         cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
+        dispositions=frozenset({OUT_OF_SCOPE, DETECTED}),
         neutralizers=(),
-        detectors=(),
+        #: `／` U+FF0F folds to `/`, which is the path-filter bypass itself.
+        #: `compat_fold` reports it.
+        detectors=("has_anomalies",),
         probe=FULLWIDTH_PATH,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2024-43093",
     ),
@@ -2193,9 +2236,11 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-116",
         cvss=5.3,
         cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
+        dispositions=frozenset({OUT_OF_SCOPE, DETECTED}),
         neutralizers=(),
-        detectors=(),
+        #: Same probe and same reason as CVE-2024-43093: the fold *is* the bypass,
+        #: and `compat_fold` reports it.
+        detectors=("has_anomalies",),
         probe=FULLWIDTH_PATH,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2023-41889",
     ),
@@ -2205,9 +2250,11 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-176",
         cvss=5.3,
         cvss_version="v3.1",
-        dispositions=frozenset({OUT_OF_SCOPE}),
+        dispositions=frozenset({OUT_OF_SCOPE, DETECTED}),
         neutralizers=(),
-        detectors=(),
+        #: `﹍` U+FE4D folds to `_`, re-populating the filtered pattern.
+        #: `compat_fold` reports the fold and `is_confusable` the lookalike.
+        detectors=("has_anomalies", "is_confusable"),
         probe=DASHED_LOW_LINE,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2023-52081",
     ),
@@ -2911,14 +2958,16 @@ class TestDetectionHasNoSuperset:
         """INVERTED by #633. It used to be the worst pair — out of scope *and*
         undetected, so a caller got neither a defence nor a warning.
 
-        The disposition has not moved and should not: disarm does not parse URLs and
+        The *scope* has not moved and should not: disarm does not parse URLs and
         cannot stop this. What changed is that a pipeline screening before it decides
         is no longer told the input is clean. Four out-of-scope rows gained a signal
         this way, which is the only thing a detector can offer a row nothing
-        neutralizes.
+        neutralizes — and #665 found two more that had it before #633 and had never
+        recorded it either.
         """
         assert self._fires(BY_ID["CVE-2019-9636"])
-        assert BY_ID["CVE-2019-9636"].dispositions == frozenset({OUT_OF_SCOPE})
+        assert BY_ID["CVE-2019-9636"].dispositions == frozenset({OUT_OF_SCOPE, DETECTED})
+        assert NEUTRALIZED not in BY_ID["CVE-2019-9636"].dispositions
 
     def test_stripping_covers_what_detection_misses(self) -> None:
         """The payoff: every vector no detector sees is still neutralized."""
@@ -2965,11 +3014,20 @@ class TestRegistryIntegrity:
             assert cve.dispositions, f"{cve.id}: no disposition"
             assert cve.dispositions <= DISPOSITIONS, cve.id
 
-    def test_out_of_scope_is_exclusive(self) -> None:
-        """A row cannot be both handled and not handled."""
+    def test_out_of_scope_never_pairs_with_a_handling_claim(self) -> None:
+        """A row cannot be both handled and not handled.
+
+        It *can* be out of scope and reported, which is what six rows were doing
+        silently before #665: disarm neutralizes nothing, and a caller screening
+        the input beforehand is still told it is not clean. Detection is not
+        handling, so the two coexist; neutralization and *not affected* are the
+        claims that contradict.
+        """
         for cve in REGISTRY:
             if OUT_OF_SCOPE in cve.dispositions:
-                assert cve.dispositions == frozenset({OUT_OF_SCOPE}), cve.id
+                assert NEUTRALIZED not in cve.dispositions, cve.id
+                assert NOT_AFFECTED not in cve.dispositions, cve.id
+                assert cve.dispositions <= frozenset({OUT_OF_SCOPE, DETECTED}), cve.id
 
     def test_not_affected_never_pairs_with_neutralized(self) -> None:
         """ "disarm stops it" and "disarm never had it" are different claims."""
@@ -2984,12 +3042,18 @@ class TestRegistryIntegrity:
         for cve in REGISTRY:
             assert cve.rendered in DISPOSITION_LABELS.values(), cve.id
 
-    def test_out_of_scope_rows_name_no_entry_point(self) -> None:
-        """An out-of-scope row that lists a defense is a contradiction — it
-        would read as coverage in the published table."""
+    def test_out_of_scope_rows_name_no_neutralizer(self) -> None:
+        """An out-of-scope row that lists a *rewriter* is a contradiction — it
+        would read as coverage in the published table.
+
+        Naming a *detector* is not, and was the gap #665 found. The check used
+        to compare ``entry_points``, which is neutralizers and detectors
+        together, so it forbade both roles at once and forced six rows to render
+        a dash for something they genuinely report.
+        """
         for cve in REGISTRY:
             if OUT_OF_SCOPE in cve.dispositions:
-                assert cve.entry_points == (), cve.id
+                assert cve.neutralizers == (), cve.id
             else:
                 assert cve.entry_points, cve.id
 
@@ -3000,22 +3064,66 @@ class TestRegistryIntegrity:
         would defend the row — including for CVE-2019-19844, whose only detector
         is ``is_confusable`` and whose neutralizers detect nothing.
 
-        Only panel members are compared. Surface-specific detectors like
-        ``is_suspicious_hostname`` may also be listed and are checked in the
-        per-CVE classes instead, since running them on input they were not
-        written for would invent coverage.
+        Only panel members are compared here. Surface-specific detectors answer
+        for one shape of input, so running them over every probe would invent
+        coverage; they are checked in one direction by
+        ``test_surface_detectors_fire_where_claimed``.
+
+        Out-of-scope rows used to be skipped entirely, on the reasoning that a
+        predicate might fire *incidentally* on such a probe and noticing a
+        character is not defending a CVE. #665 measured the registry and found
+        no such row: every out-of-scope probe that fires a detector fires it on
+        the mechanism the CVE exploits — the fullwidth solidus that *is* the path
+        bypass, the zero-width space that *is* the upload bypass. The carve-out
+        was suppressing six real signals to guard against a case that does not
+        occur, so it is gone and every row is compared. If an incidental firing
+        ever does arrive, this test fails and the author records the decision
+        rather than inheriting it.
         """
         for cve in REGISTRY:
             fired = {name for name, pred in DETECTOR_PANEL.items() if pred(cve.probe)}
             claimed = set(cve.detectors) & set(DETECTOR_PANEL)
-            if OUT_OF_SCOPE in cve.dispositions:
-                # A predicate may fire incidentally on an out-of-scope probe --
-                # is_confusable sees the fullwidth forms in CVE-2024-3098 -- but
-                # noticing a character is not defending the CVE, so nothing is
-                # claimed and nothing is compared.
-                assert claimed == set(), cve.id
-                continue
             assert claimed == fired, (cve.id, sorted(claimed), sorted(fired))
+
+    def test_surface_detectors_fire_where_claimed(self) -> None:
+        """The other 8 of the 41 detector claims, which no gate reached.
+
+        ``DETECTOR_PANEL`` covers 33. The remaining claims are surface-specific
+        — ``is_suspicious_hostname`` on four hostname rows, ``inspect_anomalies``
+        on three, ``is_case_fold_stable`` on one — and were verified only by
+        hand, in the per-CVE classes, which is where a claim quietly stops being
+        true.
+
+        Checked in one direction only, and that is deliberate. A claim must
+        fire; a *non*-claim is not compared, because running a hostname
+        predicate over a source-code probe would manufacture coverage. That is
+        the same reasoning that keeps these out of the panel.
+        """
+        unchecked = []
+        for cve in REGISTRY:
+            for name in cve.detectors:
+                if name in DETECTOR_PANEL:
+                    continue
+                if name not in SURFACE_DETECTORS:
+                    unchecked.append((cve.id, name))
+                    continue
+                fires = SURFACE_DETECTORS[name]
+                assert fires(cve.probe), f"{cve.id}: claims {name}, which does not fire"
+        assert not unchecked, (
+            "a detector is claimed that neither the panel nor SURFACE_DETECTORS "
+            f"knows how to check: {unchecked}"
+        )
+
+    def test_every_detector_claim_is_reachable_by_a_gate(self) -> None:
+        """No claim may sit outside both tables.
+
+        Without this, adding a detector name that is in neither collection would
+        silently go unchecked — the failure this pair of tests exists to end.
+        """
+        known = set(DETECTOR_PANEL) | set(SURFACE_DETECTORS)
+        for cve in REGISTRY:
+            for name in cve.detectors:
+                assert name in known, f"{cve.id}: {name} is checked by nothing"
 
     def test_detected_rows_name_a_detector_and_others_do_not(self) -> None:
         """DETECTED in the disposition and an empty detector list contradict."""
@@ -3270,6 +3378,69 @@ class TestDocsMatrixDrift:
         assert int(claim.group("negatives")) == negatives, (
             f"THREAT_MODEL.md says {claim.group('negatives')} negatives, registry has {negatives}"
         )
+
+    #: "**25 of the 46 rows are compared.** The other 21 ... 15 are out of scope
+    #: ... 5 are *not affected* ... and 1 is detected without being neutralized."
+    COMPARISON_SENTENCE = re.compile(
+        r"\*\*(?P<compared>\d+) of the (?P<total>\d+) rows are compared\.\*\*"
+        r"\s+The other (?P<rest>\d+) cannot be.*?"
+        r"(?P<oos>\d+) are out of scope.*?"
+        r"(?P<not_affected>\d+) are \*not affected\*.*?"
+        r"and (?P<detected_only>\d+) (?:is|are) detected without being\s+neutralized",
+        flags=re.DOTALL,
+    )
+
+    #: "`has_anomalies` reports **24** of the 46 today"
+    ANOMALY_COUNT = re.compile(r"`has_anomalies` reports \*\*(?P<n>\d+)\*\* of the (?P<total>\d+)")
+
+    def test_the_comparison_arithmetic_reconciles_to_the_registry(self) -> None:
+        """The five numbers in the published sentence, checked rather than trusted.
+
+        They did not add up before #665, and nothing noticed for a year: `25 + 14`
+        misses 46, and `15 + 2 + 1` misses 14. Both were hand-written prose sitting
+        beside a table that *is* gated — which is exactly where a count goes stale,
+        because the gate next to it looks convincing.
+        """
+        text = self.DOC.read_text(encoding="utf-8")
+        match = self.COMPARISON_SENTENCE.search(text)
+        assert match is not None, "the comparison-arithmetic sentence has changed shape"
+        said = {k: int(v) for k, v in match.groupdict().items()}
+
+        census = {
+            "compared": sum(1 for c in REGISTRY if NEUTRALIZED in c.dispositions),
+            "oos": sum(
+                1
+                for c in REGISTRY
+                if OUT_OF_SCOPE in c.dispositions and NEUTRALIZED not in c.dispositions
+            ),
+            "not_affected": sum(1 for c in REGISTRY if NOT_AFFECTED in c.dispositions),
+            "detected_only": sum(1 for c in REGISTRY if c.dispositions == frozenset({DETECTED})),
+            "total": len(REGISTRY),
+        }
+        census["rest"] = census["total"] - census["compared"]
+
+        assert said == census, {"page says": said, "registry says": census}
+
+        # And the sentence must reconcile with itself, so a future edit cannot
+        # make each number individually right and the sum wrong.
+        assert said["compared"] + said["rest"] == said["total"]
+        assert said["oos"] + said["not_affected"] + said["detected_only"] == said["rest"]
+
+    def test_the_documented_detection_count_matches_the_registry(self) -> None:
+        """`has_anomalies` reports N of 46, and N moves whenever a kind is added.
+
+        It moved twice without the page following: 19 after #612, then 24 once
+        `compat_fold` (#633) landed, while the most recent number a reader met
+        stayed 19.
+        """
+        text = self.DOC.read_text(encoding="utf-8")
+        match = self.ANOMALY_COUNT.search(text)
+        assert match is not None, "the has_anomalies count sentence has changed shape"
+        fires = sum(1 for cve in REGISTRY if has_anomalies(cve.probe))
+        assert int(match.group("n")) == fires, (
+            f"page says has_anomalies reports {match.group('n')} rows; it reports {fires}"
+        )
+        assert int(match.group("total")) == len(REGISTRY)
 
     def test_documented_disposition_matches_the_registry(self) -> None:
         """The wording is derived, not approximated — no softening in Markdown."""

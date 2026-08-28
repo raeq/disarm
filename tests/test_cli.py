@@ -33,8 +33,8 @@ def run_cli(
 
     ``main()`` reads ``sys.argv`` and writes to ``sys.stdout``/``sys.stderr``, so
     all three are patched for the call. Exit status comes from ``SystemExit``:
-    the CLI raises it explicitly on an input error and argparse raises it on a
-    bad argument, while a clean return means 0.
+    the CLI raises it explicitly on an input error, argparse raises it with an
+    integer status on a bad argument, and a clean return means 0.
 
     ``timeout`` is accepted and ignored. It exists so call sites do not have to
     change, and in-process there is no process to time out — a hang here hangs
@@ -63,7 +63,11 @@ def run_cli(
                 code = 0
             elif isinstance(exc.code, int):
                 code = exc.code
-            else:  # a string message: argparse's convention is exit 1 with it on stderr
+            else:
+                # `sys.exit("message")` — CPython prints the object to stderr and
+                # exits 1. Not argparse, which exits with an int (2) after
+                # printing its own message; this branch is here because any code
+                # under main() may raise SystemExit carrying a non-int.
                 code = 1
                 stderr.write(f"{exc.code}\n")
 

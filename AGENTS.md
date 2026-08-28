@@ -40,7 +40,7 @@ bindings drifting from each other. The rules that follow from that:
 - `data/` — **gitignored** built context dictionaries (`*_dict.bin`) plus
   corpora / CLDR sources
 - `tests/` — Rust integration tests (incl. `exhaustive_transliterate`) + Python pytest suite (`test_*.py`)
-- `benchmarks/`, `fuzz/`, `docs/`, `examples/` — perf, fuzzing, docs, usage
+- `benchmarks/`, `docs/`, `examples/` — perf, docs, usage
 
 ## Build & Test (everyday)
 

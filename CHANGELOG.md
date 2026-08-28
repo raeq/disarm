@@ -295,6 +295,26 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   Verified the conversion did not hollow the tests out: planting a `RuntimeError` in
   `cmd_transliterate` turns **34** of the 62 red, across both paths.
 
+- **`fuzz/` deleted, and `SECURITY.md` no longer claims something the code did not support
+  (#679).** The four `cargo-fuzz` targets have not compiled since the June presets rename:
+  every one imports `_disarm`, and the crate is `disarm`. Three also reach
+  `pub(crate)` modules that an external crate cannot see. Confirmed with `cargo check` —
+  `error[E0433]` on all four.
+
+  Nothing was going to notice. There is no `[workspace]` in the root manifest, so no
+  root-level `cargo check`, `clippy --all-targets` or `test` reaches the directory, and no
+  workflow or script invokes `cargo fuzz`.
+
+  The part that made this more than housekeeping: `SECURITY.md` told vulnerability
+  reporters the library "is exhaustively fuzzed", in the paragraph that sets the bar for a
+  report. It now names what actually runs — 27 `proptest` properties on every pull request
+  and 23 Hypothesis fuzz tests over arbitrary text and bytes, with 19 falsifying examples
+  pinned in committed regression corpora. That is a stronger claim than the old one, and a
+  true one.
+
+  `THREAT_MODEL.md`'s "fuzzed and tested for no-panic and linear behavior on hostile bytes
+  (#78)" needed no change: it refers to `tests/test_encoding_fuzz.py`, which runs.
+
 ### Documentation
 
 - **Key-builder output now carries a stated stability contract (#644).** `0.14.0`'s

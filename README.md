@@ -2,11 +2,13 @@
 
 [![Documentation](https://img.shields.io/badge/docs-disarm.dev-blue)](https://docs.disarm.dev/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/disarm/blob/main/LICENSE)
 
-Unicode canonicalization and TR39 *visual* confusable analysis — building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling), plus standards-based *phonetic* transliteration. **One pure-Rust core, with bindings for Python, Ruby, and more.**
+Unicode canonicalization and TR39 *visual* confusable analysis — building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling), plus standards-based *phonetic* transliteration. **One pure-Rust core, with bindings for Python, Ruby, Node.js, Java/Kotlin and C.**
 
 **[Documentation](docs/index.md)** | **[API Reference](docs/api/index.md)** | **[PyPI](https://pypi.org/project/disarm/)**
 
-**Get started in your language:** [Python](docs/python/getting-started.md) · [Rust](docs/rust/getting-started.md) · [Ruby](docs/ruby/getting-started.md)
+**Get started in your language:** [Python](docs/python/getting-started.md) · [Rust](docs/rust/getting-started.md) · [Ruby](docs/ruby/getting-started.md) · [Node.js](docs/node/getting-started.md)
+
+Java and Kotlin ship as `dev.disarm:disarm` and `dev.disarm:disarm-kotlin` on [Maven Central](https://central.sonatype.com/artifact/dev.disarm/disarm) (JDK 21+); a getting-started guide for them is [in progress](https://github.com/raeq/disarm/issues/628).
 
 ## Demo
 

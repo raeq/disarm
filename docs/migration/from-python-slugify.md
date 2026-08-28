@@ -2,6 +2,11 @@
 
 disarm's `slugify()` is parameter-compatible with [python-slugify](https://pypi.org/project/python-slugify/). In most cases, migration requires only changing the import.
 
+!!! note "Installing the libraries these examples compare against"
+    The *Before* blocks import `slugify`, provided by the `python-slugify` distribution.
+    `pip install disarm` does not bring it; install it with `pip install python-slugify`.
+    Every comparator this page benchmarks against is pinned in the project's `bench` extra, if you would rather install them all at once: `pip install "disarm[bench]"`.
+
 ## Quick migration
 
 <!--- skip: next -->

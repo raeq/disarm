@@ -2,6 +2,11 @@
 
 disarm includes built-in confusable detection that replaces [confusable_homoglyphs](https://pypi.org/project/confusable-homoglyphs/).
 
+!!! note "Installing the libraries these examples compare against"
+    The *Before* blocks import `confusable_homoglyphs`, provided by the `confusable-homoglyphs` distribution.
+    `pip install disarm` does not bring it; install it with `pip install confusable-homoglyphs`.
+    `confusable-homoglyphs` is in no disarm extra, so it has to be named explicitly.
+
 ## Quick migration
 
 ### Mixed-script detection

@@ -126,6 +126,58 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   Found independently by the drift gate added in #641 on its first run. Deleting the page
   took its allowlist entries with it, leaving only #660.
 
+- **The migration guides now say which library to install (#657).** All seven import the
+  module they compare against (`anyascii`, `pathvalidate`, `slugify`, `unidecode`,
+  `text_unidecode`, `confusable_homoglyphs`), and `pip install disarm` brings none of the
+  distributions that provide them.
+  A reader copying a *Before* block got `ModuleNotFoundError` naming a package they never
+  asked for, with no way to tell whether disarm was broken. Six are pinned in the `bench`
+  extra, which the note names; `confusable-homoglyphs` is in no extra at all, so that page
+  spells out the package.
+
+  It never failed in CI because those blocks carry `<!--- skip: next -->`, which is the
+  category of defect that survives a green pipeline.
+
+- **`normalize` says which Unicode version it implements (#642).** disarm normalizes to
+  **UCD 17.0.0**, via the `unicode-normalization` crate. A host `unicodedata` on an older
+  UCD disagrees for code points assigned in between — swept exhaustively, every scalar
+  value against all four forms, a UCD 16.0.0 host diverges on exactly one code point
+  (`U+A7F1`, in NFKC and NFKD), and an older CPython on more. Every divergence is disarm
+  being more current rather than wrong, but a pipeline that canonicalizes with one and
+  validates with the other will disagree about which strings are normalized, and the
+  disputed set moves when the deployment's Python is upgraded.
+
+  Stated on the Python and Rust docstrings, in `docs/provenance.md` as a new row, and on
+  `docs/security/cve-validation.md` beside the differential assertion that motivated it —
+  that assertion holds for its payload and is not true in general. The runtime accessor is
+  still missing; that half is #642 and #645.
+
+  All three statements are gated. `unicode-normalization` is a floating `0.1` requirement,
+  so a `cargo update` can move the bundled Unicode data with no disarm code change at all,
+  and three prose claims would keep naming the old version.
+  `tests/normalization_ucd_drift.rs` compares each of them against the crate's own
+  `UNICODE_VERSION` const and fails when one falls behind.
+
+- **The CVE page names the `digit_policy` trade (#646).** Its stated purpose is answering
+  *which call do I make when I don't know which attack is coming*, and it mentioned
+  `digit_policy` zero times. Under `tr39` a Gurmukhi zero standing in for `o` folds and the
+  spoof is caught; under the default it is missed. The cost is that an Arabic-Indic year
+  loses its zero to a full stop, which in a path-shaped key is a traversal-adjacent shape.
+  Both directions are now asserted examples on an executed page.
+
+  It also records that the flag reaches `normalize_confusables` and nothing else: not the
+  presets, not the key builders, not any of the seven profiles. A caller following that
+  section's advice cannot select it at all.
+
+- **Corrected language lists and one wrong method name (#628).** The tagline said "bindings
+  for Python, Ruby, and more" for a library that ships Rust, Python, Ruby, Node.js, Java,
+  Kotlin and a C ABI, and the *Get started in your language* row offered three of them.
+  Node.js is added with its existing page; Java and Kotlin get their Maven coordinates and
+  a pointer, since their guide is still to be written.
+
+  Two pages read "`analyzeHostname` in Node/Ruby/Java". Ruby spells it `analyze_hostname`,
+  and Kotlin was missing. Both corrected.
+
 ## [0.14.0] — 2026-08-28
 
 ### Upgrade notes

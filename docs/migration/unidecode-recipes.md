@@ -19,6 +19,11 @@ hand-rolled code and are not executed.
     disarm helper encapsulates the correct order so you never have to make
     that call.
 
+!!! note "Installing the libraries these examples compare against"
+    The *Before* blocks import `unidecode`, provided by the `Unidecode` distribution.
+    `pip install disarm` does not bring it; install it with `pip install Unidecode`.
+    Every comparator this page benchmarks against is pinned in the project's `bench` extra, if you would rather install them all at once: `pip install "disarm[bench]"`.
+
 ## At a glance
 
 | Hand-rolled with `unidecode` | disarm one-liner |

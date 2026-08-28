@@ -119,8 +119,10 @@ bundle from `github.ref_name`, but the artifact *version* is this hardcode — s
 a stale Gradle version silently publishes the wrong Maven version. Keep them lockstep.
 
 Two things that look like versions but must **not** change: the
-`#[deprecated(since = "X")]` (Rust) and `.. deprecated:: X` (Python docstring) markers
-record the version in which something was *deprecated*, not the current release. The
+`#[deprecated(since = "X")]` (Rust) marker and the `Since X.Y.` opening a Python
+docstring's `Deprecated:` section record the version in which something was *deprecated*,
+not the current release. (Python docstrings used a reST `.. deprecated:: X` directive until
+#664; mkdocstrings is configured for Google style and rendered it as literal text.) The
 binding **glue** crates (`bindings/node/Cargo.toml`, `bindings/ruby/ext/disarm/Cargo.toml`,
 `bindings/java/rust/Cargo.toml`, `bindings/cabi/Cargo.toml`) stay pinned at
 `version = "0.0.0"`; each one's `disarm_core = { package = "disarm", version = "0.<minor>" }`

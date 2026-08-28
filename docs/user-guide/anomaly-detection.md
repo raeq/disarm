@@ -116,3 +116,56 @@ or the decoded word), and its own `reason`.
 A `False` result is not a safety guarantee — it means only that none of the six
 branches fired on the lexicon you supplied. Compose this with your own policy, as
 you would the hostname analysis.
+
+## Checking a transform at the seam
+
+Run `has_anomalies` on the **output** of a transform and it tells you whether that
+transform left something behind. The check needs no new API and is the cheapest way
+to find out you picked the wrong function.
+
+One input carrying three different hazards — a right-to-left override, a zero-width
+space and a Cyrillic `ԁ` standing in for Latin `d`:
+
+```python
+from disarm import (
+    canonicalize,
+    has_anomalies,
+    inspect_anomalies,
+    ml_normalize,
+    normalize_confusables,
+)
+
+hostile = "\u202eexample\u200b.com\u0501"
+
+# canonicalize clears all three: nothing is left to report.
+assert canonicalize(hostile) == "example.comd"
+assert has_anomalies(canonicalize(hostile)) is False
+
+# ml_normalize is not a security preset. The override survives, and the seam
+# check is what tells you so.
+assert has_anomalies(ml_normalize(hostile)) is True
+assert inspect_anomalies(ml_normalize(hostile)).kinds == ["bidi"]
+
+# normalize_confusables folds the homoglyph and nothing else.
+assert inspect_anomalies(normalize_confusables(hostile)).kinds == ["invisible"]
+```
+
+### The guidance only runs one way
+
+!!! warning "A clean result is not an all-clear"
+    **If `has_anomalies` is still true after you clean, you used the wrong function
+    for your input.** A false result does not mean you chose right — the anomaly
+    panel does not cover every class a transform can leave behind.
+
+    Reported recall across 645 adversarial vectors is **42.6%**: 130 of 305
+    wrong-choice failures are visible at the seam, at zero false positives,
+    splitting as confusables 43%, bidi 58%, PUA 0%. Those figures are not ours and
+    we have not reproduced them; the mechanism above is measured here.
+
+    At that recall this is a useful alarm and a useless all-clear. Wire it into CI
+    as an acceptance test and it will read "clean" on well over half the inputs that
+    are not. The PUA column is the sharpest case: private-use characters are not an
+    anomaly kind, so every transform that forwards one is reported clean.
+
+    See [#643](https://github.com/raeq/disarm/issues/643) for classes the panel
+    does not cover.

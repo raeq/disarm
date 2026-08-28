@@ -7,11 +7,11 @@ Provides:
 - ``slugify_url``, ``slugify_filename``, ``slugify_unicode`` — preconfigured instances
 - ``slugify_ru``, ``slugify_de``, ``slugify_el`` — language-specific instances
 
-.. deprecated::
+Deprecated:
     The awesome-slugify compatibility layer (``Slugify``, ``UniqueSlugify``, and
     the ``slugify_*`` pre-configured instances) emits ``DeprecationWarning`` for
     unsupported parameters.  These aliases are planned for removal in v1.0.
-    Migrate to :func:`disarm.slugify` directly.
+    Migrate to `slugify` directly.
 """
 
 from __future__ import annotations

@@ -183,7 +183,7 @@ class Text:
     def strip_control_chars(self) -> Text:
         """Remove control characters that are not whitespace (#433).
 
-        The controls :meth:`collapse_whitespace` folds — TAB, LF, VT, FF, CR, the
+        The controls `collapse_whitespace` folds — TAB, LF, VT, FF, CR, the
         information separators and NEL — are preserved so the fold can turn them
         into a space; deleting them would join the tokens either side."""
         return Text(self._t().strip_control_chars(self._value))
@@ -214,7 +214,7 @@ class Text:
 
         ``default`` is the fallback when the slug would be empty; it is
         sanitized through the same slug pipeline before being returned (#169,
-        #193). See :func:`disarm.slugify`.
+        #193). See `slugify`.
         """
         return Text(
             self._t().slugify(
@@ -291,7 +291,7 @@ class Text:
         return Text(self._t().canonicalize(self._value))
 
     def security_clean(self) -> Text:
-        """Deprecated alias for :meth:`canonicalize` (#430); removed in 1.0."""
+        """Deprecated alias for `canonicalize` (#430); removed in 1.0."""
         warnings.warn(
             "Text.security_clean is deprecated; use Text.canonicalize (removed in 1.0)",
             DeprecationWarning,
@@ -327,7 +327,7 @@ class Text:
         return Text(self._t().strip_format(self._value))
 
     def display_clean(self) -> Text:
-        """Deprecated alias for :meth:`strip_format` (#430); removed in 1.0."""
+        """Deprecated alias for `strip_format` (#430); removed in 1.0."""
         warnings.warn(
             "Text.display_clean is deprecated; use Text.strip_format (removed in 1.0)",
             DeprecationWarning,
@@ -340,14 +340,14 @@ class Text:
 
         Strict Unicode hygiene for untrusted input: NFKC → strip bidi/format,
         zero-width and control → strip invisibles (#413) → strip_zalgo →
-        confusables → collapse whitespace → NFC. Like :meth:`canonicalize` but
+        confusables → collapse whitespace → NFC. Like `canonicalize` but
         also strips zalgo, and unlike the key presets it does not transliterate —
         the original script is preserved.
         """
         return Text(self._t().canonicalize_strict(self._value))
 
     def normalize_user_input(self) -> Text:
-        """Deprecated alias for :meth:`canonicalize_strict` (#430); removed in 1.0."""
+        """Deprecated alias for `canonicalize_strict` (#430); removed in 1.0."""
         warnings.warn(
             "Text.normalize_user_input is deprecated; use Text.canonicalize_strict "
             "(removed in 1.0)",

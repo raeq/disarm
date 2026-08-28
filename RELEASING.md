@@ -96,7 +96,7 @@ independently without anyone having to guess which core a binding wraps.
 > discipline within `0.x`, but our **major**-version semantics are defined above
 > (support status), not by API compatibility.
 
-### Where the version lives — bump all eight
+### Where the version lives — bump all nine
 
 A version bump touches **nine** files and ten `version` fields, across the eight items
 below — item 3 names two files, and one of those carries two fields. Missing any of

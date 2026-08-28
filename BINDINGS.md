@@ -90,15 +90,17 @@ exactly what turns one cycle into three.
   diverge.
 
 **Binding ↔ core compatibility.** The shared `0.MINOR` *is* the compatibility statement:
-a binding's `0.MINOR.x` wraps core `0.MINOR`, in every ecosystem at once. As of **0.11**
-(the Node.js binding's headline minor), all registries are aligned:
+a binding's `0.MINOR.x` wraps core `0.MINOR`, in every ecosystem at once. As of **0.14**,
+all registries are aligned:
 
 | Artifact | Registry | Wraps core |
 |----------|----------|------------|
 | `disarm` crate | crates.io | — (is the core) |
-| `disarm` wheel | PyPI | `0.11` |
-| `disarm` gem | RubyGems | `0.11` |
-| `disarm` package | npm | `0.11` |
+| `disarm` wheel | PyPI | `0.14` |
+| `disarm` gem | RubyGems | `0.14` |
+| `disarm` package | npm | `0.14` |
+| `dev.disarm:disarm` | Maven Central | `0.14` |
+| `dev.disarm:disarm-kotlin` | Maven Central | `0.14` |
 
 Per [RELEASING.md](RELEASING.md), a fix touching one binding may ship as a per-registry
 **patch** (e.g. an npm-only `0.11.3`) without re-cutting the others — so the third
@@ -136,7 +138,8 @@ release time.
 | **Ruby** ✅ #45 | magnus + rb-sys | RubyGems | `snake_case`, `?` predicates, symbols | `Disarm::Error < StandardError` | RSpec | YARD / markdown |
 | **Node** #44 | napi-rs (native) or wasm-pack | npm | `camelCase`, options objects, string unions, `.d.ts` | `DisarmError extends Error` | vitest / jest | TSDoc + types |
 | **Go** #47 | cgo over the C-ABI | pkg.go.dev | exported `CamelCase`, `(T, error)` | `error` values, `errors.Is` sentinels | `go test` | godoc |
-| **Java** #43 | JNI or Panama (FFM) | Maven Central | `camelCase`, builders, packages | `DisarmException` hierarchy | JUnit | Javadoc |
+| **Java** ✅ #43 | JNI over safer-ffi | Maven Central (`dev.disarm:disarm`) | `camelCase`, builders, packages | `DisarmException` hierarchy | JUnit | [JVM API](https://docs.disarm.dev/java/api.html) + Javadoc |
+| **Kotlin** ✅ #43 | (rides the Java artifact) | Maven Central (`dev.disarm:disarm-kotlin`) | `String` extensions, default args, `@JvmOverloads` | shares the Java hierarchy | kotlin.test | [JVM API](https://docs.disarm.dev/java/api.html) + KDoc |
 | **PHP** #46 | ext-php-rs | Packagist / PECL | PSR, namespaced | `DisarmException` | PHPUnit | phpDocumentor |
 | **R** #48 | extendr | CRAN | `snake_case` / `.` funcs | `condition` / `stop()` | testthat | roxygen2 + vignette |
 

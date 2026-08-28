@@ -16,6 +16,8 @@ theme:
     - python
     - rust
     - bash
+    - java
+    - kotlin
 
 plugins:
   - search
@@ -64,6 +66,7 @@ nav:
       - Rust: rust/getting-started.md
       - Ruby: ruby/getting-started.md
       - Node.js: node/getting-started.md
+      - Java & Kotlin: java/getting-started.md
   - Concepts:
       - Which function do I want?: concepts/which-function.md
       - Adversarial-Text Defense: security/adversarial-defense.md
@@ -101,6 +104,7 @@ nav:
       - Rust (docs.rs & semver policy): RUST_API.md
       - Ruby (gem API): ruby/api.md
       - Node.js (npm): node/api.md
+      - Java & Kotlin (Maven Central): java/api.md
   - Architecture:
       - Transliteration Engine: architecture/transliteration-engine.md
       - Data Tables & Caching: architecture/data-tables.md

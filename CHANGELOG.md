@@ -402,6 +402,35 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   text safe to emit; encode at the sink."* It contains `clean`, `untrusted` and `safe`,
   the three words a searcher uses, and promises none of them.
 
+- **The Java and Kotlin bindings have documentation (#628).** They shipped in `0.13.0` and
+  the site never absorbed them: no `docs/java/`, no nav entry, and four lines in the whole
+  tree mentioning the binding. A reader arriving from Maven Central had no supported path
+  from the artifact to a working example.
+
+  Two pages, deliberately scoped to what no other page can give a JVM reader rather than
+  mirroring all 69 methods. `docs/java/getting-started.md` covers the coordinates for
+  Gradle and Maven, the JDK 21 floor, the five bundled natives, the exception hierarchy,
+  and the two things with no counterpart elsewhere: `Pipeline` and `Lexicon` are
+  `AutoCloseable` over native handles, and `hasAnomalies` has no single-argument form.
+  `docs/java/api.md` covers the two call styles, the four options builders, the types, and
+  a name mapping from the bindings a reader may already know.
+
+  **Every example was run before it was written down**, which is how three of them got
+  fixed: `hasAnomalies("...")` does not compile, Kotlin's functions are top-level rather
+  than members of a `Disarm` object, and the transliteration scheme is `STRICT_ISO9` rather
+  than `ISO9`.
+
+  `BINDINGS.md` carried Java as a *planned* binding with "JNI or Panama (FFM)" as an open
+  choice, no Maven coordinates in the artifact table, and no Kotlin row at all. All three
+  corrected, and the table's "as of 0.11" alignment note brought to 0.14.
+  `bindings/java/README.md` now exists, so the GitHub directory view and the published POM
+  `url` reach something.
+
+  Comparing the surface against `generated/parity.yaml` for that page turned up #677: the
+  JVM has neither `canonicalizeStrict` nor `stripFormat`, so the two-call recommendation on
+  the CVE page cannot be followed there as written — and the parity matrix does not track
+  the JVM at all, which is why nothing had noticed.
+
 ## [0.14.0] — 2026-08-28
 
 ### Upgrade notes

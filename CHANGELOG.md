@@ -75,6 +75,35 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   sdist builds from source and passes all 14 checks, and so does the tracked tree. Both
   were sound, so the gates encode a true invariant rather than papering over a break.
 
+- **Key-builder output is gated, not just promised (#644).** `0.14.0` stated the contract —
+  a patch release never changes `search_key`, `catalog_key` or `sort_key` output; a minor
+  release may — and said plainly that nothing enforced it.
+  `tests/test_key_stability.py` does now: eight key-producing functions recomputed over a
+  fixed 22,878-row corpus, failing with a per-function count and a sample of what moved.
+
+  Review was not enough, and the history is the argument. `0.14.0` moved `search_key` on
+  4.1% of a 5,030-input corpus, and the change responsible (#602) was a correctness fix
+  whose diff said nothing about keys — it stopped `ErrorMode::Preserve` excepting itself
+  from the table's empty mappings. Nobody reading that diff would have thought *reindex*.
+
+  Checked against the published `0.13.0` wheel the gate reproduces exactly that movement:
+  `sort_key` 3,026 rows of 22,878 (13.23%), `canonicalize_strict` 604, `search_key` and
+  `catalog_key` 267 each, down to `strip_obfuscation` at 164. Every one is a correctness
+  fix, which is the point rather than a complication — `banĸ.example` really should become
+  `bank.example`, and it still invalidates a stored key. The gate does not judge whether a
+  change is right; it makes the change visible and forces somebody to decide.
+
+  Two properties of the fixture are recorded rather than hidden, in
+  `tests/fixtures/key_stability/README.md`. The corpus is **not reproducible** — its
+  natural rows are tokenised from randomly sampled Wikipedia titles, so the committed file
+  *is* the fixture, while the derived keys regenerate deterministically from it. And its
+  **licence is not the repository's**: `corpus.txt` is CC BY-SA 4.0 with attribution, where
+  the rest of disarm is MIT.
+
+  What is still missing is a signal a consumer can assert in their own CI. That is
+  `KEY_SCHEMA_VERSION` (#645), and it is downstream of this: a constant only means
+  something once something detects that the thing it counts has moved.
+
 ### Fixed
 
 - **Four CI workflows built a dev-profile wheel and then tested it (#658).** `maturin

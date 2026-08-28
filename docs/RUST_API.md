@@ -145,14 +145,40 @@ are correct behaviour.
 
 ### How the rule is kept
 
-Today, by review: a change to the key path is visible in the diff, and moving
-keys is a decision a reviewer has to make deliberately. That is weaker than the
-rest of this document, where claims are gated. The golden-corpus fixture that
-turns it into a gate — recompute every key over a fixed corpus, fail on any
-change, regenerate only as a reviewed act — is the remaining work on #644, and
-`KEY_SCHEMA_VERSION` (#645) is the signal a consumer could assert in their own CI.
-Neither exists yet. Until they do, the statement above is a policy the project
-holds itself to, not one a machine enforces.
+By a gate, since #644. `tests/test_key_stability.py` recomputes eight key-producing
+functions over a fixed 22,878-row corpus and fails on any change, reporting a
+per-function count and a sample of what moved. Regenerating the fixture is the act
+of accepting the change, and it belongs in the same commit as the change that
+caused it.
+
+Review alone did not catch this, and the history says so. `0.14.0` moved
+`search_key` on 4.1% of a 5,030-input corpus, and the change responsible (#602)
+was a correctness fix whose diff said nothing about keys — it stopped
+`ErrorMode::Preserve` excepting itself from the table's empty mappings. Nobody
+reading that diff would have thought *reindex*.
+
+Checked against the published `0.13.0` wheel, the gate reports the movement it was
+built for:
+
+| function | rows changed | share of 22,878 |
+| --- | ---: | ---: |
+| `sort_key` | 3,026 | 13.23% |
+| `canonicalize_strict` | 604 | 2.64% |
+| `search_key` | 267 | 1.17% |
+| `catalog_key` | 267 | 1.17% |
+| `canonicalize` | 249 | 1.09% |
+| `normalize_confusables` | 249 | 1.09% |
+| `strip_obfuscation` | 164 | 0.72% |
+
+Every one of those is a correctness fix, which is the point rather than a
+complication: `banĸ.example` really should become `bank.example`, and it still
+invalidates a stored key. The gate does not judge whether a change is right. It
+makes the change visible, and forces somebody to decide.
+
+What it still does not give a consumer is a signal they can assert in their own
+CI. That is `KEY_SCHEMA_VERSION` (#645), which is downstream of this fixture: a
+constant is only meaningful once something detects that the thing it counts has
+moved.
 
 ## MSRV
 

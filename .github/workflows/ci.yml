@@ -274,6 +274,19 @@ jobs:
           pip install dist/*.whl
           pip install ".[test]"
 
+      - name: docs/index.md is in sync with its sources (#656)
+        # It is generated from README.md + docs/_index_nav.md and carries a "do
+        # not edit directly" banner. Nothing regenerated or verified it, and it
+        # drifted in both directions: content only in the generated file that the
+        # next run would delete, and content only in the sources that never
+        # reached the site.
+        #
+        # This job is the right home rather than `test`: `test` is gated on the
+        # `code` path filter, which does not include `**.md`, so a README-only
+        # pull request would skip the check entirely. `doc-tests` runs on `docs`
+        # too.
+        run: bash scripts/generate_docs_index.sh --check
+
       - name: Anti-rot doc-claim lint (#156)
         run: python3 scripts/check_doc_claims.py
 

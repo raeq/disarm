@@ -48,7 +48,7 @@ Codepoints in emoji ranges (`is_emoji_codepoint`) that don't match any table ent
 
 ## What the emoji engine does not do
 
-Scope statements, so a reader can tell a deliberate omission from a gap.
+These are deliberate omissions rather than gaps, and each is recorded here so a reader does not have to guess which it is.
 
 - **No emojize** (text → emoji). It is the inverse operation and out of scope: disarm's transforms are lossy by design.
 - **No rendering or display.** The engine operates on codepoint sequences, never glyphs.

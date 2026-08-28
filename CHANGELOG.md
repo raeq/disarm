@@ -41,10 +41,12 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   feature it documents and a PR gate would block every feature branch for doing that
   correctly. A red run means documented API has outrun the last release.
 
-  Two gaps are allowlisted, each against an open issue: the `disarm.emoji` plugin API that
-  has never shipped (#655), and `LANG_AUTO`, the one `LANG_*` constant of 84 that the
-  package never re-exports even though three doc blocks tell readers to import it (#660,
-  found by this gate on its first run).
+  Names it cannot fix are allowlisted, and only against an open issue. The gate fails when
+  a listed name starts resolving, and a test fails when the page that named it is gone, so
+  the list shrinks rather than accumulating — it did so in this same release. What remains
+  is `LANG_AUTO`, the one `LANG_*` constant of 84 that the package never re-exports even
+  though three doc blocks tell readers to import it (#660, found by this gate on its first
+  run).
 
 ### Fixed
 
@@ -121,8 +123,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   packages, a file-based provider, and chaining for mixed-era corpora, which is the piece
   with no workaround today.
 
-  Found independently by the drift gate added in #641 on its first run, which is why three
-  of its four allowlisted gaps are now gone.
+  Found independently by the drift gate added in #641 on its first run. Deleting the page
+  took its allowlist entries with it, leaving only #660.
 
 ## [0.14.0] — 2026-08-28
 

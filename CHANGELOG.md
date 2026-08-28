@@ -104,6 +104,27 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `KEY_SCHEMA_VERSION` (#645), and it is downstream of this: a constant only means
   something once something detects that the thing it counts has moved.
 
+- **An execute-only doc tier, so no page has a runnable example that nothing runs (#656).**
+  Before it, a page could be in three states: on `EXECUTED_RECIPES` with its assertions
+  checked, carrying no `python` blocks at all, or — the invisible one — carrying blocks
+  that **nothing executed**. Eight pages were in the third state, so a signature change
+  could break a published example in silence.
+
+  `EXECUTE_ONLY_RECIPES` runs those blocks and checks nothing else. That claims less than
+  the assertion list on purpose, and leaves the ratchet exactly as it was: a page still
+  joins `EXECUTED_RECIPES` only once its examples assert rather than decorate.
+
+  Getting the seven pages to pass took five different fixes, because the blocks failed for
+  five different reasons. Three fragments on `limitations.md` needed the imports the page
+  never made; `architecture/pipeline.md` needed a `dataset` to iterate. Three genuinely
+  cannot run and now say so: `api/index.md` uses mypy's `reveal_type`, `api/encoding.md`
+  ends on a call it documents as raising, and `migration/index.md` imports a comparator
+  from the `bench` extra.
+
+  `tests/test_doc_recipe_coverage.py` keeps the third state gone, which the tier cannot do
+  for itself — a new page joins the tree without touching either list. The doc-test runner
+  now covers **39** pages, up from 32.
+
 ### Fixed
 
 - **Four CI workflows built a dev-profile wheel and then tested it (#658).** `maturin

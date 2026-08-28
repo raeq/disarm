@@ -29,6 +29,7 @@ enc, confidence = detect_encoding("café".encode("windows-1252"))
 
 ::: disarm.decode_to_utf8
 
+<!--- skip: next -->
 ```python
 from disarm import decode_to_utf8
 

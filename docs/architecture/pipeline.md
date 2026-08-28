@@ -61,6 +61,10 @@ This makes `TextPipeline` safe to share across threads (it implements `Send` via
 
 ## Intended use pattern
 
+<!--- invisible-code-block: python
+dataset = ["Grüße aus München", "Köln"]
+-->
+
 ```python
 from disarm import TextPipeline
 

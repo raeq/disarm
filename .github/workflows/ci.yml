@@ -220,8 +220,13 @@ jobs:
         run: pip install maturin[patchelf]
 
       - name: Build wheel and install
+        # --release is load-bearing, not tidiness (#658). `maturin build` defaults
+        # to the dev profile, and this job runs the whole Python suite against
+        # whatever it produces: measured 129s on a debug wheel vs 17s on a release
+        # one, same selection, same machine. The extra compile time is repaid many
+        # times over by the test run, so do not drop the flag to speed up the build.
         run: |
-          maturin build --out dist
+          maturin build --release --out dist
           pip install dist/*.whl
           pip install ".[test]"
           pip install pytest-cov
@@ -265,7 +270,7 @@ jobs:
 
       - name: Build wheel and install
         run: |
-          maturin build --out dist
+          maturin build --release --out dist
           pip install dist/*.whl
           pip install ".[test]"
 

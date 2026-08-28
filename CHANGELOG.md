@@ -16,6 +16,26 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Four CI workflows built a dev-profile wheel and then tested it (#658).** `maturin
+  build` defaults to the dev profile. `--release` was missing from `ci.yml`'s `test` and
+  `doc-tests` jobs, from `tier3.yml`'s formal-invariant build, and from `bench.yml`, while
+  `nightly-hypothesis.yml` and `perf-gate.yml` already passed it — so the convention
+  existed and these four sat outside it.
+
+  Measured on one machine with one selection: the CI Python job takes **129s against a
+  debug wheel and 17s against a release one**. The extra compile time is repaid several
+  times over by the test run it feeds.
+
+  `bench.yml` was wrong rather than merely slow. It built a debug wheel and ran
+  `benchmarks/bench_quick.py` against it, so the numbers that job printed described an
+  unoptimized build. A benchmark whose output cannot be compared to anything is not a
+  smoke test of the artifact the project ships.
+
+  No published artifact was affected: `publish.yml` has always passed `--release` to
+  `maturin-action`, so every wheel on PyPI is an optimized build.
+
 ## [0.14.0] — 2026-08-28
 
 ### Upgrade notes

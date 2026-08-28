@@ -71,7 +71,7 @@ jobs:
 
       - name: Build wheel and install (for formal invariants)
         run: |
-          maturin build --out dist
+          maturin build --release --out dist
           # Install the test dependencies, then force the freshly-built WHEEL as
           # the installed `disarm`. `.[test]` alone would (re)build disarm from the
           # source checkout and shadow the wheel; --force-reinstall --no-deps swaps

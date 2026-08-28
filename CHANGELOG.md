@@ -16,6 +16,24 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A partially-published gem could not be repaired by re-running the publish (#687).**
+  `v0.14.1` shipped with four of five platform gems on RubyGems. The registry accepted
+  `x86_64-darwin` and still timed the client out (`It appears that
+  disarm-0.14.1-x86_64-darwin did not finish pushing`), and because the step ran
+  `for g in pkg/*.gem; do gem push "$g"; done` under `bash -e`, the loop died there and
+  never attempted `x86_64-linux` — the most common Linux target.
+
+  The job already documented `workflow_dispatch` as "the recovery path when a release's
+  gem build failed … but the registry version was never pushed". That path did not work
+  here: a re-run aborts on the first gem that is already published, before reaching the
+  missing one. The recovery route failed in the one case it was written for.
+
+  A failed push is now checked against rubygems.org rather than abandoned. Already-live
+  is not an error and the loop continues; anything else still fails the job. The registry
+  is the authority instead of the error text, which RubyGems phrases several ways.
+
 ## [0.14.1] — 2026-08-28
 
 ### Added

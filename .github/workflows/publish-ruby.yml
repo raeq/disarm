@@ -199,5 +199,68 @@ jobs:
           ruby-version: "3.3"
       - name: Configure RubyGems credentials (OIDC trusted publishing)
         uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+      # A partial publish is the case this has to survive. RubyGems can accept a
+      # gem and still time the client out ("did not finish pushing"), and the
+      # step runs under `bash -e`, so the v0.14.1 release aborted mid-loop with
+      # four of five platforms live and `x86_64-linux` never attempted. Plain
+      # re-running could not repair it: the retry died on the first gem that was
+      # already published, before reaching the missing one — so the
+      # workflow_dispatch recovery path this job documents did not work in the
+      # one situation it exists for.
+      #
+      # Now a push that fails is checked against the registry rather than
+      # abandoned. Already-live is not an error; anything else still fails the
+      # job. The registry is the authority instead of the error text, which
+      # RubyGems phrases several ways.
       - name: gem push
-        run: for g in pkg/*.gem; do gem push "$g"; done
+        run: |
+          set -uo pipefail
+          command -v jq >/dev/null || { echo "::error::jq is not available"; exit 1; }
+
+          # Without nullglob an empty pkg/ iterates the literal string "pkg/*.gem",
+          # which would push a non-existent file and then probe the registry with a
+          # version and platform parsed out of the glob itself.
+          shopt -s nullglob
+          gems=(pkg/*.gem)
+          if [ ${#gems[@]} -eq 0 ]; then
+            echo "::error::no gems in pkg/ — the cross-gem artifacts did not download"
+            exit 1
+          fi
+
+          # Three outcomes, not two: live, absent, and could-not-tell. Collapsing the
+          # third into "absent" would report a network blip as a failed push and say
+          # so in the log, which is the misleading half.
+          registry_has() {
+            local version=$1 platform=$2 attempt out
+            for attempt in 1 2 3; do
+              if out=$(curl -sSf --max-time 30 "https://rubygems.org/api/v1/versions/disarm.json" 2>/dev/null); then
+                printf '%s' "$out" | jq -e --arg v "$version" --arg p "$platform" \
+                  'any(.[]; .number == $v and .platform == $p)' >/dev/null && return 0
+                return 1
+              fi
+              sleep $((attempt * 5))
+            done
+            return 2
+          }
+
+          failed=0
+          for g in "${gems[@]}"; do
+            if gem push "$g"; then
+              continue
+            fi
+            base=$(basename "$g" .gem)              # disarm-0.14.1-x86_64-linux
+            rest=${base#disarm-}                    # 0.14.1-x86_64-linux
+            version=${rest%%-*}                     # 0.14.1
+            platform=${rest#*-}                     # x86_64-linux
+            [ "$platform" = "$version" ] && platform=ruby
+            echo "push failed for $base; asking rubygems.org whether it is already live"
+            registry_has "$version" "$platform"
+            case $? in
+              0) echo "  $version ($platform) is already published — continuing" ;;
+              1) echo "::error::$version ($platform) is not on rubygems.org — the push genuinely failed"
+                 failed=1 ;;
+              2) echo "::error::could not reach rubygems.org after 3 attempts to check $version ($platform); not assuming either way"
+                 failed=1 ;;
+            esac
+          done
+          exit $failed

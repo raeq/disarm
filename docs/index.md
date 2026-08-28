@@ -9,9 +9,7 @@ Unicode canonicalization and TR39 *visual* confusable analysis — building bloc
 
 **[Documentation](index.md)** | **[API Reference](api/index.md)** | **[PyPI](https://pypi.org/project/disarm/)**
 
-**Get started in your language:** [Python](python/getting-started.md) · [Rust](rust/getting-started.md) · [Ruby](ruby/getting-started.md) · [Node.js](node/getting-started.md)
-
-Java and Kotlin ship as `dev.disarm:disarm` and `dev.disarm:disarm-kotlin` on [Maven Central](https://central.sonatype.com/artifact/dev.disarm/disarm) (JDK 21+); a getting-started guide for them is [in progress](https://github.com/raeq/disarm/issues/628).
+**Get started in your language:** [Python](python/getting-started.md) · [Rust](rust/getting-started.md) · [Ruby](ruby/getting-started.md) · [Node.js](node/getting-started.md) · [Java & Kotlin](java/getting-started.md)
 
 ## Demo
 
@@ -423,7 +421,7 @@ See [formal-verification.md](formal-verification.md) for details.
 
 Core concepts and usage for each feature area.
 
-- **Getting Started** — install + quickstart for [Python](python/getting-started.md) · [Rust](rust/getting-started.md) · [Ruby](ruby/getting-started.md) · [Node.js](node/getting-started.md)
+- **Getting Started** — install + quickstart for [Python](python/getting-started.md) · [Rust](rust/getting-started.md) · [Ruby](ruby/getting-started.md) · [Node.js](node/getting-started.md) · [Java & Kotlin](java/getting-started.md)
 - **[Adversarial-Text Defense](security/adversarial-defense.md)** — TR39 visual confusable mapping vs phonetic transliteration, the XMR benchmark, and why it matters
 - **[Transliteration](user-guide/transliteration.md)** — Unicode → ASCII with language profiles, plus reverse (Latin → native script)
 - **[Slugification](user-guide/slugification.md)** — URL-safe slug generation, drop-in python-slugify replacement

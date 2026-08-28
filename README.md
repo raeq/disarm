@@ -6,9 +6,7 @@ Unicode canonicalization and TR39 *visual* confusable analysis — building bloc
 
 **[Documentation](docs/index.md)** | **[API Reference](docs/api/index.md)** | **[PyPI](https://pypi.org/project/disarm/)**
 
-**Get started in your language:** [Python](docs/python/getting-started.md) · [Rust](docs/rust/getting-started.md) · [Ruby](docs/ruby/getting-started.md) · [Node.js](docs/node/getting-started.md)
-
-Java and Kotlin ship as `dev.disarm:disarm` and `dev.disarm:disarm-kotlin` on [Maven Central](https://central.sonatype.com/artifact/dev.disarm/disarm) (JDK 21+); a getting-started guide for them is [in progress](https://github.com/raeq/disarm/issues/628).
+**Get started in your language:** [Python](docs/python/getting-started.md) · [Rust](docs/rust/getting-started.md) · [Ruby](docs/ruby/getting-started.md) · [Node.js](docs/node/getting-started.md) · [Java & Kotlin](docs/java/getting-started.md)
 
 ## Demo
 

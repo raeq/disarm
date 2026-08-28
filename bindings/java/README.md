@@ -12,10 +12,14 @@ Two artifacts on Maven Central, versioned in lockstep with the core:
 
 ```kotlin
 dependencies {
-    implementation("dev.disarm:disarm:0.14.0")
-    implementation("dev.disarm:disarm-kotlin:0.14.0")   // optional
+    implementation("dev.disarm:disarm:0.14.1")
+    implementation("dev.disarm:disarm-kotlin:0.14.1")   // optional
 }
 ```
+
+The version above is the one current when this file was written;
+[Maven Central](https://central.sonatype.com/artifact/dev.disarm/disarm) has the
+newest.
 
 JDK 21 or newer. The jar bundles `darwin-aarch64`, `darwin-x86_64`,
 `linux-aarch64`, `linux-x86_64` and `windows-x86_64`, and extracts the right one

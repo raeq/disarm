@@ -10,9 +10,9 @@ it. Both are on Maven Central.
 
     ```kotlin
     dependencies {
-        implementation("dev.disarm:disarm:0.14.0")
+        implementation("dev.disarm:disarm:0.14.1")
         // optional: String extensions and default arguments
-        implementation("dev.disarm:disarm-kotlin:0.14.0")
+        implementation("dev.disarm:disarm-kotlin:0.14.1")
     }
     ```
 
@@ -20,8 +20,8 @@ it. Both are on Maven Central.
 
     ```groovy
     dependencies {
-        implementation 'dev.disarm:disarm:0.14.0'
-        implementation 'dev.disarm:disarm-kotlin:0.14.0'
+        implementation 'dev.disarm:disarm:0.14.1'
+        implementation 'dev.disarm:disarm-kotlin:0.14.1'
     }
     ```
 
@@ -31,13 +31,18 @@ it. Both are on Maven Central.
     <dependency>
       <groupId>dev.disarm</groupId>
       <artifactId>disarm</artifactId>
-      <version>0.14.0</version>
+      <version>0.14.1</version>
     </dependency>
     ```
 
 `disarm-kotlin` depends on `disarm`, so adding it alone is enough if you only
 write Kotlin. The two versions move in lockstep — see
 [RELEASING.md](../RELEASING.md).
+
+The version above is the one current when this page was written.
+[Maven Central](https://central.sonatype.com/artifact/dev.disarm/disarm) has the
+newest, and the banner at the top of this page says which release the site
+describes.
 
 ### JDK 21 or newer
 

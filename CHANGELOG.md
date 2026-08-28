@@ -16,6 +16,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.14.1] — 2026-08-28
+
 ### Added
 
 - **Every documentation page now says which commit it was built from, and which version

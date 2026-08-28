@@ -31,6 +31,12 @@ canonicalizes with one and validates with the other is where that matters; see
 `docs/security/cve-validation.md` → *Normalization cost*. There is no runtime
 accessor for this version yet (#642); the row is the answer until there is.
 
+The row is gated rather than hand-maintained. `unicode-normalization` is a floating
+`0.1` requirement, so a `cargo update` can move the bundled data with no disarm code
+change; `tests/normalization_ucd_drift.rs` compares this row, the `normalize` rustdoc
+and the Python docstring against the crate's own `UNICODE_VERSION` and fails when any
+of the three falls behind.
+
 **Reading the confusables version at runtime (#560).** The row above is a build-time
 artifact; the same value is reachable from a running program, so a deployment can answer
 "is my fold stale?" without inferring it from behaviour:

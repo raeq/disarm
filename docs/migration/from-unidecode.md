@@ -8,8 +8,8 @@ disarm provides a drop-in replacement for both [Unidecode](https://pypi.org/proj
 > recipes](unidecode-recipes.md) for the pattern-by-pattern mapping.
 
 !!! note "Installing the libraries these examples compare against"
-    The *Before* blocks import `Unidecode` and `text-unidecode`, which `pip install disarm` does not bring.
-    Install what you need alongside it: `pip install Unidecode text-unidecode`.
+    The *Before* blocks import `unidecode` and `text_unidecode`, provided by the `Unidecode` and `text-unidecode` distributions.
+    `pip install disarm` brings neither; install them with `pip install Unidecode text-unidecode`.
     Every comparator this page benchmarks against is pinned in the project's `bench` extra, if you would rather install them all at once: `pip install "disarm[bench]"`.
 
 ## Quick migration

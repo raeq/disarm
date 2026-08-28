@@ -5,9 +5,9 @@ disarm consolidates 8+ legacy Python Unicode text-processing libraries into a si
 > **If you use `unidecode` (or `ftfy`/`anyascii`) as a security/sanitization step, you should migrate for correctness, not just convenience.** Those tools map confusables *phonetically* and cannot reverse homoglyph attacks; `unidecode` can even degrade results. disarm maps *visually* per TR39. See [From Unidecode](from-unidecode.md#unidecode-is-not-a-security-tool).
 
 !!! note "Installing the libraries these examples compare against"
-    The *Before* blocks import `Unidecode`, `python-slugify`, `pathvalidate` and `confusable-homoglyphs`, which `pip install disarm` does not bring.
-    Install what you need alongside it: `pip install Unidecode python-slugify pathvalidate confusable-homoglyphs`.
-    `confusable-homoglyphs` is not in any disarm extra, so it has to be named explicitly.
+    The *Before* blocks import `unidecode`, `slugify`, `pathvalidate` and `confusable_homoglyphs`. Three of the four come from differently-named distributions.
+    `pip install disarm` brings none of them; install them with `pip install Unidecode python-slugify pathvalidate confusable-homoglyphs`.
+    `confusable-homoglyphs` is in no disarm extra, so it has to be named explicitly.
 
 ## The problem
 

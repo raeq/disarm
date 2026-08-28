@@ -152,6 +152,12 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   that assertion holds for its payload and is not true in general. The runtime accessor is
   still missing; that half is #642 and #645.
 
+  All three statements are gated. `unicode-normalization` is a floating `0.1` requirement,
+  so a `cargo update` can move the bundled Unicode data with no disarm code change at all,
+  and three prose claims would keep naming the old version.
+  `tests/normalization_ucd_drift.rs` compares each of them against the crate's own
+  `UNICODE_VERSION` const and fails when one falls behind.
+
 - **The CVE page names the `digit_policy` trade (#646).** Its stated purpose is answering
   *which call do I make when I don't know which attack is coming*, and it mentioned
   `digit_policy` zero times. Under `tr39` a Gurmukhi zero standing in for `o` folds and the

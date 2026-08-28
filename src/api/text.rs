@@ -252,6 +252,11 @@ impl std::str::FromStr for NormalizationForm {
 /// current side of any such disagreement. `docs/provenance.md` records the version
 /// per surface per release, and there is no runtime accessor for this one yet
 /// (#642).
+///
+/// The version above is not hand-maintained: `unicode-normalization` is a floating
+/// `0.1` requirement, so `tests/normalization_ucd_drift.rs` checks this line, the
+/// Python docstring and `docs/provenance.md` against the crate's own
+/// `UNICODE_VERSION`. A `cargo update` that moves the data fails there.
 #[must_use]
 pub fn normalize(text: &str, form: NormalizationForm) -> String {
     crate::normalize::normalize(text, form.as_str())

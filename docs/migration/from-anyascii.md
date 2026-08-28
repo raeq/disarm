@@ -4,7 +4,7 @@ disarm's `transliterate()` replaces [anyascii](https://pypi.org/project/anyascii
 
 !!! note "Installing the libraries these examples compare against"
     The *Before* blocks import `anyascii`, which `pip install disarm` does not bring.
-    Install what you need alongside it: `pip install anyascii`.
+    Install it alongside: `pip install anyascii`.
     Every comparator this page benchmarks against is pinned in the project's `bench` extra, if you would rather install them all at once: `pip install "disarm[bench]"`.
 
 ## Quick migration

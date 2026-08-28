@@ -37,6 +37,7 @@ exception — it is anchored on Latin, and fires on Latin combined with Cyrillic
 | `leet` | every out-of-place char substitutes a letter and the result is a common word (`fr33` → `free`) | a literal number that maps to no letter (`win32`, `Power5`, `21st`, `3pm`) |
 | `segmentation` | dense separators splitting single letters into a real word (`v.i.a.g.r.a`) | multi-letter parts (`6-foot-6`); a lone separator (`e-mail`) |
 | `control` | a non-whitespace control anywhere in the token — `NUL`, `ESC`, `BEL`, `DEL`, the C1 block. Never legitimate in text, and the introducer for terminal-escape injection and leading-blank blocklist bypass | the whitespace-class controls (TAB, LF, VT, FF, CR, `U+001C`–`U+001F`, NEL), which are real separators `collapse_whitespace` folds to a space |
+| `compat_fold` | a token mixing a Unicode **compatibility** form with ASCII, where the non-ASCII part folds *to ASCII* — `ａdmin`, `ｅxample.com`, `＜script＞`. `canonicalize` performs that fold as its first step, so the class was neutralized and reported clean | ordinary fullwidth typography with no ASCII alphanumeric (`ＮＨＫ`, `Ｑ＆Ａ`, `１９９５年`, `ＣＤ－ＲＯＭ`); unit symbols whose fold is Greek, not ASCII (`kΩ`, `µF`); and a token spelled *wholly* in a compatibility form (`ｐａｙｐａｌ`), which cannot be told from `ＮＨＫ` by character class |
 
 The **leet** and **segmentation** branches take a caller-supplied **lexicon** — a
 set of common words for the language being protected. The defining rule: a real

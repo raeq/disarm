@@ -298,6 +298,7 @@ class TestAnomalyKindDoesNotDriftFromTheBindings:
             "leet": "fr33",
             "segmentation": "v.i.a.g.r.a",
             "control": "\x00evil",
+            "compat_fold": "\uff45xample.com",
         }
         assert set(samples) == self._rust_kinds(), "sample set is stale"
         # `leet` and `segmentation` are lexicon-gated by design, so they need one.

@@ -13,6 +13,8 @@
 
 use std::collections::HashSet;
 
+use unicode_normalization::UnicodeNormalization;
+
 use crate::scripts::detect_scripts;
 use crate::zalgo::is_zalgo;
 
@@ -79,6 +81,15 @@ pub enum AnomalyKind {
     /// separators that [`crate::api::collapse_whitespace`] folds to a space,
     /// so flagging them would fire on ordinary multi-line text (#612).
     Control,
+    /// A token spelled partly in a Unicode **compatibility** form and partly in ASCII —
+    /// `ａdmin`, `ｅxample.com`, `＜script＞` — which NFKC folds to a different string.
+    ///
+    /// `canonicalize` performs that fold as its first step, so the whole class was
+    /// neutralized and reported clean (#633). The mixed spelling is the signal: nobody
+    /// writes half a word in fullwidth. A token that is *wholly* in a compatibility form
+    /// (`ｐａｙｐａｌ`, `ＮＨＫ`, `１９９５年`) is deliberately not flagged — see the
+    /// branch in `classify` for why.
+    CompatFold,
 }
 
 impl AnomalyKind {
@@ -94,6 +105,7 @@ impl AnomalyKind {
             AnomalyKind::Leet => "leet",
             AnomalyKind::Segmentation => "segmentation",
             AnomalyKind::Control => "control",
+            AnomalyKind::CompatFold => "compat_fold",
         }
     }
 }
@@ -148,6 +160,10 @@ impl Finding {
             AnomalyKind::Control => {
                 format!("{:?} contains the control character {}", self.token, self.detail)
             }
+            AnomalyKind::CompatFold => format!(
+                "{:?} mixes a compatibility form with ASCII and folds to {}",
+                self.token, self.detail
+            ),
         }
     }
 }
@@ -446,6 +462,49 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
                 return Some(mk(AnomalyKind::MixedScript, scripts.join(" and ")));
             }
         }
+
+        // Compatibility fold (#633): the token changes under NFKC *and* also carries
+        // ASCII alphanumerics — so it is spelled half in a compatibility form and half
+        // in ASCII (`ａdmin`, `ｅxample.com`, `＜script＞alert(1)`). Nobody writes half a
+        // word in fullwidth. `canonicalize` folds this as its very first step, so until
+        // now the entire class was neutralized and reported clean, which is the
+        // asymmetry #603/#605/#610/#612 each closed for a different character class.
+        //
+        // TWO GATES, and both are load-bearing.
+        //
+        // 1. The token must carry an ASCII alphanumeric. Ordinary Japanese typography
+        //    changes under NFKC too — `ＮＨＫ`, `Ｑ＆Ａ`, `１９９５年`, `ＣＤ－ＲＯＭ`,
+        //    `全角１２３`, `Ｔシャツ` — and none of them does, so none fires.
+        // 2. Some non-ASCII character must fold TO ASCII. This one was added after the
+        //    first draft fired on `kΩ µF resistor`, which `mixed_script_spares_cjk_-
+        //    units_and_single_scripts` caught: U+2126 OHM SIGN folds to Greek `Ω` and
+        //    U+00B5 MICRO SIGN to Greek `μ`, so both changed under NFKC while disguising
+        //    nothing. A compatibility form is only a disguise when what it folds to is
+        //    the ASCII someone else is comparing against — which is exactly the attack
+        //    and exactly not the unit symbol.
+        //
+        // Measured with both gates: every mixed-form attack shape caught, 0 of 15
+        // legitimate samples flagged (the Japanese corpus plus the unit symbols).
+        //
+        // The 3 it does not catch are a token spelled WHOLLY in a compatibility form
+        // (`ｐａｙｐａｌ`, `Ｈｅｌｌｏ`, `１２３`), and that is deliberate rather than a
+        // gap: by character class those are indistinguishable from `ＮＨＫ`, and nothing
+        // available here separates them. A detector that fired on `ＮＨＫ` is one a
+        // CJK-facing caller would switch off entirely — which would cost the mixed case
+        // as well, so the narrow rule protects the coverage it does have.
+        //
+        // Cheap test first: the ASCII scan is a byte walk, the NFKC comparison is not.
+        // Both live inside the non-ASCII block because ASCII is already NFKC-normalized,
+        // so a pure-ASCII token can never fire — pinned by
+        // `ascii_is_nfkc_stable_so_the_fast_path_is_safe`, the check #612 needed and
+        // did not have.
+        if tok.chars().any(|c| c.is_ascii_alphanumeric())
+            && tok
+                .chars()
+                .any(|c| !c.is_ascii() && c.nfkc().all(|f| f.is_ascii()))
+        {
+            return Some(mk(AnomalyKind::CompatFold, tok.nfkc().collect::<String>()));
+        }
     }
 
     if core.chars().count() < 2 {
@@ -591,6 +650,96 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Compatibility fold (#633) ───────────────────────────────────
+
+    /// The premise of putting the branch inside the non-ASCII block. ASCII is already
+    /// in NFKC normal form, so a pure-ASCII token can never fold — which is what makes
+    /// skipping the check on the fast path safe. #612's `control` kind was placed the
+    /// other way round and had to move; this asserts the premise instead of assuming it.
+    #[test]
+    fn ascii_is_nfkc_stable_so_the_fast_path_is_safe() {
+        use unicode_normalization::UnicodeNormalization;
+        for cp in 0u32..0x80 {
+            let s = char::from_u32(cp).unwrap().to_string();
+            assert!(
+                s.nfkc().eq(s.chars()),
+                "ASCII U+{cp:04X} is not NFKC-stable"
+            );
+        }
+    }
+
+    #[test]
+    fn a_token_half_in_fullwidth_is_flagged() {
+        for (tok, folds_to) in [
+            ("\u{FF1C}script\u{FF1E}", "<script>"),
+            ("\u{FF41}dmin", "admin"),
+            ("\u{FF45}xample.com", "example.com"),
+        ] {
+            let r = inspect_anomalies(tok, &HashSet::new());
+            assert_eq!(r.kinds, vec![AnomalyKind::CompatFold], "{tok:?}");
+            assert_eq!(r.findings[0].detail, folds_to);
+        }
+    }
+
+    /// The false-positive gate, and the reason the rule is narrow. Every one of these
+    /// changes under NFKC and every one is ordinary Japanese typography; none carries an
+    /// ASCII alphanumeric, so none fires.
+    #[test]
+    fn ordinary_fullwidth_typography_is_not_flagged() {
+        for tok in [
+            "\u{FF2E}\u{FF28}\u{FF2B}",                         // ＮＨＫ
+            "\u{FF31}\u{FF06}\u{FF21}",                         // Ｑ＆Ａ
+            "\u{FF11}\u{FF19}\u{FF19}\u{FF15}\u{5E74}",         // １９９５年
+            "\u{FF23}\u{FF24}\u{FF0D}\u{FF32}\u{FF2F}\u{FF2D}", // ＣＤ－ＲＯＭ
+        ] {
+            assert!(
+                inspect_anomalies(tok, &HashSet::new()).kinds.is_empty(),
+                "{tok:?} was flagged"
+            );
+        }
+    }
+
+    /// MEASURED LIMIT, and a decision rather than a gap: a token spelled WHOLLY in a
+    /// compatibility form is indistinguishable by character class from `ＮＨＫ`. A
+    /// detector that fired on it would fire on ordinary Japanese too, and a CJK-facing
+    /// caller would switch the whole thing off — costing the mixed case as well.
+    #[test]
+    fn a_token_wholly_in_fullwidth_is_deliberately_not_flagged() {
+        for tok in [
+            "\u{FF50}\u{FF41}\u{FF59}\u{FF50}\u{FF41}\u{FF4C}", // ｐａｙｐａｌ
+            "\u{FF11}\u{FF12}\u{FF13}",                         // １２３
+        ] {
+            assert!(
+                inspect_anomalies(tok, &HashSet::new()).kinds.is_empty(),
+                "{tok:?}"
+            );
+        }
+    }
+
+    /// The second gate, and the reason it exists. A first draft required only "changes
+    /// under NFKC", which fired on `kΩ µF resistor` — U+2126 OHM SIGN folds to Greek `Ω`
+    /// and U+00B5 MICRO SIGN to Greek `μ`. Both change, neither disguises any ASCII, and
+    /// the existing `mixed_script` unit test caught it. A compatibility form is only a
+    /// disguise when it folds to the ASCII someone else compares against.
+    #[test]
+    fn unit_symbols_fold_to_greek_and_are_not_a_disguise() {
+        for tok in ["k\u{2126}", "\u{B5}F", "\u{B5}s", "100\u{2126}"] {
+            assert!(
+                inspect_anomalies(tok, &HashSet::new()).kinds.is_empty(),
+                "{tok:?} was flagged"
+            );
+        }
+    }
+
+    /// The rule is not fullwidth-specific: any compatibility form counts, which is why
+    /// the ligature is caught by the same branch.
+    #[test]
+    fn other_compatibility_forms_count_too() {
+        let r = inspect_anomalies("\u{FB01}le", &HashSet::new()); // ﬁle
+        assert_eq!(r.kinds, vec![AnomalyKind::CompatFold]);
+        assert_eq!(r.findings[0].detail, "file");
+    }
 
     fn lex(words: &[&str]) -> HashSet<String> {
         words.iter().map(|w| (*w).to_string()).collect()

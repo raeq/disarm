@@ -241,6 +241,22 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   ~1,025 Rust tests rather than ~630, ~4,490 Python rather than ~2,200, and the Hypothesis
   tier 587 tests / ~67s rather than "~440 / ~40s".
 
+- **Three exhaustive test targets moved from release-time to PR CI, and one of them had
+  never run at all (#658 item 7).** `exhaustive_transliterate`, `exhaustive_grapheme` and
+  `width_conformance` cover the full BMP, every Hangul syllable, all CJK ideographs, 15
+  Indic blocks, grapheme-boundary integrity, and every Unicode scalar for width bounds.
+  They ran only in `tier3.yml`, which `publish.yml` calls — so a regression in any of it
+  surfaced on the release pull request rather than on the one that caused it, and the
+  reason recorded for that placement was cost.
+
+  The cost is 0.62s. The `test` job already builds the debug profile these binaries need,
+  so nothing is compiled twice. (Release would run them in 0.07s and need a whole second
+  build profile, which costs far more than the 0.55s it saves.)
+
+  `width_conformance` was worse than that: it appeared in no workflow and in no documented
+  gate, so **nothing had ever run it**. `exhaustive_confusables` stays in `tier3.yml`,
+  where its 1.14s and its need for the release profile belong.
+
 ### Documentation
 
 - **Key-builder output now carries a stated stability contract (#644).** `0.14.0`'s

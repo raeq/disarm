@@ -273,13 +273,24 @@ points) both bare and crossed with composing marks, all CJK ideographs, 15 Indic
 — plus the seven formalized invariants (I1–I7). `.github/workflows/tier3.yml` runs the
 same set.
 
-```bash
-# Rust exhaustive domain tests (16 tests, marked #[ignore])
-PYO3_PYTHON=$(which python3) cargo test --no-default-features \
-  --test exhaustive_transliterate -- --ignored
+Three of these now run in **PR CI** rather than only here (#658): the
+transliterate, grapheme and width targets cost 0.62s against a profile the `test`
+job has already built, so a regression in them surfaces on the pull request that
+caused it. `width_conformance` was in no workflow and no documented gate before
+that, so nothing had ever run it.
 
-# Grapheme-boundary integrity across the same domain (#174).
-cargo test --no-default-features --test exhaustive_grapheme -- --ignored
+The three of them in one invocation, which is how CI runs them — each
+`cargo test` repeats metadata resolution, so three invocations cost more than
+three times the test time suggests:
+
+```bash
+# exhaustive_transliterate (16 tests), exhaustive_grapheme (#174, 4),
+# width_conformance (#224, 1). All #[ignore]d; all also run in PR CI.
+cargo test --no-default-features \
+  --test exhaustive_transliterate \
+  --test exhaustive_grapheme \
+  --test width_conformance \
+  -- --ignored
 
 # Confusables on the Layer-2 API: the BMP crossed with composing marks, checked for
 # idempotence and for output that is still confusable (#586). Deliberately separate

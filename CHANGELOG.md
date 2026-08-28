@@ -169,6 +169,49 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   specialists below it. Being in a generated, executed page, both new lines are asserted
   rather than decorative.
 
+- **The test suite spent most of its time on two tests and a serial loop (#658).** Item 1
+  landed earlier — `--release` on four `maturin build` calls, which took CI's Python job
+  from 129s to 17s. The rest of the issue is here.
+
+  `TestBatchReleasesGil` was 112.6s of that 129s: 87% of the job in two tests. Both assert
+  a *ratio*, so the batch only has to be large enough that per-call overhead does not blur
+  it. Measured across sizes, the speedup is flat at ~1.8x from 21.6M characters down to
+  0.5M, against a 1.3x threshold. Sized to 4.3M with rounds cut from 5 to 3 — deliberately
+  not the smallest that works, because CI runners have fewer cores and noisier neighbours
+  than the machine this was measured on. The pair now takes 0.39s, and ran ten times
+  without a flake.
+
+  `scripts/run_doc_tests.py` ran 32 pytest processes in sequence for about 4.6s of actual
+  assertions. The pages are independent — that is why they get separate processes — so the
+  loop is concurrent now: **6.5s to 1.7s**. Output is buffered and only failures print
+  theirs, in allowlist order, so a concurrent run reads like a serial one.
+  `DISARM_DOC_TEST_JOBS=1` restores the serial behaviour.
+
+  The oracle suite emitted 42,457 `DeprecationWarning`s on a full run, from exercising the
+  three deprecated aliases against every generated input. Filtered by name in that module
+  — not globally, which would also hide deprecations from dependencies, the ones a
+  maintainer wants to see.
+
+- **Bare `pytest` now runs what CI runs (#658).** The Hypothesis tier was in the local
+  default and in no CI job, so a contributor paid ~67s per run for a tier
+  `nightly-hypothesis.yml` already exercises every night with a random seed and a 10×
+  oracle budget. And the `slow` marker described itself as deselectable while nothing
+  deselected it, so it had no effect: both things it covers are gated elsewhere, and one
+  costs a cold `cargo` build on the first run after a Rust change.
+
+  Both are one command away — `pytest -m hypothesis`, `pytest -m slow` — and `pytest-xdist`
+  is in the `test` extra for `pytest -n 2 --dist loadfile`. `--dist loadfile` is not
+  optional: `register_lang` mutates process-global state that cannot be undone, so tests
+  must stay grouped by file.
+
+  CI keeps its serial command. Measured after the fixes above: serial 6.1s, `-n 2` 4.9s,
+  `-n auto` 5.4s — `auto` is *worse*, because once the suite is short enough, worker
+  startup dominates. The ~1s does not pay for installing the plugin.
+
+  `CONTRIBUTING.md`'s tier figures were stale in both directions and are now measured:
+  ~1,025 Rust tests rather than ~630, ~4,490 Python rather than ~2,200, and the Hypothesis
+  tier 587 tests / ~67s rather than "~440 / ~40s".
+
 ### Documentation
 
 - **Key-builder output now carries a stated stability contract (#644).** `0.14.0`'s

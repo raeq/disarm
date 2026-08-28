@@ -98,8 +98,10 @@ independently without anyone having to guess which core a binding wraps.
 
 ### Where the version lives — bump all eight
 
-A version bump touches **eight** files. Missing one ships inconsistent metadata (the
-`0.11.1` PR initially left items 5–6 stale — caught in review before publish):
+A version bump touches **nine** files and ten `version` fields, across the eight items
+below — item 3 names two files, and one of those carries two fields. Missing any of
+them ships inconsistent metadata (the `0.11.1` PR initially left items 5–6 stale —
+caught in review before publish):
 
 1. `Cargo.toml` — `version = "..."`
 2. `pyproject.toml` — `version = "..."`
@@ -130,8 +132,17 @@ dependency uses a **minor-only** requirement, so a patch never touches them — 
 bumps all four pins** in lockstep with the core (leave them at the *old* minor until the new
 core is published, or the pre-publish build can't resolve the dependency).
 
-Before tagging, sweep for stray references and eyeball what is left (the surviving hits
-should only be the `deprecated` markers above):
+Two more that the eight do not cover, because they are documentation rather than
+metadata: the Gradle and Maven install snippets in `docs/java/getting-started.md` and
+`bindings/java/README.md`. Unlike `pip`, `gem`, `npm` and `cargo add`, a JVM dependency
+declaration has to name a version, so those pages carry one. The other four
+getting-started pages do not and need nothing.
+
+Before tagging, sweep for stray references and eyeball what is left. The surviving hits
+should be the `deprecated` markers above, plus prose that is deliberately historical —
+measurements against a named release, the key-stability fixture's provenance, the
+`0.13.0 → 0.14.0` tables in `RUST_API.md`. Those are correct as written and must not be
+bumped:
 
 ```sh
 grep -rn "<old-version>" --exclude=CHANGELOG.md . | grep -v deprecated

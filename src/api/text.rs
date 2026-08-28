@@ -243,6 +243,15 @@ impl std::str::FromStr for NormalizationForm {
 /// Normalize `text` to the given Unicode normalization form.
 ///
 /// Infallible: a [`NormalizationForm`] is always a valid form.
+///
+/// # Unicode version
+/// Normalization tracks the `unicode-normalization` crate, currently **UCD
+/// 17.0.0** — a different version from several bundled tables, and typically a
+/// newer one than a host Python's `unicodedata`. Results therefore differ from
+/// another implementation for code points assigned in between; disarm is the more
+/// current side of any such disagreement. `docs/provenance.md` records the version
+/// per surface per release, and there is no runtime accessor for this one yet
+/// (#642).
 #[must_use]
 pub fn normalize(text: &str, form: NormalizationForm) -> String {
     crate::normalize::normalize(text, form.as_str())

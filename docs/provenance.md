@@ -20,7 +20,16 @@ against for byte-stable behavior.
 | Case folding — `case_folding.tsv` | Unicode `CaseFolding.txt` (status C&nbsp;+&nbsp;F) | **16.0** |
 | East Asian width — `char_width.tsv` | UCD `EastAsianWidth.txt` | **15.1.0** |
 | Emoji presentation — `emoji_presentation.tsv` | UCD `emoji-data.txt` | **15.1.0** |
+| Normalization — `normalize()`, and every NFC/NFKC step inside the presets | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **17.0.0** |
 | Transliteration / romanization | per-block standards (the rest of this document) | mixed; conventional where no single published standard exists |
+
+The normalization row is the one with an external consequence. Because it tracks a
+newer UCD than most shipped CPythons, `disarm.normalize` and `unicodedata.normalize`
+disagree on code points assigned in between — one code point on a UCD 16.0.0 host,
+more on an older one. Every divergence is disarm being more current. A pipeline that
+canonicalizes with one and validates with the other is where that matters; see
+`docs/security/cve-validation.md` → *Normalization cost*. There is no runtime
+accessor for this version yet (#642); the row is the answer until there is.
 
 **Reading the confusables version at runtime (#560).** The row above is a build-time
 artifact; the same value is reachable from a running program, so a deployment can answer

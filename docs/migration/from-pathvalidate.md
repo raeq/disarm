@@ -2,6 +2,11 @@
 
 disarm's `sanitize_filename()` replaces [pathvalidate](https://pypi.org/project/pathvalidate/) for filename sanitization use cases.
 
+!!! note "Installing the libraries these examples compare against"
+    The *Before* blocks import `pathvalidate`, which `pip install disarm` does not bring.
+    Install what you need alongside it: `pip install pathvalidate`.
+    Every comparator this page benchmarks against is pinned in the project's `bench` extra, if you would rather install them all at once: `pip install "disarm[bench]"`.
+
 ## Quick migration
 
 <!--- skip: next -->

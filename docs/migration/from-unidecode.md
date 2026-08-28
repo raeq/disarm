@@ -7,6 +7,11 @@ disarm provides a drop-in replacement for both [Unidecode](https://pypi.org/proj
 > single-call disarm equivalent. See [Unidecode → disarm
 > recipes](unidecode-recipes.md) for the pattern-by-pattern mapping.
 
+!!! note "Installing the libraries these examples compare against"
+    The *Before* blocks import `Unidecode` and `text-unidecode`, which `pip install disarm` does not bring.
+    Install what you need alongside it: `pip install Unidecode text-unidecode`.
+    Every comparator this page benchmarks against is pinned in the project's `bench` extra, if you would rather install them all at once: `pip install "disarm[bench]"`.
+
 ## Quick migration
 
 ### Option 1: Drop-in alias

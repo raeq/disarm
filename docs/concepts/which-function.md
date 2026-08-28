@@ -43,7 +43,7 @@ chose, not of confusable mapping.
 | Your threat model | Reach for | It costs you |
 |---|---|---|
 | Homoglyph spoofing in a name / address / prose | `normalize_confusables` | Nothing beyond the fold |
-| Homoglyph spoofing in an identifier or hostname | `is_suspicious_hostname` (`analyzeHostname` in Node/Ruby/Java) | Nothing — these report, they do not transform |
+| Homoglyph spoofing in an identifier or hostname | `is_suspicious_hostname` (`analyzeHostname` in Node, Java and Kotlin; `analyze_hostname` in Ruby) | Nothing — these report, they do not transform |
 | A bidi attack — detecting one | `inspect_anomalies` — kind `bidi` is a `U+202x` override, kind `bidi_mixed` is a real-letter direction conflict | Nothing — it reports, it does not transform |
 | A bidi attack — removing one | `strip_bidi` for the override; there is no removal for a real-letter conflict, because there is no format character to remove | The `U+202x` characters |
 | Untrusted input into a store or a key | `canonicalize_strict` | Invisibles, bidi, zalgo |

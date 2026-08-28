@@ -1,0 +1,143 @@
+name: Smoke
+
+# Does the thing a user gets actually import and run?
+#
+# Every other gate tests a development environment. `ci.yml` builds a wheel,
+# installs it, then installs the project again from source with its test extras
+# on top — so what pytest imports afterwards is not reliably the wheel that was
+# built, and the wheel is never imported alone. The local pre-push gate uses
+# `maturin develop`, which produces no distributable artifact at all.
+#
+# Two jobs, for two different gaps.
+#
+# `tracked-tree` (#669): ci.yml triggers on `pull_request` only, so the commit
+# that lands on main is the one commit nothing checks. A PR check runs against
+# `refs/pull/N/merge` — a speculative merge — and with squash merges the commit
+# that reaches main is a brand-new object that has never existed anywhere. This
+# job has NO paths filter on purpose: the point is that it runs on every commit
+# that lands.
+#
+# `artifacts` (#667): the sdist is built at publish time and never installed, so
+# `pip install git+…` and `pip install disarm` on a platform with no matching
+# wheel both take a path nobody has executed before a user executes it.
+#
+# Both run scripts/smoke_installed.py, from a directory outside the checkout —
+# a source tree on sys.path shadows the installed package and the check passes
+# without testing an install at all.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      # Everything that decides what ends up in an artifact, plus the gate itself.
+      - "pyproject.toml"
+      - "Cargo.toml"
+      - "build.rs"
+      - "MANIFEST.in"
+      - "src/tables/data/**"
+      - "python/disarm/**"
+      - "scripts/smoke_installed.py"
+      - ".github/workflows/smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tracked-tree:
+    name: The tree on ${{ github.ref_name }} builds and imports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # v2
+
+      - name: Export the tracked tree
+        # `git archive HEAD` contains exactly what someone fetching this commit
+        # receives. Building the working directory instead would let an untracked
+        # or ignored file stand in for a missing one, which is the failure this
+        # job exists to catch — and this repository ignores a lot: data/corpora,
+        # data/*.bin.gz, /surfaces/, tests/_doc_rust_examples.rs.
+        run: |
+          mkdir -p "$RUNNER_TEMP/tracked"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/tracked"
+          echo "exported $(find "$RUNNER_TEMP/tracked" -type f | wc -l) tracked files"
+
+      - name: Install it the way a person cloning main would
+        # Into a virtualenv holding nothing else, not the runner's global
+        # environment. The runner image ships a long list of preinstalled
+        # packages, any of which would satisfy a dependency this project failed
+        # to declare — which is one of the two failures this workflow exists to
+        # catch, so installing where they are present would hide it.
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --upgrade pip
+          "$RUNNER_TEMP/venv/bin/pip" install "$RUNNER_TEMP/tracked"
+          "$RUNNER_TEMP/venv/bin/pip" list
+
+      - name: Import and exercise it, from outside the checkout
+        # cd out of both the checkout and the export. The script also anchors its
+        # own shadowing check on its location rather than on the cwd, so this is
+        # belt and braces rather than the whole guard.
+        working-directory: ${{ runner.temp }}
+        run: "$RUNNER_TEMP/venv/bin/python $GITHUB_WORKSPACE/scripts/smoke_installed.py"
+
+  artifacts:
+    name: ${{ matrix.artifact }} installs and imports
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        artifact: [wheel, sdist]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # v2
+
+      - name: Install maturin
+        run: pip install "maturin[patchelf]>=1.13.3,<2"
+
+      - name: Build the ${{ matrix.artifact }}
+        # --release for the wheel to match what publish.yml ships (#658). The
+        # sdist carries no compiled code, so the profile applies when pip builds
+        # it below rather than here.
+        run: |
+          if [ "${{ matrix.artifact }}" = "wheel" ]; then
+            maturin build --release --out dist
+          else
+            maturin sdist --out dist
+          fi
+          ls -l dist/
+
+      - name: Install into a virtualenv holding nothing else
+        # No `.[test]`, no editable install. A missing runtime dependency is
+        # invisible in an environment that already has pytest, hypothesis, mypy
+        # and sybil — which is every other environment in this repository.
+        #
+        # --no-binary disarm on the sdist leg forces pip to build it, which is
+        # the path being tested: it is what `pip install git+…` does, and what
+        # `pip install disarm` does on any platform with no matching wheel.
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --upgrade pip
+          if [ "${{ matrix.artifact }}" = "wheel" ]; then
+            "$RUNNER_TEMP/venv/bin/pip" install dist/*.whl
+          else
+            "$RUNNER_TEMP/venv/bin/pip" install --no-binary disarm dist/*.tar.gz
+          fi
+          "$RUNNER_TEMP/venv/bin/pip" list
+
+      - name: Import and exercise it, from outside the checkout
+        working-directory: ${{ runner.temp }}
+        run: "$RUNNER_TEMP/venv/bin/python $GITHUB_WORKSPACE/scripts/smoke_installed.py"

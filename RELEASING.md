@@ -98,8 +98,10 @@ independently without anyone having to guess which core a binding wraps.
 
 ### Where the version lives — bump all eight
 
-A version bump touches **eight** files. Missing one ships inconsistent metadata (the
-`0.11.1` PR initially left items 5–6 stale — caught in review before publish):
+A version bump touches **nine** files and ten `version` fields, across the eight items
+below — item 3 names two files, and one of those carries two fields. Missing any of
+them ships inconsistent metadata (the `0.11.1` PR initially left items 5–6 stale —
+caught in review before publish):
 
 1. `Cargo.toml` — `version = "..."`
 2. `pyproject.toml` — `version = "..."`

@@ -1,8 +1,10 @@
-"""The nine version sites agree, and the four glue pins track the minor.
+"""Every version field agrees, and the four glue pins track the minor.
 
-`RELEASING.md` says *bump all eight*, lists them, and records what happens when
-one is missed: "the `0.11.1` PR initially left items 5–6 stale — caught in review
-before publish". Caught by a person reading a diff. Nothing else was looking.
+`RELEASING.md` lists eight items, covering nine files and ten `version` fields —
+its item 3 names two files, and one of those carries two fields. It records what
+happens when one is missed: "the `0.11.1` PR initially left items 5–6 stale —
+caught in review before publish". Caught by a person reading a diff. Nothing
+else was looking.
 
 A missed site is not a build failure. It is inconsistent metadata on a published
 artifact: a wheel that says one version and a gem that says another, or — the case
@@ -24,8 +26,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 
-#: The eight sites `RELEASING.md` enumerates, plus `package-lock.json`'s second
-#: field, each with the pattern that finds the version in that file's syntax.
+#: The files whose version is one field a single regex can find. The remaining
+#: three — `package.json`, `package-lock.json` (two fields) and `uv.lock` — need
+#: their own parsing, and have dedicated tests below.
 SITES: dict[str, str] = {
     "Cargo.toml": r'^version = "([^"]+)"',
     "pyproject.toml": r'^version = "([^"]+)"',

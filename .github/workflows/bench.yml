@@ -41,7 +41,10 @@ jobs:
         run: pip install maturin[patchelf]
 
       - name: Python quick benchmarks
+        # A benchmark run against a dev-profile wheel measures nothing anyone can
+        # compare against (#658). Smoke test or not, the numbers this step prints
+        # have to describe the artifact the project ships.
         run: |
-          maturin build --out dist
+          maturin build --release --out dist
           pip install dist/*.whl
           python benchmarks/bench_quick.py

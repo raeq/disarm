@@ -278,6 +278,23 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   gate, so **nothing had ever run it**. `exhaustive_confusables` stays in `tier3.yml`,
   where its 1.14s and its need for the release profile belong.
 
+- **`test_cli.py` spawned 58 interpreters to test argument parsing (#658 item 6).** It was
+  2.73s of a 6.16s suite, and roughly 4.6s of the 5.2s originally measured was interpreter
+  startup. Every test routed through one `run_cli` helper, so the conversion is in the
+  helper: it now patches `sys.argv`, `sys.stdin`, `sys.stdout` and `sys.stderr`, calls
+  `main()`, and turns `SystemExit` into a returncode. **No test body changed.**
+
+  **58 tests, 2.73s → 0.08s.**
+
+  Four subprocesses remain, in `TestProcessEntryPoint`, and they are the reason this is a
+  split rather than a wholesale conversion. An in-process suite passes just as happily when
+  `python -m disarm` no longer resolves, when `__main__.py` fails to import under a fresh
+  interpreter, or when the console-script entry point is wrong. Those four assert exactly
+  that, and nothing else.
+
+  Verified the conversion did not hollow the tests out: planting a `RuntimeError` in
+  `cmd_transliterate` turns **34** of the 62 red, across both paths.
+
 ### Documentation
 
 - **Key-builder output now carries a stated stability contract (#644).** `0.14.0`'s

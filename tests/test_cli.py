@@ -2,19 +2,87 @@
 
 Exercises all subcommands, short aliases, flags, stdin piping,
 error handling, and malformed/malicious input.
+
+Most of these call ``main()`` in-process (#658). Every test used to spawn
+``python -m disarm``, which made this file 2.73s of a 6.16s suite — about 4.6s of
+the 5.2s measured in that issue was interpreter startup, for tests that are about
+argument parsing rather than about processes.
+
+``TestProcessEntryPoint`` keeps a handful of real subprocesses, and is the reason
+this is a split rather than a wholesale conversion: an in-process-only suite would
+pass even if ``python -m disarm`` no longer resolved, or if the console script
+were broken. Those are the assertions a subprocess is genuinely required for.
 """
 
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import subprocess
 import sys
+from unittest import mock
+
+import disarm.__main__
 
 
 def run_cli(
     *args: str, input_text: str | None = None, timeout: float = 10
 ) -> subprocess.CompletedProcess[str]:
-    """Run the disarm CLI and return the result."""
+    """Run the CLI in-process and return a subprocess-shaped result.
+
+    ``main()`` reads ``sys.argv`` and writes to ``sys.stdout``/``sys.stderr``, so
+    all three are patched for the call. Exit status comes from ``SystemExit``:
+    the CLI raises it explicitly on an input error, argparse raises it with an
+    integer status on a bad argument, and a clean return means 0.
+
+    ``timeout`` is accepted and ignored. It exists so call sites do not have to
+    change, and in-process there is no process to time out — a hang here hangs
+    pytest, which is a louder failure than a timeout anyway.
+    """
+    del timeout
+
+    stdout, stderr = io.StringIO(), io.StringIO()
+    # StringIO.isatty() is False, which is what `_read_input` checks before
+    # reading stdin. A test that passes no input_text and no positional argument
+    # therefore reads "" rather than taking the "no input provided" branch —
+    # matching the subprocess behaviour under pytest, where stdin is not a tty.
+    stdin = io.StringIO(input_text if input_text is not None else "")
+
+    code = 0
+    with (
+        contextlib.redirect_stdout(stdout),
+        contextlib.redirect_stderr(stderr),
+        mock.patch.object(sys, "argv", ["disarm", *args]),
+        mock.patch.object(sys, "stdin", stdin),
+    ):
+        try:
+            disarm.__main__.main()
+        except SystemExit as exc:
+            if exc.code is None:
+                code = 0
+            elif isinstance(exc.code, int):
+                code = exc.code
+            else:
+                # `sys.exit("message")` — CPython prints the object to stderr and
+                # exits 1. Not argparse, which exits with an int (2) after
+                # printing its own message; this branch is here because any code
+                # under main() may raise SystemExit carrying a non-int.
+                code = 1
+                stderr.write(f"{exc.code}\n")
+
+    return subprocess.CompletedProcess(
+        args=["disarm", *args],
+        returncode=code,
+        stdout=stdout.getvalue(),
+        stderr=stderr.getvalue(),
+    )
+
+
+def run_cli_subprocess(
+    *args: str, input_text: str | None = None, timeout: float = 10
+) -> subprocess.CompletedProcess[str]:
+    """Spawn a real ``python -m disarm``. Used only by TestProcessEntryPoint."""
     env = {**os.environ, "PYTHONUTF8": "1"}
     return subprocess.run(
         [sys.executable, "-m", "disarm", *args],
@@ -343,3 +411,45 @@ class TestMaliciousInput:
     def test_zero_max_length(self):
         r = run_cli("s", "--max-length", "0", "hello world")
         assert isinstance(r.returncode, int)
+
+
+# ---------------------------------------------------------------------------
+# The process boundary itself (#658)
+# ---------------------------------------------------------------------------
+
+
+class TestProcessEntryPoint:
+    """The few assertions a real subprocess is required for.
+
+    Everything above calls ``main()`` in-process, which is 34x faster and tests
+    the same argument parsing. What it cannot test is that there is a process to
+    call: an in-process suite passes just as happily when ``python -m disarm`` no
+    longer resolves, when ``__main__.py`` fails to import under a fresh
+    interpreter, or when the console-script entry point is wrong.
+
+    Four subprocesses, not fifty-eight. That is the whole trade.
+    """
+
+    def test_module_invocation_resolves(self):
+        """`python -m disarm` finds and runs the module."""
+        r = run_cli_subprocess("--help")
+        assert r.returncode == 0
+        assert "transliterate" in r.stdout
+
+    def test_a_real_process_transliterates(self):
+        """End to end through a fresh interpreter: argv in, stdout out."""
+        r = run_cli_subprocess("t", "Москва")
+        assert r.returncode == 0
+        assert r.stdout.strip() == "Moskva"
+
+    def test_a_real_process_reads_stdin(self):
+        """The pipe, through actual OS plumbing rather than a StringIO."""
+        r = run_cli_subprocess("t", input_text="café")
+        assert r.returncode == 0
+        assert r.stdout.strip() == "cafe"
+
+    def test_a_real_process_exits_nonzero_on_error(self):
+        """The exit status a shell or CI step would actually observe."""
+        r = run_cli_subprocess("s", "--lang", "zzz", "hello")
+        assert r.returncode == 1
+        assert r.stderr.startswith("Error:")

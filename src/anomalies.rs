@@ -472,19 +472,28 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         //
         // TWO GATES, and both are load-bearing.
         //
-        // 1. The token must carry an ASCII alphanumeric. Ordinary Japanese typography
+        // 1. The token must carry an ASCII **letter**. Ordinary Japanese typography
         //    changes under NFKC too — `ＮＨＫ`, `Ｑ＆Ａ`, `１９９５年`, `ＣＤ－ＲＯＭ`,
-        //    `全角１２３`, `Ｔシャツ` — and none of them does, so none fires.
+        //    `全角１２３`, `Ｔシャツ` — and none of them carries one, so none fires.
+        //
+        //    A letter, not an alphanumeric: the squared CJK units fold to ASCII and so
+        //    pass gate 2, and a digit beside them is ordinary — `10㎏` folds to `10kg`,
+        //    `5㎞` to `5km`, `3㎡` to `3m2`. 125 code points in U+3000–U+33FF fold to
+        //    ASCII, so an alphanumeric gate opens a whole false-positive class that
+        //    gate 2 cannot see (review on #652). The disguise case is a *word* spelled
+        //    half in a compatibility form, and a word has letters.
         // 2. Some non-ASCII character must fold TO ASCII. This one was added after the
-        //    first draft fired on `kΩ µF resistor`, which `mixed_script_spares_cjk_-
-        //    units_and_single_scripts` caught: U+2126 OHM SIGN folds to Greek `Ω` and
+        //    first draft fired on `kΩ µF resistor`, caught by
+        //    `mixed_script_spares_cjk_units_and_single_scripts`: U+2126 OHM SIGN folds
+        //    to Greek `Ω` and
         //    U+00B5 MICRO SIGN to Greek `μ`, so both changed under NFKC while disguising
         //    nothing. A compatibility form is only a disguise when what it folds to is
         //    the ASCII someone else is comparing against — which is exactly the attack
         //    and exactly not the unit symbol.
         //
-        // Measured with both gates: every mixed-form attack shape caught, 0 of 15
-        // legitimate samples flagged (the Japanese corpus plus the unit symbols).
+        // Measured with both gates: every mixed-form attack shape caught, 0 of 16
+        // legitimate samples flagged — the Japanese corpus, the Greek-folding unit
+        // symbols, and the squared CJK units.
         //
         // The 3 it does not catch are a token spelled WHOLLY in a compatibility form
         // (`ｐａｙｐａｌ`, `Ｈｅｌｌｏ`, `１２３`), and that is deliberate rather than a
@@ -498,7 +507,7 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         // so a pure-ASCII token can never fire — pinned by
         // `ascii_is_nfkc_stable_so_the_fast_path_is_safe`, the check #612 needed and
         // did not have.
-        if tok.chars().any(|c| c.is_ascii_alphanumeric())
+        if tok.chars().any(|c| c.is_ascii_alphabetic())
             && tok
                 .chars()
                 .any(|c| !c.is_ascii() && c.nfkc().all(|f| f.is_ascii()))
@@ -724,7 +733,19 @@ mod tests {
     /// disguise when it folds to the ASCII someone else compares against.
     #[test]
     fn unit_symbols_fold_to_greek_and_are_not_a_disguise() {
-        for tok in ["k\u{2126}", "\u{B5}F", "\u{B5}s", "100\u{2126}"] {
+        for tok in [
+            "k\u{2126}",
+            "\u{B5}F",
+            "\u{B5}s",
+            "100\u{2126}",
+            // And the squared CJK units, which DO fold to ASCII and so clear gate 2 —
+            // gate 1's letter requirement is the only thing keeping them out
+            // (review on #652). `10㎏` -> `10kg`, `5㎞` -> `5km`, `3㎡` -> `3m2`.
+            "10\u{338F}",
+            "5\u{339E}",
+            "3\u{33A1}",
+            "100\u{339C}",
+        ] {
             assert!(
                 inspect_anomalies(tok, &HashSet::new()).kinds.is_empty(),
                 "{tok:?} was flagged"

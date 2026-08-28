@@ -16,14 +16,16 @@ nav pages; markup that renders as text is neither. These tests are the check.
 
 The equivalents that *do* render, and that also read correctly under ``help()``:
 
-===========================  ==================================
-reST                         Google / Markdown
-===========================  ==================================
-``.. warning::``             ``Warning:`` section
-``.. note::``                ``Note:`` section
-``.. deprecated:: X``        ``Deprecated:`` section, ``Since X.``
-``:func:`canonicalize```     ```canonicalize```
-===========================  ==================================
+- a ``.. warning::`` directive becomes a ``Warning:`` section
+- a ``.. note::`` directive becomes a ``Note:`` section
+- a ``.. deprecated:: X`` directive becomes a ``Deprecated:`` section opening
+  ``Since X.``
+- a ``:func:`` / ``:class:`` / ``:doc:`` role becomes a plain single-backtick code
+  span around the name
+
+Written as prose rather than a two-column table because the reST side of the last
+row is a role wrapped in backticks, and every way of typesetting that inside a
+docstring reads as something it is not.
 """
 
 from __future__ import annotations

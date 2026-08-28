@@ -123,8 +123,8 @@ Run `has_anomalies` on the **output** of a transform and it tells you whether th
 transform left something behind. The check needs no new API and is the cheapest way
 to find out you picked the wrong function.
 
-One input, three overrides in it — a right-to-left override, a zero-width space and
-a Cyrillic `ԁ`:
+One input carrying three different hazards — a right-to-left override, a zero-width
+space and a Cyrillic `ԁ` standing in for Latin `d`:
 
 ```python
 from disarm import (

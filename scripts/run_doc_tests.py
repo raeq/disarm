@@ -15,8 +15,9 @@ independent of execution order. The allowlist is read from ``docs/conftest.py``
 
 The pages are independent of each other — that is the whole premise of running
 them in separate processes — so the loop runs them concurrently (#658). Before
-that it was 33 sequential interpreter-plus-collection starts for about 4.6s of
-actual assertions, and the process starts were most of the wall time. Output is
+that it was one sequential interpreter-plus-collection start per allowlisted page
+(32 at the time of writing) for about 4.6s of actual assertions, and the process
+starts were most of the wall time. Output is
 buffered per page and printed in allowlist order, so a concurrent run reads the
 same as a serial one.
 

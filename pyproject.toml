@@ -53,9 +53,14 @@ classifiers = [
 test = [
     "pytest>=9.1.0",
     "pytest-cov>=5.0",
-    # `-n auto --dist loadfile` (#658). `--dist loadfile` is not optional here:
+    # `pytest -n 2 --dist loadfile` (#658). `--dist loadfile` is not optional:
     # `register_lang` mutates process-global state that cannot be undone, so
-    # tests have to stay grouped by file. Per-file distribution preserves that.
+    # tests have to stay grouped by file, which per-file distribution preserves.
+    #
+    # `-n 2`, not `-n auto`. Measured after the #658 fixes: serial 6.1s, -n 2
+    # 4.9s, -n 4 5.0s, -n auto 5.4s — once the suite is this short, worker
+    # startup dominates and `auto` over-provisions. CI stays serial for the same
+    # reason; ~1s does not pay for installing the plugin there.
     "pytest-xdist>=3.6",
     "hypothesis>=6.155.3",
     "mypy>=2.1.0",
@@ -134,11 +139,18 @@ testpaths = ["tests"]
 # installed from a wheel rather than editable — as in CI — where the repo root
 # is not otherwise importable.
 pythonpath = ["."]
-# Bare `pytest` selects what CI selects (#658). The Hypothesis tier was in the
-# local default and in no CI job, so a contributor paid 67s on every run for a
-# tier that `nightly-hypothesis.yml` already runs every night at 03:17 UTC with a
-# random seed and a 10x oracle budget — a better exercise of it than one more
-# fixed-seed pass. Run it on demand with `pytest -m hypothesis`.
+# Bare `pytest` runs CI's selection minus the opt-in `slow` tier (#658). CI uses
+# `-m "not formal and not hypothesis"`, so the two expressions differ by
+# `not slow` — but nothing in that tier executes under CI conditions anyway:
+# `test_cabi_header_drift` skips when $CI is set, and the ratio floors need the
+# `bench` extra, which CI does not install. Measured with CI=1 and no bench
+# extra: 5 selected, 5 skipped. The *executed* set matches; the *expression*
+# does not.
+#
+# The Hypothesis tier was in the local default and in no CI job at all, so a
+# contributor paid ~67s on every run for a tier `nightly-hypothesis.yml` already
+# runs at 03:17 UTC with a random seed and a 10x oracle budget — a better
+# exercise of it than one more fixed-seed pass. `pytest -m hypothesis` on demand.
 addopts = ["-v", "--tb=short", "-m", "not formal and not hypothesis and not slow"]
 markers = [
     # Opt-in since #658: the marker described itself as deselectable and nothing

@@ -174,11 +174,16 @@ What every PR must pass. Mirrors `.github/workflows/ci.yml`.
 # --no-default-features disables the Python-linking extension-module feature.
 PYO3_PYTHON=$(which python3) cargo test --no-default-features
 
-# Python deterministic tests (~4,490). This is what bare `pytest` runs: since #658
-# the default selection is CI's selection, so a green local run means the same
-# thing a green CI run does.
+# Python deterministic tests (~4,490). Since #658 this is what bare `pytest` runs.
 pytest
 ```
+
+CI's own command is `pytest tests/ --ignore=tests/test_typing.py -m "not formal and
+not hypothesis"`, so the two marker expressions are **not** identical — the local
+default also carries `not slow`. Nothing in that tier executes under CI conditions
+regardless: measured with `CI=1` and no `bench` extra, all five slow tests skip. The
+executed set matches; the expression does not, and a green local run means what a
+green CI run means for that reason rather than by definition.
 
 Counts were stale in both directions before #658 and are worth stating measured
 rather than approximated, because they are how a reader notices a tier stopped

@@ -93,7 +93,53 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
   Keys computed and compared **within one process** are unaffected either way.
 
+- **`has_anomalies` flags a class it did not flag before.** The `compat_fold` kind
+  (#633) reports a token that mixes a Unicode compatibility form with ASCII —
+  `ａdmin`, `ｅxample.com`, `＜script＞`. If you alert on `has_anomalies`, expect new
+  hits on input that was previously reported clean; `canonicalize` already folded all
+  of it, so nothing you were *cleaning* changes, only what you are *told about*.
+
+  It is gated twice to keep ordinary text out — the token must carry an ASCII letter,
+  and some non-ASCII character must fold *to* ASCII — so `ＮＨＫ`, `Ｑ＆Ａ`,
+  `１９９５年`, `kΩ`, `µF` and `10㎏` are all silent. Measured at 0 false positives on
+  a 16-sample corpus of Japanese typography and unit symbols. A token spelled *wholly*
+  in a compatibility form (`ｐａｙｐａｌ`) is deliberately not flagged.
+
+  Node callers: the `AnomalyKind` union gained `'compat_fold'`. An exhaustive `switch`
+  over it needs a new arm.
+
 ### Added
+
+- **`compat_fold` — the last row on the CVE page a character class could close (#633).**
+  `canonicalize("＜script＞")` returned `<script>` and `inspect_anomalies("＜script＞")`
+  reported clean: the whole class was neutralized and none of it was detected, the same
+  asymmetry #603, #605, #610 and #612 each closed for a different character class.
+
+  It lands against an explicit prediction. #612's closing text argued the remaining rows
+  each needed a *comparison* between two strings rather than the presence of a character,
+  so no further character class would close them. Right about the others, wrong about this
+  one: a compatibility fold is checkable per token — compare the token to its NFKC form —
+  and what made it hard was never detection but false positives.
+
+  **Two gates, and both were found by something firing rather than by design.** The token
+  must carry an ASCII **letter**, and some non-ASCII character must fold *to ASCII*. The
+  first draft required only "changes under NFKC" and fired on `kΩ µF resistor`, which an
+  existing test caught — the Ohm and micro signs fold to Greek and disguise nothing. The
+  second draft required an ASCII *alphanumeric* and fired on `10㎏`, which folds to `10kg`;
+  125 code points in `U+3000`–`U+33FF` fold to ASCII, so the squared CJK units were a whole
+  class. The disguise case is a *word* spelled half in a compatibility form, and a word has
+  letters.
+
+  Reaches five CVE rows, and **four of them are out of scope**. CVE-2007-2688 (Cisco IPS
+  fullwidth evasion) becomes `Neutralized + detected`; CVE-2019-9636, CVE-2024-43093,
+  CVE-2023-41889 and CVE-2023-52081 keep their disposition — disarm does not parse URLs and
+  cannot stop them — but a caller who screens before deciding is no longer told the input is
+  clean. `has_anomalies` goes from 19 rows to 24, and the undetected-in-scope set from seven
+  to six.
+
+  A token spelled *wholly* in a compatibility form (`ｐａｙｐａｌ`, `１２３`) is deliberately
+  not flagged: by character class it cannot be told from `ＮＨＫ`, and a detector that fires
+  on `ＮＨＫ` is one a CJK-facing caller switches off entirely.
 
 - **`find_key_collisions` — which of these names are the same name (#620).** The first
   disarm entry point that takes a *collection*. Every other detector is a single-string

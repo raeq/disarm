@@ -58,8 +58,18 @@ def _pages_with_python_blocks() -> set[str]:
 
 
 def test_both_lists_exist_and_are_populated() -> None:
-    assert len(_list("EXECUTED_RECIPES")) > 20
-    assert _list("EXECUTE_ONLY_RECIPES")
+    """Empty lists would make every check below pass while testing nothing.
+
+    Deliberately not a count. A threshold breaks on ordinary docs churn without
+    indicating a coverage regression, and the thing worth guarding is the vacuous
+    case — a renamed or emptied list — which emptiness catches on its own.
+    """
+    for name in ("EXECUTED_RECIPES", "EXECUTE_ONLY_RECIPES"):
+        assert _list(name), (
+            f"{name} is empty in docs/conftest.py. Sybil's `patterns` is built from "
+            "both lists, so an empty one silently stops executing that whole tier "
+            "and every check in this file still passes."
+        )
 
 
 def test_no_page_is_on_both_lists() -> None:
@@ -89,7 +99,21 @@ def test_every_page_with_python_blocks_is_executed() -> None:
     )
 
 
-def test_the_scan_finds_something() -> None:
-    """A regex that matched nothing would make the check above vacuous."""
-    pages = _pages_with_python_blocks()
-    assert len(pages) > 25, sorted(pages)
+def test_the_scan_finds_every_listed_page() -> None:
+    """A regex matching nothing would make the check above vacuous.
+
+    Anchored to the lists rather than to a count. Every listed page is a recipe,
+    so every one has a ```python block by construction — which makes the scan a
+    superset of the lists, and makes that a fact about the tree rather than a
+    number somebody has to keep updating. It also fails harder than a threshold:
+    a regex that half-works is caught, not just one that matches nothing.
+    """
+    listed = set(_list("EXECUTED_RECIPES")) | set(_list("EXECUTE_ONLY_RECIPES"))
+    scanned = _pages_with_python_blocks()
+    missed = sorted(listed - scanned)
+    assert not missed, (
+        "these pages are on a recipe list but the scan did not find a ```python "
+        f"block in them: {missed}. Either the scan is broken — which would make "
+        "test_every_page_with_python_blocks_is_executed vacuous — or these pages "
+        "no longer have runnable examples and should come off the list."
+    )

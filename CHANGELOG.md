@@ -68,6 +68,47 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   No published artifact was affected: `publish.yml` has always passed `--release` to
   `maturin-action`, so every wheel on PyPI is an optimized build.
 
+
+- **Six CVE rows report and the matrix showed a dash (#665).** `docs/security/cve-validation.md`
+  is generated from a registry, gated against it by `TestDocsMatrixDrift`, and understated
+  disarm's own detection on six of its 46 rows. The gate was comparing the page with the
+  registry; the registry was what was wrong.
+
+  The root cause is one missing dictionary entry. `DISPOSITION_LABELS` had a label for
+  `{not-affected, detected}` and none for `{out-of-scope, detected}`, so adding `DETECTED`
+  to an out-of-scope row raised `KeyError` and the combination could not be written down at
+  all. Four rows gained their signal with `compat_fold` (#633); two — CVE-2026-28289's
+  leading zero-width space and CVE-2024-3098's fullwidth `__import__` — reported before
+  that and had never been recorded.
+
+  A carve-out in `test_detectors_are_exactly_those_that_fire` skipped out-of-scope rows
+  entirely, on the reasoning that a predicate might fire *incidentally* and noticing a
+  character is not defending a CVE. Measured against the registry, no such row exists: all
+  six fire on the mechanism the CVE exploits — the fullwidth solidus that **is** the path
+  bypass, the zero-width space that **is** the upload bypass. The carve-out was suppressing
+  six real signals to guard a case that does not occur, so every row is compared now.
+
+- **Two published counts that did not add up (#665).** `25 + 14` misses 46, and
+  `15 + 2 + 1` misses 14; the correct census is 25 compared, 15 out of scope, 5 not
+  affected, 1 detected-only. That sentence had been wrong since before `0.14.0`. The most
+  recent detection total a reader met was also stale: `has_anomalies` reports **24** of the
+  46 rows, not the 19 it reached after #612.
+
+  Both numbers are now derived checks rather than prose. `TestDocsMatrixDrift` parses the
+  sentences and compares them with the registry, and requires the arithmetic to reconcile
+  with itself so a future edit cannot make each number individually right and the sum
+  wrong.
+
+- **Eight detector claims were verified by nothing (#665).** `DETECTOR_PANEL` covers 33 of
+  the 41 claims on the page. The rest are surface-specific — `is_suspicious_hostname`,
+  `inspect_anomalies`, `is_case_fold_stable` — and were checked only by hand.
+
+  `SURFACE_DETECTORS` now records what *firing* means for each, because they do not all
+  report the same way: `is_suspicious_hostname` returns a tuple, and `is_case_fold_stable`
+  signals a problem by returning `False`. They are checked in one direction only, since
+  running a hostname predicate over a source-code probe would manufacture coverage. A
+  companion test fails if a claim ever names something neither table knows how to check.
+
 ### Documentation
 
 - **Key-builder output now carries a stated stability contract (#644).** `0.14.0`'s

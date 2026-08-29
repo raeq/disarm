@@ -297,11 +297,22 @@ class TestFooterTemplate:
     OVERRIDE = REPO / "overrides" / "main.html"
 
     def test_the_override_exists_and_is_wired_in(self) -> None:
+        """`custom_dir` must be a live YAML key, not a mention of one.
+
+        Searching the file for the literal text also matches it commented out,
+        and that is the state this exists to catch: the theme's own empty
+        `main.html` wins and the footer silently loses its provenance line.
+        """
         assert self.OVERRIDE.is_file(), "overrides/main.html is gone; the footer renders nothing"
         mkdocs = (REPO / "mkdocs.yml").read_text(encoding="utf-8")
-        assert "custom_dir: overrides/" in mkdocs, (
-            "mkdocs.yml no longer points at overrides/, so the theme's own empty "
-            "main.html wins and the footer silently loses its provenance line"
+        wired = any(
+            re.fullmatch(r"custom_dir:\s*overrides/?", line.strip())
+            for line in mkdocs.splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert wired, (
+            "mkdocs.yml has no active `custom_dir: overrides/` key, so the theme's own "
+            "empty main.html wins and the footer silently loses its provenance line"
         )
 
     @pytest.mark.parametrize("key", ["build_commit", "released_version"])
@@ -323,6 +334,10 @@ class TestFooterTemplate:
         html = self.OVERRIDE.read_text(encoding="utf-8")
         assert 'rel="canonical"' not in html
         assert "isPartOf" in html, "the parent-site signal is gone"
+        assert CANONICAL_SITE in re.findall(r'"url":\s*"([^"]+)"', html), (
+            f"the isPartOf block does not name {CANONICAL_SITE}, so the structured-data "
+            "signal and the footer link now point at different sites"
+        )
 
     def test_the_footer_links_the_canonical_site(self) -> None:
         """The link must be an `href` in `copyright:`, not merely present in the file.

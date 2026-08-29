@@ -57,6 +57,15 @@ jobs:
       HAS_CLOUDFLARE_CREDENTIALS: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          # A `release` event resolves to the *tag's* commit, which is behind
+          # `main` by however much has landed since. Without this the release
+          # trigger added above would deploy the tag's docs over the newer
+          # site — refreshing the version in the footer by making every other
+          # page older. The site tracks `main`; only the banner's version comes
+          # from the release. An empty string is checkout's own default, so
+          # push and pull_request behave exactly as before.
+          ref: ${{ github.event_name == 'release' && 'main' || '' }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
@@ -73,13 +82,17 @@ jobs:
         # through to the hook's own fallbacks if it cannot be reached: a docs
         # deploy must not depend on a third party being up.
         run: |
-          echo "DISARM_DOCS_COMMIT=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          # `git rev-parse HEAD`, not GITHUB_SHA: on a release event the event
+          # SHA is the tag's, while the tree checked out above is `main`. The
+          # banner must name the commit that was actually built.
+          built=$(git rev-parse HEAD)
+          echo "DISARM_DOCS_COMMIT=${built}" >> "$GITHUB_ENV"
           released=$(curl -fsS --max-time 10 https://pypi.org/pypi/disarm/json \
             | python -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])' \
             2>/dev/null) || released=""
           if [ -n "$released" ]; then
             echo "DISARM_DOCS_RELEASE=${released}" >> "$GITHUB_ENV"
-            echo "::notice title=Docs banner::Built from ${GITHUB_SHA:0:7}; newest release ${released}"
+            echo "::notice title=Docs banner::Built from ${built:0:7}; newest release ${released}"
           else
             echo "::warning title=Docs banner::PyPI did not answer; the banner falls \
             back to the version in pyproject.toml"

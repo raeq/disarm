@@ -40,8 +40,11 @@
   {
     "@context": "https://schema.org",
     "@type": "WebSite",
+    {#- The name stays distinct from the parent's: config.site_name is "disarm"
+        for both, and two WebSite nodes with one name is ambiguous. Only the URL
+        was duplicated config, so only the URL comes from it. -#}
     "name": "disarm documentation",
-    "url": "https://docs.disarm.dev/",
+    "url": {{ config.site_url | tojson }},
     "isPartOf": {
       "@type": "WebSite",
       "name": "disarm",

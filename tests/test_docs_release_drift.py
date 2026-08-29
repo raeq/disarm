@@ -22,6 +22,11 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 
+#: The landing site the docs declare themselves part of (#692). Compared by
+#: equality against parsed `href` values, never as a substring of a URL —
+#: substring checks on URLs are bypassable and CodeQL rejects them.
+CANONICAL_SITE = "https://disarm.dev/"
+
 # Import the two scripts directly (they live in scripts/, not on the path) —
 # same idiom as tests/test_excluded_compositions_sync.py.
 
@@ -320,8 +325,18 @@ class TestFooterTemplate:
         assert "isPartOf" in html, "the parent-site signal is gone"
 
     def test_the_footer_links_the_canonical_site(self) -> None:
+        """The link must be an `href` in `copyright:`, not merely present in the file.
+
+        Searching the whole of `mkdocs.yml` for the URL passes on the comment
+        above the setting, so deleting the actual link would leave this green.
+        Reading the hrefs out of the `copyright:` line is what makes it a test
+        of the rendered footer rather than of the file's prose.
+        """
         mkdocs = (REPO / "mkdocs.yml").read_text(encoding="utf-8")
-        assert "https://disarm.dev/" in mkdocs, (
-            "nothing links docs.disarm.dev to disarm.dev; that link is the "
-            "cross-site signal #692 added"
+        line = next((ln for ln in mkdocs.splitlines() if ln.startswith("copyright:")), None)
+        assert line is not None, "mkdocs.yml has no copyright: setting to carry the link"
+        hrefs = re.findall(r"""href=['"]([^'"]+)['"]""", line)
+        assert any(href == CANONICAL_SITE for href in hrefs), (
+            f"the footer copyright links {hrefs or 'nothing'}, none of which is "
+            f"{CANONICAL_SITE} — the cross-site signal #692 added"
         )

@@ -18,6 +18,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The "Try disarm in your browser" link pointed at a host that no longer resolves (#696).**
+  The demo moved to `https://disarm.dev/tools/` and the link did not follow it.
+
+  `disarm-web.pages.dev` fails at DNS, so this was a hard error rather than a redirect a
+  browser would follow. It sat on the two most-read pages in the project — `README.md`,
+  which is the crates.io and PyPI landing copy, and `docs/index.md`, the docs.disarm.dev
+  homepage — as the first call to action under `## Demo`, above the whole "Why disarm"
+  case. A reader evaluating the library clicked it before reading anything else.
+
+  `mkdocs build --strict` cannot catch this. It validates internal links, not external
+  hosts, and no other job checks them either, which is how a dead link survived in the
+  two files most readers see first.
+
 - **The build banner sat above every page, named a stale version, and nothing linked the
   canonical site (#692).** Three problems with one footprint.
 

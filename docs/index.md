@@ -13,7 +13,7 @@ Unicode canonicalization and TR39 *visual* confusable analysis — building bloc
 
 ## Demo
 
-**[Try disarm in your browser](https://disarm-web.pages.dev/)**
+**[Try disarm in your browser](https://disarm.dev/tools/)**
 
 ## Why disarm
 

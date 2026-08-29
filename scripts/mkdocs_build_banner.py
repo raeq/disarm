@@ -33,6 +33,12 @@ _ROOT = Path(__file__).resolve().parent.parent
 #: ``version = "0.14.1"`` inside a TOML table.
 _TOML_VERSION = re.compile(r'^version\s*=\s*"([^"]+)"')
 
+#: Every environment variable ``_build_commit`` consults, in order. Named rather
+#: than inlined so a test isolating the function can clear exactly this set:
+#: ``GITHUB_SHA`` is always present on Actions, so a test that clears only
+#: ``DISARM_DOCS_COMMIT`` passes locally and fails in CI.
+_COMMIT_ENV = ("DISARM_DOCS_COMMIT", "GITHUB_SHA")
+
 
 def _git(*args: str) -> str | None:
     """Run a read-only git command, or return ``None`` when git cannot answer.
@@ -58,7 +64,7 @@ def _git(*args: str) -> str | None:
 
 def _build_commit() -> str | None:
     """The commit this build describes, shortest reliable form first."""
-    for env in ("DISARM_DOCS_COMMIT", "GITHUB_SHA"):
+    for env in _COMMIT_ENV:
         value = os.environ.get(env, "").strip()
         if value:
             return value[:7]

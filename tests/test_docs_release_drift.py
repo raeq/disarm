@@ -271,7 +271,8 @@ class TestBannerProvenance:
         empty sentence, which is the failure the admonition version guarded
         against and this must keep guarding.
         """
-        monkeypatch.delenv("DISARM_DOCS_COMMIT", raising=False)
+        for var in banner._COMMIT_ENV:  # GITHUB_SHA among them: always set on Actions
+            monkeypatch.delenv(var, raising=False)
         monkeypatch.delenv("DISARM_DOCS_RELEASE", raising=False)
         monkeypatch.setattr(banner, "_ROOT", tmp_path)  # no pyproject.toml here
         monkeypatch.setattr(banner, "_git", lambda *a: None)

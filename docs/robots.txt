@@ -1,0 +1,16 @@
+# robots.txt for https://docs.disarm.dev
+#
+# Without this file Cloudflare serves a managed one, which is the Content
+# Signals explanatory preamble and nothing else: no User-agent, no Allow, and
+# no Sitemap. The sitemap MkDocs writes on every build was therefore undeclared,
+# leaving discovery of 75 pages to a crawler guessing the conventional path.
+#
+# An origin robots.txt supersedes the managed file, so that preamble goes with
+# it. Nothing operative is lost — it declared no signals. Content Signals, if
+# wanted, belong here as explicit Content-Signal: lines rather than inherited by
+# default (#691).
+
+User-agent: *
+Allow: /
+
+Sitemap: https://docs.disarm.dev/sitemap.xml

@@ -7,6 +7,13 @@ name: Docs
 # source statically (griffe), so no Rust/maturin is required here.
 
 on:
+  # Publishing a release changes the answer the build banner gives, and no
+  # path filter can see that happen: a release that edits nothing under
+  # docs/ never rebuilt the site, so the footer kept naming the previous
+  # version. v0.14.1 shipped and the site said 0.14.0 (#692).
+  release:
+    types: [published]
+  workflow_dispatch:
   push:
     branches: [main]
     paths:

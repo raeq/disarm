@@ -7,10 +7,18 @@ repo_name: raeq/disarm
 edit_uri: edit/main/docs/
 use_directory_urls: false
 
-copyright: "&copy; 2026 the <a href='https://github.com/raeq/disarm/graphs/contributors'>disarm team</a>."
+# The footer is the only element on every page, which makes it where the docs
+# declare they belong to https://disarm.dev/ (#692). The two sites had no link
+# between them in either direction.
+copyright: "&copy; 2026 the <a href='https://github.com/raeq/disarm/graphs/contributors'>disarm team</a>. <a href='https://disarm.dev/'>disarm.dev</a>"
 
 theme:
   name: readthedocs
+  # overrides/main.html — the theme ships a main.html whose only content is a
+  # comment saying customisations belong here. It carries the footer build
+  # provenance and the og/schema.org markup naming disarm.dev as the parent
+  # site (#692).
+  custom_dir: overrides/
   highlightjs: true
   hljs_languages:
     - python
@@ -35,9 +43,10 @@ plugins:
             separate_signature: true
             docstring_style: google
 
-# Every page is stamped with the commit it was built from and the version a
-# reader can install (#641). The site deploys on every push to main; the package
-# deploys on a tag, and nothing on the page used to say those were different.
+# The commit each build came from and the version a reader can install (#641),
+# published into config.extra and rendered in the footer by overrides/main.html
+# (#692). The site deploys on every push to main; the package deploys on a tag,
+# and nothing on the page used to say those were different.
 hooks:
   - scripts/mkdocs_build_banner.py
 

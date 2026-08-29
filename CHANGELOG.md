@@ -18,6 +18,39 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The build banner sat above every page, named a stale version, and nothing linked the
+  canonical site (#692).** Three problems with one footprint.
+
+  #641 injected the provenance note as an `!!! info` admonition under each page's first
+  H1, so a five-line box came between the title and the first sentence on all 91 pages.
+  The facts are worth keeping everywhere; that placement was not. `on_page_markdown` is
+  gone — `scripts/mkdocs_build_banner.py` now publishes the two facts into `config.extra`
+  via `on_config`, and `overrides/main.html` renders them once in the footer.
+
+  The version it named was stale because `docs.yml` is path-filtered. Its last deploy ran
+  at the release-PR merge, and CI resolves the version by asking PyPI at build time —
+  which still served `0.14.0`, because the tag came minutes later. Nothing rebuilt the
+  site afterwards, since neither #686 nor #688 touched a filtered path. So publishing a
+  release never refreshed the page that says which release exists. `docs.yml` now also
+  runs on `release: [published]`.
+
+  Nothing linked `https://disarm.dev/` from anywhere in the docs, so neither site passed
+  the other any signal. The footer links it now, with `og:site_name` and a schema.org
+  `isPartOf` naming it the parent. Deliberately **not** done by repointing `rel=canonical`:
+  `base.html` emits a correct self-referential canonical per page, and aiming those at the
+  landing site declares all 91 pages duplicates of it, whose usual result is the docs
+  dropping out of results for their own content. A test now asserts the override does not
+  emit a canonical of its own.
+
+- **`docs.disarm.dev` declared no sitemap (#691).** With no `robots.txt` of its own,
+  Cloudflare served a managed one: the Content Signals explanatory preamble, and nothing
+  else. No `User-agent`, no `Allow`, no `Sitemap`, and no actual signals — so the 75-page
+  sitemap MkDocs writes on every build was undeclared, and discovery depended on a crawler
+  guessing the conventional path. `docs/robots.txt` declares it; MkDocs copies `docs/` to
+  the site root, as `docs/_redirects` already relied on. The managed preamble goes with it,
+  which loses nothing operative; Content Signals, if wanted, belong there as explicit
+  `Content-Signal:` lines rather than inherited by default.
+
 - **A partially-published gem could not be repaired by re-running the publish (#687).**
   `v0.14.1` shipped with four of five platform gems on RubyGems. The registry accepted
   `x86_64-darwin` and still timed the client out (`It appears that

@@ -22,6 +22,11 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 
+#: The landing site the docs declare themselves part of (#692). Compared by
+#: equality against parsed `href` values, never as a substring of a URL —
+#: substring checks on URLs are bypassable and CodeQL rejects them.
+CANONICAL_SITE = "https://disarm.dev/"
+
 # Import the two scripts directly (they live in scripts/, not on the path) —
 # same idiom as tests/test_excluded_compositions_sync.py.
 
@@ -249,39 +254,105 @@ class TestBannerProvenance:
         monkeypatch.setenv("DISARM_DOCS_COMMIT", "deadbeefcafe")
         assert banner._build_commit() == "deadbee"
 
-    def test_no_facts_means_no_banner(self) -> None:
-        """Better to say nothing than to render an admonition full of blanks."""
-        assert banner._banner(None, None) is None
+    def test_the_hook_publishes_both_facts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`on_config` is the whole interface now — the template reads these two keys."""
+        monkeypatch.setenv("DISARM_DOCS_COMMIT", "abc1234def")
+        monkeypatch.setenv("DISARM_DOCS_RELEASE", "0.14.1")
+        config = banner.on_config({})
+        assert config["extra"]["build_commit"] == "abc1234"
+        assert config["extra"]["released_version"] == "0.14.1"
 
-    def test_the_banner_names_both_facts(self) -> None:
-        text = banner._banner("abc1234", "0.14.0")
-        assert text is not None
-        assert "abc1234" in text
-        assert "0.14.0" in text
-        assert text.startswith("!!! info")
+    def test_missing_facts_are_none_rather_than_blanks(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A build with no git and no pyproject must not render a footer of gaps.
+
+        `None` is what the template tests for; an empty string would render an
+        empty sentence, which is the failure the admonition version guarded
+        against and this must keep guarding.
+        """
+        for var in banner._COMMIT_ENV:  # GITHUB_SHA among them: always set on Actions
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.delenv("DISARM_DOCS_RELEASE", raising=False)
+        monkeypatch.setattr(banner, "_ROOT", tmp_path)  # no pyproject.toml here
+        monkeypatch.setattr(banner, "_git", lambda *a: None)
+        config = banner.on_config({})
+        assert config["extra"]["build_commit"] is None
+        assert config["extra"]["released_version"] is None
+
+    def test_it_does_not_clobber_an_existing_extra(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`extra` is a shared config key; another hook or mkdocs.yml may own it."""
+        monkeypatch.setenv("DISARM_DOCS_COMMIT", "abc1234")
+        config = banner.on_config({"extra": {"unrelated": "kept"}})
+        assert config["extra"]["unrelated"] == "kept"
+        assert config["extra"]["build_commit"] == "abc1234"
 
 
-class TestBannerPlacement:
-    """Where the banner lands, and where it must not."""
+class TestFooterTemplate:
+    """The override that renders the facts, and the wiring that reaches it.
 
-    class _Page:
-        def __init__(self, src_uri: str) -> None:
-            self.file = type("F", (), {"src_uri": src_uri})()
+    The hook publishing a fact nothing reads is a silently empty footer, which
+    looks identical to a working one. These tie the two ends together.
+    """
 
-    def _render(self, markdown: str, src_uri: str, monkeypatch: pytest.MonkeyPatch) -> str:
-        monkeypatch.setattr(banner, "_BANNER", "BANNER\n\n")
-        return banner.on_page_markdown(markdown, self._Page(src_uri), None, None)
+    OVERRIDE = REPO / "overrides" / "main.html"
 
-    def test_it_lands_under_the_first_h1(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        out = self._render("# Title\n\nBody text.\n", "guide.md", monkeypatch)
-        assert out.startswith("# Title\n\nBANNER")
-        assert "Body text." in out
+    def test_the_override_exists_and_is_wired_in(self) -> None:
+        """`custom_dir` must be a live YAML key, not a mention of one.
 
-    def test_a_page_with_no_h1_gets_it_first(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        out = self._render("Body only.\n", "guide.md", monkeypatch)
-        assert out.startswith("BANNER")
+        Searching the file for the literal text also matches it commented out,
+        and that is the state this exists to catch: the theme's own empty
+        `main.html` wins and the footer silently loses its provenance line.
+        """
+        assert self.OVERRIDE.is_file(), "overrides/main.html is gone; the footer renders nothing"
+        mkdocs = (REPO / "mkdocs.yml").read_text(encoding="utf-8")
+        wired = any(
+            re.fullmatch(r"custom_dir:\s*overrides/?", line.strip())
+            for line in mkdocs.splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert wired, (
+            "mkdocs.yml has no active `custom_dir: overrides/` key, so the theme's own "
+            "empty main.html wins and the footer silently loses its provenance line"
+        )
 
-    def test_the_changelog_is_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Every line of it is already a version statement."""
-        source = "# Changelog\n\nStuff.\n"
-        assert self._render(source, "CHANGELOG.md", monkeypatch) == source
+    @pytest.mark.parametrize("key", ["build_commit", "released_version"])
+    def test_the_template_reads_what_the_hook_writes(self, key: str) -> None:
+        """Renaming a key in the hook must break a test, not the site."""
+        assert f"config.extra.{key}" in self.OVERRIDE.read_text(encoding="utf-8"), (
+            f"overrides/main.html does not read config.extra.{key}, which "
+            "mkdocs_build_banner.on_config publishes"
+        )
+
+    def test_it_does_not_rewrite_the_canonical_url(self) -> None:
+        """#692: the docs must keep their own canonical.
+
+        `base.html` emits a self-referential `rel=canonical` per page. Pointing
+        it at the landing site declares all 91 pages duplicates of it, and the
+        usual outcome is the docs dropping out of results for their own content.
+        The cross-site signal is `isPartOf` and a real link, not this.
+        """
+        html = self.OVERRIDE.read_text(encoding="utf-8")
+        assert 'rel="canonical"' not in html
+        assert "isPartOf" in html, "the parent-site signal is gone"
+        assert CANONICAL_SITE in re.findall(r'"url":\s*"([^"]+)"', html), (
+            f"the isPartOf block does not name {CANONICAL_SITE}, so the structured-data "
+            "signal and the footer link now point at different sites"
+        )
+
+    def test_the_footer_links_the_canonical_site(self) -> None:
+        """The link must be an `href` in `copyright:`, not merely present in the file.
+
+        Searching the whole of `mkdocs.yml` for the URL passes on the comment
+        above the setting, so deleting the actual link would leave this green.
+        Reading the hrefs out of the `copyright:` line is what makes it a test
+        of the rendered footer rather than of the file's prose.
+        """
+        mkdocs = (REPO / "mkdocs.yml").read_text(encoding="utf-8")
+        line = next((ln for ln in mkdocs.splitlines() if ln.startswith("copyright:")), None)
+        assert line is not None, "mkdocs.yml has no copyright: setting to carry the link"
+        hrefs = re.findall(r"""href=['"]([^'"]+)['"]""", line)
+        assert any(href == CANONICAL_SITE for href in hrefs), (
+            f"the footer copyright links {hrefs or 'nothing'}, none of which is "
+            f"{CANONICAL_SITE} — the cross-site signal #692 added"
+        )

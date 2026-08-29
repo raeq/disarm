@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{#
+  Theme override for the readthedocs theme (#692).
+
+  The theme ships a main.html whose only content is a comment saying that
+  customisations belong here, overriding blocks from base.html. This is that
+  file.
+
+  Two jobs:
+
+  1. Build provenance in the footer. #641 put it in an `!!! info` admonition
+     injected under every page's H1, which sat between the title and the first
+     sentence of all 91 pages. The facts are worth keeping on every page; the
+     placement was not. scripts/mkdocs_build_banner.py now publishes them into
+     config.extra and they render once, here.
+
+  2. Tell search engines that docs.disarm.dev belongs to disarm.dev. The two are
+     separate sites with no link between them, so neither passed the other any
+     signal. Deliberately NOT done by rewriting rel=canonical: base.html emits a
+     correct self-referential canonical per page, and repointing it at
+     disarm.dev would declare all 91 pages duplicates of the landing page, whose
+     usual result is the docs dropping out of results for their own content.
+#}
+
+{%- block site_meta %}
+  {{ super() }}
+  {#- The canonical above stays self-referential. These say which site this is
+      part of, which is the signal that was missing. -#}
+  <meta property="og:site_name" content="disarm" />
+  <meta property="og:type" content="website" />
+  {%- if page and page.canonical_url %}
+  <meta property="og:url" content="{{ page.canonical_url }}" />
+  {%- endif %}
+  <meta property="og:title" content="{% if page and page.title and not page.is_homepage %}{{ page.title }} - {% endif %}{{ config.site_name }}" />
+  {%- if config.site_description %}
+  <meta property="og:description" content="{{ config.site_description }}" />
+  {%- endif %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    {#- The name stays distinct from the parent's: config.site_name is "disarm"
+        for both, and two WebSite nodes with one name is ambiguous. Only the URL
+        was duplicated config, so only the URL comes from it. -#}
+    "name": "disarm documentation",
+    "url": {{ config.site_url | tojson }},
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "disarm",
+      "url": "https://disarm.dev/"
+    }
+  }
+  </script>
+{%- endblock %}
+
+{%- block footer %}
+  {{ super() }}
+  {#- Provenance last, after the theme's own credit line: it describes the build
+      rather than the page, so it reads as a colophon. Each half is conditional
+      because a build from an sdist has no git metadata and a build with no
+      network answer has no released version — see the hook. -#}
+  {%- if config.extra.build_commit or config.extra.released_version %}
+  <div role="contentinfo" class="disarm-build-provenance">
+    <p>
+      {%- if config.extra.build_commit %}
+      Built from <code>main</code> at
+      <a href="{{ config.repo_url }}/commit/{{ config.extra.build_commit }}">{{ config.extra.build_commit }}</a>.
+      {%- endif %}
+      {%- if config.extra.released_version %}
+      The published release is <code>{{ config.extra.released_version }}</code>.
+      Anything documented here that landed after it is not yet in
+      <code>pip install disarm</code>. See the
+      <a href="{{ 'CHANGELOG.html'|url }}">changelog</a> or the
+      <a href="{{ config.repo_url }}/releases">releases</a>.
+      {%- else %}
+      This build could not determine the published version, so treat every page
+      as describing <code>main</code> rather than a release.
+      {%- endif %}
+    </p>
+  </div>
+  {%- endif %}
+{%- endblock %}

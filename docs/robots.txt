@@ -1,0 +1,16 @@
+# robots.txt for https://docs.disarm.dev
+# Allow all well-behaved crawlers full access.
+User-agent: *
+Allow: /
+
+# MkDocs writes this sitemap at build time. Until this line existed it was
+# undeclared: nothing on the site links to it, so a crawler had to guess the
+# conventional path to find any of the pages it lists.
+#
+# This file supersedes the managed robots.txt Cloudflare served while the origin
+# had none. That file carried the Content Signals explanatory preamble and no
+# directives whatsoever -- no User-agent, no Allow, no Disallow and no Sitemap --
+# so nothing operative is being revoked here. To express signals deliberately,
+# add `Content-Signal:` lines under the User-agent group above; declaring none
+# leaves the position unstated, which is what the managed file already did.
+Sitemap: https://docs.disarm.dev/sitemap.xml

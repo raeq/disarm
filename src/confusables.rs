@@ -27,7 +27,7 @@ const MAX_CONFUSABLE_PASSES: usize = 8;
 
 fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
     match digit_policy {
-        "numeric" | "tr39" => Ok(()),
+        "numeric" | "tr39" | "preserve" => Ok(()),
         _ => Err(crate::ErrorRepr::InvalidDigitPolicy {
             got: digit_policy.to_owned(),
         }),
@@ -48,18 +48,30 @@ fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
 /// (the part that would actually cost something) is skipped entirely. Splitting the fold
 /// into two loops to remove the test was considered and rejected: it duplicates the
 /// borrow-on-no-op logic for a branch that is already free in practice.
+///
+/// `preserve_digits` is the third policy (#648) and needs no table of its own. "The digit
+/// rows" are exactly the rows whose target is one ASCII digit, which the bundled map
+/// already states, so the set is read off the live table instead of duplicated beside it
+/// — and therefore cannot drift from it. The two tables disagree about which sources
+/// those are (157 rows in the Latin map, 66 in the Cyrillic, neither a subset of the
+/// other), so a separate file would have had to be per-target as well.
 #[inline]
 fn lookup_with_policy(
     map: Option<&'static phf::Map<char, &'static str>>,
     ch: char,
     tr39_digits: bool,
+    preserve_digits: bool,
 ) -> Option<&'static str> {
     if tr39_digits {
         if let Some(over) = crate::tables::confusable_digit_tr39_override(ch) {
             return Some(over);
         }
     }
-    map.and_then(|m| m.get(&ch).copied())
+    let hit = map.and_then(|m| m.get(&ch).copied())?;
+    if preserve_digits && hit.len() == 1 && hit.as_bytes()[0].is_ascii_digit() {
+        return None;
+    }
+    Some(hit)
 }
 
 /// Validate the `target_script` parameter.
@@ -127,6 +139,9 @@ pub(crate) fn normalize_confusables_cow<'a>(
     // Latin-only: the override set carries TR39's *Latin* targets, so it must never be
     // consulted for another target script (see `lookup_with_policy`).
     let tr39_digits = digit_policy == "tr39" && target_script == "latin";
+    // Unlike `tr39`, this is target-agnostic: it declines to fold a digit at all, so
+    // there is no Latin-target restriction to honour.
+    let preserve_digits = digit_policy == "preserve";
 
     // #475/#477: a base + combining-mark cluster (or a conjoining Hangul jamo run, #483)
     // must fold as its precomposed form. Compose-at-lookup can only change something when
@@ -140,7 +155,7 @@ pub(crate) fn normalize_confusables_cow<'a>(
     if !text.is_ascii() && crate::compose::needs_composition(text) {
         let mut out = String::with_capacity(text.len());
         for (ch, _) in crate::compose::composed(text) {
-            match lookup_with_policy(map, ch, tr39_digits) {
+            match lookup_with_policy(map, ch, tr39_digits, preserve_digits) {
                 Some(replacement) => out.push_str(replacement),
                 None => out.push(ch),
             }
@@ -149,13 +164,13 @@ pub(crate) fn normalize_confusables_cow<'a>(
     }
 
     for (i, ch) in text.char_indices() {
-        if let Some(replacement) = lookup_with_policy(map, ch, tr39_digits) {
+        if let Some(replacement) = lookup_with_policy(map, ch, tr39_digits, preserve_digits) {
             // First fold found: copy the borrowed prefix, then fold the rest.
             let mut out = String::with_capacity(text.len());
             out.push_str(&text[..i]);
             out.push_str(replacement);
             for ch in text[i + ch.len_utf8()..].chars() {
-                match lookup_with_policy(map, ch, tr39_digits) {
+                match lookup_with_policy(map, ch, tr39_digits, preserve_digits) {
                     Some(replacement) => out.push_str(replacement),
                     None => out.push(ch),
                 }

@@ -55,15 +55,22 @@ module Disarm
 
     # Fold cross-script confusables toward `target:` (:latin or :cyrillic).
     #
-    # `digit_policy:` selects how non-Latin DIGITS fold (#561). `:numeric` (default)
-    # sends them to the ASCII digit — `०` becomes `0` — which is right for prose, where
-    # a Devanagari zero really is a zero. `:tr39` uses upstream's targets, which send
-    # most of them to a Latin letter (`०` → `o`; three of the 45 rows fold to `.` or
-    # to the two characters `rn` instead); that is what an identifier *skeleton*
-    # wants, since its only job is to make two confusable identifiers collide. The two
-    # differ on 45 rows and agree everywhere else. Scoped to `target: :latin` — the
-    # override rows are generated from the Latin table and carry TR39's Latin-script
-    # targets, so with `target: :cyrillic` it is a no-op.
+    # `digit_policy:` selects how non-Latin DIGITS fold (#561).
+    #
+    # `:numeric` (default) sends them to the ASCII digit — `०` becomes `0` — which is
+    # right for prose, where a Devanagari zero really is a zero.
+    #
+    # `:tr39` uses upstream's targets, which send most of them to a Latin letter
+    # (`०` → `o`; three of the 45 rows fold to `.` or to the two characters `rn`
+    # instead). That is what an identifier *skeleton* wants, since its only job is to
+    # make two confusable identifiers collide. The two differ on 45 rows and agree
+    # everywhere else. Scoped to `target: :latin` — the override rows are generated from
+    # the Latin table and carry TR39's Latin-script targets, so with `target: :cyrillic`
+    # it is a no-op.
+    #
+    # `:preserve` leaves the digit alone (#648). The other two both yield a mixed-script
+    # numeral — `२०२४` becomes `२0२४` or `२o२४` — so neither keeps the script. Unlike
+    # `:tr39` it applies under every target script.
     def normalize_confusables(text, target: :latin, digit_policy: :numeric)
       translate_errors { _normalize_confusables(text, target.to_s, digit_policy.to_s) }
     end

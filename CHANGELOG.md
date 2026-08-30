@@ -16,6 +16,33 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Added
+
+- **`digit_policy="preserve"` — leave the numeral in its own script (#648).**
+  The two existing settings are not "keep the script" and "fold to ASCII"; both rewrite a
+  non-Latin numeral, and both leave a *mixed-script* result, which is neither:
+
+  ```
+  normalize_confusables("२०२४")                          ->  '२0२४'   numeric
+  normalize_confusables("२०२४", digit_policy="tr39")     ->  '२o२४'   tr39
+  normalize_confusables("२०२४", digit_policy="preserve") ->  '२०२४'   #648
+  ```
+
+  It declines the digit rows and folds everything else as usual, so a homoglyph attack is
+  still neutralized — `раypal` still becomes `paypal`. Unlike `"tr39"` it applies under
+  every target script, because declining to fold is not a Latin-specific act.
+
+  No new table. "The digit rows" are the rows whose target is a single ASCII digit, which
+  the bundled map already states, so the set is read off the live table rather than
+  duplicated beside it and cannot drift from it. #648 proposed a third per-code-point
+  file; the two shipped tables disagree about which sources are digit rows — 157 in the
+  Latin map, 66 in the Cyrillic, neither a subset of the other — so that file would have
+  had to be per-target as well.
+
+  Available on every surface: `DigitPolicy::Preserve` (Rust), `digit_policy="preserve"`
+  (Python, C ABI), `'preserve'` (Node, widening the `DigitPolicy` union), `:preserve`
+  (Ruby), `DigitPolicy.PRESERVE` (Java/Kotlin).
+
 ### Changed (breaking)
 
 - **The confusable fold no longer contradicts itself inside an uppercase block (#734).**

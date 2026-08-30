@@ -173,6 +173,15 @@ def _grapheme_rows() -> list:
     one, and a second table elsewhere in the file cannot leak in.
     """
     lines = (ROOT / GRAPHEMES).read_text(encoding="utf-8").splitlines()
+    # A bare `.index()` here raises `ValueError: not in list`, which names neither the
+    # file nor what it was looking for — the least useful failure a drift gate can give.
+    assert GRAPHEME_TABLE_HEADER in lines, (
+        f"{GRAPHEMES}: the comparison-table header line is gone. This guard anchors to "
+        f"it exactly, including spacing, and expected:\n"
+        f"    {GRAPHEME_TABLE_HEADER}\n"
+        f"If the table was reworded or moved, update GRAPHEME_TABLE_HEADER in the same "
+        f"change — otherwise the rows below it stop being checked."
+    )
     start = lines.index(GRAPHEME_TABLE_HEADER) + 2  # header + separator
 
     rows = []

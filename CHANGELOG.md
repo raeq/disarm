@@ -34,9 +34,9 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 - **The generator's Unicode floor sat below its own data, and corrupted digit rows
   (#439, #734).** `MIN_UNICODE_VERSION` was `16.0.0` while `DATA_UNICODE_VERSION` was
-  `17.0.0`, so a regeneration under UCD 16 passed the floor check, printed a warning, and
-  produced a wrong table. `U+11DE0` TOLONG SIKI DIGIT ZERO and `U+11DE1` DIGIT ONE read as
-  unassigned under UCD 16, so `enforce_digit_target` could not protect them and they
+  `17.0.0`, so a regeneration under an older table passed the check, printed a warning,
+  and produced a wrong result. `U+11DE0` TOLONG SIKI DIGIT ZERO and `U+11DE1` DIGIT ONE
+  read as unassigned there, so `enforce_digit_target` could not protect them and they
   folded to the *letters* `O` and `l` — the exact failure #439 added that guard for. Two
   Beria Erfe capitals went unreconciled the same way.
 
@@ -47,8 +47,24 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   U+16EB6 BERIA ERFE CAPITAL UI         'b'  ->  'B'
   ```
 
-  The floor now tracks the data version. Regenerating therefore requires an interpreter
-  shipping UCD 17.0.0 — CPython 3.15 or newer; 3.14 ships 16.0.0 and is refused.
+  A version floor is the wrong shape for this. Below the data version it permits the
+  corruption it exists to prevent; equal to it, table generation is pinned to whichever
+  CPython ships that UCD — for data that leads the release cycle, an alpha. The real
+  requirement is that every code point the data references be *classifiable*, and that is
+  now what is checked.
+
+  New `data/ucd_backfill.tsv` carries category, digit value and decompositions for the 99
+  referenced code points that CPython 3.13 reports as unassigned, generated from the
+  matching UCD by `scripts/gen_ucd_backfill.py`. The generator prefers `unicodedata` and
+  consults the file only on a `Cn` reading, so a newer interpreter is always authoritative
+  and the file can never mask it. Generation now produces byte-identical tables under
+  CPython 3.13, 3.14 and 3.15.
+
+  Two guards, because the obvious one has no teeth where it runs: the backfill must cover
+  every referenced code point the running interpreter cannot classify — checkable on any
+  interpreter, and the assertion that bites on CI — and its values must agree with
+  `unicodedata` wherever the interpreter knows them, which skips explicitly rather than
+  passing vacuously when it can verify nothing.
 
   Twenty-two rows change in total: 15 in `confusables_to_latin.tsv`, 5 in
   `confusables_to_cyrillic.tsv`, and 2 added to `confusables_digit_tr39.tsv`. This moves

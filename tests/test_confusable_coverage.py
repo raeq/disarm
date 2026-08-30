@@ -154,3 +154,112 @@ def test_uppercase_block_folds_to_one_case(block: str) -> None:
         "defect: TR39's lowercase `l` prototype reaching a source that "
         "`fix_case_mismatch` did not reconcile."
     )
+
+
+# ── The UCD backfill must not drift from the UCD (#439, #734) ─────────────────
+
+BACKFILL = pathlib.Path(__file__).resolve().parent.parent / "data" / "ucd_backfill.tsv"
+DATA_UNICODE_VERSION = "17.0.0"
+
+
+def _decode_field(field: str, cp: int) -> str:
+    """A backfill decomposition field: `-` means "decomposes to itself"."""
+    if field == "-":
+        return chr(cp)
+    return "".join(chr(int(x, 16)) for x in field.split())
+
+
+def _backfill_rows() -> list[tuple[int, str, int | None, str, str]]:
+    rows = []
+    for line in BACKFILL.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        cp_s, cat, dig, nfkc, nfd, *_ = line.split("\t")
+        cp = int(cp_s, 16)
+        rows.append(
+            (
+                cp,
+                cat,
+                None if dig == "-" else int(dig),
+                _decode_field(nfkc, cp),
+                _decode_field(nfd, cp),
+            )
+        )
+    return rows
+
+
+def test_backfill_is_not_empty() -> None:
+    """A backfill that parses to nothing would disable the generator's completeness gate
+    silently — the gate only fails on code points it cannot describe, so an empty file
+    reads as 'nothing to describe' rather than as a defect."""
+    assert len(_backfill_rows()) > 50, (
+        f"{BACKFILL.name} holds {len(_backfill_rows())} rows; expected the ~99 code points "
+        f"assigned after the baseline UCD. Regenerate with scripts/gen_ucd_backfill.py."
+    )
+
+
+def test_backfill_covers_every_codepoint_this_interpreter_cannot_classify() -> None:
+    """The backfill must describe every referenced code point this Python reads as `Cn`.
+
+    This is the assertion with teeth on the baseline. The value check below can verify
+    nothing on an interpreter older than the data — every row is `Cn` there, so it skips
+    all 99 and would otherwise read as a pass. Completeness is checkable everywhere, and
+    it is the property the generator actually depends on: a referenced code point that is
+    `Cn` and unlisted means the digit guard (#439) and the case reconciliation (#734)
+    cannot fire, and the maps come out wrong without complaint.
+    """
+    text = CONFUSABLES.read_text(encoding="utf-8")
+    referenced = {int(m.group(1), 16) for m in re.finditer(r"^([0-9A-F]{4,6})\s*;", text, re.M)}
+    for m in re.finditer(r"^[0-9A-F]{4,6}\s*;\s*([0-9A-F ]+);", text, re.M):
+        referenced |= {int(x, 16) for x in m.group(1).split()}
+
+    listed = {cp for cp, *_ in _backfill_rows()}
+    blind = {cp for cp in referenced if unicodedata.category(chr(cp)) == "Cn"} - listed
+    assert not blind, (
+        f"{len(blind)} code point(s) in confusables.txt are unassigned under UCD "
+        f"{unicodedata.unidata_version} and absent from {BACKFILL.name}: "
+        + ", ".join(f"U+{cp:04X}" for cp in sorted(blind)[:10])
+        + ". Regenerate it with scripts/gen_ucd_backfill.py under a UCD "
+        f"{DATA_UNICODE_VERSION} interpreter."
+    )
+
+
+def test_backfill_agrees_with_this_interpreter() -> None:
+    """Where this Python knows a code point, the backfill must say the same thing.
+
+    The backfill exists so an interpreter older than the data still classifies it
+    correctly. That only holds while the file is *right*, and the file is hand-generated
+    from one interpreter, so it can rot. Any Python whose UCD reaches the data version can
+    check every row; older ones can only check the rows they happen to know, which is
+    still worth doing and is what the `Cn` skip below leaves out.
+    """
+    rows = _backfill_rows()
+    comparable = [r for r in rows if unicodedata.category(chr(r[0])) != "Cn"]
+    if not comparable:
+        pytest.skip(
+            f"UCD {unicodedata.unidata_version} knows none of the {len(rows)} backfilled "
+            f"code points, so this check can verify nothing here. Completeness is covered "
+            f"by the test above; values are verified under a UCD "
+            f"{DATA_UNICODE_VERSION} interpreter."
+        )
+
+    mismatches = []
+    for cp, cat, dig, nfkc, nfd in comparable:
+        ch = chr(cp)
+        actual = (
+            unicodedata.category(ch),
+            unicodedata.digit(ch, None),
+            unicodedata.normalize("NFKC", ch),
+            unicodedata.normalize("NFD", ch),
+        )
+        if actual != (cat, dig, nfkc, nfd):
+            mismatches.append((cp, (cat, dig, nfkc, nfd), actual))
+
+    assert not mismatches, (
+        f"{BACKFILL.name} disagrees with unicodedata {unicodedata.unidata_version} on "
+        f"{len(mismatches)} code point(s): "
+        + "; ".join(f"U+{cp:04X} file={f!r} ucd={a!r}" for cp, f, a in mismatches[:5])
+        + ". The interpreter is authoritative — regenerate with "
+        "scripts/gen_ucd_backfill.py under a UCD "
+        f"{DATA_UNICODE_VERSION} interpreter."
+    )

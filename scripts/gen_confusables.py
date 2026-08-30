@@ -46,13 +46,9 @@ BUNDLED_CONFUSABLES = Path(__file__).resolve().parent.parent / "data" / "confusa
 # below (which knows the currently-problematic digit blocks) and warn on any
 # mismatch. Run under the newest Python available.
 DATA_UNICODE_VERSION = "17.0.0"
-# The floor tracks the data, and must: a floor *below* `DATA_UNICODE_VERSION` permits
-# exactly the corruption this check exists to prevent. Regenerating under UCD 16.0.0
-# while the data was 17.0.0 folded `U+11DE0` TOLONG SIKI DIGIT ZERO to the letter `O`
-# and `U+11DE1` DIGIT ONE to `l`, because both read as `Cn` and `enforce_digit_target`
-# cannot protect a codepoint it does not know is a digit (#439). Two Beria Erfe capitals
-# went unreconciled the same way. The run warned and produced the wrong table anyway.
-MIN_UNICODE_VERSION = DATA_UNICODE_VERSION
+# The floor is only the baseline the backfill is built against; completeness, not
+# version, is what `_check_unicode_version` actually enforces.
+MIN_UNICODE_VERSION = "15.1.0"
 # Measured cross-script supplement folded with priority over TR39 (#342/#343).
 BUNDLED_SUPPLEMENT = Path(__file__).resolve().parent.parent / "data" / "confusables_supplement.tsv"
 BUNDLED_ATTESTED = Path(__file__).resolve().parent.parent / "data" / "confusables_attested.tsv"
@@ -63,9 +59,75 @@ BUNDLED_ATTESTED = Path(__file__).resolve().parent.parent / "data" / "confusable
 # ---------------------------------------------------------------------------
 
 
+BUNDLED_UCD_BACKFILL = Path(__file__).resolve().parent.parent / "data" / "ucd_backfill.tsv"
+
+
+def _decode_seq(field: str, cp: int) -> str:
+    """A backfill decomposition field: `-` means "no decomposition", else code points."""
+    if field == "-":
+        return chr(cp)
+    return "".join(chr(int(x, 16)) for x in field.split())
+
+
+def _load_ucd_backfill() -> dict[int, tuple[str, int | None, str, str]]:
+    """`codepoint -> (category, digit, nfkc, nfd)` for code points this Python may not know.
+
+    `unicodedata` carries whatever table the running interpreter shipped. Under a table
+    older than the data, a code point reads as `Cn`, no rule below can fire, and the
+    output is wrong without being loud — a digit folds to a look-alike letter (#439), an
+    uppercase source keeps TR39's lowercase prototype (#734).
+    """
+    out: dict[int, tuple[str, int | None, str, str]] = {}
+    if not BUNDLED_UCD_BACKFILL.is_file():
+        return out
+    for line in BUNDLED_UCD_BACKFILL.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        cp_s, cat, dig, nfkc, nfd, *_ = line.split("\t")
+        cp = int(cp_s, 16)
+        out[cp] = (
+            cat,
+            None if dig == "-" else int(dig),
+            _decode_seq(nfkc, cp),
+            _decode_seq(nfd, cp),
+        )
+    return out
+
+
+UCD_BACKFILL = _load_ucd_backfill()
+
+# Every accessor below prefers `unicodedata` and reaches the backfill only on a `Cn`
+# reading, so a newer interpreter is always authoritative and the file cannot mask it.
+
+
+def ucd_category(cp: int) -> str:
+    cat = unicodedata.category(chr(cp))
+    if cat == "Cn" and cp in UCD_BACKFILL:
+        return UCD_BACKFILL[cp][0]
+    return cat
+
+
+def ucd_digit(cp: int) -> int | None:
+    if unicodedata.category(chr(cp)) == "Cn" and cp in UCD_BACKFILL:
+        return UCD_BACKFILL[cp][1]
+    return unicodedata.digit(chr(cp), None)
+
+
+def ucd_nfkc(cp: int) -> str:
+    if unicodedata.category(chr(cp)) == "Cn" and cp in UCD_BACKFILL:
+        return UCD_BACKFILL[cp][2]
+    return unicodedata.normalize("NFKC", chr(cp))
+
+
+def ucd_nfd(cp: int) -> str:
+    if unicodedata.category(chr(cp)) == "Cn" and cp in UCD_BACKFILL:
+        return UCD_BACKFILL[cp][3]
+    return unicodedata.normalize("NFD", chr(cp))
+
+
 def is_combining_mark(cp: int) -> bool:
     """True if codepoint is a Unicode combining mark (category M*)."""
-    return unicodedata.category(chr(cp)).startswith("M")
+    return ucd_category(cp).startswith("M")
 
 
 def is_latin(cp: int) -> bool:
@@ -120,9 +182,7 @@ def strips_a_diacritic(cp: int) -> bool:
     Detected from the source's own canonical decomposition rather than a codepoint list,
     so a future confusables.txt cannot smuggle a new accented source past it.
     """
-    return any(
-        unicodedata.category(ch).startswith("M") for ch in unicodedata.normalize("NFD", chr(cp))
-    )
+    return any(ucd_category(ord(ch)).startswith("M") for ch in ucd_nfd(cp))
 
 
 def is_basic_ascii_letter(cp: int) -> bool:
@@ -399,7 +459,7 @@ def uppercase_nfkc(cp: int) -> str | None:
     `None` for everything else, including mixed-case decompositions such as `U+3392`
     SQUARE MHZ (`MHz`), which must not be rewritten.
     """
-    nfkc = unicodedata.normalize("NFKC", chr(cp))
+    nfkc = ucd_nfkc(cp)
     if nfkc and nfkc.isascii() and nfkc.isalpha() and nfkc.isupper():
         return nfkc
     return None
@@ -424,10 +484,9 @@ def is_uppercase_source(cp: int) -> bool:
     `_check_unicode_version`: `U+1CCDE` was assigned in Unicode 16.0, and under an older
     table it is `Cn` with no decomposition and this returns False for it.
     """
-    ch = chr(cp)
-    if unicodedata.category(ch) == "Lu":
+    if ucd_category(cp) == "Lu":
         return True
-    nfkc = unicodedata.normalize("NFKC", ch)
+    nfkc = ucd_nfkc(cp)
     return len(nfkc) == 1 and nfkc.isascii() and nfkc.isupper()
 
 
@@ -459,8 +518,8 @@ def fix_case_mismatch(source_cp: int, target_str: str) -> str:
             return nfkc
         return target_str
 
-    source_cat = unicodedata.category(chr(source_cp))
-    target_cat = unicodedata.category(target_str)
+    source_cat = ucd_category(source_cp)
+    target_cat = ucd_category(ord(target_str))
     if is_uppercase_source(source_cp) and target_cat == "Ll":
         if target_str == "l":
             return "I"
@@ -480,11 +539,11 @@ def enforce_digit_target(source_cp: int, target_str: str) -> str | None:
     is not already a single ASCII digit, remap it to the source's own digit value;
     return ``None`` to drop the row if that value is somehow indeterminate.
     """
-    if unicodedata.category(chr(source_cp)) != "Nd":
+    if ucd_category(source_cp) != "Nd":
         return target_str
     if len(target_str) == 1 and target_str.isascii() and target_str.isdigit():
         return target_str
-    d = unicodedata.digit(chr(source_cp), None)
+    d = ucd_digit(source_cp)
     return str(d) if d is not None else None
 
 
@@ -560,7 +619,7 @@ def filter_via_classes(
                 # target-script member is a combining mark.
                 if is_combining_mark(m):
                     continue
-                cat = unicodedata.category(chr(m))
+                cat = ucd_category(m)
                 if cat == "Lu":
                     target_members_upper.append(m)
                 elif cat == "Ll":
@@ -584,7 +643,7 @@ def filter_via_classes(
             if 0x0030 <= m <= 0x0039:
                 continue
 
-            source_cat = unicodedata.category(chr(m))
+            source_cat = ucd_category(m)
 
             # Pick the target member with matching case
             target_cp = None
@@ -711,7 +770,7 @@ def generate_mappings(
         # the O/l confusable classes, so the generic logic picks the letter;
         # override digits here so normalize_confusables keeps numbers numeric (#89).
         for cp in list(merged):
-            digit = unicodedata.normalize("NFKC", chr(cp))
+            digit = ucd_nfkc(cp)
             if len(digit) == 1 and "0" <= digit <= "9":
                 merged[cp] = digit
         # Safe non-letter look-alikes TR39 does not fold onto a Latin letter
@@ -783,23 +842,43 @@ def write_tsv(mappings: list[tuple[int, str]], path: Path, script_name: str) -> 
 # ---------------------------------------------------------------------------
 
 
-def _check_unicode_version() -> None:
-    """Refuse to run under a Unicode table too old to classify the data's digits (#439)."""
+def _check_unicode_version(sources: list[int] | None = None) -> None:
+    """Refuse to generate from a table this interpreter cannot fully classify (#439, #734).
+
+    The old check was a version floor, and a floor is the wrong shape twice over. Set
+    below `DATA_UNICODE_VERSION` it permits exactly the corruption it exists to prevent —
+    regenerating under UCD 16.0.0 against 17.0.0 data folded `U+11DE0` TOLONG SIKI DIGIT
+    ZERO to the letter `O`, because `enforce_digit_target` cannot protect a code point it
+    does not know is a digit. Set equal to it, table generation is pinned to whichever
+    CPython ships that UCD, which for data that leads the release cycle means an alpha.
+
+    The real requirement is neither: every code point the data references must be
+    classifiable, by `unicodedata` or by `data/ucd_backfill.tsv`. That is what is checked.
+    """
     cur = unicodedata.unidata_version
     as_tuple = lambda v: tuple(int(p) for p in v.split("."))  # noqa: E731
     if as_tuple(cur) < as_tuple(MIN_UNICODE_VERSION):
         sys.exit(
-            f"gen_confusables requires unicodedata >= {MIN_UNICODE_VERSION}, but this Python "
-            f"ships {cur}. Under an older table, digits assigned in newer Unicode (e.g. the "
-            f"outlined digits U+1CCF0/U+1CCF1) are not recognised and fold to look-alike "
-            f"letters (#439). Run under a newer Python."
+            f"gen_confusables requires unicodedata >= {MIN_UNICODE_VERSION}, but this "
+            f"Python ships {cur}. The backfill in {BUNDLED_UCD_BACKFILL.name} is built "
+            f"against that baseline and does not describe the gap below it."
         )
-    if cur != DATA_UNICODE_VERSION:
-        print(
-            f"warning: confusables.txt is Unicode {DATA_UNICODE_VERSION} but this Python's "
-            f"unicodedata is {cur}; characters assigned only in {DATA_UNICODE_VERSION} may be "
-            f"misclassified. Regenerate under a matching Python when one is available.",
-            file=sys.stderr,
+    if not sources:
+        return
+    blind = [
+        cp for cp in sources if unicodedata.category(chr(cp)) == "Cn" and cp not in UCD_BACKFILL
+    ]
+    if blind:
+        shown = ", ".join(f"U+{cp:04X}" for cp in blind[:10])
+        sys.exit(
+            f"{len(blind)} code point(s) in confusables.txt are unassigned in this "
+            f"Python's UCD ({cur}) and absent from {BUNDLED_UCD_BACKFILL.name}: {shown}"
+            f"{' …' if len(blind) > 10 else ''}.\n"
+            f"Their category, digit value and decomposition are unknown, so the digit "
+            f"guard (#439) and the case reconciliation (#734) cannot fire and the maps "
+            f"would be silently wrong. Regenerate the backfill under a UCD "
+            f"{DATA_UNICODE_VERSION} interpreter:\n"
+            f"    uv run --python 3.15 python scripts/gen_ucd_backfill.py"
         )
 
 
@@ -938,6 +1017,13 @@ def main() -> None:
 
     entries = parse_confusables(text)
     print(f"Parsed {len(entries)} total entries", file=sys.stderr)
+
+    # Now that the data is loaded, check this interpreter can actually classify it —
+    # sources and targets alike, since `fix_case_mismatch` inspects both.
+    referenced = {cp for cp, _ in entries}
+    for _, tgt in entries:
+        referenced |= set(tgt)
+    _check_unicode_version(sorted(referenced))
 
     supplement = load_supplement(BUNDLED_SUPPLEMENT)
     attested = load_attested(BUNDLED_ATTESTED)

@@ -105,7 +105,7 @@ pub(crate) enum ErrorRepr {
     },
 
     /// Invalid `digit_policy` for confusables functions (#561).
-    #[error("digit_policy must be 'numeric' or 'tr39', got '{got}'")]
+    #[error("digit_policy must be 'numeric', 'tr39', or 'preserve', got '{got}'")]
     InvalidDigitPolicy {
         /// The offending value.
         got: String,

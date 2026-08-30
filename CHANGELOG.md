@@ -95,6 +95,29 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `(NFD)` / `(jamo)`, so a parser that ignores it scores two of the nine rows against the
   wrong string and passes.
 
+- **The parity matrix covered four of the seven shipped surfaces (#677, #698, #707).**
+  `generated/parity.yaml` and `scripts/parity.py` tracked rust, python, ruby and node.
+  Java, Kotlin and the C ABI had no column, so nothing measured them and nothing would
+  catch the next gap — which is why #677 and #707 were both found by reading declarations
+  by hand, and why both understate their own gap. Measured with the columns in place: the
+  JVM is missing six operations rather than the two #677 names, and the C ABI twenty
+  rather than the one #707 names.
+
+  Each surface needs its own reader, and that is the reason the gap persisted: Java
+  declares `public static`, Kotlin ships extension functions whose receiver has to be
+  skipped, and the C ABI declares `disarm_*` in a generated header. A reader that gets
+  this wrong fails quietly, by reporting a smaller surface rather than by erroring.
+
+  The check stays advisory, as `tests/test_parity.py` documents: interface parity must
+  never gate a security release.
+
+- **The parity manifest could regenerate differently run to run.** `canonmap` was built by
+  iterating a `set`, so if two symbols in one binding reduced to the same canonical name
+  the survivor depended on hash order. No collision existed while four surfaces were
+  tracked; adding the C ABI produced one, and the committed manifest then disagreed with a
+  fresh regeneration at random. Construction is now sorted, and the output is verified
+  identical across five `PYTHONHASHSEED` values.
+
 - **CI and the `dev` extra pinned different ruff versions (#689).** `ci.yml` installed
   `ruff==0.15.17` while `pyproject.toml`'s `dev` extra pinned `0.16.4`, so a contributor
   formatting with the documented tooling produced a diff CI would then reject. CI now

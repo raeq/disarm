@@ -233,7 +233,7 @@ A comparison showing how different counting methods diverge:
 | `"👨‍👩‍👧‍👦"` | 25 | 7 | 1 |
 | `"🇬🇧"` | 8 | 2 | 1 |
 | `"👋🏽"` | 8 | 2 | 1 |
-| `"नमस्ते"` | 18 | 6 | 4 |
+| `"नमस्ते"` | 18 | 6 | 3 |
 | `"한"` (precomposed) | 3 | 1 | 1 |
 | `"한"` (jamo) | 9 | 3 | 1 |
 

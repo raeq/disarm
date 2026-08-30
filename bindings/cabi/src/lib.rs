@@ -123,7 +123,9 @@ fn disarm_normalize_confusables(text: char_p::Ref<'_>, target: char_p::Ref<'_>) 
 /// digit) or `"tr39"` (upstream's, which folds most of them to a Latin letter; three of
 /// the 45 rows are not — two fold to `.` and one to the two characters `rn`). `"tr39"` is
 /// scoped to `target = "latin"`: the override rows are generated from the Latin table and
-/// carry TR39's Latin-script targets, so with any other target it is a no-op. Added as an
+/// carry TR39's Latin-script targets, so with any other target it is a no-op.
+/// `"preserve"` leaves the digit alone (#648); the other two both produce a mixed-script
+/// numeral, and it applies under every target script. Added as an
 /// `_opts` variant rather than by widening the existing entry point, so the two-argument
 /// symbol keeps its ABI for callers already linked against it — the same shape
 /// `disarm_transliterate` / `disarm_transliterate_opts` already use in this file.

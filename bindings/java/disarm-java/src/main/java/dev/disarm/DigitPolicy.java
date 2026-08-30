@@ -27,7 +27,17 @@ public enum DigitPolicy {
      * Latin table and carry TR39's Latin-script targets, so with
      * {@link TargetScript#CYRILLIC} this policy is a no-op.
      */
-    TR39("tr39");
+    TR39("tr39"),
+
+    /**
+     * Leave the digit alone — {@code ०} stays {@code ०} (#648).
+     *
+     * <p>The other two both rewrite a non-Latin numeral and neither keeps the script:
+     * {@code २०२४} becomes {@code २0२४} under {@link #NUMERIC} and {@code २o२४} under
+     * {@link #TR39}, both mixed-script numerals. This declines the digit rows and folds
+     * everything else as usual, under every target script.
+     */
+    PRESERVE("preserve");
 
     private final String token;
 

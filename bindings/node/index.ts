@@ -131,8 +131,12 @@ export type TargetScript = 'latin' | 'cyrillic'
  *
  * Scoped to `target: 'latin'`: the override rows are generated from the Latin table and
  * carry TR39's Latin-script targets, so with `target: 'cyrillic'` the option is a no-op.
+ *
+ * `'preserve'` leaves the digit alone (#648). The other two both rewrite a non-Latin
+ * numeral and neither keeps the script — `२०२४` becomes `२0२४` or `२o२४`, both
+ * mixed-script. This one applies under every target script.
  */
-export type DigitPolicy = 'numeric' | 'tr39'
+export type DigitPolicy = 'numeric' | 'tr39' | 'preserve'
 /** Unicode normalization form. */
 export type NormalizationForm = 'NFC' | 'NFD' | 'NFKC' | 'NFKD'
 /** Filename-safety platform ruleset. */

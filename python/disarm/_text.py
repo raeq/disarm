@@ -124,6 +124,10 @@ class Text:
         the 45 rows land elsewhere: two fold to ``.`` and one to the two characters
         ``rn``. Scoped to ``target_script="latin"``; with any other target it is a
         no-op.
+
+        ``digit_policy="preserve"`` leaves the digit alone (#648), since the other two
+        both produce a mixed-script numeral: ``२०२४`` becomes ``२0२४`` or ``२o२४``.
+        It applies under every target script.
         """
         return Text(
             self._t().normalize_confusables(

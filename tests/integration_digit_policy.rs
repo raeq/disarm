@@ -195,3 +195,65 @@ fn a_divergence_with_no_ascii_form_falls_back_to_numeric() {
         "9"
     );
 }
+
+// ── #648: the third policy ───────────────────────────────────────────────────
+
+/// The premise of #648: neither existing policy leaves the numeral in its own script.
+/// Both rewrite it, and both produce a *mixed-script* result.
+#[test]
+fn neither_existing_policy_keeps_the_script() {
+    let year = "\u{0968}\u{0966}\u{0968}\u{096A}"; // २०२४
+    assert_eq!(
+        normalize_confusables_with(year, LATIN, DigitPolicy::Numeric),
+        "\u{0968}0\u{0968}\u{096A}"
+    );
+    assert_eq!(
+        normalize_confusables_with(year, LATIN, DigitPolicy::Tr39),
+        "\u{0968}o\u{0968}\u{096A}"
+    );
+}
+
+#[test]
+fn preserve_leaves_the_digit_rows_alone() {
+    for src in ["\u{0966}", "\u{0A66}", "\u{0665}", "\u{06F0}"] {
+        assert_eq!(
+            normalize_confusables_with(src, LATIN, DigitPolicy::Preserve),
+            src,
+            "preserve rewrote U+{:04X}",
+            src.chars().next().unwrap() as u32
+        );
+    }
+}
+
+/// It declines the digit rows, not the fold — a homoglyph attack is still neutralized.
+#[test]
+fn preserve_still_folds_letters() {
+    assert_eq!(
+        normalize_confusables_with("\u{0440}\u{0430}ypal", LATIN, DigitPolicy::Preserve),
+        "paypal"
+    );
+}
+
+/// Unlike `Tr39`, which is Latin-only because its override rows carry Latin targets.
+/// Declining to fold is not a Latin-specific act, and the two tables disagree about
+/// which sources are digit rows, so a Latin-only reading would leave the Cyrillic
+/// target unable to express this at all.
+#[test]
+fn preserve_applies_under_every_target_script() {
+    let year = "\u{0968}\u{0966}\u{0968}\u{096A}";
+    for target in [TargetScript::Latin, TargetScript::Cyrillic] {
+        assert_eq!(
+            normalize_confusables_with(year, target, DigitPolicy::Preserve),
+            year
+        );
+    }
+}
+
+#[test]
+fn preserve_round_trips_through_its_token() {
+    assert_eq!(DigitPolicy::Preserve.as_str(), "preserve");
+    assert_eq!(
+        "preserve".parse::<DigitPolicy>().unwrap(),
+        DigitPolicy::Preserve
+    );
+}

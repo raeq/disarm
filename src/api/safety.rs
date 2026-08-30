@@ -95,6 +95,19 @@ pub enum DigitPolicy {
     /// with any other target it is a no-op and the fold behaves exactly as
     /// [`DigitPolicy::Numeric`].
     Tr39,
+    /// Leave the digit alone — `०` stays `०`, `٥` stays `٥` (#648).
+    ///
+    /// The other two policies both *rewrite* a non-Latin numeral, and neither leaves the
+    /// script intact: `Numeric` produces `२०२४` → `२0२४` and `Tr39` produces `२०२४` →
+    /// `२o२४`. Both are mixed-script numerals, which is neither the original nor a clean
+    /// fold. This is the third answer — decline to map the digit rows and fold everything
+    /// else as usual.
+    ///
+    /// "The digit rows" are the rows whose target is a single ASCII digit, read from the
+    /// bundled table itself rather than from a separate list, so the set cannot drift
+    /// from the map it describes. Unlike [`DigitPolicy::Tr39`] this applies under every
+    /// target script, because declining to fold is not a Latin-specific act.
+    Preserve,
 }
 
 impl DigitPolicy {
@@ -104,6 +117,7 @@ impl DigitPolicy {
         match self {
             DigitPolicy::Numeric => "numeric",
             DigitPolicy::Tr39 => "tr39",
+            DigitPolicy::Preserve => "preserve",
         }
     }
 }
@@ -111,11 +125,12 @@ impl DigitPolicy {
 impl std::str::FromStr for DigitPolicy {
     type Err = Error;
 
-    /// Parse `"numeric"` / `"tr39"`.
+    /// Parse `"numeric"` / `"tr39"` / `"preserve"`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "numeric" => Ok(Self::Numeric),
             "tr39" => Ok(Self::Tr39),
+            "preserve" => Ok(Self::Preserve),
             _ => Err(Error::from(crate::ErrorRepr::InvalidDigitPolicy {
                 got: s.to_owned(),
             })),

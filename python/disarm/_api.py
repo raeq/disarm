@@ -757,6 +757,14 @@ def normalize_confusables(
             Latin table and carry TR39's Latin-script targets, so with
             ``target_script="cyrillic"`` this is a no-op.
 
+            ``"preserve"`` leaves the digit alone (#648). The other two both rewrite
+            a non-Latin numeral and neither keeps the script: ``२०२४`` becomes
+            ``२0२४`` under ``"numeric"`` and ``२o२४`` under ``"tr39"``. Both are
+            *mixed-script* numerals, which is neither the original nor a clean fold.
+            This declines the digit rows and folds everything else as usual. Unlike
+            ``"tr39"`` it applies under every target script, because declining to
+            fold is not a Latin-specific act.
+
     Returns:
         String with confusable characters replaced by target-script equivalents.
 
@@ -772,6 +780,8 @@ def normalize_confusables(
         'раура\u04cf'
         >>> normalize_confusables("g००gle")  # Devanagari zeros stay numeric
         'g00gle'
+        >>> normalize_confusables("२०२४", digit_policy="preserve")  # keep the script
+        '२०२४'
         >>> normalize_confusables("g००gle", digit_policy="tr39")  # …or collide
         'google'
     """

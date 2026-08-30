@@ -79,9 +79,14 @@ def main() -> None:
     # Ask the baseline interpreter directly rather than inferring it: `unicodedata`
     # exposes no age API, and a guess here silently produces an incomplete backfill,
     # which is the same class of quiet wrongness this file exists to remove.
+    # The probe reports its own UCD first. Assuming BASELINE_PYTHON ships BASELINE_UCD
+    # is the kind of unverified pairing that goes stale silently: a CPython patch
+    # release can move the bundled table, and the backfill would then be built against
+    # a different baseline while the header still claimed the old one.
     probe = (
         "import sys,unicodedata;"
         "cps=[int(x,16) for x in sys.argv[1:]];"
+        "print(unicodedata.unidata_version);"
         "print(' '.join(f'{c:04X}' for c in cps "
         "if unicodedata.category(chr(c))=='Cn'))"
     )
@@ -95,7 +100,17 @@ def main() -> None:
     )
     if proc.returncode != 0:
         sys.exit(f"could not probe the baseline interpreter ({BASELINE_PYTHON}):\n{proc.stderr}")
-    unknown = [int(tok, 16) for tok in proc.stdout.split()]
+    baseline_ucd, _, unknown_line = proc.stdout.partition("\n")
+    baseline_ucd = baseline_ucd.strip()
+    if baseline_ucd != BASELINE_UCD:
+        sys.exit(
+            f"BASELINE_PYTHON ({BASELINE_PYTHON}) ships UCD {baseline_ucd}, not the "
+            f"declared BASELINE_UCD {BASELINE_UCD}. The pairing has drifted — a backfill "
+            f"built now would describe a different baseline than its header claims. "
+            f"Update BASELINE_UCD to {baseline_ucd}, or pin BASELINE_PYTHON to an "
+            f"interpreter that still ships {BASELINE_UCD}."
+        )
+    unknown = [int(tok, 16) for tok in unknown_line.split()]
 
     rows = []
     for cp in unknown:

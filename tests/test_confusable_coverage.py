@@ -170,6 +170,11 @@ def _decode_field(field: str, cp: int) -> str:
 
 
 def _backfill_rows() -> list[tuple[int, str, int | None, str, str]]:
+    assert BACKFILL.is_file(), (
+        f"{BACKFILL} is missing. The generator needs it to classify code points this "
+        f"interpreter's UCD does not know; regenerate with "
+        f"`uv run --python 3.15 python scripts/gen_ucd_backfill.py`."
+    )
     rows = []
     for line in BACKFILL.read_text(encoding="utf-8").splitlines():
         if not line.strip() or line.startswith("#"):

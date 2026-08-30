@@ -111,10 +111,10 @@ name twice is the same name twice, which a reservation table already handles.
 ```python
 from disarm import is_case_fold_stable
 
-is_case_fold_stable("gross.txt")   # True
-is_case_fold_stable("groß.txt")    # False — folds to gross.txt, so the two collide
-is_case_fold_stable("ﬁle")         # False — folds to file
-is_case_fold_stable("ΟΔΟΣ")        # False — lowercases to οδος, folds to οδοσ
+is_case_fold_stable("gross.txt")  # True
+is_case_fold_stable("groß.txt")  # False — folds to gross.txt, so the two collide
+is_case_fold_stable("ﬁle")  # False — folds to file
+is_case_fold_stable("ΟΔΟΣ")  # False — lowercases to οδος, folds to οδοσ
 ```
 
 Use it before a name becomes a key: a reservation table, a username registry, an
@@ -141,8 +141,8 @@ caller's to choose: reserve both forms, reject the name, or key the table on
 ```python
 from disarm import is_zalgo
 
-is_zalgo("café")          # False (1 combining mark — normal)
-is_zalgo("Việt Nam")      # False (2 combining marks — normal)
+is_zalgo("café")  # False (1 combining mark — normal)
+is_zalgo("Việt Nam")  # False (2 combining marks — normal)
 # Zalgo: 'a' with 20 stacked combining graves
 is_zalgo("a" + "\u0300" * 20)  # True
 ```

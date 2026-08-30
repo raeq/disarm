@@ -9,11 +9,12 @@ disarm provides functions for working with **extended grapheme clusters** as def
 A naive length is a count of **codepoints**, not user-perceived characters. In Python, `len()` exhibits this:
 
 ```python
-text = "café"            # 4 characters, right?
+text = "café"  # 4 characters, right?
 assert len(text) == 4
 
 # But with decomposed é (e + combining acute accent):
 import unicodedata
+
 text_nfd = unicodedata.normalize("NFD", "café")
 assert len(text_nfd) == 5
 
@@ -46,7 +47,7 @@ Count the number of user-perceived characters:
     assert grapheme_len("🏳️‍🌈") == 1
 
     # Complex scripts
-    assert grapheme_len("\u1100\u1161\u11A8") == 1
+    assert grapheme_len("\u1100\u1161\u11a8") == 1
     assert grapheme_len("नमस्ते") == 3
     ```
 
@@ -92,12 +93,12 @@ Split text into individual grapheme clusters:
     ```python
     from disarm import grapheme_split
 
-    assert grapheme_split("café") == ['c', 'a', 'f', 'é']
-    assert grapheme_split("cafe\u0301") == ['c', 'a', 'f', 'é']
+    assert grapheme_split("café") == ["c", "a", "f", "é"]
+    assert grapheme_split("cafe\u0301") == ["c", "a", "f", "é"]
 
-    assert grapheme_split("👨‍👩‍👧‍👦!") == ['👨\u200d👩\u200d👧\u200d👦', '!']
-    assert grapheme_split("🇫🇷🇬🇧") == ['🇫🇷', '🇬🇧']
-    assert grapheme_split("Hi 👋🏽") == ['H', 'i', ' ', '👋🏽']
+    assert grapheme_split("👨‍👩‍👧‍👦!") == ["👨\u200d👩\u200d👧\u200d👦", "!"]
+    assert grapheme_split("🇫🇷🇬🇧") == ["🇫🇷", "🇬🇧"]
+    assert grapheme_split("Hi 👋🏽") == ["H", "i", " ", "👋🏽"]
     ```
 
 === "Rust"
@@ -138,14 +139,14 @@ Truncate text to a maximum number of grapheme clusters without splitting any clu
     ```python
     from disarm import grapheme_truncate
 
-    assert grapheme_truncate("Hello World", 5) == 'Hello'
-    assert grapheme_truncate("café", 3) == 'caf'
-    assert grapheme_truncate("cafe\u0301s", 4) == 'café'
+    assert grapheme_truncate("Hello World", 5) == "Hello"
+    assert grapheme_truncate("café", 3) == "caf"
+    assert grapheme_truncate("cafe\u0301s", 4) == "café"
 
     # Emoji are never split
-    assert grapheme_truncate("👨‍👩‍👧‍👦🎉", 1) == '👨\u200d👩\u200d👧\u200d👦'
-    assert grapheme_truncate("Hi 👩‍👩‍👧‍👦!", 4) == 'Hi 👩\u200d👩\u200d👧\u200d👦'
-    assert grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2) == '🇬🇧🇫🇷'
+    assert grapheme_truncate("👨‍👩‍👧‍👦🎉", 1) == "👨\u200d👩\u200d👧\u200d👦"
+    assert grapheme_truncate("Hi 👩‍👩‍👧‍👦!", 4) == "Hi 👩\u200d👩\u200d👧\u200d👦"
+    assert grapheme_truncate("🇬🇧🇫🇷🇩🇪", 2) == "🇬🇧🇫🇷"
     ```
 
 === "Rust"
@@ -192,10 +193,10 @@ t = Text("Hello 👨‍👩‍👧‍👦!")
 
 # Predicates (non-chaining)
 assert t.grapheme_len() == 8
-assert t.grapheme_split() == ['H', 'e', 'l', 'l', 'o', ' ', '👨\u200d👩\u200d👧\u200d👦', '!']
+assert t.grapheme_split() == ["H", "e", "l", "l", "o", " ", "👨\u200d👩\u200d👧\u200d👦", "!"]
 
 # Transform (chaining)
-assert t.grapheme_truncate(7).value == 'Hello 👨\u200d👩\u200d👧\u200d👦'
+assert t.grapheme_truncate(7).value == "Hello 👨\u200d👩\u200d👧\u200d👦"
 ```
 
 ## When to Use Grapheme Functions
@@ -260,6 +261,7 @@ Sanitize input first, then enforce a grapheme-aware length limit:
 ```python
 from disarm import canonicalize_strict, grapheme_len, grapheme_truncate
 
+
 def validate_username(raw: str, max_graphemes: int = 30) -> str:
     clean = canonicalize_strict(raw)
     if grapheme_len(clean) > max_graphemes:
@@ -274,6 +276,7 @@ Use `strip_format` for lightweight sanitization and `grapheme_truncate` for the 
 ```python
 from disarm import strip_format, grapheme_truncate
 
+
 def prepare_post(raw: str, max_graphemes: int = 280) -> str:
     clean = strip_format(raw)
     return grapheme_truncate(clean, max_graphemes)
@@ -286,6 +289,7 @@ When storing text in a column with a character limit, truncate by grapheme clust
 ```python
 from disarm import canonicalize, grapheme_truncate
 
+
 def safe_for_db(raw: str, max_graphemes: int = 255) -> str:
     clean = canonicalize(raw)
     return grapheme_truncate(clean, max_graphemes)
@@ -297,6 +301,7 @@ Normalize text before truncating to a token-budget-friendly length:
 
 ```python
 from disarm import ml_normalize, grapheme_truncate
+
 
 def prepare_for_model(raw: str, max_graphemes: int = 4096) -> str:
     clean = ml_normalize(raw)

@@ -23,7 +23,7 @@ the opposite of what you intend.
     # WRONG - mechanical rename, branch polarity silently flipped
     ok, details = is_suspicious_hostname(host)
     if ok:
-        allow(host)          # now allows *suspicious* hosts
+        allow(host)  # now allows *suspicious* hosts
 
     # RIGHT - invert the branch along with the name
     suspicious, analysis = is_suspicious_hostname(host)

@@ -15,10 +15,12 @@ disarm includes built-in confusable detection that replaces [confusable_homoglyp
 ```python
 # Before
 from confusable_homoglyphs import confusables
+
 result = confusables.is_mixed_script("Неllo")  # detailed dict
 
 # After
 from disarm import is_mixed_script
+
 result = is_mixed_script("Неllo")  # True
 ```
 
@@ -28,10 +30,12 @@ result = is_mixed_script("Неllo")  # True
 ```python
 # Before
 from confusable_homoglyphs import confusables
+
 result = confusables.is_confusable("Неllo", greedy=True)  # detailed list of dicts
 
 # After — greedy and preferred_aliases are accepted (with deprecation warning)
 from disarm import is_confusable
+
 result = is_confusable("Неllo")  # True
 result = is_confusable("Неllo", greedy=True)  # accepted, warns
 ```
@@ -43,7 +47,8 @@ result = is_confusable("Неllo", greedy=True)  # accepted, warns
 
 # disarm adds this capability
 from disarm import normalize_confusables
-assert normalize_confusables("Неllo") == 'Hello'
+
+assert normalize_confusables("Неllo") == "Hello"
 ```
 
 ## API comparison
@@ -68,13 +73,15 @@ confusable_homoglyphs returns detailed structured data (dicts with character inf
 ```python
 # confusable_homoglyphs
 from confusable_homoglyphs import confusables
+
 confusables.is_mixed_script("Неllo")
 # {'mixed': True, 'scripts': ['Cyrillic', 'Latin']}
 
 # disarm — separate functions
 from disarm import is_mixed_script, detect_scripts
-is_mixed_script("Неllo")    # True
-detect_scripts("Неllo")     # [Script.CYRILLIC, Script.LATIN]
+
+is_mixed_script("Неllo")  # True
+detect_scripts("Неllo")  # [Script.CYRILLIC, Script.LATIN]
 ```
 
 ## New features in disarm

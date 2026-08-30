@@ -186,17 +186,17 @@ All 10 Brahmic scripts use virama/mātrā-aware transliteration: consonants carr
     from disarm import transliterate, slugify
 
     # Chinese
-    assert transliterate("北京市") == 'bei jing shi'
-    assert slugify("北京烤鸭") == 'bei-jing-kao-ya'
+    assert transliterate("北京市") == "bei jing shi"
+    assert slugify("北京烤鸭") == "bei-jing-kao-ya"
 
     # Korean
-    assert transliterate("서울") == 'seo ul'
-    assert slugify("대한민국") == 'dae-han-min-gug'
+    assert transliterate("서울") == "seo ul"
+    assert slugify("대한민국") == "dae-han-min-gug"
 
     # Japanese (hiragana/katakana use Hepburn; kanji use Chinese pinyin)
-    assert transliterate("ひらがな") == 'hiragana'
-    assert transliterate("東京タワー") == 'dong jing tawa-'
-    assert transliterate("東京タワー", lang="ja") == 'dong jing tawa'
+    assert transliterate("ひらがな") == "hiragana"
+    assert transliterate("東京タワー") == "dong jing tawa-"
+    assert transliterate("東京タワー", lang="ja") == "dong jing tawa"
     ```
 
 === "Rust"
@@ -255,12 +255,12 @@ disarm can convert romanized Latin text back to native script for selected langu
 ```python
 from disarm import transliterate, reverse_langs
 
-assert transliterate("Moskva", target="ru") == 'Москва'
-assert transliterate("Kyiv", target="uk") == 'Кїв'
-assert transliterate("Athina", target="el") == 'Αθηνα'
+assert transliterate("Moskva", target="ru") == "Москва"
+assert transliterate("Kyiv", target="uk") == "Кїв"
+assert transliterate("Athina", target="el") == "Αθηνα"
 
 # List supported languages
-assert reverse_langs() == ['el', 'ru', 'uk']
+assert reverse_langs() == ["el", "ru", "uk"]
 ```
 
 Reverse transliteration uses greedy longest-match scanning to handle digraphs and trigraphs (e.g., `"shch"` → `щ`). See [Limitations](../limitations.md#reverse-transliteration-is-approximate) for round-trip degradation details.
@@ -273,25 +273,25 @@ When you don't know the language of the input text, pass `lang="auto"` to automa
 from disarm import transliterate, slugify
 
 # Detects Cyrillic → uses Russian ("ru") profile
-transliterate("Москва", lang="auto")         # "Moskva"
+transliterate("Москва", lang="auto")  # "Moskva"
 
 # Detects Thai → uses Thai ("th") profile
-transliterate("ภาษาไทย", lang="auto")         # Thai transliteration
+transliterate("ภาษาไทย", lang="auto")  # Thai transliteration
 
 # Detects Devanagari → uses Hindi ("hi") profile
-transliterate("नमस्ते", lang="auto")           # "namaste"
+transliterate("नमस्ते", lang="auto")  # "namaste"
 
 # Detects Hangul → uses Korean ("ko") profile
-slugify("한국어", lang="auto")                 # Korean romanization slug
+slugify("한국어", lang="auto")  # Korean romanization slug
 
 # Works with all call sites
 from disarm import TextPipeline, Slugifier
 
 pipe = TextPipeline(transliterate=True, lang="auto")
-pipe("こんにちは")    # Japanese transliteration
+pipe("こんにちは")  # Japanese transliteration
 
 s = Slugifier(lang="auto")
-s("東京タワー")      # CJK slug
+s("東京タワー")  # CJK slug
 ```
 
 ### How auto-detection works
@@ -356,16 +356,16 @@ If **no** exclusive characters are found, the script default is used (Cyrillic �
 
 ```python
 # Ukrainian detected by exclusive ї
-assert transliterate("Київ", lang="auto") == 'Kyiv'
+assert transliterate("Київ", lang="auto") == "Kyiv"
 
 # Persian detected by exclusive پ
-assert transliterate("پارسی", lang="auto") == 'parsy'
+assert transliterate("پارسی", lang="auto") == "parsy"
 
 # German detected by ß
-assert transliterate("Straße", lang="auto") == 'Strasse'
+assert transliterate("Straße", lang="auto") == "Strasse"
 
 # No exclusive chars → safe default
-assert transliterate("Москва", lang="auto") == 'Moskva'
+assert transliterate("Москва", lang="auto") == "Moskva"
 ```
 
 For scripts that remain ambiguous after discrimination (Devanagari, Han), pass an explicit language code when accuracy matters.
@@ -391,9 +391,9 @@ For scripts that remain ambiguous after discrimination (Devanagari, Han), pass a
     ```python
     from disarm import transliterate, slugify, sanitize_filename
 
-    assert transliterate("Ürümqi", lang="de") == 'Ueruemqi'
-    assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
-    assert sanitize_filename("Ärger.txt", lang="de") == 'Aerger.txt'
+    assert transliterate("Ürümqi", lang="de") == "Ueruemqi"
+    assert slugify("Ärger im Büro", lang="de") == "aerger-im-buero"
+    assert sanitize_filename("Ärger.txt", lang="de") == "Aerger.txt"
     ```
 
 === "Rust"
@@ -440,8 +440,8 @@ Pre-defined constants for type safety:
 ```python
 from disarm import LANG_DE, LANG_FR, transliterate
 
-assert transliterate("Ä", lang=LANG_DE) == 'Ae'
-assert transliterate("Ç", lang=LANG_FR) == 'C'
+assert transliterate("Ä", lang=LANG_DE) == "Ae"
+assert transliterate("Ç", lang=LANG_FR) == "C"
 ```
 
 ## Listing available languages
@@ -451,7 +451,91 @@ assert transliterate("Ç", lang=LANG_FR) == 'C'
     ```python
     from disarm import list_langs
 
-    assert list_langs() == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
+    assert list_langs() == [
+        "am",
+        "ar",
+        "as",
+        "ban",
+        "bax",
+        "bg",
+        "bn",
+        "bo",
+        "bug",
+        "ca",
+        "chr",
+        "cjm",
+        "cop",
+        "cs",
+        "cy",
+        "da",
+        "de",
+        "dv",
+        "el",
+        "es",
+        "et",
+        "fa",
+        "fi",
+        "fr",
+        "ga",
+        "gu",
+        "he",
+        "hi",
+        "hr",
+        "hu",
+        "hy",
+        "is",
+        "it",
+        "ja",
+        "ja-kunrei",
+        "jv",
+        "ka",
+        "khb",
+        "km",
+        "kn",
+        "ko",
+        "lis",
+        "lo",
+        "lt",
+        "lv",
+        "ml",
+        "mn",
+        "mni",
+        "mr",
+        "mt",
+        "my",
+        "ne",
+        "nl",
+        "no",
+        "nod",
+        "nqo",
+        "or",
+        "pa",
+        "pl",
+        "pt",
+        "ro",
+        "ru",
+        "sa",
+        "sat",
+        "si",
+        "sk",
+        "sl",
+        "sq",
+        "sr",
+        "su",
+        "sv",
+        "syr",
+        "ta",
+        "tdd",
+        "te",
+        "th",
+        "tl",
+        "tr",
+        "tzm",
+        "uk",
+        "vai",
+        "vi",
+        "zh",
+    ]
     ```
 
 === "Rust"
@@ -474,16 +558,19 @@ Register a new language profile or override an existing one:
 from disarm import register_lang, transliterate
 
 # Register Esperanto
-register_lang("eo", {
-    "ĉ": "cx",
-    "ĝ": "gx",
-    "ĥ": "hx",
-    "ĵ": "jx",
-    "ŝ": "sx",
-    "ŭ": "ux",
-})
+register_lang(
+    "eo",
+    {
+        "ĉ": "cx",
+        "ĝ": "gx",
+        "ĥ": "hx",
+        "ĵ": "jx",
+        "ŝ": "sx",
+        "ŭ": "ux",
+    },
+)
 
-assert transliterate("ĉapelo", lang="eo") == 'cxapelo'
+assert transliterate("ĉapelo", lang="eo") == "cxapelo"
 ```
 
 !!! warning
@@ -496,13 +583,15 @@ Register global pre-transliteration string replacements:
 ```python
 from disarm import register_replacements, transliterate
 
-register_replacements({
-    "©": "(c)",
-    "®": "(R)",
-    "™": "(TM)",
-})
+register_replacements(
+    {
+        "©": "(c)",
+        "®": "(R)",
+        "™": "(TM)",
+    }
+)
 
-assert transliterate("Hello™ World©") == 'Hello(TM) World(c)'
+assert transliterate("Hello™ World©") == "Hello(TM) World(c)"
 ```
 
 ## Norwegian variants

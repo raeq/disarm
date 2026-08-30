@@ -34,15 +34,15 @@ from disarm import sanitize_filename
 from disarm import sanitize_filename
 
 # pathvalidate — these work directly in disarm (compatibility aliases)
-assert sanitize_filename("my<file>.txt", replacement_text="_") == 'my_file.txt'
-assert sanitize_filename("my<file>.txt", max_len=100) == 'my_file.txt'
+assert sanitize_filename("my<file>.txt", replacement_text="_") == "my_file.txt"
+assert sanitize_filename("my<file>.txt", max_len=100) == "my_file.txt"
 
 # disarm native names
-assert sanitize_filename("my<file>.txt", separator="_") == 'my_file.txt'
-assert sanitize_filename("my<file>.txt", max_length=100) == 'my_file.txt'
+assert sanitize_filename("my<file>.txt", separator="_") == "my_file.txt"
+assert sanitize_filename("my<file>.txt", max_length=100) == "my_file.txt"
 
 # platform values are lowercase in disarm
-assert sanitize_filename("my<file>.txt", platform="windows") == 'my_file.txt'
+assert sanitize_filename("my<file>.txt", platform="windows") == "my_file.txt"
 ```
 
 | pathvalidate parameter | disarm parameter | Notes |
@@ -63,10 +63,12 @@ pathvalidate strips or replaces non-ASCII characters. disarm transliterates them
 ```python
 # pathvalidate
 from pathvalidate import sanitize_filename
+
 sanitize_filename("café résumé.pdf")  # "caf rsm.pdf" (stripped)
 
 # disarm
 from disarm import sanitize_filename
+
 sanitize_filename("café résumé.pdf")  # "cafe_resume.pdf" (transliterated)
 ```
 
@@ -75,8 +77,8 @@ sanitize_filename("café résumé.pdf")  # "cafe_resume.pdf" (transliterated)
 ```python
 from disarm import sanitize_filename
 
-assert sanitize_filename("Ärger.txt", lang="de") == 'Aerger.txt'
-assert sanitize_filename("Ärger.txt") == 'Arger.txt'
+assert sanitize_filename("Ärger.txt", lang="de") == "Aerger.txt"
+assert sanitize_filename("Ärger.txt") == "Arger.txt"
 ```
 
 ### Extension preservation
@@ -84,7 +86,10 @@ assert sanitize_filename("Ärger.txt") == 'Arger.txt'
 ```python
 from disarm import sanitize_filename
 
-assert sanitize_filename("very_long_name.pdf", max_length=15, preserve_extension=True) == 'very_long_n.pdf'
+assert (
+    sanitize_filename("very_long_name.pdf", max_length=15, preserve_extension=True)
+    == "very_long_n.pdf"
+)
 ```
 
 ## What's not covered

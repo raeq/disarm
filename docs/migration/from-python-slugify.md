@@ -24,11 +24,11 @@ All parameters are supported with identical names and defaults:
 from disarm import slugify
 
 # These work identically in both libraries
-assert slugify("Hello, World!") == 'hello-world'
-assert slugify("My Post", separator="_") == 'my_post'
-assert slugify("Long Title", max_length=10, word_boundary=True) == 'long-title'
-assert slugify("the big fox", stopwords=["the"]) == 'big-fox'
-assert slugify("C++ Code", replacements=[("C++", "cpp")]) == 'cpp-code'
+assert slugify("Hello, World!") == "hello-world"
+assert slugify("My Post", separator="_") == "my_post"
+assert slugify("Long Title", max_length=10, word_boundary=True) == "long-title"
+assert slugify("the big fox", stopwords=["the"]) == "big-fox"
+assert slugify("C++ Code", replacements=[("C++", "cpp")]) == "cpp-code"
 ```
 
 ## Parameter compatibility
@@ -58,7 +58,7 @@ assert slugify("C++ Code", replacements=[("C++", "cpp")]) == 'cpp-code'
 from disarm import slugify
 
 # python-slugify can't do this
-assert slugify("Ärger im Büro", lang="de") == 'aerger-im-buero'
+assert slugify("Ärger im Büro", lang="de") == "aerger-im-buero"
 ```
 
 ### Reusable slugifiers
@@ -71,8 +71,8 @@ slug = Slugifier(lang="de", separator="_")
 
 # Unique slug generation
 unique = UniqueSlugifier()
-assert unique("My Post") == 'my-post'
-assert unique("My Post") == 'my-post-1'
+assert unique("My Post") == "my-post"
+assert unique("My Post") == "my-post-1"
 ```
 
 ## awesome-slugify migration
@@ -93,8 +93,8 @@ custom = Slugify(to_lower=True)
 custom("Hello World")  # "hello-world"
 
 unique = UniqueSlugify()
-unique("My Post")   # "My-Post"
-unique("My Post")   # "My-Post-1"
+unique("My Post")  # "My-Post"
+unique("My Post")  # "My-Post-1"
 ```
 
 ### awesome-slugify parameter compatibility
@@ -125,7 +125,7 @@ my_slugify.max_length = 200
 my_slugify.separator = "_"
 my_slugify.pretranslate = {"©": "c", "®": "r"}
 
-assert my_slugify("Hello © World") == 'hello_c_world'
+assert my_slugify("Hello © World") == "hello_c_world"
 ```
 
 ### Preconfigured instances
@@ -160,11 +160,11 @@ If you prefer disarm's native API (which offers more features), use `Slugifier` 
 from disarm import Slugifier, UniqueSlugifier
 
 custom = Slugifier(lowercase=True, lang="de")
-assert custom("Ärger im Büro") == 'aerger-im-buero'
+assert custom("Ärger im Büro") == "aerger-im-buero"
 
 unique = UniqueSlugifier()
-assert unique("My Post") == 'my-post'
-assert unique("My Post") == 'my-post-1'
+assert unique("My Post") == "my-post"
+assert unique("My Post") == "my-post-1"
 ```
 
 ### What's different

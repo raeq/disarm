@@ -40,7 +40,7 @@ the script is preserved:
     from disarm import ml_normalize
 
     assert ml_normalize("CAFÉ") == "cafe"
-    assert ml_normalize("Привет") == "привет"        # stays Cyrillic, normalized
+    assert ml_normalize("Привет") == "привет"  # stays Cyrillic, normalized
     assert ml_normalize("Café — RÉSUMÉ 🎉") == "cafe em dash resume party popper"
     ```
 
@@ -133,10 +133,10 @@ measurement wires in whichever tokenizer you target:
 import tiktoken
 from disarm import transliterate
 
-enc = tiktoken.get_encoding("o200k_base")          # GPT-4o
+enc = tiktoken.get_encoding("o200k_base")  # GPT-4o
 text = "नमस्ते दुनिया"
 before = len(enc.encode(text))
-after = len(enc.encode(transliterate(text)))        # romanized → fewer subwords
+after = len(enc.encode(transliterate(text)))  # romanized → fewer subwords
 ```
 
 A reproducible token-fertility benchmark across several non-Latin scripts and

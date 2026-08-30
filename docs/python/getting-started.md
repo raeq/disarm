@@ -24,12 +24,15 @@ The two operations people most often confuse are *visual* confusable folding
 
 ```python
 from disarm import (
-    normalize_confusables, strip_obfuscation, transliterate, slugify,
+    normalize_confusables,
+    strip_obfuscation,
+    transliterate,
+    slugify,
     is_suspicious_hostname,
 )
 
 # Visual (TR39) confusable folding — homoglyph defence
-assert normalize_confusables("раypal") == "paypal"   # Cyrillic р/а → Latin
+assert normalize_confusables("раypal") == "paypal"  # Cyrillic р/а → Latin
 assert strip_obfuscation("рroduсt") == "product"
 
 # Phonetic romanization — readable ASCII, NOT a security control.

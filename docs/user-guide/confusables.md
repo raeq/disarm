@@ -76,10 +76,10 @@ Replace confusable characters with their target-script equivalents:
     from disarm import normalize_confusables
 
     # Cyrillic а, е, о → Latin a, e, o
-    assert normalize_confusables("Неllo Wоrld") == 'Hello World'
+    assert normalize_confusables("Неllo Wоrld") == "Hello World"
 
     # Greek omicron → Latin o
-    assert normalize_confusables("Ηellο") == 'Hello'
+    assert normalize_confusables("Ηellο") == "Hello"
     ```
 
 === "Rust"
@@ -151,8 +151,8 @@ The wider `strip_obfuscation` bundle recovers the same attack but also runs
 `strip_accents`, so it does not preserve the name:
 
 ```python
-assert strip_obfuscation("pаypаl") == "paypal"          # same recovery
-assert strip_obfuscation("José Martínez") == "Jose Martinez"   # different fidelity
+assert strip_obfuscation("pаypаl") == "paypal"  # same recovery
+assert strip_obfuscation("José Martínez") == "Jose Martinez"  # different fidelity
 ```
 
 Neither is wrong; they answer different questions. Accent destruction is a property of
@@ -210,10 +210,10 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
     ```python
     # Normalize to Latin (default) — non-Latin homoglyphs → Latin
-    assert normalize_confusables("раypal") == 'paypal'
+    assert normalize_confusables("раypal") == "paypal"
 
     # Normalize to Cyrillic — non-Cyrillic homoglyphs → Cyrillic
-    assert normalize_confusables("paypal", target_script="cyrillic") == 'раураӏ'
+    assert normalize_confusables("paypal", target_script="cyrillic") == "раураӏ"
     ```
 
 === "Ruby"
@@ -444,10 +444,10 @@ so a digraph can never form across a dot:
 
 ```python
 _s, a = is_suspicious_hostname("vvv.com", contractions=True)
-assert a.canonical == "wv.com"          # leftmost wins, never "vw"
+assert a.canonical == "wv.com"  # leftmost wins, never "vw"
 
 _s, b = is_suspicious_hostname("var.net", contractions=True)
-assert b.canonical == "var.net"         # the r and n are in different labels
+assert b.canonical == "var.net"  # the r and n are in different labels
 ```
 
 One pass is a fixed point by construction: `build.rs` asserts no rule's output occurs
@@ -492,7 +492,7 @@ precomposed form is mapped counts as covered — otherwise the report would disa
 what the transform actually does:
 
 ```python
-assert normalize_confusables("\u0456\u0308") == "i"    # і + ◌̈ composes to ї, which folds
+assert normalize_confusables("\u0456\u0308") == "i"  # і + ◌̈ composes to ї, which folds
 assert find_unmapped_confusables("\u0456\u0308") == []
 ```
 
@@ -535,7 +535,7 @@ if is_mixed_script(domain):
 # Detect Cyrillic homoglyphs injected into Russian text
 text = "Банк pоссии"  # Latin 'p' and 'o' instead of Cyrillic
 normalized = normalize_confusables(text, target_script="cyrillic")
-assert normalized == 'Банк россии'
+assert normalized == "Банк россии"
 ```
 
 ### Username validation
@@ -544,6 +544,7 @@ Ensure usernames don't contain confusable characters:
 
 ```python
 from disarm import is_confusable
+
 
 def validate_username(name: str) -> bool:
     if is_confusable(name):

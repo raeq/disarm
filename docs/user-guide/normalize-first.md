@@ -31,13 +31,20 @@ final whitespace cleanup last:
 from disarm import TextPipeline
 
 pipe = TextPipeline(
-    fold_case=True,           # passed first…
-    normalize="NFKC",         # …but normalize always runs first
+    fold_case=True,  # passed first…
+    normalize="NFKC",  # …but normalize always runs first
     confusables=True,
     collapse_whitespace=True,
 )
 
-assert [name for name, _param in pipe.steps] == ['normalize', 'confusables', 'fold_case', 'strip_control', 'strip_zero_width', 'collapse_whitespace']
+assert [name for name, _param in pipe.steps] == [
+    "normalize",
+    "confusables",
+    "fold_case",
+    "strip_control",
+    "strip_zero_width",
+    "collapse_whitespace",
+]
 ```
 
 The order a pipeline **reports** (`pipe.steps`) is, by construction, the order it
@@ -103,7 +110,7 @@ Detect it with `is_mixed_script`, and fold it to a single script with
     ```python
     import disarm
 
-    raw = "pаypаl"                     # contains Cyrillic а (U+0430)
+    raw = "pаypаl"  # contains Cyrillic а (U+0430)
 
     # Normalize first — NFKC folds compatibility variants (fullwidth, ligatures)
     # so the script check sees canonical input, never a disguised bypass.
@@ -112,7 +119,7 @@ Detect it with `is_mixed_script`, and fold it to a single script with
     assert disarm.is_mixed_script(s) == True
 
     pure = disarm.normalize_confusables(s, target_script="latin")
-    assert pure == 'paypal'
+    assert pure == "paypal"
     assert disarm.is_mixed_script(pure) == False
     ```
 
@@ -157,8 +164,8 @@ would need:
     ```python
     import disarm
 
-    assert disarm.normalize("⁵", form="NFC") == '⁵'    # superscript five — preserved
-    assert disarm.normalize("⁵", form="NFKC") == '5'   # folded to ASCII — unrecoverable
+    assert disarm.normalize("⁵", form="NFC") == "⁵"  # superscript five — preserved
+    assert disarm.normalize("⁵", form="NFKC") == "5"  # folded to ASCII — unrecoverable
     ```
 
 === "Rust"
@@ -176,11 +183,11 @@ An NFC-first canonicalization keeps the door open to a clean round-trip:
 
     ```python
     native = "Москва"
-    canonical = disarm.normalize(native, form="NFC")        # canonical, lossless
+    canonical = disarm.normalize(native, form="NFC")  # canonical, lossless
     romanized = disarm.transliterate(canonical, lang="ru")
-    assert romanized == 'Moskva'
+    assert romanized == "Moskva"
     back = disarm.transliterate(romanized, target="ru")
-    assert back == 'Москва'                                   # round-trips
+    assert back == "Москва"  # round-trips
     ```
 
 === "Rust"

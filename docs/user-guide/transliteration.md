@@ -25,9 +25,9 @@ There are two quality tiers to be aware of (see [Language Support](language-supp
     ```python
     from disarm import transliterate
 
-    assert transliterate("café") == 'cafe'
-    assert transliterate("naïve") == 'naive'
-    assert transliterate("Αθήνα") == 'Athina'
+    assert transliterate("café") == "cafe"
+    assert transliterate("naïve") == "naive"
+    assert transliterate("Αθήνα") == "Athina"
     ```
 
 === "Rust"
@@ -70,17 +70,17 @@ Kyiv (the default mapping would not), and German ü → ue:
 
     ```python
     # Ukrainian
-    assert transliterate("Київ", lang="uk") == 'Kyiv'
+    assert transliterate("Київ", lang="uk") == "Kyiv"
 
     # German
-    assert transliterate("Ärger über Ölförderung", lang="de") == 'Aerger ueber Oelfoerderung'
+    assert transliterate("Ärger über Ölförderung", lang="de") == "Aerger ueber Oelfoerderung"
     # Without lang — default mapping
-    assert transliterate("Ärger über Ölförderung") == 'Arger uber Olforderung'
+    assert transliterate("Ärger über Ölförderung") == "Arger uber Olforderung"
 
     # Norwegian / Swedish / Turkish
-    assert transliterate("Ål i Ørsta", lang="no") == 'Aal i Oersta'
-    assert transliterate("Malmö Ängby", lang="sv") == 'Malmoe Aengby'
-    assert transliterate("İstanbul çağı", lang="tr") == 'Istanbul cagi'
+    assert transliterate("Ål i Ørsta", lang="no") == "Aal i Oersta"
+    assert transliterate("Malmö Ängby", lang="sv") == "Malmoe Aengby"
+    assert transliterate("İstanbul çağı", lang="tr") == "Istanbul cagi"
     ```
 
 === "Rust"
@@ -115,10 +115,10 @@ Kyiv (the default mapping would not), and German ü → ue:
 When the source language is unknown, `lang="auto"` detects the dominant non-Latin script and selects the appropriate language profile automatically:
 
 ```python
-assert transliterate("Москва", lang="auto") == 'Moskva'
-assert transliterate("ภาษาไทย", lang="auto") == 'phasaaithy'
-assert transliterate("café", lang="auto") == 'cafe'
-assert transliterate("Hello Москва", lang="auto") == 'Hello Moskva'
+assert transliterate("Москва", lang="auto") == "Moskva"
+assert transliterate("ภาษาไทย", lang="auto") == "phasaaithy"
+assert transliterate("café", lang="auto") == "cafe"
+assert transliterate("Hello Москва", lang="auto") == "Hello Moskva"
 ```
 
 For ambiguous scripts like Cyrillic (shared by Russian, Ukrainian, Bulgarian, etc.), auto-detection uses a default (Russian for Cyrillic). Pass an explicit code when the language is known.
@@ -140,23 +140,23 @@ The `errors` parameter controls what happens when a character has no translitera
 === "replace (default)"
 
     ```python
-    assert transliterate("text ♠ here", errors="replace") == 'text [?] here'
+    assert transliterate("text ♠ here", errors="replace") == "text [?] here"
 
-    assert transliterate("text ♠ here", errors="replace", replace_with="") == 'text  here'
+    assert transliterate("text ♠ here", errors="replace", replace_with="") == "text  here"
 
-    assert transliterate("text ♠ here", errors="replace", replace_with="?") == 'text ? here'
+    assert transliterate("text ♠ here", errors="replace", replace_with="?") == "text ? here"
     ```
 
 === "ignore"
 
     ```python
-    assert transliterate("text ♠ here", errors="ignore") == 'text  here'
+    assert transliterate("text ♠ here", errors="ignore") == "text  here"
     ```
 
 === "preserve"
 
     ```python
-    assert transliterate("text ♠ here", errors="preserve") == 'text ♠ here'
+    assert transliterate("text ♠ here", errors="preserve") == "text ♠ here"
     ```
 
 === "strict"
@@ -181,7 +181,7 @@ replace/drop/preserve:
 from disarm import find_untranslatable
 
 assert find_untranslatable("café") == []
-assert find_untranslatable("a♠b♣c") == [('♠', 1), ('♣', 5)]
+assert find_untranslatable("a♠b♣c") == [("♠", 1), ("♣", 5)]
 ```
 
 This is useful for validating input up front, or reporting which characters a
@@ -212,25 +212,25 @@ Chinese characters are mapped to toneless pinyin from the Unicode Unihan databas
 ```python
 from disarm import slugify
 
-assert transliterate("北京市") == 'bei jing shi'
-assert transliterate("中国人民") == 'zhong guo ren min'
-assert slugify("北京烤鸭") == 'bei-jing-kao-ya'
+assert transliterate("北京市") == "bei jing shi"
+assert transliterate("中国人民") == "zhong guo ren min"
+assert slugify("北京烤鸭") == "bei-jing-kao-ya"
 ```
 
 Korean Hangul syllables are decomposed algorithmically into jamo components and romanized using the Revised Romanization standard:
 
 ```python
-assert transliterate("서울") == 'seo ul'
-assert transliterate("대한민국") == 'dae han min gug'
-assert slugify("대한민국") == 'dae-han-min-gug'
+assert transliterate("서울") == "seo ul"
+assert transliterate("대한민국") == "dae han min gug"
+assert slugify("대한민국") == "dae-han-min-gug"
 ```
 
 Japanese hiragana and katakana use Modified Hepburn romanization. Kanji (shared with Chinese) fall back to Chinese pinyin readings:
 
 ```python
-assert transliterate("ひらがな") == 'hiragana'
-assert transliterate("カタカナ") == 'katakana'
-assert transliterate("東京タワー") == 'dong jing tawa-'
+assert transliterate("ひらがな") == "hiragana"
+assert transliterate("カタカナ") == "katakana"
+assert transliterate("東京タワー") == "dong jing tawa-"
 ```
 
 See [Limitations](../limitations.md) for details on context-free mapping trade-offs.
@@ -243,14 +243,14 @@ The `target` parameter converts romanized Latin text **back** to a native script
 from disarm import transliterate, reverse_langs
 
 # Latin → Cyrillic
-assert transliterate("Moskva", target="ru") == 'Москва'
-assert transliterate("Kyiv", target="uk") == 'Кїв'
+assert transliterate("Moskva", target="ru") == "Москва"
+assert transliterate("Kyiv", target="uk") == "Кїв"
 
 # Latin → Greek
-assert transliterate("Athina", target="el") == 'Αθηνα'
+assert transliterate("Athina", target="el") == "Αθηνα"
 
 # List supported target languages
-assert reverse_langs() == ['el', 'ru', 'uk']
+assert reverse_langs() == ["el", "ru", "uk"]
 ```
 
 The `target` parameter is **mutually exclusive** with `lang` — you are either going forward (Unicode → ASCII via `lang`) or backward (Latin → native via `target`), not both. Forward-only parameters (`errors`, `replace_with`, `strict_iso9`, `gost7034`, `tones`) raise `ValueError` when used with `target`.
@@ -275,7 +275,7 @@ Reverse transliteration uses greedy longest-match scanning to handle digraphs an
 ```python
 from disarm import unidecode
 
-assert unidecode("café") == 'cafe'
+assert unidecode("café") == "cafe"
 ```
 
 !!! warning "`unidecode()` is a lossy ASCII fold"
@@ -299,9 +299,9 @@ disarm operates in two transliteration modes depending on the `context` paramete
 Every character is mapped independently to its ASCII equivalent using a lookup table. No dictionary, no context, no ambiguity resolution. This is the standard approach used by all transliteration libraries (Unidecode, anyascii, text-unidecode).
 
 ```python
-assert transliterate("Київ", lang="uk") == 'Kyiv'
+assert transliterate("Київ", lang="uk") == "Kyiv"
 assert transliterate("كتب العربية") == "ktb al'rbyh"
-assert transliterate("שלום", lang="he") == 'shlvm'
+assert transliterate("שלום", lang="he") == "shlvm"
 ```
 
 Context-free transliteration works well for scripts that write vowels explicitly (Latin, Cyrillic, Greek, Devanagari, Thai, etc.). It produces poor results for **abjad scripts** (Arabic, Persian, Hebrew) where vowels are omitted in standard writing.
@@ -312,9 +312,9 @@ For abjad scripts, pass `context=True` to enable dictionary-based vowel restorat
 
 <!--- skip: next -->
 ```python
-transliterate("كتب العربية", context=True)              # "kataba al'arabiyahi"
-transliterate("کتاب فارسی", lang="fa", context=True)     # "ketab farsy"
-transliterate("שלום", lang="he", context=True)           # "shalvom"
+transliterate("كتب العربية", context=True)  # "kataba al'arabiyahi"
+transliterate("کتاب فارسی", lang="fa", context=True)  # "ketab farsy"
+transliterate("שלום", lang="he", context=True)  # "shalvom"
 ```
 
 Context-aware mode uses a three-tier fallback:

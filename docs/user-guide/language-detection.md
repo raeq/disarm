@@ -20,7 +20,7 @@ The entire pipeline is deterministic, O(n), and fail-safe: if detection is uncer
     # Stage 1: Cyrillic detected → ambiguous script
     # Stage 2: ї found → Ukrainian discriminator hit
     # Stage 3: returns "uk"
-    assert transliterate("Київ", lang="auto") == 'Kyiv'
+    assert transliterate("Київ", lang="auto") == "Kyiv"
     ```
 
 === "Rust"
@@ -182,22 +182,22 @@ Key properties:
     from disarm import transliterate
 
     # Ukrainian: ї is exclusive to Ukrainian Cyrillic
-    assert transliterate("Київ", lang="auto") == 'Kyiv'
+    assert transliterate("Київ", lang="auto") == "Kyiv"
 
     # Serbian: ћ is exclusive to Serbian Cyrillic
-    assert transliterate("Београд", lang="auto") == 'Beograd'
+    assert transliterate("Београд", lang="auto") == "Beograd"
 
     # Persian: پ is exclusive to Persian Arabic
-    assert transliterate("پارسی", lang="auto") == 'parsy'
+    assert transliterate("پارسی", lang="auto") == "parsy"
 
     # Vietnamese: ơ is exclusive to Vietnamese Latin
-    assert transliterate("Hà Nội", lang="auto") == 'Ha Noi'
+    assert transliterate("Hà Nội", lang="auto") == "Ha Noi"
 
     # German: ß is exclusive to German Latin
-    assert transliterate("Straße", lang="auto") == 'Strasse'
+    assert transliterate("Straße", lang="auto") == "Strasse"
 
     # No discriminator: Москва has no exclusive chars
-    assert transliterate("Москва", lang="auto") == 'Moskva'
+    assert transliterate("Москва", lang="auto") == "Moskva"
     ```
 
 === "Rust"
@@ -378,7 +378,7 @@ The fields map to each binding's idiom — Python dict keys, Ruby hash keys
 
 ```python
 # Do this:
-transliterate("Софія", lang="bg")   # Known to be Bulgarian
+transliterate("Софія", lang="bg")  # Known to be Bulgarian
 
 # Not this:
 transliterate("Софія", lang="auto")  # Defaults to Russian (no Bulgarian discriminators)
@@ -392,8 +392,14 @@ transliterate("Софія", lang="auto")  # Defaults to Russian (no Bulgarian di
 
 ```python
 from disarm import (
-    transliterate, slugify, catalog_key, search_key, sort_key,
-    TextPipeline, Slugifier, Text,
+    transliterate,
+    slugify,
+    catalog_key,
+    search_key,
+    sort_key,
+    TextPipeline,
+    Slugifier,
+    Text,
 )
 
 # Functions

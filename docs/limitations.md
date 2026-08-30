@@ -98,9 +98,9 @@ The `target` parameter enables Latin → native script conversion, but this is i
 from disarm import transliterate
 
 text = "Тьма"
-fwd = transliterate(text, lang="ru")        # "Tma"
-rev = transliterate(fwd, target="ru")       # "Тма" (soft sign lost)
-fwd2 = transliterate(rev, lang="ru")        # "Tma" (looks same but Ь is gone)
+fwd = transliterate(text, lang="ru")  # "Tma"
+rev = transliterate(fwd, target="ru")  # "Тма" (soft sign lost)
+fwd2 = transliterate(rev, lang="ru")  # "Tma" (looks same but Ь is gone)
 ```
 
 **Guidance:** Reverse transliteration is useful for recovering romanized text written in a standard transliteration scheme, not for lossless round-tripping. Note that `strict_iso9=True` is an ASCII (digraph) scheme, **not** a reversible diacritic standard — digraphs like ж→zh are not uniquely invertible. For recovering native script from romanized Latin, use reverse transliteration (`target=`, ru/uk/el).
@@ -275,10 +275,10 @@ from disarm import canonicalize, normalize_confusables, strip_accents
 -->
 
 ```python
-strip_accents("José")    # 'Jose'   — readable, one accent lost
-strip_accents("বাংলা")    # 'বল'     — the name of the Bengali language, 5 codepoints to 2
-strip_accents("हिन्दी")    # 'हनद'    — the word "Hindi"
-strip_accents("జ్ఞానం")   # 'జఞన'    — Telugu for "knowledge"
+strip_accents("José")  # 'Jose'   — readable, one accent lost
+strip_accents("বাংলা")  # 'বল'     — the name of the Bengali language, 5 codepoints to 2
+strip_accents("हिन्दी")  # 'हनद'    — the word "Hindi"
+strip_accents("జ్ఞానం")  # 'జఞన'    — Telugu for "knowledge"
 ```
 
 The measurable difference is length. Removing an accent from precomposed Latin or Greek
@@ -294,10 +294,10 @@ does so wherever the bundled TR39 table has a mapping — including inside text 
 wholly non-Latin, where there is no Latin for a homoglyph to be confused with.
 
 ```python
-normalize_confusables("العربية")   # 'lلعربية'    Arabic alef → Latin l
-normalize_confusables("עברית")     # "עבר'ת"      Hebrew yod → apostrophe
+normalize_confusables("العربية")  # 'lلعربية'    Arabic alef → Latin l
+normalize_confusables("עברית")  # "עבר'ת"      Hebrew yod → apostrophe
 normalize_confusables("Ελληνικά")  # 'Eλλnvikά'   half folded, half not
-normalize_confusables("జ్ఞానం")     # 'జ్ఞానo'      Telugu anusvara → o
+normalize_confusables("జ్ఞానం")  # 'జ్ఞానo'      Telugu anusvara → o
 ```
 
 How much of a block is in scope varies a lot: 22 of the 256 Arabic code points fold to
@@ -333,7 +333,7 @@ word and its absence changes the rendering. It is also meaningful in several Ind
 scripts. Every preset that removes format characters removes it, `strip_format` included.
 
 ```python
-canonicalize("می‌خواهم")   # the ZWNJ is gone; Persian for "I want"
+canonicalize("می‌خواهم")  # the ZWNJ is gone; Persian for "I want"
 ```
 
 ### Nothing warns you first
@@ -374,9 +374,9 @@ The canonical case is a lone emoji skin-tone modifier (U+1F3FB EMOJI MODIFIER FI
 ```python
 from disarm import terminal_width, grapheme_len
 
-terminal_width(" 🏻")              # 1 — " 🏻" is ONE cluster: space (1) + zero-width extender (0)
-grapheme_len(" 🏻")                # 1
-terminal_width("🏻")               # 2 — alone, its base has Emoji_Presentation
+terminal_width(" 🏻")  # 1 — " 🏻" is ONE cluster: space (1) + zero-width extender (0)
+grapheme_len(" 🏻")  # 1
+terminal_width("🏻")  # 2 — alone, its base has Emoji_Presentation
 terminal_width("") + 1 + terminal_width("🏻")  # 3 — but the joined string measures 1
 ```
 

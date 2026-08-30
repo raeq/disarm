@@ -46,7 +46,13 @@ BUNDLED_CONFUSABLES = Path(__file__).resolve().parent.parent / "data" / "confusa
 # below (which knows the currently-problematic digit blocks) and warn on any
 # mismatch. Run under the newest Python available.
 DATA_UNICODE_VERSION = "17.0.0"
-MIN_UNICODE_VERSION = "16.0.0"
+# The floor tracks the data, and must: a floor *below* `DATA_UNICODE_VERSION` permits
+# exactly the corruption this check exists to prevent. Regenerating under UCD 16.0.0
+# while the data was 17.0.0 folded `U+11DE0` TOLONG SIKI DIGIT ZERO to the letter `O`
+# and `U+11DE1` DIGIT ONE to `l`, because both read as `Cn` and `enforce_digit_target`
+# cannot protect a codepoint it does not know is a digit (#439). Two Beria Erfe capitals
+# went unreconciled the same way. The run warned and produced the wrong table anyway.
+MIN_UNICODE_VERSION = DATA_UNICODE_VERSION
 # Measured cross-script supplement folded with priority over TR39 (#342/#343).
 BUNDLED_SUPPLEMENT = Path(__file__).resolve().parent.parent / "data" / "confusables_supplement.tsv"
 BUNDLED_ATTESTED = Path(__file__).resolve().parent.parent / "data" / "confusables_attested.tsv"
@@ -387,6 +393,44 @@ def strip_combining(target_cps: list[int]) -> list[int]:
     return [cp for cp in target_cps if not is_combining_mark(cp)]
 
 
+def uppercase_nfkc(cp: int) -> str | None:
+    """The source's NFKC form, if that form is a run of ASCII uppercase letters (#734).
+
+    `None` for everything else, including mixed-case decompositions such as `U+3392`
+    SQUARE MHZ (`MHz`), which must not be rewritten.
+    """
+    nfkc = unicodedata.normalize("NFKC", chr(cp))
+    if nfkc and nfkc.isascii() and nfkc.isalpha() and nfkc.isupper():
+        return nfkc
+    return None
+
+
+def is_uppercase_source(cp: int) -> bool:
+    """True if *cp* is an uppercase letter for folding purposes (#734).
+
+    `Lu` covers almost all of it, and used to be the whole test. Two sources in the
+    capital-I family are not `Lu` — `U+2160` ROMAN NUMERAL ONE is `Nl`, `U+1CCDE`
+    OUTLINED LATIN CAPITAL LETTER I is `So` — so neither was ever reconciled and both
+    kept TR39's lowercase `l`. The table then contradicted itself inside one block:
+    `Ⅷ` folded to `Vlll`, and the outlined alphabet read `…GHlJK…`.
+
+    The second clause is "NFKC-decomposes to a single uppercase ASCII letter", which is
+    what separates those two from the only other candidates. Of the 21 sources whose
+    name contains CAPITAL, whose category is not `Lu`, and whose target is a lowercase
+    letter, 20 are the small capitals (`ɢ ɪ ɴ ʀ ʏ …`) — every one `Ll`, with no NFKC
+    decomposition at all, correctly keeping a lowercase target. The 21st is `U+1CCDE`.
+
+    This reads `unicodedata`, so it is subject to the version floor enforced by
+    `_check_unicode_version`: `U+1CCDE` was assigned in Unicode 16.0, and under an older
+    table it is `Cn` with no decomposition and this returns False for it.
+    """
+    ch = chr(cp)
+    if unicodedata.category(ch) == "Lu":
+        return True
+    nfkc = unicodedata.normalize("NFKC", ch)
+    return len(nfkc) == 1 and nfkc.isascii() and nfkc.isupper()
+
+
 def fix_case_mismatch(source_cp: int, target_str: str) -> str:
     """Ensure case consistency between source and target.
 
@@ -394,11 +438,30 @@ def fix_case_mismatch(source_cp: int, target_str: str) -> str:
     adjust the target to match. Special case: the {I, l, 1} class
     where uppercase should map to I, not L.
     """
-    if len(target_str) != 1 or not target_str.isalpha():
+    if not target_str.isalpha():
         return target_str
+
+    # Multi-character targets (#734). TR39 maps `Ⅷ` to `V l l l` and records its own
+    # reasoning as `# →VIII→`: the right letters, reached through the lowercase `l`
+    # prototype. The old guard returned early on any target longer than one character,
+    # so the nine multi-character Roman numerals kept that lowercase spelling and
+    # `normalize_confusables("Ⅷ")` was `Vlll`.
+    #
+    # Reconcile against the source's NFKC form when that form is a same-length run of
+    # ASCII uppercase letters. Measured over both shipped tables, that is exactly nine
+    # rows — U+2161..U+2168, U+216A, U+216B — and nothing else. The `isascii` test keeps
+    # this to the Latin table: the Cyrillic targets are Cyrillic letters and are handled
+    # by the single-character path below, which must stay non-ASCII-capable or the
+    # palochka rows stop being reconciled.
+    if len(target_str) > 1:
+        nfkc = uppercase_nfkc(source_cp)
+        if nfkc is not None and len(nfkc) == len(target_str) and target_str.isascii():
+            return nfkc
+        return target_str
+
     source_cat = unicodedata.category(chr(source_cp))
     target_cat = unicodedata.category(target_str)
-    if source_cat == "Lu" and target_cat == "Ll":
+    if is_uppercase_source(source_cp) and target_cat == "Ll":
         if target_str == "l":
             return "I"
         return target_str.upper()

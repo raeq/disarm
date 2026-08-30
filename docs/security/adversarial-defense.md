@@ -167,8 +167,8 @@ its exact signature (e.g. Rust's `normalize_confusables` takes an explicit
     ```python
     from disarm import strip_obfuscation, normalize_confusables, is_suspicious_hostname
 
-    assert strip_obfuscation("рroduсt") == 'product'
-    assert normalize_confusables("раypal") == 'paypal'
+    assert strip_obfuscation("рroduсt") == "product"
+    assert normalize_confusables("раypal") == "paypal"
 
     # leading Cyrillic 'а' is flagged
     suspicious, analysis = is_suspicious_hostname("аpple.com")

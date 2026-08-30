@@ -101,11 +101,11 @@ Caps the number of combining marks per base character, preserving legitimate dia
 ```python
 from disarm import strip_zalgo
 
-assert strip_zalgo("café") == 'café'
-assert strip_zalgo("Việt Nam") == 'Việt Nam'
+assert strip_zalgo("café") == "café"
+assert strip_zalgo("Việt Nam") == "Việt Nam"
 
 # Strip all combining marks (like strip_accents)
-assert strip_zalgo("café", max_marks=0) == 'cafe'
+assert strip_zalgo("café", max_marks=0) == "cafe"
 ```
 
 ---
@@ -121,9 +121,9 @@ from disarm import transliterate, slugify
 
 titles = ["café résumé", "Straße nach München", "Москва"]
 
-assert transliterate(titles) == ['cafe resume', 'Strasse nach Munchen', 'Moskva']
+assert transliterate(titles) == ["cafe resume", "Strasse nach Munchen", "Moskva"]
 
-assert slugify(titles, lang="de") == ['cafe-resume', 'strasse-nach-muenchen', 'moskva']
+assert slugify(titles, lang="de") == ["cafe-resume", "strasse-nach-muenchen", "moskva"]
 ```
 
 For large datasets, passing a list is significantly faster than calling the function in a Python loop. See [Performance](../performance.md) for benchmarks.
@@ -142,7 +142,7 @@ The following aliases are provided for migration convenience:
 ```python
 from disarm import unidecode, casefold, remove_accents
 
-assert unidecode("café") == 'cafe'
-assert casefold("Straße") == 'strasse'
-assert remove_accents("café") == 'cafe'
+assert unidecode("café") == "cafe"
+assert casefold("Straße") == "strasse"
+assert remove_accents("café") == "cafe"
 ```

@@ -13,10 +13,12 @@ disarm's `transliterate()` replaces [anyascii](https://pypi.org/project/anyascii
 ```python
 # Before
 from anyascii import anyascii
+
 result = anyascii("café")
 
 # After
 from disarm import transliterate
+
 result = transliterate("café")
 ```
 
@@ -24,6 +26,7 @@ Or use the compatibility alias:
 
 ```python
 from disarm import unidecode as anyascii
+
 result = anyascii("café")
 ```
 
@@ -50,12 +53,12 @@ anyascii and disarm both provide Unicode → ASCII transliteration, but they use
 from disarm import transliterate
 
 # Common cases — identical
-assert anyascii("café") == 'cafe'
-assert transliterate("café") == 'cafe'
+assert anyascii("café") == "cafe"
+assert transliterate("café") == "cafe"
 
 # CJK — may differ in romanization style
-anyascii("北京")       # romanization varies
-assert transliterate("北京") == 'bei jing'
+anyascii("北京")  # romanization varies
+assert transliterate("北京") == "bei jing"
 ```
 
 ### Language awareness
@@ -66,8 +69,8 @@ anyascii has no language parameter. disarm provides 83 language-specific profile
 from disarm import transliterate
 
 # anyascii can't do this
-assert transliterate("München", lang="de") == 'Muenchen'
-assert transliterate("Malmö", lang="sv") == 'Malmoe'
+assert transliterate("München", lang="de") == "Muenchen"
+assert transliterate("Malmö", lang="sv") == "Malmoe"
 ```
 
 ### Error handling
@@ -77,9 +80,9 @@ anyascii silently drops characters with no mapping. disarm gives you control:
 ```python
 from disarm import transliterate
 
-assert transliterate("♠", errors="replace", replace_with="?") == '?'
-assert transliterate("♠", errors="ignore") == ''
-assert transliterate("♠", errors="preserve") == '♠'
+assert transliterate("♠", errors="replace", replace_with="?") == "?"
+assert transliterate("♠", errors="ignore") == ""
+assert transliterate("♠", errors="preserve") == "♠"
 ```
 
 ## New features in disarm

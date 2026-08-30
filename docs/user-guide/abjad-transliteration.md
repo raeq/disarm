@@ -24,6 +24,7 @@ Standard character-by-character transliteration — the approach used by Unideco
 
     ```python
     from disarm import transliterate
+
     assert transliterate("كتب العربية") == "ktb al'rbyh"
     assert transliterate("שלום", lang="he") == "shlvm"
     assert transliterate("کتاب فارسی", lang="fa") == "ktab farsy"
@@ -68,9 +69,9 @@ This is the same approach as every other transliteration library. Each character
 <!--- skip: next -->
 ```python
 # Requires context dictionaries (see bootstrap_dicts.sh and DISARM_DICT_DIR)
-transliterate("كتب العربية", context=True)              # "kataba al'arabiyahi"
-transliterate("שלום", lang="he", context=True)           # "shalvom"
-transliterate("کتاب فارسی", lang="fa", context=True)     # "ketab farsy"
+transliterate("كتب العربية", context=True)  # "kataba al'arabiyahi"
+transliterate("שלום", lang="he", context=True)  # "shalvom"
+transliterate("کتاب فارسی", lang="fa", context=True)  # "ketab farsy"
 ```
 
 This mode uses a **dictionary-based vowel restoration** system to recover the missing vowels before transliterating. The result is readable romanized text rather than a consonant skeleton.
@@ -253,7 +254,7 @@ Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian ra
 <!--- skip: next -->
 ```python
 # With context — vowels from curated dictionary (requires context dictionaries)
-transliterate("کتاب فارسی", lang="fa", context=True) # "ketab farsy"
+transliterate("کتاب فارسی", lang="fa", context=True)  # "ketab farsy"
 ```
 
 For words not in the curated vocabulary, the system falls back to the Arabic context dictionary. Since approximately 40% of Persian vocabulary is Arabic-origin, many loanwords benefit from the Arabic dictionary automatically.
@@ -312,7 +313,7 @@ The Hebrew dictionary is built from [Project Ben Yehuda](https://github.com/proj
 <!--- skip: next -->
 ```python
 # With context — niqqud restored from dictionary (requires context dictionaries)
-transliterate("שלום", lang="he", context=True) # "shalvom"
+transliterate("שלום", lang="he", context=True)  # "shalvom"
 ```
 
 ### Differences from Arabic

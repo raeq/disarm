@@ -24,8 +24,8 @@ assert grapheme_len("é") == 1
 ```python
 from disarm import grapheme_split
 
-assert grapheme_split("café") == ['c', 'a', 'f', 'é']
-assert grapheme_split("👨‍👩‍👧‍👦!") == ['👨\u200d👩\u200d👧\u200d👦', '!']
+assert grapheme_split("café") == ["c", "a", "f", "é"]
+assert grapheme_split("👨‍👩‍👧‍👦!") == ["👨\u200d👩\u200d👧\u200d👦", "!"]
 ```
 
 !!! note
@@ -40,9 +40,9 @@ assert grapheme_split("👨‍👩‍👧‍👦!") == ['👨\u200d👩\u200d�
 ```python
 from disarm import grapheme_truncate
 
-assert grapheme_truncate("Hello World", 5) == 'Hello'
-assert grapheme_truncate("café", 3) == 'caf'
-assert grapheme_truncate("👨‍👩‍👧‍👦🎉", 1) == '👨\u200d👩\u200d👧\u200d👦'
+assert grapheme_truncate("Hello World", 5) == "Hello"
+assert grapheme_truncate("café", 3) == "caf"
+assert grapheme_truncate("👨‍👩‍👧‍👦🎉", 1) == "👨\u200d👩\u200d👧\u200d👦"
 ```
 
 Unlike byte-level or codepoint-level truncation, `grapheme_truncate` never splits a grapheme cluster, which would corrupt emoji, combining sequences, or Hangul syllables.

@@ -29,8 +29,8 @@ Each call to `get_pipeline()` returns a fresh `TextPipeline` instance.
 
 ```python
 pipe = get_pipeline("scholarly_cyrillic_iso9")
-assert pipe("Юность") == 'junost'
-assert pipe("Москва") == 'moskva'
+assert pipe("Юность") == "junost"
+assert pipe("Москва") == "moskva"
 ```
 
 | Property | Value |
@@ -46,8 +46,8 @@ assert pipe("Москва") == 'moskva'
 
 ```python
 pipe = get_pipeline("library_catalog_key_eu")
-assert pipe("München — Bayern") == 'munchen - bayern'
-assert pipe("Città di Firenze") == 'citta di firenze'
+assert pipe("München — Bayern") == "munchen - bayern"
+assert pipe("Città di Firenze") == "citta di firenze"
 ```
 
 | Property | Value |
@@ -63,7 +63,7 @@ assert pipe("Città di Firenze") == 'citta di firenze'
 
 ```python
 pipe = get_pipeline("normalize_web_input")
-assert pipe("  Hello   World  ") == 'Hello World'
+assert pipe("  Hello   World  ") == "Hello World"
 ```
 
 | Property | Value |
@@ -82,7 +82,7 @@ assert pipe("  Hello   World  ") == 'Hello World'
 
 ```python
 pipe = get_pipeline("ml_corpus_normalize")
-assert pipe("Héllo WÖRLD 🎉") == 'hello world party popper'
+assert pipe("Héllo WÖRLD 🎉") == "hello world party popper"
 ```
 
 | Property | Value |
@@ -98,8 +98,8 @@ assert pipe("Héllo WÖRLD 🎉") == 'hello world party popper'
 
 ```python
 pipe = get_pipeline("search_index")
-assert pipe("München") == 'munchen'
-assert pipe("Москва") == 'moskva'
+assert pipe("München") == "munchen"
+assert pipe("Москва") == "moskva"
 ```
 
 | Property | Value |

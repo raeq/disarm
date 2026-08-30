@@ -30,8 +30,8 @@ Ready-to-use multi-step text processing pipelines. Each is a single compiled Rus
 ```python
 from disarm import canonicalize
 
-assert canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
-assert canonicalize("Ηello Ꮤorld") == 'Hello World'
+assert canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == "Real text"
+assert canonicalize("Ηello Ꮤorld") == "Hello World"
 ```
 
 ---
@@ -47,13 +47,13 @@ assert canonicalize("Ηello Ꮤorld") == 'Hello World'
 ```python
 from disarm import ml_normalize
 
-assert ml_normalize("Café RÉSUMÉ") == 'cafe resume'
-assert ml_normalize("München", lang="de") == 'muenchen'
-assert ml_normalize("I ❤️ Python 🐍") == 'i red heart python snake'
+assert ml_normalize("Café RÉSUMÉ") == "cafe resume"
+assert ml_normalize("München", lang="de") == "muenchen"
+assert ml_normalize("I ❤️ Python 🐍") == "i red heart python snake"
 
 # fold_case=False drops the case fold for a cased downstream model (#559);
 # every other stage — including strip_accents — still runs.
-assert ml_normalize("José Martínez", fold_case=False) == 'Jose Martinez'
+assert ml_normalize("José Martínez", fold_case=False) == "Jose Martinez"
 ```
 
 ---
@@ -69,10 +69,10 @@ assert ml_normalize("José Martínez", fold_case=False) == 'Jose Martinez'
 ```python
 from disarm import catalog_key
 
-assert catalog_key("  Café  RÉSUMÉ  ") == 'cafe resume'
-assert catalog_key("Москва", lang="ru") == 'moskva'
-assert catalog_key("Москва", lang="auto") == 'moskva'
-assert catalog_key("Müller", lang="de") == 'mueller'
+assert catalog_key("  Café  RÉSUMÉ  ") == "cafe resume"
+assert catalog_key("Москва", lang="ru") == "moskva"
+assert catalog_key("Москва", lang="auto") == "moskva"
+assert catalog_key("Müller", lang="de") == "mueller"
 ```
 
 ---
@@ -88,9 +88,9 @@ assert catalog_key("Müller", lang="de") == 'mueller'
 ```python
 from disarm import strip_format
 
-assert strip_format("hello\x00world\u200b!") == 'helloworld!'
-assert strip_format("  spaced   out  ") == 'spaced out'
-assert strip_format("admin\u202Euser") == 'adminuser'
+assert strip_format("hello\x00world\u200b!") == "helloworld!"
+assert strip_format("  spaced   out  ") == "spaced out"
+assert strip_format("admin\u202euser") == "adminuser"
 ```
 
 ---
@@ -106,9 +106,9 @@ assert strip_format("admin\u202Euser") == 'adminuser'
 ```python
 from disarm import search_key
 
-assert search_key("Café RÉSUMÉ") == 'cafe resume'
-assert search_key("Москва", lang="ru") == 'moskva'
-assert search_key("ΩMEGA", lang="auto") == 'omega'
+assert search_key("Café RÉSUMÉ") == "cafe resume"
+assert search_key("Москва", lang="ru") == "moskva"
+assert search_key("ΩMEGA", lang="auto") == "omega"
 ```
 
 ---
@@ -132,13 +132,13 @@ pass it to a Unicode collator when linguistically-correct order matters.)
 from disarm import search_key, sort_key
 
 # accents preserved for ordering (contrast search_key, which folds them away)
-assert sort_key("Über") == 'über'
-assert search_key("Über") == 'uber'
+assert sort_key("Über") == "über"
+assert search_key("Über") == "uber"
 # a language profile never expands an accented Latin letter in a sort key
-assert sort_key("Über", lang="de") == 'über'
+assert sort_key("Über", lang="de") == "über"
 # non-Latin scripts are still folded to Latin so titles interfile
-assert sort_key("Война и мир", lang="ru") == 'voyna i mir'
-assert sort_key("Café") == 'café'
+assert sort_key("Война и мир", lang="ru") == "voyna i mir"
+assert sort_key("Café") == "café"
 ```
 
 ---
@@ -154,9 +154,9 @@ assert sort_key("Café") == 'café'
 ```python
 from disarm import canonicalize_strict
 
-assert canonicalize_strict("Hello, world!") == 'Hello, world!'
-assert canonicalize_strict("p\u0430ypal") == 'paypal'
-assert canonicalize_strict("admin\u202Euser") == 'adminuser'
+assert canonicalize_strict("Hello, world!") == "Hello, world!"
+assert canonicalize_strict("p\u0430ypal") == "paypal"
+assert canonicalize_strict("admin\u202euser") == "adminuser"
 ```
 
 Unlike `canonicalize`, this pipeline also strips zalgo text (excessive combining mark stacking). Unlike `catalog_key`/`search_key`, it does **not** transliterate — the original script is preserved.
@@ -175,7 +175,7 @@ Unlike `canonicalize`, this pipeline also strips zalgo text (excessive combining
 from disarm import strip_obfuscation
 
 # Homoglyphs (Greek/Cyrillic) folded, bidi override removed, emoji expanded.
-assert strip_obfuscation("Ηеllо‮Wоrld \U0001F600") == "HelloWorld grinning face"
+assert strip_obfuscation("Ηеllо‮Wоrld \U0001f600") == "HelloWorld grinning face"
 # Strips ALL combining marks (zalgo and accents) but preserves case.
 assert strip_obfuscation("Cáfé") == "Cafe"
 ```
@@ -193,8 +193,29 @@ from disarm import PRESETS
 Dict mapping preset function names to their ordered pipeline steps. Each value is a list of `(step_name, parameter)` tuples in execution order.
 
 ```python
-assert PRESETS["canonicalize"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_invisibles', 'comparison'), ('strip_control', None), ('strip_zero_width', None), ('collapse_whitespace', None), ('strip_zalgo', None), ('normalize', 'NFC'), ('confusables', 'latin'), ('normalize', 'NFC')]
-assert PRESETS["canonicalize_strict"] == [('normalize', 'NFKC'), ('strip_bidi', None), ('strip_zero_width', None), ('strip_control', None), ('strip_invisibles', 'comparison'), ('strip_zalgo', None), ('confusables', 'latin'), ('collapse_whitespace', None), ('normalize', 'NFC')]
+assert PRESETS["canonicalize"] == [
+    ("normalize", "NFKC"),
+    ("strip_bidi", None),
+    ("strip_invisibles", "comparison"),
+    ("strip_control", None),
+    ("strip_zero_width", None),
+    ("collapse_whitespace", None),
+    ("strip_zalgo", None),
+    ("normalize", "NFC"),
+    ("confusables", "latin"),
+    ("normalize", "NFC"),
+]
+assert PRESETS["canonicalize_strict"] == [
+    ("normalize", "NFKC"),
+    ("strip_bidi", None),
+    ("strip_zero_width", None),
+    ("strip_control", None),
+    ("strip_invisibles", "comparison"),
+    ("strip_zalgo", None),
+    ("confusables", "latin"),
+    ("collapse_whitespace", None),
+    ("normalize", "NFC"),
+]
 ```
 
 Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.
@@ -211,7 +232,7 @@ Named policy profiles provide pre-configured `TextPipeline` instances for common
 from disarm import get_pipeline
 
 pipe = get_pipeline("scholarly_cyrillic_iso9")
-assert pipe("Москва") == 'moskva'
+assert pipe("Москва") == "moskva"
 ```
 
 Returns a fresh `TextPipeline` configured for the named profile. Raises `DisarmError` for unknown profiles.

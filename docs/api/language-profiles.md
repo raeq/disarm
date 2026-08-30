@@ -12,7 +12,91 @@ Functions for querying and extending transliteration language profiles.
 from disarm import list_langs
 
 langs = list_langs()
-assert langs == ['am', 'ar', 'as', 'ban', 'bax', 'bg', 'bn', 'bo', 'bug', 'ca', 'chr', 'cjm', 'cop', 'cs', 'cy', 'da', 'de', 'dv', 'el', 'es', 'et', 'fa', 'fi', 'fr', 'ga', 'gu', 'he', 'hi', 'hr', 'hu', 'hy', 'is', 'it', 'ja', 'ja-kunrei', 'jv', 'ka', 'khb', 'km', 'kn', 'ko', 'lis', 'lo', 'lt', 'lv', 'ml', 'mn', 'mni', 'mr', 'mt', 'my', 'ne', 'nl', 'no', 'nod', 'nqo', 'or', 'pa', 'pl', 'pt', 'ro', 'ru', 'sa', 'sat', 'si', 'sk', 'sl', 'sq', 'sr', 'su', 'sv', 'syr', 'ta', 'tdd', 'te', 'th', 'tl', 'tr', 'tzm', 'uk', 'vai', 'vi', 'zh']
+assert langs == [
+    "am",
+    "ar",
+    "as",
+    "ban",
+    "bax",
+    "bg",
+    "bn",
+    "bo",
+    "bug",
+    "ca",
+    "chr",
+    "cjm",
+    "cop",
+    "cs",
+    "cy",
+    "da",
+    "de",
+    "dv",
+    "el",
+    "es",
+    "et",
+    "fa",
+    "fi",
+    "fr",
+    "ga",
+    "gu",
+    "he",
+    "hi",
+    "hr",
+    "hu",
+    "hy",
+    "is",
+    "it",
+    "ja",
+    "ja-kunrei",
+    "jv",
+    "ka",
+    "khb",
+    "km",
+    "kn",
+    "ko",
+    "lis",
+    "lo",
+    "lt",
+    "lv",
+    "ml",
+    "mn",
+    "mni",
+    "mr",
+    "mt",
+    "my",
+    "ne",
+    "nl",
+    "no",
+    "nod",
+    "nqo",
+    "or",
+    "pa",
+    "pl",
+    "pt",
+    "ro",
+    "ru",
+    "sa",
+    "sat",
+    "si",
+    "sk",
+    "sl",
+    "sq",
+    "sr",
+    "su",
+    "sv",
+    "syr",
+    "ta",
+    "tdd",
+    "te",
+    "th",
+    "tl",
+    "tr",
+    "tzm",
+    "uk",
+    "vai",
+    "vi",
+    "zh",
+]
 ```
 
 Returns both built-in and user-registered language codes, sorted alphabetically.
@@ -37,12 +121,12 @@ Raises `KeyError` if the code is not recognized.
 from disarm import lang_info
 
 meta = lang_info("de")
-assert meta["name"] == 'German'
-assert meta["script"] == 'Latin'
-assert meta["region"] == 'European'
-assert meta["context"] == 'none'
+assert meta["name"] == "German"
+assert meta["script"] == "Latin"
+assert meta["region"] == "European"
+assert meta["context"] == "none"
 
-assert lang_info("cop")["script"] == 'Coptic'
+assert lang_info("cop")["script"] == "Coptic"
 ```
 
 ---
@@ -61,12 +145,12 @@ Returns a `ScriptMeta` dict with `name`, `default_lang`, `example`, and
 from disarm import Script, script_info
 
 meta = script_info("Coptic")
-assert meta["name"] == 'Coptic'
-assert meta["default_lang"] == 'cop'
+assert meta["name"] == "Coptic"
+assert meta["default_lang"] == "cop"
 assert meta["context_aware"] is False
 
 # A Script enum value works too
-assert script_info(Script.THAI)["name"] == 'Thai'
+assert script_info(Script.THAI)["name"] == "Thai"
 ```
 
 ---
@@ -84,7 +168,7 @@ Returns the sorted list of language codes whose `lang_info()` metadata has a
 ```python
 from disarm import list_context_langs
 
-assert list_context_langs() == ['ar', 'fa', 'he']
+assert list_context_langs() == ["ar", "fa", "he"]
 assert "ar" in list_context_langs()
 assert "de" not in list_context_langs()
 ```
@@ -100,15 +184,23 @@ assert "de" not in list_context_langs()
 ```python
 from disarm import register_lang, transliterate
 
-register_lang("eo", {
-    "ĉ": "cx", "ĝ": "gx", "ĥ": "hx",
-    "ĵ": "jx", "ŝ": "sx", "ŭ": "ux",
-})
+register_lang(
+    "eo",
+    {
+        "ĉ": "cx",
+        "ĝ": "gx",
+        "ĥ": "hx",
+        "ĵ": "jx",
+        "ŝ": "sx",
+        "ŭ": "ux",
+    },
+)
 
-assert transliterate("ĉapelo", lang="eo") == 'cxapelo'
+assert transliterate("ĉapelo", lang="eo") == "cxapelo"
 
 # Verify registration
 from disarm import list_langs
+
 assert "eo" in list_langs()
 ```
 
@@ -126,13 +218,15 @@ assert "eo" in list_langs()
 ```python
 from disarm import register_replacements, transliterate
 
-register_replacements({
-    "©": "(c)",
-    "®": "(R)",
-    "™": "(TM)",
-})
+register_replacements(
+    {
+        "©": "(c)",
+        "®": "(R)",
+        "™": "(TM)",
+    }
+)
 
-assert transliterate("Hello™ World©") == 'Hello(TM) World(c)'
+assert transliterate("Hello™ World©") == "Hello(TM) World(c)"
 ```
 
 Replacements are applied as a pre-processing step before the character-by-character transliteration lookup. They are global and persist for the process lifetime.
@@ -149,11 +243,11 @@ Replacements are applied as a pre-processing step before the character-by-charac
 from disarm import register_replacements, remove_replacement, transliterate
 
 register_replacements({"©": "(c)", "®": "(R)"})
-assert transliterate("©®") == '(c)(R)'
+assert transliterate("©®") == "(c)(R)"
 
 assert remove_replacement("©") == True
 assert remove_replacement("©") == False
-assert transliterate("©®") == '(c)(R)'
+assert transliterate("©®") == "(c)(R)"
 ```
 
 ---
@@ -168,10 +262,10 @@ assert transliterate("©®") == '(c)(R)'
 from disarm import register_replacements, clear_replacements, transliterate
 
 register_replacements({"©": "(c)", "®": "(R)"})
-assert transliterate("©®") == '(c)(R)'
+assert transliterate("©®") == "(c)(R)"
 
 clear_replacements()
-assert transliterate("©®") == '(c)(R)'
+assert transliterate("©®") == "(c)(R)"
 ```
 
 !!! note

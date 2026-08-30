@@ -58,26 +58,26 @@ from disarm import (
 # bidi overrides, zero-width characters and control characters. It canonicalizes
 # for comparison; it does not make text safe to emit — encode at the sink.
 assert canonicalize("\u202eexample\u200b.com") == "example.com"
-assert canonicalize("Ηello Ꮤorld") == "Hello World"     # Greek Η, Cherokee Ꮤ
+assert canonicalize("Ηello Ꮤorld") == "Hello World"  # Greek Η, Cherokee Ꮤ
 
 # The narrower functions, when you know which single problem you have.
 # Fold Cyrillic look-alikes to their Latin prototypes (TR39 visual mapping)
-assert strip_obfuscation("рroduсt") == 'product'
-assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
+assert strip_obfuscation("рroduсt") == "product"
+assert strip_obfuscation("pаypаl 🔥🔥") == "paypal fire fire"
 
-assert normalize_confusables("раypal") == 'paypal'
+assert normalize_confusables("раypal") == "paypal"
 
 # IDN / hostname spoofing check (flags the bad; a False result is not a safety guarantee)
-suspicious, analysis = is_suspicious_hostname("аpple.com")   # leading Cyrillic а
+suspicious, analysis = is_suspicious_hostname("аpple.com")  # leading Cyrillic а
 # suspicious is True; analysis.has_confusables and analysis.mixed_script flag why
 
 # Whole-script spoof: an ALL-Cyrillic label that skeletons to a Latin brand (#545).
 # `suspicious` alone can't tell it from a real Russian domain (it flags both), but
 # whole_script_confusable names the discriminator — the per-label list lets a caller
 # apply the precise `wsc(non-TLD) and Latin-TLD` policy.
-_, a = is_suspicious_hostname("аррӏе.com")          # all-Cyrillic "apple"
+_, a = is_suspicious_hostname("аррӏе.com")  # all-Cyrillic "apple"
 assert a.whole_script_confusable and a.canonical == "apple.com"
-assert a.label_whole_script_confusable == [True, False]   # spoof label, then the TLD
+assert a.label_whole_script_confusable == [True, False]  # spoof label, then the TLD
 ```
 
 ## Installation
@@ -194,19 +194,22 @@ All text processing is implemented in Rust with O(1) PHF lookups and exposed to 
 
 ```python
 from disarm import (
-    is_confusable, normalize_confusables, strip_obfuscation,
-    canonicalize, canonicalize_strict,
+    is_confusable,
+    normalize_confusables,
+    strip_obfuscation,
+    canonicalize,
+    canonicalize_strict,
 )
 
 assert is_confusable("аpple") == True
-assert normalize_confusables("раypal") == 'paypal'
+assert normalize_confusables("раypal") == "paypal"
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars, bidi, emoji → clean text
-assert strip_obfuscation("рroduсt") == 'product'
+assert strip_obfuscation("рroduсt") == "product"
 
 # Pipelines
-assert canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
-assert canonicalize_strict("pаypal") == 'paypal'
+assert canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == "Real text"
+assert canonicalize_strict("pаypal") == "paypal"
 ```
 
 ### Transliteration (standards-based core)
@@ -216,36 +219,36 @@ assert canonicalize_strict("pаypal") == 'paypal'
 ```python
 from disarm import transliterate, slugify
 
-assert transliterate("café") == 'cafe'
-assert transliterate("Москва") == 'Moskva'
-assert transliterate("Αθήνα") == 'Athina'
+assert transliterate("café") == "cafe"
+assert transliterate("Москва") == "Moskva"
+assert transliterate("Αθήνα") == "Athina"
 
 # Named standards (Latin / Cyrillic / Greek)
-assert transliterate("Юрий", strict_iso9=True) == 'Jurij'
-assert transliterate("Москва", gost7034=True) == 'Moskva'
+assert transliterate("Юрий", strict_iso9=True) == "Jurij"
+assert transliterate("Москва", gost7034=True) == "Moskva"
 
 # Language profiles (sparse overrides on top of the default table)
-assert transliterate("Ärger", lang="de") == 'Aerger'
-assert transliterate("Київ", lang="uk") == 'Kyiv'
+assert transliterate("Ärger", lang="de") == "Aerger"
+assert transliterate("Київ", lang="uk") == "Kyiv"
 
 # Auto-detect language from script
-assert transliterate("Москва", lang="auto") == 'Moskva'
+assert transliterate("Москва", lang="auto") == "Moskva"
 
 # Reverse transliteration (Latin → native script): Russian, Ukrainian, Greek
-assert transliterate("Moskva", target="ru") == 'Москва'
-assert transliterate("Athina", target="el") == 'Αθηνα'
+assert transliterate("Moskva", target="ru") == "Москва"
+assert transliterate("Athina", target="el") == "Αθηνα"
 
 # Slugs & filenames
-assert slugify("café au lait") == 'cafe-au-lait'
+assert slugify("café au lait") == "cafe-au-lait"
 ```
 
 ### Compatibility coverage (CJK and other scripts)
 
 ```python
 # Context-free, character-by-character — best-effort, unidecode-parity (see caveats below)
-assert transliterate("北京市") == 'bei jing shi'
-assert transliterate("서울") == 'seo ul'
-assert transliterate("ひらがな") == 'hiragana'
+assert transliterate("北京市") == "bei jing shi"
+assert transliterate("서울") == "seo ul"
+assert transliterate("ひらがな") == "hiragana"
 ```
 
 ## Coverage tiers
@@ -268,21 +271,21 @@ disarm transliterates a very wide range of scripts, but the **quality guarantee 
 from disarm import canonicalize, ml_normalize, catalog_key, canonicalize_strict, strip_obfuscation
 
 # Security: NFKC → strip bidi → strip invisibles → strip control/zero-width → collapse → cap marks → NFC → confusables → NFC
-assert canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == 'Real text'
+assert canonicalize("ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥") == "Real text"
 
 # ML/NLP: NFKC → emoji→text → transliterate → strip accents → fold case
-assert ml_normalize("Café ☕ Ünïcödé") == 'cafe hot beverage unicode'
+assert ml_normalize("Café ☕ Ünïcödé") == "cafe hot beverage unicode"
 
 # Library catalog: NFKC → transliterate → confusables → strip accents → fold case
-assert catalog_key("Москва", lang="ru") == 'moskva'
-assert catalog_key("ΩMEGA  café") == 'omega cafe'
+assert catalog_key("Москва", lang="ru") == "moskva"
+assert catalog_key("ΩMEGA  café") == "omega cafe"
 
 # Web input: NFKC → strip bidi → strip zero-width → strip control → strip invisibles → strip zalgo → confusables → collapse → NFC
-assert canonicalize_strict("pаypal") == 'paypal'
+assert canonicalize_strict("pаypal") == "paypal"
 
 # Maximum deobfuscation: homoglyphs, zalgo, invisible chars → clean text
-assert strip_obfuscation("рroduсt") == 'product'
-assert strip_obfuscation("pаypаl 🔥🔥") == 'paypal fire fire'
+assert strip_obfuscation("рroduсt") == "product"
+assert strip_obfuscation("pаypаl 🔥🔥") == "paypal fire fire"
 # Note: does NOT transliterate — chain with transliterate() if needed
 ```
 
@@ -300,7 +303,7 @@ result = (
     .fold_case()
     .value
 )
-assert result == 'unicode cafe hot beverage'
+assert result == "unicode cafe hot beverage"
 ```
 
 ## Package structure
@@ -392,9 +395,9 @@ disarm provides compatibility aliases for painless migration from existing libra
 ```python
 from disarm import unidecode, casefold, remove_accents
 
-assert unidecode("café") == 'cafe'
-assert casefold("Straße") == 'strasse'
-assert remove_accents("café") == 'cafe'
+assert unidecode("café") == "cafe"
+assert casefold("Straße") == "strasse"
+assert remove_accents("café") == "cafe"
 ```
 
 `sanitize_filename()` also accepts `replacement_text` and `max_len` kwargs for pathvalidate compatibility, and `is_confusable()` accepts `greedy` for confusable_homoglyphs compatibility. See [migration guides](docs/migration/index.md) for details.

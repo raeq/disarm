@@ -90,7 +90,7 @@ quantities — so `4`, `0`, `1` are left alone:
     assert normalize_confusables("Llama-3.1-70B") == "Llama-3.1-70B"
 
     # But cross-script homoglyph spoofs are folded to their Latin skeleton:
-    assert normalize_confusables("pаypаl") == "paypal"   # Cyrillic а → a
+    assert normalize_confusables("pаypаl") == "paypal"  # Cyrillic а → a
     ```
 
 === "Rust"
@@ -214,6 +214,7 @@ about to send to a model that reads the original script fine:
 ```python
 from disarm import get_pipeline
 
+
 def prepare_for_llm(text, *, romanize=False):
     """Normalize untrusted text for an LLM index / matching path.
 
@@ -224,8 +225,9 @@ def prepare_for_llm(text, *, romanize=False):
     profile = "rag_ingest" if romanize else "llm_guardrail"
     return get_pipeline(profile)(text)
 
-assert prepare_for_llm("pаypаl") == "paypal"            # guardrail
-assert prepare_for_llm("Москва", romanize=True) == "Moskva"      # ingestion
+
+assert prepare_for_llm("pаypаl") == "paypal"  # guardrail
+assert prepare_for_llm("Москва", romanize=True) == "Moskva"  # ingestion
 ```
 
 ## Case, and what folding it costs a cased model
@@ -279,9 +281,23 @@ which are category `Cc`. Bidi controls are `Cf`, so they fall straight through, 
 nothing in the list touches the Private Use Area.
 
 ```python
-BIDI = "".join(chr(c) for c in
-               (0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
-                0x2066, 0x2067, 0x2068, 0x2069, 0x200E, 0x200F, 0x061C))
+BIDI = "".join(
+    chr(c)
+    for c in (
+        0x202A,
+        0x202B,
+        0x202C,
+        0x202D,
+        0x202E,
+        0x2066,
+        0x2067,
+        0x2068,
+        0x2069,
+        0x200E,
+        0x200F,
+        0x061C,
+    )
+)
 
 # All twelve bidi controls survive.
 assert [c for c in BIDI if c in ml_normalize(f"a{c}b")] == list(BIDI)
@@ -296,8 +312,8 @@ It does remove zero-width fragmentation, and most of the Tags block — but not 
 more complete than it is.
 
 ```python
-assert ml_normalize("Summarize.\U000e0061") == "summarize."      # tag letter: removed
-assert ml_normalize("Summarize.\U000e0001") != "summarize."      # LANGUAGE TAG: survives
+assert ml_normalize("Summarize.\U000e0061") == "summarize."  # tag letter: removed
+assert ml_normalize("Summarize.\U000e0001") != "summarize."  # LANGUAGE TAG: survives
 ```
 
 None of this makes `ml_normalize` broken. It is a tokenizer-hygiene preset, and
@@ -309,7 +325,7 @@ control or PUA code point matters. Reach for a profile when the text is untruste
 from disarm import get_pipeline
 
 guardrail = get_pipeline("llm_guardrail")
-assert not any(c in guardrail(f"a{c}b") for c in BIDI)   # bidi handled
+assert not any(c in guardrail(f"a{c}b") for c in BIDI)  # bidi handled
 assert guardrail("Summarize.\U000f0000") == "summarize.\U000f0000"  # PUA still not
 
 assert get_pipeline("rag_ingest")("Summarize.\U000f0000") == "Summarize."  # PUA handled

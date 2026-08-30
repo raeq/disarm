@@ -38,10 +38,12 @@ The `disarm.unidecode()` function is a direct alias for `transliterate()` with d
 ```python
 # Before
 from unidecode import unidecode
+
 result = unidecode("café")
 
 # After
 from disarm import transliterate
+
 result = transliterate("café")
 ```
 
@@ -51,13 +53,12 @@ result = transliterate("café")
 from disarm import transliterate
 
 # Language-specific transliteration
-assert transliterate("München", lang="de") == 'Muenchen'
+assert transliterate("München", lang="de") == "Muenchen"
 
 # Error handling modes
-assert transliterate("♠", errors="ignore") == ''
-assert transliterate("♠", errors="preserve") == '♠'
-assert transliterate("♠", errors="replace",
-              replace_with="?") == '?'
+assert transliterate("♠", errors="ignore") == ""
+assert transliterate("♠", errors="preserve") == "♠"
+assert transliterate("♠", errors="replace", replace_with="?") == "?"
 ```
 
 ## API comparison
@@ -83,8 +84,8 @@ disarm uses its own hand-curated transliteration tables. Most common mappings ar
 from disarm import unidecode
 
 # Identical in both
-assert unidecode("café") == 'cafe'
-assert unidecode("北京") == 'bei jing'
+assert unidecode("café") == "cafe"
+assert unidecode("北京") == "bei jing"
 
 # May differ for obscure characters
 # disarm aims for more linguistically accurate results
@@ -102,11 +103,11 @@ from disarm import unidecode, transliterate
 
 # Distinct place names collide under the lossy BGN/PCGN fold
 assert unidecode("Колыбелька") == "Kolybelka"
-assert unidecode("Колыбелка")  == "Kolybelka"   # same output — collision!
+assert unidecode("Колыбелка") == "Kolybelka"  # same output — collision!
 
 # Use a language profile to preserve the distinction (ь → ', ъ → ")
 assert transliterate("Колыбелька", lang="ru") == "Kolybel'ka"
-assert transliterate("Колыбелка",  lang="ru") == "Kolybelka"
+assert transliterate("Колыбелка", lang="ru") == "Kolybelka"
 ```
 
 If you need distinctness-preserving (or lossless) Cyrillic, prefer
@@ -147,12 +148,14 @@ It is a defense-in-depth layer, not a complete control — see the
 ```python
 # Wrong tool for defense — phonetic mapping, attack survives
 from disarm import unidecode
-assert unidecode("рroduсt") == 'rrodust'
+
+assert unidecode("рroduсt") == "rrodust"
 
 # Right tools — visual TR39 mapping
 from disarm import strip_obfuscation, normalize_confusables
-assert normalize_confusables("рroduсt") == 'product'
-assert strip_obfuscation("рroduсt") == 'product'
+
+assert normalize_confusables("рroduсt") == "product"
+assert strip_obfuscation("рroduсt") == "product"
 ```
 
 See [Adversarial-Text Defense](../security/adversarial-defense.md) for the full

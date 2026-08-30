@@ -80,6 +80,17 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   is not an error and the loop continues; anything else still fails the job. The registry
   is the authority instead of the error text, which RubyGems phrases several ways.
 
+### Documentation
+
+- **CI and the `dev` extra pinned different ruff versions (#689).** `ci.yml` installed
+  `ruff==0.15.17` while `pyproject.toml`'s `dev` extra pinned `0.16.4`, so a contributor
+  formatting with the documented tooling produced a diff CI would then reject. CI now
+  installs `0.16.4`, and the tree is formatted with it.
+
+  0.16 formats Python code blocks inside Markdown, which 0.15 left alone. The reformat
+  touches 37 Markdown files and no Python file: quote normalization, comment spacing and
+  import-list wrapping inside documentation examples. No documented behaviour changes.
+
 ## [0.14.1] — 2026-08-28
 
 ### Added
@@ -654,6 +665,7 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   ```python
   # in a venv holding the OLD version, dump keys for your real values
   import disarm, json
+
   json.dump({s: disarm.search_key(s) for s in my_values}, open("before.json", "w"))
 
   # then upgrade and compare

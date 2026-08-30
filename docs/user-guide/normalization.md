@@ -8,8 +8,8 @@ The same visible text can have multiple Unicode representations:
 
 ```python
 # These look identical but are different byte sequences:
-a = "\u00e9"       # U+00E9 (precomposed)
-b = "\u0065\u0301" # U+0065 U+0301 (decomposed: e + combining acute)
+a = "\u00e9"  # U+00E9 (precomposed)
+b = "\u0065\u0301"  # U+0065 U+0301 (decomposed: e + combining acute)
 
 assert (a == b) == False
 ```
@@ -33,17 +33,17 @@ Normalization resolves this by converting to a canonical form.
     from disarm import normalize
 
     # NFC: compose into single codepoints
-    assert normalize("e\u0301") == 'é'
+    assert normalize("e\u0301") == "é"
 
     # NFD: decompose into base + combining marks
-    assert normalize("é", form="NFD") == 'é'
+    assert normalize("é", form="NFD") == "é"
 
     # NFKC: compatibility + compose
-    assert normalize("ﬁnance", form="NFKC") == 'finance'
-    assert normalize("2²", form="NFKC") == '22'
+    assert normalize("ﬁnance", form="NFKC") == "finance"
+    assert normalize("2²", form="NFKC") == "22"
 
     # NFKD: compatibility + decompose
-    assert normalize("ﬁ", form="NFKD") == 'fi'
+    assert normalize("ﬁ", form="NFKD") == "fi"
     ```
 
 === "Rust"
@@ -131,7 +131,7 @@ For programmatic use, the `NF` enum provides the four forms:
 ```python
 from disarm import NF, normalize
 
-assert normalize("ﬁ", form=NF.KC.value) == 'fi'
+assert normalize("ﬁ", form=NF.KC.value) == "fi"
 ```
 
 | Member | Value |

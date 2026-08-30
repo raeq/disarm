@@ -45,7 +45,7 @@ re.sub(r"[^\w ]", "", unidecode(nsi_attributes["tags"]["name"]).replace("&", "an
 
 # investpy: normalise before dict lookup
 country = unidecode(country.strip().lower())
-stock   = unidecode(stock.strip().lower())
+stock = unidecode(stock.strip().lower())
 ```
 
 Note that the order of operations varies: sometimes `.lower().strip()` is
@@ -71,8 +71,8 @@ slug library's own Unicode handling is insufficient.
 path_components[index] = unidecode(item).replace(os.sep, sep_replace)
 
 # headphones: strip slashes from artist/album names before writing files
-unidecode(album['ArtistName']).replace('/', '_')
-unidecode(album['AlbumTitle']).replace('/', '_')
+unidecode(album["ArtistName"]).replace("/", "_")
+unidecode(album["AlbumTitle"]).replace("/", "_")
 ```
 
 `.replace()` here removes the one character class `.lower()` doesn't cover:
@@ -106,7 +106,7 @@ percent-encode the remaining non-URL-safe characters.
 
 ```python
 # Name matching library: normalise both sides before comparing
-base   = unidecode(base.strip().upper())
+base = unidecode(base.strip().upper())
 second = unidecode(second.strip().upper())
 ```
 

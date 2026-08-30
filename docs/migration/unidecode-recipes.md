@@ -42,6 +42,7 @@ hand-rolled code and are not executed.
 import re
 from unidecode import unidecode
 
+
 def slug(t):
     return re.sub(r"\W+", "-", unidecode(t).lower().strip()).strip("-")
 ```
@@ -142,8 +143,8 @@ The confusable fold is what sets `catalog_key` apart — typographic variants of
 title collapse to the same key:
 
 ```python
-assert catalog_key('naïve “quote”') == "naive ''quote''"   # quotes folded
-assert search_key('naïve “quote”') == 'naive "quote"'      # quotes preserved
+assert catalog_key("naïve “quote”") == "naive ''quote''"  # quotes folded
+assert search_key("naïve “quote”") == 'naive "quote"'  # quotes preserved
 ```
 
 That fold runs *after* transliteration, so it does **not** reverse cross-script
@@ -182,7 +183,7 @@ see:
 from disarm import transliterate, search_key
 
 # Lowercasing BEFORE transliteration misses the introduced capital:
-assert transliterate("№5".lower()) == "No5"     # wrong — stray capital N
+assert transliterate("№5".lower()) == "No5"  # wrong — stray capital N
 # Lowercasing AFTER transliteration is correct:
 assert transliterate("№5").lower() == "no5"
 # The disarm helpers fold case after transliterating, so they get it right:

@@ -83,6 +83,6 @@ disarm is fully typed. A `py.typed` marker file and `.pyi` stub files are includ
 ```python
 # All functions have full type annotations
 reveal_type(transliterate("test"))  # str
-reveal_type(detect_scripts("test")) # list[Script]
-reveal_type(is_ascii("test"))       # bool
+reveal_type(detect_scripts("test"))  # list[Script]
+reveal_type(is_ascii("test"))  # bool
 ```

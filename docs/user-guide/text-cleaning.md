@@ -11,11 +11,11 @@ Remove diacritical marks while preserving base characters:
     ```python
     from disarm import strip_accents
 
-    assert strip_accents("café") == 'cafe'
-    assert strip_accents("naïve") == 'naive'
-    assert strip_accents("résumé") == 'resume'
-    assert strip_accents("Ångström") == 'Angstrom'
-    assert strip_accents("São Paulo") == 'Sao Paulo'
+    assert strip_accents("café") == "cafe"
+    assert strip_accents("naïve") == "naive"
+    assert strip_accents("résumé") == "resume"
+    assert strip_accents("Ångström") == "Angstrom"
+    assert strip_accents("São Paulo") == "Sao Paulo"
     ```
 
 === "Rust"
@@ -73,11 +73,11 @@ Remove excessive combining marks (zalgo text abuse) while preserving legitimate 
     from disarm import strip_zalgo, is_zalgo
 
     # Legitimate diacritics are preserved
-    assert strip_zalgo("café") == 'café'
-    assert strip_zalgo("Việt Nam") == 'Việt Nam'
+    assert strip_zalgo("café") == "café"
+    assert strip_zalgo("Việt Nam") == "Việt Nam"
 
     # Zalgo stacking is stripped to max_marks (default: 2)
-    is_zalgo("café")             # False
+    is_zalgo("café")  # False
     is_zalgo("ḧ̸̡̢̧̛̗̱́̑̾̊̿̏̒̓̕ě̵̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕o")  # True
     ```
 
@@ -130,21 +130,21 @@ Full Unicode case folding per CaseFolding.txt (Unicode 16.0) — a more thorough
     from disarm import fold_case
 
     # Latin
-    assert fold_case("HELLO") == 'hello'
-    assert fold_case("Straße") == 'strasse'
-    assert fold_case("İstanbul") == 'i̇stanbul'
-    assert fold_case("ﬁnance") == 'finance'
-    assert fold_case("ﬂight") == 'flight'
+    assert fold_case("HELLO") == "hello"
+    assert fold_case("Straße") == "strasse"
+    assert fold_case("İstanbul") == "i̇stanbul"
+    assert fold_case("ﬁnance") == "finance"
+    assert fold_case("ﬂight") == "flight"
 
     # Greek variant forms
-    assert fold_case("ϐ ϑ ϕ ϖ ϰ ϱ") == 'β θ φ π κ ρ'
-    assert fold_case("ς") == 'σ'
+    assert fold_case("ϐ ϑ ϕ ϖ ϰ ϱ") == "β θ φ π κ ρ"
+    assert fold_case("ς") == "σ"
 
     # Scripts that .lower() misses entirely
-    assert fold_case("\u00B5") == 'μ'
-    assert fold_case("\u017F") == 's'
-    assert fold_case("\u1C90") == 'ა'
-    assert fold_case("\U0001E900") == '𞤢'
+    assert fold_case("\u00b5") == "μ"
+    assert fold_case("\u017f") == "s"
+    assert fold_case("\u1c90") == "ა"
+    assert fold_case("\U0001e900") == "𞤢"
     ```
 
 === "Rust"
@@ -214,11 +214,11 @@ zero-width characters (see the note below).
     from disarm import collapse_whitespace
 
     # Collapse runs of whitespace
-    assert collapse_whitespace("hello   world") == 'hello world'
+    assert collapse_whitespace("hello   world") == "hello world"
 
     # Normalize Unicode whitespace variants
-    assert collapse_whitespace("hello world") == 'hello world'
-    assert collapse_whitespace("hello world") == 'hello world'
+    assert collapse_whitespace("hello world") == "hello world"
+    assert collapse_whitespace("hello world") == "hello world"
     ```
 
 === "Rust"
@@ -258,9 +258,9 @@ Braille blank (U+2800) and the Hangul fillers (U+115F, U+1160, U+3164, U+FFA0) �
 fold too.
 
 ```python
-assert collapse_whitespace("a\rb") == 'a b'          # carriage return → space
-assert collapse_whitespace("a⠀b") == 'a b'    # Braille blank → space
-assert collapse_whitespace("aㅤb") == 'a b'    # Hangul filler → space
+assert collapse_whitespace("a\rb") == "a b"  # carriage return → space
+assert collapse_whitespace("a⠀b") == "a b"  # Braille blank → space
+assert collapse_whitespace("aㅤb") == "a b"  # Hangul filler → space
 ```
 
 ### Stripping control and zero-width characters
@@ -270,8 +270,8 @@ is a separate concern, so a non-whitespace control (NUL) or a zero-width space
 passes through unchanged:
 
 ```python
-assert collapse_whitespace("hello\x00world") == 'hello\x00world'
-assert collapse_whitespace("hello​world") == 'hello​world'
+assert collapse_whitespace("hello\x00world") == "hello\x00world"
+assert collapse_whitespace("hello​world") == "hello​world"
 ```
 
 To also delete them, run the dedicated steps first. The `canonicalize` /

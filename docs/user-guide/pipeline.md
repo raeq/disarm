@@ -11,13 +11,15 @@ Wrap a string in `Text`, chain methods, extract with `.value` or `str()`. Each m
     ```python
     from disarm import Text
 
-    result = (Text("  Héllo   Straße  ")
+    result = (
+        Text("  Héllo   Straße  ")
         .normalize(form="NFC")
         .transliterate(lang="de")
         .fold_case()
         .collapse_whitespace()
-        .value)
-    assert result == 'hello strasse'
+        .value
+    )
+    assert result == "hello strasse"
     ```
 
 === "Rust"
@@ -44,10 +46,10 @@ Steps execute in the order you chain them. This gives full control — there is 
 
     ```python
     # Strip accents first, then transliterate the remainder
-    assert Text("café").strip_accents().transliterate().value == 'cafe'
+    assert Text("café").strip_accents().transliterate().value == "cafe"
 
     # Transliterate first (accents handled by the transliteration table)
-    assert Text("café").transliterate().value == 'cafe'
+    assert Text("café").transliterate().value == "cafe"
     ```
 
 === "Rust"
@@ -72,11 +74,11 @@ Because each step returns a new `Text`, you can branch from a common base:
     base = Text("Héllo Wörld").normalize(form="NFC")
 
     ascii_version = base.transliterate().value
-    assert ascii_version == 'Hello World'
+    assert ascii_version == "Hello World"
     lowered = base.fold_case().value
-    assert lowered == 'héllo wörld'
+    assert lowered == "héllo wörld"
     slug = base.transliterate().slugify().value
-    assert slug == 'hello-world'
+    assert slug == "hello-world"
     ```
 
 === "Rust"
@@ -150,10 +152,10 @@ Predicates return their native type and do not chain:
     ```python
     t = Text("café").transliterate()
 
-    assert t.value == 'cafe'       # property access
-    assert str(t) == 'cafe'        # str() conversion
+    assert t.value == "cafe"  # property access
+    assert str(t) == "cafe"  # str() conversion
     assert len(t) == 4
-    assert t == "cafe"             # compares with str directly
+    assert t == "cafe"  # compares with str directly
     ```
 
 === "Rust"

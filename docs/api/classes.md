@@ -85,12 +85,12 @@ assert str(text) == "cafe"
 from disarm import Slugifier
 
 slug = Slugifier(separator="_", lang="de", max_length=50)
-assert slug("Ärger im Büro") == 'aerger_im_buero'
-assert slug("Über den Wolken") == 'ueber_den_wolken'
+assert slug("Ärger im Büro") == "aerger_im_buero"
+assert slug("Über den Wolken") == "ueber_den_wolken"
 
 # Auto-detect language from script
 auto_slug = Slugifier(lang="auto")
-assert auto_slug("Москва") == 'moskva'
+assert auto_slug("Москва") == "moskva"
 ```
 
 Accepts all the same parameters as `slugify()`. Construct once, call many times.
@@ -107,12 +107,12 @@ Accepts all the same parameters as `slugify()`. Construct once, call many times.
 from disarm import UniqueSlugifier
 
 unique = UniqueSlugifier()
-assert unique("My Post") == 'my-post'
-assert unique("My Post") == 'my-post-1'
-assert unique("My Post") == 'my-post-2'
+assert unique("My Post") == "my-post"
+assert unique("My Post") == "my-post-1"
+assert unique("My Post") == "my-post-2"
 
-unique.reset()      # clear seen slugs
-assert unique("My Post") == 'my-post'
+unique.reset()  # clear seen slugs
+assert unique("My Post") == "my-post"
 ```
 
 ### External uniqueness check
@@ -121,6 +121,7 @@ assert unique("My Post") == 'my-post'
 ```python
 def exists_in_db(slug: str) -> bool:
     return db.slugs.filter(slug=slug).exists()
+
 
 unique = UniqueSlugifier(check=exists_in_db)
 ```
@@ -146,7 +147,7 @@ pipe = TextPipeline(
     collapse_whitespace=True,
 )
 
-assert pipe("  Héllo Wörld  ") == 'hello world'
+assert pipe("  Héllo Wörld  ") == "hello world"
 ```
 
 ### Execution order
@@ -176,14 +177,14 @@ from disarm import Slugify
 
 # Same API as awesome-slugify
 custom = Slugify(to_lower=True)
-assert custom("Hello World") == 'hello-world'
+assert custom("Hello World") == "hello-world"
 
 # Attribute-style configuration (awesome-slugify pattern)
 s = Slugify()
 s.to_lower = True
 s.stop_words = ("the", "a")
 s.max_length = 200
-assert s("The Big Fox") == 'big-fox'
+assert s("The Big Fox") == "big-fox"
 ```
 
 Accepts both awesome-slugify parameter names (`to_lower`, `stop_words`, `safe_chars`, `capitalize`, `pretranslate`) and native disarm names (`lowercase`, `stopwords`, `replacements`).
@@ -200,11 +201,11 @@ Defaults to `to_lower=False` (matching awesome-slugify). For python-slugify comp
 from disarm import UniqueSlugify
 
 unique = UniqueSlugify(to_lower=True)
-assert unique("My Post") == 'my-post'
-assert unique("My Post") == 'my-post-1'
+assert unique("My Post") == "my-post"
+assert unique("My Post") == "my-post-1"
 
 unique.reset()
-assert unique("My Post") == 'my-post'
+assert unique("My Post") == "my-post"
 ```
 
 Extends `Slugify` with uniqueness tracking. Accepts `uids` and `unique_check` parameters from awesome-slugify.
@@ -217,15 +218,15 @@ Drop-in replacements for awesome-slugify's preconfigured slugifiers:
 
 ```python
 from disarm import (
-    slugify_url,       # lowercase, strips articles, max 200 chars
+    slugify_url,  # lowercase, strips articles, max 200 chars
     slugify_filename,  # underscore separator, preserves -., max 255 chars
-    slugify_unicode,   # keeps non-ASCII letters
-    slugify_ru,        # Russian transliteration
-    slugify_de,        # German transliteration (ä→ae, ö→oe, ü→ue)
-    slugify_el,        # Greek transliteration
+    slugify_unicode,  # keeps non-ASCII letters
+    slugify_ru,  # Russian transliteration
+    slugify_de,  # German transliteration (ä→ae, ö→oe, ü→ue)
+    slugify_el,  # Greek transliteration
 )
 
-assert slugify_url("The Big Fox") == 'big-fox'
-assert slugify_de("Ärger im Büro") == 'Aerger-im-Buero'
-assert slugify_filename("My Report.pdf") == 'My_Report.pdf'
+assert slugify_url("The Big Fox") == "big-fox"
+assert slugify_de("Ärger im Büro") == "Aerger-im-Buero"
+assert slugify_filename("My Report.pdf") == "My_Report.pdf"
 ```

@@ -121,6 +121,7 @@ nav:
       - TextPipeline: architecture/pipeline.md
       - Performance Optimization: architecture/performance.md
       - Security & Hostnames: architecture/security.md
+      - Prototype Policy (I/l/1, O/0): architecture/prototype-policy.md
       - Testing & Guarantees: architecture/testing-guarantees.md
       - Exhaustive Testing: formal-verification.md
       - Transliteration Comparison: architecture/transliteration-comparison.md

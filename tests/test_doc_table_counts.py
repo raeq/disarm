@@ -16,14 +16,29 @@ the very staleness this guard exists to catch. The `~` tells a reader the number
 approximate; it does not license the number being wrong. Regenerating a table is a
 deliberate act, and updating one figure in two files in the same change is the cost of
 that.
+
+The second guard here (#708) is a different shape for the same rot. Prose figures are
+parsed out and compared against a data file; a **comparison table** is parsed out and
+compared against the library itself, one row at a time. It exists because
+``docs/user-guide/graphemes.md`` said ``नमस्ते`` was 4 grapheme clusters three screens
+below four executed blocks asserting 3, and every doc gate in the repo reads fenced code
+blocks while none reads a markdown table.
+
+The published table is the input, deliberately. ``tests/test_performance_claims.py``
+hand-writes assertions mirroring its table, which creates a second list that can drift
+from the first — someone fixes the test, not the page, and the gate goes green over
+documentation that is still wrong. Parsing the page cannot do that.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
 
 import pytest
+
+import disarm
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "src" / "tables" / "data"
@@ -129,4 +144,83 @@ def test_documented_count_matches_the_table(doc: Path, pattern: str, tsv: str) -
         f"{doc.name} claims {claimed:,} for {tsv} but it has {actual:,} rows. "
         f"Regenerating the tables moves these figures — update the prose in the same "
         f"change."
+    )
+
+
+# ── Comparison tables: assert the published row, not a copy of it (#708) ──────
+
+GRAPHEMES = Path("docs/user-guide/graphemes.md")
+GRAPHEME_TABLE_HEADER = "| Text | `len(b)` bytes | `len(s)` codepoints | `grapheme_len(s)` |"
+
+#: A parenthetical in the Text cell is a **normalization instruction**, not a label.
+#: The two ``café`` rows hold byte-identical cell text (both NFC in the source, because
+#: an editor will normalize the file), and so do the two ``한`` rows. Only the
+#: parenthetical separates them. A parser that ignores it scores the NFD and jamo rows
+#: against the precomposed string and passes — wrongly — on two of the nine rows.
+NORMALIZATION = {"NFC": "NFC", "precomposed": "NFC", "NFD": "NFD", "jamo": "NFD"}
+
+_TABLE_ROW = re.compile(
+    r'^\|\s*`"(?P<text>.*)"`\s*(?:\((?P<note>[^)]*)\))?\s*\|'
+    r"\s*(?P<byte_len>\d+)\s*\|\s*(?P<codepoints>\d+)\s*\|\s*(?P<graphemes>\d+)\s*\|\s*$"
+)
+
+
+def _grapheme_rows() -> list:
+    """Every row of the graphemes comparison table, as the page publishes it.
+
+    Anchored to the header line rather than to a line number or a bare regex sweep, so
+    the table can move within the page but cannot be silently swapped for a different
+    one, and a second table elsewhere in the file cannot leak in.
+    """
+    lines = (ROOT / GRAPHEMES).read_text(encoding="utf-8").splitlines()
+    # A bare `.index()` here raises `ValueError: not in list`, which names neither the
+    # file nor what it was looking for — the least useful failure a drift gate can give.
+    assert GRAPHEME_TABLE_HEADER in lines, (
+        f"{GRAPHEMES}: the comparison-table header line is gone. This guard anchors to "
+        f"it exactly, including spacing, and expected:\n"
+        f"    {GRAPHEME_TABLE_HEADER}\n"
+        f"If the table was reworded or moved, update GRAPHEME_TABLE_HEADER in the same "
+        f"change — otherwise the rows below it stop being checked."
+    )
+    start = lines.index(GRAPHEME_TABLE_HEADER) + 2  # header + separator
+
+    rows = []
+    for line in lines[start:]:
+        if not line.startswith("|"):
+            break
+        match = _TABLE_ROW.match(line)
+        assert match is not None, f"{GRAPHEMES}: unparsable table row: {line!r}"
+
+        note = (match["note"] or "").strip()
+        # Fail on an unrecognised parenthetical rather than treating it as prose. A new
+        # form silently read as plain text is exactly the pass this guard exists to deny.
+        assert note in NORMALIZATION or not note, (
+            f"{GRAPHEMES}: unknown parenthetical {note!r}. It reads as a normalization "
+            f"instruction, so add it to NORMALIZATION or the row is scored against the "
+            f"wrong string."
+        )
+        form = NORMALIZATION.get(note)
+        text = unicodedata.normalize(form, match["text"]) if form else match["text"]
+        rows.append(
+            pytest.param(
+                text,
+                (int(match["byte_len"]), int(match["codepoints"]), int(match["graphemes"])),
+                id=f"{match['text']}-{note or 'as-written'}",
+            )
+        )
+
+    assert len(rows) == 9, (
+        f"{GRAPHEMES}: parsed {len(rows)} rows, expected 9. A gate that matches nothing "
+        f"passes vacuously — if the table genuinely gained or lost a row, update this "
+        f"count in the same change."
+    )
+    return rows
+
+
+@pytest.mark.parametrize(("text", "published"), _grapheme_rows())
+def test_grapheme_table_row_matches_the_library(text: str, published: tuple) -> None:
+    measured = (len(text.encode("utf-8")), len(text), disarm.grapheme_len(text))
+    assert measured == published, (
+        f"{GRAPHEMES} publishes {published} for {text!r} but the library measures "
+        f"{measured}. The table is the input to this test, so correct the page."
     )

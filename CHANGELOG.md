@@ -82,6 +82,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **The graphemes comparison table contradicted its own page (#708).**
+  `docs/user-guide/graphemes.md` said `नमस्ते` was 4 grapheme clusters. Four executed
+  blocks on the same page assert 3, and 3 is correct. The cell is fixed, and the table
+  is now parsed out of the page and asserted row by row against the library, so the
+  published table is the input rather than a copy of it.
+
+  Every doc gate in the repo parses fenced code blocks and none read a markdown table,
+  which is how a wrong cell sat three screens below four green assertions. The new guard
+  also rejects a row whose normalization parenthetical it does not recognise: the two
+  `café` rows and the two `한` rows hold byte-identical cell text and differ only by
+  `(NFD)` / `(jamo)`, so a parser that ignores it scores two of the nine rows against the
+  wrong string and passes.
+
 - **CI and the `dev` extra pinned different ruff versions (#689).** `ci.yml` installed
   `ruff==0.15.17` while `pyproject.toml`'s `dev` extra pinned `0.16.4`, so a contributor
   formatting with the documented tooling produced a diff CI would then reject. CI now

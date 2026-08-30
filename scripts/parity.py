@@ -13,17 +13,26 @@ Fixes over v0 (per external review):
     for strip_control_chars/strip_zero_width_chars named
     `collapse_whitespace(strip_control=True)`, a signature that never existed,
     which hid the gap until #616 exported both from Python.
+#677/#698/#707 add java, kotlin and cabi. Until then the matrix covered four of the
+seven shipped surfaces, so three could not be measured at all — which is why #677 and
+#707 were both found by reading declarations by hand, and why both understate their own
+gap. Measured here: the JVM is missing six operations, not the two #677 names, and the C
+ABI twenty, not the one #707 names.
+
 Caveat: Python+Rust are verified against the real public surface; Ruby is parsed
 from source defs (reliable) and Node from `export function` (reliable), but
 neither is runtime-introspected (no toolchain) — finalize with
-`Disarm.respond_to?` / Node export keys before wiring CI.
+`Disarm.respond_to?` / Node export keys before wiring CI. The three new columns carry
+the same caveat and one more: each is read with a different regex because each binding
+declares its surface differently, and a reader that is wrong fails *quietly*, by
+reporting a smaller surface rather than by erroring.
 """
 
 from __future__ import annotations
 import re, sys, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-LANGS = ["rust", "python", "ruby", "node"]
+LANGS = ["rust", "python", "ruby", "node", "java", "kotlin", "cabi"]
 
 
 def py_surface() -> set[str]:
@@ -58,6 +67,38 @@ def node_surface() -> set[str]:
     return set(re.findall(r"export\s+(?:declare\s+)?function\s+([a-zA-Z0-9_]+)", t))
 
 
+# The three surfaces below were unmodelled until #677/#698/#707. Each is read from the
+# declaration that actually ships, and each needs a different shape — which is the reason
+# the gaps went unnoticed: there is no one regex that reads all six bindings.
+
+
+def java_surface() -> set[str]:
+    """`public static` methods on the JVM facade. Overloads collapse to one name."""
+    t = (ROOT / "bindings/java/disarm-java/src/main/java/dev/disarm/Disarm.java").read_text()
+    return set(re.findall(r"public\s+static\s+[\w<>\[\], ]+?\s+([a-zA-Z0-9_]+)\s*\(", t))
+
+
+def kotlin_surface() -> set[str]:
+    """Kotlin ships **extension functions** (`fun String.canonicalize()`), so the receiver
+    has to be skipped. A regex that captures the first identifier after `fun` reads the
+    receiver type instead of the operation and reports a 7-symbol surface for a 51-symbol
+    file."""
+    t = (
+        ROOT / "bindings/java/disarm-kotlin/src/main/kotlin/dev/disarm/kotlin/Disarm.kt"
+    ).read_text()
+    return set(re.findall(r"^fun\s+(?:[\w<>, ]+\.)?([a-zA-Z0-9_]+)\s*\(", t, re.M))
+
+
+def cabi_surface() -> set[str]:
+    """Symbols in the generated C header, less the memory-management entry point.
+
+    `disarm.h` is regenerated from the crate by `test_cabi_header_drift.py`, so a function
+    never added to `bindings/cabi/src/lib.rs` is missing from *both* sides and that gate
+    stays green over it. This column is the check that notices."""
+    t = (ROOT / "bindings/cabi/disarm.h").read_text()
+    return {n[len("disarm_") :] for n in re.findall(r"\bdisarm_[a-z0-9_]+", t)} - {"string_free"}
+
+
 def camel_to_snake(s):
     return re.sub(r"(?<!^)(?=[A-Z])", "_", s).lower()
 
@@ -74,12 +115,29 @@ RUBY_PRED = {
 }
 
 
+# The C ABI spells the opt-in contraction pass as a separate symbol rather than a widened
+# one (`disarm.h:38` records the reason), so it needs the alias its siblings do not.
+#
+# Deliberately NOT aliased: `analyze_hostname`. Every binding ships BOTH `analyzeHostname`
+# and `isSuspiciousHostname`, so folding the first onto the second collides with a symbol
+# the binding already has, and `canonmap` would then keep whichever the iteration reached
+# last. That op has no `rust`/`python` counterpart under either name, so it stays out of
+# `ops` exactly as Node's has always done. The three-way naming of this family
+# (`is_suspicious_hostname` / `analyze_hostname` / `analyze_hostname_with`) is a real
+# divergence and #677 §2 is the place to settle it, not a canon rule here.
+HOSTNAME_ALIASES = {
+    "analyze_hostname_opts": "analyze_hostname_with",
+}
+
+
 def canon(name, lang):
-    if lang == "node":
+    if lang in ("node", "java", "kotlin"):
         name = camel_to_snake(name)
     if lang == "ruby":
         name = name.rstrip("?!")
         name = RUBY_PRED.get(name, name)
+    if lang in ("java", "kotlin", "cabi", "node"):
+        name = HOSTNAME_ALIASES.get(name, name)
     return name
 
 
@@ -141,11 +199,30 @@ SURF = {
     "python": py_surface(),
     "ruby": ruby_surface(),
     "node": node_surface(),
+    "java": java_surface(),
+    "kotlin": kotlin_surface(),
+    "cabi": cabi_surface(),
 }
 canonmap: dict[str, dict[str, str]] = {}
 for l in LANGS:
-    for sym in SURF[l]:
-        canonmap.setdefault(canon(sym, l), {})[l] = sym
+    # `sorted`, not set order: if two symbols in one binding ever canon to the same name,
+    # the survivor must be the same on every run. Unsorted, the committed manifest and a
+    # fresh regeneration disagreed run-to-run and the staleness warning flapped.
+    #
+    # Determinism alone is not enough, though: the assignment would still *discard* one of
+    # the two symbols and under-report that binding's surface with no signal — the same
+    # "fails quietly" shape these columns exist to close. So a collision is an error.
+    # Measured: zero across all seven surfaces. The only one ever seen was a bad alias
+    # rule written during #677/#698/#707, which is precisely what this catches.
+    for sym in sorted(SURF[l]):
+        c = canon(sym, l)
+        if l in canonmap.get(c, {}):
+            raise SystemExit(
+                f"parity: {l} symbols {canonmap[c][l]!r} and {sym!r} both reduce to {c!r}. "
+                f"One would be dropped and {l}'s surface under-reported. Fix the canon or "
+                f"alias rule — do not let the later symbol win."
+            )
+        canonmap.setdefault(c, {})[l] = sym
 ops = sorted(
     c
     for c in canonmap
@@ -166,7 +243,10 @@ for l in LANGS:
 
 
 def matrix():
-    rows = ["| operation | rust | python | ruby | node |", "|---|:--:|:--:|:--:|:--:|"]
+    rows = [
+        "| operation | " + " | ".join(LANGS) + " |",
+        "|---|" + "|".join([":--:"] * len(LANGS)) + "|",
+    ]
     for c in ops:
         cells = []
         for l in LANGS:
@@ -182,7 +262,7 @@ def matrix():
 
 print("\n" + matrix())
 
-for lang in ("ruby", "node", "python"):
+for lang in [l for l in LANGS if l != "rust"]:
     g = [
         c
         for c in ops
@@ -207,9 +287,22 @@ DOC_PRIMARY = {
     "python": ["docs/api", "docs/python"],
     "ruby": ["docs/ruby"],
     "node": ["docs/node"],
+    # Java and Kotlin share one page (#628). The C ABI has no page at all, so its docs
+    # column reads 0 by construction — that is the finding, not a bug in this script.
+    "java": ["docs/java"],
+    "kotlin": ["docs/java"],
+    "cabi": [],
 }
 DOC_TAB_DIRS = ["docs/user-guide", "docs/concepts", "docs/migration"]
-DOC_TAB_LABEL = {"rust": "Rust", "python": "Python", "ruby": "Ruby", "node": "Node"}
+DOC_TAB_LABEL = {
+    "rust": "Rust",
+    "python": "Python",
+    "ruby": "Ruby",
+    "node": "Node",
+    "java": "Java",
+    "kotlin": "Kotlin",
+    "cabi": "C",
+}
 
 
 def _read_md(rel):
@@ -271,7 +364,8 @@ def cell(c, l):
 
 out = [
     "# disarm parity manifest (v2 seed). symbol | {provided_via:…} | {alias_of:…} | null(gap).",
-    "# Python=__all__, Rust=pub fn + pub use re-exports, Ruby=def lines, Node=export function.",
+    "# Python=__all__, Rust=pub fn + pub use re-exports, Ruby=def lines, Node=export function,",
+    "# Java=public static, Kotlin=fun (extension receiver skipped), C ABI=disarm_* in disarm.h.",
     "operations:",
 ]
 for c in ops:

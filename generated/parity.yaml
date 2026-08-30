@@ -1,5 +1,6 @@
 # disarm parity manifest (v2 seed). symbol | {provided_via:…} | {alias_of:…} | null(gap).
-# Python=__all__, Rust=pub fn + pub use re-exports, Ruby=def lines, Node=export function.
+# Python=__all__, Rust=pub fn + pub use re-exports, Ruby=def lines, Node=export function,
+# Java=public static, Kotlin=fun (extension receiver skipped), C ABI=disarm_* in disarm.h.
 operations:
   - id: analyze_hostname_with
     names:
@@ -7,456 +8,684 @@ operations:
       python: null
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: analyze_hostname_opts
   - id: canonicalize
     names:
       rust: canonicalize
       python: canonicalize
       ruby: canonicalize
       node: canonicalize
+      java: canonicalize
+      kotlin: canonicalize
+      cabi: canonicalize
   - id: canonicalize_strict
     names:
       rust: canonicalize_strict
       python: canonicalize_strict
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: catalog_key
     names:
       rust: catalog_key
       python: catalog_key
       ruby: catalog_key
       node: catalogKey
+      java: catalogKey
+      kotlin: catalogKey
+      cabi: catalog_key
   - id: clear_replacements
     names:
       rust: clear_replacements
       python: clear_replacements
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: collapse_whitespace
     names:
       rust: collapse_whitespace
       python: collapse_whitespace
       ruby: collapse_whitespace
       node: collapseWhitespace
+      java: collapseWhitespace
+      kotlin: collapseWhitespace
+      cabi: collapse_whitespace
   - id: confusables_version
     names:
       rust: confusables_version
       python: { provided_via: "disarm.CONFUSABLES_VERSION" }
       ruby: confusables_version
       node: confusablesVersion
+      java: confusablesVersion
+      kotlin: confusablesVersion
+      cabi: confusables_version
   - id: decode_to_utf8
     names:
       rust: decode_to_utf8
       python: decode_to_utf8
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: dedup_batch
     names:
       rust: null
       python: dedup_batch
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: demojize
     names:
       rust: demojize
       python: demojize
       ruby: demojize
       node: demojize
+      java: demojize
+      kotlin: demojize
+      cabi: demojize
   - id: detect_encoding
     names:
       rust: detect_encoding
       python: detect_encoding
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: detect_scripts
     names:
       rust: detect_scripts
       python: detect_scripts
       ruby: detect_scripts
       node: detectScripts
+      java: detectScripts
+      kotlin: detectScripts
+      cabi: null
   - id: display_clean
     names:
       rust: display_clean
       python: display_clean
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: escape_html
     names:
       rust: escape_html
       python: escape_html
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: find_key_collisions
     names:
       rust: find_key_collisions
       python: find_key_collisions
       ruby: find_key_collisions
       node: findKeyCollisions
+      java: findKeyCollisions
+      kotlin: findKeyCollisions
+      cabi: find_key_collisions
   - id: find_unmapped_confusables
     names:
       rust: find_unmapped_confusables
       python: find_unmapped_confusables
       ruby: find_unmapped_confusables
       node: findUnmappedConfusables
+      java: findUnmappedConfusables
+      kotlin: findUnmappedConfusables
+      cabi: find_unmapped_confusables
   - id: find_untranslatable
     names:
       rust: null
       python: find_untranslatable
       ruby: find_untranslatable
       node: findUntranslatable
+      java: findUntranslatable
+      kotlin: findUntranslatable
+      cabi: null
   - id: fold_case
     names:
       rust: fold_case
       python: fold_case
       ruby: fold_case
       node: foldCase
+      java: foldCase
+      kotlin: foldCase
+      cabi: fold_case
   - id: get_pipeline
     names:
       rust: get_pipeline
       python: get_pipeline
       ruby: get_pipeline
       node: getPipeline
+      java: getPipeline
+      kotlin: getPipeline
+      cabi: null
   - id: grapheme_len
     names:
       rust: grapheme_len
       python: grapheme_len
       ruby: grapheme_len
       node: graphemeLen
+      java: graphemeLen
+      kotlin: graphemeLen
+      cabi: grapheme_len
   - id: grapheme_split
     names:
       rust: grapheme_split
       python: grapheme_split
       ruby: grapheme_split
       node: graphemeSplit
+      java: graphemeSplit
+      kotlin: graphemeSplit
+      cabi: null
   - id: grapheme_truncate
     names:
       rust: grapheme_truncate
       python: grapheme_truncate
       ruby: grapheme_truncate
       node: graphemeTruncate
+      java: graphemeTruncate
+      kotlin: graphemeTruncate
+      cabi: null
   - id: grapheme_width
     names:
       rust: grapheme_width
       python: grapheme_width
       ruby: grapheme_width
       node: graphemeWidth
+      java: graphemeWidth
+      kotlin: graphemeWidth
+      cabi: null
   - id: has_anomalies
     names:
       rust: has_anomalies
       python: has_anomalies
       ruby: has_anomalies?
       node: hasAnomalies
+      java: hasAnomalies
+      kotlin: hasAnomalies
+      cabi: null
   - id: has_bidi_conflict
     names:
       rust: has_bidi_conflict
       python: has_bidi_conflict
       ruby: bidi_conflict?
       node: hasBidiConflict
+      java: hasBidiConflict
+      kotlin: hasBidiConflict
+      cabi: has_bidi_conflict
   - id: inspect_anomalies
     names:
       rust: inspect_anomalies
       python: inspect_anomalies
       ruby: inspect_anomalies
       node: inspectAnomalies
+      java: inspectAnomalies
+      kotlin: inspectAnomalies
+      cabi: inspect_anomalies
   - id: inspect_auto_lang
     names:
       rust: inspect_auto_lang
       python: inspect_auto_lang
       ruby: inspect_auto_lang
       node: inspectAutoLang
+      java: inspectAutoLang
+      kotlin: inspectAutoLang
+      cabi: inspect_auto_lang
   - id: is_ascii
     names:
       rust: is_ascii
       python: is_ascii
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: is_case_fold_stable
     names:
       rust: is_case_fold_stable
       python: is_case_fold_stable
       ruby: case_fold_stable?
       node: isCaseFoldStable
+      java: isCaseFoldStable
+      kotlin: isCaseFoldStable
+      cabi: is_case_fold_stable
   - id: is_confusable
     names:
       rust: is_confusable
       python: is_confusable
       ruby: confusable?
       node: isConfusable
+      java: isConfusable
+      kotlin: isConfusable
+      cabi: null
   - id: is_mixed_script
     names:
       rust: is_mixed_script
       python: is_mixed_script
       ruby: mixed_script?
       node: isMixedScript
+      java: isMixedScript
+      kotlin: isMixedScript
+      cabi: is_mixed_script
   - id: is_normalized
     names:
       rust: is_normalized
       python: is_normalized
       ruby: normalized?
       node: isNormalized
+      java: isNormalized
+      kotlin: isNormalized
+      cabi: null
   - id: is_suspicious_hostname
     names:
       rust: is_suspicious_hostname
       python: is_suspicious_hostname
       ruby: suspicious_hostname?
       node: isSuspiciousHostname
+      java: isSuspiciousHostname
+      kotlin: isSuspiciousHostname
+      cabi: is_suspicious_hostname
   - id: is_zalgo
     names:
       rust: is_zalgo
       python: is_zalgo
       ruby: zalgo?
       node: isZalgo
+      java: isZalgo
+      kotlin: isZalgo
+      cabi: null
   - id: lang_info
     names:
       rust: lang_info
       python: lang_info
       ruby: lang_info
       node: langInfo
+      java: langInfo
+      kotlin: langInfo
+      cabi: lang_info
   - id: lexicon
     names:
       rust: lexicon
       python: null
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: list_context_langs
     names:
       rust: list_context_langs
       python: list_context_langs
       ruby: list_context_langs
       node: listContextLangs
+      java: listContextLangs
+      kotlin: listContextLangs
+      cabi: null
   - id: list_langs
     names:
       rust: list_langs
       python: list_langs
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: list_profiles
     names:
       rust: list_profiles
       python: list_profiles
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: list_scripts
     names:
       rust: list_scripts
       python: list_scripts
       ruby: list_scripts
       node: listScripts
+      java: listScripts
+      kotlin: listScripts
+      cabi: null
   - id: make_cached_transliterator
     names:
       rust: null
       python: make_cached_transliterator
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: ml_normalize
     names:
       rust: ml_normalize
       python: ml_normalize
       ruby: ml_normalize
       node: mlNormalize
+      java: mlNormalize
+      kotlin: mlNormalize
+      cabi: ml_normalize
   - id: normalize
     names:
       rust: normalize
       python: normalize
       ruby: normalize
       node: normalize
+      java: normalize
+      kotlin: normalize
+      cabi: normalize
   - id: normalize_confusables
     names:
       rust: normalize_confusables
       python: normalize_confusables
       ruby: normalize_confusables
       node: normalizeConfusables
+      java: normalizeConfusables
+      kotlin: normalizeConfusables
+      cabi: normalize_confusables
   - id: normalize_confusables_with
     names:
       rust: normalize_confusables_with
       python: null
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: normalize_user_input
     names:
       rust: normalize_user_input
       python: normalize_user_input
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: percent_encode
     names:
       rust: percent_encode
       python: percent_encode
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: register_lang
     names:
       rust: register_lang
       python: register_lang
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: register_replacements
     names:
       rust: register_replacements
       python: register_replacements
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: registrations_sealed
     names:
       rust: registrations_sealed
       python: registrations_sealed
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: remove_replacement
     names:
       rust: remove_replacement
       python: remove_replacement
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: reverse_langs
     names:
       rust: reverse_langs
       python: reverse_langs
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: reverse_transliterate
     names:
       rust: reverse_transliterate
       python: { provided_via: "transliterate(target=…)" }
       ruby: reverse_transliterate
       node: reverseTransliterate
+      java: reverseTransliterate
+      kotlin: reverseTransliterate
+      cabi: reverse_transliterate
   - id: sanitize_filename
     names:
       rust: sanitize_filename
       python: sanitize_filename
       ruby: sanitize_filename
       node: sanitizeFilename
+      java: sanitizeFilename
+      kotlin: sanitizeFilename
+      cabi: null
   - id: script_info
     names:
       rust: script_info
       python: script_info
       ruby: script_info
       node: scriptInfo
+      java: scriptInfo
+      kotlin: scriptInfo
+      cabi: script_info
   - id: seal_registrations
     names:
       rust: seal_registrations
       python: seal_registrations
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: search_key
     names:
       rust: search_key
       python: search_key
       ruby: search_key
       node: searchKey
+      java: searchKey
+      kotlin: searchKey
+      cabi: search_key
   - id: security_clean
     names:
       rust: security_clean
       python: security_clean
       ruby: security_clean
       node: securityClean
+      java: null
+      kotlin: null
+      cabi: null
   - id: set_emoji_provider
     names:
       rust: null
       python: set_emoji_provider
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: slugify
     names:
       rust: slugify
       python: slugify
       ruby: slugify
       node: slugify
+      java: slugify
+      kotlin: slugify
+      cabi: null
   - id: sort_key
     names:
       rust: sort_key
       python: sort_key
       ruby: sort_key
       node: sortKey
+      java: sortKey
+      kotlin: sortKey
+      cabi: sort_key
   - id: strip_accents
     names:
       rust: strip_accents
       python: strip_accents
       ruby: strip_accents
       node: stripAccents
+      java: stripAccents
+      kotlin: stripAccents
+      cabi: strip_accents
   - id: strip_bidi
     names:
       rust: strip_bidi
       python: strip_bidi
       ruby: strip_bidi
       node: stripBidi
+      java: stripBidi
+      kotlin: stripBidi
+      cabi: strip_bidi
   - id: strip_control_chars
     names:
       rust: strip_control_chars
       python: strip_control_chars
       ruby: strip_control_chars
       node: stripControlChars
+      java: stripControlChars
+      kotlin: stripControlChars
+      cabi: strip_control_chars
   - id: strip_format
     names:
       rust: strip_format
       python: strip_format
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: strip_log_injection
     names:
       rust: strip_log_injection
       python: strip_log_injection
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: strip_noncharacters
     names:
       rust: strip_noncharacters
       python: strip_noncharacters
       ruby: strip_noncharacters
       node: stripNoncharacters
+      java: stripNoncharacters
+      kotlin: stripNoncharacters
+      cabi: strip_noncharacters
   - id: strip_obfuscation
     names:
       rust: strip_obfuscation
       python: strip_obfuscation
       ruby: strip_obfuscation
       node: stripObfuscation
+      java: stripObfuscation
+      kotlin: stripObfuscation
+      cabi: strip_obfuscation
   - id: strip_pua
     names:
       rust: strip_pua
       python: strip_pua
       ruby: strip_pua
       node: stripPua
+      java: stripPua
+      kotlin: stripPua
+      cabi: strip_pua
   - id: strip_tags
     names:
       rust: strip_tags
       python: strip_tags
       ruby: strip_tags
       node: stripTags
+      java: stripTags
+      kotlin: stripTags
+      cabi: strip_tags
   - id: strip_variation_selectors
     names:
       rust: strip_variation_selectors
       python: strip_variation_selectors
       ruby: strip_variation_selectors
       node: stripVariationSelectors
+      java: stripVariationSelectors
+      kotlin: stripVariationSelectors
+      cabi: strip_variation_selectors
   - id: strip_zalgo
     names:
       rust: strip_zalgo
       python: strip_zalgo
       ruby: strip_zalgo
       node: stripZalgo
+      java: stripZalgo
+      kotlin: stripZalgo
+      cabi: null
   - id: strip_zero_width_chars
     names:
       rust: strip_zero_width_chars
       python: strip_zero_width_chars
       ruby: strip_zero_width_chars
       node: stripZeroWidthChars
+      java: stripZeroWidthChars
+      kotlin: stripZeroWidthChars
+      cabi: strip_zero_width_chars
   - id: terminal_width
     names:
       rust: terminal_width
       python: terminal_width
       ruby: terminal_width
       node: terminalWidth
+      java: terminalWidth
+      kotlin: terminalWidth
+      cabi: terminal_width
   - id: transliterate
     names:
       rust: transliterate
       python: transliterate
       ruby: transliterate
       node: transliterate
+      java: transliterate
+      kotlin: transliterate
+      cabi: transliterate
   - id: unmapped_confusables
     names:
       rust: unmapped_confusables
       python: unmapped_confusables
       ruby: unmapped_confusables
       node: unmappedConfusables
+      java: unmappedConfusables
+      kotlin: unmappedConfusables
+      cabi: unmapped_confusables
   - id: ascii_fold
     alias_of: transliterate
     names:
@@ -464,6 +693,9 @@ operations:
       python: ascii_fold
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: casefold
     alias_of: fold_case
     names:
@@ -471,6 +703,9 @@ operations:
       python: casefold
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: remove_accents
     alias_of: strip_accents
     names:
@@ -478,6 +713,9 @@ operations:
       python: remove_accents
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: slugify_de
     alias_of: slugify
     names:
@@ -485,6 +723,9 @@ operations:
       python: slugify_de
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: slugify_el
     alias_of: slugify
     names:
@@ -492,6 +733,9 @@ operations:
       python: slugify_el
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: slugify_filename
     alias_of: slugify
     names:
@@ -499,6 +743,9 @@ operations:
       python: slugify_filename
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: slugify_ru
     alias_of: slugify
     names:
@@ -506,6 +753,9 @@ operations:
       python: slugify_ru
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: slugify_unicode
     alias_of: slugify
     names:
@@ -513,6 +763,9 @@ operations:
       python: slugify_unicode
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: slugify_url
     alias_of: slugify
     names:
@@ -520,6 +773,9 @@ operations:
       python: slugify_url
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: unidecode
     alias_of: transliterate
     names:
@@ -527,3 +783,6 @@ operations:
       python: unidecode
       ruby: null
       node: null
+      java: null
+      kotlin: null
+      cabi: null

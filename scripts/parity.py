@@ -208,8 +208,21 @@ for l in LANGS:
     # `sorted`, not set order: if two symbols in one binding ever canon to the same name,
     # the survivor must be the same on every run. Unsorted, the committed manifest and a
     # fresh regeneration disagreed run-to-run and the staleness warning flapped.
+    #
+    # Determinism alone is not enough, though: the assignment would still *discard* one of
+    # the two symbols and under-report that binding's surface with no signal — the same
+    # "fails quietly" shape these columns exist to close. So a collision is an error.
+    # Measured: zero across all seven surfaces. The only one ever seen was a bad alias
+    # rule written during #677/#698/#707, which is precisely what this catches.
     for sym in sorted(SURF[l]):
-        canonmap.setdefault(canon(sym, l), {})[l] = sym
+        c = canon(sym, l)
+        if l in canonmap.get(c, {}):
+            raise SystemExit(
+                f"parity: {l} symbols {canonmap[c][l]!r} and {sym!r} both reduce to {c!r}. "
+                f"One would be dropped and {l}'s surface under-reported. Fix the canon or "
+                f"alias rule — do not let the later symbol win."
+            )
+        canonmap.setdefault(c, {})[l] = sym
 ops = sorted(
     c
     for c in canonmap

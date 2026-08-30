@@ -16,6 +16,56 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- **The confusable fold no longer contradicts itself inside an uppercase block (#734).**
+  `fix_case_mismatch` in `scripts/gen_confusables.py` gated on general category `Lu`, so
+  two uppercase sources that are not `Lu` were never reconciled and kept TR39's lowercase
+  `l` prototype: `U+2160` ROMAN NUMERAL ONE (`Nl`) and `U+1CCDE` OUTLINED LATIN CAPITAL
+  LETTER I (`So`). A third case was missed entirely — the guard returned early on any
+  target longer than one character, so the nine multi-character Roman numerals kept a
+  lowercase spelling too.
+
+  ```
+  normalize_confusables("Ⅷ")                     'Vlll'  ->  'VIII'
+  outlined alphabet U+1CCD6..U+1CCEF   'ABCDEFGHlJK...'  ->  'ABCDEFGHIJK...'
+  roman numerals U+2160..U+216F     'I ll lll lV V ...'  ->  'I II III IV V ...'
+  ```
+
+- **The generator's Unicode floor sat below its own data, and corrupted digit rows
+  (#439, #734).** `MIN_UNICODE_VERSION` was `16.0.0` while `DATA_UNICODE_VERSION` was
+  `17.0.0`, so a regeneration under UCD 16 passed the floor check, printed a warning, and
+  produced a wrong table. `U+11DE0` TOLONG SIKI DIGIT ZERO and `U+11DE1` DIGIT ONE read as
+  unassigned under UCD 16, so `enforce_digit_target` could not protect them and they
+  folded to the *letters* `O` and `l` — the exact failure #439 added that guard for. Two
+  Beria Erfe capitals went unreconciled the same way.
+
+  ```
+  U+11DE0 TOLONG SIKI DIGIT ZERO        'O'  ->  '0'
+  U+11DE1 TOLONG SIKI DIGIT ONE         'l'  ->  '1'
+  U+16EAA BERIA ERFE CAPITAL LAKKO      'l'  ->  'I'
+  U+16EB6 BERIA ERFE CAPITAL UI         'b'  ->  'B'
+  ```
+
+  The floor now tracks the data version. Regenerating therefore requires an interpreter
+  shipping UCD 17.0.0 — CPython 3.15 or newer; 3.14 ships 16.0.0 and is refused.
+
+  Twenty-two rows change in total: 15 in `confusables_to_latin.tsv`, 5 in
+  `confusables_to_cyrillic.tsv`, and 2 added to `confusables_digit_tr39.tsv`. This moves
+  the output of `normalize_confusables`, `canonicalize`, `search_key`, `catalog_key` and
+  `sort_key` for those code points, so a stored key built from one of them no longer
+  compares equal to a freshly computed one.
+
+  Lowercase Roman numerals are untouched, the small capitals keep their lowercase targets
+  (`U+026A` is `Ll` and correctly folds to `i`), `U+042B` correctly keeps `bl` because
+  TR39 is a visual mapping, and `U+3392` SQUARE MHZ is untouched because its NFKC form is
+  mixed case.
+
+  Guarded by a new block-consistency assertion in `tests/test_confusable_coverage.py`:
+  every ASCII-letter target within an uppercase block must agree on case. It reads only
+  the generated table and never calls `unicodedata`, so it cannot be silently skipped by
+  an interpreter whose Unicode version predates the data.
+
 ### Fixed
 
 - **The "Try disarm in your browser" link pointed at a host that no longer resolves (#696).**

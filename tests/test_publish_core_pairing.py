@@ -30,7 +30,9 @@ looks like a complete gate and reads like one.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 import yaml
@@ -79,8 +81,19 @@ def test_the_publishers_exist() -> None:
 
 @pytest.mark.parametrize("name", PUBLISHERS)
 def test_the_gate_polls_for_the_core(name: str) -> None:
-    """The #500 half, still needed: a release publishes the core in parallel."""
-    assert "index.crates.io" in _text(name), f"{name} lost its crates.io poll"
+    """The #500 half, still needed: a release publishes the core in parallel.
+
+    The host is compared as a parsed netloc rather than as a substring. CodeQL flagged the
+    substring form (`py/incomplete-url-substring-sanitization`) and the rule is right on
+    the general point — `"index.crates.io" in text` also matches
+    `index.crates.io.example.com` — so this checks the thing the rule asks for, which is
+    also the stronger assertion.
+    """
+    urls = re.findall(r"https?://[^\s\"']+", _text(name))
+    hosts = {urlparse(url).netloc for url in urls}
+    assert "index.crates.io" in hosts, (
+        f"{name} lost its crates.io sparse-index poll; hosts found: {sorted(hosts)}"
+    )
 
 
 @pytest.mark.parametrize("name", PUBLISHERS)

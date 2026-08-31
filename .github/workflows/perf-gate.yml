@@ -60,6 +60,13 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       perf: ${{ steps.f.outputs.perf }}
+      # #832: the baseline commit, computed once here and consumed by every job that
+      # benchmarks against it. It used to be recomputed per job as
+      # `git merge-base origin/${{ github.base_ref }} HEAD`, which is empty on a push —
+      # so two of the three jobs ran `git merge-base origin/ HEAD` and died before
+      # benchmarking anything. Exporting it means a future job cannot get this wrong by
+      # copying the broken line, which is how both of them got it.
+      base: ${{ steps.f.outputs.base }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -77,6 +84,9 @@ jobs:
               base="$(git rev-parse HEAD~1)"
             fi
           fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "baseline commit: $base"
+
           if git diff --name-only "$base" HEAD \
              | grep -qE '^(src/|benchmarks/|examples/|Cargo\.toml$|build\.rs$|requirements/bench\.txt$|\.github/workflows/perf-gate\.yml$)'; then
             touched=true
@@ -96,7 +106,9 @@ jobs:
           #   * the PR edits benchmarks/ or this workflow, where the gate is
           #     itself the thing under test.
           # Pushes to main always run it (see the `on:` block), so nothing
-          # reaches a release unmeasured.
+          # reaches a release unmeasured — true of the trigger since it was
+          # written, and true of the measurement only since #832: every push run
+          # died computing its baseline, 13 of 13 over the last 60 runs.
           #
           # `perf=false` leaves the required check reporting as a no-op shim — a
           # SKIPPED required job reads as missing rather than satisfied and would
@@ -178,8 +190,16 @@ jobs:
           PYO3_PYTHON: python3
         run: |
           set -euo pipefail
-          BASE="$(git merge-base origin/${{ github.base_ref }} HEAD)"
-          echo "merge-base: $BASE"
+          # #832: taken from the `changes` job rather than recomputed. On a push to
+          # main `github.base_ref` is empty, and this line used to expand to
+          # `git merge-base origin/ HEAD` — `fatal: Not a valid object name origin/`,
+          # before a single benchmark ran.
+          BASE="${{ needs.changes.outputs.base }}"
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "::error::no usable baseline commit from the changes job (got '$BASE')"
+            exit 1
+          fi
+          echo "baseline: $BASE"
           # Gate metric = estimated cycles (cache-sim), built twice with the same
           # rustc; compared directionally vs the merge-base baseline.
           if git cat-file -e "$BASE:benchmarks/bench_iai.rs" 2>/dev/null \
@@ -255,7 +275,14 @@ jobs:
         env:
           PYO3_PYTHON: python3
         run: |
-          BASE="$(git merge-base origin/${{ github.base_ref }} HEAD)"
+          # #832: from the `changes` job, for the reason in the gate job above. This
+          # one is flag-only, so it degraded to a skipped comparison rather than a red
+          # job — which is why it went unnoticed for as long as the gate did.
+          BASE="${{ needs.changes.outputs.base }}"
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "::warning::no usable baseline commit; skipping the wall-clock delta"
+            exit 0
+          fi
           CRIT=(--warm-up-time 1 --measurement-time 2 --sample-size 10)
           # bench_personas is on the base (unlike the new bench_iai), so this
           # wall-clock delta actually compares. Same runner/session; flag-only.

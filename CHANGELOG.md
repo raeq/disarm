@@ -515,6 +515,22 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **`perf-gate.yml` has never run on `main` (#832).** It triggers on `push` as well as
+  `pull_request`, and two of its three jobs computed the baseline as
+  `git merge-base origin/${{ github.base_ref }} HEAD`. `github.base_ref` is the target
+  branch *of a pull request* and is empty on a push, so the command became
+  `git merge-base origin/ HEAD` and the step died with `fatal: Not a valid object name
+  origin/` before benchmarking anything. Measured over the last 60 runs: 44 `pull_request`
+  runs all successful, **13 push runs all failures**. A comment in the same file said
+  "Pushes to main always run it, so nothing reaches a release unmeasured" — true of the
+  trigger, and false of the measurement.
+
+  The third job had the correct branch all along, under a comment naming this exact case,
+  which is why the fix is to compute the baseline **once** and export it rather than to
+  repeat the conditional twice more: the right answer was already twelve lines from both
+  wrong ones. `tests/test_workflow_baselines.py` holds it — no workflow that runs on
+  `push` may read `github.base_ref` without first establishing the event.
+
 - **"Escapes, never literals" now covers the tree, not just `README.md` (#802).** The
   README guard's docstring already made the argument, and recorded that the defect it
   guards against **shipped once** — a literal `U+202E` in a README example reached GitHub,

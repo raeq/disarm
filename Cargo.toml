@@ -2,7 +2,14 @@
 name = "disarm"
 version = "0.14.1"
 edition = "2021"
-rust-version = "1.81"
+# 1.88, not 1.81 (#718). The floor is set by a RUNTIME dependency, not a dev one:
+# `idna` -> `idna_adapter` -> `icu_normalizer` / `icu_properties` / `icu_provider`,
+# every one of which declares `rust-version = "1.88"`, and `idna_adapter` 1.2.2 uses
+# edition 2024, which cargo below 1.85 cannot even parse. Measured: `cargo +1.81`,
+# `+1.85` and `+1.87` all fail to build a consumer of this crate; `+1.88` succeeds.
+# The claim of 1.81 was unverified — nothing in CI builds at the declared MSRV.
+# `tests/msrv_declared.rs` derives the floor from the resolved tree and asserts it.
+rust-version = "1.88"
 license = "MIT"
 description = "Unicode canonicalization and TR39 visual confusable analysis: building blocks for text-security pipelines (homoglyph/bidi/zalgo handling) plus standards-based phonetic transliteration"
 repository = "https://github.com/raeq/disarm"
@@ -87,9 +94,11 @@ phf_codegen = "0.13"
 
 [dev-dependencies]
 proptest = "1"
-# criterion 0.8 requires Rust 1.86+. The shipped library MSRV stays `rust-version`
-# above (criterion is dev-only — never built by downstream consumers); only running
-# the benches or `cargo test`/`cargo clippy --all-targets` in this repo needs 1.86+.
+# criterion 0.8 requires Rust 1.86+, which no longer exceeds the library MSRV: since
+# #718 that is 1.88, forced by the ICU4X crates `idna` pulls in. Kept as a note because
+# the distinction still matters — a dev-dependency's floor never reaches a downstream
+# consumer, and the gate in `tests/msrv_declared.rs` deliberately measures the runtime
+# tree only, so a future criterion bump cannot silently raise the published MSRV.
 criterion = { version = "0.8", features = ["html_reports"] }
 iai-callgrind = "0.16.1"
 stats_alloc = "0.1.10"

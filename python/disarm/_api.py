@@ -1719,6 +1719,25 @@ def detect_encoding(data: bytes) -> tuple[str, float]:
     A high confidence score does NOT guarantee correctness. For critical
     pipelines, always prefer explicit encoding metadata over detection.
 
+    **UTF-16** (#710). Two cases are decided *before* chardetng runs, because
+    chardetng never produces a UTF-16 label at all:
+
+    - **A BOM.** ``FF FE``, ``FE FF`` and ``EF BB BF`` yield ``UTF-16LE``,
+      ``UTF-16BE`` and ``UTF-8`` directly. A BOM is not a probabilistic signal.
+      This is the same WHATWG sniff `decode_to_utf8` performs internally, so the
+      two agree by construction — they used to disagree silently, with
+      ``detect_encoding`` reporting ``KOI8-U`` at confidence 0.95 for the bytes
+      `decode_to_utf8` read correctly as UTF-16LE.
+    - **BOM-less UTF-16 over ASCII-range text**, where every second byte is
+      ``00`` and the position of the NUL is the endianness. Deterministic, not a
+      frequency guess.
+
+    **BOM-less UTF-16 outside the ASCII range is not detected.** In UTF-16LE
+    Cyrillic the high byte is ``04``, not ``00``, so ``"Привет"`` without a BOM
+    carries no NUL and there is no deterministic signal to read. Such input
+    decodes as a single-byte encoding and yields mojibake, with no flag — supply
+    the encoding explicitly when you know the source emits BOM-less UTF-16.
+
     Args:
         data: Raw byte sequence to analyze.
 

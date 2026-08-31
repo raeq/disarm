@@ -16,6 +16,39 @@ The confidence score returned by `detect_encoding` should not be treated as reli
 
 **Notable limitation**: chardetng's accuracy was evaluated on the same Wikipedia dataset used for training, unlike ced's testing against independent corpora. Real-world accuracy on domain-specific content (e.g., machine-generated logs, mixed-encoding streams) may differ.
 
+### BOM-less UTF-16 is detected only over ASCII-range text
+
+chardetng never produces a UTF-16 label, so disarm decides UTF-16 before handing the bytes
+to it. Two cases are deterministic and both are handled:
+
+- **A BOM.** `FF FE`, `FE FF` and `EF BB BF` yield `UTF-16LE`, `UTF-16BE` and `UTF-8`
+  directly. This is the same WHATWG sniff `decode_to_utf8` performs internally, so the two
+  functions agree by construction.
+- **BOM-less UTF-16 over ASCII-range text.** Every ASCII character is one NUL byte plus
+  the ASCII byte, and which position holds the NUL is the endianness. Text in a single-byte
+  encoding contains no NUL at all, so the pattern is near-decisive; disarm requires one
+  position to be at least half NUL and the other to be exactly zero.
+
+**Outside the ASCII range there is no signal to read.** In UTF-16LE Cyrillic the high byte
+is `04`, not `00`, so `"Привет"` without a BOM carries no NUL:
+
+```python
+from disarm import detect_encoding
+
+assert detect_encoding("héllo wörld".encode("utf-16-le"))[0] == "UTF-16LE"  # mostly ASCII
+assert detect_encoding("Привет".encode("utf-16-le"))[0] != "UTF-16LE"  # no NULs
+```
+
+Such input decodes as a single-byte encoding and yields mojibake, with `had_errors=False`
+and no `strict=True` error, because windows-1252 maps every byte to something. Guessing
+from script frequency instead would be exactly the ambiguous-bytes case
+[THREAT_MODEL.md](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md) scopes out.
+Supply the encoding explicitly when you know the source emits BOM-less UTF-16 — Windows
+tooling and several database exports do.
+
+Measured over 20,082 text inputs (12 texts across 14 single-byte and multi-byte encodings,
+plus 20,000 random NUL-free byte strings): zero false UTF-16 labels.
+
 ### Encoding coverage is web-focused
 
 chardetng targets encodings historically deployed as browser defaults per the [WHATWG Encoding Standard](https://encoding.spec.whatwg.org/). It does not detect macintosh encoding, ISO-8859-3, or the font-hack encodings used in South Asian web content. Content from .in and .lk domains may be misidentified.

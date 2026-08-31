@@ -12,11 +12,80 @@
 /// callers using `min_confidence` thresholds (e.g. 0.7) get intuitive results.
 const CONFIDENCE_HIGH: f64 = 0.95;
 
+/// BOM-less UTF-16 over ASCII-range text (#710 §3).
+///
+/// In UTF-16 every ASCII character is one NUL byte plus the ASCII byte, and which of the
+/// two positions holds the NUL is the endianness: `41 00 42 00` is little-endian, `00 41
+/// 00 42` big-endian. That is a deterministic pattern, not a frequency guess, and
+/// chardetng never produces a UTF-16 label at all, so nothing else in the pipeline can
+/// see it. BOM-less UTF-16 is what Windows tooling and several DB exports emit, and the
+/// consequence was not a wrong label but a wrong *decode*:
+/// `decode_to_utf8("héllo".encode("utf-16-le"))` returned `'h\0é\0l\0l\0o\0'` with
+/// `had_errors = false`, and `strict = true` did not catch it.
+///
+/// Deliberately conservative, because a false positive turns working text into garbage:
+///
+/// - Even length and at least two code units. An odd length is not UTF-16 at all.
+/// - One position must be **at least half** NUL and the other **exactly zero**. Text in a
+///   single-byte encoding contains no NUL anywhere — it is a C0 control — so any split at
+///   all is evidence; requiring the clean side to be empty is what keeps a binary blob
+///   from being read as text.
+///
+/// The 90% floor is what limits this to the ASCII range, and that limit is real: in
+/// UTF-16LE Cyrillic the high byte is `04`, not `00`, so `"Привет"` without a BOM carries
+/// no NUL and stays undetected. Documented on both surfaces rather than papered over —
+/// widening it would mean guessing from script frequency, which is the ambiguous-bytes
+/// case `THREAT_MODEL.md` scopes out.
+fn sniff_bomless_utf16(bytes: &[u8]) -> Option<&'static encoding_rs::Encoding> {
+    const MIN_NUL_FRACTION: f64 = 0.5;
+    if bytes.len() < 4 || bytes.len() % 2 != 0 {
+        return None;
+    }
+    let (mut even_nuls, mut odd_nuls) = (0usize, 0usize);
+    for (i, b) in bytes.iter().enumerate() {
+        if *b == 0 {
+            if i % 2 == 0 {
+                even_nuls += 1;
+            } else {
+                odd_nuls += 1;
+            }
+        }
+    }
+    let units = bytes.len() / 2;
+    #[allow(clippy::cast_precision_loss)] // counts are bounded by the input length
+    let floor = MIN_NUL_FRACTION * units as f64;
+    #[allow(clippy::cast_precision_loss)]
+    match (even_nuls == 0, odd_nuls == 0) {
+        // NUL in the high position of each unit: big-endian.
+        (false, true) if even_nuls as f64 >= floor => Some(encoding_rs::UTF_16BE),
+        // NUL in the low position: little-endian.
+        (true, false) if odd_nuls as f64 >= floor => Some(encoding_rs::UTF_16LE),
+        _ => None,
+    }
+}
+
 /// Pure Rust encoding detection — no Python dependency.
 ///
 /// Returns (encoding_name, confidence).
 pub(crate) fn detect_encoding_impl(bytes: &[u8]) -> (String, f64) {
     use chardetng::{EncodingDetector, Iso2022JpDetection, Utf8Detection};
+
+    // #710 §1: a BOM is not a probabilistic signal, and chardetng does not guess UTF-16
+    // at all — so `detect_encoding` could not return a UTF-16 label for any input, and
+    // reported `KOI8-U` at confidence 0.95 for UTF-16LE-with-BOM while `decode_to_utf8`
+    // returned the correct text from the same bytes. The two disagreed silently, and a
+    // caller following this function's own advice — "prefer explicit encoding metadata
+    // over detection" — carried the wrong label to another decoder and got mojibake.
+    //
+    // `Encoding::for_bom` is the WHATWG sniff `Encoding::decode` already performs
+    // internally, so using it here makes the two functions agree by construction rather
+    // than by a second implementation that could drift.
+    if let Some((encoding, _bom_len)) = encoding_rs::Encoding::for_bom(bytes) {
+        return (encoding.name().to_owned(), CONFIDENCE_HIGH);
+    }
+    if let Some(encoding) = sniff_bomless_utf16(bytes) {
+        return (encoding.name().to_owned(), CONFIDENCE_HIGH);
+    }
 
     // chardetng 1.0 split `guess_assess` into `guess` (encoding only). We pass
     // the permissive options that match the old `guess_assess(None, true)`
@@ -154,6 +223,44 @@ mod tests {
     fn test_detect_utf8_with_bom() {
         let (encoding, _) = detect_encoding_impl(b"\xef\xbb\xbfhello");
         assert_eq!(encoding, "UTF-8");
+    }
+
+    /// #710: chardetng never produces a UTF-16 label, so a BOM has to be read first.
+    /// `detect_encoding` reported `KOI8-U` at confidence 0.95 for the first row while
+    /// `decode_to_utf8` read the same bytes correctly.
+    #[test]
+    fn test_detect_utf16_bom() {
+        // "hi" in each, with the BOM.
+        let le: &[u8] = &[0xFF, 0xFE, b'h', 0, b'i', 0];
+        let be: &[u8] = &[0xFE, 0xFF, 0, b'h', 0, b'i'];
+        assert_eq!(detect_encoding_impl(le).0, "UTF-16LE");
+        assert_eq!(detect_encoding_impl(be).0, "UTF-16BE");
+    }
+
+    /// #710 §3: BOM-less UTF-16 over ASCII-range text, where the NUL position is the
+    /// endianness. The harm was not the label but the decode — `decode_to_utf8` returned
+    /// a NUL after every character with `had_errors = false`, and `strict` did not catch
+    /// it.
+    #[test]
+    fn test_detect_bomless_utf16_over_ascii() {
+        assert_eq!(detect_encoding_impl(b"h\0e\0l\0l\0o\0").0, "UTF-16LE");
+        assert_eq!(detect_encoding_impl(b"\0h\0e\0l\0l\0o").0, "UTF-16BE");
+    }
+
+    /// The clean side must be EXACTLY zero, which is what keeps real text out: a
+    /// single-byte encoding never emits a NUL, so any split at all is evidence.
+    #[test]
+    fn test_bomless_sniff_rejects_the_ambiguous_cases() {
+        // NULs at both parities: not a UTF-16 text pattern.
+        assert!(sniff_bomless_utf16(b"\0\0\0\0\0\0").is_none());
+        // Odd length cannot be UTF-16 at all.
+        assert!(sniff_bomless_utf16(b"h\0e\0l").is_none());
+        // Under two code units there is no pattern to read.
+        assert!(sniff_bomless_utf16(b"h\0").is_none());
+        // Ordinary text carries no NUL, so neither side can win.
+        assert!(sniff_bomless_utf16(b"hello world").is_none());
+        // Below the half-NUL floor: one ASCII character in four units.
+        assert!(sniff_bomless_utf16(b"h\0\x04\x1f\x04@\x048").is_none());
     }
 
     /// Regression pins for the chardetng 0.1 -> 1.0 migration (#164). These

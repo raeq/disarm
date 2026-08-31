@@ -248,18 +248,6 @@ pub(crate) fn is_suspicious_hostname_opts(
     hostname: &str,
     contractions: bool,
 ) -> (bool, HostnameAnalysis) {
-    // #709: read the compatibility forms off the RAW input. The NFKC below is what makes
-    // the rest of this analysis work — every later field is computed from `normalized` —
-    // and it is also what erases the evidence: by the per-label checks `ｇoogle` is
-    // already `google`, `is_confusable` correctly returns false, and nothing reports what
-    // the mapping ate. `analysis.canonical` differing from the input was the analysis
-    // proving to itself that a fold happened while `suspicious` said clean.
-    //
-    // ACE labels are pure ASCII and so are NFKC-stable by construction; a compatibility
-    // form smuggled inside punycode is caught by the UTS #46 decode below, which rejects
-    // DISALLOWED code points outright.
-    let mut compat_fold = has_compat_form(hostname);
-
     // NFKC is still applied for the IPv6-literal test below, which is a *structural*
     // question (does this parse as `[::1]`) that fullwidth digits and colons can dress
     // up. It is deliberately NOT applied to the labels: see `is_label_separator`.
@@ -296,6 +284,13 @@ pub(crate) fn is_suspicious_hostname_opts(
     let mut has_mixed = false;
     let mut has_confusables = false;
     let mut has_invisible = false;
+    // #709: read off the RAW label, inside the loop. Every other field is computed after
+    // the UTS #46 mapping and the NFKC, which is what makes them work and also what erases
+    // this evidence: by the per-label checks `ｇoogle` is already `google`,
+    // `is_confusable` correctly returns false, and nothing reports what the mapping ate.
+    // `analysis.canonical` differing from the input was the analysis proving to itself
+    // that a fold had happened while `suspicious` said clean.
+    let mut compat_fold = false;
     let mut decoded_labels: Vec<String> = Vec::new();
     let mut per_label_scripts: Vec<Vec<String>> = Vec::new();
     let mut per_label_wsc: Vec<bool> = Vec::new();
@@ -332,7 +327,22 @@ pub(crate) fn is_suspicious_hostname_opts(
         // covers both spellings and the ACE/literal branch disappears. A malformed
         // label cannot be verified → fail closed, as the ACE branch already did. On
         // error the raw label is kept instead of the best-effort mapping; see below.
+        // #709: per *label*, not over the whole hostname. Three of the four UTS #46
+        // separators carry a compatibility decomposition — `U+FF0E` and `U+FF61` do,
+        // `U+3002` does not — so a whole-string scan reported `example．com` suspicious
+        // and `example。com` clean, for two spellings of one host. A separator is
+        // structure, not label content, and RFC 5892 §2.1 is a statement about what may
+        // appear *in a label*.
         //
+        // Read before the mapping for the same reason it is read before NFKC: UTS #46
+        // maps the compatibility repertoire away (or rejects it as DISALLOWED), so a
+        // check placed after it can never fire. An ACE label is pure ASCII and so
+        // NFKC-stable by construction; a compatibility form smuggled inside punycode is
+        // caught by the decode below, which rejects DISALLOWED code points outright.
+        if has_compat_form(raw_label) {
+            compat_fold = true;
+        }
+
         // The invisible strip below runs FIRST, on the raw label, because UTS #46 gives
         // ZWSP, the word joiner, U+FEFF, U+180E and the variation selectors the IGNORED
         // disposition: the mapping deletes them silently, and mapping before the check
@@ -352,11 +362,6 @@ pub(crate) fn is_suspicious_hostname_opts(
             label = label.nfkc().collect();
         } else {
             label = mapped.nfkc().collect();
-        }
-        // A compatibility form can also arrive inside punycode, where the raw-input scan
-        // above cannot see it: the ACE label is pure ASCII.
-        if has_compat_form(&label) {
-            compat_fold = true;
         }
         // Second pass: a punycode label can decode into an invisible the raw scan above
         // could not see.

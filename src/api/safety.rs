@@ -513,6 +513,10 @@ pub struct HostnameAnalysis {
     /// evidence: before #709 `ｇoogle.com` reached the per-label checks already spelled
     /// `google.com`, so [`has_confusables`](Self::has_confusables) was correctly `false`
     /// and nothing reported what the mapping had eaten.
+    ///
+    /// Read per **label**, not over the whole hostname: three of the four UTS #46 label
+    /// separators carry a compatibility decomposition (`U+FF0E` and `U+FF61` do, `U+3002`
+    /// does not), and a separator is structure rather than label content.
     pub compat_fold: bool,
     /// Whether the labels resolve to more than one distinct script (Common /
     /// Inherited excluded). Broader and noisier than [`bidi_conflict`](Self::bidi_conflict)

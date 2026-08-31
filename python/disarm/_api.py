@@ -1441,9 +1441,13 @@ def is_suspicious_hostname(
       rather than a lookalike: ``ｅvil.com`` is absent from a blocked set, screens
       clean, and resolves to ``evil.com``. Tested per character rather than "NFKC
       changed the label", which would fire on decomposed input that is entirely
-      valid (``한국.kr`` written with conjoining jamo). This is the one field read
-      from the **raw** input — every other field is computed after normalization,
-      which is what makes them work and also what erases this evidence.
+      valid (``한국.kr`` written with conjoining jamo). Read per **label**, not over
+      the whole hostname: three of the four UTS #46 label separators carry a
+      compatibility decomposition (``U+FF0E`` and ``U+FF61`` do, ``U+3002`` does
+      not), and a separator is structure rather than label content. This is the one
+      field read from the **raw** input — every other field is computed after
+      normalization, which is what makes them work and also what erases this
+      evidence.
     - ``cross_label_script``: bool — True if the labels span more than one
       distinct script. Broader and noisier than ``bidi_conflict`` (it fires on
       benign IDN ccTLDs like ``google.рф``), so it is **not** folded into

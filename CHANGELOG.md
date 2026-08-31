@@ -224,6 +224,10 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   the IGNORED disposition — the mapping deletes them silently, so a check placed only
   after it can never fire on a literal spelling, and a punycode label can decode into one.
 
+  `compat_fold` is read per **label**, not over the whole hostname: three of the four
+  UTS #46 separators carry a compatibility decomposition (`U+FF0E` and `U+FF61` do,
+  `U+3002` does not), and a separator is structure rather than label content.
+
   `compat_fold` is surfaced on Python, Node, Ruby, Java/Kotlin and the C ABI (#549, #553).
   The Ruby tuple's last two fields are now a nested pair: magnus implements `IntoValue` for
   tuples up to arity 12, and this was the thirteenth. The hash `analyze_hostname` returns

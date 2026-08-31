@@ -163,6 +163,13 @@ def test_label_separators_are_the_uts46_set() -> None:
     exactly what pre-empted the mapping. The separators are now handled directly.
     """
     for sep in (".", "．", "。", "｡"):
-        _, d = is_suspicious_hostname(f"example{sep}com")
+        suspicious, d = is_suspicious_hostname(f"example{sep}com")
         assert d.label_scripts == [["Latin"], ["Latin"]], sep
         assert d.canonical == "example.com", sep
+        # A separator is structure, not label content. Three of the four carry a
+        # compatibility decomposition (`．` and `｡` do, `。` does not), so a whole-string
+        # `compat_fold` scan reported `example．com` suspicious and `example。com` clean —
+        # two spellings of one host, two verdicts. RFC 5892 §2.1 is a statement about what
+        # may appear *in a label*.
+        assert not d.compat_fold, sep
+        assert not suspicious, sep

@@ -78,7 +78,9 @@ FLOOR = frozenset(
     }
 )
 
-#: The four rows this gate exists for. Kept separate so a failure names the issue.
+#: The three matrix rows this gate exists for, kept separate so a failure names the
+#: issue. P21 closed four gaps; the fourth was `LANG_AUTO`, a Python-only export that
+#: the parity matrix does not model — `tests/test_lang_constant_exports.py` holds it.
 CLOSED_IN_P21 = {
     "strip_format": ("node", "ruby", "cabi", "java", "kotlin"),
     "sanitize_filename": ("cabi",),

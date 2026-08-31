@@ -330,11 +330,13 @@ fn demojize(text: Wtf8Text, strip_modifiers: bool) -> String {
 
 /// Strip the non-interchange and invisible classes while KEEPING the script (#698).
 ///
-/// The seven universal `strip*` primitives cannot be composed into this. Its invisibles
-/// policy is a private constant, and the chain is strictly more destructive than the
-/// preset: it removes PUA, the presentation variation selectors `U+FE0E`/`U+FE0F` after a
-/// base, and TAB/LF, none of which `Disarm.strip_format` touches. So a caller on this binding had
-/// no way to reach the behaviour at all, not merely no convenience wrapper.
+/// The seven universal `strip*` primitives cannot be composed into this, and the
+/// difference runs in both directions. `strip_format` is *less* destructive where
+/// rendering matters — it preserves the Private Use Area for icon fonts and keeps the
+/// VS15/VS16 presentation selectors after a base (`RENDERING_STRIP`), both of which the
+/// naive chain deletes — and *more* destructive with whitespace, because it ends in
+/// `CollapseWs` and folds TAB/LF to a space where the primitives leave them. The policy
+/// itself is a private constant, so a caller on this binding could not express it at all.
 ///
 /// Unlike `canonicalize` it does NOT fold confusables, so non-Latin text keeps its script
 /// — the point of the preset.

@@ -145,8 +145,9 @@ fun String.canonicalizeStrict(): String = JDisarm.canonicalizeStrict(this)
 
 /**
  * Strip the non-interchange and invisible classes while keeping the script. Folds no
- * confusables, so non-Latin text survives as itself; not composable from the universal
- * `strip*` extensions.
+ * confusables, so non-Latin text survives as itself. Not composable from the universal
+ * `strip*` extensions, and the difference runs both ways: this keeps the private-use area
+ * and the VS15/VS16 presentation selectors after a base, and it collapses TAB/LF.
  */
 fun String.stripFormat(): String = JDisarm.stripFormat(this)
 

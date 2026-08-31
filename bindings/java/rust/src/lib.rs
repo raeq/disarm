@@ -745,9 +745,11 @@ pub fn stripObfuscation<'l>(
 
 /// Strip the non-interchange and invisible classes while keeping the script (#698).
 ///
-/// Not composable from the seven universal `strip*` primitives: the invisibles policy is
-/// a private constant and the chain is strictly more destructive (PUA, `U+FE0E`/`U+FE0F`
-/// after a base, TAB/LF). Infallible.
+/// Not composable from the seven universal `strip*` primitives, and the difference runs
+/// both ways: this preserves the Private Use Area and the VS15/VS16 presentation
+/// selectors after a base (`RENDERING_STRIP`), which the naive chain deletes, and it
+/// collapses TAB/LF where the primitives leave them. The policy is a private constant.
+/// Infallible.
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripFormat<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> JObject<'l> {
     map_str(env, input, |t| api::strip_format(t).into_owned())

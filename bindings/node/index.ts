@@ -407,9 +407,10 @@ export function canonicalizeStrict(text: string): string {
  * Strip the non-interchange and invisible classes while KEEPING the script.
  *
  * Unlike {@link canonicalize} it folds no confusables, so non-Latin text survives as
- * itself. It cannot be rebuilt from the seven universal `strip*` functions: the invisibles
- * policy is internal, and this also removes private-use characters, the presentation
- * variation selectors after a base, and TAB/LF. Infallible.
+ * itself. It cannot be rebuilt from the seven universal `strip*` functions, and the
+ * difference runs both ways: this preserves the Private Use Area (icon fonts) and keeps
+ * the VS15/VS16 presentation selectors after a base, which the naive chain deletes, and
+ * it collapses TAB/LF to a space, which the primitives leave alone. Infallible.
  */
 export function stripFormat(text: string): string {
   return native.stripFormat(text)

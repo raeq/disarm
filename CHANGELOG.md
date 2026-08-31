@@ -63,10 +63,11 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 - **The gaps the parity matrix found, on the surfaces that had them (#698, #707, #677,
   #660).** `strip_format` reached only Rust and Python: the seven universal `strip*`
-  primitives cannot be composed into it, because its invisibles policy is a private
-  constant and the chain is strictly more destructive (PUA, `U+FE0E`/`U+FE0F` after a
-  base, TAB/LF). A caller on Node, Ruby, the C ABI or the JVM had no route to the
-  behaviour at all. It is now on all seven. `sanitize_filename` — the one entry point
+  primitives cannot be composed into it: its invisibles policy is a private constant, and
+  the difference from a naive chain runs in both directions — `strip_format` preserves the
+  Private Use Area and the `U+FE0E`/`U+FE0F` presentation selectors after a base, which
+  the chain deletes, and it collapses TAB/LF, which the chain leaves alone. A caller on
+  Node, Ruby, the C ABI or the JVM had no route to the behaviour at all. It is now on all seven. `sanitize_filename` — the one entry point
   whose whole purpose is a filesystem sink, and where transliteration neutralizes 19 of
   the 53 vectors in the attacker battery rather than the denylist (#601) — was missing
   from the C ABI, the surface most likely to be feeding one. `canonicalize_strict`, the

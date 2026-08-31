@@ -4,6 +4,7 @@ import unicodedata
 
 import pytest
 
+import disarm
 from disarm import (
     DisarmError,
     Text,
@@ -686,13 +687,20 @@ class TestSecurityCleanZalgoCap:
 
     def test_caps_zalgo_stacking(self):
         zalgo = "a" + "".join(chr(c) for c in range(0x0300, 0x0310))  # 'a' + 16 marks
-        # capped to <= 2 (one acute composes onto 'a', leaving one combining mark)
-        assert self._marks(canonicalize(zalgo)) <= 2
+        # Capped to <= 3 since #788: the cap equals `is_zalgo`'s threshold, so the
+        # transform never strips from text the predicate calls ordinary. 16 marks is far
+        # above the threshold and is still cut — the bound moved by one, it did not go.
+        assert self._marks(canonicalize(zalgo)) <= 3
+        assert disarm.is_zalgo(zalgo), "the input must be above the threshold to be cut"
 
     def test_legitimate_diacritics_preserved(self):
-        # <= 2 marks per base is preserved — accent-preserving, no transliteration.
+        # <= 3 marks per base is preserved — accent-preserving, no transliteration.
         assert canonicalize("café") == "café"  # 1 mark in NFD
         assert canonicalize("Việt") == "Việt"  # ệ = 2 marks in NFD
+        # 3 marks, and ordinary: pointed Hebrew, the case #788 is about.
+        hebrew = "\u05d0\u05b8\u05c1\u0591"
+        assert self._marks(canonicalize(hebrew)) == 3
+        assert not disarm.is_zalgo(hebrew)
 
     def test_matches_normalize_user_input_cap(self):
         zalgo = "Z" + "\u0301" * 8

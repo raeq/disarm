@@ -22,9 +22,23 @@ use unicode_normalization::UnicodeNormalization;
 pub(crate) const DEFAULT_THRESHOLD: usize = 3;
 
 /// Default cap for `strip_zalgo`: keep at most this many combining marks per
-/// base character.  Set to 2 to preserve all legitimate diacritics (including
-/// Vietnamese double-stacked marks) while stripping anything beyond that.
-pub(crate) const DEFAULT_MAX_MARKS: usize = 2;
+/// base character.
+///
+/// **Equal to [`DEFAULT_THRESHOLD`] on purpose (#788).** It was 2 while the threshold
+/// was 3, so the library stripped from text it had just declined to call suspicious:
+/// `is_zalgo("\u05d0\u05b8\u05c1\u0591")` is `false` — pointed and cantillated
+/// Hebrew routinely puts a vowel, a dot and an accent on one consonant — and
+/// `strip_zalgo` removed the accent anyway.
+///
+/// The two constants must move together, and the direction is forced. Lowering the
+/// threshold to 2 would make `is_zalgo` call ordinary Torah text zalgo; raising the cap
+/// to 3 makes the transform act only on what the predicate flags. #429 set the cap to
+/// preserve legitimate diacritics, and 3-mark Hebrew is legitimate — so this serves
+/// that decision rather than reversing it.
+///
+/// `tests/test_zalgo_cap.py` holds the invariant: `strip_zalgo(s) == s` for every `s`
+/// where `is_zalgo(s)` is false.
+pub(crate) const DEFAULT_MAX_MARKS: usize = DEFAULT_THRESHOLD;
 
 /// Streaming check: does any base character carry **more than** `threshold`
 /// consecutive combining marks in NFD form?

@@ -208,6 +208,33 @@ Multilingual datasets may require per-language normalization strategies. Languag
 
 Normalization depends on the version of the `unicode-normalization` Rust crate compiled into the library. Different Unicode versions may normalize certain characters differently, particularly for recently added scripts.
 
+## Combining Marks
+
+### `strip_zalgo`'s cap is a bound on real orthography, not only on abuse
+
+`strip_zalgo` keeps at most three combining marks per base character, and `is_zalgo`
+flags a base carrying more than three. Those two figures are equal on purpose (#788):
+before they were 2 and 3, so the library removed a mark from text it had just declined to
+call suspicious.
+
+The bound still exists, and it is worth knowing where it bites. Three marks is the normal
+case in several scripts, not the pathological one:
+
+- Pointed and cantillated **Hebrew** routinely puts a vowel, a dot and an accent on one
+  consonant — Torah text, siddurim, learner materials.
+- **Arabic** with shadda, a short vowel and sukun on one letter.
+- **Bengali, Myanmar and Sinhala** clusters carrying a nukta, a vowel sign and an
+  anusvara. Measured over the key-stability corpus, this was the largest affected group:
+  the old cap truncated `ইয়াং` to `ইয়া`.
+
+A fourth mark on one base is still removed, and that is a deliberate bound rather than a
+detection: `strip_zalgo` does not ask which script it is in. If you process text where
+four marks on one base is ordinary, pass a higher `max_marks` — the parameter exists for
+exactly that, and `is_zalgo`'s `threshold` is its counterpart.
+
+The preset that strips *every* mark is `ml_normalize`, whose cap is `0` by design and is
+unaffected by the default.
+
 ## Case Folding
 
 ### Default (non-Turkic) folding only

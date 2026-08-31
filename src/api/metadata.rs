@@ -130,7 +130,11 @@ pub fn unicode_version() -> &'static str {
 /// ```
 /// assert!(disarm::api::KEY_SCHEMA_VERSION >= 1);
 /// ```
-pub const KEY_SCHEMA_VERSION: u32 = 1;
+/// Bumped to 2 by #788: raising `strip_zalgo`'s cap to match `is_zalgo`'s threshold
+/// moved `canonicalize` and `canonicalize_strict` on 351 and 340 of the 22,878
+/// key-stability rows. Nothing lost a mark — every moved row is text the old cap had
+/// been truncating.
+pub const KEY_SCHEMA_VERSION: u32 = 2;
 
 /// The key-schema counter, as a function (#645).
 ///

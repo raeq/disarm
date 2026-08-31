@@ -4,7 +4,7 @@
 //! release is not restated here — [`CONFUSABLES_VERSION`] carries it, parsed from the
 //! TSV header by build.rs so there is exactly one place it can be wrong (#560).
 //!
-//! Contains 2,220 non-Latin → Latin mappings and 1,349 non-Cyrillic →
+//! Contains 2,273 non-Latin → Latin mappings and 1,349 non-Cyrillic →
 //! Cyrillic mappings. Uses compile-time perfect hash maps (`phf`) for O(1)
 //! lookups. Covers Cyrillic, Greek, Armenian, Georgian, CJK compatibility,
 //! mathematical symbols, fullwidth forms, and other confusable characters.

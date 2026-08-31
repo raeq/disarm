@@ -302,7 +302,69 @@ ASCII_FOLD: dict[str, str] = {
     # (#245); #341 makes ASCII the contract. (Σ folds to S via the Lu case rule.)
     "Ʃ": "s",  # LATIN CAPITAL LETTER ESH — sigma/summation class (#341)
     "Ɒ": "a",  # LATIN CAPITAL LETTER TURNED ALPHA
+    # #801: three more prototypes in the same "chosen by visual shape" class as the
+    # block above. Each is corroborated by the target the *capital* of the same
+    # upstream class already carries here, so the choice is read off the table rather
+    # than off my eye: `\u041c` М → `M` fixes `\u028d` ʍ → `m`, `\u0417` З → `3` fixes
+    # `\u025c` ɜ → `3`, and `\u2c9c` Ⲝ → `3` fixes `\u0293` ʓ → `3`. Without them the
+    # lowercase halves (`\u043c` м, `\u0437` з, `\u2c9d` ⲝ) stay unfolded while their
+    # capitals fold, which is the asymmetry #801 is about.
+    "ʍ": "m",  # LATIN SMALL LETTER TURNED W — turned-letter shape, as Ʌ→a above
+    "ɜ": "3",  # LATIN SMALL LETTER REVERSED OPEN E
+    "ʓ": "3",  # LATIN SMALL LETTER EZH WITH CURL
 }
+
+
+def _small_capital_folds() -> dict[str, str]:
+    """`LATIN LETTER SMALL CAPITAL X` → `x`, derived from the character's UCD name.
+
+    TR39's prototype for several Cyrillic homoglyph classes is a Latin **small
+    capital**, not the ASCII letter: `\u0442` т maps to `\u1d1b` ᴛ, `\u043d` н to
+    `\u029c` ʜ. Those prototypes are Latin, so `filter_direct` keeps them, and then
+    the ASCII-only table contract drops the row — which is how the classic Cyrillic
+    homoglyphs came to have a mapping on the capital and none on the lowercase (#801).
+
+    Derived from `Name`, not enumerated: a future `confusables.txt` that routes a new
+    class through a small capital is covered without an edit here. The shape is a
+    letter-for-letter identity — `\u1d1b` ᴛ *is* a T — so there is no visual judgment
+    to make, unlike the entries above.
+    """
+    out: dict[str, str] = {}
+    # `unicodedata.name` directly rather than a backfilled accessor: every small
+    # capital has been assigned since Unicode 4.0, so no interpreter this generator
+    # runs on reads one as `Cn`, and `UCD_BACKFILL` carries no names to fall back to.
+    for cp in range(0x110000):
+        name = unicodedata.name(chr(cp), "")
+        if not name.startswith("LATIN LETTER SMALL CAPITAL "):
+            continue
+        rest = name[len("LATIN LETTER SMALL CAPITAL ") :]
+        if len(rest) == 1 and "A" <= rest <= "Z":
+            out[chr(cp)] = rest.lower()
+    return out
+
+
+def _close_under_case(fold: dict[str, str]) -> dict[str, str]:
+    """Give every entry's case pair the same ASCII letter (#801).
+
+    `ASCII_FOLD` was itself case-asymmetric in fourteen of thirty-two entries — it
+    carried `\u0186` Ɔ but not `\u0254` ɔ, `\u01a8` ƨ but not `\u01a7` Ƨ. That is the
+    same defect as the one this closure exists to fix, one layer up: the capital
+    resolved to ASCII and the lowercase it case-folds to did not, so a case fold
+    converged both spellings onto the unmapped side.
+
+    Derived, and deliberately so — the pair inherits the letter its partner was
+    already given, so closing the set introduces no new visual judgment. An explicit
+    entry always wins; this only fills gaps.
+    """
+    out = dict(fold)
+    for source, target in fold.items():
+        for pair in (source.lower(), source.upper()):
+            if len(pair) == 1 and pair != source:
+                out.setdefault(pair, target)
+    return out
+
+
+ASCII_FOLD = _close_under_case({**_small_capital_folds(), **ASCII_FOLD})
 
 
 # ---------------------------------------------------------------------------
@@ -570,9 +632,17 @@ def filter_direct(
         if 0x0030 <= source_cp <= 0x0039:
             continue
         cleaned_cps = strip_combining(target_cps)
-        if not all(is_target_or_common(cp) for cp in cleaned_cps):
-            continue
         target_str = "".join(chr(cp) for cp in cleaned_cps)
+        # #801: resolve the prototype through `ASCII_FOLD` BEFORE the script gate, not
+        # after. Membership in that map is itself the assertion that the prototype is a
+        # Latin letter with an ASCII representative, so gating it on `is_target_or_common`
+        # — a list of block ranges — rejects rows the map already answers for. `\u1d1b` ᴛ
+        # sits in Phonetic Extensions, which no range on that list covers, so `\u0442` т →
+        # `\u1d1b` ᴛ was dropped while `\u0422` Т → `T` was kept: the capital folded to
+        # Latin and the lowercase it case-folds to did not.
+        target_str = ASCII_FOLD.get(target_str, target_str)
+        if not all(is_target_or_common(ord(ch)) for ch in target_str):
+            continue
         if not target_str.strip():
             continue
         # #593: ASCII-fold before reconciling case, for the same reason as
@@ -581,7 +651,7 @@ def filter_direct(
         # `generate_mappings` because that only fires on a single character. That is how
         # Cherokee YE (U+13F0), a B-shape, came out as `SS` in a table about *visual*
         # confusability. Blast radius measured: this row and no other.
-        target_str = fix_case_mismatch(source_cp, ASCII_FOLD.get(target_str, target_str))
+        target_str = fix_case_mismatch(source_cp, target_str)
         guarded = enforce_digit_target(source_cp, target_str)
         if guarded is None:
             continue

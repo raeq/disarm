@@ -2053,9 +2053,17 @@ REGISTRY: tuple[CVE, ...] = (
         cvss_version="v3.0",
         dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("strip_obfuscation", "catalog_key", "strip_zalgo"),
+        # `has_bidi_conflict` was listed here until #773. It fired because
+        # `strong_dir` resolved direction from a script-name lookup, and U+0651
+        # ARABIC SHADDA sits in the Arabic block — so a combining mark read as a
+        # strong RTL *letter*. Its `Bidi_Class` is `NSM`, which UAX #9 rule W1 gives
+        # the direction of the preceding character: after Latin `a` it is L, and no
+        # conflict exists. The detection was an artifact of the approximation.
+        #
+        # The row's coverage is unchanged. This is a mixed-script signal, not a bidi
+        # one, and the three detectors that remain all still fire on the vector.
         detectors=(
             "has_anomalies",
-            "has_bidi_conflict",
             "is_mixed_script",
             "is_suspicious_hostname",
         ),
@@ -2900,7 +2908,15 @@ class TestDetectionHasNoSuperset:
             # a strong-RTL character beside Latin letters, which is exactly the
             # question has_bidi_conflict asks. It reads zero on every Trojan
             # Source row, which is the point made in TestTrojanSourceBidi.
-            "has_bidi_conflict": 1,
+            # 0 since #773. It covered CVE-2017-7833 only because `strong_dir`
+            # read U+0651 ARABIC SHADDA — a combining mark, `Bidi_Class` NSM — as a
+            # strong RTL letter, on the strength of the Arabic block it sits in.
+            # Reading `Bidi_Class` properly removed that, and the row keeps its
+            # coverage from the three detectors that actually answer its question.
+            # A detector covering no row in this matrix is not a gap: the matrix is a
+            # spot check, and `has_bidi_conflict` now sees 2,962 R/AL code points
+            # where it used to see 1,222.
+            "has_bidi_conflict": 0,
             # Both cost rows: a DoS payload made of marks is a mark pile.
             "is_zalgo": 2,
         }, coverage

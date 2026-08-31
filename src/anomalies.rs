@@ -448,7 +448,7 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             // catches non-Latin RTL mixes (e.g. Cyrillic+Hebrew) the Latin-anchored
             // `mixed_script` rule below cannot see. Checked first so the more
             // specific kind wins.
-            if crate::scripts::has_bidi_conflict(core) {
+            if crate::scripts::has_bidi_letter_conflict(core) {
                 return Some(mk(AnomalyKind::BidiMixed, scripts.join(" and ")));
             }
             let has_latin = scripts.contains(&"Latin");

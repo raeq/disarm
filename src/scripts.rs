@@ -42,6 +42,7 @@ pub(crate) fn is_mixed_script(text: &str) -> bool {
 }
 
 include!(concat!(env!("OUT_DIR"), "/assigned_ranges.rs"));
+include!(concat!(env!("OUT_DIR"), "/bidi_strong_ranges.rs"));
 
 /// True if `cp` is an assigned code point in the bundled Unicode snapshot (#774).
 ///
@@ -333,42 +334,50 @@ pub(crate) fn detect_char_script(ch: char) -> &'static str {
     }
 }
 
-/// The scripts whose letters are strong **right-to-left** under the Unicode
-/// Bidirectional Algorithm (UAX #9): Hebrew/Syriac/Thaana/N'Ko are class `R`,
-/// Arabic is `AL`. For detecting a *direction conflict* the distinction between
-/// `R` and `AL` does not matter — both reorder against left-to-right text — so
-/// they are folded into a single `Rtl`.
-const RTL_SCRIPTS: &[&str] = &["Hebrew", "Arabic", "Syriac", "Thaana", "NKo"];
-
 /// Strong bidirectional direction of a character, for direction-conflict
 /// detection.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum StrongDir {
-    /// Strong left-to-right (UAX #9 `L`): letters of Latin, Cyrillic, Greek,
-    /// CJK, Indic, … — every named script that is not strong-RTL.
+    /// Strong left-to-right: `Bidi_Class` `L`, from the bundled UAX #9 table.
     Ltr,
-    /// Strong right-to-left (UAX #9 `R`/`AL`): letters of [`RTL_SCRIPTS`].
+    /// Strong right-to-left: `Bidi_Class` `R` or `AL`, from the bundled UAX #9 table.
     Rtl,
 }
 
-/// Resolve a character's strong bidi direction, or `None` for a bidi-neutral
-/// character (digits and numerics — UAX #9 `EN`/`AN` — plus all `Common` and
-/// `Inherited` punctuation, whitespace and combining marks).
+/// Resolve a character's strong bidi direction, or `None` when it has none.
 ///
-/// This is derived from disarm's own [`detect_char_script`] ranges — it is
-/// *script-level*, a deliberate, conservative approximation of the per-codepoint
-/// UAX #9 class and needs no external bidi table. Numerics are excluded first so
-/// that, e.g., Arabic-Indic digits (which live in the Arabic block but are bidi
-/// class `AN`) do not by themselves create a conflict.
+/// This is `Bidi_Class` itself, from the bundled UAX #9 snapshot: `L` is
+/// [`StrongDir::Ltr`], `R` and `AL` are [`StrongDir::Rtl`], and everything else —
+/// `EN`/`AN` digits, whitespace, the neutrals, the explicit formatting controls — has no
+/// strong direction and returns `None`.
+///
+/// It used to be a script-name lookup against a five-element `RTL_SCRIPTS` list, which
+/// answered a different question. 1,786 of the 3,018 assigned code points with
+/// `Bidi_Class` in {R, AL} resolved to no script at all, so they were bidi-neutral to
+/// disarm while reordering normally on screen — two entire Arabic blocks among them
+/// (#773).
+///
+/// The old form also excluded numerics explicitly, so that Arabic-Indic digits — which
+/// sit in the Arabic block but are `AN` — could not create a conflict by themselves. That
+/// special case is gone because it is no longer needed: `AN` is simply not a strong class.
+/// Digits that genuinely are `L`, such as the Devanagari ones, now resolve as `L`, which
+/// is what UAX #9 says they are.
 pub(crate) fn strong_dir(ch: char) -> Option<StrongDir> {
-    if ch.is_numeric() {
+    let cp = ch as u32;
+    let idx = match BIDI_STRONG_RANGES.binary_search_by(|&(start, _, _)| start.cmp(&cp)) {
+        Ok(i) => i,
+        Err(0) => return None,
+        Err(i) => i - 1,
+    };
+    let (_, end, class) = BIDI_STRONG_RANGES[idx];
+    if cp > end {
         return None;
     }
-    match detect_char_script(ch) {
-        "Common" | "Inherited" => None,
-        s if RTL_SCRIPTS.contains(&s) => Some(StrongDir::Rtl),
-        _ => Some(StrongDir::Ltr),
-    }
+    Some(if class == 1 {
+        StrongDir::Rtl
+    } else {
+        StrongDir::Ltr
+    })
 }
 
 /// True iff `text` contains at least one strong-left-to-right character **and**
@@ -394,9 +403,31 @@ pub(crate) fn strong_dir(ch: char) -> Option<StrongDir> {
 ///
 /// [`has_bidi_control`]: crate::scripts::has_bidi_control
 pub(crate) fn has_bidi_conflict(text: &str) -> bool {
+    bidi_conflict(text, false)
+}
+
+/// [`has_bidi_conflict`] restricted to strong-directional **letters** (#773).
+///
+/// The `bidi_mixed` anomaly kind has always described itself as "a single token mixing
+/// strong-LTR and strong-RTL *letters*", and while direction came from a script-name
+/// lookup it got that for free: `U+200F` RIGHT-TO-LEFT MARK is category `Cf`, resolved to
+/// script `Common`, and so had no direction. Reading `Bidi_Class` properly makes it strong
+/// `R`, which is what UAX #9 says it is — so the restriction the detector always meant now
+/// has to be stated rather than inherited from an approximation.
+///
+/// Whether the detector *should* spare a bare mark is #741's question, not this one. This
+/// keeps the documented behaviour exactly as it was.
+pub(crate) fn has_bidi_letter_conflict(text: &str) -> bool {
+    bidi_conflict(text, true)
+}
+
+fn bidi_conflict(text: &str, letters_only: bool) -> bool {
     let mut ltr = false;
     let mut rtl = false;
     for ch in text.chars() {
+        if letters_only && !ch.is_alphabetic() {
+            continue;
+        }
         match strong_dir(ch) {
             Some(StrongDir::Ltr) => ltr = true,
             Some(StrongDir::Rtl) => rtl = true,

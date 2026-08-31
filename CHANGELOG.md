@@ -45,6 +45,36 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed (breaking)
 
+- **Bidi direction now comes from `Bidi_Class`, not a five-name script list (#773).**
+  `strong_dir` resolved direction by looking a character's *script name* up in
+  `RTL_SCRIPTS = ["Hebrew", "Arabic", "Syriac", "Thaana", "NKo"]`. UAX #9 resolves it from
+  `Bidi_Class`, and the two answer different questions: **1,786 of the 3,018** assigned
+  code points with `Bidi_Class` in {R, AL} resolved to no script at all, so they were
+  bidi-neutral to disarm while reordering normally on screen. Two entire Arabic blocks
+  were among them, along with every astral RTL script — Cypriot, Phoenician, Kharoshthi,
+  Mende Kikakui, Old Turkic. All of them are now seen.
+
+  Two behaviour changes fall out, both toward UAX #9:
+
+  `has_bidi_conflict` now reports a bare `U+200F` RIGHT-TO-LEFT MARK, which is
+  `Bidi_Class` R. The `bidi_mixed` anomaly kind does **not** — it has always described
+  itself as mixing strong-directional *letters*, and got that for free while direction
+  came from a script lookup. That restriction is now stated rather than inherited from an
+  approximation. Whether the detector should spare a bare mark is #741's question.
+
+  A combining mark is no longer strong. `U+0651` ARABIC SHADDA is `Bidi_Class` NSM, which
+  UAX #9 rule W1 gives the direction of the preceding character; after Latin `a` that is
+  L. It used to read as strong-RTL because it sits in the Arabic block, which is why
+  `has_bidi_conflict` left CVE-2017-7833's detector list in
+  `docs/security/cve-validation.md`. That row's coverage is unchanged — the mark is a
+  mixed-script signal, and `has_anomalies`, `is_mixed_script` and `is_suspicious_hostname`
+  all still fire on it.
+
+  The explicit `is_numeric()` guard is gone with the list it protected. `AN` is simply not
+  a strong class, so Arabic-Indic digits are neutral without a special case — and the
+  guard was too broad, since Devanagari digits are `Bidi_Class` L and beside RTL text
+  genuinely are a conflict.
+
 - **The confusable fold no longer contradicts itself inside an uppercase block (#734).**
   `fix_case_mismatch` in `scripts/gen_confusables.py` gated on general category `Lu`, so
   two uppercase sources that are not `Lu` were never reconciled and kept TR39's lowercase

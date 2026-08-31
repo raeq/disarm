@@ -508,6 +508,50 @@ fn main() {
         &out_dir.join("assigned_ranges.rs"),
         "ASSIGNED_RANGES",
     );
+    // #773: UAX #9 strong direction, replacing a five-name script list.
+    generate_bidi_strong_ranges(
+        &data_dir.join("bidi_strong_ranges.tsv"),
+        &out_dir.join("bidi_strong_ranges.rs"),
+    );
+}
+
+/// Generate `BIDI_STRONG_RANGES: &[(u32, u32, u8)]` from `bidi_strong_ranges.tsv`.
+/// Class encoding: 0 = strong LTR (`Bidi_Class L`), 1 = strong RTL (`R` or `AL`). A code
+/// point absent from the table has no strong direction (#773).
+fn generate_bidi_strong_ranges(tsv_path: &Path, out_path: &Path) {
+    let content = fs::read_to_string(tsv_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", tsv_path.display()));
+    let mut rows: Vec<(u32, u32, u8)> = Vec::new();
+    for line in content.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let mut it = t.split('\t');
+        let start = parse_hex(it.next().unwrap_or(""), tsv_path);
+        let end = parse_hex(it.next().unwrap_or(""), tsv_path);
+        let class = match it.next().unwrap_or("") {
+            "L" => 0u8,
+            "R" => 1u8,
+            other => panic!("{}: unknown bidi class {other:?}", tsv_path.display()),
+        };
+        rows.push((start, end, class));
+    }
+    rows.sort_unstable();
+    let mut code = String::from("static BIDI_STRONG_RANGES: &[(u32, u32, u8)] = &[\n");
+    for (s, e, c) in &rows {
+        writeln!(
+            code,
+            "    (0x{:04X}_{:04X}, 0x{:04X}_{:04X}, {c}),",
+            s >> 16,
+            s & 0xFFFF,
+            e >> 16,
+            e & 0xFFFF
+        )
+        .unwrap();
+    }
+    code.push_str("];\n");
+    fs::write(out_path, code).unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));
 }
 
 /// Generate `WIDTH_RANGES: &[(u32, u32, u8)]` from `char_width.tsv`.

@@ -211,6 +211,15 @@ pub(crate) enum ErrorRepr {
         max: usize,
     },
 
+    /// NFKC expanded the input past the preset output cap (#768).
+    #[error("normalization expanded the input to {size} bytes, exceeding the {max} byte limit")]
+    NormalizeOutputTooLarge {
+        /// The produced size in bytes.
+        size: usize,
+        /// The maximum allowed.
+        max: usize,
+    },
+
     /// A registration mutation attempted after `seal_registrations()`.
     #[error(
         "{op}: registration tables are sealed (seal_registrations() was called); \
@@ -485,6 +494,7 @@ impl ErrorRepr {
             }
             ErrorRepr::BatchTooLarge { .. } => "batch_too_large",
             ErrorRepr::ReplacementOutputTooLarge { .. } => "replacement_output_too_large",
+            ErrorRepr::NormalizeOutputTooLarge { .. } => "normalize_output_too_large",
             ErrorRepr::Sealed { .. } => "sealed",
             ErrorRepr::RegisterLangLimit { .. } => "register_lang_limit",
             ErrorRepr::RegisterLangBadKeys { .. } => "register_lang_bad_keys",
@@ -599,6 +609,7 @@ impl From<ErrorRepr> for pyo3::PyErr {
             // ResourceLimitError — a configured limit was exceeded.
             ErrorRepr::BatchTooLarge { .. }
             | ErrorRepr::ReplacementOutputTooLarge { .. }
+            | ErrorRepr::NormalizeOutputTooLarge { .. }
             | ErrorRepr::RegisterLangLimit { .. }
             | ErrorRepr::RegisterReplacementsLimit { .. }
             | ErrorRepr::RegexTooLong { .. }
@@ -699,6 +710,7 @@ impl Error {
 
             ErrorRepr::BatchTooLarge { .. }
             | ErrorRepr::ReplacementOutputTooLarge { .. }
+            | ErrorRepr::NormalizeOutputTooLarge { .. }
             | ErrorRepr::RegisterLangLimit { .. }
             | ErrorRepr::RegisterReplacementsLimit { .. }
             | ErrorRepr::RegexTooLong { .. }

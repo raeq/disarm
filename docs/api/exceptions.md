@@ -54,6 +54,11 @@ A configured resource limit was exceeded.
 - A batch larger than the maximum batch size.
 - The registered-languages or replacements cap.
 - A `regex_pattern` over the byte limit, or `UniqueSlugifier` exhausting its attempts.
+- **Output** that expands past 10 MiB inside a preset — either through registered
+  replacements or through NFKC, which widens some code points by up to 18×. disarm does
+  not cap input size (that is the caller's to bound), and these two are the exceptions:
+  both amplify by an amount an input-size check cannot foresee. `normalize(form="NFKC")`
+  is deliberately not capped, because there the caller named the expansion.
 
 ### `UnsupportedError`
 A requested operation is not supported.

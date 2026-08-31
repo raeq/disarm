@@ -141,6 +141,21 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **NFKC amplification inside a preset is now bounded (#768).** `src/limits.rs` gives the
+  reason for its one output cap as *an amplification a caller's own input-size check cannot
+  foresee*. That is true of NFKC as well, and NFKC was not capped: `U+FDFA` ARABIC LIGATURE
+  SALLALLAHOU ALAYHE WASALLAM expands to 18 characters, so a caller who bounded input at
+  6 MB — the mitigation that comment assigns them — got **60 MB** out of `canonicalize`.
+
+  Every preset now raises `ResourceLimitError` above 10 MiB of produced output, reusing the
+  existing limit rather than introducing a second number. `normalize(text, form="NFKC")` is
+  deliberately **not** capped: there the caller named the operation whose expansion this is,
+  and bounding a function against what it was explicitly asked to do is a different
+  decision from bounding a preset that never mentions normalization in its name.
+
+  An expansion that stays under the ceiling still succeeds — 300,000 ligatures expand to
+  9 MB and are unaffected. The cap is on produced output, so ordinary text cannot reach it.
+
 - **An unassigned code point inherited its neighbour's script (#774).**
   `detect_char_script` resolves a script by binary-searching a curated table of **block**
   ranges, and a block has holes: `U+05EB` is unassigned inside the Hebrew block, `U+FDD0`

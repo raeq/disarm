@@ -45,8 +45,11 @@ def canonicalize(text: str) -> str:
     ``U+2044 FRACTION SLASH`` becomes ``/``, ``U+2216 SET MINUS`` becomes ``\``.
     232 code points reach ASCII by the fold alone, 76 of them producing one of
     ``: = % & ? # / \``. A string that carried no delimiter can leave here carrying
-    one — encode at the sink, and screen with `inspect_anomalies`, whose
-    ``confusable`` kind reports it.
+    one — encode at the sink.
+
+    `inspect_anomalies` reports it as ``confusable`` **when the word also carries an
+    ASCII letter**, which is #633's gate and what keeps ``Привет`` from firing. A
+    delimiter-only string such as ``∶∶∶`` folds to ``:::`` and is not reported.
 
     Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
     strip_control → strip_zero_width → collapse_whitespace → cap combining marks

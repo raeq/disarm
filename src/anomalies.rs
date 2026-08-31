@@ -865,8 +865,13 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
                 .chars()
                 .filter(|c| !c.is_ascii() && c.nfkc().all(|f| f.is_ascii()))
                 .collect();
+            // ALL, not ANY. With `any`, one fullwidth character exempted the whole word:
+            // `\u{1D41A}\u{FF41}` mixes a Mathematical Alphanumeric with a fullwidth `a`,
+            // folds to `aa`, and reported clean. The exemption reads "this word is
+            // ordinary text in a block where a whole-token spelling is ordinary" — a word
+            // drawing on two compatibility blocks is not that, whichever blocks they are.
             let spared =
-                !has_ascii_letter && compat.iter().copied().any(whole_token_compat_is_ordinary);
+                !has_ascii_letter && compat.iter().copied().all(whole_token_compat_is_ordinary);
             if !compat.is_empty() && !spared {
                 return Some(mk(AnomalyKind::CompatFold, tok.nfkc().collect::<String>()));
             }

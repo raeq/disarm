@@ -27,8 +27,11 @@ use crate::Error;
 /// RATIO` has no decomposition at all and becomes `:`, `U+2044 FRACTION SLASH` becomes
 /// `/`, `U+2216 SET MINUS` becomes `\`. 232 code points reach ASCII by the fold alone, 76
 /// of them producing one of `: = % & ? # / \`. So a string that carried no delimiter can
-/// leave here carrying one — encode at the sink, and screen with `inspect_anomalies`,
-/// whose `confusable` kind reports it.
+/// leave here carrying one — encode at the sink.
+///
+/// `inspect_anomalies` reports it as `confusable` — when the word also carries an ASCII
+/// letter, which is #633's gate and what keeps `Привет` from firing. A delimiter-only
+/// string such as `\u{2236}\u{2236}\u{2236}` folds to `:::` and is not reported.
 ///
 /// **Scoped to identifiers, not body text** (#624). The confusable fold runs
 /// toward Latin, so it rewrites non-Latin text that has a Latin lookalike: Arabic

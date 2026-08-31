@@ -269,7 +269,9 @@ public final class Disarm {
      * fold, which reaches characters NFKC leaves alone. {@code U+2236 RATIO} becomes
      * {@code :}, {@code U+2044 FRACTION SLASH} becomes {@code /}, {@code U+2216 SET
      * MINUS} becomes {@code \}. A string that carried no delimiter can leave here
-     * carrying one; {@code inspectAnomalies} reports it as {@code confusable}.
+     * carrying one. {@code inspectAnomalies} reports it as {@code confusable} <em>when the
+     * word also carries an ASCII letter</em>, which is the gate that keeps ordinary
+     * non-Latin text from firing; a delimiter-only string is not reported.
      */
     public static String canonicalize(String text) {
         return Native.canonicalize(req(text));

@@ -249,3 +249,36 @@ def test_the_two_locators_read_the_same_table_from_opposite_sides() -> None:
 
     assert find_unmapped_confusables("pɑypal") == []
     assert [ch for ch, _offset, _target in find_confusables("pɑypal")] == ["ɑ"]
+
+
+# ── the two findings from the review on #811 ─────────────────────────────────
+
+
+def test_two_compatibility_blocks_in_one_word_is_not_ordinary_text() -> None:
+    """The exemption was `any`, so one fullwidth character exempted the whole word.
+
+    `𝐚ａ` mixes a Mathematical Alphanumeric with a fullwidth `a`, folds to `aa`, and
+    reported clean. The exemption reads "this word is ordinary text in a block where a
+    whole-token spelling is ordinary" — a word drawing on two compatibility blocks is not
+    that, whichever blocks they are.
+    """
+    assert canonicalize("𝐚ａ") == "aa"
+    assert _kinds("𝐚ａ") == ["compat_fold"]
+    assert _kinds("ⓐａ") == ["compat_fold"]
+    # And each block alone still gets its own answer.
+    assert _kinds("𝐚𝐛") == ["compat_fold"]
+    assert not has_anomalies("ａｂ")
+
+
+def test_a_delimiter_only_string_is_not_reported() -> None:
+    """The ASCII-letter gate applies to the delimiter half too, and the docs now say so.
+
+    `∶∶∶` folds to `:::` — the fold does introduce delimiters — but with no ASCII letter
+    in the word there is nothing to disguise, and firing here would mean firing on every
+    non-Latin string whose characters fold.
+    """
+    assert canonicalize("∶∶∶") == ":::"
+    assert _kinds("∶∶∶") == []
+    # With a letter present it is reported, which is the contrast that makes the gate
+    # a scope rather than a hole.
+    assert _kinds("ord∶end") == ["confusable"]

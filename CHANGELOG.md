@@ -175,6 +175,21 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **The I/l/1 and O/0 prototype question has an answer, in one place (#646, #650).**
+  Three issues asked it from different directions and each re-argued it from scratch.
+  `docs/architecture/prototype-policy.md` records the decision: the class is in scope, it
+  belongs in a new key builder rather than on an existing one, the letter half is a
+  reasonable default there while the digit half is the caller's choice, and `digit_policy`
+  belongs on `Step::Confusables` rather than on one function's signature.
+
+  The load-bearing measurement is step order. Over 235,976 word-list entries, counting only
+  merges the class creates that case folding alone did not, it costs 6 groups applied
+  before a case fold and 264 applied after — a factor of 44. Every existing key builder is
+  in the expensive position, and `catalog_key` cannot be reordered because folding before
+  transliteration is what makes it idempotent (#419).
+
+  No behaviour change. The page is the design note #650 needs before it can be built.
+
 - **The graphemes comparison table contradicted its own page (#708).**
   `docs/user-guide/graphemes.md` said `नमस्ते` was 4 grapheme clusters. Four executed
   blocks on the same page assert 3, and 3 is correct. The cell is fixed, and the table

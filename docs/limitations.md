@@ -249,7 +249,7 @@ The fold is **case-symmetric where upstream gives evidence for it, and not other
 matters because UTS #46 case-folds every hostname label: without the rule, `Т.com` and
 `т.com` — the same registered domain — converged onto whichever spelling happened to be
 unmapped. Seven pairs stay asymmetric, each because the unmapped half's own upstream
-prototype belongs to another script (Greek `χ` and `λ`, Cyrillic `л`) or is a math symbol
+prototype belongs to another script (Greek `χ`, `λ` and `Γ`, Cyrillic `л`) or is a math symbol
 (`∂`). Folding those would be a transliteration decision rather than a homoglyph one, and
 transliteration is a different table.
 

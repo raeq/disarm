@@ -21,6 +21,7 @@ the asymmetry fails here instead of widening it — the shape #774 and #614 both
 from __future__ import annotations
 
 import pathlib
+import re
 import unicodedata
 
 import pytest
@@ -165,3 +166,80 @@ def test_the_cherokee_rows_this_also_closed() -> None:
     """
     for source, target in (("ꭰ", "d"), ("ꭱ", "r"), ("ꭲ", "t"), ("ᏼ", "b")):
         assert disarm.normalize_confusables(source) == target, source
+
+
+class TestTheProseAgreesWithTheGate:
+    """The counts in the docs and in `build.rs` must match what is actually enforced.
+
+    Three of these drifted inside one change: the CHANGELOG said six exempt pairs while
+    the gate asserted seven, `docs/limitations.md` listed two Greek prototypes where there
+    are three, and `build.rs` asserted 50 rows while its own panic message still said 49.
+    Every one is the same failure — a number written twice, checked once — and the second
+    copy is the one a reader trusts when the assertion trips.
+    """
+
+    def test_the_documented_exempt_count_matches_the_enforced_one(self) -> None:
+        """`seven` in the prose, `== 7` in the gate. One source of truth, two spellings."""
+        enforced = sum(
+            1
+            for source in MAPPED
+            if (pair := _pair(source)) is not None
+            and pair not in MAPPED
+            and _exempt(pair) == "upstream prototype is not a Latin letter"
+        )
+        words = {6: "six", 7: "seven", 8: "eight", 9: "nine"}
+        spelled = words.get(enforced)
+        assert spelled, f"add {enforced} to the spelling table"
+        # Scoped to the sentence, not the file. `seven` occurs in both documents for
+        # unrelated reasons — "the seven universal strip primitives" — so a whole-file
+        # `in` passes for the wrong reason, which is the failure
+        # `normalization_ucd_drift.rs` scopes to a row to avoid.
+        for path in (ROOT / "CHANGELOG.md", ROOT / "docs" / "limitations.md"):
+            text = path.read_text(encoding="utf-8").lower()
+            sentences = [
+                line
+                for line in re.split(r"(?<=[.])\s", text.replace("\n", " "))
+                if "asymmetric" in line and ("remain" in line or "pairs" in line)
+            ]
+            assert sentences, f"{path.name} has no sentence about the asymmetric pairs"
+            assert any(spelled in sentence for sentence in sentences), (
+                f"{path.name} does not say {spelled!r} where it counts the exempt pairs, "
+                f"but the gate enforces {enforced}.\n\nfound: {sentences}"
+            )
+
+    def test_every_exempt_prototype_script_is_named_in_the_prose(self) -> None:
+        """The Greek gamma was missing from limitations.md while the gate exempted it.
+
+        Derived from the exemptions themselves rather than from a list, so a future
+        refresh that exempts a new script fails here instead of leaving the page wrong.
+        """
+        prototypes = set()
+        for source in MAPPED:
+            pair = _pair(source)
+            if pair is None or pair in MAPPED:
+                continue
+            if _exempt(pair) != "upstream prototype is not a Latin letter":
+                continue
+            for char in PROTOTYPES.get(pair, ""):
+                if not unicodedata.category(char).startswith("M"):
+                    prototypes.add(char)
+        assert prototypes, "no exempt prototypes found — the derivation is broken"
+        page = (ROOT / "docs" / "limitations.md").read_text(encoding="utf-8")
+        missing = sorted(char for char in prototypes if char not in page)
+        assert not missing, (
+            f"docs/limitations.md exempts these prototypes without naming them: "
+            f"{[f'U+{ord(c):04X} {c}' for c in missing]}"
+        )
+
+    def test_the_build_gate_message_states_the_number_it_asserts(self) -> None:
+        """A panic message that names a stale count misdirects whoever it fires on."""
+        build = (ROOT / "build.rs").read_text(encoding="utf-8")
+        start = build.index("emoji_single.tsv ∩ confusables_to_latin.tsv changed")
+        block = build[max(0, start - 400) : start + 400]
+        asserted = re.search(r"overlap\.len\(\),\s*(\d+),", block)
+        assert asserted, "could not find the asserted overlap count in build.rs"
+        stated = re.search(r"expected the (\d+) rows", block)
+        assert stated, "the panic message does not state a row count"
+        assert asserted.group(1) == stated.group(1), (
+            f"build.rs asserts {asserted.group(1)} rows but its message says {stated.group(1)}"
+        )

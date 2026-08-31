@@ -496,11 +496,15 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   in fourteen of thirty-two entries, carrying `Ɔ` without `ɔ` and `ƨ` without `Ƨ`.
 
   44 rows added, none removed or re-pointed; the Latin table goes 2,220 → 2,273. Of the 30
-  pairs where upstream lists the lowercase and disarm dropped it, 24 are closed and 6
-  remain, every one because the pair's own upstream prototype is Greek, Cyrillic or a math
-  symbol — folding those needs a transliteration decision, not a homoglyph one.
-  `tests/test_confusable_case_pairs.py` asserts the rule against the table itself, so a
-  future refresh that reopens the asymmetry fails rather than widening it.
+  pairs where upstream lists the lowercase and disarm dropped it, 24 are closed. Seven
+  asymmetric pairs remain table-wide — the number the gate enforces — every one because
+  the unmapped half's own upstream prototype is Greek (`χ`, `λ`, `Γ`), Cyrillic (`л`) or a
+  math symbol (`∂`). Folding those needs a transliteration decision, not a homoglyph one.
+  (Six of the seven fall in the 30 above; the seventh runs the other way, a Cherokee
+  *lowercase* that is mapped while its capital is not, because that capital's prototype is
+  Greek gamma.) `tests/test_confusable_case_pairs.py` asserts the rule against the table
+  itself and pins that count, so a future refresh that reopens the asymmetry fails rather
+  than widening it.
 
   **This also closes #715.** Its 16 dropped Cherokee sources, `U+AB70` included, come back
   through the same mechanism, so the answer to "should they be folded" is yes, and it is

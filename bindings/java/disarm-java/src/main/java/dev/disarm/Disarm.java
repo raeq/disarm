@@ -261,6 +261,16 @@ public final class Disarm {
         return Native.stripObfuscation(req(text));
     }
 
+    /**
+     * Canonicalize text for security-sensitive comparison. Not an output sanitizer —
+     * encode at the sink.
+     *
+     * <p>Two steps introduce ASCII, not one (#719): the leading NFKC, and the confusable
+     * fold, which reaches characters NFKC leaves alone. {@code U+2236 RATIO} becomes
+     * {@code :}, {@code U+2044 FRACTION SLASH} becomes {@code /}, {@code U+2216 SET
+     * MINUS} becomes {@code \}. A string that carried no delimiter can leave here
+     * carrying one; {@code inspectAnomalies} reports it as {@code confusable}.
+     */
     public static String canonicalize(String text) {
         return Native.canonicalize(req(text));
     }

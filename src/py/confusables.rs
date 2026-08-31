@@ -42,6 +42,23 @@ pub fn _unmapped_confusables(target_script: &str) -> PyResult<Vec<String>> {
         .collect())
 }
 
+/// Scan `text` for the confusables the bundled table DOES fold, with their targets (#737).
+///
+/// The mirror of `_find_unmapped_confusables`: that one answers "what would survive the
+/// fold?" — exposure — and this one answers "what did the fold change, and to what?" —
+/// evidence. Returns `(char, byte_offset, target)` in order of appearance.
+#[pyfunction]
+#[pyo3(signature = (text, *, target_script="latin"))]
+pub fn _find_confusables(
+    text: &str,
+    target_script: &str,
+) -> PyResult<Vec<(String, usize, String)>> {
+    Ok(crate::confusables::find_confusables(text, target_script)?
+        .into_iter()
+        .map(|(ch, offset, target)| (ch.to_string(), offset, target.to_string()))
+        .collect())
+}
+
 /// Scan `text` for upstream confusable sources the bundled table does not fold (#563).
 ///
 /// Returns `(char, byte_offset)` pairs in order of appearance — the same convention

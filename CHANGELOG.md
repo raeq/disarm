@@ -61,6 +61,18 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Added
 
+- **`find_confusables()` — the mapped confusables in a string, with offsets (#737 §3).**
+  The mirror of `find_unmapped_confusables`: that one answers *what would survive the
+  fold?* — exposure — and this one answers *what did the fold change, and to what?* —
+  evidence. `is_confusable` returns a bare bool and `normalize_confusables` returns the
+  folded string; neither says **where**, and diffing the two does not work because the
+  fold is not length-preserving (`ﬁ` becomes `fi`).
+
+  ```python
+  find_confusables("pɑypal")   # [('ɑ', 1, 'a')]
+  find_confusables("paypal")   # []
+  ```
+
 - **`stream_safe()` and `is_normalized_stream_safe()` — UAX #15 Stream-Safe Text Format.**
   The standard bounds a run of non-starters at 30 so text can be processed in fixed-size
   buffers without a normalization boundary landing inside one. `unicode-normalization`
@@ -381,6 +393,55 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   an interpreter whose Unicode version predates the data.
 
 ### Fixed
+
+- **The detector consults the confusable table (#737), including the punctuation it
+  produces (#719), and the whole-token exemption is per block (#722).**
+
+  `canonicalize` has two steps that put ASCII into its output the input did not carry:
+  the leading NFKC, and the confusable fold. #633 wired the first in as `compat_fold`.
+  The second is the **largest body of data disarm ships**, and the aggregate detector
+  never consulted it:
+
+  ```
+  is_confusable("pɑypal")   True
+  canonicalize("pɑypal")    'paypal'
+  has_anomalies("pɑypal")   False   ->  True, kind `confusable`
+  ```
+
+  The slice with no compatibility decomposition is also single-script, so `mixed_script`
+  could not see it either. `detail` names the impersonated letter the way `mixed_script`
+  names the two scripts: `ɑ (U+0251) folds to a`.
+
+  **#719 — the punctuation half.** `U+2236 RATIO` has no decomposition at all and reaches
+  `:` only through the fold; `U+2044` reaches `/`, `U+2216` reaches `\`. 232 code points
+  reach ASCII by the fold alone, 76 producing one of `: = % & ? # / \`. `U+00BD` is the
+  case the issue calls subtle: its NFKC is `1⁄2`, whose middle character is not ASCII, so
+  the `compat_fold` gate is false — and the `/` appears only when the fold reaches that
+  `U+2044` one step later. Neither step alone sees it; the composition does.
+
+  **#722 — the exemption was calibrated on one block and applied to twelve.** #633 spared
+  a token spelled *wholly* in a compatibility form, because `ｐａｙｐａｌ` cannot be told
+  from `ＮＨＫ` by character class. Sound for fullwidth; not for Mathematical
+  Alphanumerics, where 652 code points spell a whole word that folds to plain ASCII and
+  reported clean. The exemption is now per block — fullwidth, CJK Compatibility,
+  Letterlike, the phonetic blocks and Enclosed Alphanumeric Supplement keep it;
+  Mathematical Alphanumerics and Enclosed Alphanumerics do not. `ＮＨＫ`, `㎏` and `№`
+  stay spared; `𝐩𝐚𝐲𝐩𝐚𝐥` and `ⓟⓐⓨⓟⓐⓛ` now report.
+
+  All three take #633's gate unchanged — the word must also carry an ASCII letter — so
+  the false-positive analysis carries over: `Привет` and `Ελλάδα` stay clean, which is the
+  over-flagging #545 removed from `is_suspicious_hostname`. Judged per **word**, not per
+  token, so `IT-специалист` and every IDN URL stay clean too (#702). And the `UNITS`
+  exemption the mixed-script branch already had is reused: the micro sign *is* how a
+  microfarad is written.
+
+  `CVE-2019-19844`, `CVE-2017-7832`, `CVE-2017-5383` and `CVE-2019-11721` move to
+  *detected* — the four homoglyph CVEs the confusable table was built for. `has_anomalies`
+  reports 29 of the 46, up from 25.
+
+  The `canonicalize` warning on every binding now says that the fold, not only NFKC, can
+  introduce ASCII punctuation (#719 §4), and the `has_anomalies` docstring says the table
+  is consulted (#737 §4).
 
 - **The two lexicon-gated branches compose, and know every separator (#726, #750, #752).**
   Three blind spots in `src/anomalies.rs`, each one character wide, each in a branch that

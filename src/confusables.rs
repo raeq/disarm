@@ -309,6 +309,39 @@ pub(crate) fn find_unmapped_confusables(
     Ok(out)
 }
 
+/// Every **mapped** confusable in `text`, with its byte offset and its fold target (#737).
+///
+/// The mirror of [`find_unmapped_confusables`]: the two read the same table from opposite
+/// sides. That one answers *"what would survive the fold?"* — exposure. This one answers
+/// *"what did the fold change, and to what?"* — evidence.
+///
+/// `is_confusable` returns a bare `bool` and `normalize_confusables` returns the folded
+/// string; neither says **where**. A caller that wants to highlight the impersonated
+/// character, or log which one it was, had to diff the two strings and hope the fold was
+/// length-preserving, which it is not (`ﬁ` -> `fi`).
+///
+/// Offsets are anchored in the caller's `text`, and iterate through `composed` for the
+/// same reason the sibling does: one path keeps this scan and the fold in lockstep by
+/// construction.
+///
+/// # Valid `target_script` values
+/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
+pub(crate) fn find_confusables(
+    text: &str,
+    target_script: &str,
+) -> Result<Vec<(char, usize, &'static str)>, crate::ErrorRepr> {
+    validate_target_script(target_script)?;
+    let map = tables::resolve_confusable_map(target_script);
+
+    let mut out = Vec::new();
+    for (ch, offset) in crate::compose::composed(text) {
+        if let Some(target) = map.and_then(|m| m.get(&ch)) {
+            out.push((ch, offset, *target));
+        }
+    }
+    Ok(out)
+}
+
 /// True if text contains any characters confusable with target-script characters.
 ///
 /// # Valid `target_script` values

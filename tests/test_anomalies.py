@@ -299,6 +299,10 @@ class TestAnomalyKindDoesNotDriftFromTheBindings:
             "segmentation": "v.i.a.g.r.a",
             "control": "\x00evil",
             "compat_fold": "\uff45xample.com",
+            # #737: the confusable fold is `canonicalize`'s SECOND ASCII-producing step,
+            # and the detector never consulted it. `p\u0251ypal` is single-script Latin,
+            # so `mixed_script` cannot see it either.
+            "confusable": "p\u0251ypal",
         }
         assert set(samples) == self._rust_kinds(), "sample set is stale"
         # `leet` and `segmentation` are lexicon-gated by design, so they need one.

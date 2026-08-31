@@ -242,6 +242,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(py::confusables::_is_confusable, m)?)?;
     m.add_function(wrap_pyfunction!(py::confusables::_unmapped_confusables, m)?)?;
+    m.add_function(wrap_pyfunction!(py::confusables::_find_confusables, m)?)?;
     m.add_function(wrap_pyfunction!(
         py::confusables::_find_unmapped_confusables,
         m

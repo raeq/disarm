@@ -331,6 +331,68 @@ assert guardrail("Summarize.\U000f0000") == "summarize.\U000f0000"  # PUA still 
 assert get_pipeline("rag_ingest")("Summarize.\U000f0000") == "Summarize."  # PUA handled
 ```
 
+## Code is not prose: `code_context`, and strip-and-report
+
+Every preset and both LLM profiles above end in `collapse_whitespace`, which folds LF to a
+space by design. That is right for a prompt and wrong for a source file: measured over the
+465 files of this repository, all thirteen collapse every file to a single line, and 147
+of 287 Python files stop parsing.
+
+`code_context` is the structure-preserving entry point. **Line count, indentation and case
+are the contract**, not a side effect:
+
+```python
+from disarm import get_pipeline
+
+code = get_pipeline("code_context")
+snippet = "def check(user):\n    if user.is_admin:  # \u202egnp.exe\n        grant()\n"
+
+cleaned = code(snippet)
+assert cleaned.count("\n") == snippet.count("\n")  # line count preserved
+assert "\u202e" not in cleaned  # the bidi control is gone
+assert "    if user.is_admin:" in cleaned  # indentation intact
+```
+
+### What it removes, and what it only reports
+
+| class | `code_context` | why |
+|---|---|---|
+| bidi controls, zero-width, C0/C1 controls | **removed** | none is source syntax, and each is the carrier for Trojan Source |
+| homoglyph confusables | **reported only** | see below |
+| compatibility forms | **reported only** | NFKC rewrites fullwidth forms and ligatures, which changes source text |
+| whitespace, case | **untouched** | they are the structure |
+
+**The confusable fold cannot run on code, and that is the design rather than an omission.**
+Exactly three ASCII code points are TR39 confusable sources: `"` folds to two apostrophes,
+the backtick folds to one, and `|` folds to `l`. All three are load-bearing syntax, so
+`normalize_confusables` — the primitive [adversarial defense](../security/adversarial-defense.md)
+describes as costing "nothing beyond the fold" — breaks 287 of 287 Python files in this
+repository while preserving every line.
+
+So the homoglyph class is **reported, not rewritten**:
+
+```python
+from disarm import get_pipeline, inspect_anomalies
+
+code = get_pipeline("code_context")
+src = "def p\u0251ypal():\n    pass\n"
+
+assert code(src) == src  # unchanged
+assert inspect_anomalies(src).kinds == ["confusable"]  # and reported
+```
+
+That split is what an AI-coding-assistant threat model needs.
+[arXiv:2503.14281v4](https://arxiv.org/abs/2503.14281) (XOXO) shows assistants flattening
+repository snippets into one prompt with no origin differentiation; the useful answer is
+*"this region of the gathered context is anomalous"*, not a rewritten prompt — and §E rules
+rewriting out on quality grounds anyway.
+
+!!! warning "A clean `code_context` result is not a claim about homoglyphs"
+
+    It removes the invisible classes and leaves the visible ones. Pair it with
+    `inspect_anomalies`, `is_confusable` or `is_mixed_script`, and treat the finding as a
+    signal to review the region rather than as something to fix by rewriting.
+
 ## Which path, and when NOT to use disarm
 
 Being explicit about the path is what earns credibility with this audience —

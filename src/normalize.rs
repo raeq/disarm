@@ -5,8 +5,15 @@
 
 use unicode_normalization::UnicodeNormalization;
 
-// disarm does not cap input or output size — bounding untrusted input is the
-// caller's responsibility (normalization is linear time/memory; see #80).
+// disarm does not cap input size — bounding untrusted input is the caller's
+// responsibility (normalization is linear time/memory; see #80). The functions in this
+// module are unbounded in output too: `normalize(text, form)` is a caller naming the
+// expansion they want.
+//
+// The preset path is not. NFKC widens `U+FDFA` by 18×, which is an amplification an
+// input-size check cannot foresee, so the `Step::Nfkc` arm of `presets::apply_into` caps
+// produced output at `MAX_NORMALIZE_OUTPUT_BYTES` (#768). This comment claimed otherwise
+// until then.
 
 /// Validate normalization form string. Returns an error for invalid forms.
 #[inline]

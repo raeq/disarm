@@ -152,7 +152,9 @@ def test_cyrillic_enclosing_marks_on_a_cyrillic_base_are_exempt() -> None:
     [
         ("\u0430\u0301\u0488\u0431\u0301\u0489", "an intervening acute before the mark"),
         ("\u0501\u0488\u0503\u0489", "Cyrillic Supplement"),
-        ("\u2de0\u0488\u2de1\u0489", "Cyrillic Extended-A"),
+        # Cyrillic Extended-A is entirely `Mn` combining letters, so it is the
+        # intervening-mark case rather than a base: `а` + U+2DE0 + U+0488.
+        ("\u0430\u2de0\u0488\u0431\u2de1\u0489", "a Cyrillic Extended-A mark between"),
         ("\ua640\u0488\ua641\u0489", "Cyrillic Extended-B"),
     ],
     ids=["acute-between", "supplement", "ext-a", "ext-b"],

@@ -16,6 +16,20 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Upgrade notes
+
+**Stored `strip_obfuscation` output moves (#757).** 60 of the 22,878 rows in the key
+stability fixture changed, 0.26%. Every one is a character that stopped being replaced by
+its English name: the katakana middle dot in Japanese names (`アテネ・トラム` was
+`アテネ katakana middle dot トラム`), the low-9 quotation mark in Central European
+titles, the dashes. `search_key`, `catalog_key` and `sort_key` do not run the emoji step
+and are unaffected. If you have persisted `strip_obfuscation` output as a key, reindex.
+
+**`ml_normalize` output moves for 326 code points (#757).** Typographic punctuation,
+currency signs and math operators are no longer replaced by English words. Text that was
+already ASCII is unaffected. Pass `emoji="none"` to suppress the emoji step entirely, as
+before.
+
 ### Added
 
 - **`stream_safe()` and `is_normalized_stream_safe()` — UAX #15 Stream-Safe Text Format.**
@@ -66,6 +80,35 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   (Ruby), `DigitPolicy.PRESERVE` (Java/Kotlin).
 
 ### Changed (breaking)
+
+- **The CLDR name table only fires for code points that are actually emoji (#757).**
+  CLDR `annotationsDerived` names 326 characters that carry neither the Unicode `Emoji`
+  nor the `Extended_Pictographic` property — the curly quotes, the dashes, the currency
+  signs, the math operators, the CJK brackets. `ml_normalize`, the preset documented for
+  tokenizers and embeddings, expanded all of them, and #614's precedence fix had reached
+  only the comparison preset.
+
+  ```
+  ml_normalize("film’s")          'film right apostrophe s'  ->  'film’s'
+  ml_normalize("tickets cost €12") 'tickets cost euro 12'    ->  'tickets cost €12'
+  strip_obfuscation("a†b")        'a dagger signb'           ->  'a†b'
+  ```
+
+  A 30-word English sentence carrying nothing but typographic punctuation came back as
+  47 words. That is the spurious-token-insertion mechanism
+  `docs/security/adversarial-defense.md` disqualifies `unidecode` for, and a finding
+  disarm cites against another library has to hold against disarm. The page now says so.
+
+  `demojize` called directly is unchanged — `demojize("I ❤ €5")` is still
+  `"I red heart euro 5"`, which #614 already settled — as is the explicit
+  `TextPipeline` `DEMOJIZE` step, where the caller asked for the name by name.
+
+  The two suppression rules are separate flags because they are separate sets: six of
+  #614's 49 rows (`‼ ⁉ ℹ ➕ ➖ ➗`) are genuine emoji, so neither contains the other.
+
+  The set is derived at build time as a difference against the pinned UCD, not curated,
+  and `build.rs` asserts its size — a CLDR refresh that annotates more punctuation fails
+  the build instead of silently suppressing another character.
 
 - **A negation overlay is no longer treated as an accent (#749).** `strip_accents` removed
   every `Mn`. `U+0338 COMBINING LONG SOLIDUS OVERLAY` and `U+20D2` are not diacritics — on

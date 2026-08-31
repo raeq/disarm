@@ -110,6 +110,13 @@ def ml_normalize(
     Produces clean, accent-free text suitable for tokenizers, embeddings, and
     feature extraction. Emoji are expanded to their CLDR short-name descriptions.
 
+    "Emoji" means the Unicode property, not the CLDR table. The annotation data also
+    names 326 code points that carry neither ``Emoji`` nor ``Extended_Pictographic`` —
+    the curly quotes, the dashes, the currency signs, the math operators — and naming
+    those inserts words into ordinary prose: ``film’s`` came back as
+    ``film right apostrophe s``, one token to four with the possessive gone. They pass
+    through unchanged since 0.15.0. `demojize` called directly still names them.
+
     Case folding is on by default. Turn it off for a **cased** downstream model:
     folding is destructive and cannot be undone later in the chain, and an uncased
     evaluation harness cannot measure what it costs. This is the one preset where

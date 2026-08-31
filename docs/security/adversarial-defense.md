@@ -64,6 +64,14 @@ Unicode normalization baselines across six attack types, three downstream tasks
 - **`unidecode` actively harms.** It maps invisible characters to visible ASCII
   sequences, introducing spurious tokens and *significantly degrading* classifier
   accuracy on invisible-character attacks (McNemar's test, p = 6.9 × 10⁻⁹).
+
+    The same reasoning is why `ml_normalize` and `strip_obfuscation` name only code
+    points that carry the Unicode `Emoji` or `Extended_Pictographic` property. CLDR's
+    annotation data also names 326 characters that are not emoji — the curly quotes, the
+    dashes, the currency signs — and until
+    [#757](https://github.com/raeq/disarm/issues/757) both presets expanded them, turning
+    a 30-word English sentence into 47 words. A finding disarm cites against another
+    library has to hold against disarm.
 - **Plain Unicode normalization is not a defense.** NFC, NFKC, NFKD, and casefold
   provide zero defense against homoglyphs and negligible defense against the rest.
 - **Preserve case.** A case-preserving pipeline fully restores downstream accuracy;

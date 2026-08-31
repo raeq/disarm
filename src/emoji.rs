@@ -319,20 +319,61 @@ pub(crate) fn pad_emoji_replacement(result: &mut String, text: &str) {
 /// materialising the full input for non-ASCII text.
 pub fn demojize_rust(text: &str, strip_modifiers: bool) -> String {
     let mut out = String::new();
-    demojize_rust_into(text, strip_modifiers, false, &mut out);
+    demojize_rust_into(text, strip_modifiers, NamePolicy::NAME_EVERYTHING, &mut out);
     out
+}
+
+/// Which CLDR name rows a caller wants left alone.
+///
+/// CLDR `annotationsDerived` names characters that are not emoji: typographic
+/// punctuation, currency, math operators, brackets. Naming them is right for standalone
+/// `demojize` — `demojize("I \u{2764} \u{20AC}5")` -> "I red heart euro 5" is what that
+/// function is for — and wrong inside a preset, where the name is a word that was in
+/// neither the input nor any emoji.
+///
+/// The two reasons are separate flags because they are separate sets: six of the 49 rows
+/// #614 found (`\u{203C}`, `\u{2049}`, `\u{2139}`, `\u{2795}`, `\u{2796}`, `\u{2797}`) are
+/// genuine emoji, so neither set contains the other.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub struct NamePolicy {
+    /// #614: leave the 49 code points the TR39 confusable table also claims for the
+    /// confusable step to fold, instead of naming them here.
+    ///
+    /// Set only by comparison presets. `strip_obfuscation("\u{20AC}xample.com")` named the
+    /// euro sign — "euro xample.com" — so the spoof and the genuine string stopped being
+    /// equal rather than becoming equal, and CVE-2017-5383 survived a preset documented
+    /// as maximum-strength deobfuscation.
+    pub skip_tr39_claimed: bool,
+    /// #757: leave the 326 code points that carry neither the Unicode `Emoji` nor the
+    /// `Extended_Pictographic` property.
+    ///
+    /// Set by every preset. `ml_normalize` — documented for tokenizers, embeddings and
+    /// feature extraction — turned `film\u{2019}s` into `film right apostrophe s`, one token
+    /// to four with the possessive gone, and returned 47 words for a 30-word English
+    /// sentence carrying nothing but typographic punctuation. That is the
+    /// spurious-token-insertion mechanism `docs/security/adversarial-defense.md`
+    /// disqualifies `unidecode` for.
+    pub skip_non_emoji: bool,
+}
+
+impl NamePolicy {
+    /// Name every row — standalone `demojize` and the explicit `TextPipeline` step,
+    /// where the caller asked for the name by name.
+    pub const NAME_EVERYTHING: Self = Self {
+        skip_tr39_claimed: false,
+        skip_non_emoji: false,
+    };
+
+    /// Whether `ch` is left for the rest of the pipeline instead of being named.
+    #[inline]
+    fn skips(self, ch: char) -> bool {
+        (self.skip_tr39_claimed && crate::tables::is_tr39_claimed_emoji_row(ch))
+            || (self.skip_non_emoji && crate::tables::is_non_emoji_cldr_row(ch))
+    }
 }
 
 /// In-place form of [`demojize_rust`] writing into `result` (cleared first), so
 /// the pipeline can reuse one buffer across steps (#236 item 7).
-/// `skip_tr39_claimed` (#614): leave the 49 code points the TR39 confusable table
-/// also claims for the confusable step to fold, instead of naming them here.
-///
-/// Set only by comparison presets. `strip_obfuscation("\u{20AC}xample.com")` named the
-/// euro sign — "euro xample.com" — so the spoof and the genuine string stopped being
-/// equal rather than becoming equal, and CVE-2017-5383 survived a preset documented as
-/// maximum-strength deobfuscation. Standalone `demojize` still names them, because
-/// `demojize("I \u{2764} \u{20AC}5")` -> "I red heart euro 5" is what that function is for.
 ///
 /// Skipping here rather than reordering the steps is deliberate: `normalize_confusables`
 /// runs *after* `demojize` so typographic punctuation inside emoji names (the `\u{2019}`
@@ -340,7 +381,7 @@ pub fn demojize_rust(text: &str, strip_modifiers: bool) -> String {
 pub fn demojize_rust_into(
     text: &str,
     strip_modifiers: bool,
-    skip_tr39_claimed: bool,
+    policy: NamePolicy,
     result: &mut String,
 ) {
     result.clear();
@@ -360,9 +401,9 @@ pub fn demojize_rust_into(
             continue;
         }
 
-        // #614: hand this code point to the confusable fold instead of naming it.
-        // Emitted verbatim, so the later `confusables` step sees it.
-        if skip_tr39_claimed && crate::tables::is_tr39_claimed_emoji_row(ch) {
+        // #614/#757: hand this code point to the rest of the pipeline instead of naming
+        // it. Emitted verbatim, so a later `confusables` step still sees it.
+        if policy.skips(ch) {
             // The separator decision has to look at what this character will BECOME,
             // not what it is. `\u{20AC}` is not alphanumeric, but TR39 folds it to `e`,
             // so emitting it bare after an emoji name produced `"woman's hat"` + `"e"`

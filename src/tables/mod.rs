@@ -813,6 +813,18 @@ pub fn is_tr39_claimed_emoji_row(ch: char) -> bool {
     emoji_data::EMOJI_ROWS_TR39_ALSO_CLAIMS.contains(&(ch as u32))
 }
 
+/// Whether this CLDR name row carries no Unicode emoji property at all (#757).
+///
+/// CLDR `annotationsDerived` names 326 code points that are not emoji by either the
+/// `Emoji` or the `Extended_Pictographic` property — typographic punctuation, currency,
+/// math operators, brackets. `build.rs` derives the set as a difference against the
+/// pinned UCD and asserts its size, so a CLDR refresh that annotates more punctuation
+/// fails the build rather than silently suppressing another character.
+#[inline]
+pub fn is_non_emoji_cldr_row(ch: char) -> bool {
+    emoji_data::EMOJI_ROWS_WITHOUT_EMOJI_PROPERTY.contains(&(ch as u32))
+}
+
 /// Look up a multi-codepoint emoji sequence by its hex-underscore key (O(1) PHF).
 /// **Test-only**: the production matcher walks the code-point trie
 /// (`match_emoji_sequence`); this is retained as the equivalence oracle (#242

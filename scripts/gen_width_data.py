@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Generate terminal-width data tables for #224 from the pinned UCD.
+"""Generate the emoji/width data tables read by build.rs from the pinned UCD.
 
-Emits two sorted-range TSVs under src/tables/data/ that build.rs turns into
-binary-searchable range tables (no runtime data, no unsafe):
+Emits three sorted-range TSVs under src/tables/data/:
 
   char_width.tsv          start;end;class   class in {Z,W,A}  (narrow = default)
   emoji_presentation.tsv  start;end         Emoji_Presentation code points
+  emoji_property.tsv      start;end         Emoji OR Extended_Pictographic
+
+The first two become binary-searchable range tables (no runtime data, no unsafe).
+The third is a *build-time input only* (#757): build.rs intersects it with
+emoji_single.tsv to derive the CLDR rows that name a code point carrying no emoji
+property at all, and ships only that set.
 
 East Asian Width and general category come from Python's ``unicodedata`` (the
 pinned UCD — keep the generating Python's ``unidata_version`` in sync). The
@@ -99,6 +104,19 @@ def main() -> int:
     default_ignorable = _parse_property(dcp, "Default_Ignorable_Code_Point")
     grapheme_extend = _parse_property(dcp, "Grapheme_Extend")
     emoji_presentation = _parse_property(emoji, "Emoji_Presentation")
+    # #757: the union CLDR `annotationsDerived` overshoots. A row is a real emoji if it
+    # carries either property; everything else is punctuation, currency or a math
+    # operator that CLDR happens to annotate.
+    #
+    # Pinned to UCD_VERSION, the same release emoji_presentation is read from, so the
+    # tree carries one emoji-data.txt version rather than two. 16.0.0 classifies the
+    # 1,727 CLDR rows identically. 17.0.0 narrows Extended_Pictographic (3,537 -> 2,848
+    # code points) and moves three of them out — U+266A eighth note, U+266D flat,
+    # U+266F sharp — so a UCD bump here is a deliberate three-row behaviour change, not
+    # a refresh.
+    emoji_property = _parse_property(emoji, "Emoji") | _parse_property(
+        emoji, "Extended_Pictographic"
+    )
 
     width_class: dict[int, str] = {}
     for cp in range(MAX_CP):
@@ -133,7 +151,10 @@ def main() -> int:
             f.write(f"{s:04X}\t{e:04X}\t{c}\n")
     print(f"  wrote {cw} ({len(width_class)} non-narrow code points)")
 
-    for name, cps in (("emoji_presentation", emoji_presentation),):
+    for name, cps in (
+        ("emoji_presentation", emoji_presentation),
+        ("emoji_property", emoji_property),
+    ):
         path = DATA / f"{name}.tsv"
         with path.open("w", encoding="utf-8") as f:
             f.write(header)

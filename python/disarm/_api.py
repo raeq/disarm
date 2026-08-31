@@ -34,6 +34,7 @@ from disarm._boundary import (
     # Predicates
     _detect_scripts,
     _escape_html,
+    _find_confusables,
     _find_key_collisions,
     _find_unmapped_confusables,
     # Untranslatable scan (#184)
@@ -1545,6 +1546,14 @@ def has_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> 
     zero-width / bidi control, or zalgo — and leaves the malicious-or-not judgement
     to the caller, exactly as `is_suspicious_hostname` does for hostnames.
 
+    **The confusable table is consulted since #737, and was not before.** `canonicalize`
+    has two steps that can put ASCII into its output: NFKC, and the confusable fold. This
+    reported the first (``compat_fold``) and had no rule for the second, so
+    ``has_anomalies("pɑypal")`` was ``False`` while ``is_confusable`` was ``True`` and
+    ``canonicalize`` returned ``paypal``. The ``confusable`` kind closes it. A clean
+    result still is not a claim about *unmapped* confusables — see
+    `find_unmapped_confusables` for that exposure set.
+
     ``lexicon`` is a set of common words for the language being protected; it is
     used only by the leet and segmentation branches.  The invisible, bidi, zalgo,
     and mixed-script branches are script-agnostic and **need no lexicon** — calling
@@ -2086,6 +2095,48 @@ def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[
         True
     """
     return frozenset(_unmapped_confusables(target_script=_target_script(target_script)))
+
+
+def find_confusables(
+    text: str, *, target_script: str | Script = "latin"
+) -> list[tuple[str, int, str]]:
+    """Find the confusables in *text* that disarm's table **does** fold (#737).
+
+    The mirror of `find_unmapped_confusables`: that one answers *"what would survive the
+    fold?"* — exposure — and this one answers *"what did the fold change, and to what?"* —
+    evidence.
+
+    `is_confusable` returns a bare ``bool`` and `normalize_confusables` returns the folded
+    string; neither says **where**. Diffing the two does not work either, because the fold
+    is not length-preserving (``ﬁ`` becomes ``fi``).
+
+    Composition runs exactly as it does in `normalize_confusables`, and offsets are
+    anchored in *text* rather than in the composed intermediate — the same contract the
+    sibling gives.
+
+    Args:
+        text: Input Unicode string.
+        target_script: Which bundled table to report against (default ``"latin"``).
+
+    Returns:
+        List of ``(char, byte_offset, target)`` for each folded confusable.
+
+    Raises:
+        TypeError: If *text* is not a ``str``.
+        InvalidArgumentError: If *target_script* is not a supported script.
+
+    Examples:
+        >>> find_confusables("p\u0251ypal")
+        [('\u0251', 1, 'a')]
+        >>> find_confusables("paypal")
+        []
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"find_confusables() expects str, got {type(text).__name__}")
+    result: list[tuple[str, int, str]] = _find_confusables(
+        text, target_script=_target_script(target_script)
+    )
+    return result
 
 
 def find_unmapped_confusables(

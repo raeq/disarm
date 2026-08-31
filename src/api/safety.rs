@@ -280,6 +280,49 @@ pub fn find_unmapped_confusables(text: &str, target: TargetScript) -> Vec<Unmapp
         .collect()
 }
 
+/// One mapped confusable located by [`find_confusables`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct MappedConfusable {
+    /// The confusable character as it appeared in the input.
+    pub ch: char,
+    /// Its byte offset in the input string.
+    pub offset: usize,
+    /// What the fold replaces it with — usually one character, sometimes more (`ﬁ`).
+    pub target: &'static str,
+}
+
+/// Every **mapped** confusable in `text`, with its offset and its fold target (#737).
+///
+/// The mirror of [`find_unmapped_confusables`]: the two read the same table from opposite
+/// sides. That one answers *"what would survive the fold?"* — exposure. This one answers
+/// *"what did the fold change, and to what?"* — evidence.
+///
+/// [`is_confusable`] returns a bare `bool` and [`normalize_confusables`] returns the folded
+/// string; neither says **where**. Diffing the two strings does not work either, because
+/// the fold is not length-preserving.
+///
+/// ```
+/// use disarm::api::{find_confusables, TargetScript};
+///
+/// let found = find_confusables("p\u{0251}ypal", TargetScript::Latin);
+/// assert_eq!(found.len(), 1);
+/// assert_eq!(found[0].ch, '\u{0251}');
+/// assert_eq!(found[0].offset, 1);
+/// assert_eq!(found[0].target, "a");
+///
+/// // Nothing folded: nothing to report.
+/// assert!(find_confusables("paypal", TargetScript::Latin).is_empty());
+/// ```
+#[must_use]
+pub fn find_confusables(text: &str, target: TargetScript) -> Vec<MappedConfusable> {
+    crate::confusables::find_confusables(text, target.as_str())
+        .expect("TargetScript always maps to a supported target script")
+        .into_iter()
+        .map(|(ch, offset, target)| MappedConfusable { ch, offset, target })
+        .collect()
+}
+
 // ── Reverse transliteration (romanized Latin → native script) ────────────────
 
 /// Language for [`reverse_transliterate`] — the scripts disarm ships reverse

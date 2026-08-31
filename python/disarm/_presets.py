@@ -39,6 +39,18 @@ def canonicalize(text: str) -> str:
     For **cleaning untrusted input before comparison**, this is the entry point.
     It does not make text safe to emit; encode at the sink.
 
+    **Two steps introduce ASCII, not one** (#719). The leading NFKC is the obvious
+    one; the confusable fold is the second and reaches characters NFKC leaves
+    alone. ``U+2236 RATIO`` has no decomposition at all and becomes ``:``,
+    ``U+2044 FRACTION SLASH`` becomes ``/``, ``U+2216 SET MINUS`` becomes ``\``.
+    232 code points reach ASCII by the fold alone, 76 of them producing one of
+    ``: = % & ? # / \``. A string that carried no delimiter can leave here carrying
+    one — encode at the sink.
+
+    `inspect_anomalies` reports it as ``confusable`` **when the word also carries an
+    ASCII letter**, which is #633's gate and what keeps ``Привет`` from firing. A
+    delimiter-only string such as ``∶∶∶`` folds to ``:::`` and is not reported.
+
     Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
     strip_control → strip_zero_width → collapse_whitespace → cap combining marks
     (anti-zalgo, #429) → NFC → confusables → NFC (the confusable fold is

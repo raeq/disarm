@@ -170,6 +170,26 @@ pub enum AnomalyKind {
     /// (`ｐａｙｐａｌ`, `ＮＨＫ`, `１９９５年`) is deliberately not flagged — see the
     /// branch in `classify` for why.
     CompatFold,
+    /// A token where the **confusable fold** — not NFKC — produces ASCII the input did
+    /// not contain: `pɑypal` (`U+0251`), `gıthub` (`U+0131`), `ord∶end` (`U+2236`).
+    ///
+    /// `canonicalize` has two ASCII-producing steps and [`CompatFold`](Self::CompatFold)
+    /// reported only the first. The second is the largest body of data disarm ships, and
+    /// the aggregate detector never consulted it: `is_confusable("pɑypal")` was `true`,
+    /// `canonicalize` returned `paypal`, and `has_anomalies` said `false`. The slice with
+    /// no compatibility decomposition is also single-script, so
+    /// [`MixedScript`](Self::MixedScript) cannot see it either (#737).
+    ///
+    /// It covers the punctuation half too (#719): `U+2236 RATIO` has no decomposition at
+    /// all and reaches `:` only through the fold, so a token could gain a delimiter with
+    /// nothing to report it. 232 code points reach ASCII by the fold alone, 76 of them
+    /// producing one of `: = % & ? # / \`.
+    ///
+    /// Gated exactly as `CompatFold` is — the token must also carry an ASCII letter — so
+    /// `Привет` and `Ελλάδα` do not fire. Every letter in them folds to Latin, and
+    /// flagging that is the whole-legitimate-non-Latin-web over-flagging #545 removed
+    /// from `is_suspicious_hostname`.
+    Confusable,
 }
 
 impl AnomalyKind {
@@ -186,6 +206,7 @@ impl AnomalyKind {
             AnomalyKind::Segmentation => "segmentation",
             AnomalyKind::Control => "control",
             AnomalyKind::CompatFold => "compat_fold",
+            AnomalyKind::Confusable => "confusable",
         }
     }
 }
@@ -244,6 +265,9 @@ impl Finding {
                 "{:?} mixes a compatibility form with ASCII and folds to {}",
                 self.token, self.detail
             ),
+            AnomalyKind::Confusable => {
+                format!("{:?} contains a confusable: {}", self.token, self.detail)
+            }
         }
     }
 }
@@ -402,6 +426,70 @@ fn nearest(d: &str, lexicon: &HashSet<String>) -> Option<String> {
     None
 }
 
+/// Blocks where a token spelled *wholly* in a compatibility form is ordinary text (#722).
+///
+/// #633 exempted the whole-token case with a sound argument about one block: `ｐａｙｐａｌ`
+/// is indistinguishable by character class from `ＮＨＫ`, and a detector that fires on
+/// `ＮＨＫ` is one a CJK-facing caller switches off entirely. The exemption was then
+/// applied to *every* compatibility form, including blocks where no `ＮＨＫ` exists — so
+/// 652 Mathematical Alphanumeric code points spell a whole word that `canonicalize` folds
+/// to plain ASCII and the detector reported clean.
+///
+/// The list is the blocks where the argument actually holds:
+///
+/// - Halfwidth and Fullwidth Forms — `ＮＨＫ`, `Ｑ＆Ａ`, the #633 case itself
+/// - CJK Compatibility — `㎏`, `㎞`, ordinary units
+/// - Letterlike Symbols — `№`, `℡`
+/// - Phonetic Extensions and IPA Extensions — an IPA transcription is a whole token
+/// - Enclosed Alphanumeric Supplement — regional indicators, handled elsewhere
+///
+/// Mathematical Alphanumeric Symbols and Enclosed Alphanumerics are deliberately absent:
+/// a formula variable is not a word, and `ⓟⓐⓨⓟⓐⓛ` is not prose. Those are #722 §2's two
+/// starting blocks.
+fn whole_token_compat_is_ordinary(ch: char) -> bool {
+    matches!(ch,
+        '\u{FF00}'..='\u{FFEF}'      // Halfwidth and Fullwidth Forms
+        | '\u{3300}'..='\u{33FF}'    // CJK Compatibility
+        | '\u{2100}'..='\u{214F}'    // Letterlike Symbols
+        | '\u{0250}'..='\u{02AF}'    // IPA Extensions
+        | '\u{1D00}'..='\u{1D7F}'    // Phonetic Extensions
+        | '\u{1D80}'..='\u{1DBF}'    // Phonetic Extensions Supplement
+        | '\u{1F100}'..='\u{1F1FF}'  // Enclosed Alphanumeric Supplement
+    )
+}
+
+/// The ASCII a confusable fold introduces that the input did not have (#719, #737).
+///
+/// Returns `(source, target)` for the first such character, so `Finding::detail` can name
+/// the impersonated letter the way `mixed_script` names the two scripts.
+///
+/// The fold is `canonicalize`'s *second* ASCII-producing step and nothing reported it.
+/// `pɑypal` folded to `paypal` while `has_anomalies` said clean, and the slice with no
+/// compatibility decomposition is single-script, so `mixed_script` could not see it
+/// either. `U+2236 RATIO` is the punctuation half: no decomposition at all, reaching `:`
+/// only through the fold.
+fn folded_confusable(tok: &str) -> Option<(char, &'static str)> {
+    fn ascii_target(c: char) -> Option<&'static str> {
+        // Only a fold that *lands* in ASCII matters: the point is that the output carries
+        // a character the input did not, which is what a downstream comparison sees.
+        crate::tables::lookup_confusable(c, "latin").filter(|t| t.is_ascii())
+    }
+    tok.chars().find_map(|c| {
+        if c.is_ascii() {
+            return None;
+        }
+        if let Some(target) = ascii_target(c) {
+            return Some((c, target));
+        }
+        // The composed case, which #719 calls the subtle one: `U+00BD` NFKC-decomposes to
+        // `1⁄2`, whose middle character is `U+2044` and is NOT ASCII — so the `CompatFold`
+        // gate above is false — and the `/` appears only when the fold reaches that
+        // `U+2044` one step later. Neither step alone sees it; the composition does.
+        c.nfkc()
+            .find(|f| !f.is_ascii() && ascii_target(*f).is_some())
+            .and_then(|f| ascii_target(f).map(|target| (c, target)))
+    })
+}
 /// `tok` trimmed by `WRAP` **minus** the characters that are also leet substitutes (#726).
 ///
 /// `!`, `(` and `)` sit in both sets. Trimming them off the token edge before the leet
@@ -758,12 +846,35 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         // branch fired on `Mr.\u{00A0}Smith` and `10\u{00A0}km`. A space folding to a space
         // is not what #633 describes — "spelled half in a compatibility form and half in
         // ASCII", the shape nobody writes on purpose. It is a space.
-        if tok.chars().any(|c| c.is_ascii_alphabetic())
-            && tok
+        //
+        // #722: the whole-token exemption is now per BLOCK. It exists to protect `ＮＨＫ`,
+        // and was applied to twelve blocks including ones where no `ＮＨＫ` exists — 652
+        // Mathematical Alphanumeric code points spell a word that folds to plain ASCII.
+        // A token with no ASCII letter still fires when every compatibility character in
+        // it comes from a block where a whole-token spelling is not ordinary text.
+        // Per WORD, for the reason #702 gives: `IT-специалист` is two words with a
+        // boundary between them, and every Cyrillic letter folds to Latin. Judging the
+        // whole token would report `Сбербанк-Online` and every IDN URL, which is the
+        // over-flagging P16 removed from the mixed-script branch a moment ago.
+        //
+        // `detail` stays the whole token's NFKC fold (#722 §4), so a caller still sees
+        // `paypal` rather than a fragment.
+        for part in word_parts(tok) {
+            let has_ascii_letter = part.chars().any(|c| c.is_ascii_alphabetic());
+            let compat: Vec<char> = part
                 .chars()
-                .any(|c| !c.is_ascii() && !c.is_whitespace() && c.nfkc().all(|f| f.is_ascii()))
-        {
-            return Some(mk(AnomalyKind::CompatFold, tok.nfkc().collect::<String>()));
+                .filter(|c| !c.is_ascii() && c.nfkc().all(|f| f.is_ascii()))
+                .collect();
+            // ALL, not ANY. With `any`, one fullwidth character exempted the whole word:
+            // `\u{1D41A}\u{FF41}` mixes a Mathematical Alphanumeric with a fullwidth `a`,
+            // folds to `aa`, and reported clean. The exemption reads "this word is
+            // ordinary text in a block where a whole-token spelling is ordinary" — a word
+            // drawing on two compatibility blocks is not that, whichever blocks they are.
+            let spared =
+                !has_ascii_letter && compat.iter().copied().all(whole_token_compat_is_ordinary);
+            if !compat.is_empty() && !spared {
+                return Some(mk(AnomalyKind::CompatFold, tok.nfkc().collect::<String>()));
+            }
         }
     }
 
@@ -840,6 +951,38 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         }
         if let Some(word) = space_fragmented_word(core, lexicon) {
             return Some(mk(AnomalyKind::Segmentation, word));
+        }
+    }
+
+    // #719, #737: the SECOND ASCII-producing step in `canonicalize`. Same two gates as
+    // `CompatFold` — an ASCII letter in the word, and a non-ASCII character folding *to*
+    // ASCII — so #633's false-positive analysis carries over unchanged and `Привет` (no
+    // ASCII letter) stays clean.
+    //
+    // LAST, because it is the least specific rule that fires without a lexicon. Nearly
+    // every within-word joiner folds to ASCII — `U+2E40` to `=`, `U+2010` to `-` — so
+    // running it earlier would relabel `c⹀o⹀n⹀f⹀i⹀r⹀m` as a confusable and lose the
+    // segmentation finding, which names the reassembled word. When there is no word,
+    // `confusable` is still the right answer and still fires.
+    if !tok.is_ascii() {
+        for part in word_parts(tok) {
+            if !part.chars().any(|c| c.is_ascii_alphabetic()) {
+                continue;
+            }
+            // The same `UNITS` exemption the mixed-script branch takes. `µF` folds to
+            // `uF` and `kΩ` keeps its omega, and both are ordinary technical text — the
+            // micro sign IS how a microfarad is written. Caught by
+            // `unit_symbols_fold_to_greek_and_are_not_a_disguise`, which existed for
+            // exactly this and is why the exemption is reused rather than re-derived.
+            if UNITS.contains(&part.to_lowercase().as_str()) {
+                continue;
+            }
+            if let Some((source, target)) = folded_confusable(part) {
+                return Some(mk(
+                    AnomalyKind::Confusable,
+                    format!("{source} (U+{:04X}) folds to {target}", source as u32),
+                ));
+            }
         }
     }
 

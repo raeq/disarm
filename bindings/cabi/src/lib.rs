@@ -252,6 +252,13 @@ fn disarm_strip_obfuscation(text: char_p::Ref<'_>) -> DisarmResult {
 }
 
 /// The strongest security-canonicalization preset.
+///
+/// Two steps introduce ASCII, not one (#719): the leading NFKC, and the confusable fold,
+/// which reaches characters NFKC leaves alone. `U+2236 RATIO` becomes `:`, `U+2044
+/// FRACTION SLASH` becomes `/`, `U+2216 SET MINUS` becomes `\`. A string that carried no
+/// delimiter can leave here carrying one. `disarm_inspect_anomalies` reports it as
+/// `confusable` WHEN the word also carries an ASCII letter, which is the gate that keeps
+/// ordinary non-Latin text from firing; a delimiter-only string is not reported.
 #[ffi_export]
 fn disarm_canonicalize(text: char_p::Ref<'_>) -> DisarmResult {
     match api::canonicalize(text.to_str()) {

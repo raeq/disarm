@@ -183,9 +183,21 @@ def test_a_multi_letter_fragment_still_disqualifies() -> None:
     assert _kinds("co.nf.irm") == []
 
 
-def test_a_non_word_is_still_clean_however_it_is_split() -> None:
-    for sep in (".", "-", "_", "‐", "⹀"):
-        assert _kinds(sep.join("qxzvbn")) == []
+@pytest.mark.parametrize("sep", [".", "-", "_"], ids=["dot", "hyphen", "underscore"])
+def test_a_non_word_is_still_clean_however_it_is_split(sep: str) -> None:
+    """No lexicon word, no segmentation finding — whatever the separator."""
+    assert _kinds(sep.join("qxzvbn")) == []
+
+
+@pytest.mark.parametrize("sep", ["‐", "⹀"], ids=["U+2010", "U+2E40"])
+def test_a_non_ascii_joiner_reports_confusable_when_there_is_no_word(sep: str) -> None:
+    """Not segmentation — there is no word — but not clean either (#719).
+
+    `U+2010` folds to `-` and `U+2E40` to `=`, so the fold puts ASCII into the output that
+    the input did not carry. `segmentation` wins when a word reassembles, because it is
+    the more specific finding; this is what is left when one does not.
+    """
+    assert _kinds(sep.join("qxzvbn")) == ["confusable"]
 
 
 def test_an_ordinary_hyphenated_word_is_not_a_finding() -> None:

@@ -25,6 +25,7 @@ from disarm._api import (
     detect_encoding,
     detect_scripts,
     escape_html,
+    find_confusables,
     find_key_collisions,
     find_unmapped_confusables,
     find_untranslatable,
@@ -247,6 +248,7 @@ __all__ = [
     # Transforms
     "transliterate",
     "find_untranslatable",
+    "find_confusables",
     "find_unmapped_confusables",
     "dedup_batch",
     "make_cached_transliterator",

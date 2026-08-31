@@ -381,6 +381,15 @@ pub fn strip_obfuscation(text: String) -> Result<String, NapiError> {
         .map_err(|e| map_err(&e))
 }
 
+/// Canonicalize text for security-sensitive comparison. Not an output sanitizer —
+/// encode at the sink.
+///
+/// Two steps introduce ASCII, not one (#719): the leading NFKC, and the confusable fold,
+/// which reaches characters NFKC leaves alone. `U+2236 RATIO` becomes `:`, `U+2044
+/// FRACTION SLASH` becomes `/`, `U+2216 SET MINUS` becomes `\`. A string that carried no
+/// delimiter can leave here carrying one. `inspectAnomalies` reports it as `confusable`
+/// WHEN the word also carries an ASCII letter, which is the gate that keeps ordinary
+/// non-Latin text from firing; a delimiter-only string is not reported.
 #[napi]
 pub fn canonicalize(text: String) -> Result<String, NapiError> {
     api::canonicalize(&text)

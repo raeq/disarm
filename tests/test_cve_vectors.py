@@ -1965,7 +1965,10 @@ REGISTRY: tuple[CVE, ...] = (
         cvss_version="v3.1",
         dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("canonicalize_strict", "fold_case", "search_key"),
-        detectors=("is_confusable",),
+        # #737: reached by the `confusable` kind. `canonicalize`'s second
+        # ASCII-producing step is the confusable fold, and the detector never
+        # consulted it — the largest table disarm ships.
+        detectors=("has_anomalies", "is_confusable"),
         probe=ATTACKER_EMAIL,
         reference="https://www.djangoproject.com/weblog/2019/dec/18/security-releases/",
     ),
@@ -2039,7 +2042,10 @@ REGISTRY: tuple[CVE, ...] = (
         cvss_version="v3.0",
         dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("canonicalize", "normalize_confusables"),
-        detectors=("is_confusable", "is_suspicious_hostname"),
+        # #737: reached by the `confusable` kind. `canonicalize`'s second
+        # ASCII-producing step is the confusable fold, and the detector never
+        # consulted it — the largest table disarm ships.
+        detectors=("has_anomalies", "is_confusable", "is_suspicious_hostname"),
         probe=SPOOF_HOST,
         reference="https://www.mozilla.org/security/advisories/mfsa2017-24/",
     ),
@@ -2051,7 +2057,10 @@ REGISTRY: tuple[CVE, ...] = (
         cvss_version="v3.0",
         dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("canonicalize", "normalize_confusables", "catalog_key"),
-        detectors=("is_confusable",),
+        # #737: reached by the `confusable` kind. `canonicalize`'s second
+        # ASCII-producing step is the confusable fold, and the detector never
+        # consulted it — the largest table disarm ships.
+        detectors=("has_anomalies", "is_confusable"),
         probe=ALT_HYPHEN_HOST,
         reference="https://www.mozilla.org/security/advisories/mfsa2017-05/",
     ),
@@ -2336,7 +2345,10 @@ REGISTRY: tuple[CVE, ...] = (
         cvss_version="v3.1",
         dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("normalize_confusables", "canonicalize", "strip_obfuscation"),
-        detectors=("is_confusable", "is_suspicious_hostname"),
+        # #737: reached by the `confusable` kind. `canonicalize`'s second
+        # ASCII-producing step is the confusable fold, and the detector never
+        # consulted it — the largest table disarm ships.
+        detectors=("has_anomalies", "is_confusable", "is_suspicious_hostname"),
         probe=KRA_HOST,
         reference="https://nvd.nist.gov/vuln/detail/CVE-2019-11721",
     ),
@@ -2919,9 +2931,10 @@ class TestDetectionHasNoSuperset:
             # That kind reaches five rows, and four of them are OUT OF SCOPE — it
             # gives a signal on vectors disarm does not claim to stop, which is the
             # most useful thing a detector can do for a row nothing neutralizes.
-            # 25 since #700 widened the carriers to what the strip functions already
-            # act on and added the run rule; 24 before that, 19 before #633.
-            "has_anomalies": 25,
+            # 29 since #737 added the `confusable` kind, which reaches the four
+            # homoglyph CVEs the confusable table was built for; 25 after #700's carrier
+            # widening and run rule, 24 after #633, 19 after #612.
+            "has_anomalies": 29,
             "is_confusable": 9,
             "is_mixed_script": 4,
             # CVE-2017-7833 is the only row that fires this: the Arabic mark is

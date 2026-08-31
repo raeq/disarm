@@ -48,10 +48,12 @@ ordinary vocabulary: `boiling`/`bolling`, `doit`/`dolt`, `broil`/`broll`,
 `silverer`/`sliverer`.
 
 Every existing key builder is in the expensive position. `catalog_key` folds case at step
-3 and reaches `Step::Confusables` at step 6, and the order is load-bearing rather than
-incidental: `src/presets.rs:1005-1009` records that folding before transliteration is
-what makes the preset idempotent (#419). Reordering to make room for this class would
-reintroduce that defect.
+3 and only then enters the romanization core, with `Step::Confusables("latin")` sitting
+inside it between transliteration and accent stripping. The order is load-bearing rather
+than incidental: `src/presets.rs:1005-1009` records that folding before transliteration is
+what makes the preset idempotent (#419), and `:1011-1024` records why the three inner
+steps run in the order they do. Reordering to make room for this class would reintroduce
+that defect.
 
 So the class needs a position no current builder offers, which makes it a separate
 builder rather than a setting on one that exists.

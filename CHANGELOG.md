@@ -89,6 +89,11 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `Step::Zalgo(0)`, which stripped every mark, so fixing only `strip_accents` left 20 of
   the 45 still inverting.
 
+  **Exactly one overlay per base.** A relation carries a single stroke; a *run* of them is
+  stacking whatever the base is. Exempting the whole run let `"=" + "\u0338" * 1000`
+  through `Zalgo(0)` intact — a cap bypass. Overlays after the first are counted like any
+  other combining mark.
+
   Idempotence is unaffected, which #467/#498 closed and #749 §4 asks to confirm. Two Rust
   tests asserted the inverted targets and are updated: `catalog_key`'s cascade test, and
   an `ml_normalize` test whose 17 rows each named a negated relation as its positive.

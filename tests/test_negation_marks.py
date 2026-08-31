@@ -11,6 +11,7 @@ strikethrough obfuscation, which `strip_obfuscation` exists to remove.
 
 from __future__ import annotations
 
+import functools
 import unicodedata
 
 import pytest
@@ -32,8 +33,13 @@ SURFACES = [
 ]
 
 
-def _negated() -> list[int]:
-    """Every assigned code point whose NFD carries a negation overlay."""
+@functools.cache
+def _negated() -> tuple[int, ...]:
+    """Every assigned code point whose NFD carries a negation overlay.
+
+    Cached: this is a full 0x110000 scan and several tests want the population, one of
+    them once per surface.
+    """
     out = []
     for cp in range(0x110000):
         if 0xD800 <= cp <= 0xDFFF or cp in (0x0338, 0x20D2):
@@ -43,7 +49,7 @@ def _negated() -> list[int]:
             continue
         if any(c in OVERLAYS for c in unicodedata.normalize("NFD", ch)):
             out.append(cp)
-    return out
+    return tuple(out)
 
 
 def _positive_base(ch: str) -> str:
@@ -106,3 +112,25 @@ def test_ordinary_accents_still_strip() -> None:
 def test_zalgo_is_still_capped() -> None:
     """The overlays are exempt from the cap, not the cap from the overlays."""
     assert disarm.strip_zalgo("a" + "́" * 10) != "a" + "́" * 10
+
+
+@pytest.mark.parametrize("run", [1, 2, 5, 50, 1000])
+def test_a_run_of_overlays_does_not_bypass_the_zalgo_cap(run: int) -> None:
+    """Exactly one overlay per base survives, however many arrive.
+
+    The exemption is for *a* negation — a relation carries one stroke. A run of them is
+    stacking whatever the base is, and exempting the whole run would let `Zalgo(0)`
+    through untouched, which is the thing that step exists to stop.
+    """
+    stacked = "=" + "\u0338" * run
+    assert len(disarm.strip_zalgo(stacked, max_marks=0)) == 1
+    assert disarm.strip_zalgo(stacked, max_marks=0) == "\u2260"
+    assert len(disarm.strip_accents(stacked)) == 1
+    # And the same run on a letter is still stripped outright — it is strikethrough.
+    assert disarm.strip_zalgo("a" + "\u0338" * run, max_marks=0) == "a"
+
+
+def test_each_base_gets_its_own_overlay() -> None:
+    """One per base, not one per string."""
+    assert disarm.strip_accents("=\u0338=\u0338") == "\u2260\u2260"
+    assert disarm.strip_zalgo("=\u0338\u0338=\u0338\u0338", max_marks=0) == "\u2260\u2260"

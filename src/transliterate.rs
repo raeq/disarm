@@ -1576,20 +1576,28 @@ pub fn strip_accents_into(text: &str, out: &mut String) {
     }
 
     // An explicit walk rather than `.filter()`: whether a mark is strippable depends on
-    // the base it sits on (#749), which a stateless filter cannot see.
-    let mut kept: Vec<char> = Vec::new();
+    // the base it sits on (#749), which a stateless filter cannot see. A `String` rather
+    // than a `Vec<char>`: the NFD walk of a long input is the hot path here, and four
+    // bytes per scalar buys nothing that `str::nfc()` cannot read back.
+    let mut kept = String::with_capacity(text.len());
     let mut base: Option<char> = None;
+    let mut negation_kept = false;
     for ch in text.nfd() {
         if unicode_normalization::char::is_combining_mark(ch) {
-            if is_negation_of(ch, base) {
+            // Exactly one negation overlay per base, matching `strip_zalgo_into`. A
+            // relation carries a single stroke; a run of them is stacking, and this walk
+            // has no cap of its own to fall back on.
+            if !negation_kept && is_negation_of(ch, base) {
+                negation_kept = true;
                 kept.push(ch);
             }
         } else {
             base = Some(ch);
+            negation_kept = false;
             kept.push(ch);
         }
     }
-    out.extend(kept.into_iter().nfc());
+    out.extend(kept.nfc());
 }
 
 /// Reject a registration mutation once the tables have been sealed (#64).

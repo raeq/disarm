@@ -198,6 +198,71 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`detect_encoding` reports UTF-16 (#710).** It could not return a UTF-16 label for any
+  input: chardetng does not guess UTF-16, and nothing looked for a BOM before it ran. So
+  the two encoding functions disagreed on the same bytes, silently, and only one of them
+  was right:
+
+  ```
+  detect_encoding("héllo wörld".encode("utf-16"))   ('KOI8-U', 0.95)  ->  ('UTF-16LE', 0.95)
+  decode_to_utf8(same bytes)                        'héllo wörld'         'héllo wörld'
+  bytes.decode(that label)                          'ЪЧh\x00И\x00l\x00…'   'héllo wörld'
+  ```
+
+  A caller following `detect_encoding`'s own advice — *"prefer explicit encoding metadata
+  over detection"* — carried the label to another decoder and got mojibake, at the highest
+  confidence the API can express. A BOM is not a probabilistic signal, so this was never
+  the ambiguous-bytes case the encoding tests scope out.
+
+  Both deterministic cases are now decided before chardetng runs:
+
+  - **A BOM**, via `Encoding::for_bom` — the same WHATWG sniff `decode_to_utf8` already
+    performs internally, so the two agree by construction rather than by a second
+    implementation that could drift.
+  - **BOM-less UTF-16 over ASCII-range text**, where every second byte is `00` and the
+    NUL's position is the endianness. That was the sharper half: `decode_to_utf8` returned
+    a NUL after every character with `had_errors=False`, and `strict=True` did not catch
+    it, because windows-1252 maps every byte to something.
+
+  **BOM-less UTF-16 outside the ASCII range stays undetected**, and is now documented
+  rather than silent (#710 §3). In UTF-16LE Cyrillic the high byte is `04`, not `00`, so
+  `"Привет"` without a BOM carries no NUL and there is nothing deterministic to read;
+  guessing from script frequency is the case `THREAT_MODEL.md` scopes out. Asserted as a
+  known negative in the tests and written up in `docs/limitations.md`.
+
+  The sniff is deliberately conservative: one byte position must be at least half NUL and
+  the other exactly zero, since text in a single-byte encoding contains no NUL at all.
+  Measured over 20,082 text inputs — 12 texts across 14 encodings plus 20,000 random
+  NUL-free byte strings — zero false UTF-16 labels.
+
+- **`sanitize_filename` no longer manufactures a percent escape (#721).** It collapses a
+  literal `..` before transliterating and again afterwards, because `U+2026` and `U+00B7`
+  can reintroduce one. The same step could assemble `%2E%2E%2F` — the percent-encoded
+  spelling of the *same* traversal — out of characters containing no `%`, no `2`, no `E`
+  and no `F`:
+
+  ```
+  sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt")   '%2E%2E%2Fetc.txt'  ->  '_2E_2E_2Fetc.txt'
+  unquote(that)                                  '../etc.txt'              '_2E_2E_2Fetc.txt'
+  sanitize_filename("％００.png")                  '%00.png'         ->  '_00.png'
+  ```
+
+  `%` is legal in a filename on every supported platform, so it is not in
+  `UNIVERSAL_ILLEGAL` and nothing removed it. The remedy at the dot-collapse covered one
+  spelling of traversal and not the other.
+
+  The rule is exact: **`%` never appears in the output unless it appeared in the input.**
+  Five code points fold to `%` — `؉` U+0609, `؊` U+060A, `٪` U+066A, `﹪` U+FE6A, `％`
+  U+FF05 — enumerated by an exhaustive scan rather than assumed, and the manufactured one
+  is replaced by the caller's separator like any other stripped character.
+
+  A `%` the caller typed is kept, which is the boundary the issue asks to have written
+  down (§2): `sanitize_filename("..%2Fetc")` returns `"%2Fetc"` — the literal `..`
+  collapsed, the percent-encoded spelling left alone, because the caller wrote it. A
+  **safe filename is not a safe URL path segment**, and a consumer that percent-decodes
+  the result must validate after decoding. Now stated on `docs/limitations.md` and on the
+  Rust, Python, Node, Ruby and Java surfaces.
+
 - **`gem install disarm` failed on every Ruby released since December 2024 (#699).** The
   five precompiled platform gems all carried `required_ruby_version = ">= 3.1, < 3.4.dev"`
   and no source gem had ever been published, so resolution simply ended — RubyGems never

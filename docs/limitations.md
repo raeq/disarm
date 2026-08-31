@@ -16,6 +16,39 @@ The confidence score returned by `detect_encoding` should not be treated as reli
 
 **Notable limitation**: chardetng's accuracy was evaluated on the same Wikipedia dataset used for training, unlike ced's testing against independent corpora. Real-world accuracy on domain-specific content (e.g., machine-generated logs, mixed-encoding streams) may differ.
 
+### BOM-less UTF-16 is detected only over ASCII-range text
+
+chardetng never produces a UTF-16 label, so disarm decides UTF-16 before handing the bytes
+to it. Two cases are deterministic and both are handled:
+
+- **A BOM.** `FF FE`, `FE FF` and `EF BB BF` yield `UTF-16LE`, `UTF-16BE` and `UTF-8`
+  directly. This is the same WHATWG sniff `decode_to_utf8` performs internally, so the two
+  functions agree by construction.
+- **BOM-less UTF-16 over ASCII-range text.** Every ASCII character is one NUL byte plus
+  the ASCII byte, and which position holds the NUL is the endianness. Text in a single-byte
+  encoding contains no NUL at all, so the pattern is near-decisive; disarm requires one
+  position to be at least half NUL and the other to be exactly zero.
+
+**Outside the ASCII range there is no signal to read.** In UTF-16LE Cyrillic the high byte
+is `04`, not `00`, so `"Привет"` without a BOM carries no NUL:
+
+```python
+from disarm import detect_encoding
+
+assert detect_encoding("héllo wörld".encode("utf-16-le"))[0] == "UTF-16LE"  # mostly ASCII
+assert detect_encoding("Привет".encode("utf-16-le"))[0] != "UTF-16LE"  # no NULs
+```
+
+Such input decodes as a single-byte encoding and yields mojibake, with `had_errors=False`
+and no `strict=True` error, because windows-1252 maps every byte to something. Guessing
+from script frequency instead would be exactly the ambiguous-bytes case
+[THREAT_MODEL.md](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md) scopes out.
+Supply the encoding explicitly when you know the source emits BOM-less UTF-16 — Windows
+tooling and several database exports do.
+
+Measured over 20,082 text inputs (12 texts across 14 single-byte and multi-byte encodings,
+plus 20,000 random NUL-free byte strings): zero false UTF-16 labels.
+
 ### Encoding coverage is web-focused
 
 chardetng targets encodings historically deployed as browser defaults per the [WHATWG Encoding Standard](https://encoding.spec.whatwg.org/). It does not detect macintosh encoding, ISO-8859-3, or the font-hack encodings used in South Asian web content. Content from .in and .lk domains may be misidentified.
@@ -393,6 +426,45 @@ The honest precondition for additivity is that the separator genuinely splits th
 - Windows reserved names (CON, PRN, NUL, COM1–COM9, LPT1–LPT9) are prefixed with `_` on all platforms, even POSIX systems where they are valid
 - The maximum filename length defaults to 255 bytes, which is the common limit across ext4, NTFS, and APFS
 - NFC normalization is always applied, even on Linux where the filesystem is encoding-agnostic
+
+### A safe filename is not a safe URL path segment
+
+`sanitize_filename()` produces a safe **filename**. It does not produce a safe URL path
+segment, and the two differ in one specific way worth knowing before you percent-decode
+the result.
+
+`%` is legal in a filename on every supported platform, so it is not stripped. A caller
+who typed one keeps it, and `sanitize_filename("..%2Fetc")` returns `"%2Fetc"` — the
+literal `..` collapsed, the percent-encoded spelling of the same traversal left alone,
+because the caller wrote it:
+
+```python
+from urllib.parse import unquote
+
+from disarm import sanitize_filename
+
+assert sanitize_filename("../etc") == "_etc"
+assert sanitize_filename("..%2Fetc") == "%2Fetc"
+assert unquote(sanitize_filename("..%2Fetc")) == "/etc"
+```
+
+What the sanitizer will *not* do is manufacture one. Compatibility folding maps five code
+points to `%` — `؉` U+0609, `؊` U+060A, `٪` U+066A, `﹪` U+FE6A and `％` U+FF05 — and
+before [#721](https://github.com/raeq/disarm/issues/721) that assembled a traversal out of
+input containing no `%` at all:
+
+```python
+assert (
+    sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt") == "_2E_2E_2Fetc.txt"
+)  # was "%2E%2E%2Fetc.txt"
+assert "%" not in sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt")
+```
+
+The rule is exact: **`%` never appears in the output unless it appeared in the input.**
+
+So a consumer that percent-decodes the result — `Content-Disposition`, an object-storage
+key, a static-file route, a download link — must validate *after* decoding.
+`serve(unquote(segment))` is not made safe by sanitizing the segment first.
 
 ### Truncation is byte-aware but not grapheme-aware
 

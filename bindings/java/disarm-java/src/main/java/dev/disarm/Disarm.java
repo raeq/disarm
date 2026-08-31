@@ -229,7 +229,15 @@ public final class Disarm {
                 options.safeChars());
     }
 
-    /** Turn arbitrary text into a filesystem-safe filename with default options. */
+    /**
+     * Turn arbitrary text into a filesystem-safe filename with default options.
+     *
+     * <p>A safe <em>filename</em>, not a safe URL path segment. {@code %} is legal in a
+     * filename, so one the caller typed is kept — {@code sanitizeFilename("..%2Fetc")}
+     * returns {@code "%2Fetc"} — and a consumer that percent-decodes the result must
+     * validate <em>after</em> decoding. What this will not do is manufacture one:
+     * {@code %} never appears in the output unless it appeared in the input (#721).
+     */
     public static String sanitizeFilename(String text) {
         return sanitizeFilename(text, SanitizeFilenameOptions.builder().build());
     }

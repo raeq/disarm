@@ -394,6 +394,18 @@ Disarm.sanitize_filename("My: report*.txt")         # => "My_report.txt"
 Disarm.sanitize_filename("CON", platform: :windows) # => "_CON"
 ```
 
+!!! warning "A safe filename is not a safe URL path segment"
+
+    `%` is legal in a filename, so one the caller typed is kept —
+    `Disarm.sanitize_filename("..%2Fetc")` returns `"%2Fetc"`, with the literal `..`
+    collapsed and the percent-encoded spelling of the same traversal left alone. A
+    consumer that percent-decodes the result must validate *after* decoding.
+
+    What this will not do is manufacture one: compatibility folding maps five code points
+    to `%`, which used to assemble `%2E%2E%2F` out of input containing none. `%` never
+    appears in the output unless it appeared in the input
+    ([#721](https://github.com/raeq/disarm/issues/721)).
+
 ## Reverse transliteration & untranslatable scan
 
 ### `Disarm.reverse_transliterate(text, lang:)`

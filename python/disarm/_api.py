@@ -112,6 +112,7 @@ from disarm._enums import (
     ScriptMeta,
 )
 from disarm._types import (
+    NF,
     EmojiProvider,
     ErrorMode,
     NormalizationForm,
@@ -659,6 +660,35 @@ def slugify(
     return slug
 
 
+def _norm_form(form: NormalizationForm | NF) -> NormalizationForm:
+    """The string the core expects, from either an `NF` member or a bare form string.
+
+    `NF`, `Script` and `Component` are plain `enum.Enum`, not `str` subclasses, so PyO3
+    rejects a member outright (#767). The coercion existed as a one-liner twice — in
+    `percent_encode` and `script_info` — and nothing generalised it, which is exactly why
+    those two were the only two surfaces that accepted their own enum.
+
+    A bare string is returned untouched, so it still reaches the core and is still
+    validated there. Subclassing `str` was rejected as the fix: it would make
+    `Script.LATIN == "Latin"` true and silently change the meaning of every equality and
+    `in` test a caller has already written against these members.
+    """
+    return form.value if isinstance(form, NF) else form
+
+
+def _target_script(value: str | Script) -> str:
+    """`Script` has two spellings in this API and they are not interchangeable (#767).
+
+    `script_info` takes the enum's own value — `"Latin"` — and rejects `"latin"`. The
+    confusable surfaces take `"latin"` and reject `"Latin"`. So the one-liner that fixes
+    `form=` is not enough here: it yields `"Latin"`, which is still wrong at six surfaces.
+
+    Only a member is lowered. A bare string passes through unchanged, so `"Latin"` keeps
+    failing exactly as it does today rather than being quietly repaired.
+    """
+    return value.value.lower() if isinstance(value, Script) else value
+
+
 @overload
 def normalize(text: str, *, form: NormalizationForm = ...) -> str: ...
 
@@ -670,7 +700,7 @@ def normalize(text: list[str], *, form: NormalizationForm = ...) -> list[str]: .
 def normalize(
     text: str | list[str],
     *,
-    form: NormalizationForm = "NFC",
+    form: NormalizationForm | NF = "NFC",
 ) -> str | list[str]:
     """Unicode normalization.
 
@@ -705,16 +735,16 @@ def normalize(
     # binding-side form check or ASCII short-circuit left to keep in sync.
     if isinstance(text, list):
         _validate_batch(text, "normalize")
-        return _normalize_batch(text, form=form)
+        return _normalize_batch(text, form=_norm_form(form))
     if not isinstance(text, str):
         raise TypeError(f"normalize() expects str or list[str], got {type(text).__name__}")
-    return _normalize(text, form=form)
+    return _normalize(text, form=_norm_form(form))
 
 
 def normalize_confusables(
     text: str,
     *,
-    target_script: str = "latin",
+    target_script: str | Script = "latin",
     digit_policy: str = "numeric",
 ) -> str:
     """Replace Unicode confusable homoglyphs with target-script equivalents.
@@ -787,7 +817,9 @@ def normalize_confusables(
     """
     if not isinstance(text, str):
         raise TypeError(f"normalize_confusables() expects str, got {type(text).__name__}")
-    return _normalize_confusables(text, target_script=target_script, digit_policy=digit_policy)
+    return _normalize_confusables(
+        text, target_script=_target_script(target_script), digit_policy=digit_policy
+    )
 
 
 def sanitize_filename(
@@ -1888,7 +1920,7 @@ def has_bidi_conflict(text: str) -> bool:
 def is_confusable(
     text: str,
     *,
-    target_script: str = "latin",
+    target_script: str | Script = "latin",
     # confusable_homoglyphs compatibility
     greedy: bool | None = None,
     preferred_aliases: list[str] | None = None,
@@ -1932,10 +1964,10 @@ def is_confusable(
             DeprecationWarning,
             stacklevel=2,
         )
-    return _is_confusable(text, target_script=target_script)
+    return _is_confusable(text, target_script=_target_script(target_script))
 
 
-def unmapped_confusables(*, target_script: str = "latin") -> frozenset[str]:
+def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[str]:
     """Every upstream confusable source disarm's bundled table does not fold (#563).
 
     Read this as **exposure**, not as a score. A tool at 95% per-source coverage is not
@@ -1970,10 +2002,12 @@ def unmapped_confusables(*, target_script: str = "latin") -> frozenset[str]:
         >>> "m" in unmapped  # TR39 skeleton source m→rn, deliberately not applied
         True
     """
-    return frozenset(_unmapped_confusables(target_script=target_script))
+    return frozenset(_unmapped_confusables(target_script=_target_script(target_script)))
 
 
-def find_unmapped_confusables(text: str, *, target_script: str = "latin") -> list[tuple[str, int]]:
+def find_unmapped_confusables(
+    text: str, *, target_script: str | Script = "latin"
+) -> list[tuple[str, int]]:
     """Find confusable sources in *text* that disarm's table does not fold (#563).
 
     The confusables analogue of `find_untranslatable`, and it follows the same
@@ -2008,7 +2042,7 @@ def find_unmapped_confusables(text: str, *, target_script: str = "latin") -> lis
     """
     if not isinstance(text, str):
         raise TypeError(f"find_unmapped_confusables() expects str, got {type(text).__name__}")
-    return _find_unmapped_confusables(text, target_script=target_script)
+    return _find_unmapped_confusables(text, target_script=_target_script(target_script))
 
 
 def find_key_collisions(
@@ -2120,7 +2154,7 @@ def is_ascii(text: str) -> bool:
 def is_normalized(
     text: str,
     *,
-    form: NormalizationForm = "NFC",
+    form: NormalizationForm | NF = "NFC",
 ) -> bool:
     """True if text is already in the specified normalization form.
 
@@ -2137,7 +2171,7 @@ def is_normalized(
         >>> is_normalized("e\\u0301", form="NFC")  # NFD decomposed
         False
     """
-    return _is_normalized(text, form=form)
+    return _is_normalized(text, form=_norm_form(form))
 
 
 # --- Stateful objects ---

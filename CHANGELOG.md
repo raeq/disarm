@@ -111,6 +111,30 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`detect_scripts` returned an empty list for four real scripts (#775).** The Rust core
+  resolved Batak, Buhid, Hanunoo and Tagbanwa; the `Script` enum could not name them, so
+  the binding warned — telling the user to report a bug — and dropped the script from the
+  result. Non-empty input, empty list, 160 assigned code points.
+
+  All four are now enum members with `SCRIPT_META` rows, and `src/metadata.rs` is
+  regenerated. A tier-3 sweep walks the whole code point space with warnings promoted to
+  errors, so a future core table gaining a script the enum cannot spell fails a test
+  instead of silently shortening someone's result.
+
+- **Ten of the twelve surfaces that document an enum rejected it (#767).** `NF`, `Script`
+  and `Component` are plain `enum.Enum`, so PyO3 raised `TypeError: 'NF' object is not an
+  instance of 'str'`. `percent_encode` and `script_info` coerced to `.value` with a
+  one-liner and were the only two that worked.
+
+  `Script` needed more than that one-liner, which is why the obvious fix would not have
+  been enough: it has two spellings in this API and they are not interchangeable.
+  `script_info` takes `"Latin"` and rejects `"latin"`; the confusable surfaces take
+  `"latin"` and reject `"Latin"`. Coercing to `.value` alone still fails at six of them.
+
+  Only a member is translated. A bare string reaches the core unchanged and is still
+  validated there, so a caller who hard-coded `"Latin"` at a confusable surface still
+  finds out rather than having it quietly repaired.
+
 - **The "Try disarm in your browser" link pointed at a host that no longer resolves (#696).**
   The demo moved to `https://disarm.dev/tools/` and the link did not follow it.
 

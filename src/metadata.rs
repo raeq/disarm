@@ -811,6 +811,15 @@ pub(crate) static SCRIPTS_META: &[(&str, ScriptRow)] = &[
         },
     ),
     (
+        "Batak",
+        ScriptRow {
+            name: "Batak",
+            default_lang: None,
+            example: "ᯀᯁᯂ",
+            context_aware: false,
+        },
+    ),
+    (
         "Bengali",
         ScriptRow {
             name: "Bengali",
@@ -825,6 +834,15 @@ pub(crate) static SCRIPTS_META: &[(&str, ScriptRow)] = &[
             name: "Buginese (Lontara)",
             default_lang: Some("bug"),
             example: "ᨀᨁᨂ",
+            context_aware: false,
+        },
+    ),
+    (
+        "Buhid",
+        ScriptRow {
+            name: "Buhid",
+            default_lang: None,
+            example: "ᝀᝁᝂ",
             context_aware: false,
         },
     ),
@@ -960,6 +978,15 @@ pub(crate) static SCRIPTS_META: &[(&str, ScriptRow)] = &[
             name: "Hangul",
             default_lang: Some("ko"),
             example: "한글",
+            context_aware: false,
+        },
+    ),
+    (
+        "Hanunoo",
+        ScriptRow {
+            name: "Hanunoo",
+            default_lang: None,
+            example: "ᜠᜡᜢ",
             context_aware: false,
         },
     ),
@@ -1189,6 +1216,15 @@ pub(crate) static SCRIPTS_META: &[(&str, ScriptRow)] = &[
         },
     ),
     (
+        "Tagbanwa",
+        ScriptRow {
+            name: "Tagbanwa",
+            default_lang: None,
+            example: "ᝠᝡᝢ",
+            context_aware: false,
+        },
+    ),
+    (
         "TaiLe",
         ScriptRow {
             name: "Tai Le",
@@ -1278,8 +1314,10 @@ pub(crate) static SCRIPTS: &[&str] = &[
     "Armenian",
     "Balinese",
     "Bamum",
+    "Batak",
     "Bengali",
     "Buginese",
+    "Buhid",
     "CanadianAboriginal",
     "Cham",
     "Cherokee",
@@ -1296,6 +1334,7 @@ pub(crate) static SCRIPTS: &[&str] = &[
     "Gurmukhi",
     "Han",
     "Hangul",
+    "Hanunoo",
     "Hebrew",
     "Hiragana",
     "Inherited",
@@ -1322,6 +1361,7 @@ pub(crate) static SCRIPTS: &[&str] = &[
     "Sundanese",
     "Syriac",
     "Tagalog",
+    "Tagbanwa",
     "TaiLe",
     "TaiTham",
     "Tamil",

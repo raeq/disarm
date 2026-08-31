@@ -669,6 +669,12 @@ EXPECTED_SCRIPT_MEMBERS = {
     "JAVANESE",
     "SUNDANESE",
     "TAGALOG",
+    # #775: added because the core already resolved them and the enum could not name
+    # them, so `detect_scripts` warned and dropped the script from its result.
+    "BUHID",
+    "HANUNOO",
+    "TAGBANWA",
+    "BATAK",
     "TAI_LE",
     "TAI_THAM",
     "NEW_TAI_LUE",

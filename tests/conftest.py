@@ -67,6 +67,12 @@ SCRIPT_SAMPLES: dict[Script, str] = {
     Script.JAVANESE: "\ua984\ua989\ua98e",  # ꦄꦉꦎ
     Script.SUNDANESE: "\u1b83\u1b84\u1b85",  # ᮃᮄᮅ
     Script.TAGALOG: "\u1700\u1701\u1702",  # ᜀᜁᜂ
+    # #775: the core resolved these four and the Script enum could not name them, so
+    # `detect_scripts` warned and returned an empty list on non-empty input.
+    Script.BUHID: "ᝀᝁᝂ",
+    Script.HANUNOO: "ᜠᜡᜢ",
+    Script.TAGBANWA: "ᝠᝡᝢ",
+    Script.BATAK: "ᯀᯁᯂ",
     Script.TAI_LE: "\u1950\u1951\u1952",  # ᥐᥑᥒ
     Script.TAI_THAM: "\u1a20\u1a21\u1a22",  # ᨠᨡᨢ
     Script.NEW_TAI_LUE: "\u1980\u1981\u1982",  # ᦀᦁᦂ

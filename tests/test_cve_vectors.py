@@ -764,10 +764,14 @@ class TestObfuscatedInjectionReachesTheGuardrail:
 class TestPromptInjectionIsOutOfScope:
     """disarm is not a prompt-injection defense. Pinned so it stays said.
 
-    Every one of these CVEs is triggered by *plain text carrying an
-    instruction*. There is no character-level manipulation to undo, so there is
-    nothing for a Unicode canonicalizer to do. disarm removes the wrapper, not
-    the message.
+    CVE-2024-5184, CVE-2024-5565 and CVE-2023-29374 are each triggered by *plain text
+    carrying an instruction*. There is no character-level manipulation to undo, so there
+    is nothing for a Unicode canonicalizer to do. disarm removes the wrapper, not the
+    message.
+
+    The three ids are named here rather than only in the section banner above, so the
+    class is findable by grepping for a CVE — and so the divider check below has
+    something to compare against.
     """
 
     @pytest.mark.parametrize(
@@ -1445,15 +1449,14 @@ class TestKraAndPunycodeSpoofs:
 
 
 # ---------------------------------------------------------------------------
-# CVE-2026-23950 — node-tar: a Unicode path collision poisons a symlink
+# CVE-2026-17084 — CPython stringprep: IDNA 2003 B.3 drifts off Unicode 3.2.0
 # ---------------------------------------------------------------------------
-# NVD: node-tar "fails to properly handle Unicode path collisions (such as `ß`
-# and `ss`), allowing conflicting paths to be processed in parallel", bypassing
-# the PathReservations concurrency guard. CWE-176 with CWE-367 (TOCTOU).
+# NVD: RFC 3454 pins stringprep tables B.2 and B.3 to Unicode 3.2.0, and CPython's
+# `map_table_b3` fell through to `str.lower()`, which uses whatever UCD the
+# interpreter ships. CWE-436 Interpretation Conflict.
 #
-# This is the same code point the CVE-2019-19844 exhaustive scan singled out:
-# `ß` is the one member of that collision class the confusable table leaves
-# alone, deliberately, because it is a real German letter.
+# A key-builder-only row: the hazard is that two CPythons disagree about one host
+# name, so there is no character to detect — only two spellings to collapse.
 
 
 class TestStringprepDrift:
@@ -1548,6 +1551,18 @@ class TestStringprepDrift:
         row = next(c for c in REGISTRY if c.id == "CVE-2026-17084")
         assert row.probe == "\u023a.example.com"
         assert disarm.search_key(row.probe) == disarm.search_key("\u2c65.example.com")
+
+
+# ---------------------------------------------------------------------------
+# CVE-2026-23950 — node-tar: a Unicode path collision poisons a symlink
+# ---------------------------------------------------------------------------
+# NVD: node-tar "fails to properly handle Unicode path collisions (such as `ß`
+# and `ss`), allowing conflicting paths to be processed in parallel", bypassing
+# the PathReservations concurrency guard. CWE-176 with CWE-367 (TOCTOU).
+#
+# This is the same code point the CVE-2019-19844 exhaustive scan singled out:
+# `ß` is the one member of that collision class the confusable table leaves
+# alone, deliberately, because it is a real German letter.
 
 
 class TestTarPathCollision:
@@ -2723,10 +2738,16 @@ REMOVAL_VECTORS = [
 NEUTRALIZABLE = [c for c, _, _ in COLLAPSE_VECTORS] + [c for c, _, _ in REMOVAL_VECTORS]
 
 #: Rows a *key builder* clears but no canonicalizer does, so they can be compared
-#: against other tools without belonging to the canonicalizer-clearable set.
-#: CVE-2026-23950 is the sharp-s path collision: folding it inside the confusable
-#: table would rewrite ordinary German, so `fold_case` owns it and `canonicalize`
-#: deliberately leaves it alone.
+#: against other tools without belonging to the canonicalizer-clearable set. Both
+#: members are here for the same structural reason and by different routes:
+#:
+#: * CVE-2026-23950 — the sharp-s path collision. Folding it inside the confusable
+#:   table would rewrite ordinary German, so `fold_case` owns it and `canonicalize`
+#:   deliberately leaves it alone. A decision, not a gap.
+#: * CVE-2026-17084 — the stringprep B.3 drift. The two spellings differ by a *case*
+#:   mapping, which is what the key builders apply and what the canonicalizers do
+#:   not: measured, they converge on 34 of 711 divergent code points where
+#:   `fold_case`, `search_key` and `catalog_key` converge on all 711.
 KEY_BUILDER_ONLY = ["CVE-2026-17084", "CVE-2026-23950"]
 
 #: What the comparator benchmark is expected to cover.
@@ -3640,3 +3661,74 @@ class TestDocsMatrixDrift:
                 if documented != claimed:
                     mismatches.append((cve_id, column, documented, claimed))
         assert not mismatches, mismatches
+
+
+class TestTheSectionDividersDescribeWhatFollowsThem:
+    """A divider must name the CVE the class below it is about.
+
+    Inserting a class above an existing one silently reassigns that one's section header
+    to the new class — the same shape as anchoring a code insert on a `fn` line and fusing
+    a doc comment onto the wrong item. It happened here: `TestStringprepDrift` landed under
+    the `CVE-2026-23950 — node-tar` divider, so the file claimed the stringprep tests were
+    about a sharp-s path collision.
+
+    A comment cannot be checked against what it means, but it can be checked against what
+    it sits above, and that is the half a machine can settle.
+    """
+
+    @staticmethod
+    def _sections() -> list[tuple[int, str, str]]:
+        """Every `# CVE-… ` divider paired with the first class defined under it."""
+        lines = Path(__file__).read_text(encoding="utf-8").split("\n")
+        out = []
+        for number, line in enumerate(lines):
+            if not line.startswith("# CVE-"):
+                continue
+            # The banner line inside a `# ---` sandwich, not a stray comment.
+            if number == 0 or not lines[number - 1].startswith("# ---"):
+                continue
+            cves = re.findall(r"CVE-\d{4}-\d+", line)
+            following = next(
+                (candidate for candidate in lines[number:] if candidate.startswith("class ")),
+                None,
+            )
+            if following and cves:
+                out.append((number + 1, ", ".join(cves), following))
+        return out
+
+    def test_the_scan_finds_the_sections(self) -> None:
+        """A gate over an empty list passes for the wrong reason."""
+        assert len(self._sections()) > 10, self._sections()
+
+    def test_each_divider_names_a_cve_its_class_tests(self) -> None:
+        """The class body must mention every CVE its banner claims.
+
+        Read from the class's own source rather than its name, because the names are
+        descriptive (`TestTarPathCollision`) rather than numeric.
+        """
+        source = Path(__file__).read_text(encoding="utf-8")
+        lines = source.split("\n")
+        mismatched = []
+        for line_no, cves, class_line in self._sections():
+            start = lines.index(class_line, line_no - 1)
+            # Stop at the next class OR the next section banner, whichever comes first.
+            # Running to the next `class` alone lets a *later* divider's text fall inside
+            # this body, and the check then finds the CVE it was looking for in a comment
+            # about something else — verified: without this bound the mutation that
+            # reproduces the original defect passes.
+            end = next(
+                (
+                    i
+                    for i in range(start + 1, len(lines))
+                    if lines[i].startswith("class ") or lines[i].startswith("# ---")
+                ),
+                len(lines),
+            )
+            body = "\n".join(lines[start:end])
+            for cve in cves.split(", "):
+                if cve not in body:
+                    mismatched.append(
+                        f"line {line_no}: the divider says {cve}, but "
+                        f"{class_line.strip()} never mentions it"
+                    )
+        assert not mismatched, "\n  ".join(mismatched)

@@ -67,6 +67,41 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Changed (breaking)
 
+- **A negation overlay is no longer treated as an accent (#749).** `strip_accents` removed
+  every `Mn`. `U+0338 COMBINING LONG SOLIDUS OVERLAY` and `U+20D2` are not diacritics — on
+  a relation symbol they *are* the negation, so removing one left the positive operator.
+  `≠` became `=`, and every surface running the step emitted output asserting the opposite
+  of its input, across 45 code points.
+
+  ```
+  strip_accents("≠")        '='   ->  '≠'
+  catalog_key("∄")          'e'   ->  '∄'      (∄ → ∃ → e)
+  ml_normalize("∦")   'parallel'  ->  '∦'
+  ```
+
+  **The rule reads the base, not the code point.** All 45 composed negations sit on a
+  symbol (`Sm` 44, `So` 1); the same `U+0338` on a *letter* is strikethrough obfuscation,
+  which `strip_obfuscation` exists to remove. A blanket exemption would have preserved
+  `H̸a̸t̸e̸` too, and that is a moderation bypass — the existing test for it is what caught
+  the first attempt.
+
+  Applies to the zalgo mark-strip as well as `strip_accents`: `strip_obfuscation` uses
+  `Step::Zalgo(0)`, which stripped every mark, so fixing only `strip_accents` left 20 of
+  the 45 still inverting.
+
+  **Exactly one overlay per base.** A relation carries a single stroke; a *run* of them is
+  stacking whatever the base is. Exempting the whole run let `"=" + "\u0338" * 1000`
+  through `Zalgo(0)` intact — a cap bypass. Overlays after the first are counted like any
+  other combining mark.
+
+  Idempotence is unaffected, which #467/#498 closed and #749 §4 asks to confirm. Two Rust
+  tests asserted the inverted targets and are updated: `catalog_key`'s cascade test, and
+  an `ml_normalize` test whose 17 rows each named a negated relation as its positive.
+
+  One residual is asserted as a known negative rather than fixed: `U+2ADC` is a
+  composition exclusion, so NFKC leaves it decomposed and the transliterate step drops the
+  orphaned overlay. That is a third mechanism and belongs in its own change.
+
 - **Bidi direction now comes from `Bidi_Class`, not a five-name script list (#773).**
   `strong_dir` resolved direction by looking a character's *script name* up in
   `RTL_SCRIPTS = ["Hebrew", "Arabic", "Syriac", "Thaana", "NKo"]`. UAX #9 resolves it from

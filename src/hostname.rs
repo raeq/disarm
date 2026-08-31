@@ -87,6 +87,20 @@ pub(crate) struct HostnameAnalysis {
     /// character (#605). Disjoint from `bidi_control`. Folded into `suspicious`,
     /// and stripped from `canonical`.
     pub(crate) has_invisible: bool,
+    /// Whether any label carried a Unicode compatibility form before normalization
+    /// (#709). Matches the `compat_fold` anomaly kind from #633, and is the only
+    /// field computed from the *raw* input: the NFKC that opens this analysis
+    /// destroys the evidence, so `ｇoogle.com` reached the per-label checks already
+    /// spelled `google.com` and screened clean while `inspect_anomalies` on the same
+    /// string returned `['compat_fold']`.
+    ///
+    /// The predicate is RFC 5892 §2.1's, applied per code point: a character `c`
+    /// where `toNFKC(c) != c` is DISALLOWED in an IDN label, so there is no
+    /// legitimate hostname to protect and this folds into `suspicious` on the same
+    /// footing as `bidi_control` and `has_invisible`. Tested per character rather
+    /// than "NFKC changed the label", which would fire on decomposed input that is
+    /// entirely valid (`한국.kr` written with conjoining jamo).
+    pub(crate) compat_fold: bool,
     /// Whether the labels span more than one distinct script (Common/Inherited
     /// excluded). Broader than `bidi_conflict`; NOT folded into `suspicious`.
     pub(crate) cross_label_script: bool,
@@ -168,11 +182,87 @@ pub(crate) struct HostnameAnalysis {
 /// contraction is worse than none (it breaks `earnings`, `turnip`, `born`), and a
 /// hostname is the one place where the threat model justifies the false positives and
 /// there is no running prose to corrupt.
+/// The IDNA label separators (UTS #46 §4): FULL STOP plus the three code points UTS #46
+/// treats as equivalent to it.
+///
+/// Splitting on `'.'` alone would read a fullwidth or ideographic stop as label *content*.
+/// The NFKC that used to open this function did that job by rewriting them, but it also
+/// pre-empted the UTS #46 mapping the analysis is supposed to run on: NFKC turns `ϲ`
+/// U+03F2 into `ς` U+03C2, where UTS #46 maps it to `σ` U+03C3. The label reaching the
+/// confusable check was then neither spelling's real form — `ϲ.com` resolved to `ς.com`
+/// and its own ACE spelling `xn--4xa.com` to `o.com`. Splitting on the separators
+/// directly lets the raw label reach `domain_to_unicode` intact (#714).
+fn is_label_separator(c: char) -> bool {
+    matches!(c, '.' | '\u{FF0E}' | '\u{3002}' | '\u{FF61}')
+}
+
+/// Remove every invisible-in-a-hostname character from `label`, recording whether any
+/// were there (#605, widened by #610).
+///
+/// Stripped BEFORE script analysis rather than later on the joined hostname: `U+FEFF`
+/// sits in the Arabic Presentation Forms block, `U+180E` in the Mongolian block and
+/// `U+FDD0` in the Arabic Presentation Forms range, so leaving them in makes
+/// `detect_scripts` report a script the reader cannot see and `mixed_script` fire on an
+/// ASCII-looking host. Stripping first means nothing downstream — scripts, mixed_script,
+/// confusables, canonical — ever sees them.
+///
+/// RFC 5892 puts the four classes #610 added in DISALLOWED outright, so a hostname
+/// carrying one is malformed whatever its intent and the screen fails closed. That is why
+/// PUA and the variation selectors are included here but would need a separate argument in
+/// a general-text detector, where both have legitimate uses. ZWNJ/ZWJ are the exception:
+/// CONTEXTJ, so conditionally permitted. Flagging them is a policy choice (#605), not
+/// something the RFC settles. The tag block is the ASCII-smuggling channel:
+/// `U+E0061`-`U+E007A` spell arbitrary Latin invisibly, so returning them in `canonical`
+/// would launder the payload.
+///
+/// Called on both sides of the UTS #46 mapping (#714): the mapping's IGNORED disposition
+/// deletes half this set silently, so a check placed only after it can never fire on a
+/// literal spelling; and a punycode label can decode into one, which a check placed only
+/// before it would miss. `retain` edits in place and only runs when something is actually
+/// there to remove, so the clean path neither allocates nor rescans.
+fn strip_invisibles(label: &mut String, found: &mut bool) {
+    if label.chars().any(is_invisible_in_hostname) {
+        *found = true;
+        label.retain(|c| !is_invisible_in_hostname(c));
+    }
+}
+
+/// RFC 5892 §2.1's DISALLOWED derivation, per code point (#709).
+///
+/// A character whose NFKC form is not itself is disallowed in an IDN label, so this is
+/// the whole test — no ASCII-alphabetic gate like `src/anomalies.rs`'s. That gate exists
+/// there to keep `ＮＨＫ` out of a general-text report; on hostname-shaped input it is
+/// already void (the TLD supplies the ASCII) and there is no registrable name to protect.
+///
+/// Per *character*, not "NFKC changed the label": the label-level form fires on
+/// decomposed input that is entirely legitimate, such as `한국.kr` written with
+/// conjoining jamo, where every individual code point is NFKC-stable.
+fn has_compat_form(label: &str) -> bool {
+    label.chars().any(|c| {
+        let mut folded = c.nfkc();
+        folded.next() != Some(c) || folded.next().is_some()
+    })
+}
+
 pub(crate) fn is_suspicious_hostname_opts(
     hostname: &str,
     contractions: bool,
 ) -> (bool, HostnameAnalysis) {
-    // 1. NFKC normalize
+    // #709: read the compatibility forms off the RAW input. The NFKC below is what makes
+    // the rest of this analysis work — every later field is computed from `normalized` —
+    // and it is also what erases the evidence: by the per-label checks `ｇoogle` is
+    // already `google`, `is_confusable` correctly returns false, and nothing reports what
+    // the mapping ate. `analysis.canonical` differing from the input was the analysis
+    // proving to itself that a fold happened while `suspicious` said clean.
+    //
+    // ACE labels are pure ASCII and so are NFKC-stable by construction; a compatibility
+    // form smuggled inside punycode is caught by the UTS #46 decode below, which rejects
+    // DISALLOWED code points outright.
+    let mut compat_fold = has_compat_form(hostname);
+
+    // NFKC is still applied for the IPv6-literal test below, which is a *structural*
+    // question (does this parse as `[::1]`) that fullwidth digits and colons can dress
+    // up. It is deliberately NOT applied to the labels: see `is_label_separator`.
     let normalized: String = hostname.nfkc().collect();
 
     // IPv6 literals (e.g. "[::1]", "[2001:db8::1]") are not IDN hostnames and
@@ -189,6 +279,7 @@ pub(crate) fn is_suspicious_hostname_opts(
                 bidi_conflict: false,
                 bidi_control: false,
                 has_invisible: false,
+                compat_fold: false,
                 cross_label_script: false,
                 label_scripts: Vec::new(),
                 whole_script_confusable: false,
@@ -209,7 +300,7 @@ pub(crate) fn is_suspicious_hostname_opts(
     let mut per_label_scripts: Vec<Vec<String>> = Vec::new();
     let mut per_label_wsc: Vec<bool> = Vec::new();
 
-    for raw_label in normalized.split('.') {
+    for raw_label in hostname.split(is_label_separator) {
         // Empty labels arise from leading, trailing, or consecutive dots
         // (e.g. "a..b" or "example.com.").  These are structurally
         // malformed but not a homoglyph attack vector — skip them (but keep a
@@ -221,46 +312,55 @@ pub(crate) fn is_suspicious_hostname_opts(
             continue;
         }
 
-        // Decode `xn--` ACE labels to their Unicode form (UTS#46, #63) so the
-        // on-the-wire IDN homograph attack is analysed instead of passing as
-        // inert ASCII. A malformed ACE label cannot be verified → fail closed.
-        // `raw_label` here is *not yet known* to be ACE — it may be a non-ASCII
-        // Unicode label — so a byte slice `raw_label[..4]` could fall mid-codepoint
-        // and panic; the byte-prefix compare never can, and real ACE labels are
-        // pure ASCII so it matches exactly. `>= 4` (not `> 4`) keeps a bare,
-        // malformed `"xn--"` recognised as ACE and routed through the fail-closed
-        // decode below rather than slipping past as an inert ASCII label.
-        let is_ace =
-            raw_label.len() >= 4 && raw_label.as_bytes()[..4].eq_ignore_ascii_case(b"xn--");
-        let mut label: String = if is_ace {
-            let (unicode, result) = idna::domain_to_unicode(raw_label);
-            if result.is_err() {
-                suspicious = true;
-            }
-            unicode.nfkc().collect()
-        } else {
-            raw_label.to_string()
-        };
-        // Invisible characters of every class (#605, widened by #610). Removed HERE,
-        // before script analysis, rather than later on the joined hostname: U+FEFF sits
-        // in the Arabic Presentation Forms block, U+180E in the Mongolian block and
-        // U+FDD0 in the Arabic Presentation Forms range, so leaving them in makes
-        // `detect_scripts` report a script the reader cannot see and `mixed_script` fire
-        // on an ASCII-looking host. Stripping first means nothing downstream — scripts,
-        // mixed_script, confusables, canonical — ever sees them.
+        // Map EVERY label through UTS #46, not only the `xn--` ones (#714).
         //
-        // RFC 5892 puts the four classes #610 added in DISALLOWED outright, so a hostname
-        // carrying one is malformed whatever its intent and the screen fails closed. That
-        // is why PUA and the variation selectors are included here but would need a
-        // separate argument in a general-text detector, where both have legitimate uses.
-        // ZWNJ/ZWJ are the exception: CONTEXTJ, so conditionally permitted. Flagging them
-        // is a policy choice (#605), not something the RFC settles.
-        // The tag block is the ASCII-smuggling channel: U+E0061-U+E007A spell arbitrary
-        // Latin invisibly, so returning them in `canonical` would launder the payload.
-        if label.chars().any(is_invisible_in_hostname) {
-            has_invisible = true;
-            label.retain(|c| !is_invisible_in_hostname(c));
+        // #63 added this decode so an on-the-wire IDN homograph would be analysed
+        // instead of passing as inert ASCII, and it did exactly that — but the mapping
+        // it introduced reached only the ACE branch. A label written in literal Unicode
+        // went to script and confusable analysis unmapped, so the two spellings of one
+        // registered domain were two different inputs and **561 code points** got a
+        // different verdict depending on which spelling the caller happened to hold:
+        // `xn--58da.com` was suspicious and `ꭰꭰ.com` was clean, naming the same domain.
+        // The Cherokee row is the CVE-2026-17084 one (#713): UTS #46 folds `U+AB70`
+        // toward `U+13A0`, which disarm maps to `D`, so only the ACE spelling ever
+        // reached the whole-script-confusable check.
+        //
+        // The NFKC at the top of this function is not a substitute: UTS #46's table
+        // includes case folding and per-character dispositions NFKC does not perform.
+        //
+        // `domain_to_unicode` decodes punycode *and* applies the mapping, so one call
+        // covers both spellings and the ACE/literal branch disappears. A malformed
+        // label cannot be verified → fail closed, as the ACE branch already did. On
+        // error the raw label is kept instead of the best-effort mapping; see below.
+        //
+        // The invisible strip below runs FIRST, on the raw label, because UTS #46 gives
+        // ZWSP, the word joiner, U+FEFF, U+180E and the variation selectors the IGNORED
+        // disposition: the mapping deletes them silently, and mapping before the check
+        // made `has_invisible` unreachable for every literal spelling of #605's own set.
+        // It runs again afterwards because a punycode label can decode *into* one.
+        let mut label = raw_label.to_string();
+        strip_invisibles(&mut label, &mut has_invisible);
+
+        let (mapped, result) = idna::domain_to_unicode(&label);
+        if result.is_err() {
+            // The returned string is a best-effort form carrying `U+FFFD`, which is worse
+            // to analyse than the input and would launder into `canonical`. Keep the raw
+            // label — NFKC-folded, so an unmappable label still canonicalizes as
+            // readably as it did before UTS #46 reached this branch — and let the flag
+            // carry the verdict.
+            suspicious = true;
+            label = label.nfkc().collect();
+        } else {
+            label = mapped.nfkc().collect();
         }
+        // A compatibility form can also arrive inside punycode, where the raw-input scan
+        // above cannot see it: the ACE label is pure ASCII.
+        if has_compat_form(&label) {
+            compat_fold = true;
+        }
+        // Second pass: a punycode label can decode into an invisible the raw scan above
+        // could not see.
+        strip_invisibles(&mut label, &mut has_invisible);
 
         decoded_labels.push(label.clone());
 
@@ -368,6 +468,15 @@ pub(crate) fn is_suspicious_hostname_opts(
         suspicious = true;
     }
 
+    // #709: folded on the same #603 / #605 / #610 precedent. RFC 5892 §2.1 derives
+    // DISALLOWED for every code point NFKC rewrites, so the whole set is malformed in a
+    // hostname whatever its intent and there is no legitimate case to protect. The threat
+    // is a blocklist bypass rather than a lookalike: `ｅvil.com` is absent from a blocked
+    // set, screens clean, and resolves to `evil.com`.
+    if compat_fold {
+        suspicious = true;
+    }
+
     // Hostname analysis keeps the NUMERIC digit policy (#561): a spoofed label is judged
     // on what a reader sees, and a Devanagari zero reads as a zero. The TR39 skeleton
     // policy is for benchmark comparison, not for this verdict.
@@ -401,6 +510,7 @@ pub(crate) fn is_suspicious_hostname_opts(
             bidi_conflict,
             bidi_control,
             has_invisible,
+            compat_fold,
             cross_label_script,
             label_scripts: per_label_scripts,
             whole_script_confusable,

@@ -27,6 +27,12 @@ import java.util.List;
  *                                   at all. Folded into {@code suspicious}; removed before any other
  *                                   field is computed, so they never reach {@code scripts} or
  *                                   {@code canonical}.
+ * @param compatFold                 whether any label carried a Unicode compatibility form before
+ *                                   normalization (#709) — fullwidth, ligature, Roman numeral,
+ *                                   mathematical alphanumeric. RFC 5892 §2.1 disallows every code point
+ *                                   where {@code toNFKC(c) != c}, so IDNA2008 disallows the whole set and
+ *                                   this is folded into {@code suspicious}. The one field read from the
+ *                                   raw input: the normalization every other field needs erases it.
  * @param crossLabelScript           whether the labels span more than one script (not folded in)
  * @param labelScripts               per-label resolved scripts, left to right
  * @param wholeScriptConfusable      whether any label is single-script, non-Latin, skeletoning to all-Latin (a signal, not folded in)
@@ -41,6 +47,7 @@ public record HostnameAnalysis(
         boolean bidiConflict,
         boolean bidiControl,
         boolean hasInvisible,
+        boolean compatFold,
         boolean crossLabelScript,
         List<List<String>> labelScripts,
         boolean wholeScriptConfusable,

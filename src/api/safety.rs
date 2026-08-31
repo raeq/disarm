@@ -447,6 +447,13 @@ pub struct HostnameAnalysis {
     /// Whether any single label mixes characters from more than one script.
     pub mixed_script: bool,
     /// Whether any label contains a character confusable with a Latin one.
+    ///
+    /// Read **after** the UTS #46 mapping and the NFKC that open this analysis, so it
+    /// cannot see a compatibility form by construction: `ｇoogle.com` is already
+    /// `google.com` by the time this field is computed, and `false` here is the correct
+    /// answer — after mapping there is no confusable left. A caller who sees
+    /// [`canonical`](Self::canonical) differ from the input while this stays `false` is
+    /// looking at [`compat_fold`](Self::compat_fold), not at a defect (#709).
     pub has_confusables: bool,
     /// Whether the decoded hostname mixes strong left-to-right and strong
     /// right-to-left characters — the precondition for Bidi display-reordering
@@ -484,6 +491,29 @@ pub struct HostnameAnalysis {
     /// [`scripts`](Self::scripts), [`mixed_script`](Self::mixed_script) or
     /// [`canonical`](Self::canonical).
     pub has_invisible: bool,
+    /// Whether any label carried a Unicode **compatibility form** before normalization
+    /// (#709) — fullwidth (`ｇoogle`), ligature (`ﬁle`), Roman-numeral (`Ⅰ`BM),
+    /// mathematical-alphanumeric (`𝗀𝗈𝗈𝗀𝗅𝖾`), circled, superscript, and the rest of the
+    /// compatibility repertoire.
+    ///
+    /// The predicate is RFC 5892 §2.1's, applied **per code point**: a character `c`
+    /// where `toNFKC(c) != c` is DISALLOWED in an IDN label. IDNA2008 therefore
+    /// disallows the whole set, exactly as it does the
+    /// [`bidi_control`](Self::bidi_control) and [`has_invisible`](Self::has_invisible)
+    /// classes, so this is folded into [`suspicious`](Self::suspicious) on the same
+    /// footing. The threat is a blocklist bypass rather than a lookalike: `ｅvil.com` is
+    /// absent from a blocked set, screens clean, and resolves to `evil.com`.
+    ///
+    /// Per character, not "NFKC changed the label" — the label-level form fires on
+    /// decomposed input that is entirely legitimate, such as `한국.kr` written with
+    /// conjoining jamo, where every individual code point is NFKC-stable.
+    ///
+    /// This is the one field read from the **raw** input. Every other field is computed
+    /// after normalization, which is what makes them work and also what erases this
+    /// evidence: before #709 `ｇoogle.com` reached the per-label checks already spelled
+    /// `google.com`, so [`has_confusables`](Self::has_confusables) was correctly `false`
+    /// and nothing reported what the mapping had eaten.
+    pub compat_fold: bool,
     /// Whether the labels resolve to more than one distinct script (Common /
     /// Inherited excluded). Broader and noisier than [`bidi_conflict`](Self::bidi_conflict)
     /// — it fires on benign IDN-ccTLD patterns like `google.рф` — so it is
@@ -513,12 +543,18 @@ pub struct HostnameAnalysis {
 /// is the overall verdict (alongside the granular `scripts` / `mixed_script` /
 /// `has_confusables` / `canonical` findings).
 ///
-/// `xn--` (ACE) labels are decoded to their Unicode form via UTS#46 before
-/// analysis (#63); a malformed ACE label fails closed (suspicious). A hostname
-/// is flagged when any single label is mixed-script (conservative, #254), when
-/// any label contains a Latin-confusable character, when the decoded hostname
-/// mixes strong LTR and strong RTL characters (`bidi_conflict`, the "BiDi Swap"
-/// precondition, #412), or when an ACE label fails to decode.
+/// **Every** label is mapped through UTS #46 before analysis, whichever spelling it
+/// arrived in (#63, widened by #714): `xn--` labels are decoded from ACE, and literal
+/// Unicode labels go through the same mapping table. A label that fails to map cannot be
+/// verified and fails closed (suspicious). Until #714 the mapping ran on the ACE branch
+/// only, so `ꭰꭰ.com` and `xn--58da.com` — the same registered domain — got different
+/// verdicts, across 561 code points.
+///
+/// A hostname is flagged when any single label is mixed-script (conservative, #254), when
+/// any label contains a Latin-confusable character, when the decoded hostname mixes
+/// strong LTR and strong RTL characters (`bidi_conflict`, the "BiDi Swap" precondition,
+/// #412), when a label carries a compatibility form (`compat_fold`, #709), or when a
+/// label fails to map.
 ///
 /// Infallible: the analysis runs against the fixed `"latin"` target script,
 /// which is always supported.
@@ -567,6 +603,7 @@ pub fn analyze_hostname_with(hostname: &str, contractions: bool) -> HostnameAnal
         bidi_conflict: core.bidi_conflict,
         bidi_control: core.bidi_control,
         has_invisible: core.has_invisible,
+        compat_fold: core.compat_fold,
         cross_label_script: core.cross_label_script,
         label_scripts: core.label_scripts,
         whole_script_confusable: core.whole_script_confusable,

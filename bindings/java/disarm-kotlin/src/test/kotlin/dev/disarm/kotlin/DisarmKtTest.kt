@@ -198,6 +198,23 @@ class DisarmKtTest {
         assertFalse(bom.mixedScript)
 
         assertFalse(clean.hasInvisible)
+
+        // Compatibility form (#709): read off the RAW input, before the normalization
+        // every other field needs. hasConfusables is correctly false — by the time it
+        // runs the label is already "google".
+        val fw = "\uFF47oogle.com".analyzeHostname()
+        assertTrue(fw.suspicious)
+        assertTrue(fw.compatFold)
+        assertFalse(fw.hasConfusables)
+        assertEquals("google.com", fw.canonical)
+        assertFalse(clean.compatFold)
+
+        // UTS #46 maps every label, not only the xn-- ones (#714): the two spellings
+        // of one registered domain are one input.
+        assertEquals(
+            "\uAB70\uAB70.com".analyzeHostname().canonical,
+            "xn--58da.com".analyzeHostname().canonical,
+        )
     }
 
     @Test

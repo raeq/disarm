@@ -215,6 +215,21 @@ RSpec.describe Disarm do
       expect(bom[:mixed_script]).to be(false)
 
       expect(clean[:has_invisible]).to be(false)
+
+      # Compatibility form (#709): read off the RAW input, before the normalization
+      # every other field needs. :has_confusables is correctly false — by the time it
+      # runs the label is already "google".
+      fw = Disarm.analyze_hostname("\uFF47oogle.com")
+      expect(fw[:suspicious]).to be(true)
+      expect(fw[:compat_fold]).to be(true)
+      expect(fw[:has_confusables]).to be(false)
+      expect(fw[:canonical]).to eq("google.com")
+      expect(clean[:compat_fold]).to be(false)
+
+      # UTS #46 maps every label, not only the xn-- ones (#714): the two spellings
+      # of one registered domain are one input.
+      expect(Disarm.analyze_hostname("\uAB70\uAB70.com")[:canonical])
+        .to eq(Disarm.analyze_hostname("xn--58da.com")[:canonical])
     end
   end
 

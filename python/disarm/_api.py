@@ -1399,7 +1399,12 @@ def is_suspicious_hostname(
       spoofs — so it is a **maximally conservative screen**, not a precise verdict.
     - ``scripts``: list[str] — Unicode scripts found across all labels.
     - ``mixed_script``: bool — True if any single label contains more than one script.
-    - ``has_confusables``: bool — True if confusable homoglyphs found.
+    - ``has_confusables``: bool — True if confusable homoglyphs found. Read *after*
+      the UTS #46 mapping and NFKC, so it cannot see a compatibility form by
+      construction: ``ｇoogle.com`` is already ``google.com`` by the time this is
+      computed, and ``False`` is the correct answer — after mapping there is no
+      confusable left. Seeing ``canonical`` differ from the input while this stays
+      ``False`` means ``compat_fold``, not a defect.
     - ``bidi_conflict``: bool — True if the decoded hostname mixes strong
       left-to-right and strong right-to-left characters (the "BiDi Swap" reorder
       precondition). Folded into ``suspicious``.
@@ -1425,6 +1430,20 @@ def is_suspicious_hostname(
       removed per label *before* any other field is computed, so a hostname whose
       only non-ASCII is an invisible no longer reports a phantom script (``U+FEFF``
       sits in the Arabic Presentation Forms block, ``U+FDD0`` in its range).
+    - ``compat_fold``: bool — True if any label carried a Unicode **compatibility
+      form** before normalization: fullwidth (``ｇoogle``), ligature (``ﬁle``),
+      Roman numeral (``Ⅰ``BM), mathematical alphanumeric (``𝗀𝗈𝗈𝗀𝗅𝖾``), circled,
+      superscript, and the rest of the compatibility repertoire. The predicate is
+      RFC 5892 §2.1's, applied **per code point**: a character ``c`` where
+      ``toNFKC(c) != c`` is DISALLOWED in an IDN label, so IDNA2008 disallows the
+      whole set and this is folded into ``suspicious`` on the same footing as
+      ``bidi_control`` and ``has_invisible``. The threat is a blocklist bypass
+      rather than a lookalike: ``ｅvil.com`` is absent from a blocked set, screens
+      clean, and resolves to ``evil.com``. Tested per character rather than "NFKC
+      changed the label", which would fire on decomposed input that is entirely
+      valid (``한국.kr`` written with conjoining jamo). This is the one field read
+      from the **raw** input — every other field is computed after normalization,
+      which is what makes them work and also what erases this evidence.
     - ``cross_label_script``: bool — True if the labels span more than one
       distinct script. Broader and noisier than ``bidi_conflict`` (it fires on
       benign IDN ccTLDs like ``google.рф``), so it is **not** folded into
@@ -1445,7 +1464,8 @@ def is_suspicious_hostname(
     (draws on more than one Unicode script, excluding Common/Inherited),
     contains confusable homoglyphs, or has a bidi-direction conflict
     (``bidi_conflict``), carries a bidi control character (``bidi_control``), or
-    carries a zero-width/invisible character (``has_invisible``).
+    carries a zero-width/invisible character (``has_invisible``), or carries a
+    compatibility form (``compat_fold``).
     The mixed-script rule is conservative and fails closed:
     it flags benign combinations such as Latin+CJK as well as spoofing ones, so a
     caller wanting a more permissive policy can inspect the ``mixed_script`` and

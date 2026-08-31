@@ -536,6 +536,15 @@ pub struct HostnameAnalysis {
     /// `suspicious`; the characters are stripped before any other field is computed,
     /// so they never reach `scripts`, `mixedScript` or `canonical`.
     pub has_invisible: bool,
+    /// Whether any label carried a Unicode compatibility form before normalization
+    /// (#709) — fullwidth (`ｇoogle`), ligature (`ﬁle`), Roman numeral (`Ⅰ`BM),
+    /// mathematical alphanumeric (`𝗀𝗈𝗈𝗀𝗅𝖾`). The predicate is RFC 5892 §2.1's, applied
+    /// per code point: `toNFKC(c) != c` is DISALLOWED in an IDN label, so IDNA2008
+    /// disallows the whole set and this folds into `suspicious`. The threat is a
+    /// blocklist bypass, not a lookalike: `ｅvil.com` screens clean and resolves to
+    /// `evil.com`. The one field read from the RAW input — the normalization every
+    /// other field needs is what erases this evidence.
+    pub compat_fold: bool,
     /// Whether the labels span more than one script. Broader/noisier than
     /// `bidiConflict`; NOT folded into `suspicious`.
     pub cross_label_script: bool,
@@ -565,6 +574,7 @@ pub fn analyze_hostname(host: String, contractions: bool) -> HostnameAnalysis {
         bidi_conflict: a.bidi_conflict,
         bidi_control: a.bidi_control,
         has_invisible: a.has_invisible,
+        compat_fold: a.compat_fold,
         cross_label_script: a.cross_label_script,
         label_scripts: a.label_scripts,
         whole_script_confusable: a.whole_script_confusable,

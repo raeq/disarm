@@ -35,6 +35,8 @@ pub struct HostnameAnalysis {
     #[pyo3(get)]
     pub has_invisible: bool,
     #[pyo3(get)]
+    pub compat_fold: bool,
+    #[pyo3(get)]
     pub cross_label_script: bool,
     #[pyo3(get)]
     pub label_scripts: Vec<Vec<String>>,
@@ -56,6 +58,7 @@ impl From<crate::api::HostnameAnalysis> for HostnameAnalysis {
             bidi_conflict: a.bidi_conflict,
             bidi_control: a.bidi_control,
             has_invisible: a.has_invisible,
+            compat_fold: a.compat_fold,
             cross_label_script: a.cross_label_script,
             label_scripts: a.label_scripts,
             whole_script_confusable: a.whole_script_confusable,

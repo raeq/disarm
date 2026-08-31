@@ -543,8 +543,14 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
                 return Some(mk(AnomalyKind::Invisible, codepoint(c)));
             }
         }
-        // #700 §2: a run fires on its own, with no letter beside it. Checked after the
-        // neighbour rule so a single carrier inside a word still reports as itself.
+        // #700 §2: a run fires on its own, with no letter beside it.
+        //
+        // Checked after the neighbour rule, which matters only for the classes the two
+        // share: a lone ZWSP inside a word reports as `U+200B` rather than `U+200B \u{d7}1`.
+        // Tags and variation selectors are NOT in `is_invisible_in_word`, so they only
+        // ever reach this branch — a single tag character reports as `U+E0074 \u{d7}1`,
+        // which is correct: its threshold is 1 precisely because one of them is already
+        // an anomaly.
         if let Some((c, len)) = carrier_run(&chars) {
             return Some(mk(
                 AnomalyKind::Invisible,

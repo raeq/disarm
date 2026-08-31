@@ -24,7 +24,13 @@ from disarm import has_anomalies, inspect_anomalies
 
 TAGS = "".join(chr(0xE0000 + ord(c)) for c in "tracked-by:acct-99213")
 VS = "".join(chr(0xE0100 + i) for i in (7, 8))
-ZW_RUN = "".join(
+# A UNIFORM run, so `U+200B ×16` says exactly what it means. The bit-encoded variant —
+# ZWSP for 0, ZWNJ for 1 — is the realistic payload shape and is covered separately by
+# `test_a_mixed_carrier_run_reports_the_longest_same_class_stretch`, because there the
+# reported code point is the start of the longest *same-class* stretch rather than the
+# whole run.
+ZW_RUN = "\u200b" * 16
+ZW_BITS = "".join(
     chr(0x200B if bit == "0" else 0x200C)
     for bit in format(ord("h"), "08b") + format(ord("i"), "08b")
 )
@@ -100,6 +106,19 @@ def test_the_finding_names_the_run_not_one_character_of_it() -> None:
     """#700 §4: a detail naming `U+200B` when sixteen are in sequence understates it."""
     report = inspect_anomalies("Hello " + ZW_RUN + " world")
     assert report.findings[0].detail == f"U+200B ×{len(ZW_RUN)}"
+
+
+def test_a_mixed_carrier_run_reports_the_longest_same_class_stretch() -> None:
+    """A bit-encoded payload alternates ZWSP and ZWNJ, and both are the same class.
+
+    The run counter groups by *class*, not by code point, so the whole alternating
+    stretch is one run and the reported code point is the one that starts it. Asserted
+    rather than left implied: `U+200B ×16` on an alternating input would read as sixteen
+    consecutive ZWSP, which is not what the input was.
+    """
+    report = inspect_anomalies("Hello " + ZW_BITS + " world")
+    assert report.findings[0].detail == f"U+{ord(ZW_BITS[0]):04X} \u00d7{len(ZW_BITS)}"
+    assert len(set(ZW_BITS)) == 2, "the point of this case is that the run is not uniform"
 
 
 @pytest.mark.parametrize("ch", ["­", "͏"], ids=["soft-hyphen", "CGJ"])

@@ -109,7 +109,7 @@ cover the input. The quantity a registry usually wants next — *after reduction
 many distinct identities does this batch hold?* — is not returned, and has to be
 derived. There is one correct spelling:
 
-```python
+```text
 reduced = len(set(values)) - sum(len(g.values) for g in groups) + len(groups)
 ```
 
@@ -119,14 +119,20 @@ to each other, and it is easy to miss, because every example on this page is
 duplicate-free and all four plausible spellings agree on a duplicate-free batch:
 
 ```python
+from disarm import find_key_collisions
+
 names = ["admin", "admin", "Admin"]
 groups = find_key_collisions(names, key="fold_case")
-# [KeyCollision(key="admin", values=["admin", "Admin"], indices=[0, 1, 2])]
+assert groups[0].values == ["admin", "Admin"]  # distinct inputs: two
+assert groups[0].indices == [0, 1, 2]  # occurrences: three
 
-len(set(names)) - sum(len(g.values) for g in groups) + len(groups)   # 1  ✅ correct
-len(names)      - sum(len(g.values) for g in groups) + len(groups)   # 2  counts a repeat
-len(set(names)) - sum(len(g.indices) for g in groups) + len(groups)  # 0  mixed denominators
-len(names)      - sum(len(g.indices) for g in groups) + len(groups)  # 1  right by cancellation
+by_values = sum(len(g.values) for g in groups)
+by_indices = sum(len(g.indices) for g in groups)
+
+assert len(set(names)) - by_values + len(groups) == 1  # correct
+assert len(names) - by_values + len(groups) == 2  # counts a repeat
+assert len(set(names)) - by_indices + len(groups) == 0  # mixed denominators
+assert len(names) - by_indices + len(groups) == 1  # right by cancellation
 ```
 
 Three names, one identity. Measured over 400 duplicate-free batches, all four

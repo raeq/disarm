@@ -988,10 +988,14 @@ pub use crate::collisions::KeyCollision;
 /// one correct spelling:
 ///
 /// ```text
-/// reduced = values.iter().collect::<HashSet<_>>().len()
+/// reduced = values.iter().map(AsRef::as_ref).collect::<HashSet<&str>>().len()
 ///         - groups.iter().map(|g| g.values.len()).sum::<usize>()
 ///         + groups.len()
 /// ```
+///
+/// The `map(AsRef::as_ref)` is load-bearing: this function is generic over
+/// `S: AsRef<str>`, which does not imply `Eq + Hash`, so collecting `values` directly
+/// fails to compile for a caller passing a wrapper type.
 ///
 /// `values` and `indices` have **different denominators by design** — see
 /// [`KeyCollision`] — so they must never be arithmetically combined. Substituting
@@ -1011,7 +1015,7 @@ pub use crate::collisions::KeyCollision;
 /// assert_eq!(found[0].values, ["admin", "Admin"]); // distinct inputs: two
 /// assert_eq!(found[0].indices, [0, 1, 2]);         // occurrences: three
 ///
-/// let distinct: HashSet<_> = names.iter().collect();
+/// let distinct: HashSet<&str> = names.iter().map(AsRef::as_ref).collect();
 /// let reduced = distinct.len()
 ///     - found.iter().map(|g| g.values.len()).sum::<usize>()
 ///     + found.len();

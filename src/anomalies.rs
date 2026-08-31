@@ -119,6 +119,38 @@ const BIDI_ISOLATES: &[char] = &['\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}']
 /// be spared. Bare `LRM`/`RLM` stay spared, which is the part that is clearly right —
 /// they carry no scope and are common in benign social text.
 const BIDI_EMBEDDINGS: &[char] = &['\u{202A}', '\u{202B}', '\u{202C}'];
+/// Bare right-to-left directional marks: `RLM` and `ALM` (#741).
+///
+/// Spared outright until now, on the false-positive grounds `docs/user-guide/
+/// anomaly-detection.md` states — "bare directional marks; LRE..PDF embeddings (RTL text,
+/// hashtags)". Measured against UAX #9 with `unicode-bidi`, two of them still reorder
+/// rendered text inside otherwise pure-Latin prose:
+///
+/// ```text
+/// Transfer <RLM>100 200 300 to Bob   renders   Transfer 300 200 100 to Bob
+/// acct <ALM>4321-9876                renders   acct 9876-4321
+/// ```
+///
+/// That is Boucher et al., *Bad Characters* (arXiv:2106.09898v2) Table I, reached with a
+/// control the detector did not report. `LRM` is **not** here: the same measurement found
+/// it produced no reordering over any carrier tried, so the finding is `RLM` and `ALM`,
+/// not "the spared set is wrong".
+const BIDI_RTL_MARKS: &[char] = &['\u{200F}', '\u{061C}'];
+
+/// Enclosing marks (`Me`) — the complete category, 13 code points (#724).
+///
+/// One mark per base is below every threshold disarm has: `is_zalgo` fires above three,
+/// `strip_zalgo` keeps two (#429's decision, and the right one — Vietnamese `ệ` is two
+/// marks in NFD), so `I\u{20DD}g\u{20DD}n\u{20DD}o\u{20DD}r\u{20DD}e\u{20DD}` was clean
+/// at every surface while `strip_obfuscation` removed it.
+///
+/// The **count** was the only thing measured, and for an enclosing mark the *category* is
+/// the whole signal: no `Me` mark is an accent, and nothing legitimate encircles every
+/// letter of a word.
+const ENCLOSING_MARKS: &[char] = &[
+    '\u{0488}', '\u{0489}', '\u{1ABE}', '\u{20DD}', '\u{20DE}', '\u{20DF}', '\u{20E0}', '\u{20E2}',
+    '\u{20E3}', '\u{20E4}', '\u{A670}', '\u{A671}', '\u{A672}',
+];
 /// Wrapping punctuation trimmed from token edges (NOT the leet symbols @ $ |).
 const WRAP: &[char] = &[
     '"', '.', ',', ';', ':', '?', '!', '(', ')', '[', ']', '{', '}', '<', '>', '\u{AB}', '\u{BB}',
@@ -190,6 +222,20 @@ pub enum AnomalyKind {
     /// flagging that is the whole-legitimate-non-Latin-web over-flagging #545 removed
     /// from `is_suspicious_hostname`.
     Confusable,
+    /// A token whose base characters carry **enclosing marks** (`Me`) — `I⃝g⃝n⃝o⃝r⃝e⃝`.
+    ///
+    /// Its own kind rather than a `Zalgo` finding, because it is a different fact: not
+    /// "too many marks" but "a mark whose category is never an accent". One per base is
+    /// below every threshold disarm has — `is_zalgo` fires above three and `strip_zalgo`
+    /// keeps two — so the whole class was clean at every surface while `strip_obfuscation`
+    /// removed it, and `canonicalize`'s accent preservation (correct for `café` and
+    /// `Việt`) preserved this too (#724).
+    ///
+    /// Keycap sequences are exempt: `1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation
+    /// selector is what makes it an RGI keycap rather than a bare enclosing mark — the
+    /// same shape as the subdivision-flag allowlist. Cyrillic `Me` on a Cyrillic base is
+    /// exempt too; `U+0488` is historic Cyrillic notation, not a disguise.
+    EnclosingMark,
 }
 
 impl AnomalyKind {
@@ -207,6 +253,7 @@ impl AnomalyKind {
             AnomalyKind::Control => "control",
             AnomalyKind::CompatFold => "compat_fold",
             AnomalyKind::Confusable => "confusable",
+            AnomalyKind::EnclosingMark => "enclosing_mark",
         }
     }
 }
@@ -268,6 +315,10 @@ impl Finding {
             AnomalyKind::Confusable => {
                 format!("{:?} contains a confusable: {}", self.token, self.detail)
             }
+            AnomalyKind::EnclosingMark => format!(
+                "{:?} carries enclosing marks that hide the base text: {}",
+                self.token, self.detail
+            ),
         }
     }
 }
@@ -490,6 +541,54 @@ fn folded_confusable(tok: &str) -> Option<(char, &'static str)> {
             .and_then(|f| ascii_target(f).map(|target| (c, target)))
     })
 }
+/// Enclosing marks in `tok` that are not part of a legitimate sequence (#724 §2).
+///
+/// Two exemptions, both narrow and both measured rather than assumed:
+///
+/// - **Keycaps.** `1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation selector is what
+///   makes it an RGI keycap rather than a bare enclosing mark — the same distinction
+///   `crate::invisibles` draws for a subdivision flag. A `U+20E3` with no `U+FE0F` before
+///   it is not a keycap.
+/// - **Cyrillic.** `U+0488`, `U+0489`, `U+A670`-`U+A672` are historic Cyrillic notation.
+///   On a Cyrillic base they are orthography; on a Latin one they are a disguise.
+///
+/// Two are required rather than one. A single enclosing mark on a single base is a
+/// character someone may have typed; encircling *every* letter of a word is not something
+/// any orthography does, and that is the shape #724 measures.
+fn enclosing_marks(tok: &str) -> Vec<char> {
+    const KEYCAP: char = '\u{20E3}';
+    const VS16: char = '\u{FE0F}';
+    let chars: Vec<char> = tok.chars().collect();
+    let mut out = Vec::new();
+    for (i, &c) in chars.iter().enumerate() {
+        if !ENCLOSING_MARKS.contains(&c) {
+            continue;
+        }
+        if c == KEYCAP && i > 0 && chars[i - 1] == VS16 {
+            continue;
+        }
+        // The base is the last character before it that is not a combining mark of any
+        // kind — not merely the last non-*enclosing* one. An intervening `U+0301` would
+        // otherwise be read as the base, and `а\u{301}\u{488}` reported.
+        //
+        // And the script comes from `detect_char_script`, the one resolver, rather than
+        // from a hand-written range: the first draft listed `U+0400-04FF` and
+        // `U+A640-A69F` and so missed Cyrillic Supplement and Extended-C, reporting
+        // ordinary `\u{501}\u{488}` and `\u{1C80}\u{488}`. Restating a range that the
+        // library already resolves is the failure #774 was about.
+        let base_is_cyrillic = chars[..i]
+            .iter()
+            .rev()
+            .find(|b| !unicode_normalization::char::is_combining_mark(**b))
+            .is_some_and(|b| crate::scripts::detect_char_script(*b) == "Cyrillic");
+        if base_is_cyrillic {
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// `tok` trimmed by `WRAP` **minus** the characters that are also leet substitutes (#726).
 ///
 /// `!`, `(` and `)` sit in both sets. Trimming them off the token edge before the leet
@@ -757,6 +856,29 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             {
                 return Some(mk(AnomalyKind::Bidi, codepoint(c)));
             }
+            // #741 §2: the narrower, higher-precision predicate the measurement suggests
+            // — a spared mark immediately preceding a run of European numbers. That is
+            // the construction that reorders, and it fires on neither RTL prose nor a
+            // hashtag, which is why the mark is not simply added to the list above.
+            //
+            // The carrier is always a number run: an account number, an amount, a date.
+            // Each group keeps its internal digits and the groups swap places, which is
+            // what makes the rendering stay plausible.
+            if let Some(i) = chars.iter().position(|c| BIDI_RTL_MARKS.contains(c)) {
+                if chars.get(i + 1).is_some_and(char::is_ascii_digit) {
+                    return Some(mk(AnomalyKind::Bidi, codepoint(chars[i])));
+                }
+            }
+        }
+        // #724: checked BEFORE the count-based zalgo rule, because it is a different fact
+        // and the count never reaches that threshold — one mark per base is below it by
+        // construction.
+        let enclosing = enclosing_marks(tok);
+        if enclosing.len() >= 2 {
+            return Some(mk(
+                AnomalyKind::EnclosingMark,
+                format!("{} \u{d7}{}", codepoint(enclosing[0]), enclosing.len()),
+            ));
         }
         if is_zalgo(tok, ZALGO_THRESHOLD) {
             return Some(mk(

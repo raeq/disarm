@@ -394,6 +394,52 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **Enclosing marks, and the bidi marks that reorder (#724, #741).** Two classes the
+  detector spared on grounds that do not hold.
+
+  **#724 — the count was measured and the category never was.** One enclosing mark per
+  base is below every threshold disarm has: `is_zalgo` fires above three, `strip_zalgo`
+  keeps two (#429's decision, and the right one — Vietnamese `ệ` is two marks in NFD). So
+  a string where every letter carries a `COMBINING ENCLOSING CIRCLE` was clean at every
+  surface, while `strip_obfuscation` removed it:
+
+  ```
+  I⃝g⃝n⃝o⃝r⃝e⃝    is_zalgo False   inspect_anomalies []   ->  enclosing_mark  U+20DD ×6
+  ```
+
+  For an enclosing mark the category *is* the signal: no `Me` mark is an accent, and
+  nothing legitimate encircles every letter of a word. It gets its own kind rather than a
+  `zalgo` finding, because it is a different fact — not "too many marks". Two exemptions,
+  both measured: a keycap sequence (`1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation
+  selector is what makes it RGI — the same distinction the subdivision-flag allowlist
+  draws), and Cyrillic `Me` on a Cyrillic base, which is historic notation. A single mark
+  is not a finding; two are needed.
+
+  **#741 — two spared bidi marks still reorder rendered text.** Measured against UAX #9
+  with `unicode-bidi`, inside otherwise pure-Latin prose:
+
+  ```
+  Transfer <RLM>100 200 300 to Bob   renders   Transfer 300 200 100 to Bob   ->  bidi
+  acct <ALM>4321-9876                renders   acct 9876-4321                ->  bidi
+  ```
+
+  That is Boucher et al., *Bad Characters* (arXiv:2106.09898v2) Table I, reached with a
+  control the detector did not report. The predicate is the narrow one #741 §2 suggests —
+  a spared mark immediately before a run of European numbers, in a majority-Latin context
+  — because that is the construction that reorders, and it fires on neither RTL prose nor
+  a hashtag. `LRM` stays spared: the same measurement found it produced no reordering over
+  any carrier tried, so the finding is `RLM` and `ALM`, not "the spared set is wrong". The
+  `RLE` row the issue lists was already closed by #643.
+
+  The *Spared* column in `docs/user-guide/anomaly-detection.md` is corrected (§4). It read
+  as a statement that these controls are safe rather than that they were not yet screened.
+
+  **`canonicalize` is unchanged, deliberately (#724 §3).** Stripping `Me` there would not
+  weaken #429 — no enclosing mark is an accent — but it moves output for 13 code points,
+  which is a `### Changed (breaking)` entry and a decision of its own rather than a side
+  effect of adding a detector rule. The asymmetry with `strip_obfuscation` is written up
+  where the accent-preserving decision is explained, and asserted in the tests.
+
 - **The detector consults the confusable table (#737), including the punctuation it
   produces (#719), and the whole-token exemption is per block (#722).**
 

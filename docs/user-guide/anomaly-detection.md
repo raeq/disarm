@@ -30,8 +30,9 @@ exception — it is anchored on Latin, and fires on Latin combined with Cyrillic
 | Kind | Fires on | Spared (false-positive guards) |
 |---|---|---|
 | `invisible` | a zero-width / formatting codepoint inside a Latin word | emoji ZWJ sequences; ZWJ/ZWNJ joiners in Indic & Arabic; soft hyphen |
-| `bidi` | an LRO/RLO override anywhere, or an isolate inside a majority-Latin token (Trojan Source) | bare directional marks; LRE..PDF embeddings (RTL text, hashtags) |
+| `bidi` | an LRO/RLO override anywhere; an isolate or an LRE..PDF embedding in a token that is majority-Latin **or has no letters at all** (`12<isolate>34` — a bare account number is exactly the carrier, so numeric tokens are in scope, Trojan Source, #643); an `RLM`/`ALM` immediately before a run of European numbers in the same context — `Transfer <RLM>100 200 300 to Bob` renders `Transfer 300 200 100 to Bob` (#741) | `LRM`, which produced no reordering over any carrier measured; `RLM`/`ALM` anywhere other than in front of a number run, so RTL prose and hashtags do not fire |
 | `zalgo` | excessive stacked combining marks | ordinary accents |
+| `enclosing_mark` | two or more **enclosing marks** (`Me`) in one token — `I⃝g⃝n⃝o⃝r⃝e⃝`. Its own kind rather than a `zalgo` finding, because it is a different fact: not "too many marks" but a mark whose category is never an accent. One per base is below every threshold — `is_zalgo` fires above three, `strip_zalgo` keeps two — so the class was clean at every surface while `strip_obfuscation` removed it (#724) | keycap sequences (`1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation selector is what makes it an RGI keycap); Cyrillic `Me` on a Cyrillic base, which is historic notation; a single enclosing mark, which is a character someone may have typed |
 | `mixed_script` | Latin combined with Cyrillic or Greek in one token | CJK / Thai / kaomoji; legitimate unit symbols (`kΩ`, `µF`) |
 | `bidi_mixed` | one token mixes strong left-to-right and strong right-to-left **letters** (`varonisו`), which can visually reorder ("BiDi Swap") — no `U+202x` override (that is `bidi`) | single-direction text (all-LTR or all-RTL); digits are neutral |
 | `leet` | every out-of-place char substitutes a letter and the result is a common word (`fr33` → `free`) | a literal number that maps to no letter (`win32`, `Power5`, `21st`, `3pm`) |
@@ -39,6 +40,21 @@ exception — it is anchored on Latin, and fires on Latin combined with Cyrillic
 | `control` | a non-whitespace control anywhere in the token — `NUL`, `ESC`, `BEL`, `DEL`, the C1 block. Never legitimate in text, and the introducer for terminal-escape injection and leading-blank blocklist bypass | the whitespace-class controls (TAB, LF, VT, FF, CR, `U+001C`–`U+001F`, NEL), which are real separators `collapse_whitespace` folds to a space |
 | `compat_fold` | a token mixing a Unicode **compatibility** form with ASCII, where the non-ASCII part folds *to ASCII* — `ａdmin`, `ｅxample.com`, `＜script＞`. `canonicalize` performs that fold as its first step, so the class was neutralized and reported clean | ordinary fullwidth typography with no ASCII letter (`ＮＨＫ`, `Ｑ＆Ａ`, `１９９５年`, `ＣＤ－ＲＯＭ`); unit symbols whose fold is Greek, not ASCII (`kΩ`, `µF`), and the squared CJK units that do fold to ASCII but carry no letter (`10㎏` → `10kg`, `5㎞` → `5km`); and a token spelled *wholly* in a compatibility form (`ｐａｙｐａｌ`), which cannot be told from `ＮＨＫ` by character class |
 | `confusable` | a token where the **confusable fold** — not NFKC — produces ASCII the input did not carry: `pɑypal` (`U+0251`), `gıthub` (`U+0131`), `ord∶end` (`U+2236` → `:`). `canonicalize` has two ASCII-producing steps and `compat_fold` reported only the first; the second is the largest table disarm ships and the detector never consulted it. The slice with no compatibility decomposition is also single-script, so `mixed_script` cannot see it either. 232 code points reach ASCII by the fold alone, 76 producing one of `: = % & ? # / \` | text where every letter folds to Latin and none is ASCII — `Привет`, `Ελλάδα`, which is the whole-legitimate-non-Latin-web over-flagging #545 removed from `is_suspicious_hostname`; accented Latin, which the fold leaves alone (`café`, `naïve`, `straße`); unit symbols (`µF`, `kΩ`); and a word boundary — `IT-специалист` is two words, judged separately |
+
+!!! note "`canonicalize` preserves enclosing marks; `strip_obfuscation` removes them"
+
+    That asymmetry is deliberate and is the same one the accent-preserving decision
+    (#429) produces: `canonicalize` caps stacked marks rather than deleting them, because
+    `café` and `Việt` must survive, and it does not read the mark's category.
+
+    #724 §3 asks whether it should strip `Me` specifically — no enclosing mark is an
+    accent, so doing so would not weaken #429. The argument is sound and the change is
+    **not** made here: it moves `canonicalize` output for 13 code points, which is a
+    `### Changed (breaking)` entry and a decision of its own rather than a side effect of
+    adding a detector rule. Until then, `inspect_anomalies` reports the class and
+    `strip_obfuscation` removes it — screen with the first, clean with the second, and do
+    not read a clean `canonicalize` as a claim that the text carries no enclosing mark.
+
 
 The **leet** and **segmentation** branches take a caller-supplied **lexicon** — a
 set of common words for the language being protected. The defining rule: a real

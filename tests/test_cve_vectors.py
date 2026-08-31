@@ -1456,6 +1456,100 @@ class TestKraAndPunycodeSpoofs:
 # alone, deliberately, because it is a real German letter.
 
 
+class TestStringprepDrift:
+    """CVE-2026-17084 — NEUTRALIZED by the key builders, and by nothing else.
+
+    RFC 3454 pins stringprep tables B.2 and B.3 to Unicode 3.2.0. CPython's
+    ``map_table_b3`` fell through to ``str.lower()``, which uses whatever UCD the
+    interpreter ships, so a domain name put through the IDNA 2003 codec comes out
+    differently on a patched and an unpatched CPython. A validator and a fetcher can
+    disagree about which host they are talking about — the hazard ``docs/provenance.md``
+    already names for ``normalize()``, published, for case folding, against a host name.
+
+    The row is a measurement over the whole divergent set, not one worked example. The set
+    is frozen in ``tests/fixtures/cve_2026_17084_b3.tsv``, generated once from
+    ``Lib/stringprep.py`` at the fix commit and its parent, because a tier-1 test must not
+    reach the network.
+
+    **The set size depends on the interpreter that generated it**, which is worth stating
+    rather than hiding: the pre-fix path calls ``str.lower()``, so a newer UCD moves more
+    code points. 711 here on UCD 15.1.0; #713 reports 684 from a host with a different
+    one. The block distribution is identical and the difference falls entirely in Latin
+    and Cyrillic. Nothing in the claim depends on the exact number.
+    """
+
+    @staticmethod
+    def _rows() -> list[tuple[str, str, str]]:
+        """(input, pre-fix B.3 output, post-fix B.3 output) for every divergent point."""
+        path = Path(__file__).parent / "fixtures" / "cve_2026_17084_b3.tsv"
+        rows = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("#") or not line.strip():
+                continue
+            code, pre, post = line.split("\t")
+            rows.append(
+                (
+                    chr(int(code, 16)),
+                    pre.encode("ascii").decode("unicode_escape"),
+                    post.encode("ascii").decode("unicode_escape"),
+                )
+            )
+        return rows
+
+    def test_the_fixture_is_the_measurement_it_claims(self) -> None:
+        """A gate over an empty or tiny corpus passes for the wrong reason."""
+        rows = self._rows()
+        assert len(rows) > 600, len(rows)
+        # The worked example from #713: U+023A, assigned in Unicode 4.1 and therefore
+        # absent from 3.2.0. Pre-fix lowercases it; post-fix leaves it alone.
+        table = {source: (pre, post) for source, pre, post in rows}
+        assert table["\u023a"] == ("\u2c65", "\u023a")
+
+    @pytest.mark.parametrize("key", ["fold_case", "search_key", "catalog_key"])
+    def test_the_key_builders_converge_on_every_divergent_point(self, key: str) -> None:
+        """All three spellings reach one key, for all of them.
+
+        This is what makes the row NEUTRALIZED: a registry keyed with any of these three
+        cannot be split by which CPython did the stringprep.
+        """
+        reduce = getattr(disarm, key)
+        split = [
+            f"U+{ord(source):04X}"
+            for source, pre, post in self._rows()
+            if not reduce(source) == reduce(pre) == reduce(post)
+        ]
+        assert not split, f"{key} gives different keys for {len(split)}: {split[:10]}"
+
+    @pytest.mark.parametrize(
+        "entry_point",
+        ["canonicalize", "canonicalize_strict", "strip_obfuscation", "normalize_confusables"],
+    )
+    def test_the_canonicalizers_do_not_close_this_row(self, entry_point: str) -> None:
+        """The negative, asserted rather than left implied — this is why it is KEY_BUILDER_ONLY.
+
+        None of the four converges on more than a small fraction of the set. They fold
+        homoglyphs and strip invisibles; they do not case-fold or transliterate, which is
+        what this row needs. Stated as a bound rather than an exact count because the
+        confusable table moves between releases and this assertion should not.
+        """
+        reduce = getattr(disarm, entry_point)
+        rows = self._rows()
+        converged = sum(
+            1 for source, pre, post in rows if reduce(source) == reduce(pre) == reduce(post)
+        )
+        assert converged < len(rows) // 2, (
+            f"{entry_point} now converges on {converged} of {len(rows)}. If a canonicalizer "
+            "really closes this row, move it out of KEY_BUILDER_ONLY rather than widening "
+            "this bound."
+        )
+
+    def test_the_registry_probe_is_the_worked_example(self) -> None:
+        """The one-host probe and the corpus must not drift apart."""
+        row = next(c for c in REGISTRY if c.id == "CVE-2026-17084")
+        assert row.probe == "\u023a.example.com"
+        assert disarm.search_key(row.probe) == disarm.search_key("\u2c65.example.com")
+
+
 class TestTarPathCollision:
     """CVE-2026-23950 — NEUTRALIZED, but only by the key builders."""
 
@@ -2365,6 +2459,21 @@ REGISTRY: tuple[CVE, ...] = (
         reference="https://nvd.nist.gov/vuln/detail/CVE-2023-4399",
     ),
     CVE(
+        id="CVE-2026-17084",
+        title="CPython stringprep — IDNA 2003 B.3 drifting off Unicode 3.2.0",
+        cwe="CWE-436",
+        cvss=6.0,
+        cvss_version="v4.0",
+        dispositions=frozenset({NEUTRALIZED}),
+        # Key builders only, and that is the measurement rather than a caveat: they
+        # transliterate and case-fold before comparing, so both spellings of a drifted
+        # code point reach one key. The canonicalizers do not — see TestStringprepDrift.
+        neutralizers=("fold_case", "search_key", "catalog_key"),
+        detectors=(),
+        probe="\u023a.example.com",
+        reference="https://nvd.nist.gov/vuln/detail/CVE-2026-17084",
+    ),
+    CVE(
         id="CVE-2026-23950",
         title="node-tar — symlink poisoning via a Unicode path collision",
         cwe="CWE-176",
@@ -2618,7 +2727,7 @@ NEUTRALIZABLE = [c for c, _, _ in COLLAPSE_VECTORS] + [c for c, _, _ in REMOVAL_
 #: CVE-2026-23950 is the sharp-s path collision: folding it inside the confusable
 #: table would rewrite ordinary German, so `fold_case` owns it and `canonicalize`
 #: deliberately leaves it alone.
-KEY_BUILDER_ONLY = ["CVE-2026-23950"]
+KEY_BUILDER_ONLY = ["CVE-2026-17084", "CVE-2026-23950"]
 
 #: What the comparator benchmark is expected to cover.
 COMPARABLE = NEUTRALIZABLE + KEY_BUILDER_ONLY
@@ -2860,6 +2969,12 @@ class TestDetectionHasNoSuperset:
         # than one of the panel predicates.
         "CVE-2024-46954",
         "CVE-2026-44288",
+        # There is no character to look for. The hazard is that two CPythons produce
+        # different B.3 output for the SAME input, so every string involved is
+        # ordinary — `\u023a` is an ordinary Latin letter, and so is the `\u2c65` a
+        # pre-fix interpreter lowercases it to. A detector would have to compare two
+        # interpreters, which is not a property of a string.
+        "CVE-2026-17084",
     }
     #: Closed by the ``compat_fold`` kind (#633) — the last row on the page that a
     #: character class could close, and the one #612's closing text said could not be:

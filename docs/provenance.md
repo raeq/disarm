@@ -24,7 +24,33 @@ against for byte-stable behavior.
 | Bidi direction — `bidi_strong_ranges.tsv` | UCD `Bidi_Class` (UAX&nbsp;#9 `L`, and `R`/`AL`) | **17.0.0** |
 | Within-word joiners — `word_joiners.tsv` | UCD `General_Category` (`Pd`, `Pc`, plus `U+002E` by hand) | **17.0.0** |
 | Normalization — `normalize()`, and every NFC/NFKC step inside the presets | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **17.0.0** |
+| Grapheme segmentation — `grapheme_len`, `terminal_width`, the cluster boundaries `slugify` cuts on, and the mark runs `is_zalgo` / `strip_zalgo` count | UAX&nbsp;#29, via the [`unicode-segmentation`](https://crates.io/crates/unicode-segmentation) crate (not a bundled table) | **17.0.0** |
+| UTS&nbsp;#46 mapping and validation — every `xn--` label `is_suspicious_hostname` and `analyze_hostname` decode | ICU4X, via [`idna`](https://crates.io/crates/idna) → `idna_adapter` → `icu_normalizer` / `icu_properties` (not a bundled table) | `idna` **1.1.0**, `icu_properties_data` **2.3.0** — see below |
+| Simple lowercasing — the `to_lowercase` side of `is_case_fold_stable` | UCD, via the **compiling toolchain's** standard library (not a bundled table, and not a dependency) | whatever the build's rustc carries — ≥ Unicode 16.0 in practice, since the crate's MSRV is 1.88 |
 | Transliteration / romanization | per-block standards (the rest of this document) | mixed; conventional where no single published standard exists |
+
+Three of those rows are crate dependencies rather than bundled tables, and all three are
+**floating** requirements (`unicode-normalization = "0.1"`, `unicode-segmentation = "1"`,
+`idna = "1"`). A `cargo update` can therefore move the Unicode data behind a security
+verdict with no disarm code change at all. That property is why the normalization row was
+written down in the first place (#642), and it applies unchanged to the other two (#716).
+
+The `idna` row pins a crate version rather than a Unicode version, deliberately. `idna`
+publishes no version constant, and the UTS #46 tables it uses arrive through two levels of
+transitive dependency — `idna_adapter` → `icu_normalizer` / `icu_properties` — each with
+its own release cadence. `icu_properties_data` is the resolved artifact that actually
+carries the data, so that is what the row names. It is the most consequential of the three
+for hostname analysis: `src/hostname.rs` routes every ACE label through
+`idna::domain_to_unicode`, so the UTS #46 mapping decides what the script and confusable
+analysis ever sees.
+
+The std lowercasing row is the only one disarm does not control at all, and it is the
+reason two builds of the same disarm version can disagree on `is_case_fold_stable` (#718).
+The divergence is latent rather than live today: the crate's MSRV is 1.88 — set by the
+ICU4X crates `idna` depends on, not by anything disarm wrote — and every rustc from 1.88
+carries Unicode 16 or newer. Measured over Garay (`U+10D50..=U+10D65`), the bicameral block
+added in Unicode 16, 0 of 22 code points read unstable on 1.88, and `cargo +1.81`, `+1.85`
+and `+1.87` cannot build a consumer of this crate at all.
 
 The normalization row is the one with an external consequence. Because it tracks a
 newer UCD than most shipped CPythons, `disarm.normalize` and `unicodedata.normalize`
@@ -85,8 +111,11 @@ data it describes — the build fails if that header stops naming a version. It 
 both confusable tables, which `build.rs` asserts are folded from one upstream release.
 
 Note there is deliberately **no** library-wide `UNICODE_VERSION`: as the table above
-shows, the four bundled surfaces track different releases, so a single number would be
-wrong for three of them.
+shows, the bundled surfaces track different releases — `CaseFolding.txt` at 16.0,
+`EastAsianWidth.txt` and `emoji-data.txt` at 15.1.0, the rest at 17.0.0 — so a single
+number would be wrong for most of them. The three crate rows are governed by their own
+release cadences on top of that, which is a second reason one number cannot stand for the
+artifact. Read the table as the census, not this sentence.
 
 **Measuring the divergence (#563).** The gap between the upstream file and the bundled
 tables is queryable at runtime, so it does not have to be reconstructed from a cached

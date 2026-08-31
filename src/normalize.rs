@@ -11,8 +11,9 @@ use unicode_normalization::UnicodeNormalization;
 // expansion they want.
 //
 // The preset path is not. NFKC widens `U+FDFA` by 18×, which is an amplification an
-// input-size check cannot foresee, so `presets::apply_step_into` caps produced output at
-// `MAX_NORMALIZE_OUTPUT_BYTES` (#768). This comment claimed otherwise until then.
+// input-size check cannot foresee, so the `Step::Nfkc` arm of `presets::apply_into` caps
+// produced output at `MAX_NORMALIZE_OUTPUT_BYTES` (#768). This comment claimed otherwise
+// until then.
 
 /// Validate normalization form string. Returns an error for invalid forms.
 #[inline]

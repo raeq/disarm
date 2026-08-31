@@ -39,8 +39,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-#: Newline, tab and carriage return are `Cc`, and are simply how a text file is written.
-ALLOWED = frozenset("\n\t\r")
+#: Newline and tab are `Cc`, and are simply how a text file is written.
+#:
+#: Carriage return is deliberately NOT here, which is where this guard first diverged from
+#: `tests/test_readme_invisible_characters.py` (`_ALLOWED = frozenset("\n\t")`). A CR is
+#: never needed to end a line — `.gitattributes` sets `* text=auto eol=lf`, so a CRLF
+#: checkout is normalized before anything reads it — and allowing one would exempt the
+#: single `Cc` control a reviewer cannot see, which is the whole class this file exists to
+#: catch. Measured at the time of writing: no file in scope contains one.
+ALLOWED = frozenset("\n\t")
 
 #: The suffixes the README guard's argument applies to — anything a reviewer reads.
 SUFFIXES = frozenset(".py .rs .md .rb .mjs .ts .java .kt .toml .yml .yaml .sh .c .h".split())
@@ -293,6 +300,17 @@ def test_an_orthographic_joiner_is_exempt() -> None:
     assert literal_invisibles(sinhala) == []
     persian = "\u062e\u0627\u0646\u0647\u200c\u0647\u0627"  # خانه‌ها — houses
     assert literal_invisibles(persian) == []
+
+
+def test_a_literal_carriage_return_is_not_exempt() -> None:
+    """`ALLOWED` once carried `\\r`, which exempted an invisible `Cc` control.
+
+    `.gitattributes` normalizes line endings to LF, so a literal CR is never how a line
+    ends here — it is a control character a reviewer cannot see, on the same footing as
+    the ZWSP beside it. This asserts the divergence from the README guard stays closed.
+    """
+    found = literal_invisibles("paypal" + chr(0x000D) + ".com")
+    assert [(char, kind) for _, _, char, kind in found] == [(chr(0x000D), "invisible")]
 
 
 def test_a_zwj_between_letters_is_not_exempt() -> None:

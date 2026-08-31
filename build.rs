@@ -502,6 +502,12 @@ fn main() {
         &out_dir.join("emoji_presentation_ranges.rs"),
         "EMOJI_PRESENTATION_RANGES",
     );
+    // #774: the assigned-ness gate in front of the block-range script table.
+    generate_range_set(
+        &data_dir.join("assigned_ranges.tsv"),
+        &out_dir.join("assigned_ranges.rs"),
+        "ASSIGNED_RANGES",
+    );
 }
 
 /// Generate `WIDTH_RANGES: &[(u32, u32, u8)]` from `char_width.tsv`.
@@ -552,9 +558,20 @@ fn generate_range_set(tsv_path: &Path, out_path: &Path, name: &str) {
         rows.push((start, end));
     }
     rows.sort_unstable();
+    // Hex, not decimal: these are code points, so hex is the readable form, and it also
+    // keeps clippy's `unreadable_literal` quiet on the astral ranges (#774) without an
+    // `allow` at the include site.
     let mut code = format!("static {name}: &[(u32, u32)] = &[\n");
     for (s, e) in &rows {
-        writeln!(code, "    ({s}, {e}),").unwrap();
+        writeln!(
+            code,
+            "    (0x{:04X}_{:04X}, 0x{:04X}_{:04X}),",
+            s >> 16,
+            s & 0xFFFF,
+            e >> 16,
+            e & 0xFFFF
+        )
+        .unwrap();
     }
     code.push_str("];\n");
     fs::write(out_path, code).unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));

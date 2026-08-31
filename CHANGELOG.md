@@ -111,6 +111,27 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **An unassigned code point inherited its neighbour's script (#774).**
+  `detect_char_script` resolves a script by binary-searching a curated table of **block**
+  ranges, and a block has holes: `U+05EB` is unassigned inside the Hebrew block, `U+FDD0`
+  is a noncharacter inside Arabic Presentation Forms-A. Both were given the surrounding
+  block's script, so a code point that does not exist reported as Hebrew or Arabic — and
+  `"hello" + U+FDD0` came back as `bidi_mixed`, because a phantom Arabic character is
+  strong-RTL.
+
+  `src/tables/data/assigned_ranges.tsv` is the gate. `detect_char_script` now returns
+  `"Common"` for anything unassigned, which is what an out-of-table code point already
+  returned — so `detect_scripts` still yields `[]`, `strong_dir` still yields `None`, and
+  there is no new enum member and no signature change.
+
+  The curated 61-script scope is unchanged. This stops the table answering for code points
+  that are not there; it does not widen what disarm claims to cover, so `U+0870` (assigned
+  Arabic, outside the table) still resolves to nothing.
+
+  Sixteen of the crate's own script tests asserted the defect: each pinned a block's first
+  and last code point, and sixteen of those ends are unassigned. They now assert the last
+  *assigned* code point in the range plus the unassigned one resolving to `"Common"`.
+
 - **`detect_scripts` returned an empty list for four real scripts (#775).** The Rust core
   resolved Batak, Buhid, Hanunoo and Tagbanwa; the `Script` enum could not name them, so
   the binding warned — telling the user to report a bug — and dropped the script from the

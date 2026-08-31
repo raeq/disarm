@@ -12,9 +12,6 @@ validation, dedup, moderation and logging code is missing.
 
 One pure-Rust core, with bindings for **Python, Rust, Ruby, Node.js, Java/Kotlin and C**.
 
-Every attack below is written with escapes, because that is the whole problem: pasted as
-literal characters, these strings are indistinguishable from the clean ones on this page.
-
 ```python
 from disarm import canonicalize, is_suspicious_hostname
 
@@ -71,38 +68,28 @@ assert slugify("Héllo Wörld") == "hello-world"
 
 ## Performance & benchmarks
 
-Two things get measured, because a fold that is fast and wrong is worthless: whether the
-mapping actually reverses an attack, and what it costs per character.
-
-**Does it work?** On the XMR confusable-recovery metric, measured over a broad sample of the
-TR39 space, disarm's *visual* mapping scores **0.63–0.68** against **≤ 0.19** for *phonetic*
-transliterators (`unidecode`, `anyascii`, `uroman`) and **0.10** for NFKC — from a study of
-435,864 observations across six attack types, three downstream tasks and two model
-architectures. →
+**Does it work?** On the XMR confusable-recovery metric, disarm's *visual* mapping scores
+**0.63–0.68**, against **≤ 0.19** for *phonetic* transliterators (`unidecode`, `anyascii`,
+`uroman`) and **0.10** for NFKC. →
 [the evidence](https://docs.disarm.dev/security/adversarial-defense.html#evidence) ·
-[what it does not cover](https://docs.disarm.dev/security/adversarial-defense.html#coverage-and-limits)
+[what it misses](https://docs.disarm.dev/security/adversarial-defense.html#coverage-and-limits)
 
-**What does it cost?** ~450M chars/sec transliterating Latin (~38× Unidecode), ~106M
-chars/sec on Cyrillic, ~712K slugs/sec (~10–24× python-slugify), and ~65 ns for an
-already-ASCII call, which returns the original `str` with zero allocation. Figures are
-hardware-dependent and directional, not guarantees. →
+**What does it cost?** ~450M chars/sec on Latin (~38× Unidecode), ~106M on Cyrillic, ~712K
+slugs/sec (~10–24× python-slugify), ~65 ns for an already-ASCII call. Hardware-dependent and
+directional, not guarantees. →
 [full results](https://docs.disarm.dev/performance.html#results) ·
 [how to read them](https://docs.disarm.dev/performance.html#how-to-read-these-numbers) ·
 [where disarm is slower](https://docs.disarm.dev/performance.html#where-disarm-is-slower)
 
-Both come from *"Fire Extinguishers Full of Gasoline: Evaluating Unicode Text Normalization
-as a Defence Against Adversarial Attacks"* — eight preprocessing tools, six attack types,
-three downstream tasks, two model architectures. The XMR metric is archived at
-[Zenodo](https://doi.org/10.5281/zenodo.20618323); cite it with
-[CITATION.cff](https://github.com/raeq/disarm/blob/main/CITATION.cff).
+Both come from *"Fire Extinguishers Full of Gasoline"*: 435,864 observations over eight
+tools, six attack types, three tasks and two model architectures.
+[Zenodo](https://doi.org/10.5281/zenodo.20618323) ·
+[CITATION.cff](https://github.com/raeq/disarm/blob/main/CITATION.cff)
 
 ## Bindings: one core, six languages
 
-The Rust core does the work; each binding is a native-feeling API over it, not a
-transliterated one — `snake_case` and `?` predicates in Ruby, `camelCase` with options
-objects and `.d.ts` types in Node, builders and a `DisarmException` hierarchy in Java,
-`String` extensions in Kotlin. The *behaviour* is shared, so a fold in Python and a fold in
-Ruby give the same answer; the *surface* is the ecosystem's every time.
+Each binding reads like its own ecosystem — `snake_case` in Ruby, `camelCase` and `.d.ts` in
+Node, builders in Java — over one shared core, so every language returns the same answer.
 
 | Language | Package | Getting started |
 |---|---|---|
@@ -113,10 +100,9 @@ Ruby give the same answer; the *surface* is the ecosystem's every time.
 | Java / Kotlin | `dev.disarm:disarm`, `dev.disarm:disarm-kotlin` on Maven Central | [guide](docs/java/getting-started.md) |
 | C / other FFI | C ABI and `disarm.h` | [bindings/cabi](https://github.com/raeq/disarm/tree/main/bindings/cabi) |
 
-Wheels, gems and native addons are precompiled, so no binding needs a local Rust toolchain.
-The core crate is `unsafe_code = "forbid"`, and its `extension-module` feature exists only to
-build the Python wheel — Rust consumers get pure Rust. What a new binding must deliver is
-written down in [BINDINGS.md](BINDINGS.md).
+Wheels, gems and addons are precompiled — no local Rust toolchain needed. The core crate is
+`unsafe_code = "forbid"` and stays pure Rust; [BINDINGS.md](BINDINGS.md) is the bar a new
+binding has to meet.
 
 ## Limitations: read this before deploying disarm
 

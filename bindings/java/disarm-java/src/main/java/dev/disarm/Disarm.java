@@ -428,6 +428,29 @@ public final class Disarm {
      * tables track different releases (see {@code docs/provenance.md}). Use this to
      * answer "is my confusables fold stale?" without inferring it from behaviour.
      */
+    /**
+     * The UCD release disarm's normalizer implements.
+     *
+     * <p>Not a library-wide Unicode version — the bundled tables track different releases
+     * and {@code docs/provenance.md} is the census. This is the one integrators ask about,
+     * because it decides whether disarm's normalization agrees with the platform's.
+     */
+    public static String unicodeVersion() {
+        return Native.unicodeVersion();
+    }
+
+    /**
+     * Whether a key stored under an earlier release still compares equal.
+     *
+     * <p>A monotonic counter, not a version: two artifacts reporting the same value
+     * produce the same key for the same input, and different values mean reindex. The
+     * value is meaningless in isolation, which is deliberate — the question a key consumer
+     * has is a comparison, not a lookup.
+     */
+    public static int keySchemaVersion() {
+        return Native.keySchemaVersion();
+    }
+
     public static String confusablesVersion() {
         return Native.confusablesVersion();
     }

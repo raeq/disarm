@@ -91,6 +91,10 @@ thiserror = "2.0.18"
 
 [build-dependencies]
 phf_codegen = "0.13"
+# Read only for its `UNICODE_VERSION` const, so `api::UNICODE_VERSION` is derived
+# from the crate that actually normalizes rather than typed a second time (#645).
+# Already in the runtime tree at the same version — this adds no crate to the graph.
+unicode-normalization = "0.1"
 
 [dev-dependencies]
 proptest = "1"

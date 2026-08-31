@@ -679,6 +679,21 @@ fn script_info(name: String) -> Result<RHash, Error> {
     Ok(hash)
 }
 
+/// The UCD release disarm's normalizer implements (#645). Not a library-wide Unicode
+/// version — the bundled tables track different releases; this is the one integrators ask
+/// about, because it decides whether disarm's normalization agrees with the host
+/// platform's.
+fn unicode_version() -> String {
+    api::UNICODE_VERSION.to_owned()
+}
+
+/// Whether a key stored under an earlier release still compares equal (#645). A
+/// monotonic counter, not a version: two artifacts reporting the same value produce the
+/// same key for the same input. Meaningless in isolation, by design.
+fn key_schema_version() -> u32 {
+    api::KEY_SCHEMA_VERSION
+}
+
 /// `Disarm._confusables_version` — the bundled `confusables.txt` release (#560).
 fn confusables_version() -> String {
     api::CONFUSABLES_VERSION.to_owned()
@@ -900,6 +915,11 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method(
         "_confusables_version",
         function!(confusables_version, 0),
+    )?;
+    module.define_singleton_method("_unicode_version", function!(unicode_version, 0))?;
+    module.define_singleton_method(
+        "_key_schema_version",
+        function!(key_schema_version, 0),
     )?;
     module.define_singleton_method("_list_scripts", function!(list_scripts, 0))?;
     module.define_singleton_method("_list_context_langs", function!(list_context_langs, 0))?;

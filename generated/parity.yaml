@@ -326,6 +326,15 @@ operations:
       java: isZalgo
       kotlin: isZalgo
       cabi: null
+  - id: key_schema_version
+    names:
+      rust: key_schema_version
+      python: { provided_via: "disarm.KEY_SCHEMA_VERSION" }
+      ruby: key_schema_version
+      node: keySchemaVersion
+      java: keySchemaVersion
+      kotlin: keySchemaVersion
+      cabi: key_schema_version
   - id: lang_info
     names:
       rust: lang_info
@@ -704,6 +713,15 @@ operations:
       java: transliterate
       kotlin: transliterate
       cabi: transliterate
+  - id: unicode_version
+    names:
+      rust: unicode_version
+      python: { provided_via: "disarm.UNICODE_VERSION" }
+      ruby: unicode_version
+      node: unicodeVersion
+      java: unicodeVersion
+      kotlin: unicodeVersion
+      cabi: unicode_version
   - id: unmapped_confusables
     names:
       rust: unmapped_confusables

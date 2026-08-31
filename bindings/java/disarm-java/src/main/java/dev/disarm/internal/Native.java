@@ -152,6 +152,10 @@ public final class Native {
     // ── Metadata listings ──────────────────────────────────────────────────────
     public static native String confusablesVersion();
 
+    public static native String unicodeVersion();
+
+    public static native int keySchemaVersion();
+
     public static native String[] listScripts();
 
     public static native String[] listContextLangs();

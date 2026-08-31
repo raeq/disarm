@@ -161,6 +161,10 @@ PROVIDED_VIA = {
     # way that language names constants. Python and Rust have real ones; the compiled
     # bindings expose a nullary accessor because a native module cannot export a static.
     "confusables_version": {"python": "disarm.CONFUSABLES_VERSION"},
+    # #645 extends the same channel with two more constants, so they take the same
+    # shape: a real constant in Python and Rust, a nullary accessor everywhere else.
+    "unicode_version": {"python": "disarm.UNICODE_VERSION"},
+    "key_schema_version": {"python": "disarm.KEY_SCHEMA_VERSION"},
     "reverse_transliterate": {"python": "transliterate(target=…)"},
 }
 # Deliberate scope decisions for Ruby/Node — not blind backfill:

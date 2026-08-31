@@ -1053,6 +1053,23 @@ pub fn detectScripts<'l>(
 
 /// The Unicode `confusables.txt` release the bundled confusable tables were folded
 /// from (#560). Not a library-wide Unicode version — see docs/provenance.md.
+/// The UCD release disarm's normalizer implements (#645). Not a library-wide Unicode
+/// version — the bundled tables track different releases; this is the one integrators ask
+/// about, because it decides whether disarm's normalization agrees with the host
+/// platform's.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn unicodeVersion<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<'l> {
+    map_string_nullary(env, || disarm_core::api::UNICODE_VERSION.to_owned())
+}
+
+/// Whether a key stored under an earlier release still compares equal (#645). A
+/// monotonic counter, not a version: two artifacts reporting the same value produce the
+/// same key for the same input. Meaningless in isolation, by design.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn keySchemaVersion(_env: EnvUnowned, _class: JClass) -> i32 {
+    disarm_core::api::KEY_SCHEMA_VERSION as i32
+}
+
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn confusablesVersion<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<'l> {
     map_string_nullary(env, || disarm_core::api::CONFUSABLES_VERSION.to_owned())

@@ -57,8 +57,9 @@ newer UCD than most shipped CPythons, `disarm.normalize` and `unicodedata.normal
 disagree on code points assigned in between — one code point on a UCD 16.0.0 host,
 more on an older one. Every divergence is disarm being more current. A pipeline that
 canonicalizes with one and validates with the other is where that matters; see
-`docs/security/cve-validation.md` → *Normalization cost*. There is no runtime
-accessor for this version yet (#642); the row is the answer until there is.
+`docs/security/cve-validation.md` → *Normalization cost*. Since #645 the answer is also
+reachable from a running program as `UNICODE_VERSION` — see below — so a deployment can
+compare itself against the host rather than inferring the gap from behaviour.
 
 The row is gated rather than hand-maintained. `unicode-normalization` is a floating
 `0.1` requirement, so a `cargo update` can move the bundled data with no disarm code
@@ -78,6 +79,32 @@ artifact; the same value is reachable from a running program, so a deployment ca
 | Ruby | `Disarm.confusables_version` |
 | Java / Kotlin | `Disarm.confusablesVersion()` |
 | C ABI | `disarm_confusables_version()` |
+
+**Two more channels on the same shape (#645).** The rows in the table above answer "what
+was this artifact built from". Two of the questions integrators actually ask are now
+answerable at runtime too, on every one of the seven surfaces:
+
+| Question | Constant | Accessor |
+|---|---|---|
+| Will my normalization agree with the host platform's? | `UNICODE_VERSION` | `unicodeVersion()` / `Disarm.unicode_version` / `disarm_unicode_version()` |
+| Would a key I stored under an earlier release still compare equal? | `KEY_SCHEMA_VERSION` | `keySchemaVersion()` / `Disarm.key_schema_version` / `disarm_key_schema_version()` |
+
+`UNICODE_VERSION` is the **normalizer's** UCD, not a library-wide version — there is none,
+for the reason the note below the table gives. It is read from `unicode-normalization` by
+`build.rs`, so it cannot drift from the tables it names. Usually it disagrees with the host:
+disarm tracks a newer UCD than most shipped CPythons, and a pipeline that canonicalizes
+with one and validates with the other is where that becomes a vulnerability rather than a
+curiosity.
+
+`KEY_SCHEMA_VERSION` is not a Unicode version at all. It is a monotonic counter, bumped
+whenever the output of a key-producing function moves, and its value is meaningless in
+isolation by design — the question a key consumer has is a comparison between two
+artifacts, not a lookup. It covers all eight functions the key-stability fixture tracks,
+not only the three named "key builders": a stored `canonicalize` value is as much a key as
+a stored `search_key` one. A counter nobody is forced to bump rots, so the version is
+written into the fixture header when it is regenerated and a test fails when the two
+disagree — regenerating the fixture without bumping the constant is the exact way this
+kind of number goes stale, and it is now a red test rather than a silent lie.
 
 The value is parsed out of the TSV header by `build.rs`, so it cannot drift from the
 data it describes — the build fails if that header stops naming a version. It covers

@@ -216,6 +216,19 @@ int main(void) {
     disarm_string_free(strict.value);
     disarm_string_free(strict.error);
 
+    /* #645: the two new version channels. `unicode_version` is a dotted release;
+     * `key_schema_version` is a counter, and the point of it is that two artifacts
+     * reporting the same value produce the same key. */
+    char *uv = disarm_unicode_version();
+    int uv_ok = uv && strchr(uv, '.') != NULL;
+    printf("%-28s %-6s (%s)\n", "unicode_version", uv_ok ? "OK" : "FAIL", uv ? uv : "(null)");
+    if (!uv_ok) failures++;
+    disarm_string_free(uv);
+
+    uint32_t schema = disarm_key_schema_version();
+    printf("%-28s %-6s (%u)\n", "key_schema_version", schema >= 1 ? "OK" : "FAIL", schema);
+    if (schema < 1) failures++;
+
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");
         return 0;

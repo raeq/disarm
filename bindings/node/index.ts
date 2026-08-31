@@ -640,6 +640,24 @@ export function scriptInfo(name: string): ScriptMeta {
  * tables track different releases (see docs/provenance.md). Use this to answer "is my
  * confusables fold stale?" without inferring it from behaviour.
  */
+/**
+ * The UCD release disarm's normalizer implements. Not a library-wide Unicode version —
+ * the bundled tables track different releases. This is the one integrators ask about,
+ * because it decides whether disarm's normalization agrees with the host platform's.
+ */
+export function unicodeVersion(): string {
+  return native.unicodeVersion()
+}
+
+/**
+ * Whether a key stored under an earlier release still compares equal. A monotonic
+ * counter, not a version — two artifacts reporting the same value produce the same key
+ * for the same input. Meaningless in isolation, by design.
+ */
+export function keySchemaVersion(): number {
+  return native.keySchemaVersion()
+}
+
 export function confusablesVersion(): string {
   return native.confusablesVersion()
 }

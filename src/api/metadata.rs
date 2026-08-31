@@ -69,6 +69,78 @@ pub fn confusables_version() -> &'static str {
     CONFUSABLES_VERSION
 }
 
+/// The UCD release disarm's normalizer implements (#642, #645).
+///
+/// The question this answers is not "what Unicode does disarm target" — the bundled
+/// tables track several releases and `docs/provenance.md` is the census. It is the
+/// narrower and more useful one: **will my keys agree with `unicodedata`?** Every NFC and
+/// NFKC step in the library, including the ones inside the presets, runs through
+/// `unicode-normalization`, and that crate carries its own UCD independent of both the
+/// bundled tables and disarm's semver.
+///
+/// It matters because the answer is usually *no*. disarm tracks a newer UCD than most
+/// shipped CPythons, so `disarm.normalize` and `unicodedata.normalize` disagree on code
+/// points assigned in between. A pipeline that canonicalizes with one and validates with
+/// the other is where that becomes a vulnerability rather than a curiosity; see
+/// `docs/security/cve-validation.md` → *Normalization cost*.
+///
+/// Read from the crate rather than restated, so it cannot drift from the data it names.
+/// `tests/normalization_ucd_drift.rs` additionally holds the documentation to it.
+///
+/// ```
+/// let v = disarm::api::UNICODE_VERSION;
+/// assert!(v.split('.').all(|part: &str| part.parse::<u32>().is_ok()));
+/// ```
+pub const UNICODE_VERSION: &str = crate::normalize::UNICODE_VERSION;
+
+/// The UCD release disarm's normalizer implements, as a function (#645).
+///
+/// Identical to [`UNICODE_VERSION`]; the const is there for `const` contexts, this is the
+/// op every binding mirrors, so the parity matrix has one name to match on.
+#[must_use]
+pub fn unicode_version() -> &'static str {
+    UNICODE_VERSION
+}
+
+/// Whether a key stored under an earlier release still compares equal (#644, #645).
+///
+/// **Not a Unicode version.** It is a monotonic counter, bumped whenever the output of a
+/// key-producing function moves. Two artifacts reporting the same value produce the same
+/// key for the same input; two reporting different values may not, and a consumer holding
+/// stored keys should reindex across the boundary.
+///
+/// The value is meaningless in isolation and that is deliberate — the question a key
+/// consumer has is a comparison, not a lookup. Pre-0.15 releases expose no constant at
+/// all, so "unknown" and "different" are the same answer there.
+///
+/// It covers every function `tests/fixtures/key_stability/golden_keys.tsv.gz` tracks, not
+/// only the three named "key builders": `search_key`, `catalog_key`, `sort_key`,
+/// `fold_case`, `canonicalize`, `canonicalize_strict`, `strip_obfuscation` and
+/// `normalize_confusables`. A stored `canonicalize` value is as much a key as a stored
+/// `search_key` one, and 0.15 moved four of those eight while leaving the other four
+/// byte-identical (#801).
+///
+/// The counter is only worth anything if something notices the output moved, which is
+/// what that fixture is for (#644). The two are wired together: the version is written
+/// into the fixture header when it is regenerated, and `tests/test_key_stability.py`
+/// fails when the constant and the header disagree. Regenerating the fixture without
+/// bumping the constant — the exact way a counter like this goes stale — is a test
+/// failure rather than a silent lie.
+///
+/// ```
+/// assert!(disarm::api::KEY_SCHEMA_VERSION >= 1);
+/// ```
+pub const KEY_SCHEMA_VERSION: u32 = 1;
+
+/// The key-schema counter, as a function (#645).
+///
+/// Identical to [`KEY_SCHEMA_VERSION`]; see that constant for what the number means and
+/// what it does not.
+#[must_use]
+pub fn key_schema_version() -> u32 {
+    KEY_SCHEMA_VERSION
+}
+
 /// Every script disarm knows, as stable UCD script identifiers, sorted by name
 /// (includes `"Common"` / `"Inherited"`).
 #[must_use]

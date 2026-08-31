@@ -75,6 +75,8 @@ from disarm._api import (
 )
 from disarm._boundary import (
     _CONFUSABLES_VERSION,
+    _KEY_SCHEMA_VERSION,
+    _UNICODE_VERSION,
     AnomalyReport,
     DisarmError,
     Finding,
@@ -215,14 +217,42 @@ except _PackageNotFoundError:  # pragma: no cover - source checkout without an i
 # --- Bundled data version (#560) ---
 #
 # The Unicode `confusables.txt` release the bundled confusable tables were folded from.
-# Deliberately NOT named `UNICODE_VERSION`: disarm's tables do not all track one Unicode
-# release (case folding is 16.0, East Asian width 15.1.0 — see docs/provenance.md), so a
-# single `UNICODE_VERSION` would be wrong for three of the four. This constant answers
-# one question only: how current is the confusables fold?
+# This constant answers one question only: how current is the confusables fold? It is not
+# a library-wide Unicode version, and there deliberately is none — disarm's tables track
+# different releases (case folding 16.0, East Asian width 15.1.0), so a single number
+# would be wrong for most of them. `docs/provenance.md` is the census.
 #
 # Read from the compiled core, which in turn reads it from the TSV header at build time,
 # so the number is never typed twice.
 CONFUSABLES_VERSION: str = _CONFUSABLES_VERSION
+
+# The UCD release disarm's NORMALIZER implements — not a library-wide version, for the
+# reason above. An earlier comment here argued against this name on exactly that ground,
+# and the objection is right about the risk: a reader can take `UNICODE_VERSION` to cover
+# the whole artifact. It is kept because the question it answers is the one integrators
+# actually ask — *will my keys agree with `unicodedata`?* — and that question is about the
+# normalizer alone. Every NFC/NFKC step in the library, including the ones inside presets,
+# runs through `unicode-normalization`, and it carries its own UCD independent of both the
+# bundled tables and disarm's semver. Usually the answer is no: disarm tracks a newer UCD
+# than most shipped CPythons, which is what makes a pipeline that canonicalizes with one
+# and validates with the other a problem (docs/security/cve-validation.md).
+#
+# Emitted by build.rs from the crate's own constant, so it cannot drift from the tables it
+# names.
+UNICODE_VERSION: str = _UNICODE_VERSION
+
+# Whether a key stored under an earlier release still compares equal. NOT a Unicode
+# version and not disarm's version: a monotonic counter, bumped whenever key-producing
+# output moves. Two artifacts reporting the same value produce the same key for the same
+# input; different values mean reindex. The value is meaningless alone — the question a
+# key consumer has is a comparison — and pre-0.15 releases expose nothing, so "unknown"
+# and "different" are the same answer there.
+#
+# It covers all eight functions the key-stability fixture tracks, not only the three named
+# "key builders": a stored `canonicalize` value is as much a key as a stored `search_key`
+# one. The counter is kept honest by that fixture, which records the version it was
+# generated under; regenerating it without bumping this is a test failure (#644, #645).
+KEY_SCHEMA_VERSION: int = _KEY_SCHEMA_VERSION
 
 # --- Compatibility aliases ---
 
@@ -246,6 +276,8 @@ __all__ = [
     # Metadata
     "__version__",
     "CONFUSABLES_VERSION",
+    "KEY_SCHEMA_VERSION",
+    "UNICODE_VERSION",
     # Transforms
     "transliterate",
     "find_untranslatable",

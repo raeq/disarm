@@ -635,6 +635,20 @@ impl std::str::FromStr for Platform {
 /// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)); `Platform` and the
 /// `usize` length make every other input infallible by construction.
 ///
+///
+/// # A safe filename is not a safe URL path segment
+///
+/// `%` is legal in a filename on every supported platform, so a `%` the caller typed is
+/// kept: `sanitize_filename("..%2Fetc")` returns `"%2Fetc"` — the literal `..` collapsed,
+/// the percent-encoded spelling of the same traversal left alone. A consumer that
+/// percent-decodes the result (`Content-Disposition`, an object-storage key, a
+/// static-file route) must validate *after* decoding.
+///
+/// What this will not do is *manufacture* one. Compatibility folding maps five code
+/// points to `%` — `\u{609}`, `\u{60A}`, `\u{66A}`, `\u{FE6A}`, `\u{FF05}` — which used to
+/// assemble `%2E%2E%2F` out of input containing no `%` at all (#721). The rule is now
+/// exact: **`%` never appears in the output unless it appeared in the input.**
+///
 /// [`ErrorKind::InvalidArgument`]: crate::ErrorKind::InvalidArgument
 pub fn sanitize_filename(
     text: &str,

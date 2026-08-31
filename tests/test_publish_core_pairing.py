@@ -83,13 +83,17 @@ def test_the_publishers_exist() -> None:
 def test_the_gate_polls_for_the_core(name: str) -> None:
     """The #500 half, still needed: a release publishes the core in parallel.
 
+    Scoped to the `wait-for-core` job with comments stripped, not to the raw file: a
+    poll that had been deleted would still be "found" in a YAML or shell comment mentioning
+    it, and this file already strips comments everywhere else for that reason.
+
     The host is compared as a parsed netloc rather than as a substring. CodeQL flagged the
     substring form (`py/incomplete-url-substring-sanitization`) and the rule is right on
     the general point — `"index.crates.io" in text` also matches
     `index.crates.io.example.com` — so this checks the thing the rule asks for, which is
     also the stronger assertion.
     """
-    urls = re.findall(r"https?://[^\s\"']+", _text(name))
+    urls = re.findall(r"https?://[^\s\"']+", _wait_for_core(name))
     hosts = {urlparse(url).netloc for url in urls}
     assert "index.crates.io" in hosts, (
         f"{name} lost its crates.io sparse-index poll; hosts found: {sorted(hosts)}"

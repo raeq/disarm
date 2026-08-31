@@ -140,7 +140,13 @@ jobs:
       - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           ruby-version: "3.3"
-          bundler-cache: true
+          # NOT `bundler-cache: true`. It runs at the repo root, which has no Gemfile —
+          # the note at the top of `test` explains why every other job here sets
+          # `BUNDLE_GEMFILE`, and this job does not. It does not need to: the check below
+          # is `cargo check`, which wants Ruby's headers for rb-sys and no gem bundle at
+          # all. Enabling the cache here would fail the gate before it reached the check
+          # it exists to run.
+          bundler-cache: false
       - name: The published core must be one this glue compiles against (#830)
         shell: bash
         working-directory: bindings/ruby/ext/disarm

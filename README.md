@@ -4,23 +4,29 @@
 
 **Make text that *looks* the same *compare* the same.**
 
-`раypal.com` and `paypal.com` render identically and are different strings. disarm folds
-those look-alikes to their Unicode [TR39](https://www.unicode.org/reports/tr39/) prototypes,
+`раypal.com` — Cyrillic `а` (U+0430) and `р` (U+0440) — renders identically to
+`paypal.com` and is a different string. disarm folds those look-alikes to their Unicode
+[TR39](https://www.unicode.org/reports/tr39/) prototypes,
 strips bidi overrides, zero-width and control characters, and flags spoofed hostnames — the
 Unicode layer your validation, dedup, moderation and logging code is missing.
 
 One pure-Rust core, with bindings for **Python, Rust, Ruby, Node.js, Java/Kotlin and C**.
 
+Every attack below is written with escapes, because that is the whole problem: pasted as
+literal characters, these strings are indistinguishable from the clean ones on this page.
+
 ```python
 from disarm import canonicalize, is_suspicious_hostname
 
-# One call for untrusted input: folds homoglyphs, removes bidi overrides,
-# zero-width and control characters.
-assert canonicalize("‮example​.com") == "example.com"
-assert canonicalize("Ηello Ꮤorld") == "Hello World"  # Greek Η, Cherokee Ꮤ
+# U+202E is a right-to-left override and U+200B a zero-width space. Neither is
+# visible, and both survive a copy-paste straight into your database.
+assert canonicalize("\u202eexample\u200b.com") == "example.com"
 
-# Analyse a hostname instead of rewriting it.
-suspicious, analysis = is_suspicious_hostname("аpple.com")  # leading Cyrillic а
+# U+0397 is Greek capital eta and U+13D4 Cherokee letter wa. They render as H and W.
+assert canonicalize("\u0397ello \u13d4orld") == "Hello World"
+
+# Cyrillic small a (U+0430) standing in for Latin a: renders as "apple.com".
+suspicious, analysis = is_suspicious_hostname("\u0430pple.com")
 assert suspicious and analysis.canonical == "apple.com"
 ```
 
@@ -47,8 +53,11 @@ gem install disarm      # Ruby 3.1+
 ```python
 from disarm import slugify, strip_obfuscation, transliterate
 
-assert strip_obfuscation("рroduсt") == "product"    # visual: Cyrillic р, с → p, c
-assert transliterate("Київ", lang="uk") == "Kyiv"   # phonetic: BGN/PCGN romanization
+# Cyrillic er (U+0440) and es (U+0441) folded to Latin p and c — visual (TR39) mapping.
+assert strip_obfuscation("\u0440rodu\u0441t") == "product"
+
+# Phonetic romanization: a different mapping, and not a defence.
+assert transliterate("Київ", lang="uk") == "Kyiv"
 assert slugify("Héllo Wörld") == "hello-world"
 ```
 

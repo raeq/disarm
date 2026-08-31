@@ -19,6 +19,12 @@ import pytest
 
 from disarm import decode_to_utf8, detect_encoding
 
+# Written as an escape, never as a literal: an invisible character pasted into a test is
+# invisible in the diff and in the editor too, which is the whole reason
+# `tests/test_readme_invisible_characters.py` exists for README.md. `test_this_file_has_no
+# _literal_invisible_character` below holds the line for this file.
+BOM = "\ufeff"
+
 # Every row from the issue's table, with what `detect_encoding` used to say.
 BOM_ROWS = [
     ("héllo wörld".encode("utf-16-le"), "UTF-16LE", "was KOI8-U"),
@@ -47,7 +53,7 @@ def test_the_label_round_trips_against_the_truth(data: bytes, _want: str, _befor
     strips it — that convention difference is not what this test is about.
     """
     label, _ = detect_encoding(data)
-    via_label = data.decode(label).lstrip("﻿")
+    via_label = data.decode(label).lstrip(BOM)
     via_disarm, had_errors = decode_to_utf8(data)
     assert via_label == via_disarm
     assert not had_errors
@@ -58,7 +64,7 @@ def test_the_two_functions_agree_by_construction() -> None:
     for data, _, _ in BOM_ROWS:
         label, _ = detect_encoding(data)
         decoded, _ = decode_to_utf8(data)
-        assert data.decode(label).lstrip("﻿") == decoded
+        assert data.decode(label).lstrip(BOM) == decoded
 
 
 # ── BOM-less UTF-16 over ASCII-range text (§3) ───────────────────────────────
@@ -156,3 +162,60 @@ def test_short_and_odd_inputs_are_left_alone(n: int) -> None:
     label, _ = detect_encoding(data)
     if n < 4 or n % 2:
         assert not label.upper().startswith("UTF-16")
+
+
+# ── the two review findings, pinned ──────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("units_with_nul", "total_units", "detected"),
+    [
+        (4, 4, True),  # 100% — plainly UTF-16
+        (3, 4, True),  # 75%
+        (2, 4, True),  # exactly the floor
+        (1, 4, False),  # below it
+        (3, 8, False),  # 37.5%
+    ],
+)
+def test_the_nul_fraction_floor_is_where_the_doc_says(
+    units_with_nul: int, total_units: int, detected: bool
+) -> None:
+    """The threshold is asserted, not described.
+
+    The rustdoc said "90%" after the constant had moved to 0.5 — a comment and a constant
+    disagreeing with nothing between them to fail. These cases straddle the real boundary,
+    so moving the constant without moving the prose now breaks a test.
+
+    Non-NUL units use `\u0400`-range bytes, which is what UTF-16LE Cyrillic actually looks
+    like: high byte `04`, not `00`.
+    """
+    data = b"".join(b"a\x00" if i < units_with_nul else b"\x1f\x04" for i in range(total_units))
+    assert detect_encoding(data)[0].upper().startswith("UTF-16") is detected
+
+
+def test_this_file_has_no_literal_invisible_character() -> None:
+    """An invisible pasted into a test is invisible in the diff and the editor too.
+
+    `tests/test_readme_invisible_characters.py` guards README.md for this reason, and #794
+    made the same argument for a test file that had pasted `U+202E` into its own sample.
+    A test about a BOM is the easiest place to reintroduce one, so it is checked here.
+    """
+    import unicodedata
+    from pathlib import Path
+
+    source = Path(__file__).read_text(encoding="utf-8")
+    offenders = [
+        (i, f"U+{ord(c):04X}", unicodedata.name(c, "?"))
+        for i, c in enumerate(source)
+        if unicodedata.category(c) == "Cf"
+        or (unicodedata.category(c) == "Cc" and c not in "\n\r\t")
+    ]
+    assert not offenders, f"write these as escapes: {offenders}"
+
+
+def test_the_invisible_guard_can_fail() -> None:
+    """The guard above passes trivially if its predicate is wrong; prove it can fire."""
+    import unicodedata
+
+    sample = "a" + chr(0xFEFF) + "b"
+    assert any(unicodedata.category(c) == "Cf" for c in sample)

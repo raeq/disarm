@@ -26,12 +26,14 @@ const CONFIDENCE_HIGH: f64 = 0.95;
 /// Deliberately conservative, because a false positive turns working text into garbage:
 ///
 /// - Even length and at least two code units. An odd length is not UTF-16 at all.
-/// - One position must be **at least half** NUL and the other **exactly zero**. Text in a
-///   single-byte encoding contains no NUL anywhere — it is a C0 control — so any split at
-///   all is evidence; requiring the clean side to be empty is what keeps a binary blob
-///   from being read as text.
+/// - One position must be at least `MIN_NUL_FRACTION` NUL and the other **exactly zero**.
+///   Text in a single-byte encoding contains no NUL anywhere — it is a C0 control — so any
+///   split at all is evidence; requiring the clean side to be empty is what keeps a binary
+///   blob from being read as text. The fraction is the weaker half of the rule and is
+///   named rather than spelled out in prose, so it cannot drift out of step with the
+///   constant (it did: the comment said 90% after the constant moved to 0.5).
 ///
-/// The 90% floor is what limits this to the ASCII range, and that limit is real: in
+/// `MIN_NUL_FRACTION` is what limits this to the ASCII range, and that limit is real: in
 /// UTF-16LE Cyrillic the high byte is `04`, not `00`, so `"Привет"` without a BOM carries
 /// no NUL and stays undetected. Documented on both surfaces rather than papered over —
 /// widening it would mean guessing from script frequency, which is the ambiguous-bytes

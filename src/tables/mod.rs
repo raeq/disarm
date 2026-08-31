@@ -813,6 +813,22 @@ pub fn is_tr39_claimed_emoji_row(ch: char) -> bool {
     emoji_data::EMOJI_ROWS_TR39_ALSO_CLAIMS.contains(&(ch as u32))
 }
 
+include!(concat!(env!("OUT_DIR"), "/word_joiners_phf.rs"));
+
+/// Whether `ch` joins parts of one word — `Pd`, `Pc`, or `U+002E FULL STOP` (#750).
+///
+/// The separator set for `seg_word`'s single-letter segmentation check, which recognised
+/// three characters while Unicode has two whole categories for the job. Sixteen joiners
+/// were silent on every path, and `U+2010 HYPHEN` disagreed with `U+002D HYPHEN-MINUS`
+/// while rendering identically.
+///
+/// Derived from the general category by `scripts/gen_word_joiners.py`, not curated, so a
+/// Unicode release that adds a dash cannot leave a hole.
+#[inline]
+pub fn is_word_joiner(ch: char) -> bool {
+    WORD_JOINERS.contains(&ch)
+}
+
 /// Whether this CLDR name row carries no Unicode emoji property at all (#757).
 ///
 /// CLDR `annotationsDerived` names 326 code points that are not emoji by either the

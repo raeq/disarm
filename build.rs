@@ -568,6 +568,14 @@ fn main() {
         &out_dir.join("assigned_ranges.rs"),
         "ASSIGNED_RANGES",
     );
+    // #750: the within-word joiners `seg_word` splits on.
+    generate_char_set(
+        &data_dir.join("word_joiners.tsv"),
+        &out_dir.join("word_joiners_phf.rs"),
+        "WORD_JOINERS",
+        "pub(crate)",
+    );
+
     // #773: UAX #9 strong direction, replacing a five-name script list.
     generate_bidi_strong_ranges(
         &data_dir.join("bidi_strong_ranges.tsv"),

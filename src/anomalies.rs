@@ -402,7 +402,37 @@ fn nearest(d: &str, lexicon: &HashSet<String>) -> Option<String> {
     None
 }
 
-/// Dense single-letter segmentation (`v.i.a.g.r.a`), not a lone hyphen or `6-foot-6`.
+/// `tok` trimmed by `WRAP` **minus** the characters that are also leet substitutes (#726).
+///
+/// `!`, `(` and `)` sit in both sets. Trimming them off the token edge before the leet
+/// decode is right when they are punctuation (`4dm1n!`) and wrong when they are the
+/// substitution (`!gn0r3` -> `ignore`). Position cannot tell those apart; the lexicon can,
+/// so this is the second attempt and runs only after the trimmed decode has missed.
+fn leet_edge_core(tok: &str) -> &str {
+    tok.trim_matches(|c: char| WRAP.contains(&c) && leet_sub(c).is_none() && c != '(' && c != ')')
+}
+
+/// Whether `c` separates the letters of a segmented word (#750, #720).
+///
+/// Was three characters — `.`, `_`, `-` — while Unicode has two whole general categories
+/// for joining parts of one word. Measured over `c<SEP>o<SEP>n<SEP>f<SEP>i<SEP>r<SEP>m`,
+/// the exact shape this branch is documented to catch, **16 of the 36 joiners were silent
+/// on every path**, and two of those are sharper than silence: `canonicalize` actively
+/// rewrites `U+2E40` and `U+30A0` to `=`, which was not in the recognised set either, so
+/// the fold moved the attack from one unrecognised separator to another.
+///
+/// `U+2010 HYPHEN` is the real typographic hyphen and `U+002D HYPHEN-MINUS` is the ASCII
+/// one. They render identically, and the branch fired on one and not the other.
+///
+/// Derived from the general category by `scripts/gen_word_joiners.py` rather than curated,
+/// so a Unicode release that adds a dash cannot leave a hole. The exotic spaces are here
+/// too (#720): `is_token_boundary` declines to consume them precisely so this branch can
+/// see them.
+#[inline]
+fn is_segment_separator(c: char) -> bool {
+    crate::tables::is_word_joiner(c) || (c.is_whitespace() && !is_token_boundary(c))
+}
+
 /// A word split by an exotic space, rejoined into a lexicon word (#720).
 ///
 /// `seg_word` above answers a different question: *dense* single-letter splitting, where
@@ -453,26 +483,43 @@ fn space_fragmented_word(core: &str, lexicon: &HashSet<String>) -> Option<String
     lexicon.contains(joined.as_str()).then_some(joined)
 }
 
+/// Dense single-letter segmentation (`v.i.a.g.r.a`), not a lone hyphen or `6-foot-6`.
 fn seg_word(core: &str, lexicon: &HashSet<String>) -> Option<String> {
     // Collapse runs of consecutive separators before counting, so padding (`v-.-i-.-a...`)
     // cannot inflate the separator count to game the density ratio: each run counts once.
     let mut seps = 0usize;
     let mut prev_sep = false;
     for c in core.chars() {
-        // #720: an exotic space is a separator here too. `is_token_boundary` excludes it
-        // from ending a token precisely so this branch can see it.
-        let is_sep = matches!(c, '.' | '_' | '-') || (c.is_whitespace() && !is_token_boundary(c));
+        let is_sep = is_segment_separator(c);
         if is_sep && !prev_sep {
             seps += 1;
         }
         prev_sep = is_sep;
     }
-    let letters: Vec<char> = core.chars().filter(|c| c.is_alphabetic()).collect();
+    // #752: DEMANGLE the non-letters rather than dropping them. `p.4.s.s.w.0.r.d` used to
+    // reassemble as `psswrd` — `4` and `0` are not `is_alphabetic`, so they were silently
+    // discarded — and neither that nor `p.a.s.s.w.0.r.d`'s `passwrd` is in any lexicon.
+    // One substituted character was enough to defeat both branches that each catch its
+    // halves: the leet branch fails because `core` still holds the separators, and this
+    // one failed because it threw the substitute away. Every substitutable position in
+    // `password` — `a`, both `s`, and `o`, the four letters `leet_sub` has an inverse for
+    // — screened clean.
+    let letters: Vec<char> = core
+        .chars()
+        .filter(|c| !is_segment_separator(*c))
+        .filter_map(|c| {
+            if c.is_alphabetic() {
+                Some(c)
+            } else {
+                leet_sub(c)
+            }
+        })
+        .collect();
     // Dense single-letter splitting: require seps >= 2 AND 5*seps >= 3*(letters-1).
     if seps < 2 || 5 * seps < 3 * letters.len().saturating_sub(1) {
         return None;
     }
-    for part in core.split(['.', '_', '-']) {
+    for part in core.split(is_segment_separator) {
         if part.chars().count() > 1 && part.chars().any(char::is_alphabetic) {
             return None;
         }
@@ -727,37 +774,51 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     // Symbols that gate the leet path: digits plus the non-digit letter-substitutes the
     // demangler understands (`@ $ | ! +`). `!`/`+`/`@`/`$`/`|` are interior here — leading
     // or trailing `!` (and the other WRAP chars) were already stripped into `core`.
+    // #726: `!` is in `WRAP` *and* in the leet alphabet, and `(`/`)` are the second case —
+    // in `WRAP` and forming `()` -> `o`. `core` is trimmed before this branch runs, so a
+    // leet word whose first or last character is one of them lost it before the decode and
+    // the shortened result missed the lexicon: `1gn0r3` was caught, `!gn0r3` was clean, and
+    // `$ystem` — a substitute NOT in `WRAP` — was caught. The two roles are not separable
+    // by position, but they are separable by outcome: trim, decode, and on a miss retry
+    // with the edges kept. The retry runs second, so the trim keeps doing its real job —
+    // `4dm1n!` decodes on the first pass and that trailing `!` is punctuation.
+    //
     // Per word, for the same reason as the mixed-script branch: `fr33` and `m0n3y` each
     // decode, and an exotic space between them no longer ends the token (#720), so a
     // whole-token decode would fail on a pair that used to be two tokens. A narrower
     // split than `word_parts` — see `leet_parts`.
-    for core in leet_parts(core) {
-        let has_sym = core
-            .chars()
-            .any(|c| c.is_ascii_digit() || matches!(c, '@' | '$' | '|' | '!' | '+'));
-        // 4.1: cap the token length BEFORE decoding, so neither the O(n) `leet_demangle`
-        // allocation nor the O(n²) `nearest()` path can be driven by an unbounded
-        // attacker-supplied token (the decode is never longer than the token itself).
-        if has_sym && core.chars().count() <= MAX_LEET_LEN {
-            // 7.1: compute the leet decode first so the ordinal/time scan only runs when a
-            // decode actually exists.
-            if let Some(d) = leet_demangle(core) {
-                if !is_ordinal_or_time(core) {
-                    let base = base_ascii(core);
-                    // reject a real word with a trailing literal number (Power5 -> power); keep
-                    // interior substitutions (ab0ut) and short leet (th3 -> the): trust base at
-                    // len>=4
-                    let literal = base.chars().count() >= 4
-                        && lexicon.contains(base.as_str())
-                        && is_word_plus_trailing(core);
-                    if base.chars().count() >= 2 && !literal && d.chars().count() >= 3 && d != base
-                    {
-                        if lexicon.contains(d.as_str()) {
-                            return Some(mk(AnomalyKind::Leet, d));
-                        }
-                        if d.chars().count() >= 6 {
-                            if let Some(near) = nearest(&d, lexicon) {
-                                return Some(mk(AnomalyKind::Leet, near));
+    for source in [core, leet_edge_core(tok)] {
+        for core in leet_parts(source) {
+            let has_sym = core
+                .chars()
+                .any(|c| c.is_ascii_digit() || matches!(c, '@' | '$' | '|' | '!' | '+'));
+            // 4.1: cap the token length BEFORE decoding, so neither the O(n) `leet_demangle`
+            // allocation nor the O(n²) `nearest()` path can be driven by an unbounded
+            // attacker-supplied token (the decode is never longer than the token itself).
+            if has_sym && core.chars().count() <= MAX_LEET_LEN {
+                // 7.1: compute the leet decode first so the ordinal/time scan only runs when a
+                // decode actually exists.
+                if let Some(d) = leet_demangle(core) {
+                    if !is_ordinal_or_time(core) {
+                        let base = base_ascii(core);
+                        // reject a real word with a trailing literal number (Power5 -> power); keep
+                        // interior substitutions (ab0ut) and short leet (th3 -> the): trust base at
+                        // len>=4
+                        let literal = base.chars().count() >= 4
+                            && lexicon.contains(base.as_str())
+                            && is_word_plus_trailing(core);
+                        if base.chars().count() >= 2
+                            && !literal
+                            && d.chars().count() >= 3
+                            && d != base
+                        {
+                            if lexicon.contains(d.as_str()) {
+                                return Some(mk(AnomalyKind::Leet, d));
+                            }
+                            if d.chars().count() >= 6 {
+                                if let Some(near) = nearest(&d, lexicon) {
+                                    return Some(mk(AnomalyKind::Leet, near));
+                                }
                             }
                         }
                     }
@@ -773,10 +834,7 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     // both to `U+0020`, which is right for display and is why the answer lives here.
     //
     // The token is used whole, NOT `word_parts`: the separators are the evidence.
-    if core
-        .chars()
-        .any(|c| matches!(c, '.' | '_' | '-') || (c.is_whitespace() && !is_token_boundary(c)))
-    {
+    if core.chars().any(is_segment_separator) {
         if let Some(word) = seg_word(core, lexicon) {
             return Some(mk(AnomalyKind::Segmentation, word));
         }

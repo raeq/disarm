@@ -382,6 +382,51 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **The two lexicon-gated branches compose, and know every separator (#726, #750, #752).**
+  Three blind spots in `src/anomalies.rs`, each one character wide, each in a branch that
+  worked correctly on the input it was designed for.
+
+  **#752 — one leet substitute inside a segmented word defeated both branches.**
+  `inspect_anomalies` catches leet substitution. It catches single-letter segmentation. It
+  reported **clean** on a token that does both:
+
+  ```
+  p4ssw0rd           leet          -> password
+  p.a.s.s.w.o.r.d    segmentation  -> password
+  p.4.s.s.w.0.r.d    clean         ->  segmentation -> password
+  ```
+
+  `seg_word` rebuilt the candidate with `filter(is_alphabetic)`, so `4` and `0` were
+  silently *dropped* rather than demangled — `psswrd` is in no lexicon. Every
+  substitutable position in `password` screened clean — `a`, both `s`, and `o`, which are
+  the four letters `leet_sub` has an inverse for. The rebuild now demangles.
+
+  **#750 — the separator set was three characters.** Unicode has two whole general
+  categories for joining parts of one word, and 16 of the 36 joiners were silent on every
+  path. `U+2E40` and `U+30A0` are the sharp ones: `canonicalize` rewrites them to `=`,
+  which was not recognised either, so the fold moved the attack from one unrecognised
+  separator to another. `U+2010 HYPHEN` and `U+002D HYPHEN-MINUS` render identically and
+  disagreed.
+
+  New table `src/tables/data/word_joiners.tsv`, derived from `General_Category` by
+  `scripts/gen_word_joiners.py` rather than curated, so a Unicode release that adds a dash
+  cannot leave a hole. 38 code points at UCD 17.0.0 — 27 `Pd`, 10 `Pc`, and `U+002E` by
+  hand, because widening the test to `Po` would pull in `?`, `!` and `@`.
+
+  **#726 — `!` is in `WRAP` and in the leet alphabet at once.** `core` is trimmed before
+  the leet branch runs, so a leet word starting with one lost it before the decode:
+  `1gn0r3` was caught and `!gn0r3` was clean. Now: trim, decode, and on a miss retry with
+  the edges kept. The retry runs second, so the trim keeps doing its real job — the
+  trailing `!` in `4dm1n!` is still punctuation.
+
+  Two of #726's rows stay clean and that is correct: `!` maps to `i`, so `gn0r3!` decodes
+  to `gnorei` and `!dm1n` to `idmin`, neither of which is a word. Asserted, so the
+  distinction is recorded rather than read as an unfixed defect.
+
+  All three density gates are unchanged — `seps >= 2`, the `5:3` ratio, and the
+  single-letter-fragment requirement — which is the acceptance criterion for this change
+  rather than a side note.
+
 - **The detector sees every carrier the strip functions already remove (#700, #643).**
   `inspect_anomalies` could not see two of the three ASCII-smuggling channels at all, and
   saw the third only when a letter happened to sit next to it — so on the exact carriers

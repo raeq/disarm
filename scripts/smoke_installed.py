@@ -108,7 +108,7 @@ def main() -> int:
         ("transform: transliterate", lambda: disarm.transliterate("Москва"), "Moskva"),
         ("transform: slugify", lambda: disarm.slugify("Hello, World!"), "hello-world"),
         ("predicate: is_confusable", lambda: disarm.is_confusable("раypal"), True),
-        ("detector: has_anomalies", lambda: disarm.has_anomalies("ad​min"), True),
+        ("detector: has_anomalies", lambda: disarm.has_anomalies("ad\u200bmin"), True),
         ("detector: has_anomalies (clean)", lambda: disarm.has_anomalies("admin"), False),
         ("builder: Text", lambda: str(disarm.Text("Café").transliterate()), "Cafe"),
     ]

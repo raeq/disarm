@@ -301,8 +301,8 @@ PERSIAN_VOCAB: list[tuple[str, str, int]] = [
     ("شاید", "شاید", 2000),
     ("باید", f"بای{_FA}د", 5000),
     ("نباید", f"ن{_FA}بای{_FA}د", 3000),
-    ("می‌خواهم", f"میخ{_SU}واه{_FA}م", 3000),
-    ("می‌توانم", f"میت{_FA}وان{_FA}م", 2500),
+    ("می\u200cخواهم", f"میخ{_SU}واه{_FA}م", 3000),
+    ("می\u200cتوانم", f"میت{_FA}وان{_FA}م", 2500),
     # --- Indo-European cognates (common Persian words with known pronunciation) ---
     # Source: borderlessblogger.com Indo-European words in Persian
     ("دختر", f"د{_DA}خ{_SU}ت{_FA}ر", 4000),  # dokhtar (daughter)

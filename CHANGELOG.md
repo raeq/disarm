@@ -349,13 +349,13 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   point survived, whatever its category, while the default ASCII path screened all of them:
 
   ```
-  slugify("file\u202Egnp.exe", allow_unicode=True)   'file‮gnp-exe'  ->  'file-gnp-exe'
-  slugify("a\u200Bb", allow_unicode=True)            'a​b'            ->  'a-b'
+  slugify("file\u202Egnp.exe", allow_unicode=True)   'file\u202egnp-exe'  ->  'file-gnp-exe'
+  slugify("a\u200Bb", allow_unicode=True)            'a\u200bb'            ->  'a-b'
   slugify("a\uFFFEb", allow_unicode=True)            'a￾b'           ->  'a-b'
   slugify("Hello 👋 World", allow_unicode=True)      'hello-👋-world' ->  'hello-world'
   ```
 
-  `'file‮gnp-exe'` renders as `fileexe.png`, and the slug is then the URL, the anchor text
+  `'file\u202egnp-exe'` renders as `fileexe.png`, and the slug is then the URL, the anchor text
   or the filename. Turning on `allow_unicode` turned the whole screen off at once, which is
   unlikely to be what a caller asking to keep the original script believed they were opting
   into.
@@ -486,6 +486,44 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   an interpreter whose Unicode version predates the data.
 
 ### Fixed
+
+- **"Escapes, never literals" now covers the tree, not just `README.md` (#802).** The
+  README guard's docstring already made the argument, and recorded that the defect it
+  guards against **shipped once** — a literal `U+202E` in a README example reached GitHub,
+  crates.io and PyPI reading as a tautology. Everything that argument says about
+  `README.md` was true of every other file, and nothing checked them.
+
+  Measured on `main`: 330 literal invisible characters across 481 files in 14 languages,
+  103 of them bidi controls — the mechanism of CVE-2021-42574, in the repository of the
+  library that detects it. The sharpest were the Trojan Source test constants themselves,
+  stored with literal `U+202E`, so what a reviewer saw in an editor, in `git diff` and in
+  the GitHub blob view was the *reordered* form rather than the one Python parses. A
+  construction whose entire point is that display order and logical order disagree was
+  stored in the form that disagrees.
+
+  All of them are now escapes. The Python conversion is proven by AST equivalence — a
+  rewrite that changed any string constant changed `ast.dump` and was reverted rather than
+  committed — which is what made it safe to run over test data whose exact bytes are the
+  point. The other languages were verified by their own suites: 224 rspec examples, 194
+  vitest tests, `gradlew` BUILD SUCCESSFUL, 39 Sybil doc pages, `mkdocs build --strict`.
+
+  Two exemptions, both mechanical rather than judgement calls, and both stated in one
+  reviewed list rather than in per-file pragmas. A `U+200D` joining two
+  `Extended_Pictographic` code points is emoji sequencing — `docs/user-guide/graphemes.md`
+  alone holds 43, and escaping them makes the page worse without making anything safer.
+  And a `U+200D`/`U+200C` between two letters of a joining script is **orthography**: this
+  one was not in #802's classification and was found by converting, when
+  `docs/reference.md`'s Sinhala sample `ශ්‍රී ලංකා` and the Persian ezafe in
+  `docs/user-guide/abjad-transliteration.md` turned out to need their joiners to be the
+  language. The emoji rule alone would have broken both, which is exactly the "gate becomes
+  a nuisance" outcome #802 §3 warns about. A joiner between Latin letters — `ad\u200dmin` —
+  gets no exemption and stays a failure.
+
+  `.gitattributes` is added as the reviewer-side signal #802 §5 asks for: `eol=lf` so a
+  CRLF checkout cannot change what a test asserts, `binary` on the byte-exact fixtures, and
+  `linguist-generated` on the tables so a regeneration does not bury the change that caused
+  it. `working-tree-encoding` is deliberately not set — it rewrites bytes on checkout, and
+  these files are byte-exact test data.
 
 - **A confusable mapping on a cased letter now implies one on its case pair (#801, #715).**
   The table carried `Т` (U+0422 CYRILLIC CAPITAL TE) → `T` and nothing for `т` (U+0442),
@@ -4146,7 +4184,7 @@ invisible characters** — see *Upgrade notes*.
 
 - **`search_key` / `catalog_key` / `sort_key` now strip bidi overrides and
   soft-hyphen / format characters** (#93). Previously a value stored with an
-  invisible character (e.g. `"pass­word"`, `"user‮txt"`) produced a
+  invisible character (e.g. `"pass\u00adword"`, `"user\u202etxt"`) produced a
   *different* key from its clean equivalent, so dedup and lookup silently
   missed. The new key is the correct one; if you persist these keys, regenerate
   any that were computed over text that could contain invisible characters.

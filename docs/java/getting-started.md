@@ -181,16 +181,16 @@ An empty list asks for the character-class checks alone:
     import dev.disarm.AnomalyReport;
     import java.util.List;
 
-    Disarm.hasAnomalies("ad​min", List.of());   // true — a zero-width space
+    Disarm.hasAnomalies("ad\u200bmin", List.of());   // true — a zero-width space
 
-    AnomalyReport report = Disarm.inspectAnomalies("ad​min", List.of());
+    AnomalyReport report = Disarm.inspectAnomalies("ad\u200bmin", List.of());
     report.kinds();                                  // ["invisible"]
     ```
 
 === "Kotlin"
 
     ```kotlin
-    "ad​min".hasAnomalies(emptyList())   // true
+    "ad\u200bmin".hasAnomalies(emptyList())   // true
     ```
 
 Passing the same word list repeatedly is what `Lexicon` is for: it builds the set

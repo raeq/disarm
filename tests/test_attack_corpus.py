@@ -49,8 +49,8 @@ HOMOGLYPHS = {
     "j": "ј",  # Cyrillic ј
 }
 
-ZERO_WIDTH = ["​", "‌", "‍", "﻿", "⁠"]
-BIDI = ["‮", "‭", "‎", "‏", "⁦", "⁩", "؜"]
+ZERO_WIDTH = ["\u200b", "\u200c", "\u200d", "\ufeff", "\u2060"]
+BIDI = ["\u202e", "\u202d", "\u200e", "\u200f", "\u2066", "\u2069", "\u061c"]
 COMBINING = ["́", "̀", "҉", "̵", "̶"]  # zalgo marks
 
 DEFENSES = [strip_obfuscation, canonicalize, canonicalize_strict]
@@ -72,7 +72,7 @@ def invisible(t: str) -> str:
 def bidi(t: str) -> str:
     # Wrap in an RLO...PDF and sprinkle marks.
     mid = len(t) // 2
-    return "‮" + t[:mid] + "‏" + t[mid:] + "‬"
+    return "\u202e" + t[:mid] + "\u200f" + t[mid:] + "\u202c"
 
 
 def zalgo(t: str, marks: int = 3) -> str:

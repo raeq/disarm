@@ -271,7 +271,7 @@ passes through unchanged:
 
 ```python
 assert collapse_whitespace("hello\x00world") == "hello\x00world"
-assert collapse_whitespace("hello​world") == "hello​world"
+assert collapse_whitespace("hello\u200bworld") == "hello\u200bworld"
 ```
 
 To also delete them, run the dedicated steps first. The `canonicalize` /

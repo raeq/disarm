@@ -41,6 +41,28 @@ pub(crate) fn is_mixed_script(text: &str) -> bool {
     false
 }
 
+include!(concat!(env!("OUT_DIR"), "/assigned_ranges.rs"));
+
+/// True if `cp` is an assigned code point in the bundled Unicode snapshot (#774).
+///
+/// [`SCRIPT_RANGES`] is a curated table of **block** ranges, and a block has holes:
+/// `U+05EB` is unassigned inside the Hebrew block, `U+FDD0` is a noncharacter inside
+/// Arabic Presentation Forms-A. Without this gate both inherited the surrounding block's
+/// script, so a code point that does not exist reported as Hebrew or Arabic — and
+/// `"hello" + U+FDD0` came back as `bidi_mixed`, because a phantom Arabic character is a
+/// strong-RTL character to [`strong_dir`].
+///
+/// The gate deliberately does not widen what disarm claims to cover. The block table
+/// encodes a curated script scope; this only stops it answering for code points that are
+/// not there.
+fn is_assigned(cp: u32) -> bool {
+    match ASSIGNED_RANGES.binary_search_by(|&(start, _)| start.cmp(&cp)) {
+        Ok(_) => true,
+        Err(0) => false,
+        Err(idx) => cp <= ASSIGNED_RANGES[idx - 1].1,
+    }
+}
+
 /// Sorted table of (range_start, range_end_inclusive, script_name) for binary search.
 /// Sorted by range_start. All ranges are non-overlapping.
 static SCRIPT_RANGES: &[(u32, u32, &str)] = &[
@@ -279,6 +301,15 @@ pub(crate) fn detect_char_script(ch: char) -> &'static str {
             return "Latin";
         }
         // Digits, punctuation, whitespace, and control chars are all Common.
+        return "Common";
+    }
+
+    // #774: an unassigned code point has no script. Without this the block table gives
+    // it the surrounding block's, so `U+FDD0` — a noncharacter — resolved to Arabic and
+    // made `"hello" + U+FDD0` a bidi conflict. `"Common"` is what an out-of-table code
+    // point already returns, so `detect_scripts` keeps yielding `[]` and `strong_dir`
+    // keeps yielding `None`: no new enum member, no signature change.
+    if !is_assigned(cp) {
         return "Common";
     }
 
@@ -887,7 +918,9 @@ mod tests {
     #[test]
     fn test_detect_thaana() {
         assert_eq!(detect_char_script('\u{0780}'), "Thaana");
-        assert_eq!(detect_char_script('\u{07BF}'), "Thaana");
+        assert_eq!(detect_char_script('\u{07B1}'), "Thaana");
+        // U+07BF is unassigned; before #774 the block table gave it "Thaana".
+        assert_eq!(detect_char_script('\u{07BF}'), "Common");
     }
 
     #[test]
@@ -899,13 +932,17 @@ mod tests {
     #[test]
     fn test_detect_mongolian() {
         assert_eq!(detect_char_script('\u{1820}'), "Mongolian");
-        assert_eq!(detect_char_script('\u{18AF}'), "Mongolian");
+        assert_eq!(detect_char_script('\u{18AA}'), "Mongolian");
+        // U+18AF is unassigned; before #774 the block table gave it "Mongolian".
+        assert_eq!(detect_char_script('\u{18AF}'), "Common");
     }
 
     #[test]
     fn test_detect_cherokee() {
         assert_eq!(detect_char_script('\u{13A0}'), "Cherokee");
-        assert_eq!(detect_char_script('\u{13FF}'), "Cherokee");
+        assert_eq!(detect_char_script('\u{13FD}'), "Cherokee");
+        // U+13FF is unassigned; before #774 the block table gave it "Cherokee".
+        assert_eq!(detect_char_script('\u{13FF}'), "Common");
     }
 
     #[test]
@@ -917,19 +954,25 @@ mod tests {
     #[test]
     fn test_detect_ogham() {
         assert_eq!(detect_char_script('\u{1681}'), "Ogham");
-        assert_eq!(detect_char_script('\u{169F}'), "Ogham");
+        assert_eq!(detect_char_script('\u{169C}'), "Ogham");
+        // U+169F is unassigned; before #774 the block table gave it "Ogham".
+        assert_eq!(detect_char_script('\u{169F}'), "Common");
     }
 
     #[test]
     fn test_detect_runic() {
         assert_eq!(detect_char_script('\u{16A0}'), "Runic");
-        assert_eq!(detect_char_script('\u{16FF}'), "Runic");
+        assert_eq!(detect_char_script('\u{16F8}'), "Runic");
+        // U+16FF is unassigned; before #774 the block table gave it "Runic".
+        assert_eq!(detect_char_script('\u{16FF}'), "Common");
     }
 
     #[test]
     fn test_detect_tai_le() {
         assert_eq!(detect_char_script('\u{1950}'), "TaiLe");
-        assert_eq!(detect_char_script('\u{197F}'), "TaiLe");
+        assert_eq!(detect_char_script('\u{1974}'), "TaiLe");
+        // U+197F is unassigned; before #774 the block table gave it "TaiLe".
+        assert_eq!(detect_char_script('\u{197F}'), "Common");
     }
 
     #[test]
@@ -953,7 +996,9 @@ mod tests {
     #[test]
     fn test_detect_vai() {
         assert_eq!(detect_char_script('\u{A500}'), "Vai");
-        assert_eq!(detect_char_script('\u{A63F}'), "Vai");
+        assert_eq!(detect_char_script('\u{A62B}'), "Vai");
+        // U+A63F is unassigned; before #774 the block table gave it "Vai".
+        assert_eq!(detect_char_script('\u{A63F}'), "Common");
     }
 
     // ── Boundary codepoint tests ────────────────────────────────
@@ -984,7 +1029,9 @@ mod tests {
         assert_eq!(detect_char_script('\u{03FF}'), "Greek");
         // Greek Extended
         assert_eq!(detect_char_script('\u{1F00}'), "Greek");
-        assert_eq!(detect_char_script('\u{1FFF}'), "Greek");
+        assert_eq!(detect_char_script('\u{1FFE}'), "Greek");
+        // U+1FFF is unassigned; before #774 the block table gave it "Greek".
+        assert_eq!(detect_char_script('\u{1FFF}'), "Common");
     }
 
     #[test]
@@ -1042,11 +1089,17 @@ mod tests {
         assert_eq!(detect_char_script('\u{1100}'), "Hangul");
         assert_eq!(detect_char_script('\u{11FF}'), "Hangul");
         // Compatibility Jamo
-        assert_eq!(detect_char_script('\u{3130}'), "Hangul");
-        assert_eq!(detect_char_script('\u{318F}'), "Hangul");
+        assert_eq!(detect_char_script('\u{3131}'), "Hangul");
+        // U+3130 is unassigned; before #774 the block table gave it "Hangul".
+        assert_eq!(detect_char_script('\u{3130}'), "Common");
+        assert_eq!(detect_char_script('\u{318E}'), "Hangul");
+        // U+318F is unassigned; before #774 the block table gave it "Hangul".
+        assert_eq!(detect_char_script('\u{318F}'), "Common");
         // Syllables
         assert_eq!(detect_char_script('\u{AC00}'), "Hangul");
-        assert_eq!(detect_char_script('\u{D7AF}'), "Hangul");
+        assert_eq!(detect_char_script('\u{D7A3}'), "Hangul");
+        // U+D7AF is unassigned; before #774 the block table gave it "Hangul".
+        assert_eq!(detect_char_script('\u{D7AF}'), "Common");
     }
 
     // ── detect_char_script for Common/Inherited ─────────────────
@@ -1067,7 +1120,9 @@ mod tests {
     #[test]
     fn test_inherited_combining_extended() {
         assert_eq!(detect_char_script('\u{1AB0}'), "Inherited");
-        assert_eq!(detect_char_script('\u{1AFF}'), "Inherited");
+        assert_eq!(detect_char_script('\u{1AEB}'), "Inherited");
+        // U+1AFF is unassigned; before #774 the block table gave it "Inherited".
+        assert_eq!(detect_char_script('\u{1AFF}'), "Common");
     }
 
     #[test]
@@ -1079,7 +1134,9 @@ mod tests {
     #[test]
     fn test_inherited_combining_symbols() {
         assert_eq!(detect_char_script('\u{20D0}'), "Inherited");
-        assert_eq!(detect_char_script('\u{20FF}'), "Inherited");
+        assert_eq!(detect_char_script('\u{20F0}'), "Inherited");
+        // U+20FF is unassigned; before #774 the block table gave it "Inherited".
+        assert_eq!(detect_char_script('\u{20FF}'), "Common");
     }
 
     #[test]
@@ -1122,7 +1179,9 @@ mod tests {
     #[test]
     fn test_syriac_supplement() {
         assert_eq!(detect_char_script('\u{0860}'), "Syriac");
-        assert_eq!(detect_char_script('\u{086F}'), "Syriac");
+        assert_eq!(detect_char_script('\u{086A}'), "Syriac");
+        // U+086F is unassigned; before #774 the block table gave it "Syriac".
+        assert_eq!(detect_char_script('\u{086F}'), "Common");
     }
 
     #[test]
@@ -1179,13 +1238,19 @@ mod tests {
     #[test]
     fn test_ethiopic_extended() {
         assert_eq!(detect_char_script('\u{2D80}'), "Ethiopic");
-        assert_eq!(detect_char_script('\u{2DDF}'), "Ethiopic");
+        assert_eq!(detect_char_script('\u{2DDE}'), "Ethiopic");
+        // U+2DDF is unassigned; before #774 the block table gave it "Ethiopic".
+        assert_eq!(detect_char_script('\u{2DDF}'), "Common");
     }
 
     #[test]
     fn test_ethiopic_extended_a() {
-        assert_eq!(detect_char_script('\u{AB00}'), "Ethiopic");
-        assert_eq!(detect_char_script('\u{AB2F}'), "Ethiopic");
+        assert_eq!(detect_char_script('\u{AB01}'), "Ethiopic");
+        // U+AB00 is unassigned; before #774 the block table gave it "Ethiopic".
+        assert_eq!(detect_char_script('\u{AB00}'), "Common");
+        assert_eq!(detect_char_script('\u{AB2E}'), "Ethiopic");
+        // U+AB2F is unassigned; before #774 the block table gave it "Ethiopic".
+        assert_eq!(detect_char_script('\u{AB2F}'), "Common");
     }
 
     #[test]
@@ -1197,7 +1262,9 @@ mod tests {
     #[test]
     fn test_canadian_aboriginal_extended() {
         assert_eq!(detect_char_script('\u{18B0}'), "CanadianAboriginal");
-        assert_eq!(detect_char_script('\u{18FF}'), "CanadianAboriginal");
+        assert_eq!(detect_char_script('\u{18F5}'), "CanadianAboriginal");
+        // U+18FF is unassigned; before #774 the block table gave it "CanadianAboriginal".
+        assert_eq!(detect_char_script('\u{18FF}'), "Common");
     }
 
     #[test]

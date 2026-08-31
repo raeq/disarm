@@ -20,6 +20,7 @@ against for byte-stable behavior.
 | Case folding — `case_folding.tsv` | Unicode `CaseFolding.txt` (status C&nbsp;+&nbsp;F) | **16.0** |
 | East Asian width — `char_width.tsv` | UCD `EastAsianWidth.txt` | **15.1.0** |
 | Emoji presentation — `emoji_presentation.tsv` | UCD `emoji-data.txt` | **15.1.0** |
+| Assigned code points — `assigned_ranges.tsv` | UCD `General_Category` (assigned = not `Cn`) | **17.0.0** |
 | Normalization — `normalize()`, and every NFC/NFKC step inside the presets | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **17.0.0** |
 | Transliteration / romanization | per-block standards (the rest of this document) | mixed; conventional where no single published standard exists |
 

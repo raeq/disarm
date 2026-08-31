@@ -2340,37 +2340,23 @@ mod tests {
         assert_eq!(result, "filter");
     }
 
-    /// #498: `ml_normalize` ("cldr") must name a symbol base exposed by its own
-    /// NFKD/strip-accents step within the *same* call. `≇` U+2247 NEITHER
-    /// APPROXIMATELY NOR ACTUALLY EQUAL TO has NFKD = `≅` U+2245 APPROXIMATELY
-    /// EQUAL TO + U+0338 COMBINING LONG SOLIDUS OVERLAY; `strip_accents` drops
-    /// the overlay and exposes the bare `≅`, but the demojize naming step ran
-    /// *earlier* in the pipeline, so the freshly-exposed `≅` is named
-    /// ("approximately equal") only on a *second* call — i.e.
-    /// `f(x) != f(f(x))`. The single call must already equal both the stable
-    /// target and `ml_normalize("≅", None, "cldr", true)`. Unlike the accepted CLDR-punctuation
-    /// non-idempotency (a name like "woman's hat" re-expands its apostrophe),
-    /// the target here is bare ASCII letters, so it *is* a true fixed point.
-    /// #498 (whole class): `ml_normalize` ("cldr") must name a symbol base
-    /// exposed by its own NFKD/strip-accents step within the *same* call.
+    /// Negated relations are preserved, and naming the bare base is idempotent (#749).
     ///
-    /// The `≇` U+2247 in the report is not unique: it is one of the "negated
-    /// relation" family, each a `<relation> + U+0338 COMBINING LONG SOLIDUS
-    /// OVERLAY` whose NFKD base is itself a CLDR-named symbol. `strip_accents`
-    /// drops the overlay and exposes the bare base (e.g. `≇`→`≅`), but the
-    /// demojize naming step ran *earlier* in the pipeline, so the freshly
-    /// exposed base is named only on a *second* call — `f(x) != f(f(x))`.
+    /// This class was enumerated by an exhaustive scan over every Unicode scalar where
+    /// NFKD strips a combining mark to expose a single base that demojize names. It used
+    /// to assert that each *negated* relation resolved to its **positive** name — `∦` to
+    /// "parallel", `⊄` to "subset of", `≰` to "less-than or equal" — because the overlay
+    /// was stripped before the base was named. Seventeen rows, each naming a symbol as
+    /// its own opposite, which for the tokenizer this preset serves is the corruption
+    /// #749 describes rather than a normalization.
     ///
-    /// All members below were enumerated by an exhaustive scan over every
-    /// Unicode scalar (NFKD strips a combining mark to expose a single base
-    /// scalar that demojize names). For each, the single call must already
-    /// equal both the stable name and `ml_normalize(<bare base>)`. Unlike the
-    /// accepted CLDR-punctuation non-idempotency (a name like "woman's hat"
-    /// re-expands its apostrophe), every target here is bare ASCII letters, so
-    /// each is a true fixed point.
+    /// `U+0338` on a symbol is now kept, so the base is never exposed and the
+    /// non-idempotency this test was written for cannot arise. Both properties it cared
+    /// about are still asserted: the negated form is a fixed point, and the bare base is
+    /// still named in one pass.
     #[test]
-    fn test_ml_normalize_idempotent_on_nfkd_exposed_symbol_class() {
-        // (input, bare NFKD base, stable name) — the complete scanned class.
+    fn test_ml_normalize_negated_relations_are_preserved() {
+        // (negated input, bare base, the base's stable name) — the complete scanned class.
         for (input, base, name) in [
             ("\u{2204}", "\u{2203}", "there exists"),            // ∄ → ∃
             ("\u{220C}", "\u{220B}", "contains as member"),      // ∌ → ∋
@@ -2390,20 +2376,26 @@ mod tests {
             ("\u{2288}", "\u{2286}", "subset equal"),            // ⊈ → ⊆
             ("\u{2289}", "\u{2287}", "superset equal"),          // ⊉ → ⊇
         ] {
+            // The negation survives, and survives a second pass.
             let once = ml_normalize(input, None, "cldr", true).unwrap();
             assert_eq!(
-                once, name,
-                "ml_normalize({input:?}) should name its NFKD-exposed base in one pass"
-            );
-            assert_eq!(
-                once,
-                ml_normalize(base, None, "cldr", true).unwrap(),
-                "ml_normalize({input:?}) should match its bare base {base:?}"
+                once, input,
+                "ml_normalize({input:?}) must not resolve a negated relation to anything"
             );
             assert_eq!(
                 once,
                 ml_normalize(&once, None, "cldr", true).unwrap(),
                 "ml_normalize not idempotent on {input:?}"
+            );
+            // The positive base is still named, in one pass, as it always was.
+            let base_named = ml_normalize(base, None, "cldr", true).unwrap();
+            assert_eq!(
+                base_named, name,
+                "ml_normalize({base:?}) should name the bare base in one pass"
+            );
+            assert_ne!(
+                once, base_named,
+                "the negated form must not share the positive form's output"
             );
         }
     }
@@ -2438,10 +2430,17 @@ mod tests {
     fn test_catalog_key_idempotent_on_confusable_cascades() {
         for (input, want) in [
             // (A) negated relations: NFD = base + U+0338, base is a confusable.
-            ("\u{2204}", "e"),  // ∄ THERE DOES NOT EXIST → ∃ → e
-            ("\u{2224}", "l"),  // ∤ DOES NOT DIVIDE → ∣ → l
-            ("\u{2226}", "ll"), // ∦ NOT PARALLEL TO → ∥ → ll
-            ("\u{2241}", "~"),  // ≁ NOT TILDE → ∼ → ~
+            //
+            // These asserted the *inverted* targets until #749 — `∄` folded through `∃`
+            // to `e`, so the key for "there does not exist" was the key for "there
+            // exists". The cascade was real and so was the idempotence it demonstrated;
+            // the destination was the defect. `U+0338` is now kept, so the fold stops
+            // where the negation is and each still reaches its fixed point in one call,
+            // which is what #467/#498 closed and what this test is for.
+            ("\u{2204}", "\u{2204}"), // ∄ THERE DOES NOT EXIST — negation preserved
+            ("\u{2224}", "\u{2224}"), // ∤ DOES NOT DIVIDE
+            ("\u{2226}", "\u{2226}"), // ∦ NOT PARALLEL TO
+            ("\u{2241}", "\u{2241}"), // ≁ NOT TILDE
             // (B) chained confusables (single codepoint, no combining mark).
             ("\u{1D14}", "eo"), // ᴔ TURNED OE → ǝo → eo
             ("\u{256A}", "!"),  // ╪ BOX DRAWINGS … → ǂ → !

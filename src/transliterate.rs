@@ -1516,8 +1516,29 @@ fn is_kana(ch: char) -> bool {
     ur::HIRAGANA.contains(&cp) || ur::KATAKANA.contains(&cp) || ur::KATAKANA_HALFWIDTH.contains(&cp)
 }
 
-/// Remove diacritical marks while preserving base characters.
-/// NFD decompose → strip combining marks → NFC recompose.
+/// Combining marks that carry **negation** rather than pronunciation (#749).
+///
+/// `strip_accents` removes every `Mn`, which is right for an accent and wrong for these
+/// two *on a symbol*: they are the stroke through a relation, so dropping one leaves the
+/// **positive** operator. `≠` became `=`, and every surface running the step emitted
+/// output asserting the opposite of its input — 45 code points across eight surfaces.
+const NEGATION_OVERLAYS: [char; 2] = ['\u{0338}', '\u{20D2}'];
+
+/// True when `mark` negates `base` rather than decorating it (#749).
+///
+/// The base decides. All 45 composed negations decompose to a base in `Sm` (44) or `So`
+/// (1) — `=`, `←`, `∃`, `⫝` — while the same `U+0338` on a *letter* is strikethrough
+/// obfuscation, which `strip_obfuscation` exists to remove: `H̸a̸t̸e̸` must still come back
+/// as `Hate`. A blanket exemption for the code point would have preserved both, and the
+/// second is a moderation bypass.
+#[inline]
+pub(crate) fn is_negation_of(mark: char, base: Option<char>) -> bool {
+    // `!is_alphanumeric()` rather than a general-category test: std exposes no category
+    // API, and this separates the two cases exactly on the measured data. All 45 composed
+    // negations have a base in `Sm`/`So`; strikethrough obfuscation targets letters.
+    NEGATION_OVERLAYS.contains(&mark) && base.is_some_and(|b| !b.is_alphanumeric())
+}
+
 pub(crate) fn strip_accents(text: &str) -> String {
     let mut out = String::new();
     strip_accents_into(text, &mut out);
@@ -1554,11 +1575,21 @@ pub fn strip_accents_into(text: &str, out: &mut String) {
         return;
     }
 
-    out.extend(
-        text.nfd()
-            .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
-            .nfc(),
-    );
+    // An explicit walk rather than `.filter()`: whether a mark is strippable depends on
+    // the base it sits on (#749), which a stateless filter cannot see.
+    let mut kept: Vec<char> = Vec::new();
+    let mut base: Option<char> = None;
+    for ch in text.nfd() {
+        if unicode_normalization::char::is_combining_mark(ch) {
+            if is_negation_of(ch, base) {
+                kept.push(ch);
+            }
+        } else {
+            base = Some(ch);
+            kept.push(ch);
+        }
+    }
+    out.extend(kept.into_iter().nfc());
 }
 
 /// Reject a registration mutation once the tables have been sealed (#64).

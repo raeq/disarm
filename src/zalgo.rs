@@ -109,8 +109,18 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
     // recompose may then re-attach kept marks into precomposed forms; the count is
     // deliberately taken *before* that recompose so stacking is measured uniformly
     // regardless of the input's composition.
+    let mut base: Option<char> = None;
     for ch in text.nfd() {
-        if is_combining_mark(ch) {
+        if crate::transliterate::is_negation_of(ch, base) {
+            // #749: not a diacritic. On a symbol, `U+0338` and `U+20D2` are the stroke
+            // through a relation, so dropping one leaves the *positive* operator — `≠`
+            // became `=`. They do not count toward the cap either: a negated symbol is
+            // one mark by construction and can never be the stacking this bounds.
+            //
+            // On a *letter* the same code point is strikethrough obfuscation, which this
+            // preset exists to remove, so `is_negation_of` asks about the base.
+            filtered.push(ch);
+        } else if is_combining_mark(ch) {
             mark_count += 1;
             if mark_count <= max_marks {
                 filtered.push(ch);
@@ -118,6 +128,7 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
             // else: drop the excess combining mark
         } else {
             mark_count = 0;
+            base = Some(ch);
             filtered.push(ch);
         }
     }

@@ -695,6 +695,14 @@ pub(crate) fn slugify_impl_with_stopset(
     // byte-identical, because `transliterate` has already removed everything they read.
     let mut pending_joiner: Option<char> = None;
     let mut mark_run: usize = 0;
+    // Separate from `prev_was_sep`, which means "a separator has already been emitted" and
+    // is deliberately NOT set when `separator` is empty — there is nothing to emit. This
+    // one means "a base is in scope", and a dropped character ends a token whether or not
+    // anything was written in its place. Fusing the two let a joiner or a mark reattach
+    // ACROSS a removed character with `separator = ""`: `slugify("a!\u{200D}b")` returned
+    // `a\u{200D}b`, joining two characters that were never adjacent, and `slugify("a!\u{300}b")`
+    // returned `àb`, moving the accent onto a letter that never carried it.
+    let mut in_token = false;
 
     for ch in value.chars() {
         if ch.is_alphanumeric()
@@ -704,14 +712,14 @@ pub(crate) fn slugify_impl_with_stopset(
             if config.allow_unicode {
                 if SLUG_JOINERS.contains(&ch) {
                     // Nothing to join to yet: a token cannot start with one.
-                    if !prev_was_sep {
+                    if in_token {
                         pending_joiner = Some(ch);
                     }
                     continue;
                 }
                 if unicode_normalization::char::is_combining_mark(ch) {
                     // A defective combining sequence — no base in this token.
-                    if prev_was_sep {
+                    if !in_token {
                         continue;
                     }
                     mark_run += 1;
@@ -738,9 +746,11 @@ pub(crate) fn slugify_impl_with_stopset(
             // separator is not inserted around them (awesome-slugify semantics, #230).
             slug.push(ch);
             prev_was_sep = false;
+            in_token = true;
         } else {
             pending_joiner = None;
             mark_run = 0;
+            in_token = false;
             if !prev_was_sep && !separator.is_empty() {
                 slug.push_str(separator);
                 prev_was_sep = true;

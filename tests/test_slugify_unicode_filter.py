@@ -161,3 +161,42 @@ def test_the_ascii_path_keeps_its_cheap_route(n: int) -> None:
     text = "Hello World Foo Bar"
     assert slugify(text, max_length=n) == slugify(text, max_length=n, allow_unicode=False)
     assert len(slugify(text, max_length=n).encode()) <= n
+
+
+# ── a dropped character ends a token, even with no separator to show for it ───
+
+# `separator=""` is the case that separates "a separator was emitted" from "a base is in
+# scope". Fusing the two let a joiner or a mark reattach ACROSS a removed character.
+EMPTY_SEPARATOR_REATTACH = [
+    ("a!‍b", "ab", "a joiner must not join two characters that were never adjacent"),
+    ("a!̀b", "ab", "a mark must not move onto a letter that never carried it"),
+    ("a.‍.b", "ab", "the same across a dropped dot"),
+    ("a\ufeff̀b", "ab", "and across a dropped format character"),
+]
+
+
+@pytest.mark.parametrize(
+    ("text", "want", "why"), EMPTY_SEPARATOR_REATTACH, ids=[r[0] for r in EMPTY_SEPARATOR_REATTACH]
+)
+def test_a_dropped_character_ends_a_token_with_an_empty_separator(
+    text: str, want: str, why: str
+) -> None:
+    assert slugify(text, allow_unicode=True, separator="") == want, why
+
+
+def test_the_empty_separator_agrees_with_the_default_one() -> None:
+    """The only difference an empty separator may make is the separator itself.
+
+    Anything else means the token-boundary state and the separator-emission state have
+    been fused, which is how the reattachment above happened.
+    """
+    for text, _, _ in EMPTY_SEPARATOR_REATTACH:
+        assert slugify(text, allow_unicode=True, separator="") == slugify(
+            text, allow_unicode=True
+        ).replace("-", "")
+
+
+def test_a_joiner_between_adjacent_letters_still_survives_an_empty_separator() -> None:
+    """The fix must not take the #712 §3 exception with it."""
+    assert slugify("می‌روم", allow_unicode=True, separator="") == "می‌روم"
+    assert slugify("क्‍ष", allow_unicode=True, separator="") == "क्‍ष"

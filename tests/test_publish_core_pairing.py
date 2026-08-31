@@ -40,6 +40,9 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 
+#: The sparse-index host the poll must reach, compared as a whole netloc.
+REGISTRY_INDEX_HOST = "index.crates.io"
+
 #: The three workflows that resolve the core from crates.io and build glue against it.
 PUBLISHERS = ("publish-node.yml", "publish-ruby.yml", "publish-java.yml")
 
@@ -95,7 +98,12 @@ def test_the_gate_polls_for_the_core(name: str) -> None:
     """
     urls = re.findall(r"https?://[^\s\"']+", _wait_for_core(name))
     hosts = {urlparse(url).netloc for url in urls}
-    assert "index.crates.io" in hosts, (
+    # Equality per host, not `literal in hosts`. Both are correct here — `hosts` holds
+    # parsed netlocs, so membership is exact — but CodeQL's
+    # `py/incomplete-url-substring-sanitization` matches the shape rather than the
+    # semantics, and an equality comparison is the pattern the rule documents. Writing
+    # it the way the analyser can verify costs nothing and keeps the check green.
+    assert any(host == REGISTRY_INDEX_HOST for host in hosts), (
         f"{name} lost its crates.io sparse-index poll; hosts found: {sorted(hosts)}"
     )
 

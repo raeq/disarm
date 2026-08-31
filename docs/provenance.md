@@ -31,8 +31,9 @@ newer UCD than most shipped CPythons, `disarm.normalize` and `unicodedata.normal
 disagree on code points assigned in between — one code point on a UCD 16.0.0 host,
 more on an older one. Every divergence is disarm being more current. A pipeline that
 canonicalizes with one and validates with the other is where that matters; see
-`docs/security/cve-validation.md` → *Normalization cost*. There is no runtime
-accessor for this version yet (#642); the row is the answer until there is.
+`docs/security/cve-validation.md` → *Normalization cost*. Since #645 the answer is also
+reachable from a running program as `UNICODE_VERSION` — see below — so a deployment can
+compare itself against the host rather than inferring the gap from behaviour.
 
 The row is gated rather than hand-maintained. `unicode-normalization` is a floating
 `0.1` requirement, so a `cargo update` can move the bundled data with no disarm code

@@ -137,3 +137,44 @@ def test_the_two_version_constants_are_different_questions() -> None:
     """
     assert disarm.CONFUSABLES_VERSION == _header_version(LATIN_TSV)
     assert disarm.UNICODE_VERSION != "", "the normalizer version must be populated"
+
+
+def test_no_source_claims_a_missing_accessor_that_now_exists() -> None:
+    """#645 — three files said "there is no runtime accessor for this version yet".
+
+    They were true when written and false the moment the constant shipped, and nothing
+    connected the two. The sentence survived in `docs/provenance.md`, the `normalize`
+    rustdoc and the Python `normalize` docstring, in the same change that added the
+    accessor they denied — one of them two paragraphs above the table announcing it.
+
+    The gate is the negation: if a constant is reachable, no file may say it is not. It
+    scans for the phrasing rather than for a specific sentence, because the next instance
+    will be worded differently and the point is the claim, not the wording.
+    """
+    root = Path(__file__).resolve().parent.parent
+    # The claim, in the shapes it has actually taken here.
+    denial = re.compile(
+        r"no runtime accessor|not reachable at runtime|no accessor for (this|that) version",
+        re.I,
+    )
+    searched = [
+        root / "docs" / "provenance.md",
+        root / "src" / "api" / "text.rs",
+        root / "src" / "api" / "metadata.rs",
+        root / "python" / "disarm" / "_api.py",
+        root / "python" / "disarm" / "__init__.py",
+    ]
+    offenders = []
+    for path in searched:
+        if not path.exists():
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if denial.search(line):
+                offenders.append(f"{path.relative_to(root)}:{number}: {line.strip()}")
+
+    assert not offenders, (
+        "these lines say a version has no runtime accessor, but "
+        f"UNICODE_VERSION ({disarm.UNICODE_VERSION}), KEY_SCHEMA_VERSION "
+        f"({disarm.KEY_SCHEMA_VERSION}) and CONFUSABLES_VERSION "
+        f"({disarm.CONFUSABLES_VERSION}) are all reachable:\n  " + "\n  ".join(offenders)
+    )

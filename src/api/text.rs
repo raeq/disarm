@@ -250,8 +250,9 @@ impl std::str::FromStr for NormalizationForm {
 /// newer one than a host Python's `unicodedata`. Results therefore differ from
 /// another implementation for code points assigned in between; disarm is the more
 /// current side of any such disagreement. `docs/provenance.md` records the version
-/// per surface per release, and there is no runtime accessor for this one yet
-/// (#642).
+/// per surface per release, and [`crate::api::UNICODE_VERSION`] reports this one at
+/// runtime (#645), so the comparison against a host's UCD can be made rather than
+/// inferred from behaviour.
 ///
 /// The version above is not hand-maintained: `unicode-normalization` is a floating
 /// `0.1` requirement, so `tests/normalization_ucd_drift.rs` checks this line, the

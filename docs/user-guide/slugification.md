@@ -126,10 +126,54 @@ assert slugify("C++ Programming", replacements=[("C++", "cpp")]) == "cpp-program
 
 ### allow_unicode
 
-Keep non-ASCII characters in the slug:
+Keep non-ASCII **letters, digits and combining marks** in the slug instead of
+transliterating them to ASCII:
 
 ```python
 assert slugify("日本語テスト", allow_unicode=True) == "日本語テスト"
+assert slugify("Привет мир", allow_unicode=True) == "привет-мир"
+assert slugify("Tiếng Việt", allow_unicode=True) == "tiếng-việt"
+```
+
+Everything outside those categories becomes a separator, exactly as it does on the
+default ASCII path — format characters (bidi controls, ZWSP, ZWNBSP, soft hyphen, the
+tag block), private use, noncharacters, surrogates, punctuation, symbols and emoji:
+
+```python
+assert slugify("file\u202egnp.exe", allow_unicode=True) == "file-gnp-exe"
+assert slugify("a\u200bb", allow_unicode=True) == "a-b"
+assert slugify("Hello 👋 World", allow_unicode=True) == "hello-world"
+```
+
+This matches `django.utils.text.slugify(allow_unicode=True)`, which keeps `\w`. disarm
+adds two things Django does not:
+
+- **Combining marks**, capped at two per base character. Django drops them, which breaks
+  Devanagari and Arabic. Two is the cap the `strip_zalgo` presets use, and what
+  Vietnamese `ệ` needs.
+- **ZWJ and ZWNJ**, when they sit *between* two other kept characters. Both are
+  orthographically required, so dropping them changes the word:
+
+```python
+assert slugify("می\u200cروم", allow_unicode=True) == "می\u200cروم"  # Persian ZWNJ
+assert slugify("क\u094d\u200dष", allow_unicode=True) == "क\u094d\u200dष"  # Devanagari ZWJ
+assert slugify("a\u200d", allow_unicode=True) == "a"  # never at a token edge
+```
+
+!!! warning "Not a security function"
+
+    `allow_unicode` screens the same classes the ASCII path does, but `slugify` is not a
+    sanitizer and makes no claim beyond "these categories do not reach the slug". For
+    untrusted input reach for [`canonicalize`](../api/pipelines.md) or
+    [`strip_obfuscation`](../api/pipelines.md) first.
+
+`max_length` cuts on a **grapheme-cluster** boundary under `allow_unicode`, so a cut
+never lands inside a cluster. A budget too small for the first cluster yields an empty
+slug, the same outcome an all-stopword input already produces:
+
+```python
+assert slugify("한국어", allow_unicode=True, max_length=6) == "한국"
+assert slugify("क\u094dषि", allow_unicode=True, max_length=9) == ""  # one 12-byte cluster
 ```
 
 ### lang

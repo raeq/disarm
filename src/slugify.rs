@@ -80,6 +80,87 @@ fn compile_regex_cached(pattern: &str) -> Result<regex::Regex, crate::ErrorRepr>
 
 use crate::utils::floor_char_boundary;
 
+/// The two joiners kept on the `allow_unicode` path (#712 §3).
+///
+/// `Cf`, like every other character #712 excludes — and the one deliberate exception,
+/// because both are orthographically **required**: ZWNJ separates a Persian `می` prefix
+/// from its verb and blocks a Devanagari conjunct; ZWJ forms one in Devanagari and
+/// Bengali. Dropping them changes the word, not just its rendering.
+///
+/// They are kept only *between* two other kept characters. A joiner cannot start a token
+/// (nothing to join to) and must not end one: `'👨\u{200D}'` and `'👨'` render identically
+/// and are different byte strings, so two rows can collide visually while a uniqueness
+/// check passes (#711).
+const SLUG_JOINERS: [char; 2] = ['\u{200C}', '\u{200D}'];
+
+/// Combining marks kept per base on the `allow_unicode` path (#712 §4).
+///
+/// The same cap the `Step::Zalgo(2)` presets use, and the same reason: Vietnamese `ệ`
+/// carries two, and 30 stacked on one base is abuse rather than orthography. The ASCII
+/// path never reaches this — `transliterate` has already removed the marks.
+const MAX_SLUG_COMBINING_MARKS: usize = 2;
+
+/// Whether `ch` may appear in an `allow_unicode` slug (#712).
+///
+/// Both public descriptions promise a category restriction — "keep non-ASCII **letters**"
+/// (Python) and "keep Unicode **word characters**" (Rust) — and the filter applied none:
+/// every non-ASCII, non-whitespace code point survived, whatever its category. A bidi
+/// override reached the slug, and `slugify(title, allow_unicode=True)` is the natural call
+/// for a site with non-Latin content and a user-supplied title. `'file\u{202E}gnp-exe'`
+/// renders as `fileexe.png`. The default ASCII path screened all of it.
+///
+/// `L* | N* | M*` plus the two joiners, which is what the docstrings already promise.
+/// `char::is_alphanumeric` is `Alphabetic | N*`; marks are needed or Devanagari and Arabic
+/// break. Everything else goes: `Cf` (bidi controls, ZWSP, ZWNBSP, soft hyphen, the tag
+/// block), `Co` (private use), `Cn` (noncharacters), `Cs`, `Zs`, `P*` and `S*`.
+fn is_unicode_slug_char(ch: char) -> bool {
+    ch.is_alphanumeric()
+        || unicode_normalization::char::is_combining_mark(ch)
+        || SLUG_JOINERS.contains(&ch)
+}
+
+/// The number of combining marks in `ch`'s own NFD (#712 §4).
+///
+/// Seeds the per-base mark budget so the cap matches `strip_zalgo(2)`, which counts over
+/// NFD: `à` already carries one mark there, so 30 stacked on it must come back as two in
+/// total rather than two *more*. Allocation-free, and the same shape as
+/// `presets::decomposes_to_mark`.
+fn base_mark_count(ch: char) -> usize {
+    use unicode_normalization::char::is_combining_mark;
+    use unicode_normalization::UnicodeNormalization;
+    std::iter::once(ch)
+        .nfd()
+        .filter(|c| is_combining_mark(*c))
+        .count()
+}
+
+/// The largest byte index `<= max` that is a grapheme-cluster boundary (#711).
+///
+/// `floor_char_boundary` lands on a *code point* boundary, which can fall inside a cluster:
+/// `slugify("👨\u{200D}👩\u{200D}👧", max_length = 8, allow_unicode = true)` returned
+/// `'👨\u{200D}'`, a slug ending in a bare zero-width joiner. A slug is an identifier that
+/// ends up in a URL, a filename or a database key, and keeping invisible characters out of
+/// exactly those places is what the rest of this library is for — so emitting one from the
+/// truncation step is disarm producing the input it is built to reject. `'🇩'` is not a
+/// truncated flag either; it is a different renderable character.
+///
+/// `max_length` stays measured in **bytes** (#711 §3): the unit is right for the filesystem
+/// and URL limits it exists for. What changes is where the cut lands.
+fn floor_grapheme_boundary(s: &str, max: usize) -> usize {
+    if s.len() <= max {
+        return s.len();
+    }
+    let mut end = 0;
+    for cluster in crate::grapheme::clusters(s) {
+        let next = end + cluster.len();
+        if next > max {
+            break;
+        }
+        end = next;
+    }
+    end
+}
+
 /// A compiled **first-match** replacement automaton for the slugify
 /// pre-transliteration replacements (#242 item 2). Unlike the global longest
 /// match table, this step's semantics are *first registered pair wins at each
@@ -196,8 +277,13 @@ pub struct SlugConfig {
     pub separator: String,
     /// Lowercase the result (default `true`).
     pub lowercase: bool,
-    /// Truncate the slug to at most this many bytes on a word boundary; `0`
-    /// (default) means no limit.
+    /// Truncate the slug to at most this many **bytes**; `0` (default) means no limit.
+    ///
+    /// With `allow_unicode` the cut lands on a **grapheme-cluster** boundary (#711), so it
+    /// never splits a cluster: a Devanagari conjunct or a Hangul syllable is kept whole or
+    /// dropped whole. A budget too small for the first cluster therefore yields an empty
+    /// slug — the same outcome an all-stopword input already produces, and callers needing
+    /// a non-empty result should check `is_empty()` or supply a default.
     pub max_length: usize,
     /// When truncating, cut only at a word boundary rather than mid-word.
     pub word_boundary: bool,
@@ -212,7 +298,22 @@ pub struct SlugConfig {
     /// Literal `(from, to)` substitutions applied before transliteration
     /// (e.g. `("&", "and")`).
     pub replacements: Vec<(String, String)>,
-    /// Keep Unicode word characters instead of transliterating to ASCII.
+    /// Keep non-ASCII **letters, digits and combining marks** instead of transliterating
+    /// to ASCII (#712).
+    ///
+    /// Everything else becomes a separator, as it does on the ASCII path: format
+    /// characters (bidi controls, ZWSP, ZWNBSP, soft hyphen, the tag block), private use,
+    /// noncharacters, surrogates, punctuation, symbols and emoji. This matches
+    /// `django.utils.text.slugify(allow_unicode=True)`, which keeps `\w`, with two
+    /// deliberate additions Django does not make:
+    ///
+    /// - **Combining marks** (`M*`), capped at two per base. Django drops them, which
+    ///   breaks Devanagari and Arabic; two is the cap the `Step::Zalgo(2)` presets use and
+    ///   what Vietnamese `ệ` needs.
+    /// - **ZWJ and ZWNJ**, between two other kept characters. Both are orthographically
+    ///   required — ZWNJ separates a Persian `می` prefix from its verb, ZWJ forms a
+    ///   Devanagari conjunct — so dropping them changes the word. Never emitted at the
+    ///   start or end of a token, where they would be invisible padding.
     pub allow_unicode: bool,
     /// Transliteration language hint; `None` uses the default tables. Not
     /// validated by the infallible Rust API (best-effort).
@@ -320,7 +421,8 @@ impl SlugConfig {
         self
     }
 
-    /// Truncate to at most this many bytes (`0` = no limit).
+    /// Truncate to at most this many bytes (`0` = no limit). With `allow_unicode` the cut
+    /// lands on a grapheme-cluster boundary (#711); see the field docs.
     #[must_use]
     pub fn with_max_length(mut self, max_length: usize) -> Self {
         self.max_length = max_length;
@@ -352,7 +454,22 @@ impl SlugConfig {
         self
     }
 
-    /// Keep Unicode word characters instead of transliterating to ASCII.
+    /// Keep non-ASCII **letters, digits and combining marks** instead of transliterating
+    /// to ASCII (#712).
+    ///
+    /// Everything else becomes a separator, as it does on the ASCII path: format
+    /// characters (bidi controls, ZWSP, ZWNBSP, soft hyphen, the tag block), private use,
+    /// noncharacters, surrogates, punctuation, symbols and emoji. This matches
+    /// `django.utils.text.slugify(allow_unicode=True)`, which keeps `\w`, with two
+    /// deliberate additions Django does not make:
+    ///
+    /// - **Combining marks** (`M*`), capped at two per base. Django drops them, which
+    ///   breaks Devanagari and Arabic; two is the cap the `Step::Zalgo(2)` presets use and
+    ///   what Vietnamese `ệ` needs.
+    /// - **ZWJ and ZWNJ**, between two other kept characters. Both are orthographically
+    ///   required — ZWNJ separates a Persian `می` prefix from its verb, ZWJ forms a
+    ///   Devanagari conjunct — so dropping them changes the word. Never emitted at the
+    ///   start or end of a token, where they would be invisible padding.
     #[must_use]
     pub fn with_allow_unicode(mut self, allow_unicode: bool) -> Self {
         self.allow_unicode = allow_unicode;
@@ -573,18 +690,71 @@ pub(crate) fn slugify_impl_with_stopset(
         HashSet::new()
     };
 
+    // #712: a joiner is held back until another kept character arrives, and marks are
+    // capped per base. Both are `allow_unicode`-only state; the ASCII path below stays
+    // byte-identical, because `transliterate` has already removed everything they read.
+    let mut pending_joiner: Option<char> = None;
+    let mut mark_run: usize = 0;
+    // Separate from `prev_was_sep`, which means "a separator has already been emitted" and
+    // is deliberately NOT set when `separator` is empty — there is nothing to emit. This
+    // one means "a base is in scope", and a dropped character ends a token whether or not
+    // anything was written in its place. Fusing the two let a joiner or a mark reattach
+    // ACROSS a removed character with `separator = ""`: `slugify("a!\u{200D}b")` returned
+    // `a\u{200D}b`, joining two characters that were never adjacent, and `slugify("a!\u{300}b")`
+    // returned `àb`, moving the accent onto a letter that never carried it.
+    let mut in_token = false;
+
     for ch in value.chars() {
         if ch.is_alphanumeric()
-            || (config.allow_unicode && !ch.is_ascii() && !ch.is_whitespace())
+            || (config.allow_unicode && !ch.is_ascii() && is_unicode_slug_char(ch))
             || (has_safe_chars && safe_set.contains(&ch))
         {
+            if config.allow_unicode {
+                if SLUG_JOINERS.contains(&ch) {
+                    // Nothing to join to yet: a token cannot start with one.
+                    if in_token {
+                        pending_joiner = Some(ch);
+                    }
+                    continue;
+                }
+                if unicode_normalization::char::is_combining_mark(ch) {
+                    // A defective combining sequence — no base in this token.
+                    if !in_token {
+                        continue;
+                    }
+                    mark_run += 1;
+                    if mark_run > MAX_SLUG_COMBINING_MARKS {
+                        continue;
+                    }
+                } else {
+                    // Seed from the base's OWN marks so the cap matches `strip_zalgo(2)`,
+                    // which counts over NFD: `à` already carries one there, and 30 stacked
+                    // on it must not come back as three. ASCII has no decomposition.
+                    mark_run = if ch.is_ascii() {
+                        0
+                    } else {
+                        base_mark_count(ch)
+                    };
+                }
+                // Reached only when a kept character follows, so a trailing joiner is
+                // never emitted.
+                if let Some(joiner) = pending_joiner.take() {
+                    slug.push(joiner);
+                }
+            }
             // safe_chars are kept verbatim and treated as word characters, so a
             // separator is not inserted around them (awesome-slugify semantics, #230).
             slug.push(ch);
             prev_was_sep = false;
-        } else if !prev_was_sep && !separator.is_empty() {
-            slug.push_str(separator);
-            prev_was_sep = true;
+            in_token = true;
+        } else {
+            pending_joiner = None;
+            mark_run = 0;
+            in_token = false;
+            if !prev_was_sep && !separator.is_empty() {
+                slug.push_str(separator);
+                prev_was_sep = true;
+            }
         }
     }
 
@@ -610,13 +780,19 @@ pub(crate) fn slugify_impl_with_stopset(
         slug = filter_stopwords(&slug, separator, stopset, config.save_order);
     }
 
-    // Step 8: Truncate to max_length (byte-length, char-boundary safe for allow_unicode)
+    // Step 8: Truncate to max_length (byte-length, cluster-boundary safe for
+    // allow_unicode — #711). The ASCII path keeps the cheap code-point route, where the
+    // two boundaries coincide anyway.
     if config.max_length > 0 && slug.len() > config.max_length {
         if config.word_boundary {
             // Truncate at word boundary
-            slug = truncate_at_boundary(&slug, config.max_length, separator);
+            slug = truncate_at_boundary(&slug, config.max_length, separator, config.allow_unicode);
         } else {
-            let boundary = floor_char_boundary(&slug, config.max_length);
+            let boundary = if config.allow_unicode {
+                floor_grapheme_boundary(&slug, config.max_length)
+            } else {
+                floor_char_boundary(&slug, config.max_length)
+            };
             slug.truncate(boundary);
             // Strip trailing separator after truncation
             if slug.ends_with(separator) && !separator.is_empty() {
@@ -675,12 +851,25 @@ fn filter_stopwords(
     }
 }
 
-/// Truncate slug at a word boundary (separator), char-boundary safe.
-fn truncate_at_boundary(slug: &str, max_length: usize, separator: &str) -> String {
+/// Truncate slug at a word boundary (separator), boundary-safe.
+///
+/// `allow_unicode` selects the *cluster* floor (#711): `word_boundary = true` was no help
+/// on emoji, because this function reached the separator search with an already-split
+/// cluster and then found no separator to fall back to.
+fn truncate_at_boundary(
+    slug: &str,
+    max_length: usize,
+    separator: &str,
+    allow_unicode: bool,
+) -> String {
     if slug.len() <= max_length {
         return slug.to_owned();
     }
-    let boundary = floor_char_boundary(slug, max_length);
+    let boundary = if allow_unicode {
+        floor_grapheme_boundary(slug, max_length)
+    } else {
+        floor_char_boundary(slug, max_length)
+    };
     let truncated = &slug[..boundary];
     match truncated.rfind(separator) {
         // Everything before the last full separator: ends on a token boundary.
@@ -1163,7 +1352,7 @@ mod tests {
 
     #[test]
     fn test_truncate_at_boundary_no_truncation_needed() {
-        assert_eq!(truncate_at_boundary("abc", 10, "-"), "abc");
+        assert_eq!(truncate_at_boundary("abc", 10, "-", false), "abc");
     }
 
     #[test]
@@ -1171,23 +1360,23 @@ mod tests {
         // "hello-world-foo" has 15 chars; truncate to 12 gives "hello-world-"
         // rfind("-") at pos 11 → "hello-world"
         assert_eq!(
-            truncate_at_boundary("hello-world-foo", 12, "-"),
+            truncate_at_boundary("hello-world-foo", 12, "-", false),
             "hello-world"
         );
     }
 
     #[test]
     fn test_truncate_at_boundary_no_separator_found() {
-        assert_eq!(truncate_at_boundary("helloworld", 5, "-"), "hello");
+        assert_eq!(truncate_at_boundary("helloworld", 5, "-", false), "hello");
     }
 
     #[test]
     fn test_truncate_at_boundary_strips_partial_multichar_separator() {
         // Review M-C1: a multi-char separator cut mid-sequence must not leave a
         // trailing partial separator. "ab--cd" truncated to 3 → "ab-" → "ab".
-        assert_eq!(truncate_at_boundary("ab--cd", 3, "--"), "ab");
+        assert_eq!(truncate_at_boundary("ab--cd", 3, "--", false), "ab");
         // A clean full-separator cut still lands on the token boundary.
-        assert_eq!(truncate_at_boundary("ab--cd", 4, "--"), "ab");
+        assert_eq!(truncate_at_boundary("ab--cd", 4, "--", false), "ab");
         // End-to-end through slugify with a custom multi-char separator.
         let cfg = SlugConfig::new()
             .with_separator("--")

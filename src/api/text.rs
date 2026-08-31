@@ -140,6 +140,18 @@ pub fn fold_case(text: &str) -> Cow<'_, str> {
 /// A `true` answer is not a promise the value is unique; two distinct stable
 /// strings can still be equal after some *other* normalization step.
 ///
+/// **Two builds of the same disarm version can disagree here (#718).** The
+/// `to_lowercase` side is whatever UCD the compiling toolchain shipped, and the
+/// crate does not control it. That divergence is currently **latent rather than
+/// live**: the smallest toolchain this crate can be built on is 1.88 — the ICU4X
+/// crates `idna` pulls in set that floor, and `idna_adapter` uses edition 2024,
+/// which cargo below 1.85 cannot parse at all — and every rustc from 1.88 carries
+/// Unicode 16 or newer. Measured over Garay (`U+10D50..=U+10D65`), the bicameral
+/// block added in Unicode 16 and the natural candidate for a split: 0 of 22 read
+/// unstable on 1.88, and `cargo +1.81`, `+1.85` and `+1.87` cannot build a
+/// consumer of this crate at all. The mechanism is real; no toolchain that can
+/// compile disarm currently exercises it.
+///
 /// ```
 /// use disarm::api;
 /// assert!(api::is_case_fold_stable("gross.txt"));

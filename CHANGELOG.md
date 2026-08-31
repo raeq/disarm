@@ -40,6 +40,15 @@ across 41 hostnames (25 legitimate single-script domains, six ASCII, ten known s
 `is_suspicious_hostname` changed its verdict on five: every one a spoof, every one
 `false` → `true`.
 
+**The declared MSRV was wrong and is now 1.88 (#718).** `Cargo.toml` published
+`rust-version = "1.81"` and nothing in CI ever built at it. The real floor is set by a
+*runtime* dependency, not a dev one: `idna` pulls in `idna_adapter`, which pulls in
+`icu_normalizer` / `icu_properties` / `icu_provider`, all declaring `rust-version = "1.88"`
+— and `idna_adapter` 1.2.2 uses edition 2024, which cargo below 1.85 cannot parse at all.
+A consumer on 1.81 did not get a subtle compile error; cargo refused to read the manifest.
+Measured: `cargo +1.81`, `+1.85` and `+1.87` all fail on a minimal consumer of this crate,
+`+1.88` succeeds. This is a correction to a claim that was already false, not a raise.
+
 **Stored `strip_obfuscation` output moves (#757).** 60 of the 22,878 rows in the key
 stability fixture changed, 0.26%. Every one is a character that stopped being replaced by
 its English name: the katakana middle dot in Japanese names (`アテネ・トラム` was
@@ -509,6 +518,19 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   **This also closes #715.** Its 16 dropped Cherokee sources, `U+AB70` included, come back
   through the same mechanism, so the answer to "should they be folded" is yes, and it is
   answered here rather than separately.
+
+- **`rust-version` is derived from the resolved tree rather than asserted (#718).** See the
+  upgrade note above for the correction itself. `tests/msrv_declared.rs` computes the floor
+  from `cargo metadata` intersected with `cargo tree -e no-dev` and fails when the manifest
+  publishes anything lower. Scoped to the runtime graph on purpose: a dev-dependency's
+  floor never reaches a downstream consumer, so `criterion` cannot raise the published
+  MSRV on its own. An earlier draft of this gate passed `std::env::consts::ARCH` to
+  `--filter-platform`, which cargo rejects — the call failed, the test took its
+  unavailable branch, and the gate went green while the manifest published a floor nothing
+  could build at. There is now a test asserting the gate actually ran.
+
+- **`is_multiple_of` in `src/encoding.rs`.** Raising the MSRV unlocked a clippy lint that
+  the old floor had suppressed.
 
 - **`strip_accents` in batch form inverted 45 mathematical relations (#822).** The batch
   function did not call `strip_accents`. It restated the algorithm as
@@ -1009,6 +1031,33 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   with the empty-key question — a reduced slot can hold several unrelated values, because
   every key builder maps some non-empty input to `""`. Noted on the docs page rather than
   solved.
+
+- **`docs/provenance.md` records every Unicode data source, not only the bundled ones
+  (#716).** Three rows were missing, all of them reaching a security verdict. Grapheme
+  segmentation (`unicode-segmentation` 1.13.3, UAX #29 17.0.0) decides `grapheme_len`,
+  `terminal_width`, the boundaries `slugify` cuts on and the mark runs `is_zalgo` counts.
+  UTS #46 mapping and validation (`idna` 1.1.0 → `icu_properties_data` 2.3.0) decides what
+  every `xn--` label `is_suspicious_hostname` decodes to, and therefore what the script and
+  confusable analysis ever sees. The compiling toolchain's `to_lowercase` is the third —
+  the one disarm does not control at all.
+
+  All three dependencies are **floating** requirements, so `cargo update` can move the data
+  behind a verdict with no disarm code change. That property is why the normalization row
+  was written down in the first place (#642) and it applies unchanged to the other two. The
+  `idna` row pins crate versions rather than a Unicode number, deliberately: `idna`
+  publishes no version constant, and the tables arrive two levels down.
+
+  The closing note no longer reads as a census — "the four bundled surfaces" now names the
+  actual split, and says the crate rows are governed by their own release cadences on top
+  of it.
+
+- **`is_case_fold_stable` states its consequence (#718).** Two builds of the same disarm
+  version can disagree, because the `to_lowercase` side is whatever UCD the compiling
+  toolchain shipped. The divergence is **latent, not live**: measured over Garay
+  (`U+10D50..=U+10D65`), the bicameral block added in Unicode 16 and the natural candidate
+  for a split, 0 of 22 code points read unstable on 1.88 — and no toolchain below 1.88 can
+  build the crate at all. #718 filed without running this; it is run now, and recorded
+  either way.
 
 - **The I/l/1 and O/0 prototype question has an answer, in one place (#646, #650).**
   Three issues asked it from different directions and each re-argued it from scratch.

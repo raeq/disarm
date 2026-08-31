@@ -40,7 +40,7 @@ const CONFIDENCE_HIGH: f64 = 0.95;
 /// case `THREAT_MODEL.md` scopes out.
 fn sniff_bomless_utf16(bytes: &[u8]) -> Option<&'static encoding_rs::Encoding> {
     const MIN_NUL_FRACTION: f64 = 0.5;
-    if bytes.len() < 4 || bytes.len() % 2 != 0 {
+    if bytes.len() < 4 || !bytes.len().is_multiple_of(2) {
         return None;
     }
     let (mut even_nuls, mut odd_nuls) = (0usize, 0usize);

@@ -18,6 +18,28 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Upgrade notes
 
+**Stored comparison output moves for Greek and Cyrillic text (#801).** Closing the
+confusable table's case asymmetry moved 1,202 of the 22,878 rows in the key-stability
+fixture, 5.25%. The four affected functions are `canonicalize`, `canonicalize_strict`,
+`strip_obfuscation` and `normalize_confusables` — all comparison surfaces. **The three key
+builders do not move at all**: `search_key`, `catalog_key` and `sort_key` are
+byte-identical on every one of the 22,878 rows, as is `fold_case`, because they
+transliterate before folding and Greek `τ` already reached `t` that way. If you persist
+`canonicalize` output as a comparison value, reindex; if you persist a *key*, you do not.
+
+Almost every moved row is a lowercase letter that now folds where its capital always did:
+Greek `τ` → `t` (`Άντρας` canonicalized to `Άvτpaς`, now `Άvtpaς`), Cyrillic `т` → `t`,
+`н` → `h`, `м` → `m`. The old output was the inconsistent one — it folded `ν` to `v` and
+`ρ` to `p` in the same word while leaving `τ` alone.
+
+One hostname detail moves with it: a label spelled entirely in Cyrillic now reports
+`whole_script_confusable`, which under UTS #39 it always was. `москва.рф` is the example.
+The documented caller policy — a non-TLD label is whole-script-confusable **and** the TLD
+is Latin/ASCII — is unaffected and still says no, because the TLD is Cyrillic. Measured
+across 41 hostnames (25 legitimate single-script domains, six ASCII, ten known spoofs),
+`is_suspicious_hostname` changed its verdict on five: every one a spoof, every one
+`false` → `true`.
+
 **Stored `strip_obfuscation` output moves (#757).** 60 of the 22,878 rows in the key
 stability fixture changed, 0.26%. Every one is a character that stopped being replaced by
 its English name: the katakana middle dot in Japanese names (`アテネ・トラム` was
@@ -49,7 +71,8 @@ Latin confusable table — `Ð`, `Λ`, `М`, `Ⴀ`, `ẞ`. UTS #46 case-folds, s
 runs on the form the name actually resolves to, and the ACE spelling of each was already
 clean. They are a gap in `confusables_to_latin.tsv`'s lowercase rows, now visible, and filed as
 [#801](https://github.com/raeq/disarm/issues/801) — 86 rows in the table, 68 of them
-screening clean in both spellings.
+screening clean in both spellings. **Fixed in this release**, see below: 24 of the 30
+pairs upstream lists are now folded, and `Т.com` and `т.com` both screen again.
 
 `canonical` is also lowercased for the same reason: `GOOGLE.COM` canonicalizes to
 `google.com`. If you compare `canonical` against a brand list, case-fold the list.
@@ -429,6 +452,34 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   an interpreter whose Unicode version predates the data.
 
 ### Fixed
+
+- **A confusable mapping on a cased letter now implies one on its case pair (#801, #715).**
+  The table carried `Т` (U+0422 CYRILLIC CAPITAL TE) → `T` and nothing for `т` (U+0442),
+  the lowercase it case-folds to. That was invisible while hostname analysis ran on
+  whatever spelling arrived; #797 made the analysis run on the form the name resolves to,
+  and UTS #46 case-folds every label — so both spellings converged onto the **unmapped**
+  one and `Т.com` stopped being flagged. DNS lowercases, so the unmapped side is the side
+  that resolves.
+
+  The cause was in the generator, not a missing hand-written row. TR39's prototype for
+  these classes is a Latin **small capital** rather than the ASCII letter — `т` maps to
+  `ᴛ` U+1D1B, `н` to `ʜ` U+029C — and `ASCII_FOLD` was applied *after* the script gate, a
+  list of block ranges that does not cover Phonetic Extensions. Membership in that map is
+  itself the claim that the prototype is a Latin letter with an ASCII representative, so
+  it is resolved first now. `ASCII_FOLD` also gained `LATIN LETTER SMALL CAPITAL X` → `x`
+  derived from the UCD name, and was closed under case pairing — it was itself asymmetric
+  in fourteen of thirty-two entries, carrying `Ɔ` without `ɔ` and `ƨ` without `Ƨ`.
+
+  44 rows added, none removed or re-pointed; the Latin table goes 2,220 → 2,273. Of the 30
+  pairs where upstream lists the lowercase and disarm dropped it, 24 are closed and 6
+  remain, every one because the pair's own upstream prototype is Greek, Cyrillic or a math
+  symbol — folding those needs a transliteration decision, not a homoglyph one.
+  `tests/test_confusable_case_pairs.py` asserts the rule against the table itself, so a
+  future refresh that reopens the asymmetry fails rather than widening it.
+
+  **This also closes #715.** Its 16 dropped Cherokee sources, `U+AB70` included, come back
+  through the same mechanism, so the answer to "should they be folded" is yes, and it is
+  answered here rather than separately.
 
 - **Enclosing marks, and the bidi marks that reorder (#724, #741).** Two classes the
   detector spared on grounds that do not hold.

@@ -619,10 +619,26 @@ class TestWholeScriptConfusable:
         assert d.label_whole_script_confusable == [True, False]
         assert d.canonical == "apple.com"
 
+    def test_moskva_is_whole_script_confusable_since_801(self):
+        # москва.рф moved into this class when #801 closed the case asymmetry: `м` had
+        # no Latin mapping — the lowercase half of the `М` → `M` pair — so one letter
+        # always survived the skeleton. With `м` → `m` the whole label skeletons to
+        # `mockba`, which is what UTS #39 calls a whole-script confusable. The previous
+        # answer came from a table gap, not from the label.
+        #
+        # The policy that decides anything is unmoved, which is the point: the flag is
+        # a *detail*, and the documented caller policy below reads it together with the
+        # TLD. москва.рф keeps a Cyrillic TLD, so it is not a Latin-brand spoof.
+        _, d = is_suspicious_hostname("москва.рф")
+        assert d.whole_script_confusable
+        assert d.canonical == "mockba.pф"
+        assert d.label_scripts[-1] == ["Cyrillic"]
+
     def test_legit_non_latin_not_flagged(self):
         # Genuine non-Latin domains: at least one letter survives the Latin skeleton
-        # in every label, so no label qualifies.
-        for host in ("москва.рф", "почта.рф", "госуслуги.рф", "αθήνα.gr", "אתר.קום", "例え.jp"):
+        # in every label, so no label qualifies. (москва.рф moved out of this list in
+        # #801 — see above.)
+        for host in ("почта.рф", "госуслуги.рф", "αθήνα.gr", "אתר.קום", "例え.jp"):
             _, d = is_suspicious_hostname(host)
             assert not d.whole_script_confusable, (host, d.label_whole_script_confusable)
 
@@ -652,5 +668,13 @@ class TestWholeScriptConfusable:
             return latin_tld and any(d.label_whole_script_confusable[:-1])
 
         assert spoofs_latin_brand("аррӏе.com")
+        # #801: the discriminator is what keeps the widened fold from costing anything
+        # on legitimate domains. Both spellings of the Cyrillic-TE spoof now qualify —
+        # they did not before, because `т` was unmapped and a case fold converged the
+        # capital onto it — while the Cyrillic-TLD domains stay clean.
+        assert spoofs_latin_brand("т.com")
+        assert spoofs_latin_brand("Т.com")
+        assert not spoofs_latin_brand("москва.рф")
+        assert not spoofs_latin_brand("сбербанк.рф")
         for legit in ("москва.рф", "яндекс.ру", "оса.рф", "αθήνα.gr", "аррӏе.рф", "example.com"):
             assert not spoofs_latin_brand(legit), legit

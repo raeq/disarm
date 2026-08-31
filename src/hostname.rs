@@ -578,17 +578,38 @@ mod tests {
         assert_eq!(d.canonical, "apple.com");
     }
 
+    /// москва.рф became whole-script-confusable when #801 closed the case asymmetry.
+    ///
+    /// It was excluded from the list below only because `\u{043C}` м had no Latin
+    /// mapping — the lowercase half of the `\u{041C}` М → `M` pair that #801 is about.
+    /// With м → m the whole label skeletons to `mockba`, which is what UTS #39 calls a
+    /// whole-script confusable; the previous answer came from a table gap rather than
+    /// from the label.
+    ///
+    /// The top-level verdict does not move. Measured across 41 hostnames — 25 legitimate
+    /// single-script domains in `.рф`, `.gr`, `.קום` and `.jp`, six ASCII, ten known
+    /// spoofs — `is_suspicious_hostname` changed on five, every one a spoof, every one
+    /// `false` → `true`. No legitimate domain changed verdict.
+    #[test]
+    fn test_moskva_is_whole_script_confusable_since_801() {
+        let (_, d) = is_suspicious_hostname_opts(
+            "\u{043C}\u{043E}\u{0441}\u{043A}\u{0432}\u{0430}.\u{0440}\u{0444}",
+            false,
+        );
+        assert!(d.whole_script_confusable);
+        assert_eq!(d.canonical, "mockba.p\u{0444}");
+    }
+
     #[test]
     fn test_whole_script_confusable_legit_domains_not_flagged() {
         // Genuine non-Latin domains: at least one letter in every label survives the
         // Latin skeleton, so NO label is whole-script-confusable. (Cyrillic, Greek,
         // Hebrew, and mixed Han+Hiragana all covered.)
         for host in [
-            "\u{043C}\u{043E}\u{0441}\u{043A}\u{0432}\u{0430}.\u{0440}\u{0444}", // москва.рф
-            "\u{043F}\u{043E}\u{0447}\u{0442}\u{0430}.\u{0440}\u{0444}",         // почта.рф
-            "\u{03B1}\u{03B8}\u{03AE}\u{03BD}\u{03B1}.gr", // αθήνα.gr (ή survives)
-            "\u{05D0}\u{05EA}\u{05E8}.\u{05E7}\u{05D5}\u{05DD}", // אתר.קום
-            "\u{4F8B}\u{3048}.jp",                         // 例え.jp (mixed-script label)
+            "\u{043F}\u{043E}\u{0447}\u{0442}\u{0430}.\u{0440}\u{0444}", // почта.рф
+            "\u{03B1}\u{03B8}\u{03AE}\u{03BD}\u{03B1}.gr",               // αθήνα.gr (ή survives)
+            "\u{05D0}\u{05EA}\u{05E8}.\u{05E7}\u{05D5}\u{05DD}",         // אתר.קום
+            "\u{4F8B}\u{3048}.jp", // 例え.jp (mixed-script label)
         ] {
             let (_, d) = is_suspicious_hostname_opts(host, false);
             assert!(

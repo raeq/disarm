@@ -317,7 +317,7 @@ fn main() {
             .collect();
         assert_eq!(
             overlap.len(),
-            49,
+            50,
             "emoji_single.tsv ∩ confusables_to_latin.tsv changed: expected the 49 rows \
              reviewed in #614, found {}. A new row means a confusable source is now \
              named instead of folded inside strip_obfuscation. Review it, then update \

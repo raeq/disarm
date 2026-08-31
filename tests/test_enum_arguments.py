@@ -25,6 +25,12 @@ SURFACES = [
     ("normalize", lambda v: disarm.normalize("ﬁ", form=v), NF.KC, "NFKC"),
     ("is_normalized", lambda v: disarm.is_normalized("fi", form=v), NF.KC, "NFKC"),
     ("Text.normalize", lambda v: disarm.Text("ﬁ").normalize(form=v), NF.KC, "NFKC"),
+    (
+        "Text.is_normalized",
+        lambda v: disarm.Text("fi").is_normalized(form=v),
+        NF.KC,
+        "NFKC",
+    ),
     ("is_confusable", lambda v: disarm.is_confusable("a", target_script=v), Script.LATIN, "latin"),
     (
         "normalize_confusables",
@@ -66,12 +72,16 @@ SURFACES = [
 ]
 
 
-@pytest.mark.parametrize(("label", "call", "member", "_text"), SURFACES, ids=lambda x: x)
+@pytest.mark.parametrize(
+    ("label", "call", "member", "_text"), SURFACES, ids=[s[0] for s in SURFACES]
+)
 def test_surface_accepts_its_own_enum(label, call, member, _text) -> None:
     call(member)  # raised TypeError at ten of these before #767
 
 
-@pytest.mark.parametrize(("label", "call", "member", "text"), SURFACES, ids=lambda x: x)
+@pytest.mark.parametrize(
+    ("label", "call", "member", "text"), SURFACES, ids=[s[0] for s in SURFACES]
+)
 def test_member_and_string_agree(label, call, member, text) -> None:
     """Same answer either way. A coercion that silently changed the result would be a
     worse defect than the rejection it replaced."""

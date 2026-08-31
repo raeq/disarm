@@ -25,8 +25,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from disarm._enums import NF, Script
+    from disarm._enums import Script
     from disarm._types import (
+        NF,
         EmojiProvider,
         ErrorMode,
         NormalizationForm,

@@ -1030,6 +1030,17 @@ pub(crate) fn catalog_key<'a>(
         Step::Nfkc,
         // 2. Strip bidi overrides + soft hyphen + format marks (#93)
         Step::StripBidi,
+        // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags,
+        //     variation selectors, CGJ, noncharacters and the Private Use Area — the
+        //     same policy `canonicalize` uses, for the same reason (#805).
+        //
+        //     A key builder exists so two spellings of one identity compare equal, and
+        //     every class here is a way to vary the key invisibly. Measured before the
+        //     fix, all three builders were evaded by a noncharacter, by a Tag character
+        //     and by a plane-15 PUA code point; `sort_key` additionally by a variation
+        //     selector and by CGJ. BMP PUA was already handled, which is what made the
+        //     gap look narrower than it was.
+        Step::StripInvisible(COMPARISON_STRIP),
         // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
         //    the transliteration table but whose original is not (e.g. Georgian
         //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
@@ -1100,6 +1111,17 @@ pub(crate) fn search_key<'a>(
         Step::Nfkc,
         // 2. Strip bidi overrides + soft hyphen + format marks (#93)
         Step::StripBidi,
+        // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags,
+        //     variation selectors, CGJ, noncharacters and the Private Use Area — the
+        //     same policy `canonicalize` uses, for the same reason (#805).
+        //
+        //     A key builder exists so two spellings of one identity compare equal, and
+        //     every class here is a way to vary the key invisibly. Measured before the
+        //     fix, all three builders were evaded by a noncharacter, by a Tag character
+        //     and by a plane-15 PUA code point; `sort_key` additionally by a variation
+        //     selector and by CGJ. BMP PUA was already handled, which is what made the
+        //     gap look narrower than it was.
+        Step::StripInvisible(COMPARISON_STRIP),
         // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
         //    the transliteration table but whose original is not (e.g. Georgian
         //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
@@ -1227,6 +1249,17 @@ pub(crate) fn sort_key<'a>(
         Step::Nfkc,
         // 2. Strip bidi overrides + soft hyphen + format marks (#93)
         Step::StripBidi,
+        // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags,
+        //     variation selectors, CGJ, noncharacters and the Private Use Area — the
+        //     same policy `canonicalize` uses, for the same reason (#805).
+        //
+        //     A key builder exists so two spellings of one identity compare equal, and
+        //     every class here is a way to vary the key invisibly. Measured before the
+        //     fix, all three builders were evaded by a noncharacter, by a Tag character
+        //     and by a plane-15 PUA code point; `sort_key` additionally by a variation
+        //     selector and by CGJ. BMP PUA was already handled, which is what made the
+        //     gap look narrower than it was.
+        Step::StripInvisible(COMPARISON_STRIP),
         // 3. Unicode case folding FIRST (#419). A cased letter whose *folded* form is
         //    in the transliteration table but whose original form is not — e.g. a
         //    Georgian Mtavruli capital `Ჱ` (U+1CB1), absent from the table, folds to

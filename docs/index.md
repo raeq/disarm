@@ -5,13 +5,13 @@
 
 [![PyPI](https://img.shields.io/pypi/v/disarm?color=blue)](https://pypi.org/project/disarm/) [![Crates.io](https://img.shields.io/crates/v/disarm?color=blue)](https://crates.io/crates/disarm) [![Documentation](https://img.shields.io/badge/docs-disarm.dev-blue)](https://docs.disarm.dev/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/raeq/disarm/blob/main/LICENSE)
 
-**Make text that *looks* the same *compare* the same.**
+**Identify malicious attacks hiding in text.**
 
 `раypal.com` — Cyrillic `а` (U+0430) and `р` (U+0440) — renders identically to
-`paypal.com` and is a different string. disarm folds those look-alikes to their Unicode
-[TR39](https://www.unicode.org/reports/tr39/) prototypes,
-strips bidi overrides, zero-width and control characters, and flags spoofed hostnames — the
-Unicode layer your validation, dedup, moderation and logging code is missing.
+`paypal.com` and is a different string. disarm finds that substitution and folds it back to
+its Unicode [TR39](https://www.unicode.org/reports/tr39/) prototype, strips bidi overrides,
+zero-width and control characters, and flags spoofed hostnames — the Unicode layer your
+validation, dedup, moderation and logging code is missing.
 
 One pure-Rust core, with bindings for **Python, Rust, Ruby, Node.js, Java/Kotlin and C**.
 

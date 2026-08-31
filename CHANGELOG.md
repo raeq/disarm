@@ -163,6 +163,43 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`detect_encoding` reports UTF-16 (#710).** It could not return a UTF-16 label for any
+  input: chardetng does not guess UTF-16, and nothing looked for a BOM before it ran. So
+  the two encoding functions disagreed on the same bytes, silently, and only one of them
+  was right:
+
+  ```
+  detect_encoding("héllo wörld".encode("utf-16"))   ('KOI8-U', 0.95)  ->  ('UTF-16LE', 0.95)
+  decode_to_utf8(same bytes)                        'héllo wörld'         'héllo wörld'
+  bytes.decode(that label)                          'ЪЧh\x00И\x00l\x00…'   'héllo wörld'
+  ```
+
+  A caller following `detect_encoding`'s own advice — *"prefer explicit encoding metadata
+  over detection"* — carried the label to another decoder and got mojibake, at the highest
+  confidence the API can express. A BOM is not a probabilistic signal, so this was never
+  the ambiguous-bytes case the encoding tests scope out.
+
+  Both deterministic cases are now decided before chardetng runs:
+
+  - **A BOM**, via `Encoding::for_bom` — the same WHATWG sniff `decode_to_utf8` already
+    performs internally, so the two agree by construction rather than by a second
+    implementation that could drift.
+  - **BOM-less UTF-16 over ASCII-range text**, where every second byte is `00` and the
+    NUL's position is the endianness. That was the sharper half: `decode_to_utf8` returned
+    a NUL after every character with `had_errors=False`, and `strict=True` did not catch
+    it, because windows-1252 maps every byte to something.
+
+  **BOM-less UTF-16 outside the ASCII range stays undetected**, and is now documented
+  rather than silent (#710 §3). In UTF-16LE Cyrillic the high byte is `04`, not `00`, so
+  `"Привет"` without a BOM carries no NUL and there is nothing deterministic to read;
+  guessing from script frequency is the case `THREAT_MODEL.md` scopes out. Asserted as a
+  known negative in the tests and written up in `docs/limitations.md`.
+
+  The sniff is deliberately conservative: one byte position must be at least half NUL and
+  the other exactly zero, since text in a single-byte encoding contains no NUL at all.
+  Measured over 20,082 text inputs — 12 texts across 14 encodings plus 20,000 random
+  NUL-free byte strings — zero false UTF-16 labels.
+
 - **`sanitize_filename` no longer manufactures a percent escape (#721).** It collapses a
   literal `..` before transliterating and again afterwards, because `U+2026` and `U+00B7`
   can reintroduce one. The same step could assemble `%2E%2E%2F` — the percent-encoded

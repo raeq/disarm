@@ -7660,8 +7660,8 @@ Závist
 Zúñiga
 Zürs
 a
-a b
-ab
+a\x00b
+a\x1bb
 ab
 abnormalis
 about

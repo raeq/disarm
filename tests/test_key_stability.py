@@ -205,6 +205,57 @@ class TestTheFixtureCoversWhatItClaims:
             "cannot express is a class the gate reports as free — see #805/#806."
         )
 
+    def test_neither_file_carries_a_raw_control_byte(self) -> None:
+        """#806 — a fixture nobody can diff is a fixture nobody checks.
+
+        The corpus carried a raw `U+0000` and a raw `U+001B`, so git, ripgrep and every
+        diff tool read `corpus.txt` and `golden_keys.tsv.gz` as **binary**. The coverage
+        is worth keeping — a NUL and an ESC through a key builder are real cases — so both
+        are escaped as `\\xNN` rather than removed, and `read_corpus` unescapes.
+
+        Checked before the change: the corpus contains no literal backslash, so
+        interpreting escapes cannot alter an existing row. That precondition is asserted
+        below, because it is what makes the escaping safe.
+        """
+        raw = CORPUS.read_bytes()
+        offenders = {
+            f"U+{byte:04X}"
+            for byte in raw
+            if byte < 0x20 and byte not in (0x0A,)  # newline is the row separator
+        }
+        assert not offenders, (
+            f"corpus.txt carries raw control bytes {sorted(offenders)}, which makes it "
+            "binary to git and every diff tool. Escape them as \\xNN instead."
+        )
+
+        with gzip.open(GOLDEN, "rb") as handle:
+            fixture = handle.read()
+        leaked = {
+            f"U+{byte:04X}"
+            for byte in fixture
+            if byte < 0x20 and byte not in (0x0A, 0x09)  # newline and tab are structure
+        }
+        assert not leaked, f"the golden fixture carries raw control bytes {sorted(leaked)}"
+
+    def test_the_escaping_precondition_holds(self) -> None:
+        """`read_corpus` interprets escapes, so a literal backslash would change meaning.
+
+        There are none today. If one is ever added, this fails rather than silently
+        reinterpreting the row it appears in.
+        """
+        text = CORPUS.read_text(encoding="utf-8")
+        rows = [line for line in text.split("\n") if line]
+        # Every backslash must be part of an escape this reader produces.
+        for row in rows:
+            for index, char in enumerate(row):
+                if char != "\\":
+                    continue
+                nxt = row[index + 1 : index + 2]
+                assert nxt in {"\\", "t", "n", "r", "x"}, (
+                    f"corpus row {row!r} has a backslash that is not an escape; "
+                    "read_corpus would reinterpret it"
+                )
+
     def test_it_contains_non_ascii_digits(self) -> None:
         """The class that exposes `digit_policy`.
 

@@ -170,6 +170,41 @@ class TestTheFixtureCoversWhatItClaims:
         ):
             assert char in joined, f"corpus no longer contains {name} ({char!r})"
 
+    def test_it_contains_the_classes_most_likely_to_move_a_key(self) -> None:
+        """#806 — the corpus had **zero** noncharacters and **zero** soft hyphens.
+
+        Those are the classes most likely to move a key, and the ones it could not
+        express. #805 is a live key evasion using a noncharacter, which makes this the
+        demonstration rather than the hypothesis: had #805 landed against the old corpus,
+        its fixture diff would have been **0 rows of 22,878** — the gate built to answer
+        "did key output move, and was that on purpose" would have reported nothing.
+
+        Asserted as a floor per class rather than an exact count, so adding corpus rows
+        is free and losing a class is not.
+        """
+        import unicodedata
+
+        joined = "\n".join(gen.read_corpus())
+
+        def noncharacter(char: str) -> bool:
+            cp = ord(char)
+            return 0xFDD0 <= cp <= 0xFDEF or (cp & 0xFFFE) == 0xFFFE
+
+        counts = {
+            "noncharacters": sum(1 for c in joined if noncharacter(c)),
+            "soft hyphen": joined.count("\u00ad"),
+            "private use": sum(1 for c in joined if unicodedata.category(c) == "Co"),
+            "tag characters": sum(1 for c in joined if 0xE0000 <= ord(c) <= 0xE007F),
+            "variation selectors": sum(
+                1 for c in joined if 0xFE00 <= ord(c) <= 0xFE0F or 0xE0100 <= ord(c) <= 0xE01EF
+            ),
+        }
+        thin = {name: n for name, n in counts.items() if n < 5}
+        assert not thin, (
+            f"the corpus is thin in classes that move keys: {thin}. A class the corpus "
+            "cannot express is a class the gate reports as free — see #805/#806."
+        )
+
     def test_it_contains_non_ascii_digits(self) -> None:
         """The class that exposes `digit_policy`.
 

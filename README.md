@@ -51,10 +51,19 @@ gem install disarm      # Ruby 3.1+
 - **[Normalization, slugs & filenames](docs/user-guide/normalization.md)** — NFC/NFD/NFKC/NFKD, full case folding, [URL-safe slugs](docs/user-guide/slugification.md), [cross-platform filenames](docs/user-guide/filenames.md), [grapheme clusters](docs/user-guide/graphemes.md), [encoding detection](docs/api/encoding.md)
 
 ```python
-from disarm import slugify, strip_obfuscation, transliterate
+from disarm import canonicalize, collapse_whitespace, slugify, strip_obfuscation, transliterate
 
 # Cyrillic er (U+0440) and es (U+0441) folded to Latin p and c — visual (TR39) mapping.
 assert strip_obfuscation("\u0440rodu\u0441t") == "product"
+
+# No-break space (U+00A0), ideographic space (U+3000), thin space (U+2009) and a
+# line separator (U+2028) all collapse to one plain ASCII space.
+assert collapse_whitespace("Ada\u00a0\u3000Lovelace\u2009\u2028King") == "Ada Lovelace King"
+
+# Their zero-width look-alikes are not whitespace at all — U+200B and U+FEFF are
+# format characters, so neither str.split() nor collapse_whitespace touches them.
+assert collapse_whitespace("A\u200bB\ufeffC") == "A\u200bB\ufeffC"
+assert canonicalize("A\u200bB\ufeffC") == "ABC"
 
 # Phonetic romanization: a different mapping, and not a defence.
 assert transliterate("Київ", lang="uk") == "Kyiv"

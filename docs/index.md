@@ -110,31 +110,6 @@ Optional `log` feature emits metadata-only diagnostics, never your text. See the
 from, so a deployment can answer "am I stale?" without inferring it from behaviour
 ([provenance](provenance.md)).
 
-## Performance
-
-A compiled Rust core with compile-time perfect-hash tables — no regex, no per-character
-Python loops, no runtime data loading. Transliteration runs at ~450M chars/sec on Latin
-(~38× Unidecode) and ~106M chars/sec on Cyrillic; slugification at ~712K slugs/sec (~10–24×
-python-slugify); an already-ASCII `transliterate()` call returns the original `str` in ~65 ns
-with zero allocation. Figures are hardware-dependent and directional — the methodology, the
-short-string regime and the full results are in [performance.md](performance.md).
-
-## Assurance
-
-Beyond unit and property-based tests: `build.rs` fails the build if a table value is
-non-ASCII or an entry count moves; every Hangul syllable (11,172), BMP codepoint (63,488),
-CJK ideograph (20,992) and Indic block is tested individually; and seven stated invariants
-(ASCII passthrough, idempotence, determinism, output bounds, …) are verified by exhaustive
-enumeration and Hypothesis. Every Python example on this page is executed in CI. See
-[exhaustive testing](formal-verification.md).
-
-## Migrating
-
-`unidecode()`, `casefold()` and `remove_accents()` aliases, `sanitize_filename()` with
-pathvalidate's kwargs, and `is_confusable()` with confusable_homoglyphs' `greedy` — see the
-[migration guides](migration/index.md). The `unidecode` alias is for *coverage*
-compatibility only; for defense use the visual functions above.
-
 
 ---
 

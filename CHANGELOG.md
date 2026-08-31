@@ -69,8 +69,8 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   fold is not length-preserving (`ﬁ` becomes `fi`).
 
   ```python
-  find_confusables("pɑypal")   # [('ɑ', 1, 'a')]
-  find_confusables("paypal")   # []
+  find_confusables("pɑypal")  # [('ɑ', 1, 'a')]
+  find_confusables("paypal")  # []
   ```
 
 - **`stream_safe()` and `is_normalized_stream_safe()` — UAX #15 Stream-Safe Text Format.**

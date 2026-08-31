@@ -62,6 +62,12 @@ SCRIPT_EXEMPLARS: dict[str, str] = {
     "OlChiki": "\u1c5a\u1c5b\u1c5c",
     "Sundanese": "\u1b83\u1b84\u1b85",
     "Tagalog": "\u1700\u1701\u1702",
+    # #775. Added as real exemplars rather than by raising the uncovered threshold:
+    # these four are now first-class members and `detect_scripts` resolves them.
+    "Buhid": "\u1740\u1741\u1742",  # Buhid: a i u
+    "Hanunoo": "\u1720\u1721\u1722",  # Hanunoo: a i u
+    "Tagbanwa": "\u1760\u1761\u1762",  # Tagbanwa: a i u
+    "Batak": "\u1bc0\u1bc1\u1bc2",  # Batak: a, simalungun a, ha
     "TaiTham": "\u1a20\u1a21\u1a22",
     "Tifinagh": "\u2d30\u2d31\u2d33",
 }

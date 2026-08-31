@@ -12,7 +12,9 @@ class Script(enum.Enum):
     Used as return values from detect_scripts() and as
     arguments to is_confusable() / normalize_confusables().
 
-    Covers 52 scripts with full codepoint range detection.
+    Every script name the Rust core can resolve has a member here; a name it emits that
+    this enum cannot spell makes `detect_scripts` drop it (#775), so the two are pinned
+    together by `tests/test_script_enum_coverage.py` rather than by a count in prose.
     """
 
     # Major world scripts
@@ -54,6 +56,12 @@ class Script(enum.Enum):
     JAVANESE = "Javanese"
     SUNDANESE = "Sundanese"
     TAGALOG = "Tagalog"
+    # The other three Philippine scripts, plus Batak (#775). The core resolved all four
+    # and the enum could not name them, so `detect_scripts` warned and returned `[]`.
+    BUHID = "Buhid"
+    HANUNOO = "Hanunoo"
+    TAGBANWA = "Tagbanwa"
+    BATAK = "Batak"
     TAI_LE = "TaiLe"
     TAI_THAM = "TaiTham"
     NEW_TAI_LUE = "NewTaiLue"
@@ -616,6 +624,33 @@ SCRIPT_META: dict[str, ScriptMeta] = {
         "name": "Tagalog (Baybayin)",
         "default_lang": "tl",
         "example": "ᜀᜁᜂ",
+        "context_aware": False,
+    },
+    # #775. `default_lang` is None for all four: it selects a transliteration profile,
+    # and disarm has none for these scripts. Naming a language disarm cannot romanize
+    # would make `script_info` claim support that does not exist.
+    "Buhid": {
+        "name": "Buhid",
+        "default_lang": None,
+        "example": "ᝀᝁᝂ",
+        "context_aware": False,
+    },
+    "Hanunoo": {
+        "name": "Hanunoo",
+        "default_lang": None,
+        "example": "ᜠᜡᜢ",
+        "context_aware": False,
+    },
+    "Tagbanwa": {
+        "name": "Tagbanwa",
+        "default_lang": None,
+        "example": "ᝠᝡᝢ",
+        "context_aware": False,
+    },
+    "Batak": {
+        "name": "Batak",
+        "default_lang": None,
+        "example": "ᯀᯁᯂ",
         "context_aware": False,
     },
 }

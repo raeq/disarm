@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from disarm._enums import Script
+    from disarm._enums import NF, Script
     from disarm._types import (
         EmojiProvider,
         ErrorMode,
@@ -110,12 +110,12 @@ class Text:
 
     # ── Chainable transforms (each returns a new Text) ───────────
 
-    def normalize(self, *, form: NormalizationForm = "NFC") -> Text:
+    def normalize(self, *, form: NormalizationForm | NF = "NFC") -> Text:
         """Unicode normalization (NFC, NFD, NFKC, NFKD)."""
         return Text(self._t().normalize(self._value, form=form))
 
     def normalize_confusables(
-        self, *, target_script: str = "latin", digit_policy: str = "numeric"
+        self, *, target_script: str | Script = "latin", digit_policy: str = "numeric"
     ) -> Text:
         """Replace confusable homoglyphs with target-script equivalents.
 
@@ -383,11 +383,11 @@ class Text:
         thing (``groß.txt`` / ``gross.txt``) — a fact, not an accusation."""
         return self._t().is_case_fold_stable(self._value)
 
-    def is_normalized(self, *, form: NormalizationForm = "NFC") -> bool:
+    def is_normalized(self, *, form: NormalizationForm | NF = "NFC") -> bool:
         """True if already in the specified normalization form."""
         return self._t().is_normalized(self._value, form=form)
 
-    def is_confusable(self, *, target_script: str = "latin") -> bool:
+    def is_confusable(self, *, target_script: str | Script = "latin") -> bool:
         """True if text contains confusable homoglyphs."""
         return self._t().is_confusable(self._value, target_script=target_script)
 

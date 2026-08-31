@@ -85,6 +85,17 @@ every ecosystem at once. Two rules keep that honest without forcing wasteful rel
    drifting. Do **not** cut no-op point releases in the other ecosystems just to keep the
    third component identical.
 
+   **The lane needs the glue and the published core to agree, which is not always
+   true (#830).** A core API and the binding glue that uses it land in one commit, so
+   from that commit until the next release the glue needs a core that is not published
+   yet — and a `workflow_dispatch` resolves the *old* published core. Dispatching in
+   that window used to fail deep in a per-platform matrix with a bare `E0425`/`E0609`.
+   `wait-for-core` now compiles the glue against the published core and refuses first,
+   with the reason. Two ways forward when it does: dispatch on a **release tag** whose
+   glue and core shipped together, or release the core first. The lane is available at a
+   release boundary and inside a window where the glue has not moved ahead — not
+   unconditionally.
+
 The consequence: at any minor, the shared `0.MINOR` *is* the compatibility statement — a
 binding's `0.11.x` wraps core `0.11`. Once per-registry patch numbers have diverged
 enough to be confusing, add a one-line compatibility note to the docs (e.g. "disarm npm

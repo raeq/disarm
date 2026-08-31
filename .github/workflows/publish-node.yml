@@ -59,6 +59,37 @@ jobs:
           done
           echo "disarm $req.* is available on crates.io."
 
+      # #830: the poll above proves a 0.MINOR.* EXISTS on crates.io. It does not prove
+      # the glue AT THIS REF can build against it, and between releases it usually
+      # cannot — a core API and the glue that uses it land in one commit, so every ref
+      # after that needs an unreleased core until the next release moves the pin.
+      #
+      # On `release:` that is fine: publish.yml has just pushed the matching core, and
+      # the poll above is what waits for it. The case this catches is a
+      # `workflow_dispatch:` on main — the per-registry patch lane RELEASING.md
+      # documents — which resolves the OLD published core and used to die deep in a
+      # per-platform matrix with a bare E0425/E0609 rather than here, with a reason.
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - name: The published core must be one this glue compiles against (#830)
+        shell: bash
+        run: |
+          set -uo pipefail
+          # No [patch.crates-io] redirect: `build` applies that only on non-publish
+          # events (#374), so this resolves exactly what the publish build will.
+          if cargo check --quiet 2>/tmp/core-check.log; then
+            echo "The published core builds this glue."
+            exit 0
+          fi
+          echo "::error title=Glue needs an unreleased core::The glue at this ref uses core API that the published disarm does not have, so this build cannot succeed."
+          echo
+          echo "First errors:"
+          grep -E '^error(\[|:)' /tmp/core-check.log | head -5 || tail -20 /tmp/core-check.log
+          echo
+          echo "Two ways forward, per RELEASING.md 'Across languages' rule 2:"
+          echo "  * dispatch this workflow on a RELEASE TAG whose glue and core were published together; or"
+          echo "  * release the core first, so the pin and the published version move together."
+          exit 1
+
   build:
     name: Build ${{ matrix.settings.target }}
     needs: wait-for-core

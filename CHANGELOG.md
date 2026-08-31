@@ -1098,6 +1098,34 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   every key builder maps some non-empty input to `""`. Noted on the docs page rather than
   solved.
 
+- **CVE-2026-17084 joins the validation matrix (#713).** RFC 3454 pins stringprep tables
+  B.2 and B.3 to Unicode 3.2.0; CPython's `map_table_b3` fell through to `str.lower()`,
+  which uses whatever UCD the interpreter ships. A domain name put through the IDNA 2003
+  codec therefore comes out differently on a patched and an unpatched CPython, so a
+  validator and a fetcher can disagree about which host they are talking about. That is
+  the hazard `docs/provenance.md` already names for `normalize()` — published, for case
+  folding, against a host name.
+
+  A **key-builder-only** row, and the row is a measurement rather than a worked example.
+  Over every code point whose B.3 output differs across the fix, `fold_case`, `search_key`
+  and `catalog_key` map the input and both outputs to one key; `canonicalize`,
+  `canonicalize_strict`, `strip_obfuscation` and `normalize_confusables` converge on a
+  small fraction. They fold homoglyphs and strip invisibles; this row needs a case fold
+  and a transliteration.
+
+  The divergent set is frozen in `tests/fixtures/cve_2026_17084_b3.tsv`, generated once
+  from `Lib/stringprep.py` at the fix commit and its parent, because a tier-1 test must
+  not reach the network. **Its size depends on the interpreter that generated it** — the
+  pre-fix path calls `str.lower()`, so a newer UCD moves more code points. 711 here on UCD
+  15.1.0 where #713 reports 684; the block distribution is identical and the difference is
+  entirely in Latin and Cyrillic. Nothing in the claim depends on the number, and the file
+  records which interpreter produced it.
+
+  Undetected in scope, and that is not a gap to close: there is no character to look for.
+  Every string involved is ordinary — `Ⱥ` is an ordinary Latin letter and so is the `ⱥ` a
+  pre-fix interpreter lowercases it to. A detector would have to compare two interpreters,
+  which is not a property of a string.
+
 - **`docs/provenance.md` records every Unicode data source, not only the bundled ones
   (#716).** Three rows were missing, all of them reaching a security verdict. Grapheme
   segmentation (`unicode-segmentation` 1.13.3, UAX #29 17.0.0) decides `grapheme_len`,

@@ -82,9 +82,14 @@ COLLAPSE: list[tuple[str, str, str]] = [
     ("CVE-2017-5383", "ex‐ample.com", "ex-ample.com"),
     ("CVE-2023-24329", "\x00https://evil.example.net", "https://evil.example.net"),
     ("CVE-2019-11721", "banĸ.example", "bank.example"),
-    # The sharp-s row is why the neutralizer is lower() and not casefold();
-    # see the module docstring. disarm's canonicalizers deliberately do not
-    # clear this one — its key builders do — so it is comparable without being
+    # CVE-2026-17084: the two spellings a patched and an unpatched CPython produce
+    # for one host. U+023A is assigned in Unicode 4.1, so RFC 3454's 3.2.0-pinned
+    # B.3 leaves it alone while a pre-fix `str.lower()` folds it to U+2C65. Like the
+    # row after it, disarm's key builders clear this and its canonicalizers do not.
+    ("CVE-2026-17084", "\u023a.example.com", "\u2c65.example.com"),
+    # The sharp-s row (CVE-2026-23950) is why the neutralizer is lower() and not
+    # casefold(); see the module docstring. disarm's canonicalizers deliberately do
+    # not clear this one — its key builders do — so it is comparable without being
     # part of the canonicalizer-clearable set.
     ("CVE-2026-23950", "groß.txt", "gross.txt"),
     ("CVE-2007-2688", "＜script＞alert(1)＜/script＞", "<script>alert(1)</script>"),
@@ -160,6 +165,7 @@ REMOVAL: list[tuple[str, str, Callable[[str], bool]]] = [
 NAMED_ELSEWHERE: dict[str, str] = {
     "CVE-2019-19844": "canonicalize_strict",
     "CVE-2020-12063": "normalize_confusables",
+    "CVE-2026-17084": "search_key",
     "CVE-2026-23950": "fold_case",
 }
 

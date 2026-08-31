@@ -22,6 +22,7 @@ against for byte-stable behavior.
 | Emoji presentation — `emoji_presentation.tsv` | UCD `emoji-data.txt` | **15.1.0** |
 | Assigned code points — `assigned_ranges.tsv` | UCD `General_Category` (assigned = not `Cn`) | **17.0.0** |
 | Bidi direction — `bidi_strong_ranges.tsv` | UCD `Bidi_Class` (UAX&nbsp;#9 `L`, and `R`/`AL`) | **17.0.0** |
+| Within-word joiners — `word_joiners.tsv` | UCD `General_Category` (`Pd`, `Pc`, plus `U+002E` by hand) | **17.0.0** |
 | Normalization — `normalize()`, and every NFC/NFKC step inside the presets | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **17.0.0** |
 | Transliteration / romanization | per-block standards (the rest of this document) | mixed; conventional where no single published standard exists |
 

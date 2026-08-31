@@ -82,9 +82,9 @@ ADV = [
     ".",
     "..",
     "...",  # dot hygiene
-    "‮",
-    "a‮b‬",  # RTLO / Trojan-source
-    "​‌‍",  # zero-width
+    "\u202e",
+    "a\u202eb\u202c",  # RTLO / Trojan-source
+    "\u200b\u200c\u200d",  # zero-width
     "e" + "́" * 200,  # zalgo / long combining run
     "\U000e0041\U000e0042",  # Unicode Tag chars
     "a️",
@@ -93,7 +93,7 @@ ADV = [
     "\U000f0000",
     "\U0010fffd",  # PUA (BMP + planes 15/16)
     "￾￿﷐\U0001fffe",  # noncharacters
-    "﻿",  # BOM
+    "\ufeff",  # BOM
     "ＣＯＮ",  # fullwidth CON
     "pаypаl",  # mixed-script homoglyph
     "a\nb\r\nc",
@@ -371,7 +371,7 @@ def test_strip_log_injection_removes_crlf(s):
     assert "\n" not in out and "\r" not in out, f"CR/LF survived: {out!r}"
 
 
-@pytest.mark.parametrize("s", ADV + ["log\nINJECT", "a\r\nb", "x y", "zw"])
+@pytest.mark.parametrize("s", ADV + ["log\nINJECT", "a\r\nb", "x y", "z\u0085w"])
 def test_strip_log_injection_removes_crlf_adv(s):
     out = disarm.strip_log_injection(s)
     assert "\n" not in out and "\r" not in out
@@ -418,7 +418,7 @@ PATHOLOGICAL = {
     "long_combining": "e" + "́" * 8000,
     "long_thai": "กำ" * 4000,
     "long_astral": "\U0001f600" * 8000,
-    "long_rtlo": "‮" * 8000,
+    "long_rtlo": "\u202e" * 8000,
 }
 
 

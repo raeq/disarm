@@ -44,14 +44,14 @@ class HandlesTest {
     @Test
     void anomaliesViaInlineWordList() {
         // A zero-width space is an "invisible" anomaly, independent of the lexicon.
-        assertTrue(Disarm.hasAnomalies("hi​there", List.of()));
+        assertTrue(Disarm.hasAnomalies("hi\u200bthere", List.of()));
         assertFalse(Disarm.hasAnomalies("hello world", List.of()));
     }
 
     @Test
     void anomaliesViaReusableLexicon() {
         try (Lexicon lex = new Lexicon(List.of("free", "winner"))) {
-            assertTrue(Disarm.hasAnomalies("hi​there", lex));
+            assertTrue(Disarm.hasAnomalies("hi\u200bthere", lex));
             assertFalse(Disarm.hasAnomalies("hello world", lex));
         }
     }

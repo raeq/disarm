@@ -46,7 +46,7 @@ const INPUTS = [
   `abc${HI}`,
   `${HI}abc`,
   `a${HI}b${LO}c`,
-  `PаyPal${HI}  ‮ rld${LO}`,
+  `PаyPal${HI}  \u202e rld${LO}`,
   PAIR,
   `x${PAIR}y`,
   `${HI}${PAIR}`, // lone high then a pair

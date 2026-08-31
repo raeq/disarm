@@ -124,7 +124,7 @@ class TestSlugifyDefault:
         assert slugify("🔥🔥🔥") == ""
         assert slugify("🔥🔥🔥", default="n-a") == "n-a"
         assert slugify("...", default="n-a") == "n-a"
-        assert slugify("​", default="n-a") == "n-a"
+        assert slugify("\u200b", default="n-a") == "n-a"
 
     def test_default_not_applied_when_nonempty(self) -> None:
         assert slugify("Hello World", default="n-a") == "hello-world"

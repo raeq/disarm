@@ -82,7 +82,7 @@ SURROGATE_INPUTS = [
     "abc" + HI,  # adjacent to text
     HI + "abc",
     "a" + HI + "b" + LO + "c",  # two lone surrogates around text
-    f"PаyPal{HI}  ‮ ẃ́́rld{LO}",  # embedded in an otherwise-actionable string
+    f"PаyPal{HI}  \u202e ẃ́́rld{LO}",  # embedded in an otherwise-actionable string
     PAIR,  # well-formed pair → must recombine to the astral, not become "��"
     "x" + PAIR + "y",  # pair embedded in text
     HI + PAIR,  # a lone high *then* a pair → "�😀"

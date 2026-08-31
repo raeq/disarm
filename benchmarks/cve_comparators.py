@@ -46,7 +46,7 @@ from collections.abc import Callable
 import disarm
 
 #: Bidi controls: UAX#9 embeddings, overrides, isolates and marks.
-BIDI = "‪‫‬‭‮⁦⁧⁨⁩‎‏؜"
+BIDI = "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\u200e\u200f\u061c"
 #: Introducers a terminal acts on.
 TERMINAL = ("\x1b", "\r", "\n", "\x07", "\x00")
 
@@ -76,7 +76,7 @@ COLLAPSE: list[tuple[str, str, str]] = [
     ("CVE-2019-19844", "admın@example.com", "admin@example.com"),
     ("CVE-2013-7236", "аdmin", "admin"),
     ("CVE-2020-12063", "bοss@example.com", "boss@example.com"),
-    ("CVE-2014-9390", ".g‌it/config", ".git/config"),
+    ("CVE-2014-9390", ".g\u200cit/config", ".git/config"),
     ("CVE-2017-7832", "mı́guel.example", "míguel.example"),
     ("CVE-2017-7833", "exaّmple.com", "example.com"),
     ("CVE-2017-5383", "ex‐ample.com", "ex-ample.com"),
@@ -92,15 +92,15 @@ COLLAPSE: list[tuple[str, str, str]] = [
 
 #: (cve, attack, predicate) — handled when the primitive is gone from the output.
 REMOVAL: list[tuple[str, str, Callable[[str], bool]]] = [
-    ("CVE-2021-42574", "/*‮ } ⁦if (isAdmin)⁩ ⁦ begin admins only */", _no_bidi),
+    ("CVE-2021-42574", "/*\u202e } \u2066if (isAdmin)\u2069 \u2066 begin admins only */", _no_bidi),
     (
         "CVE-2009-3376",
-        "photo_high_re‮gnp.js",
+        "photo_high_re\u202egnp.js",
         lambda out: _no_bidi(out) and out.lower().endswith(".js"),
     ),
     (
         "CVE-2023-33955",
-        "report‮fdp.exe",
+        "report\u202efdp.exe",
         lambda out: _no_bidi(out) and out.lower().endswith(".exe"),
     ),
     (

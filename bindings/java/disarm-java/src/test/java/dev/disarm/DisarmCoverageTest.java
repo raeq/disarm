@@ -23,7 +23,7 @@ class DisarmCoverageTest {
 
     @Test
     void stripBidi() {
-        assertFalse(Disarm.stripBidi("a‮b").contains("‮")); // RLO
+        assertFalse(Disarm.stripBidi("a\u202eb").contains("\u202e")); // RLO
     }
 
     @Test

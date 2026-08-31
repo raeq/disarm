@@ -1,0 +1,22 @@
+# #802: mark the files whose whole purpose is to carry attack strings.
+#
+# Every literal invisible character was converted to a `\uXXXX` escape, and
+# `tests/test_tree_invisible_characters.py` keeps them that way — so this file is a
+# signal for reviewers who do not run the suite, not a substitute for the gate.
+#
+# `working-tree-encoding` is deliberately NOT set anywhere here: it rewrites bytes on
+# checkout, and these files are byte-exact test data.
+
+# Normalize line endings so a CRLF checkout cannot change what a test asserts.
+* text=auto eol=lf
+
+# Binary, or byte-exact and not to be touched by any filter.
+*.gz binary
+*.bin binary
+tests/fixtures/key_stability/golden_keys.tsv.gz binary
+
+# Generated — collapse them in review, so a regenerated table does not bury the change
+# that caused it.
+src/tables/data/*.tsv linguist-generated=true
+generated/parity.yaml linguist-generated=true
+bindings/cabi/disarm.h linguist-generated=true

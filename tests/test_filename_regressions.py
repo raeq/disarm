@@ -468,7 +468,7 @@ class TestNeverEmptyNeverDirectoryReference:
         assert sanitize_filename(text) == "_"
 
     def test_no_empty_for_any_all_stripped_input(self) -> None:
-        for text in ["", "   ", "\x01\x02", "​​"]:
+        for text in ["", "   ", "\x01\x02", "\u200b\u200b"]:
             assert sanitize_filename(text) != ""
 
     def test_no_leading_dot_dotfile(self) -> None:

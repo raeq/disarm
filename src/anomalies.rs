@@ -402,7 +402,6 @@ fn nearest(d: &str, lexicon: &HashSet<String>) -> Option<String> {
     None
 }
 
-/// Dense single-letter segmentation (`v.i.a.g.r.a`), not a lone hyphen or `6-foot-6`.
 /// `tok` trimmed by `WRAP` **minus** the characters that are also leet substitutes (#726).
 ///
 /// `!`, `(` and `)` sit in both sets. Trimming them off the token edge before the leet
@@ -484,6 +483,7 @@ fn space_fragmented_word(core: &str, lexicon: &HashSet<String>) -> Option<String
     lexicon.contains(joined.as_str()).then_some(joined)
 }
 
+/// Dense single-letter segmentation (`v.i.a.g.r.a`), not a lone hyphen or `6-foot-6`.
 fn seg_word(core: &str, lexicon: &HashSet<String>) -> Option<String> {
     // Collapse runs of consecutive separators before counting, so padding (`v-.-i-.-a...`)
     // cannot inflate the separator count to game the density ratio: each run counts once.
@@ -501,8 +501,9 @@ fn seg_word(core: &str, lexicon: &HashSet<String>) -> Option<String> {
     // discarded — and neither that nor `p.a.s.s.w.0.r.d`'s `passwrd` is in any lexicon.
     // One substituted character was enough to defeat both branches that each catch its
     // halves: the leet branch fails because `core` still holds the separators, and this
-    // one failed because it threw the substitute away. 0 of the 7 substitutable positions
-    // in `password` were detected.
+    // one failed because it threw the substitute away. Every substitutable position in
+    // `password` — `a`, both `s`, and `o`, the four letters `leet_sub` has an inverse for
+    // — screened clean.
     let letters: Vec<char> = core
         .chars()
         .filter(|c| !is_segment_separator(*c))

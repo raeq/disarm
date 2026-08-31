@@ -144,7 +144,7 @@ def test_each_half_was_already_caught() -> None:
     ],
 )
 def test_a_substituted_letter_inside_a_segmented_word_is_caught(token: str) -> None:
-    """0 of the 7 substitutable positions in `password` were detected.
+    """Every substitutable position in `password` screened clean.
 
     `seg_word` rebuilt the candidate with `filter(is_alphabetic)`, so `4` and `0` were
     silently *dropped* rather than demangled: `psswrd` and `passwrd` are in no lexicon.
@@ -153,17 +153,20 @@ def test_a_substituted_letter_inside_a_segmented_word_is_caught(token: str) -> N
 
 
 def test_every_substitutable_position_is_covered() -> None:
-    """The issue measures all seven; assert the whole set rather than a sample."""
-    subs = {"a": "4", "s": "5", "o": "0", "e": "3", "p": "p", "w": "w", "r": "r", "d": "d"}
-    covered = 0
-    for i, ch in enumerate("password"):
-        if subs.get(ch, ch) == ch:
-            continue
+    """Derive the positions rather than trusting the count.
+
+    #752 says seven. Measured, `password` has **four**: `a`, both `s`, and `o` are the
+    only letters `leet_sub` has an inverse for — `p`, `w`, `r` and `d` have none. The set
+    is derived here so the assertion cannot drift from the demangler's actual alphabet.
+    """
+    #: The demangler's alphabet, inverted. Only these letters can be substituted.
+    subs = {"a": "4", "s": "5", "o": "0", "e": "3", "i": "1", "t": "7", "b": "8", "g": "9"}
+    positions = [i for i, ch in enumerate("password") if ch in subs]
+    assert positions == [1, 2, 3, 5], positions
+    for i in positions:
         letters = list("password")
-        letters[i] = subs[ch]
-        covered += 1
+        letters[i] = subs[letters[i]]
         assert _detail(".".join(letters)) == "password", f"position {i}"
-    assert covered >= 4, covered
 
 
 # ── the gates that must not have moved ───────────────────────────────────────

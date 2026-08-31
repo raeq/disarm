@@ -397,9 +397,9 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   ```
 
   `seg_word` rebuilt the candidate with `filter(is_alphabetic)`, so `4` and `0` were
-  silently *dropped* rather than demangled — `psswrd` is in no lexicon. All seven
-  substitutable positions in `password` screened clean; 0 of 7 detected. The rebuild now
-  demangles.
+  silently *dropped* rather than demangled — `psswrd` is in no lexicon. Every
+  substitutable position in `password` screened clean — `a`, both `s`, and `o`, which are
+  the four letters `leet_sub` has an inverse for. The rebuild now demangles.
 
   **#750 — the separator set was three characters.** Unicode has two whole general
   categories for joining parts of one word, and 16 of the 36 joiners were silent on every

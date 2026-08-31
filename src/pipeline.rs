@@ -262,7 +262,8 @@ impl Pipeline {
             crate::presets::strip_bidi_into(input, out);
             Ok(true)
         } else if step == PipelineSteps::DEMOJIZE {
-            emoji::demojize_rust_into(input, false, false, out);
+            // The caller composed this step by name, so every row is named (#757).
+            emoji::demojize_rust_into(input, false, emoji::NamePolicy::NAME_EVERYTHING, out);
             Ok(true)
         } else if step == PipelineSteps::STRIP_ACCENTS {
             transliterate::strip_accents_into(input, out);

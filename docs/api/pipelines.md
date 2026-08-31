@@ -175,7 +175,7 @@ Unlike `canonicalize`, this pipeline also strips zalgo text (excessive combining
 from disarm import strip_obfuscation
 
 # Homoglyphs (Greek/Cyrillic) folded, bidi override removed, emoji expanded.
-assert strip_obfuscation("Ηеllо‮Wоrld \U0001f600") == "HelloWorld grinning face"
+assert strip_obfuscation("Ηеllо\u202eWоrld \U0001f600") == "HelloWorld grinning face"
 # Strips ALL combining marks (zalgo and accents) but preserves case.
 assert strip_obfuscation("Cáfé") == "Cafe"
 ```

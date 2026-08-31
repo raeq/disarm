@@ -74,8 +74,8 @@ class DisarmKtTest {
     fun textCleaning() {
         assertEquals("a b", "a   b".collapseWhitespace())
         assertEquals("ab", "a\u0000b".stripControlChars())
-        assertEquals("ab", "a​b".stripZeroWidthChars())
-        assertFalse("a‮b".stripBidi().contains('‮'))
+        assertEquals("ab", "a\u200bb".stripZeroWidthChars())
+        assertFalse("a\u202eb".stripBidi().contains('\u202e'))
         assertEquals("ab", ("a" + String(Character.toChars(0xE0041)) + "b").stripTags())
         assertEquals("ab", "a️b".stripVariationSelectors())
         assertEquals("ab", "a￾b".stripNoncharacters())
@@ -87,7 +87,7 @@ class DisarmKtTest {
 
     @Test
     fun deobfuscationAndKeys() {
-        assertFalse("h​e​llo".stripObfuscation().isBlank())
+        assertFalse("h\u200be\u200bllo".stripObfuscation().isBlank())
         assertFalse("Ｈello".canonicalize().isBlank())
         // #677: both halves of the pair reach Kotlin. stripFormat keeps the script;
         // canonicalize folds the same input to Latin.
@@ -144,12 +144,12 @@ class DisarmKtTest {
 
     @Test
     fun anomalies() {
-        assertTrue("hi​there".hasAnomalies())
+        assertTrue("hi\u200bthere".hasAnomalies())
         assertFalse("hello world".hasAnomalies())
-        assertTrue("hi​there".inspectAnomalies().anomalous())
+        assertTrue("hi\u200bthere".inspectAnomalies().anomalous())
         Lexicon(listOf("free")).use { lex ->
-            assertTrue("hi​there".hasAnomalies(lex))
-            assertTrue("hi​there".inspectAnomalies(lex).anomalous())
+            assertTrue("hi\u200bthere".hasAnomalies(lex))
+            assertTrue("hi\u200bthere".inspectAnomalies(lex).anomalous())
         }
     }
 

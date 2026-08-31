@@ -62,13 +62,13 @@ def test_the_chain_and_the_preset_disagree_in_both_directions() -> None:
 
 def test_the_script_is_not_folded() -> None:
     """The property that separates it from `canonicalize` — no confusable fold."""
-    cyrillic = "ар‍р"
+    cyrillic = "ар\u200dр"
     assert disarm.strip_format(cyrillic) == "арр"
     assert disarm.canonicalize(cyrillic) == "app"
 
 
 def test_it_is_a_fixed_point() -> None:
     """No NFC pass, so a decomposed base+mark stays decomposed (`src/presets.rs`)."""
-    for text in (f"a{PUA}b❤{VS16}\tx", "é", "ар‍р"):
+    for text in (f"a{PUA}b❤{VS16}\tx", "é", "ар\u200dр"):
         once = disarm.strip_format(text)
         assert disarm.strip_format(once) == once, text

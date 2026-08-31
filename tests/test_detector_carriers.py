@@ -70,7 +70,7 @@ def test_a_filler_is_reported_the_way_zwsp_already_was(ch: str, name: str) -> No
     """`ad\\u3164min` renders as `admin`; `ad\\u200bmin` was reported and this was not."""
     assert has_anomalies(f"ad{ch}min"), name
     assert inspect_anomalies(f"ad{ch}min").kinds == ["invisible"], name
-    assert has_anomalies("ad​min")  # the control case, unchanged
+    assert has_anomalies("ad\u200bmin")  # the control case, unchanged
 
 
 def test_u180e_is_no_longer_reported_as_a_script_it_is_not() -> None:
@@ -80,7 +80,7 @@ def test_u180e_is_no_longer_reported_as_a_script_it_is_not() -> None:
     same defect #605 fixed in `is_suspicious_hostname` by stripping invisibles *before*
     script analysis. The detector never got that fix.
     """
-    assert inspect_anomalies("ad᠎min").kinds == ["invisible"]
+    assert inspect_anomalies("ad\u180emin").kinds == ["invisible"]
 
 
 # ── #700 §2: the run rule, and #700 §4: the run is what gets reported ─────────
@@ -91,7 +91,7 @@ def test_u180e_is_no_longer_reported_as_a_script_it_is_not() -> None:
     [
         ("\U000e0074", 0, 1),  # a tag character: one is not ordinary anything
         ("︇", 1, 2),  # a variation selector: one after a base is presentation
-        ("​", 7, 8),  # zero-width: well above orthography, below two smuggled letters
+        ("\u200b", 7, 8),  # zero-width: well above orthography, below two smuggled letters
     ],
     ids=["tag", "variation-selector", "zero-width"],
 )
@@ -121,7 +121,7 @@ def test_a_mixed_carrier_run_reports_the_longest_same_class_stretch() -> None:
     assert len(set(ZW_BITS)) == 2, "the point of this case is that the run is not uniform"
 
 
-@pytest.mark.parametrize("ch", ["­", "͏"], ids=["soft-hyphen", "CGJ"])
+@pytest.mark.parametrize("ch", ["\u00ad", "͏"], ids=["soft-hyphen", "CGJ"])
 def test_a_run_only_carrier_is_spared_singly_and_caught_in_bulk(ch: str) -> None:
     """Both have a legitimate use *between letters*, which is where the neighbour rule fires.
 
@@ -135,8 +135,8 @@ def test_a_run_only_carrier_is_spared_singly_and_caught_in_bulk(ch: str) -> None
 # ── #700 §3: the exemptions that distinguish this from "flag every invisible" ─
 
 MUST_STAY_CLEAN = [
-    ("emoji ZWJ sequence", "family \U0001f468‍\U0001f469‍\U0001f467 here"),
-    ("Persian ZWNJ", "می‌روم"),
+    ("emoji ZWJ sequence", "family \U0001f468\u200d\U0001f469\u200d\U0001f467 here"),
+    ("Persian ZWNJ", "می\u200cروم"),
     ("CJK plus Latin", "これはCD-ROMです"),
     (
         "Scotland flag",
@@ -209,10 +209,10 @@ def test_a_latin_majority_embedding_is_flagged() -> None:
     benign", and a Latin-majority embedding was spared identically — the Trojan Source
     construction with the older embedding operators in place of the isolates.
     """
-    assert has_anomalies("‫if (isAdmin) { grant(); }‬")
+    assert has_anomalies("\u202bif (isAdmin) { grant(); }\u202c")
 
 
 def test_the_embedding_carve_out_still_spares_real_rtl() -> None:
     """The half of that sentence which was right stays right."""
-    assert not has_anomalies("‫مرحبا‬")
-    assert not has_anomalies("hello‏world")  # a bare directional mark carries no scope
+    assert not has_anomalies("\u202bمرحبا\u202c")
+    assert not has_anomalies("hello\u200fworld")  # a bare directional mark carries no scope

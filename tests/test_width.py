@@ -38,7 +38,7 @@ from disarm import grapheme_len, grapheme_width, terminal_width
         ("1️⃣", 2),  # keycap
         ("👨‍👩‍👧‍👦", 2),  # ZWJ family
         ("\t", 0),  # tab not expanded (A5)
-        ("​", 0),  # ZWSP
+        ("\u200b", 0),  # ZWSP
         ("a\x00b", 2),  # NUL is 0
     ],
 )
@@ -69,7 +69,7 @@ def test_iw1_ascii_equals_len(s: str) -> None:
 
 def test_iw5_zero_width_clusters() -> None:
     assert grapheme_width("́") == 0  # combining
-    assert grapheme_width("‍") == 0  # ZWJ
+    assert grapheme_width("\u200d") == 0  # ZWJ
     assert grapheme_width("️") == 0  # lone VS16
 
 

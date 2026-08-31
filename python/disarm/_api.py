@@ -56,6 +56,7 @@ from disarm._boundary import (
     _is_confusable,
     _is_mixed_script,
     _is_normalized,
+    _is_normalized_stream_safe,
     # Hostname safety
     _is_suspicious_hostname,
     # Language profiles
@@ -82,6 +83,7 @@ from disarm._boundary import (
     _Slugifier,
     _slugify,
     _slugify_batch,
+    _stream_safe,
     _strip_accents,
     _strip_accents_batch,
     _strip_control_chars,
@@ -2172,6 +2174,71 @@ def is_normalized(
         False
     """
     return _is_normalized(text, form=_norm_form(form))
+
+
+def stream_safe(text: str) -> str:
+    """Apply the Unicode Stream-Safe Text Format (UAX #15).
+
+    Inserts ``U+034F COMBINING GRAPHEME JOINER`` to break any run of more than 30
+    non-starters. That bound exists so text can be processed in fixed-size buffers
+    without a normalization boundary landing inside one, which makes this an
+    **interoperability** primitive.
+
+    Three things it is not, because each is a plausible misreading:
+
+    - **Not canonically equivalent.** It inserts a character, so ``stream_safe(s) != s``
+      and the normalized forms differ too. Never build a comparison key from it — use
+      ``search_key()`` or ``canonicalize()``.
+    - **Not a zalgo control.** ``strip_zalgo()`` answers that. 30 non-starters is far
+      above anything a reader would call stacking abuse, and this makes no judgement about
+      whether the text is abusive.
+    - **Not a size bound.** The presets already cap produced output; this does not change
+      how much text a call returns.
+
+    Args:
+        text: Input string.
+
+    Returns:
+        The text with joiners inserted where a non-starter run exceeded the bound.
+
+    Examples:
+        >>> stream_safe("Hello world")          # nothing to bound
+        'Hello world'
+        >>> long_stack = "a" + "\u0301" * 40
+        >>> "\u034f" in stream_safe(long_stack)
+        True
+    """
+    return _stream_safe(text)
+
+
+def is_normalized_stream_safe(
+    text: str,
+    *,
+    form: NormalizationForm | NF = "NFC",
+) -> bool:
+    """True if *text* is **both** in normalization form *form* **and** Stream-Safe.
+
+    It is a conjunction, and the name says so. The underlying predicate is
+    ``unicode-normalization``'s ``is_nfc_stream_safe``, whose own documentation reads "is
+    Stream-Safe NFC" — a string can be stream-safe without being normalized, and this
+    returns ``False`` for it.
+
+    Args:
+        text: Input string.
+        form: Normalization form. The compatibility forms are answered by their canonical
+            counterparts, since compatibility folding does not change how long a
+            non-starter run is.
+
+    Returns:
+        True if the string is normalized *and* within the Stream-Safe bound.
+
+    Examples:
+        >>> is_normalized_stream_safe("café")
+        True
+        >>> is_normalized_stream_safe("e\u0301")   # stream-safe, but not NFC
+        False
+    """
+    return _is_normalized_stream_safe(text, form=_norm_form(form))
 
 
 # --- Stateful objects ---

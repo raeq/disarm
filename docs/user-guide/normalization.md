@@ -141,6 +141,59 @@ assert normalize("ﬁ", form=NF.KC.value) == "fi"
 | `NF.KC` | `"NFKC"` |
 | `NF.KD` | `"NFKD"` |
 
+## Stream-Safe Text Format
+
+UAX #15 defines a bound on how many non-starters may follow one starter — 30 — so that
+text can be processed in fixed-size buffers without a normalization boundary landing
+inside one. `stream_safe()` enforces it by inserting `U+034F COMBINING GRAPHEME JOINER`.
+
+```python
+from disarm import stream_safe, is_normalized_stream_safe, normalize
+
+assert stream_safe("Hello world") == "Hello world"
+
+long_stack = "a" + "\u0301" * 40
+assert "\u034f" in stream_safe(long_stack)
+```
+
+This is an **interoperability** primitive. Three things it is not:
+
+**Not canonically equivalent.** It inserts a character, so the output is a different
+string and normalizes differently. Never build a comparison key from it — use
+`search_key()` or `canonicalize()`.
+
+```python
+assert stream_safe(long_stack) != long_stack
+assert normalize(stream_safe(long_stack), form="NFC") != normalize(long_stack, form="NFC")
+```
+
+**Not a zalgo control.** Thirty non-starters is far above anything a reader would call
+stacking abuse, and this function makes no judgement about whether text is abusive.
+`strip_zalgo()` answers that question, with a different bound and a different purpose.
+Ordinary stacking abuse passes straight through:
+
+```python
+zalgo = "a" + "\u0301" * 8
+assert stream_safe(zalgo) == zalgo  # under the bound
+```
+
+Legitimate stacking is nowhere near it either — Hebrew points, Arabic harakat and Indic
+conjuncts are all untouched.
+
+**Not a size bound.** The presets already cap produced output; `stream_safe()` does not
+change how much text a call can return.
+
+### The predicate is a conjunction
+
+`is_normalized_stream_safe(text, form=...)` answers *"is this normalized **and**
+stream-safe"*, not *"is this stream-safe"*. That is what the underlying Unicode predicate
+computes, and the name says so rather than leaving it to be discovered:
+
+```python
+assert not is_normalized_stream_safe("e\u0301")  # stream-safe, but not NFC
+assert is_normalized_stream_safe(normalize("e\u0301", form="NFC"))
+```
+
 ## When to use which form
 
 - **NFC** — Default for most applications. Store and compare text in NFC.

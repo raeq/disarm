@@ -231,6 +231,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(py::normalize::_normalize, m)?)?;
     m.add_function(wrap_pyfunction!(py::normalize::_is_normalized, m)?)?;
+    m.add_function(wrap_pyfunction!(py::normalize::_stream_safe, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        py::normalize::_is_normalized_stream_safe,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(
         py::confusables::_normalize_confusables,
         m

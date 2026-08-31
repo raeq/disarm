@@ -272,6 +272,55 @@ pub fn is_normalized(text: &str, form: NormalizationForm) -> bool {
         .expect("NormalizationForm is always a valid form")
 }
 
+/// Apply the Unicode Stream-Safe Text Format (UAX #15).
+///
+/// Inserts `U+034F COMBINING GRAPHEME JOINER` to break any run of more than 30
+/// non-starters. That is the bound the standard defines so text can be processed in
+/// fixed-size buffers without a normalization boundary landing inside one, which is what
+/// makes this an **interoperability** primitive.
+///
+/// Three things it is not, because each is a plausible misreading:
+///
+/// - **Not canonically equivalent.** It inserts a character, so `stream_safe(s) != s` and
+///   the normalized forms differ too. Never build a comparison key from it — use
+///   [`crate::api::search_key`] or [`crate::api::canonicalize`] for that.
+/// - **Not a zalgo control.** [`crate::api::strip_zalgo`] answers that question. 30
+///   non-starters is far above anything a reader would call stacking abuse, and this makes
+///   no judgement about whether the text is abusive — it only bounds the run.
+/// - **Not a size bound.** The presets already cap produced output (#768); this does not
+///   change how much text a call can return.
+///
+/// ```
+/// use disarm::api;
+/// let long_stack: String = "a".to_string() + &"\u{0301}".repeat(40);
+/// let safe = api::stream_safe(&long_stack);
+/// assert!(safe.contains('\u{034F}'));
+/// // The predicate is a conjunction, so normalize before asking.
+/// let nfc = api::normalize(&safe, api::NormalizationForm::Nfc);
+/// assert!(api::is_normalized_stream_safe(&nfc, api::NormalizationForm::Nfc));
+/// ```
+#[must_use]
+pub fn stream_safe(text: &str) -> String {
+    crate::normalize::stream_safe(text)
+}
+
+/// True if `text` is **both** in normalization form `form` **and** Stream-Safe.
+///
+/// It is a conjunction, and the name says so. The underlying predicate is upstream's
+/// `is_nfc_stream_safe`, whose own documentation reads "is Stream-Safe NFC" — a string can
+/// be stream-safe without being normalized, and this returns `false` for it. Naming it
+/// `is_stream_safe` would have been wrong in a way only a caller reading the source would
+/// find.
+///
+/// Infallible: a [`NormalizationForm`] is always a valid form. The compatibility forms are
+/// answered by their canonical counterparts — compatibility folding does not change how
+/// long a non-starter run is.
+#[must_use]
+pub fn is_normalized_stream_safe(text: &str, form: NormalizationForm) -> bool {
+    crate::normalize::is_normalized_stream_safe(text, form.as_str())
+        .expect("NormalizationForm is always a valid form")
+}
+
 // ── Output encoders (encode once, at the sink) ───────────────────────────────
 
 /// Escape the five HTML metacharacters for element-body (PCDATA) and

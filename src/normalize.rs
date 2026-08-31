@@ -87,6 +87,44 @@ pub(crate) fn is_normalized(text: &str, form: &str) -> Result<bool, crate::Error
     Ok(already_normalized)
 }
 
+/// Apply the Unicode Stream-Safe Text Format (UAX #15).
+///
+/// Inserts `U+034F COMBINING GRAPHEME JOINER` to break any run of more than 30
+/// non-starters, which is the bound the standard defines so an implementation can process
+/// text in fixed-size buffers without a normalization boundary falling inside one.
+///
+/// This is an **interop** bound, and it is worth being plain about what it is not:
+///
+/// - Not canonically equivalent. It inserts a character, so `stream_safe(s) != s` and
+///   `NFC(stream_safe(s)) != NFC(s)`. Never use it on a comparison key.
+/// - Not a zalgo control. [`crate::zalgo`] answers that question, with a different bound
+///   and a different purpose; 30 non-starters is far above anything a reader would call
+///   stacking abuse.
+/// - Not a size bound on the presets. `MAX_NORMALIZE_OUTPUT_BYTES` (#768) is that, and it
+///   already applies.
+pub(crate) fn stream_safe(text: &str) -> String {
+    use unicode_normalization::UnicodeNormalization;
+    text.chars().stream_safe().collect()
+}
+
+/// True if `text` is **both** in normalization form `form` **and** Stream-Safe.
+///
+/// The upstream predicate is a conjunction — its own doc says "is Stream-Safe NFC" — and
+/// the name here says so rather than leaving a reader to discover it. A string can be
+/// stream-safe and not normalized; this returns `false` for it.
+///
+/// `NFKC`/`NFKD` are answered by their canonical counterparts, since compatibility folding
+/// does not change how long a non-starter run is.
+pub(crate) fn is_normalized_stream_safe(text: &str, form: &str) -> Result<bool, crate::ErrorRepr> {
+    match form {
+        "NFC" | "NFKC" => Ok(unicode_normalization::is_nfc_stream_safe(text)),
+        "NFD" | "NFKD" => Ok(unicode_normalization::is_nfd_stream_safe(text)),
+        _ => Err(crate::ErrorRepr::InvalidNormForm {
+            got: form.to_owned(),
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

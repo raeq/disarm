@@ -18,6 +18,28 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`stream_safe()` and `is_normalized_stream_safe()` — UAX #15 Stream-Safe Text Format.**
+  The standard bounds a run of non-starters at 30 so text can be processed in fixed-size
+  buffers without a normalization boundary landing inside one. `unicode-normalization`
+  already shipped the implementation; disarm did not expose it.
+
+  This is an **interoperability** primitive, and the docs lead with what it is not:
+
+  - **Not canonically equivalent.** It inserts `U+034F`, so `stream_safe(s) != s` and the
+    normalized forms differ. Never build a comparison key from it.
+  - **Not a zalgo control.** 30 non-starters is far above stacking abuse, and it makes no
+    judgement about whether text is abusive — `strip_zalgo()` answers that. Eight stacked
+    marks pass straight through, as do Hebrew points, Arabic harakat and Indic conjuncts.
+  - **Not a size bound.** The presets already cap produced output (#768).
+
+  The predicate is a **conjunction**: `is_normalized_stream_safe(text, form=...)` answers
+  "is this normalized *and* stream-safe". That is what the underlying Unicode predicate
+  computes — its own documentation reads "is Stream-Safe NFC" — and the name says so
+  rather than leaving a caller to find out from the source.
+
+  Rust and Python only. The parity matrix now reports the four remaining bindings as gaps,
+  which is the mechanism working rather than an oversight.
+
 - **`digit_policy="preserve"` — leave the numeral in its own script (#648).**
   The two existing settings are not "keep the script" and "fold to ASCII"; both rewrite a
   non-Latin numeral, and both leave a *mixed-script* result, which is neither:

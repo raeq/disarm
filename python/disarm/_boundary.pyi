@@ -135,6 +135,9 @@ from disarm._core import (
     _is_normalized as _is_normalized,
 )
 from disarm._core import (
+    _is_normalized_stream_safe as _is_normalized_stream_safe,
+)
+from disarm._core import (
     _is_suspicious_hostname as _is_suspicious_hostname,
 )
 from disarm._core import (
@@ -205,6 +208,9 @@ from disarm._core import (
 )
 from disarm._core import (
     _sort_key as _sort_key,
+)
+from disarm._core import (
+    _stream_safe as _stream_safe,
 )
 from disarm._core import (
     _strip_accents as _strip_accents,

@@ -20,8 +20,9 @@ gem install disarm
 ```
 
 Requires Ruby >= 3.1. Precompiled platform gems ship for Ruby 3.1 through 4.0
-(Linux x86_64/aarch64, macOS x86_64/arm64, Windows). Anything else installs the
-source gem and compiles locally, which needs a Rust toolchain.
+(Linux x86_64/aarch64, macOS x86_64/arm64, Windows). On a supported Ruby with no
+matching platform gem, the source gem installs and compiles locally, which needs a
+Rust toolchain. Below 3.1 the gem does not install at all.
 
 ## Usage
 

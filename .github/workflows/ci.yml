@@ -347,14 +347,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # magnus 0.7 supports 3.1-3.3, and all three are exercised — but not on
-        # every PR push. A PR runs the FLOOR (3.1): a magnus/rb-sys incompatibility
-        # shows up at the oldest supported version, not the newest, so one version
-        # catches the realistic break for a third of the minutes. Pushes to main
-        # run the full range, so nothing reaches a release unverified across it,
-        # and publish-ruby.yml re-runs all three before the gem is built.
-        # Must list every ABI `publish-ruby.yml` builds (#699), or the next Ruby
-        # release is caught by a user's `gem install` rather than by CI.
+        # Every ABI `publish-ruby.yml` builds, and no fewer (#699): a version missing
+        # here means the next Ruby release is caught by a user's `gem install` rather
+        # than by CI, which is how 3.4 and 4.0 stayed unshipped for six releases.
+        #
+        # Not on every PR push, though. A PR runs the FLOOR (3.1), because a
+        # magnus/rb-sys incompatibility shows up at the oldest supported version
+        # rather than the newest, so one version catches the realistic break for a
+        # fraction of the minutes. Pushes to main run the full range, and
+        # publish-ruby.yml re-runs it before the gem is built.
         ruby: ${{ github.event_name == 'pull_request' && fromJSON('["3.1"]') || fromJSON('["3.1","3.2","3.3","3.4","4.0"]') }}
     env:
       # bundler-cache runs at the repo root (no Gemfile there) unless pointed at

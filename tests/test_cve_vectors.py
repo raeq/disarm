@@ -658,14 +658,24 @@ class TestAsciiSmuggling:
         assert get_pipeline("llm_guardrail")(SMUGGLED) == VISIBLE_TEXT.lower()
         assert get_pipeline("rag_ingest")(SMUGGLED) == VISIBLE_TEXT
 
-    def test_not_reported_as_an_anomaly(self) -> None:
-        """OUT-OF-SCOPE NEGATIVE: stripping works, detection does not.
+    def test_reported_as_an_anomaly(self) -> None:
+        """#700: it is detected now, and it was not.
 
-        The Tags block is not one of the anomaly kinds, so a pipeline that
-        *screens* with ``has_anomalies`` and only strips what it flags will
-        forward the payload intact. Strip unconditionally.
+        This assertion used to read ``is False``, under the heading "OUT-OF-SCOPE
+        NEGATIVE: stripping works, detection does not". Two independent gates kept it
+        that way: the Tags block was absent from the detector's eight-character carrier
+        table, and the neighbour rule requires a letter beside the character — which a
+        run standing in its own whitespace token does not have. So a pipeline that
+        screened with ``has_anomalies`` and stripped only what it flagged forwarded the
+        payload intact, on the exact carrier #413 was opened for.
+
+        The finding names the run, not one character of it: 60 tag characters in
+        sequence is what distinguishes a payload from a stray code point.
         """
-        assert has_anomalies(SMUGGLED) is False
+        assert has_anomalies(SMUGGLED) is True
+        report = inspect_anomalies(SMUGGLED)
+        assert report.kinds == ["invisible"]
+        assert report.findings[0].detail.endswith(f"\u00d7{len(INJECTION)}")
 
 
 # ---------------------------------------------------------------------------
@@ -2129,9 +2139,13 @@ REGISTRY: tuple[CVE, ...] = (
         cwe="CWE-74",
         cvss=9.3,
         cvss_version="v3.1",
-        dispositions=frozenset({NEUTRALIZED}),
+        dispositions=frozenset({NEUTRALIZED, DETECTED}),
         neutralizers=("strip_tags", "llm_guardrail", "canonicalize", "strip_obfuscation"),
-        detectors=(),
+        # #700: detection reached this row. The Tags block was absent from the detector's
+        # carrier table, and a run standing in its own whitespace token had no letter
+        # beside it to trip the neighbour rule either — so the sanitizer closed the
+        # channel and the detector called the same input clean.
+        detectors=("has_anomalies", "inspect_anomalies"),
         probe=SMUGGLED,
         reference="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-32711",
     ),
@@ -2818,8 +2832,12 @@ class TestDetectionHasNoSuperset:
     #: Pinned, so closing one shows up here as a failure to celebrate rather
     #: than as a silent improvement nobody notices.
     UNDETECTED_IN_SCOPE = {
-        "CVE-2025-32711",  # the Tags block is not an anomaly kind
-        "CVE-2023-46695",  # nor is a long run of already-normalized characters
+        # CVE-2025-32711 was the first entry here — "the Tags block is not an anomaly
+        # kind" — and #700 closed it. It was the one row on the list that WAS a
+        # character you could look for; the detector's carrier table simply did not
+        # have it, and the neighbour rule could not fire on a run standing in its own
+        # whitespace token. See TestAsciiSmuggling.
+        "CVE-2023-46695",  # a long run of already-normalized characters is not one
         # The whole encoding class is silent too — see TestOverlongAndInvalid-
         # Sequences and TestLoneSurrogates. Every one is neutralized and none
         # is reported.
@@ -2901,7 +2919,9 @@ class TestDetectionHasNoSuperset:
             # That kind reaches five rows, and four of them are OUT OF SCOPE — it
             # gives a signal on vectors disarm does not claim to stop, which is the
             # most useful thing a detector can do for a row nothing neutralizes.
-            "has_anomalies": 24,
+            # 25 since #700 widened the carriers to what the strip functions already
+            # act on and added the run rule; 24 before that, 19 before #633.
+            "has_anomalies": 25,
             "is_confusable": 9,
             "is_mixed_script": 4,
             # CVE-2017-7833 is the only row that fires this: the Arabic mark is
@@ -2929,6 +2949,11 @@ class TestDetectionHasNoSuperset:
         telling way: **the entire class is undetected.** Every escape-sequence
         row is neutralized and none is reported. A pipeline that screens before
         it cleans has no coverage of that class at all.
+
+        It shrank by one at #700, which is the shape this pin exists to surface: the
+        Tags row left the set because a carrier class was added, and the remainder each
+        need a *comparison* — a length budget, a decode result — rather than another
+        character to look for.
         """
         undetected = self._undetected()
         assert undetected == self.UNDETECTED_IN_SCOPE, sorted(undetected)

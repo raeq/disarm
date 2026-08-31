@@ -28,17 +28,97 @@ const ZALGO_THRESHOLD: usize = 3;
 /// affecting normal input.
 const MAX_LEET_LEN: usize = 64;
 
-/// Zero-width / invisible formatting codepoints (soft hyphen U+00AD is excluded: it is
-/// legitimate hyphenation).
-const INVISIBLE: &[char] = &[
-    '\u{200B}', '\u{200C}', '\u{200D}', '\u{2060}', '\u{2061}', '\u{2062}', '\u{2063}', '\u{FEFF}',
-];
+/// Whether `c` is invisible *inside a word* — the set the neighbour rule below reads.
+///
+/// Reuses `crate::invisibles` rather than restating the ranges (#700 §1). The detector
+/// having its own eight-character list is exactly how it drifted from the strip functions:
+/// `strip_zero_width_chars` removed `U+2064` and `U+180E` and the detector reported the
+/// same input clean, and `U+180E` sits in the Mongolian block so the token was reported as
+/// `mixed_script` instead — a script the reader cannot see.
+///
+/// The **fillers** (#643) join it here rather than in the run rule: `ad\u{3164}min` renders
+/// as `admin`, which is the single-character-inside-a-word shape the neighbour rule exists
+/// for, and `U+200B` is already reported for identical attacks.
+///
+/// Soft hyphen and CGJ are deliberately **not** here — both have a legitimate use between
+/// letters, which is precisely where the neighbour rule fires. They are carriers for the
+/// run rule only, where a *sequence* of them is not legitimate under any reading.
+#[inline]
+fn is_invisible_in_word(c: char) -> bool {
+    crate::invisibles::is_zero_width(c) || crate::invisibles::is_invisible_filler(c)
+}
+
+/// Soft hyphen — legitimate hyphenation between letters, so it is a run-rule carrier only.
+const SOFT_HYPHEN: char = '\u{00AD}';
+/// Combining Grapheme Joiner — legitimate between letters (it blocks normalization), so
+/// likewise run-rule only.
+const CGJ: char = '\u{034F}';
+
+/// How many consecutive carriers of each class it takes to fire on their own, with no
+/// letter beside them (#700 §2).
+///
+/// The neighbour rule is right for one zero-width space hiding inside a word: the letter
+/// next to it is what makes it suspicious. It is wrong for a *run*, which is the shape a
+/// pasted payload has — a run standing between two spaces has no letter in its token, so
+/// it could not fire even for a character that was in the table. `"Hello "` plus 21 tag
+/// characters spelling `tracked-by:acct-99213` plus `" world"` reported clean while
+/// `strip_tags` removed the whole thing.
+///
+/// The thresholds differ because the classes do. A single tag character is not ordinary
+/// anything — nothing legitimate emits one outside a subdivision flag, which is allowed
+/// for separately. A single variation selector after a base is ordinary emoji
+/// presentation, so two is the floor. Zero-width runs need the loosest floor: eight, well
+/// above any orthography and well below the sixteen it takes to smuggle two ASCII letters.
+const RUN_THRESHOLD_TAG: usize = 1;
+const RUN_THRESHOLD_VARIATION_SELECTOR: usize = 2;
+const RUN_THRESHOLD_ZERO_WIDTH: usize = 8;
+
+/// The carrier classes the run rule counts, each with its own floor.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Carrier {
+    Tag,
+    VariationSelector,
+    ZeroWidth,
+}
+
+impl Carrier {
+    fn of(c: char) -> Option<Self> {
+        if crate::invisibles::is_tag(c) {
+            Some(Self::Tag)
+        } else if crate::invisibles::is_variation_selector(c) {
+            Some(Self::VariationSelector)
+        } else if is_invisible_in_word(c) || c == SOFT_HYPHEN || c == CGJ {
+            Some(Self::ZeroWidth)
+        } else {
+            None
+        }
+    }
+
+    fn threshold(self) -> usize {
+        match self {
+            Self::Tag => RUN_THRESHOLD_TAG,
+            Self::VariationSelector => RUN_THRESHOLD_VARIATION_SELECTOR,
+            Self::ZeroWidth => RUN_THRESHOLD_ZERO_WIDTH,
+        }
+    }
+}
 /// Bidi overrides (LRO/RLO): never legitimate in normal text.
 const BIDI_OVERRIDE: &[char] = &['\u{202D}', '\u{202E}'];
 /// Bidi isolates (LRI/RLI/FSI/PDI). Plain embeddings (LRE/RLE/PDF) and bare directional
 /// marks are common in benign RTL and social text, so they are not flagged. The overrides
 /// (U+202D/U+202E) are handled first by [`BIDI_OVERRIDE`], so they are not re-listed here.
 const BIDI_ISOLATES: &[char] = &['\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}'];
+/// Bidi *embeddings*: LRE/RLE and their terminator PDF. Held to the same
+/// majority-Latin condition as the isolates above (#643).
+///
+/// `bidi_spares_marks_and_embeddings` documented that condition — "an LRE..PDF embedding
+/// around RTL text (no Latin majority) is benign" — and did not implement it: an
+/// embedding was spared unconditionally, so `\u{202B}if (isAdmin) { grant(); }\u{202C}`
+/// reported clean. That is the Trojan Source construction with the older embedding
+/// operators in place of the isolates, and the comment already said it was not meant to
+/// be spared. Bare `LRM`/`RLM` stay spared, which is the part that is clearly right —
+/// they carry no scope and are common in benign social text.
+const BIDI_EMBEDDINGS: &[char] = &['\u{202A}', '\u{202B}', '\u{202C}'];
 /// Wrapping punctuation trimmed from token edges (NOT the leet symbols @ $ |).
 const WRAP: &[char] = &[
     '"', '.', ',', ';', ':', '?', '!', '(', ')', '[', ']', '{', '}', '<', '>', '\u{AB}', '\u{BB}',
@@ -353,6 +433,48 @@ fn seg_word(core: &str, lexicon: &HashSet<String>) -> Option<String> {
     }
 }
 
+/// The longest carrier run in `chars` that reaches its class's threshold (#700 §2, §4).
+///
+/// Returns `(class-representative code point, run length)`. Reports the **run**, not one
+/// character of it: a finding whose detail names `U+200B` when sixteen are in sequence
+/// understates the input, and the count is what tells a caller this was a payload rather
+/// than a stray character.
+///
+/// A well-formed emoji subdivision flag is skipped whole (#700 §3). `U+1F3F4` plus tag
+/// letters plus `U+E007F` is a flag when the letters decode to one of the three RGI
+/// payloads, and the tags channel wearing a flag base otherwise — a distinction
+/// `crate::invisibles` already draws, and which is reused rather than restated so the
+/// detector and the stripper cannot disagree.
+fn carrier_run(chars: &[char]) -> Option<(char, usize)> {
+    let mut i = 0;
+    let mut best: Option<(char, usize)> = None;
+    while i < chars.len() {
+        if let Some(len) = crate::invisibles::subdivision_flag_len(&chars[i..]) {
+            i += len;
+            continue;
+        }
+        let Some(class) = Carrier::of(chars[i]) else {
+            i += 1;
+            continue;
+        };
+        let start = i;
+        while i < chars.len() && Carrier::of(chars[i]) == Some(class) {
+            i += 1;
+        }
+        let len = i - start;
+        // An explicit match rather than `is_none_or` (Rust 1.82; the crate's MSRV is
+        // 1.81) or `map_or(true, ..)`, which clippy rewrites back into `is_none_or`.
+        let longer = match best {
+            None => true,
+            Some((_, best_len)) => len > best_len,
+        };
+        if len >= class.threshold() && longer {
+            best = Some((chars[start], len));
+        }
+    }
+    best
+}
+
 fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Finding> {
     let end = start + tok.len();
     let mk = |kind: AnomalyKind, detail: String| Finding {
@@ -393,7 +515,7 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     if !tok.is_ascii() {
         let chars: Vec<char> = tok.chars().collect();
         for (i, &c) in chars.iter().enumerate() {
-            if !INVISIBLE.contains(&c) {
+            if !is_invisible_in_word(c) {
                 continue;
             }
             // ZWJ/ZWNJ are legitimate joiners in many non-Latin scripts (Arabic,
@@ -421,14 +543,25 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
                 return Some(mk(AnomalyKind::Invisible, codepoint(c)));
             }
         }
+        // #700 §2: a run fires on its own, with no letter beside it. Checked after the
+        // neighbour rule so a single carrier inside a word still reports as itself.
+        if let Some((c, len)) = carrier_run(&chars) {
+            return Some(mk(
+                AnomalyKind::Invisible,
+                format!("{} \u{d7}{len}", codepoint(c)),
+            ));
+        }
         if let Some(&c) = chars.iter().find(|c| BIDI_OVERRIDE.contains(c)) {
             return Some(mk(AnomalyKind::Bidi, codepoint(c)));
         }
-        // Spare isolates only in tokens that are majority non-Latin-script (legit RTL):
-        // flag an isolate when the token has any ASCII-Latin letter (majority-Latin) OR
-        // has no letters at all (digits/punct only, e.g. `12<isolate>34`).
+        // Spare isolates and embeddings only in tokens that are majority non-Latin-script
+        // (legit RTL): flag one when the token has any ASCII-Latin letter (majority-Latin)
+        // OR has no letters at all (digits/punct only, e.g. `12<isolate>34`).
         if is_majority_latin(tok) || has_no_letters(tok) {
-            if let Some(&c) = chars.iter().find(|c| BIDI_ISOLATES.contains(c)) {
+            if let Some(&c) = chars
+                .iter()
+                .find(|c| BIDI_ISOLATES.contains(c) || BIDI_EMBEDDINGS.contains(c))
+            {
                 return Some(mk(AnomalyKind::Bidi, codepoint(c)));
             }
         }
@@ -865,6 +998,10 @@ mod tests {
             "\u{202B}\u{0639}\u{0631}\u{0628}\u{064A}\u{202C}",
             &l
         ));
+        // #643: the Latin-majority half of that sentence was never implemented, so the
+        // same embedding around SOURCE CODE was spared too — the Trojan Source
+        // construction with the older operators in place of the isolates.
+        assert!(has_anomalies("\u{202B}if(isAdmin){grant();}\u{202C}", &l));
     }
 
     // ── zalgo ───────────────────────────────────────────────────────────────

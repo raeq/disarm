@@ -82,6 +82,56 @@ pub(crate) fn is_zero_width(ch: char) -> bool {
     )
 }
 
+/// The default-ignorable **fillers** — invisible characters that are `Lo`, not `Cf`, so
+/// no format-character predicate covers them (#643).
+///
+/// `U+3164 HANGUL FILLER` and its relatives render as nothing and are the standard
+/// characters behind invisible usernames on Discord, Twitter and similar platforms.
+/// `ad\u{3164}min` renders as `admin`. `U+200B` is used for identical attacks and is
+/// already reported; the inconsistency is what makes this a defect rather than a
+/// coverage gap.
+///
+/// `U+2800 BRAILLE PATTERN BLANK` is `So` rather than `Lo` and is included for the same
+/// reason: a blank Braille cell is genuinely invisible, and it is not exotic.
+/// `U+1680 OGHAM SPACE MARK` is deliberately **absent** — it is `Zs`, so it is a token
+/// separator everywhere in this library, and it renders visibly in most fonts.
+#[inline]
+pub(crate) fn is_invisible_filler(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{115F}'      // HANGUL CHOSEONG FILLER
+        | '\u{1160}'    // HANGUL JUNGSEONG FILLER
+        | '\u{3164}'    // HANGUL FILLER
+        | '\u{FFA0}'    // HALFWIDTH HANGUL FILLER
+        | '\u{2800}' // BRAILLE PATTERN BLANK
+    )
+}
+
+/// Whether `chars` (positioned at a [`FLAG_BASE`]) opens a well-formed emoji subdivision
+/// flag, and if so how many code points it spans.
+///
+/// The detector needs the same allowlist the stripper uses (#700 §3): a valid flag is not
+/// an anomaly, and there are exactly three of them. Exposed here rather than restated in
+/// `anomalies.rs` so the two cannot drift — which is the failure #700 is about.
+pub(crate) fn subdivision_flag_len(chars: &[char]) -> Option<usize> {
+    if chars.first() != Some(&FLAG_BASE) {
+        return None;
+    }
+    let mut decoded = String::new();
+    for (i, &c) in chars.iter().enumerate().skip(1) {
+        if is_tag_letter(c) {
+            decoded.push(char::from_u32(c as u32 - 0xE0000)?);
+        } else if c == CANCEL_TAG {
+            return VALID_SUBDIVISION_FLAGS
+                .contains(&decoded.as_str())
+                .then_some(i + 1);
+        } else {
+            return None;
+        }
+    }
+    None
+}
+
 /// Combining Grapheme Joiner — invisible; blocks normalization/collation and so
 /// splits a confusable/denylisted run while staying unseen.
 const CGJ: char = '\u{034F}';

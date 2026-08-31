@@ -577,7 +577,7 @@ def slugify(
             ZWNBSP, soft hyphen, the tag block), private use, noncharacters,
             surrogates, punctuation, symbols and emoji. This matches
             ``django.utils.text.slugify(allow_unicode=True)``, which keeps
-            ``\w`` — with two deliberate additions Django does not make:
+            ``\\w`` — with two deliberate additions Django does not make:
 
             * **Combining marks** (``M*``) are kept, capped at two per base
               character. Django drops them, which breaks Devanagari and Arabic;

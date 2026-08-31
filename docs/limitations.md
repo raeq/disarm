@@ -239,10 +239,19 @@ The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/
 ### The bundled table does not cover every confusable, and the gap is now measurable
 
 A TR39 fold is only as good as the table behind it, and disarm's to-Latin table is a
-*subset* of upstream `confusables.txt`: 6,565 sources upstream, 2,220 rows bundled. The
+*subset* of upstream `confusables.txt`: 6,565 sources upstream, 2,273 rows bundled. The
 gap is mostly deliberate — a source whose upstream target is CJK, Arabic or Hangul does
 not belong in a to-Latin table — but "mostly deliberate" is not a claim a deployment
 should have to take on trust.
+
+The fold is **case-symmetric where upstream gives evidence for it, and not otherwise**
+(#801). A mapping on a cased letter implies one on the letter it case-folds to, which
+matters because UTS #46 case-folds every hostname label: without the rule, `Т.com` and
+`т.com` — the same registered domain — converged onto whichever spelling happened to be
+unmapped. Seven pairs stay asymmetric, each because the unmapped half's own upstream
+prototype belongs to another script (Greek `χ`, `λ` and `Γ`, Cyrillic `л`) or is a math symbol
+(`∂`). Folding those would be a transliteration decision rather than a homoglyph one, and
+transliteration is a different table.
 
 Since #563 the residue is queryable rather than inferred. `unmapped_confusables()`
 returns every upstream source the chosen table does not fold, and

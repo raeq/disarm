@@ -152,14 +152,20 @@ def test_614_precedence_is_unchanged() -> None:
 
 
 def test_the_two_suppression_sets_are_not_the_same_set() -> None:
-    """Six of #614's 49 rows are genuine emoji, so neither rule subsumes the other."""
+    """Six of #614's 50 rows are genuine emoji, so neither rule subsumes the other.
+
+    49 until #801, which folded `\u222b` INTEGRAL to `s` — upstream maps it straight
+    onto `\u0283` LATIN SMALL LETTER ESH, and closing the case asymmetry gave esh an
+    ASCII representative. It is a CLDR-named non-emoji, so it lands in the intersection
+    and not in the six below.
+    """
     confusable = {
         int(line.split("\t")[0], 16)
         for line in (DATA / "confusables_to_latin.tsv").read_text(encoding="utf-8").splitlines()
         if line and not line.startswith("#")
     }
     tr39_claimed = {cp for cp in ROWS if cp in confusable}
-    assert len(tr39_claimed) == 49
+    assert len(tr39_claimed) == 50
     assert tr39_claimed - set(NON_EMOJI) == {
         0x203C,
         0x2049,

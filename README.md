@@ -43,13 +43,12 @@ gem install disarm      # Ruby 3.1+
 
 ## disarm capabilities
 
-- **[Confusable folding & detection](docs/user-guide/confusables.md)** — TR39 *visual* mapping (`normalize_confusables`, `is_confusable`), plus [`unmapped_confusables()`](docs/user-guide/confusables.md#knowing-what-is-not-covered) so you can measure what the bundled table misses instead of assuming it
-- **[Obfuscation stripping](docs/security/adversarial-defense.md)** — bidi controls, zero-width and invisible characters, zalgo, emoji (`strip_obfuscation`)
-- **[Hostname / IDN analysis](docs/api/predicates.md#is_suspicious_hostname)** — mixed-script, whole-script-confusable and bidi checks for domains
-- **[Ready-made pipelines](docs/api/pipelines.md)** — `canonicalize`, `canonicalize_strict`, `catalog_key`, `search_key`, `ml_normalize`, and [LLM/RAG profiles](docs/user-guide/llm-pipelines.md)
-- **[Transliteration](docs/user-guide/transliteration.md)** — standards-based for Latin/Cyrillic/Greek (BGN/PCGN, ISO 9, GOST), including reverse; best-effort [coverage](docs/user-guide/language-support.md) for CJK, Indic, Arabic, Hebrew and more across 83 language profiles
-- **[Normalization, slugs & filenames](docs/user-guide/normalization.md)** — NFC/NFD/NFKC/NFKD, full case folding, [URL-safe slugs](docs/user-guide/slugification.md), [cross-platform filenames](docs/user-guide/filenames.md), [grapheme clusters](docs/user-guide/graphemes.md), [encoding detection](docs/api/encoding.md)
-
+- **[Confusable folding](docs/user-guide/confusables.md)** — TR39 visual mapping, plus what it misses
+- **[Obfuscation stripping](docs/security/adversarial-defense.md)** — bidi controls, zero-width characters, zalgo, emoji
+- **[Hostname / IDN analysis](docs/api/predicates.md#is_suspicious_hostname)** — mixed-script, whole-script and bidi checks
+- **[Ready-made pipelines](docs/api/pipelines.md)** — `canonicalize`, `catalog_key`, `search_key`, LLM and RAG profiles
+- **[Transliteration](docs/user-guide/transliteration.md)** — BGN/PCGN, ISO 9 and GOST; 83 language profiles
+- **[Normalization, slugs & filenames](docs/user-guide/normalization.md)** — case folding, graphemes, encoding detection
 ```python
 from disarm import canonicalize, collapse_whitespace, slugify, strip_obfuscation, transliterate
 
@@ -91,7 +90,13 @@ hardware-dependent and directional, not guarantees. →
 [how to read them](https://docs.disarm.dev/performance.html#how-to-read-these-numbers) ·
 [where disarm is slower](https://docs.disarm.dev/performance.html#where-disarm-is-slower)
 
-## One core, six languages
+Both come from *"Fire Extinguishers Full of Gasoline: Evaluating Unicode Text Normalization
+as a Defence Against Adversarial Attacks"* — eight preprocessing tools, six attack types,
+three downstream tasks, two model architectures. The XMR metric is archived at
+[Zenodo](https://doi.org/10.5281/zenodo.20618323); cite it with
+[CITATION.cff](https://github.com/raeq/disarm/blob/main/CITATION.cff).
+
+## Bindings: one core, six languages
 
 The Rust core does the work; each binding is a native-feeling API over it, not a
 transliterated one — `snake_case` and `?` predicates in Ruby, `camelCase` with options
@@ -130,6 +135,9 @@ written down in [BINDINGS.md](BINDINGS.md).
 from, so a deployment can answer "am I stale?" without inferring it from behaviour
 ([provenance](docs/provenance.md)).
 
+Found a bypass? Report it under the [security policy](SECURITY.md) rather than in a public
+issue.
+
 ## Links
 
 | | |
@@ -139,6 +147,8 @@ from, so a deployment can answer "am I stale?" without inferring it from behavio
 | **PyPI package** | <https://pypi.org/project/disarm/> |
 | **Rust crate** | <https://crates.io/crates/disarm> |
 | **Issue tracker** | <https://github.com/raeq/disarm/issues> |
+| **Security policy** | <https://github.com/raeq/disarm/blob/main/SECURITY.md> |
+| **Contributing** | <https://github.com/raeq/disarm/blob/main/CONTRIBUTING.md> |
 | **Changelog** | <https://github.com/raeq/disarm/blob/main/CHANGELOG.md> |
 
 ## License

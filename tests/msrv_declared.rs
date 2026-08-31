@@ -43,7 +43,13 @@ fn parts(version: &str) -> (u32, u32, u32) {
 /// host's.
 fn metadata() -> Option<String> {
     let out = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
-        .args(["metadata", "--format-version", "1", "--locked"])
+        // No `--locked`: `Cargo.lock` is gitignored here (this is a library), and
+        // `Cargo.toml`'s packaging `include` excludes it too, so `--locked` fails on a
+        // fresh checkout and in the packaged crate. It failed *loudly* rather than
+        // silently — `the_gate_is_actually_running` below exists for exactly that — but
+        // a gate that only works when someone has run `cargo generate-lockfile` first is
+        // not a gate. Resolving fresh reads the same graph.
+        .args(["metadata", "--format-version", "1"])
         .output()
         .ok()?;
     out.status
@@ -96,7 +102,7 @@ fn declared_floors(json: &str) -> Vec<(String, String)> {
 /// published MSRV on its own.
 fn runtime_packages() -> Vec<String> {
     let out = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
-        .args(["tree", "-e", "no-dev", "--prefix", "none", "--locked"])
+        .args(["tree", "-e", "no-dev", "--prefix", "none"])
         .output();
     let Ok(out) = out else { return Vec::new() };
     if !out.status.success() {

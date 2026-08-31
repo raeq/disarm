@@ -90,7 +90,7 @@ Kotlin passes the same values as named arguments and does not use the builders.
 |---|---|
 | `AnomalyReport` | `anomalous`, `kinds`, `findings`, `reason` |
 | `Finding` | one anomaly: `kind`, `token`, `start`, `end`, `detail`, `reason` |
-| `HostnameAnalysis` | `suspicious`, `canonical`, `scripts`, `mixedScript`, `hasConfusables`, `bidiConflict`, `bidiControl`, `hasInvisible`, `crossLabelScript`, `labelScripts`, `wholeScriptConfusable`, `labelWholeScriptConfusable` |
+| `HostnameAnalysis` | `suspicious`, `canonical`, `scripts`, `mixedScript`, `hasConfusables`, `bidiConflict`, `bidiControl`, `hasInvisible`, `compatFold`, `crossLabelScript`, `labelScripts`, `wholeScriptConfusable`, `labelWholeScriptConfusable` |
 | `KeyCollision` | `key`, `values`, `indices` |
 | `UnmappedConfusable`, `Untranslatable` | coverage residue |
 | `LangMeta`, `ScriptMeta`, `AutoLangInspection` | metadata |

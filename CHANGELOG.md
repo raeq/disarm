@@ -30,6 +30,35 @@ currency signs and math operators are no longer replaced by English words. Text 
 already ASCII is unaffected. Pass `emoji="none"` to suppress the emoji step entirely, as
 before.
 
+**`is_suspicious_hostname` flags far more, and `canonical` moves (#709, #714).** Both
+changes stop the analysis normalizing away the thing it is supposed to analyse.
+
+Measured over every code point built as `X.com`:
+
+| | assigned (292,531) | unassigned (819,533) |
+|---|---|---|
+| newly suspicious | **6,178** — 3,647 a compatibility form, 2,531 DISALLOWED by UTS #46 | **814,676** |
+| no longer suspicious | **68** | 0 |
+| `canonical` changed | **2,191** | — |
+
+The unassigned bucket is the largest number and the least interesting: an unassigned code
+point cannot appear in a resolvable hostname, and UTS #46 says so. It used to pass.
+
+The 68 losses are all **uppercase letters** whose lowercase form is not in the bundled
+Latin confusable table — `Ð`, `Λ`, `М`, `Ⴀ`, `ẞ`. UTS #46 case-folds, so the analysis now
+runs on the form the name actually resolves to, and the ACE spelling of each was already
+clean. They are a gap in `confusables_to_latin.tsv`'s lowercase rows, now visible, and filed as
+[#801](https://github.com/raeq/disarm/issues/801) — 86 rows in the table, 68 of them
+screening clean in both spellings.
+
+`canonical` is also lowercased for the same reason: `GOOGLE.COM` canonicalizes to
+`google.com`. If you compare `canonical` against a brand list, case-fold the list.
+
+**`HostnameAnalysis` gains a `compat_fold` field** on every binding. The Rust struct is
+`#[non_exhaustive]`, so that is additive; the **Java record's constructor arity changes**
+from 12 to 13, which is source- and binary-breaking for anyone constructing one directly
+(reading it is unaffected).
+
 ### Added
 
 - **`stream_safe()` and `is_normalized_stream_safe()` — UAX #15 Stream-Safe Text Format.**
@@ -144,6 +173,69 @@ before.
   One residual is asserted as a known negative rather than fixed: `U+2ADC` is a
   composition exclusion, so NFKC leaves it decomposed and the transliterate step drops the
   orphaned overlay. That is a third mechanism and belongs in its own change.
+
+- **`is_suspicious_hostname` analyses the hostname it was given, not the one NFKC left
+  behind (#709, #714).** Two defects, one root cause: the function normalized before it
+  analysed, so every per-label check ran on a string the caller never held.
+
+  **#709 — compatibility forms.** NFKC ran first, so the compatibility form was destroyed
+  before any check could see it, and the two detectors returned opposite verdicts on the
+  same string:
+
+  ```
+  inspect_anomalies("ｇoogle.com").kinds   ['compat_fold']
+  is_suspicious_hostname("ｇoogle.com")    False        ->  True
+                          .canonical      'google.com'      'google.com'
+  ```
+
+  `canonical` differing from the input was the analysis proving to itself that a fold had
+  happened, while the verdict said clean. The new `compat_fold` field is the only one read
+  from the raw input. The predicate is RFC 5892 §2.1's, applied **per code point** —
+  `toNFKC(c) != c` is DISALLOWED in an IDN label — so it folds into `suspicious` on the
+  same footing as `bidi_control` and `has_invisible`, with no legitimate case to protect.
+  Per character rather than "NFKC changed the label", which would fire on `한국.kr` written
+  with conjoining jamo. The threat is a blocklist bypass rather than a lookalike:
+  `ｅvil.com` is absent from a blocked set, screens clean, and resolves to `evil.com`.
+
+  **#714 — UTS #46 ran on the `xn--` branch only.** A label written in literal Unicode went
+  to script and confusable analysis unmapped, so the two spellings of one registered
+  domain were two different inputs across **561 code points**:
+
+  ```
+  is_suspicious_hostname("ꭰꭰ.com")        False -> True     canonical 'ꭰꭰ.com' -> 'DD.com'
+  is_suspicious_hostname("xn--58da.com")  True     True     canonical 'DD.com'
+  ```
+
+  That is the CVE-2026-17084 row (#713): UTS #46 folds `U+AB70` toward `U+13A0`, which
+  disarm maps to `D`, so only the ACE spelling ever reached the whole-script-confusable
+  check — and the literal spelling is exactly what an affected pipeline emits.
+
+  The NFKC was not a substitute and was actively wrong: for `ϲ` U+03F2 it produces `ς`
+  U+03C2 where UTS #46 produces `σ` U+03C3, so the label reaching the confusable check was
+  neither spelling's real form. Labels are now split on the UTS #46 separator set
+  (`.`, `U+FF0E`, `U+3002`, `U+FF61`) and the raw label reaches `domain_to_unicode`
+  intact. NFKC still runs for the IPv6-literal test, which is a structural question.
+
+  Measured after the fix over all 157,188 spelling pairs: **zero** analysis differences and
+  **zero** `canonical` differences, against 561 verdict disagreements before.
+
+  The invisible-character strip (#605) moved in front of the mapping and runs again after
+  it. UTS #46 gives ZWSP, the word joiner, `U+FEFF`, `U+180E` and the variation selectors
+  the IGNORED disposition — the mapping deletes them silently, so a check placed only
+  after it can never fire on a literal spelling, and a punycode label can decode into one.
+
+  `compat_fold` is read per **label**, not over the whole hostname: three of the four
+  UTS #46 separators carry a compatibility decomposition (`U+FF0E` and `U+FF61` do,
+  `U+3002` does not), and a separator is structure rather than label content.
+
+  `compat_fold` is surfaced on Python, Node, Ruby, Java/Kotlin and the C ABI (#549, #553).
+  The Ruby tuple's last two fields are now a nested pair: magnus implements `IntoValue` for
+  tuples up to arity 12, and this was the thirteenth. The hash `analyze_hostname` returns
+  is unchanged.
+
+  `has_confusables` gains the clause it was missing (#709 §6): it is read after the
+  mapping, so it cannot see a compatibility form by construction, and `False` beside a
+  changed `canonical` is the correct answer rather than a defect.
 
 - **Bidi direction now comes from `Bidi_Class`, not a five-name script list (#773).**
   `strong_dir` resolved direction by looking a character's *script name* up in

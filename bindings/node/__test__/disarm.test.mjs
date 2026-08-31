@@ -320,6 +320,22 @@ describe('script analysis', () => {
     expect(bom.mixedScript).toBe(false)
 
     expect(clean.hasInvisible).toBe(false)
+
+    // Compatibility form (#709): read off the RAW input, before the normalization
+    // every other field needs. `hasConfusables` is correctly false — by the time it
+    // runs the label is already `google`.
+    const fw = disarm.analyzeHostname('\uFF47oogle.com')
+    expect(fw.suspicious).toBe(true)
+    expect(fw.compatFold).toBe(true)
+    expect(fw.hasConfusables).toBe(false)
+    expect(fw.canonical).toBe('google.com')
+    expect(clean.compatFold).toBe(false)
+
+    // UTS #46 maps every label, not only the `xn--` ones (#714): the two spellings
+    // of one registered domain are one input.
+    expect(disarm.analyzeHostname('\uAB70\uAB70.com').canonical).toBe(
+      disarm.analyzeHostname('xn--58da.com').canonical,
+    )
   })
   test('inspectAutoLang', () => {
     const info = disarm.inspectAutoLang('Москва')

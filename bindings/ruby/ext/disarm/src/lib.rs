@@ -376,6 +376,12 @@ fn suspicious_hostname(host: Wtf8Text) -> bool {
 /// maps to a named hash — same rationale as `AnomalyReportTuple` (avoid registering
 /// a Ruby class for an internal boundary). magnus converts the nested
 /// `Vec<Vec<String>>` and the `Vec<bool>` to nested Ruby arrays automatically.
+///
+/// The last two fields are a nested pair rather than two more top-level ones: magnus
+/// implements `IntoValue` for tuples up to arity 12 (`r_array.rs`, `seq!(N in 0..12)`),
+/// and `compat_fold` (#709) was the thirteenth. Ruby destructures the pair in the same
+/// statement, so the hash `analyze_hostname` returns is unchanged. A fourteenth field
+/// should register a class or build an `RArray` rather than nest again.
 #[allow(clippy::type_complexity)]
 type HostnameAnalysisTuple = (
     bool,             // suspicious
@@ -385,11 +391,15 @@ type HostnameAnalysisTuple = (
     bool,             // bidi_conflict
     bool,             // bidi_control
     bool,             // has_invisible
+    bool,             // compat_fold (#709)
     bool,             // cross_label_script
     Vec<Vec<String>>, // label_scripts
     bool,             // whole_script_confusable
-    Vec<bool>,        // label_whole_script_confusable
-    String,           // canonical
+    // Nested to stay inside magnus's arity-12 ceiling; see the doc comment above.
+    (
+        Vec<bool>, // label_whole_script_confusable
+        String,    // canonical
+    ),
 );
 
 /// `Disarm._analyze_hostname(host)` — the full analysis behind the
@@ -404,11 +414,11 @@ fn analyze_hostname(host: Wtf8Text, contractions: bool) -> HostnameAnalysisTuple
         a.bidi_conflict,
         a.bidi_control,
         a.has_invisible,
+        a.compat_fold,
         a.cross_label_script,
         a.label_scripts,
         a.whole_script_confusable,
-        a.label_whole_script_confusable,
-        a.canonical,
+        (a.label_whole_script_confusable, a.canonical),
     )
 }
 

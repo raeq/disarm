@@ -83,11 +83,11 @@ def test_the_check_can_actually_fail() -> None:
     strips, so the check would pass and prove nothing.
     """
     original = README.read_text(encoding="utf-8")
-    assert "## What it does" in original, "the probe's anchor moved"
+    assert "## disarm capabilities" in original, "the probe's anchor moved"
     try:
         README.write_text(
             original.replace(
-                "## What it does", "## What it does\n\n- drift probe", 1
+                "## disarm capabilities", "## disarm capabilities\n\n- drift probe", 1
             ),
             encoding="utf-8",
         )

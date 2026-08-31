@@ -35,14 +35,7 @@ npm install disarm      # Node.js 14+
 gem install disarm      # Ruby 3.1+
 ```
 
-Java & Kotlin: `dev.disarm:disarm` on Maven Central. Getting started:
-[Python](docs/python/getting-started.md) ·
-[Rust](docs/rust/getting-started.md) ·
-[Ruby](docs/ruby/getting-started.md) ·
-[Node.js](docs/node/getting-started.md) ·
-[Java & Kotlin](docs/java/getting-started.md)
-
-## What it does
+## disarm capabilities
 
 - **[Confusable folding & detection](docs/user-guide/confusables.md)** — TR39 *visual* mapping (`normalize_confusables`, `is_confusable`), plus [`unmapped_confusables()`](docs/user-guide/confusables.md#knowing-what-is-not-covered) so you can measure what the bundled table misses instead of assuming it
 - **[Obfuscation stripping](docs/security/adversarial-defense.md)** — bidi controls, zero-width and invisible characters, zalgo, emoji (`strip_obfuscation`)
@@ -70,25 +63,27 @@ confusable space it recovers **XMR 0.63–0.68**, where phonetic tools stay at o
 **[benchmark](docs/security/adversarial-defense.md)** has the intervals and the residue this
 leaves.
 
-## Use from Rust
+## One core, six languages
 
-```rust
-use disarm::api::{self, TargetScript};
+The Rust core does the work; each binding is a native-feeling API over it, not a
+transliterated one — `snake_case` and `?` predicates in Ruby, `camelCase` with options
+objects and `.d.ts` types in Node, builders and a `DisarmException` hierarchy in Java,
+`String` extensions in Kotlin. The *behaviour* is shared, so a fold in Python and a fold in
+Ruby give the same answer; the *surface* is the ecosystem's every time.
 
-// Visual (TR39) confusable folding — homoglyph defence
-assert_eq!(api::normalize_confusables("раypal", TargetScript::Latin), "paypal");
-// Phonetic romanization — readable ASCII, not a security control
-assert_eq!(api::transliterate("Москва"), "Moskva");
-assert!(api::is_suspicious_hostname("раypal.com").suspicious);
-```
+| Language | Package | Getting started |
+|---|---|---|
+| Python 3.10+ | `disarm` on [PyPI](https://pypi.org/project/disarm/) | [guide](docs/python/getting-started.md) |
+| Rust 1.81+ | `disarm` on [crates.io](https://crates.io/crates/disarm) | [guide](docs/rust/getting-started.md) · [docs.rs](https://docs.rs/disarm) |
+| Ruby 3.1+ | `disarm` on RubyGems | [guide](docs/ruby/getting-started.md) |
+| Node.js 14+ | `disarm` on npm | [guide](docs/node/getting-started.md) |
+| Java / Kotlin | `dev.disarm:disarm`, `dev.disarm:disarm-kotlin` on Maven Central | [guide](docs/java/getting-started.md) |
+| C / other FFI | C ABI and `disarm.h` | [bindings/cabi](https://github.com/raeq/disarm/tree/main/bindings/cabi) |
 
-The public surface is [`disarm::api`](https://docs.rs/disarm/latest/disarm/api/) plus the
-error types, and the [`DisarmStr`](https://docs.rs/disarm/latest/disarm/trait.DisarmStr.html)
-trait gives the same operations method syntax. The crate is `unsafe_code = "forbid"`; the
-`extension-module` feature (which pulls in `pyo3`) exists only to build the Python wheel.
-Optional `log` feature emits metadata-only diagnostics, never your text. See the
-[Rust guide](docs/rust/getting-started.md), the [semver policy](docs/RUST_API.md) and
-[docs.rs/disarm](https://docs.rs/disarm).
+Wheels, gems and native addons are precompiled, so no binding needs a local Rust toolchain.
+The core crate is `unsafe_code = "forbid"`, and its `extension-module` feature exists only to
+build the Python wheel — Rust consumers get pure Rust. What a new binding must deliver is
+written down in [BINDINGS.md](BINDINGS.md).
 
 ## Scope — read this before you depend on it
 

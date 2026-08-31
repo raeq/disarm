@@ -567,13 +567,21 @@ fn enclosing_marks(tok: &str) -> Vec<char> {
         if c == KEYCAP && i > 0 && chars[i - 1] == VS16 {
             continue;
         }
-        // The base is the last non-mark before it.
-        let cyrillic_base = chars[..i]
+        // The base is the last character before it that is not a combining mark of any
+        // kind — not merely the last non-*enclosing* one. An intervening `U+0301` would
+        // otherwise be read as the base, and `а\u{301}\u{488}` reported.
+        //
+        // And the script comes from `detect_char_script`, the one resolver, rather than
+        // from a hand-written range: the first draft listed `U+0400-04FF` and
+        // `U+A640-A69F` and so missed Cyrillic Supplement and Extended-C, reporting
+        // ordinary `\u{501}\u{488}` and `\u{1C80}\u{488}`. Restating a range that the
+        // library already resolves is the failure #774 was about.
+        let base_is_cyrillic = chars[..i]
             .iter()
             .rev()
-            .find(|b| !ENCLOSING_MARKS.contains(b))
-            .is_some_and(|b| matches!(*b, '\u{0400}'..='\u{04FF}' | '\u{A640}'..='\u{A69F}'));
-        if cyrillic_base {
+            .find(|b| !unicode_normalization::char::is_combining_mark(**b))
+            .is_some_and(|b| crate::scripts::detect_char_script(*b) == "Cyrillic");
+        if base_is_cyrillic {
             continue;
         }
         out.push(c);

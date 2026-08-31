@@ -147,6 +147,46 @@ def test_cyrillic_enclosing_marks_on_a_cyrillic_base_are_exempt() -> None:
     assert not has_anomalies("а\u0488б\u0489")
 
 
+@pytest.mark.parametrize(
+    ("text", "block"),
+    [
+        ("\u0430\u0301\u0488\u0431\u0301\u0489", "an intervening acute before the mark"),
+        ("\u0501\u0488\u0503\u0489", "Cyrillic Supplement"),
+        ("\u2de0\u0488\u2de1\u0489", "Cyrillic Extended-A"),
+        ("\ua640\u0488\ua641\u0489", "Cyrillic Extended-B"),
+    ],
+    ids=["acute-between", "supplement", "ext-a", "ext-b"],
+)
+def test_the_base_walk_finds_the_real_base(text: str, block: str) -> None:
+    """Two holes the first draft had, both reported by review on #817.
+
+    It skipped only prior *enclosing* marks, so an intervening `U+0301` was read as the
+    base; and it checked a hand-written Cyrillic range that missed Supplement and
+    Extended-C. The script now comes from `detect_char_script`, the one resolver —
+    restating a range the library already resolves is the failure #774 was about.
+    """
+    assert not has_anomalies(text), block
+
+
+def test_cyrillic_extended_c_is_a_known_negative() -> None:
+    """`U+1C80` is Cyrillic and `detect_scripts` does not say so, so this still fires.
+
+    The block table in `src/scripts.rs` covers Cyrillic, Supplement, Extended-A and
+    Extended-B and omits Extended-C (`U+1C80`-`U+1C8F`, 11 assigned) and Extended-D
+    (`U+1E030`-`U+1E08F`, 63). Teaching it those two changes `detect_scripts` for 74 code
+    points, which reaches `mixed_script`, `bidi_mixed` and `is_suspicious_hostname` — the
+    same class of change as #774, and its own issue rather than a drive-by here.
+
+    Asserted so it is a recorded limit rather than a surprise, and so closing the gap
+    fails this test loudly.
+    """
+    from disarm import detect_scripts
+
+    assert detect_scripts("\u1c80") == []
+    # Two marks, since one is never a finding — see the test above.
+    assert _kinds("\u1c80\u0488\u1c81\u0489") == ["enclosing_mark"]
+
+
 def test_the_same_marks_on_a_latin_base_are_not() -> None:
     """On Latin they are exactly the disguise the rule exists for."""
     assert _kinds("a\u0488b\u0489") == ["enclosing_mark"]

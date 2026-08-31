@@ -510,6 +510,26 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   through the same mechanism, so the answer to "should they be folded" is yes, and it is
   answered here rather than separately.
 
+- **`strip_accents` in batch form inverted 45 mathematical relations (#822).** The batch
+  function did not call `strip_accents`. It restated the algorithm as
+  `nfd().filter(|c| !is_combining_mark(c)).nfc()` — precisely the stateless filter that
+  `strip_accents_into`'s own comment rules out, because whether a mark is strippable
+  depends on the base it sits on (#749). So the batch path deleted the negation overlay
+  the single path keeps: `strip_accents(["≠"])` returned `["="]`, `∄` came back as `∃`,
+  `∉` as `∈`. A relation and its negation are not the same character with an accent.
+
+  `_strip_accents_batch` now delegates and keeps only what a batch function should own —
+  the boundary crossing, the released GIL, the ASCII fast path — plus one reusable buffer
+  across the batch, as the pipeline does (#236). The other three batch functions were
+  audited and all already delegate; this was the only one that had gone stale against a
+  fix to its single path.
+
+  Found by `tests/test_batch_consistency.py`, which is Hypothesis-marked and so never runs
+  in CI — it failed only in developer worktrees, and only when the shrinker happened to
+  reach one of the 45. `tests/test_batch_delegates.py` is the deterministic half: it
+  derives the negation set from the UCD and asserts batch-equals-single for all four batch
+  functions. Verified it fails 46 tests against the old implementation.
+
 - **Enclosing marks, and the bidi marks that reorder (#724, #741).** Two classes the
   detector spared on grounds that do not hold.
 

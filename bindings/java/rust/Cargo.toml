@@ -44,7 +44,10 @@ disarm_core = { package = "disarm", version = "0.14", default-features = false }
 jni = "0.22"
 
 # NOTE: no committed `[patch.crates-io]` — like the Node/Ruby bindings, the shipped
-# manifest builds against the PUBLISHED `disarm` core. CI injects a path redirect
+# manifest builds against the PUBLISHED `disarm` core AT A RELEASE BOUNDARY (#830):
+# between releases the glue routinely uses core API that is not published yet, which is
+# why `wait-for-core` compiles this against the published core before a dispatched
+# per-registry patch is allowed to build. CI injects a path redirect
 # (`disarm = { path = "../../.." }`) to drift-gate the binding against the in-repo
 # core (#374); to build the glue against your local core, apply that redirect first
 # (see .claude/CLAUDE.md and scripts/perf_lint.sh).

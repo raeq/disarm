@@ -531,6 +531,30 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   wrong ones. `tests/test_workflow_baselines.py` holds it — no workflow that runs on
   `push` may read `github.base_ref` without first establishing the event.
 
+- **A dispatched per-registry patch release could not build (#830).** `RELEASING.md`
+  documents a lane for "a packaging bug in the gem, a wrong type in the npm package" — a
+  point release in one ecosystem only. Dispatching `publish-node.yml`, `publish-ruby.yml`
+  or `publish-java.yml` on `main` skips the `[patch.crates-io]` redirect by design,
+  resolves the published core, and dies at the first API the published core does not have.
+
+  `wait-for-core` did not catch it. It polls the sparse index for **any** non-yanked
+  `0.MINOR.*` and stops there, so `0.14.1` — which had existed since the release —
+  satisfied it in one request. The job proves a version *exists*; it never proved the glue
+  could build against it.
+
+  Between releases it usually cannot, and that is ordinary rather than a defect: a core
+  API and the glue that uses it land in one commit, so from that commit until the next
+  release the glue needs a core that is not published yet. #830 measured one missing
+  field. Reproduced on `cadd616` it is four core items and every binding — node 3 errors,
+  Ruby 4, Java 4 — because the gap widens with each core API that lands mid-cycle.
+
+  `wait-for-core` now compiles the glue against the published core after the poll, with no
+  redirect, and refuses with the reason and the two ways forward: dispatch on a release tag
+  whose glue and core shipped together, or release the core first. `RELEASING.md` rule 2
+  says the lane is conditional rather than always available, and the two manifest comments
+  that asserted the disproved property — "the shipped manifest builds against the PUBLISHED
+  core" — now say *at a release boundary*.
+
 - **"Escapes, never literals" now covers the tree, not just `README.md` (#802).** The
   README guard's docstring already made the argument, and recorded that the defect it
   guards against **shipped once** — a literal `U+202E` in a README example reached GitHub,

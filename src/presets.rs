@@ -83,9 +83,9 @@ enum Step {
     FixedPoint(&'static [Step]),
     Demojize {
         only_if_cldr: bool,
-        /// #614: leave the 49 rows TR39 also claims for the confusable step to fold.
-        /// Set by comparison presets only; standalone `demojize` still names them.
-        skip_tr39_claimed: bool,
+        /// Which CLDR name rows to leave for the rest of the pipeline (#614, #757).
+        /// Standalone `demojize` and the explicit `TextPipeline` step name every row.
+        policy: crate::emoji::NamePolicy,
     },
 }
 
@@ -290,12 +290,12 @@ fn apply_into(
         }
         Step::Demojize {
             only_if_cldr,
-            skip_tr39_claimed,
+            policy,
         } => {
             if only_if_cldr && !ctx.emoji_cldr {
                 return Ok(false);
             }
-            emoji::demojize_rust_into(input, false, skip_tr39_claimed, out);
+            emoji::demojize_rust_into(input, false, policy, out);
             Ok(true)
         }
     }
@@ -880,6 +880,13 @@ pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr>
 /// embeddings, and feature extraction. Emoji are expanded to their CLDR
 /// short-name descriptions before transliteration.
 ///
+/// "Emoji" means the Unicode property, not the CLDR table (#757). The annotation data
+/// also names 326 code points that carry neither `Emoji` nor `Extended_Pictographic` —
+/// the curly quotes, the dashes, the currency signs, the math operators — and naming
+/// those inserts words into ordinary prose: `film’s` came back as
+/// `film right apostrophe s`. They pass through unchanged. `demojize` called directly
+/// still names them.
+///
 /// # Parameters
 /// - `emoji_style`: `"cldr"` — expand emoji to CLDR short names (default);
 ///   `"none"` — leave emoji characters as-is; any other value raises `DisarmError`.
@@ -895,9 +902,16 @@ pub(crate) fn ml_normalize<'a>(
         // 1. NFKC normalization
         Step::Nfkc,
         // 2. Emoji → text (CLDR short names) when emoji_style == "cldr".
+        //    #757: only for rows that are actually emoji. CLDR annotates 326 code
+        //    points that carry no emoji property — the apostrophes, the dashes, the
+        //    currency signs — and naming them inserted spurious tokens into ordinary
+        //    body text: `film’s` came back as `film right apostrophe s`.
         Step::Demojize {
             only_if_cldr: true,
-            skip_tr39_claimed: false,
+            policy: crate::emoji::NamePolicy {
+                skip_tr39_claimed: false,
+                skip_non_emoji: true,
+            },
         },
         // 3. Transliterate if lang is set (e.g. "de" for ü→ue, "ja" for kana).
         //    Use Ignore mode: ML pipelines need clean ASCII-ish output, so
@@ -920,7 +934,10 @@ pub(crate) fn ml_normalize<'a>(
         //     single extra pass reaches the fixed point; no iteration is needed.
         Step::Demojize {
             only_if_cldr: true,
-            skip_tr39_claimed: false,
+            policy: crate::emoji::NamePolicy {
+                skip_tr39_claimed: false,
+                skip_non_emoji: true,
+            },
         },
         // 5. Unicode case folding (ß→ss, ﬁ→fi, etc.)
         Step::FoldCase,
@@ -1426,8 +1443,13 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
         // 5. Demojize — expand emoji to text names with spacing
         Step::Demojize {
             only_if_cldr: false,
-            // #614: this is a comparison preset, so the TR39 fold wins over the name.
-            skip_tr39_claimed: true,
+            policy: crate::emoji::NamePolicy {
+                // #614: this is a comparison preset, so the TR39 fold wins over the name.
+                skip_tr39_claimed: true,
+                // #757: and a row that is not emoji at all is named by no rule worth
+                // having here — `a†b` became `a dagger signb`.
+                skip_non_emoji: true,
+            },
         },
         // 5b. Strip the #413 smuggling / non-interchange classes. Runs AFTER demojize
         //     so the emoji pass sees flags/presentation selectors intact; whatever
@@ -1811,7 +1833,12 @@ mod tests {
     #[test]
     fn standalone_demojize_still_names_the_claimed_rows() {
         let mut out = String::new();
-        crate::emoji::demojize_rust_into("I \u{2764} \u{20AC}5", false, false, &mut out);
+        crate::emoji::demojize_rust_into(
+            "I \u{2764} \u{20AC}5",
+            false,
+            crate::emoji::NamePolicy::NAME_EVERYTHING,
+            &mut out,
+        );
         assert_eq!(out, "I red heart euro 5");
     }
 
@@ -2308,7 +2335,10 @@ mod tests {
             Step::Nfkc,
             Step::Demojize {
                 only_if_cldr: true,
-                skip_tr39_claimed: false,
+                policy: crate::emoji::NamePolicy {
+                    skip_tr39_claimed: false,
+                    skip_non_emoji: true,
+                },
             },
             Step::Transliterate {
                 mode: crate::ErrorMode::Ignore,
@@ -2317,7 +2347,10 @@ mod tests {
             Step::StripAccents,
             Step::Demojize {
                 only_if_cldr: true,
-                skip_tr39_claimed: false,
+                policy: crate::emoji::NamePolicy {
+                    skip_tr39_claimed: false,
+                    skip_non_emoji: true,
+                },
             },
             Step::FoldCase,
             Step::StripControl,
@@ -2350,31 +2383,35 @@ mod tests {
     /// its own opposite, which for the tokenizer this preset serves is the corruption
     /// #749 describes rather than a normalization.
     ///
-    /// `U+0338` on a symbol is now kept, so the base is never exposed and the
-    /// non-idempotency this test was written for cannot arise. Both properties it cared
-    /// about are still asserted: the negated form is a fixed point, and the bare base is
-    /// still named in one pass.
+    /// Two fixes retired that mechanism from both ends. #749 keeps `U+0338` on a symbol,
+    /// so the base is never exposed. #757 stops naming a row that carries no emoji
+    /// property, and every base here is `Sm`, so the name would not fire even if it were
+    /// exposed. What is left to assert is that both forms survive, that both are fixed
+    /// points, and that they stay distinct — the negated relation must never share the
+    /// positive one's output, which is the property the original 17 rows violated.
     #[test]
     fn test_ml_normalize_negated_relations_are_preserved() {
-        // (negated input, bare base, the base's stable name) — the complete scanned class.
-        for (input, base, name) in [
-            ("\u{2204}", "\u{2203}", "there exists"),            // ∄ → ∃
-            ("\u{220C}", "\u{220B}", "contains as member"),      // ∌ → ∋
-            ("\u{2224}", "\u{2223}", "divides"),                 // ∤ → ∣
-            ("\u{2226}", "\u{2225}", "parallel"),                // ∦ → ∥
-            ("\u{2241}", "\u{223C}", "tilde operator"),          // ≁ → ∼
-            ("\u{2244}", "\u{2243}", "asymptotically equal"),    // ≄ → ≃
-            ("\u{2247}", "\u{2245}", "approximately equal"),     // ≇ → ≅
-            ("\u{2249}", "\u{2248}", "almost equal"),            // ≉ → ≈
-            ("\u{2262}", "\u{2261}", "identical to"),            // ≢ → ≡
-            ("\u{2270}", "\u{2264}", "less-than or equal"),      // ≰ → ≤
-            ("\u{2271}", "\u{2265}", "greater-than or equal"),   // ≱ → ≥
-            ("\u{2275}", "\u{2273}", "greater-than equivalent"), // ≵ → ≳
-            ("\u{2280}", "\u{227A}", "precedes"),                // ⊀ → ≺
-            ("\u{2284}", "\u{2282}", "subset of"),               // ⊄ → ⊂
-            ("\u{2285}", "\u{2283}", "superset"),                // ⊅ → ⊃
-            ("\u{2288}", "\u{2286}", "subset equal"),            // ⊈ → ⊆
-            ("\u{2289}", "\u{2287}", "superset equal"),          // ⊉ → ⊇
+        // (negated input, bare base) — the complete scanned class. The third column is
+        // the CLDR name the positive base carried when this test asserted the inversion;
+        // it is retained as a comment so the row is still greppable from #498.
+        for (input, base) in [
+            ("\u{2204}", "\u{2203}"), // ∄ → ∃  (there exists)
+            ("\u{220C}", "\u{220B}"), // ∌ → ∋  (contains as member)
+            ("\u{2224}", "\u{2223}"), // ∤ → ∣  (divides)
+            ("\u{2226}", "\u{2225}"), // ∦ → ∥  (parallel)
+            ("\u{2241}", "\u{223C}"), // ≁ → ∼  (tilde operator)
+            ("\u{2244}", "\u{2243}"), // ≄ → ≃  (asymptotically equal)
+            ("\u{2247}", "\u{2245}"), // ≇ → ≅  (approximately equal)
+            ("\u{2249}", "\u{2248}"), // ≉ → ≈  (almost equal)
+            ("\u{2262}", "\u{2261}"), // ≢ → ≡  (identical to)
+            ("\u{2270}", "\u{2264}"), // ≰ → ≤  (less-than or equal)
+            ("\u{2271}", "\u{2265}"), // ≱ → ≥  (greater-than or equal)
+            ("\u{2275}", "\u{2273}"), // ≵ → ≳  (greater-than equivalent)
+            ("\u{2280}", "\u{227A}"), // ⊀ → ≺  (precedes)
+            ("\u{2284}", "\u{2282}"), // ⊄ → ⊂  (subset of)
+            ("\u{2285}", "\u{2283}"), // ⊅ → ⊃  (superset)
+            ("\u{2288}", "\u{2286}"), // ⊈ → ⊆  (subset equal)
+            ("\u{2289}", "\u{2287}"), // ⊉ → ⊇  (superset equal)
         ] {
             // The negation survives, and survives a second pass.
             let once = ml_normalize(input, None, "cldr", true).unwrap();
@@ -2387,14 +2424,14 @@ mod tests {
                 ml_normalize(&once, None, "cldr", true).unwrap(),
                 "ml_normalize not idempotent on {input:?}"
             );
-            // The positive base is still named, in one pass, as it always was.
-            let base_named = ml_normalize(base, None, "cldr", true).unwrap();
+            // So does the positive base: it is `Sm`, so #757 leaves it alone too.
+            let base_out = ml_normalize(base, None, "cldr", true).unwrap();
             assert_eq!(
-                base_named, name,
-                "ml_normalize({base:?}) should name the bare base in one pass"
+                base_out, base,
+                "ml_normalize({base:?}) should pass a non-emoji math symbol through"
             );
             assert_ne!(
-                once, base_named,
+                once, base_out,
                 "the negated form must not share the positive form's output"
             );
         }

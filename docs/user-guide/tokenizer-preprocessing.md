@@ -41,8 +41,11 @@ the script is preserved:
 
     assert ml_normalize("CAFÉ") == "cafe"
     assert ml_normalize("Привет") == "привет"  # stays Cyrillic, normalized
-    assert ml_normalize("Café — RÉSUMÉ 🎉") == "cafe em dash resume party popper"
+    assert ml_normalize("Café — RÉSUMÉ 🎉") == "cafe — resume party popper"
     ```
+
+    Only the emoji is named. The em dash is punctuation, not an emoji, and stays
+    an em dash — see [Emoji, and only emoji](#emoji-and-only-emoji) below.
 
 === "Rust"
 
@@ -52,7 +55,7 @@ the script is preserved:
     // ml_normalize(text, lang, emoji_style, fold_case) — lang=None preserves the script
     assert_eq!(api::ml_normalize("CAFÉ", None, "cldr", true).unwrap(), "cafe");
     assert_eq!(api::ml_normalize("Привет", None, "cldr", true).unwrap(), "привет");        // stays Cyrillic, normalized
-    assert_eq!(api::ml_normalize("Café — RÉSUMÉ 🎉", None, "cldr", true).unwrap(), "cafe em dash resume party popper");
+    assert_eq!(api::ml_normalize("Café — RÉSUMÉ 🎉", None, "cldr", true).unwrap(), "cafe — resume party popper");
 
     // fold_case=false keeps capitals for a cased model (#559).
     assert_eq!(api::ml_normalize("CAFÉ", None, "cldr", false).unwrap(), "CAFE");
@@ -120,6 +123,36 @@ every binding; the `rag_ingest` preset is a Python pipeline:
 Pick the lever by path: romanize for an index/matching path; keep the script when
 the text goes to a multilingual model that reads it natively (see
 [when NOT to use disarm](llm-pipelines.md#which-path-and-when-not-to-use-disarm)).
+
+### Emoji, and only emoji
+
+`ml_normalize` names a character when it carries the Unicode `Emoji` or
+`Extended_Pictographic` property. Nothing else. The CLDR annotation data disarm reads
+also names 326 code points that are not emoji by either property — the curly
+apostrophes and quotes, the dashes, the currency signs, the math operators, the CJK
+brackets — and naming those inserts words into ordinary prose:
+
+| input | named as (before 0.15.0) | now |
+|---|---|---|
+| `’` U+2019 | `right apostrophe` | `’` |
+| `—` U+2014 | `em dash` | `—` |
+| `€` U+20AC | `euro` | `€` |
+| `•` U+2022 | `bullet` | `•` |
+| `⁄` U+2044 | `fraction slash` | `⁄` |
+| `🎉` U+1F389 | `party popper` | `party popper` |
+
+The measurable difference on body text is the count. A 30-word English sentence
+carrying nothing but typographic punctuation came back as 47 words: `film’s` became
+`film right apostrophe s`, one token to four with the possessive gone. That is the
+spurious-token-insertion mechanism [adversarial defense](../security/adversarial-defense.md)
+disqualifies `unidecode` for, and it applied to disarm's own tokenizer front-end
+until [#757](https://github.com/raeq/disarm/issues/757).
+
+`demojize` is unchanged: called directly it still names every row, because
+`demojize("I ❤ €5")` → `"I red heart euro 5"` is what that function is for. The
+change is about which table wins inside a *preset*.
+
+To keep every emoji as-is instead, pass `emoji="none"`.
 
 ## Measuring fertility
 

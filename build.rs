@@ -9,6 +9,7 @@
 //!   - str→str maps:  `key\tvalue`
 //!   - char sets:      `HEXCODEPOINT`
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Write as _;
@@ -338,6 +339,65 @@ fn main() {
         fs::write(out_dir.join("emoji_tr39_overlap_phf.rs"), code).unwrap();
     }
 
+    // --- Emoji rows that name a code point with no emoji property (#757) ---
+    // CLDR `annotationsDerived` names characters that are not emoji by any Unicode
+    // property: typographic punctuation, currency, math operators, brackets. #614 caught
+    // the 49 of them the TR39 confusable table also claims; the rest were still named,
+    // and `ml_normalize` — the preset documented for tokenizers — ran the name table with
+    // no suppression at all. `film’s` came back as `film right apostrophe s`: one token
+    // to four, and the possessive gone. That is the spurious-token-insertion mechanism
+    // `docs/security/adversarial-defense.md` disqualifies `unidecode` for.
+    //
+    // Derived as a SET DIFFERENCE against the UCD property, not a curated list, so a CLDR
+    // refresh that annotates more punctuation lands in the set instead of slipping past
+    // it. The count is asserted for the opposite reason to #614's: there the gate guards
+    // a gap that should not widen, here it guards a suppression list that should not grow
+    // without review — a new row means a preset stopped naming something it used to name.
+    {
+        let emoji = read_char_str_tsv(&data_dir.join("emoji_single.tsv"));
+        let property = read_range_tsv(&data_dir.join("emoji_property.tsv"));
+        let has_property = |cp: u32| {
+            property
+                .binary_search_by(|&(lo, hi)| {
+                    if cp < lo {
+                        Ordering::Greater
+                    } else if cp > hi {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .is_ok()
+        };
+        let non_emoji: BTreeSet<u32> = emoji
+            .keys()
+            .filter(|cp| !has_property(**cp))
+            .copied()
+            .collect();
+        assert_eq!(
+            non_emoji.len(),
+            326,
+            "emoji_single.tsv rows carrying neither Emoji nor Extended_Pictographic \
+             changed: expected the 326 reviewed in #757, found {}. A new row means a \
+             preset now passes through a character it used to name. Review it, then \
+             update this count.",
+            non_emoji.len()
+        );
+        let mut code = String::from(
+            "/// Code points the CLDR name table annotates that carry neither the Unicode\n\
+             /// `Emoji` nor the `Extended_Pictographic` property (#757). Skipped by\n\
+             /// `demojize` inside presets; standalone `demojize` still names them.\n\
+             pub(crate) static EMOJI_ROWS_WITHOUT_EMOJI_PROPERTY: phf::Set<u32> = ",
+        );
+        let mut set = phf_codegen::Set::new();
+        for cp in &non_emoji {
+            set.entry(*cp);
+        }
+        code.push_str(&set.build().to_string());
+        code.push_str(";\n");
+        fs::write(out_dir.join("emoji_non_emoji_phf.rs"), code).unwrap();
+    }
+
     // Production matcher (#242 item 4): compact code-point trie.
     generate_emoji_trie(
         &data_dir.join("emoji_multi.tsv"),
@@ -631,6 +691,27 @@ fn parse_hex(hex: &str, path: &Path) -> u32 {
 
 /// Read a TSV file with lines of `HEX_CODEPOINT\tvalue`.
 /// Skips blank lines and lines starting with `#`.
+/// Read a `start\tend` hex range TSV (the shape `generate_range_set` consumes) as a
+/// sorted, binary-searchable list. Used for build-time property lookups that ship no
+/// runtime table of their own (#757).
+fn read_range_tsv(path: &Path) -> Vec<(u32, u32)> {
+    let content = fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
+    let mut rows: Vec<(u32, u32)> = Vec::new();
+    for line in content.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let mut it = t.split('\t');
+        let start = parse_hex(it.next().unwrap_or(""), path);
+        let end = parse_hex(it.next().unwrap_or(""), path);
+        rows.push((start, end));
+    }
+    rows.sort_unstable();
+    rows
+}
+
 fn read_char_str_tsv(path: &Path) -> BTreeMap<u32, String> {
     let content = fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));

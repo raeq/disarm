@@ -290,6 +290,15 @@ operations:
       java: isNormalized
       kotlin: isNormalized
       cabi: null
+  - id: is_normalized_stream_safe
+    names:
+      rust: is_normalized_stream_safe
+      python: is_normalized_stream_safe
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: is_suspicious_hostname
     names:
       rust: is_suspicious_hostname
@@ -551,6 +560,15 @@ operations:
       java: sortKey
       kotlin: sortKey
       cabi: sort_key
+  - id: stream_safe
+    names:
+      rust: stream_safe
+      python: stream_safe
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: strip_accents
     names:
       rust: strip_accents

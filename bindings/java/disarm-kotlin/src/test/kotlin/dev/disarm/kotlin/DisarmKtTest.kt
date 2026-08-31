@@ -89,6 +89,11 @@ class DisarmKtTest {
     fun deobfuscationAndKeys() {
         assertFalse("h​e​llo".stripObfuscation().isBlank())
         assertFalse("Ｈello".canonicalize().isBlank())
+        // #677: both halves of the pair reach Kotlin. stripFormat keeps the script;
+        // canonicalize folds the same input to Latin.
+        assertEquals("\u0430\u0440\u0440", "\u0430\u0440\u200D\u0440".stripFormat())
+        assertEquals("app", "\u0430\u0440\u200D\u0440".canonicalize())
+        assertEquals("Hello".canonicalize(), "Hello".canonicalizeStrict())
         assertEquals("café".searchKey(), "CAFE".searchKey())
         assertFalse("Zürich".searchKey("de").isBlank())
         assertFalse("Zürich".sortKey().isBlank())

@@ -76,6 +76,16 @@ disarm_canonicalize (
     char const * text);
 
 /** \brief
+ *  Canonicalize, but fail rather than silently normalize a structural difference away.
+ *
+ *  The half of the pair that lets a caller *reject* input instead of comparing a value
+ *  the sender never wrote.
+ */
+DisarmResult_t
+disarm_canonicalize_strict (
+    char const * text);
+
+/** \brief
  *  Library-catalog dedup key; `lang` may be NULL, `strict_iso9` selects ISO 9:1995.
  */
 DisarmResult_t
@@ -280,6 +290,27 @@ disarm_reverse_transliterate (
     char const * lang);
 
 /** \brief
+ *  Sanitize `text` into a filename safe on `platform` (#707).
+ *
+ *  The only entry point disarm ships whose *whole* purpose is a filesystem sink, and the
+ *  C ABI is the surface most likely to be feeding one. `platform` is `"universal"`,
+ *  `"posix"` or `"windows"`; `lang` is nullable (NULL = no transliteration profile).
+ *
+ *  Transliteration is load-bearing here, not a convenience: 19 of the 53 vectors in the
+ *  attacker battery are neutralized by the romanization step rather than by the denylist
+ *  (#601), so a caller who reaches for `disarm_strip_obfuscation` and its own denylist
+ *  instead does not get the same protection.
+ */
+DisarmResult_t
+disarm_sanitize_filename (
+    char const * text,
+    char const * separator,
+    size_t max_length,
+    char const * platform,
+    char const * lang,
+    bool preserve_extension);
+
+/** \brief
  *  Metadata for a script name as JSON (`name`, `default_lang`, `example`,
  *  `context_aware`), or an error in the [`DisarmResult`] for an unknown name.
  */
@@ -331,6 +362,26 @@ disarm_strip_bidi (
  */
 char *
 disarm_strip_control_chars (
+    char const * text);
+
+/** \brief
+ *  Strip the non-interchange and invisible classes while KEEPING the script (#698).
+ *
+ *  The seven universal `strip*` primitives cannot be composed into this, and the
+ *  difference runs in both directions. `strip_format` is *less* destructive where
+ *  rendering matters — it preserves the Private Use Area for icon fonts and keeps the
+ *  VS15/VS16 presentation selectors after a base (`RENDERING_STRIP`), both of which the
+ *  naive chain deletes — and *more* destructive with whitespace, because it ends in
+ *  `CollapseWs` and folds TAB/LF to a space where the primitives leave them. The policy
+ *  itself is a private constant, so a caller on this binding could not express it at all.
+ *
+ *  Unlike `canonicalize` it does NOT fold confusables, so non-Latin text keeps its script
+ *  — the point of the preset.
+ *
+ *  Infallible: returns the string directly rather than a `DisarmResult`.
+ */
+char *
+disarm_strip_format (
     char const * text);
 
 /** \brief

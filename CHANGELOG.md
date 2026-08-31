@@ -61,6 +61,31 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Added
 
+- **The gaps the parity matrix found, on the surfaces that had them (#698, #707, #677,
+  #660).** `strip_format` reached only Rust and Python: the seven universal `strip*`
+  primitives cannot be composed into it: its invisibles policy is a private constant, and
+  the difference from a naive chain runs in both directions — `strip_format` preserves the
+  Private Use Area and the `U+FE0E`/`U+FE0F` presentation selectors after a base, which
+  the chain deletes, and it collapses TAB/LF, which the chain leaves alone. A caller on
+  Node, Ruby, the C ABI or the JVM had no route to the behaviour at all. It is now on all seven. `sanitize_filename` — the one entry point
+  whose whole purpose is a filesystem sink, and where transliteration neutralizes 19 of
+  the 53 vectors in the attacker battery rather than the denylist (#601) — was missing
+  from the C ABI, the surface most likely to be feeding one. `canonicalize_strict`, the
+  half of the pair that lets a caller reject input instead of comparing a value the
+  sender never wrote, is now on Node, Ruby, the C ABI, Java and Kotlin. On the Python
+  side `LANG_AUTO` was the single `LANG_*` constant of eighty-four that `__init__.py`
+  never re-exported, while three doc blocks told the reader to import it;
+  `test_api_stability.py` had frozen its absence as correct.
+
+- **A parity gate that fails (`tests/test_parity_floor.py`).** The existing parity check
+  re-seeds the same matrix and emits warnings, deliberately — a security release must
+  never wait on interface parity — so the four gaps above sat in the matrix while every
+  run stayed green. The new gate is narrow enough to keep that property: it asserts a
+  fixed floor of 38 operations that are complete on all seven surfaces and must stay so,
+  and leaves the whole 79-row matrix to the advisory check. `tests/test_lang_constant_exports.py`
+  does the same for the constants, enumerating `_enums.pyi` rather than `dir(disarm)` —
+  reading the runtime for the expected set would have made the defect invisible.
+
 - **`code_context` — a profile whose output is still source code (#746).** disarm claims
   two source-code CVEs and points LLM-stack authors at the guardrail path, and shipped no
   entry point that returns compilable code. Every one of the eleven presets and both LLM

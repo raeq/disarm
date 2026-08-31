@@ -24,11 +24,11 @@ operations:
     names:
       rust: canonicalize_strict
       python: canonicalize_strict
-      ruby: null
-      node: null
-      java: null
-      kotlin: null
-      cabi: null
+      ruby: canonicalize_strict
+      node: canonicalizeStrict
+      java: canonicalizeStrict
+      kotlin: canonicalizeStrict
+      cabi: canonicalize_strict
   - id: catalog_key
     names:
       rust: catalog_key
@@ -505,7 +505,7 @@ operations:
       node: sanitizeFilename
       java: sanitizeFilename
       kotlin: sanitizeFilename
-      cabi: null
+      cabi: sanitize_filename
   - id: script_info
     names:
       rust: script_info
@@ -609,11 +609,11 @@ operations:
     names:
       rust: strip_format
       python: strip_format
-      ruby: null
-      node: null
-      java: null
-      kotlin: null
-      cabi: null
+      ruby: strip_format
+      node: stripFormat
+      java: stripFormat
+      kotlin: stripFormat
+      cabi: strip_format
   - id: strip_log_injection
     names:
       rust: strip_log_injection

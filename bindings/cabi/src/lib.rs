@@ -242,6 +242,37 @@ fn disarm_strip_pua(text: char_p::Ref<'_>) -> char_p::Box {
 
 // ── Deobfuscation & key-derivation presets (fallible) ───────────────────────────
 
+/// Canonicalize, but fail rather than silently normalize a structural difference away.
+///
+/// The half of the pair that lets a caller *reject* input instead of comparing a value
+/// the sender never wrote.
+#[ffi_export]
+fn disarm_canonicalize_strict(text: char_p::Ref<'_>) -> DisarmResult {
+    match api::canonicalize_strict(text.to_str()) {
+        Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
+/// Strip the non-interchange and invisible classes while KEEPING the script (#698).
+///
+/// The seven universal `strip*` primitives cannot be composed into this, and the
+/// difference runs in both directions. `strip_format` is *less* destructive where
+/// rendering matters — it preserves the Private Use Area for icon fonts and keeps the
+/// VS15/VS16 presentation selectors after a base (`RENDERING_STRIP`), both of which the
+/// naive chain deletes — and *more* destructive with whitespace, because it ends in
+/// `CollapseWs` and folds TAB/LF to a space where the primitives leave them. The policy
+/// itself is a private constant, so a caller on this binding could not express it at all.
+///
+/// Unlike `canonicalize` it does NOT fold confusables, so non-Latin text keeps its script
+/// — the point of the preset.
+///
+/// Infallible: returns the string directly rather than a `DisarmResult`.
+#[ffi_export]
+fn disarm_strip_format(text: char_p::Ref<'_>) -> char_p::Box {
+    to_c(api::strip_format(text.to_str()).into_owned())
+}
+
 /// Aggressively strip obfuscation (invisibles, bidi, zero-width, etc.).
 #[ffi_export]
 fn disarm_strip_obfuscation(text: char_p::Ref<'_>) -> DisarmResult {
@@ -555,6 +586,42 @@ fn disarm_ml_normalize(
         fold_case,
     ) {
         Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
+/// Sanitize `text` into a filename safe on `platform` (#707).
+///
+/// The only entry point disarm ships whose *whole* purpose is a filesystem sink, and the
+/// C ABI is the surface most likely to be feeding one. `platform` is `"universal"`,
+/// `"posix"` or `"windows"`; `lang` is nullable (NULL = no transliteration profile).
+///
+/// Transliteration is load-bearing here, not a convenience: 19 of the 53 vectors in the
+/// attacker battery are neutralized by the romanization step rather than by the denylist
+/// (#601), so a caller who reaches for `disarm_strip_obfuscation` and its own denylist
+/// instead does not get the same protection.
+#[ffi_export]
+fn disarm_sanitize_filename(
+    text: char_p::Ref<'_>,
+    separator: char_p::Ref<'_>,
+    max_length: usize,
+    platform: char_p::Ref<'_>,
+    lang: Option<char_p::Ref<'_>>,
+    preserve_extension: bool,
+) -> DisarmResult {
+    let platform: api::Platform = match platform.to_str().parse() {
+        Ok(p) => p,
+        Err(e) => return err(&e),
+    };
+    match api::sanitize_filename(
+        text.to_str(),
+        separator.to_str(),
+        max_length,
+        platform,
+        opt_str(lang),
+        preserve_extension,
+    ) {
+        Ok(s) => ok(s),
         Err(e) => err(&e),
     }
 }

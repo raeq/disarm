@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["3.1", "3.2", "3.3"]
+        ruby: ["3.1", "3.2", "3.3", "3.4", "4.0"]
     # bundler-cache in the setup action runs at the repo root, which has no
     # Gemfile — point bundler at the gem's Gemfile everywhere. GITHUB_TOKEN
     # authenticates the cargo-cache cleanup's cargo-binstall fetch, which
@@ -152,11 +152,59 @@ jobs:
       - uses: oxidize-rb/actions/cross-gem@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           platform: ${{ matrix.platform }}
-          ruby-versions: "3.1,3.2,3.3"
+          # Every ABI the gem claims support for must be built (#699). A version
+          # missing here is not a degraded install — it is no install at all, because
+          # `lib/disarm.rb` requires `disarm/<RUBY_VERSION>/disarm` and a platform gem
+          # carries only the ABIs listed here. 3.4 shipped 2024-12 and 4.0 2025-12;
+          # both were locked out across six disarm releases.
+          ruby-versions: "3.1,3.2,3.3,3.4,4.0"
           working-directory: bindings/ruby
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: cross-gem-${{ matrix.platform }}
+          path: bindings/ruby/pkg/*.gem
+
+  # The fallback that turns a missing ABI into a local compile rather than a
+  # resolution failure (#699). Every version from 0.10.0 to 0.14.1 shipped
+  # precompiled-only — 35 platform gems, zero `ruby`-platform gems — so a Ruby the
+  # cross-build did not cover had nowhere to go. The push loop below has always
+  # handled a source gem (it sets `platform=ruby` when the filename parse yields no
+  # suffix); that branch had simply never been reached, because `cross-gems` was the
+  # only job producing artifacts.
+  source-gem:
+    name: Build source gem
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    needs: wait-for-core
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/bindings/ruby/Gemfile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+      # `gem build`, not `rake build`: the Rakefile makes `build` depend on `compile`
+      # (a local convenience), and compiling here would be several minutes of work
+      # whose output the gemspec does not package anyway — `spec.files` globs
+      # `lib/**/*.rb`, not `.bundle`. Verified: the resulting gem is `platform: ruby`
+      # with zero compiled artifacts, carrying `extconf.rb` and the Rust sources so
+      # RubyGems compiles it on install.
+      - name: Build the source gem
+        working-directory: bindings/ruby
+        run: |
+          set -euo pipefail
+          mkdir -p pkg
+          version=$(ruby -r ./lib/disarm/version -e 'print Disarm::VERSION')
+          gem build disarm.gemspec -o "pkg/disarm-${version}.gem"
+          # A platform suffix here would mean the gemspec grew a `spec.platform`,
+          # and the push loop would then treat it as a platform gem.
+          test -f "pkg/disarm-${version}.gem"
+      # Named `cross-gem-*` so the publish job's existing download pattern collects
+      # it without a second `download-artifact` step.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: cross-gem-source
           path: bindings/ruby/pkg/*.gem
 
   # ── Tier 3 release gate (#159) ──────────────────────────────────
@@ -172,7 +220,7 @@ jobs:
 
   publish:
     name: Publish to RubyGems
-    needs: [test, cross-gems, tier3]
+    needs: [test, cross-gems, source-gem, tier3]
     # Publish on a GitHub Release, or via a manual `workflow_dispatch` — the latter
     # is the recovery path when a release's gem build failed (e.g. binding drift)
     # but the registry version was never pushed. `gem push` of an existing version

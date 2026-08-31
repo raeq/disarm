@@ -44,7 +44,7 @@ on raw, untrusted input:
 
     // Fullwidth letters (NFKC-folded) and zero-width joiners (stripped):
     assert_eq!(api::strip_obfuscation("Ｈｅｌｌｏ").unwrap(), "Hello");
-    assert_eq!(api::strip_obfuscation("h\u200bi").unwrap(), "hi");
+    assert_eq!(api::strip_obfuscation("h\u{200b}i").unwrap(), "hi");
     ```
 
 === "Ruby"

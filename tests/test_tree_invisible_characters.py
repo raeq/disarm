@@ -308,3 +308,33 @@ def test_the_variation_selector_is_stepped_over() -> None:
     )
     kinds = [kind for _, _, _, kind in literal_invisibles(heart_people)]
     assert "zero width joiner" not in kinds, kinds
+
+
+def test_escapes_inside_a_rust_fence_use_rust_syntax() -> None:
+    """`\\uXXXX` is Python and JavaScript; Rust needs `\\u{XXXX}`.
+
+    Converting the tree wrote `\\u200b` into a ```rust block in
+    `docs/user-guide/llm-pipelines.md`, which is not valid Rust. Nothing in the Python
+    suite compiles those blocks — `scripts/check_doc_rust_examples.py` does, and it is a
+    separate CI job — so the mistake was invisible here and red there.
+
+    The rule is per fence language, so it belongs beside the rule that produced the
+    escapes rather than in the Rust checker.
+    """
+    import re
+
+    offenders = []
+    for path in SOURCES:
+        if path.suffix != ".md":
+            continue
+        language: str | None = None
+        for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            if line.strip().startswith("```"):
+                language = (line.strip()[3:].strip() or None) if language is None else None
+                continue
+            if language in {"rust", "rs"} and re.search(r"\\u[0-9a-fA-F]{4}(?!\})", line):
+                offenders.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()[:70]}")
+    assert not offenders, (
+        "Rust code blocks must spell an escape `\\u{XXXX}`, not `\\uXXXX`:\n  "
+        + "\n  ".join(offenders)
+    )

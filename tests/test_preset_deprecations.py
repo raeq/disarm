@@ -23,7 +23,7 @@ RENAMES = [
     ("normalize_user_input", "canonicalize_strict"),
 ]
 
-SAMPLES = ["pаypal", "admin‮user", "  Héllo  wörld  ", "ç̧", "plain"]
+SAMPLES = ["pаypal", "admin\u202euser", "  Héllo  wörld  ", "ç̧", "plain"]
 
 
 @pytest.mark.parametrize("old,new", RENAMES)
@@ -59,8 +59,8 @@ def test_deprecated_text_builder_method(old: str, new: str) -> None:
     """The Text builder's renamed methods warn and match the new method."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        old_out = str(getattr(Text("pаypal‮"), old)())
-    new_out = str(getattr(Text("pаypal‮"), new)())
+        old_out = str(getattr(Text("pаypal\u202e"), old)())
+    new_out = str(getattr(Text("pаypal\u202e"), new)())
     assert old_out == new_out
 
     with warnings.catch_warnings(record=True) as caught:

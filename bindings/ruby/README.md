@@ -50,7 +50,7 @@ Disarm.demojize("I ❤️ Ruby")                          # => "I red heart Ruby
 Disarm.demojize("👍🏽", strip_modifiers: true)
 
 # Security presets
-Disarm.strip_obfuscation("Ѕ𝗲𝗰𝗿𝗲𝘁  ​data")            # deobfuscated
+Disarm.strip_obfuscation("Ѕ𝗲𝗰𝗿𝗲𝘁  \u200bdata")            # deobfuscated
 Disarm.canonicalize("…")                           # homoglyph/bidi/zero-width clean
 
 # IDN / hostname spoof check (a false result is not a safety guarantee)

@@ -135,12 +135,12 @@ describe('text cleaning', () => {
     // It no longer accepts strip options and does not delete anything: a
     // non-whitespace control (NUL) and a zero-width space pass through.
     expect(disarm.collapseWhitespace('a\x00b')).toBe('a\x00b')
-    expect(disarm.collapseWhitespace('a​b')).toBe('a​b')
+    expect(disarm.collapseWhitespace('a\u200bb')).toBe('a\u200bb')
   })
   test('strip control / zero-width / bidi', () => {
-    expect(disarm.stripControlChars('ab')).toBe('ab')
-    expect(disarm.stripZeroWidthChars('a​b')).toBe('ab')
-    expect(disarm.stripBidi('a‮b')).toBe('ab')
+    expect(disarm.stripControlChars('a\u0007b')).toBe('ab')
+    expect(disarm.stripZeroWidthChars('a\u200bb')).toBe('ab')
+    expect(disarm.stripBidi('a\u202eb')).toBe('ab')
   })
   test('zalgo detection and stripping', () => {
     const zalgo = `Z${'́'.repeat(8)}`
@@ -155,9 +155,9 @@ describe('deobfuscation & security', () => {
   // #698: stripFormat KEEPS the script; canonicalize folds it. The same input each way
   // is the whole reason the preset is not composable from the universal strip* calls.
   test('stripFormat keeps the script', () =>
-    expect(disarm.stripFormat('ар‍р')).toBe('арр'))
+    expect(disarm.stripFormat('ар\u200dр')).toBe('арр'))
   test('canonicalize folds the same input to Latin', () =>
-    expect(disarm.canonicalize('ар‍р')).toBe('app'))
+    expect(disarm.canonicalize('ар\u200dр')).toBe('app'))
   test('canonicalizeStrict is reachable', () =>
     expect(disarm.canonicalizeStrict('Hello')).toBe(disarm.canonicalize('Hello')))
   // #430: securityClean is a deprecated alias for canonicalize (removed in 1.0).

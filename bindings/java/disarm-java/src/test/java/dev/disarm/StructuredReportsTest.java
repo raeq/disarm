@@ -54,7 +54,7 @@ class StructuredReportsTest {
 
     @Test
     void inspectAnomaliesViaWordList() {
-        AnomalyReport r = Disarm.inspectAnomalies("hi​there", List.of()); // zero-width space
+        AnomalyReport r = Disarm.inspectAnomalies("hi\u200bthere", List.of()); // zero-width space
         assertTrue(r.anomalous());
         assertFalse(r.findings().isEmpty());
         assertTrue(r.kinds().contains("invisible"), r.kinds().toString());
@@ -94,7 +94,7 @@ class StructuredReportsTest {
     @Test
     void inspectAnomaliesViaReusableLexicon() {
         try (Lexicon lex = new Lexicon(List.of("free"))) {
-            AnomalyReport r = Disarm.inspectAnomalies("hi​there", lex);
+            AnomalyReport r = Disarm.inspectAnomalies("hi\u200bthere", lex);
             assertTrue(r.anomalous());
         }
     }

@@ -18,11 +18,11 @@ from disarm import slugify
 
 # Every row from the issue's table, with the ASCII path's answer beside it.
 EXCLUDED = [
-    ("file‮gnp.exe", "file-gnp-exe", "RLO"),
-    ("a​b", "a-b", "ZWSP"),
-    ("a­b", "a-b", "soft hyphen"),
-    ("a﻿b", "a-b", "ZWNBSP"),
-    ("a⁦b", "a-b", "LRI"),
+    ("file\u202egnp.exe", "file-gnp-exe", "RLO"),
+    ("a\u200bb", "a-b", "ZWSP"),
+    ("a\u00adb", "a-b", "soft hyphen"),
+    ("a\ufeffb", "a-b", "ZWNBSP"),
+    ("a\u2066b", "a-b", "LRI"),
     ("ab", "a-b", "private use"),
     ("a￾b", "a-b", "noncharacter"),
     ("a\U000e0041b", "a-b", "tag character"),
@@ -37,10 +37,10 @@ def test_a_non_letter_never_reaches_the_slug(text: str, want: str, label: str) -
 def test_the_rlo_row_is_the_one_that_matters() -> None:
     """`slugify(title, allow_unicode=True)` is the natural call for a non-Latin site.
 
-    `'file‮gnp-exe'` renders as `fileexe.png`, and the slug is then the URL, the
+    `'file\u202egnp-exe'` renders as `fileexe.png`, and the slug is then the URL, the
     anchor text, or the filename.
     """
-    assert "‮" not in slugify("file‮gnp.exe", allow_unicode=True)
+    assert "\u202e" not in slugify("file\u202egnp.exe", allow_unicode=True)
 
 
 def test_emoji_go_the_way_django_sends_them() -> None:
@@ -61,22 +61,22 @@ def test_the_two_paths_now_screen_the_same_classes() -> None:
 
 def test_a_joiner_between_letters_survives() -> None:
     """ZWNJ and ZWJ are orthographically required; dropping them changes the word."""
-    assert slugify("می‌روم", allow_unicode=True) == "می‌روم"  # Persian
-    assert slugify("क्‍ष", allow_unicode=True) == "क्‍ष"  # Devanagari
-    assert slugify("a‍b", allow_unicode=True) == "a‍b"
+    assert slugify("می\u200cروم", allow_unicode=True) == "می\u200cروم"  # Persian
+    assert slugify("क्\u200dष", allow_unicode=True) == "क्\u200dष"  # Devanagari
+    assert slugify("a\u200db", allow_unicode=True) == "a\u200db"
 
 
-@pytest.mark.parametrize("text", ["a‍", "‍a", "a‍ b", "a‌"])
+@pytest.mark.parametrize("text", ["a\u200d", "\u200da", "a\u200d b", "a\u200c"])
 def test_a_joiner_never_sits_at_a_token_edge(text: str) -> None:
     """A joiner with nothing to join to is invisible padding.
 
-    `'👨‍'` and `'👨'` render identically and are different byte strings, so two rows
+    `'👨\u200d'` and `'👨'` render identically and are different byte strings, so two rows
     can collide visually while a uniqueness check passes (#711).
     """
     out = slugify(text, allow_unicode=True)
     for token in out.split("-"):
-        assert not token.startswith(("‌", "‍")), out
-        assert not token.endswith(("‌", "‍")), out
+        assert not token.startswith(("\u200c", "\u200d")), out
+        assert not token.endswith(("\u200c", "\u200d")), out
 
 
 # ── #712 §4: the zalgo cap ───────────────────────────────────────────────────
@@ -135,12 +135,12 @@ def test_truncation_is_a_cluster_prefix_of_the_untruncated_slug(n: int) -> None:
 
 @pytest.mark.parametrize("n", range(1, 40))
 def test_a_truncated_slug_never_ends_in_a_mark_or_a_joiner(n: int) -> None:
-    text = "한국어 Tiếng Việt क्षि می‌روم"
+    text = "한국어 Tiếng Việt क्षि می\u200cروم"
     cut = slugify(text, allow_unicode=True, max_length=n)
     if cut:
         # The last *code point*, not the last of its NFD: `ế` is a complete character
         # whose decomposition ends in a mark, and keeping it is the point.
-        assert cut[-1] not in ("‌", "‍"), cut
+        assert cut[-1] not in ("\u200c", "\u200d"), cut
         assert not unicodedata.combining(cut[-1]), cut
 
 
@@ -168,9 +168,9 @@ def test_the_ascii_path_keeps_its_cheap_route(n: int) -> None:
 # `separator=""` is the case that separates "a separator was emitted" from "a base is in
 # scope". Fusing the two let a joiner or a mark reattach ACROSS a removed character.
 EMPTY_SEPARATOR_REATTACH = [
-    ("a!‍b", "ab", "a joiner must not join two characters that were never adjacent"),
+    ("a!\u200db", "ab", "a joiner must not join two characters that were never adjacent"),
     ("a!̀b", "ab", "a mark must not move onto a letter that never carried it"),
-    ("a.‍.b", "ab", "the same across a dropped dot"),
+    ("a.\u200d.b", "ab", "the same across a dropped dot"),
     ("a\ufeff̀b", "ab", "and across a dropped format character"),
 ]
 
@@ -198,5 +198,5 @@ def test_the_empty_separator_agrees_with_the_default_one() -> None:
 
 def test_a_joiner_between_adjacent_letters_still_survives_an_empty_separator() -> None:
     """The fix must not take the #712 §3 exception with it."""
-    assert slugify("می‌روم", allow_unicode=True, separator="") == "می‌روم"
-    assert slugify("क्‍ष", allow_unicode=True, separator="") == "क्‍ष"
+    assert slugify("می\u200cروم", allow_unicode=True, separator="") == "می\u200cروم"
+    assert slugify("क्\u200dष", allow_unicode=True, separator="") == "क्\u200dष"

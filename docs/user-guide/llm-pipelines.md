@@ -34,7 +34,7 @@ on raw, untrusted input:
 
     # Fullwidth letters (NFKC-folded) and zero-width joiners (stripped):
     assert strip_obfuscation("Ｈｅｌｌｏ") == "Hello"
-    assert strip_obfuscation("h​i") == "hi"
+    assert strip_obfuscation("h\u200bi") == "hi"
     ```
 
 === "Rust"
@@ -44,7 +44,7 @@ on raw, untrusted input:
 
     // Fullwidth letters (NFKC-folded) and zero-width joiners (stripped):
     assert_eq!(api::strip_obfuscation("Ｈｅｌｌｏ").unwrap(), "Hello");
-    assert_eq!(api::strip_obfuscation("h​i").unwrap(), "hi");
+    assert_eq!(api::strip_obfuscation("h\u{200b}i").unwrap(), "hi");
     ```
 
 === "Ruby"
@@ -54,7 +54,7 @@ on raw, untrusted input:
 
     # Fullwidth letters (NFKC-folded) and zero-width joiners (stripped):
     Disarm.strip_obfuscation("Ｈｅｌｌｏ")   # => "Hello"
-    Disarm.strip_obfuscation("h​i")       # => "hi"
+    Disarm.strip_obfuscation("h\u200bi")       # => "hi"
     ```
 
 === "Node"
@@ -141,7 +141,7 @@ from disarm import get_pipeline
 guardrail = get_pipeline("llm_guardrail")
 # NFKC → strip zalgo/bidi → demojize → strip accents → confusables →
 # fold case → strip control/zero-width → collapse whitespace
-assert guardrail("Ѕ𝗲𝗰𝗿𝗲𝘁  ​data") == "secret data"
+assert guardrail("Ѕ𝗲𝗰𝗿𝗲𝘁  \u200bdata") == "secret data"
 ```
 
 Compare the matched key, not the raw string, against your policy.

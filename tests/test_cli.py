@@ -206,9 +206,9 @@ class TestPipeline:
 
     def test_strip_bidi_step(self):
         # #250 C6: strip_bidi was supported by TextPipeline but unreachable.
-        r = run_cli("p", "--steps", "strip_bidi", "a‮b")  # RLO override
+        r = run_cli("p", "--steps", "strip_bidi", "a\u202eb")  # RLO override
         assert r.returncode == 0
-        assert "‮" not in r.stdout
+        assert "\u202e" not in r.stdout
         assert r.stdout.strip() == "ab"
 
     def test_strip_zalgo_step(self):
@@ -344,7 +344,7 @@ class TestMalformedInput:
         assert r.returncode == 0
 
     def test_emoji_sequence(self):
-        r = run_cli("t", "👨‍👩‍👧‍👦 family")
+        r = run_cli("t", "👨\u200d👩\u200d👧\u200d👦 family")
         assert r.returncode == 0
 
     def test_mixed_scripts(self):

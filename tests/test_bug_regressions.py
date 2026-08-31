@@ -445,10 +445,10 @@ class TestKeyFunctionBidiLeak:
     """
 
     INVISIBLE_PAIRS = [
-        ("pass­word", "password"),  # soft hyphen
-        ("user‮txt", "usertxt"),  # RLO override
-        ("a‎b", "ab"),  # LRM
-        ("x؜y", "xy"),  # Arabic Letter Mark
+        ("pass\u00adword", "password"),  # soft hyphen
+        ("user\u202etxt", "usertxt"),  # RLO override
+        ("a\u200eb", "ab"),  # LRM
+        ("x\u061cy", "xy"),  # Arabic Letter Mark
     ]
 
     @pytest.mark.parametrize("stored,clean", INVISIBLE_PAIRS)

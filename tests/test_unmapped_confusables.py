@@ -143,7 +143,7 @@ def test_scan_unknown_target_script_raises() -> None:
     [
         "hello world",
         f"p{CYRILLIC_A}ypal.com",
-        "\U0001f980​́",
+        "\U0001f980\u200b́",
         "Ｆｕｌｌｗｉｄｔｈ",
         "각",  # conjoining Hangul jamo (#483)
         "á̂̃b",

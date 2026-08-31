@@ -512,7 +512,7 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 - **`strip_accents` in batch form inverted 45 mathematical relations (#822).** The batch
   function did not call `strip_accents`. It restated the algorithm as
-  `nfd().filter(is_combining_mark).nfc()` — precisely the stateless filter that
+  `nfd().filter(|c| !is_combining_mark(c)).nfc()` — precisely the stateless filter that
   `strip_accents_into`'s own comment rules out, because whether a mark is strippable
   depends on the base it sits on (#749). So the batch path deleted the negation overlay
   the single path keeps: `strip_accents(["≠"])` returned `["="]`, `∄` came back as `∃`,

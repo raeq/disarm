@@ -1,7 +1,7 @@
 """#822 — a batch function owns the boundary crossing, not the algorithm.
 
 `_strip_accents_batch` did not call `strip_accents`. It restated the algorithm as
-`nfd().filter(is_combining_mark).nfc()`, which is exactly the stateless filter that
+`nfd().filter(|c| !is_combining_mark(c)).nfc()`, which is exactly the stateless filter that
 `strip_accents_into`'s own comment rules out — whether a mark is strippable depends on the
 base it sits on (#749). So the batch path deleted the negation overlay the single path
 keeps, and inverted 45 mathematical relations: `∄` came back as `∃`, `∉` as `∈`, `≠` as

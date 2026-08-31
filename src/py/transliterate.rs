@@ -465,7 +465,7 @@ pub fn _transliterate_batch(
 /// crossing.
 ///
 /// Delegates to `strip_accents_into` rather than restating the algorithm (#822). It used
-/// to run its own `nfd().filter(is_combining_mark).nfc()` here, which is precisely the
+/// to run its own `nfd().filter(|c| !is_combining_mark(c)).nfc()` here, which is precisely the
 /// stateless filter that `strip_accents_into`'s own comment rules out: whether a mark is
 /// strippable depends on the base it sits on (#749). The batch path therefore deleted the
 /// negation overlay the single path keeps, and inverted 45 mathematical relations —

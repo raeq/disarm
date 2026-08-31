@@ -52,16 +52,26 @@ assert transliterate("Київ", lang="uk") == "Kyiv"   # phonetic: BGN/PCGN rom
 assert slugify("Héllo Wörld") == "hello-world"
 ```
 
-## Why not `unidecode` or `ftfy`?
+## Performance & benchmarks
 
-The text-cleaning libraries already in most pipelines map confusables *phonetically* —
-Cyrillic `р` becomes `r` — because they were built for encoding repair and ASCII conversion.
-That leaves the spoof in place: `р` *sounds* like `r` but *looks* like `p`. disarm's TR39
-mapping is *visual*, so it reverses the substitution. Over a broad sample of the TR39
-confusable space it recovers **XMR 0.63–0.68**, where phonetic tools stay at or below
-**0.19** and NFKC reaches **0.10** — the
-**[benchmark](docs/security/adversarial-defense.md)** has the intervals and the residue this
-leaves.
+Two things get measured, because a fold that is fast and wrong is worthless: whether the
+mapping actually reverses an attack, and what it costs per character.
+
+**Does it work?** On the XMR confusable-recovery metric, measured over a broad sample of the
+TR39 space, disarm's *visual* mapping scores **0.63–0.68** against **≤ 0.19** for *phonetic*
+transliterators (`unidecode`, `anyascii`, `uroman`) and **0.10** for NFKC — from a study of
+435,864 observations across six attack types, three downstream tasks and two model
+architectures. →
+[the evidence](https://docs.disarm.dev/security/adversarial-defense.html#evidence) ·
+[what it does not cover](https://docs.disarm.dev/security/adversarial-defense.html#coverage-and-limits)
+
+**What does it cost?** ~450M chars/sec transliterating Latin (~38× Unidecode), ~106M
+chars/sec on Cyrillic, ~712K slugs/sec (~10–24× python-slugify), and ~65 ns for an
+already-ASCII call, which returns the original `str` with zero allocation. Figures are
+hardware-dependent and directional, not guarantees. →
+[full results](https://docs.disarm.dev/performance.html#results) ·
+[how to read them](https://docs.disarm.dev/performance.html#how-to-read-these-numbers) ·
+[where disarm is slower](https://docs.disarm.dev/performance.html#where-disarm-is-slower)
 
 ## One core, six languages
 

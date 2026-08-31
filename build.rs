@@ -689,11 +689,12 @@ fn parse_hex(hex: &str, path: &Path) -> u32 {
 
 // ─── Data readers ────────────────────────────────────────────────────
 
-/// Read a TSV file with lines of `HEX_CODEPOINT\tvalue`.
-/// Skips blank lines and lines starting with `#`.
 /// Read a `start\tend` hex range TSV (the shape `generate_range_set` consumes) as a
 /// sorted, binary-searchable list. Used for build-time property lookups that ship no
 /// runtime table of their own (#757).
+///
+/// Distinct from [`read_char_str_tsv`] below, which reads the `HEX_CODEPOINT\tvalue` map
+/// shape. Two columns either way, but the second is a bound rather than a value.
 fn read_range_tsv(path: &Path) -> Vec<(u32, u32)> {
     let content = fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
@@ -712,6 +713,8 @@ fn read_range_tsv(path: &Path) -> Vec<(u32, u32)> {
     rows
 }
 
+/// Read a TSV file with lines of `HEX_CODEPOINT\tvalue`.
+/// Skips blank lines and lines starting with `#`.
 fn read_char_str_tsv(path: &Path) -> BTreeMap<u32, String> {
     let content = fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));

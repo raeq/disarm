@@ -436,6 +436,51 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   matrix — it was the one row on the "why nothing flags it" list that was a character you
   could look for.
 
+- **A token is not a word, and the detector now knows the difference (#702, #720).**
+  `split_tokens` bounded a token on `char::is_whitespace` and nothing else, which produced
+  a false positive and a false negative from the same line.
+
+  **#702 — a hyphen did not end a token**, so ordinary multilingual text reported
+  `mixed_script` with a finding byte-for-byte identical to a real homoglyph attack:
+
+  ```
+  раypal                  mixed_script  "Cyrillic and Latin"   <- the attack
+  IT-специалист           mixed_script  "Latin and Cyrillic"   -> clean
+  Сбербанк-Online         mixed_script  "Cyrillic and Latin"   -> clean
+  β-carotene              mixed_script  "Greek and Latin"      -> clean
+  https://пример.рф/path  mixed_script  "Latin and Cyrillic"   -> clean
+  ```
+
+  A caller could not tell them apart. `раypal` is an attack *because* the two scripts sit
+  inside one word with no boundary to hide behind; `IT-специалист` is two words and the
+  hyphen is the boundary. The mixed-script and bidi-mixed branches now ask their question
+  per **word**.
+
+  **#720 — an exotic space did end one**, so `Ign<U+200A>ore` was two ordinary tokens
+  rather than one suspicious one, and the fragmentation was invisible by construction. All
+  nine `Zs` separators now report `segmentation`. This is the word-fragmentation subtype
+  of arXiv:2508.14070v1 §3, which measured 0/10 detected.
+
+  The two pull in opposite directions — #720 says so outright — and the resolution is that
+  different branches want different boundaries. Structural whitespace ends a token; a
+  hyphen, slash, colon, `@` or exotic space ends a *word*; and the segmentation branch
+  sees the token whole, because there the separators are the evidence. The leet branch
+  gets a third, narrower set: `@` and `$` are letter-substitutes, so `p@ss` is one word,
+  and the apostrophe stays out because `d0n't` must still decode.
+
+  **`canonicalize` is unchanged, deliberately (#720 §1).** Deleting a word-internal exotic
+  space would rejoin the fragments, and would also break `Mr.<U+00A0>Smith`,
+  `10<U+00A0>km` and the `1<U+202F>234` thousands separator. Only a lexicon separates
+  those from an attack, and `collapse_whitespace` has none — the `segmentation` branch
+  does, which is why the fix lives there. Recorded as an assertion rather than left
+  implied.
+
+  One consequence worth naming: every `Zs` folds to `U+0020` under NFKC, so once the
+  exotic spaces stayed inside a token, #633's `compat_fold` branch fired on
+  `Mr.<U+00A0>Smith`. Whitespace is now excluded from that trigger — a space folding to a
+  space is not "spelled half in a compatibility form and half in ASCII", which is the
+  shape that branch exists for.
+
 - **`detect_encoding` reports UTF-16 (#710).** It could not return a UTF-16 label for any
   input: chardetng does not guess UTF-16, and nothing looked for a BOM before it ran. So
   the two encoding functions disagreed on the same bytes, silently, and only one of them

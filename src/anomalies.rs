@@ -403,13 +403,65 @@ fn nearest(d: &str, lexicon: &HashSet<String>) -> Option<String> {
 }
 
 /// Dense single-letter segmentation (`v.i.a.g.r.a`), not a lone hyphen or `6-foot-6`.
+/// A word split by an exotic space, rejoined into a lexicon word (#720).
+///
+/// `seg_word` above answers a different question: *dense* single-letter splitting, where
+/// `v.i.a.g.r.a` is a finding because five separators sit between six letters. A word
+/// broken **once** — `Ign\u{200A}ore` — never reaches that gate and should not; the shape
+/// is not density but a separator that has no business inside a word at all.
+///
+/// The discrimination is the lexicon, and it is the only thing that works here. Every
+/// candidate looks identical to `collapse_whitespace`, which folds them all to `U+0020`:
+///
+/// ```text
+/// Ign<U+200A>ore    -> "ignore"     in the lexicon      -> fragmentation
+/// Mr.<U+00A0>Smith  -> "mr.smith"   not a word          -> clean
+/// 10<U+00A0>km      -> "10km"       not a word          -> clean
+/// Hello<U+00A0>мир  -> "helloмир"   not a word          -> clean
+/// ```
+///
+/// This is the word-fragmentation subtype of arXiv:2508.14070v1 §3, whose generator uses
+/// `U+200A`; it measured 0/10 neutralized and 0/10 detected, the only structural subtype
+/// where both columns were zero and the input is still plainly legible.
+///
+/// A letter is required on **both** sides of at least one removed space, so a trailing or
+/// leading one — which is a space doing its job — cannot trip it.
+fn space_fragmented_word(core: &str, lexicon: &HashSet<String>) -> Option<String> {
+    let chars: Vec<char> = core.chars().collect();
+    let mut word_internal = false;
+    let mut joined = String::with_capacity(core.len());
+    for (i, &c) in chars.iter().enumerate() {
+        if c.is_whitespace() && !is_token_boundary(c) {
+            let before = chars[..i]
+                .iter()
+                .next_back()
+                .is_some_and(|p| p.is_alphabetic());
+            let after = chars[i + 1..]
+                .iter()
+                .next()
+                .is_some_and(|n| n.is_alphabetic());
+            if before && after {
+                word_internal = true;
+            }
+            continue;
+        }
+        joined.extend(c.to_lowercase());
+    }
+    if !word_internal || joined.chars().count() < 4 {
+        return None;
+    }
+    lexicon.contains(joined.as_str()).then_some(joined)
+}
+
 fn seg_word(core: &str, lexicon: &HashSet<String>) -> Option<String> {
     // Collapse runs of consecutive separators before counting, so padding (`v-.-i-.-a...`)
     // cannot inflate the separator count to game the density ratio: each run counts once.
     let mut seps = 0usize;
     let mut prev_sep = false;
     for c in core.chars() {
-        let is_sep = matches!(c, '.' | '_' | '-');
+        // #720: an exotic space is a separator here too. `is_token_boundary` excludes it
+        // from ending a token precisely so this branch can see it.
+        let is_sep = matches!(c, '.' | '_' | '-') || (c.is_whitespace() && !is_token_boundary(c));
         if is_sep && !prev_sep {
             seps += 1;
         }
@@ -577,9 +629,17 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
                 "stacked combining marks".to_string(),
             ));
         }
-        let core_lower = core.to_lowercase();
-        if core.chars().count() >= 2 && !UNITS.contains(&core_lower.as_str()) {
-            let scripts = detect_scripts(core);
+        // #702: per WORD, not per token. `IT-специалист` reported `Latin and Cyrillic` —
+        // byte-for-byte the finding `раypal` produces — because a hyphen did not end a
+        // token. The attack works by putting two scripts inside one word; a hyphen,
+        // an underscore, a slash or an exotic space is a boundary, and a boundary is
+        // exactly what the attack cannot have.
+        for part in word_parts(core) {
+            let part_lower = part.to_lowercase();
+            if part.chars().count() < 2 || UNITS.contains(&part_lower.as_str()) {
+                continue;
+            }
+            let scripts = detect_scripts(part);
             // Direction conflict (#412): a single token mixing strong-LTR and
             // strong-RTL *letters* (no U+202x override — that is the `Bidi` kind)
             // can visually reorder under the Bidi Algorithm ("BiDi Swap"). This is
@@ -587,7 +647,7 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             // catches non-Latin RTL mixes (e.g. Cyrillic+Hebrew) the Latin-anchored
             // `mixed_script` rule below cannot see. Checked first so the more
             // specific kind wins.
-            if crate::scripts::has_bidi_letter_conflict(core) {
+            if crate::scripts::has_bidi_letter_conflict(part) {
                 return Some(mk(AnomalyKind::BidiMixed, scripts.join(" and ")));
             }
             let has_latin = scripts.contains(&"Latin");
@@ -646,10 +706,15 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         // so a pure-ASCII token can never fire — pinned by
         // `ascii_is_nfkc_stable_so_the_fast_path_is_safe`, the check #612 needed and
         // did not have.
+        // Whitespace is excluded from the trigger (#720). Every exotic `Zs` folds to
+        // `U+0020` under NFKC, so once `is_token_boundary` stopped consuming them this
+        // branch fired on `Mr.\u{00A0}Smith` and `10\u{00A0}km`. A space folding to a space
+        // is not what #633 describes — "spelled half in a compatibility form and half in
+        // ASCII", the shape nobody writes on purpose. It is a space.
         if tok.chars().any(|c| c.is_ascii_alphabetic())
             && tok
                 .chars()
-                .any(|c| !c.is_ascii() && c.nfkc().all(|f| f.is_ascii()))
+                .any(|c| !c.is_ascii() && !c.is_whitespace() && c.nfkc().all(|f| f.is_ascii()))
         {
             return Some(mk(AnomalyKind::CompatFold, tok.nfkc().collect::<String>()));
         }
@@ -662,31 +727,38 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     // Symbols that gate the leet path: digits plus the non-digit letter-substitutes the
     // demangler understands (`@ $ | ! +`). `!`/`+`/`@`/`$`/`|` are interior here — leading
     // or trailing `!` (and the other WRAP chars) were already stripped into `core`.
-    let has_sym = core
-        .chars()
-        .any(|c| c.is_ascii_digit() || matches!(c, '@' | '$' | '|' | '!' | '+'));
-    // 4.1: cap the token length BEFORE decoding, so neither the O(n) `leet_demangle`
-    // allocation nor the O(n²) `nearest()` path can be driven by an unbounded
-    // attacker-supplied token (the decode is never longer than the token itself).
-    if has_sym && core.chars().count() <= MAX_LEET_LEN {
-        // 7.1: compute the leet decode first so the ordinal/time scan only runs when a
-        // decode actually exists.
-        if let Some(d) = leet_demangle(core) {
-            if !is_ordinal_or_time(core) {
-                let base = base_ascii(core);
-                // reject a real word with a trailing literal number (Power5 -> power); keep
-                // interior substitutions (ab0ut) and short leet (th3 -> the): trust base at
-                // len>=4
-                let literal = base.chars().count() >= 4
-                    && lexicon.contains(base.as_str())
-                    && is_word_plus_trailing(core);
-                if base.chars().count() >= 2 && !literal && d.chars().count() >= 3 && d != base {
-                    if lexicon.contains(d.as_str()) {
-                        return Some(mk(AnomalyKind::Leet, d));
-                    }
-                    if d.chars().count() >= 6 {
-                        if let Some(near) = nearest(&d, lexicon) {
-                            return Some(mk(AnomalyKind::Leet, near));
+    // Per word, for the same reason as the mixed-script branch: `fr33` and `m0n3y` each
+    // decode, and an exotic space between them no longer ends the token (#720), so a
+    // whole-token decode would fail on a pair that used to be two tokens. A narrower
+    // split than `word_parts` — see `leet_parts`.
+    for core in leet_parts(core) {
+        let has_sym = core
+            .chars()
+            .any(|c| c.is_ascii_digit() || matches!(c, '@' | '$' | '|' | '!' | '+'));
+        // 4.1: cap the token length BEFORE decoding, so neither the O(n) `leet_demangle`
+        // allocation nor the O(n²) `nearest()` path can be driven by an unbounded
+        // attacker-supplied token (the decode is never longer than the token itself).
+        if has_sym && core.chars().count() <= MAX_LEET_LEN {
+            // 7.1: compute the leet decode first so the ordinal/time scan only runs when a
+            // decode actually exists.
+            if let Some(d) = leet_demangle(core) {
+                if !is_ordinal_or_time(core) {
+                    let base = base_ascii(core);
+                    // reject a real word with a trailing literal number (Power5 -> power); keep
+                    // interior substitutions (ab0ut) and short leet (th3 -> the): trust base at
+                    // len>=4
+                    let literal = base.chars().count() >= 4
+                        && lexicon.contains(base.as_str())
+                        && is_word_plus_trailing(core);
+                    if base.chars().count() >= 2 && !literal && d.chars().count() >= 3 && d != base
+                    {
+                        if lexicon.contains(d.as_str()) {
+                            return Some(mk(AnomalyKind::Leet, d));
+                        }
+                        if d.chars().count() >= 6 {
+                            if let Some(near) = nearest(&d, lexicon) {
+                                return Some(mk(AnomalyKind::Leet, near));
+                            }
                         }
                     }
                 }
@@ -694,8 +766,21 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         }
     }
 
-    if core.chars().any(|c| matches!(c, '.' | '_' | '-')) {
+    // #720: the separator set gains the exotic spaces. This branch is the one built for
+    // "a real word broken up by separators", and it is the only place in the library that
+    // can tell `Ign\u{200A}ore` from `Mr.\u{00A0}Smith` — because it asks the lexicon
+    // whether the fragments spell a word. `collapse_whitespace` has no lexicon and folds
+    // both to `U+0020`, which is right for display and is why the answer lives here.
+    //
+    // The token is used whole, NOT `word_parts`: the separators are the evidence.
+    if core
+        .chars()
+        .any(|c| matches!(c, '.' | '_' | '-') || (c.is_whitespace() && !is_token_boundary(c)))
+    {
         if let Some(word) = seg_word(core, lexicon) {
+            return Some(mk(AnomalyKind::Segmentation, word));
+        }
+        if let Some(word) = space_fragmented_word(core, lexicon) {
             return Some(mk(AnomalyKind::Segmentation, word));
         }
     }
@@ -703,11 +788,71 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     None
 }
 
+/// Whitespace that ends a token — the *structural* kind (#720).
+///
+/// Deliberately narrower than `char::is_whitespace`, which is what it used to be. Every
+/// exotic `Zs` separator is whitespace by that test, so `Ign\u{200A}ore` was not one
+/// suspicious token but two ordinary ones, `Ign` and `ore` — neither a word, so nothing
+/// fired, and no widening of the carrier table could have changed it because the
+/// separator was consumed before classification began. That is the word-fragmentation
+/// subtype of arXiv:2508.14070v1 §3, and it measured 0/10 detected.
+///
+/// The exotic spaces now stay *inside* the token, where `seg_word` can ask the question
+/// that actually separates an attack from typography: do the fragments spell a real word?
+/// `collapse_whitespace` still folds them to `U+0020` — see the module docs on why
+/// deleting them there would be wrong.
+///
+/// `U+0085 NEL`, `U+2028` and `U+2029` stay boundaries: they are line breaks, not spaces.
+#[inline]
+fn is_token_boundary(c: char) -> bool {
+    c.is_ascii_whitespace() || matches!(c, '\u{000B}' | '\u{0085}' | '\u{2028}' | '\u{2029}')
+}
+
+/// Split `s` into *words* for the branches that ask a per-word question (#702, #720).
+///
+/// A token is not a word. `split_tokens` bounds on structural whitespace, so
+/// `IT-специалист` arrives as one token and `detect_scripts` reported
+/// `Latin and Cyrillic` — the same kind and the same detail as `раypal`, which is the
+/// attack. `раypal` works *because* the two scripts sit inside one word with no boundary
+/// to hide behind; `IT-специалист` is two words and the hyphen is the boundary.
+///
+/// The set is the punctuation that joins words rather than forming them, plus the exotic
+/// spaces `is_token_boundary` no longer consumes — `Hello\u{00A0}мир` is two words and must
+/// not read as a mixed-script one.
+///
+/// The apostrophe is deliberately **absent**, though #702 §1 lists it: `leet_demangle`
+/// skips apostrophes so contractions decode, and splitting on one turns `d0n't` into
+/// `d0n` and `t`, neither of which decodes to anything. None of the six measured false
+/// positives uses an apostrophe, so the set stays exactly what the evidence needs.
+///
+/// Deliberately NOT used by the `segmentation` branch, which needs the separators intact:
+/// `v.i.a.g.r.a` is a finding precisely because they are inside one token.
+fn word_parts(s: &str) -> impl Iterator<Item = &str> {
+    s.split(|c: char| c.is_whitespace() || matches!(c, '-' | '_' | '/' | ':' | '@' | ','))
+        .filter(|p| !p.is_empty())
+}
+
+/// Word parts for the **leet** branch: the exotic spaces only (#720).
+///
+/// The joining punctuation `word_parts` splits on is the leet payload here, not a
+/// boundary — `@` and `$` and `|` are letter-substitutes the demangler understands, so
+/// `p@ss` is one word and splitting it yields `p` and `ss`, neither of which decodes.
+/// The apostrophe is skipped by `leet_demangle` for the same reason, so `d0n't` decodes
+/// to `dont`.
+///
+/// What this does need is the exotic spaces, because `is_token_boundary` no longer
+/// consumes them: `fr33\u{00A0}m0n3y` used to arrive as two tokens and would otherwise now
+/// arrive as one that decodes to nothing.
+fn leet_parts(s: &str) -> impl Iterator<Item = &str> {
+    s.split(|c: char| c.is_whitespace())
+        .filter(|p| !p.is_empty())
+}
+
 fn split_tokens(text: &str) -> Vec<(usize, &str)> {
     let mut out = Vec::new();
     let mut start: Option<usize> = None;
     for (i, c) in text.char_indices() {
-        if c.is_whitespace() {
+        if is_token_boundary(c) {
             if let Some(s) = start.take() {
                 out.push((s, &text[s..i]));
             }

@@ -163,6 +163,34 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`sanitize_filename` no longer manufactures a percent escape (#721).** It collapses a
+  literal `..` before transliterating and again afterwards, because `U+2026` and `U+00B7`
+  can reintroduce one. The same step could assemble `%2E%2E%2F` — the percent-encoded
+  spelling of the *same* traversal — out of characters containing no `%`, no `2`, no `E`
+  and no `F`:
+
+  ```
+  sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt")   '%2E%2E%2Fetc.txt'  ->  '_2E_2E_2Fetc.txt'
+  unquote(that)                                  '../etc.txt'              '_2E_2E_2Fetc.txt'
+  sanitize_filename("％００.png")                  '%00.png'         ->  '_00.png'
+  ```
+
+  `%` is legal in a filename on every supported platform, so it is not in
+  `UNIVERSAL_ILLEGAL` and nothing removed it. The remedy at the dot-collapse covered one
+  spelling of traversal and not the other.
+
+  The rule is exact: **`%` never appears in the output unless it appeared in the input.**
+  Five code points fold to `%` — `؉` U+0609, `؊` U+060A, `٪` U+066A, `﹪` U+FE6A, `％`
+  U+FF05 — enumerated by an exhaustive scan rather than assumed, and the manufactured one
+  is replaced by the caller's separator like any other stripped character.
+
+  A `%` the caller typed is kept, which is the boundary the issue asks to have written
+  down (§2): `sanitize_filename("..%2Fetc")` returns `"%2Fetc"` — the literal `..`
+  collapsed, the percent-encoded spelling left alone, because the caller wrote it. A
+  **safe filename is not a safe URL path segment**, and a consumer that percent-decodes
+  the result must validate after decoding. Now stated on `docs/limitations.md` and on the
+  Rust, Python, Node, Ruby and Java surfaces.
+
 - **`gem install disarm` failed on every Ruby released since December 2024 (#699).** The
   five precompiled platform gems all carried `required_ruby_version = ">= 3.1, < 3.4.dev"`
   and no source gem had ever been published, so resolution simply ended — RubyGems never

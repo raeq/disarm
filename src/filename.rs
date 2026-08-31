@@ -25,7 +25,45 @@ const WINDOWS_RESERVED: &[&str] = &[
 const UNIVERSAL_ILLEGAL: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\0'];
 const POSIX_ILLEGAL: &[char] = &['/', '\0'];
 
+use std::borrow::Cow;
+
 use crate::utils::floor_char_boundary;
+
+/// Replace a `%` that transliteration manufactured, leaving one the caller typed (#721).
+///
+/// `sanitize_filename` already accepts this premise once: `collapse_dot_sequences` runs a
+/// second time after transliteration because `U+2026` and `U+00B7` can reintroduce a `..`
+/// that was not in the input. The same step can assemble `%2E%2E%2F` — the percent-encoded
+/// spelling of the *same* traversal — out of characters containing no `%`, no `2`, no `E`
+/// and no `F`:
+///
+/// ```text
+/// sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt")  ->  "%2E%2E%2Fetc.txt"
+/// urllib.parse.unquote(that)                       ->  "../etc.txt"
+/// ```
+///
+/// `%` is a legal filename character on every supported platform, so it is not in
+/// `UNIVERSAL_ILLEGAL` and nothing removed it. The remedy at the dot-collapse covered one
+/// spelling of traversal and not the other.
+///
+/// The test is `contains('%')` on the **raw input**, so the property is exact: `%` never
+/// appears in the output unless it appeared in the input. A caller who typed `%` keeps it
+/// — passing a literal `%2E%2E%2F` through is defensible, since the caller wrote it; a
+/// sanitizer *manufacturing* one from fullwidth characters is not. Filenames reach
+/// percent-decoders routinely (`Content-Disposition`, object-storage keys, static-file
+/// routes), so `serve(unquote(segment))` is a common enough shape to be worth the check.
+///
+/// Borrows on the overwhelmingly common path: no `%` in the transliterated text at all.
+fn neutralize_introduced_percent<'a>(
+    transliterated: &'a str,
+    raw_input: &str,
+    separator: &str,
+) -> Cow<'a, str> {
+    if !transliterated.contains('%') || raw_input.contains('%') {
+        return Cow::Borrowed(transliterated);
+    }
+    Cow::Owned(transliterated.replace('%', separator))
+}
 
 /// Check if a stem (filename without extension) matches a Windows reserved name.
 fn is_windows_reserved(stem: &str) -> bool {
@@ -187,6 +225,11 @@ pub(crate) fn sanitize_filename(
     // HORIZONTAL ELLIPSIS (→ "...") or U+00B7 MIDDLE DOT (→ ".") can
     // reintroduce ".." sequences after transliteration.
     let transliterated = collapse_dot_sequences(&transliterated);
+
+    // #721: and neutralize a `%` the same step manufactured. Same before/after comparison
+    // the dot-collapse above embodies, for the other spelling of the same traversal.
+    let transliterated =
+        neutralize_introduced_percent(&transliterated, text, separator).into_owned();
 
     // #570: trim trailing dots and spaces BEFORE choosing the extension boundary.
     //

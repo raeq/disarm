@@ -873,6 +873,23 @@ def sanitize_filename(
         '_CON.txt'
         >>> sanitize_filename("résumé.docx", lang="fr")
         'resume.docx'
+
+    Warning:
+        **A safe filename is not a safe URL path segment.** ``%`` is legal in a
+        filename on every supported platform, so a ``%`` the caller typed is kept:
+        ``sanitize_filename("..%2Fetc")`` returns ``"%2Fetc"``, with the literal
+        ``..`` collapsed and the percent-encoded spelling of the same traversal
+        left alone. A consumer that percent-decodes the result must validate
+        *after* decoding.
+
+        What the sanitizer will not do is manufacture one. Compatibility folding
+        maps five code points to ``%`` (``؉`` U+0609, ``؊`` U+060A, ``٪`` U+066A,
+        ``﹪`` U+FE6A, ``％`` U+FF05), which used to assemble ``%2E%2E%2F`` out of
+        input containing no ``%`` at all. The rule is now exact: **``%`` never
+        appears in the output unless it appeared in the input** (#721).
+
+        >>> sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt")
+        '_2E_2E_2Fetc.txt'
     """
     if not isinstance(text, str):
         raise TypeError(f"sanitize_filename() expects str, got {type(text).__name__}")

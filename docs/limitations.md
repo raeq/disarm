@@ -394,6 +394,45 @@ The honest precondition for additivity is that the separator genuinely splits th
 - The maximum filename length defaults to 255 bytes, which is the common limit across ext4, NTFS, and APFS
 - NFC normalization is always applied, even on Linux where the filesystem is encoding-agnostic
 
+### A safe filename is not a safe URL path segment
+
+`sanitize_filename()` produces a safe **filename**. It does not produce a safe URL path
+segment, and the two differ in one specific way worth knowing before you percent-decode
+the result.
+
+`%` is legal in a filename on every supported platform, so it is not stripped. A caller
+who typed one keeps it, and `sanitize_filename("..%2Fetc")` returns `"%2Fetc"` — the
+literal `..` collapsed, the percent-encoded spelling of the same traversal left alone,
+because the caller wrote it:
+
+```python
+from urllib.parse import unquote
+
+from disarm import sanitize_filename
+
+assert sanitize_filename("../etc") == "_etc"
+assert sanitize_filename("..%2Fetc") == "%2Fetc"
+assert unquote(sanitize_filename("..%2Fetc")) == "/etc"
+```
+
+What the sanitizer will *not* do is manufacture one. Compatibility folding maps five code
+points to `%` — `؉` U+0609, `؊` U+060A, `٪` U+066A, `﹪` U+FE6A and `％` U+FF05 — and
+before [#721](https://github.com/raeq/disarm/issues/721) that assembled a traversal out of
+input containing no `%` at all:
+
+```python
+assert (
+    sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt") == "_2E_2E_2Fetc.txt"
+)  # was "%2E%2E%2Fetc.txt"
+assert "%" not in sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt")
+```
+
+The rule is exact: **`%` never appears in the output unless it appeared in the input.**
+
+So a consumer that percent-decodes the result — `Content-Disposition`, an object-storage
+key, a static-file route, a download link — must validate *after* decoding.
+`serve(unquote(segment))` is not made safe by sanitizing the segment first.
+
 ### Truncation is byte-aware but not grapheme-aware
 
 When `max_length` forces truncation, the stem is shortened to fit. Truncation respects UTF-8 byte boundaries (never splits a multi-byte character) but does not consider grapheme clusters. A truncation point could split a base character from its combining mark.

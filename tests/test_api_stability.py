@@ -45,6 +45,7 @@ EXPECTED_ALL = {
     "normalize",
     "normalize_confusables",
     "sanitize_filename",
+    "stream_safe",
     "strip_accents",
     "strip_control_chars",
     "strip_zero_width_chars",
@@ -111,6 +112,8 @@ EXPECTED_ALL = {
     "is_ascii",
     "is_case_fold_stable",
     "is_normalized",
+    # UAX #15 Stream-Safe, added as an interop primitive.
+    "is_normalized_stream_safe",
     # Pipeline management
     "PRESETS",
     "get_pipeline",

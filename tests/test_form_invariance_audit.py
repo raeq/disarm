@@ -55,6 +55,11 @@ FORM_PRESERVING = {
     # boundary normalization as well.
     "strip_control_chars",
     "strip_zero_width_chars",
+    # UAX #15 Stream-Safe. It *inserts* U+034F rather than deleting a class, and is
+    # explicitly not canonically equivalent — that is the property its own docs and tests
+    # lead with. Form-invariance would be the wrong assertion here: it is an interop
+    # bound, not a recovery entry point, and its output must never become a key.
+    "stream_safe",
     "escape_html",
     "strip_log_injection",
     "demojize",

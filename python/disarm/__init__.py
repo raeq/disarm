@@ -42,6 +42,7 @@ from disarm._api import (
     is_confusable,
     is_mixed_script,
     is_normalized,
+    is_normalized_stream_safe,
     is_suspicious_hostname,
     lang_info,
     list_context_langs,
@@ -62,6 +63,7 @@ from disarm._api import (
     seal_registrations,
     set_emoji_provider,
     slugify,
+    stream_safe,
     strip_accents,
     strip_control_chars,
     strip_log_injection,
@@ -253,6 +255,7 @@ __all__ = [
     "normalize",
     "normalize_confusables",
     "sanitize_filename",
+    "stream_safe",
     "strip_accents",
     "strip_control_chars",
     "fold_case",
@@ -317,6 +320,7 @@ __all__ = [
     "is_ascii",
     "is_case_fold_stable",
     "is_normalized",
+    "is_normalized_stream_safe",
     # Preset metadata
     "PRESETS",
     # Policy profiles

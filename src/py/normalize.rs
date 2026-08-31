@@ -22,6 +22,19 @@ pub fn _is_normalized(text: &str, form: &str) -> PyResult<bool> {
     Ok(crate::normalize::is_normalized(text, form)?)
 }
 
+/// `stream_safe(text) -> str`
+#[pyfunction]
+pub fn _stream_safe(text: &str) -> String {
+    crate::normalize::stream_safe(text)
+}
+
+/// `is_normalized_stream_safe(text, *, form="NFC") -> bool`
+#[pyfunction]
+#[pyo3(signature = (text, *, form = "NFC"))]
+pub fn _is_normalized_stream_safe(text: &str, form: &str) -> PyResult<bool> {
+    Ok(crate::normalize::is_normalized_stream_safe(text, form)?)
+}
+
 /// `normalize_batch(texts, *, form="NFC") -> list[str]`
 #[pyfunction]
 #[pyo3(signature = (texts, *, form = "NFC"))]

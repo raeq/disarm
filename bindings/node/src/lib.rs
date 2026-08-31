@@ -390,6 +390,12 @@ pub fn canonicalize(text: String) -> Result<String, NapiError> {
 
 /// Turn arbitrary text into a safe filename. `platform` is `"universal"` |
 /// `"windows"` | `"posix"`.
+///
+/// A safe **filename**, not a safe URL path segment. `%` is legal in a filename, so one
+/// the caller typed is kept — `sanitizeFilename("..%2Fetc")` returns `"%2Fetc"` — and a
+/// consumer that percent-decodes the result must validate *after* decoding. What this
+/// will not do is manufacture one: `%` never appears in the output unless it appeared in
+/// the input (#721).
 #[napi]
 pub fn sanitize_filename(
     text: String,

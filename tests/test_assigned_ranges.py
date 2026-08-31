@@ -46,6 +46,19 @@ def _spans() -> list[tuple[int, int]]:
     return out
 
 
+def test_every_span_is_well_formed() -> None:
+    """Each span on its own, before any pairwise check.
+
+    Folded into the adjacency loop, the last span is only ever the right-hand element and
+    its own inversion goes unchecked.
+    """
+    spans = _spans()
+    assert spans, "no spans parsed"
+    for start, end in spans:
+        assert start <= end, f"U+{start:04X}..U+{end:04X} is inverted"
+        assert 0 <= start and end <= 0x10FFFF, f"U+{start:04X}..U+{end:04X} is out of range"
+
+
 def test_spans_are_sorted_disjoint_and_non_adjacent() -> None:
     """Structural, so it holds on every interpreter.
 
@@ -53,9 +66,9 @@ def test_spans_are_sorted_disjoint_and_non_adjacent() -> None:
     is a merge bug rather than data — and the binary search assumes disjointness.
     """
     spans = _spans()
-    assert spans, "no spans parsed"
+    # `strict=False` is deliberate, not an oversight: the two operands differ in length by
+    # one by construction, which is what makes this a pairwise walk.
     for (a_start, a_end), (b_start, b_end) in zip(spans, spans[1:], strict=False):
-        assert a_start <= a_end, f"U+{a_start:04X}..U+{a_end:04X} is inverted"
         assert b_start > a_end + 1, (
             f"U+{a_start:04X}..U+{a_end:04X} and U+{b_start:04X}..U+{b_end:04X} are "
             f"adjacent or overlapping; they should have been one span"
@@ -66,8 +79,10 @@ def test_surrogates_are_absent() -> None:
     """Rust `char` cannot hold a surrogate, so it can never reach the lookup. Listing one
     would describe a case that cannot occur."""
     for start, end in _spans():
-        assert not (start <= 0xD800 <= end or start <= 0xDFFF <= end), (
-            f"U+{start:04X}..U+{end:04X} covers surrogates"
+        # Overlap, not membership: a span wholly inside the surrogate block — say
+        # U+D900..U+DA00 — contains neither endpoint and would pass a membership test.
+        assert not (start <= 0xDFFF and end >= 0xD800), (
+            f"U+{start:04X}..U+{end:04X} overlaps the surrogate range U+D800..U+DFFF"
         )
 
 

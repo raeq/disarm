@@ -13,8 +13,8 @@ to name a script for anything unassigned, which closes the holes without disturb
 curated 61-script scope the block table deliberately encodes.
 
 It is a snapshot of a Unicode version, so it carries the same obligations as every other
-bundled table: a row in `docs/provenance.md` and a drift gate
-(`tests/assigned_ranges_drift.rs`). Regenerate with:
+bundled table: a row in `docs/provenance.md` and drift gates in
+`tests/test_assigned_ranges.py`. Regenerate with:
 
     uv run --python 3.15 python scripts/gen_assigned_ranges.py
 """

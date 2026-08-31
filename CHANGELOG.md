@@ -382,6 +382,60 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **The detector sees every carrier the strip functions already remove (#700, #643).**
+  `inspect_anomalies` could not see two of the three ASCII-smuggling channels at all, and
+  saw the third only when a letter happened to sit next to it — so on the exact carriers
+  #413 was opened for, the sanitizer closed the channel and the detector reported the
+  text clean:
+
+  ```
+  "Hello world" + 21 Tags chars spelling `tracked-by:acct-99213`   clean  ->  invisible
+  "Hello " + 2 variation selectors carrying `hi` + " world"        clean  ->  invisible
+  "Hello " + 16 ZWSP/ZWNJ spelling `hi` + " world"                 clean  ->  invisible
+  ad<U+3164>min      (renders as `admin`)                          clean  ->  invisible
+  ```
+
+  Two independent gates, both load-bearing. **The carriers were not in the table** — the
+  detector kept its own eight-character list while `src/invisibles.rs` already had a
+  predicate for every class and `strip_*` already acted on them. It now reuses those
+  predicates, so the detector and the sanitizer cannot drift, which is the failure the
+  issue is about. **And a listed character still needed a letter beside it** — the
+  neighbour rule reads one whitespace token, so a run standing between two spaces could
+  not fire even for a character that was listed. A run rule now fires on its own, at one
+  tag character, two variation selectors or eight zero-width, and the finding names the
+  **run**: `U+200B ×16`, not `U+200B`.
+
+  Soft hyphen and CGJ are carriers for the run rule only. Both have a legitimate use
+  between letters, which is exactly where the neighbour rule fires; nine in a row is
+  neither hyphenation nor a normalization boundary.
+
+  The exemptions that distinguish this from "flag every invisible" are unchanged and
+  tested: emoji ZWJ sequences, Persian ZWNJ, Latin-plus-CJK, emoji presentation selectors,
+  and the three RGI subdivision flags — for which the detector reuses `invisibles`' own
+  allowlist rather than matching on the region-subtag shape.
+
+  Two findings not in either issue. `ad<U+180E>min` reported as **`mixed_script`**: U+180E
+  sits in the Mongolian block, so the detector named a script nobody can see — the same
+  defect #605 fixed for `is_suspicious_hostname` by stripping invisibles before script
+  analysis, which the detector never got. And `bidi_spares_marks_and_embeddings`
+  documented a condition it did not implement — "an LRE..PDF embedding around RTL text
+  (*no Latin majority*) is benign" — so `\u202Bif (isAdmin) { grant(); }\u202C` was spared
+  too, the Trojan Source construction with the older embedding operators in place of the
+  isolates. Embeddings now take the same majority-Latin condition the isolates already
+  had; bare `LRM`/`RLM` stay spared.
+
+  #643 §2 asks whether the key builders' treatment of `U+2800` and `U+1680` is arbitrary.
+  Measured, it is not, and the answer is recorded as an assertion rather than left to be
+  rediscovered: the four Hangul fillers collide with `admin` because NFKC or
+  `transliterate` **deletes** them, while `U+2800` and `U+1680` resolve to a **space**, so
+  `ad<X>min` becomes `ad min` — genuinely different text, and the same answer an ordinary
+  space gets. `U+1680` stays undetected for the same reason: it is `Zs`, a token separator
+  everywhere in this library, so it can never be inside the token the neighbour rule reads.
+
+  `CVE-2025-32711` moves from *Neutralized* to *Neutralized + detected* in the validation
+  matrix — it was the one row on the "why nothing flags it" list that was a character you
+  could look for.
+
 - **`detect_encoding` reports UTF-16 (#710).** It could not return a UTF-16 label for any
   input: chardetng does not guess UTF-16, and nothing looked for a BOM before it ran. So
   the two encoding functions disagreed on the same bytes, silently, and only one of them

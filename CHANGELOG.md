@@ -555,6 +555,24 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   that asserted the disproved property — "the shipped manifest builds against the PUBLISHED
   core" — now say *at a release boundary*.
 
+- **The key-stability corpus could not express the classes most likely to move a key
+  (#806).** The golden-key fixture is the gate that catches key-output drift, and its
+  174,880-character corpus contained **zero noncharacters and zero soft hyphens**, with one
+  tag character, one variation selector and two PUA code points between them — three
+  categories its own README named as covered.
+
+  That is not a thin spot, it is a blind one. #805 is a live key evasion using a
+  noncharacter, and measured against the old corpus its fixture diff would have been
+  **0 rows of 22,878**: the gate built to answer *"did key output move, and was that on
+  purpose"* would have reported nothing about the change that closes it. 85 rows now carry
+  noncharacters at each edge and inside a word, soft hyphens in four words, and thicker
+  coverage of PUA, tags, variation selectors, ZWSP, word joiner and the BOM — each beside
+  a clean control, so a later diff shows the two keys converging rather than one key
+  appearing.
+
+  `tests/test_key_stability.py` asserts a floor per class rather than the README
+  paragraph, so adding rows stays free and losing a class fails.
+
 - **"Escapes, never literals" now covers the tree, not just `README.md` (#802).** The
   README guard's docstring already made the argument, and recorded that the defect it
   guards against **shipped once** — a literal `U+202E` in a README example reached GitHub,

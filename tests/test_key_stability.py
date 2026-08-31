@@ -170,6 +170,92 @@ class TestTheFixtureCoversWhatItClaims:
         ):
             assert char in joined, f"corpus no longer contains {name} ({char!r})"
 
+    def test_it_contains_the_classes_most_likely_to_move_a_key(self) -> None:
+        """#806 — the corpus had **zero** noncharacters and **zero** soft hyphens.
+
+        Those are the classes most likely to move a key, and the ones it could not
+        express. #805 is a live key evasion using a noncharacter, which makes this the
+        demonstration rather than the hypothesis: had #805 landed against the old corpus,
+        its fixture diff would have been **0 rows of 22,878** — the gate built to answer
+        "did key output move, and was that on purpose" would have reported nothing.
+
+        Asserted as a floor per class rather than an exact count, so adding corpus rows
+        is free and losing a class is not.
+        """
+        import unicodedata
+
+        joined = "\n".join(gen.read_corpus())
+
+        def noncharacter(char: str) -> bool:
+            cp = ord(char)
+            return 0xFDD0 <= cp <= 0xFDEF or (cp & 0xFFFE) == 0xFFFE
+
+        counts = {
+            "noncharacters": sum(1 for c in joined if noncharacter(c)),
+            "soft hyphen": joined.count("\u00ad"),
+            "private use": sum(1 for c in joined if unicodedata.category(c) == "Co"),
+            "tag characters": sum(1 for c in joined if 0xE0000 <= ord(c) <= 0xE007F),
+            "variation selectors": sum(
+                1 for c in joined if 0xFE00 <= ord(c) <= 0xFE0F or 0xE0100 <= ord(c) <= 0xE01EF
+            ),
+        }
+        thin = {name: n for name, n in counts.items() if n < 5}
+        assert not thin, (
+            f"the corpus is thin in classes that move keys: {thin}. A class the corpus "
+            "cannot express is a class the gate reports as free — see #805/#806."
+        )
+
+    def test_neither_file_carries_a_raw_control_byte(self) -> None:
+        """#806 — a fixture nobody can diff is a fixture nobody checks.
+
+        The corpus carried a raw `U+0000` and a raw `U+001B`, so git, ripgrep and every
+        diff tool read `corpus.txt` and `golden_keys.tsv.gz` as **binary**. The coverage
+        is worth keeping — a NUL and an ESC through a key builder are real cases — so both
+        are escaped as `\\xNN` rather than removed, and `read_corpus` unescapes.
+
+        Checked before the change: the corpus contains no literal backslash, so
+        interpreting escapes cannot alter an existing row. That precondition is asserted
+        below, because it is what makes the escaping safe.
+        """
+        raw = CORPUS.read_bytes()
+        offenders = {
+            f"U+{byte:04X}"
+            for byte in raw
+            if byte < 0x20 and byte not in (0x0A,)  # newline is the row separator
+        }
+        assert not offenders, (
+            f"corpus.txt carries raw control bytes {sorted(offenders)}, which makes it "
+            "binary to git and every diff tool. Escape them as \\xNN instead."
+        )
+
+        with gzip.open(GOLDEN, "rb") as handle:
+            fixture = handle.read()
+        leaked = {
+            f"U+{byte:04X}"
+            for byte in fixture
+            if byte < 0x20 and byte not in (0x0A, 0x09)  # newline and tab are structure
+        }
+        assert not leaked, f"the golden fixture carries raw control bytes {sorted(leaked)}"
+
+    def test_the_escaping_precondition_holds(self) -> None:
+        """`read_corpus` interprets escapes, so a literal backslash would change meaning.
+
+        There are none today. If one is ever added, this fails rather than silently
+        reinterpreting the row it appears in.
+        """
+        text = CORPUS.read_text(encoding="utf-8")
+        rows = [line for line in text.split("\n") if line]
+        # Every backslash must be part of an escape this reader produces.
+        for row in rows:
+            for index, char in enumerate(row):
+                if char != "\\":
+                    continue
+                nxt = row[index + 1 : index + 2]
+                assert nxt in {"\\", "t", "n", "r", "x"}, (
+                    f"corpus row {row!r} has a backslash that is not an escape; "
+                    "read_corpus would reinterpret it"
+                )
+
     def test_it_contains_non_ascii_digits(self) -> None:
         """The class that exposes `digit_policy`.
 

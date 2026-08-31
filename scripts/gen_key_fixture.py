@@ -52,16 +52,26 @@ FUNCTIONS = (
     "fold_case",
 )
 
-#: A value containing a tab or newline would break the TSV; neither appears in the
-#: corpus today, and escaping rather than rejecting keeps that from becoming a
-#: silent truncation if one ever does.
-_ESCAPES = ((("\\"), r"\\"), ("\t", r"\t"), ("\n", r"\n"), ("\r", r"\r"))
+#: A value containing a tab or newline would break the TSV; escaping rather than
+#: rejecting keeps that from becoming a silent truncation.
+#:
+#: Every other C0 control is escaped too, as `\xNN`. Two were reaching both files raw —
+#: `U+0000` and `U+001B` — which made `corpus.txt` and the golden fixture read as
+#: **binary** to git, ripgrep and every diff tool. That is a review problem rather than a
+#: correctness one, but a fixture nobody can diff is a fixture nobody checks. The
+#: coverage stays: a NUL and an ESC in a key builder are worth testing, so they are
+#: escaped rather than removed.
+_ESCAPES = (("\\", r"\\"), ("\t", r"\t"), ("\n", r"\n"), ("\r", r"\r"))
 
 
 def escape(value: str) -> str:
     for raw, escaped in _ESCAPES:
         value = value.replace(raw, escaped)
-    return value
+    # Remaining C0/C1 controls, which have no short form above.
+    return "".join(
+        ch if not (ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F) else f"\\x{ord(ch):02x}"
+        for ch in value
+    )
 
 
 def unescape(value: str) -> str:
@@ -69,6 +79,13 @@ def unescape(value: str) -> str:
     while i < len(value):
         if value[i] == "\\" and i + 1 < len(value):
             nxt = value[i + 1]
+            if nxt == "x" and i + 3 < len(value):
+                try:
+                    out.append(chr(int(value[i + 2 : i + 4], 16)))
+                    i += 4
+                    continue
+                except ValueError:
+                    pass
             out.append({"\\": "\\", "t": "\t", "n": "\n", "r": "\r"}.get(nxt, "\\" + nxt))
             i += 2
         else:
@@ -78,7 +95,14 @@ def unescape(value: str) -> str:
 
 
 def read_corpus() -> list[str]:
-    return [line for line in CORPUS.read_text(encoding="utf-8").split("\n") if line]
+    """Corpus rows, with the same escaping the fixture uses.
+
+    The corpus is escape-aware since #806: it carried a raw `U+0000` and a raw `U+001B`,
+    which made the file binary to every diff tool. It contains no literal backslash, so
+    interpreting escapes here cannot change any existing row — checked before the change,
+    and asserted in `tests/test_key_stability.py`.
+    """
+    return [unescape(line) for line in CORPUS.read_text(encoding="utf-8").split("\n") if line]
 
 
 def compute(rows: list[str]) -> str:

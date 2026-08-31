@@ -24,6 +24,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
+
 import pytest
 
 WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
@@ -49,9 +51,30 @@ def test_there_are_workflows_to_check() -> None:
 
 
 def _runs_on_push(text: str) -> bool:
-    """True when the `on:` block includes a `push:` trigger."""
-    on_block = re.search(r"^on:\s*$(.*?)^\S", text, re.M | re.S)
-    return bool(on_block and re.search(r"^\s{2}push:", on_block.group(1), re.M))
+    """True when the workflow's `on:` includes a `push` trigger, in any of its forms.
+
+    Parsed rather than pattern-matched. An earlier draft required `on:` on its own line
+    followed by exactly two spaces before `push:`, which silently exempted the inline
+    forms — `on: push` and `on: [push, pull_request]` — and this repository already uses
+    the inline style elsewhere. A gate that reports "not a push workflow" for a push
+    workflow passes for the wrong reason, which is the failure this file exists to catch.
+
+    Note the YAML 1.1 trap: `on` is a boolean keyword, so PyYAML parses the key as
+    `True`, not `"on"`. All three forms below land under that key.
+
+        on: push                      -> {True: "push"}
+        on: [push, pull_request]      -> {True: ["push", "pull_request"]}
+        on:\n  push:\n    branches: … -> {True: {"push": …}}
+    """
+    document = yaml.safe_load(text) or {}
+    triggers = document.get("on", document.get(True))
+    if isinstance(triggers, str):
+        return triggers == "push"
+    if isinstance(triggers, list):
+        return "push" in triggers
+    if isinstance(triggers, dict):
+        return "push" in triggers
+    return False
 
 
 @pytest.mark.parametrize("path", _workflows(), ids=lambda p: p.name)
@@ -81,6 +104,24 @@ def test_no_unguarded_base_ref_in_a_push_workflow(path: Path) -> None:
         "three jobs came to run `git merge-base origin/ HEAD` on every push to main:\n  "
         + "\n  ".join(offenders)
     )
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("on: push\n", True),
+        ("on: [push, pull_request]\n", True),
+        ("on:\n  push:\n    branches: [main]\n  pull_request:\n", True),
+        ("on: pull_request\n", False),
+        ("on: [pull_request]\n", False),
+        ("on:\n  pull_request:\n", False),
+        ("on:\n  workflow_dispatch:\n", False),
+    ],
+    ids=["inline-str", "inline-list", "block", "pr-str", "pr-list", "pr-block", "dispatch"],
+)
+def test_every_trigger_form_is_recognised(source: str, expected: bool) -> None:
+    """The inline forms are the ones an earlier draft of this gate exempted."""
+    assert _runs_on_push(source) is expected
 
 
 def test_the_check_can_actually_fail() -> None:

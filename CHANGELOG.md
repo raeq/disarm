@@ -163,6 +163,30 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`gem install disarm` failed on every Ruby released since December 2024 (#699).** The
+  five precompiled platform gems all carried `required_ruby_version = ">= 3.1, < 3.4.dev"`
+  and no source gem had ever been published, so resolution simply ended — RubyGems never
+  tried to compile.
+
+  The ceiling was packaging, not code: the glue builds and its suite passes on Ruby 4.0.6
+  against the published core. `< 3.4.dev` was synthesised from a stale `ruby-versions:
+  "3.1,3.2,3.3"` in the cross-gem build, and both test matrices agreed with the stale list,
+  so nothing caught it.
+
+  Cross-gems now build 3.1 through 4.0, and both matrices test the same set — a version
+  missing from that list is not a degraded install but no install at all, because
+  `lib/disarm.rb` requires `disarm/<RUBY_VERSION>/disarm` and a platform gem carries only
+  the ABIs it was built for.
+
+  A **source gem** is published alongside them, which is what turns a future unbuilt ABI
+  into a local compile rather than a resolution failure. Every version from 0.10.0 to
+  0.14.1 was precompiled-only: 35 platform gems, zero `ruby`-platform gems. The push loop
+  has always handled a source gem — it sets `platform=ruby` when the filename parse yields
+  no suffix — and that branch had never been reached because nothing produced one.
+
+  The README and the getting-started page promised a source fallback that did not exist.
+  Both now state the built range and describe a fallback that is real.
+
 - **NFKC amplification inside a preset is now bounded (#768).** `src/limits.rs` gives the
   reason for its one output cap as *an amplification a caller's own input-size check cannot
   foresee*. That is true of NFKC as well, and NFKC was not capped: `U+FDFA` ARABIC LIGATURE

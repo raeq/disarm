@@ -65,6 +65,11 @@ test = [
     "hypothesis>=6.155.3",
     "mypy>=2.1.0",
     "sybil>=6",  # executable cookbook doc-tests (#154)
+    # The workflow gates (#830, #832) read `.github/workflows/*.yml`, and pattern-
+    # matching them is what produced the bug review caught: an `on: push` written
+    # inline read as "not a push workflow" and was silently exempted. Parsing needs
+    # a YAML reader, and `on` being a YAML 1.1 boolean is not a thing to hand-roll.
+    "pyyaml>=6",
 ]
 dev = [
     "disarm[test]",

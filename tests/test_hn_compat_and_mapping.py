@@ -173,3 +173,24 @@ def test_label_separators_are_the_uts46_set() -> None:
         # may appear *in a label*.
         assert not d.compat_fold, sep
         assert not suspicious, sep
+
+
+@pytest.mark.parametrize("raw", ["ｇoogle", "ﬁle", "Ⅰbm", "ＮＨＫ"])
+def test_a_compat_form_inside_punycode_fails_closed_on_the_mapping(raw: str) -> None:
+    """Pins the argument for *not* checking `compat_fold` after the decode.
+
+    The raw-label scan cannot see inside punycode — an ACE label is pure ASCII — so a
+    post-decode check looks necessary. It is not: UTS #46 puts the whole compatibility
+    repertoire in DISALLOWED, so `domain_to_unicode` errors and the fail-closed branch
+    has already set `suspicious`. A check placed after the decode would also run after
+    the NFKC and could never fire anyway.
+
+    The punycode here is built by encoding the compatibility form *directly*, bypassing
+    the mapping a registrar would apply — which is the only way such a label exists.
+    """
+    ace = "xn--" + raw.encode("punycode").decode("ascii")
+    suspicious, d = is_suspicious_hostname(f"{ace}.com")
+    assert suspicious, ace
+    # Not via `compat_fold`: the label really is plain ASCII. The mapping caught it.
+    assert not d.compat_fold, ace
+    assert d.canonical == f"{ace}.com", ace

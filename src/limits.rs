@@ -47,11 +47,32 @@ pub const MAX_REGEX_DFA_BYTES: usize = 1_048_576; // 1 MiB
 ///
 /// disarm does not cap raw input size — bounding untrusted input is the
 /// caller's responsibility (all operations are linear time/memory; see #80).
-/// This bound is the one exception: registered replacement *values* are
+/// This bound is one of two exceptions (#256, #768): registered replacement *values* are
 /// caller-supplied and unbounded, so a tiny input can expand to an enormous
 /// string via a separately-registered value (an amplification a caller's own
 /// input-size check cannot foresee). The pre-pass output is therefore capped.
+/// The other is [`MAX_NORMALIZE_OUTPUT_BYTES`], below: NFKC amplifies by up to 18× and
+/// the same argument applies to it.
 pub const MAX_REPLACEMENT_OUTPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
+
+/// Output ceiling on the normalization pre-pass inside a preset (#768).
+///
+/// The comment above gives the reason for the replacement cap as *an amplification a
+/// caller's own input-size check cannot foresee*. That is true of NFKC as well, and NFKC
+/// was not capped. `U+FDFA` ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM expands to 18
+/// characters, and a caller who bounds input at 6 MB — the mitigation the comment assigns
+/// them — got 60 MB out of `canonicalize`, measured.
+///
+/// Applies to the **preset** path only. `normalize(text, form="NFKC")` is a caller naming
+/// the operation whose expansion this is, and bounding a function against the thing it was
+/// asked to do would be a different decision; the presets never mention normalization in
+/// their names.
+///
+/// One shared ceiling rather than a tighter one for the key builders (#768 §2). A second
+/// limit is a second thing to document, discover and get wrong, and the argument for it —
+/// that a 3.6 MB search key is already meaningless — is an argument about the caller's
+/// data, not about a bound disarm can defend.
+pub const MAX_NORMALIZE_OUTPUT_BYTES: usize = MAX_REPLACEMENT_OUTPUT_BYTES;
 
 /// Upper bound on the transliteration output-capacity hint.
 ///

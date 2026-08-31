@@ -101,6 +101,17 @@ fn apply_into(
     match step {
         Step::Nfkc => {
             crate::normalize::normalize_into(input, "NFKC", out)?;
+            // #768: NFKC is an amplification the caller cannot foresee from the input
+            // size, which is the reason `limits.rs` gives for capping the replacement
+            // pre-pass — and NFKC was not capped. `U+FDFA` expands to 18 characters, so
+            // 6 MB in produced 60 MB out. Checked against produced output, the same shape
+            // the replacement cap uses.
+            if out.len() > crate::limits::MAX_NORMALIZE_OUTPUT_BYTES {
+                return Err(crate::ErrorRepr::NormalizeOutputTooLarge {
+                    size: out.len(),
+                    max: crate::limits::MAX_NORMALIZE_OUTPUT_BYTES,
+                });
+            }
             Ok(true)
         }
         Step::Nfc => {

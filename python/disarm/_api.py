@@ -2133,7 +2133,10 @@ def find_confusables(
     """
     if not isinstance(text, str):
         raise TypeError(f"find_confusables() expects str, got {type(text).__name__}")
-    return _find_confusables(text, target_script=_target_script(target_script))
+    result: list[tuple[str, int, str]] = _find_confusables(
+        text, target_script=_target_script(target_script)
+    )
+    return result
 
 
 def find_unmapped_confusables(

@@ -75,6 +75,9 @@ from disarm._core import (
     _escape_html as _escape_html,
 )
 from disarm._core import (
+    _find_confusables as _find_confusables,
+)
+from disarm._core import (
     _find_key_collisions as _find_key_collisions,
 )
 from disarm._core import (

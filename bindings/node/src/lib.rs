@@ -374,6 +374,31 @@ pub fn is_zalgo(text: String, threshold: i64) -> Result<bool, NapiError> {
 
 // ── Deobfuscation & security presets (fallible) ───────────────────────────────
 
+/// Strip the non-interchange and invisible classes while KEEPING the script (#698).
+///
+/// The seven universal `strip*` primitives cannot be composed into this, and the
+/// difference runs in both directions. `strip_format` is *less* destructive where
+/// rendering matters — it preserves the Private Use Area for icon fonts and keeps the
+/// VS15/VS16 presentation selectors after a base (`RENDERING_STRIP`), both of which the
+/// naive chain deletes — and *more* destructive with whitespace, because it ends in
+/// `CollapseWs` and folds TAB/LF to a space where the primitives leave them. The policy
+/// itself is a private constant, so a caller on this binding could not express it at all.
+///
+/// Unlike `canonicalize` it does NOT fold confusables, so non-Latin text keeps its script
+/// — the point of the preset.
+/// Canonicalize, but fail rather than silently normalize a structural difference away.
+#[napi]
+pub fn canonicalize_strict(text: String) -> Result<String, NapiError> {
+    api::canonicalize_strict(&text)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
+}
+
+#[napi]
+pub fn strip_format(text: String) -> String {
+    api::strip_format(&text).into_owned()
+}
+
 #[napi]
 pub fn strip_obfuscation(text: String) -> Result<String, NapiError> {
     api::strip_obfuscation(&text)

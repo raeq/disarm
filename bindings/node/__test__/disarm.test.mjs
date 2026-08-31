@@ -152,6 +152,14 @@ describe('text cleaning', () => {
 describe('deobfuscation & security', () => {
   test('stripObfuscation', () => expect(disarm.stripObfuscation('рroduсt')).toBe('product'))
   test('canonicalize', () => expect(disarm.canonicalize('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥')).toBe('Real text'))
+  // #698: stripFormat KEEPS the script; canonicalize folds it. The same input each way
+  // is the whole reason the preset is not composable from the universal strip* calls.
+  test('stripFormat keeps the script', () =>
+    expect(disarm.stripFormat('ар‍р')).toBe('арр'))
+  test('canonicalize folds the same input to Latin', () =>
+    expect(disarm.canonicalize('ар‍р')).toBe('app'))
+  test('canonicalizeStrict is reachable', () =>
+    expect(disarm.canonicalizeStrict('Hello')).toBe(disarm.canonicalize('Hello')))
   // #430: securityClean is a deprecated alias for canonicalize (removed in 1.0).
   test('securityClean (deprecated alias)', () =>
     expect(disarm.securityClean('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥')).toBe(disarm.canonicalize('ℝ𝕖𝕒𝕝 𝕥𝕖𝕩𝕥')))

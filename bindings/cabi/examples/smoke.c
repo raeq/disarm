@@ -178,6 +178,44 @@ int main(void) {
     if (!c_on_ok) failures++;
     disarm_string_free(c_on);
 
+    /* #707: sanitize_filename — the one entry point whose whole purpose is a
+     * filesystem sink, and the C ABI had no way to reach it. Transliteration is
+     * load-bearing (#601), so the accented source must come back romanized. */
+    DisarmResult_t fname = disarm_sanitize_filename(
+        "h\xc3\xa9llo/w\xc3\xb6rld.txt", "_", 255, "universal", NULL, true);
+    check("sanitize_filename", fname.value, "hello_world.txt");
+    if (fname.error) { printf("unexpected error: %s\n", fname.error); failures++; }
+    disarm_string_free(fname.value);
+    disarm_string_free(fname.error);
+
+    /* Its error path: an unknown platform is rejected, not silently defaulted. */
+    DisarmResult_t fbad = disarm_sanitize_filename("x", "_", 255, "vms", NULL, true);
+    printf("%-28s %-6s\n", "sanitize bad platform",
+           (fbad.error && !fbad.value) ? "OK" : "FAIL");
+    if (!(fbad.error && !fbad.value)) failures++;
+    disarm_string_free(fbad.value);
+    disarm_string_free(fbad.error);
+
+    /* #698: strip_format keeps the SCRIPT — the property that separates it from
+     * canonicalize. Cyrillic in, Cyrillic out, with the zero-width joiner gone. */
+    char *kept = disarm_strip_format("\xd0\xb0\xd1\x80\xe2\x80\x8d\xd1\x80");
+    check("strip_format keeps script", kept, "\xd0\xb0\xd1\x80\xd1\x80");
+    disarm_string_free(kept);
+
+    /* The contrast, on the same input: canonicalize folds it to Latin. */
+    DisarmResult_t folded = disarm_canonicalize("\xd0\xb0\xd1\x80\xe2\x80\x8d\xd1\x80");
+    check("canonicalize folds script", folded.value, "app");
+    disarm_string_free(folded.value);
+    disarm_string_free(folded.error);
+
+    /* canonicalize_strict: same value on clean input, and it is reachable at all. */
+    DisarmResult_t strict = disarm_canonicalize_strict("Hello");
+    printf("%-28s %-6s\n", "canonicalize_strict",
+           (strict.value && !strict.error) ? "OK" : "FAIL");
+    if (!(strict.value && !strict.error)) failures++;
+    disarm_string_free(strict.value);
+    disarm_string_free(strict.error);
+
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");
         return 0;

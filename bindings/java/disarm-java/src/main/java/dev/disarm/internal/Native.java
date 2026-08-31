@@ -86,6 +86,10 @@ public final class Native {
 
     public static native String canonicalize(String text);
 
+    public static native String canonicalizeStrict(String text);
+
+    public static native String stripFormat(String text);
+
     public static native String searchKey(String text, String lang);
 
     public static native String sortKey(String text, String lang);

@@ -743,6 +743,32 @@ pub fn stripObfuscation<'l>(
     })
 }
 
+/// Strip the non-interchange and invisible classes while keeping the script (#698).
+///
+/// Not composable from the seven universal `strip*` primitives, and the difference runs
+/// both ways: this preserves the Private Use Area and the VS15/VS16 presentation
+/// selectors after a base (`RENDERING_STRIP`), which the naive chain deletes, and it
+/// collapses TAB/LF where the primitives leave them. The policy is a private constant.
+/// Infallible.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn stripFormat<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> JObject<'l> {
+    map_str(env, input, |t| api::strip_format(t).into_owned())
+}
+
+/// `canonicalize`, but refuses rather than silently normalizing away a structural
+/// difference. The half of the pair that lets a caller *reject* input instead of
+/// comparing a value the sender never wrote.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn canonicalizeStrict<'l>(
+    env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+) -> JObject<'l> {
+    map_str_try(env, input, |t| {
+        api::canonicalize_strict(t).map(std::borrow::Cow::into_owned)
+    })
+}
+
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn canonicalize<'l>(
     env: EnvUnowned<'l>,

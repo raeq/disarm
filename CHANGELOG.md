@@ -237,6 +237,55 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   mapping, so it cannot see a compatibility form by construction, and `False` beside a
   changed `canonical` is the correct answer rather than a defect.
 
+- **`slugify(allow_unicode=True)` keeps letters, digits and marks — and nothing else
+  (#712), and cuts on a grapheme boundary (#711).** Both public descriptions promised a
+  category restriction — "keep non-ASCII **letters**" (Python), "keep Unicode **word
+  characters**" (Rust) — and the filter applied none. Every non-ASCII, non-whitespace code
+  point survived, whatever its category, while the default ASCII path screened all of them:
+
+  ```
+  slugify("file\u202Egnp.exe", allow_unicode=True)   'file‮gnp-exe'  ->  'file-gnp-exe'
+  slugify("a\u200Bb", allow_unicode=True)            'a​b'            ->  'a-b'
+  slugify("a\uFFFEb", allow_unicode=True)            'a￾b'           ->  'a-b'
+  slugify("Hello 👋 World", allow_unicode=True)      'hello-👋-world' ->  'hello-world'
+  ```
+
+  `'file‮gnp-exe'` renders as `fileexe.png`, and the slug is then the URL, the anchor text
+  or the filename. Turning on `allow_unicode` turned the whole screen off at once, which is
+  unlikely to be what a caller asking to keep the original script believed they were opting
+  into.
+
+  The kept set is `L* | N* | M*` plus the two joiners. That matches
+  `django.utils.text.slugify(allow_unicode=True)`, which keeps `\w`, with two deliberate
+  additions Django does not make:
+
+  - **Combining marks**, capped at two per base. Django drops them, which breaks Devanagari
+    and Arabic. Two is the cap the `Step::Zalgo(2)` presets use, and what Vietnamese `ệ`
+    needs; 30 stacked marks on one base used to survive intact.
+  - **ZWJ and ZWNJ**, between two other kept characters — orthographically required, so
+    dropping them changes the word. They are never emitted at a token edge, where they
+    would be invisible padding.
+
+  **The `max_length` cut lands on a grapheme-cluster boundary (#711).** It landed on a code
+  point boundary, so it could fall inside a cluster and emit the invisible character the
+  rest of the library exists to remove:
+
+  ```
+  slugify("한국어", allow_unicode=True, max_length=6)      '한국'   (unchanged)
+  slugify("क\u094Dषि", allow_unicode=True, max_length=9)   'क्ष'  ->  ''
+  ```
+
+  A cluster is kept whole or dropped whole, so a budget below the first cluster yields an
+  empty slug — the same outcome an all-stopword input already produces. `word_boundary=True`
+  is fixed with it: it called the same code-point floor, then looked for a separator that
+  was not there. `max_length` stays measured in bytes; what changed is where the cut lands.
+  The ASCII path keeps its cheap code-point route, where the two boundaries coincide.
+
+  Side effect: the `slugify_unicode` form-invariance tail is now **empty**. It held four
+  code points (`U+037E`, `U+1FEE`, `U+1FEF`, `U+1FFD`) whose raw spelling slugged
+  differently from their normalized form; all four are punctuation the category filter now
+  drops in both spellings.
+
 - **Bidi direction now comes from `Bidi_Class`, not a five-name script list (#773).**
   `strong_dir` resolved direction by looking a character's *script name* up in
   `RTL_SCRIPTS = ["Hebrew", "Arabic", "Syriac", "Thaana", "NKo"]`. UAX #9 resolves it from

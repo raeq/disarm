@@ -241,10 +241,17 @@ def test_transliterate_family_raw_vs_normalized_closed(name: str) -> None:
     )
 
 
-# `slugify_unicode` preserves Unicode, so on top of the transliterate tail it strips a
-# few raw Greek accent/question marks differently from their normalized form (U+037E ;,
-# U+1FEF grave, U+1FEE, U+1FFD) — all punctuation, not letters. Pinned as the slug tail.
-SLUGIFY_UNICODE_TAIL = frozenset({0x037E, 0x1FEE, 0x1FEF, 0x1FFD})
+# The tail is EMPTY, and closing it was a side effect of #712 rather than the point of it.
+#
+# It used to hold four code points — U+037E Greek question mark, U+1FEE, U+1FEF, U+1FFD —
+# where the raw spelling slugged differently from its normalized form. All four are
+# punctuation or `Sk` diacritic marks that `allow_unicode` used to keep because the filter
+# kept every non-ASCII code point whatever its category. Restricting it to `L* | N* | M*`
+# drops them in *both* spellings, so the two agree.
+#
+# Pinned as empty rather than deleted: a code point reappearing here means the category
+# filter has been widened, which is the change #712 is about.
+SLUGIFY_UNICODE_TAIL: frozenset[int] = frozenset()
 
 
 def test_slugify_unicode_raw_vs_normalized_canonically_equivalent() -> None:

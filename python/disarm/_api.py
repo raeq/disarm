@@ -554,10 +554,15 @@ def slugify(
         text: Input Unicode string.
         separator: Character(s) between slug words.
         lowercase: Convert to lowercase.
-        max_length: Maximum slug length in bytes (0 = unlimited).
-            With ``allow_unicode=True``, multi-byte characters count as
-            2–4 bytes each — use `grapheme_truncate` for
-            character-aware limiting.
+        max_length: Maximum slug length in **bytes** (0 = unlimited). The unit is
+            right for the filesystem and URL limits it exists for; use
+            `grapheme_truncate` when you want a character count instead.
+
+            With ``allow_unicode=True`` the cut lands on a **grapheme-cluster**
+            boundary, so it never splits a cluster: a Devanagari conjunct or a
+            Hangul syllable is kept whole or dropped whole. A budget too small
+            for the first cluster therefore yields an empty slug — handle it the
+            same way you handle an all-stopword input, or pass ``default``.
         word_boundary: When truncating via max_length, cut at word boundaries.
         save_order: When ``True``, only leading and trailing stopwords are
             removed; interior stopwords are kept so relative word order is
@@ -566,7 +571,23 @@ def slugify(
         stopwords: Words to remove from the slug.
         regex_pattern: Custom regex for stripping characters.
         replacements: Pre-transliteration (old, new) substitution pairs.
-        allow_unicode: Keep non-ASCII letters instead of transliterating.
+        allow_unicode: Keep non-ASCII **letters, digits and combining marks**
+            instead of transliterating to ASCII. Everything else is a separator,
+            as it is on the ASCII path: format characters (bidi controls, ZWSP,
+            ZWNBSP, soft hyphen, the tag block), private use, noncharacters,
+            surrogates, punctuation, symbols and emoji. This matches
+            ``django.utils.text.slugify(allow_unicode=True)``, which keeps
+            ``\w`` — with two deliberate additions Django does not make:
+
+            * **Combining marks** (``M*``) are kept, capped at two per base
+              character. Django drops them, which breaks Devanagari and Arabic;
+              two is the cap the ``strip_zalgo`` presets use and what Vietnamese
+              ``ệ`` needs.
+            * **ZWJ and ZWNJ** are kept *between* two other kept characters.
+              Both are orthographically required — ZWNJ separates a Persian
+              ``می`` prefix from its verb, ZWJ forms a Devanagari conjunct — so
+              dropping them changes the word. They are never emitted at the start
+              or end of a token, where they would be invisible padding.
         lang: Language code for transliteration (e.g. "de", "ru", "auto").
         entities: Decode HTML entities before processing.
         decimal: Decode HTML decimal entities (&#123;).

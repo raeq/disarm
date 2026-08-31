@@ -463,10 +463,19 @@ pub fn _transliterate_batch(
 
 /// Batch accent stripping: process a list of strings in a single PyO3 boundary
 /// crossing.
+///
+/// Delegates to `strip_accents_into` rather than restating the algorithm (#822). It used
+/// to run its own `nfd().filter(is_combining_mark).nfc()` here, which is precisely the
+/// stateless filter that `strip_accents_into`'s own comment rules out: whether a mark is
+/// strippable depends on the base it sits on (#749). The batch path therefore deleted the
+/// negation overlay the single path keeps, and inverted 45 mathematical relations —
+/// `\u{2204}` ∄ became `\u{2203}` ∃, `\u{2260}` ≠ became `=`.
+///
+/// The batch function owns the boundary crossing and the released GIL; it does not own
+/// the algorithm. One reusable buffer across the whole batch, as in the pipeline (#236).
 #[pyfunction]
 #[pyo3(signature = (texts,))]
 pub fn _strip_accents_batch(py: Python<'_>, texts: Vec<String>) -> PyResult<Vec<String>> {
-    use unicode_normalization::UnicodeNormalization;
     if texts.len() > crate::MAX_BATCH_SIZE {
         return Err(crate::ErrorRepr::BatchTooLarge {
             len: texts.len(),
@@ -476,16 +485,15 @@ pub fn _strip_accents_batch(py: Python<'_>, texts: Vec<String>) -> PyResult<Vec<
     }
     // Pure-Rust loop with the GIL released (#70).
     Ok(py.detach(move || {
+        let mut buf = String::new();
         texts
             .into_iter()
             .map(|text| {
                 if text.is_ascii() {
                     text // move, no clone — Vec is consumed by into_iter()
                 } else {
-                    text.nfd()
-                        .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
-                        .nfc()
-                        .collect()
+                    crate::transliterate::strip_accents_into(&text, &mut buf);
+                    std::mem::take(&mut buf)
                 }
             })
             .collect()

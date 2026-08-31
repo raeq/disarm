@@ -356,6 +356,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // The bundled confusables.txt release (#560), read from the same const the Rust
     // surface exposes so the Python wrapper never restates the number.
     m.add("_CONFUSABLES_VERSION", api::CONFUSABLES_VERSION)?;
+    m.add("_UNICODE_VERSION", api::UNICODE_VERSION)?;
+    m.add("_KEY_SCHEMA_VERSION", api::KEY_SCHEMA_VERSION)?;
 
     Ok(())
 }

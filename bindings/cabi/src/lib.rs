@@ -565,6 +565,27 @@ fn disarm_confusables_version() -> char_p::Box {
     to_c(api::CONFUSABLES_VERSION.to_owned())
 }
 
+/// The UCD release disarm's normalizer implements (#645). Free with
+/// [`disarm_string_free`].
+///
+/// Not a library-wide Unicode version — the bundled tables track different releases, and
+/// `docs/provenance.md` is the census. This is the one integrators ask about, because it
+/// decides whether disarm's normalization agrees with the host platform's.
+#[ffi_export]
+fn disarm_unicode_version() -> char_p::Box {
+    to_c(api::UNICODE_VERSION.to_owned())
+}
+
+/// Whether a key stored under an earlier release still compares equal (#645).
+///
+/// A monotonic counter, not a version: two artifacts reporting the same value produce the
+/// same key for the same input, and different values mean reindex. Meaningless in
+/// isolation, by design — the question a key consumer has is a comparison, not a lookup.
+#[ffi_export]
+fn disarm_key_schema_version() -> u32 {
+    api::KEY_SCHEMA_VERSION
+}
+
 /// ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
 /// [case fold] → strip control → strip zero-width → collapse whitespace.
 ///

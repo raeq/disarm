@@ -88,6 +88,11 @@ def compute(rows: list[str]) -> str:
         "# disarm golden key fixture — see tests/fixtures/key_stability/README.md",
         f"# generated against disarm {disarm.__version__}",
         f"# rows = {len(rows)}",
+        # #645: the schema counter travels with the data it describes. `KEY_SCHEMA_VERSION`
+        # is only worth anything if regenerating this fixture without bumping it is caught,
+        # and that is exactly how a counter like this goes stale. The gate lives in
+        # `tests/test_key_stability.py`.
+        f"# key_schema_version = {disarm.KEY_SCHEMA_VERSION}",
         "# columns: input\t" + "\t".join(FUNCTIONS),
     ]
     for row in rows:

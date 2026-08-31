@@ -19,6 +19,8 @@ _MAX_BATCH_SIZE: int
 
 # The bundled `confusables.txt` release, parsed from the TSV header at build time (#560).
 _CONFUSABLES_VERSION: str
+_UNICODE_VERSION: str
+_KEY_SCHEMA_VERSION: int
 
 class DisarmError(ValueError): ...
 class InvalidArgumentError(DisarmError): ...

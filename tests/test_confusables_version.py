@@ -83,12 +83,57 @@ def test_distinct_from_the_package_version() -> None:
     assert disarm.CONFUSABLES_VERSION == _header_version(LATIN_TSV)
 
 
-def test_case_folding_version_is_not_claimed() -> None:
-    """Guards the naming decision (#560 review).
+def test_unicode_version_is_scoped_to_the_normalizer() -> None:
+    """The #560 guard, discharged and rewritten (#645).
 
-    The constant is deliberately not called ``UNICODE_VERSION``: disarm's tables do not
-    share one Unicode release, so a library-wide name would be wrong for three of the
-    four surfaces listed in ``docs/provenance.md``. If someone later adds that alias,
-    this test asks them to reckon with the per-table versions first.
+    This test used to assert ``not hasattr(disarm, "UNICODE_VERSION")``. Its stated purpose
+    was to force whoever added that name to reckon with the per-table versions first,
+    because disarm's tables do not share one Unicode release and a library-wide constant
+    would be wrong for most of them. #645 is that reckoning: the constant now exists, and
+    it is **not** library-wide. It names the UCD the *normalizer* implements — the only
+    scope for which one number is correct, and the one integrators actually ask about,
+    because it decides whether disarm's normalization agrees with the host platform's.
+
+    So the guard is kept and pointed at the thing that still matters: that the two
+    constants stay distinct questions, and that no third constant appears claiming to
+    cover the artifact as a whole. ``docs/provenance.md`` remains the census.
     """
-    assert not hasattr(disarm, "UNICODE_VERSION")
+    assert hasattr(disarm, "UNICODE_VERSION")
+    assert disarm.UNICODE_VERSION.count(".") == 2, disarm.UNICODE_VERSION
+
+    # No third constant claiming to cover the artifact as a whole. The bundled tables
+    # that track other releases — case folding 16.0, East Asian width 15.1.0 — are
+    # deliberately not exposed as constants, so a caller cannot mistake any one number
+    # for the library's Unicode version.
+    assert not hasattr(disarm, "CASE_FOLDING_VERSION")
+    assert not hasattr(disarm, "EAST_ASIAN_WIDTH_VERSION")
+
+
+def test_unicode_version_answers_the_question_it_exists_for() -> None:
+    """*Will my normalization agree with the host platform's?* — askable, not guessed.
+
+    The assertion is the direction, not the gap: `docs/provenance.md` claims every
+    divergence is disarm being **more** current, and disarm falling behind the host is the
+    one case it does not describe. The gap itself moves with the interpreter, so pinning a
+    number here would only pin this machine.
+    """
+    import unicodedata
+
+    host = tuple(int(part) for part in unicodedata.unidata_version.split("."))
+    ours = tuple(int(part) for part in disarm.UNICODE_VERSION.split("."))
+    assert ours >= host, (
+        f"disarm normalizes against UCD {disarm.UNICODE_VERSION}, this interpreter "
+        f"carries {unicodedata.unidata_version}"
+    )
+
+
+def test_the_two_version_constants_are_different_questions() -> None:
+    """They read 17.0.0 both today, which is exactly why this asserts the wiring.
+
+    `CONFUSABLES_VERSION` is parsed from the TSV header by `build.rs`;
+    `UNICODE_VERSION` comes from `unicode-normalization`. If the second were ever wired
+    to the first, the values would agree forever and nothing would notice — so the check
+    is that the confusable constant still tracks its table, independently.
+    """
+    assert disarm.CONFUSABLES_VERSION == _header_version(LATIN_TSV)
+    assert disarm.UNICODE_VERSION != "", "the normalizer version must be populated"

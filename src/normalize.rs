@@ -15,6 +15,13 @@ use unicode_normalization::UnicodeNormalization;
 // produced output at `MAX_NORMALIZE_OUTPUT_BYTES` (#768). This comment claimed otherwise
 // until then.
 
+// `UNICODE_VERSION`: the UCD release `unicode-normalization` implements. Emitted by
+// build.rs from the crate's own const, so it cannot drift from the tables it names — the
+// same discipline `CONFUSABLES_VERSION` uses. The doc comment lives on the generated item
+// (a doc comment cannot attach to an `include!`). Re-exported as
+// `crate::api::UNICODE_VERSION` (#642, #645).
+include!(concat!(env!("OUT_DIR"), "/unicode_version.rs"));
+
 /// Validate normalization form string. Returns an error for invalid forms.
 #[inline]
 pub(crate) fn validate_form(form: &str) -> Result<(), crate::ErrorRepr> {

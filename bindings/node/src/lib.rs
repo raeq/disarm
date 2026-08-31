@@ -725,6 +725,23 @@ pub fn script_info(name: String) -> Result<ScriptMeta, NapiError> {
 /// from (#560). Deliberately not called a "Unicode version": disarm's other tables
 /// track different releases (see docs/provenance.md), so this answers one question —
 /// how current is the confusables fold?
+/// The UCD release disarm's normalizer implements (#645). Not a library-wide Unicode
+/// version — the bundled tables track different releases; this is the one integrators ask
+/// about, because it decides whether disarm's normalization agrees with the host
+/// platform's.
+#[napi]
+pub fn unicode_version() -> String {
+    api::UNICODE_VERSION.to_owned()
+}
+
+/// Whether a key stored under an earlier release still compares equal (#645). A
+/// monotonic counter, not a version: two artifacts reporting the same value produce the
+/// same key for the same input. Meaningless in isolation, by design.
+#[napi]
+pub fn key_schema_version() -> u32 {
+    api::KEY_SCHEMA_VERSION
+}
+
 #[napi]
 pub fn confusables_version() -> String {
     api::CONFUSABLES_VERSION.to_owned()

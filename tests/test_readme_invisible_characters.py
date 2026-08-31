@@ -62,6 +62,10 @@ def test_the_check_can_actually_fail() -> None:
     Uses a synthetic sample rather than perturbing README.md, so a crash between
     perturb and restore cannot leave the working tree dirty.
     """
-    found = _literal_invisibles('assert canonicalize("‮example​.com")')
+    # Built with chr() rather than pasted: a literal U+202E here would put the
+    # very payload this test rejects into the repository, one file over from the
+    # one being guarded.
+    sample = f'assert canonicalize("{chr(0x202E)}example{chr(0x200B)}.com")'
+    found = _literal_invisibles(sample)
     assert [f"U+{ord(char):04X}" for _, _, char in found] == ["U+202E", "U+200B"]
     assert not _literal_invisibles('assert canonicalize("\\u202eexample\\u200b.com")')

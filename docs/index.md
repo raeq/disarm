@@ -98,7 +98,7 @@ Node, builders in Java — over one shared core, so every language returns the s
 |---|---|---|
 | Python 3.10+ | `disarm` on [PyPI](https://pypi.org/project/disarm/) | [guide](python/getting-started.md) |
 | Rust 1.81+ | `disarm` on [crates.io](https://crates.io/crates/disarm) | [guide](rust/getting-started.md) · [docs.rs](https://docs.rs/disarm) |
-| Ruby 3.1+ | `disarm` on RubyGems | [guide](ruby/getting-started.md) |
+| Ruby 3.1+, RubyGems 3.3.22+ | `disarm` on RubyGems | [guide](ruby/getting-started.md) |
 | Node.js 14+ | `disarm` on npm | [guide](node/getting-started.md) |
 | Java / Kotlin | `dev.disarm:disarm`, `dev.disarm:disarm-kotlin` on Maven Central | [guide](java/getting-started.md) |
 | C / other FFI | C ABI and `disarm.h` | [bindings/cabi](https://github.com/raeq/disarm/tree/main/bindings/cabi) |

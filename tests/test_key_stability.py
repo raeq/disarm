@@ -29,6 +29,8 @@ from pathlib import Path
 
 import pytest
 
+import disarm
+
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_DIR = ROOT / "tests" / "fixtures" / "key_stability"
 CORPUS = FIXTURE_DIR / "corpus.txt"
@@ -203,3 +205,76 @@ class TestTheGateCanFail:
         """A truncated fixture would silently stop checking the tail."""
         _, inputs, _ = golden
         assert inputs == gen.read_corpus()
+
+
+def _header_lines() -> list[str]:
+    with gzip.open(GOLDEN, "rt", encoding="utf-8") as handle:
+        return [line for line in handle.read().split("\n") if line.startswith("#")]
+
+
+class TestTheSchemaCounterCannotGoStale:
+    """#645 — `KEY_SCHEMA_VERSION` is only worth anything if a stale value is caught.
+
+    The constant answers one question: *would a key I stored under an earlier release still
+    compare equal?* Two artifacts reporting the same value produce the same key for the same
+    input. That claim is a lie the moment somebody regenerates the fixture — which is the
+    act of accepting that key output moved — without bumping the counter, and a monotonic
+    counter nobody is forced to bump is the classic way this kind of constant rots.
+
+    So the version travels inside the fixture header, and these assert the two agree. The
+    generator writes `disarm.KEY_SCHEMA_VERSION` at generation time; if the constant has
+    moved since, the fixture is from a different schema and must be regenerated with it.
+    """
+
+    def test_the_fixture_records_a_schema_version(self) -> None:
+        """A gate over a missing header line passes for the wrong reason."""
+        recorded = [line for line in _header_lines() if line.startswith("# key_schema_version")]
+        assert len(recorded) == 1, _header_lines()
+
+    def test_the_fixture_and_the_constant_agree(self) -> None:
+        line = next(line for line in _header_lines() if line.startswith("# key_schema_version"))
+        recorded = int(line.split("=")[1].strip())
+        assert recorded == disarm.KEY_SCHEMA_VERSION, (
+            f"the fixture was generated under key schema {recorded}, but "
+            f"disarm.KEY_SCHEMA_VERSION is {disarm.KEY_SCHEMA_VERSION}. Either the constant "
+            "moved without the fixture being regenerated, or the fixture was regenerated "
+            "without the constant being bumped — and the second is what makes the constant "
+            "a lie for anyone comparing two artifacts."
+        )
+
+    def test_the_constant_is_a_counter_not_a_version_string(self) -> None:
+        """Asserted because the name invites the wrong reading.
+
+        It is not a Unicode version and not disarm's version. `docs/provenance.md` carries
+        the data vintages; this is a monotonic integer whose only meaning is whether two
+        artifacts share it.
+        """
+        assert isinstance(disarm.KEY_SCHEMA_VERSION, int)
+        assert disarm.KEY_SCHEMA_VERSION >= 1
+        assert not isinstance(disarm.KEY_SCHEMA_VERSION, bool)
+
+
+class TestTheUnicodeVersionConstant:
+    """#642/#645 — the normalizer's UCD is askable at runtime, not only in a doc."""
+
+    def test_it_is_a_dotted_numeric_version(self) -> None:
+        parts = disarm.UNICODE_VERSION.split(".")
+        assert len(parts) == 3, disarm.UNICODE_VERSION
+        assert all(part.isdigit() for part in parts), disarm.UNICODE_VERSION
+
+    def test_it_answers_the_question_it_exists_for(self) -> None:
+        """*Will my keys agree with `unicodedata`?* — answerable without running both.
+
+        Usually the answer is no: disarm tracks a newer UCD than most shipped CPythons.
+        The assertion is the comparison being possible, not its outcome, which moves with
+        the host interpreter.
+        """
+        import unicodedata
+
+        host = tuple(int(p) for p in unicodedata.unidata_version.split("."))
+        ours = tuple(int(p) for p in disarm.UNICODE_VERSION.split("."))
+        assert ours >= host, (
+            f"disarm normalizes against UCD {disarm.UNICODE_VERSION} and this interpreter "
+            f"carries {unicodedata.unidata_version}. disarm being *behind* the host is the "
+            "one direction docs/provenance.md does not claim."
+        )

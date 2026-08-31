@@ -480,6 +480,20 @@ module Disarm
     # The Unicode `confusables.txt` release the bundled confusable tables were folded
     # from, e.g. "17.0.0". Not a Unicode version for the library as a whole — the
     # case-folding and width tables track different releases (see docs/provenance.md).
+    # The UCD release disarm's normalizer implements. Not a library-wide Unicode
+    # version — the bundled tables track different releases. This is the one integrators
+    # ask about: it decides whether disarm's normalization agrees with Ruby's.
+    def unicode_version
+      _unicode_version
+    end
+
+    # Whether a key stored under an earlier release still compares equal. A monotonic
+    # counter, not a version: two artifacts reporting the same value produce the same key
+    # for the same input. Meaningless in isolation, by design.
+    def key_schema_version
+      _key_schema_version
+    end
+
     def confusables_version
       translate_errors { _confusables_version }
     end

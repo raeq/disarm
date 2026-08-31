@@ -42,6 +42,10 @@ FLOOR = frozenset(
         "catalog_key",
         "collapse_whitespace",
         "confusables_version",
+        # #645: added complete on all seven, so they join the floor in the same
+        # change rather than waiting for a later one to notice they drifted.
+        "unicode_version",
+        "key_schema_version",
         "demojize",
         "find_key_collisions",
         "find_unmapped_confusables",

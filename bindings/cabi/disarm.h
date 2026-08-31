@@ -222,6 +222,16 @@ disarm_is_suspicious_hostname (
     char const * host);
 
 /** \brief
+ *  Whether a key stored under an earlier release still compares equal (#645).
+ *
+ *  A monotonic counter, not a version: two artifacts reporting the same value produce the
+ *  same key for the same input, and different values mean reindex. Meaningless in
+ *  isolation, by design — the question a key consumer has is a comparison, not a lookup.
+ */
+uint32_t
+disarm_key_schema_version (void);
+
+/** \brief
  *  Metadata for a language code as JSON (`name`, `script`, `region`, `context`), or
  *  an error in the [`DisarmResult`] for an unknown code.
  */
@@ -451,6 +461,17 @@ disarm_transliterate_opts (
     char const * text,
     char const * scheme,
     char const * lang);
+
+/** \brief
+ *  The UCD release disarm's normalizer implements (#645). Free with
+ *  [`disarm_string_free`].
+ *
+ *  Not a library-wide Unicode version — the bundled tables track different releases, and
+ *  `docs/provenance.md` is the census. This is the one integrators ask about, because it
+ *  decides whether disarm's normalization agrees with the host platform's.
+ */
+char *
+disarm_unicode_version (void);
 
 /** \brief
  *  Every upstream confusable source the bundled `target` table does not fold, as a

@@ -93,6 +93,34 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Added
 
+- **`UNICODE_VERSION` and `KEY_SCHEMA_VERSION`, on all seven surfaces (#645, #642, #644).**
+  #641, #642 and #644 were filed separately and are one failure repeated: disarm knows
+  something an integrator needs and has no channel to say it. `CONFUSABLES_VERSION` (#560)
+  is the first instance and the plumbing was already finished, so this extends it rather
+  than building a mechanism.
+
+  `UNICODE_VERSION` is the UCD the **normalizer** implements. Not a library-wide version —
+  there is none, because the bundled tables track different releases — but the scope for
+  which one number is correct, and the one integrators ask about: *will my normalization
+  agree with the host platform's?* Usually not, since disarm tracks a newer UCD than most
+  shipped CPythons. Emitted by `build.rs` from `unicode-normalization`'s own constant, the
+  same discipline `CONFUSABLES_VERSION` uses, so it cannot drift from what it names.
+
+  `KEY_SCHEMA_VERSION` is a monotonic counter, not a version: two artifacts reporting the
+  same value produce the same key for the same input, and different values mean reindex.
+  Meaningless in isolation by design. It covers all eight functions the key-stability
+  fixture tracks, not only the three named "key builders" — a stored `canonicalize` value
+  is as much a key as a stored `search_key` one. The counter is kept honest by that
+  fixture (#644): the version is written into its header at generation time and a test
+  fails when the constant and the header disagree, so regenerating without bumping is red
+  rather than a silent lie. Verified in both directions.
+
+  This reverses a decision the repository had written down and tested. `test_confusables_version.py`
+  asserted `not hasattr(disarm, "UNICODE_VERSION")`, to force whoever added that name to
+  reckon with the per-table versions first. #645 is that reckoning; the test is rewritten
+  to guard what still matters — that the constant is scoped to the normalizer, and that no
+  third constant appears claiming to cover the artifact as a whole.
+
 - **The gaps the parity matrix found, on the surfaces that had them (#698, #707, #677,
   #660).** `strip_format` reached only Rust and Python: the seven universal `strip*`
   primitives cannot be composed into it: its invisibles policy is a private constant, and

@@ -35,6 +35,8 @@ EXPECTED_ALL = {
     # Metadata
     "__version__",
     "CONFUSABLES_VERSION",
+    "KEY_SCHEMA_VERSION",  # #645: the key-comparability counter
+    "UNICODE_VERSION",  # #645: the normalizer's UCD, not a library-wide version
     # Core transforms
     "transliterate",
     "find_untranslatable",

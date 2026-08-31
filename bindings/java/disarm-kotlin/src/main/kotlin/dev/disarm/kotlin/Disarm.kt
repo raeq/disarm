@@ -276,6 +276,18 @@ fun scriptInfo(name: String): ScriptMeta = JDisarm.scriptInfo(name)
 fun confusablesVersion(): String = JDisarm.confusablesVersion()
 
 /**
+ * The UCD release disarm's normalizer implements. Not a library-wide Unicode version —
+ * the bundled tables track different releases.
+ */
+fun unicodeVersion(): String = JDisarm.unicodeVersion()
+
+/**
+ * Whether a key stored under an earlier release still compares equal. A monotonic
+ * counter, not a version; meaningless in isolation, by design.
+ */
+fun keySchemaVersion(): Int = JDisarm.keySchemaVersion()
+
+/**
  * ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents → [case fold]
  * → strip control → strip zero-width → collapse whitespace.
  *

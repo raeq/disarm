@@ -15,7 +15,13 @@ from disarm._core import (
     _CONFUSABLES_VERSION as _CONFUSABLES_VERSION,
 )
 from disarm._core import (
+    _KEY_SCHEMA_VERSION as _KEY_SCHEMA_VERSION,
+)
+from disarm._core import (
     _MAX_BATCH_SIZE as _MAX_BATCH_SIZE,
+)
+from disarm._core import (
+    _UNICODE_VERSION as _UNICODE_VERSION,
 )
 from disarm._core import (
     AnomalyReport as AnomalyReport,

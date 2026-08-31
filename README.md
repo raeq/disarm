@@ -102,13 +102,6 @@ written down in [BINDINGS.md](BINDINGS.md).
 from, so a deployment can answer "am I stale?" without inferring it from behaviour
 ([provenance](docs/provenance.md)).
 
-## Architecture
-
-Rust core with compile-time PHF (perfect hash function) tables for O(1) per-character lookup,
-exposed to Python via PyO3 with the stable ABI (abi3-py39). The Chinese pinyin table contains
-20,924 entries from the Unicode Unihan database; Korean romanization is purely algorithmic
-(jamo decomposition, ~100 lines of Rust).
-
 ## Links
 
 | | |

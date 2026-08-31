@@ -18,7 +18,7 @@ import re
 import pytest
 
 import disarm
-from disarm import KeyCollision, find_key_collisions
+from disarm import KeyCollision, find_key_collisions, fold_case
 
 
 def _accepted_key_forms() -> tuple[str, ...]:
@@ -257,3 +257,87 @@ class TestSurrogateContract:
         # And a genuine collision alongside a surrogate still reports.
         found = find_key_collisions(["a\ud800b", "groß", "gross"], key="fold_case")
         assert [g.values for g in found] == [["groß", "gross"]]
+
+
+class TestTheReducedSetCount:
+    """#763 — the return is a filtered list, not a partition, and the two counts do not add.
+
+    A name that collides with nothing never appears in the result, so a caller who wants
+    "how many distinct identities does this batch hold" has to derive it. Four spellings
+    of that derivation are plausible and three are wrong, but all four agree on any
+    duplicate-free input — and every worked example in the repository was duplicate-free.
+    That is the whole trap: a caller checking their arithmetic against the documentation
+    got agreement from a wrong formula.
+
+    Pinned to ASCII case folding on purpose (R13). `admin` / `Admin` reduce the same way
+    before and after the confusable regeneration in #715/#801 and the `strip_accents`
+    change in #749, so unrelated data work cannot move this fixture.
+    """
+
+    #: The one correct spelling: distinct inputs, minus the distinct inputs the groups
+    #: account for, plus one slot per group.
+    @staticmethod
+    def reduced(names: list[str], groups: list) -> int:
+        return len(set(names)) - sum(len(g.values) for g in groups) + len(groups)
+
+    def test_the_documented_derivation(self) -> None:
+        names = ["admin", "admin", "Admin"]
+        groups = find_key_collisions(names, key="fold_case")
+        assert len(groups) == 1
+        assert groups[0].values == ["admin", "Admin"]  # distinct: two
+        assert groups[0].indices == [0, 1, 2]  # occurrences: three
+        assert self.reduced(names, groups) == 1, "three names, one identity"
+
+    def test_the_three_near_misses_are_wrong_on_this_input(self) -> None:
+        """Asserted, not described. Each is a real substitution somebody would make."""
+        names = ["admin", "admin", "Admin"]
+        groups = find_key_collisions(names, key="fold_case")
+        raw = len(names)
+        distinct = len(set(names))
+        by_values = sum(len(g.values) for g in groups)
+        by_indices = sum(len(g.indices) for g in groups)
+        assert raw - by_values + len(groups) == 2, "counts a repeat as a second identity"
+        assert distinct - by_indices + len(groups) == 0, "mixes the two denominators"
+        assert raw - by_indices + len(groups) == 1, "right here, by cancellation"
+
+    def test_the_derivation_agrees_with_the_direct_form(self) -> None:
+        """The two routes to the same number, pinned to each other.
+
+        `len({fold_case(n) for n in names})` is the quantity by definition; the
+        derivation is the quantity from the report. They must not diverge.
+        """
+        for names in (
+            ["admin", "admin", "Admin"],
+            ["admin", "Admin", "ADMIN"],
+            ["a.txt", "b.txt"],
+            ["a.txt", "a.txt"],
+            ["groß.txt", "gross.txt", "gross.txt", "other.txt"],
+            [],
+        ):
+            groups = find_key_collisions(names, key="fold_case")
+            direct = len({fold_case(n) for n in names})
+            assert self.reduced(names, groups) == direct, names
+
+    def test_a_duplicate_free_batch_cannot_tell_the_four_apart(self) -> None:
+        """Why no existing test caught it: the trap is invisible without a repeat."""
+        names = ["groß.txt", "gross.txt", "other.txt"]
+        groups = find_key_collisions(names, key="fold_case")
+        by_values = sum(len(g.values) for g in groups)
+        by_indices = sum(len(g.indices) for g in groups)
+        assert by_values == by_indices, "no repeat, so the denominators coincide"
+        assert len(set(names)) == len(names)
+        assert self.reduced(names, groups) == 2
+
+    def test_one_reduced_slot_can_hold_unrelated_values(self) -> None:
+        """#728, noted rather than solved: the count is slots, not meanings.
+
+        Every key builder maps some non-empty input to the empty string, so one of the
+        two identities below is the empty key holding three strings with nothing in
+        common.
+        """
+        names = ["", "\u200b", "\u0301\u0302", "bob"]
+        groups = find_key_collisions(names, key="search_key")
+        assert len(groups) == 1
+        assert groups[0].key == ""
+        assert groups[0].values == ["", "\u200b", "\u0301\u0302"]
+        assert self.reduced(names, groups) == 2

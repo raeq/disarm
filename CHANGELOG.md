@@ -962,6 +962,34 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **The reduced-set count beside `find_key_collisions` (#763).** The function returns a
+  filtered list, not a partition — a name that collides with nothing never appears — so
+  the quantity a registry actually wants next, *after reduction, how many distinct
+  identities does this batch hold*, has to be derived by the caller. The derivation has
+  four plausible spellings and three are wrong, because `values` and `indices` have
+  different denominators by design and must not be arithmetically combined.
+
+  The trap was invisible from the documentation: every worked example in the repository
+  was duplicate-free, and on a duplicate-free batch all four spellings agree. Measured
+  over 400 duplicate-free batches, 400/400 agree with the truth; over 400 of the same
+  batches with one repeat injected, 0/400 do. A caller checking their arithmetic against
+  the docs got agreement from a wrong formula.
+
+  The rustdoc, the Python docstring and `docs/api/predicates.md` now state the correct
+  spelling, carry an example with a repeated input, and name the negative. The rustdoc
+  and docstring examples are executable, so the formula is checked rather than asserted.
+  `tests/test_key_collisions.py` gains the reduced count pinned against the direct form
+  (`len({fold_case(n) for n in names})`) and each of the three near-misses asserted wrong
+  on the same input, on an ASCII case-fold fixture that unrelated data work cannot move.
+
+  **A `reduced_size` primitive is not added here.** It is one pass over the existing
+  reducer and would be the natural home for this number, but it is an API addition across
+  seven surfaces for a quantity a caller can now derive correctly from the documented
+  formula. #728 and #731 both build on this count and should decide its shape together
+  with the empty-key question — a reduced slot can hold several unrelated values, because
+  every key builder maps some non-empty input to `""`. Noted on the docs page rather than
+  solved.
+
 - **The I/l/1 and O/0 prototype question has an answer, in one place (#646, #650).**
   Three issues asked it from different directions and each re-argued it from scratch.
   `docs/architecture/prototype-policy.md` records the decision: the class is in scope, it

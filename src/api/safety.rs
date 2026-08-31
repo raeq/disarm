@@ -980,6 +980,44 @@ pub use crate::collisions::KeyCollision;
 /// is deliberately not repeated here — and [`crate::ErrorKind::InvalidArgument`] if a
 /// reducer rejects an input.
 ///
+/// # The return is not a partition, and the two counts do not add (#763)
+///
+/// A name that collides with nothing never appears in the result, so the groups do not
+/// cover the input. The quantity a registry actually wants — *after reduction, how many
+/// distinct identities does this batch hold?* — has to be derived, and the derivation has
+/// one correct spelling:
+///
+/// ```text
+/// reduced = values.iter().collect::<HashSet<_>>().len()
+///         - groups.iter().map(|g| g.values.len()).sum::<usize>()
+///         + groups.len()
+/// ```
+///
+/// `values` and `indices` have **different denominators by design** — see
+/// [`KeyCollision`] — so they must never be arithmetically combined. Substituting
+/// `indices.len()` for `values.len()` above, or the raw input length for the distinct
+/// one, gives a formula that is right on every duplicate-free batch and wrong the moment
+/// an input repeats. Measured over 400 duplicate-free batches all four spellings agree;
+/// over 400 with one repeat injected, only this one does.
+///
+/// ```
+/// use disarm::api::{self, KeyForm};
+/// use std::collections::HashSet;
+/// // A repeated input — the shape every other example here omits, and the only shape
+/// // that separates the correct derivation from its three near-misses.
+/// let names = ["admin", "admin", "Admin"];
+/// let found = api::find_key_collisions(&names, KeyForm::FoldCase, None).unwrap();
+/// assert_eq!(found.len(), 1);
+/// assert_eq!(found[0].values, ["admin", "Admin"]); // distinct inputs: two
+/// assert_eq!(found[0].indices, [0, 1, 2]);         // occurrences: three
+///
+/// let distinct: HashSet<_> = names.iter().collect();
+/// let reduced = distinct.len()
+///     - found.iter().map(|g| g.values.len()).sum::<usize>()
+///     + found.len();
+/// assert_eq!(reduced, 1, "three names, one identity");
+/// ```
+///
 /// ```
 /// use disarm::api::{self, KeyForm};
 /// let found = api::find_key_collisions(

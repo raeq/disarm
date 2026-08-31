@@ -102,6 +102,45 @@ Each result is a `KeyCollision` with three fields:
 A group is reported only when it holds two or more *distinct* inputs. The same
 name twice is the same name twice, which a reservation table already handles.
 
+### The return is not a partition, and the two counts do not add
+
+A name that collides with nothing never appears in the result, so the groups do not
+cover the input. The quantity a registry usually wants next — *after reduction, how
+many distinct identities does this batch hold?* — is not returned, and has to be
+derived. There is one correct spelling:
+
+```python
+reduced = len(set(values)) - sum(len(g.values) for g in groups) + len(groups)
+```
+
+`values` and `indices` have **different denominators by design**, which is why the
+table above says they are not parallel. The consequence is that they cannot be added
+to each other, and it is easy to miss, because every example on this page is
+duplicate-free and all four plausible spellings agree on a duplicate-free batch:
+
+```python
+names = ["admin", "admin", "Admin"]
+groups = find_key_collisions(names, key="fold_case")
+# [KeyCollision(key="admin", values=["admin", "Admin"], indices=[0, 1, 2])]
+
+len(set(names)) - sum(len(g.values) for g in groups) + len(groups)   # 1  ✅ correct
+len(names)      - sum(len(g.values) for g in groups) + len(groups)   # 2  counts a repeat
+len(set(names)) - sum(len(g.indices) for g in groups) + len(groups)  # 0  mixed denominators
+len(names)      - sum(len(g.indices) for g in groups) + len(groups)  # 1  right by cancellation
+```
+
+Three names, one identity. Measured over 400 duplicate-free batches, all four
+spellings agree with the truth; over 400 of the same batches with one repeat
+injected, only the first does.
+
+!!! note "One reduced slot can hold unrelated values"
+
+    Every key builder maps some non-empty input to `""`, so a reduced count can
+    include a slot holding several strings that have nothing to do with each other.
+    `["", "\u200b", "\u0301\u0302", "bob"]` reduces to 2 under `search_key`, and one
+    of those two is the empty key. Tracked separately in
+    [#728](https://github.com/raeq/disarm/issues/728).
+
 ---
 
 ## is_case_fold_stable

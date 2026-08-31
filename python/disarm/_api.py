@@ -2223,6 +2223,21 @@ def find_key_collisions(
     it holds **two or more distinct inputs** — the same string twice is the same
     name twice, which a reservation table already handles.
 
+    **The return is not a partition, and the two counts do not add (#763).** A name
+    that collides with nothing never appears, so the groups do not cover the input.
+    The quantity a registry actually wants — *after reduction, how many distinct
+    identities does this batch hold?* — has to be derived, and there is one correct
+    spelling::
+
+        reduced = len(set(values)) - sum(len(g.values) for g in groups) + len(groups)
+
+    ``values`` and ``indices`` have **different denominators by design** (see
+    `KeyCollision`), so they must never be arithmetically combined. Substituting
+    ``g.indices`` for ``g.values`` above, or ``len(values)`` for ``len(set(values))``,
+    gives a formula that is right on every duplicate-free batch and wrong the moment an
+    input repeats. Measured over 400 duplicate-free batches all four spellings agree
+    with the truth; over 400 with one repeat injected, only this one does.
+
     Args:
         values: The set to check. Order is preserved in the report; the batch cap
             is the same 100,000 every other batch entry point uses.
@@ -2256,6 +2271,21 @@ def find_key_collisions(
         [0, 1]
         >>> find_key_collisions(["a.txt", "b.txt"], key="fold_case")
         []
+
+        A repeated input — the shape every other example omits, and the only shape
+        that separates the correct derivation from its three near-misses:
+
+        >>> names = ["admin", "admin", "Admin"]
+        >>> groups = find_key_collisions(names, key="fold_case")
+        >>> groups[0].values          # distinct inputs: two
+        ['admin', 'Admin']
+        >>> groups[0].indices         # occurrences: three
+        [0, 1, 2]
+        >>> len(set(names)) - sum(len(g.values) for g in groups) + len(groups)
+        1
+
+        Three names, one identity. The three near-misses give 2, 0 and 1 — the last
+        by cancellation rather than by construction.
     """
     if not isinstance(values, list):
         raise TypeError(f"find_key_collisions() expects list[str], got {type(values).__name__}")

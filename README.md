@@ -113,7 +113,7 @@ The core crate is `unsafe_code = "forbid"`, and its `extension-module` feature e
 build the Python wheel — Rust consumers get pure Rust. What a new binding must deliver is
 written down in [BINDINGS.md](BINDINGS.md).
 
-## Scope — read this before you depend on it
+## Limitations: read this before deploying disarm
 
 > - **Defense in depth, not a complete control.** disarm folds the confusables it bundles
 >   and strips the format characters it enumerates. The confusable space is larger than any

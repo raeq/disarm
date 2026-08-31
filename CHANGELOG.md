@@ -61,6 +61,42 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Added
 
+- **`code_context` — a profile whose output is still source code (#746).** disarm claims
+  two source-code CVEs and points LLM-stack authors at the guardrail path, and shipped no
+  entry point that returns compilable code. Every one of the eleven presets and both LLM
+  profiles ends in `collapse_whitespace`, which folds LF to a space by design (#433):
+  measured over the 465 files of this repository, all thirteen collapse every file to a
+  single line, and 147 of 287 Python files stop parsing.
+
+  **Line count, indentation and case are the contract**, not a side effect. `strip_bidi` +
+  `strip_zero_width` + `strip_control`, and nothing else — no `collapse_whitespace`, no
+  `fold_case`, no NFKC, no confusable fold.
+
+  ```python
+  code = get_pipeline("code_context")
+  cleaned = code(trojan_source_c)
+  assert cleaned.count("\n") == trojan_source_c.count("\n")
+  assert "\u202e" not in cleaned
+  ```
+
+  **The confusable fold cannot run on code, and that is the design rather than an
+  omission.** Exactly three ASCII code points are TR39 sources (#725): `"` folds to two
+  apostrophes, the backtick to one, and `|` to `l`. All three are load-bearing syntax, so
+  `normalize_confusables` breaks 287 of 287 Python files here while preserving every line.
+  The profile is therefore **strip-and-report**: it neutralises the invisible, bidi and
+  control classes, and the homoglyph and compatibility classes are reported by
+  `inspect_anomalies`, `is_confusable` and `is_mixed_script` rather than rewritten.
+  arXiv:2503.14281v4 §E rules rewriting out on quality grounds for the same reason.
+
+  The invariants are gated over the whole repository, which is what the CVE gate could not
+  do — both its Trojan Source vectors are single lines. `docs/user-guide/llm-pipelines.md`
+  carries the strip-and-report split, and the two source-file rows in
+  `docs/security/cve-validation.md` link to it.
+
+  Drive-by: `python/disarm/_presets.py` emitted a `SyntaxWarning` on import — a backslash
+  in a non-raw docstring, introduced by my own #719 edit, and the second of that class this
+  cycle after `\w` in #712. A repository-wide gate now fails on any of them.
+
 - **`find_confusables()` — the mapped confusables in a string, with offsets (#737 §3).**
   The mirror of `find_unmapped_confusables`: that one answers *what would survive the
   fold?* — exposure — and this one answers *what did the fold change, and to what?* —

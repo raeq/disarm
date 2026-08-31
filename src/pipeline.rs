@@ -376,6 +376,7 @@ impl ProfileSpec {
 
 /// Profile names, sorted (matches the previous `list_profiles()` ordering).
 const PROFILE_NAMES: &[&str] = &[
+    "code_context",
     "library_catalog_key_eu",
     "llm_guardrail",
     "ml_corpus_normalize",
@@ -424,6 +425,31 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             strip_accents: true,
             fold_case: true,
             collapse_whitespace: true,
+            ..ProfileSpec::default()
+        },
+        // #746: the only STRUCTURE-PRESERVING entry point. Every other profile and every
+        // preset ends in `collapse_whitespace`, which folds LF to a space by design
+        // (#433) — measured over 465 files of this repository, all thirteen collapse
+        // every file to a single line, and 147 of 287 Python files stop parsing.
+        //
+        // Line count, indentation and case are the CONTRACT here, not a side effect.
+        //
+        // No confusable fold, and that is the design point rather than an omission.
+        // Exactly three ASCII code points are TR39 sources (#725): `"` -> `''`,
+        // `` ` `` -> `'`, `|` -> `l`. All three are load-bearing syntax, so
+        // `normalize_confusables` breaks 287 of 287 Python files here while preserving
+        // every line. A code profile therefore has to be STRIP-AND-REPORT: neutralise the
+        // invisible / bidi / control classes in the text, and expose the homoglyph class
+        // through `inspect_anomalies`, `is_confusable` and `is_mixed_script` rather than
+        // by rewriting. arXiv:2503.14281v4 §E rules rewriting out on quality grounds for
+        // the same reason.
+        //
+        // No NFKC either: it rewrites fullwidth forms and ligatures, which changes source
+        // text, and the compatibility class is reported by the `compat_fold` kind.
+        "code_context" => ProfileSpec {
+            strip_bidi: true,
+            strip_zero_width: Some(true),
+            strip_control: Some(true),
             ..ProfileSpec::default()
         },
         "llm_guardrail" => ProfileSpec {

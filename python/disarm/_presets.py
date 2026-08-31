@@ -34,7 +34,7 @@ from disarm._boundary import (
 
 
 def canonicalize(text: str) -> str:
-    """Canonicalize text for security-sensitive comparison.
+    r"""Canonicalize text for security-sensitive comparison.
 
     For **cleaning untrusted input before comparison**, this is the entry point.
     It does not make text safe to emit; encode at the sink.

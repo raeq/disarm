@@ -170,6 +170,7 @@ EXPECTED_LANG_CONSTANTS = {
     "LANG_AM",
     "LANG_AR",
     "LANG_AS",
+    "LANG_AUTO",  # #660: the one LANG_* constant this list froze as absent
     "LANG_BAN",
     "LANG_BAX",
     "LANG_BG",

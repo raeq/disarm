@@ -116,6 +116,23 @@ module Disarm
       translate_errors { _demojize(text, strip_modifiers) }
     end
 
+    # Canonicalize, but raise rather than silently normalize a structural difference
+    # away — the half of the pair that lets a caller reject input instead of comparing
+    # a value the sender never wrote.
+    def canonicalize_strict(text)
+      translate_errors { _canonicalize_strict(text) }
+    end
+
+    # Strip the non-interchange and invisible classes while KEEPING the script.
+    #
+    # Unlike `canonicalize` it folds no confusables, so non-Latin text survives as
+    # itself. It cannot be rebuilt from the seven universal `strip_*` methods: its
+    # invisibles policy is internal, and it also removes private-use characters, the
+    # presentation variation selectors after a base, and TAB/LF.
+    def strip_format(text)
+      _strip_format(text)
+    end
+
     # Remove obfuscation (zero-width, bidi, combining-mark abuse) while keeping
     # legible content.
     def strip_obfuscation(text)

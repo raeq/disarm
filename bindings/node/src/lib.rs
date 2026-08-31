@@ -374,6 +374,29 @@ pub fn is_zalgo(text: String, threshold: i64) -> Result<bool, NapiError> {
 
 // ── Deobfuscation & security presets (fallible) ───────────────────────────────
 
+/// Strip the non-interchange and invisible classes while KEEPING the script (#698).
+///
+/// The seven universal `strip*` primitives cannot be composed into this. Its invisibles
+/// policy is a private constant, and the chain is strictly more destructive than the
+/// preset: it removes PUA, the presentation variation selectors `U+FE0E`/`U+FE0F` after a
+/// base, and TAB/LF, none of which `stripFormat` touches. So a caller on this binding had
+/// no way to reach the behaviour at all, not merely no convenience wrapper.
+///
+/// Unlike `canonicalize` it does NOT fold confusables, so non-Latin text keeps its script
+/// — the point of the preset.
+/// Canonicalize, but fail rather than silently normalize a structural difference away.
+#[napi]
+pub fn canonicalize_strict(text: String) -> Result<String, NapiError> {
+    api::canonicalize_strict(&text)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
+}
+
+#[napi]
+pub fn strip_format(text: String) -> String {
+    api::strip_format(&text).into_owned()
+}
+
 #[napi]
 pub fn strip_obfuscation(text: String) -> Result<String, NapiError> {
     api::strip_obfuscation(&text)

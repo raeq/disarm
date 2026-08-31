@@ -328,6 +328,26 @@ fn demojize(text: Wtf8Text, strip_modifiers: bool) -> String {
 
 // ── Security presets (fallible) ───────────────────────────────────────────────
 
+/// Strip the non-interchange and invisible classes while KEEPING the script (#698).
+///
+/// The seven universal `strip*` primitives cannot be composed into this. Its invisibles
+/// policy is a private constant, and the chain is strictly more destructive than the
+/// preset: it removes PUA, the presentation variation selectors `U+FE0E`/`U+FE0F` after a
+/// base, and TAB/LF, none of which `Disarm.strip_format` touches. So a caller on this binding had
+/// no way to reach the behaviour at all, not merely no convenience wrapper.
+///
+/// Unlike `canonicalize` it does NOT fold confusables, so non-Latin text keeps its script
+/// — the point of the preset.
+fn canonicalize_strict(text: Wtf8Text) -> Result<String, Error> {
+    api::canonicalize_strict(&text)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
+}
+
+fn strip_format(text: Wtf8Text) -> String {
+    api::strip_format(&text).into_owned()
+}
+
 fn strip_obfuscation(text: Wtf8Text) -> Result<String, Error> {
     api::strip_obfuscation(&text)
         .map(std::borrow::Cow::into_owned)
@@ -801,6 +821,8 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_confusable?", function!(is_confusable, 2))?;
     module.define_singleton_method("_slugify", function!(slugify, 13))?;
     module.define_singleton_method("_demojize", function!(demojize, 2))?;
+    module.define_singleton_method("_canonicalize_strict", function!(canonicalize_strict, 1))?;
+    module.define_singleton_method("_strip_format", function!(strip_format, 1))?;
     module.define_singleton_method("_strip_obfuscation", function!(strip_obfuscation, 1))?;
     module.define_singleton_method("_canonicalize", function!(canonicalize, 1))?;
 

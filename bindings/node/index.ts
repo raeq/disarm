@@ -394,6 +394,27 @@ export function isZalgo(text: string, options: { threshold?: number } = {}): boo
 
 // ── Deobfuscation & security presets ────────────────────────────────────────
 
+/**
+ * Canonicalize, but throw rather than silently normalize a structural difference away —
+ * the half of the pair that lets a caller reject input instead of comparing a value the
+ * sender never wrote.
+ */
+export function canonicalizeStrict(text: string): string {
+  return call(() => native.canonicalizeStrict(text))
+}
+
+/**
+ * Strip the non-interchange and invisible classes while KEEPING the script.
+ *
+ * Unlike {@link canonicalize} it folds no confusables, so non-Latin text survives as
+ * itself. It cannot be rebuilt from the seven universal `strip*` functions: the invisibles
+ * policy is internal, and this also removes private-use characters, the presentation
+ * variation selectors after a base, and TAB/LF. Infallible.
+ */
+export function stripFormat(text: string): string {
+  return native.stripFormat(text)
+}
+
 /** Remove obfuscation (zero-width, bidi, combining-mark abuse, homoglyphs) while keeping legible content. */
 export function stripObfuscation(text: string): string {
   return call(() => native.stripObfuscation(text))

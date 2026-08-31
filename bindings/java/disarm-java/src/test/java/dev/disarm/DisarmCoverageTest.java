@@ -65,6 +65,19 @@ class DisarmCoverageTest {
                 () -> Disarm.findKeyCollisions(List.of("a"), "lower"));
     }
 
+    /**
+     * #677 — the JVM carried neither half of the pair. {@code stripFormat} keeps the
+     * script, {@code canonicalize} folds the same input to Latin; that contrast is why
+     * the preset cannot be rebuilt from the universal {@code strip*} methods.
+     */
+    @Test
+    void stripFormatAndCanonicalizeStrict() {
+        String cyrillic = "\u0430\u0440\u200D\u0440";
+        assertEquals("\u0430\u0440\u0440", Disarm.stripFormat(cyrillic));
+        assertEquals("app", Disarm.canonicalize(cyrillic));
+        assertEquals(Disarm.canonicalize("Hello"), Disarm.canonicalizeStrict("Hello"));
+    }
+
     @Test
     void isCaseFoldStable() {
         assertTrue(Disarm.isCaseFoldStable("gross.txt"));

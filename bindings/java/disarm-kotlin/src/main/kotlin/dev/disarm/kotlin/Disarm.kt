@@ -136,6 +136,20 @@ fun String.stripObfuscation(): String = JDisarm.stripObfuscation(this)
 
 fun String.canonicalize(): String = JDisarm.canonicalize(this)
 
+/**
+ * Canonicalize, but throw rather than silently normalize a structural difference away —
+ * the half of the pair that lets a caller reject input instead of comparing a value the
+ * sender never wrote.
+ */
+fun String.canonicalizeStrict(): String = JDisarm.canonicalizeStrict(this)
+
+/**
+ * Strip the non-interchange and invisible classes while keeping the script. Folds no
+ * confusables, so non-Latin text survives as itself; not composable from the universal
+ * `strip*` extensions.
+ */
+fun String.stripFormat(): String = JDisarm.stripFormat(this)
+
 @JvmOverloads
 fun String.searchKey(lang: String? = null): String = JDisarm.searchKey(this, lang)
 

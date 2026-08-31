@@ -277,6 +277,31 @@ public final class Disarm {
         return Native.canonicalize(req(text));
     }
 
+    /**
+     * Canonicalize, but throw rather than silently normalize a structural difference away.
+     *
+     * <p>The half of the pair that lets a caller <em>reject</em> input instead of
+     * comparing a value the sender never wrote — the useful behaviour when the comparison
+     * decides access rather than ranks a search result.
+     *
+     * @throws DisarmException if the text cannot be canonicalized unambiguously
+     */
+    public static String canonicalizeStrict(String text) {
+        return Native.canonicalizeStrict(req(text));
+    }
+
+    /**
+     * Strip the non-interchange and invisible classes while keeping the script.
+     *
+     * <p>Unlike {@link #canonicalize} it folds no confusables, so non-Latin text keeps its
+     * script. It cannot be rebuilt from the universal {@code strip*} methods: its
+     * invisibles policy is internal, and it also removes private-use characters, the
+     * presentation variation selectors after a base, and TAB/LF.
+     */
+    public static String stripFormat(String text) {
+        return Native.stripFormat(req(text));
+    }
+
     /** Case/accent/script-insensitive search lookup key. */
     public static String searchKey(String text) {
         return searchKey(text, null);

@@ -331,6 +331,18 @@ RSpec.describe Disarm do
       expect(Disarm.canonicalize("a\u{2800}b")).to eq("a b") # Braille blank -> space
     end
 
+    # #698: strip_format keeps the SCRIPT, which is what separates it from canonicalize
+    # and what makes it un-composable from the seven universal strip_* methods.
+    it "strips the invisible classes without folding the script (#698)" do
+      cyrillic = "\u{0430}\u{0440}\u{200D}\u{0440}"
+      expect(Disarm.strip_format(cyrillic)).to eq("\u{0430}\u{0440}\u{0440}")
+      expect(Disarm.canonicalize(cyrillic)).to eq("app")
+    end
+
+    it "exposes canonicalize_strict" do
+      expect(Disarm.canonicalize_strict("Hello")).to eq(Disarm.canonicalize("Hello"))
+    end
+
     it "keeps security_clean as a deprecated alias for canonicalize (#430)" do
       input = "p\u{0430}ypal\u{202E}"
       expect(Disarm.security_clean(input)).to eq(Disarm.canonicalize(input))

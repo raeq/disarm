@@ -139,7 +139,22 @@ def test_ml_normalize_still_strips_every_mark() -> None:
 
 
 def test_the_explicit_argument_still_works() -> None:
-    """A caller who passes a cap gets it, including the old default."""
+    """A caller who passes a cap gets it — now counted per combining class (#842).
+
+    `max_marks` bounds the marks at ONE POSITION, not the total on a base. The three
+    marks in this Hebrew word have three different canonical combining classes, so a cap
+    of 2 removes nothing: no position carries more than one. Under the old flat count it
+    truncated to two, which is the behaviour that deleted a tone mark from ordinary
+    Burmese.
+
+    `max_marks=0` still removes every mark, because zero is below every count.
+    """
     text = "אָׁ֑"
-    assert marks(disarm.strip_zalgo(text, max_marks=2)) == 2
+    assert marks(text) == 3
+    assert marks(disarm.strip_zalgo(text, max_marks=2)) == 3, "no class exceeds 2"
     assert marks(disarm.strip_zalgo(text, max_marks=0)) == 0
+
+    # A cap does bite when one position is over it: eight acutes are one class.
+    stacked = "a" + "\u0301" * 8
+    assert marks(disarm.strip_zalgo(stacked, max_marks=2)) == 2
+    assert marks(disarm.strip_zalgo(stacked, max_marks=5)) == 5

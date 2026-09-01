@@ -691,6 +691,29 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   positioned rather than stacked, so a doubled Devanagari matra is an orthography
   question rather than this one.
 
+- **A meta-benchmark that runs `n` of `m` externally produced benchmarks
+  (`benchmarks/meta`).** The 0.15.0 cycle found and verified defects against roughly
+  thirty outside artifacts — corpora released with papers, public spam and phishing
+  datasets, normative Unicode/IETF/ICANN tables, published CVEs, released tokenizers and
+  a third-party labelled benchmark — and each measurement lived in its own script. This
+  consolidates the selection, the provenance record, the scoring protocol and the report
+  into one harness. It is not collected by `pytest` and runs on demand:
+
+  ```bash
+  python -m benchmarks.meta --list                    # show m, and what is runnable
+  python -m benchmarks.meta --run --only-available    # run what the machine has
+  python -m benchmarks.meta --run --select 'uts39-*' --report out.md
+  ```
+
+  The harness supplies the runner and supplies no vectors. `Provenance.external` marks
+  the bias boundary, the report renders external and introspective results separately,
+  and a test asserts that no external suite is scored against a file disarm generated —
+  `data/confusables_lgr.tsv` is the trap, since the shipped fold was built from it.
+
+  A suite whose artifact is absent reports `SKIPPED` with the variable to set, never a
+  pass. Results are compared against a committed baseline keyed by suite *and*
+  population; a moved number is reported and never fails a run.
+
 - **Asking `disarm` for an outcome name now teaches the naming rule (#654).** `clean`,
   `sanitize`, `safe`, `secure`, `escape`, `is_safe` and `make_safe` will never exist —
   CONTRIBUTING.md's rule is that a public name describes the operation and never the

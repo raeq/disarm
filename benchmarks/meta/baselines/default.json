@@ -1,0 +1,261 @@
+{
+  "disarm_version": "0.14.1",
+  "recorded_utc": "2026-09-01T15:56:01+00:00",
+  "suites": {
+    "cldr-emoji-annotations": {
+      "external": true,
+      "measurements": {
+        "annotated_codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1765
+        },
+        "glossed_by_ml_normalize": {
+          "higher_is_better": null,
+          "of": 1765,
+          "value": 1411
+        }
+      },
+      "population": 1765
+    },
+    "cve-2026-17084-stringprep": {
+      "external": true,
+      "measurements": {
+        "collides_catalog_key": {
+          "higher_is_better": true,
+          "of": 684,
+          "value": 684
+        },
+        "collides_search_key": {
+          "higher_is_better": true,
+          "of": 684,
+          "value": 684
+        },
+        "collides_sort_key": {
+          "higher_is_better": true,
+          "of": 684,
+          "value": 684
+        },
+        "delta_rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 711
+        },
+        "detected": {
+          "higher_is_better": true,
+          "of": 684,
+          "value": 0
+        },
+        "divergent_rows": {
+          "higher_is_better": null,
+          "of": 711,
+          "value": 684
+        }
+      },
+      "population": 711
+    },
+    "uax29-word-joiners": {
+      "external": true,
+      "measurements": {
+        "detected": {
+          "higher_is_better": true,
+          "of": 37,
+          "value": 21
+        },
+        "joiners": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 37
+        },
+        "recovered": {
+          "higher_is_better": true,
+          "of": 37,
+          "value": 0
+        }
+      },
+      "population": 37
+    },
+    "ucd-bidi-class": {
+      "external": true,
+      "measurements": {
+        "conflict_detected": {
+          "higher_is_better": true,
+          "of": 3018,
+          "value": 3018
+        },
+        "neutral_to_disarm": {
+          "higher_is_better": false,
+          "of": 3018,
+          "value": 0
+        },
+        "strong_rtl": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3018
+        }
+      },
+      "population": 3018
+    },
+    "ucd-scripts": {
+      "external": true,
+      "measurements": {
+        "agree": {
+          "higher_is_better": true,
+          "of": 122366,
+          "value": 114150
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 126761
+        },
+        "contradict": {
+          "higher_is_better": false,
+          "of": 122366,
+          "value": 20
+        },
+        "scored": {
+          "higher_is_better": null,
+          "of": 126761,
+          "value": 122366
+        },
+        "silent": {
+          "higher_is_better": false,
+          "of": 122366,
+          "value": 8196
+        }
+      },
+      "population": 126761
+    },
+    "uts39-augmented-scripts": {
+      "external": true,
+      "measurements": {
+        "flagged_by_inspect_anomalies": {
+          "higher_is_better": null,
+          "of": 4,
+          "value": 0
+        },
+        "flagged_by_is_mixed_script": {
+          "higher_is_better": null,
+          "of": 4,
+          "value": 0
+        },
+        "flagged_by_is_suspicious_hostname": {
+          "higher_is_better": null,
+          "of": 4,
+          "value": 0
+        },
+        "probes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 4
+        },
+        "surface_disagreements": {
+          "higher_is_better": false,
+          "of": 4,
+          "value": 0
+        }
+      },
+      "population": 4
+    },
+    "uts39-confusables": {
+      "external": true,
+      "measurements": {
+        "folded": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 5061
+        },
+        "sources": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6565
+        },
+        "unreached": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 1504
+        },
+        "unreached_strong_rtl": {
+          "higher_is_better": null,
+          "of": 1504,
+          "value": 90
+        }
+      },
+      "population": 6565
+    },
+    "uts39-equivalence-classes": {
+      "external": true,
+      "measurements": {
+        "classes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3416
+        },
+        "closed_under_canonicalize": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 1595
+        },
+        "no_ascii_reachable_member": {
+          "higher_is_better": false,
+          "of": 3416,
+          "value": 2876
+        }
+      },
+      "population": 3416
+    },
+    "uts39-mixed-numbers": {
+      "external": true,
+      "measurements": {
+        "ascii_mixed_flagged": {
+          "higher_is_better": true,
+          "of": 75,
+          "value": 75
+        },
+        "numbering_systems": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 75
+        },
+        "pairwise_mixed_flagged": {
+          "higher_is_better": true,
+          "of": 75,
+          "value": 75
+        }
+      },
+      "population": 75
+    },
+    "youtube-spam": {
+      "external": true,
+      "measurements": {
+        "misses_novel": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 27
+        },
+        "misses_principled": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 8
+        },
+        "nonascii_folded": {
+          "higher_is_better": true,
+          "of": 3104,
+          "value": 2447
+        },
+        "perturbation_bearing": {
+          "higher_is_better": null,
+          "of": 1956,
+          "value": 1580
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1956
+        }
+      },
+      "population": 1956
+    }
+  }
+}

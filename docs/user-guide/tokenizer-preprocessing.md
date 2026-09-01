@@ -124,6 +124,46 @@ Pick the lever by path: romanize for an index/matching path; keep the script whe
 the text goes to a multilingual model that reads it natively (see
 [when NOT to use disarm](llm-pipelines.md#which-path-and-when-not-to-use-disarm)).
 
+### "Keeps the script" is not "keeps the writing system" (#754)
+
+The page opens on Hindi and Thai, and `ml_normalize` does keep text in its own script —
+it does not romanize. But it strips **every combining mark**, and in an abugida the
+vowel signs *are* combining marks. So the script survives and the words do not:
+
+```python
+from disarm import ml_normalize
+
+ml_normalize("हिन्दी")  # 'हनद'    — Devanagari, still Devanagari, no longer a word
+ml_normalize("मराठी")  # 'मरठ'
+ml_normalize("မြန်မာ")  # 'မနမ'    — Myanmar
+ml_normalize("বাংলা")  # 'বল'     — Bengali
+ml_normalize("ภาษาไทย")  # 'ภาษาไทย' — Thai is unaffected
+ml_normalize("Привет")  # 'привет' — Cyrillic is unaffected
+```
+
+Measured over assigned code points in each block, the share `ml_normalize` deletes
+outright:
+
+| script | deleted | of assigned |
+|---|---:|---:|
+| Myanmar | 58 | 160 |
+| Devanagari | 34 | 128 |
+| Sinhala | 21 | 91 |
+| Bengali | 20 | 96 |
+| Tamil | 14 | 72 |
+| Thai | 16 | 87 |
+
+Thai is the exception in practice and worth understanding, because it is half of this
+page's opening sentence: Thai vowels are written as separate code points that
+`strip_accents` does not classify as marks to remove, so ordinary Thai survives. The
+Indic abugidas do not.
+
+**If your corpus is Devanagari, Bengali, Tamil, Sinhala or Myanmar, this is the wrong
+lever.** Use `transliterate` — which is the other lever on this page and is designed to
+lose the script deliberately rather than to lose the vowels accidentally — or apply NFKC
+and case folding yourself without `strip_accents`. `ml_normalize` is the right tool for
+Latin, Cyrillic, Greek and CJK corpora.
+
 ### Emoji, and only emoji
 
 `ml_normalize` names a character when it carries the Unicode `Emoji` or
@@ -178,6 +218,14 @@ positioning work; it is intentionally out of CI because it pulls in large,
 license-gated tokenizers and datasets.
 
 ## Honest caveats
+
+**Neither lever is safe on source code (#745).** Both end in `collapse_whitespace`, which
+folds LF to a space by design — right for a prompt, wrong for a file. If the text you are
+about to normalize is code, use the `code_context` profile instead; see
+[Code is not prose](llm-pipelines.md#code-is-not-prose-code_context-and-strip-and-report).
+This matters for the case that looks least like it: an AI coding assistant's *context* is
+source code, and the pages recommending disarm for untrusted context are the pages its
+authors read.
 
 Romanization is not a free win, and fertility is not the whole story:
 

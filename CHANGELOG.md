@@ -1330,6 +1330,46 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **Four guide pages recommended a function for a job it does not do (#745, #754, #760,
+  #761).** Each claim was true of *something* — just not of the thing it was written
+  beside.
+
+  **`normalize_confusables` is NFC-first, not NFKC-first (#760).**
+  `docs/user-guide/llm-pipelines.md` told guardrail authors that disarm's defense
+  functions "start from NFKC themselves" and named this one. #475 made it NFC-first. It
+  folds what its *confusable table* covers, so `ﬁ` and `Ａ` fold and `²` does not.
+  Measured against the bundled UCD 17.0.0: of the **4,965** code points NFKC would
+  change, `normalize_confusables` leaves **3,722 — 75.0% — unchanged**.
+  `strip_obfuscation` and `canonicalize` are NFKC-first and the page now says which is
+  which.
+
+  **`ml_normalize` keeps the script and loses the words (#754).**
+  `docs/user-guide/tokenizer-preprocessing.md` opens on Hindi and Thai and calls this the
+  lever that "preserves the script". It does not romanize, so the script survives — and
+  it strips every combining mark, which in an abugida is where the vowels live:
+  `हिन्दी` → `हनद`, `မြန်မာ` → `မနမ`, `বাংলা` → `বল`. Over assigned code points it
+  deletes 58 of 160 Myanmar, 34 of 128 Devanagari, 21 of 91 Sinhala. Thai is genuinely
+  unaffected — its vowels are separate code points `strip_accents` does not touch — which
+  is worth stating because Thai is half the page's opening sentence.
+
+  **`strip_accents`' warning stopped at the Indic scripts (#761).** Two families it sent
+  a reader past: `かばん` → `かはん`, because in kana the dakuten is voicing rather than
+  decoration, so that is a different word; and `Чайковский` → `Чаиковскии`, because `й`
+  and `ё` are letters of the Russian alphabet that happen to decompose. The warning is
+  now about marks that carry meaning rather than about a list of scripts.
+
+  **Source code is untrusted context too (#745).** The tokenizer page recommends disarm
+  as a front-end and never mentions code; an AI coding assistant's context *is* source.
+  It now points at `code_context`. Measured over this repository's own Python:
+  `canonicalize`, `strip_format` and `normalize_confusables` round-trip **0 of 155**
+  files, `code_context` round-trips **149**. The six exceptions are one class — a **ZWJ
+  inside a string literal or comment**, so a ZWJ-joined emoji or a Sinhala conjunct in a
+  literal changes and the file still parses. That is `code_context` working as designed,
+  and it is now a stated caveat rather than a surprise.
+
+  `tests/test_guide_corrections.py` runs every example and derives every figure, including
+  each row of the per-script table.
+
 - **Three limits that were true and unwritten (#769, #770, #772).** None is a defect. Each
   is a place where two things that look like they answer the same question do not.
 

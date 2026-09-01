@@ -16,6 +16,24 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Tier 3 release gate ran four times, independently, on one artifact.**
+  `publish.yml`, `publish-node.yml`, `publish-ruby.yml` and `publish-java.yml` each
+  called the reusable `tier3.yml`, described as gating "on the SAME reusable workflow".
+  True of the definition, false of the execution: `uses:` instantiates a fresh job per
+  caller, and Tier 3 contains proptests, which draw random inputs.
+
+  Four stochastic gates on one artifact are atomic only by luck. A seed that fails in
+  one workflow and passes in three publishes a subset of the bindings — and the three
+  green ones look verified. Cutting `v0.15.0` hit the benign version: all four failed
+  on the same proptest input, so nothing published and nothing diverged.
+
+  Tier 3 now runs in `publish.yml` alone. The bindings inherit it transitively — each
+  waits for the core on crates.io, and the core cannot get there unless that gate
+  passed — so nothing is left ungated. `tests/test_workflow_baselines.py` asserts the
+  single caller and the transitive wait.
+
 ## [0.15.0] — 2026-09-01
 
 ### Upgrade notes

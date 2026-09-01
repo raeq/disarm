@@ -248,20 +248,27 @@ jobs:
           name: cross-gem-source
           path: bindings/ruby/pkg/*.gem
 
-  # ── Tier 3 release gate (#159) ──────────────────────────────────
-  # The gem must not ship unless the SAME exhaustive + formal regimen that gates
-  # the PyPI wheel and the crates.io core (publish.yml) is green. Reused from
-  # .github/workflows/tier3.yml. Release/dispatch only — the exhaustive suite is a
-  # release gate, not a per-PR/-push cost (the PR-time `test` job already builds +
-  # RSpecs the binding against the core).
-  tier3:
-    name: Tier 3 (exhaustive + formal)
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/tier3.yml
+  # ── Tier 3 runs on the CORE only (#159, and the 0.15.0 release) ──
+  # This workflow used to call `.github/workflows/tier3.yml` itself, so that "the
+  # exhaustive net guards the core and every binding alike". `uses:` instantiates a
+  # FRESH job per caller, so four publish workflows meant four independent runs of
+  # the same suite rather than one shared verdict — and Tier 3 contains proptests,
+  # which draw random inputs. Four stochastic gates on one artifact make the release
+  # atomic only by luck: a seed that fails in one workflow and passes in three ships
+  # a subset of the bindings, and the three green ones look verified.
+  #
+  # It is also redundant. `wait-for-core` below blocks until the core is on
+  # crates.io, and the core cannot get there unless publish.yml's Tier 3 passed. The
+  # correctness gate is inherited transitively; re-running it here bought nothing and
+  # risked disagreement.
+  #
+  # Cutting v0.15.0 is what surfaced it: all four workflows failed Tier 3 on the same
+  # proptest input, which is the benign draw. Nothing published, which is the only
+  # reason the bindings did not diverge.
 
   publish:
     name: Publish to RubyGems
-    needs: [test, cross-gems, source-gem, tier3]
+    needs: [test, cross-gems, source-gem]
     # Publish on a GitHub Release, or via a manual `workflow_dispatch` — the latter
     # is the recovery path when a release's gem build failed (e.g. binding drift)
     # but the registry version was never pushed. `gem push` of an existing version

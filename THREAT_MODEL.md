@@ -180,6 +180,90 @@ behavior, not a vulnerability:
   data is updated. The bundled version is recorded in the release.
 - **Semantic / meaning-level attacks.** Prompt injection, social engineering, or any
   attack that does not depend on character-level visual/format manipulation.
+- **Textual encoding obfuscation — base64, hex, ROT-n, binary, Morse, percent-encoding,
+  `\uXXXX` escapes (#729).** disarm does not decode these and does not detect them. It
+  operates on the string it is given; a payload spelled `PHNjcmlwdD4=` is, to every
+  transform here, an ordinary run of ASCII letters. Two API names invite the opposite
+  conclusion and are the first a reader auditing for this class will find:
+  `detect_encoding` and `decode_to_utf8` answer a **byte-charset** question — is this
+  buffer UTF-8, UTF-16, Latin-1 — and have nothing to do with textual encodings. If your
+  threat model includes an encoded payload, decode it yourself first and pass the result
+  to disarm; disarm before decode leaves the payload untouched, and decode before disarm
+  is the correct order for the same reason canonicalization precedes validation.
+- **Word fragmentation by a *visible* separator (#755, #804).** `Con firm`,
+  `C.o.n.f.i.r.m`, `C-o-n-f-i-r-m`. The invisible twin of this is not just handled but is
+  a documented asset — see *Payload reconstitution via invisible-character stripping*
+  below, where the zero-width pass rejoins the fragments. The visible form is neither
+  rejoined nor reported, and the asymmetry is sharp enough to be worth stating outright:
+
+  | separator | `search_key` matches the unfragmented word | `inspect_anomalies` reports |
+  |---|---|---|
+  | `U+200B`, `U+200C` | yes | yes |
+  | space, `.`, `-` | no | nothing |
+
+  A space or a dot is ordinary text, which is exactly why disarm does not remove it: a
+  transform that collapsed `Con firm` to `Confirm` would collapse every legitimate phrase
+  in the language with it. Recovering it needs word segmentation and a lexicon, which is
+  the boundary named under *Semantic / meaning-level attacks* above. If your matcher needs
+  to survive this, the segmentation belongs in the matcher.
+- **The model as the sink: a many-to-one fold widens what reaches a poisoned association
+  (#753).** Two entries below — *Metacharacter unmasking via NFKC* and *Payload
+  reconstitution via invisible-character stripping* — say the same structural thing about
+  an output encoder and an upstream filter respectively. There is a third sink, and both
+  `docs/user-guide/llm-pipelines.md` and `docs/user-guide/tokenizer-preprocessing.md`
+  recommend disarm for it: **a model whose weights already carry an attacker-chosen
+  association.**
+
+  Against such a model the fold does not remove the association. It is many-to-one, so it
+  *widens* the set of inputs that arrive at it. Measured on one five-letter trigger, using
+  only single-position substitutions by code points that fold to the letter they replace:
+  **227 of 313 spellings reach the same `search_key`.** Every one of those is an input the
+  model now receives as the trigger and would not have without the normalizer.
+
+  This is not a defect and there is no version of a normalizer that avoids it — collapsing
+  variants onto one form is the entire job. It is a placement property, and it points the
+  same way as the two entries below: what disarm hands on is *more* actionable than what
+  it was given, so the association has to be dealt with at the model, not in front of it.
+  (`inspect_anomalies` does flag most of these — 97.8% of that 227 — so the detector is a
+  partial mitigation. It is not a substitute for not having the association.)
+- **An identical transform on both sides of training (#756).** `THREAT_MODEL.md` states
+  one placement invariant above: canonicalize first, then validate, authorize, and encode.
+  A normalizer in front of a *tokenizer* has a second one, and it is not implied by the
+  first: **the same transform, at the same version and the same settings, has to run on the
+  training side and the serving side.**
+
+  Applied on the training side only, every deployment feeds the model a distribution it was
+  not fitted on. Applied on the serving side only, the model is fitted on raw text and
+  served canonical text, and every many-to-one collapse becomes one the model never learned
+  to expect. disarm cannot enforce this — it does not know which side it is running on —
+  which is why it is recorded here rather than fixed. `KEY_SCHEMA_VERSION` and
+  `UNICODE_VERSION` exist so that "the same version" is a thing you can assert in CI
+  rather than assume.
+- **Word-substitution adversarial examples — TextFooler, BERT-Attack, BAE, A2T (#758).**
+  Replacing a word with a synonym or a near-neighbour that flips a classifier's output is
+  a *semantic* attack and out of scope by the entry above. It is named separately because
+  `docs/security/adversarial-defense.md` is titled *Adversarial-Text Defense* and its
+  evidence base — SST-2, AG-News, DistilBERT, RoBERTa-base — is the same benchmark setting
+  that literature uses. A reader can reasonably arrive at that page expecting this family
+  to be covered. It is not: the substituted word is ordinary text in the target script,
+  with no visual confusable, no invisible, and no format character, so there is nothing
+  character-level for disarm to act on.
+- **The agent state / tool-result record (#748).** `docs/user-guide/llm-pipelines.md`
+  names two jobs — guardrail matching and ingestion — and neither is the channel an agent
+  framework feeds its own planner: a structured state or tool-result record, produced
+  upstream, serialized to text, and read back as evidence. disarm has no entry point for
+  it. The transforms that make text comparable are the ones that damage a record: they
+  collapse whitespace, which merges records that were separated by newlines, and they fold
+  or delete the delimiters the serialization depends on. Treat a state record as data to be
+  parsed and validated structurally, not as text to be normalized.
+- **Optimized jailbreak suffixes (#743).** A GCG-style adversarial suffix is ASCII, carries
+  no confusable, no invisible and no bidi control, and is out of scope for the same reason
+  as the entry above it: there is nothing character-level in it. It is named because
+  `docs/user-guide/llm-pipelines.md` is written for exactly the audience that asks about
+  it, and its *when NOT to use disarm* list did not include the case. Note the second-order
+  point: the presets *rewrite* such a suffix, because case folding and whitespace collapse
+  apply to any text, so a caller can observe output that differs from input and conclude
+  something was handled. Nothing was.
 - **Injection attacks — XSS, HTML, SQL, shell, template, header.** disarm does **not**
   escape, encode, quote, or strip the metacharacters these attacks use. Pure-ASCII payloads
   such as `<script>alert(1)</script>` or `' OR 1=1 --` pass through every transform
@@ -196,6 +280,24 @@ behavior, not a vulnerability:
   it means disarm output is, if anything, **more** important to context-encode on the way
   out, never less. Do not treat normalized text as closer to injection-safe than the raw
   input; it is not.
+
+  **The same mechanism manufactures model-context delimiters (#747).** The entry above is
+  written for an output encoder, and the LLM case is worth stating because the sink does
+  not look like one. A chat template or a system-prompt boundary is a delimiter in exactly
+  the sense `<` is, and NFKC produces it from an inert, fullwidth spelling the same way:
+
+  | input | output | profiles |
+  |---|---|---|
+  | `＜/state＞＜system＞` | `</state><system>` | 7 of 8 |
+  | `＜script＞` | `<script>` | 7 of 8 |
+  | `＜｜im_start｜＞` | `<\|im_start\|>` | 4 of 8 |
+  | `＜＜SYS＞＞` | `<<SYS>>` | 2 of 8 |
+
+  The input is inert: a model's tokenizer does not recognise `＜｜im_start｜＞` as a control
+  token. The output is not. This is correct normalization and the reason to run it, and it
+  is also the reason the boundary between user content and template content must be
+  enforced structurally — by building the prompt from typed parts — rather than by
+  scanning text for delimiters, before or after disarm.
 - **Payload reconstitution via invisible-character stripping (coalescence).** Removing
   zero-width and other invisible code points — the zero-width pass shared by `canonicalize`,
   `canonicalize_strict`, and `strip_obfuscation` — **rejoins** the characters on either side. A

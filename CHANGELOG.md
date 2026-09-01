@@ -1351,6 +1351,40 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **`THREAT_MODEL.md` names nine classes it was silent on (#729, #743, #747, #748, #753,
+  #755, #756, #758, #804).** The *Out of scope* section is the page a reader consults to
+  decide whether a class is disarm's problem, and silence there reads as coverage. Each
+  gap is now a named entry rather than an absence:
+
+  | class | why it is out of scope |
+  |---|---|
+  | Textual encoding — base64, hex, ROT-n, Morse (#729) | not decoded and not detected; `detect_encoding` answers a **byte-charset** question and is the name a reader finds first |
+  | Word fragmentation by a *visible* separator (#755, #804) | removing it needs word segmentation and a lexicon |
+  | The model as a sink (#753) | a many-to-one fold *widens* what reaches a poisoned association |
+  | Identical transform on both sides of training (#756) | disarm cannot know which side it is running on |
+  | Word-substitution adversarial examples (#758) | nothing character-level to act on |
+  | The agent state / tool-result record (#748) | a record is parsed, not normalized |
+  | Optimized jailbreak suffixes (#743) | ASCII, no confusable, no invisible |
+  | NFKC manufacturing model-context delimiters (#747) | correct normalization, same shape as metacharacter unmasking |
+
+  Two of these are asymmetries rather than boundaries, and that is what makes them worth
+  writing down. Fragmentation by a zero-width is not merely handled but is a *documented
+  asset* — the strip rejoins the fragments — while the same attack spelled with a space is
+  neither rejoined nor reported. And the LLM delimiter case is the existing *Metacharacter
+  unmasking via NFKC* entry with a sink that does not look like an output encoder: 7 of 8
+  profiles turn `＜script＞` into `<script>`, and 4 of 8 assemble a chat-template control
+  token the same way.
+
+  `tests/test_threat_model_scope.py` measures the entries that rest on a measurement, so
+  one cannot quietly stop being true. The definitional ones are checked for presence only,
+  because there is nothing to run.
+
+  **One figure in #753 did not reproduce and is not published.** The issue reports 74.9% of
+  the widened set as passing undetected. Measured here on the same construction, the
+  detector flags **97.8%** of it — so the entry states the widening, which is real and
+  structural, and records the detector as a partial mitigation rather than repeating a
+  number that points the other way.
+
 - **Normalization is not closed under concatenation, and `docs/RUST_API.md` says so
   (#787).** The key-stability contract is about *time* — a key you stored last year. This
   is the other thing a caller may not rely on, and it holds within one release:

@@ -215,6 +215,20 @@ def test_an_issue_opening_action_on_a_schedule_can_open_an_issue(path: Path) -> 
             f"{path.name}: job '{name}' runs an issue-opening action on a schedule with "
             f"no job-level permissions; it inherits the workflow's and cannot report"
         )
+        # `permissions:` is legally a scalar as well as a mapping — `write-all` and
+        # `read-all` are both valid. Indexing a string raises `AttributeError`, which
+        # reports as an error rather than as a failure and says nothing about the
+        # workflow (#878 review). Handle the scalar form as the answer it is.
+        if isinstance(permissions, str):
+            assert permissions == "write-all", (
+                f"{path.name}: job '{name}' sets `permissions: {permissions}`, which "
+                f"grants no issue write; it cannot report on a non-PR event"
+            )
+            continue
+        assert isinstance(permissions, dict), (
+            f"{path.name}: job '{name}' has an unrecognised `permissions:` shape "
+            f"({type(permissions).__name__}); this gate cannot read it"
+        )
         assert permissions.get("issues") == "write", (
             f"{path.name}: job '{name}' needs `issues: write` to report on a non-PR "
             f"event; it has {permissions}"

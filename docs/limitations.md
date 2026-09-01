@@ -227,10 +227,26 @@ case in several scripts, not the pathological one:
   anusvara. Measured over the key-stability corpus, this was the largest affected group:
   the old cap truncated `ইয়াং` to `ইয়া`.
 
-A fourth mark on one base is still removed, and that is a deliberate bound rather than a
-detection: `strip_zalgo` does not ask which script it is in. If you process text where
-four marks on one base is ordinary, pass a higher `max_marks` — the parameter exists for
-exactly that, and `is_zalgo`'s `threshold` is its counterpart.
+The bound counts marks **per canonical combining class**, not per base (#842). That
+distinction is what makes it usable across scripts:
+
+- A mark with combining class 0 is *positioned* by the renderer rather than stacked —
+  Burmese vowel signs and medials, Indic matras, Thai vowels. It never counts.
+- Zalgo is many marks at one position, which means many marks of one non-zero class.
+
+Counting every mark on a base instead flagged 142 ordinary Burmese place names in disarm's
+own test corpus and deleted a tone mark from each: `မြို့` is one syllable carrying a base,
+a medial, two vowel signs and a tone. Raising the flat threshold would have cleared that
+corpus and stopped nowhere principled — Burmese takes a second medial, so more of the
+language pushes the number up again, and each raise costs detection at the top end for
+every other script.
+
+A fourth mark **at one position** is still removed, and that is a deliberate bound rather
+than a detection: `strip_zalgo` does not ask which script it is in. If you process text
+where four stacked marks is ordinary, pass a higher `max_marks` — the parameter exists for
+exactly that, and `is_zalgo`'s `threshold` is its counterpart. Note that a base can carry
+more than `max_marks` in total, because the cap applies at each position: a mark above and
+a mark below are two positions, not one.
 
 The preset that strips *every* mark is `ml_normalize`, whose cap is `0` by design and is
 unaffected by the default.

@@ -824,6 +824,26 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   rather than a failing test to decode. The version's doc comment says what is actually
   guaranteed.
 
+- **The `target_script` error named two of the four accepted values (#888).**
+  It read `target_script must be 'latin' or 'cyrillic'` and stayed that way when #792
+  added Arabic and Hebrew, on all three entry points — `normalize_confusables`,
+  `unmapped_confusables`, `find_confusables`. A caller who trusted it could not discover
+  the two targets that cycle existed to add.
+
+  The doc comment on `TargetScript::ALL` already warns that these lists drift, and two
+  tests hold the validator and the enum together. The message was a third copy nobody had
+  wired in. It is now derived from `TargetScript::ALL`, so a fifth target updates it by
+  construction, and a test asserts it names every accepted token and none of the
+  unsupported ones.
+
+  Measuring the accepted set against the table it comes from is worth recording. Counting
+  `data/confusables.txt` by the script its target resolves to, **2,694 of 6,565 pairs —
+  41% — point at a target that cannot be asked for**: Han is the second-largest target at
+  1,471 pairs and is rejected, while Greek carries 161 and is rejected where Cyrillic (37)
+  and Hebrew (24) are both accepted. Whether `target_script` should accept a script with
+  no table is #884, deferred to 0.16.x; this entry is only the part that was wrong rather
+  than incomplete.
+
 - **The last profile that was not a fixed point (#751).** `llm_guardrail` returned `B`
   for `U+13F8` CHEROKEE SMALL LETTER YE on the first pass and `b` on the second, so its
   output depended on how many times you called it — which makes it unusable for a key.

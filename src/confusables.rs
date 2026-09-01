@@ -412,6 +412,47 @@ mod tests {
         }
     }
 
+    /// The third copy of the same list: the error message (#888).
+    ///
+    /// It read `"target_script must be 'latin' or 'cyrillic'"` and stayed that way when
+    /// #792 added Arabic and Hebrew — naming two of the four values it accepts, on all
+    /// three entry points. A caller who trusted it could not discover the two targets
+    /// that cycle existed to add.
+    ///
+    /// The two tests around this one hold the validator and the enum together; nothing
+    /// held the message. It is now derived from `TargetScript::ALL`, and this asserts the
+    /// derivation names every accepted token and nothing else — so a fifth target updates
+    /// the message by construction rather than by someone remembering.
+    #[test]
+    fn the_error_message_names_exactly_the_accepted_scripts() {
+        // A `got` value that is not itself a script name, so the absence checks below
+        // cannot trip over the rejected value being echoed back.
+        let message = crate::ErrorRepr::InvalidTargetScript {
+            got: "klingon".to_owned(),
+        }
+        .to_string();
+        for variant in crate::api::TargetScript::ALL {
+            let quoted = format!("'{}'", variant.as_str());
+            assert!(
+                message.contains(&quoted),
+                "the error does not name the accepted script {quoted}: {message:?}",
+            );
+        }
+        // And nothing it does not accept — including the three largest unsupported
+        // targets in the table, which is what makes the list informative rather than
+        // decorative (#888).
+        for absent in ["'greek'", "'han'", "'hangul'"] {
+            assert!(
+                !message.contains(absent),
+                "the error names {absent}, which is not accepted: {message:?}",
+            );
+        }
+        assert!(
+            message.contains("got 'klingon'"),
+            "the error must still report the offending value: {message:?}",
+        );
+    }
+
     /// And the other direction: the validator must not accept a token the type cannot
     /// express, or the enum stops being the definition of what is supported.
     #[test]

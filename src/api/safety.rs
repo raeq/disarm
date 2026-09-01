@@ -42,6 +42,26 @@ impl TargetScript {
         TargetScript::Hebrew,
     ];
 
+    /// The accepted tokens, quoted and comma-joined, for the `InvalidTargetScript`
+    /// message (#888).
+    ///
+    /// The message used to be the literal `"must be 'latin' or 'cyrillic'"`, and it
+    /// stayed that way when #792 added Arabic and Hebrew — so it named two of the four
+    /// values it accepts, and a caller who trusted it could not discover the two targets
+    /// that cycle existed to add. The doc comment on [`TargetScript::ALL`] already warns
+    /// that these lists drift; the error string was a third copy nobody had wired in.
+    ///
+    /// Derived here rather than written out, so a fifth target updates the message by
+    /// construction.
+    #[must_use]
+    pub fn accepted_tokens() -> String {
+        Self::ALL
+            .iter()
+            .map(|s| format!("'{}'", s.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     /// The canonical string token for this value: the lowercase token the underlying
     /// tables are keyed by, the inverse of its `FromStr`, and what `Display` prints.
     #[must_use]

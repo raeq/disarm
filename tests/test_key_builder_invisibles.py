@@ -36,22 +36,28 @@ import disarm
 
 KEY_BUILDERS = ("search_key", "catalog_key", "sort_key")
 
-#: One representative per invisible class, written as escapes (#802).
+#: One representative per invisible class, every one as an escape.
+#:
+#: The #802 gate does not reach these — noncharacters are `Cn`, private use is `Co`, and
+#: the selectors and CGJ are `Mn`, while that gate covers `Cf`/`Cc` — so nothing forced
+#: the convention here. It applies anyway, for the reason #802 exists rather than because
+#: a check demanded it: every one renders as nothing, so a literal leaves a reviewer
+#: looking at blank space and taking the dictionary key's word for what is there.
 INVISIBLES = {
-    "noncharacter U+FDD0": "﷐",
-    "noncharacter U+FDEF": "﷯",
-    "noncharacter U+FFFE": "￾",
-    "noncharacter U+FFFF": "￿",
+    "noncharacter U+FDD0": "\ufdd0",
+    "noncharacter U+FDEF": "\ufdef",
+    "noncharacter U+FFFE": "\ufffe",
+    "noncharacter U+FFFF": "\uffff",
     "noncharacter U+1FFFE": "\U0001fffe",
     "noncharacter U+10FFFF": "\U0010ffff",
     "tag letter U+E0041": "\U000e0041",
     "tag terminator U+E007F": "\U000e007f",
-    "PUA BMP U+E000": "",
+    "PUA BMP U+E000": "\ue000",
     "PUA plane 15": "\U000f0000",
     "PUA plane 16": "\U0010fffd",
-    "variation selector 1": "︀",
-    "variation selector 16": "️",
-    "CGJ U+034F": "͏",
+    "variation selector 1": "\ufe00",
+    "variation selector 16": "\ufe0f",
+    "CGJ U+034F": "\u034f",
 }
 
 
@@ -68,7 +74,7 @@ def test_the_position_does_not_matter(builder: str) -> None:
     """Leading, trailing and doubled — an attacker picks the position."""
     reduce = getattr(disarm, builder)
     baseline = reduce("admin")
-    for variant in ("﷐admin", "admin﷐", "ad﷐min", "ad﷐﷐min"):
+    for variant in ("\ufdd0admin", "admin\ufdd0", "ad\ufdd0min", "ad\ufdd0\ufdd0min"):
         assert reduce(variant) == baseline, f"{builder} evaded by {variant!r}"
 
 
@@ -81,7 +87,7 @@ def test_the_library_no_longer_disagrees_with_itself(builder: str) -> None:
     identity.
     """
     reduce = getattr(disarm, builder)
-    for char in ("﷐", "\U000e0041", "\U000f0000"):
+    for char in ("\ufdd0", "\U000e0041", "\U000f0000"):
         assert disarm.canonicalize(f"a{char}b") == "ab"
         assert reduce(f"a{char}b") == reduce("ab")
 

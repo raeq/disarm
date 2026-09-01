@@ -1006,7 +1006,8 @@ const fn without_fold_case(steps: &[Step; 9]) -> [Step; 8] {
 
 /// Library catalog key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → fold_case → transliterate → confusables → strip_accents → fold_case → collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate →
+/// confusables → strip_accents → fold_case → collapse_whitespace
 ///
 /// Transliteration runs before confusable normalization so that non-Latin
 /// scripts receive correct phonetic romanization (e.g. Cyrillic г→g, not
@@ -1091,7 +1092,8 @@ pub(crate) fn catalog_key<'a>(
 
 /// Search index key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → fold_case → transliterate → strip_accents → fold_case → collapse_whitespace
+/// Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate →
+/// strip_accents → fold_case → collapse_whitespace
 ///
 /// Produces a case-insensitive, accent-insensitive, script-insensitive lookup
 /// key.  Like `catalog_key` but without confusable normalization — lighter and
@@ -1215,7 +1217,7 @@ fn transliterate_preserving_latin_into(text: &str, lang: Option<&str>, out: &mut
 
 /// Sort key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → fold_case → transliterate-non-Latin → fold_case
+/// Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate-non-Latin → fold_case
 /// → collapse_whitespace → NFC (if non-ASCII)
 ///
 /// The second `fold_case` lowercases any uppercase a transliteration *emits* (e.g.

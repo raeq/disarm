@@ -181,8 +181,6 @@ class TrojanSourcePoC(SuiteBase):
             add(outcome, "poc_files", 0)
             return
 
-        import disarm
-
         surface_map = surfaces()
         still_source = {name: 0 for name in surface_map}
         bidi_removed = {name: 0 for name in surface_map}
@@ -196,7 +194,7 @@ class TrojanSourcePoC(SuiteBase):
                     continue
                 if lines_before and out.count("\n") == lines_before:
                     still_source[name] += 1
-                if not disarm.has_bidi_control(out):
+                if not _has_bidi_control(out):
                     bidi_removed[name] += 1
         add(outcome, "poc_files", len(files), unit="files")
         add(
@@ -218,6 +216,22 @@ class TrojanSourcePoC(SuiteBase):
             "line_structure_preserved": still_source,
             "bidi_removed": bidi_removed,
         }
+
+
+#: The twelve controls UAX #9 defines. Used when the installed build predates
+#: `has_bidi_control`, which arrived during the 0.15.0 cycle — the harness has to
+#: run against versions older than itself for a cross-version comparison to mean
+#: anything.
+_BIDI_CONTROLS = "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+
+
+def _has_bidi_control(text: str) -> bool:
+    import disarm
+
+    fn = getattr(disarm, "has_bidi_control", None)
+    if callable(fn):
+        return bool(fn(text))
+    return any(c in _BIDI_CONTROLS for c in text)
 
 
 SUITES = [CVE202617084Stringprep(), TrojanSourcePoC()]

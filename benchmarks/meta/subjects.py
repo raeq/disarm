@@ -213,24 +213,50 @@ class DisarmSubject(_Base):
     def transforms(self) -> dict[str, Callable[[str], str]]:
         import disarm
 
-        out: dict[str, Callable[[str], str]] = {
-            name: getattr(disarm, name) for name in sorted(disarm.PRESETS)
-        }
-        for profile in disarm.list_profiles():
-            out[f"profile:{profile}"] = disarm.get_pipeline(profile)
+        # Same defensiveness: a preset named in PRESETS but absent from the
+        # module, or a profile the build does not ship, is skipped rather than
+        # raising — the harness must survive the version it is pointed at.
+        out: dict[str, Callable[[str], str]] = {}
+        for name in sorted(getattr(disarm, "PRESETS", ())):
+            fn = getattr(disarm, name, None)
+            if callable(fn):
+                out[name] = fn
+        list_profiles: Callable[[], list[str]] = getattr(disarm, "list_profiles", list)
+        for profile in list_profiles():
+            try:
+                out[f"profile:{profile}"] = disarm.get_pipeline(profile)
+            except Exception:  # noqa: BLE001 - an unavailable profile is absent
+                continue
         return out
 
     def detectors(self) -> dict[str, Callable[[str], bool]]:
+        """Every detector the *installed* build actually has.
+
+        Resolved by name rather than hardcoded, because the harness has to run
+        against builds older than itself: `has_bidi_control` arrived during the
+        0.15.0 cycle, and referencing it directly made every suite error out on
+        0.14.1 — which defeats the cross-version comparison the versioned
+        identity exists for. A surface the build lacks is absent, not zero.
+        """
         import disarm
 
-        return {
-            "has_anomalies": disarm.has_anomalies,
-            "is_confusable": lambda s: bool(disarm.is_confusable(s)),
-            "is_mixed_script": disarm.is_mixed_script,
-            "is_zalgo": disarm.is_zalgo,
-            "has_bidi_conflict": disarm.has_bidi_conflict,
-            "has_bidi_control": disarm.has_bidi_control,
-        }
+        def truthy(fn: Callable[[str], object]) -> Callable[[str], bool]:
+            """`is_confusable` returns a match list; every other one returns bool."""
+            return lambda s: bool(fn(s))
+
+        out: dict[str, Callable[[str], bool]] = {}
+        for name in (
+            "has_anomalies",
+            "is_confusable",
+            "is_mixed_script",
+            "is_zalgo",
+            "has_bidi_conflict",
+            "has_bidi_control",
+        ):
+            fn = getattr(disarm, name, None)
+            if callable(fn):
+                out[name] = truthy(fn)
+        return out
 
     #: Profiles whose contract is to build a comparison key, not to return
     #: readable text. They collapse by design exactly as the three key functions
@@ -246,12 +272,13 @@ class DisarmSubject(_Base):
     def keys(self) -> dict[str, Callable[[str], str]]:
         import disarm
 
-        out: dict[str, Callable[[str], str]] = {
-            "search_key": disarm.search_key,
-            "catalog_key": disarm.catalog_key,
-            "sort_key": disarm.sort_key,
-        }
-        available = set(disarm.list_profiles())
+        out: dict[str, Callable[[str], str]] = {}
+        for name in ("search_key", "catalog_key", "sort_key"):
+            fn = getattr(disarm, name, None)
+            if callable(fn):
+                out[name] = fn
+        profiles: Callable[[], list[str]] = getattr(disarm, "list_profiles", list)
+        available = set(profiles())
         for profile in self.KEY_PROFILES:
             if profile in available:
                 out[f"profile:{profile}"] = disarm.get_pipeline(profile)

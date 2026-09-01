@@ -292,6 +292,9 @@ def test_every_binding_publisher_waits_for_the_core() -> None:
     for name in ("publish-node.yml", "publish-ruby.yml", "publish-java.yml"):
         document = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8")) or {}
         jobs = document.get("jobs") or {}
-        assert any("wait-for-core" in key for key in jobs), (
-            f"{name} has no wait-for-core job, so it does not inherit the core's gate"
+        # The exact key, not a substring: `wait-for-core-disabled` would satisfy a
+        # containment test, and `wait_for_core` would not be found by one (#898 review).
+        assert "wait-for-core" in jobs, (
+            f"{name} has no job keyed exactly `wait-for-core`, so it does not inherit "
+            f"the core's Tier 3 gate; its jobs are {sorted(jobs)}"
         )

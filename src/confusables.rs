@@ -23,6 +23,48 @@ use crate::tables;
 /// Safety bound on the confusables fixed-point loop, shared by the owned and borrowing
 /// forms. Far above the observed maximum; the `debug_assert` on the way out catches any
 /// future table change that regresses convergence.
+/// The three digit policies, as a type rather than a string (#646 §2).
+///
+/// `digit_policy` was a `&str` on one public function and nowhere else, so
+/// `Step::Confusables` could not carry it and no preset could express the setting. As a
+/// `Copy` enum it lives on the step, which is where the decision in
+/// `docs/architecture/prototype-policy.md` §3 puts it: the policy is a property of the
+/// fold, not of one function's signature.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum DigitPolicy {
+    /// disarm's reading: a non-Latin digit folds to the ASCII digit, so a number in
+    /// running prose stays a number. The default, and what every preset used before the
+    /// step could express anything else.
+    Numeric,
+    /// Upstream TR39's: most non-Latin digits fold to a Latin letter (Devanagari zero →
+    /// `o`). Correct for an identifier skeleton, ruinous for a field carrying a number.
+    Tr39,
+    /// Leave the numeral in its own script (#648).
+    Preserve,
+}
+
+impl DigitPolicy {
+    /// The wire name, which is what the public string parameter still accepts.
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            DigitPolicy::Numeric => "numeric",
+            DigitPolicy::Tr39 => "tr39",
+            DigitPolicy::Preserve => "preserve",
+        }
+    }
+
+    /// Parse the public string form. `None` for anything else, so the caller can raise
+    /// the existing `InvalidDigitPolicy` rather than this deciding the error shape.
+    pub(crate) fn parse(s: &str) -> Option<Self> {
+        match s {
+            "numeric" => Some(DigitPolicy::Numeric),
+            "tr39" => Some(DigitPolicy::Tr39),
+            "preserve" => Some(DigitPolicy::Preserve),
+            _ => None,
+        }
+    }
+}
+
 const MAX_CONFUSABLE_PASSES: usize = 8;
 
 fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
@@ -239,6 +281,7 @@ pub(crate) fn normalize_confusables_fixed_cow<'a>(
 pub(crate) fn normalize_confusables_into(
     text: &str,
     target_script: &str,
+    digit_policy: DigitPolicy,
     out: &mut String,
 ) -> Result<(), crate::ErrorRepr> {
     validate_target_script(target_script)?;
@@ -252,8 +295,16 @@ pub(crate) fn normalize_confusables_into(
     // U+0060 `` ` ``→`'`), so ASCII input is not identity even for `target="latin"`.
     let map = tables::resolve_confusable_map(target_script);
 
+    // The policy is applied here rather than assumed (#646 §2). Until this took a
+    // `DigitPolicy` it did a bare map lookup, so `Step::Confusables` — and through it
+    // every preset — was pinned to `numeric` while the public `normalize_confusables`
+    // could be told otherwise. Two call paths into the same fold, one of which could not
+    // express the security-relevant setting.
+    let tr39_digits = digit_policy == DigitPolicy::Tr39 && target_script == "latin";
+    let preserve_digits = digit_policy == DigitPolicy::Preserve;
+
     for ch in text.chars() {
-        match map.and_then(|m| m.get(&ch).copied()) {
+        match lookup_with_policy(map, ch, tr39_digits, preserve_digits) {
             Some(replacement) => out.push_str(replacement),
             None => out.push(ch),
         }

@@ -1330,7 +1330,6 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
-<<<<<<< HEAD
 - **A doc block documented the block below it, not the member it was written for (#851
   review, #778).** In TypeScript, Java and Kotlin only the *last* doc comment before a
   declaration binds, so inserting a member between an existing block and its declaration
@@ -1349,9 +1348,6 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   file-level block is exempt, because it documents no declaration and legitimately
   precedes the first member's. Verified it reports all four against the pre-fix files,
   and both shipped ones against `origin/main`.
-
-=======
->>>>>>> origin/docs/threat-model-scope
 - **`THREAT_MODEL.md` names nine classes it was silent on (#729, #743, #747, #748, #753,
   #755, #756, #758, #804).** The *Out of scope* section is the page a reader consults to
   decide whether a class is disarm's problem, and silence there reads as coverage. Each
@@ -1385,8 +1381,6 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   detector flags **97.8%** of it — so the entry states the widening, which is real and
   structural, and records the detector as a partial mitigation rather than repeating a
   number that points the other way.
-<<<<<<< HEAD
-=======
 
 - **A doc block documented the block below it, not the member it was written for (#851
   review, #778).** In TypeScript, Java and Kotlin only the *last* doc comment before a
@@ -1406,7 +1400,6 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   file-level block is exempt, because it documents no declaration and legitimately
   precedes the first member's. Verified it reports all four against the pre-fix files,
   and both shipped ones against `origin/main`.
->>>>>>> origin/docs/threat-model-scope
 
 - **Normalization is not closed under concatenation, and `docs/RUST_API.md` says so
   (#787).** The key-stability contract is about *time* — a key you stored last year. This

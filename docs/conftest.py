@@ -40,6 +40,8 @@ def _reset_global_state(namespace: dict) -> None:
 # recipe; #156 grows it to the whole cookbook and adds the anti-rot lint that
 # keeps un-converted pages visibly unguarded. Paths are relative to docs/.
 EXECUTED_RECIPES = [
+    # #787: the concatenation section asserts both routes and the boundary check.
+    "RUST_API.md",
     "index.md",
     "python/getting-started.md",
     # performance.md is tables-only (#322); its executable claims now live in

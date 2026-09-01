@@ -77,11 +77,11 @@ You do not need to pre-normalise before handing text to `strip_obfuscation()` or
     ```python
     from disarm import normalize_confusables, strip_obfuscation
 
-    normalize_confusables("ﬁ")   # 'fi'  — in the table
-    normalize_confusables("Ａ")   # 'A'   — in the table
-    normalize_confusables("²")   # '²'   — NOT in the table, and NFKC would give '2'
+    normalize_confusables("ﬁ")  # 'fi'  — in the table
+    normalize_confusables("Ａ")  # 'A'   — in the table
+    normalize_confusables("²")  # '²'   — NOT in the table, and NFKC would give '2'
 
-    strip_obfuscation("²")       # '2'   — this one is NFKC-first
+    strip_obfuscation("²")  # '2'   — this one is NFKC-first
     ```
 
     Measured over `U+0020`–`U+2FFFF` against the bundled UCD 17.0.0: of the **4,965**

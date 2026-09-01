@@ -133,12 +133,12 @@ vowel signs *are* combining marks. So the script survives and the words do not:
 ```python
 from disarm import ml_normalize
 
-ml_normalize("हिन्दी")    # 'हनद'    — Devanagari, still Devanagari, no longer a word
-ml_normalize("मराठी")     # 'मरठ'
-ml_normalize("မြန်မာ")     # 'မနမ'    — Myanmar
-ml_normalize("বাংলা")      # 'বল'     — Bengali
-ml_normalize("ภาษาไทย")   # 'ภาษาไทย' — Thai is unaffected
-ml_normalize("Привет")   # 'привет' — Cyrillic is unaffected
+ml_normalize("हिन्दी")  # 'हनद'    — Devanagari, still Devanagari, no longer a word
+ml_normalize("मराठी")  # 'मरठ'
+ml_normalize("မြန်မာ")  # 'မနမ'    — Myanmar
+ml_normalize("বাংলা")  # 'বল'     — Bengali
+ml_normalize("ภาษาไทย")  # 'ภาษาไทย' — Thai is unaffected
+ml_normalize("Привет")  # 'привет' — Cyrillic is unaffected
 ```
 
 Measured over assigned code points in each block, the share `ml_normalize` deletes

@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .baseline import Drift
-from .leaderboard import ALPHA_FLOOR, Leaderboard
+from .leaderboard import ALPHA_FLOOR, Leaderboard, is_control
 from .protocol import Family, Measurement, Outcome, Provenance, Status
 from .runner import RunReport
 
@@ -157,13 +157,13 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
     for st in board.standings:
         name = f"`{st.subject}`"
         if st.control:
-            name += " *(control)*"
+            name += " *(control — reference only, never ranked)*"
         if st.partial:
             name += " *(partial coverage — not ranked)*"
         composite = "off-scale" if st.control and abs(st.composite) > 10 else f"{st.composite:.3f}"
         # A subject answering one benchmark has no place in an ordering built
         # from four: it was asked fewer questions, not judged better.
-        position = "—" if st.partial else str(st.rank)
+        position = "—" if (st.partial or st.control) else str(st.rank)
         lines.append(
             f"| {position} | {name} | {composite} | "
             f"[{st.ci_low:.2f}, {st.ci_high:.2f}] | {st.bt_strength:.3f} | "
@@ -190,20 +190,34 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
         standings = per.get(item.suite, [])
         if not standings:
             continue
-        lines += [
+        ranked = [st for st in standings if not (st.partial or st.control)]
+        header = (
             f"**`{item.suite}`** — discrimination {item.discrimination:.3f}, "
-            f"{len(standings)} subjects",
-            "",
+            f"{len(ranked)} ranked of {len(standings)} measured"
+        )
+        lines += [header, ""]
+        if len(ranked) < 2:
+            # One subject in the ordering is not a ranking. It happens when only
+            # one tool answers the whole benchmark, and saying "1st of 1" would
+            # dress that up as a win.
+            lines += [
+                "Fewer than two subjects answered this benchmark in full, so "
+                "there is no ordering here — only the measurements below.",
+                "",
+            ]
+        lines += [
             "| # | subject | z | oriented score |",
             "|---|---|---|---|",
         ]
         for place in standings:
             name = f"`{place.subject}`"
             if place.control:
-                name += " *(control)*"
+                name += " *(control — not ranked)*"
             if place.partial:
                 name += " *(answered part of this benchmark — not ranked)*"
-            position = "—" if place.partial else str(place.rank)
+            position = (
+                "—" if (place.partial or place.control or len(ranked) < 2) else str(place.rank)
+            )
             lines.append(f"| {position} | {name} | {place.z:+.2f} | {place.raw:.4g} |")
         lines.append("")
     return lines
@@ -240,8 +254,14 @@ def _render_comparison(report: RunReport) -> list[str]:
         arrow = {True: " ↑", False: " ↓", None: ""}[higher_is_better]
         best: float | None = None
         if higher_is_better is not None and got:
-            values = [v for v in got.values() if v is not None]
-            best = max(values) if higher_is_better else min(values)
+            # Controls are never eligible to be best. `identity` wins any
+            # "do not alter wrongly" row by never altering anything, and
+            # `null-baseline` wins any "do not leave it unfolded" row by leaving
+            # nothing at all. Marking either as the winner would present the
+            # degenerate answer as the target.
+            values = [v for s, v in got.items() if v is not None and not is_control(s)]
+            if values:
+                best = max(values) if higher_is_better else min(values)
         cells = []
         for s in subjects:
             value = got.get(s)

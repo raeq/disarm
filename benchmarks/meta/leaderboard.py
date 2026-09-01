@@ -209,8 +209,12 @@ class Leaderboard:
         """
         out: dict[str, list[BenchmarkStanding]] = {}
         for item in self.items:
-            complete = [s for s in item.z if item.complete(s)]
-            incomplete = [s for s in item.z if not item.complete(s)]
+            # A control is a reference line, never a competitor: it is in the
+            # roster to prove a metric can reject it, and a metric it *wins* is
+            # one that rewards the degenerate answer. Its value stays visible.
+            complete = [s for s in item.z if item.complete(s) and not is_control(s)]
+            incomplete = [s for s in item.z if not item.complete(s) and not is_control(s)]
+            controls = [s for s in item.z if is_control(s)]
             ordered = sorted(complete, key=lambda s: item.z[s], reverse=True)
             standings: list[BenchmarkStanding] = []
             previous: float | None = None
@@ -238,8 +242,18 @@ class Leaderboard:
                         rank=0,
                         z=item.z[subject],
                         raw=item.scores[subject],
-                        control=is_control(subject),
+                        control=False,
                         partial=True,
+                    )
+                )
+            for subject in sorted(controls, key=lambda s: item.z[s], reverse=True):
+                standings.append(
+                    BenchmarkStanding(
+                        subject=subject,
+                        rank=0,
+                        z=item.z[subject],
+                        raw=item.scores[subject],
+                        control=True,
                     )
                 )
             out[item.suite] = standings
@@ -525,13 +539,16 @@ def build(
     total_items = len(items)
     for st in scored:
         st.partial = total_items > 0 and (st.items / total_items) < MIN_COVERAGE
-    scored.sort(key=lambda st: (st.partial, -st.composite))
+    # Ranked tools first, then partial coverage, then controls. Neither a
+    # control nor a partially-measured subject may occupy a rank, because a rank
+    # asserts it beat the things below it.
+    scored.sort(key=lambda st: (st.control, st.partial, -st.composite))
     # A control sits far outside the fitted distribution by construction, so its
     # composite is an artefact of dividing by the tools' spread. Recorded, never
     # presented as a comparable magnitude.
     position = 0
     for st in scored:
-        if st.partial:
+        if st.partial or st.control:
             continue
         position += 1
         st.rank = position

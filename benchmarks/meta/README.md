@@ -78,6 +78,14 @@ thing that proves a metric *can* fail.
 `identity` changes nothing. It is the floor a tool has to beat on coverage while
 staying near it on cost, and it stops a do-nothing tool reading as a safe one.
 
+A control is a reference line and never a competitor. It is listed with its
+value, and it can neither hold a rank nor be marked as the best cell in a row —
+`identity` wins any "do not alter wrongly" row by never altering anything, and
+`null-baseline` wins any "do not leave it unfolded" row by leaving nothing at
+all. Marking either as the winner would put the degenerate answer forward as the
+target, which is the same failure the non-empty collision rule fixed, resurfacing
+one layer up in the report.
+
 Never quote a control as a comparator.
 
 ## The other direction

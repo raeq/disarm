@@ -963,3 +963,70 @@ def test_a_census_row_gets_no_direction_arrow():
     report = RunReport(outcomes=[out, other], selected=1, registered=1, subjects=["a@1", "b@1"])
     md = render_markdown(report)
     assert "`count` ↑" not in md and "`count` ↓" not in md
+
+
+def _directed(subject: str, suite: str, value: float, higher: bool) -> Outcome:
+    from benchmarks.meta.protocol import Measurement, Method
+
+    return Outcome(
+        suite=suite,
+        family=Family.NORMATIVE,
+        provenance=Provenance(
+            origin="o", citation="c", url="http://x", version="1", licence="l", issues=(1,)
+        ),
+        method=Method(subject=subject, subject_version="1"),
+        population=10,
+        measurements=[Measurement(key="m", value=value, of=1.0, higher_is_better=higher)],
+    )
+
+
+def test_a_control_is_never_marked_best_in_the_comparison():
+    """`identity` wins any "do not alter wrongly" row by never altering.
+
+    Marking it best would present the degenerate answer as the target — the same
+    failure the non-empty collision rule fixed, resurfacing in the report.
+    """
+    outs = [
+        _directed("disarm", "s", 0.30, higher=False),
+        _directed("ftfy", "s", 0.40, higher=False),
+        _directed("identity", "s", 0.00, higher=False),
+    ]
+    report = RunReport(
+        outcomes=outs,
+        selected=1,
+        registered=1,
+        subjects=["disarm@1", "ftfy@1", "identity@1"],
+    )
+    md = render_markdown(report)
+    assert "**30.0%**" in md, "the best non-control value wins the row"
+    assert "**0.0%**" not in md, "a control must never be marked best"
+
+
+def test_controls_are_listed_but_never_ranked():
+    outs = []
+    for i in range(4):
+        for subj, value in (("a", 0.9), ("b", 0.6), ("c", 0.3), ("identity", 0.99)):
+            outs.append(_board_outcome(subj, f"s{i}", "m", value))
+    board = leaderboard.build(outs, bootstrap=20)
+    ranked = [st for st in board.standings if not st.control]
+    controls = [st for st in board.standings if st.control]
+    assert controls, "the control must still be listed"
+    assert all(st.rank == 0 for st in controls), "a control holds no rank"
+    assert [st.rank for st in ranked] == [1, 2, 3]
+    assert board.standings[-1].control, "controls sort to the bottom"
+    for standings in board.per_benchmark().values():
+        assert all(st.rank == 0 for st in standings if st.control)
+        assert standings[0].subject.startswith("a@"), "a tool tops the benchmark"
+
+
+def test_a_benchmark_only_one_subject_answered_is_not_a_ranking():
+    outs = []
+    for i in range(3):
+        outs.append(_directed("disarm", f"s{i}", 0.9 - 0.1 * i, higher=True))
+        # Only a control joins, so no ordering between tools is possible and
+        # "1st of 1" would dress that up as a win.
+        outs.append(_directed("identity", f"s{i}", 0.5, higher=True))
+    board = leaderboard.build(outs, bootstrap=10)
+    report = RunReport(outcomes=outs, selected=1, registered=1, subjects=["disarm@1", "identity@1"])
+    md = render_markdown(report, leaderboard=board)
+    assert "there is no ordering here" in md

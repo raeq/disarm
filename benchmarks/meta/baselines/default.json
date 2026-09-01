@@ -2,7 +2,7 @@
   "confusables_version": "17.0.0",
   "disarm_version": "0.14.1",
   "host_ucd": "16.0.0",
-  "recorded_utc": "2026-09-01T17:31:18+00:00",
+  "recorded_utc": "2026-09-01T17:34:59+00:00",
   "suites": {
     "anyascii@0.3.3::corruption-cost": {
       "external": true,
@@ -306,7 +306,7 @@
       "subject": "decancer",
       "subject_version": "0.4.1"
     },
-    "disarm@0.14.1+g5ff5582.dirty::cldr-emoji-annotations": {
+    "disarm@0.14.1+gd8397c2.dirty::cldr-emoji-annotations": {
       "external": true,
       "measurements": {
         "annotated_codepoints": {
@@ -322,9 +322,9 @@
       },
       "population": 1765,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::confusable-bench-v1": {
+    "disarm@0.14.1+gd8397c2.dirty::confusable-bench-v1": {
       "external": true,
       "measurements": {
         "benign_controls": {
@@ -410,9 +410,9 @@
       },
       "population": 140,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::confusable-vision": {
+    "disarm@0.14.1+gd8397c2.dirty::confusable-vision": {
       "external": true,
       "measurements": {
         "collide_in_canonicalize": {
@@ -438,9 +438,9 @@
       },
       "population": 4174,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::corruption-cost": {
+    "disarm@0.14.1+gd8397c2.dirty::corruption-cost": {
       "external": true,
       "measurements": {
         "clean_ascii_altered_gentlest": {
@@ -516,9 +516,9 @@
       },
       "population": 9438,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::cve-2021-42574-trojan-source": {
+    "disarm@0.14.1+gd8397c2.dirty::cve-2021-42574-trojan-source": {
       "external": true,
       "measurements": {
         "poc_files": {
@@ -539,9 +539,9 @@
       },
       "population": 311,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::cve-2026-17084-stringprep": {
+    "disarm@0.14.1+gd8397c2.dirty::cve-2026-17084-stringprep": {
       "external": true,
       "measurements": {
         "collides_catalog_key": {
@@ -577,9 +577,9 @@
       },
       "population": 711,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::icann-lgr-latin": {
+    "disarm@0.14.1+gd8397c2.dirty::icann-lgr-latin": {
       "external": true,
       "measurements": {
         "blocked_pairs": {
@@ -600,9 +600,9 @@
       },
       "population": 21,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::uax29-word-joiners": {
+    "disarm@0.14.1+gd8397c2.dirty::uax29-word-joiners": {
       "external": true,
       "measurements": {
         "detected": {
@@ -623,9 +623,9 @@
       },
       "population": 37,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::ucd-bidi-class": {
+    "disarm@0.14.1+gd8397c2.dirty::ucd-bidi-class": {
       "external": true,
       "measurements": {
         "conflict_detected": {
@@ -646,9 +646,9 @@
       },
       "population": 3018,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::ucd-scripts": {
+    "disarm@0.14.1+gd8397c2.dirty::ucd-scripts": {
       "external": true,
       "measurements": {
         "agree": {
@@ -679,9 +679,9 @@
       },
       "population": 126761,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::ucd-toNFKC-casefold": {
+    "disarm@0.14.1+gd8397c2.dirty::ucd-toNFKC-casefold": {
       "external": true,
       "measurements": {
         "default_ignorable": {
@@ -697,9 +697,9 @@
       },
       "population": 405,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::untrace-techniques": {
+    "disarm@0.14.1+gd8397c2.dirty::untrace-techniques": {
       "external": true,
       "measurements": {
         "altered_by_strip_obfuscation": {
@@ -725,9 +725,9 @@
       },
       "population": 64,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::uts39-augmented-scripts": {
+    "disarm@0.14.1+gd8397c2.dirty::uts39-augmented-scripts": {
       "external": true,
       "measurements": {
         "cases": {
@@ -763,9 +763,9 @@
       },
       "population": 6,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::uts39-confusables": {
+    "disarm@0.14.1+gd8397c2.dirty::uts39-confusables": {
       "external": true,
       "measurements": {
         "altered_but_not_onto_target": {
@@ -796,9 +796,9 @@
       },
       "population": 6565,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::uts39-equivalence-classes": {
+    "disarm@0.14.1+gd8397c2.dirty::uts39-equivalence-classes": {
       "external": true,
       "measurements": {
         "classes": {
@@ -819,9 +819,9 @@
       },
       "population": 3416,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::uts39-mixed-numbers": {
+    "disarm@0.14.1+gd8397c2.dirty::uts39-mixed-numbers": {
       "external": true,
       "measurements": {
         "ascii_mixed_flagged": {
@@ -842,9 +842,9 @@
       },
       "population": 75,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
-    "disarm@0.14.1+g5ff5582.dirty::youtube-spam": {
+    "disarm@0.14.1+gd8397c2.dirty::youtube-spam": {
       "external": true,
       "measurements": {
         "misses_novel": {
@@ -875,7 +875,7 @@
       },
       "population": 1956,
       "subject": "disarm",
-      "subject_version": "0.14.1+g5ff5582.dirty"
+      "subject_version": "0.14.1+gd8397c2.dirty"
     },
     "ftfy@6.3.1::corruption-cost": {
       "external": true,

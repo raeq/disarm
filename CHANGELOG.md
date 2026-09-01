@@ -20,18 +20,11 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 **Stored `canonicalize` output moves for Burmese and other complex scripts (#842).** The
 zalgo bound now counts marks per canonical combining class rather than per base, so 142 of
-the 22,971 key-stability rows move on `canonicalize` and `canonicalize_strict`, and 38 on
+the 22,963 key-stability rows move on `canonicalize` and `canonicalize_strict`, and 38 on
 `strip_obfuscation`. Every one is a Myanmar place name **regaining** a tone mark the old
 bound deleted, so a reindexed key is strictly closer to its input. `search_key`,
 `catalog_key`, `sort_key` and `fold_case` are byte-identical — they transliterate Myanmar
 before the step runs.
-
-**Stored comparison output moves for accented Latin (#831).** 17 rows were added to the
-to-Latin confusable table from ICANN's Latin second-level LGR, so `canonicalize`,
-`canonicalize_strict`, `strip_obfuscation` and `normalize_confusables` now collide pairs
-they previously kept apart — `ź`/`ż`, `ò`/`ỏ`, `ã`/`ā` and the rest of the 19. If you
-persist any of those as a comparison value, reindex. The key builders are unaffected in
-practice: they strip accents, so both members already produced one key.
 
 **Stored `canonicalize` output moves for Indic, Hebrew and Arabic text (#788).**
 `strip_zalgo`'s cap rose from 2 to 3 so it stops stripping from text `is_zalgo` calls
@@ -137,6 +130,28 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   `is_suspicious_hostname` is unaffected and says so: it computes whole-script-confusable
   against Latin with the fold's target hardcoded, so an Arabic label whose skeleton stays
   Arabic cannot qualify whatever these tables hold.
+
+- **`has_bidi_control` — is there a bidi formatting character in this text? (#778)** The
+  question was answerable only through `inspect_anomalies`, and only for nine of the
+  twelve. `has_bidi_conflict` answers a different question: it is about text *mixing*
+  strong LTR and strong RTL content, which is a property of the content rather than of the
+  controls. A caller wanting "does this string carry a bidi control at all" had to
+  enumerate the twelve themselves.
+
+  | | asks |
+  |---|---|
+  | `has_bidi_conflict` | does the text mix strong LTR and strong RTL content? |
+  | `has_bidi_control` | is any of the twelve explicit formatting characters present? |
+
+  Measured rather than taken from the issue, which said six: `inspect_anomalies` answers
+  **9 of 12** — #741 added LRE, RLE and PDF after the issue was written. The three still
+  held back are the directional *marks*, LRM, RLM and ALM, and deliberately: a lone
+  directional mark is ordinary in RTL text, so reporting it as an anomaly would be noise.
+  `has_bidi_control` has no such judgement to make and reports all twelve.
+
+  Available on every surface — Rust, Python (free function and `Text.has_bidi_control`),
+  Ruby as `bidi_control?`, Node as `hasBidiControl`, Java/Kotlin as `hasBidiControl`, and
+  the C ABI as `disarm_has_bidi_control`.
 
 - **`UNICODE_VERSION` and `KEY_SCHEMA_VERSION`, on all seven surfaces (#645, #642, #644).**
   #641, #642 and #644 were filed separately and are one failure repeated: disarm knows
@@ -701,42 +716,6 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   have let a Thai vowel or a Sinhala matra survive maximum-strength deobfuscation —
   measured at 38 corpus rows before the exception was added. `strip_obfuscation` output
   is unchanged from 0.14.1.
-
-- **ICANN's Latin second-level LGR blocks 23 same-script homoglyph pairs; `canonicalize`
-  collided 2 (#831).** The LGR defines 25 variant sets over a 231-element repertoire, and
-  23 of the 51 expanded pairs carry the Latin Generation Panel's own comment *"Glyphs
-  either homoglyph or nearly identical"*. All 19 that a single code point can express now
-  collide, and the four hostname rows in the issue are closed: `ważne.pl`/`waźne.pl`,
-  `gmaġl.com`/`gmaģl.com`, `lýs.com`/`lỳs.com`, `gǝnc.com`/`gənc.com`.
-
-  This was not a defect in the fold. These are **same-script Latin-to-Latin** pairs, most
-  of whose code points are not TR39 sources at all, and disarm's confusable data is
-  cross-script — the two sets never met. So the rows come from a third data file,
-  `data/confusables_lgr.tsv`, with its own admission criterion beside the cross-script
-  supplement (#342) and the attested rows (#597).
-
-  **The targets are not ASCII, and both decisions #831 raised are recorded there.** Folding
-  `ż` to `z` merges it with the bare letter, which the LGR does not block — the
-  over-collapse `search_key` already commits at 1,534 non-LGR merges — so the target has to
-  be the other member. The issue proposed a pairwise "fold to the lower code point" rule;
-  that is not a function here, because `ỉ` appears in three pairs and `ỷ` in two, and it
-  would have made `ə` a *source* and undone its existing fold to `e`. Read as equivalence
-  classes instead — 16 over 35 code points — with the representative taken from the class's
-  existing ASCII fold where one exists and the lowest code point otherwise. That repairs
-  the `ǝ`/`ə` inconsistency the issue flags rather than entrenching it.
-
-  `build.rs` now asserts what makes a non-ASCII target safe: it must be Latin, and it must
-  not itself be a source. Every one of the 2,290 rows was ASCII before and nothing checked
-  it; both conditions are verified to fail the build.
-
-  The second decision, `build.rs:216`, is **not** relaxed: the contraction table is
-  unreachable from `normalize_confusables`, so `n̄`→`ñ` there would not collide the pair.
-  Those two rows are dropped at a cost of 2 of 23, and the class they belong to is #836.
-
-  `tests/test_lgr_pairs.py` asserts both directions. The second matters more: the LGR's
-  other 23 pairs are Common-LGR transitivity artefacts (`u`/`ü`, `a`/`á`) that must **not**
-  collide, and pinning that is what stops a later well-meaning import of the whole variant
-  set.
 
 - **`perf-gate.yml` has never run on `main` (#832).** It triggers on `push` as well as
   `pull_request`, and two of its three jobs computed the baseline as
@@ -1385,6 +1364,25 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   structural, and records the detector as a partial mitigation rather than repeating a
   number that points the other way.
 
+- **A doc block documented the block below it, not the member it was written for (#851
+  review, #778).** In TypeScript, Java and Kotlin only the *last* doc comment before a
+  declaration binds, so inserting a member between an existing block and its declaration
+  silently un-documents the original and gives the newcomer nothing. Nothing fails: the
+  file parses, the build passes, the rendered API docs are simply wrong.
+
+  Four instances, in two pairs. `hasBidiControl` displaced `hasBidiConflict`'s block in
+  `bindings/node/index.ts` and `Disarm.java` — caught in review here. `unicodeVersion`
+  had already done the same to `confusablesVersion` in both files, which **shipped**, so
+  the published npm and Maven docs describe `unicodeVersion` twice and
+  `confusablesVersion` not at all. The Ruby, Python, Kotlin and Rust copies of both
+  changes were correct; it is not a rule anyone breaks deliberately.
+
+  `tests/test_binding_doc_adjacency.py` is the gate: two doc blocks may not be adjacent.
+  Narrow on purpose — that is the entire failure, and it needs no language parser. A
+  file-level block is exempt, because it documents no declaration and legitimately
+  precedes the first member's. Verified it reports all four against the pre-fix files,
+  and both shipped ones against `origin/main`.
+
 - **Normalization is not closed under concatenation, and `docs/RUST_API.md` says so
   (#787).** The key-stability contract is about *time* — a key you stored last year. This
   is the other thing a caller may not rely on, and it holds within one release:
@@ -1418,7 +1416,7 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   | | count |
   |---|---|
   | TR39 sources in the bundled file | 6,565 |
-  | unmapped under `target_script="latin"` | 4,330 |
+  | unmapped under `target_script="latin"` | 4,331 |
   | …of those, strong-RTL | 948 |
 
   The residue is not evenly spread, which is what makes it a section rather than a
@@ -1435,8 +1433,7 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   `tests/test_confusable_residue_docs.py` derives every figure on the page from the
   tables rather than trusting the prose — the totals, the strong-RTL share and each
   per-script row. These are exactly the numbers that rot: #821 already moved the residue
-  from 4,384 to 4,331 between the issue being filed and this being written, and #831 then
-  moved it again to 4,330. The per-script
+  from 4,384 to 4,331 between the issue being filed and this being written. The per-script
   figures are deliberately left to the page for that reason, where a gate holds them; a
   changelog entry is a record of a release and should not need regenerating.
 

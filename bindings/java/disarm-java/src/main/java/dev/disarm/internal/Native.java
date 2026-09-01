@@ -139,6 +139,8 @@ public final class Native {
 
     public static native boolean hasBidiConflict(String text);
 
+    public static native boolean hasBidiControl(String text);
+
     public static native String[] detectScripts(String text);
 
     public static native String mlNormalize(

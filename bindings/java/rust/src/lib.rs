@@ -1015,6 +1015,19 @@ pub fn isMixedScript<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString
     map_bool(env, input, api::is_mixed_script)
 }
 
+/// All twelve UAX #9 explicit formatting characters, uncontexted (#778). The counterpart
+/// to `has_bidi_conflict`, which reads strong-direction letters and is blind to these; the
+/// two are disjoint. The detector's `bidi` kind reports nine, holding back LRM, RLM and ALM
+/// because a lone directional mark is ordinary in right-to-left text.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn hasBidiControl<'l>(
+    env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+) -> jboolean {
+    map_bool(env, input, api::has_bidi_control)
+}
+
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn hasBidiConflict<'l>(
     env: EnvUnowned<'l>,

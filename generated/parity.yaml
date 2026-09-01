@@ -236,6 +236,15 @@ operations:
       java: hasBidiConflict
       kotlin: hasBidiConflict
       cabi: has_bidi_conflict
+  - id: has_bidi_control
+    names:
+      rust: has_bidi_control
+      python: has_bidi_control
+      ruby: bidi_control?
+      node: hasBidiControl
+      java: hasBidiControl
+      kotlin: hasBidiControl
+      cabi: has_bidi_control
   - id: inspect_anomalies
     names:
       rust: inspect_anomalies

@@ -598,6 +598,18 @@ export function isMixedScript(text: string): boolean {
 }
 
 /**
+ * All twelve UAX #9 explicit formatting characters, uncontexted.
+ *
+ * The counterpart to {@link hasBidiConflict}, which reads strong-direction letters and is
+ * blind to these; the two are disjoint. The anomaly detector's `bidi` kind reports nine of
+ * the twelve, holding back LRM, RLM and ALM because a lone directional mark is ordinary in
+ * right-to-left text.
+ */
+export function hasBidiControl(text: string): boolean {
+  return native.hasBidiControl(text)
+}
+
+/**
  * Whether `text` mixes strong left-to-right and strong right-to-left characters
  * — the precondition for Bidi display-reordering ("BiDi Swap", #412). Fires on
  * the real letters (no `U+202x` override); a `false` result is not a safety
@@ -633,14 +645,6 @@ export function scriptInfo(name: string): ScriptMeta {
 }
 
 /**
- * The Unicode `confusables.txt` release the bundled confusable tables were folded
- * from, e.g. `"17.0.0"`.
- *
- * Not a Unicode version for the library as a whole — disarm's case-folding and width
- * tables track different releases (see docs/provenance.md). Use this to answer "is my
- * confusables fold stale?" without inferring it from behaviour.
- */
-/**
  * The UCD release disarm's normalizer implements. Not a library-wide Unicode version —
  * the bundled tables track different releases. This is the one integrators ask about,
  * because it decides whether disarm's normalization agrees with the host platform's.
@@ -658,6 +662,14 @@ export function keySchemaVersion(): number {
   return native.keySchemaVersion()
 }
 
+/**
+ * The Unicode `confusables.txt` release the bundled confusable tables were folded
+ * from, e.g. `"17.0.0"`.
+ *
+ * Not a Unicode version for the library as a whole — disarm's case-folding and width
+ * tables track different releases (see docs/provenance.md). Use this to answer "is my
+ * confusables fold stale?" without inferring it from behaviour.
+ */
 export function confusablesVersion(): string {
   return native.confusablesVersion()
 }

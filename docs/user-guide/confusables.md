@@ -241,7 +241,7 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
 | Target | Mappings | Description |
 |--------|----------|-------------|
-| `"latin"` (default) | 2,290 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
+| `"latin"` (default) | 2,273 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
 | `"cyrillic"` | 1,349 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
 | `"arabic"` | 373 | Non-Arabic → Arabic. `⸮`→`؟`, `𞣉`→`٣`, etc. |
 | `"hebrew"` | 261 | Non-Hebrew → Hebrew. `ℵ`→`א`, `∸`→`﬩`, etc. |
@@ -264,7 +264,7 @@ Measured against the bundled `confusables.txt` (Unicode 17.0.0):
 | | count |
 |---|---|
 | TR39 sources in the bundled file | 6,565 |
-| unmapped under `target_script="latin"` | 4,330 |
+| unmapped under `target_script="latin"` | 4,331 |
 | …of those, strong-RTL (`Bidi_Class` `R` or `AL`) | 948 |
 
 The residue is not evenly spread, which is the fact that makes this a section rather than

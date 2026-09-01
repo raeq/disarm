@@ -103,9 +103,23 @@ def test_ties_go_to_the_first_candidate() -> None:
     assert disarm.nearest_match("ax", ["ac", "ab"], max_distance=1).value == "ac"
 
 
-def test_distance_counts_characters_not_bytes() -> None:
-    """So a composed and a decomposed accent are not silently three edits apart."""
+def test_distance_counts_scalar_values_not_bytes() -> None:
+    """`é` is one unit, not the two bytes it encodes to."""
     assert disarm.edit_distance("é", "e") == 1
     assert disarm.edit_distance("café", "cafe") == 1
-    # And the documented composition: reduce first when that difference should vanish.
-    assert disarm.edit_distance(disarm.canonicalize("café"), disarm.canonicalize("café")) == 0
+
+
+def test_composition_is_not_ignored_and_canonicalize_is_how_to_ignore_it() -> None:
+    """The claim the docs used to make, corrected (#893 review).
+
+    Counting scalar values does **not** make a composed and a decomposed accent equal:
+    the decomposed form is one scalar longer and the letter differs, so they are 2 apart.
+    An earlier version of this test compared `canonicalize("café")` to itself, which is 0
+    for a reason that has nothing to do with the claim.
+    """
+    composed = "caf\u00e9"
+    decomposed = "cafe\u0301"
+    assert composed != decomposed
+    assert disarm.edit_distance(composed, decomposed) == 2
+    # Reduce first, and the difference goes away — which is the documented composition.
+    assert disarm.edit_distance(disarm.canonicalize(composed), disarm.canonicalize(decomposed)) == 0

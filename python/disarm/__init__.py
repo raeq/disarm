@@ -87,6 +87,7 @@ from disarm._boundary import (
     InvalidArgumentError,
     KeyCollision,
     Lexicon,
+    NearestMatch,
     ResourceLimitError,
     UnsupportedError,
 )
@@ -356,6 +357,7 @@ __all__ = [
     "unmapped_confusables",
     "edit_distance",
     "find_key_collisions",
+    "NearestMatch",
     "nearest_match",
     "KeyCollision",
     "is_ascii",

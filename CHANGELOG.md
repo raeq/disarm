@@ -165,7 +165,9 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   the caller, and returns the distance so the policy stays the caller's, which is the
   precedent `find_key_collisions` set.
 
-  It returns a named `NearestMatch` with `value` and `distance`, not a tuple — the repo's
+  It returns a named `NearestMatch` with `value` and `distance` — exported from the
+  package root, like `KeyCollision` and `Finding`, so it can be annotated and
+  `isinstance`-checked — not a tuple — the repo's
   `api_surface_contract` gate caught the tuple, and it is right that `(str, int)` at a
   call site does not say which number is which.
 

@@ -3242,9 +3242,13 @@ def edit_distance(a: str, b: str) -> int:
     All twelve are **distance 1** from the name they imitate, so guarding a reserved list
     needs only ``edit_distance(candidate, reserved) <= 1``.
 
-    Counts **characters**, not bytes, so ``"é"`` and ``"e"`` are one edit apart whether the
-    accent is composed or not. Feed it `canonicalize` output when you want the comparison
-    to ignore that too — the two answer different questions and compose well.
+    Counts **Unicode scalar values**, not UTF-8 bytes: ``"é"`` is one unit, so ``"é"`` and
+    ``"e"`` are one edit apart rather than two.
+
+    That is not the same as ignoring composition. A composed ``"café"`` and a decomposed
+    ``"cafe\u0301"`` are **2** edits apart, because the decomposed form is one scalar
+    longer and the letter differs. Reduce first when you want them to compare equal —
+    ``edit_distance(canonicalize(a), canonicalize(b))`` is 0 for that pair.
 
     Args:
         a: First string.

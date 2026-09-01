@@ -1156,9 +1156,13 @@ pub use crate::anomalies::{
 /// All twelve are **distance 1** from the name they imitate, so a registry guarding a
 /// reserved list needs only `edit_distance(candidate, reserved) <= 1`.
 ///
-/// Counts characters rather than bytes, so `"é"` and `"e"` are one edit apart whether the
-/// accent is composed or not — feed it [`crate::api::canonicalize`] output if you want the comparison
-/// to ignore that difference too.
+/// Counts **Unicode scalar values**, not UTF-8 bytes: `"é"` is one unit, so `"é"` and
+/// `"e"` are one edit apart rather than two.
+///
+/// That is not the same as ignoring composition. A composed `"café"` and a decomposed
+/// `"cafe\u{301}"` are *2* edits apart — the decomposed form is one scalar longer and the
+/// letter differs. Feed both through [`crate::api::canonicalize`] first when you want them
+/// to compare equal.
 ///
 /// ```
 /// assert_eq!(disarm::api::edit_distance("paypa1", "paypal"), 1);

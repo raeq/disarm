@@ -115,6 +115,7 @@ EXPECTED_ALL = {
     # reach. Additive — no existing name changed.
     "edit_distance",
     "find_key_collisions",
+    "NearestMatch",
     "nearest_match",
     "KeyCollision",
     "is_ascii",

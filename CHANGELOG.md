@@ -176,11 +176,14 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
   **Python only in this release.** The other five bindings are tracked separately.
 
-- **`digit_policy` is reachable from the six key builders (#885).** It was accepted by
+- **`digit_policy` is reachable from the six key builders, in Python (#885).** It was
+  accepted by
   `normalize_confusables` and by nothing else — not a preset, not a profile, not a key
   builder — so a caller who reached for `canonicalize`, the README's first example, could
   not express the better answer for this class. `canonicalize`, `canonicalize_strict`,
-  `search_key`, `catalog_key`, `sort_key` and `strip_obfuscation` now take it.
+  `search_key`, `catalog_key`, `sort_key` and `strip_obfuscation` now take it **on the
+  Python surface**; the Rust API and the other five bindings are tracked separately, as
+  the equivalent split was made for #883.
 
   Over `confusable-bench.v1` the union of the six goes from **72 of 120** malicious rows
   to **92** under `"tr39"`.

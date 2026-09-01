@@ -51,6 +51,16 @@ def _apply_digit_policy(text: str, digit_policy: str) -> str:
 
     The other two apply `normalize_confusables` first. That is a composition a caller
     could write by hand; having it here makes it discoverable and pins what it means.
+
+    A pre-pass rather than the policy threaded into the key pipeline's own confusable
+    stage, and that is a deliberate trade rather than an oversight (#895 review). The
+    preset step lists are `static_steps!` **consts** — the monomorphisation #695 and #868
+    built so each preset folds to its own arm and links only the tables it uses. A runtime
+    policy there either duplicates every step list per policy or defeats that, and
+    `scripts/perf_lint.sh` and the wasm size gate exist to catch precisely that. The cost
+    of the pre-pass falls only on the two non-default policies, which are opt-in; the
+    default path does no extra work at all. #896 tracks doing it properly alongside the
+    other bindings.
     """
     if digit_policy in _NON_DEFAULT_DIGIT_POLICIES:
         return _normalize_confusables(text, target_script="latin", digit_policy=digit_policy)

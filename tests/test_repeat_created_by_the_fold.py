@@ -20,6 +20,8 @@ defect needs a base *and* a mark, so none of them could see it, which is why it 
 
 from __future__ import annotations
 
+import functools
+
 import pytest
 
 import disarm
@@ -72,43 +74,92 @@ def test_every_regressed_pair_is_idempotent(base: int, mark: int) -> None:
     assert disarm.canonicalize(once) == once
 
 
-@pytest.mark.parametrize("name", sorted(BUILDERS))
-def test_no_builder_moves_on_a_second_pass_over_the_bmp(name: str) -> None:
-    """The sweep that would have caught this, over pairs rather than single characters.
+@functools.cache
+def _bases_that_can_end_up_carrying_a_duplicated_mark() -> tuple[int, ...]:
+    """The population that can produce this defect, derived rather than listed.
 
-    Bounded to the BMP to stay in the fast tier; the full-range version is below, marked
-    `formal`. Every pair in `REGRESSED` is in this range, so the bound does not hide the
-    class it was written for.
+    Two routes, and the second is why the obvious derivation is not enough:
+
+    1. The base's **confusable target** carries a mark. `U+1EF3` folds to `U+00FD`,
+       whose NFD is `y` + acute, so a following acute becomes a duplicate.
+    2. The **base itself** decomposes to base + mark. It can then reorder and recompose
+       with the following mark into a *different* character, which folds and reintroduces
+       the mark it started with. `U+0121` (g with dot above) does not fold at all — but
+       `U+0121` + cedilla reorders by combining class to `g` + cedilla + dot, recomposes
+       to `U+0123`, and *that* folds to `ġ` = `g` + dot. Two dots.
+
+    A first draft of this function had only route 1. It covered 15 of the 16 pairs that
+    actually regressed and would have shipped believing itself exhaustive — the property
+    is about the (base, mark) *pair* after normalization, not about the base alone.
+
+    12,469 code points. Cached: the scan walks the whole code point space and every test
+    in this module wants the same answer.
+    """
+    at_risk = []
+    for cp in range(0x110000):
+        char = chr(cp)
+        if any(disarm.normalize(char, form="NFD")[1:]):
+            at_risk.append(cp)
+            continue
+        folded = disarm.normalize_confusables(char)
+        if folded != char and any(disarm.normalize(folded, form="NFD")[1:]):
+            at_risk.append(cp)
+    return tuple(at_risk)
+
+
+@pytest.mark.parametrize("name", sorted(BUILDERS))
+def test_no_builder_moves_on_a_second_pass_over_the_at_risk_bases(name: str) -> None:
+    """The sweep that would have caught this, over the population that can produce it.
+
+    Deliberately not a full sweep: an exhaustive BMP version costs ~5s of a ~12s suite
+    and finds exactly the same thing, because a base whose fold carries no mark cannot
+    manufacture a repeat. The exhaustive version is below, marked `formal`.
+
+    No `try`/`except` here. Nothing in `BUILDERS` raises — not even on a lone surrogate,
+    checked — so a broad catch would swallow only genuine failures, which is how a sweep
+    passes for the wrong reason (#751 measured that mistake first-hand).
     """
     build = BUILDERS[name]
     moved = []
-    for cp in range(0x10000):
+    for cp in _bases_that_can_end_up_carrying_a_duplicated_mark():
         for mark in MARKS:
             text = chr(cp) + chr(mark)
-            try:
-                once = build(text)
-                twice = build(once)
-            except Exception:  # noqa: BLE001 - surrogates are not the subject
-                continue
-            if once != twice:
-                moved.append((hex(cp), hex(mark), once, twice))
+            once = build(text)
+            if build(once) != once:
+                moved.append((hex(cp), hex(mark), once, build(once)))
     assert not moved, f"{name}: {len(moved)} pairs move on a second pass; {moved[:5]}"
+
+
+def test_the_at_risk_population_covers_every_pair_that_regressed() -> None:
+    """Non-vacuity, and the check the first draft of the derivation would have failed.
+
+    A derived sweep that derives the wrong set passes for the wrong reason. Route 1 alone
+    covered 15 of these 16.
+    """
+    at_risk = set(_bases_that_can_end_up_carrying_a_duplicated_mark())
+    assert len(at_risk) > 1000, f"only {len(at_risk)} at-risk bases — has the fold changed?"
+    uncovered = [(hex(b), hex(m)) for b, m in REGRESSED if b not in at_risk]
+    assert not uncovered, f"the sweep cannot reach these known-bad pairs: {uncovered}"
 
 
 @pytest.mark.formal
 @pytest.mark.parametrize("name", sorted(BUILDERS))
 def test_no_builder_moves_on_a_second_pass_over_every_code_point(name: str) -> None:
-    """The exhaustive version. Tier 3 (see CLAUDE.md), because it is slow, not optional."""
+    """The exhaustive version. Tier 3 (see CLAUDE.md), because it is slow, not optional.
+
+    The default-tier sweep above is over the *derived* at-risk population, which is
+    faster and, on the argument in that function, complete. This one assumes nothing
+    about the derivation and is what would catch a third route into the class.
+
+    No `try`/`except`: nothing in `BUILDERS` raises, not even on a lone surrogate, so a
+    catch here would swallow only genuine failures (#881 review).
+    """
     build = BUILDERS[name]
     moved = []
     for cp in range(0x110000):
         for mark in MARKS:
             text = chr(cp) + chr(mark)
-            try:
-                once = build(text)
-                twice = build(once)
-            except Exception:  # noqa: BLE001
-                continue
-            if once != twice:
-                moved.append((hex(cp), hex(mark), once, twice))
+            once = build(text)
+            if build(once) != once:
+                moved.append((hex(cp), hex(mark), once, build(once)))
     assert not moved, f"{name}: {len(moved)} pairs move on a second pass; {moved[:5]}"

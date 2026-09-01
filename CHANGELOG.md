@@ -749,6 +749,26 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   feature and vanish with it; a data file's absence is a build-level fact a deleted test
   cannot hide.
 
+- **`Step::Confusables` could not express the digit policy, so no preset could (#646 §2).**
+  `digit_policy` reached exactly one function. The step carried a target script and
+  nothing else, and the fold it calls — `normalize_confusables_into` — did a bare map
+  lookup with no policy at all. Two call paths into one fold, and the one every preset
+  uses could not say the security-relevant thing.
+
+  The step now carries a `DigitPolicy`, which is where
+  `docs/architecture/prototype-policy.md` §3 decided it belongs: the policy is a property
+  of the fold, not of one function's signature. All three variants that fold confusables
+  — `Confusables`, `ConfusablesNfcFixedPoint`, `ConfusablesMarkFixedPoint` — take it.
+
+  **No output changes.** Every shipped preset passes `Numeric`, which is what they did
+  implicitly before the step could say anything else, and
+  `no_shipped_preset_uses_a_non_default_digit_policy` asserts that — a preset silently
+  gaining `Tr39` would turn a number into a letter inside a key, which is the damage that
+  page prices at `SKU-100` and `SKU-1O0` sharing one key.
+
+  This widens what is *expressible*. Exposing the choice on `TextPipeline` is a public
+  parameter owed across six bindings and is left to its own change.
+
 - **A preset linked every table any step could reach; `strip_format` cost 663 KB of wasm
   (#695).** `presets::run` walked a `&[Step]` and called `apply_into` with a *runtime*
   value, so the optimiser could not prove any of the eighteen match arms unreachable. A

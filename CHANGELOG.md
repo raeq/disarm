@@ -252,6 +252,28 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Changed (breaking)
 
+- **`sort_key` bounds combining marks (#807).** It was the one key builder with neither
+  `strip_zalgo` nor `strip_accents`, so nothing bounded them:
+  `sort_key("a" + U+0301 × 40 + "b")` returned 41 characters and `has_anomalies` called
+  its own output `zalgo`. Two properties were wrong at once — a key builder under a
+  stability contract emitting flagged output, and its **length set by the attacker**:
+  1,000 marks in produced 1,001 characters out.
+
+  Capping rather than stripping is what makes this possible without destroying the
+  function. `search_key` and `catalog_key` are clean only as a side effect, because
+  `strip_accents` removes the marks, and that route is closed here: keeping diacritics is
+  what a sort key is *for*, and `café` and `cafe` must not collide.
+
+  The cap is `DEFAULT_MAX_MARKS`, which since #788 equals `is_zalgo`'s threshold, so it
+  removes exactly what the library already calls abuse and nothing it calls ordinary. That
+  ordering was not optional: with the old cap of 2 this step would have truncated a
+  three-mark Bengali cluster or a pointed Hebrew consonant inside a key builder.
+
+  **No key moves.** The step sits after transliteration, and `sort_key` romanises
+  non-Latin text before reaching it, so all 22,963 corpus rows are byte-identical. What
+  remains for it to bound is a Latin-script stack, which is exactly where the
+  amplification lives. `KEY_SCHEMA_VERSION` is unchanged.
+
 - **`strip_zalgo`'s cap now equals `is_zalgo`'s threshold (#788).** It was 2 while the
   threshold was 3, so the library removed a mark from text it had just declined to call
   suspicious:

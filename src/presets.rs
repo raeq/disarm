@@ -1247,6 +1247,20 @@ pub(crate) fn sort_key<'a>(
         //     strips accents), so accent preservation — the sort_key invariant
         //     (`Über` → `über`) — is unaffected.
         Step::FoldCase,
+        // 4b. Cap combining marks (#807). `sort_key` was the one key builder with
+        //     neither `strip_zalgo` nor `strip_accents`, so nothing bounded them:
+        //     `sort_key("a" + U+0301 * 40 + "b")` returned 41 characters and
+        //     `has_anomalies` called its own output `zalgo`. The other two builders are
+        //     clean only as a side effect — `strip_accents` removes the marks — and that
+        //     is not available here, because keeping diacritics is what a sort key is
+        //     FOR: `café` and `cafe` must not collide.
+        //
+        //     Capping rather than stripping preserves that. `DEFAULT_MAX_MARKS` is the
+        //     figure `is_zalgo` flags above (#788), so this removes exactly what the
+        //     library already calls abuse and nothing it calls ordinary — which is why
+        //     #788 had to land first. A three-mark Bengali cluster or a pointed Hebrew
+        //     consonant sorts unchanged.
+        Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
         // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
         Step::StripControl,
         Step::StripZeroWidth,

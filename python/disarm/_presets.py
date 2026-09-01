@@ -185,7 +185,8 @@ def catalog_key(
 ) -> str:
     """Library catalog key generation pipeline.
 
-    Pipeline: NFKC → fold_case → transliterate → confusables → strip_accents →
+    Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate →
+    confusables → strip_accents →
               fold_case → collapse_whitespace
 
     Produces a canonical deduplication key for bibliographic titles.
@@ -281,7 +282,8 @@ def search_key(
 ) -> str:
     """Search index key generation pipeline.
 
-    Pipeline: NFKC → fold_case → transliterate → strip_accents → fold_case →
+    Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate →
+    strip_accents → fold_case →
               collapse_whitespace
 
     Produces a case-insensitive, accent-insensitive, script-insensitive
@@ -331,7 +333,7 @@ def sort_key(
 ) -> str:
     """Sort key generation pipeline.
 
-    Pipeline: NFKC → strip_bidi → fold_case → transliterate-non-Latin →
+    Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate-non-Latin →
     fold_case → collapse_whitespace
 
     A case-insensitive collation key that, unlike `search_key`,

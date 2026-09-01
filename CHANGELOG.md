@@ -286,6 +286,36 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   mark on one base is still removed, deliberately, and `max_marks` is the parameter for
   text where that is ordinary.
 
+- **The key builders strip the invisible classes (#805).** `search_key`, `catalog_key` and
+  `sort_key` passed noncharacters through unchanged, so inserting one varied the key
+  without varying anything a human sees. `canonicalize`, `strip_obfuscation` and
+  `strip_noncharacters` always stripped them, which made this an asymmetry inside the
+  library rather than a missing capability — and until #774 the detector reported it, but
+  only as a side effect of the script mislabel that #774 correctly fixed.
+
+  **The class is wider than the issue measured.** Before the fix:
+
+  | class | `search_key` | `catalog_key` | `sort_key` |
+  |---|---|---|---|
+  | noncharacters | evades | evades | evades |
+  | tag characters | evades | evades | evades |
+  | PUA, supplementary planes | evades | evades | evades |
+  | PUA, BMP | ok | ok | ok |
+  | variation selectors | ok | ok | evades |
+  | CGJ | ok | ok | evades |
+
+  BMP private-use was already handled, so a spot check with `U+E000` came back clean and
+  the class looked covered. The Tags block is the ASCII-smuggling channel #700 gave the
+  *detector* and never gave the key builders.
+
+  One step fixes all of it, because it is one class: `StripInvisible(COMPARISON_STRIP)` —
+  the policy `canonicalize` already uses. Fixing only noncharacters would have left tags
+  and supplementary PUA evading, which is a worse place to stop than either end.
+
+  A well-formed emoji flag keeps its tag sequence, per the #413 carve-out: those tags are
+  the character rather than smuggling, and stripping them would collapse every regional
+  flag onto one black flag.
+
 - **The CLDR name table only fires for code points that are actually emoji (#757).**
   CLDR `annotationsDerived` names 326 characters that carry neither the Unicode `Emoji`
   nor the `Extended_Pictographic` property — the curly quotes, the dashes, the currency

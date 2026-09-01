@@ -110,6 +110,13 @@ and would rank a tool with no key builder at all as the safer one.
 | `model` | a released model artifact | chat-template delimiters read from published `tokenizer.json` files |
 | `comparator` | a third-party labelled benchmark or rival tool | `confusable-bench.v1`, confusable-vision, untrace |
 
+Tools differ in what they can be asked. A key-builder question put to a
+transliterator has no answer, and a suite asking two separable questions — is it
+detected, is it undone — lets a subject answer the half it has. The half it
+cannot answer is omitted, never reported as zero: `confusable-homoglyphs` detects
+and does not transform, and `recovered: 0` for it would read as total failure
+rather than as a question it was never asked.
+
 `introspective` is the sixth tier and is not a benchmark. Its sweeps run over the
 UCD code-point domain, which is external, but disarm is the only oracle for what
 the answer should be — so a number moving there proves nothing on its own. They

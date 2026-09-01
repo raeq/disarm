@@ -455,10 +455,16 @@ def test_doing_nothing_scores_zero_coverage_and_zero_cost():
 
 def test_the_degenerate_flag_fires_only_on_the_null_baseline():
     flagged = set()
+    scored = 0
     for subject in subjects.all_subjects():
         out = registry.by_name("corruption-cost").run(subject=subject)
-        if out.measurement("degenerate").value:
+        measured = out.measurement("degenerate")
+        if measured is None:
+            continue  # a subject with no transform surface is not asked
+        scored += 1
+        if measured.value:
             flagged.add(subject.info.name)
+    assert scored > 1, "expected several subjects to be scored"
     assert flagged == {"null-baseline"}
 
 
@@ -808,3 +814,44 @@ def test_every_rendered_identity_shows_a_version():
     )
     md = render_markdown(report)
     assert "disarm@" in md, "a report must never name a tool without its version"
+
+
+def test_a_half_a_subject_cannot_answer_is_omitted_not_zeroed():
+    """A question never asked must not be reported as a failed answer.
+
+    `confusable-homoglyphs` detects and does not transform. Reporting
+    `recovered: 0` for it would read as total failure at recovery rather than as
+    a capability it does not claim.
+    """
+    suite = registry.by_name("uax29-word-joiners")
+    detector_only = subjects.by_name("confusable-homoglyphs")
+    if detector_only is None or not detector_only.available()[0]:
+        pytest.skip("confusable-homoglyphs is not installed")
+    out = suite.run(subject=detector_only)
+    assert out.status is Status.OK
+    assert out.measurement("detected") is not None
+    assert out.measurement("recovered") is None
+
+    both = suite.run(subject=subjects.by_name("disarm"))
+    assert both.measurement("detected") is not None
+    assert both.measurement("recovered") is not None
+
+
+def test_requires_any_admits_a_subject_with_either_capability():
+    suite = registry.by_name("uax29-word-joiners")
+    assert suite.REQUIRES_ANY
+    for name in ("disarm", "unidecode", "confusable-homoglyphs"):
+        subject = subjects.by_name(name)
+        if subject is None or not subject.available()[0]:
+            continue
+        ok, why = suite.supports(subject)
+        assert ok, f"{name} should be admitted: {why}"
+
+
+def test_the_icu_subject_is_registered_even_when_absent():
+    """A missing reference implementation must be visible as missing."""
+    icu = subjects.by_name("icu")
+    assert icu is not None
+    ready, why = icu.available()
+    if not ready:
+        assert "pyicu" in why.lower()

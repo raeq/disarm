@@ -188,8 +188,14 @@ class SuiteBase:
     #: no other tool exposes — running such a suite against `ftfy` would produce a
     #: zero that reads as a result rather than as "not applicable".
     MULTI_SUBJECT = False
-    #: Capabilities a subject must provide before this suite can score it.
+    #: Capabilities a subject must provide before this suite can score it — all
+    #: of them.
     REQUIRES: tuple[str, ...] = (Capability.TRANSFORM,)
+    #: Capabilities of which the subject needs *at least one*. Used where a suite
+    #: asks two separable questions — "is it detected" and "is it undone" — so a
+    #: detector-only tool can answer the half it has rather than being excluded.
+    #: The half it cannot answer is omitted, never reported as zero.
+    REQUIRES_ANY: tuple[str, ...] = ()
 
     #: Set for the duration of :meth:`run`.
     subject: Subject | None = None
@@ -256,7 +262,14 @@ class SuiteBase:
                 f"{self.name} measures a disarm-specific surface; "
                 f"{subject.info.name} exposes no equivalent"
             )
-        missing = set(self.REQUIRES) - subject.capabilities()
+        caps = subject.capabilities()
+        if self.REQUIRES_ANY:
+            if not (set(self.REQUIRES_ANY) & caps):
+                return False, (
+                    f"{subject.info.name} provides none of {'/'.join(sorted(self.REQUIRES_ANY))}"
+                )
+            return True, ""
+        missing = set(self.REQUIRES) - caps
         if missing:
             return False, f"{subject.info.name} provides no {'/'.join(sorted(missing))} surface"
         return True, ""

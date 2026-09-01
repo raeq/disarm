@@ -281,6 +281,122 @@ class DecancerSubject(_Base):
         return {"decancer_parse": lambda s: str(decancer_py.parse(s))}
 
 
+class ConfusableHomoglyphsSubject(_Base):
+    """The other detector in the registry.
+
+    Until this was added, disarm was the only subject with a ``detect``
+    capability, so every detector suite was locked to it and no detection
+    question had a second column. A benchmark with one participant is a
+    description, not a comparison.
+    """
+
+    info = SubjectInfo(
+        name="confusable-homoglyphs",
+        version=_version("confusable-homoglyphs"),
+        origin="Victor Felder",
+        url="https://github.com/vhf/confusable_homoglyphs",
+        role="detects confusable and mixed-script identifiers (UTS #39 data)",
+    )
+
+    def available(self) -> tuple[bool, str]:
+        return (
+            (True, "")
+            if _import("confusable_homoglyphs")
+            else (False, "pip install confusable-homoglyphs")
+        )
+
+    def detectors(self) -> dict[str, Callable[[str], bool]]:
+        from confusable_homoglyphs import confusables
+
+        return {
+            "is_dangerous": lambda s: bool(confusables.is_dangerous(s)),
+            "is_confusable": lambda s: bool(confusables.is_confusable(s)),
+            "is_mixed_script": lambda s: bool(confusables.is_mixed_script(s)),
+        }
+
+
+class PyUnormalizeSubject(_Base):
+    """Normalization against a different UCD than the interpreter's.
+
+    Ships its own Unicode tables, so it isolates *table version* from *algorithm*
+    — the one variable the stdlib column cannot vary. When it and `stdlib`
+    disagree, the difference is the UCD, not the code.
+    """
+
+    info = SubjectInfo(
+        name="pyunormalize",
+        version=_version("pyunormalize"),
+        origin="Marc Lodewijck",
+        url="https://github.com/mlodewijck/pyunormalize",
+        role="NFC/NFD/NFKC/NFKD against its own bundled UCD",
+    )
+
+    def available(self) -> tuple[bool, str]:
+        return (True, "") if _import("pyunormalize") else (False, "pip install pyunormalize")
+
+    def transforms(self) -> dict[str, Callable[[str], str]]:
+        import pyunormalize
+
+        return {
+            "NFC": pyunormalize.NFC,
+            "NFD": pyunormalize.NFD,
+            "NFKC": pyunormalize.NFKC,
+            "NFKD": pyunormalize.NFKD,
+        }
+
+
+def _icu_version() -> str:
+    try:
+        import icu
+
+        return str(icu.ICU_VERSION)
+    except ImportError:
+        return "not installed"
+
+
+class ICUSubject(_Base):
+    """ICU: the reference implementation of the standard disarm is measured against.
+
+    ``icu.SpoofChecker`` implements UTS #39 directly and ``icu.Transliterator``
+    covers the romanization axis, which makes this the most informative column
+    available — and the only one that is not merely another tool but the
+    standard's own implementation. Registered even when absent, because a reader
+    should see that it is missing rather than not know it was an option.
+    """
+
+    info = SubjectInfo(
+        name="icu",
+        version=_icu_version(),
+        origin="Unicode Consortium / PyICU",
+        url="https://pypi.org/project/PyICU/",
+        role="UTS #39 SpoofChecker and ICU Transliterator",
+    )
+
+    def available(self) -> tuple[bool, str]:
+        if _import("icu"):
+            return True, ""
+        return False, (
+            "pip install pyicu — needs the ICU C++ headers "
+            "(brew install icu4c pkg-config, then PKG_CONFIG_PATH=...)"
+        )
+
+    def transforms(self) -> dict[str, Callable[[str], str]]:
+        if not _import("icu"):
+            return {}
+        import icu
+
+        latin = icu.Transliterator.createInstance("Any-Latin; Latin-ASCII")
+        return {"Any-Latin_Latin-ASCII": latin.transliterate}
+
+    def detectors(self) -> dict[str, Callable[[str], bool]]:
+        if not _import("icu"):
+            return {}
+        import icu
+
+        checker = icu.SpoofChecker()
+        return {"spoof_check": lambda s: bool(checker.check(s))}
+
+
 class NullBaselineSubject(_Base):
     """The degenerate solution, kept in the roster on purpose.
 
@@ -339,6 +455,9 @@ ALL: tuple[type[_Base], ...] = (
     UnidecodeSubject,
     TextUnidecodeSubject,
     AnyAsciiSubject,
+    ConfusableHomoglyphsSubject,
+    PyUnormalizeSubject,
+    ICUSubject,
     NullBaselineSubject,
     IdentitySubject,
 )

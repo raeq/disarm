@@ -22,6 +22,7 @@ from .. import damage
 from ..base import DATA, FIXTURES, SuiteBase, add, artifact, record, thin
 from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
+from ..subjects import Capability
 
 _MAX_CP = sys.maxunicode + 1
 
@@ -36,6 +37,14 @@ def _apply(fn: Callable[[str], str], text: str) -> str:
 
 def _changed(fn: Callable[[str], str], text: str) -> bool:
     return _apply(fn, text) != text
+
+
+def _fires(fn: Callable[[str], bool], text: str) -> bool:
+    """Run one detector; a refusal counts as "did not fire"."""
+    try:
+        return bool(fn(text))
+    except Exception:  # noqa: BLE001 - a detector may reject some input
+        return False
 
 
 def _word_joiners() -> list[int]:
@@ -565,6 +574,14 @@ class UAX29WordJoiners(SuiteBase):
     name = "uax29-word-joiners"
     family = Family.NORMATIVE
     availability = Availability.DERIVED
+    # "Is a fragmented word detected, and is it rejoined" is a tool-neutral
+    # question, so this became multi-subject as soon as a second detector
+    # existed. The pinned reproduction still runs for disarm only.
+    MULTI_SUBJECT = True
+    # Two separable questions, so a tool with either capability can answer its
+    # half. `confusable-homoglyphs` detects and does not transform; excluding it
+    # would leave the detection question with one participant again.
+    REQUIRES_ANY = (Capability.TRANSFORM, Capability.DETECT)
     summary = "Visible within-word joiners (Pd + Pc): is a fragmented word detected?"
     provenance = Provenance(
         origin="Unicode Consortium",
@@ -633,35 +650,47 @@ class UAX29WordJoiners(SuiteBase):
         }
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
-        import disarm
 
         joiners = thin(_word_joiners(), limit)
         outcome.population = len(joiners)
+        det = self.detect()
+        surface_map = self.transforms()
+        record(
+            outcome,
+            domain=f"{len(joiners)} Pd/Pc within-word joiners",
+            predicates=[*sorted(surface_map), *sorted(det)],
+            probe="pass<SEP>word, scored against 'password'",
+        )
 
         detected = recovered = 0
         for cp in joiners:
             fragmented = f"pass{chr(cp)}word"
-            if disarm.has_anomalies(fragmented):
+            if any(_fires(fn, fragmented) for fn in det.values()):
                 detected += 1
-            if disarm.strip_obfuscation(fragmented) == "password":
+            if any(_apply(fn, fragmented) == "password" for fn in surface_map.values()):
                 recovered += 1
         add(outcome, "joiners", len(joiners), unit="codepoints")
-        add(
-            outcome,
-            "detected",
-            detected,
-            of=len(joiners),
-            higher_is_better=True,
-            detail="has_anomalies flags the fragmented word",
-        )
-        add(
-            outcome,
-            "recovered",
-            recovered,
-            of=len(joiners),
-            higher_is_better=True,
-            detail="strip_obfuscation rejoins it",
-        )
+        # Only report a half the subject can actually answer. A detector-only
+        # tool scoring 0 for "recovered" would read as a failure rather than as
+        # a question it was never asked.
+        if det:
+            add(
+                outcome,
+                "detected",
+                detected,
+                of=len(joiners),
+                higher_is_better=True,
+                detail="some detector of the subject flags the fragmented word",
+            )
+        if surface_map:
+            add(
+                outcome,
+                "recovered",
+                recovered,
+                of=len(joiners),
+                higher_is_better=True,
+                detail="some surface of the subject rejoins it",
+            )
 
 
 class DefaultIgnorableCasefold(SuiteBase):

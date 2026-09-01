@@ -1750,10 +1750,13 @@ mod tests {
         // own assertions, and a scan over the whole file matched itself.
         let src = include_str!("presets.rs");
         let body = &src[..src.find("\nmod tests {").unwrap_or(src.len())];
+        // Search for the non-default variants directly rather than for a line holding
+        // both `Step::Confusables` and a policy. A step formatted across two lines has
+        // neither token on the same line, so the paired search would miss exactly the
+        // case a reviewer would reformat into existence (#869 review).
         let offenders: Vec<&str> = body
             .lines()
-            .filter(|l| l.contains("Step::Confusables") && l.contains("DigitPolicy::"))
-            .filter(|l| !l.contains("DigitPolicy::Numeric"))
+            .filter(|l| l.contains("DigitPolicy::Tr39") || l.contains("DigitPolicy::Preserve"))
             .collect();
         assert!(
             offenders.is_empty(),

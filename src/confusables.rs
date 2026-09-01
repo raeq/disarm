@@ -11,18 +11,6 @@
 
 use crate::tables;
 
-/// Validate the `digit_policy` parameter (#561).
-///
-/// `"numeric"` (default) keeps disarm's reading: a non-Latin digit folds to the ASCII
-/// digit, so a number in running prose stays a number. `"tr39"` selects upstream's, which
-/// folds most of them to a Latin letter (Devanagari zero → `o`) — correct for an
-/// identifier skeleton, where the only job is to make two confusable identifiers collide.
-/// Three of the 45 divergent rows do not land on a letter: `٠` and `۰` fold to `.`, and
-/// `𑣣` folds to the two characters `rn`. A skeleton feeding a label- or path-shaped key
-/// has to allow for that extra `.`.
-/// Safety bound on the confusables fixed-point loop, shared by the owned and borrowing
-/// forms. Far above the observed maximum; the `debug_assert` on the way out catches any
-/// future table change that regresses convergence.
 /// The three digit policies, as a type rather than a string (#646 §2).
 ///
 /// `digit_policy` was a `&str` on one public function and nowhere else, so
@@ -43,8 +31,20 @@ pub(crate) enum DigitPolicy {
     Preserve,
 }
 
+/// Safety bound on the confusables fixed-point loop, shared by the owned and borrowing
+/// forms. Far above the observed maximum; the `debug_assert` on the way out catches any
+/// future table change that regresses convergence.
 const MAX_CONFUSABLE_PASSES: usize = 8;
 
+/// Validate the `digit_policy` parameter (#561).
+///
+/// `"numeric"` (default) keeps disarm's reading: a non-Latin digit folds to the ASCII
+/// digit, so a number in running prose stays a number. `"tr39"` selects upstream's, which
+/// folds most of them to a Latin letter (Devanagari zero → `o`) — correct for an
+/// identifier skeleton, where the only job is to make two confusable identifiers collide.
+/// Three of the 45 divergent rows do not land on a letter: `٠` and `۰` fold to `.`, and
+/// `𑣣` folds to the two characters `rn`. A skeleton feeding a label- or path-shaped key
+/// has to allow for that extra `.`.
 fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
     match digit_policy {
         "numeric" | "tr39" | "preserve" => Ok(()),

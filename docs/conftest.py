@@ -76,6 +76,7 @@ EXECUTED_RECIPES = [
     "user-guide/tokenizer-preprocessing.md",
     "user-guide/text-cleaning.md",
     "user-guide/transliteration.md",
+    "security/watermarks.md",
 ]
 
 #: The execute-only tier (#656). These pages' ``python`` blocks are run, and a

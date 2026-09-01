@@ -1348,6 +1348,72 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   file-level block is exempt, because it documents no declaration and legitimately
   precedes the first member's. Verified it reports all four against the pre-fix files,
   and both shipped ones against `origin/main`.
+- **Nothing detected a merge-conflict marker in the tree, and one shipped into a
+  branch.** A `git merge` reported "Automatic merge failed", the next command was
+  `git add -A && git commit`, and three markers went into `CHANGELOG.md` with everything
+  else. The full Python suite passed with them in place: no test reads that file as
+  Markdown — ruff formats the Python blocks inside it and the changelog test checks
+  heading order, and neither cares about a line of angle brackets.
+
+  `tests/test_no_conflict_markers.py` scans every tracked file. `=======` is deliberately
+  not one of the markers it looks for: it is a legitimate Markdown setext heading
+  underline, and `<<<<<<<` / `>>>>>>>` are sufficient because git writes all three or
+  none. Every disarm branch edits the same `[Unreleased]` block, so this shape is common
+  rather than exotic.
+
+- **`THREAT_MODEL.md` names nine classes it was silent on (#729, #743, #747, #748, #753,
+  #755, #756, #758, #804).** The *Out of scope* section is the page a reader consults to
+  decide whether a class is disarm's problem, and silence there reads as coverage. Nine
+  issues, eight entries — visible fragmentation covers #755 and #804 together, because
+  they are one class described from either side:
+
+  | class | why it is out of scope |
+  |---|---|
+  | Textual encoding — base64, hex, ROT-n, Morse (#729) | not decoded and not detected; `detect_encoding` answers a **byte-charset** question and is the name a reader finds first |
+  | Word fragmentation by a *visible* separator (#755, #804) | removing it needs word segmentation and a lexicon |
+  | The model as a sink (#753) | a many-to-one fold *widens* what reaches a poisoned association |
+  | Identical transform on both sides of training (#756) | disarm cannot know which side it is running on |
+  | Word-substitution adversarial examples (#758) | nothing character-level to act on |
+  | The agent state / tool-result record (#748) | a record is parsed, not normalized |
+  | Optimized jailbreak suffixes (#743) | ASCII, no confusable, no invisible |
+  | NFKC manufacturing model-context delimiters (#747) | correct normalization, same shape as metacharacter unmasking |
+
+  Two of these are asymmetries rather than boundaries, and that is what makes them worth
+  writing down. Fragmentation by a zero-width is not merely handled but is a *documented
+  asset* — the strip rejoins the fragments — while the same attack spelled with a space is
+  neither rejoined nor reported. And the LLM delimiter case is the existing *Metacharacter
+  unmasking via NFKC* entry with a sink that does not look like an output encoder: 7 of 8
+  profiles turn `＜script＞` into `<script>`, and 4 of 8 assemble a chat-template control
+  token the same way.
+
+  `tests/test_threat_model_scope.py` measures the entries that rest on a measurement, so
+  one cannot quietly stop being true. The definitional ones are checked for presence only,
+  because there is nothing to run.
+
+  **One figure in #753 did not reproduce and is not published.** The issue reports 74.9% of
+  the widened set as passing undetected. Measured here on the same construction, the
+  detector flags **97.8%** of it — so the entry states the widening, which is real and
+  structural, and records the detector as a partial mitigation rather than repeating a
+  number that points the other way.
+
+- **A doc block documented the block below it, not the member it was written for (#851
+  review, #778).** In TypeScript, Java and Kotlin only the *last* doc comment before a
+  declaration binds, so inserting a member between an existing block and its declaration
+  silently un-documents the original and gives the newcomer nothing. Nothing fails: the
+  file parses, the build passes, the rendered API docs are simply wrong.
+
+  Four instances, in two pairs. `hasBidiControl` displaced `hasBidiConflict`'s block in
+  `bindings/node/index.ts` and `Disarm.java` — caught in review here. `unicodeVersion`
+  had already done the same to `confusablesVersion` in both files, which **shipped**, so
+  the published npm and Maven docs describe `unicodeVersion` twice and
+  `confusablesVersion` not at all. The Ruby, Python, Kotlin and Rust copies of both
+  changes were correct; it is not a rule anyone breaks deliberately.
+
+  `tests/test_binding_doc_adjacency.py` is the gate: two doc blocks may not be adjacent.
+  Narrow on purpose — that is the entire failure, and it needs no language parser. A
+  file-level block is exempt, because it documents no declaration and legitimately
+  precedes the first member's. Verified it reports all four against the pre-fix files,
+  and both shipped ones against `origin/main`.
 
 - **Normalization is not closed under concatenation, and `docs/RUST_API.md` says so
   (#787).** The key-stability contract is about *time* — a key you stored last year. This

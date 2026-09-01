@@ -266,10 +266,23 @@ The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/
 ### The bundled table does not cover every confusable, and the gap is now measurable
 
 A TR39 fold is only as good as the table behind it, and disarm's to-Latin table is a
-*subset* of upstream `confusables.txt`: 6,565 sources upstream, 2,273 rows bundled. The
+*subset* of upstream `confusables.txt`: 6,565 sources upstream, 2,290 rows bundled. The
 gap is mostly deliberate — a source whose upstream target is CJK, Arabic or Hangul does
 not belong in a to-Latin table — but "mostly deliberate" is not a claim a deployment
 should have to take on trust.
+
+The table also carries one source that is not TR39 at all: **ICANN's Latin second-level
+LGR** (#831). Those are *same-script* Latin pairs — `ź`/`ż`, `ò`/`ỏ`, `ã`/`ā` — which a
+cross-script table cannot reach, and most of the code points are not TR39 sources in the
+first place. Only the 23 pairs the Latin Generation Panel commented "Glyphs either
+homoglyph or nearly identical" are imported; the 23 it blocks for Common-LGR transitivity
+(`u`/`ü`, `a`/`á`) are excluded, because folding those would strip legitimate diacritics
+from every language that uses them.
+
+These are the only rows whose **target is not ASCII**, and that is forced rather than
+chosen: folding `ż` to `z` merges it with the bare letter, which the LGR does not block. So
+the pair collides with each other and with nothing else. `build.rs` asserts that a
+non-ASCII target is Latin and is not itself a source, which keeps the fold one step.
 
 The fold is **case-symmetric where upstream gives evidence for it, and not otherwise**
 (#801). A mapping on a cased letter implies one on the letter it case-folds to, which

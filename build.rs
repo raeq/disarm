@@ -88,6 +88,40 @@ fn main() {
             "confusables_to_latin.tsv: expected ≥1,000 entries, got {}",
             entries.len()
         );
+        // #831: a non-ASCII VALUE is now permitted in this table, and only under two
+        // conditions. Every row was ASCII before — 2,220 of 2,220, unasserted — and the
+        // LGR rows cannot be: folding `\u{17c}` ż to `z` merges it with the bare letter,
+        // which that registry does not block, and is the over-collapse `search_key`
+        // already commits.
+        //
+        // The two conditions are what make it safe, so they are checked rather than
+        // trusted. A non-ASCII target must be a Latin LETTER — the table maps onto Latin,
+        // and a Greek or Cyrillic target would make the fold a partial transliterator —
+        // and it must not itself be a source, or the fold takes more than one step and
+        // the fixed-point loop has work to do that it should not.
+        for (&cp, value) in &entries {
+            if value.is_ascii() {
+                continue;
+            }
+            for ch in value.chars() {
+                assert!(
+                    is_latin_letter(ch),
+                    "confusables_to_latin.tsv: U+{cp:04X} maps to {value:?}, which is not \
+                     Latin. A non-ASCII target must stay inside the script this table \
+                     folds toward (#831)."
+                );
+            }
+            let target: Vec<char> = value.chars().collect();
+            if target.len() == 1 {
+                assert!(
+                    !entries.contains_key(&(target[0] as u32)),
+                    "confusables_to_latin.tsv: U+{cp:04X} maps to {value:?}, which is \
+                     itself a source. That chains the fold and gives the fixed-point loop \
+                     a second pass to do (#831)."
+                );
+            }
+        }
+
         let code = build_char_str_map(&entries, "TO_LATIN", "");
         fs::write(out_dir.join("confusables_phf.rs"), code).unwrap();
 
@@ -746,6 +780,25 @@ fn read_range_tsv(path: &Path) -> Vec<(u32, u32)> {
 
 /// Read a TSV file with lines of `HEX_CODEPOINT\tvalue`.
 /// Skips blank lines and lines starting with `#`.
+/// True for a character inside a Latin block (#831).
+///
+/// `build.rs` has no script property and no dependency that supplies one, so this is a
+/// block-range list. It is deliberately STRICTER than `Script=Latin`: a Latin letter in a
+/// block not listed here fails the build rather than passing quietly, which is the safe
+/// direction for an assert whose job is to keep a Greek or Cyrillic target out of a table
+/// that folds toward Latin. Widen it when a row needs it, and look at the row.
+fn is_latin_letter(ch: char) -> bool {
+    let cp = ch as u32;
+    ch.is_ascii()
+        || (0x00C0..=0x024F).contains(&cp)  // Latin-1 Supplement letters, Extended-A/B
+        || (0x0250..=0x02AF).contains(&cp)  // IPA Extensions
+        || (0x1D00..=0x1DBF).contains(&cp)  // Phonetic Extensions (+ Supplement)
+        || (0x1E00..=0x1EFF).contains(&cp)  // Latin Extended Additional
+        || (0x2C60..=0x2C7F).contains(&cp)  // Latin Extended-C
+        || (0xA720..=0xA7FF).contains(&cp)  // Latin Extended-D
+        || (0xAB30..=0xAB6F).contains(&cp) // Latin Extended-E
+}
+
 fn read_char_str_tsv(path: &Path) -> BTreeMap<u32, String> {
     let content = fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));

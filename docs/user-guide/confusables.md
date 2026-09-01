@@ -241,7 +241,7 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
 | Target | Mappings | Description |
 |--------|----------|-------------|
-| `"latin"` (default) | 2,273 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
+| `"latin"` (default) | 2,290 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
 | `"cyrillic"` | 1,349 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
 
 Characters without a confusable equivalent in the target script pass through unchanged. This is pure visual mapping — not transliteration. Latin `f` has no Cyrillic lookalike, so it stays as `f`.

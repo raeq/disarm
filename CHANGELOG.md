@@ -18,6 +18,13 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Upgrade notes
 
+**Stored comparison output moves for accented Latin (#831).** 17 rows were added to the
+to-Latin confusable table from ICANN's Latin second-level LGR, so `canonicalize`,
+`canonicalize_strict`, `strip_obfuscation` and `normalize_confusables` now collide pairs
+they previously kept apart — `ź`/`ż`, `ò`/`ỏ`, `ã`/`ā` and the rest of the 19. If you
+persist any of those as a comparison value, reindex. The key builders are unaffected in
+practice: they strip accents, so both members already produced one key.
+
 **Stored `canonicalize` output moves for Indic, Hebrew and Arabic text (#788).**
 `strip_zalgo`'s cap rose from 2 to 3 so it stops stripping from text `is_zalgo` calls
 ordinary. 351 of the 22,878 key-stability rows move on `canonicalize` and 340 on
@@ -609,6 +616,42 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   an interpreter whose Unicode version predates the data.
 
 ### Fixed
+
+- **ICANN's Latin second-level LGR blocks 23 same-script homoglyph pairs; `canonicalize`
+  collided 2 (#831).** The LGR defines 25 variant sets over a 231-element repertoire, and
+  23 of the 51 expanded pairs carry the Latin Generation Panel's own comment *"Glyphs
+  either homoglyph or nearly identical"*. All 19 that a single code point can express now
+  collide, and the four hostname rows in the issue are closed: `ważne.pl`/`waźne.pl`,
+  `gmaġl.com`/`gmaģl.com`, `lýs.com`/`lỳs.com`, `gǝnc.com`/`gənc.com`.
+
+  This was not a defect in the fold. These are **same-script Latin-to-Latin** pairs, most
+  of whose code points are not TR39 sources at all, and disarm's confusable data is
+  cross-script — the two sets never met. So the rows come from a third data file,
+  `data/confusables_lgr.tsv`, with its own admission criterion beside the cross-script
+  supplement (#342) and the attested rows (#597).
+
+  **The targets are not ASCII, and both decisions #831 raised are recorded there.** Folding
+  `ż` to `z` merges it with the bare letter, which the LGR does not block — the
+  over-collapse `search_key` already commits at 1,534 non-LGR merges — so the target has to
+  be the other member. The issue proposed a pairwise "fold to the lower code point" rule;
+  that is not a function here, because `ỉ` appears in three pairs and `ỷ` in two, and it
+  would have made `ə` a *source* and undone its existing fold to `e`. Read as equivalence
+  classes instead — 16 over 35 code points — with the representative taken from the class's
+  existing ASCII fold where one exists and the lowest code point otherwise. That repairs
+  the `ǝ`/`ə` inconsistency the issue flags rather than entrenching it.
+
+  `build.rs` now asserts what makes a non-ASCII target safe: it must be Latin, and it must
+  not itself be a source. Every one of the 2,290 rows was ASCII before and nothing checked
+  it; both conditions are verified to fail the build.
+
+  The second decision, `build.rs:216`, is **not** relaxed: the contraction table is
+  unreachable from `normalize_confusables`, so `n̄`→`ñ` there would not collide the pair.
+  Those two rows are dropped at a cost of 2 of 23, and the class they belong to is #836.
+
+  `tests/test_lgr_pairs.py` asserts both directions. The second matters more: the LGR's
+  other 23 pairs are Common-LGR transitivity artefacts (`u`/`ü`, `a`/`á`) that must **not**
+  collide, and pinning that is what stops a later well-meaning import of the whole variant
+  set.
 
 - **`perf-gate.yml` has never run on `main` (#832).** It triggers on `push` as well as
   `pull_request`, and two of its three jobs computed the baseline as

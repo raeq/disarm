@@ -158,6 +158,14 @@ const WRAP: &[char] = &[
 ];
 /// CJK script names: legitimately mixed with Latin in ordinary text (annotations,
 /// product names, mixed-language prose), so they are exempt from the mixed-script branch.
+///
+/// **Wider than the UTS #39 §5.1 augmented sets, on purpose** (#776).
+/// [`crate::scripts::is_mixed_script`] resolves those sets exactly, so it calls Latin
+/// beside Japanese mixed — a *label* doing that is the shape the rule exists to catch.
+/// This detector runs over prose, where a Japanese sentence carrying a product name in
+/// Latin is ordinary text, so it exempts the combination as well. The two answers differ
+/// for `例えa` and that is a policy, recorded in
+/// `tests/test_augmented_script_sets.py::test_the_detector_stays_wider_on_purpose`.
 const CJK_SCRIPTS: &[&str] = &["Han", "Hiragana", "Katakana", "Hangul", "Bopomofo"];
 
 /// Legitimate spoof-looking unit symbols (lowercased), exempt from the mixed-script branch.
@@ -236,6 +244,16 @@ pub enum AnomalyKind {
     /// same shape as the subdivision-flag allowlist. Cyrillic `Me` on a Cyrillic base is
     /// exempt too; `U+0488` is historic Cyrillic notation, not a disguise.
     EnclosingMark,
+    /// A token drawing digits from more than one decimal numbering system — UTS #39 §5.3
+    /// *Mixed Numbers*.
+    ///
+    /// `1٢۳４५` reads as `12345` and is five systems; `12٣` is two and was clean at every
+    /// surface. Digits carry the script of nothing, so
+    /// [`MixedScript`](Self::MixedScript) cannot see the common shape — a token that is
+    /// mostly ASCII with one substituted digit is one script to every other check here.
+    ///
+    /// A single system is never flagged however unusual it looks: `٢٠٢٤` is a year.
+    MixedNumbers,
 }
 
 impl AnomalyKind {
@@ -254,6 +272,7 @@ impl AnomalyKind {
             AnomalyKind::CompatFold => "compat_fold",
             AnomalyKind::Confusable => "confusable",
             AnomalyKind::EnclosingMark => "enclosing_mark",
+            AnomalyKind::MixedNumbers => "mixed_numbers",
         }
     }
 }
@@ -317,6 +336,10 @@ impl Finding {
             }
             AnomalyKind::EnclosingMark => format!(
                 "{:?} carries enclosing marks that hide the base text: {}",
+                self.token, self.detail
+            ),
+            AnomalyKind::MixedNumbers => format!(
+                "{:?} mixes digits from {} (UTS #39 Mixed Numbers)",
                 self.token, self.detail
             ),
         }
@@ -799,6 +822,25 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     // ASCII fast-path: the invisible / bidi / zalgo / mixed-script branches can only fire
     // above U+007F, so a pure-ASCII token skips every script and zalgo call.
     if !tok.is_ascii() {
+        // Mixed numbers — UTS #39 §5.3 (#777). Inside the fast path, not before it: a
+        // pure-ASCII token carries only ASCII digits and so cannot mix systems, and the
+        // shape this exists for — `12\u{0663}`, ASCII beside Arabic-Indic — is not pure
+        // ASCII, so it reaches here anyway. An earlier version ran the scan on every
+        // token and paid a walk plus a binary search per digit for nothing (#865 review).
+        //
+        // Two or more systems, not "any non-ASCII digit". `\u{0662}\u{0660}\u{0662}\u{0664}`
+        // is a year written entirely in Arabic-Indic digits and is ordinary text; `12\u{0663}`
+        // is not, and it was clean at every surface — `is_mixed_script` sees one script
+        // because digits carry the script of nothing, and nothing looked at numbering
+        // systems at all.
+        let systems = crate::digits::system_count(tok);
+        if systems > 1 {
+            return Some(mk(
+                AnomalyKind::MixedNumbers,
+                format!("{systems} decimal numbering systems"),
+            ));
+        }
+
         let chars: Vec<char> = tok.chars().collect();
         for (i, &c) in chars.iter().enumerate() {
             if !is_invisible_in_word(c) {

@@ -18,6 +18,18 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Upgrade notes
 
+**`is_mixed_script` and the hostname screen no longer call ordinary Japanese, Korean or
+Chinese "mixed" (#776).** They now resolve the UTS #39 §5.1 augmented script sets, which
+`inspect_anomalies` has applied all along. If you store or compare the output of either,
+re-evaluate: `is_mixed_script("日本語テスト")` was `True` and is now `False`, and
+`is_suspicious_hostname("例え.jp")` no longer reports `mixed_script`.
+
+This *reduces* what those two surfaces flag, so a caller relying on them to catch Han +
+Kana loses that. It was never a spoofing signal — it fired on every Japanese domain name
+— and the detector already declined to report it, which is what made the three surfaces
+contradict each other. Anything without a writing system in common is still mixed,
+including CJK beside a non-CJK script.
+
 **Stored `canonicalize` output moves for Burmese and other complex scripts (#842).** The
 zalgo bound now counts marks per canonical combining class rather than per base, so 142 of
 the 22,963 key-stability rows move on `canonicalize` and `canonicalize_strict`, and 38 on
@@ -135,6 +147,32 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   `getattr()` to agree — `hasattr`, `getattr(..., default)` and `__all__` all behave as
   before — and the hook cannot mask an `AttributeError` raised from inside an import,
   checked in a subprocess against a genuinely failing one.
+
+- **`mixed_numbers` — UTS #39 §5.3 Mixed Numbers (#777).** An identifier should not carry
+  digits from more than one decimal numbering system. Nothing checked it, and the reason
+  the gap survived is worth stating: **digits carry the script of nothing**, so
+  `is_mixed_script` sees one script for a token that is mostly ASCII with one substituted
+  digit.
+
+  | input | before | now |
+  |---|---|---|
+  | `12٣` — ASCII + Arabic-Indic | clean at **every** surface | `mixed_numbers` |
+  | `1٢۳４२` — five systems | `is_mixed_script` only, by accident | `mixed_numbers` |
+  | `٢٠٢٤` — one system | clean | clean |
+  | `२०२४` — one system | clean | clean |
+
+  `1٢۳४५` was caught only because five systems happened to be five *scripts*. `12٣` —
+  the shape an attacker would use — was `anomalous=False` with no kinds. A single system
+  is never flagged however unusual it looks: `٢٠٢٤` is a year.
+
+  UCD 17.0.0 has **77** numbering systems, not the 76 UTS #39 and the issue quote — that
+  figure is UCD 16.0.0. Each is a complete run of ten code points from its zero, so
+  `src/tables/data/decimal_digit_zeros.tsv` is one row per system and membership is
+  `cp - decimal_value`. build.rs asserts the rows are sorted and at least ten apart, which
+  is the model the lookup depends on.
+
+  Reported by `inspect_anomalies` and `has_anomalies` on every surface — the kind flows
+  through an entry point all six already export, so no new binding functions were needed.
 
 - **`target_script="arabic"` and `"hebrew"` (#792).** Generation drops an equivalence class
   entirely when no member belongs to the target script, so a class whose members are all
@@ -772,6 +810,40 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   Cyrillic text carrying its own marks — an Arabic fatha inside Arabic is not evidence of
   mixing. The gate asserts every code point using that exemption is actually a combining
   mark, so it cannot cover a real disagreement.
+
+- **Three surfaces answered "is this mixed script?" three ways (#776).** UTS #39 §5.1
+  augmented script sets treat Han + Hiragana + Katakana as one writing system.
+  `inspect_anomalies` applied them; `is_mixed_script` and the hostname path did not.
+
+  | input | detector | `is_mixed_script` | hostname |
+  |---|---|---|---|
+  | `例え` | clean | **mixed** | **suspicious** |
+  | `日本語テスト` | clean | **mixed** | **suspicious** |
+
+  So **every Japanese domain name was reported as a spoof**, by a check the anomaly
+  detector called clean on the same input.
+
+  `is_mixed_script` and the hostname path now share one resolver — an `AugmentedState`
+  fed either a character walk or a script list — rather than two implementations that
+  agree by inspection. Han + Hangul resolves to Korean and Han + Bopomofo to Chinese, for
+  the same reason.
+
+  `inspect_anomalies` does not share that resolver and keeps its own wider policy, which
+  is why the three surfaces now agree on the question this is about without being
+  identical.
+
+  The sets narrow the answer; they do not remove it. `ひら한` is Japanese beside Korean,
+  which share no augmented set, and `例えa` is Japanese beside Latin — both still mixed,
+  and the second is the shape the rule exists for.
+
+  One difference is left and is now a stated policy rather than an accident:
+  `inspect_anomalies` also exempts CJK beside Latin, because it runs over prose where a
+  Japanese sentence carrying a Latin product name is ordinary text. A *label* doing that
+  is not, so the predicate and the hostname screen still flag it.
+
+  Two tests had frozen the old behaviour — one asserted "Japanese text mixing Han and
+  Katakana IS multi-script", which is the contradiction rather than a property of the
+  text. Both are inverted with the reason.
 
 - **`canonicalize_strict` was not idempotent when a cross-script mark split a mark run
   (#862).** The zalgo cap ran at step 3 and `ConfusablesMarkFixedPoint` — which carries

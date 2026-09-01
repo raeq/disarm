@@ -79,7 +79,7 @@ fn lookup_with_policy(
 /// Supported values: `"latin"`, `"cyrillic"`.
 fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
     match target_script {
-        "latin" | "cyrillic" => Ok(()),
+        "latin" | "cyrillic" | "arabic" | "hebrew" => Ok(()),
         _ => Err(crate::ErrorRepr::InvalidTargetScript {
             got: target_script.to_owned(),
         }),

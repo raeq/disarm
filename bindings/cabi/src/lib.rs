@@ -107,7 +107,7 @@ fn build_transliterate(
 
 // ── Confusables & normalization (fallible) ──────────────────────────────────────
 
-/// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"`).
+/// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"` | `"arabic"` | `"hebrew"`).
 #[ffi_export]
 fn disarm_normalize_confusables(text: char_p::Ref<'_>, target: char_p::Ref<'_>) -> DisarmResult {
     build_normalize_confusables(

@@ -388,7 +388,7 @@ fn new_untranslatable<'l>(env: &mut Env<'l>, u: &api::Untranslatable) -> JniResu
 
 // ── Confusables (TR39) ──────────────────────────────────────────────────────────
 
-/// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"`).
+/// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"` | `"arabic"` | `"hebrew"`).
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn normalizeConfusables<'l>(
     mut env: EnvUnowned<'l>,

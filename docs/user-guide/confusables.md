@@ -243,8 +243,36 @@ By default, confusables are normalized to Latin. You can specify a different tar
 |--------|----------|-------------|
 | `"latin"` (default) | 2,273 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
 | `"cyrillic"` | 1,349 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
+| `"arabic"` | 373 | Non-Arabic → Arabic. `⸮`→`؟`, `𞣉`→`٣`, etc. |
+| `"hebrew"` | 261 | Non-Hebrew → Hebrew. `ℵ`→`א`, `∸`→`﬩`, etc. |
 
 Characters without a confusable equivalent in the target script pass through unchanged. This is pure visual mapping — not transliteration. Latin `f` has no Cyrillic lookalike, so it stays as `f`.
+
+### The RTL targets, and what they do not reach
+
+`"arabic"` and `"hebrew"` exist because generation **drops an equivalence class entirely**
+when no member belongs to the target script, so a class whose members are all Arabic folded
+to nothing under either of the original two. 948 of TR39's 1,007 strong-RTL sources were in
+that position (#791). These give them somewhere to land.
+
+They fold **toward** Arabic and Hebrew from other scripts, and that is the limit of what a
+target-script table can do. An **intra-Arabic** pair — Persian keheh against Arabic kaf,
+which TR39 puts in one equivalence class — is not reachable, because both members are
+already in the target script:
+
+```python
+from disarm import normalize_confusables
+
+# unchanged: a cross-script table cannot express a same-script pair
+assert normalize_confusables("\u06a9", target_script="arabic") == "\u06a9"
+```
+
+Tracked as [#848](https://github.com/raeq/disarm/issues/848), which needs the generator to
+stop discarding same-script classes — a different change from adding a target.
+
+`is_suspicious_hostname` is unaffected too, and deliberately: it computes
+whole-script-confusable against Latin and calls the fold with `"latin"` hardcoded, so an
+Arabic label whose skeleton stays Arabic cannot qualify whatever these tables hold.
 
 ## Script detection
 

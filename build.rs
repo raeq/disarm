@@ -131,6 +131,27 @@ fn main() {
         fs::write(out_dir.join("confusables_to_cyrillic_phf.rs"), code).unwrap();
     }
 
+    // --- Confusables (Arabic and Hebrew targets, #792) ---
+    // The RTL targets. 948 of TR39's 1,007 strong-RTL sources were unmapped under both
+    // existing targets (#791), because generation drops a class entirely when no member
+    // belongs to the target script — so a class whose members are all Arabic survived
+    // into neither table. No `inject_folding_singleton_rows` here: that pass (#481) is
+    // about a canonical singleton resolving as its target, and both of these tables are
+    // generated from classes whose target is already the script's own letter.
+    for (script, table, ident) in [
+        ("arabic", "confusables_to_arabic.tsv", "TO_ARABIC"),
+        ("hebrew", "confusables_to_hebrew.tsv", "TO_HEBREW"),
+    ] {
+        let entries = read_char_str_tsv(&data_dir.join(table));
+        assert!(!entries.is_empty(), "{table}: expected ≥1 entries, got 0");
+        let code = build_char_str_map(&entries, ident, "");
+        fs::write(
+            out_dir.join(format!("confusables_to_{script}_phf.rs")),
+            code,
+        )
+        .unwrap();
+    }
+
     // --- Bundled confusables.txt version (#560) ---
     // The upstream version is already written in the TSV header line that
     // `read_char_str_tsv` skips as a comment. Parse it here and emit it as a const so a

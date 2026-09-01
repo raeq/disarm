@@ -118,6 +118,21 @@ CASES = [
         "confusables_to_cyrillic.tsv",
         id="python-docstring-cyrillic",
     ),
+    # #792: the RTL targets. Anchored on the script name rather than on position,
+    # because the ordinal patterns above already broke once when a fifth "(N mappings)"
+    # was added between them.
+    pytest.param(
+        Path("python/disarm/_api.py"),
+        r"``\"arabic\"`` \(~?([\d,]+) mappings\)",
+        "confusables_to_arabic.tsv",
+        id="python-docstring-arabic",
+    ),
+    pytest.param(
+        Path("python/disarm/_api.py"),
+        r"``\"hebrew\"`` \(~?([\d,]+) mappings\)",
+        "confusables_to_hebrew.tsv",
+        id="python-docstring-hebrew",
+    ),
     pytest.param(
         Path("docs/user-guide/confusables.md"),
         r"`\"latin\"` \(default\) \| ~?([\d,]+)",

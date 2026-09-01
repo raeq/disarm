@@ -790,8 +790,15 @@ def normalize_confusables(
     Args:
         text: Input string potentially containing homoglyphs.
         target_script: Script to normalize toward. Supported values:
-            ``"latin"`` (default, 2,273 mappings) and ``"cyrillic"``
-            (1,349 mappings).
+            ``"latin"`` (default, 2,273 mappings), ``"cyrillic"`` (1,349 mappings),
+            ``"arabic"`` (373 mappings) and ``"hebrew"`` (261 mappings).
+
+            The two RTL targets exist because generation drops an equivalence
+            class entirely when no member belongs to the target script, so a
+            class whose members are all Arabic folded to nothing under either of
+            the first two (#791/#792). They do **not** reach an intra-Arabic pair
+            such as ``"\u06a9"`` against ``"\u0643"``: both members are already in
+            the target script, which a cross-script table cannot express (#848).
         digit_policy: How non-Latin **digits** fold (#561).
 
             ``"numeric"`` (default) sends them to the ASCII digit — ``०`` becomes
@@ -2079,8 +2086,10 @@ def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[
     as coverage it does not have.
 
     Args:
-        target_script: Which bundled table to report against — ``"latin"`` (default)
-            or ``"cyrillic"``. The two have genuinely different coverage.
+        target_script: Which bundled table to report against — ``"latin"`` (default),
+            ``"cyrillic"``, ``"arabic"`` or ``"hebrew"``. They have genuinely
+            different coverage, and the residue is largest for the RTL targets
+            because most of TR39 has no Arabic or Hebrew member at all.
 
     Returns:
         A frozenset of single-character strings.

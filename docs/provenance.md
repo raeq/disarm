@@ -16,7 +16,7 @@ against for byte-stable behavior.
 
 | Surface / table | Standard | Version |
 |---|---|---|
-| Confusables — `confusables_to_latin.tsv`, `confusables_to_cyrillic.tsv` | Unicode **UTS&nbsp;#39** `confusables.txt` | **17.0.0**, plus disarm additions (#336) — see below |
+| Confusables — `confusables_to_latin.tsv`, `confusables_to_cyrillic.tsv`, `confusables_to_arabic.tsv`, `confusables_to_hebrew.tsv` | Unicode **UTS&nbsp;#39** `confusables.txt` | **17.0.0**, plus disarm additions (#336) — see below |
 | Case folding — `case_folding.tsv` | Unicode `CaseFolding.txt` (status C&nbsp;+&nbsp;F) | **16.0** |
 | East Asian width — `char_width.tsv` | UCD `EastAsianWidth.txt` | **15.1.0** |
 | Emoji presentation — `emoji_presentation.tsv` | UCD `emoji-data.txt` | **15.1.0** |

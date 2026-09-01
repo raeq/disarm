@@ -21,24 +21,118 @@ pub(crate) fn detect_scripts(text: &str) -> Vec<&'static str> {
     scripts
 }
 
-/// True if text contains characters from more than one script (excluding Common/Inherited).
+/// Membership of the UTS #39 §5.1 augmented script sets, as a bitmask (#776).
 ///
-/// Short-circuits after finding the second distinct script, avoiding
-/// scanning the rest of the string.
-pub(crate) fn is_mixed_script(text: &str) -> bool {
-    let mut first_script: Option<&'static str> = None;
-    for ch in text.chars() {
-        let script = detect_char_script(ch);
-        if script == "Common" || script == "Inherited" {
-            continue;
-        }
-        match first_script {
-            None => first_script = Some(script),
-            Some(s) if s != script => return true,
-            _ => {}
+/// Han, Hiragana, Katakana, Hangul and Bopomofo do not resolve to one script for this
+/// purpose: writing systems combine them, and treating `例え` as two scripts calls
+/// ordinary Japanese mixed. UTS #39 expands each character to a *set* and asks whether
+/// the intersection over the string is non-empty.
+mod augmented {
+    /// Japanese: Han + Hiragana + Katakana.
+    pub(super) const JPAN: u8 = 1 << 0;
+    /// Korean: Han + Hangul.
+    pub(super) const KORE: u8 = 1 << 1;
+    /// Chinese with phonetics: Han + Bopomofo.
+    pub(super) const HANB: u8 = 1 << 2;
+    /// Han standing on its own, so that Han-only text is not claimed by one of the above.
+    pub(super) const HANI: u8 = 1 << 3;
+}
+
+/// The augmented script set for `script`, or `None` if it is not one of the five.
+///
+/// A script outside this family is its own set of one, compared by name — there is no
+/// gain in giving every script a bit when only these five overlap.
+fn augmented_set(script: &str) -> Option<u8> {
+    use augmented::{HANB, HANI, JPAN, KORE};
+    match script {
+        // Han is in all three writing systems and also stands alone.
+        "Han" => Some(HANI | JPAN | KORE | HANB),
+        "Hiragana" | "Katakana" => Some(JPAN),
+        "Hangul" => Some(KORE),
+        "Bopomofo" => Some(HANB),
+        _ => None,
+    }
+}
+
+/// The running answer to "have these scripts stayed within one writing system?".
+///
+/// One implementation, fed two ways (#867 review). `is_mixed_script` pushes characters as
+/// it walks them and stops at the first `false`; `is_single_augmented_script` pushes a
+/// list a caller already has. An earlier version had the intersection written out twice
+/// and a comment claiming they were shared, which is the drift this type removes.
+struct AugmentedState<'a> {
+    /// The intersection of the augmented sets seen so far. All bits until a CJK script
+    /// narrows it; zero means two CJK scripts with no writing system in common.
+    cjk_mask: u8,
+    saw_cjk: bool,
+    other: Option<&'a str>,
+}
+
+impl<'a> AugmentedState<'a> {
+    const fn new() -> Self {
+        Self {
+            cjk_mask: u8::MAX,
+            saw_cjk: false,
+            other: None,
         }
     }
-    false
+
+    /// Push one script. Returns `false` once the answer is settled as *mixed*, so a
+    /// caller walking text can stop.
+    fn accept(&mut self, script: &'a str) -> bool {
+        if script == "Common" || script == "Inherited" {
+            return true;
+        }
+        if let Some(set) = augmented_set(script) {
+            self.saw_cjk = true;
+            self.cjk_mask &= set;
+            if self.cjk_mask == 0 {
+                // e.g. Hiragana + Hangul: Japanese and Korean share no augmented set.
+                return false;
+            }
+        } else {
+            match self.other {
+                None => self.other = Some(script),
+                Some(s) if s != script => return false,
+                _ => {}
+            }
+        }
+        // A CJK script beside a non-CJK one is mixed under every augmented set.
+        !(self.saw_cjk && self.other.is_some())
+    }
+}
+
+/// True if `scripts` resolve to a single writing system under the UTS #39 §5.1 augmented
+/// sets (#776).
+///
+/// Takes the already-computed script names so a caller that has them — the hostname path
+/// works label by label and keeps a list — does not re-scan the text.
+pub(crate) fn is_single_augmented_script(scripts: &[&str]) -> bool {
+    let mut state = AugmentedState::new();
+    scripts.iter().all(|&script| state.accept(script))
+}
+
+/// True if text contains characters from more than one Unicode **writing system**
+/// (excluding Common/Inherited).
+///
+/// **Resolves the UTS #39 §5.1 augmented script sets** (#776), so `例え` (Han + Hiragana)
+/// is Japanese rather than two scripts. Before this, `inspect_anomalies` applied them and
+/// this function did not, so ordinary Japanese was clean to the detector, mixed-script
+/// here, and suspicious as a hostname — three surfaces answering one question three ways.
+///
+/// Mixing a CJK script with a non-CJK one is still mixed: `例えa` is Japanese **and**
+/// Latin, and no augmented set contains both. That is the case the mixed-script rule
+/// exists for, and widening the exemption to reach it would cost the Latin homoglyph
+/// detection this is here to provide.
+///
+/// `inspect_anomalies` is deliberately wider still — it exempts CJK beside Latin too,
+/// because it runs over prose. It does **not** share this resolver, and that is the
+/// design rather than an oversight; see `CJK_SCRIPTS` in `crate::anomalies`.
+///
+/// Short-circuits as soon as the answer is settled.
+pub(crate) fn is_mixed_script(text: &str) -> bool {
+    let mut state = AugmentedState::new();
+    !text.chars().all(|ch| state.accept(detect_char_script(ch)))
 }
 
 include!(concat!(env!("OUT_DIR"), "/assigned_ranges.rs"));

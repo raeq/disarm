@@ -240,9 +240,15 @@ class TestMixedScripts:
     def test_latin_han_mixed(self) -> None:
         assert is_mixed_script("hello 中文")
 
-    def test_hiragana_katakana_mixed(self) -> None:
-        """Japanese text often mixes Hiragana and Katakana."""
-        assert is_mixed_script("ひらがなカタカナ")
+    def test_hiragana_katakana_is_one_writing_system(self) -> None:
+        """Japanese text often mixes Hiragana and Katakana — and that is not "mixed".
+
+        This asserted the opposite until #776. UTS #39 §5.1 puts Hiragana and Katakana in
+        the same augmented script set (Japanese), and `inspect_anomalies` had applied that
+        all along, so the old assertion was pinning a contradiction between two surfaces
+        rather than a property of the text.
+        """
+        assert not is_mixed_script("ひらがなカタカナ")
 
     def test_detection_order_preserved(self) -> None:
         """detect_scripts() returns scripts in order of first appearance."""
@@ -271,9 +277,25 @@ class TestMixedScripts:
         assert not is_mixed_script("Москва Россия")
         assert not is_mixed_script("中文漢字")  # Pure Han
 
-    def test_japanese_han_katakana_is_mixed(self) -> None:
-        """Japanese text mixing Han and Katakana IS multi-script."""
-        assert is_mixed_script("日本語テスト")
+    def test_japanese_han_katakana_is_one_writing_system(self) -> None:
+        """`日本語テスト` is ordinary Japanese, not a multi-script token (#776).
+
+        Han + Katakana resolve to Japanese under UTS #39 §5.1. The old assertion is why
+        every Japanese hostname was reported suspicious while the anomaly detector called
+        the same string clean.
+        """
+        assert not is_mixed_script("日本語テスト")
+
+    def test_two_writing_systems_are_still_mixed(self) -> None:
+        """The augmented sets narrow the answer; they do not remove it.
+
+        Hiragana and Hangul share no augmented set, so Japanese beside Korean is mixed —
+        and so is anything CJK beside a non-CJK script, which is the case the rule exists
+        for.
+        """
+        assert is_mixed_script("ひら한")
+        assert is_mixed_script("例えa")
+        assert is_mixed_script("аpple")
 
 
 class TestScriptEnumValues:

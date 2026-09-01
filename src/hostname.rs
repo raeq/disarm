@@ -409,7 +409,13 @@ pub(crate) fn is_suspicious_hostname_opts(
         // Callers needing a more permissive policy (e.g. allowing Latin + CJK)
         // can read the `mixed_script` and `scripts` fields and decide for
         // themselves; the boolean here fails closed.
-        if label_scripts.len() > 1 {
+        //
+        // Resolved through the UTS #39 §5.1 augmented sets (#776), so a Japanese label
+        // is one writing system rather than two scripts. Before this, `例え.jp` was
+        // suspicious here, clean to `inspect_anomalies`, and mixed to `is_mixed_script`
+        // — three answers to one question. Latin + CJK is still mixed, which is what
+        // the "allowing Latin + CJK" note above refers a caller to the fields for.
+        if !crate::scripts::is_single_augmented_script(&label_scripts) {
             has_mixed = true;
             suspicious = true;
         }

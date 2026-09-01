@@ -124,14 +124,21 @@ pub(crate) fn is_zalgo(text: &str, threshold: usize) -> bool {
 /// Nonzero combining class only, matching the cap's own discriminator (#842): a class-0
 /// mark is positioned rather than stacked, so a doubled Indic matra is an orthography
 /// question rather than this one.
-pub(crate) fn drop_repeated_marks_into(text: &str, out: &mut String) {
-    out.clear();
-    // Same shape as the cap's fast path: the check is cheaper than the rewrite, and most
-    // text has no repeat at all.
+/// Returns `false` when there was no repeat, leaving `out` untouched — the caller keeps
+/// its input, which is the `apply_into` no-op contract.
+///
+/// The earlier draft normalized to NFC on that path instead, and every pipeline using
+/// this step runs [`strip_zalgo_into`] immediately after it, which does its own NFD→NFC
+/// pass — so the overwhelming majority of strings, the ones with no repeat at all, paid
+/// for two full normalizations to reach the same bytes. Nothing here owes the pipeline an
+/// NFC form: each list carries an explicit `Step::Nfc` after the cap for that (#874
+/// review).
+pub(crate) fn drop_repeated_marks_into(text: &str, out: &mut String) -> bool {
+    // The check is much cheaper than the rewrite, and most text has no repeat at all.
     if !has_repeated_mark(text) {
-        out.extend(text.nfc());
-        return;
+        return false;
     }
+    out.clear();
     let mut filtered = String::with_capacity(text.len());
     let mut previous: Option<char> = None;
     for ch in text.nfd() {
@@ -146,6 +153,7 @@ pub(crate) fn drop_repeated_marks_into(text: &str, out: &mut String) {
         filtered.push(ch);
     }
     out.extend(filtered.nfc());
+    true
 }
 
 /// Whether any base carries the same stacking mark twice in a row (#835).

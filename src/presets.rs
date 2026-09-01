@@ -219,10 +219,7 @@ fn apply_into(
             zalgo::strip_zalgo_into(input, cap, out);
             Ok(true)
         }
-        Step::DropRepeatedMarks => {
-            zalgo::drop_repeated_marks_into(input, out);
-            Ok(true)
-        }
+        Step::DropRepeatedMarks => Ok(zalgo::drop_repeated_marks_into(input, out)),
         Step::FoldCase => {
             case_fold::fold_case_into(input, out);
             Ok(true)
@@ -2566,6 +2563,59 @@ mod tests {
             .filter(|c| unicode_normalization::char::canonical_combining_class(*c) == 230)
             .count();
         assert_eq!(marks, crate::zalgo::DEFAULT_MAX_MARKS);
+    }
+
+    /// #874 review: the repeat step must do **no work** when there is no repeat.
+    ///
+    /// It first normalized to NFC on that path, and every pipeline that uses it runs the
+    /// zalgo cap immediately after — which does its own NFD→NFC pass. So the common case,
+    /// text with no repeated mark at all, paid for two full normalizations to arrive at
+    /// the same bytes. `apply_into` already has a no-op signal; the step now uses it.
+    ///
+    /// Asserted on the return value rather than on the output, because the output was
+    /// correct either way. That is what made it invisible to every other test here.
+    #[test]
+    fn the_repeat_step_is_a_no_op_when_nothing_repeats() {
+        let ctx = PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+        };
+        let mut out = String::new();
+        for input in [
+            "hello",
+            "caf\u{e9}",
+            "cafe\u{301}",
+            "Vi\u{1ec7}t",
+            // Two DIFFERENT marks on one base: acute then grave. The rule is about the
+            // repeat, not about stacking.
+            "\u{e1}\u{300}",
+        ] {
+            out.clear();
+            let wrote = apply_into(Step::DropRepeatedMarks, input, &ctx, &mut out).unwrap();
+            assert!(
+                !wrote,
+                "{input:?} has no repeated mark but the step claimed a rewrite"
+            );
+            assert!(
+                out.is_empty(),
+                "{input:?}: a no-op must not touch the scratch buffer"
+            );
+        }
+        // And it still reports a rewrite when there IS one, or the no-op path would be
+        // hiding the whole feature.
+        for (input, expected) in [
+            ("a\u{301}\u{301}", "\u{e1}"),
+            // Precomposed plus the same mark again. It is only a repeat in NFD, which is
+            // why the check decomposes rather than scanning the input as written — and
+            // it is exactly #835's case: this renders as `\u{e1}` and nothing else.
+            ("\u{e1}\u{301}", "\u{e1}"),
+        ] {
+            out.clear();
+            let wrote = apply_into(Step::DropRepeatedMarks, input, &ctx, &mut out).unwrap();
+            assert!(wrote, "{input:?} repeats a mark in NFD");
+            assert_eq!(out, expected, "{input:?}");
+        }
     }
 
     /// The ordering constraint itself, for every pipeline that caps marks.

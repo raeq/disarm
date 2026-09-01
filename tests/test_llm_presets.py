@@ -29,6 +29,10 @@ def test_llm_guardrail_step_order() -> None:
         "strip_accents",
         "confusables",
         "fold_case",
+        # The fold runs again after the case fold (#852): a cased letter whose folded
+        # form is in the confusable table and whose original is not — `Þ` has no entry,
+        # folds to `þ`, and only then folds to `p` — would otherwise need a second call.
+        "confusables",
         "strip_control",
         "strip_zero_width",
         "collapse_whitespace",

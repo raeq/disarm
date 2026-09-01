@@ -214,6 +214,23 @@ class TestTheFixtureCoversWhatItClaims:
             "variation selectors": sum(
                 1 for c in joined if 0xFE00 <= ord(c) <= 0xFE0F or 0xE0100 <= ord(c) <= 0xE01EF
             ),
+            # An invisible sitting *between two combining marks*, which is not the same
+            # class as "the corpus contains an invisible somewhere". A mark-capping step
+            # placed before the invisible strip counts two short runs where there is one
+            # long one; the invisible is then deleted, the runs merge, and the next pass
+            # truncates further. That is #850, and the corpus expressed every character
+            # involved without ever putting them in that order — so the fixture diff for
+            # #843 was 0 rows and the gate reported the regression as free.
+            "invisible inside a mark run": sum(
+                1
+                for line in gen.read_corpus()
+                for i, c in enumerate(line)
+                if i > 0
+                and i + 1 < len(line)
+                and unicodedata.combining(line[i - 1])
+                and unicodedata.combining(line[i + 1])
+                and (c in "\u200b\u200c\u200d\u00ad\ufeff" or unicodedata.category(c) == "Cf")
+            ),
         }
         thin = {name: n for name, n in counts.items() if n < 5}
         assert not thin, (

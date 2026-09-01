@@ -6,7 +6,7 @@ key-builder output; a minor release may.*
 
 | file | what it is |
 |---|---|
-| `corpus.txt` | 22,963 rows: 22,478 natural word forms + 485 hand-built adversarial rows |
+| `corpus.txt` | 22,971 rows: 22,478 natural word forms + 493 hand-built adversarial rows |
 | `golden_keys.tsv.gz` | the corpus crossed with eight key-producing functions, generated on a pinned build |
 
 Regenerate with `python scripts/gen_key_fixture.py`, and read
@@ -42,6 +42,12 @@ of 22,878**. 85 rows now carry noncharacters at each edge and inside a word, sof
 in four words, and thicker coverage of PUA, tags, variation selectors, ZWSP, word joiner
 and the BOM — each beside a clean control, so a diff shows two keys converging rather than
 one key appearing.
+
+**An invisible between two combining marks (#850).** 8 rows place a zero-width, ZWNJ,
+ZWJ, soft hyphen or BOM *inside* a mark run rather than beside one. The corpus expressed
+every character involved and never that arrangement, so a mark-capping step placed before
+the invisible strip counted two short runs where there was one long one, and #843's
+fixture diff was **0 rows of 22,963**. With the rows present that change moves 4.
 
 **Burmese is load-bearing (#842).** The 669 Myanmar rows carry the deepest combining
 sequences in the corpus: a syllable takes a base, a medial, two vowel signs and a tone.

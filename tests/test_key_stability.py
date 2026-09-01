@@ -401,8 +401,12 @@ class TestTheSchemaCounterCannotGoStale:
             (ROOT / "src" / "api" / "metadata.rs").read_text(encoding="utf-8"),
         )
         assert recorded is not None, "KEY_FIXTURE_SHA256 is missing from src/api/metadata.rs"
-        with gzip.open(GOLDEN, "rb") as handle:
-            actual = hashlib.sha256(handle.read()).hexdigest()
+        # Rows only: the header stamps `disarm.__version__`, so hashing the whole file
+        # moved the digest on every version bump even when no key moved — which is noise
+        # in the one signal this gate carries.
+        with gzip.open(GOLDEN, "rt", encoding="utf-8") as handle:
+            body = "\n".join(line for line in handle.read().split("\n") if not line.startswith("#"))
+        actual = hashlib.sha256(body.encode("utf-8")).hexdigest()
         assert actual == recorded.group(1), (
             f"the fixture's digest is {actual}, but src/api/metadata.rs records "
             f"{recorded.group(1)}. The fixture was regenerated: decide whether the key "

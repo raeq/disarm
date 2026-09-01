@@ -1,6 +1,6 @@
 [package]
 name = "disarm"
-version = "0.14.1"
+version = "0.15.0"
 edition = "2021"
 # 1.88, not 1.81 (#718). The floor is set by a RUNTIME dependency, not a dev one:
 # `idna` -> `idna_adapter` -> `icu_normalizer` / `icu_properties` / `icu_provider`,

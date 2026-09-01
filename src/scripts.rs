@@ -169,7 +169,12 @@ static SCRIPT_RANGES: &[(u32, u32, &str)] = &[
     // Inherited — Combining Diacritical Marks
     (0x0300, 0x036F, "Inherited"),
     // Greek
-    (0x0370, 0x03FF, "Greek"),
+    (0x0370, 0x03E1, "Greek"),
+    // Coptic letters sitting *inside* the Greek block (#819). The UCD gives
+    // U+03E2..U+03EF `Script=Coptic`; the block does not, and a block table that
+    // says Greek here contradicts the standard rather than declining to answer.
+    (0x03E2, 0x03EF, "Coptic"),
+    (0x03F0, 0x03FF, "Greek"),
     // Cyrillic
     (0x0400, 0x04FF, "Cyrillic"),
     (0x0500, 0x052F, "Cyrillic"), // Cyrillic Supplement
@@ -267,10 +272,25 @@ static SCRIPT_RANGES: &[(u32, u32, &str)] = &[
     (0x1C50, 0x1C7F, "OlChiki"),
     // Georgian Extended
     (0x1C90, 0x1CBF, "Georgian"),
-    // Latin — Phonetic Extensions
-    (0x1D00, 0x1D7F, "Latin"),
+    // Latin — Phonetic Extensions.
+    //
+    // The block is mostly Latin and carries nineteen letters that are not (#819). Each
+    // is a *letter of another script* the UCD names, and calling them Latin is what let
+    // `is_mixed_script("a\u{1d26}")` return false — a Greek small capital gamma beside
+    // ASCII read as single-script. Split out rather than left to the block.
+    (0x1D00, 0x1D25, "Latin"),
+    (0x1D26, 0x1D2A, "Greek"),    // GREEK LETTER SMALL CAPITAL GAMMA..PSI
+    (0x1D2B, 0x1D2B, "Cyrillic"), // CYRILLIC LETTER SMALL CAPITAL EL
+    (0x1D2C, 0x1D5C, "Latin"),
+    (0x1D5D, 0x1D61, "Greek"), // MODIFIER LETTER SMALL BETA..CHI
+    (0x1D62, 0x1D65, "Latin"),
+    (0x1D66, 0x1D6A, "Greek"), // GREEK SUBSCRIPT SMALL LETTER BETA..CHI
+    (0x1D6B, 0x1D77, "Latin"),
+    (0x1D78, 0x1D78, "Cyrillic"), // MODIFIER LETTER CYRILLIC EN
+    (0x1D79, 0x1D7F, "Latin"),
     // Latin — Phonetic Extensions Supplement
-    (0x1D80, 0x1DBF, "Latin"),
+    (0x1D80, 0x1DBE, "Latin"),
+    (0x1DBF, 0x1DBF, "Greek"), // MODIFIER LETTER SMALL THETA
     // Inherited — Combining Diacritical Marks Supplement
     (0x1DC0, 0x1DFF, "Inherited"),
     // Latin Extended Additional
@@ -332,7 +352,9 @@ static SCRIPT_RANGES: &[(u32, u32, &str)] = &[
     // Ethiopic Extended-A
     (0xAB00, 0xAB2F, "Ethiopic"),
     // Latin Extended-E
-    (0xAB30, 0xAB6F, "Latin"),
+    (0xAB30, 0xAB64, "Latin"),
+    (0xAB65, 0xAB65, "Greek"), // GREEK LETTER SMALL CAPITAL OMEGA (#819)
+    (0xAB66, 0xAB6F, "Latin"),
     // Cherokee Supplement
     (0xAB70, 0xABBF, "Cherokee"),
     // Meetei Mayek

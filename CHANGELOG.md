@@ -858,6 +858,31 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **A negation overlay outlived a base that did not survive (#749 follow-up).**
+  `is_negation_of` kept `U+0338` / `U+20D2` whenever the base was `!is_alphanumeric()`,
+  because the 45 composed negations all sit on `Sm`/`So` and std exposes no
+  general-category API. That also admitted every base the pipeline *deletes*: the overlay
+  was kept because it had a base, the base was stripped by a later step, and the orphan
+  went on the next pass.
+
+  ```
+  ml_normalize("\u0000\u0338")  ->  "\u0338"  ->  ""
+  ```
+
+  **141 (base, overlay) pairs**, across `ml_normalize` and `strip_obfuscation`. They share
+  no general category — `U+0000` (Cc), `U+0020` (Zs), `U+00A8` (Sk, which NFKC-decomposes
+  to space + diaeresis), `U+2017` (Po, likewise), `U+2800` (So, removed as a blank render).
+  What they share is that **none of them survives**, so the fix asks about survival rather
+  than category.
+
+  Both halves of #749 still hold: `≠`, `∄` and `∉` keep their overlay, and `H̸a̸t̸e̸` still
+  comes back as `Hate`.
+
+  Found by `exhaustive_preset_idempotency` in the publish workflow while cutting the
+  release — after the same suite passed locally on the same commit with a different draw.
+  That non-determinism is why Tier 3 no longer runs in four publish workflows at once
+  (#898).
+
 - **The key-fixture digest moved on every version bump (#887 follow-up).** `#887` added
   `KEY_FIXTURE_SHA256` so that regenerating the fixture without bumping
   `KEY_SCHEMA_VERSION` fails a gate. It hashed the whole file — and the fixture header

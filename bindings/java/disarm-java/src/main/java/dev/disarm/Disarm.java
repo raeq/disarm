@@ -408,7 +408,6 @@ public final class Disarm {
         return Native.isMixedScript(req(text));
     }
 
-    /** Whether {@code text} mixes strong LTR and strong RTL characters ("BiDi Swap" precondition). */
     /**
      * All twelve UAX #9 explicit formatting characters, uncontexted.
      *
@@ -421,6 +420,7 @@ public final class Disarm {
         return Native.hasBidiControl(req(text));
     }
 
+    /** Whether {@code text} mixes strong LTR and strong RTL characters ("BiDi Swap" precondition). */
     public static boolean hasBidiConflict(String text) {
         return Native.hasBidiConflict(req(text));
     }
@@ -432,14 +432,6 @@ public final class Disarm {
 
     // ── Metadata listings ──────────────────────────────────────────────────────
 
-    /**
-     * The Unicode {@code confusables.txt} release the bundled confusable tables were
-     * folded from, e.g. {@code "17.0.0"}.
-     *
-     * <p>Not a Unicode version for the library as a whole: the case-folding and width
-     * tables track different releases (see {@code docs/provenance.md}). Use this to
-     * answer "is my confusables fold stale?" without inferring it from behaviour.
-     */
     /**
      * The UCD release disarm's normalizer implements.
      *
@@ -463,6 +455,14 @@ public final class Disarm {
         return Native.keySchemaVersion();
     }
 
+    /**
+     * The Unicode {@code confusables.txt} release the bundled confusable tables were
+     * folded from, e.g. {@code "17.0.0"}.
+     *
+     * <p>Not a Unicode version for the library as a whole: the case-folding and width
+     * tables track different releases (see {@code docs/provenance.md}). Use this to
+     * answer "is my confusables fold stale?" without inferring it from behaviour.
+     */
     public static String confusablesVersion() {
         return Native.confusablesVersion();
     }

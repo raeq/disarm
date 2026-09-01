@@ -1330,6 +1330,25 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **A doc block documented the block below it, not the member it was written for (#851
+  review, #778).** In TypeScript, Java and Kotlin only the *last* doc comment before a
+  declaration binds, so inserting a member between an existing block and its declaration
+  silently un-documents the original and gives the newcomer nothing. Nothing fails: the
+  file parses, the build passes, the rendered API docs are simply wrong.
+
+  Four instances, in two pairs. `hasBidiControl` displaced `hasBidiConflict`'s block in
+  `bindings/node/index.ts` and `Disarm.java` — caught in review here. `unicodeVersion`
+  had already done the same to `confusablesVersion` in both files, which **shipped**, so
+  the published npm and Maven docs describe `unicodeVersion` twice and
+  `confusablesVersion` not at all. The Ruby, Python, Kotlin and Rust copies of both
+  changes were correct; it is not a rule anyone breaks deliberately.
+
+  `tests/test_binding_doc_adjacency.py` is the gate: two doc blocks may not be adjacent.
+  Narrow on purpose — that is the entire failure, and it needs no language parser. A
+  file-level block is exempt, because it documents no declaration and legitimately
+  precedes the first member's. Verified it reports all four against the pre-fix files,
+  and both shipped ones against `origin/main`.
+
 - **Normalization is not closed under concatenation, and `docs/RUST_API.md` says so
   (#787).** The key-stability contract is about *time* — a key you stored last year. This
   is the other thing a caller may not rely on, and it holds within one release:

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import sys
 from pathlib import Path
 
@@ -171,6 +172,15 @@ def main() -> int:
         f"functions={len(FUNCTIONS)}  disarm={disarm.__version__}"
     )
     print("Commit this with the change that moved the keys, and write it up in Upgrade notes.")
+    # #887: the digest is the anchor this script does NOT author into the fixture, so it
+    # is the one thing that catches a regeneration without a bump. Printing it here is
+    # the difference between a two-line edit and a failing test the author has to decode.
+    with gzip.open(GOLDEN, "rb") as handle:
+        digest = hashlib.sha256(handle.read()).hexdigest()
+    print()
+    print("Then update BOTH lines in src/api/metadata.rs:")
+    print("  - bump KEY_SCHEMA_VERSION if this release moved stored keys")
+    print(f'  - KEY_FIXTURE_SHA256 = "{digest}"')
     return 0
 
 

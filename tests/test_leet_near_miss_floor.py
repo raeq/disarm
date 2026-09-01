@@ -58,20 +58,55 @@ def test_four_letters_is_still_below_the_floor() -> None:
     assert "leet" not in disarm.inspect_anomalies("1yft", lexicon=BRANDS).kinds
 
 
-@pytest.mark.parametrize("token", ["k8s", "b2b", "es6", "go2", "id3", "mp3", "x86", "3pm"])
-def test_short_technical_tokens_do_not_fire_through_the_near_miss_path(token: str) -> None:
-    """The floor is doing real work and the issue's argument for removing it was too strong.
+# (token, its actual `leet_sub` decode, a word one edit from that decode).
+#
+# Spelled out per row because an earlier version of this test described `k8s` as decoding
+# to `kos` and `b2b` to `bab` — those are the words `nearest()` *matched*, not the
+# decodes, which are `kbs` and `bzb` (#877 review). The decode is stated here so the
+# one-edit relationship is checkable rather than asserted in a comment, and the decode
+# itself is never in the lexicon: seeding it would make these exact-path hits and the
+# test would be measuring the wrong path.
+SHORT_TECHNICAL = [
+    ("k8s", "kbs", "abs"),
+    ("b2b", "bzb", "bob"),
+    ("es6", "esg", "egg"),
+    ("go2", "goz", "got"),
+    ("id3", "ide", "ida"),
+    ("mp3", "mpe", "ape"),
+    ("l10n", "lion", "lions"),
+    ("a11y", "aiiy", "airy"),
+]
 
-    At floor 3 these decode into a one-edit neighbourhood dense enough to match: `k8s` →
-    `kos`, `b2b` → `bab`, `es6` → `es`. Measured, removing the floor takes false
-    positives from 5 to 22 per 65 tokens.
+
+@pytest.mark.parametrize(("token", "decode", "neighbour"), SHORT_TECHNICAL, ids=lambda v: v)
+def test_short_technical_tokens_do_not_fire_through_the_near_miss_path(
+    token: str, decode: str, neighbour: str
+) -> None:
+    """The floor is doing real work, and the issue's case for removing it was too strong.
+
+    Every decode here is three or four characters, which is short enough that a one-edit
+    neighbourhood catches ordinary technical tokens. Measured, removing the floor takes
+    false positives from 5 to 22 per 65 such tokens.
     """
-    # One edit from each decode, never the decode itself — a lexicon holding the decode
-    # would make these *exact*-path hits and the test would be measuring the wrong path.
-    # `k8s` decodes to `kos`, `b2b` to `bab`, `es6` to `esg`, `id3` to `ide`, `mp3` to `mpe`.
-    neighbours = {"kot", "bat", "esq", "gob", "ida", "mpg", "xbg", "opm", "epm"}
-    report = disarm.inspect_anomalies(token, lexicon=neighbours | BRANDS)
-    assert "leet" not in report.kinds, f"{token}: {report.reason}"
+    assert decode not in {neighbour}, "the neighbour must not be the decode itself"
+    report = disarm.inspect_anomalies(token, lexicon={neighbour} | BRANDS)
+    assert "leet" not in report.kinds, f"{token} -> {decode}: {report.reason}"
+
+
+@pytest.mark.parametrize(("token", "decode", "neighbour"), SHORT_TECHNICAL, ids=lambda v: v)
+def test_those_tokens_do_reach_the_branch(token: str, decode: str, neighbour: str) -> None:
+    """Non-vacuity, and the reason the test above is worth anything.
+
+    A token that never enters the leet branch at all — too short a base, a literal number
+    — would pass the test above for a reason that has nothing to do with the floor. Put
+    the decode itself in the lexicon and the *exact* path fires, which has no floor beyond
+    three. So the branch is reachable for every row, and the near-miss floor is the only
+    thing declining them.
+    """
+    assert neighbour  # the row is well-formed
+    report = disarm.inspect_anomalies(token, lexicon={decode} | BRANDS)
+    assert "leet" in report.kinds, f"{token} never reaches the leet branch at all"
+    assert report.findings[0].detail == decode
 
 
 def test_the_exact_path_keeps_its_own_lower_floor() -> None:

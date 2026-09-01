@@ -77,7 +77,10 @@ def test_the_rows_that_decode_to_nothing_are_still_caught_one_edit_out(
     """
     assert decodes_to not in LEXICON
     assert _kinds(token) == ["leet"]
-    assert reports in (_detail(token) or "")
+    # Equality, not containment: `Finding.detail` for `leet` is exactly the matched
+    # lexicon word — the code passes `near` straight into the `Finding` — so a substring
+    # check would accept a longer word that merely contains it (#877 review).
+    assert _detail(token) == reports
 
 
 # ── #750: the separator set ──────────────────────────────────────────────────

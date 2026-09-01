@@ -764,7 +764,6 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
-<<<<<<< HEAD
 - **The detector and the neutralizer disagreed about what is invisible (#812, #813, #814).**
   Three surfaces, one channel.
 
@@ -799,7 +798,7 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   `strip_zero_width_chars` widens by those twelve on every surface. It is the function
   whose own description is *"strip zero-width and invisible characters"*, and a code point
   that renders as nothing belongs to that set by that description.
-=======
+
 - **The leet near-miss path was floored at six characters, so `1ogin` screened clean
   while `l0gin` was caught (#825).** The branch has two sub-paths — the decode is a
   lexicon word, or it is one edit from one — and the second carried an uncommented `>= 6`
@@ -830,7 +829,6 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   with the six-character floor given as the reason — a test freezing the floor's own
   defect as correct. Both are one edit from the word they imitate, `ignore` and `admin`,
   and both are now reported.
->>>>>>> 744041a (fix: the leet near-miss floor was set three positions too high (#825))
 
 - **#803 fixed the presets and left `list_profiles()` behind (#853).** #757 measured
   `ml_normalize` turning `film’s` into `film right apostrophe s` — 326 code points carry

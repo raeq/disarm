@@ -1348,6 +1348,19 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   file-level block is exempt, because it documents no declaration and legitimately
   precedes the first member's. Verified it reports all four against the pre-fix files,
   and both shipped ones against `origin/main`.
+- **Nothing detected a merge-conflict marker in the tree, and one shipped into a
+  branch.** A `git merge` reported "Automatic merge failed", the next command was
+  `git add -A && git commit`, and three markers went into `CHANGELOG.md` with everything
+  else. The full Python suite passed with them in place: no test reads that file as
+  Markdown — ruff formats the Python blocks inside it and the changelog test checks
+  heading order, and neither cares about a line of angle brackets.
+
+  `tests/test_no_conflict_markers.py` scans every tracked file. `=======` is deliberately
+  not one of the markers it looks for: it is a legitimate Markdown setext heading
+  underline, and `<<<<<<<` / `>>>>>>>` are sufficient because git writes all three or
+  none. Every disarm branch edits the same `[Unreleased]` block, so this shape is common
+  rather than exotic.
+
 - **`THREAT_MODEL.md` names nine classes it was silent on (#729, #743, #747, #748, #753,
   #755, #756, #758, #804).** The *Out of scope* section is the page a reader consults to
   decide whether a class is disarm's problem, and silence there reads as coverage. Each

@@ -851,6 +851,12 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   Now hashed over the rows, header excluded, so the digest carries one meaning: a key
   moved. The 0.15.0 regeneration is the proof — the stamp changed and the digest did not.
 
+  The rows are found by splitting on the `# columns:` delimiter rather than by filtering
+  `#`-leading lines. A TSV row begins with the *escaped input*, so a corpus entry starting
+  with `#` looks exactly like a header line and a prefix filter would have placed it
+  outside the digest — silently, in the one gate that exists to notice a key moving. No
+  such row exists today, which is why this is a mechanism test rather than a fix.
+
 - **`normalize_web_input` was not a fixed point on 6,410 (base, mark) pairs (#886).**
   Its steps are `normalize` → `confusables` → strips, and nothing normalized after the
   fold — so the fold emitted a decomposed base and the *next* call composed it. Two

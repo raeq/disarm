@@ -1223,6 +1223,29 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **Normalization is not closed under concatenation, and `docs/RUST_API.md` says so
+  (#787).** The key-stability contract is about *time* — a key you stored last year. This
+  is the other thing a caller may not rely on, and it holds within one release:
+  normalizing two fields and joining them is not the same as joining them and normalizing.
+
+  Four surfaces show it — `canonicalize`, `canonicalize_strict`, `sort_key` and
+  `normalize_confusables` — and three do not, for two different reasons: `search_key` and
+  `catalog_key` agree because `strip_accents` removes the mark either way, and `fold_case`
+  agrees because it normalizes nothing. So the property cannot be inferred from one
+  function to another, which is why both halves are pinned.
+
+  **No primitive is added.** `concat_normalized` and `is_normalization_safe_boundary` were
+  both considered; the second is answerable by a caller in one line — does the second part
+  begin with a non-starter — and measured over 4,000 random pairs that check has **zero
+  false negatives**. Adding it would be an API addition across seven surfaces for
+  something needing no table and no core state, and the documented rule is shorter than
+  either: *normalize the joined string, not the fields.*
+
+  One correction to the issue: it reasons that `find_key_collisions` cannot see a splice,
+  because it is handed values joined elsewhere. Measured, it can — it **re-reduces** its
+  inputs rather than comparing them, so the field-wise spelling composes on the way in.
+  Over 600 random pairs it grouped all 90 that differ.
+
 - **The reduced-set count beside `find_key_collisions` (#763).** The function returns a
   filtered list, not a partition — a name that collides with nothing never appears — so
   the quantity a registry actually wants next, *after reduction, how many distinct

@@ -52,6 +52,7 @@ MIN_UNICODE_VERSION = "15.1.0"
 # Measured cross-script supplement folded with priority over TR39 (#342/#343).
 BUNDLED_SUPPLEMENT = Path(__file__).resolve().parent.parent / "data" / "confusables_supplement.tsv"
 BUNDLED_ATTESTED = Path(__file__).resolve().parent.parent / "data" / "confusables_attested.tsv"
+BUNDLED_LGR = Path(__file__).resolve().parent.parent / "data" / "confusables_lgr.tsv"
 
 
 # ---------------------------------------------------------------------------
@@ -491,6 +492,52 @@ def load_supplement(path: Path) -> dict[str, dict[int, str]]:
             value = cell.strip()
             if value and value != "-":
                 overrides[target][cp] = value
+    return overrides
+
+
+def load_lgr(path: Path) -> dict[int, str]:
+    """Parse confusables_lgr.tsv into a to-Latin override map (#831).
+
+    A third override file beside the supplement (#342) and the attested rows (#597),
+    because the admission criterion is a third thing: the pair is a BLOCKED variant in
+    ICANN's Latin second-level LGR whose variant comment reads "Glyphs either homoglyph
+    or nearly identical" — one registry's published visual judgement about SAME-SCRIPT
+    Latin pairs.
+
+    To-Latin only. These are Latin-to-Latin pairs; there is no Cyrillic reading of them,
+    and inventing one would be a different claim than the LGR makes.
+
+    Columns are source_hex, target, target_rule. The third is validated and not consumed,
+    for the reason `load_attested` gives about its own provenance columns: a row that
+    cannot say how its target was chosen has no business in a security-critical table.
+    """
+    overrides: dict[int, str] = {}
+    valid_rules = {"ascii", "lowest"}
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.split("#", 1)[0].rstrip() if not raw.lstrip().startswith("#") else ""
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        if len(parts) < 3:
+            raise ValueError(
+                f"{path.name}:{lineno}: malformed LGR row (need >=3 tab-separated "
+                f"columns: source_hex, target, target_rule): {raw!r}"
+            )
+        # Every column stripped, including the target. `load_supplement` and
+        # `load_attested` strip theirs a line later; this one did not, so a trailing
+        # space in the TSV would have become part of the fold target (#870 review).
+        # Unlike `confusables_to_latin.tsv`, where a trailing space can be the whole
+        # value (`U+30FB` folds to one), an LGR target is always a Latin letter.
+        source_hex, target, rule = parts[0].strip(), parts[1].strip(), parts[2].strip()
+        if rule not in valid_rules:
+            raise ValueError(
+                f"{path.name}:{lineno}: target_rule must be one of {sorted(valid_rules)}, "
+                f"got {rule!r}"
+            )
+        source = int(source_hex, 16)
+        if not target:
+            raise ValueError(f"{path.name}:{lineno}: empty target")
+        overrides[source] = target
     return overrides
 
 
@@ -1142,10 +1189,15 @@ def main() -> None:
     # provenance are, not because the pipeline treats them differently.
     for script_key in ("latin", "cyrillic"):
         supplement[script_key].update(attested[script_key])
+    # #831: applied after the attested rows, so the LGR's judgement wins on an overlap.
+    # There is none today; the ordering is stated rather than left to dict insertion.
+    lgr = load_lgr(BUNDLED_LGR)
+    supplement["latin"].update(lgr)
     print(
         f"Loaded overrides: {len(supplement['latin'])} latin + "
         f"{len(supplement['cyrillic'])} cyrillic "
-        f"(#342/#343 supplement + {len(attested['latin'])} attested rows, #597)",
+        f"(#342/#343 supplement + {len(attested['latin'])} attested rows, #597 + "
+        f"{len(lgr)} ICANN LGR rows, #831)",
         file=sys.stderr,
     )
 

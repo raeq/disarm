@@ -27,6 +27,24 @@ bitflags! {
         const STRIP_ZERO_WIDTH = 0b1_0000_0000;
         const STRIP_BIDI       = 0b10_0000_0000;
         const STRIP_ZALGO      = 0b100_0000_0000;
+        /// The confusable fold that runs AFTER the case fold (#852).
+        ///
+        /// A cased letter whose *folded* form is in the confusable table and whose
+        /// original is not folds only on a second call: `\u{00DE}` has no entry, case
+        /// folds to `\u{00FE}`, and only then folds to `p`. Measured over the BMP, 126
+        /// code points behaved that way in `llm_guardrail`.
+        ///
+        /// Running the fold again *after* the case fold closes it. Folding case *first*
+        /// would also close it and is the wrong trade: 73 cased code points fold to a
+        /// different target than their case pair — `\u{00D0}` is `D` and `\u{00F0}` is
+        /// unmapped, `\u{0397}` is `H` and `\u{03B7}` is `n` — so pre-folding would lose
+        /// the uppercase mapping outright rather than reaching it one pass later.
+        ///
+        /// Its own flag rather than a second `CONFUSABLES` entry, so every flag still
+        /// appears in `STEP_ORDER` exactly once and the pass exists only where a case
+        /// fold precedes it. Set by `Pipeline::new`, never by a caller, and displayed as
+        /// `confusables` because that is what it does.
+        const CONFUSABLES_POST = 0b1000_0000_0000;
     }
 }
 
@@ -48,10 +66,27 @@ const STEP_ORDER: &[(PipelineSteps, &str)] = &[
     (PipelineSteps::STRIP_ZALGO, "strip_zalgo"),
     (PipelineSteps::STRIP_BIDI, "strip_bidi"),
     (PipelineSteps::DEMOJIZE, "demojize"),
+    // Case folded BEFORE the folds below as well as after (#852, the #419 lesson).
+    //
+    // A cased letter whose *folded* form is in the confusable or transliteration table
+    // but whose original form is not folds only on the second pass, which breaks
+    // idempotency: `\u{00DE}` is absent from the table, folds to `\u{00FE}`, and only
+    // then folds to `p`. Measured over the BMP, 126 code points behaved that way in
+    // `llm_guardrail` — Latin, Cyrillic, Greek, Armenian, Cherokee and Georgian.
+    //
+    // Folding first makes both passes see the same form. Folding *again* afterwards is
+    // what #419 added to `sort_key` and is still needed: the fold can itself emit
+    // uppercase from a source the first pass could not reach.
+    //
+    // Placed after `strip_accents`, not before it. `U+0345 COMBINING GREEK
+    // YPOGEGRAMMENI` case-folds to `\u{03B9}` — a *letter* — so folding first would
+    // carry it past the mark strip and out as `i` where it is removed today. That is a
+    // change of kind rather than of case, and none of it is what #852 is about.
     (PipelineSteps::STRIP_ACCENTS, "strip_accents"),
     (PipelineSteps::TRANSLITERATE, "transliterate"),
     (PipelineSteps::CONFUSABLES, "confusables"),
     (PipelineSteps::FOLD_CASE, "fold_case"),
+    (PipelineSteps::CONFUSABLES_POST, "confusables"),
     (PipelineSteps::STRIP_CONTROL, "strip_control"),
     (PipelineSteps::STRIP_ZERO_WIDTH, "strip_zero_width"),
     (PipelineSteps::COLLAPSE_WS, "collapse_whitespace"),
@@ -118,6 +153,12 @@ impl Pipeline {
         }
         if fold_case {
             steps |= PipelineSteps::FOLD_CASE;
+            // The second fold only where a case fold precedes it (#852). Without
+            // `confusables` there is nothing to re-run, and reporting a step that does
+            // nothing would make `explain()` describe a mechanism the pipeline lacks.
+            if confusables {
+                steps |= PipelineSteps::CONFUSABLES_POST;
+            }
         }
         if collapse_whitespace {
             steps |= PipelineSteps::COLLAPSE_WS;
@@ -288,7 +329,7 @@ impl Pipeline {
                     Ok(true)
                 }
             }
-        } else if step == PipelineSteps::CONFUSABLES {
+        } else if step == PipelineSteps::CONFUSABLES || step == PipelineSteps::CONFUSABLES_POST {
             confusables::normalize_confusables_into(input, "latin", out)?;
             Ok(true)
         } else if step == PipelineSteps::FOLD_CASE {
@@ -318,7 +359,7 @@ impl Pipeline {
             self.normalize_form.clone()
         } else if step == PipelineSteps::STRIP_ZALGO {
             self.zalgo_max_marks.map(|m| m.to_string())
-        } else if step == PipelineSteps::CONFUSABLES {
+        } else if step == PipelineSteps::CONFUSABLES || step == PipelineSteps::CONFUSABLES_POST {
             Some("latin".to_owned())
         } else if step == PipelineSteps::TRANSLITERATE {
             self.lang.clone()
@@ -529,6 +570,9 @@ mod tests {
     fn step_order_lists_every_flag_exactly_once() {
         // If a new PipelineSteps flag is added but not registered in STEP_ORDER,
         // it would be neither executed nor reported. This fails loudly instead.
+        //
+        // `FOLD_CASE_PRE` is its own flag rather than a second `FOLD_CASE` entry, so
+        // this stays an exactly-once check (#852).
         let mut seen = PipelineSteps::empty();
         for (flag, _name) in STEP_ORDER {
             assert!(
@@ -564,7 +608,10 @@ mod tests {
                 (None, "é")
             } else if *flag == PipelineSteps::TRANSLITERATE {
                 (None, "Москва")
-            } else if *flag == PipelineSteps::CONFUSABLES {
+            } else if *flag == PipelineSteps::CONFUSABLES
+                || *flag == PipelineSteps::CONFUSABLES_POST
+            {
+                // Both run the same fold; `CONFUSABLES_POST` differs only in when (#852).
                 (None, "\u{0410}pple") // Cyrillic А
             } else if *flag == PipelineSteps::FOLD_CASE {
                 (None, "ABC")
@@ -909,6 +956,10 @@ mod tests {
                 "transliterate",
                 "confusables",
                 "fold_case",
+                // The fold runs again after the case fold (#852): a cased letter whose
+                // folded form is in the confusable table and whose original is not would
+                // otherwise fold only on a second call.
+                "confusables",
                 "strip_control",
                 "strip_zero_width",
                 "collapse_whitespace",

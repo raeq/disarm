@@ -316,9 +316,21 @@ Hangul fillers map to another Default_Ignorable code point rather than to nothin
 
 **Use `canonicalize` if what you want is the identifier operation.** It removes **387** of
 the 405 — its invisible-strip is what stands in for the missing third step — and it also
-applies the confusable fold, which `toNFKC_Casefold` does not. The 18 it keeps are the
-variation selectors and the musical-notation controls, which the rendering policy
-preserves deliberately.
+applies the confusable fold, which `toNFKC_Casefold` does not.
+
+The 18 it keeps are **not** the variation selectors: `COMPARISON_STRIP` removes every one
+of those, including the presentation selectors, which is the whole point of a comparison
+policy. They are:
+
+| | |
+|---|---|
+| `U+17B4`–`U+17B5` | Khmer inherent vowels |
+| `U+180B`–`U+180F` | Mongolian free variation selectors |
+| `U+1BCA0`–`U+1BCA3` | Duployan shorthand format controls |
+| `U+1D173`–`U+1D17A` | musical beam, tie, slur and phrase controls |
+
+Each is a formatting control belonging to a specific script or notation, where removing it
+would damage ordinary text in that script rather than close a smuggling channel.
 
 This is a gap in the *primitives*, not in the presets. It matters when a caller is
 building their own pipeline from the parts and reasoning from the UTS #39 definition: the

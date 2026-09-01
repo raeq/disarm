@@ -105,6 +105,31 @@ def test_canonicalize_is_the_one_that_removes_them() -> None:
     )
 
 
+def test_the_survivors_are_the_ones_the_page_lists() -> None:
+    """#858 review: the page named the variation selectors, which do not survive.
+
+    `COMPARISON_STRIP` removes every variation selector including the presentation ones —
+    that is what a comparison policy is for. What survives is four blocks of
+    script-specific formatting controls, and the page now says so. Asserted by range so
+    a newly assigned code point inside one of them does not fail the page.
+    """
+    survivors = {ord(ch) for ch in default_ignorable() if disarm.canonicalize(ch) != ""}
+    documented = (
+        (0x17B4, 0x17B5),  # Khmer inherent vowels
+        (0x180B, 0x180F),  # Mongolian free variation selectors
+        (0x1BCA0, 0x1BCA3),  # Duployan shorthand format controls
+        (0x1D173, 0x1D17A),  # musical beam/tie/slur/phrase controls
+    )
+    unexpected = sorted(cp for cp in survivors if not any(lo <= cp <= hi for lo, hi in documented))
+    assert not unexpected, (
+        "docs/limitations.md lists the Default_Ignorable code points canonicalize keeps; "
+        f"these survive and are not on it: {[f'U+{cp:04X}' for cp in unexpected]}"
+    )
+    assert not any(0xFE00 <= cp <= 0xFE0F for cp in survivors), (
+        "a variation selector now survives canonicalize; the page says none does"
+    )
+
+
 def test_the_soft_hyphen_example_on_the_page_is_real() -> None:
     # Escapes, per #802: a literal soft hyphen renders as nothing and reads as smuggling.
     assert disarm.fold_case(disarm.normalize("a\u00ada", form="NFKC")) == "a\u00ada"

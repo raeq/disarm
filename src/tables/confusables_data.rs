@@ -15,9 +15,6 @@
 // Non-Latin → Latin confusable mappings.
 include!(concat!(env!("OUT_DIR"), "/confusables_phf.rs"));
 
-// ASCII codepoints the latin map rewrites (preset fast-path guard, #458).
-include!(concat!(env!("OUT_DIR"), "/ascii_confusable_latin.rs"));
-
 // Non-Cyrillic → Cyrillic confusable mappings.
 include!(concat!(env!("OUT_DIR"), "/confusables_to_cyrillic_phf.rs"));
 include!(concat!(env!("OUT_DIR"), "/confusables_to_arabic_phf.rs"));

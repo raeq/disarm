@@ -89,9 +89,64 @@ enum Step {
     },
 }
 
+/// One statically-known step list, emitted twice: as the `Step` slice the fast-path
+/// guard and `explain()` read, and as a straight-line applier.
+///
+/// The applier is why this macro exists. `apply_steps` walks a `&[Step]` and calls
+/// `apply_into` with a *runtime* value, so the optimiser cannot prove any match arm
+/// unreachable and every preset links every table a step could reach — `strip_format`
+/// declares five steps that neither transliterate nor demojize and linked the Hanzi
+/// pinyin and CLDR emoji tables anyway, at 663 KB against a possible 16 KB (#695).
+///
+/// Unrolling the list gives each call a `const` step, which `apply_into` being
+/// `#[inline]` lets LLVM fold to the one arm. The arms a preset does not name become
+/// unreachable *per call site* rather than per program, and the linker drops their data.
+///
+/// `TextPipeline` keeps the dynamic path deliberately: it is configured at runtime, so it
+/// can name any step and must link every table. The presets are static and need not.
+macro_rules! static_steps {
+    (
+        $(#[$meta:meta])*
+        const $steps:ident;
+        fn $apply:ident;
+        [$($step:expr),* $(,)?]
+    ) => {
+        $(#[$meta])*
+        const $steps: &[Step] = &[$($step),*];
+
+        /// The fast-path mask for the list above, computed at compile time.
+        ///
+        /// `Actionable::for_steps` matches every `Step` variant, so calling it at runtime
+        /// kept the payload types — and the CLDR emoji table behind them — in any binary
+        /// that reached it. As a const it is a struct literal and the function is gone
+        /// (#695).
+        const MASK: Actionable = Actionable::for_steps($steps);
+
+        /// One pass of the step list above, unrolled. See `static_steps!`.
+        #[inline]
+        fn $apply(input: &str, ctx: &PresetCtx) -> Result<String, crate::ErrorRepr> {
+            let mut cur = input.to_owned();
+            let mut scratch = String::new();
+            $(
+                if apply_into($step, &cur, ctx, &mut scratch)? {
+                    std::mem::swap(&mut cur, &mut scratch);
+                }
+            )*
+            Ok(cur)
+        }
+    };
+}
+
 /// Apply one step, writing into the reused scratch `out`. Returns `true` when `out`
 /// holds the result (caller swaps it in) or `false` for a no-op (input unchanged,
 /// `out` left as a spare). Every writing leaf clears `out` itself.
+// `inline(always)`, against clippy's advice and deliberately (#695). This is an
+// eighteen-arm match, which LLVM will not inline at its own discretion — measured, plain
+// `#[inline]` leaves it out of line and every preset links every table again: 656,850
+// bytes for `strip_format` against 27,384 with this attribute. Inlining is what lets each
+// call site fold the `const` step to its one arm, which is the whole mechanism.
+#[allow(clippy::inline_always)]
+#[inline(always)]
 fn apply_into(
     step: Step,
     input: &str,
@@ -333,7 +388,21 @@ impl Actionable {
     /// mask-audit tests fail if it is classified wrong. Confusable steps are
     /// asserted Latin-only — the guard's confusable-source check is Latin-specific,
     /// so a non-Latin target panics here rather than silently mis-classifying.
-    fn for_steps(steps: &[Step]) -> Self {
+    /// The mask for a step list, at **compile time** where the list is a const (#695).
+    ///
+    /// `const` is the whole point rather than a tidiness win. This function takes a
+    /// runtime `&[Step]` and matches every variant, which kept the `Step` payload types
+    /// — and through them the CLDR emoji table — alive in any binary that called it. The
+    /// preset fast-path guard calls it on every run, so `strip_format` linked 258 KB of
+    /// emoji names through a function that only sets booleans. Evaluated as a const, the
+    /// call is gone from the binary and so is everything it reached.
+    ///
+    /// Measured on a single-export `wasm32-unknown-unknown` probe: 275,449 bytes calling
+    /// this at runtime, 27,658 with the mask precomputed.
+    ///
+    /// `TextPipeline` still calls it at runtime and still pays, correctly — it is
+    /// configured at runtime and can name any step.
+    const fn for_steps(steps: &[Step]) -> Self {
         let mut m = Self {
             controls: false,
             collapse_ws: false,
@@ -349,7 +418,10 @@ impl Actionable {
             transliterate: false,
             demojize: false,
         };
-        for &step in steps {
+        let mut idx = 0;
+        while idx < steps.len() {
+            let step = steps[idx];
+            idx += 1;
             match step {
                 Step::StripControl => m.controls = true,
                 Step::CollapseWs => m.collapse_ws = true,
@@ -364,11 +436,13 @@ impl Actionable {
                     // ASCII `A`/`B`/`a`/`b` — so a non-Latin target classified here
                     // would let the guard skip input the fold would change. Reject it
                     // loudly: a non-Latin confusable preset needs target-aware tables.
+                    // Byte comparison rather than `==`: `str` equality is not const.
                     assert!(
-                        target == "latin",
-                        "fast-path guard supports only Latin confusable targets; \
-                         {target:?} rewrites different sources — make the guard \
-                         target-aware first"
+                        matches!(target.as_bytes(), b"latin"),
+                        "fast-path guard supports only Latin confusable targets; the \
+                         Cyrillic map rewrites different sources (ASCII A/B/a/b), so a \
+                         non-Latin target would let the guard skip input the fold \
+                         changes — make the guard target-aware first"
                     );
                     m.confusables = true;
                     // #615/#638: `ConfusablesMarkFixedPoint` also strips cross-script
@@ -392,10 +466,16 @@ impl Actionable {
                     // enforce that the inner list has no nested `FixedPoint`, keeping
                     // the `apply_into`/`apply_steps` recursion bounded (it runs in the
                     // equivalence tests over every preset, so a violation is caught).
-                    debug_assert!(
-                        !inner.iter().any(|s| matches!(s, Step::FixedPoint(_))),
-                        "FixedPoint inner list must not contain a nested FixedPoint"
-                    );
+                    // A hand-rolled loop: `Iterator::any` is not const. The check is the
+                    // same one, and `nested_fixed_point_is_rejected` covers it.
+                    let mut i = 0;
+                    while i < inner.len() {
+                        assert!(
+                            !matches!(inner[i], Step::FixedPoint(_)),
+                            "FixedPoint inner list must not contain a nested FixedPoint"
+                        );
+                        i += 1;
+                    }
                     m.union(Self::for_steps(inner));
                 }
                 Step::Nfkc | Step::Nfc | Step::NfcIfNonAscii => {
@@ -424,7 +504,7 @@ impl Actionable {
 
     /// OR another mask's classes into this one — used to fold a `FixedPoint`'s inner
     /// mask into the outer preset's (#467).
-    fn union(&mut self, o: Self) {
+    const fn union(&mut self, o: Self) {
         self.controls |= o.controls;
         self.collapse_ws |= o.collapse_ws;
         self.fold_case |= o.fold_case;
@@ -436,9 +516,11 @@ impl Actionable {
         // conservative union is the minimum when both are `Some` — `or` alone would
         // under-approximate. (No shipped `FixedPoint` inner sets zalgo_cap, so this is
         // belt-and-suspenders, but it keeps `union` sound for any future inner list.)
+        // Written out rather than via `min`/`or`, neither of which is const-stable.
         self.zalgo_cap = match (self.zalgo_cap, o.zalgo_cap) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
+            (Some(a), Some(b)) => Some(if a < b { a } else { b }),
+            (Some(a), None) => Some(a),
+            (None, b) => b,
         };
         self.bidi |= o.bidi;
         self.zero_width |= o.zero_width;
@@ -713,6 +795,43 @@ fn run<'a>(
     Ok(Cow::Owned(apply_steps(steps, text, ctx)?))
 }
 
+/// `run`, with the application supplied by the caller instead of walked from `steps`.
+///
+/// The guard is identical and still reads `steps` — `Actionable::for_steps` only
+/// *inspects* the list, it does not dispatch on it, so nothing it touches links a table.
+/// What changes is the final line: a preset passes its unrolled applier, so the runtime
+/// `Step` value never reaches `apply_into` and the arms it does not name stay out of the
+/// binary (#695).
+#[inline]
+fn run_static<'a>(
+    mask: Actionable,
+    text: &'a str,
+    ctx: &PresetCtx,
+    apply: impl FnOnce(&str, &PresetCtx) -> Result<String, crate::ErrorRepr>,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
+    #[cfg(test)]
+    let guard_on = !FASTPATH_DISABLED.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    let guard_on = true;
+    if guard_on {
+        let conf_map = if mask.confusables {
+            crate::tables::resolve_confusable_map("latin")
+        } else {
+            None
+        };
+        match classify(text, mask, conf_map) {
+            Guard::Inert => return Ok(Cow::Borrowed(text)),
+            Guard::WhitespaceOnly => {
+                let mut out = String::new();
+                whitespace::collapse_whitespace_into(text, &mut out);
+                return Ok(Cow::Owned(out));
+            }
+            Guard::Actionable => {}
+        }
+    }
+    Ok(Cow::Owned(apply(text, ctx)?))
+}
+
 /// Apply a step list once via the two-buffer ping-pong, returning the owned result.
 /// Shared by `run` (the top-level pass, after the fast-path guard) and
 /// `Step::FixedPoint` (one pass of its inner sub-pipeline, #467).
@@ -814,61 +933,66 @@ fn is_bidi_or_format(ch: char) -> bool {
 /// TR39 skeletoning is not normalization-stable — so the pipeline is idempotent
 /// (`f(f(x)) == f(x)`).
 pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
-    const STEPS: &[Step] = &[
-        // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
-        Step::Nfkc,
-        // 2. Strip bidi overrides, isolates, marks, and soft hyphens
-        Step::StripBidi,
-        // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags
-        //     (keeping valid emoji flag sequences), variation selectors, CGJ,
-        //     noncharacters, and the Private Use Area. Runs before the NFC below so a
-        //     CGJ stripped from between a base and a mark gets recomposed.
-        Step::StripInvisible(COMPARISON_STRIP),
-        // 3. Strip non-whitespace controls + zero-width, then fold whitespace (#433:
-        //    these were one fused `collapse_whitespace(_, true, true)` call; the split
-        //    makes the steps explicit and lets the line controls fold to a space
-        //    rather than be deleted, so e.g. `a\rb` → `a b`, not `ab`).
-        Step::StripControl,
-        Step::StripZeroWidth,
-        Step::CollapseWs,
-        // 3b. Cap combining marks at 2 per base (#429), matching canonicalize_strict.
-        //     Removes zalgo stacking so a stacked token matches its base in a denylist
-        //     comparison, while keeping legitimate diacritics (`café`, `Việt`). Runs
-        //     AFTER the control / zero-width strip above so a stripped invisible
-        //     between two marks cannot split a mark run and hide the count (the #121
-        //     lesson); a later strip would merge the runs and break idempotency.
-        Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
-        // 4. NFC (#416): the strips above can leave a base character next to a
-        //    combining mark that was non-adjacent before (e.g. separated by a
-        //    now-removed zero-width), which the leading NFKC passed over. Compose it
-        //    here so the confusable fold below sees the *composed* form consistently.
-        Step::Nfc,
-        // 5. Confusables → Latin (neutralizes cross-script homoglyphs), iterated to a
-        //    fixed point between NFC passes (#416/#434). TR39 skeletoning is not
-        //    normalization-stable: it drops the diacritic on a *composed* accented
-        //    letter (`ç`→`c`, `ø`→`o`) but never on the *decomposed* form, and it can
-        //    *emit* a decomposed skeleton (`Ý`→`Y`+◌́). The leading NFC feeds it a
-        //    composed form and the trailing NFC recomposes its output — but a
-        //    *duplicate* combining mark breaks a single sandwich: NFC composes only
-        //    one mark onto the base, the fold drops it, and the recomposing NFC
-        //    reattaches the *spare* mark, re-creating a foldable composed char the
-        //    next call would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping until stable
-        //    makes the preset a true fixed point (`f(f(x)) == f(x)`).
-        Step::ConfusablesNfcFixedPoint("latin"),
-    ];
+    static_steps! {
+        const STEPS;
+        fn apply;
+        [
+            // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
+            Step::Nfkc,
+            // 2. Strip bidi overrides, isolates, marks, and soft hyphens
+            Step::StripBidi,
+            // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags
+            //     (keeping valid emoji flag sequences), variation selectors, CGJ,
+            //     noncharacters, and the Private Use Area. Runs before the NFC below so a
+            //     CGJ stripped from between a base and a mark gets recomposed.
+            Step::StripInvisible(COMPARISON_STRIP),
+            // 3. Strip non-whitespace controls + zero-width, then fold whitespace (#433:
+            //    these were one fused `collapse_whitespace(_, true, true)` call; the split
+            //    makes the steps explicit and lets the line controls fold to a space
+            //    rather than be deleted, so e.g. `a\rb` → `a b`, not `ab`).
+            Step::StripControl,
+            Step::StripZeroWidth,
+            Step::CollapseWs,
+            // 3b. Cap combining marks at 2 per base (#429), matching canonicalize_strict.
+            //     Removes zalgo stacking so a stacked token matches its base in a denylist
+            //     comparison, while keeping legitimate diacritics (`café`, `Việt`). Runs
+            //     AFTER the control / zero-width strip above so a stripped invisible
+            //     between two marks cannot split a mark run and hide the count (the #121
+            //     lesson); a later strip would merge the runs and break idempotency.
+            Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
+            // 4. NFC (#416): the strips above can leave a base character next to a
+            //    combining mark that was non-adjacent before (e.g. separated by a
+            //    now-removed zero-width), which the leading NFKC passed over. Compose it
+            //    here so the confusable fold below sees the *composed* form consistently.
+            Step::Nfc,
+            // 5. Confusables → Latin (neutralizes cross-script homoglyphs), iterated to a
+            //    fixed point between NFC passes (#416/#434). TR39 skeletoning is not
+            //    normalization-stable: it drops the diacritic on a *composed* accented
+            //    letter (`ç`→`c`, `ø`→`o`) but never on the *decomposed* form, and it can
+            //    *emit* a decomposed skeleton (`Ý`→`Y`+◌́). The leading NFC feeds it a
+            //    composed form and the trailing NFC recomposes its output — but a
+            //    *duplicate* combining mark breaks a single sandwich: NFC composes only
+            //    one mark onto the base, the fold drops it, and the recomposing NFC
+            //    reattaches the *spare* mark, re-creating a foldable composed char the
+            //    next call would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping until stable
+            //    makes the preset a true fixed point (`f(f(x)) == f(x)`).
+            Step::ConfusablesNfcFixedPoint("latin"),
+        ]
+    }
     // #431: no path-separator neutralization. Mapping a synthesised '/' (e.g. a
     // confusable-unmasked U+2044) to '_' is sink-specific output-sanitizer
     // behaviour, which THREAT_MODEL.md says disarm does not do — and it silently
     // corrupted legitimate URLs/paths. Path-traversal defence belongs at the sink,
     // run on this canonicalized output (see THREAT_MODEL.md "Pipeline placement").
-    run(
-        STEPS,
+    run_static(
+        MASK,
         text,
         &PresetCtx {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
         },
+        apply,
     )
 }
 
@@ -1026,67 +1150,72 @@ pub(crate) fn catalog_key<'a>(
 ) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the validate prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
-    const STEPS: &[Step] = &[
-        // 1. NFKC normalization
-        Step::Nfkc,
-        // 2. Strip bidi overrides + soft hyphen + format marks (#93)
-        Step::StripBidi,
-        // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags,
-        //     variation selectors, CGJ, noncharacters and the Private Use Area — the
-        //     same policy `canonicalize` uses, for the same reason (#805).
-        //
-        //     A key builder exists so two spellings of one identity compare equal, and
-        //     every class here is a way to vary the key invisibly. Measured before the
-        //     fix, all three builders were evaded by a noncharacter, by a Tag character
-        //     and by a plane-15 PUA code point; `sort_key` additionally by a variation
-        //     selector and by CGJ. BMP PUA was already handled, which is what made the
-        //     gap look narrower than it was.
-        Step::StripInvisible(COMPARISON_STRIP),
-        // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
-        //    the transliteration table but whose original is not (e.g. Georgian
-        //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
-        //    on the second pass — non-idempotent. Fold before transliterate so both
-        //    passes see the same form.
-        Step::FoldCase,
-        // 4/5/6. Romanization core, iterated to a fixed point (#467). A single pass
-        //    of transliterate → confusables → strip-accents is not idempotent: each
-        //    step can feed an EARLIER one on a re-run —
-        //      • strip-accents drops the U+0338 overlay of a negated relation and
-        //        exposes a confusable the fold already passed (`∤`→`∣`→`l`);
-        //      • confusables emits a letter transliterate romanizes (`ᴔ`→`ǝo`, then
-        //        `ǝ`→`e`);
-        //      • the maps chain.
-        //    Looping the whole core folds them all the way down in one call. Order
-        //    within each pass is preserved (transliterate first, so non-Latin scripts
-        //    are romanized before confusables — avoiding broken mappings like Cyrillic
-        //    к → literal \u{0138}; confusables before strip-accents, so a confusable
-        //    that *emits* an accent is still stripped). Transliterate uses Preserve
-        //    mode (always on) so catalog keys are pure ASCII where possible.
-        Step::FixedPoint(&[
-            Step::Transliterate {
-                mode: crate::ErrorMode::Preserve,
-                only_if_lang: false,
-            },
-            Step::Confusables("latin"),
-            Step::StripAccents,
-        ]),
-        // 6b. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
-        //     (`£` → `GBP`, `№` → `No`), unreachable by the pre-transliterate fold.
-        Step::FoldCase,
-        // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-        Step::StripControl,
-        Step::StripZeroWidth,
-        Step::CollapseWs,
-    ];
+    static_steps! {
+        const STEPS;
+        fn apply;
+        [
+            // 1. NFKC normalization
+            Step::Nfkc,
+            // 2. Strip bidi overrides + soft hyphen + format marks (#93)
+            Step::StripBidi,
+            // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags,
+            //     variation selectors, CGJ, noncharacters and the Private Use Area — the
+            //     same policy `canonicalize` uses, for the same reason (#805).
+            //
+            //     A key builder exists so two spellings of one identity compare equal, and
+            //     every class here is a way to vary the key invisibly. Measured before the
+            //     fix, all three builders were evaded by a noncharacter, by a Tag character
+            //     and by a plane-15 PUA code point; `sort_key` additionally by a variation
+            //     selector and by CGJ. BMP PUA was already handled, which is what made the
+            //     gap look narrower than it was.
+            Step::StripInvisible(COMPARISON_STRIP),
+            // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
+            //    the transliteration table but whose original is not (e.g. Georgian
+            //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
+            //    on the second pass — non-idempotent. Fold before transliterate so both
+            //    passes see the same form.
+            Step::FoldCase,
+            // 4/5/6. Romanization core, iterated to a fixed point (#467). A single pass
+            //    of transliterate → confusables → strip-accents is not idempotent: each
+            //    step can feed an EARLIER one on a re-run —
+            //      • strip-accents drops the U+0338 overlay of a negated relation and
+            //        exposes a confusable the fold already passed (`∤`→`∣`→`l`);
+            //      • confusables emits a letter transliterate romanizes (`ᴔ`→`ǝo`, then
+            //        `ǝ`→`e`);
+            //      • the maps chain.
+            //    Looping the whole core folds them all the way down in one call. Order
+            //    within each pass is preserved (transliterate first, so non-Latin scripts
+            //    are romanized before confusables — avoiding broken mappings like Cyrillic
+            //    к → literal \u{0138}; confusables before strip-accents, so a confusable
+            //    that *emits* an accent is still stripped). Transliterate uses Preserve
+            //    mode (always on) so catalog keys are pure ASCII where possible.
+            Step::FixedPoint(&[
+                Step::Transliterate {
+                    mode: crate::ErrorMode::Preserve,
+                    only_if_lang: false,
+                },
+                Step::Confusables("latin"),
+                Step::StripAccents,
+            ]),
+            // 6b. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
+            //     (`£` → `GBP`, `№` → `No`), unreachable by the pre-transliterate fold.
+            Step::FoldCase,
+            // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+            Step::StripControl,
+            Step::StripZeroWidth,
+            Step::CollapseWs,
+        ]
+    }
     crate::transliterate::validate_lang(lang)?;
-    run(
-        STEPS,
+    run_static(
+        MASK,
         text,
         &PresetCtx {
             lang,
             strict_iso9,
             emoji_cldr: false,
         },
+        apply,
     )
 }
 
@@ -1108,53 +1237,58 @@ pub(crate) fn search_key<'a>(
 ) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the validate prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
-    const STEPS: &[Step] = &[
-        // 1. NFKC normalization
-        Step::Nfkc,
-        // 2. Strip bidi overrides + soft hyphen + format marks (#93)
-        Step::StripBidi,
-        // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags,
-        //     variation selectors, CGJ, noncharacters and the Private Use Area — the
-        //     same policy `canonicalize` uses, for the same reason (#805).
-        //
-        //     A key builder exists so two spellings of one identity compare equal, and
-        //     every class here is a way to vary the key invisibly. Measured before the
-        //     fix, all three builders were evaded by a noncharacter, by a Tag character
-        //     and by a plane-15 PUA code point; `sort_key` additionally by a variation
-        //     selector and by CGJ. BMP PUA was already handled, which is what made the
-        //     gap look narrower than it was.
-        Step::StripInvisible(COMPARISON_STRIP),
-        // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
-        //    the transliteration table but whose original is not (e.g. Georgian
-        //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
-        //    on the second pass — non-idempotent. Fold before transliterate so both
-        //    passes see the same form.
-        Step::FoldCase,
-        // 4. Transliterate (always — search keys should be pure ASCII where possible)
-        Step::Transliterate {
-            mode: crate::ErrorMode::Preserve,
-            only_if_lang: false,
-        },
-        // 5. Strip accents
-        Step::StripAccents,
-        // 6. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
-        //    (`£` → `GBP`, `№` → `No`), which the pre-transliterate fold above could not
-        //    reach. Folding the output too makes the key a fixed point.
-        Step::FoldCase,
-        // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-        Step::StripControl,
-        Step::StripZeroWidth,
-        Step::CollapseWs,
-    ];
+    static_steps! {
+        const STEPS;
+        fn apply;
+        [
+            // 1. NFKC normalization
+            Step::Nfkc,
+            // 2. Strip bidi overrides + soft hyphen + format marks (#93)
+            Step::StripBidi,
+            // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags,
+            //     variation selectors, CGJ, noncharacters and the Private Use Area — the
+            //     same policy `canonicalize` uses, for the same reason (#805).
+            //
+            //     A key builder exists so two spellings of one identity compare equal, and
+            //     every class here is a way to vary the key invisibly. Measured before the
+            //     fix, all three builders were evaded by a noncharacter, by a Tag character
+            //     and by a plane-15 PUA code point; `sort_key` additionally by a variation
+            //     selector and by CGJ. BMP PUA was already handled, which is what made the
+            //     gap look narrower than it was.
+            Step::StripInvisible(COMPARISON_STRIP),
+            // 3. Unicode case folding FIRST (#419): a cased letter whose folded form is in
+            //    the transliteration table but whose original is not (e.g. Georgian
+            //    Mtavruli `Ჱ` → Mkhedruli `ჱ` → `he`) would otherwise transliterate only
+            //    on the second pass — non-idempotent. Fold before transliterate so both
+            //    passes see the same form.
+            Step::FoldCase,
+            // 4. Transliterate (always — search keys should be pure ASCII where possible)
+            Step::Transliterate {
+                mode: crate::ErrorMode::Preserve,
+                only_if_lang: false,
+            },
+            // 5. Strip accents
+            Step::StripAccents,
+            // 6. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
+            //    (`£` → `GBP`, `№` → `No`), which the pre-transliterate fold above could not
+            //    reach. Folding the output too makes the key a fixed point.
+            Step::FoldCase,
+            // 7. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+            Step::StripControl,
+            Step::StripZeroWidth,
+            Step::CollapseWs,
+        ]
+    }
     crate::transliterate::validate_lang(lang)?;
-    run(
-        STEPS,
+    run_static(
+        MASK,
         text,
         &PresetCtx {
             lang,
             strict_iso9: false,
             emoji_cldr: false,
         },
+        apply,
     )
 }
 
@@ -1246,82 +1380,87 @@ pub(crate) fn sort_key<'a>(
 ) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the validate prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
-    const STEPS: &[Step] = &[
-        // 1. NFKC normalization (canonical-composes accents: `é` stays one codepoint)
-        Step::Nfkc,
-        // 2. Strip bidi overrides + soft hyphen + format marks (#93)
-        Step::StripBidi,
-        // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags,
-        //     variation selectors, CGJ, noncharacters and the Private Use Area — the
-        //     same policy `canonicalize` uses, for the same reason (#805).
-        //
-        //     A key builder exists so two spellings of one identity compare equal, and
-        //     every class here is a way to vary the key invisibly. Measured before the
-        //     fix, all three builders were evaded by a noncharacter, by a Tag character
-        //     and by a plane-15 PUA code point; `sort_key` additionally by a variation
-        //     selector and by CGJ. BMP PUA was already handled, which is what made the
-        //     gap look narrower than it was.
-        Step::StripInvisible(COMPARISON_STRIP),
-        // 3. Unicode case folding FIRST (#419). A cased letter whose *folded* form is
-        //    in the transliteration table but whose original form is not — e.g. a
-        //    Georgian Mtavruli capital `Ჱ` (U+1CB1), absent from the table, folds to
-        //    Mkhedruli `ჱ` (U+10F1), which transliterates to `he` — would otherwise
-        //    transliterate only on the *second* pass, breaking idempotency. Folding
-        //    before transliterate makes both passes see the same form. (`Über` →
-        //    `über`; `ß` → `ss`; Latin accents survive.)
-        Step::FoldCase,
-        // 4. Transliterate non-Latin scripts only — Latin accents are preserved so
-        //    the collation key can order on them (this is the sort_key/search_key
-        //    distinction; search_key strips accents here instead).
-        Step::TranslitPreservingLatin,
-        // 4b. Fold case AGAIN. Transliteration can *emit* uppercase from a non-Latin
-        //     source the pre-transliterate fold could not reach — e.g. Old Persian
-        //     `𐏈` (U+103C8) romanizes to the proper noun `Auramazda`. Without this
-        //     second fold the key is `Auramazda` on pass 1 and `auramazda` on pass 2,
-        //     violating `f(f(x)) == f(x)`. `fold_case` only lowercases (it never
-        //     strips accents), so accent preservation — the sort_key invariant
-        //     (`Über` → `über`) — is unaffected.
-        Step::FoldCase,
-        // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-        Step::StripControl,
-        Step::StripZeroWidth,
-        Step::CollapseWs,
-        // 5b. Cap combining marks (#807). `sort_key` was the one key builder with
-        //     neither `strip_zalgo` nor `strip_accents`, so nothing bounded them:
-        //     `sort_key("a" + U+0301 * 40 + "b")` returned 41 characters and
-        //     `has_anomalies` called its own output `zalgo`. The other two builders are
-        //     clean only as a side effect — `strip_accents` removes the marks — and that
-        //     is not available here, because keeping diacritics is what a sort key is
-        //     FOR: `café` and `cafe` must not collide.
-        //
-        //     Capping rather than stripping preserves that. `DEFAULT_MAX_MARKS` is the
-        //     figure `is_zalgo` flags above (#788), so this removes exactly what the
-        //     library already calls abuse and nothing it calls ordinary — which is why
-        //     #788 had to land first. A three-mark Bengali cluster or a pointed Hebrew
-        //     consonant sorts unchanged.
-        //
-        //     Runs AFTER the strips above, matching `canonicalize` step 3b, so a
-        //     stripped invisible between two marks cannot split a run and hide the
-        //     count. #843 first placed it before them, and the split run then merged on
-        //     the next pass and truncated further: `sort_key` of U+0301 * 3 + ZWSP +
-        //     U+0301 returned four marks, and `sort_key` of *that* returned three.
-        Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
-        // 6. Terminal NFC (#416): because sort_key now *preserves* Latin accents
-        //    (#411) instead of folding them away, a combining mark separated from its
-        //    base by a now-stripped zero-width would otherwise survive in decomposed
-        //    form and only compose on the next pass — breaking idempotency. Recompose
-        //    so `f(f(x)) == f(x)`.
-        Step::NfcIfNonAscii,
-    ];
+    static_steps! {
+        const STEPS;
+        fn apply;
+        [
+            // 1. NFKC normalization (canonical-composes accents: `é` stays one codepoint)
+            Step::Nfkc,
+            // 2. Strip bidi overrides + soft hyphen + format marks (#93)
+            Step::StripBidi,
+            // 2b. Strip the #413 smuggling / non-interchange classes: Unicode Tags,
+            //     variation selectors, CGJ, noncharacters and the Private Use Area — the
+            //     same policy `canonicalize` uses, for the same reason (#805).
+            //
+            //     A key builder exists so two spellings of one identity compare equal, and
+            //     every class here is a way to vary the key invisibly. Measured before the
+            //     fix, all three builders were evaded by a noncharacter, by a Tag character
+            //     and by a plane-15 PUA code point; `sort_key` additionally by a variation
+            //     selector and by CGJ. BMP PUA was already handled, which is what made the
+            //     gap look narrower than it was.
+            Step::StripInvisible(COMPARISON_STRIP),
+            // 3. Unicode case folding FIRST (#419). A cased letter whose *folded* form is
+            //    in the transliteration table but whose original form is not — e.g. a
+            //    Georgian Mtavruli capital `Ჱ` (U+1CB1), absent from the table, folds to
+            //    Mkhedruli `ჱ` (U+10F1), which transliterates to `he` — would otherwise
+            //    transliterate only on the *second* pass, breaking idempotency. Folding
+            //    before transliterate makes both passes see the same form. (`Über` →
+            //    `über`; `ß` → `ss`; Latin accents survive.)
+            Step::FoldCase,
+            // 4. Transliterate non-Latin scripts only — Latin accents are preserved so
+            //    the collation key can order on them (this is the sort_key/search_key
+            //    distinction; search_key strips accents here instead).
+            Step::TranslitPreservingLatin,
+            // 4b. Fold case AGAIN. Transliteration can *emit* uppercase from a non-Latin
+            //     source the pre-transliterate fold could not reach — e.g. Old Persian
+            //     `𐏈` (U+103C8) romanizes to the proper noun `Auramazda`. Without this
+            //     second fold the key is `Auramazda` on pass 1 and `auramazda` on pass 2,
+            //     violating `f(f(x)) == f(x)`. `fold_case` only lowercases (it never
+            //     strips accents), so accent preservation — the sort_key invariant
+            //     (`Über` → `über`) — is unaffected.
+            Step::FoldCase,
+            // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+            Step::StripControl,
+            Step::StripZeroWidth,
+            Step::CollapseWs,
+            // 5b. Cap combining marks (#807). `sort_key` was the one key builder with
+            //     neither `strip_zalgo` nor `strip_accents`, so nothing bounded them:
+            //     `sort_key("a" + U+0301 * 40 + "b")` returned 41 characters and
+            //     `has_anomalies` called its own output `zalgo`. The other two builders are
+            //     clean only as a side effect — `strip_accents` removes the marks — and that
+            //     is not available here, because keeping diacritics is what a sort key is
+            //     FOR: `café` and `cafe` must not collide.
+            //
+            //     Capping rather than stripping preserves that. `DEFAULT_MAX_MARKS` is the
+            //     figure `is_zalgo` flags above (#788), so this removes exactly what the
+            //     library already calls abuse and nothing it calls ordinary — which is why
+            //     #788 had to land first. A three-mark Bengali cluster or a pointed Hebrew
+            //     consonant sorts unchanged.
+            //
+            //     Runs AFTER the strips above, matching `canonicalize` step 3b, so a
+            //     stripped invisible between two marks cannot split a run and hide the
+            //     count. #843 first placed it before them, and the split run then merged on
+            //     the next pass and truncated further: `sort_key` of U+0301 * 3 + ZWSP +
+            //     U+0301 returned four marks, and `sort_key` of *that* returned three.
+            Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
+            // 6. Terminal NFC (#416): because sort_key now *preserves* Latin accents
+            //    (#411) instead of folding them away, a combining mark separated from its
+            //    base by a now-stripped zero-width would otherwise survive in decomposed
+            //    form and only compose on the next pass — breaking idempotency. Recompose
+            //    so `f(f(x)) == f(x)`.
+            Step::NfcIfNonAscii,
+        ]
+    }
     crate::transliterate::validate_lang(lang)?;
-    run(
-        STEPS,
+    run_static(
+        MASK,
         text,
         &PresetCtx {
             lang,
             strict_iso9: false,
             emoji_cldr: false,
         },
+        apply,
     )
 }
 
@@ -1334,28 +1473,33 @@ pub(crate) fn sort_key<'a>(
 /// malicious content), control characters, and zero-width injections, then
 /// collapses runs of whitespace to single spaces.
 pub(crate) fn strip_format(text: &str) -> Cow<'_, str> {
-    const STEPS: &[Step] = &[
-        // 1. Strip bidi overrides, isolates, marks, and soft hyphens
-        Step::StripBidi,
-        // 1b. Strip the #413 smuggling / non-interchange classes, with the rendering
-        //     policy: keep well-formed emoji flags, keep VS15/VS16 after a base, and
-        //     PRESERVE the Private Use Area (icon fonts) rather than deleting it. CGJ
-        //     and noncharacters are still stripped. No NFC pass: strip_format does no
-        //     NFKC, so any base+mark left decomposed stays decomposed (idempotent).
-        Step::StripInvisible(RENDERING_STRIP),
-        // 2. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-        Step::StripControl,
-        Step::StripZeroWidth,
-        Step::CollapseWs,
-    ];
-    run(
-        STEPS,
+    static_steps! {
+        const STEPS;
+        fn apply;
+        [
+            // 1. Strip bidi overrides, isolates, marks, and soft hyphens
+            Step::StripBidi,
+            // 1b. Strip the #413 smuggling / non-interchange classes, with the rendering
+            //     policy: keep well-formed emoji flags, keep VS15/VS16 after a base, and
+            //     PRESERVE the Private Use Area (icon fonts) rather than deleting it. CGJ
+            //     and noncharacters are still stripped. No NFC pass: strip_format does no
+            //     NFKC, so any base+mark left decomposed stays decomposed (idempotent).
+            Step::StripInvisible(RENDERING_STRIP),
+            // 2. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+            Step::StripControl,
+            Step::StripZeroWidth,
+            Step::CollapseWs,
+        ]
+    }
+    run_static(
+        MASK,
         text,
         &PresetCtx {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
         },
+        apply,
     )
     .expect("strip_format steps are infallible")
 }
@@ -1389,76 +1533,81 @@ pub(crate) fn strip_format(text: &str) -> Cow<'_, str> {
 /// `catalog_key`/`search_key`, it does *not* transliterate — the original
 /// script is preserved.
 pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
-    const STEPS: &[Step] = &[
-        // 1. NFKC normalization
-        Step::Nfkc,
-        // 2. Strip invisibles FIRST (bidi/format + zero-width + non-whitespace
-        //    control) so they cannot split a run of combining marks; otherwise
-        //    removing them later would merge two short runs into one long run that a
-        //    second pass would cap differently (zalgo-capping would not be
-        //    idempotent) — e.g. "\u{301}\u{301}\0\u{301}" must not become a longer
-        //    contiguous run once the NUL is stripped. (#433) strip_control_chars now
-        //    *preserves* the whitespace controls — CR/VT/FF/NEL/FS–US — which the
-        //    final fold turns into a space; folding a separator, unlike deleting it,
-        //    leaves a stable boundary and so keeps the cap idempotent.
-        Step::StripBidi,
-        Step::StripZeroWidth,
-        Step::StripControl,
-        // 2b. Strip the #413 smuggling / non-interchange classes (Tags with the flag
-        //     carve-out, variation selectors, CGJ, noncharacters, PUA).
-        Step::StripInvisible(COMPARISON_STRIP),
-        // 3. Cap combining marks at 2 per base character (zalgo)
-        Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
-        // 4. Confusables → Latin (neutralizes cross-script homoglyphs), iterated with
-        //    NFC to a fixed point (#434): a duplicate combining mark can survive one
-        //    fold and recompose via NFC, re-creating a foldable composed char the next
-        //    pass would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping makes the preset a
-        //    true fixed point — see `canonicalize` for the full rationale.
-        // 4 + 4b. The confusable fold and the #615 cross-script mark strip, iterated
-        //     TOGETHER to a fixed point (#638). Each is a fixed point on its own and
-        //     the pair was not, because they expose work for each other in both
-        //     directions:
-        //
-        //     — the fold rewrites the BASE, so a mark that matched its base beforehand
-        //       can stop matching afterwards. `а` (Cyrillic) + U+0489 (Cyrillic mark)
-        //       agrees before the fold and not after it, which is why #615 put the
-        //       strip second: deciding against the FINAL base script is the only
-        //       stable point.
-        //     — and the strip removes marks, which can expose a COMPOSITION the fold
-        //       has already finished with. `U+0489` has ccc 0, so it is a starter and
-        //       blocks `C`+`U+0327` from composing; remove it and the terminal NFC
-        //       makes `Ç`, which folds to `C` — one pass too late. 474 code points
-        //       reach that shape and `canonicalize_strict_idempotent` found one.
-        //
-        //     Neither ordering is a fixed point alone, so the pair loops. It converges
-        //     for the same reason the inner fold does: every pass either folds a
-        //     character or deletes a mark, and neither is undone.
-        //
-        //     4b's rule itself (drop a mark whose own script differs from its base's,
-        //     #615, CVE-2017-7833): the zalgo cap above is a COUNT, and by count one
-        //     Arabic shadda is indistinguishable from one acute accent, so no
-        //     threshold removes the spoof and keeps `café`.
-        Step::ConfusablesMarkFixedPoint("latin"),
-        // 5. Fold whitespace (#433: fold-only — control/zero-width were already
-        //    stripped explicitly above, before the zalgo cap, per #121). The line
-        //    controls now fold to a space instead of being deleted, so `a\rb` → `a b`.
-        Step::CollapseWs,
-        // 5b. Terminal NFC (#416/#413): stripping a CGJ (or other invisible) from
-        //     between a base and a combining mark leaves them adjacent but decomposed;
-        //     recompose so the pipeline stays a fixed point.
-        Step::Nfc,
-    ];
+    static_steps! {
+        const STEPS;
+        fn apply;
+        [
+            // 1. NFKC normalization
+            Step::Nfkc,
+            // 2. Strip invisibles FIRST (bidi/format + zero-width + non-whitespace
+            //    control) so they cannot split a run of combining marks; otherwise
+            //    removing them later would merge two short runs into one long run that a
+            //    second pass would cap differently (zalgo-capping would not be
+            //    idempotent) — e.g. "\u{301}\u{301}\0\u{301}" must not become a longer
+            //    contiguous run once the NUL is stripped. (#433) strip_control_chars now
+            //    *preserves* the whitespace controls — CR/VT/FF/NEL/FS–US — which the
+            //    final fold turns into a space; folding a separator, unlike deleting it,
+            //    leaves a stable boundary and so keeps the cap idempotent.
+            Step::StripBidi,
+            Step::StripZeroWidth,
+            Step::StripControl,
+            // 2b. Strip the #413 smuggling / non-interchange classes (Tags with the flag
+            //     carve-out, variation selectors, CGJ, noncharacters, PUA).
+            Step::StripInvisible(COMPARISON_STRIP),
+            // 3. Cap combining marks at 2 per base character (zalgo)
+            Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
+            // 4. Confusables → Latin (neutralizes cross-script homoglyphs), iterated with
+            //    NFC to a fixed point (#434): a duplicate combining mark can survive one
+            //    fold and recompose via NFC, re-creating a foldable composed char the next
+            //    pass would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping makes the preset a
+            //    true fixed point — see `canonicalize` for the full rationale.
+            // 4 + 4b. The confusable fold and the #615 cross-script mark strip, iterated
+            //     TOGETHER to a fixed point (#638). Each is a fixed point on its own and
+            //     the pair was not, because they expose work for each other in both
+            //     directions:
+            //
+            //     — the fold rewrites the BASE, so a mark that matched its base beforehand
+            //       can stop matching afterwards. `а` (Cyrillic) + U+0489 (Cyrillic mark)
+            //       agrees before the fold and not after it, which is why #615 put the
+            //       strip second: deciding against the FINAL base script is the only
+            //       stable point.
+            //     — and the strip removes marks, which can expose a COMPOSITION the fold
+            //       has already finished with. `U+0489` has ccc 0, so it is a starter and
+            //       blocks `C`+`U+0327` from composing; remove it and the terminal NFC
+            //       makes `Ç`, which folds to `C` — one pass too late. 474 code points
+            //       reach that shape and `canonicalize_strict_idempotent` found one.
+            //
+            //     Neither ordering is a fixed point alone, so the pair loops. It converges
+            //     for the same reason the inner fold does: every pass either folds a
+            //     character or deletes a mark, and neither is undone.
+            //
+            //     4b's rule itself (drop a mark whose own script differs from its base's,
+            //     #615, CVE-2017-7833): the zalgo cap above is a COUNT, and by count one
+            //     Arabic shadda is indistinguishable from one acute accent, so no
+            //     threshold removes the spoof and keeps `café`.
+            Step::ConfusablesMarkFixedPoint("latin"),
+            // 5. Fold whitespace (#433: fold-only — control/zero-width were already
+            //    stripped explicitly above, before the zalgo cap, per #121). The line
+            //    controls now fold to a space instead of being deleted, so `a\rb` → `a b`.
+            Step::CollapseWs,
+            // 5b. Terminal NFC (#416/#413): stripping a CGJ (or other invisible) from
+            //     between a base and a combining mark leaves them adjacent but decomposed;
+            //     recompose so the pipeline stays a fixed point.
+            Step::Nfc,
+        ]
+    }
     // #431: no path-separator neutralization — see canonicalize. Mapping '/' to
     // '_' is sink-specific output sanitization (out of scope per THREAT_MODEL.md)
     // and corrupted legitimate input; defend traversal at the sink instead.
-    run(
-        STEPS,
+    run_static(
+        MASK,
         text,
         &PresetCtx {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
         },
+        apply,
     )
 }
 
@@ -1488,52 +1637,57 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
 /// Use cases: content moderation, anti-phishing, spam detection, hate speech
 /// detection, social media NLP preprocessing.
 pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
-    const STEPS: &[Step] = &[
-        // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
-        Step::Nfkc,
-        // 2. Strip ALL combining marks (max_marks=0) — removes zalgo AND accents early
-        Step::Zalgo(0),
-        // 3. Strip bidi overrides, isolates, marks, and soft hyphens
-        Step::StripBidi,
-        // 4. Strip zero-width chars (ZWS, ZWNJ, ZWJ, WJ, BOM)
-        Step::StripZeroWidth,
-        // 5. Demojize — expand emoji to text names with spacing
-        Step::Demojize {
-            only_if_cldr: false,
-            policy: crate::emoji::NamePolicy {
-                // #614: this is a comparison preset, so the TR39 fold wins over the name.
-                skip_tr39_claimed: true,
-                // #757: and a row that is not emoji at all is named by no rule worth
-                // having here — `a†b` became `a dagger signb`.
-                skip_non_emoji: true,
+    static_steps! {
+        const STEPS;
+        fn apply;
+        [
+            // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
+            Step::Nfkc,
+            // 2. Strip ALL combining marks (max_marks=0) — removes zalgo AND accents early
+            Step::Zalgo(0),
+            // 3. Strip bidi overrides, isolates, marks, and soft hyphens
+            Step::StripBidi,
+            // 4. Strip zero-width chars (ZWS, ZWNJ, ZWJ, WJ, BOM)
+            Step::StripZeroWidth,
+            // 5. Demojize — expand emoji to text names with spacing
+            Step::Demojize {
+                only_if_cldr: false,
+                policy: crate::emoji::NamePolicy {
+                    // #614: this is a comparison preset, so the TR39 fold wins over the name.
+                    skip_tr39_claimed: true,
+                    // #757: and a row that is not emoji at all is named by no rule worth
+                    // having here — `a†b` became `a dagger signb`.
+                    skip_non_emoji: true,
+                },
             },
-        },
-        // 5b. Strip the #413 smuggling / non-interchange classes. Runs AFTER demojize
-        //     so the emoji pass sees flags/presentation selectors intact; whatever
-        //     demojize leaves (stray Tags, variation selectors, noncharacters, PUA) is
-        //     removed here. CGJ is already gone via the zalgo(0) combining-mark strip.
-        Step::StripInvisible(COMPARISON_STRIP),
-        // 6. Confusables → Latin (TR39 visual mapping: Cyrillic р→p, с→c, В→B).
-        //    Runs AFTER demojize so that typographic punctuation in emoji names
-        //    (e.g. the ’ in "woman’s hat") is folded too; otherwise a second pass
-        //    would fold it and strip_obfuscation would not be idempotent.
-        Step::Confusables("latin"),
-        // 7. Strip accents (NFD decompose + strip combining marks)
-        Step::StripAccents,
-        // 8. Strip non-whitespace controls, then fold whitespace (#433: split out of
-        //    the former fused collapse; zero-width was already stripped above). Case
-        //    is NOT folded.
-        Step::StripControl,
-        Step::CollapseWs,
-    ];
-    run(
-        STEPS,
+            // 5b. Strip the #413 smuggling / non-interchange classes. Runs AFTER demojize
+            //     so the emoji pass sees flags/presentation selectors intact; whatever
+            //     demojize leaves (stray Tags, variation selectors, noncharacters, PUA) is
+            //     removed here. CGJ is already gone via the zalgo(0) combining-mark strip.
+            Step::StripInvisible(COMPARISON_STRIP),
+            // 6. Confusables → Latin (TR39 visual mapping: Cyrillic р→p, с→c, В→B).
+            //    Runs AFTER demojize so that typographic punctuation in emoji names
+            //    (e.g. the ’ in "woman’s hat") is folded too; otherwise a second pass
+            //    would fold it and strip_obfuscation would not be idempotent.
+            Step::Confusables("latin"),
+            // 7. Strip accents (NFD decompose + strip combining marks)
+            Step::StripAccents,
+            // 8. Strip non-whitespace controls, then fold whitespace (#433: split out of
+            //    the former fused collapse; zero-width was already stripped above). Case
+            //    is NOT folded.
+            Step::StripControl,
+            Step::CollapseWs,
+        ]
+    }
+    run_static(
+        MASK,
         text,
         &PresetCtx {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
         },
+        apply,
     )
 }
 
@@ -2338,6 +2492,26 @@ mod tests {
         );
     }
 
+    /// The next step list in `src`, and whether it is the macro form. See `step_arrays`.
+    fn next_list(src: &str) -> Option<(usize, bool)> {
+        let macro_at = src.find("\n    static_steps! {");
+        let plain_at = src
+            .match_indices("\n    const STEPS: &[Step")
+            .map(|(i, _)| i)
+            .find(|&i| {
+                src[i..]
+                    .lines()
+                    .nth(1)
+                    .is_some_and(|l| l.trim_end().ends_with('['))
+            });
+        match (macro_at, plain_at) {
+            (Some(m), Some(p)) => Some(if m < p { (m, true) } else { (p, false) }),
+            (Some(m), None) => Some((m, true)),
+            (None, Some(p)) => Some((p, false)),
+            (None, None) => None,
+        }
+    }
+
     /// Split the source into `(enclosing fn name, const STEPS body)` pairs.
     ///
     /// The name is only used to make a failure legible, but a wrong one is worse than
@@ -2348,17 +2522,29 @@ mod tests {
     fn step_arrays(src: &str) -> Vec<(&str, &str)> {
         let mut out = Vec::new();
         let mut rest = src;
-        while let Some(i) = rest.find("\n    const STEPS") {
-            // Only an array *literal*. `const STEPS_NO_FOLD: [Step; 8] =
-            // without_fold_case(STEPS);` is one line with no `];` terminator, so treating
-            // it as a pipeline made the scan swallow the whole of the next function's
-            // array and drop `catalog_key` from the list entirely — a gate silently
-            // covering one pipeline fewer than it reports.
-            let decl_end = rest[i + 1..].find('\n').map_or(rest.len(), |n| i + 1 + n);
-            if !rest[i..decl_end].trim_end().ends_with('[') {
-                rest = &rest[decl_end..];
-                continue;
-            }
+        // `static_steps! { const STEPS; fn apply; [ … ] }` since #695 — the step lists
+        // moved into a macro so each preset also gets a compile-time mask and an unrolled
+        // applier. A scan written against the old `const STEPS: &[Step] = &[` form finds
+        // nothing and passes, which is why both gates below assert a floor on how many
+        // pipelines they found.
+        // Two forms since #695. Most presets use `static_steps! { … [ … ] }`, which
+        // also emits their compile-time mask and unrolled applier. `ml_normalize` keeps
+        // a plain `const STEPS: &[Step; 9]` because it selects between two lists at
+        // runtime — and it links every table through its own `Transliterate` and
+        // `Demojize` steps anyway, so converting it would buy nothing. Both forms are
+        // scanned: a gate that silently stopped covering a pipeline is exactly what the
+        // floor assertion below exists to catch.
+        while let Some((i, is_macro)) = next_list(rest) {
+            let i = if is_macro {
+                if let Some(n) = rest[i..].find("\n        [\n") {
+                    i + n
+                } else {
+                    rest = &rest[i + 20..];
+                    continue;
+                }
+            } else {
+                i
+            };
             let name = rest[..i]
                 .lines()
                 .rev()
@@ -2371,7 +2557,11 @@ mod tests {
                 })
                 .unwrap_or("<unknown fn>");
             let body = &rest[i..];
-            let end = body.find("\n    ];").unwrap_or(body.len());
+            let end = if is_macro {
+                body.find("\n        ]\n").unwrap_or(body.len())
+            } else {
+                body.find("\n    ];").unwrap_or(body.len())
+            };
             out.push((name, &body[..end]));
             rest = &body[end..];
         }

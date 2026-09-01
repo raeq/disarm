@@ -790,7 +790,7 @@ def normalize_confusables(
     Args:
         text: Input string potentially containing homoglyphs.
         target_script: Script to normalize toward. Supported values:
-            ``"latin"`` (default, 2,273 mappings), ``"cyrillic"`` (1,349 mappings),
+            ``"latin"`` (default, 2,290 mappings), ``"cyrillic"`` (1,349 mappings),
             ``"arabic"`` (373 mappings) and ``"hebrew"`` (261 mappings).
 
             The two RTL targets exist because generation drops an equivalence

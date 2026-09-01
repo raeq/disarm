@@ -744,6 +744,35 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   reasons, but a table appearing in a surface that cannot reach it is categorical, and it
   is what regressed.
 
+- **The script table contradicted the UCD for 33 code points; 19 of them reported as
+  Latin (#819).** `detect_char_script` binary-searches a curated table of **block** ranges,
+  and a block is not a script. #774 fixed the holes *inside* blocks; this is the part it
+  did not reach — blocks that are mislabelled.
+
+  | | |
+  |---|---|
+  | `Ϣ` U+03E2, UCD `Script=Coptic` | reported **Greek** — 14 Coptic letters sit inside the Greek block |
+  | `ᴦ` U+1D26, UCD `Script=Greek` | reported **Latin** — Phonetic Extensions is mostly Latin and is not all Latin |
+  | `ᴫ` U+1D2B, UCD `Script=Cyrillic` | reported **Latin** |
+
+  The 19 that resolved to `Latin` are the ones that cost something: a token mixing one
+  with ASCII read as single-script, so the mixed-script rule could not fire.
+  `is_mixed_script("aᴦ")` was `False` and is now `True`. Contradictions: **0**.
+
+  **A gate now separates a scope from a defect, which nothing did before.** The table
+  *declining* to name a script is the curated 61-script scope working — 12,541 code points,
+  mostly CJK and other extension blocks — and costs a missed detection. The table naming a
+  **different** script is wrong under any curation policy.
+  `tests/fixtures/ucd_script_ranges.tsv` is the independent data that lets the two be told
+  apart; without it the only available comparison is the table against itself.
+
+  One exemption, checked rather than assumed: `Script=Inherited` means "take the script of
+  the preceding character", which a static range table cannot do. The table names the
+  block's script instead, which is what makes `is_mixed_script` useful on Arabic or
+  Cyrillic text carrying its own marks — an Arabic fatha inside Arabic is not evidence of
+  mixing. The gate asserts every code point using that exemption is actually a combining
+  mark, so it cannot cover a real disagreement.
+
 - **`canonicalize_strict` was not idempotent when a cross-script mark split a mark run
   (#862).** The zalgo cap ran at step 3 and `ConfusablesMarkFixedPoint` — which carries
   the #615 cross-script mark strip — at step 4. So a mark whose own script differs from

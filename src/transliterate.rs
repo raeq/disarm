@@ -1531,12 +1531,47 @@ const NEGATION_OVERLAYS: [char; 2] = ['\u{0338}', '\u{20D2}'];
 /// obfuscation, which `strip_obfuscation` exists to remove: `H̸a̸t̸e̸` must still come back
 /// as `Hate`. A blanket exemption for the code point would have preserved both, and the
 /// second is a moderation bypass.
+/// Whether `b` is a base a negation overlay can outlive.
+///
+/// `!is_alphanumeric()` alone was the original test, on the grounds that std exposes no
+/// general-category API and the 45 composed negations all sit on `Sm`/`So`. It also admits
+/// every base the pipeline *deletes*, and that is the bug: the overlay is kept because it
+/// has a base, the base is then stripped by a later step, and the orphan is removed on the
+/// next pass. `ml_normalize("\u{0}\u{338}")` gave `"\u{338}"` and then `""` — not
+/// idempotent, on 141 (base, overlay) pairs.
+///
+/// The failing bases do not share a category — `U+0000` (Cc), `U+0020` (Zs), `U+00A8` (Sk,
+/// which NFKC-decomposes to space + diaeresis), `U+2800` (So, removed as a blank render).
+/// What they share is that **none of them survives**. So the question is survival, not
+/// category:
+///
+/// - not a control, whitespace, or noncharacter — those are stripped outright;
+/// - not something that renders as nothing (#643's fillers, the Braille blank);
+/// - not a compatibility form whose NFKC image *starts with* a space, which is how
+///   `U+00A8` and `U+2017` lose their base without ever being stripped themselves.
+fn survives_as_a_negation_base(b: char) -> bool {
+    use unicode_normalization::UnicodeNormalization;
+    if b.is_control() || b.is_whitespace() || crate::invisibles::is_noncharacter(b) {
+        return false;
+    }
+    if crate::invisibles::is_invisible_filler(b)
+        || crate::invisibles::is_zero_width(b)
+        || crate::invisibles::is_default_ignorable_format(b)
+        || crate::invisibles::is_tag(b)
+    {
+        return false;
+    }
+    // NFKC first: the base the later steps see is the decomposed one.
+    matches!(b.nfkc().next(), Some(first) if !first.is_whitespace() && !first.is_control())
+}
+
 #[inline]
 pub(crate) fn is_negation_of(mark: char, base: Option<char>) -> bool {
-    // `!is_alphanumeric()` rather than a general-category test: std exposes no category
-    // API, and this separates the two cases exactly on the measured data. All 45 composed
-    // negations have a base in `Sm`/`So`; strikethrough obfuscation targets letters.
-    NEGATION_OVERLAYS.contains(&mark) && base.is_some_and(|b| !b.is_alphanumeric())
+    // The base decides, and it must both be a non-letter (strikethrough obfuscation
+    // targets letters, and `H\u{338}a\u{338}t\u{338}e\u{338}` must still come back as
+    // `Hate`) AND survive the pipeline — see `survives_as_a_negation_base`.
+    NEGATION_OVERLAYS.contains(&mark)
+        && base.is_some_and(|b| !b.is_alphanumeric() && survives_as_a_negation_base(b))
 }
 
 pub(crate) fn strip_accents(text: &str) -> String {

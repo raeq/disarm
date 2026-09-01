@@ -2375,7 +2375,15 @@ mod tests {
     /// That case is covered by `no_pipeline_truncates_further_on_a_second_pass` below,
     /// which asks the pipelines rather than the source and so sees every remover
     /// whatever its mode.
-    const MARK_RUN_SPLITTERS: &[&str] = &["Step::StripZeroWidth", "Step::StripInvisible"];
+    const MARK_RUN_SPLITTERS: &[&str] = &[
+        "Step::StripZeroWidth",
+        "Step::StripInvisible",
+        // #863 review. #121's rule names control stripping explicitly, and a C0 control
+        // between two marks splits a run for the count exactly as a zero-width does.
+        // Left out of the first draft because the zero-width case was the one in hand,
+        // which is how a gate ends up narrower than the rule it enforces.
+        "Step::StripControl",
+    ];
 
     /// Every mark-capping pipeline is idempotent on a run split by a removable
     /// character — whichever step does the removing (#862).
@@ -2397,6 +2405,10 @@ mod tests {
                 "COMBINING CYRILLIC MILLIONS SIGN — cross-script on a Latin base",
             ),
             ('\u{200d}', "ZERO WIDTH JOINER"),
+            (
+                '\u{0001}',
+                "START OF HEADING — a C0 control, which #121 names too",
+            ),
         ];
         for (splitter, what) in splitters {
             for run in 1..=4 {

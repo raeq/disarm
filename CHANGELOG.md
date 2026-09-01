@@ -684,10 +684,11 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   against four builders at every run length. It is weaker about *why* and stronger about
   *whether*, which is the pair #121 needs.
 
-  The key-stability corpus gained five rows placing a cross-script mark inside a mark run.
-  It expressed every character involved and never that arrangement, so this change's
-  fixture diff would have been 0 rows of 22,972 — the same blind spot #850 found one class
-  over. With the rows present the diff is **1 row**, in `canonicalize_strict` only.
+  The key-stability corpus gained six rows placing a cross-script mark inside a mark run,
+  taking it from 22,971 to 22,977. It expressed every character involved and never that
+  arrangement, so this change's fixture diff would have been 0 rows — the same blind spot
+  #850 found one class over. With the rows present the diff is **1 row**, in
+  `canonicalize_strict` only.
 
 - **The ruff version was pinned in two files and nothing checked they agree.**
   `pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each carry a

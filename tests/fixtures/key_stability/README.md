@@ -49,7 +49,7 @@ every character involved and never that arrangement, so a mark-capping step plac
 the invisible strip counted two short runs where there was one long one, and #843's
 fixture diff was **0 rows of 22,963**. With the rows present that change moves 4.
 
-**A cross-script mark between two mark runs (#862).** 5 rows place a mark whose own
+**A cross-script mark between two mark runs (#862).** 6 rows place a mark whose own
 script differs from its base *inside* a run of ordinary ones. It is a different class from
 the #850 rows above: the #615 cross-script strip removes it in strict mode only, so it
 splits the run for the count and is then deleted. The corpus expressed every character

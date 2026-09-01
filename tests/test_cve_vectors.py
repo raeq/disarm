@@ -2817,18 +2817,26 @@ class TestOneCall:
     def _score(self, fn) -> set[str]:
         return {cve for cve, (a, b) in self.RANKING_VECTORS.items() if self._clears(fn, a, b)}
 
-    def test_catalog_key_clears_the_ranking_but_not_the_matrix(self) -> None:
-        """The near-miss that looks like an answer until the matrix is included.
+    def test_catalog_key_now_clears_the_matrix_too(self) -> None:
+        """The near-miss that stopped being one (#805).
 
         It is the only single call carrying both a confusable step and
-        ``strip_accents``, so it clears the mark and the hyphen where the other
-        presets each drop one. It has no format-stripping step, so the Unicode
-        Tags block of CVE-2025-32711 goes straight through it — which is what
-        stops "use catalog_key" being the answer.
+        ``strip_accents``, so it always cleared the mark and the hyphen where the other
+        presets each drop one. What stopped "use catalog_key" being an answer was one
+        row: it had no format-stripping step, so the Unicode Tags block of
+        CVE-2025-32711 went straight through.
+
+        #805 gave the key builders the same invisible-class strip `canonicalize` uses —
+        because a noncharacter, a Tag character and a supplementary-plane PUA code point
+        all varied the key invisibly — and the Tags row closed as a consequence.
+
+        This test asserted the near-miss and is inverted rather than deleted, because the
+        near-miss is the interesting historical fact: for one row, the most useful entry
+        point on the page was not an answer.
         """
         assert self._score(catalog_key) == set(self.RANKING_VECTORS)
         missed = {cve for cve in NEUTRALIZABLE if not _handles(catalog_key, cve)}
-        assert missed == {"CVE-2025-32711"}, sorted(missed)
+        assert not missed, sorted(missed)
 
     def test_the_mirror_pair_is_closed(self) -> None:
         """Inverted by #614 and #615, which is why they had to land together.
@@ -2885,16 +2893,26 @@ class TestOneCall:
         written so that closing a gap would fail loudly rather than leave the published
         advice stale. It did exactly that, and this is the rewrite it asked for.
 
-        Two entry points now clear the whole matrix, and the pairing is not a
+        Three entry points now clear the whole matrix. The first two are not a
         coincidence: both carry a confusable fold *and* something that removes a
-        combining mark. Everything else is still short, so "clean unconditionally"
-        survives as advice — the reason has just moved from "nothing suffices" to
-        "only these two do, and they are the most destructive ones".
+        combining mark.
+
+        `catalog_key` joined them in #805, and it fired this assertion a second time —
+        which is what it is for. It had missed exactly one row, CVE-2025-32711, the
+        Unicode Tags block; giving the key builders the invisible-class strip closed it.
+        That one is worth stating in the guidance rather than only here, because it is a
+        **key builder**: a caller already computing catalog keys now gets the whole
+        matrix from a call they were making anyway, instead of needing a cleaning pass
+        beside it.
+
+        Everything else is still short, so "clean unconditionally" survives as advice.
         """
         everything = set(NEUTRALIZABLE) | set(self.RANKING_VECTORS)
         sufficient = {
             "canonicalize_strict": canonicalize_strict,
             "strip_obfuscation": strip_obfuscation,
+            # #805: the invisible-class strip closed its one remaining row.
+            "catalog_key": catalog_key,
         }
         for name, fn in sufficient.items():
             missed = {c for c in everything if not self._clears_any(fn, c)}

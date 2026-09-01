@@ -1170,7 +1170,7 @@ class CorruptionCost(SuiteBase):
             of=1.0,
             unit="ratio",
             higher_is_better=True,
-            detail=f"characters surviving `{worst_name}`",
+            detail=f"input characters present in `{worst_name}`'s output (multiset)",
         )
         add(
             outcome,
@@ -1179,7 +1179,23 @@ class CorruptionCost(SuiteBase):
             of=1.0,
             unit="ratio",
             higher_is_better=True,
-            detail=f"characters surviving `{gentle_name}`",
+            detail=f"input characters present in `{gentle_name}`'s output",
+        )
+        add(
+            outcome,
+            "length_ratio_worst_surface",
+            worst.length_ratio,
+            of=1.0,
+            unit="ratio",
+            detail="output length over input length — above 1 is expansion, not "
+            "retention, and a transliterator legitimately expands",
+        )
+        add(
+            outcome,
+            "max_expansion_worst_surface",
+            worst.expansion,
+            higher_is_better=False,
+            detail="largest single-input amplification (#768 found 18x with no cap)",
         )
         add(
             outcome,

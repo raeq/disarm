@@ -22,6 +22,7 @@ provide it, and every unmatched pair is reported as a skip with the reason.
 
 from __future__ import annotations
 
+import pathlib
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -106,6 +107,41 @@ def _version(dist: str) -> str:
         return "?"
 
 
+def _git_describe(repo: object) -> str:
+    """``+g<sha>`` for a build made from a working checkout, else empty.
+
+    ``disarm.__version__`` only moves at release, so every build between two
+    releases reports the older number. Nine commits of behaviour change can sit
+    behind one version string — and a leaderboard row reading `disarm@0.14.1`
+    while the extension carries post-0.14.1 code is exactly the mislabelling the
+    versioned-identity rule exists to prevent. A dirty tree is marked too,
+    because an uncommitted change is not any commit.
+    """
+    import subprocess
+
+    root = pathlib.Path(str(repo)).resolve().parent
+    try:
+        sha = subprocess.run(
+            ["git", "--no-optional-locks", "-C", str(root), "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "--no-optional-locks", "-C", str(root), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if not sha:
+        return ""
+    return f"+g{sha}" + (".dirty" if dirty else "")
+
+
 class DisarmSubject(_Base):
     """The library under review: every preset, profile, detector and key builder."""
 
@@ -113,9 +149,10 @@ class DisarmSubject(_Base):
         super().__init__()
         import disarm
 
+        released = getattr(disarm, "__version__", "?")
         self.info = SubjectInfo(
             name="disarm",
-            version=getattr(disarm, "__version__", "?"),
+            version=released + _git_describe(getattr(disarm, "__file__", "")),
             origin="raeq/disarm",
             url="https://github.com/raeq/disarm",
             role="Unicode security normalization, detection and key building",

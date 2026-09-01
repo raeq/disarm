@@ -108,6 +108,14 @@ class Item:
     scores: dict[str, float]  # subject -> oriented raw score
     discrimination: float = 0.0  # corrected item-total correlation
     z: dict[str, float] = field(default_factory=dict)
+    #: subject -> the measurement keys it actually contributed to this parcel.
+    member_keys: dict[str, set[str]] = field(default_factory=dict)
+    #: Every key any subject contributed to this parcel.
+    all_keys: set[str] = field(default_factory=set)
+
+    def complete(self, subject: str) -> bool:
+        """Did ``subject`` answer every measurement this benchmark reports?"""
+        return self.member_keys.get(subject, set()) == self.all_keys
 
 
 @dataclass
@@ -133,6 +141,8 @@ class BenchmarkStanding:
     z: float
     raw: float
     control: bool = False
+    #: Answered only part of this benchmark's measurement set.
+    partial: bool = False
 
 
 @dataclass
@@ -199,7 +209,9 @@ class Leaderboard:
         """
         out: dict[str, list[BenchmarkStanding]] = {}
         for item in self.items:
-            ordered = sorted(item.z, key=lambda s: item.z[s], reverse=True)
+            complete = [s for s in item.z if item.complete(s)]
+            incomplete = [s for s in item.z if not item.complete(s)]
+            ordered = sorted(complete, key=lambda s: item.z[s], reverse=True)
             standings: list[BenchmarkStanding] = []
             previous: float | None = None
             rank = 0
@@ -215,6 +227,19 @@ class Leaderboard:
                         z=score,
                         raw=item.scores[subject],
                         control=is_control(subject),
+                    )
+                )
+            # Listed after the ordering, never inside it: a subject that answered
+            # half a benchmark was asked an easier question, not a better one.
+            for subject in sorted(incomplete, key=lambda s: item.z[s], reverse=True):
+                standings.append(
+                    BenchmarkStanding(
+                        subject=subject,
+                        rank=0,
+                        z=item.z[subject],
+                        raw=item.scores[subject],
+                        control=is_control(subject),
+                        partial=True,
                     )
                 )
             out[item.suite] = standings
@@ -296,11 +321,18 @@ def parcel(items: list[Item]) -> list[Item]:
             for s in subjects
             if any(s in i.z for i in group)
         }
+        # Which measurements each subject actually answered. A parcel averaged
+        # over a subset scores a different question: `unidecode` outranked
+        # `disarm` on the word-joiner benchmark while recovering 24.3% to its
+        # 43.2%, because disarm's average also carried a detection score that
+        # `unidecode` has no surface to earn.
         out.append(
             Item(
                 suite=suite,
                 key=f"parcel({len(group)} measurement{'' if len(group) == 1 else 's'})",
                 scores=merged,
+                member_keys={s: {i.key for i in group if s in i.z} for s in merged},
+                all_keys={i.key for i in group},
             )
         )
     return out

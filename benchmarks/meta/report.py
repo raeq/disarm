@@ -198,8 +198,13 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
             "|---|---|---|---|",
         ]
         for place in standings:
-            name = f"`{place.subject}`" + (" *(control)*" if place.control else "")
-            lines.append(f"| {place.rank} | {name} | {place.z:+.2f} | {place.raw:.4g} |")
+            name = f"`{place.subject}`"
+            if place.control:
+                name += " *(control)*"
+            if place.partial:
+                name += " *(answered part of this benchmark — not ranked)*"
+            position = "—" if place.partial else str(place.rank)
+            lines.append(f"| {position} | {name} | {place.z:+.2f} | {place.raw:.4g} |")
         lines.append("")
     return lines
 
@@ -208,17 +213,17 @@ def _render_comparison(report: RunReport) -> list[str]:
     """Cross-subject columns, wherever more than one subject produced a number."""
     if len(report.subjects) < 2:
         return []
-    rows: list[tuple[str, str, dict[str, float]]] = []
+    rows: list[tuple[str, str, dict[str, float], bool | None]] = []
     for suite in dict.fromkeys(o.suite for o in report.ran):
         for key in dict.fromkeys(
             m.key for o in report.ran if o.suite == suite for m in o.measurements
         ):
             got = report.comparison(suite, key)
             if len(got) > 1:
-                rows.append((suite, key, got))
+                rows.append((suite, key, got, report.direction(suite, key)))
     if not rows:
         return []
-    subjects = [s for s in report.subjects if any(s in g for _, _, g in rows)]
+    subjects = [s for s in report.subjects if any(s in g for _, _, g, _d in rows)]
     lines = [
         "## Across subjects",
         "",
@@ -229,10 +234,30 @@ def _render_comparison(report: RunReport) -> list[str]:
         "| suite | measurement | " + " | ".join(f"`{s}`" for s in subjects) + " |",
         "|---|---|" + "---|" * len(subjects),
     ]
-    for suite, key, got in rows:
-        cells = ["—" if got.get(s) is None else _cell(got[s]) for s in subjects]
-        lines.append(f"| `{suite}` | `{key}` | " + " | ".join(cells) + " |")
-    lines.append("")
+    for suite, key, got, higher_is_better in rows:
+        # Without an arrow, a lower-is-better row reads backwards: `unreached`
+        # 34.1% beats 44.5%, and nothing on the row said so.
+        arrow = {True: " ↑", False: " ↓", None: ""}[higher_is_better]
+        best: float | None = None
+        if higher_is_better is not None and got:
+            values = [v for v in got.values() if v is not None]
+            best = max(values) if higher_is_better else min(values)
+        cells = []
+        for s in subjects:
+            value = got.get(s)
+            if value is None:
+                cells.append("—")
+            elif best is not None and value == best:
+                cells.append(f"**{_cell(value)}**")
+            else:
+                cells.append(_cell(value))
+        lines.append(f"| `{suite}` | `{key}`{arrow} | " + " | ".join(cells) + " |")
+    lines += [
+        "",
+        "↑ higher is better, ↓ lower is better, no arrow is a census with no "
+        "direction. The best value in each directed row is bold.",
+        "",
+    ]
     return lines
 
 

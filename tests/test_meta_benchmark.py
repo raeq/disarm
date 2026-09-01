@@ -907,3 +907,59 @@ def test_equal_scores_share_a_rank():
     board = leaderboard.build(outs, bootstrap=20)
     ranks = [st.rank for st in board.per_benchmark()["s0"]]
     assert ranks == [1, 1, 3], "a tie shares the rank and the next place is skipped"
+
+
+def test_a_lower_is_better_row_marks_the_lowest_value_as_best():
+    """Without direction, a lower-is-better row reads backwards.
+
+    `unreached` 34.1% beats 44.5%, and a bare percentage row said nothing about
+    which end wins.
+    """
+    from benchmarks.meta.protocol import Measurement, Method
+
+    def outcome(subject: str, value: float) -> Outcome:
+        return Outcome(
+            suite="s",
+            family=Family.NORMATIVE,
+            provenance=Provenance(
+                origin="o",
+                citation="c",
+                url="http://x",
+                version="1",
+                licence="l",
+                issues=(1,),
+            ),
+            method=Method(subject=subject, subject_version="1"),
+            population=10,
+            measurements=[Measurement(key="miss", value=value, of=1.0, higher_is_better=False)],
+        )
+
+    report = RunReport(
+        outcomes=[outcome("a", 0.20), outcome("b", 0.80)],
+        selected=1,
+        registered=1,
+        subjects=["a@1", "b@1"],
+    )
+    md = render_markdown(report)
+    assert "`miss` ↓" in md
+    assert "**20.0%**" in md, "the lowest value wins a lower-is-better row"
+    assert "**80.0%**" not in md
+
+
+def test_a_census_row_gets_no_direction_arrow():
+    from benchmarks.meta.protocol import Measurement, Method
+
+    out = Outcome(
+        suite="s",
+        family=Family.NORMATIVE,
+        provenance=Provenance(
+            origin="o", citation="c", url="http://x", version="1", licence="l", issues=(1,)
+        ),
+        method=Method(subject="a", subject_version="1"),
+        measurements=[Measurement(key="count", value=5, of=10, higher_is_better=None)],
+    )
+    other = Outcome(**{**out.__dict__})
+    other.method = Method(subject="b", subject_version="1")
+    report = RunReport(outcomes=[out, other], selected=1, registered=1, subjects=["a@1", "b@1"])
+    md = render_markdown(report)
+    assert "`count` ↑" not in md and "`count` ↓" not in md

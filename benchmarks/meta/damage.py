@@ -29,6 +29,7 @@ partially-degenerate one visible.
 from __future__ import annotations
 
 import unicodedata
+from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
@@ -42,6 +43,10 @@ class Damage:
     altered: int = 0
     chars_in: int = 0
     chars_out: int = 0
+    #: Input characters present in the output, counted as a multiset.
+    kept: int = 0
+    #: Largest output/input length ratio seen on any single input.
+    max_growth: float = 1.0
     distinct_in: int = 0
     distinct_out: int = 0
 
@@ -54,9 +59,36 @@ class Damage:
         return self.altered / self.inputs if self.inputs else 0.0
 
     @property
-    def retention(self) -> float:
-        """Characters surviving, as a fraction of characters in."""
+    def length_ratio(self) -> float:
+        """Output length over input length. **Can exceed 1.**
+
+        Not a retention figure, and named so it cannot be read as one. A
+        transliterator maps one code point to several ASCII characters — `¼` to
+        `1/4`, `→` to `->`, a CJK ideograph to a whole syllable — so a ratio
+        above 1 means expansion, not that more of the input survived.
+        """
         return self.chars_out / self.chars_in if self.chars_in else 1.0
+
+    @property
+    def retention(self) -> float:
+        """Fraction of the input's characters that appear in the output.
+
+        A true retention figure, bounded at 1: a multiset intersection, so
+        characters the tool *adds* cannot inflate it. `length_ratio` and this
+        disagree exactly when a tool substitutes rather than deletes.
+        """
+        return self.kept / self.chars_in if self.chars_in else 1.0
+
+    @property
+    def expansion(self) -> float:
+        """Worst single-input amplification seen.
+
+        Its own number because expansion is a finding in this codebase, not a
+        curiosity: #768 measured one code point growing 18x through every preset
+        with no ceiling, and #747 found presets *manufacturing* chat-template
+        delimiters that the input never contained.
+        """
+        return self.max_growth
 
     @property
     def injectivity(self) -> float:
@@ -107,6 +139,15 @@ def per_surface(
             outputs.append(got)
             d.chars_in += len(text)
             d.chars_out += len(got)
+            # Multiset intersection: characters the tool added cannot count as
+            # characters it retained.
+            remaining = Counter(got)
+            for ch in text:
+                if remaining[ch]:
+                    remaining[ch] -= 1
+                    d.kept += 1
+            if text:
+                d.max_growth = max(d.max_growth, len(got) / len(text))
             if not got and text:
                 d.destroyed += 1
             if got != text:

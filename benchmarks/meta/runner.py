@@ -60,6 +60,16 @@ class RunReport:
             out.setdefault(o.method.subject_key, []).append(o)
         return out
 
+    def direction(self, suite: str, key: str) -> bool | None:
+        """``True`` higher-is-better, ``False`` lower, ``None`` a census."""
+        for o in self.ran:
+            if o.suite != suite:
+                continue
+            m = o.measurement(key)
+            if m is not None:
+                return m.higher_is_better
+        return None
+
     def comparison(self, suite: str, key: str) -> dict[str, float]:
         """One measurement across every subject that produced it.
 

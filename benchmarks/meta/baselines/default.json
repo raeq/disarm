@@ -2,7 +2,7 @@
   "confusables_version": "17.0.0",
   "disarm_version": "0.14.1",
   "host_ucd": "16.0.0",
-  "recorded_utc": "2026-09-01T17:14:42+00:00",
+  "recorded_utc": "2026-09-01T17:31:18+00:00",
   "suites": {
     "anyascii@0.3.3::corruption-cost": {
       "external": true,
@@ -47,15 +47,25 @@
           "of": 1.0,
           "value": 0.297096842551388
         },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0258317063838553
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 3.1818181818181817
+        },
         "retention_gentlest_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 1.0258317063838553
+          "value": 0.9074551893965407
         },
         "retention_worst_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 1.0258317063838553
+          "value": 0.9074551893965407
         }
       },
       "population": 9438,
@@ -197,15 +207,25 @@
           "of": 1.0,
           "value": 0.4972451790633609
         },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.9564402672448469
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 1.3333333333333333
+        },
         "retention_gentlest_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9564402672448469
+          "value": 0.9510443544035554
         },
         "retention_worst_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9564402672448469
+          "value": 0.9510443544035554
         }
       },
       "population": 9438,
@@ -286,7 +306,7 @@
       "subject": "decancer",
       "subject_version": "0.4.1"
     },
-    "disarm@0.14.1::cldr-emoji-annotations": {
+    "disarm@0.14.1+g5ff5582.dirty::cldr-emoji-annotations": {
       "external": true,
       "measurements": {
         "annotated_codepoints": {
@@ -302,9 +322,9 @@
       },
       "population": 1765,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::confusable-bench-v1": {
+    "disarm@0.14.1+g5ff5582.dirty::confusable-bench-v1": {
       "external": true,
       "measurements": {
         "benign_controls": {
@@ -390,9 +410,9 @@
       },
       "population": 140,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::confusable-vision": {
+    "disarm@0.14.1+g5ff5582.dirty::confusable-vision": {
       "external": true,
       "measurements": {
         "collide_in_canonicalize": {
@@ -418,9 +438,9 @@
       },
       "population": 4174,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::corruption-cost": {
+    "disarm@0.14.1+g5ff5582.dirty::corruption-cost": {
       "external": true,
       "measurements": {
         "clean_ascii_altered_gentlest": {
@@ -473,6 +493,16 @@
           "of": 1.0,
           "value": 0.4955499046408137
         },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.9720982252352127
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 1.8888888888888888
+        },
         "retention_gentlest_surface": {
           "higher_is_better": true,
           "of": 1.0,
@@ -481,14 +511,14 @@
         "retention_worst_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9720982252352127
+          "value": 0.9074257571446791
         }
       },
       "population": 9438,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::cve-2021-42574-trojan-source": {
+    "disarm@0.14.1+g5ff5582.dirty::cve-2021-42574-trojan-source": {
       "external": true,
       "measurements": {
         "poc_files": {
@@ -509,9 +539,9 @@
       },
       "population": 311,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::cve-2026-17084-stringprep": {
+    "disarm@0.14.1+g5ff5582.dirty::cve-2026-17084-stringprep": {
       "external": true,
       "measurements": {
         "collides_catalog_key": {
@@ -547,9 +577,9 @@
       },
       "population": 711,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::icann-lgr-latin": {
+    "disarm@0.14.1+g5ff5582.dirty::icann-lgr-latin": {
       "external": true,
       "measurements": {
         "blocked_pairs": {
@@ -570,9 +600,9 @@
       },
       "population": 21,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::uax29-word-joiners": {
+    "disarm@0.14.1+g5ff5582.dirty::uax29-word-joiners": {
       "external": true,
       "measurements": {
         "detected": {
@@ -593,9 +623,9 @@
       },
       "population": 37,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::ucd-bidi-class": {
+    "disarm@0.14.1+g5ff5582.dirty::ucd-bidi-class": {
       "external": true,
       "measurements": {
         "conflict_detected": {
@@ -616,9 +646,9 @@
       },
       "population": 3018,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::ucd-scripts": {
+    "disarm@0.14.1+g5ff5582.dirty::ucd-scripts": {
       "external": true,
       "measurements": {
         "agree": {
@@ -649,9 +679,9 @@
       },
       "population": 126761,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::ucd-toNFKC-casefold": {
+    "disarm@0.14.1+g5ff5582.dirty::ucd-toNFKC-casefold": {
       "external": true,
       "measurements": {
         "default_ignorable": {
@@ -667,9 +697,9 @@
       },
       "population": 405,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::untrace-techniques": {
+    "disarm@0.14.1+g5ff5582.dirty::untrace-techniques": {
       "external": true,
       "measurements": {
         "altered_by_strip_obfuscation": {
@@ -695,9 +725,9 @@
       },
       "population": 64,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::uts39-augmented-scripts": {
+    "disarm@0.14.1+g5ff5582.dirty::uts39-augmented-scripts": {
       "external": true,
       "measurements": {
         "cases": {
@@ -733,9 +763,9 @@
       },
       "population": 6,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::uts39-confusables": {
+    "disarm@0.14.1+g5ff5582.dirty::uts39-confusables": {
       "external": true,
       "measurements": {
         "altered_but_not_onto_target": {
@@ -766,9 +796,9 @@
       },
       "population": 6565,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::uts39-equivalence-classes": {
+    "disarm@0.14.1+g5ff5582.dirty::uts39-equivalence-classes": {
       "external": true,
       "measurements": {
         "classes": {
@@ -789,9 +819,9 @@
       },
       "population": 3416,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::uts39-mixed-numbers": {
+    "disarm@0.14.1+g5ff5582.dirty::uts39-mixed-numbers": {
       "external": true,
       "measurements": {
         "ascii_mixed_flagged": {
@@ -812,9 +842,9 @@
       },
       "population": 75,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
-    "disarm@0.14.1::youtube-spam": {
+    "disarm@0.14.1+g5ff5582.dirty::youtube-spam": {
       "external": true,
       "measurements": {
         "misses_novel": {
@@ -845,7 +875,7 @@
       },
       "population": 1956,
       "subject": "disarm",
-      "subject_version": "0.14.1"
+      "subject_version": "0.14.1+g5ff5582.dirty"
     },
     "ftfy@6.3.1::corruption-cost": {
       "external": true,
@@ -890,15 +920,25 @@
           "of": 1.0,
           "value": 1.0
         },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0004414837779239
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 1.3636363636363635
+        },
         "retention_gentlest_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9999705677481384
+          "value": 0.9995879484739377
         },
         "retention_worst_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 1.0004414837779239
+          "value": 0.9984989551550589
         }
       },
       "population": 9438,
@@ -1020,6 +1060,16 @@
         "injectivity_worst_surface": {
           "higher_is_better": null,
           "of": 1.0,
+          "value": 1.0
+        },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
           "value": 1.0
         },
         "retention_gentlest_surface": {
@@ -1154,6 +1204,16 @@
           "of": 1.0,
           "value": 0.00010595465140919687
         },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 1.0
+        },
         "retention_gentlest_surface": {
           "higher_is_better": true,
           "of": 1.0,
@@ -1286,15 +1346,25 @@
           "of": 1.0,
           "value": 1.0
         },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0078191682445623
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 1.4545454545454546
+        },
         "retention_gentlest_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9999901892493794
+          "value": 0.9996762452295225
         },
         "retention_worst_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 1.0078191682445623
+          "value": 0.9947120054155344
         }
       },
       "population": 9438,
@@ -1418,15 +1488,25 @@
           "of": 1.0,
           "value": 1.0
         },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0078191682445623
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 1.4545454545454546
+        },
         "retention_gentlest_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9999901892493794
+          "value": 0.9996762452295225
         },
         "retention_worst_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 1.0078191682445623
+          "value": 0.9947120054155344
         }
       },
       "population": 9438,
@@ -1550,15 +1630,25 @@
           "of": 1.0,
           "value": 0.11909302818393727
         },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.9804962277663865
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 1.7272727272727273
+        },
         "retention_gentlest_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9804962277663865
+          "value": 0.9074551893965407
         },
         "retention_worst_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9804962277663865
+          "value": 0.9074551893965407
         }
       },
       "population": 9438,
@@ -1682,15 +1772,25 @@
           "of": 1.0,
           "value": 0.12227166772621319
         },
+        "length_ratio_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.9566168607560165
+        },
+        "max_expansion_worst_surface": {
+          "higher_is_better": false,
+          "of": null,
+          "value": 1.7272727272727273
+        },
         "retention_gentlest_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9566168607560165
+          "value": 0.9074551893965407
         },
         "retention_worst_surface": {
           "higher_is_better": true,
           "of": 1.0,
-          "value": 0.9566168607560165
+          "value": 0.9074551893965407
         }
       },
       "population": 9438,

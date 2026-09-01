@@ -23,8 +23,8 @@ licensing.
 from __future__ import annotations
 
 import gzip
-import re
 import importlib.util
+import re
 import sys
 from pathlib import Path
 

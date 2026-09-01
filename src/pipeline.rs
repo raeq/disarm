@@ -97,6 +97,15 @@ const STEP_ORDER: &[(PipelineSteps, &str)] = &[
     // reaching it one pass later.
     (PipelineSteps::STRIP_ACCENTS, "strip_accents"),
     (PipelineSteps::TRANSLITERATE, "transliterate"),
+    // #834: `NORMALIZE` runs first, so the fold here sees an NFKC image rather than the
+    // input as written, and 68 code points get a different answer than
+    // `normalize_confusables` gives standalone (8 for the Cyrillic target). That is the
+    // order this pipeline wants — 44 of the 68 are number forms and mathematical
+    // alphanumerics, where `\u{2474}` -> `(1)` beats `(l)` and a mathematical `m` -> `m`
+    // beats `rn` — but it is a choice, not a consequence, and it was undocumented while
+    // both orders shipped as public API. `docs/limitations.md` lists the shadowed rows
+    // rather than subtracting them, for the same reason it refuses to filter the coverage
+    // report.
     (PipelineSteps::CONFUSABLES, "confusables"),
     (PipelineSteps::FOLD_CASE, "fold_case"),
     (PipelineSteps::CONFUSABLES_POST, "confusables"),

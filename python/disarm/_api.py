@@ -1984,18 +1984,41 @@ def inspect_auto_lang(text: str) -> dict[str, str | list[str] | None]:
 
 
 def is_mixed_script(text: str) -> bool:
-    """True if text contains characters from more than one Unicode script.
+    """True if text contains characters from more than one Unicode **writing system**.
+
+    Resolves the UTS #39 §5.1 augmented script sets (#776), so a script pair that one
+    writing system uses is not "mixed":
+
+    ==================================  ============================
+    Han + Hiragana + Katakana           Japanese
+    Han + Hangul                        Korean
+    Han + Bopomofo                      Chinese
+    ==================================  ============================
+
+    So ``日本語テスト`` is one writing system, not three scripts. Anything without a
+    writing system in common is still mixed, including a CJK script beside a non-CJK
+    one — ``例えa`` is Japanese *and* Latin, and that is the case this check exists for.
+
+    Note:
+        `inspect_anomalies` is deliberately more permissive: it also exempts CJK beside
+        Latin, because it runs over prose where a Japanese sentence carrying a product
+        name in Latin is ordinary text. A *label* doing the same is not, which is why
+        this function and the hostname screen both flag it.
 
     Args:
         text: Input string.
 
     Returns:
-        True if multiple scripts detected (excluding Common/Inherited).
+        True if the text spans more than one writing system (Common/Inherited excluded).
 
     Examples:
         >>> is_mixed_script("Hello")
         False
         >>> is_mixed_script("Hello Мир")  # Latin + Cyrillic
+        True
+        >>> is_mixed_script("日本語テスト")  # Han + Katakana, one writing system
+        False
+        >>> is_mixed_script("ひら한")  # Japanese + Korean, no set in common
         True
     """
     return _is_mixed_script(text)

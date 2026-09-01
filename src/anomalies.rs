@@ -405,6 +405,38 @@ pub struct AnomalyReport {
     pub reason: Option<String>,
 }
 
+/// Shortest decode the *near-miss* sub-path will consider (#825).
+///
+/// The leet branch has two sub-paths: the decode is a lexicon word, or the decode is one
+/// edit from one. The first has a floor of three. The second carried `>= 6` from #393
+/// with no comment, and `leet_sub` maps `'1'` to `'i'` rather than `'l'` — correctly, but
+/// it means a `1`-for-`l` substitution never decodes *exactly* and can only ever be
+/// caught by the second path. Below the floor that path does not run, so the whole
+/// substitution class went unreported on short targets: `l0gin` was caught and `1ogin`
+/// was not, same brand, same five letters, one digit each.
+///
+/// Five rather than six or three, and the number is measured rather than chosen. Over 65
+/// ordinary digit-bearing tokens (`mp3`, `k8s`, `sha1`, `i18n`, `rtx4090`, …) against a
+/// 234k-word lexicon, and 8 single-substitution brand spoofs:
+///
+/// | floor | false positives / 65 | spoofs caught / 8 |
+/// |------:|---------------------:|------------------:|
+/// | 3     | 22                   | 8                 |
+/// | 4     | 12                   | 8                 |
+/// | **5** | **5**                | **7**             |
+/// | 6     | 4                    | 3                 |
+///
+/// Six caught three of eight. Five costs exactly one more false positive than six —
+/// `top10`, whose decode `topio` is one edit from a word — and more than doubles the
+/// spoofs caught. Four costs eight more to gain one (`1yft`, four letters), which is the
+/// wrong side of the knee.
+///
+/// The issue argued the floor should go entirely, on the grounds that the exact path
+/// already fires below it and produces false positives anyway. The measurement does not
+/// support that: the exact path contributes 4 of the 65, and removing the floor takes the
+/// total to 22. The floor is doing work — it was just set three positions too high.
+const NEAR_MISS_MIN_LEN: usize = 5;
+
 fn leet_sub(c: char) -> Option<char> {
     match c {
         '0' => Some('o'),
@@ -1176,7 +1208,7 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
                             if lexicon.contains(d.as_str()) {
                                 return Some(mk(AnomalyKind::Leet, d));
                             }
-                            if d.chars().count() >= 6 {
+                            if d.chars().count() >= NEAR_MISS_MIN_LEN {
                                 if let Some(near) = nearest(&d, lexicon) {
                                     return Some(mk(AnomalyKind::Leet, near));
                                 }

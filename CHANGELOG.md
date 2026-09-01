@@ -764,6 +764,7 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+<<<<<<< HEAD
 - **The detector and the neutralizer disagreed about what is invisible (#812, #813, #814).**
   Three surfaces, one channel.
 
@@ -798,6 +799,38 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   `strip_zero_width_chars` widens by those twelve on every surface. It is the function
   whose own description is *"strip zero-width and invisible characters"*, and a code point
   that renders as nothing belongs to that set by that description.
+=======
+- **The leet near-miss path was floored at six characters, so `1ogin` screened clean
+  while `l0gin` was caught (#825).** The branch has two sub-paths — the decode is a
+  lexicon word, or it is one edit from one — and the second carried an uncommented `>= 6`
+  from #393. `leet_sub` maps `'1'` to `'i'` rather than `'l'`, which is correct, but it
+  means a `1`-for-`l` substitution never decodes *exactly* and can only ever be caught by
+  the second path. Below the floor that path does not run, so the entire substitution
+  class went unreported on short targets: 0 of 5 five-letter brands against 7 of 7
+  six-letter ones.
+
+  Now five, and the number is measured. Over 65 ordinary digit-bearing tokens (`mp3`,
+  `k8s`, `sha1`, `i18n`, `rtx4090`, …) against a 234k-word lexicon, and 8 single-
+  substitution brand spoofs:
+
+  | floor | false positives / 65 | spoofs caught / 8 |
+  |------:|---------------------:|------------------:|
+  | 3     | 22                   | 8                 |
+  | 4     | 12                   | 8                 |
+  | **5** | **5**                | **7**             |
+  | 6     | 4                    | 3                 |
+
+  Five costs exactly one false positive more than six — `top10`, whose decode `topio` is
+  one edit from a word — and more than doubles the spoofs caught. The issue argued for
+  removing the floor entirely, on the grounds that the exact path fires below it anyway;
+  the measurement does not support that, and it is recorded on the constant so the next
+  reader does not have to redo it.
+
+  Two rows of #726's table moved with it. `gn0r3!` and `!dm1n` were asserted **clean**,
+  with the six-character floor given as the reason — a test freezing the floor's own
+  defect as correct. Both are one edit from the word they imitate, `ignore` and `admin`,
+  and both are now reported.
+>>>>>>> 744041a (fix: the leet near-miss floor was set three positions too high (#825))
 
 - **#803 fixed the presets and left `list_profiles()` behind (#853).** #757 measured
   `ml_normalize` turning `film’s` into `film right apostrophe s` — 326 code points carry

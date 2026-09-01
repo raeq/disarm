@@ -725,6 +725,30 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **#847 was silently reverted in full by #851, and `main` stayed green.** Every one of
+  its fourteen files: 140 lines of `build.rs`, `data/confusables_lgr.tsv`,
+  `tests/test_lgr_pairs.py`, the seventeen ICANN LGR rows in `confusables_to_latin.tsv`,
+  and the documented count in four places.
+
+  The consequence was behavioural. `canonicalize("ż") != canonicalize("ź")` again — the
+  same-script Latin homoglyph pairs #831 closed had reopened, and the four hostname rows
+  that issue names were live again.
+
+  **Nothing caught it**, and the reason is the point: the test file that covers this class
+  was deleted by the same commit, so it could not fail. The doc-count gates could not
+  fire either, because the counts were reverted along with the table they check. A
+  fixture diff of 40 rows was the only trace, and it was applied rather than questioned.
+
+  The cause was `git reset --soft origin/main` used to collapse a branch, at a moment when
+  `origin/main` had moved ahead of the working tree. The reset recorded the *difference*,
+  which included deleting files the branch had never seen.
+
+  Restored, and `tests/test_no_silent_revert.py` now checks the **artifacts** rather than
+  the behaviour: a bundled data file must exist and something must reference it, and
+  `build.rs` must still carry #831's two safety asserts. Behaviour tests travel with the
+  feature and vanish with it; a data file's absence is a build-level fact a deleted test
+  cannot hide.
+
 - **A preset linked every table any step could reach; `strip_format` cost 663 KB of wasm
   (#695).** `presets::run` walked a `&[Step]` and called `apply_into` with a *runtime*
   value, so the optimiser could not prove any of the eighteen match arms unreachable. A

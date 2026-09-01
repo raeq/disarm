@@ -1407,8 +1407,6 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
         // 2b. Strip the #413 smuggling / non-interchange classes (Tags with the flag
         //     carve-out, variation selectors, CGJ, noncharacters, PUA).
         Step::StripInvisible(COMPARISON_STRIP),
-        // 3. Cap combining marks at 2 per base character (zalgo)
-        Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
         // 4. Confusables → Latin (neutralizes cross-script homoglyphs), iterated with
         //    NFC to a fixed point (#434): a duplicate combining mark can survive one
         //    fold and recompose via NFC, re-creating a foldable composed char the next
@@ -1439,6 +1437,20 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
         //     Arabic shadda is indistinguishable from one acute accent, so no
         //     threshold removes the spoof and keeps `café`.
         Step::ConfusablesMarkFixedPoint("latin"),
+        // 4c. Cap combining marks (#862). Runs AFTER the fold above, not before it,
+        //     because `ConfusablesMarkFixedPoint` carries the #615 cross-script mark
+        //     strip — and that strip DELETES marks. A cross-script mark sitting between
+        //     two runs of ordinary ones splits them for the count, is then removed, and
+        //     the runs merge for the next pass, which truncates further:
+        //
+        //         canonicalize_strict("a" + U+0308*3 + U+0489 + U+0308)  ->  4 marks
+        //         canonicalize_strict(that)                              ->  3
+        //
+        //     This is the #121 lesson one step wider than #850 applied it. #850 moved
+        //     `sort_key`'s cap after the zero-width strip; the cross-script mark strip
+        //     is a third character-removing step, and the one that removes marks
+        //     specifically. Every removing step has to precede the count.
+        Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
         // 5. Fold whitespace (#433: fold-only — control/zero-width were already
         //    stripped explicitly above, before the zalgo cap, per #121). The line
         //    controls now fold to a space instead of being deleted, so `a\rb` → `a b`.
@@ -2302,17 +2314,25 @@ mod tests {
                 continue;
             }
             let before = &body[..z];
-            // `StripZeroWidth` specifically, not "any strip". `StripInvisible` handles
-            // the #413 smuggling classes and leaves U+200B alone, so accepting it here
-            // would have passed the exact pipeline this test was written for: `sort_key`
-            // ran `StripInvisible` at step 3, `Zalgo` at 4b and `StripZeroWidth` at 5.
-            // A gate that admits the bug it was written for is decoration (#850 review).
-            assert!(
-                before.contains("Step::StripZeroWidth"),
-                "{name}: Step::Zalgo runs before Step::StripZeroWidth; a stripped \
-                 zero-width can split a mark run, survive the count and then merge the \
-                 runs for the next pass (#121, #850)",
-            );
+            // EVERY step that can delete a character from between two marks, not just
+            // the one this gate was first written for. #850 checked `StripZeroWidth`
+            // alone, which is why it did not see #862: `ConfusablesMarkFixedPoint`
+            // carries the #615 cross-script mark strip, and that removes *marks* —
+            // so a cross-script mark split two runs, survived the count, was deleted,
+            // and the runs merged for the next pass.
+            //
+            // Naming them rather than accepting "any strip" is deliberate: an
+            // over-broad gate is what let #850's own bug through. Add to this list when
+            // a step gains the ability to remove a character, and the ordering is
+            // enforced for every pipeline at once.
+            for remover in MARK_RUN_SPLITTERS {
+                assert!(
+                    before.contains(remover),
+                    "{name}: Step::Zalgo runs before {remover}, which can delete a \
+                     character from between two mark runs — the runs then merge on the \
+                     next pass and the cap truncates further (#121, #850, #862)",
+                );
+            }
             checked += 1;
         }
         assert!(
@@ -2336,6 +2356,88 @@ mod tests {
             !once.contains('\u{301}'),
             "cap 0 must leave no marks: {once:?}"
         );
+    }
+
+    /// Every step that can delete a character sitting between two combining marks.
+    ///
+    /// A mark cap counts *runs*, so anything that removes a character between two of
+    /// them changes the count — and if the removal happens after the count, the runs
+    /// merge and the next pass truncates further. That is #121, and it has now been
+    /// found three times: `canonicalize` (#121), `sort_key` (#850) and
+    /// `canonicalize_strict` (#862). Each time the fix was to move the cap.
+    ///
+    /// `ConfusablesMarkFixedPoint` is deliberately NOT here, and that is the limit of
+    /// what a source-order gate can do: it carries the #615 cross-script mark strip, but
+    /// only in strict mode, and the step list does not say which mode a pipeline runs in
+    /// — `canonicalize` keeps `U+0489` where `canonicalize_strict` removes it. Reading
+    /// the list alone would fail `canonicalize` for a bug it does not have.
+    ///
+    /// That case is covered by `no_pipeline_truncates_further_on_a_second_pass` below,
+    /// which asks the pipelines rather than the source and so sees every remover
+    /// whatever its mode.
+    const MARK_RUN_SPLITTERS: &[&str] = &["Step::StripZeroWidth", "Step::StripInvisible"];
+
+    /// Every mark-capping pipeline is idempotent on a run split by a removable
+    /// character — whichever step does the removing (#862).
+    ///
+    /// The source-order gate above reads the step list, which cannot see a step that
+    /// removes marks only in one mode. This asks the functions instead: it is weaker
+    /// about *why* a pipeline fails and stronger about *whether* it does, and the two
+    /// together are what #121 needs.
+    ///
+    /// The inputs are runs of ordinary marks split by something a pipeline may delete —
+    /// a zero-width, a CGJ, and a cross-script mark, which is the one #850 missed.
+    #[test]
+    fn no_pipeline_truncates_further_on_a_second_pass() {
+        let splitters = [
+            ('\u{200b}', "ZERO WIDTH SPACE"),
+            ('\u{034f}', "COMBINING GRAPHEME JOINER"),
+            (
+                '\u{0489}',
+                "COMBINING CYRILLIC MILLIONS SIGN — cross-script on a Latin base",
+            ),
+            ('\u{200d}', "ZERO WIDTH JOINER"),
+        ];
+        for (splitter, what) in splitters {
+            for run in 1..=4 {
+                let input: String = std::iter::once('a')
+                    .chain(std::iter::repeat_n('\u{0308}', run))
+                    .chain(std::iter::once(splitter))
+                    .chain(std::iter::once('\u{0308}'))
+                    .collect();
+                for (name, once) in [
+                    (
+                        "canonicalize",
+                        canonicalize(&input).map(std::borrow::Cow::into_owned),
+                    ),
+                    (
+                        "canonicalize_strict",
+                        canonicalize_strict(&input).map(std::borrow::Cow::into_owned),
+                    ),
+                    (
+                        "sort_key",
+                        sort_key(&input, None).map(std::borrow::Cow::into_owned),
+                    ),
+                    (
+                        "search_key",
+                        search_key(&input, None).map(std::borrow::Cow::into_owned),
+                    ),
+                ] {
+                    let once = once.expect("pipeline should not error on this input");
+                    let twice = match name {
+                        "canonicalize" => canonicalize(&once).unwrap().into_owned(),
+                        "canonicalize_strict" => canonicalize_strict(&once).unwrap().into_owned(),
+                        "sort_key" => sort_key(&once, None).unwrap().into_owned(),
+                        _ => search_key(&once, None).unwrap().into_owned(),
+                    };
+                    assert_eq!(
+                        once, twice,
+                        "{name} is not idempotent on {run} marks split by {what}: \
+                         {input:?} -> {once:?} -> {twice:?}",
+                    );
+                }
+            }
+        }
     }
 
     /// Split the source into `(enclosing fn name, const STEPS body)` pairs.

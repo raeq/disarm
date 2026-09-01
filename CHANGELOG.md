@@ -661,6 +661,34 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **`canonicalize_strict` was not idempotent when a cross-script mark split a mark run
+  (#862).** The zalgo cap ran at step 3 and `ConfusablesMarkFixedPoint` — which carries
+  the #615 cross-script mark strip — at step 4. So a mark whose own script differs from
+  its base split a run for the *count*, was then deleted, and the runs merged for the
+  next pass:
+
+  ```text
+  canonicalize_strict("a" + U+0308*3 + U+0489 + U+0308)  ->  four marks
+  canonicalize_strict(that)                              ->  three
+  ```
+
+  This is #121's rule one step wider than #850 applied it. #850 moved `sort_key`'s cap
+  after the zero-width strip and gated on that step; the cross-script mark strip is a
+  **third** character-removing step, and the one that removes marks specifically.
+
+  Two gates now, because one shape cannot cover it. The source-order gate keeps checking
+  the step list, and deliberately does **not** list `ConfusablesMarkFixedPoint` — that
+  step removes marks only in strict mode, and the list cannot see a mode, so including it
+  would fail `canonicalize` for a bug it does not have. `no_pipeline_truncates_further_on_a_second_pass`
+  asks the pipelines instead: four splitters (zero-width, CGJ, ZWJ, cross-script mark)
+  against four builders at every run length. It is weaker about *why* and stronger about
+  *whether*, which is the pair #121 needs.
+
+  The key-stability corpus gained five rows placing a cross-script mark inside a mark run.
+  It expressed every character involved and never that arrangement, so this change's
+  fixture diff would have been 0 rows of 22,972 — the same blind spot #850 found one class
+  over. With the rows present the diff is **1 row**, in `canonicalize_strict` only.
+
 - **The ruff version was pinned in two files and nothing checked they agree.**
   `pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each carry a
   `ruff==` pin, and the pre-commit hooks are `language: system` — they run whichever

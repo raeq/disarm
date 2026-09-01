@@ -221,6 +221,22 @@ class TestTheFixtureCoversWhatItClaims:
             # truncates further. That is #850, and the corpus expressed every character
             # involved without ever putting them in that order — so the fixture diff for
             # #843 was 0 rows and the gate reported the regression as free.
+            # A *cross-script* mark inside a mark run, which is not the same class as an
+            # invisible inside one. The #615 strip removes it in strict mode only, so it
+            # splits a run for the count and is then deleted — #862's shape, and the
+            # corpus had every character involved without ever that arrangement, so the
+            # fixture diff for #862 was 0 rows.
+            "cross-script mark inside a mark run": sum(
+                1
+                for line in gen.read_corpus()
+                for i, c in enumerate(line)
+                if i > 0
+                and i + 1 < len(line)
+                and unicodedata.combining(line[i - 1])
+                and unicodedata.combining(line[i + 1])
+                and unicodedata.category(c) in {"Mn", "Me"}
+                and unicodedata.combining(c) == 0
+            ),
             "invisible inside a mark run": sum(
                 1
                 for line in gen.read_corpus()

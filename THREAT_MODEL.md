@@ -217,14 +217,14 @@ behavior, not a vulnerability:
   Against such a model the fold does not remove the association. It is many-to-one, so it
   *widens* the set of inputs that arrive at it. Measured on one five-letter trigger, using
   only single-position substitutions by code points that fold to the letter they replace:
-  **227 of 313 spellings reach the same `search_key`.** Every one of those is an input the
+  **226 of 312 spellings reach the same `search_key`.** Every one of those is an input the
   model now receives as the trigger and would not have without the normalizer.
 
   This is not a defect and there is no version of a normalizer that avoids it — collapsing
   variants onto one form is the entire job. It is a placement property, and it points the
   same way as the two entries below: what disarm hands on is *more* actionable than what
   it was given, so the association has to be dealt with at the model, not in front of it.
-  (`inspect_anomalies` does flag most of these — 97.8% of that 227 — so the detector is a
+  (`inspect_anomalies` does flag most of these — 97.8% of that 226 — so the detector is a
   partial mitigation. It is not a substitute for not having the association.)
 - **An identical transform on both sides of training (#756).** `THREAT_MODEL.md` states
   one placement invariant above: canonicalize first, then validate, authorize, and encode.

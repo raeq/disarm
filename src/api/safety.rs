@@ -29,9 +29,21 @@ pub enum TargetScript {
 }
 
 impl TargetScript {
-    /// The lowercase token the underlying tables are keyed by.
-    /// The canonical string token for this value (the inverse of its `FromStr`,
-    /// and what `Display` prints).
+    /// Every variant, in declaration order.
+    ///
+    /// `validate_target_script` matches on string literals rather than on this type, so
+    /// the two lists can drift — the doc comment there said `"latin"`/`"cyrillic"` for as
+    /// long as it took a review to notice (#792). Tests iterate this to hold them
+    /// together.
+    pub const ALL: &'static [TargetScript] = &[
+        TargetScript::Latin,
+        TargetScript::Cyrillic,
+        TargetScript::Arabic,
+        TargetScript::Hebrew,
+    ];
+
+    /// The canonical string token for this value: the lowercase token the underlying
+    /// tables are keyed by, the inverse of its `FromStr`, and what `Display` prints.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {

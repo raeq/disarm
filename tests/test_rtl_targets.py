@@ -100,6 +100,17 @@ def test_the_hostname_screen_is_unaffected() -> None:
     """
     suspicious, analysis = disarm.is_suspicious_hostname("مرحبا.com")
     assert not analysis.whole_script_confusable
+    assert analysis.label_whole_script_confusable == [False, False]
+
+    # The verdict itself, not only the flag behind it (#849 review asked for the binding
+    # rather than a discarded name). It *is* suspicious, and for reasons that have nothing
+    # to do with these tables: an Arabic label under a Latin TLD is a bidi conflict and a
+    # cross-label script change. Both predate #792. Asserting the verdict together with
+    # its reasons is what makes this a regression test — if adding a target ever starts
+    # driving the screen, `whole_script_confusable` moves and this fails.
+    assert suspicious
+    assert analysis.bidi_conflict
+    assert analysis.cross_label_script
 
 
 def test_an_unknown_target_is_still_rejected() -> None:

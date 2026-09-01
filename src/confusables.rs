@@ -76,7 +76,12 @@ fn lookup_with_policy(
 
 /// Validate the `target_script` parameter.
 ///
-/// Supported values: `"latin"`, `"cyrillic"`.
+/// Supported values: `"latin"`, `"cyrillic"`, `"arabic"`, `"hebrew"` (#792).
+///
+/// This list and the `match` below are the same list written twice, so they are checked
+/// against each other: `crate::api::TargetScript` enumerates the supported values, and
+/// `every_target_script_variant_validates` asserts each variant passes here and that
+/// nothing outside it does.
 fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
     match target_script {
         "latin" | "cyrillic" | "arabic" | "hebrew" => Ok(()),
@@ -363,6 +368,42 @@ pub(crate) fn is_confusable(text: &str, target_script: &str) -> Result<bool, cra
 
 #[cfg(test)]
 mod tests {
+    /// #849 review: the doc comment on `validate_target_script` still said
+    /// `"latin"`/`"cyrillic"` after #792 added two more. The list is written twice — once
+    /// as the `match` arms here, once as `TargetScript`'s variants — so hold them together
+    /// rather than relying on both being edited.
+    #[test]
+    fn every_target_script_variant_validates() {
+        for variant in crate::api::TargetScript::ALL {
+            assert!(
+                validate_target_script(variant.as_str()).is_ok(),
+                "TargetScript::{variant:?} ({:?}) is not accepted by validate_target_script",
+                variant.as_str(),
+            );
+        }
+    }
+
+    /// And the other direction: the validator must not accept a token the type cannot
+    /// express, or the enum stops being the definition of what is supported.
+    #[test]
+    fn the_validator_accepts_nothing_outside_the_enum() {
+        let known: Vec<&str> = crate::api::TargetScript::ALL
+            .iter()
+            .map(|v| v.as_str())
+            .collect();
+        for candidate in [
+            "greek", "klingon", "Latin", "LATIN", "", "arabic ", "hebrew\n", "han",
+        ] {
+            if known.contains(&candidate) {
+                continue;
+            }
+            assert!(
+                validate_target_script(candidate).is_err(),
+                "validate_target_script accepted {candidate:?}, which TargetScript cannot \
+                 express",
+            );
+        }
+    }
 
     /// Tier-3 exhaustive gate for the fold/compose idempotency invariant (#522).
     ///

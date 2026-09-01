@@ -396,13 +396,59 @@ impl Pipeline {
             // `Numeric`, which is what this did implicitly before the fold took a
             // policy. Exposing the choice on `TextPipeline` is a public parameter owed
             // across six bindings and is left to its own change (#646 §2).
-            confusables::normalize_confusables_into(
-                input,
-                "latin",
-                confusables::DigitPolicy::Numeric,
-                out,
-            )?;
-            Ok(true)
+            //
+            // Iterated to a fixed point against the pipeline's OWN form when it normalizes
+            // (#886) — `NFKC` for every profile that configures one, not the `NFC` the
+            // preset loop uses, which is why this is a sibling of
+            // `Step::ConfusablesNfcFixedPoint` rather than a call to it. `canonicalize`
+            // has done the equivalent since #416/#434; the profiles never did. TR39 skeletoning is not normalization-stable: it drops
+            // the diacritic on a *composed* accented letter (`\u{e7}` -> `c`) but never on
+            // the decomposed form, and it can *emit* a decomposed skeleton. A single pass
+            // therefore leaves output whose next pass differs — `normalize_web_input`
+            // was not a fixed point on 6,410 (base, mark) pairs.
+            //
+            // Only when a form is configured: with nothing to normalize toward there is
+            // no composed form to converge on, and a bare `confusables` pipeline stays
+            // the single pass a caller asked for.
+            let Some(ref form) = self.normalize_form else {
+                confusables::normalize_confusables_into(
+                    input,
+                    "latin",
+                    confusables::DigitPolicy::Numeric,
+                    out,
+                )?;
+                return Ok(true);
+            };
+            // Same shape as `presets::Step::ConfusablesNfcFixedPoint`, including the
+            // reused buffers: a fresh `String` per iteration showed up in the preset
+            // allocation gate and this runs on the same hot paths.
+            let mut cur = input.to_owned();
+            let mut conf = String::new();
+            let mut nxt = String::new();
+            let mut cur_is_normal = false;
+            for _ in 0..crate::presets::CONFUSABLE_FIXED_POINT_ITERS {
+                confusables::normalize_confusables_into(
+                    &cur,
+                    "latin",
+                    confusables::DigitPolicy::Numeric,
+                    &mut conf,
+                )?;
+                if conf == cur && cur_is_normal {
+                    break;
+                }
+                normalize::normalize_into(&conf, form, &mut nxt)?;
+                if nxt == cur {
+                    break;
+                }
+                std::mem::swap(&mut cur, &mut nxt);
+                cur_is_normal = true;
+            }
+            if cur == input {
+                Ok(false)
+            } else {
+                *out = cur;
+                Ok(true)
+            }
         } else if step == PipelineSteps::FOLD_CASE || step == PipelineSteps::FOLD_CASE_POST {
             case_fold::fold_case_into(input, out);
             Ok(true)

@@ -19,6 +19,8 @@ included `U+ABB7`.
 
 from __future__ import annotations
 
+import functools
+
 import pytest
 
 import disarm
@@ -87,3 +89,74 @@ def test_the_second_case_fold_is_only_added_where_it_can_do_something() -> None:
         "confusables",
         "fold_case",
     ]
+
+
+# ---------------------------------------------------------------------------
+# #886 — the sweep above walks single code points, and this class needs a pair
+# ---------------------------------------------------------------------------
+
+#: Combining marks that compose with a Latin base under NFC.
+MARKS = [0x300, 0x301, 0x302, 0x303, 0x304, 0x306, 0x307, 0x308, 0x30A, 0x30C, 0x327, 0x328]
+
+
+@functools.cache
+def _bases_that_can_move_under_a_fold() -> tuple[int, ...]:
+    """Bases whose fold, or whose own decomposition, can leave a mark uncomposed.
+
+    The same derivation `tests/test_repeat_created_by_the_fold.py` uses, and for the same
+    reason: sweeping every code point against every mark costs seconds per profile and
+    finds nothing the derived population misses.
+    """
+    at_risk = []
+    for cp in range(0x110000):
+        char = chr(cp)
+        if any(disarm.normalize(char, form="NFD")[1:]):
+            at_risk.append(cp)
+            continue
+        folded = disarm.normalize_confusables(char)
+        if folded != char:
+            at_risk.append(cp)
+    return tuple(at_risk)
+
+
+@pytest.mark.parametrize("name", disarm.list_profiles())
+def test_the_profile_is_a_fixed_point_over_base_and_mark_pairs(name: str) -> None:
+    """`normalize_web_input` was not, on 6,410 pairs (#886).
+
+    The single-code-point sweep above passed throughout, because the defect needs a base
+    *and* a mark: the confusable fold emits a decomposed base, and nothing composed it
+    until the next call. That is the same blind spot that let #835's regression reach
+    `main` — closed for the key builders in #881, and this closes it for the profiles.
+    """
+    pipeline = disarm.get_pipeline(name)
+    moved = []
+    for cp in _bases_that_can_move_under_a_fold():
+        for mark in MARKS:
+            once = pipeline(chr(cp) + chr(mark))
+            if pipeline(once) != once:
+                moved.append((hex(cp), hex(mark), once, pipeline(once)))
+    assert not moved, f"{name}: {len(moved)} pairs move on a second pass; {moved[:5]}"
+
+
+def test_the_reported_pairs_are_stable() -> None:
+    """The three worked cases from the issue, named so a regression names a character."""
+    pipeline = disarm.get_pipeline("normalize_web_input")
+    for base, mark in [(0x007C, 0x0301), (0x0430, 0x0301), (0x00E7, 0x0327)]:
+        once = pipeline(chr(base) + chr(mark))
+        assert pipeline(once) == once, f"U+{base:04X}+U+{mark:04X} moved again: {once!r}"
+    # And the shape that motivated it: a spoofed `cafe` built from Cyrillic e.
+    spoof = "caf" + chr(0x0435) + chr(0x0301)
+    once = pipeline(spoof)
+    assert pipeline(once) == once
+    assert once == "café"
+
+
+def test_a_pipeline_without_normalization_still_folds_once() -> None:
+    """The fixed point is gated on a form being configured.
+
+    With nothing to normalize toward there is no composed form to converge on, and a
+    caller who asked for `confusables` alone gets the single pass they asked for.
+    """
+    single = disarm.TextPipeline(confusables=True)
+    assert [n for n, _ in single.steps] == ["confusables"]
+    assert single("\u0430pple") == "apple"

@@ -27,7 +27,9 @@
 # pair. `build.rs` asserts that any non-ASCII value here is Latin-script and is not itself
 # a source, which is what keeps the fold one step and the fixed-point loop untouched.
 #
-# HOW THE TARGET IS CHOSEN. The 19 qualifying pairs form 16 equivalence classes over 35
+# HOW THE TARGET IS CHOSEN. 23 pairs qualify by the criterion above; 19 of them can be
+# expressed by a single code point and are the ones in this file. Those 19 form 16
+# equivalence classes over 35
 # code points, because several share a member: `ỉ` appears in three pairs and `ỷ` in two,
 # so a pairwise "fold to the lower code point" rule is not a function. Per class:
 #   * if some member already folds to a single ASCII character, that is the target;

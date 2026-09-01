@@ -357,9 +357,11 @@ should have to take on trust.
 The table also carries one source that is not TR39 at all: **ICANN's Latin second-level
 LGR** (#831). Those are *same-script* Latin pairs — `ź`/`ż`, `ò`/`ỏ`, `ã`/`ā` — which a
 cross-script table cannot reach, and most of the code points are not TR39 sources in the
-first place. Only the 23 pairs the Latin Generation Panel commented "Glyphs either
-homoglyph or nearly identical" are imported; the 23 it blocks for Common-LGR transitivity
-(`u`/`ü`, `a`/`á`) are excluded, because folding those would strip legitimate diacritics
+first place. The admission criterion is the Latin Generation Panel's own comment "Glyphs
+either homoglyph or nearly identical" — a visual judgement by the people who wrote the
+registry, rather than a count this page has to keep in step with the data. Pairs it blocks
+only for Common-LGR transitivity (`u`/`ü`, `a`/`á`) are excluded, because folding those
+would strip legitimate diacritics
 from every language that uses them.
 
 These are the only rows whose **target is not ASCII**, and that is forced rather than

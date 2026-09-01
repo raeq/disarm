@@ -523,7 +523,12 @@ def load_lgr(path: Path) -> dict[int, str]:
                 f"{path.name}:{lineno}: malformed LGR row (need >=3 tab-separated "
                 f"columns: source_hex, target, target_rule): {raw!r}"
             )
-        source_hex, target, rule = parts[0].strip(), parts[1], parts[2].strip()
+        # Every column stripped, including the target. `load_supplement` and
+        # `load_attested` strip theirs a line later; this one did not, so a trailing
+        # space in the TSV would have become part of the fold target (#870 review).
+        # Unlike `confusables_to_latin.tsv`, where a trailing space can be the whole
+        # value (`U+30FB` folds to one), an LGR target is always a Latin letter.
+        source_hex, target, rule = parts[0].strip(), parts[1].strip(), parts[2].strip()
         if rule not in valid_rules:
             raise ValueError(
                 f"{path.name}:{lineno}: target_rule must be one of {sorted(valid_rules)}, "

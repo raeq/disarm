@@ -1330,6 +1330,46 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **The security and stability pages stated properties of a neighbour of the thing they
+  described (#725, #733, #735, #744).**
+
+  **CVE-2021-42574's subject is a source file, and the matrix answered for a line
+  (#744).** Both Trojan Source vectors in the test corpus were single lines, so nothing
+  distinguished "removed the bidi control" from "returned something that is still a
+  program". Measured on the published four-line proof-of-concept: `strip_bidi` and
+  `code_context` return a source file; `strip_format`, `canonicalize` and
+  `strip_obfuscation` remove the control and return the file **as one line**, because
+  each ends in `collapse_whitespace`. The matrix row now lists the two that leave you
+  with source, and `TROJAN_PY_FILE` is in the corpus so the distinction is tested rather
+  than described.
+
+  **`catalog_key`'s homoglyph warning exempted Cyrillic and Greek, which are not exempt
+  (#735).** It said their lookalikes "do collide with their Latin spellings". They do
+  not: a romanization is a *sound*, not a shape. `раураl` keys as `raural`, not `paypal`;
+  `аррlе` keys as `arrle`. Measured over the letter blocks, **29 of 96** Cyrillic and
+  **31 of 129** Greek letters key off their visual target. The pairs that do line up
+  (`а`/`a`, `е`/`e`, `о`/`o`) line up because sound and shape happen to agree for those
+  letters.
+
+  **Five surfaces rewrite three printable ASCII characters, recorded only in a Rust
+  comment (#725).** `|`→`l`, `"`→`''`, `` ` ``→`'` — the three printable ASCII characters
+  that are TR39 confusable *sources*. `canonicalize`, `canonicalize_strict`,
+  `strip_obfuscation`, `normalize_confusables` and `catalog_key` apply them;
+  `search_key`, `sort_key` and `ml_normalize` do not, as a side effect of consuming the
+  characters earlier. Now a section of `docs/limitations.md`, with a gate asserting these
+  are the *only* printable ASCII any surface changes.
+
+  **The key-stability contract covered three of the eight functions its own gate watches
+  (#733).** `tests/test_key_stability.py` has recomputed eight since #644; the contract
+  named `search_key`, `catalog_key` and `sort_key`. The other five — `canonicalize`,
+  `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`, `fold_case` — were
+  watched, uncovered, and silent in their docstrings. `canonicalize` is the one that
+  matters: it is the comparison entry point, a value you use to decide whether two
+  strings are the same is a value you store, and it has moved twice this release (#805,
+  #842). The contract now extends to all eight, which records a promise the gate was
+  already enforcing rather than making a new one. `tests/test_security_and_stability_docs.py`
+  derives the list from the generator, so a ninth function is covered the day it is added.
+
 - **A doc block documented the block below it, not the member it was written for (#851
   review, #778).** In TypeScript, Java and Kotlin only the *last* doc comment before a
   declaration binds, so inserting a member between an existing block and its declaration

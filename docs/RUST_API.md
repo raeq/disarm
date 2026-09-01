@@ -105,6 +105,32 @@ That is the contract, and it is what a consumer can plan against:
 
 The same rule holds in every binding, because they all wrap one core.
 
+### The five the gate watches and the contract did not cover (#733)
+
+`tests/test_key_stability.py` recomputes **eight** functions against a stored fixture. The
+paragraph above names **three**. The other five were watched and uncovered, and their
+docstrings said nothing either way — so a reader asking "may I store this?" got no answer
+for the entry point most likely to be stored.
+
+| function | watched by the gate | covered above | inline note |
+| --- | --- | --- | --- |
+| `search_key`, `catalog_key`, `sort_key` | yes | yes | yes |
+| `canonicalize` | yes | **now yes** | **now yes** |
+| `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`, `fold_case` | yes | **now yes** | **now yes** |
+
+**The contract extends to all eight.** A patch release never changes any of their output;
+a minor release may. That was already the *behaviour* the gate enforced — the fixture has
+watched eight since #644 and a moved row fails CI whichever function moved it — so this
+records a promise already being kept rather than making a new one.
+
+`canonicalize` is called out because it is the comparison entry point. It is what the
+guide pages hand untrusted text to, it is what a caller reaches for to decide whether two
+strings are "the same", and a value you use to decide that is a value you store. It has
+moved twice in this release alone — noncharacters (#805) and the combining-mark class
+rule (#842) — both listed under *Upgrade notes*, which is exactly the mechanism this
+contract exists to point at.
+
+
 ### What a key does *not* promise: it is not closed under concatenation (#787)
 
 The contract above is about time — a key you stored last year. There is a second thing a

@@ -788,6 +788,13 @@ def normalize_confusables(
         `canonicalize` or `strip_obfuscation` when the input is
         untrusted rather than merely mixed-script.
 
+    Note:
+        **Stability.** A patch upgrade never changes this function's output; a
+        minor upgrade may, and is a possible reindex event (#644, #733). Read the
+        *Upgrade notes* of any minor release before deploying it against stored
+        values. The contract, and what has moved so far, is in ``docs/RUST_API.md``
+        under *Key stability*.
+
     Args:
         text: Input string potentially containing homoglyphs.
         target_script: Script to normalize toward. Supported values:
@@ -1003,6 +1010,13 @@ def fold_case(text: str) -> str:
     Equivalent to ``str.casefold()`` but executed in Rust via a
     compile-time PHF (perfect hash function) table.  Pure-ASCII strings
     take a branchless fast path with no table lookup.
+
+    Note:
+        **Stability.** A patch upgrade never changes this function's output; a
+        minor upgrade may, and is a possible reindex event (#644, #733). Read the
+        *Upgrade notes* of any minor release before deploying it against stored
+        values. The contract, and what has moved so far, is in ``docs/RUST_API.md``
+        under *Key stability*.
 
     Args:
         text: Input string.

@@ -10,9 +10,9 @@ it. Both are on Maven Central.
 
     ```kotlin
     dependencies {
-        implementation("dev.disarm:disarm:0.14.1")
+        implementation("dev.disarm:disarm:0.15.0")
         // optional: String extensions and default arguments
-        implementation("dev.disarm:disarm-kotlin:0.14.1")
+        implementation("dev.disarm:disarm-kotlin:0.15.0")
     }
     ```
 
@@ -20,8 +20,8 @@ it. Both are on Maven Central.
 
     ```groovy
     dependencies {
-        implementation 'dev.disarm:disarm:0.14.1'
-        implementation 'dev.disarm:disarm-kotlin:0.14.1'
+        implementation 'dev.disarm:disarm:0.15.0'
+        implementation 'dev.disarm:disarm-kotlin:0.15.0'
     }
     ```
 
@@ -31,7 +31,7 @@ it. Both are on Maven Central.
     <dependency>
       <groupId>dev.disarm</groupId>
       <artifactId>disarm</artifactId>
-      <version>0.14.1</version>
+      <version>0.15.0</version>
     </dependency>
     ```
 

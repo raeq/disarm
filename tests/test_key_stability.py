@@ -345,6 +345,20 @@ class TestTheGateCanFail:
         assert inputs == gen.read_corpus()
 
 
+def _fixture_rows(text: str) -> str:
+    """The fixture's data rows: everything after the `# columns:` header line.
+
+    Split on the delimiter rather than filtering `#`-leading lines (#897 review). A TSV
+    row begins with the escaped input, so a corpus entry starting with `#` would have been
+    dropped from the digest by a prefix filter — silently placing it outside the one gate
+    that notices a key moving. No such row exists today; the point is that adding one must
+    not quietly shrink what is covered.
+    """
+    _, sep, rest = text.partition("# columns:")
+    assert sep, "the fixture header has no `# columns:` line"
+    return rest.split("\n", 1)[1]
+
+
 def _header_lines() -> list[str]:
     with gzip.open(GOLDEN, "rt", encoding="utf-8") as handle:
         return [line for line in handle.read().split("\n") if line.startswith("#")]
@@ -401,13 +415,46 @@ class TestTheSchemaCounterCannotGoStale:
             (ROOT / "src" / "api" / "metadata.rs").read_text(encoding="utf-8"),
         )
         assert recorded is not None, "KEY_FIXTURE_SHA256 is missing from src/api/metadata.rs"
-        with gzip.open(GOLDEN, "rb") as handle:
-            actual = hashlib.sha256(handle.read()).hexdigest()
+        # Rows only: the header stamps `disarm.__version__`, so hashing the whole file
+        # moved the digest on every version bump even when no key moved — which is noise
+        # in the one signal this gate carries.
+        with gzip.open(GOLDEN, "rt", encoding="utf-8") as handle:
+            body = _fixture_rows(handle.read())
+        actual = hashlib.sha256(body.encode("utf-8")).hexdigest()
         assert actual == recorded.group(1), (
             f"the fixture's digest is {actual}, but src/api/metadata.rs records "
             f"{recorded.group(1)}. The fixture was regenerated: decide whether the key "
             "movement is intended, bump KEY_SCHEMA_VERSION on the line above the digest "
             "if it is, and update the digest in the same edit."
+        )
+
+    def test_a_data_row_starting_with_a_hash_is_inside_the_digest(self) -> None:
+        """The hole #897's review found, before it could open.
+
+        A TSV row begins with the *escaped input*, so a corpus entry starting with `#`
+        looks exactly like a header line. The first version of this gate filtered
+        `#`-leading lines, which would have placed such a row outside the digest —
+        silently, and in the one gate that exists to notice a key moving.
+
+        No corpus row starts with `#` today, so the current digest is correct either way.
+        This asserts the *mechanism*: split on the `# columns:` delimiter, and a row that
+        happens to look like a comment is still covered.
+        """
+        header = (
+            "# disarm golden key fixture\n"
+            "# generated against disarm 9.9.9\n"
+            "# columns: input\tsearch_key\n"
+        )
+        ordinary = header + "a\tb\nc\td\n"
+        with_hash_row = header + "a\tb\n#hash\tkey\nc\td\n"
+
+        assert _fixture_rows(ordinary) == "a\tb\nc\td\n"
+        rows = _fixture_rows(with_hash_row)
+        assert "#hash\tkey" in rows, "a data row starting with `#` fell outside the digest"
+        # And the two must hash differently, or adding that row would not move the digest.
+        assert (
+            hashlib.sha256(rows.encode("utf-8")).hexdigest()
+            != hashlib.sha256(_fixture_rows(ordinary).encode("utf-8")).hexdigest()
         )
 
     def test_the_constant_is_a_counter_not_a_version_string(self) -> None:

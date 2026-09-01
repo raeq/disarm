@@ -140,8 +140,16 @@ binding **glue** crates (`bindings/node/Cargo.toml`, `bindings/ruby/ext/disarm/C
 `bindings/java/rust/Cargo.toml`, `bindings/cabi/Cargo.toml`) stay pinned at
 `version = "0.0.0"`; each one's `disarm_core = { package = "disarm", version = "0.<minor>" }`
 dependency uses a **minor-only** requirement, so a patch never touches them — but a **minor
-bumps all four pins** in lockstep with the core (leave them at the *old* minor until the new
-core is published, or the pre-publish build can't resolve the dependency).
+bumps all four pins in the release PR itself**, in lockstep with the core.
+
+An earlier version of this paragraph said to leave them at the *old* minor until the new
+core was published. That is wrong, and `test_glue_pin_tracks_the_minor` fails a release PR
+that follows it. The #374 drift gate injects `[patch.crates-io] disarm = { path = "../.." }`
+on non-release CI — including the release PR — so a stale `^0.<old>` pin cannot resolve
+against a local core that is already `0.<new>`, and every binding job breaks. At publish
+time the binding publishers are gated on the core (`needs:`, #500), so `0.<new>` is on
+crates.io before they build and there is no window where the new pin is unresolvable.
+Confirmed on #541 (node `0.11`→`0.12`) and #557 (all four `0.12`→`0.13`), both merged green.
 
 Two more that the eight do not cover, because they are documentation rather than
 metadata: the Gradle and Maven install snippets in `docs/java/getting-started.md` and

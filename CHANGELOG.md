@@ -16,6 +16,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-09-01
+
 ### Upgrade notes
 
 **Stored `strip_obfuscation` output moves for 90 Cyrillic rows (#723).** A fold target
@@ -837,6 +839,23 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   an interpreter whose Unicode version predates the data.
 
 ### Fixed
+
+- **The key-fixture digest moved on every version bump (#887 follow-up).** `#887` added
+  `KEY_FIXTURE_SHA256` so that regenerating the fixture without bumping
+  `KEY_SCHEMA_VERSION` fails a gate. It hashed the whole file — and the fixture header
+  stamps `disarm.__version__`, so the digest moved on any release whether or not a key
+  did. Caught preparing this one: the only difference was
+  `# generated against disarm 0.14.1` becoming `0.15.0`, with all 22,977 rows
+  byte-identical.
+
+  Now hashed over the rows, header excluded, so the digest carries one meaning: a key
+  moved. The 0.15.0 regeneration is the proof — the stamp changed and the digest did not.
+
+  The rows are found by splitting on the `# columns:` delimiter rather than by filtering
+  `#`-leading lines. A TSV row begins with the *escaped input*, so a corpus entry starting
+  with `#` looks exactly like a header line and a prefix filter would have placed it
+  outside the digest — silently, in the one gate that exists to notice a key moving. No
+  such row exists today, which is why this is a mechanism test rather than a fix.
 
 - **`normalize_web_input` was not a fixed point on 6,410 (base, mark) pairs (#886).**
   Its steps are `normalize` → `confusables` → strips, and nothing normalized after the

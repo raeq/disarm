@@ -36,7 +36,7 @@ crate-type = ["cdylib"]
 # so the binding is self-contained and per-platform cross-builds (which mount only
 # this dir) can fetch it. Imported as `disarm_core` (package name `disarm` clashes
 # with this crate's shared-object name).
-disarm_core = { package = "disarm", version = "0.14", default-features = false }
+disarm_core = { package = "disarm", version = "0.15", default-features = false }
 # Ergonomic, safe JNI over jni-sys. 0.22 is the current stable line and supports
 # the Java 21 floor (and forward). Its `#[jni_mangle]` attribute and `with_env`
 # wrapper keep the FFI export/marshalling unsafe inside the crate's macros, so this

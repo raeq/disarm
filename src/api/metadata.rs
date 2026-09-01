@@ -172,13 +172,21 @@ pub const KEY_SCHEMA_VERSION: u32 = 3;
 /// the line above. Forgetting the bump becomes a deliberate act instead of an invisible
 /// one.
 ///
-/// Hashed decompressed rather than as stored. The generator already writes with
-/// `mtime=0`, so the timestamp is not the problem — but DEFLATE output still varies
-/// across zlib builds and compression-level changes, and a digest that moves when
-/// somebody's toolchain moves is a gate that cries wolf. The decompressed content is the
-/// semantic anchor: it changes when, and only when, a key moved.
+/// Hashed over the fixture's **rows only**, decompressed, with the comment header
+/// excluded.
+///
+/// Decompressed because the generator already writes with `mtime=0` — the timestamp is
+/// not the problem — but DEFLATE output still varies across zlib builds and compression
+/// levels, and a digest that moves when somebody's toolchain moves is a gate that cries
+/// wolf.
+///
+/// Rows only because the header stamps `disarm.__version__`, so hashing the whole file
+/// made the digest move on **every version bump** even when no key moved — noise in
+/// exactly the signal this exists to carry. Caught preparing 0.15.0, where the sole
+/// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
+/// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "fd718135d678e6e5f257d69a80a3e5dcac1f1e70696d92194018baa5c9f36784";
+    "ab034956526ef58babba2a2612cbe6a4f073564ebca3e94a40dbf6f39bf6381c";
 
 /// The key-schema counter, as a function (#645).
 ///

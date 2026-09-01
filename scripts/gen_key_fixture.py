@@ -175,8 +175,13 @@ def main() -> int:
     # #887: the digest is the anchor this script does NOT author into the fixture, so it
     # is the one thing that catches a regeneration without a bump. Printing it here is
     # the difference between a two-line edit and a failing test the author has to decode.
-    with gzip.open(GOLDEN, "rb") as handle:
-        digest = hashlib.sha256(handle.read()).hexdigest()
+    # Rows only, split on the `# columns:` delimiter rather than filtering `#`-leading
+    # lines: a TSV row starts with the escaped input, so a corpus entry beginning with `#`
+    # would otherwise fall outside the digest (#897 review). The header also carries the
+    # version stamp, which must not move the digest.
+    with gzip.open(GOLDEN, "rt", encoding="utf-8") as handle:
+        rows_only = handle.read().partition("# columns:")[2].split("\n", 1)[1]
+    digest = hashlib.sha256(rows_only.encode("utf-8")).hexdigest()
     print()
     print("Then update BOTH lines in src/api/metadata.rs:")
     print("  - bump KEY_SCHEMA_VERSION if this release moved stored keys")

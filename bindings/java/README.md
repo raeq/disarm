@@ -12,8 +12,8 @@ Two artifacts on Maven Central, versioned in lockstep with the core:
 
 ```kotlin
 dependencies {
-    implementation("dev.disarm:disarm:0.14.1")
-    implementation("dev.disarm:disarm-kotlin:0.14.1")   // optional
+    implementation("dev.disarm:disarm:0.15.0")
+    implementation("dev.disarm:disarm-kotlin:0.15.0")   // optional
 }
 ```
 

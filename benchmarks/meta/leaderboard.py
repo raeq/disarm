@@ -85,6 +85,11 @@ MIN_DISCRIMINATION = 0.0
 ALPHA_FLOOR = 0.70
 #: Fewer parcels than this and the bootstrap has nothing to resample.
 MIN_PARCELS = 5
+#: A subject scored on less than this fraction of the battery is listed but not
+#: ranked against the others. Placing a tool measured on one benchmark above one
+#: measured on four compares different things and flatters whichever was asked
+#: the fewest questions.
+MIN_COVERAGE = 0.75
 #: Subjects that are controls are ranked but flagged, never quoted as rivals.
 CONTROL_SUBJECTS = ("null-baseline", "identity")
 
@@ -114,6 +119,19 @@ class Standing:
     ci_low: float
     ci_high: float
     items: int
+    control: bool = False
+    #: Scored on too little of the battery to sit in the same ordering.
+    partial: bool = False
+
+
+@dataclass
+class BenchmarkStanding:
+    """One subject's place on one benchmark."""
+
+    subject: str
+    rank: int
+    z: float
+    raw: float
     control: bool = False
 
 
@@ -166,6 +184,41 @@ class Leaderboard:
     @property
     def supported(self) -> bool:
         return self.usable and not self.blockers
+
+    def per_benchmark(self) -> dict[str, list[BenchmarkStanding]]:
+        """A ranking for each benchmark on its own.
+
+        Always publishable, even when the composite is not. The composite needs
+        the benchmarks to measure one construct before averaging them; a single
+        benchmark measures whatever it measures, so ranking within it carries no
+        such assumption. When the battery cannot support a composite — which is
+        the current state — these are the rankings that stand.
+
+        Ties share a rank, because two tools that score identically on a
+        benchmark are not ordered by it.
+        """
+        out: dict[str, list[BenchmarkStanding]] = {}
+        for item in self.items:
+            ordered = sorted(item.z, key=lambda s: item.z[s], reverse=True)
+            standings: list[BenchmarkStanding] = []
+            previous: float | None = None
+            rank = 0
+            for position, subject in enumerate(ordered, start=1):
+                score = item.z[subject]
+                if previous is None or score != previous:
+                    rank = position
+                    previous = score
+                standings.append(
+                    BenchmarkStanding(
+                        subject=subject,
+                        rank=rank,
+                        z=score,
+                        raw=item.scores[subject],
+                        control=is_control(subject),
+                    )
+                )
+            out[item.suite] = standings
+        return out
 
     def separated_pairs(self) -> int:
         """Adjacent pairs whose 95% intervals do not overlap."""
@@ -435,11 +488,20 @@ def build(
                 control=is_control(s),
             )
         )
-    scored.sort(key=lambda st: st.composite, reverse=True)
+    # Fully-covered subjects rank; partially-covered ones are listed after, out
+    # of the ordering, because their composite answers a smaller set of questions.
+    total_items = len(items)
+    for st in scored:
+        st.partial = total_items > 0 and (st.items / total_items) < MIN_COVERAGE
+    scored.sort(key=lambda st: (st.partial, -st.composite))
     # A control sits far outside the fitted distribution by construction, so its
     # composite is an artefact of dividing by the tools' spread. Recorded, never
     # presented as a comparable magnitude.
-    for position, st in enumerate(scored, start=1):
+    position = 0
+    for st in scored:
+        if st.partial:
+            continue
+        position += 1
         st.rank = position
     board.standings = scored
     return board

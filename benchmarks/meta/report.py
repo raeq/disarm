@@ -153,12 +153,21 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
         "| # | subject | composite | 95% CI | Bradley-Terry | benchmarks |",
         "|---|---|---|---|---|---|",
     ]
+    total = len(board.items)
     for st in board.standings:
-        name = f"`{st.subject}`" + (" *(control)*" if st.control else "")
+        name = f"`{st.subject}`"
+        if st.control:
+            name += " *(control)*"
+        if st.partial:
+            name += " *(partial coverage — not ranked)*"
         composite = "off-scale" if st.control and abs(st.composite) > 10 else f"{st.composite:.3f}"
+        # A subject answering one benchmark has no place in an ordering built
+        # from four: it was asked fewer questions, not judged better.
+        position = "—" if st.partial else str(st.rank)
         lines.append(
-            f"| {st.rank} | {name} | {composite} | "
-            f"[{st.ci_low:.2f}, {st.ci_high:.2f}] | {st.bt_strength:.3f} | {st.items} |"
+            f"| {position} | {name} | {composite} | "
+            f"[{st.ci_low:.2f}, {st.ci_high:.2f}] | {st.bt_strength:.3f} | "
+            f"{st.items}/{total} |"
         )
     lines += [
         "",
@@ -167,7 +176,31 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
     ]
     for item in sorted(board.items, key=lambda i: -i.discrimination):
         lines.append(f"| `{item.suite}` | {item.discrimination:.3f} | {item.key} |")
-    lines.append("")
+    lines += ["", "### Per benchmark", ""]
+    lines += [
+        "Each benchmark ranked on its own. These stand whether or not the "
+        "composite does: averaging benchmarks needs them to measure one thing "
+        "first, but ranking within one benchmark assumes nothing beyond that "
+        "benchmark. Equal scores share a rank. A subject absent from a table was "
+        "not asked that question.",
+        "",
+    ]
+    per = board.per_benchmark()
+    for item in sorted(board.items, key=lambda i: -i.discrimination):
+        standings = per.get(item.suite, [])
+        if not standings:
+            continue
+        lines += [
+            f"**`{item.suite}`** — discrimination {item.discrimination:.3f}, "
+            f"{len(standings)} subjects",
+            "",
+            "| # | subject | z | oriented score |",
+            "|---|---|---|---|",
+        ]
+        for place in standings:
+            name = f"`{place.subject}`" + (" *(control)*" if place.control else "")
+            lines.append(f"| {place.rank} | {name} | {place.z:+.2f} | {place.raw:.4g} |")
+        lines.append("")
     return lines
 
 

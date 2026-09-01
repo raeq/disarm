@@ -226,7 +226,15 @@ Item Response Theory is the method of record for this and is deliberately not
 fitted: 2PL estimates from single-digit respondents are not stable, and fitting
 one would look more rigorous while being less so.
 
-The interlock matters more than the ranking. When the battery has too few
+**Each benchmark is also ranked on its own**, and those rankings always stand.
+Averaging benchmarks requires them to measure one construct first; ranking within
+a single benchmark requires nothing beyond that benchmark. When the composite is
+blocked — which it currently is — the per-benchmark tables are the result. A
+subject scored on materially less of the battery than the others is listed but
+kept out of the composite ordering: one benchmark answered is not a better result
+than four answered.
+
+The interlock matters more than the composite. When the battery has too few
 directed benchmarks, or alpha falls below the conventional 0.70, or no two
 subjects have non-overlapping intervals, no ranking is published and the reason
 is printed. On the current battery all three fire. A leaderboard that cannot fail

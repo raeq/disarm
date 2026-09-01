@@ -855,3 +855,55 @@ def test_the_icu_subject_is_registered_even_when_absent():
     ready, why = icu.available()
     if not ready:
         assert "pyicu" in why.lower()
+
+
+def test_a_subject_scored_on_less_of_the_battery_is_not_ranked():
+    """One benchmark answered is not a better result than four answered.
+
+    `confusable-homoglyphs` participates in one suite and ranked first over
+    tools measured on four, which compares different things and flatters
+    whichever was asked the fewest questions.
+    """
+    outs = []
+    for i in range(4):
+        for subj, value in (("broad-a", 0.9), ("broad-b", 0.5), ("broad-c", 0.3)):
+            outs.append(_board_outcome(subj, f"s{i}", "m", value))
+    outs.append(_board_outcome("narrow", "s0", "m", 0.99))
+    board = leaderboard.build(outs, bootstrap=20)
+    narrow = next(st for st in board.standings if st.subject.startswith("narrow@"))
+    assert narrow.partial
+    assert board.standings[-1] is narrow, "a partial subject sorts out of the ordering"
+    assert all(not st.partial for st in board.standings[:-1])
+    ranked = [st.rank for st in board.standings if not st.partial]
+    assert ranked == sorted(ranked) and ranked[0] == 1
+
+
+def test_every_benchmark_is_ranked_even_when_the_composite_refuses():
+    """Per-benchmark rankings carry no internal-consistency assumption.
+
+    Averaging benchmarks requires them to measure one construct; ranking within
+    one benchmark requires nothing beyond that benchmark. So when the composite
+    is blocked — which it currently is — these are the rankings that stand.
+    """
+    outs = [
+        _board_outcome(subj, f"s{i}", "m", value)
+        for i in range(3)
+        for subj, value in (("a", 0.9), ("b", 0.5), ("c", 0.1))
+    ]
+    board = leaderboard.build(outs, bootstrap=20)
+    assert not board.supported, "this battery should be blocked"
+    per = board.per_benchmark()
+    assert len(per) == 3
+    for standings in per.values():
+        assert [st.rank for st in standings] == [1, 2, 3]
+        assert standings[0].subject.startswith("a@")
+
+
+def test_equal_scores_share_a_rank():
+    outs = []
+    for i in range(3):
+        for subj, value in (("a", 0.9), ("b", 0.9), ("c", 0.1)):
+            outs.append(_board_outcome(subj, f"s{i}", "m", value))
+    board = leaderboard.build(outs, bootstrap=20)
+    ranks = [st.rank for st in board.per_benchmark()["s0"]]
+    assert ranks == [1, 1, 3], "a tie shares the rank and the next place is skipped"

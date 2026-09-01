@@ -298,6 +298,10 @@ class TestAnomalyKindDoesNotDriftFromTheBindings:
             "leet": "fr33",
             "segmentation": "v.i.a.g.r.a",
             "control": "\x00evil",
+            # #777, UTS #39 §5.3: ASCII `1` with an Arabic-Indic `٣`. Two systems, and
+            # the shape that was clean everywhere — digits carry the script of nothing,
+            # so `mixed_script` never saw it.
+            "mixed_numbers": "12\u0663",
             "compat_fold": "\uff45xample.com",
             # #737: the confusable fold is `canonicalize`'s SECOND ASCII-producing step,
             # and the detector never consulted it. `p\u0251ypal` is single-script Latin,

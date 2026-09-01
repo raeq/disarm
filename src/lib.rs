@@ -123,6 +123,7 @@ pub(crate) mod collisions;
 pub(crate) mod compose;
 pub(crate) mod confusables;
 pub(crate) mod context;
+pub(crate) mod digits;
 pub(crate) mod encoders;
 pub(crate) mod encoding;
 pub(crate) mod filename;

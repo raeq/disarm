@@ -148,6 +148,32 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   before — and the hook cannot mask an `AttributeError` raised from inside an import,
   checked in a subprocess against a genuinely failing one.
 
+- **`mixed_numbers` — UTS #39 §5.3 Mixed Numbers (#777).** An identifier should not carry
+  digits from more than one decimal numbering system. Nothing checked it, and the reason
+  the gap survived is worth stating: **digits carry the script of nothing**, so
+  `is_mixed_script` sees one script for a token that is mostly ASCII with one substituted
+  digit.
+
+  | input | before | now |
+  |---|---|---|
+  | `12٣` — ASCII + Arabic-Indic | clean at **every** surface | `mixed_numbers` |
+  | `1٢۳４२` — five systems | `is_mixed_script` only, by accident | `mixed_numbers` |
+  | `٢٠٢٤` — one system | clean | clean |
+  | `२०२४` — one system | clean | clean |
+
+  `1٢۳४५` was caught only because five systems happened to be five *scripts*. `12٣` —
+  the shape an attacker would use — was `anomalous=False` with no kinds. A single system
+  is never flagged however unusual it looks: `٢٠٢٤` is a year.
+
+  UCD 17.0.0 has **77** numbering systems, not the 76 UTS #39 and the issue quote — that
+  figure is UCD 16.0.0. Each is a complete run of ten code points from its zero, so
+  `src/tables/data/decimal_digit_zeros.tsv` is one row per system and membership is
+  `cp - decimal_value`. build.rs asserts the rows are sorted and at least ten apart, which
+  is the model the lookup depends on.
+
+  Reported by `inspect_anomalies` and `has_anomalies` on every surface — the kind flows
+  through an entry point all six already export, so no new binding functions were needed.
+
 - **`target_script="arabic"` and `"hebrew"` (#792).** Generation drops an equivalence class
   entirely when no member belongs to the target script, so a class whose members are all
   Arabic folded to nothing under either shipped table — 948 of TR39's 1,007 strong-RTL

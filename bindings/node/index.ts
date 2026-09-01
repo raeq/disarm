@@ -603,6 +603,18 @@ export function isMixedScript(text: string): boolean {
  * the real letters (no `U+202x` override); a `false` result is not a safety
  * guarantee.
  */
+/**
+ * All twelve UAX #9 explicit formatting characters, uncontexted.
+ *
+ * The counterpart to {@link hasBidiConflict}, which reads strong-direction letters and is
+ * blind to these; the two are disjoint. The anomaly detector's `bidi` kind reports nine of
+ * the twelve, holding back LRM, RLM and ALM because a lone directional mark is ordinary in
+ * right-to-left text.
+ */
+export function hasBidiControl(text: string): boolean {
+  return native.hasBidiControl(text)
+}
+
 export function hasBidiConflict(text: string): boolean {
   return native.hasBidiConflict(text)
 }

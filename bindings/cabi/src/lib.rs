@@ -349,6 +349,16 @@ fn disarm_has_bidi_conflict(text: char_p::Ref<'_>) -> bool {
     api::has_bidi_conflict(text.to_str())
 }
 
+/// All twelve UAX #9 explicit formatting characters, uncontexted (#778).
+/// The counterpart to `has_bidi_conflict`, which reads strong-direction letters and is
+/// blind to these; the two are disjoint. The anomaly detector's `bidi` kind reports nine
+/// of the twelve, holding back LRM, RLM and ALM because a lone directional mark is
+/// ordinary in right-to-left text.
+#[ffi_export]
+fn disarm_has_bidi_control(text: char_p::Ref<'_>) -> bool {
+    api::has_bidi_control(text.to_str())
+}
+
 // ── Measurements (infallible) ───────────────────────────────────────────────────
 
 /// Number of grapheme clusters (user-perceived characters) in `text`.

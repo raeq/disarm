@@ -409,6 +409,18 @@ public final class Disarm {
     }
 
     /** Whether {@code text} mixes strong LTR and strong RTL characters ("BiDi Swap" precondition). */
+    /**
+     * All twelve UAX #9 explicit formatting characters, uncontexted.
+     *
+     * <p>The counterpart to {@link #hasBidiConflict}, which reads strong-direction
+     * letters and is blind to these; the two are disjoint. The anomaly detector's
+     * {@code bidi} kind reports nine of the twelve, holding back LRM, RLM and ALM
+     * because a lone directional mark is ordinary in right-to-left text.
+     */
+    public static boolean hasBidiControl(String text) {
+        return Native.hasBidiControl(req(text));
+    }
+
     public static boolean hasBidiConflict(String text) {
         return Native.hasBidiConflict(req(text));
     }

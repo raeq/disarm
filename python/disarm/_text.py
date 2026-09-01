@@ -400,6 +400,14 @@ class Text:
         """True if text mixes strong left-to-right and strong right-to-left characters."""
         return self._t().has_bidi_conflict(self._value)
 
+    def has_bidi_control(self) -> bool:
+        """True if text contains any of the twelve explicit bidi formatting characters.
+
+        Distinct from `has_bidi_conflict`, which is about mixing strong LTR and strong
+        RTL *content*. This one asks only whether a control is present.
+        """
+        return self._t().has_bidi_control(self._value)
+
     def detect_scripts(self) -> list[Script]:
         """Return Unicode scripts present, in order of first appearance."""
         return self._t().detect_scripts(self._value)

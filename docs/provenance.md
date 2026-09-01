@@ -27,7 +27,6 @@ against for byte-stable behavior.
 | Grapheme segmentation — `grapheme_len`, `terminal_width`, the cluster boundaries `slugify` cuts on, and the mark runs `is_zalgo` / `strip_zalgo` count | UAX&nbsp;#29, via the [`unicode-segmentation`](https://crates.io/crates/unicode-segmentation) crate (not a bundled table) | **17.0.0** |
 | UTS&nbsp;#46 mapping and validation — every `xn--` label `is_suspicious_hostname` and `analyze_hostname` decode | ICU4X, via [`idna`](https://crates.io/crates/idna) → `idna_adapter` → `icu_normalizer` / `icu_properties` (not a bundled table) | `idna` **1.1.0**, `icu_properties_data` **2.3.0** — see below |
 | Simple lowercasing — the `to_lowercase` side of `is_case_fold_stable` | UCD, via the **compiling toolchain's** standard library (not a bundled table, and not a dependency) | whatever the build's rustc carries — ≥ Unicode 16.0 in practice, since the crate's MSRV is 1.88 |
-| Same-script Latin homoglyphs — `confusables_lgr.tsv` | ICANN, *Reference LGR for the Second Level, Latin script* | **25 October 2024** — the 23 pairs commented "Glyphs either homoglyph or nearly identical"; the 23 Common-LGR transitivity pairs are excluded (#831) |
 | Transliteration / romanization | per-block standards (the rest of this document) | mixed; conventional where no single published standard exists |
 
 Three of those rows are crate dependencies rather than bundled tables, and all three are

@@ -819,25 +819,28 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         return Some(mk(AnomalyKind::Control, codepoint(c)));
     }
 
-    // Mixed numbers — UTS #39 §5.3 (#777). Checked before the ASCII fast-path for the
-    // same reason as controls: the common shape mixes ASCII with one other system, so a
-    // token that is *mostly* ASCII must still reach this.
-    //
-    // Two or more systems, not "any non-ASCII digit". `٢٠٢٤` is a year written entirely
-    // in Arabic-Indic digits and is ordinary text; `12٣` is not, and it was clean at
-    // every surface — `is_mixed_script` sees one script because digits carry the script
-    // of nothing, and no other check looked at numbering systems at all.
-    let systems = crate::digits::system_count(tok);
-    if systems > 1 {
-        return Some(mk(
-            AnomalyKind::MixedNumbers,
-            format!("{systems} decimal numbering systems"),
-        ));
-    }
-
     // ASCII fast-path: the invisible / bidi / zalgo / mixed-script branches can only fire
     // above U+007F, so a pure-ASCII token skips every script and zalgo call.
     if !tok.is_ascii() {
+        // Mixed numbers — UTS #39 §5.3 (#777). Inside the fast path, not before it: a
+        // pure-ASCII token carries only ASCII digits and so cannot mix systems, and the
+        // shape this exists for — `12\u{0663}`, ASCII beside Arabic-Indic — is not pure
+        // ASCII, so it reaches here anyway. An earlier version ran the scan on every
+        // token and paid a walk plus a binary search per digit for nothing (#865 review).
+        //
+        // Two or more systems, not "any non-ASCII digit". `\u{0662}\u{0660}\u{0662}\u{0664}`
+        // is a year written entirely in Arabic-Indic digits and is ordinary text; `12\u{0663}`
+        // is not, and it was clean at every surface — `is_mixed_script` sees one script
+        // because digits carry the script of nothing, and nothing looked at numbering
+        // systems at all.
+        let systems = crate::digits::system_count(tok);
+        if systems > 1 {
+            return Some(mk(
+                AnomalyKind::MixedNumbers,
+                format!("{systems} decimal numbering systems"),
+            ));
+        }
+
         let chars: Vec<char> = tok.chars().collect();
         for (i, &c) in chars.iter().enumerate() {
             if !is_invisible_in_word(c) {

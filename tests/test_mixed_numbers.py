@@ -16,8 +16,21 @@ import pytest
 
 import disarm
 
-#: `(text, system count)`. A single system is never a finding however unusual it looks.
-ONE_SYSTEM = ["2024", "٢٠٢٤", "٢٠٢٤", "२०२४", "๒๐๒๔", "hello", "", "no digits here"]
+#: Text drawing on **at most one** numbering system, which is never a finding however
+#: unusual the digits look. One entry per system rather than a repeated one — an earlier
+#: version listed `\u0662\u0660\u0662\u0664` twice and called itself `(text, count)`
+#: while holding bare strings (#865 review).
+ONE_SYSTEM = [
+    "2024",  # ASCII
+    "\u0662\u0660\u0662\u0664",  # Arabic-Indic
+    "\u06f2\u06f0\u06f2\u06f4",  # Extended Arabic-Indic
+    "\u0968\u0966\u0968\u096a",  # Devanagari
+    "\u0e52\u0e50\u0e52\u0e54",  # Thai
+    "\uff12\uff10\uff12\uff14",  # fullwidth
+    "hello",  # no digits at all
+    "",
+    "no digits here",
+]
 
 MANY_SYSTEMS = [
     ("12٣", 2),  # ASCII + Arabic-Indic — the common shape
@@ -80,13 +93,10 @@ def test_every_system_in_the_table_is_a_complete_run() -> None:
     """
     import unicodedata
 
-    zeros = []
-    for cp in range(0x30, 0x110000):
-        try:
-            if unicodedata.decimal(chr(cp)) == 0:
-                zeros.append(cp)
-        except ValueError:
-            continue
+    # `default=` rather than catching `ValueError`: the overwhelming majority of the
+    # ~1.1M code points are not decimal digits, so the exception path is the common one
+    # and raising it a million times is most of the test's runtime (#865 review).
+    zeros = [cp for cp in range(0x30, 0x110000) if unicodedata.decimal(chr(cp), -1) == 0]
     assert len(zeros) > 50, f"only {len(zeros)} numbering systems found; table too small"
 
     missed = []

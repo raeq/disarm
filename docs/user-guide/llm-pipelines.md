@@ -353,9 +353,20 @@ from disarm import get_pipeline
 
 guardrail = get_pipeline("llm_guardrail")
 assert not any(c in guardrail(f"a{c}b") for c in BIDI)  # bidi handled
-assert guardrail("Summarize.\U000f0000") == "summarize.\U000f0000"  # PUA still not
+assert guardrail("Summarize.\U000f0000") == "summarize."  # PUA handled (#814)
 
 assert get_pipeline("rag_ingest")("Summarize.\U000f0000") == "Summarize."  # PUA handled
+```
+
+Until #814 the guardrail was the *bad* half of that comparison: `ProfileSpec` had no PUA
+field, so `llm_guardrail` could not strip the Private Use Area even in principle, and
+passed through exactly what `canonicalize` removes. Seven of the eight profiles now strip
+it. `code_context` does not, and that is #413's rule rather than an omission — it is the
+one profile whose job is to preserve its input, and a PUA code point in a UI string is an
+icon-font glyph.
+
+```python
+assert "\ue000" in get_pipeline("code_context")("Menu \ue000")  # preserved, by design
 ```
 
 ## Code is not prose: `code_context`, and strip-and-report

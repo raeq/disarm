@@ -45,6 +45,21 @@ bitflags! {
         /// fold precedes it. Set by `Pipeline::new`, never by a caller, and displayed as
         /// `confusables` because that is what it does.
         const CONFUSABLES_POST = 0b1000_0000_0000;
+        /// Strip the Private Use Area (#814).
+        ///
+        /// The presets have carried this split since #413: the comparison/storage
+        /// presets strip the PUA, `strip_format` keeps it because icon fonts live there.
+        /// `ProfileSpec` had no field for it at all, so `llm_guardrail` — the profile the
+        /// LLM-pipeline docs send a guardrail author to — could not strip PUA even in
+        /// principle, and passed through exactly what `canonicalize` removes.
+        ///
+        /// Set by `ProfileSpec::build`, which is the only thing that sets it. It is
+        /// deliberately **not** a `Pipeline::new` parameter: that constructor is the
+        /// public hand-built path across six bindings, and adding a thirteenth positional
+        /// argument to it is a breaking change owed to all of them. #814 is about the
+        /// named profiles, which are curated recommendations and can take the preset
+        /// policy without a signature change. Exposing it to a caller is its own change.
+        const STRIP_PUA = 0b1_0000_0000_0000;
     }
 }
 
@@ -87,6 +102,9 @@ const STEP_ORDER: &[(PipelineSteps, &str)] = &[
     (PipelineSteps::CONFUSABLES_POST, "confusables"),
     (PipelineSteps::STRIP_CONTROL, "strip_control"),
     (PipelineSteps::STRIP_ZERO_WIDTH, "strip_zero_width"),
+    // Beside the zero-width strip and after it: both remove what is not text, and the
+    // PUA strip must not run before the confusable fold, which has PUA source rows.
+    (PipelineSteps::STRIP_PUA, "strip_pua"),
     (PipelineSteps::COLLAPSE_WS, "collapse_whitespace"),
 ];
 
@@ -364,6 +382,13 @@ impl Pipeline {
         } else if step == PipelineSteps::STRIP_ZERO_WIDTH {
             whitespace::strip_zero_width_chars_into(input, out);
             Ok(true)
+        } else if step == PipelineSteps::STRIP_PUA {
+            out.clear();
+            // `filter`'s `size_hint` lower bound is 0, so `extend` cannot pre-size the
+            // buffer — the same reason `strip_zero_width_chars_into` reserves (review M-P5).
+            out.reserve(input.len());
+            out.extend(input.chars().filter(|&c| !crate::invisibles::is_pua(c)));
+            Ok(true)
         } else if step == PipelineSteps::COLLAPSE_WS {
             // Fold whitespace only (#433) — STRIP_CONTROL / STRIP_ZERO_WIDTH are
             // their own steps, so any control or zero-width character a caller did
@@ -415,6 +440,14 @@ struct ProfileSpec {
     demojize: bool,
     strip_bidi: bool,
     strip_zalgo: Option<usize>,
+    /// Strip the Private Use Area (#814).
+    ///
+    /// `true` for every profile whose job is comparison, storage or screening — which is
+    /// #413's rule for the presets, applied to the profiles for the first time. `false`
+    /// only for `code_context`, the one profile that exists to preserve its input: PUA
+    /// rendering as an icon-font glyph is exactly the case #413 carved `strip_format`
+    /// out for.
+    strip_pua: bool,
 }
 
 impl ProfileSpec {
@@ -435,6 +468,9 @@ impl ProfileSpec {
             self.strip_bidi,
             self.strip_zalgo,
         )?;
+        if self.strip_pua {
+            pipeline.steps |= PipelineSteps::STRIP_PUA;
+        }
         // A named profile is a curated recommendation, so it takes the preset policy:
         // the 326 code points carrying neither `Emoji` nor `Extended_Pictographic` are
         // left for the rest of the pipeline rather than named (#757, #853). `demojize`
@@ -467,6 +503,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             strict_iso9: true,
             fold_case: true,
             collapse_whitespace: true,
+            strip_pua: true,
             ..ProfileSpec::default()
         },
         "library_catalog_key_eu" => ProfileSpec {
@@ -476,12 +513,14 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             strip_accents: true,
             fold_case: true,
             collapse_whitespace: true,
+            strip_pua: true,
             ..ProfileSpec::default()
         },
         "normalize_web_input" => ProfileSpec {
             normalize: Some("NFKC"),
             confusables: true,
             collapse_whitespace: true,
+            strip_pua: true,
             ..ProfileSpec::default()
         },
         "ml_corpus_normalize" => ProfileSpec {
@@ -490,6 +529,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             strip_accents: true,
             fold_case: true,
             collapse_whitespace: true,
+            strip_pua: true,
             ..ProfileSpec::default()
         },
         "search_index" => ProfileSpec {
@@ -498,6 +538,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             strip_accents: true,
             fold_case: true,
             collapse_whitespace: true,
+            strip_pua: true,
             ..ProfileSpec::default()
         },
         // #746: the only STRUCTURE-PRESERVING entry point. Every other profile and every
@@ -536,6 +577,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             strip_accents: true,
             fold_case: true,
             collapse_whitespace: true,
+            strip_pua: true,
             ..ProfileSpec::default()
         },
         // rag_ingest canonicalizes by phonetic *romanization* (transliterate),
@@ -555,6 +597,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             transliterate: true,
             strip_accents: true,
             collapse_whitespace: true,
+            strip_pua: true,
             ..ProfileSpec::default()
         },
         _ => return None,
@@ -652,6 +695,8 @@ mod tests {
                 (None, "a\u{0000}b")
             } else if *flag == PipelineSteps::STRIP_ZERO_WIDTH {
                 (None, "a\u{200b}b")
+            } else if *flag == PipelineSteps::STRIP_PUA {
+                (None, "a\u{e000}b")
             } else if *flag == PipelineSteps::COLLAPSE_WS {
                 (None, "a  b")
             } else {
@@ -995,6 +1040,7 @@ mod tests {
                 "confusables",
                 "strip_control",
                 "strip_zero_width",
+                "strip_pua",
                 "collapse_whitespace",
             ]
         );

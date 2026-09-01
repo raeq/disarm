@@ -161,8 +161,20 @@ pub(crate) fn is_zero_width(ch: char) -> bool {
     // typesetting) which sit contiguously at U+2060–U+2064.
     // Singletons: BOM / ZW no-break space (U+FEFF), Mongolian Vowel Separator
     // (U+180E).
+    //
+    // #813 adds the `Default_Ignorable` formats that carry no other predicate — the
+    // Duployan and musical `Cf` runs. They belong to this set by the function's own
+    // description ("zero-width and invisible characters"): they render as nothing and
+    // split a token for anything comparing strings. Delegated rather than restated, so
+    // `crate::invisibles::is_default_ignorable_format` stays the single definition —
+    // the detector reads the same one, which is what stops the two drifting the way
+    // #700 found them drifted.
     let cp = ch as u32;
-    cp.wrapping_sub(0x200B) <= 2 || cp.wrapping_sub(0x2060) <= 4 || cp == 0xFEFF || cp == 0x180E
+    cp.wrapping_sub(0x200B) <= 2
+        || cp.wrapping_sub(0x2060) <= 4
+        || cp == 0xFEFF
+        || cp == 0x180E
+        || crate::invisibles::is_default_ignorable_format(ch)
 }
 
 #[cfg(test)]

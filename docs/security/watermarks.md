@@ -29,10 +29,10 @@ between two letters:
 
 | | count |
 |---|---:|
-| `canonicalize` removes it **and** `inspect_anomalies` reports it | 117 |
+| `canonicalize` removes it **and** `inspect_anomalies` reports it | 129 |
 | `canonicalize` removes it, nothing reports it | 266 |
 | reported but **not** removed | 10 |
-| neither | 12 |
+| neither | 0 |
 
 The 266 is the number to understand. Variation selectors and the Tags block are stripped
 without a finding, because in ordinary text they are not anomalous — a variation selector
@@ -42,8 +42,14 @@ marked. Run both if the question is provenance.
 
 The 10 that are reported and not removed are the fillers and Khmer vowel-position
 characters, which `canonicalize` keeps because removing them would damage ordinary text in
-those scripts. The 12 that are neither are the Shorthand Format Controls and the musical
-notation controls.
+those scripts.
+
+**The "neither" row was 12 until #813**, and those 12 were the Duployan Shorthand Format
+Controls and the musical notation controls — invisible by property rather than by name,
+which is how they escaped every predicate here. They are now removed *and* reported, so
+that row is empty and the first row gained them. A code point invisible to a reader and
+invisible to the library is the one combination this table exists to make visible, so an
+empty row there is the point of the measurement rather than a tidy result.
 
 ```python
 from disarm import canonicalize, inspect_anomalies

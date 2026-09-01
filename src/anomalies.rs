@@ -45,7 +45,13 @@ const MAX_LEET_LEN: usize = 64;
 /// run rule only, where a *sequence* of them is not legitimate under any reading.
 #[inline]
 fn is_invisible_in_word(c: char) -> bool {
-    crate::invisibles::is_zero_width(c) || crate::invisibles::is_invisible_filler(c)
+    crate::invisibles::is_zero_width(c)
+        || crate::invisibles::is_invisible_filler(c)
+        // #813: invisible by Unicode property rather than by name. `pay` + `U+1D173` +
+        // `pal` is the same attack as `pay` + `U+200B` + `pal` and was reported clean,
+        // which is the inconsistency that makes it a defect rather than a coverage gap —
+        // the argument #643 made for the fillers on the line above.
+        || crate::invisibles::is_default_ignorable_format(c)
 }
 
 /// Soft hyphen — legitimate hyphenation between letters, so it is a run-rule carrier only.
@@ -69,9 +75,17 @@ const CGJ: char = '\u{034F}';
 /// for separately. A single variation selector after a base is ordinary emoji
 /// presentation, so two is the floor. Zero-width runs need the loosest floor: eight, well
 /// above any orthography and well below the sixteen it takes to smuggle two ASCII letters.
+///
+/// The Private Use Area (#812) takes four. It is a run rule and not a neighbour rule for
+/// the reason `strip_format` keeps the block at all: a single PUA code point beside a
+/// letter is an icon-font glyph, which is ordinary in UI strings — so the floor has to sit
+/// above one, unlike the tag block where nothing legitimate emits even one. Four is the
+/// shortest run that no icon font produces and that still catches the shape
+/// `canonicalize` was already deleting silently.
 const RUN_THRESHOLD_TAG: usize = 1;
 const RUN_THRESHOLD_VARIATION_SELECTOR: usize = 2;
 const RUN_THRESHOLD_ZERO_WIDTH: usize = 8;
+const RUN_THRESHOLD_PRIVATE_USE: usize = 4;
 
 /// The carrier classes the run rule counts, each with its own floor.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -79,6 +93,10 @@ enum Carrier {
     Tag,
     VariationSelector,
     ZeroWidth,
+    /// #812: `canonicalize` strips the Private Use Area and the detector said nothing, so
+    /// a guardrail screening with `has_anomalies` passed exactly what the comparison
+    /// presets had decided was not text.
+    PrivateUse,
 }
 
 impl Carrier {
@@ -89,6 +107,8 @@ impl Carrier {
             Some(Self::VariationSelector)
         } else if is_invisible_in_word(c) || c == SOFT_HYPHEN || c == CGJ {
             Some(Self::ZeroWidth)
+        } else if crate::invisibles::is_pua(c) {
+            Some(Self::PrivateUse)
         } else {
             None
         }
@@ -99,6 +119,7 @@ impl Carrier {
             Self::Tag => RUN_THRESHOLD_TAG,
             Self::VariationSelector => RUN_THRESHOLD_VARIATION_SELECTOR,
             Self::ZeroWidth => RUN_THRESHOLD_ZERO_WIDTH,
+            Self::PrivateUse => RUN_THRESHOLD_PRIVATE_USE,
         }
     }
 }

@@ -35,6 +35,7 @@ def test_llm_guardrail_step_order() -> None:
         "confusables",
         "strip_control",
         "strip_zero_width",
+        "strip_pua",
         "collapse_whitespace",
     ]
 
@@ -48,6 +49,7 @@ def test_rag_ingest_step_order() -> None:
         "transliterate",
         "strip_control",
         "strip_zero_width",
+        "strip_pua",
         "collapse_whitespace",
     ]
 

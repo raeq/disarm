@@ -274,6 +274,51 @@ def clean_ascii_corpus(size: int = 2000) -> list[str]:
     ]
 
 
+#: A carrier of ASCII letters every tool here leaves alone, so the replacement
+#: can be recovered by stripping the ends. A lone code point is not enough: the
+#: naming behaviour fires on text, and `strip_obfuscation("—")` returns the dash
+#: untouched while `strip_obfuscation("a — b")` returned "a em dash b".
+_CARRIER = ("aa", "bb")
+
+
+def _replacement(fn: Callable[[str], str], ch: str) -> str | None:
+    """What one code point became, measured inside a stable ASCII carrier."""
+    left, right = _CARRIER
+    out = apply(fn, f"{left}{ch}{right}")
+    if not out.startswith(left) or not out.endswith(right):
+        return None  # the carrier moved; cannot attribute the change
+    return out[len(left) : len(out) - len(right)]
+
+
+def classify_removal(fn: Callable[[str], str], ch: str) -> str:
+    """Why did this non-ASCII character stop being non-ASCII?
+
+    "Folded", "deleted" and "named" all remove a non-ASCII code point, and a
+    metric that only counts what disappeared cannot tell them apart. That is not
+    hypothetical: disarm 0.14.1 turned `a — b` into `a em dash b`, and the
+    fold-rate metric scored the naming bug (#757) as coverage. When #803 fixed
+    it the corpus rate *fell*, and the benchmark reported the fix as a
+    regression.
+
+    The line between a fold and a name is words, not length: `½` to `1/2` is a
+    compatibility fold, `—` to `em dash` is a description. A replacement counts
+    as naming when it carries whitespace or is three or more letters.
+
+    Returns ``folded`` | ``deleted`` | ``named`` | ``survives``.
+    """
+    got = _replacement(fn, ch)
+    if got is None or got == ch:
+        return "survives"
+    if not got.strip():
+        return "deleted"
+    if not got.isascii():
+        return "survives"
+    stripped = got.strip()
+    if any(c.isspace() for c in got) or (len(stripped) >= 3 and stripped.isalpha()):
+        return "named"
+    return "folded"
+
+
 def assigned_sample(step: int = 97) -> list[int]:
     """A strided sample of assigned code points.
 

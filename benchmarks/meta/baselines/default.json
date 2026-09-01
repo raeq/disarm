@@ -2,7 +2,7 @@
   "confusables_version": "17.0.0",
   "disarm_version": "0.15.0",
   "host_ucd": "16.0.0",
-  "recorded_utc": "2026-09-01T22:31:01+00:00",
+  "recorded_utc": "2026-09-01T23:00:44+00:00",
   "suites": {
     "anyascii@0.3.3::bad-characters": {
       "external": true,
@@ -482,7 +482,7 @@
       "subject": "decancer",
       "subject_version": "0.4.1"
     },
-    "disarm@0.15.0+g711b802.dirty::bad-characters": {
+    "disarm@0.15.0+g371356f.dirty::bad-characters": {
       "external": true,
       "measurements": {
         "clean_retention": {
@@ -538,9 +538,9 @@
       },
       "population": 22370,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::cldr-emoji-annotations": {
+    "disarm@0.15.0+g371356f.dirty::cldr-emoji-annotations": {
       "external": true,
       "measurements": {
         "annotated_codepoints": {
@@ -556,9 +556,9 @@
       },
       "population": 1765,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::confusable-bench-v1": {
+    "disarm@0.15.0+g371356f.dirty::confusable-bench-v1": {
       "external": true,
       "measurements": {
         "benign_controls": {
@@ -644,9 +644,9 @@
       },
       "population": 140,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::confusable-vision": {
+    "disarm@0.15.0+g371356f.dirty::confusable-vision": {
       "external": true,
       "measurements": {
         "collide_in_canonicalize": {
@@ -659,22 +659,27 @@
           "of": 4174,
           "value": 1103
         },
+        "gaps_not_named": {
+          "higher_is_better": false,
+          "of": 4045,
+          "value": 3252
+        },
+        "named_but_covered": {
+          "higher_is_better": false,
+          "of": 129,
+          "value": 4
+        },
         "pairs": {
           "higher_is_better": null,
           "of": null,
           "value": 4174
-        },
-        "visible_to_coverage_introspection": {
-          "higher_is_better": true,
-          "of": 4174,
-          "value": 797
         }
       },
       "population": 4174,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::corruption-cost": {
+    "disarm@0.15.0+g371356f.dirty::corruption-cost": {
       "external": true,
       "measurements": {
         "clean_ascii_altered": {
@@ -760,9 +765,9 @@
       },
       "population": 9438,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::cve-2021-42574-trojan-source": {
+    "disarm@0.15.0+g371356f.dirty::cve-2021-42574-trojan-source": {
       "external": true,
       "measurements": {
         "poc_files": {
@@ -783,9 +788,9 @@
       },
       "population": 311,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::cve-2026-17084-stringprep": {
+    "disarm@0.15.0+g371356f.dirty::cve-2026-17084-stringprep": {
       "external": true,
       "measurements": {
         "collides_catalog_key": {
@@ -821,9 +826,9 @@
       },
       "population": 711,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::icann-lgr-latin": {
+    "disarm@0.15.0+g371356f.dirty::icann-lgr-latin": {
       "external": true,
       "measurements": {
         "blocked_pairs": {
@@ -844,9 +849,9 @@
       },
       "population": 21,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::uax29-word-joiners": {
+    "disarm@0.15.0+g371356f.dirty::uax29-word-joiners": {
       "external": true,
       "measurements": {
         "detected": {
@@ -867,9 +872,9 @@
       },
       "population": 37,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::ucd-bidi-class": {
+    "disarm@0.15.0+g371356f.dirty::ucd-bidi-class": {
       "external": true,
       "measurements": {
         "conflict_detected": {
@@ -890,9 +895,9 @@
       },
       "population": 3018,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::ucd-scripts": {
+    "disarm@0.15.0+g371356f.dirty::ucd-scripts": {
       "external": true,
       "measurements": {
         "agree": {
@@ -923,9 +928,9 @@
       },
       "population": 126761,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::ucd-toNFKC-casefold": {
+    "disarm@0.15.0+g371356f.dirty::ucd-toNFKC-casefold": {
       "external": true,
       "measurements": {
         "default_ignorable": {
@@ -941,9 +946,9 @@
       },
       "population": 405,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::untrace-techniques": {
+    "disarm@0.15.0+g371356f.dirty::untrace-techniques": {
       "external": true,
       "measurements": {
         "altered_by_strip_obfuscation": {
@@ -969,9 +974,9 @@
       },
       "population": 64,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::uts39-augmented-scripts": {
+    "disarm@0.15.0+g371356f.dirty::uts39-augmented-scripts": {
       "external": true,
       "measurements": {
         "cases": {
@@ -1007,9 +1012,9 @@
       },
       "population": 6,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::uts39-confusables": {
+    "disarm@0.15.0+g371356f.dirty::uts39-confusables": {
       "external": true,
       "measurements": {
         "altered_but_not_onto_target": {
@@ -1060,9 +1065,9 @@
       },
       "population": 6565,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::uts39-equivalence-classes": {
+    "disarm@0.15.0+g371356f.dirty::uts39-equivalence-classes": {
       "external": true,
       "measurements": {
         "classes": {
@@ -1093,9 +1098,9 @@
       },
       "population": 3416,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::uts39-mixed-numbers": {
+    "disarm@0.15.0+g371356f.dirty::uts39-mixed-numbers": {
       "external": true,
       "measurements": {
         "ascii_mixed_flagged": {
@@ -1116,9 +1121,9 @@
       },
       "population": 75,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::uts39-target-scripts": {
+    "disarm@0.15.0+g371356f.dirty::uts39-target-scripts": {
       "external": true,
       "measurements": {
         "pairs": {
@@ -1184,25 +1189,40 @@
       },
       "population": 6565,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
-    "disarm@0.15.0+g711b802.dirty::youtube-spam": {
+    "disarm@0.15.0+g371356f.dirty::youtube-spam": {
       "external": true,
       "measurements": {
+        "deleted_outright": {
+          "higher_is_better": null,
+          "of": 203,
+          "value": 5
+        },
+        "folded_to_ascii": {
+          "higher_is_better": true,
+          "of": 203,
+          "value": 39
+        },
         "misses_novel": {
           "higher_is_better": null,
           "of": null,
-          "value": 27
+          "value": 150
         },
         "misses_principled": {
           "higher_is_better": false,
           "of": null,
-          "value": 8
+          "value": 9
         },
-        "nonascii_folded": {
-          "higher_is_better": true,
+        "named_as_words": {
+          "higher_is_better": false,
+          "of": 203,
+          "value": 0
+        },
+        "nonascii_removed": {
+          "higher_is_better": null,
           "of": 3104,
-          "value": 2447
+          "value": 1856
         },
         "perturbation_bearing": {
           "higher_is_better": null,
@@ -1217,7 +1237,7 @@
       },
       "population": 1956,
       "subject": "disarm",
-      "subject_version": "0.15.0+g711b802.dirty"
+      "subject_version": "0.15.0+g371356f.dirty"
     },
     "ftfy@6.3.1::bad-characters": {
       "external": true,

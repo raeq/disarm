@@ -1280,3 +1280,60 @@ def test_the_partition_oracle_is_external():
     """Partitioning with disarm's own script table would be circular."""
     out = registry.by_name("uts39-target-scripts").run(limit=500)
     assert "UCD" in out.method.parameters["partition_oracle"]
+
+
+def test_naming_a_character_is_not_counted_as_folding_it():
+    """`—` to `em dash` removes a non-ASCII code point without folding it.
+
+    disarm 0.14.1 did exactly that, and the undifferentiated fold rate scored the
+    naming bug (#757) as coverage. When #803 fixed it the rate fell 81.9% to
+    78.8% and the benchmark reported the fix as a regression.
+    """
+    from benchmarks.meta import damage
+
+    cases = {
+        "folded": lambda s: s.replace("—", "-"),
+        "named": lambda s: s.replace("—", " em dash "),
+        "deleted": lambda s: s.replace("—", ""),
+        "survives": lambda s: s,
+    }
+    for expected, fn in cases.items():
+        assert damage.classify_removal(fn, "—") == expected, expected
+
+
+def test_a_compatibility_expansion_is_a_fold_not_a_name():
+    """The line is words, not length: `1/2` is characters, `em dash` is words."""
+    from benchmarks.meta import damage
+
+    assert damage.classify_removal(lambda s: s.replace("½", "1/2"), "½") == "folded"
+    assert damage.classify_removal(lambda s: s.replace("½", "one half"), "½") == "named"
+
+
+def test_the_gap_list_is_scored_for_accuracy_not_length():
+    """Covering a pair removed it from the gap list and lowered the old score.
+
+    Between 0.14.1 and 0.15.0 `unmapped_confusables()` went 4,384 to 4,330 with
+    54 leaving and none joining — pure coverage gain, reported as a loss.
+    """
+    import inspect as _inspect
+
+    from benchmarks.meta.suites.comparators import ConfusableVision
+
+    src = _inspect.getsource(ConfusableVision.measure)
+    assert "visible_to_coverage_introspection" not in src
+    assert "gaps_not_named" in src and "named_but_covered" in src
+
+
+def test_the_corpus_metric_scores_the_declared_surface():
+    """#759: adversarial_eval hardcoded one entry point.
+
+    The corpus rate and the removal split were measuring different surfaces,
+    which is the same asymmetry the coverage and cost axes had.
+    """
+    import inspect as _inspect
+
+    from benchmarks.adversarial_eval.metrics import evaluate
+    from benchmarks.meta.suites.datasets import _AdversarialEvalSuite
+
+    assert "transform" in _inspect.signature(evaluate).parameters
+    assert "transform" in _inspect.getsource(_AdversarialEvalSuite.measure)

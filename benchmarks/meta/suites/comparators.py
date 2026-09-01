@@ -248,29 +248,52 @@ class ConfusableVision(SuiteBase):
             add(outcome, "pairs", 0)
             return
 
-        reached = flagged = in_denominator = 0
         # unmapped_confusables() is a frozenset of single-character strings.
         # Iterating it with `for c, *_ in ...` unpacks each string and only
         # happens to work while every member is one character long.
         unmapped: set[str] = set(disarm.unmapped_confusables() or ())
+        reached = flagged = 0
+        gaps_not_named = named_but_covered = uncovered = 0
         for src, tgt, _score in pairs:
-            if disarm.canonicalize(src) == disarm.canonicalize(tgt):
+            covered = disarm.canonicalize(src) == disarm.canonicalize(tgt)
+            listed = src in unmapped
+            if covered:
                 reached += 1
+                if listed:
+                    named_but_covered += 1
+            else:
+                uncovered += 1
+                if not listed:
+                    gaps_not_named += 1
             if disarm.is_confusable(src):
                 flagged += 1
-            if src in unmapped:
-                in_denominator += 1
         n = len(pairs)
         add(outcome, "pairs", n, unit="pairs")
         add(outcome, "collide_in_canonicalize", reached, of=n, higher_is_better=True)
         add(outcome, "flagged_by_is_confusable", flagged, of=n, higher_is_better=True)
+        # The old form counted pairs *listed* as unmapped and scored higher as
+        # better, so the only way to reach 100% was to map nothing: covering a
+        # pair removed it from the gap list and lowered the score. Between 0.14.1
+        # and 0.15.0 the list went 4,384 -> 4,330 with 54 leaving and **none
+        # joining** — pure coverage gain, reported as a 21.8% -> 19.1% loss.
+        # These two ask instead whether the gap list is *accurate*, and neither
+        # can be improved by refusing to map anything.
         add(
             outcome,
-            "visible_to_coverage_introspection",
-            in_denominator,
-            of=n,
-            higher_is_better=True,
-            detail="present in unmapped_confusables(), so a gap report can name it",
+            "gaps_not_named",
+            gaps_not_named,
+            of=uncovered or None,
+            higher_is_better=False,
+            detail="pairs the fold misses that unmapped_confusables() does not "
+            "list — a blind spot in the introspection itself",
+        )
+        add(
+            outcome,
+            "named_but_covered",
+            named_but_covered,
+            of=reached or None,
+            higher_is_better=False,
+            detail="listed as a gap and in fact covered — a stale entry",
         )
 
 

@@ -19,6 +19,7 @@ from typing import Any
 
 from ..base import CACHE, SuiteBase, add, artifact, record
 from ..protocol import Availability, Family, Outcome, Provenance
+from ..subjects import Role
 
 
 def _altered(fn: Callable[[str], str], text: str) -> bool:
@@ -29,7 +30,53 @@ def _altered(fn: Callable[[str], str], text: str) -> bool:
         return False
 
 
-class _AdversarialEvalSuite(SuiteBase):
+class _RemovalSplitMixin:
+    """Classify *how* each non-ASCII code point stopped being non-ASCII."""
+
+    def _add_removal_split(self, outcome: Outcome, universe: set[int]) -> None:
+        """``universe`` is every distinct non-ASCII code point the corpus holds.
+
+        Not the survivors: a survivor never folds, which is the whole
+        distinction being drawn.
+        """
+        from .. import damage
+
+        subject = getattr(self, "subject", None)
+        surfaces = subject.role(Role.SANITIZER) if subject is not None else {}
+        if not surfaces or not universe:
+            return
+        fn = next(iter(surfaces.values()))
+        counts = {"folded": 0, "deleted": 0, "named": 0, "survives": 0}
+        for cp in sorted(universe):
+            counts[damage.classify_removal(fn, chr(cp))] += 1
+        total = len(universe)
+        add(
+            outcome,
+            "folded_to_ascii",
+            counts["folded"],
+            of=total,
+            higher_is_better=True,
+            detail="replaced by one or two ASCII characters — an actual fold",
+        )
+        add(
+            outcome,
+            "deleted_outright",
+            counts["deleted"],
+            of=total,
+            detail="removed with nothing in its place",
+        )
+        add(
+            outcome,
+            "named_as_words",
+            counts["named"],
+            of=total,
+            higher_is_better=False,
+            detail="replaced by a run of ASCII words — `—` to `em dash` (#757). "
+            "Counted as coverage by the undifferentiated rate",
+        )
+
+
+class _AdversarialEvalSuite(_RemovalSplitMixin, SuiteBase):
     """Delegate to a ``benchmarks.adversarial_eval`` corpus adapter."""
 
     family = Family.DATASET
@@ -71,22 +118,49 @@ class _AdversarialEvalSuite(SuiteBase):
 
         adapter = self._adapter()
         effective = limit if limit is not None else self.default_limit
+        # One extra pass to collect the distinct non-ASCII code points the corpus
+        # actually contains. The removal split needs those, not the survivors —
+        # a survivor never folds, which is the distinction being drawn.
+        universe = {
+            ord(c) for rec in adapter.load(limit=effective) for c in rec.text if ord(c) > 0x7F
+        }
+        # Score the DECLARED sanitizer, not the module's hardcoded
+        # `strip_obfuscation` (#759). Without this the corpus metric and the
+        # removal split below measure different surfaces, which is the same
+        # asymmetry the coverage and cost axes had.
+        # #903 landed the same capability on main with a better signature: a
+        # dotted path rather than the callable this branch first passed, because
+        # a callable does not survive being handed to a worker process. The
+        # declared role gives the attribute name; the module comes from the
+        # resolved surface, so this keeps working if a surface moves.
+        declared = self.subject.role(Role.SANITIZER) if self.subject else {}
+        name, fn = next(iter(declared.items()), (None, None))
+        surface = f"{fn.__module__.split('.')[0]}.{name}" if fn is not None else None
         res = evaluate(
             adapter.load(limit=effective),
             corpus=adapter.name,
             labeled=adapter.labeled,
             processes=1 if (effective or 0) and effective <= 2000 else None,
+            **({"transform": surface} if surface else {}),
         )
         outcome.population = res.n_rows
         add(outcome, "rows", res.n_rows, unit="rows")
         add(outcome, "perturbation_bearing", res.rows_with_nonascii, of=res.n_rows)
+        # Deliberately NOT scored. "(before - after) / before" counts any way a
+        # non-ASCII code point stops being non-ASCII, so folding, deleting and
+        # *naming* all read the same. disarm 0.14.1 turned `—` into the words
+        # "em dash" and this metric called it coverage; when #803 stopped that,
+        # the rate fell 81.9% -> 78.8% and the benchmark reported the fix as a
+        # regression. The split below is the scored form.
         add(
             outcome,
-            "nonascii_folded",
+            "nonascii_removed",
             res.nonascii_before - res.nonascii_after,
             of=res.nonascii_before,
-            higher_is_better=True,
+            detail="any way a non-ASCII code point stopped being one — folded, "
+            "deleted or named. A census: it cannot tell the three apart",
         )
+        self._add_removal_split(outcome, universe)
         add(
             outcome,
             "misses_principled",

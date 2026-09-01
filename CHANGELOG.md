@@ -661,6 +661,23 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **The ruff version was pinned in two files and nothing checked they agree.**
+  `pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each carry a
+  `ruff==` pin, and the pre-commit hooks are `language: system` — they run whichever
+  `ruff` is on PATH. So a stale local ruff passes every local gate and fails CI, with
+  nothing in the failure pointing at a version.
+
+  It is a sharper trap than a version skew usually is: **0.16 formats Python inside
+  Markdown fenced blocks and 0.15 does not**, and this repository's docs carry executable
+  Python in fences. A branch passed `ruff format --check .` on 0.15.17 and failed the
+  *Lint & format* job on 0.16.4, over comment alignment inside two guide pages.
+
+  Both pins move to **0.16.5**, and `tests/test_toolchain_pins.py` now asserts three
+  things: the two pins agree, the pin is at least 0.16 (below that the Markdown blocks
+  stop being formatted, which fails nothing), and the ruff actually on PATH matches —
+  skipped when ruff is absent, since a runner without the `dev` extra is legitimate.
+  CONTRIBUTING.md gains the one-liner that installs the pinned version.
+
 - **`sort_key` was not idempotent when an invisible split a mark run (#850).** #843 added
   the combining-mark cap to `sort_key` as step 4b, before the `StripControl` /
   `StripZeroWidth` pair at step 5. A zero-width between two marks therefore survived into

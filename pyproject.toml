@@ -73,7 +73,7 @@ test = [
 ]
 dev = [
     "disarm[test]",
-    "ruff==0.16.4",
+    "ruff==0.16.5",
     "maturin>=1.14.0,<2",
     "pre-commit>=4.6.0",
 ]

@@ -18,6 +18,13 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Upgrade notes
 
+**Stored `strip_obfuscation` output moves for 90 Cyrillic rows (#723).** A fold target
+that was itself a source is now resolved in the data, so the single-pass callers reach
+the fixed point the iterating ones already did: `Apy6ƅi` becomes `Apy6bi`. If you persist
+`strip_obfuscation` output as a comparison value, reindex. `canonicalize`,
+`normalize_confusables`, `search_key`, `catalog_key` and `sort_key` are byte-identical —
+they iterate, and were already returning the resolved form.
+
 **`is_mixed_script` and the hostname screen no longer call ordinary Japanese, Korean or
 Chinese "mixed" (#776).** They now resolve the UTS #39 §5.1 augmented script sets, which
 `inspect_anomalies` has applied all along. If you store or compare the output of either,
@@ -748,6 +755,25 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   being equal rather than becoming equal — #614's mechanism, in the profiles.
   `docs/security/cve-validation.md` records it, because that is the entry point the LLM
   pipeline pages send a guardrail author to.
+
+- **`strip_obfuscation` was not a fixed point: a fold target contained a source (#723).**
+  `044B` ы mapped to `ƅi`, and `ƅ` (`U+0185`) is a source folding to `b`. The entry points
+  that iterate reached `bi`; the single-pass ones — `strip_obfuscation`, and the
+  `confusables` step inside `get_pipeline` — stopped at `ƅi`.
+
+  The issue's title names why it survived: **the exhaustive idempotence gate tests the one
+  function that iterates.** A gate aimed at the forgiving caller cannot see a defect only
+  the strict one meets.
+
+  Fixed in the data. `scripts/gen_confusables.py` now resolves every target through the
+  map until it is a fixed point, and `build.rs`'s "a target must not itself be a source"
+  assert — which previously checked only *single-character* targets, which is exactly the
+  hole `ƅi` fell through — now checks every character of every target. The assert can hold
+  only because the data satisfies it, which is what keeps the class closed.
+
+  Two rows resolved: `044B` → `bi` (was `ƅi`) and `1D14` → `eo` (was `ǝo`), the second a
+  chain the issue does not name. `strip_obfuscation` is now a fixed point over the whole
+  BMP, where it had two exceptions.
 
 - **#847 was silently reverted in full by #851, and `main` stayed green.** Every one of
   its fourteen files: 140 lines of `build.rs`, `data/confusables_lgr.tsv`,

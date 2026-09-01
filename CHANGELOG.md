@@ -1460,6 +1460,42 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   already enforcing rather than making a new one. `tests/test_security_and_stability_docs.py`
   derives the list from the generator, so a ninth function is covered the day it is added.
 
+- **Three limits that were true and unwritten (#769, #770, #772).** None is a defect. Each
+  is a place where two things that look like they answer the same question do not.
+
+  **`has_bidi_conflict` reads the whole string; `inspect_anomalies` reads one token
+  (#769).** So a label whose directions are split across a space is a conflict by one and
+  clean by the other:
+
+  ```python
+  has_bidi_conflict("hello שלום")  # True  — the whole string
+  inspect_anomalies("hello שלום").kinds  # []    — two clean tokens
+  ```
+
+  Neither is wrong: a label made of two words in two scripts is ordinary multilingual
+  text, and the detector declining to flag it is why it can be run over prose. But
+  `docs/concepts/which-function.md` routed "detecting a bidi attack" only to the
+  token-scoped one. It now has a row for each, and the rule for choosing: a single
+  identifier, filename or hostname label is one token; a display name or a line of prose
+  is not.
+
+  **The primitives do not compose to `toNFKC_Casefold` (#770).** UTS #39 defines it as
+  NFKC, case folding, **and removing `Default_Ignorable_Code_Point`**. disarm exposes the
+  first two, and putting them in sequence does not produce the third. Measured over the
+  405 assigned Default_Ignorable code points, `fold_case(normalize(s, form="NFKC"))`
+  removes **none of them** — 403 pass through byte-identical and the two Hangul fillers
+  map to another ignorable. `canonicalize` removes **387**, which is what a caller
+  reasoning from the UTS #39 definition should reach for.
+
+  **A registered Ideographic Variation Sequence is not distinguished from a base plus a
+  selector (#772).** `葛`+`U+E0100` is a registered IVS; `A`+`U+E0100` is not a sequence
+  at all. Every surface drops the selector from both and reports neither. For a
+  comparison key that is right — the variants are the same character — and for anything
+  that round-trips text it is a fidelity loss. The other direction is the one with
+  security shape: a base carrying an ignorable selector no registration justifies is a
+  smuggling carrier, and while `canonicalize` removes it, nothing *reports* it. Every
+  other CJK fidelity loss on that page was already documented.
+
 - **A doc block documented the block below it, not the member it was written for (#851
   review, #778).** In TypeScript, Java and Kotlin only the *last* doc comment before a
   declaration binds, so inserting a member between an existing block and its declaration

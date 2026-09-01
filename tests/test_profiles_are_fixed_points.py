@@ -45,16 +45,18 @@ def test_the_profile_is_a_fixed_point_over_every_code_point(name: str) -> None:
 
     A profile that is not a fixed point is a profile whose output depends on how many
     times you called it, which makes it unusable for a key.
+
+    No `try`/`except`. An earlier draft caught `Exception` and continued, on the theory
+    that surrogates need skipping — they do not: every profile accepts a lone surrogate
+    without raising, checked. So the catch could only ever have swallowed a genuine
+    failure and let the sweep pass for the wrong reason (#880 review).
     """
     pipeline = disarm.get_pipeline(name)
     moved = []
     for cp in range(0x110000):
         char = chr(cp)
-        try:
-            once = pipeline(char)
-            twice = pipeline(once)
-        except Exception:  # noqa: BLE001 - surrogates and the like are not the subject
-            continue
+        once = pipeline(char)
+        twice = pipeline(once)
         if once != twice:
             moved.append((hex(cp), once, twice))
     assert not moved, f"{name}: {len(moved)} code points move on a second pass; {moved[:5]}"

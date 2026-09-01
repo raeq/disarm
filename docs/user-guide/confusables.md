@@ -15,6 +15,62 @@ For those rows the rule is **observed attacker substitution**, which is wider th
 confusability. Unicode would not accept them upstream, and they are marked tier `2a` and
 `2b` in that file.
 
+## Detection and reduction answer different questions
+
+`find_confusables` reports **what looks like something else**. A key reducer —
+`canonicalize`, `search_key`, `catalog_key` and the rest — reports **what two strings
+collapse to**. Each looks complete on its own, and neither is.
+
+Measured over [`confusable-bench.v1`](https://paultendo.github.io/posts/unicode-identifier-threat-model/)
+(120 malicious identifiers, 20 benign controls), scoring a reducer as a registry would —
+does the identifier reduce to the same non-empty form as the name it targets:
+
+| surface | caught /120 | composability | impersonation | evasion | false positives /20 |
+|---|---:|---:|---:|---:|---:|
+| six key reducers, union | 72 | 0/31 | 30/35 | **42/54** | 0 |
+| `find_confusables` | 66 | **31/31** | **35/35** | 0/54 | 0 |
+| **either one firing** | **108** | 31/31 | 35/35 | 42/54 | **0** |
+
+The two are almost perfectly complementary. The detector takes the two categories the
+reducers cannot reach, and the reducers take the one the detector cannot. **A caller who
+picks one interface leaves between a third and a half of the corpus on the table, at no
+false-positive saving** — both are 0/20 alone and together.
+
+### Use both
+
+```python
+from disarm import canonicalize, find_confusables
+
+RESERVED = {"paypal", "admin", "support"}
+
+
+def rejected(identifier: str) -> str | None:
+    if canonicalize(identifier).casefold() in RESERVED:
+        return "collides with a reserved name"  # the reducers' half
+    if find_confusables(identifier):
+        return "contains characters that imitate others"  # the detector's half
+    return None
+
+
+assert rejected("paypal") == "collides with a reserved name"
+assert rejected("pаypal") is not None  # Cyrillic а
+assert rejected("stripe") is None
+```
+
+The reducer answers *"is this the same as something I protect?"* and the detector answers
+*"is this pretending to be something?"*. A registry needs both questions asked.
+
+### Why the split falls where it does
+
+`find_confusables` sees a character that has a fold target, whether or not folding it
+changes the comparison — so it catches the **composability** and **impersonation** classes
+outright. It cannot see **evasion**, where the attacker's character has no fold target and
+the attack is in what survives.
+
+The reducers are the mirror. They catch evasion, because a stripped invisible or a
+collapsed mark changes the key. They cannot catch composability, because the two strings
+they are comparing are already equal by the time the divergence matters.
+
 ## The fold is not order-independent
 
 `normalize_confusables` folds the table against the input as written. Every **preset** and

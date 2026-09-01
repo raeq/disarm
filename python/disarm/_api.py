@@ -2255,6 +2255,21 @@ def find_confusables(
     fold?"* — exposure — and this one answers *"what did the fold change, and to what?"* —
     evidence.
 
+    Note:
+        **Pair this with a key reducer; neither is complete (#882).** This function
+        reports what *looks like* something else. `canonicalize` and the other key
+        reducers report what two strings *collapse to*. Measured over
+        ``confusable-bench.v1`` — 120 malicious identifiers, 20 benign — this catches 66
+        and the six reducers together catch 72, but **either one firing catches 108**, at
+        0 false positives for each alone and for the pair.
+
+        The split is structural rather than incidental. This sees a character that has a
+        fold target, so it takes the composability (31/31) and impersonation (35/35)
+        classes outright and cannot see evasion (0/54), where the attack is in what has
+        no fold target and survives. The reducers are the mirror: 42/54 on evasion, 0/31
+        on composability. A registry needs both questions asked — see
+        *Detection and reduction answer different questions* in the confusables guide.
+
     `is_confusable` returns a bare ``bool`` and `normalize_confusables` returns the folded
     string; neither says **where**. Diffing the two does not work either, because the fold
     is not length-preserving (``ﬁ`` becomes ``fi``).

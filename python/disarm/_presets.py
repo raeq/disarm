@@ -39,6 +39,15 @@ def canonicalize(text: str) -> str:
     For **cleaning untrusted input before comparison**, this is the entry point.
     It does not make text safe to emit; encode at the sink.
 
+    **It is half of a spoof-resistance answer, not all of it (#882).** This reports what
+    two strings *collapse to*; `find_confusables` reports what *looks like* something
+    else. Measured over ``confusable-bench.v1``, the six key reducers together catch 72
+    of 120 malicious identifiers and `find_confusables` catches 66 — but **either one
+    firing catches 108**, at 0 false positives on the 20 benign controls for each alone
+    and for the pair. The reducers take the evasion class (42/54) that the detector
+    cannot see, and the detector takes the composability class (31/31) the reducers
+    cannot. A registry needs both questions asked.
+
     **Two steps introduce ASCII, not one** (#719). The leading NFKC is the obvious
     one; the confusable fold is the second and reaches characters NFKC leaves
     alone. ``U+2236 RATIO`` has no decomposition at all and becomes ``:``,

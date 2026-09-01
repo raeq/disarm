@@ -274,7 +274,12 @@ impl Pipeline {
             crate::presets::strip_bidi_into(input, out);
             Ok(true)
         } else if step == PipelineSteps::DEMOJIZE {
-            // The caller composed this step by name, so every row is named (#757).
+            // Which rows are named depends on how the pipeline was built (#853). A
+            // hand-composed `TextPipeline` names every row — the caller asked for the step
+            // by name. A **named profile** is a curated recommendation like a preset, so
+            // it skips the 326 rows carrying neither `Emoji` nor `Extended_Pictographic`;
+            // naming those is what turned `film\u{2019}s` into `film right apostrophe s`
+            // (#757). `Pipeline::new` sets the default and `ProfileSpec::build` overrides.
             emoji::demojize_rust_into(input, false, self.emoji_name_policy, out);
             Ok(true)
         } else if step == PipelineSteps::STRIP_ACCENTS {

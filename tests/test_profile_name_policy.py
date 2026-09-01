@@ -40,14 +40,27 @@ def test_every_profile_is_a_fixed_point_on_a_cldr_name(profile: str) -> None:
     assert pipe(once) == once, f"{profile} renames its own output"
 
 
-@pytest.mark.parametrize("char", ["’", "€", "¼", "×", "°"])
-def test_a_named_profile_does_not_name_a_non_emoji(char: str) -> None:
-    """None of these is an emoji, and none should become an English word."""
+#: `(character, the word it must not become)`. Each is a real non-emoji CLDR row —
+#: `demojize` names it, so a profile skipping the class must not. An earlier version
+#: parametrised `×` and `°` and asserted three fixed substrings against all of them; the
+#: two are not in the name table at all, so those cases asserted nothing (#872 review).
+NON_EMOJI_ROWS = [
+    ("\u2019", "apostrophe"),  # RIGHT SINGLE QUOTATION MARK
+    ("\u20ac", "euro"),  # EURO SIGN
+    ("\u2044", "fraction slash"),  # FRACTION SLASH — what NFKC turns ¼ into
+    ("\u2212", "minus"),  # MINUS SIGN
+]
+
+
+@pytest.mark.parametrize(("char", "forbidden"), NON_EMOJI_ROWS)
+def test_a_named_profile_does_not_name_a_non_emoji(char: str, forbidden: str) -> None:
+    """Each input against the word it would become, not a fixed list against all of them."""
+    assert forbidden in disarm.demojize(char), (
+        f"U+{ord(char):04X} is no longer a CLDR name row, so this case tests nothing"
+    )
     for profile in disarm.list_profiles():
         out = disarm.get_pipeline(profile)(char)
-        assert "apostrophe" not in out, f"{profile} named {char!r} as {out!r}"
-        assert "euro" not in out, f"{profile} named {char!r} as {out!r}"
-        assert "fraction slash" not in out, f"{profile} named {char!r} as {out!r}"
+        assert forbidden not in out, f"{profile} named U+{ord(char):04X} as {out!r}"
 
 
 @pytest.mark.parametrize(

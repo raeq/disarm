@@ -2957,7 +2957,7 @@ class TestOneCall:
         written so that closing a gap would fail loudly rather than leave the published
         advice stale. It did exactly that, and this is the rewrite it asked for.
 
-        Three entry points now clear the whole matrix. The first two are not a
+        Four entry points now clear the whole matrix. The first two are not a
         coincidence: both carry a confusable fold *and* something that removes a
         combining mark.
 
@@ -2968,6 +2968,13 @@ class TestOneCall:
         **key builder**: a caller already computing catalog keys now gets the whole
         matrix from a call they were making anyway, instead of needing a cleaning pass
         beside it.
+
+        `llm_guardrail` joined in #853 and fired it a third time. Naming the 326
+        non-emoji CLDR rows was what broke it: `\u20acxample.com` became
+        "euro xample.com", so the spoof and the genuine string stopped being *equal*
+        rather than becoming equal — #614's mechanism, surviving in the profiles after
+        #803 fixed it for `PRESETS`. That one is worth stating in the guidance too,
+        because it is the entry point the LLM pipeline pages send a guardrail author to.
 
         Everything else is still short, so "clean unconditionally" survives as advice.
         """

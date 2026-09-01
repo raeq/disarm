@@ -773,6 +773,26 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **The last profile that was not a fixed point (#751).** `llm_guardrail` returned `B`
+  for `U+13F8` CHEROKEE SMALL LETTER YE on the first pass and `b` on the second, so its
+  output depended on how many times you called it — which makes it unusable for a key.
+
+  This is the mirror of #852 and its closing half. That change added a confusable pass
+  *after* the case fold, so a cased letter whose folded form is in the table gets folded
+  (`Þ` → `þ` → `p`). But the fold's **target** can be uppercase, and nothing case-folded
+  after it. Ten Cherokee small letters fold to a capital Latin letter: `ᏸ`→`B`, `ᏺ`→`H`,
+  `ꮷ`→`D`, scattered across three blocks.
+
+  `PipelineSteps::FOLD_CASE_POST` closes it, gated exactly as `CONFUSABLES_POST` is —
+  added only where a second confusable pass precedes it, so a pipeline without
+  `confusables` gains no step and `explain()` never describes a mechanism it does not run.
+
+  **All eight profiles are now fixed points over every code point that exists**, measured
+  by exhaustive sweep rather than by sample: the ten are scattered enough that no
+  hand-written list would have included `U+ABB7`. That sweep is now
+  `tests/test_profiles_are_fixed_points.py`, which is also what #723's `PRESETS`-only
+  version never reached.
+
 - **The detector and the neutralizer disagreed about what is invisible (#812, #813, #814).**
   Three surfaces, one channel.
 

@@ -60,6 +60,19 @@ bitflags! {
         /// named profiles, which are curated recommendations and can take the preset
         /// policy without a signature change. Exposing it to a caller is its own change.
         const STRIP_PUA = 0b1_0000_0000_0000;
+        /// The case fold that runs AFTER the second confusable pass (#751).
+        ///
+        /// `CONFUSABLES_POST` exists because a cased letter can reach the table only via
+        /// its folded form. It closes that, and opens the mirror: the fold's *target* can
+        /// be uppercase, and nothing case-folded after it. Ten Cherokee small letters do
+        /// exactly that — `U+13F8` folds to `B`, so `llm_guardrail` returned `B` on the
+        /// first pass and `b` on the second, and the profile was not a fixed point.
+        ///
+        /// Its own flag rather than a second `FOLD_CASE` entry, for the reason #852 gave:
+        /// every flag appears in `STEP_ORDER` exactly once, and this pass exists only
+        /// where a post-fold precedes it. Displayed as `fold_case`, because that is what
+        /// it does.
+        const FOLD_CASE_POST = 0b10_0000_0000_0000;
     }
 }
 
@@ -109,6 +122,10 @@ const STEP_ORDER: &[(PipelineSteps, &str)] = &[
     (PipelineSteps::CONFUSABLES, "confusables"),
     (PipelineSteps::FOLD_CASE, "fold_case"),
     (PipelineSteps::CONFUSABLES_POST, "confusables"),
+    // #751: the pass above can EMIT an uppercase letter — ten Cherokee small letters fold
+    // to one — and there was no case fold after it, so the profile returned `B` on the
+    // first pass and `b` on the second. This is the closing half of #852's opening one.
+    (PipelineSteps::FOLD_CASE_POST, "fold_case"),
     (PipelineSteps::STRIP_CONTROL, "strip_control"),
     (PipelineSteps::STRIP_ZERO_WIDTH, "strip_zero_width"),
     // Beside the zero-width strip and after it: both remove what is not text, and the
@@ -192,6 +209,10 @@ impl Pipeline {
             // nothing would make `explain()` describe a mechanism the pipeline lacks.
             if confusables {
                 steps |= PipelineSteps::CONFUSABLES_POST;
+                // And the case fold that closes it (#751): that second fold can emit an
+                // uppercase target, which nothing folded afterwards. Gated identically —
+                // without `confusables` there is no second fold to close.
+                steps |= PipelineSteps::FOLD_CASE_POST;
             }
         }
         if collapse_whitespace {
@@ -382,7 +403,7 @@ impl Pipeline {
                 out,
             )?;
             Ok(true)
-        } else if step == PipelineSteps::FOLD_CASE {
+        } else if step == PipelineSteps::FOLD_CASE || step == PipelineSteps::FOLD_CASE_POST {
             case_fold::fold_case_into(input, out);
             Ok(true)
         } else if step == PipelineSteps::STRIP_CONTROL {
@@ -698,7 +719,8 @@ mod tests {
             {
                 // Both run the same fold; `CONFUSABLES_POST` differs only in when (#852).
                 (None, "\u{0410}pple") // Cyrillic А
-            } else if *flag == PipelineSteps::FOLD_CASE {
+            } else if *flag == PipelineSteps::FOLD_CASE || *flag == PipelineSteps::FOLD_CASE_POST {
+                // Both run the same fold; `FOLD_CASE_POST` differs only in when (#751).
                 (None, "ABC")
             } else if *flag == PipelineSteps::STRIP_CONTROL {
                 (None, "a\u{0000}b")
@@ -1047,6 +1069,7 @@ mod tests {
                 // folded form is in the confusable table and whose original is not would
                 // otherwise fold only on a second call.
                 "confusables",
+                "fold_case",
                 "strip_control",
                 "strip_zero_width",
                 "strip_pua",

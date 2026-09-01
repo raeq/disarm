@@ -33,6 +33,9 @@ def test_llm_guardrail_step_order() -> None:
         # form is in the confusable table and whose original is not — `Þ` has no entry,
         # folds to `þ`, and only then folds to `p` — would otherwise need a second call.
         "confusables",
+        # And the case fold that closes it (#751): that second pass can emit an uppercase
+        # target — `U+13F8` CHEROKEE SMALL LETTER YE folds to `B` — which nothing folded.
+        "fold_case",
         "strip_control",
         "strip_zero_width",
         "strip_pua",

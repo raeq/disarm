@@ -121,47 +121,75 @@ class UTS39ConfusableCoverage(SuiteBase):
         ordered = thin(sorted(pairs), limit)
         outcome.population = len(ordered)
 
-        surface_map = self.transforms()
+        # Two roles, scored apart. A key builder merges by contract, so letting
+        # it earn coverage while the cost axis excludes it credits a library for
+        # surfaces it is never charged for — an asymmetry in the favour of
+        # whichever library ships the most key builders, on its own benchmark.
+        all_surfaces = self.transforms()
+        collapsing = set(self.subject.keys()) if self.subject else set()
+        text_surfaces, key_surfaces = damage.split_by_intent(all_surfaces, collapsing)
+        text_surfaces = text_surfaces or all_surfaces
+
+        probes = [(chr(cp), pairs[cp]) for cp in ordered]
+        winner, folded = damage.best_surface(text_surfaces, probes)
+        key_winner, key_folded = damage.best_surface(key_surfaces, probes)
         record(
             outcome,
             domain=f"{len(ordered)} UTS #39 source->target pairs",
-            predicates=sorted(surface_map),
+            predicates=sorted(text_surfaces),
+            collapsing_surfaces_scored_separately=sorted(key_surfaces),
             reached_if=(
-                "some surface maps the source and its UTS #39 target to one "
-                "NON-EMPTY form; deleting both sides is not coverage"
+                "the subject's single best NON-KEY surface maps the source and "
+                "its UTS #39 target to one NON-EMPTY form"
             ),
-            changed_if="some surface merely alters the source",
+            best_surface=winner,
+            surfaces_offered=len(text_surfaces),
             note=(
-                "'changed' is not a fair cross-tool score: a transliterator "
-                "rewrites nearly every non-ASCII code point and would read as "
-                "near-total coverage while landing nowhere near the target."
+                "Best single surface, not a union over all of them: a union asks "
+                "whether any of N entry points got it, which rewards shipping "
+                "many rather than shipping good. It is also what makes coverage "
+                "symmetric with cost, which was already per-surface."
             ),
         )
-        folded = unchanged = 0
+        unchanged = len(ordered) - folded
         rtl_unreached = 0
         altered_only = 0
         for cp in ordered:
             ch, target = chr(cp), pairs[cp]
-            # damage.collides requires a non-empty shared form, which is what
-            # stops a delete-everything tool scoring 100% here.
-            if damage.collides(surface_map.values(), ch, target):
-                folded += 1
-            else:
-                unchanged += 1
-                if any(_changed(fn, ch) for fn in surface_map.values()):
-                    altered_only += 1
-                if unicodedata.bidirectional(ch) in ("R", "AL"):
-                    rtl_unreached += 1
+            if damage.collides(text_surfaces.values(), ch, target):
+                continue
+            if any(_changed(fn, ch) for fn in text_surfaces.values()):
+                altered_only += 1
+            if unicodedata.bidirectional(ch) in ("R", "AL"):
+                rtl_unreached += 1
         n = len(ordered)
         add(outcome, "sources", n, unit="pairs")
+        add(
+            outcome,
+            "surfaces_offered",
+            len(text_surfaces),
+            detail="non-key entry points the subject was allowed — a census, so a "
+            "reader can see how many tries the score came from",
+        )
         add(
             outcome,
             "folded",
             folded,
             of=n,
             higher_is_better=True,
-            detail="source and its UTS #39 target land on one form",
+            detail=f"best single non-key surface (`{winner or 'none'}`) maps source "
+            "and target onto one form",
         )
+        if key_surfaces:
+            add(
+                outcome,
+                "folded_by_key_builder",
+                key_folded,
+                of=n,
+                higher_is_better=True,
+                detail=f"best key builder (`{key_winner or 'none'}`) — scored in its "
+                "own role, where merging is the contract rather than a cost",
+            )
         add(
             outcome,
             "unreached",
@@ -1020,36 +1048,74 @@ class UTS39EquivalenceClasses(SuiteBase):
 
         # The strongest surface the subject has, chosen per class: a tool is
         # credited with closing a class if any one of its surfaces does.
-        surface_map = self.transforms()
+        # Same two corrections as uts39-confusables: key builders are scored in
+        # their own role rather than earning coverage the cost axis excuses, and
+        # the score is one surface's rather than a union over however many the
+        # subject happens to ship.
+        all_surfaces = self.transforms()
+        collapsing = set(self.subject.keys()) if self.subject else set()
+        text_surfaces, key_surfaces = damage.split_by_intent(all_surfaces, collapsing)
+        text_surfaces = text_surfaces or all_surfaces
+
+        def closes(fn: Callable[[str], str], target: str) -> bool:
+            forms = {_apply(fn, m) for m in (*classes[target], target)}
+            return len(forms) == 1 and next(iter(forms)) != ""
+
+        def best_closer(surfaces: dict[str, Callable[[str], str]]) -> tuple[str, int]:
+            winner, best = "", 0
+            for name, fn in surfaces.items():
+                hits = sum(1 for t in keys if closes(fn, t))
+                if hits > best:
+                    winner, best = name, hits
+            return winner, best
+
+        winner, closed = best_closer(text_surfaces)
+        key_winner, key_closed = best_closer(key_surfaces)
         record(
             outcome,
             domain=f"{len(keys)} UTS #39 equivalence classes",
-            predicates=sorted(surface_map),
-            closed_if="one surface maps every member and the prototype to one form",
+            predicates=sorted(text_surfaces),
+            collapsing_surfaces_scored_separately=sorted(key_surfaces),
+            closed_if="the single best non-key surface maps every member and the "
+            "prototype to one non-empty form",
+            best_surface=winner,
+            surfaces_offered=len(text_surfaces),
         )
-        closed = 0
-        intra_script_only = 0
-        for target in keys:
-            members = classes[target]
-            everything = [*members, target]
-            # One non-empty shared form. Collapsing the class to "" is deletion,
-            # not closure, and scored the null baseline at 100% before this.
-            if any(
-                len(forms := {_apply(fn, m) for m in everything}) == 1 and next(iter(forms)) != ""
-                for fn in surface_map.values()
-            ):
-                closed += 1
-            if not any(_apply(fn, m).isascii() for fn in surface_map.values() for m in everything):
-                intra_script_only += 1
+        intra_script_only = sum(
+            1
+            for target in keys
+            if not any(
+                _apply(fn, m).isascii()
+                for fn in text_surfaces.values()
+                for m in (*classes[target], target)
+            )
+        )
         n = len(keys)
         add(outcome, "classes", n, unit="classes")
+        add(
+            outcome,
+            "surfaces_offered",
+            len(text_surfaces),
+            detail="non-key entry points the subject was allowed",
+        )
+        if key_surfaces:
+            add(
+                outcome,
+                "closed_by_key_builder",
+                key_closed,
+                of=n,
+                higher_is_better=True,
+                detail=f"best key builder (`{key_winner or 'none'}`), scored in its "
+                "own role where merging is the contract",
+            )
         add(
             outcome,
             "closed_under_canonicalize",
             closed,
             of=n,
             higher_is_better=True,
-            detail="every member and the prototype land on one form",
+            detail=f"best single non-key surface (`{winner or 'none'}`) lands every "
+            "member and the prototype on one form",
         )
         add(
             outcome,
@@ -1163,23 +1229,38 @@ class CorruptionCost(SuiteBase):
             unit="ratio",
             detail=f"`{gentle_name}`",
         )
+        # The scored cost is identity retention, not raw retention. Raw retention
+        # charges a sanitizer for removing private-use, format and control code
+        # points, which is the one thing it exists to do: on the first census
+        # 93.5% of disarm's "damage" was Private Use Area removal. Raw retention
+        # is kept as a census so the difference stays inspectable.
+        add(
+            outcome,
+            "identity_retention_worst_surface",
+            worst.identity_retention,
+            of=1.0,
+            unit="ratio",
+            higher_is_better=True,
+            detail=f"letters and symbols surviving `{worst_name}` — format, control "
+            "and private-use removal is the job, not damage",
+        )
+        add(
+            outcome,
+            "identity_retention_gentlest_surface",
+            gentle.identity_retention,
+            of=1.0,
+            unit="ratio",
+            higher_is_better=True,
+            detail=f"letters and symbols surviving `{gentle_name}`",
+        )
         add(
             outcome,
             "retention_worst_surface",
             worst.retention,
             of=1.0,
             unit="ratio",
-            higher_is_better=True,
-            detail=f"input characters present in `{worst_name}`'s output (multiset)",
-        )
-        add(
-            outcome,
-            "retention_gentlest_surface",
-            gentle.retention,
-            of=1.0,
-            unit="ratio",
-            higher_is_better=True,
-            detail=f"input characters present in `{gentle_name}`'s output",
+            detail=f"all input characters surviving `{worst_name}`, identity-free "
+            "ones included — a census, deliberately not scored",
         )
         add(
             outcome,

@@ -230,17 +230,25 @@ def _render_comparison(report: RunReport) -> list[str]:
     """Cross-subject columns, wherever more than one subject produced a number."""
     if len(report.subjects) < 2:
         return []
-    rows: list[tuple[str, str, dict[str, float], bool | None]] = []
+    rows: list[tuple[str, str, dict[str, float], bool | None, bool]] = []
     for suite in dict.fromkeys(o.suite for o in report.ran):
         for key in dict.fromkeys(
             m.key for o in report.ran if o.suite == suite for m in o.measurements
         ):
             got = report.comparison(suite, key)
             if len(got) > 1:
-                rows.append((suite, key, got, report.direction(suite, key)))
+                rows.append(
+                    (
+                        suite,
+                        key,
+                        got,
+                        report.direction(suite, key),
+                        report.is_ratio(suite, key),
+                    )
+                )
     if not rows:
         return []
-    subjects = [s for s in report.subjects if any(s in g for _, _, g, _d in rows)]
+    subjects = [s for s in report.subjects if any(s in g for _, _, g, _d, _r in rows)]
     lines = [
         "## Across subjects",
         "",
@@ -251,7 +259,7 @@ def _render_comparison(report: RunReport) -> list[str]:
         "| suite | measurement | " + " | ".join(f"`{s}`" for s in subjects) + " |",
         "|---|---|" + "---|" * len(subjects),
     ]
-    for suite, key, got, higher_is_better in rows:
+    for suite, key, got, higher_is_better, ratio in rows:
         # Without an arrow, a lower-is-better row reads backwards: `unreached`
         # 34.1% beats 44.5%, and nothing on the row said so.
         arrow = {True: " ↑", False: " ↓", None: ""}[higher_is_better]
@@ -271,9 +279,9 @@ def _render_comparison(report: RunReport) -> list[str]:
             if value is None:
                 cells.append("—")
             elif best is not None and value == best:
-                cells.append(f"**{_cell(value)}**")
+                cells.append(f"**{_cell(value, ratio)}**")
             else:
-                cells.append(_cell(value))
+                cells.append(_cell(value, ratio))
         lines.append(f"| `{suite}` | `{key}`{arrow} | " + " | ".join(cells) + " |")
     lines += [
         "",
@@ -342,8 +350,11 @@ def _render_pareto(board: Leaderboard) -> list[str]:
     return lines
 
 
-def _cell(value: float) -> str:
-    return f"{value * 100:.1f}%" if 0 <= value <= 1 else _num(value)
+def _cell(value: float, ratio: bool = True) -> str:
+    """Percentages only where the measurement actually has a denominator."""
+    if ratio and 0 <= value <= 1:
+        return f"{value * 100:.1f}%"
+    return _num(value)
 
 
 def _render_method(out: Outcome) -> list[str]:

@@ -2,8 +2,66 @@
   "confusables_version": "17.0.0",
   "disarm_version": "0.14.1",
   "host_ucd": "16.0.0",
-  "recorded_utc": "2026-09-01T17:42:40+00:00",
+  "recorded_utc": "2026-09-01T18:10:28+00:00",
   "suites": {
+    "anyascii@0.3.3::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9997053385885764
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 336
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 336
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 0,
+          "value": 0
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 9312
+        }
+      },
+      "population": 22370,
+      "subject": "anyascii",
+      "subject_version": "0.3.3"
+    },
     "anyascii@0.3.3::corruption-cost": {
       "external": true,
       "measurements": {
@@ -37,6 +95,16 @@
           "of": 9438,
           "value": 0
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -57,13 +125,8 @@
           "of": null,
           "value": 3.1818181818181817
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 0.9074551893965407
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9074551893965407
         }
@@ -108,6 +171,11 @@
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
@@ -140,6 +208,11 @@
           "higher_is_better": false,
           "of": 3416,
           "value": 0
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
         }
       },
       "population": 3416,
@@ -163,6 +236,64 @@
       "population": 37,
       "subject": "confusable-homoglyphs",
       "subject_version": "3.3.1"
+    },
+    "decancer@0.4.1::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.8653372720040536
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 19517
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 19517
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 0,
+          "value": 0
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 21937
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 7556
+        }
+      },
+      "population": 22370,
+      "subject": "decancer",
+      "subject_version": "0.4.1"
     },
     "decancer@0.4.1::corruption-cost": {
       "external": true,
@@ -197,6 +328,16 @@
           "of": 9438,
           "value": 0
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9943377065660036
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9943377065660036
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -217,13 +358,8 @@
           "of": null,
           "value": 1.3333333333333333
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 0.9510443544035554
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9510443544035554
         }
@@ -268,6 +404,11 @@
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
@@ -300,13 +441,76 @@
           "higher_is_better": false,
           "of": 3416,
           "value": 1521
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
         }
       },
       "population": 3416,
       "subject": "decancer",
       "subject_version": "0.4.1"
     },
-    "disarm@0.14.1+g8430cae.dirty::cldr-emoji-annotations": {
+    "disarm@0.14.1+g3bdb14f.dirty::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.8579676020225954
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 20270
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 84
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 6,
+          "value": 4
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 22049
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 18948
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 11506
+        }
+      },
+      "population": 22370,
+      "subject": "disarm",
+      "subject_version": "0.14.1+g3bdb14f.dirty"
+    },
+    "disarm@0.14.1+g3bdb14f.dirty::cldr-emoji-annotations": {
       "external": true,
       "measurements": {
         "annotated_codepoints": {
@@ -322,9 +526,9 @@
       },
       "population": 1765,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::confusable-bench-v1": {
+    "disarm@0.14.1+g3bdb14f.dirty::confusable-bench-v1": {
       "external": true,
       "measurements": {
         "benign_controls": {
@@ -410,9 +614,9 @@
       },
       "population": 140,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::confusable-vision": {
+    "disarm@0.14.1+g3bdb14f.dirty::confusable-vision": {
       "external": true,
       "measurements": {
         "collide_in_canonicalize": {
@@ -438,9 +642,9 @@
       },
       "population": 4174,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::corruption-cost": {
+    "disarm@0.14.1+g3bdb14f.dirty::corruption-cost": {
       "external": true,
       "measurements": {
         "clean_ascii_altered_gentlest": {
@@ -461,7 +665,7 @@
         "collapsing_surfaces": {
           "higher_is_better": null,
           "of": null,
-          "value": 3
+          "value": 6
         },
         "degenerate": {
           "higher_is_better": false,
@@ -478,6 +682,16 @@
           "of": 9438,
           "value": 0
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -486,12 +700,12 @@
         "injectivity_worst_surface": {
           "higher_is_better": null,
           "of": 1.0,
-          "value": 0.12248357702903158
+          "value": 0.1250264886628523
         },
         "key_injectivity": {
           "higher_is_better": null,
           "of": 1.0,
-          "value": 0.4955499046408137
+          "value": 0.12248357702903158
         },
         "length_ratio_worst_surface": {
           "higher_is_better": null,
@@ -503,22 +717,17 @@
           "of": null,
           "value": 1.8888888888888888
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 0.999980378498759
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
-          "value": 0.9074257571446791
+          "value": 0.9074355678952997
         }
       },
       "population": 9438,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::cve-2021-42574-trojan-source": {
+    "disarm@0.14.1+g3bdb14f.dirty::cve-2021-42574-trojan-source": {
       "external": true,
       "measurements": {
         "poc_files": {
@@ -539,9 +748,9 @@
       },
       "population": 311,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::cve-2026-17084-stringprep": {
+    "disarm@0.14.1+g3bdb14f.dirty::cve-2026-17084-stringprep": {
       "external": true,
       "measurements": {
         "collides_catalog_key": {
@@ -577,9 +786,9 @@
       },
       "population": 711,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::icann-lgr-latin": {
+    "disarm@0.14.1+g3bdb14f.dirty::icann-lgr-latin": {
       "external": true,
       "measurements": {
         "blocked_pairs": {
@@ -600,9 +809,9 @@
       },
       "population": 21,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::uax29-word-joiners": {
+    "disarm@0.14.1+g3bdb14f.dirty::uax29-word-joiners": {
       "external": true,
       "measurements": {
         "detected": {
@@ -623,9 +832,9 @@
       },
       "population": 37,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::ucd-bidi-class": {
+    "disarm@0.14.1+g3bdb14f.dirty::ucd-bidi-class": {
       "external": true,
       "measurements": {
         "conflict_detected": {
@@ -646,9 +855,9 @@
       },
       "population": 3018,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::ucd-scripts": {
+    "disarm@0.14.1+g3bdb14f.dirty::ucd-scripts": {
       "external": true,
       "measurements": {
         "agree": {
@@ -679,9 +888,9 @@
       },
       "population": 126761,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::ucd-toNFKC-casefold": {
+    "disarm@0.14.1+g3bdb14f.dirty::ucd-toNFKC-casefold": {
       "external": true,
       "measurements": {
         "default_ignorable": {
@@ -697,9 +906,9 @@
       },
       "population": 405,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::untrace-techniques": {
+    "disarm@0.14.1+g3bdb14f.dirty::untrace-techniques": {
       "external": true,
       "measurements": {
         "altered_by_strip_obfuscation": {
@@ -725,9 +934,9 @@
       },
       "population": 64,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::uts39-augmented-scripts": {
+    "disarm@0.14.1+g3bdb14f.dirty::uts39-augmented-scripts": {
       "external": true,
       "measurements": {
         "cases": {
@@ -763,42 +972,52 @@
       },
       "population": 6,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::uts39-confusables": {
+    "disarm@0.14.1+g3bdb14f.dirty::uts39-confusables": {
       "external": true,
       "measurements": {
         "altered_but_not_onto_target": {
           "higher_is_better": false,
-          "of": 2238,
-          "value": 2234
+          "of": 2545,
+          "value": 2290
         },
         "folded": {
           "higher_is_better": true,
           "of": 6565,
-          "value": 4327
+          "value": 4020
+        },
+        "folded_by_key_builder": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 3790
         },
         "sources": {
           "higher_is_better": null,
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 13
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
-          "value": 2238
+          "value": 2545
         },
         "unreached_strong_rtl": {
           "higher_is_better": null,
-          "of": 2238,
+          "of": 2545,
           "value": 341
         }
       },
       "population": 6565,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::uts39-equivalence-classes": {
+    "disarm@0.14.1+g3bdb14f.dirty::uts39-equivalence-classes": {
       "external": true,
       "measurements": {
         "classes": {
@@ -806,22 +1025,32 @@
           "of": null,
           "value": 3416
         },
+        "closed_by_key_builder": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 1777
+        },
         "closed_under_canonicalize": {
           "higher_is_better": true,
           "of": 3416,
-          "value": 1932
+          "value": 1739
         },
         "no_ascii_reachable_member": {
           "higher_is_better": false,
           "of": 3416,
           "value": 0
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 13
         }
       },
       "population": 3416,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::uts39-mixed-numbers": {
+    "disarm@0.14.1+g3bdb14f.dirty::uts39-mixed-numbers": {
       "external": true,
       "measurements": {
         "ascii_mixed_flagged": {
@@ -842,9 +1071,9 @@
       },
       "population": 75,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
     },
-    "disarm@0.14.1+g8430cae.dirty::youtube-spam": {
+    "disarm@0.14.1+g3bdb14f.dirty::youtube-spam": {
       "external": true,
       "measurements": {
         "misses_novel": {
@@ -875,7 +1104,65 @@
       },
       "population": 1956,
       "subject": "disarm",
-      "subject_version": "0.14.1+g8430cae.dirty"
+      "subject_version": "0.14.1+g3bdb14f.dirty"
+    },
+    "ftfy@6.3.1::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9997743018976329
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 168
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 140
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 0,
+          "value": 0
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 4951
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 3200
+        }
+      },
+      "population": 22370,
+      "subject": "ftfy",
+      "subject_version": "6.3.1"
     },
     "ftfy@6.3.1::corruption-cost": {
       "external": true,
@@ -910,6 +1197,16 @@
           "of": 9438,
           "value": 0
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9995999466595547
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9984613333059793
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -930,13 +1227,8 @@
           "of": null,
           "value": 1.3636363636363635
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 0.9995879484739377
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9984989551550589
         }
@@ -981,6 +1273,11 @@
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 2
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
@@ -1013,11 +1310,74 @@
           "higher_is_better": false,
           "of": 3416,
           "value": 3077
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 2
         }
       },
       "population": 3416,
       "subject": "ftfy",
       "subject_version": "6.3.1"
+    },
+    "identity@1::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 0,
+          "value": 0
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 0
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 3200
+        }
+      },
+      "population": 22370,
+      "subject": "identity",
+      "subject_version": "1"
     },
     "identity@1::corruption-cost": {
       "external": true,
@@ -1052,6 +1412,16 @@
           "of": 9438,
           "value": 0
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -1072,13 +1442,8 @@
           "of": null,
           "value": 1.0
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 1.0
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 1.0
         }
@@ -1123,6 +1488,11 @@
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
@@ -1155,10 +1525,73 @@
           "higher_is_better": false,
           "of": 3416,
           "value": 3116
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
         }
       },
       "population": 3416,
       "subject": "identity",
+      "subject_version": "1"
+    },
+    "null-baseline@1::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 22370
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 22370
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 22370
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 0,
+          "value": 0
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 22370
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        }
+      },
+      "population": 22370,
+      "subject": "null-baseline",
       "subject_version": "1"
     },
     "null-baseline@1::corruption-cost": {
@@ -1194,6 +1627,16 @@
           "of": 9438,
           "value": 9438
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.0
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -1214,13 +1657,8 @@
           "of": null,
           "value": 1.0
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 0.0
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.0
         }
@@ -1265,6 +1703,11 @@
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
@@ -1297,11 +1740,74 @@
           "higher_is_better": false,
           "of": 3416,
           "value": 0
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
         }
       },
       "population": 3416,
       "subject": "null-baseline",
       "subject_version": "1"
+    },
+    "pyunormalize@17.0.0::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9999937306082676
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 28
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 0,
+          "value": 0
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 28
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 3200
+        }
+      },
+      "population": 22370,
+      "subject": "pyunormalize",
+      "subject_version": "17.0.0"
     },
     "pyunormalize@17.0.0::corruption-cost": {
       "external": true,
@@ -1336,6 +1842,16 @@
           "of": 9438,
           "value": 0
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9996614933273155
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9944710576794855
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -1356,13 +1872,8 @@
           "of": null,
           "value": 1.4545454545454546
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 0.9996762452295225
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9947120054155344
         }
@@ -1407,6 +1918,11 @@
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 4
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
@@ -1439,11 +1955,74 @@
           "higher_is_better": false,
           "of": 3416,
           "value": 3077
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 4
         }
       },
       "population": 3416,
       "subject": "pyunormalize",
       "subject_version": "17.0.0"
+    },
+    "stdlib@16.0.0::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.8656193946320124
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 19517
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 0,
+          "value": 0
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 19936
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 3200
+        }
+      },
+      "population": 22370,
+      "subject": "stdlib",
+      "subject_version": "16.0.0"
     },
     "stdlib@16.0.0::corruption-cost": {
       "external": true,
@@ -1478,6 +2057,16 @@
           "of": 9438,
           "value": 0
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9996614933273155
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9944710576794855
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -1498,13 +2087,8 @@
           "of": null,
           "value": 1.4545454545454546
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 0.9996762452295225
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9947120054155344
         }
@@ -1549,6 +2133,11 @@
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 5
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
@@ -1581,11 +2170,74 @@
           "higher_is_better": false,
           "of": 3416,
           "value": 3076
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 5
         }
       },
       "population": 3416,
       "subject": "stdlib",
       "subject_version": "16.0.0"
+    },
+    "text-unidecode@1.3::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9997053385885764
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 336
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 336
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 0,
+          "value": 0
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 5104
+        }
+      },
+      "population": 22370,
+      "subject": "text-unidecode",
+      "subject_version": "1.3"
     },
     "text-unidecode@1.3::corruption-cost": {
       "external": true,
@@ -1620,6 +2272,16 @@
           "of": 9438,
           "value": 0
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -1640,13 +2302,8 @@
           "of": null,
           "value": 1.7272727272727273
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 0.9074551893965407
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9074551893965407
         }
@@ -1691,6 +2348,11 @@
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
@@ -1723,11 +2385,74 @@
           "higher_is_better": false,
           "of": 3416,
           "value": 0
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
         }
       },
       "population": 3416,
       "subject": "text-unidecode",
       "subject_version": "1.3"
+    },
+    "unidecode@1.4.0::bad-characters": {
+      "external": true,
+      "measurements": {
+        "clean_retention": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9997053385885764
+        },
+        "clean_rows_corrupted": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 336
+        },
+        "clean_rows_corrupted_gentlest": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 336
+        },
+        "clean_rows_destroyed": {
+          "higher_is_better": false,
+          "of": 22370,
+          "value": 0
+        },
+        "detected_any": {
+          "higher_is_better": null,
+          "of": 0,
+          "value": 0
+        },
+        "non_ascii_rows": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 22370
+        },
+        "rows_altered_by_most_active_surface": {
+          "higher_is_better": null,
+          "of": 22370,
+          "value": 14376
+        },
+        "rows_detected_by_best_detector": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 0
+        },
+        "xmr_best_surface": {
+          "higher_is_better": true,
+          "of": 22370,
+          "value": 5118
+        }
+      },
+      "population": 22370,
+      "subject": "unidecode",
+      "subject_version": "1.4.0"
     },
     "unidecode@1.4.0::corruption-cost": {
       "external": true,
@@ -1762,6 +2487,16 @@
           "of": 9438,
           "value": 0
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
+        "identity_retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
         "injectivity_gentlest_surface": {
           "higher_is_better": null,
           "of": 1.0,
@@ -1782,13 +2517,8 @@
           "of": null,
           "value": 1.7272727272727273
         },
-        "retention_gentlest_surface": {
-          "higher_is_better": true,
-          "of": 1.0,
-          "value": 0.9074551893965407
-        },
         "retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9074551893965407
         }
@@ -1833,6 +2563,11 @@
           "of": null,
           "value": 6565
         },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
+        },
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
@@ -1865,6 +2600,11 @@
           "higher_is_better": false,
           "of": 3416,
           "value": 0
+        },
+        "surfaces_offered": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 1
         }
       },
       "population": 3416,

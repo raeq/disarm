@@ -1085,3 +1085,80 @@ def test_the_pareto_frontier_is_published_even_when_the_composite_is_not():
     assert "Pareto frontier" in md
     assert "non-dominated" in md
     assert "does not support a ranking" in md
+
+
+def test_coverage_is_one_surface_not_a_union_over_all_of_them():
+    """A union rewards shipping many entry points, not good ones.
+
+    disarm exposes 19 transforms; every other tool exposes 1-5. Scoring coverage
+    as "did any of them get it" gave disarm 4.9 points that no other subject
+    could earn, because none of them has enough surfaces for a union to differ
+    from its best one.
+    """
+    from benchmarks.meta import damage
+
+    pairs = [("a", "b"), ("c", "d")]
+    # Two surfaces, each solving a different pair: a union would score 2/2.
+    surfaces = {
+        "one": lambda s: "X" if s in ("a", "b") else s,
+        "two": lambda s: "Y" if s in ("c", "d") else s,
+    }
+    name, hits = damage.best_surface(surfaces, pairs)
+    assert hits == 1, "best single surface solves one pair, not the union's two"
+    assert name in ("one", "two")
+
+
+def test_key_builders_are_scored_in_their_own_role_not_as_coverage():
+    """The surfaces that earn coverage must be the ones charged for cost.
+
+    Key builders merge by contract. Letting them earn confusable coverage while
+    the cost axis excluded them credited disarm for surfaces it was never
+    charged for — an asymmetry in its own favour on its own benchmark.
+    """
+    import inspect as _inspect
+
+    from benchmarks.meta.suites.normative import (
+        UTS39ConfusableCoverage,
+        UTS39EquivalenceClasses,
+    )
+
+    for suite in (UTS39ConfusableCoverage, UTS39EquivalenceClasses):
+        src = _inspect.getsource(suite.measure)
+        assert "split_by_intent" in src, f"{suite.__name__} must separate the roles"
+        assert "self.transforms()" in src
+
+
+def test_key_building_profiles_count_as_key_builders():
+    """`library_catalog_key_eu` is a key builder that lives among the profiles.
+
+    Excluding only the three top-level key functions left it scored as a text
+    surface, where it was the single most destructive one in the corruption
+    census — which is exactly what a catalog key should look like.
+    """
+    disarm_subject = subjects.by_name("disarm")
+    if disarm_subject is None or not disarm_subject.available()[0]:
+        pytest.skip("disarm is not importable")
+    keys = disarm_subject.keys()
+    assert "profile:library_catalog_key_eu" in keys
+    assert "profile:search_index" in keys
+    assert set(keys) <= set(disarm_subject.transforms()), "keys are drawn from transforms"
+
+
+def test_a_small_integer_is_not_rendered_as_a_percentage():
+    """A surface count of 1 rendered as "100.0%"."""
+    from benchmarks.meta.report import _cell
+
+    assert _cell(1, ratio=False) == "1"
+    assert _cell(13, ratio=False) == "13"
+    assert _cell(0.5, ratio=True) == "50.0%"
+
+
+def test_removing_an_identity_free_codepoint_is_not_counted_as_damage():
+    """93.5% of the first census's "damage" was private-use removal."""
+    from benchmarks.meta import damage
+
+    strip_pua = {"strip": lambda s: "".join(c for c in s if c != "")}
+    corpus = ["orderend"]
+    d = damage.per_surface(strip_pua, corpus)["strip"]
+    assert d.retention < 1.0, "raw retention still records the removal"
+    assert d.identity_retention == 1.0, "no letter or symbol was lost"

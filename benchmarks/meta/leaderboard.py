@@ -327,6 +327,16 @@ def parcel(items: list[Item]) -> list[Item]:
     out: list[Item] = []
     for suite, group in grouped.items():
         subjects = sorted({s for i in group for s in i.scores})
+        # A measurement every tool scores identically separates nothing, and
+        # averaging it in as a run of zeros dilutes the ones that do. Five of
+        # corruption-cost's seven directed measurements were constant across
+        # every real tool, so its signal was being divided by seven.
+        discriminating = [
+            i
+            for i in group
+            if _sd([i.scores[s] for s in subjects if s in i.scores and not is_control(s)]) > 0
+        ]
+        group = discriminating or group
         # Average the *standardised* member scores, so measurements on wildly
         # different scales contribute equally inside the parcel.
         standardize(group, subjects, fit_on=subjects)

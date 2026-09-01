@@ -21,6 +21,7 @@ from pathlib import Path
 
 from .. import damage
 from ..base import CACHE, SuiteBase, add, artifact, record
+from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
 
 TEXT_COLUMNS = ("text", "perturbed", "adversarial", "attack", "suffix", "input", "body", "prompt")
@@ -85,16 +86,20 @@ class AttackCorpusSuite(SuiteBase):
     #: Filenames the suite will accept from the cache directory.
     filenames: tuple[str, ...] = ()
 
+    def rows(self, path: Path, limit: int | None) -> list[tuple[str, str | None]]:
+        """Load the corpus. Overridden where a release is not flat."""
+        return list(_rows(path, limit))
+
     def locate(self) -> Path | None:
         candidates = [CACHE / self.name / n for n in self.filenames]
         candidates += [CACHE / n for n in self.filenames]
-        return artifact(*candidates, env=self.env_var)
+        return self.provisioned() or artifact(*candidates, env=self.env_var)
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
 
         path = self.locate()
         assert path is not None
-        rows = list(_rows(path, limit))
+        rows = self.rows(path, limit)
         outcome.population = len(rows)
         if not rows:
             add(outcome, "rows", 0)
@@ -149,8 +154,14 @@ class AttackCorpusSuite(SuiteBase):
         # good on recovery by destroying if this stays invisible.
         clean_rows = [c for _t, c in rows if c]
         if clean_rows:
-            clean_damage = damage.per_surface(surface_map, clean_rows)
+            # Key builders collapse by contract, so scoring them as corruption
+            # would charge a library for having them — the same exclusion
+            # corruption-cost already makes.
+            collapsing = set(self.subject.keys()) if self.subject else set()
+            text_only, _keys = damage.split_by_intent(surface_map, collapsing)
+            clean_damage = damage.per_surface(text_only or surface_map, clean_rows)
             worst_name, worst_damage = damage.worst(clean_damage)
+            gentle_name, gentle_damage = damage.gentlest(clean_damage)
 
         n = len(rows)
         add(outcome, "rows", n, unit="rows")
@@ -216,7 +227,15 @@ class AttackCorpusSuite(SuiteBase):
                 of=1.0,
                 unit="ratio",
                 higher_is_better=True,
-                detail="characters of clean text surviving the worst surface",
+                detail=f"clean-text characters surviving `{worst_name}`",
+            )
+            add(
+                outcome,
+                "clean_rows_corrupted_gentlest",
+                gentle_damage.altered,
+                of=len(clean_rows),
+                higher_is_better=False,
+                detail=f"`{gentle_name}` — the least destructive surface on offer",
             )
         outcome.extra = {
             "detected": detected,
@@ -228,8 +247,54 @@ class AttackCorpusSuite(SuiteBase):
 
 class BadCharacters(AttackCorpusSuite):
     name = "bad-characters"
+    availability = Availability.NETWORK
     env_var = "DISARM_META_BAD_CHARACTERS"
     filenames = ("bad_characters.jsonl", "bad_characters.tsv", "bad_characters.csv")
+    SOURCES = (
+        Source(
+            url="https://raw.githubusercontent.com/nickboucher/imperceptible/main"
+            "/results/adversarial-examples.json",
+            filename="bad-characters.json",
+            licence="MIT",
+            note="the authors' released adversarial examples; each row carries the "
+            "perturbed `adv_example` beside the original `input`",
+        ),
+    )
+
+    def _rows_from_nested(self, path: Path, limit: int | None) -> Iterator[tuple[str, str | None]]:
+        """The release nests experiment -> budget -> row id -> record.
+
+        Not the flat shape the generic loader expects, and flattening it here
+        rather than converting the file keeps the artifact byte-identical to what
+        the authors published.
+        """
+        import json as _json
+
+        blob = _json.loads(path.read_text(encoding="utf-8"))
+        seen = 0
+        for experiment in blob.values():
+            if not isinstance(experiment, dict):
+                continue
+            for budget in experiment.values():
+                if not isinstance(budget, dict):
+                    continue
+                for row in budget.values():
+                    if not isinstance(row, dict):
+                        continue
+                    text = row.get("adv_example")
+                    clean = row.get("input")
+                    if not isinstance(text, str) or not text.strip():
+                        continue
+                    yield text, (clean if isinstance(clean, str) else None)
+                    seen += 1
+                    if limit is not None and seen >= limit:
+                        return
+
+    def rows(self, path: Path, limit: int | None) -> list[tuple[str, str | None]]:
+        if path.name == "bad-characters.json":
+            return list(self._rows_from_nested(path, limit))
+        return list(_rows(path, limit))
+
     summary = "Boucher et al.'s four imperceptible-perturbation classes, scored for XMR."
     provenance = Provenance(
         origin="Boucher, Shumailov, Anderson & Papernot",

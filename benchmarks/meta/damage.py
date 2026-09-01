@@ -33,6 +33,10 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
+#: General categories that carry no identity of their own. Removing one is what
+#: a sanitizer is for; keeping one is not a virtue.
+_NO_IDENTITY = frozenset({"Cf", "Cc", "Co", "Cs", "Cn", "Zl", "Zp"})
+
 
 @dataclass
 class Damage:
@@ -45,6 +49,12 @@ class Damage:
     chars_out: int = 0
     #: Input characters present in the output, counted as a multiset.
     kept: int = 0
+    #: Identity-bearing input characters (letters, digits, symbols) present in
+    #: the output. Format, control and private-use code points are excluded:
+    #: removing those is the job, and counting it as damage measured a sanitizer
+    #: sanitizing. 93.5% of the "damage" in the first census was Private Use.
+    kept_identity: int = 0
+    chars_in_identity: int = 0
     #: Largest output/input length ratio seen on any single input.
     max_growth: float = 1.0
     distinct_in: int = 0
@@ -78,6 +88,18 @@ class Damage:
         disagree exactly when a tool substitutes rather than deletes.
         """
         return self.kept / self.chars_in if self.chars_in else 1.0
+
+    @property
+    def identity_retention(self) -> float:
+        """Retention counting only characters that carry identity.
+
+        The honest cost measure. Plain `retention` charges a sanitizer for
+        removing private-use, format and control code points, which is the one
+        thing it exists to do — so it scores "did the job" as "did damage".
+        """
+        if not self.chars_in_identity:
+            return 1.0
+        return self.kept_identity / self.chars_in_identity
 
     @property
     def expansion(self) -> float:
@@ -143,9 +165,14 @@ def per_surface(
             # characters it retained.
             remaining = Counter(got)
             for ch in text:
+                bears_identity = unicodedata.category(ch) not in _NO_IDENTITY
+                if bears_identity:
+                    d.chars_in_identity += 1
                 if remaining[ch]:
                     remaining[ch] -= 1
                     d.kept += 1
+                    if bears_identity:
+                        d.kept_identity += 1
             if text:
                 d.max_growth = max(d.max_growth, len(got) / len(text))
             if not got and text:
@@ -175,6 +202,31 @@ def gentlest(damages: dict[str, Damage]) -> tuple[str, Damage]:
     if not damages:
         return "", Damage()
     return min(damages.items(), key=lambda kv: (kv[1].destruction_rate, kv[1].alteration_rate))
+
+
+def best_surface(
+    surfaces: dict[str, Callable[[str], str]],
+    pairs: Sequence[tuple[str, str]],
+) -> tuple[str, int]:
+    """The single surface that merges the most pairs, and how many.
+
+    Coverage must be a *per-surface* score, not a union over every surface a
+    library happens to expose. A union asks "did any of your N entry points get
+    this one", which rewards shipping many rather than shipping good: disarm
+    exposes 19 surfaces and gained 4.9 points from the union, while every tool
+    with one or two surfaces gained nothing. A caller picks one entry point, so
+    the comparable question is what one entry point achieves.
+
+    It also makes coverage symmetric with cost, which was already measured
+    per-surface — the asymmetry is what let coverage be earned by surfaces that
+    the cost side had excluded.
+    """
+    winner, best = "", 0
+    for name, fn in surfaces.items():
+        hits = sum(1 for left, right in pairs if collides([fn], left, right))
+        if hits > best:
+            winner, best = name, hits
+    return winner, best
 
 
 def split_by_intent(

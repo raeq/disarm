@@ -183,14 +183,30 @@ class DisarmSubject(_Base):
             "has_bidi_control": disarm.has_bidi_control,
         }
 
+    #: Profiles whose contract is to build a comparison key, not to return
+    #: readable text. They collapse by design exactly as the three key functions
+    #: do, and scoring them as text surfaces charged the library for having them:
+    #: `library_catalog_key_eu` was the single worst "text" surface in the
+    #: corruption census, which is what a catalog key is supposed to look like.
+    KEY_PROFILES = (
+        "library_catalog_key_eu",
+        "search_index",
+        "scholarly_cyrillic_iso9",
+    )
+
     def keys(self) -> dict[str, Callable[[str], str]]:
         import disarm
 
-        return {
+        out: dict[str, Callable[[str], str]] = {
             "search_key": disarm.search_key,
             "catalog_key": disarm.catalog_key,
             "sort_key": disarm.sort_key,
         }
+        available = set(disarm.list_profiles())
+        for profile in self.KEY_PROFILES:
+            if profile in available:
+                out[f"profile:{profile}"] = disarm.get_pipeline(profile)
+        return out
 
 
 class StdlibSubject(_Base):

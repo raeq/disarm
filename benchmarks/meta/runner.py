@@ -70,6 +70,20 @@ class RunReport:
                 return m.higher_is_better
         return None
 
+    def is_ratio(self, suite: str, key: str) -> bool:
+        """Does this measurement carry a denominator?
+
+        Without it a bare count of 1 renders as "100.0%": the cell formatter
+        cannot tell a proportion from a small integer by looking at the number.
+        """
+        for o in self.ran:
+            if o.suite != suite:
+                continue
+            m = o.measurement(key)
+            if m is not None:
+                return m.of is not None or m.unit == "ratio"
+        return False
+
     def comparison(self, suite: str, key: str) -> dict[str, float]:
         """One measurement across every subject that produced it.
 

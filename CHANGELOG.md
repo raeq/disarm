@@ -643,6 +643,14 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   a base can carry more than that in total: a mark above and a mark below are two
   positions.
 
+  `max_marks == 0` keeps its old meaning and is the one case the class rule does not
+  apply to. It is documented in three places as stripping **all** combining marks and
+  being equivalent to `strip_accents`, and `strip_obfuscation` is built on it. A
+  threshold of zero is not a judgement about stacking, so exempting class 0 there would
+  have let a Thai vowel or a Sinhala matra survive maximum-strength deobfuscation —
+  measured at 38 corpus rows before the exception was added. `strip_obfuscation` output
+  is unchanged from 0.14.1.
+
 - **`perf-gate.yml` has never run on `main` (#832).** It triggers on `push` as well as
   `pull_request`, and two of its three jobs computed the baseline as
   `git merge-base origin/${{ github.base_ref }} HEAD`. `github.base_ref` is the target

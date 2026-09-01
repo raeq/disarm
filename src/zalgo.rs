@@ -66,7 +66,13 @@ fn exceeds_combining_run(text: &str, threshold: usize) -> bool {
             // What zalgo actually is, is many marks at ONE position, and that means many
             // marks of one non-zero class. Runs are per class, so a legitimate cluster of
             // distinct marks never accumulates.
-            if class == 0 {
+            //
+            // A threshold of 0 is not a stacking judgement at all — it means no mark is
+            // acceptable — so the exemption does not apply there. `strip_zalgo` documents
+            // `max_marks=0` as "strip all combining marks (equivalent to `strip_accents`)"
+            // and `strip_obfuscation` depends on it; exempting class 0 unconditionally
+            // would have let a Thai vowel or an Indic matra through both (#846 review).
+            if class == 0 && threshold > 0 {
                 run = 0;
                 previous = 0;
                 continue;
@@ -170,8 +176,12 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
             // is positioned rather than stacked, so it never counts toward the cap and
             // never gets dropped: capping those truncated ordinary Burmese, Bengali and
             // Thai, deleting a tone mark from `မြို့`.
+            //
+            // `max_marks == 0` is the exception: it means no mark is acceptable, not
+            // "no *stacked* mark", and three doc comments promise it is equivalent to
+            // `strip_accents`. See `exceeds_combining_run` above.
             let class = canonical_combining_class(ch);
-            if class == 0 {
+            if class == 0 && max_marks > 0 {
                 mark_count = 0;
                 mark_class = 0;
                 filtered.push(ch);
@@ -259,6 +269,49 @@ pub(crate) fn strip_cross_script_marks_into(text: &str, out: &mut String) {
 
 #[cfg(test)]
 mod tests {
+    /// #846 review: the class-0 exemption must not reach `max_marks == 0`.
+    ///
+    /// Three doc comments promise that 0 strips **all** combining marks and is equivalent
+    /// to `strip_accents`, and `strip_obfuscation` is built on it. Counting per class is a
+    /// judgement about *stacking*, which a threshold of zero is not making.
+    #[test]
+    fn zero_max_marks_strips_class_zero_marks_too() {
+        // Each of these is a combining mark with canonical combining class 0 — the class
+        // the per-class count exempts, because a renderer positions them rather than
+        // stacking them at one spot.
+        for (mark, name) in [
+            ('\u{0E31}', "THAI CHARACTER MAI HAN-AKAT"),
+            ('\u{093F}', "DEVANAGARI VOWEL SIGN I"),
+            ('\u{102D}', "MYANMAR VOWEL SIGN I"),
+            ('\u{09BE}', "BENGALI VOWEL SIGN AA"),
+        ] {
+            assert_eq!(
+                canonical_combining_class(mark),
+                0,
+                "{name} is no longer class 0; pick another example",
+            );
+            let input = format!("\u{0E01}{mark}");
+            let stripped = strip_zalgo(&input, 0);
+            assert!(
+                !stripped.contains(mark),
+                "max_marks=0 left {name} in {stripped:?}",
+            );
+            assert!(
+                is_zalgo(&input, 0),
+                "threshold 0 must call {name} excess, to match what strip_zalgo removes",
+            );
+        }
+    }
+
+    /// The other half of the same rule: above zero, class-0 marks stay exempt. This is
+    /// #842 — capping them truncated ordinary Burmese, Bengali and Thai.
+    #[test]
+    fn nonzero_max_marks_still_exempts_class_zero_marks() {
+        let burmese = "\u{1019}\u{103C}\u{102D}\u{102F}\u{1037}";
+        assert_eq!(strip_zalgo(burmese, DEFAULT_MAX_MARKS), burmese);
+        assert!(!is_zalgo(burmese, DEFAULT_MAX_MARKS));
+    }
+
     use super::*;
 
     #[test]

@@ -13,6 +13,7 @@ stale the way it did.
 
 from __future__ import annotations
 
+import functools
 import re
 from pathlib import Path
 
@@ -25,12 +26,21 @@ GUIDE = ROOT / "docs" / "user-guide" / "confusables.md"
 LIMITATIONS = ROOT / "docs" / "limitations.md"
 
 
-def _divergent(target: str) -> list[int]:
+@functools.cache
+def _divergent(target: str) -> tuple[int, ...]:
     """Code points the standalone fold and the NFKC-first fold answer differently.
 
     Uses `disarm.normalize` rather than `unicodedata.normalize`: the runtime's Unicode
     version trails the library's, and a census that normalizes with the wrong one gets a
     different count for a reason that has nothing to do with the question.
+
+    Cached: the scan walks the whole code point space and four tests in this module want
+    the same two answers (#879 review).
+
+    No surrogate skip and no `try`/`except`. Neither `normalize_confusables` nor
+    `normalize` raises on a lone surrogate — checked, both accept one and return it — so
+    a guard here would be guarding against nothing, and a broad catch would swallow a
+    genuine failure instead.
     """
     out = []
     for cp in range(0x110000):
@@ -42,7 +52,7 @@ def _divergent(target: str) -> list[int]:
             disarm.normalize(ch, form="NFKC"), target_script=target
         ):
             out.append(cp)
-    return out
+    return tuple(out)
 
 
 @pytest.mark.parametrize(("target", "expected"), [("latin", 68), ("cyrillic", 8)])

@@ -1,8 +1,238 @@
 {
+  "confusables_version": "17.0.0",
   "disarm_version": "0.14.1",
-  "recorded_utc": "2026-09-01T15:56:01+00:00",
+  "host_ucd": "16.0.0",
+  "recorded_utc": "2026-09-01T16:34:47+00:00",
   "suites": {
-    "cldr-emoji-annotations": {
+    "anyascii::corruption-cost": {
+      "external": true,
+      "measurements": {
+        "clean_ascii_altered_gentlest": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "clean_ascii_altered_worst": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 9438
+        },
+        "degenerate": {
+          "higher_is_better": false,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "destroyed_gentlest_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "destroyed_worst_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "injectivity_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.297096842551388
+        },
+        "injectivity_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.297096842551388
+        },
+        "retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0258317063838553
+        },
+        "retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0258317063838553
+        }
+      },
+      "population": 9438,
+      "subject": "anyascii",
+      "subject_version": "0.3.3"
+    },
+    "anyascii::uts39-confusables": {
+      "external": true,
+      "measurements": {
+        "altered_but_not_onto_target": {
+          "higher_is_better": false,
+          "of": 2919,
+          "value": 2911
+        },
+        "folded": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 3646
+        },
+        "sources": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6565
+        },
+        "unreached": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 2919
+        },
+        "unreached_strong_rtl": {
+          "higher_is_better": null,
+          "of": 2919,
+          "value": 445
+        }
+      },
+      "population": 6565,
+      "subject": "anyascii",
+      "subject_version": "0.3.3"
+    },
+    "anyascii::uts39-equivalence-classes": {
+      "external": true,
+      "measurements": {
+        "classes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3416
+        },
+        "closed_under_canonicalize": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 1712
+        },
+        "no_ascii_reachable_member": {
+          "higher_is_better": false,
+          "of": 3416,
+          "value": 0
+        }
+      },
+      "population": 3416,
+      "subject": "anyascii",
+      "subject_version": "0.3.3"
+    },
+    "decancer::corruption-cost": {
+      "external": true,
+      "measurements": {
+        "clean_ascii_altered_gentlest": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "clean_ascii_altered_worst": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 9438
+        },
+        "degenerate": {
+          "higher_is_better": false,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "destroyed_gentlest_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "destroyed_worst_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "injectivity_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.4972451790633609
+        },
+        "injectivity_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.4972451790633609
+        },
+        "retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9564402672448469
+        },
+        "retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9564402672448469
+        }
+      },
+      "population": 9438,
+      "subject": "decancer",
+      "subject_version": "0.4.1"
+    },
+    "decancer::uts39-confusables": {
+      "external": true,
+      "measurements": {
+        "altered_but_not_onto_target": {
+          "higher_is_better": false,
+          "of": 3708,
+          "value": 1226
+        },
+        "folded": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 2857
+        },
+        "sources": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6565
+        },
+        "unreached": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 3708
+        },
+        "unreached_strong_rtl": {
+          "higher_is_better": null,
+          "of": 3708,
+          "value": 831
+        }
+      },
+      "population": 6565,
+      "subject": "decancer",
+      "subject_version": "0.4.1"
+    },
+    "decancer::uts39-equivalence-classes": {
+      "external": true,
+      "measurements": {
+        "classes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3416
+        },
+        "closed_under_canonicalize": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 849
+        },
+        "no_ascii_reachable_member": {
+          "higher_is_better": false,
+          "of": 3416,
+          "value": 1521
+        }
+      },
+      "population": 3416,
+      "subject": "decancer",
+      "subject_version": "0.4.1"
+    },
+    "disarm::cldr-emoji-annotations": {
       "external": true,
       "measurements": {
         "annotated_codepoints": {
@@ -16,9 +246,79 @@
           "value": 1411
         }
       },
-      "population": 1765
+      "population": 1765,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
     },
-    "cve-2026-17084-stringprep": {
+    "disarm::corruption-cost": {
+      "external": true,
+      "measurements": {
+        "clean_ascii_altered_gentlest": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "clean_ascii_altered_worst": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 9438
+        },
+        "collapsing_surfaces": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3
+        },
+        "degenerate": {
+          "higher_is_better": false,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "destroyed_gentlest_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "destroyed_worst_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "injectivity_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.9998940453485908
+        },
+        "injectivity_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.12248357702903158
+        },
+        "key_injectivity": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.4955499046408137
+        },
+        "retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.999980378498759
+        },
+        "retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9720982252352127
+        }
+      },
+      "population": 9438,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
+    },
+    "disarm::cve-2026-17084-stringprep": {
       "external": true,
       "measurements": {
         "collides_catalog_key": {
@@ -52,9 +352,11 @@
           "value": 684
         }
       },
-      "population": 711
+      "population": 711,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
     },
-    "uax29-word-joiners": {
+    "disarm::uax29-word-joiners": {
       "external": true,
       "measurements": {
         "detected": {
@@ -73,9 +375,11 @@
           "value": 0
         }
       },
-      "population": 37
+      "population": 37,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
     },
-    "ucd-bidi-class": {
+    "disarm::ucd-bidi-class": {
       "external": true,
       "measurements": {
         "conflict_detected": {
@@ -94,9 +398,11 @@
           "value": 3018
         }
       },
-      "population": 3018
+      "population": 3018,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
     },
-    "ucd-scripts": {
+    "disarm::ucd-scripts": {
       "external": true,
       "measurements": {
         "agree": {
@@ -125,46 +431,60 @@
           "value": 8196
         }
       },
-      "population": 126761
+      "population": 126761,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
     },
-    "uts39-augmented-scripts": {
+    "disarm::uts39-augmented-scripts": {
       "external": true,
       "measurements": {
+        "cases": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6
+        },
+        "disagrees_with_uts39": {
+          "higher_is_better": false,
+          "of": 6,
+          "value": 0
+        },
+        "flagged_by_hostname_mixed_script": {
+          "higher_is_better": null,
+          "of": 6,
+          "value": 1
+        },
         "flagged_by_inspect_anomalies": {
           "higher_is_better": null,
-          "of": 4,
-          "value": 0
+          "of": 6,
+          "value": 1
         },
         "flagged_by_is_mixed_script": {
           "higher_is_better": null,
-          "of": 4,
-          "value": 0
-        },
-        "flagged_by_is_suspicious_hostname": {
-          "higher_is_better": null,
-          "of": 4,
-          "value": 0
-        },
-        "probes": {
-          "higher_is_better": null,
-          "of": null,
-          "value": 4
+          "of": 6,
+          "value": 1
         },
         "surface_disagreements": {
           "higher_is_better": false,
-          "of": 4,
+          "of": 6,
           "value": 0
         }
       },
-      "population": 4
+      "population": 6,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
     },
-    "uts39-confusables": {
+    "disarm::uts39-confusables": {
       "external": true,
       "measurements": {
+        "altered_but_not_onto_target": {
+          "higher_is_better": false,
+          "of": 2245,
+          "value": 2241
+        },
         "folded": {
           "higher_is_better": true,
           "of": 6565,
-          "value": 5061
+          "value": 4320
         },
         "sources": {
           "higher_is_better": null,
@@ -174,17 +494,19 @@
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
-          "value": 1504
+          "value": 2245
         },
         "unreached_strong_rtl": {
           "higher_is_better": null,
-          "of": 1504,
-          "value": 90
+          "of": 2245,
+          "value": 341
         }
       },
-      "population": 6565
+      "population": 6565,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
     },
-    "uts39-equivalence-classes": {
+    "disarm::uts39-equivalence-classes": {
       "external": true,
       "measurements": {
         "classes": {
@@ -195,17 +517,19 @@
         "closed_under_canonicalize": {
           "higher_is_better": true,
           "of": 3416,
-          "value": 1595
+          "value": 1928
         },
         "no_ascii_reachable_member": {
           "higher_is_better": false,
           "of": 3416,
-          "value": 2876
+          "value": 0
         }
       },
-      "population": 3416
+      "population": 3416,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
     },
-    "uts39-mixed-numbers": {
+    "disarm::uts39-mixed-numbers": {
       "external": true,
       "measurements": {
         "ascii_mixed_flagged": {
@@ -224,9 +548,11 @@
           "value": 75
         }
       },
-      "population": 75
+      "population": 75,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
     },
-    "youtube-spam": {
+    "disarm::youtube-spam": {
       "external": true,
       "measurements": {
         "misses_novel": {
@@ -255,7 +581,694 @@
           "value": 1956
         }
       },
-      "population": 1956
+      "population": 1956,
+      "subject": "disarm",
+      "subject_version": "0.14.1"
+    },
+    "ftfy::corruption-cost": {
+      "external": true,
+      "measurements": {
+        "clean_ascii_altered_gentlest": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "clean_ascii_altered_worst": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 9438
+        },
+        "degenerate": {
+          "higher_is_better": false,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "destroyed_gentlest_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "destroyed_worst_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "injectivity_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "injectivity_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9999705677481384
+        },
+        "retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0004414837779239
+        }
+      },
+      "population": 9438,
+      "subject": "ftfy",
+      "subject_version": "6.3.1"
+    },
+    "ftfy::uts39-confusables": {
+      "external": true,
+      "measurements": {
+        "altered_but_not_onto_target": {
+          "higher_is_better": false,
+          "of": 3628,
+          "value": 853
+        },
+        "folded": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 2937
+        },
+        "sources": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6565
+        },
+        "unreached": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 3628
+        },
+        "unreached_strong_rtl": {
+          "higher_is_better": null,
+          "of": 3628,
+          "value": 466
+        }
+      },
+      "population": 6565,
+      "subject": "ftfy",
+      "subject_version": "6.3.1"
+    },
+    "ftfy::uts39-equivalence-classes": {
+      "external": true,
+      "measurements": {
+        "classes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3416
+        },
+        "closed_under_canonicalize": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 1454
+        },
+        "no_ascii_reachable_member": {
+          "higher_is_better": false,
+          "of": 3416,
+          "value": 3077
+        }
+      },
+      "population": 3416,
+      "subject": "ftfy",
+      "subject_version": "6.3.1"
+    },
+    "identity::corruption-cost": {
+      "external": true,
+      "measurements": {
+        "clean_ascii_altered_gentlest": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "clean_ascii_altered_worst": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 9438
+        },
+        "degenerate": {
+          "higher_is_better": false,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "destroyed_gentlest_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "destroyed_worst_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "injectivity_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "injectivity_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0
+        }
+      },
+      "population": 9438,
+      "subject": "identity",
+      "subject_version": "1"
+    },
+    "identity::uts39-confusables": {
+      "external": true,
+      "measurements": {
+        "altered_but_not_onto_target": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 0
+        },
+        "folded": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 0
+        },
+        "sources": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6565
+        },
+        "unreached": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 6565
+        },
+        "unreached_strong_rtl": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 1007
+        }
+      },
+      "population": 6565,
+      "subject": "identity",
+      "subject_version": "1"
+    },
+    "identity::uts39-equivalence-classes": {
+      "external": true,
+      "measurements": {
+        "classes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3416
+        },
+        "closed_under_canonicalize": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 0
+        },
+        "no_ascii_reachable_member": {
+          "higher_is_better": false,
+          "of": 3416,
+          "value": 3116
+        }
+      },
+      "population": 3416,
+      "subject": "identity",
+      "subject_version": "1"
+    },
+    "null-baseline::corruption-cost": {
+      "external": true,
+      "measurements": {
+        "clean_ascii_altered_gentlest": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 1200
+        },
+        "clean_ascii_altered_worst": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 1200
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 9438
+        },
+        "degenerate": {
+          "higher_is_better": false,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "destroyed_gentlest_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 9438
+        },
+        "destroyed_worst_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 9438
+        },
+        "injectivity_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.00010595465140919687
+        },
+        "injectivity_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.00010595465140919687
+        },
+        "retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.0
+        }
+      },
+      "population": 9438,
+      "subject": "null-baseline",
+      "subject_version": "1"
+    },
+    "null-baseline::uts39-confusables": {
+      "external": true,
+      "measurements": {
+        "altered_but_not_onto_target": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 6565
+        },
+        "folded": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 0
+        },
+        "sources": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6565
+        },
+        "unreached": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 6565
+        },
+        "unreached_strong_rtl": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 1007
+        }
+      },
+      "population": 6565,
+      "subject": "null-baseline",
+      "subject_version": "1"
+    },
+    "null-baseline::uts39-equivalence-classes": {
+      "external": true,
+      "measurements": {
+        "classes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3416
+        },
+        "closed_under_canonicalize": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 0
+        },
+        "no_ascii_reachable_member": {
+          "higher_is_better": false,
+          "of": 3416,
+          "value": 0
+        }
+      },
+      "population": 3416,
+      "subject": "null-baseline",
+      "subject_version": "1"
+    },
+    "stdlib::corruption-cost": {
+      "external": true,
+      "measurements": {
+        "clean_ascii_altered_gentlest": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "clean_ascii_altered_worst": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 9438
+        },
+        "degenerate": {
+          "higher_is_better": false,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "destroyed_gentlest_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "destroyed_worst_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "injectivity_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "injectivity_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9999901892493794
+        },
+        "retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0078191682445623
+        }
+      },
+      "population": 9438,
+      "subject": "stdlib",
+      "subject_version": "16.0.0"
+    },
+    "stdlib::uts39-confusables": {
+      "external": true,
+      "measurements": {
+        "altered_but_not_onto_target": {
+          "higher_is_better": false,
+          "of": 3630,
+          "value": 1163
+        },
+        "folded": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 2935
+        },
+        "sources": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6565
+        },
+        "unreached": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 3630
+        },
+        "unreached_strong_rtl": {
+          "higher_is_better": null,
+          "of": 3630,
+          "value": 466
+        }
+      },
+      "population": 6565,
+      "subject": "stdlib",
+      "subject_version": "16.0.0"
+    },
+    "stdlib::uts39-equivalence-classes": {
+      "external": true,
+      "measurements": {
+        "classes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3416
+        },
+        "closed_under_canonicalize": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 1454
+        },
+        "no_ascii_reachable_member": {
+          "higher_is_better": false,
+          "of": 3416,
+          "value": 3076
+        }
+      },
+      "population": 3416,
+      "subject": "stdlib",
+      "subject_version": "16.0.0"
+    },
+    "text-unidecode::corruption-cost": {
+      "external": true,
+      "measurements": {
+        "clean_ascii_altered_gentlest": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "clean_ascii_altered_worst": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 9438
+        },
+        "degenerate": {
+          "higher_is_better": false,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "destroyed_gentlest_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "destroyed_worst_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "injectivity_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.11909302818393727
+        },
+        "injectivity_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.11909302818393727
+        },
+        "retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9804962277663865
+        },
+        "retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9804962277663865
+        }
+      },
+      "population": 9438,
+      "subject": "text-unidecode",
+      "subject_version": "1.3"
+    },
+    "text-unidecode::uts39-confusables": {
+      "external": true,
+      "measurements": {
+        "altered_but_not_onto_target": {
+          "higher_is_better": false,
+          "of": 5845,
+          "value": 5837
+        },
+        "folded": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 720
+        },
+        "sources": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6565
+        },
+        "unreached": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 5845
+        },
+        "unreached_strong_rtl": {
+          "higher_is_better": null,
+          "of": 5845,
+          "value": 987
+        }
+      },
+      "population": 6565,
+      "subject": "text-unidecode",
+      "subject_version": "1.3"
+    },
+    "text-unidecode::uts39-equivalence-classes": {
+      "external": true,
+      "measurements": {
+        "classes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3416
+        },
+        "closed_under_canonicalize": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 390
+        },
+        "no_ascii_reachable_member": {
+          "higher_is_better": false,
+          "of": 3416,
+          "value": 0
+        }
+      },
+      "population": 3416,
+      "subject": "text-unidecode",
+      "subject_version": "1.3"
+    },
+    "unidecode::corruption-cost": {
+      "external": true,
+      "measurements": {
+        "clean_ascii_altered_gentlest": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "clean_ascii_altered_worst": {
+          "higher_is_better": false,
+          "of": 1200,
+          "value": 0
+        },
+        "codepoints": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 9438
+        },
+        "degenerate": {
+          "higher_is_better": false,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "destroyed_gentlest_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "destroyed_worst_surface": {
+          "higher_is_better": false,
+          "of": 9438,
+          "value": 0
+        },
+        "injectivity_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.12227166772621319
+        },
+        "injectivity_worst_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.12227166772621319
+        },
+        "retention_gentlest_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9566168607560165
+        },
+        "retention_worst_surface": {
+          "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9566168607560165
+        }
+      },
+      "population": 9438,
+      "subject": "unidecode",
+      "subject_version": "1.4.0"
+    },
+    "unidecode::uts39-confusables": {
+      "external": true,
+      "measurements": {
+        "altered_but_not_onto_target": {
+          "higher_is_better": false,
+          "of": 5103,
+          "value": 5095
+        },
+        "folded": {
+          "higher_is_better": true,
+          "of": 6565,
+          "value": 1462
+        },
+        "sources": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 6565
+        },
+        "unreached": {
+          "higher_is_better": false,
+          "of": 6565,
+          "value": 5103
+        },
+        "unreached_strong_rtl": {
+          "higher_is_better": null,
+          "of": 5103,
+          "value": 988
+        }
+      },
+      "population": 6565,
+      "subject": "unidecode",
+      "subject_version": "1.4.0"
+    },
+    "unidecode::uts39-equivalence-classes": {
+      "external": true,
+      "measurements": {
+        "classes": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 3416
+        },
+        "closed_under_canonicalize": {
+          "higher_is_better": true,
+          "of": 3416,
+          "value": 432
+        },
+        "no_ascii_reachable_member": {
+          "higher_is_better": false,
+          "of": 3416,
+          "value": 0
+        }
+      },
+      "population": 3416,
+      "subject": "unidecode",
+      "subject_version": "1.4.0"
     }
-  }
+  },
+  "unicode_version": "17.0.0"
 }

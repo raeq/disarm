@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..base import CACHE, SuiteBase, add, artifact, surfaces
+from ..base import CACHE, SuiteBase, add, artifact, record
 from ..protocol import Availability, Family, Outcome, Provenance
 
 
@@ -20,6 +20,7 @@ class ChatTemplateDelimiters(SuiteBase):
     name = "chat-template-delimiters"
     family = Family.MODEL_ARTIFACT
     availability = Availability.MANUAL
+    MULTI_SUBJECT = True
     env_var = "DISARM_META_TOKENIZERS"
     summary = "Do released special tokens survive a preset, and does NFKC manufacture them?"
     provenance = Provenance(
@@ -81,15 +82,23 @@ class ChatTemplateDelimiters(SuiteBase):
             add(outcome, "delimiters", 0)
             return
 
-        surface_map = surfaces()
+        surface_map = self.transforms()
+        record(
+            outcome,
+            domain=f"{len(tokens)} declared special tokens",
+            predicates=sorted(surface_map),
+            forward="is the delimiter still a substring of the output",
+            reverse="does the fullwidth spelling produce the live delimiter",
+        )
         survives_all = 0
-        manufactured_any = 0
+        manufactured_by_any_surface = 0
         per_surface_survive = {name: 0 for name in surface_map}
         per_surface_manufacture = {name: 0 for name in surface_map}
 
         for token in tokens:
             wide = self._fullwidth(token)
             survived_here = 0
+            manufactured_here = False
             for name, fn in surface_map.items():
                 try:
                     forward = fn(token)
@@ -101,10 +110,11 @@ class ChatTemplateDelimiters(SuiteBase):
                     survived_here += 1
                 if token in reverse:
                     per_surface_manufacture[name] += 1
+                    manufactured_here = True
             if survived_here == len(surface_map):
                 survives_all += 1
-            if any(per_surface_manufacture.values()):
-                manufactured_any += 1
+            if manufactured_here:
+                manufactured_by_any_surface += 1
 
         n = len(tokens)
         add(outcome, "delimiters", n, unit="tokens")
@@ -119,10 +129,18 @@ class ChatTemplateDelimiters(SuiteBase):
         add(
             outcome,
             "manufactured_from_fullwidth",
+            manufactured_by_any_surface,
+            of=n,
+            higher_is_better=False,
+            detail="at least one surface PRODUCES the live delimiter from inert input",
+        )
+        add(
+            outcome,
+            "manufactured_by_worst_surface",
             max(per_surface_manufacture.values()),
             of=n,
             higher_is_better=False,
-            detail="a surface PRODUCES the live delimiter from inert fullwidth input",
+            detail="the single surface that manufactures the most delimiters",
         )
         outcome.extra = {
             "survive_by_surface": per_surface_survive,

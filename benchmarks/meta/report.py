@@ -35,9 +35,13 @@ def _num(value: float) -> str:
 def fmt(m: Measurement) -> str:
     if m.unit == "ratio":
         return f"{m.value * 100:.1f}%"
-    if m.of:
-        return f"{_num(m.value)} / {_num(m.of)} ({m.value / m.of * 100:.1f}%)"
-    return _num(m.value)
+    if m.of is None:
+        return _num(m.value)
+    # `of == 0` is a real denominator, not a missing one: an empty population is
+    # exactly the case the report must not hide behind a bare count.
+    if m.of == 0:
+        return f"{_num(m.value)} / 0"
+    return f"{_num(m.value)} / {_num(m.of)} ({m.value / m.of * 100:.1f}%)"
 
 
 def render_markdown(
@@ -50,6 +54,8 @@ def render_markdown(
         "",
         f"_disarm {report.disarm_version} · Unicode {report.unicode_version} · "
         f"confusables {report.confusables_version}_",
+        "",
+        f"Subjects: {', '.join(f'`{s}`' for s in report.subjects)}.",
         "",
         f"Ran **{report.selected} of {report.registered}** registered benchmarks in "
         f"{report.duration_s:.1f}s: {len(report.ran)} produced measurements, "
@@ -72,18 +78,112 @@ def render_markdown(
             "",
         ]
 
+    lines += _render_comparison(report)
     by_family = report.by_family()
     for family in Family:
         outcomes = by_family.get(family)
         if not outcomes:
             continue
         lines += [f"## {_FAMILY_TITLE[family]}", ""]
+        # Grouped by suite: the provenance, the finding and the methodology
+        # belong to the benchmark, not to each tool that ran it. Repeating them
+        # per subject buried the numbers.
+        by_suite: dict[str, list[Outcome]] = {}
         for out in outcomes:
-            lines += _render_outcome(out)
+            by_suite.setdefault(out.suite, []).append(out)
+        for group in by_suite.values():
+            lines += _render_suite(group)
     if drifts:
         lines += _render_drift(drifts, baseline_name)
     lines += _render_skips(report)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_comparison(report: RunReport) -> list[str]:
+    """Cross-subject columns, wherever more than one subject produced a number."""
+    if len(report.subjects) < 2:
+        return []
+    rows: list[tuple[str, str, dict[str, float]]] = []
+    for suite in dict.fromkeys(o.suite for o in report.ran):
+        for key in dict.fromkeys(
+            m.key for o in report.ran if o.suite == suite for m in o.measurements
+        ):
+            got = report.comparison(suite, key)
+            if len(got) > 1:
+                rows.append((suite, key, got))
+    if not rows:
+        return []
+    subjects = [s for s in report.subjects if any(s in g for _, _, g in rows)]
+    lines = [
+        "## Across subjects",
+        "",
+        "The same benchmark, the same rows, several tools. An absolute figure is "
+        "readable only beside another one. A tool absent from a row could not be "
+        "asked that question, which is not the same as scoring zero.",
+        "",
+        "| suite | measurement | " + " | ".join(f"`{s}`" for s in subjects) + " |",
+        "|---|---|" + "---|" * len(subjects),
+    ]
+    for suite, key, got in rows:
+        cells = ["—" if got.get(s) is None else _cell(got[s]) for s in subjects]
+        lines.append(f"| `{suite}` | `{key}` | " + " | ".join(cells) + " |")
+    lines.append("")
+    return lines
+
+
+def _cell(value: float) -> str:
+    return f"{value * 100:.1f}%" if 0 <= value <= 1 else _num(value)
+
+
+def _render_method(out: Outcome) -> list[str]:
+    m = out.method
+    bits = [
+        "<details><summary>Method</summary>",
+        "",
+        f"- subject: `{m.subject}` {m.subject_version}",
+        f"- domain: {m.domain or 'unstated'} ({m.domain_size:,} units)",
+    ]
+    if m.predicates:
+        shown = ", ".join(f"`{x}`" for x in m.predicates[:12])
+        more = f" (+{len(m.predicates) - 12} more)" if len(m.predicates) > 12 else ""
+        bits.append(f"- predicates: {shown}{more}")
+    if m.parameters:
+        bits.append("- parameters:")
+        bits += [f"    - `{k}` = {v!r}" for k, v in sorted(m.parameters.items())]
+    if m.artifact:
+        bits.append(
+            f"- artifact: `{m.artifact}` "
+            f"(sha256 `{(m.artifact_sha256 or '')[:16]}…`, {m.artifact_bytes:,} bytes)"
+        )
+    if m.environment:
+        bits.append(
+            "- environment: " + ", ".join(f"{k} {v}" for k, v in sorted(m.environment.items()))
+        )
+    bits += ["", "</details>", ""]
+    return bits
+
+
+def _render_suite(group: list[Outcome]) -> list[str]:
+    """One benchmark: its provenance once, then what each subject measured."""
+    head = group[0]
+    lines = _render_outcome(head)
+    for out in group[1:]:
+        if out.status is Status.SKIPPED:
+            lines += [f"> `{out.method.subject}` — not run: {out.skip_reason}", ""]
+            continue
+        if out.status is Status.ERROR:
+            lines += [f"> `{out.method.subject}` — errored: `{out.error}`", ""]
+            continue
+        lines += [
+            f"**`{out.method.subject}`** {out.method.subject_version} — "
+            f"population {out.population:,}",
+            "",
+            "| measurement | value | reading |",
+            "|---|---|---|",
+        ]
+        lines += [f"| `{m.key}` | {fmt(m)} | {m.detail or ''} |" for m in out.measurements]
+        lines.append("")
+    return lines
 
 
 def _render_outcome(out: Outcome) -> list[str]:
@@ -109,8 +209,26 @@ def _render_outcome(out: Outcome) -> list[str]:
         return lines
     if p.notes:
         lines += [f"**How it is measured.** {p.notes}", ""]
+    if out.reproduction:
+        verdict = (
+            "reproduces the published script exactly"
+            if out.reproduces_its_finding
+            else "**does NOT reproduce the published script** — the finding above "
+            "and the table below are not a before/after"
+        )
+        lines += [
+            f"**Reproduction.** {p.reproduces or 'pinned'} — {verdict}.",
+            "",
+            "| quantity | published | here |",
+            "|---|---|---|",
+        ]
+        for r in out.reproduction:
+            mark = "" if r.matches else " (differs)"
+            lines.append(f"| `{r.key}` | {_num(r.expected)} | {_num(r.actual)}{mark} |")
+        lines.append("")
     lines += [
-        f"Measured now — population {out.population:,}, {out.duration_s:.2f}s:",
+        f"**`{out.method.subject}`** {out.method.subject_version} — measured now, "
+        f"population {out.population:,}, {out.duration_s:.2f}s:",
         "",
         "| measurement | value | reading |",
         "|---|---|---|",
@@ -118,6 +236,7 @@ def _render_outcome(out: Outcome) -> list[str]:
     for m in out.measurements:
         lines.append(f"| `{m.key}` | {fmt(m)} | {m.detail or ''} |")
     lines.append("")
+    lines += _render_method(out)
     return lines
 
 
@@ -131,14 +250,22 @@ def _render_drift(drifts: Sequence[Drift], baseline_name: str) -> list[str]:
         f"{len(significant)} beyond the noise floor. "
         "Nothing here fails a run — the point is that a silent change becomes visible.",
         "",
-        "| suite | measurement | before | after | direction | comparable |",
-        "|---|---|---|---|---|---|",
+        "| subject | suite | measurement | before | after | direction | comparable |",
+        "|---|---|---|---|---|---|---|",
     ]
     for d in sorted(significant, key=lambda x: (x.suite, x.key)):
-        note = "yes" if d.comparable else "**no — different population**"
+        note = (
+            "yes"
+            if d.comparable
+            else (
+                "**no — Unicode tables moved**"
+                if d.tables_moved
+                else "**no — different population**"
+            )
+        )
         lines.append(
-            f"| `{d.suite}` | `{d.key}` | {_num(d.before)} | {_num(d.after)} | "
-            f"{d.direction} | {note} |"
+            f"| `{d.subject}` | `{d.suite}` | `{d.key}` | {_num(d.before)} | "
+            f"{_num(d.after)} | {d.direction} | {note} |"
         )
     lines.append("")
     incomparable = [d for d in significant if not d.comparable]
@@ -171,6 +298,7 @@ def _render_skips(report: RunReport) -> list[str]:
 
 def render_json(report: RunReport, drifts: Sequence[Drift] = ()) -> str:
     payload = {
+        "subjects": report.subjects,
         "disarm_version": report.disarm_version,
         "unicode_version": report.unicode_version,
         "confusables_version": report.confusables_version,
@@ -185,6 +313,29 @@ def render_json(report: RunReport, drifts: Sequence[Drift] = ()) -> str:
                 "external": o.external,
                 "population": o.population,
                 "duration_s": round(o.duration_s, 3),
+                "method": {
+                    "subject": o.method.subject,
+                    "subject_version": o.method.subject_version,
+                    "domain": o.method.domain,
+                    "domain_size": o.method.domain_size,
+                    "predicates": o.method.predicates,
+                    "parameters": o.method.parameters,
+                    "artifact": o.method.artifact,
+                    "artifact_sha256": o.method.artifact_sha256,
+                    "artifact_bytes": o.method.artifact_bytes,
+                    "environment": o.method.environment,
+                },
+                "reproduction": [
+                    {
+                        "key": r.key,
+                        "expected": r.expected,
+                        "actual": r.actual,
+                        "matches": r.matches,
+                        "version": r.version,
+                    }
+                    for r in o.reproduction
+                ],
+                "reproduces_its_finding": o.reproduces_its_finding,
                 "skip_reason": o.skip_reason,
                 "error": o.error,
                 "provenance": {
@@ -223,6 +374,8 @@ def render_json(report: RunReport, drifts: Sequence[Drift] = ()) -> str:
                 "delta": d.delta,
                 "ratio_delta": d.ratio_delta,
                 "comparable": d.comparable,
+                "subject": d.subject,
+                "tables_moved": d.tables_moved,
                 "direction": d.direction,
                 "significant": d.significant,
             }

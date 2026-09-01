@@ -6,7 +6,9 @@ and compares them against a committed baseline.
 
 ```bash
 python -m benchmarks.meta --list                       # show m, and what is runnable
+python -m benchmarks.meta --list-subjects              # show the tools under test
 python -m benchmarks.meta --run --only-available       # run what the machine has
+python -m benchmarks.meta --run --subject all          # every tool, plus the controls
 python -m benchmarks.meta --run --select 'uts39-*'     # run one group
 python -m benchmarks.meta --run --sample 5 --seed 3    # a reproducible partial pass
 python -m benchmarks.meta --run --family cve academic --report out.md --json out.json
@@ -36,6 +38,51 @@ Inherited guardrail, from #39/#40: these corpora are measuring instruments, neve
 optimization targets. Do not add a confusable mapping to improve a number here.
 Coverage grows from authoritative sources; a principled miss is routed to #40.
 
+## More than one tool
+
+A benchmark that only scores one library tells you what that library does, not
+whether the number is good. `--subject` runs the same suites against the pinned
+comparator environment in `requirements/bench.txt` — ftfy, unidecode,
+text-unidecode, anyascii, decancer — plus CPython's own normalization as the
+floor.
+
+Not every suite fits every tool. A key-builder question put to a transliterator
+has no answer, so those pairs report SKIPPED with the reason rather than a zero;
+zeros read as results. Suites that measure a disarm-specific surface set
+`MULTI_SUBJECT = False`.
+
+Two subjects are **controls**, not candidates:
+
+`null-baseline` deletes everything. It scores perfectly on any naive coverage
+metric, because both sides of every comparison become identical — and it was the
+top-scoring subject here until collisions began requiring a non-empty shared
+form. It stays in the roster because a control that is meant to fail is the only
+thing that proves a metric *can* fail.
+
+`identity` changes nothing. It is the floor a tool has to beat on coverage while
+staying near it on cost, and it stops a do-nothing tool reading as a safe one.
+
+Never quote a control as a comparator.
+
+## The other direction
+
+Every coverage score has a degenerate solution, so no coverage number here is
+reported alone. `corruption-cost` measures what a tool does to text that needed
+nothing: code points destroyed, characters retained, injectivity (distinct
+outputs per distinct input), and alteration of pure-ASCII text that has nothing
+to fix. Labelled corpora get this for free — their `clean` column is, by the
+corpus author's definition, text needing no repair, so anything a surface does to
+it is cost.
+
+Two rules keep that fair. **Both ends, always**: the costliest surface and the
+gentlest are reported together with their names, because quoting only the worst
+judges a library by an entry point nobody has to call, and quoting only the best
+hides a destructive default. **Collapsing surfaces are separated**: `sort_key`
+and `catalog_key` are many-to-one by contract — that is what makes two spellings
+of one thing compare equal — so they are reported apart from text surfaces.
+Scoring them together would make a library look destructive for doing its job,
+and would rank a tool with no key builder at all as the safer one.
+
 ## The five external families, and the sixth tier
 
 | family | anchor | examples |
@@ -54,9 +101,42 @@ are registered because dropping them would leave a hole in the 0.15.0 record, an
 because they catch silent regressions. They are excluded unless you pass
 `--include-introspective`, and they never enter an external total.
 
+## Reproductions
+
+A suite normally *generalises* its issue: the published script probed seven
+cases, the suite sweeps the domain. That makes the sweep stronger and the
+finding/now comparison meaningless, because the two numbers answer different
+questions. So each suite also recomputes the gist's exact quantity, pinned to the
+value that gist printed.
+
+This is not decoration. The `#719` census reports 261 code points via NFKC and
+232 via the confusable fold; a sweep with a looser punctuation set, a bare
+detection probe and an assigned-only domain reported 266 and 253 — a difference
+in method that reads as a change in behaviour. `Reproduction.matches` is the only
+thing that licenses reading a finding and a measurement as a before/after, and
+the report says so in both directions.
+
+Pinned values come from *executing* the published script on a v0.14.1 build, not
+from its own docstring. The segmentation census header says `total=36`; running
+it says `37`.
+
+```bash
+DISARM_META_REFERENCE_BUILD=0.14.1 \
+    pytest tests/test_meta_benchmark.py -k reproductions --noconftest
+```
+
+`--noconftest` is required: `tests/conftest.py` imports post-0.14.1 API.
+
 ## What a run reports
 
-Three things per suite, kept apart on purpose:
+Every run records its own method — subject and version, domain and size, the
+predicates actually invoked, every parameter that moves a result, the sha256 of
+the artifact read, and the Unicode/UCD versions in force. It is in the JSON
+always and behind a Method fold in the Markdown. The 0.15.0 work produced several
+figures for one question that differed only because a predicate moved, and
+nothing recorded which was which.
+
+Three more things per suite, kept apart on purpose:
 
 **Found during the cycle** is historical — what the benchmark measured when it was
 run against 0.14.1, quoted from the issue it produced. It is never edited to match
@@ -103,7 +183,9 @@ python -m benchmarks.meta --run --only-available          # later: reports what 
 The harness reports and does not gate. A moved number never fails a run; only a
 suite that threw does, because that is a harness defect rather than a result.
 
-Baselines are keyed by suite *and* population. A ratio measured over 4,000 code
+Baselines are keyed by subject, suite *and* population, and record the Unicode
+and confusables versions in force — a table bump moves normative numbers on its
+own, and without that the drift row blames the tool. A ratio measured over 4,000 code
 points and one measured over 150,000 are not comparable, and the report marks such
 a row rather than subtracting it. `--limit` samples by stride rather than
 truncating, because the first N code points of any sorted domain are Latin, Greek

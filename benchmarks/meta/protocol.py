@@ -71,6 +71,10 @@ class Provenance:
     finding: str = ""
     #: How the benchmark works — methodology, not results. Stays true over time.
     notes: str = ""
+    #: The published script this suite reproduces, and what that script computes.
+    #: Empty means the suite generalises its issue rather than reproducing a
+    #: measurement, and no finding/now comparison should be read off it.
+    reproduces: str = ""
 
 
 @dataclass
@@ -96,6 +100,56 @@ class Measurement:
 
 
 @dataclass
+class Method:
+    """Exactly how one suite produced one run's numbers.
+
+    A measurement without its method is a number without units. The 0.15.0 work
+    produced several figures for the same question that differed only because the
+    predicate or the domain moved, and nothing recorded which was which — so this
+    is written on every run, for every suite, and carried into the JSON.
+
+    ``predicates`` names the surfaces actually invoked, ``parameters`` holds every
+    knob that changes a result (limit, probe strings, thresholds, character sets),
+    and ``artifact_sha256`` pins the external file the suite read.
+    """
+
+    subject: str = "?"
+    subject_version: str = "?"
+    domain: str = ""
+    domain_size: int = 0
+    predicates: list[str] = field(default_factory=list)
+    parameters: dict[str, Any] = field(default_factory=dict)
+    artifact: str | None = None
+    artifact_sha256: str | None = None
+    artifact_bytes: int | None = None
+    environment: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class Reproduction:
+    """A pinned re-run of the published script a suite's finding came from.
+
+    A suite normally *generalises* its issue — it sweeps a domain where the
+    original script probed a handful of cases. That makes the sweep stronger and
+    the finding/now comparison meaningless, because the two numbers answer
+    different questions. So the gist's exact quantity is computed alongside, and
+    pinned to the value the gist printed at the version it names.
+
+    ``matches`` is the only thing that licenses reading the finding and the
+    measurement as a before/after.
+    """
+
+    key: str
+    expected: float
+    actual: float
+    version: str = "0.14.1"
+
+    @property
+    def matches(self) -> bool:
+        return self.expected == self.actual
+
+
+@dataclass
 class Outcome:
     """What one suite produced on one run."""
 
@@ -108,7 +162,16 @@ class Outcome:
     error: str = ""
     duration_s: float = 0.0
     population: int = 0
+    method: Method = field(default_factory=Method)
+    reproduction: list[Reproduction] = field(default_factory=list)
     extra: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def reproduces_its_finding(self) -> bool | None:
+        """``None`` when the suite pins no reproduction — not ``False``."""
+        if not self.reproduction:
+            return None
+        return all(r.matches for r in self.reproduction)
 
     @property
     def external(self) -> bool:
@@ -140,5 +203,5 @@ class Suite(Protocol):
     def available(self) -> tuple[bool, str]:
         """Return ``(ready, reason)``. ``reason`` explains a ``False``."""
 
-    def run(self, limit: int | None = None) -> Outcome:
-        """Score disarm against the artifact and return the measurements."""
+    def run(self, limit: int | None = None, subject: object | None = None) -> Outcome:
+        """Score ``subject`` against the artifact and return the measurements."""

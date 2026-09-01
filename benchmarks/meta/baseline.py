@@ -36,6 +36,10 @@ class Drift:
     after_of: float | None
     comparable: bool
     higher_is_better: bool | None
+    subject: str = "disarm"
+    #: The Unicode/confusables/UCD version moved since the baseline, so a change
+    #: here is not attributable to the subject.
+    tables_moved: bool = False
 
     @property
     def delta(self) -> float:
@@ -85,9 +89,14 @@ def snapshot(outcomes: list[Outcome], disarm_version: str) -> dict[str, Any]:
     for out in outcomes:
         if out.status is not Status.OK:
             continue
-        suites[out.suite] = {
+        # Keyed by subject as well as suite: the same measurement means a
+        # different thing for a transliterator than for disarm, and subtracting
+        # one from the other is meaningless.
+        suites[f"{out.method.subject}::{out.suite}"] = {
             "population": out.population,
             "external": out.external,
+            "subject": out.method.subject,
+            "subject_version": out.method.subject_version,
             "measurements": {
                 m.key: {
                     "value": m.value,
@@ -97,8 +106,14 @@ def snapshot(outcomes: list[Outcome], disarm_version: str) -> dict[str, Any]:
                 for m in out.measurements
             },
         }
+    env = next((o.method.environment for o in outcomes if o.method.environment), {})
     return {
         "disarm_version": disarm_version,
+        # A normative number moves when the tables move, not only when the code
+        # does. Without these, a UCD bump reads as a disarm regression.
+        "unicode_version": env.get("unicode_version", "?"),
+        "confusables_version": env.get("confusables_version", "?"),
+        "host_ucd": env.get("host_ucd", "?"),
         "recorded_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "suites": suites,
     }
@@ -123,11 +138,17 @@ def compare(outcomes: list[Outcome], name: str = "default") -> list[Drift]:
     for out in outcomes:
         if out.status is not Status.OK:
             continue
-        prior = base.get("suites", {}).get(out.suite)
+        prior = base.get("suites", {}).get(f"{out.method.subject}::{out.suite}")
         if not prior:
             continue
         prior_pop = prior.get("population")
         comparable = prior_pop == out.population
+        # A table bump moves normative numbers on its own. Recording it here
+        # keeps the drift row honest about what actually changed.
+        tables_moved = any(
+            base.get(k, "?") not in ("?", out.method.environment.get(k, "?"))
+            for k in ("unicode_version", "confusables_version", "host_ucd")
+        )
         for m in out.measurements:
             before = prior.get("measurements", {}).get(m.key)
             if before is None:
@@ -142,8 +163,10 @@ def compare(outcomes: list[Outcome], name: str = "default") -> list[Drift]:
                     after=float(m.value),
                     before_of=before.get("of"),
                     after_of=m.of,
-                    comparable=comparable,
+                    comparable=comparable and not tables_moved,
                     higher_is_better=m.higher_is_better,
+                    subject=out.method.subject,
+                    tables_moved=tables_moved,
                 )
             )
     return drifts

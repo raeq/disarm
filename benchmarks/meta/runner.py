@@ -14,6 +14,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from .protocol import Family, Outcome, Provenance, Status, Suite
+from .subjects import Subject
+from .subjects import by_name as subject_by_name
 
 
 @dataclass
@@ -25,6 +27,7 @@ class RunReport:
     disarm_version: str = "?"
     unicode_version: str = "?"
     confusables_version: str = "?"
+    subjects: list[str] = field(default_factory=list)
 
     @property
     def ran(self) -> list[Outcome]:
@@ -48,33 +51,67 @@ class RunReport:
             out.setdefault(o.family, []).append(o)
         return out
 
+    def by_subject(self) -> dict[str, list[Outcome]]:
+        out: dict[str, list[Outcome]] = {}
+        for o in self.outcomes:
+            out.setdefault(o.method.subject, []).append(o)
+        return out
+
+    def comparison(self, suite: str, key: str) -> dict[str, float]:
+        """One measurement across every subject that produced it.
+
+        The whole point of a subject matrix: an absolute number becomes a
+        column only when something else is in the next column.
+        """
+        got: dict[str, float] = {}
+        for o in self.ran:
+            if o.suite != suite:
+                continue
+            m = o.measurement(key)
+            if m is not None:
+                got[o.method.subject] = m.ratio if m.ratio is not None else m.value
+        return got
+
 
 def run(
     suites: Sequence[Suite],
     registered: int,
     limit: int | None = None,
+    subjects: Sequence[Subject] | None = None,
     on_start: Callable[[Suite], None] | None = None,
     on_finish: Callable[[Outcome], None] | None = None,
 ) -> RunReport:
+    """Run every (suite, subject) pair.
+
+    A pair the suite cannot serve — a key-builder question put to a
+    transliterator — comes back SKIPPED with the reason, exactly like a missing
+    corpus. Silence would read as a zero, and a zero reads as a result.
+    """
+    if not subjects:
+        default = subject_by_name("disarm")
+        subjects = [default] if default is not None else []
     report = RunReport(selected=len(suites), registered=registered)
     report.disarm_version, report.unicode_version, report.confusables_version = _versions()
+    report.subjects = [s.info.name for s in subjects]
     start = time.perf_counter()
     for suite in suites:
         if on_start:
             on_start(suite)
-        try:
-            outcome = suite.run(limit=limit)
-        except Exception as exc:  # noqa: BLE001 - a broken suite is a finding, not a crash
-            outcome = Outcome(
-                suite=suite.name,
-                family=suite.family,
-                provenance=getattr(suite, "provenance", _unknown_provenance()),
-                status=Status.ERROR,
-                error=f"{type(exc).__name__}: {exc}",
-            )
-        report.outcomes.append(outcome)
-        if on_finish:
-            on_finish(outcome)
+        for subject in subjects:
+            try:
+                outcome = suite.run(limit=limit, subject=subject)
+            except Exception as exc:  # noqa: BLE001 - a broken suite is a finding
+                outcome = Outcome(
+                    suite=suite.name,
+                    family=suite.family,
+                    provenance=getattr(suite, "provenance", _unknown_provenance()),
+                    status=Status.ERROR,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+                outcome.method.subject = subject.info.name
+            report.outcomes.append(outcome)
+            if on_finish:
+                on_finish(outcome)
     report.duration_s = time.perf_counter() - start
     return report
 

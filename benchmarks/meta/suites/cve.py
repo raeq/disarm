@@ -26,6 +26,10 @@ class CVE202617084Stringprep(SuiteBase):
         version="Lib/stringprep.py at 7e109d0 and its parent, frozen",
         licence="PSF-2.0 (derived table)",
         issues=(713, 715),
+        reproduces=(
+            "cve-2026-17084-repro.py — the count of B.3 rows whose pre-fix and "
+            "post-fix outputs differ, which is the row set the CVE creates."
+        ),
         finding=(
             "#713: a key-builder-only row — the two IDNA-2003 spellings collide in "
             "the key builders and no detector reports either of them."
@@ -38,8 +42,26 @@ class CVE202617084Stringprep(SuiteBase):
         ),
     )
 
+    REPRO_EXPECTED = {"divergent_rows": 684}
+
     def locate(self) -> Path | None:
         return artifact(FIXTURES / "cve_2026_17084_b3.tsv", env="DISARM_META_CVE_B3")
+
+    def reproduce(self) -> dict[str, float]:
+        path = self.locate()
+        assert path is not None
+        divergent = 0
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip() or line.startswith("#"):
+                continue
+            cols = line.split("\t")
+            if len(cols) != 3:
+                continue
+            pre = cols[1].encode().decode("unicode_escape")
+            post = cols[2].encode().decode("unicode_escape")
+            if pre != post:
+                divergent += 1
+        return {"divergent_rows": divergent}
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         import disarm

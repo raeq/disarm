@@ -14,12 +14,47 @@ from __future__ import annotations
 import sys
 import unicodedata
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
-from ..base import DATA, FIXTURES, SuiteBase, add, artifact, thin
+from .. import damage
+from ..base import DATA, FIXTURES, SuiteBase, add, artifact, record, thin
 from ..protocol import Availability, Family, Outcome, Provenance
 
 _MAX_CP = sys.maxunicode + 1
+
+
+def _apply(fn: Callable[[str], str], text: str) -> str:
+    """Run one surface, treating a refusal as "left unchanged"."""
+    try:
+        return fn(text)
+    except Exception:  # noqa: BLE001 - a surface may reject some input
+        return text
+
+
+def _changed(fn: Callable[[str], str], text: str) -> bool:
+    return _apply(fn, text) != text
+
+
+def _word_joiners() -> list[int]:
+    """General categories Pd and Pc — every code point that renders as a
+    within-word joiner, and the denominator the published census uses."""
+    return [cp for cp in range(_MAX_CP) if unicodedata.category(chr(cp)) in ("Pd", "Pc")]
+
+
+def _strong_rtl() -> list[int]:
+    """Assigned code points with Bidi_Class R or AL, surrogates excluded.
+
+    The exact domain ``bidi_class_sweep.py`` sweeps, so the reproduction and the
+    wider measurement below cannot silently disagree about the denominator.
+    """
+    return [
+        cp
+        for cp in range(_MAX_CP)
+        if not (0xD800 <= cp <= 0xDFFF)
+        and unicodedata.category(chr(cp)) != "Cn"
+        and unicodedata.bidirectional(chr(cp)) in ("R", "AL")
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -30,6 +65,7 @@ class UTS39ConfusableCoverage(SuiteBase):
     name = "uts39-confusables"
     family = Family.NORMATIVE
     availability = Availability.VENDORED
+    MULTI_SUBJECT = True
     summary = "How much of UTS #39 confusables.txt does the shipped fold actually reach?"
     provenance = Provenance(
         origin="Unicode Consortium",
@@ -54,50 +90,82 @@ class UTS39ConfusableCoverage(SuiteBase):
         return artifact(DATA / "confusables.txt", env="DISARM_META_CONFUSABLES")
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
-        import disarm
 
         path = self.locate()
         assert path is not None
-        sources: set[int] = set()
+        pairs: dict[int, str] = {}
         for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
+            line = line.split("#", 1)[0].strip()
+            if not line:
                 continue
-            head = line.split(";", 1)[0].strip()
+            cols = [c.strip() for c in line.split(";")]
+            if len(cols) < 2 or not cols[0] or not cols[1]:
+                continue
             try:
-                sources.add(int(head, 16))
+                source = int(cols[0], 16)
+                target = "".join(chr(int(h, 16)) for h in cols[1].split())
             except ValueError:
                 continue
-        ordered = thin(sorted(sources), limit)
-        sources = set(ordered)
-        outcome.population = len(sources)
+            pairs[source] = target
+        ordered = thin(sorted(pairs), limit)
+        outcome.population = len(ordered)
 
+        surface_map = self.transforms()
+        record(
+            outcome,
+            domain=f"{len(ordered)} UTS #39 source->target pairs",
+            predicates=sorted(surface_map),
+            reached_if=(
+                "some surface maps the source and its UTS #39 target to one "
+                "NON-EMPTY form; deleting both sides is not coverage"
+            ),
+            changed_if="some surface merely alters the source",
+            note=(
+                "'changed' is not a fair cross-tool score: a transliterator "
+                "rewrites nearly every non-ASCII code point and would read as "
+                "near-total coverage while landing nowhere near the target."
+            ),
+        )
         folded = unchanged = 0
         rtl_unreached = 0
-        for cp in sources:
-            ch = chr(cp)
-            if disarm.strip_obfuscation(ch) != ch:
+        altered_only = 0
+        for cp in ordered:
+            ch, target = chr(cp), pairs[cp]
+            # damage.collides requires a non-empty shared form, which is what
+            # stops a delete-everything tool scoring 100% here.
+            if damage.collides(surface_map.values(), ch, target):
                 folded += 1
             else:
                 unchanged += 1
+                if any(_changed(fn, ch) for fn in surface_map.values()):
+                    altered_only += 1
                 if unicodedata.bidirectional(ch) in ("R", "AL"):
                     rtl_unreached += 1
-        add(outcome, "sources", len(sources), unit="codepoints")
+        n = len(ordered)
+        add(outcome, "sources", n, unit="pairs")
         add(
             outcome,
             "folded",
             folded,
-            of=len(sources),
+            of=n,
             higher_is_better=True,
-            detail="strip_obfuscation changes the code point",
+            detail="source and its UTS #39 target land on one form",
         )
         add(
             outcome,
             "unreached",
             unchanged,
-            of=len(sources),
+            of=n,
             higher_is_better=False,
-            detail="in UTS #39 and unchanged — addressable, route via #40",
+            detail="source and target still differ — addressable, route via #40",
+        )
+        add(
+            outcome,
+            "altered_but_not_onto_target",
+            altered_only,
+            of=unchanged,
+            higher_is_better=False,
+            detail="rewritten, and still not equal to the target: motion without coverage",
         )
         add(
             outcome,
@@ -120,6 +188,10 @@ class UTS39MixedNumbers(SuiteBase):
         version="derived from the running interpreter's UCD",
         licence="Unicode License v3",
         issues=(777,),
+        reproduces=(
+            "mixed_number_probe.py — the seven labelled cases, scored on whether "
+            "any surface reports a multi-system identifier."
+        ),
         finding=(
             "#777: unimplemented at 0.14.1 — `1٢۳４५` reported clean, and ASCII mixed "
             "with any of the other 75 numbering systems was one script to "
@@ -127,6 +199,46 @@ class UTS39MixedNumbers(SuiteBase):
         ),
         notes="Numbering systems are grouped by the decimal-zero of each Nd run.",
     )
+
+    #: The published probe's own cases: (text, carries a mix).
+    CASES = (
+        ("2024", False),
+        ("٢٠٢٤", False),
+        ("२०२४", False),
+        ("1٢", True),
+        ("٢५", True),
+        ("1٢۳４५", True),
+        ("acct-1٢3", True),
+    )
+
+    #: From executing mixed_number_probe.py on a v0.14.1 build. Counting
+    #: is_mixed_script as a hit would give 3 and mean nothing: Arabic-Indic plus
+    #: Devanagari is a genuine script mix, so that surface fires for an unrelated
+    #: reason. The claim under test is that no surface names the numbers rule.
+    REPRO_EXPECTED = {
+        "cases": 7,
+        "mixed_numbers_kind_reported": 0,
+        "pure_digit_mixes_flagged": 0,
+    }
+
+    def reproduce(self) -> dict[str, float]:
+        import disarm
+
+        named = flagged = 0
+        for text, mixed in self.CASES:
+            if not mixed:
+                continue
+            if any("number" in kind for kind in disarm.inspect_anomalies(text).kinds):
+                named += 1
+            # The three all-digit mixes; "acct-1٢3" is excluded because it
+            # carries Latin letters and so has a script signal of its own.
+            if text.isdigit() and disarm.has_anomalies(text):
+                flagged += 1
+        return {
+            "cases": len(self.CASES),
+            "mixed_numbers_kind_reported": named,
+            "pure_digit_mixes_flagged": flagged,
+        }
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         import disarm
@@ -186,6 +298,11 @@ class UTS39AugmentedScripts(SuiteBase):
         version="derived",
         licence="Unicode License v3",
         issues=(776,),
+        reproduces=(
+            "augmented_script_probe.py — six labelled cases, scored on the "
+            "three-way disagreement between inspect_anomalies, is_mixed_script "
+            "and HostnameAnalysis.mixed_script."
+        ),
         finding=(
             "#776: applied in inspect_anomalies only — `例え` was clean to the "
             "detector, mixed-script to is_mixed_script, and suspicious as a hostname."
@@ -196,44 +313,85 @@ class UTS39AugmentedScripts(SuiteBase):
         ),
     )
 
-    #: Script-mixture probes whose correct verdict UTS #39 §5.1 fixes: each is a
-    #: single augmented script, so none of them is mixed-script.
-    SINGLE_AUGMENTED = ("例え", "カタカナ漢字", "한글漢字", "漢字ひらがな")
+    #: The published probe's own cases, verbatim: (label, text, hostname). Five
+    #: single augmented scripts and one genuine Cyrillic/Latin spoof as a
+    #: positive control. These are not chosen here — inventing the probe strings
+    #: would make this suite's verdict disarm's opinion rather than UTS #39's.
+    CASES = (
+        ("Japanese Han+Hiragana", "例え", "例え.テスト", False),
+        ("Japanese Han+Katakana", "例テ", "例テ.com", False),
+        ("Japanese Hira+Katakana", "ひらカタ", "ひらカタ.jp", False),
+        ("Korean Hangul only", "실례", "실례.테스트", False),
+        ("Chinese Han only", "例子", "例子.测试", False),
+        ("SPOOF Cyrillic+Latin", "аpple", "аpple.com", True),
+    )
+
+    #: From executing augmented_script_probe.py on a v0.14.1 build: the three
+    #: Japanese rows disagree, Korean/Chinese/spoof agree.
+    REPRO_EXPECTED = {"cases": 6, "three_way_disagreements": 3}
+
+    def reproduce(self) -> dict[str, float]:
+        # augmented_script_probe.py. The gist reads HostnameAnalysis.mixed_script,
+        # not is_suspicious_hostname()[0]; the latter is an overall verdict that
+        # folds in several other rules, so it answers a different question.
+        import disarm
+
+        disagreements = 0
+        for _label, text, host, _spoof in self.CASES:
+            anomalous = "mixed_script" in disarm.inspect_anomalies(text).kinds
+            mixed = disarm.is_mixed_script(text)
+            _, analysis = disarm.is_suspicious_hostname(host)
+            if anomalous != mixed or mixed != analysis.mixed_script:
+                disagreements += 1
+        return {"cases": len(self.CASES), "three_way_disagreements": disagreements}
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         import disarm
 
-        probes = list(self.SINGLE_AUGMENTED)[: limit or None]
-        outcome.population = len(probes)
-        disagreements = 0
+        cases = list(self.CASES)[: limit or None]
+        outcome.population = len(cases)
+        disagreements = wrong = 0
         by_surface: Counter[str] = Counter()
-        for text in probes:
+        for _label, text, host, spoof in cases:
+            _, analysis = disarm.is_suspicious_hostname(host)
             verdicts = {
                 "is_mixed_script": disarm.is_mixed_script(text),
                 "inspect_anomalies": "mixed_script" in disarm.inspect_anomalies(text).kinds,
-                "is_suspicious_hostname": disarm.is_suspicious_hostname(f"{text}.example")[0],
+                "hostname_mixed_script": analysis.mixed_script,
             }
             for surface, flagged in verdicts.items():
                 if flagged:
                     by_surface[surface] += 1
             if len(set(verdicts.values())) > 1:
                 disagreements += 1
-        add(outcome, "probes", len(probes), unit="strings")
+            # UTS #39 §5.1 fixes the right answer per case: a single augmented
+            # script is not mixed, and the Cyrillic/Latin spoof is.
+            if any(v is not spoof for v in verdicts.values()):
+                wrong += 1
+        add(outcome, "cases", len(cases), unit="strings")
         add(
             outcome,
             "surface_disagreements",
             disagreements,
-            of=len(probes),
+            of=len(cases),
             higher_is_better=False,
             detail="the three surfaces do not return one verdict",
         )
-        for surface in ("is_mixed_script", "inspect_anomalies", "is_suspicious_hostname"):
+        add(
+            outcome,
+            "disagrees_with_uts39",
+            wrong,
+            of=len(cases),
+            higher_is_better=False,
+            detail="at least one surface contradicts the augmented-set answer",
+        )
+        for surface in ("is_mixed_script", "inspect_anomalies", "hostname_mixed_script"):
             add(
                 outcome,
                 f"flagged_by_{surface}",
                 by_surface[surface],
-                of=len(probes),
-                detail="a single augmented script should not be mixed",
+                of=len(cases),
+                detail="only the Cyrillic/Latin spoof should be flagged",
             )
 
 
@@ -351,6 +509,10 @@ class UCDBidiClass(SuiteBase):
         version="derived from the running interpreter's UCD",
         licence="Unicode License v3",
         issues=(773, 741),
+        reproduces=(
+            "bidi_class_sweep.py — assigned Bidi_Class R/AL code points, and how "
+            "many of them detect_scripts() resolves to no script at all."
+        ),
         finding=(
             "#773: direction was resolved from a five-name script list, so 1,786 of "
             "3,018 assigned R/AL code points were neutral to has_bidi_conflict, "
@@ -362,15 +524,22 @@ class UCDBidiClass(SuiteBase):
         ),
     )
 
+    REPRO_EXPECTED = {"assigned_r_al": 3018, "unscripted": 1786}
+
+    def reproduce(self) -> dict[str, float]:
+        # bidi_class_sweep.py: the finding is about direction *resolution*, so the
+        # quantity is detect_scripts() == [] — not has_bidi_conflict, which is one
+        # consumer of it. Measuring the consumer answers a different question.
+        import disarm
+
+        rtl = _strong_rtl()
+        unscripted = [cp for cp in rtl if not disarm.detect_scripts(chr(cp))]
+        return {"assigned_r_al": len(rtl), "unscripted": len(unscripted)}
+
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         import disarm
 
-        rtl = [
-            cp
-            for cp in range(_MAX_CP)
-            if unicodedata.category(chr(cp)) != "Cn"
-            and unicodedata.bidirectional(chr(cp)) in ("R", "AL")
-        ]
+        rtl = _strong_rtl()
         rtl = thin(rtl, limit)
         outcome.population = len(rtl)
 
@@ -402,6 +571,11 @@ class UAX29WordJoiners(SuiteBase):
         version="derived",
         licence="Unicode License v3",
         issues=(750, 752, 755, 804),
+        reproduces=(
+            "segmentation-separator-census.py — the fully atomized lexicon word "
+            "c<SEP>o<SEP>n...m for 'confirm', scored on the `segmentation` anomaly "
+            "kind directly and after canonicalize."
+        ),
         finding=(
             "#750: the segmentation branch recognised three separators, so 16 of the "
             "36 within-word joiners were silent on both paths and U+2010 disagreed "
@@ -410,11 +584,56 @@ class UAX29WordJoiners(SuiteBase):
         notes="The invisible-carrier twin of this class has a full out-of-scope entry.",
     )
 
+    #: From executing segmentation-separator-census.py on a v0.14.1 build, not
+    #: from its docstring — that header says "Pd=26 Pc=10 total=36 (Unicode 16.0
+    #: tables)" and the script prints Pd=27 Pc=10 total=37 under UCD 16.0.0. The
+    #: header is a transcribed claim; the run is the derived one.
+    REPRO_UCD = "16.0.0"
+    REPRO_EXPECTED = {
+        "joiners": 37,
+        "segmentation_direct": 2,
+        "segmentation_after_canonicalize": 16,
+        "other_kind_never_segmentation": 4,
+        "silent_both_paths": 17,
+    }
+
+    def reproduce(self) -> dict[str, float]:
+        # segmentation-separator-census.py. Three things the gist does that the
+        # sweep below does not: it atomizes the whole word, it passes a lexicon
+        # (the `segmentation` branch is lexicon-gated), and it scores that one
+        # anomaly kind rather than has_anomalies. Drop any of the three and the
+        # number stops being the one #750 reports.
+        import disarm
+
+        word, lex = "confirm", {"confirm"}
+        joiners = _word_joiners()
+        direct = after = other = silent = 0
+        for cp in joiners:
+            token = chr(cp).join(word)
+            kinds = disarm.inspect_anomalies(token, lex).kinds
+            d = "segmentation" in kinds
+            a = "segmentation" in disarm.inspect_anomalies(disarm.canonicalize(token), lex).kinds
+            direct += d
+            after += a
+            # The census's buckets: "other" reports something that is never
+            # segmentation on either path; "silent" reports nothing at all
+            # directly and nothing after canonicalize. They are not complements.
+            if kinds and not d and not a:
+                other += 1
+            if not kinds and not a:
+                silent += 1
+        return {
+            "joiners": len(joiners),
+            "segmentation_direct": direct,
+            "segmentation_after_canonicalize": after,
+            "other_kind_never_segmentation": other,
+            "silent_both_paths": silent,
+        }
+
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         import disarm
 
-        joiners = [cp for cp in range(_MAX_CP) if unicodedata.category(chr(cp)) in ("Pd", "Pc")]
-        joiners = thin(joiners, limit)
+        joiners = thin(_word_joiners(), limit)
         outcome.population = len(joiners)
 
         detected = recovered = 0
@@ -649,6 +868,7 @@ class UTS39EquivalenceClasses(SuiteBase):
     name = "uts39-equivalence-classes"
     family = Family.NORMATIVE
     availability = Availability.VENDORED
+    MULTI_SUBJECT = True
     summary = "Class closure: does every member of a UTS #39 class key the same?"
     provenance = Provenance(
         origin="Unicode Consortium",
@@ -676,7 +896,6 @@ class UTS39EquivalenceClasses(SuiteBase):
         return artifact(DATA / "confusables.txt", env="DISARM_META_CONFUSABLES")
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
-        import disarm
 
         path = self.locate()
         assert path is not None
@@ -699,16 +918,28 @@ class UTS39EquivalenceClasses(SuiteBase):
         keys = [ordered[i] for i in thin(list(range(len(ordered))), limit)]
         outcome.population = len(keys)
 
+        # The strongest surface the subject has, chosen per class: a tool is
+        # credited with closing a class if any one of its surfaces does.
+        surface_map = self.transforms()
+        record(
+            outcome,
+            domain=f"{len(keys)} UTS #39 equivalence classes",
+            predicates=sorted(surface_map),
+            closed_if="one surface maps every member and the prototype to one form",
+        )
         closed = 0
         intra_script_only = 0
         for target in keys:
             members = classes[target]
-            folded = {disarm.canonicalize(m) for m in members}
-            if len(folded) == 1 and disarm.canonicalize(target) in folded:
+            everything = [*members, target]
+            # One non-empty shared form. Collapsing the class to "" is deletion,
+            # not closure, and scored the null baseline at 100% before this.
+            if any(
+                len(forms := {_apply(fn, m) for m in everything}) == 1 and next(iter(forms)) != ""
+                for fn in surface_map.values()
+            ):
                 closed += 1
-            # A class with no ASCII-reachable member is the shape #848 describes:
-            # nothing in it can act as a fold target for the rest.
-            if not any(disarm.canonicalize(m).isascii() for m in [*members, target]):
+            if not any(_apply(fn, m).isascii() for fn in surface_map.values() for m in everything):
                 intra_script_only += 1
         n = len(keys)
         add(outcome, "classes", n, unit="classes")
@@ -730,8 +961,184 @@ class UTS39EquivalenceClasses(SuiteBase):
         )
 
 
+class CorruptionCost(SuiteBase):
+    name = "corruption-cost"
+    family = Family.NORMATIVE
+    availability = Availability.DERIVED
+    MULTI_SUBJECT = True
+    summary = "The other direction: what the tool costs on text that needed nothing."
+    provenance = Provenance(
+        origin="Unicode Consortium",
+        citation="UCD assigned code points (General_Category != Cn)",
+        url="https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt",
+        version="derived from the running interpreter's UCD",
+        licence="Unicode License v3",
+        issues=(759, 842, 754, 761, 745),
+        finding=(
+            "#759: benchmarks/adversarial_eval measures only recovery and is "
+            "hardcoded to one entry point, so there is no clean-text cost metric "
+            "behind 'what each entry point costs you'. #745: every preset "
+            "collapsed 465/465 source files to one line — a cost no coverage "
+            "number could show."
+        ),
+        notes=(
+            "Every coverage metric in this registry has a degenerate solution: a "
+            "tool that deletes all input folds every confusable onto its target "
+            "and closes every equivalence class. This suite is the paired cost, "
+            "and `null-baseline` is kept in the subject roster to prove it fires. "
+            "Two domains: assigned code points inside a clean ASCII carrier, and "
+            "pure-ASCII text that needs no repair at all — any change to the "
+            "latter is cost with no possible benefit."
+        ),
+    )
+
+    #: Coarse enough to stay sub-second; strided, so it spans the planes.
+    STRIDE = 31
+
+    def measure(self, outcome: Outcome, limit: int | None) -> None:
+        all_surfaces = self.transforms()
+        # Key builders are many-to-one by contract: sort_key and catalog_key
+        # exist so two spellings of one thing compare equal. Scoring them beside
+        # a text normalizer would make a library look destructive for doing its
+        # job — and would rank a tool with no key builder as the safer one.
+        collapsing = set(self.subject.keys()) if self.subject else set()
+        surface_map, key_map = damage.split_by_intent(all_surfaces, collapsing)
+
+        codepoints = thin(damage.assigned_sample(self.STRIDE), limit)
+        carried = damage.carried(codepoints)
+        clean = damage.clean_ascii_corpus(min(limit or 1200, 1200))
+        outcome.population = len(carried)
+        record(
+            outcome,
+            domain=(
+                f"{len(carried)} assigned code points in an ASCII carrier, plus "
+                f"{len(clean)} pure-ASCII strings"
+            ),
+            predicates=sorted(surface_map),
+            collapsing_surfaces_excluded=sorted(key_map),
+            stride=self.STRIDE,
+            carriers=list(damage.CARRIERS),
+            degenerate_if="destruction > 50% or injectivity < 10%",
+        )
+
+        per = damage.per_surface(surface_map, carried)
+        worst_name, worst = damage.worst(per)
+        gentle_name, gentle = damage.gentlest(per)
+        clean_per = damage.per_surface(surface_map, clean)
+        cw_name, cw = damage.worst(clean_per)
+        cg_name, cg = damage.gentlest(clean_per)
+
+        add(outcome, "codepoints", len(carried), unit="strings")
+        # Both ends, always. Either alone misrepresents.
+        add(
+            outcome,
+            "destroyed_worst_surface",
+            worst.destroyed,
+            of=worst.inputs,
+            higher_is_better=False,
+            detail=f"`{worst_name}` — the costliest text surface on offer",
+        )
+        add(
+            outcome,
+            "destroyed_gentlest_surface",
+            gentle.destroyed,
+            of=gentle.inputs,
+            higher_is_better=False,
+            detail=f"`{gentle_name}` — the least costly text surface on offer",
+        )
+        add(
+            outcome,
+            "injectivity_worst_surface",
+            worst.injectivity,
+            of=1.0,
+            unit="ratio",
+            detail="distinct outputs per distinct input; low means merging, which "
+            "is how a coverage score is faked — but see the collapsing row below",
+        )
+        add(
+            outcome,
+            "injectivity_gentlest_surface",
+            gentle.injectivity,
+            of=1.0,
+            unit="ratio",
+            detail=f"`{gentle_name}`",
+        )
+        add(
+            outcome,
+            "retention_worst_surface",
+            worst.retention,
+            of=1.0,
+            unit="ratio",
+            higher_is_better=True,
+            detail=f"characters surviving `{worst_name}`",
+        )
+        add(
+            outcome,
+            "retention_gentlest_surface",
+            gentle.retention,
+            of=1.0,
+            unit="ratio",
+            higher_is_better=True,
+            detail=f"characters surviving `{gentle_name}`",
+        )
+        add(
+            outcome,
+            "clean_ascii_altered_worst",
+            cw.altered,
+            of=cw.inputs,
+            higher_is_better=False,
+            detail=f"`{cw_name}` rewrites text with nothing to fix",
+        )
+        add(
+            outcome,
+            "clean_ascii_altered_gentlest",
+            cg.altered,
+            of=cg.inputs,
+            higher_is_better=False,
+            detail=f"`{cg_name}`",
+        )
+        add(
+            outcome,
+            "degenerate",
+            1.0 if (worst.degenerate and gentle.degenerate) else 0.0,
+            of=1.0,
+            higher_is_better=False,
+            detail="every text surface scores by destroying rather than resolving",
+        )
+        if key_map:
+            key_damage = damage.per_surface(key_map, carried)
+            _kn, kd = damage.worst(key_damage)
+            add(
+                outcome,
+                "collapsing_surfaces",
+                len(key_map),
+                detail="key builders, excluded above: collapsing is their contract",
+            )
+            add(
+                outcome,
+                "key_injectivity",
+                kd.injectivity,
+                of=1.0,
+                unit="ratio",
+                detail="reported, not scored — a low number here is the feature",
+            )
+        outcome.extra = {
+            "per_surface": {
+                name: {
+                    "destruction_rate": d.destruction_rate,
+                    "alteration_rate": d.alteration_rate,
+                    "injectivity": d.injectivity,
+                    "retention": d.retention,
+                }
+                for name, d in sorted(per.items())
+            },
+            "collapsing_surfaces": sorted(key_map),
+        }
+
+
 SUITES = [
     UTS39ConfusableCoverage(),
+    CorruptionCost(),
     UTS39EquivalenceClasses(),
     UTS39MixedNumbers(),
     UTS39AugmentedScripts(),

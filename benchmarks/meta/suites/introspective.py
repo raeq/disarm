@@ -96,6 +96,11 @@ class ASCIIProducingSteps(SuiteBase):
         licence="n/a",
         external=False,
         issues=(719, 721, 747),
+        reproduces=(
+            "confusable-fold-delimiter-census.py — an explicit PUNCT set (`-` and "
+            "`_` excluded as unreserved), NFKC-membership attribution, and the "
+            "carrier probe has_anomalies('ord' + c + 'end')."
+        ),
         finding=(
             "#719: 493 code points gain ASCII punctuation — 261 from NFKC, 232 from "
             "the fold. 174 of the fold's 232 screen clean, and 76 of those produce "
@@ -109,8 +114,54 @@ class ASCIIProducingSteps(SuiteBase):
         ),
     )
 
-    #: The ASCII punctuation whose appearance changes how a downstream sink parses.
-    DANGEROUS = set(":=%&?#/\\<>|\"'`")
+    #: The census's own punctuation set. `-` and `_` are deliberately absent:
+    #: both are unreserved in RFC 3986 and load-bearing in no grammar here, and
+    #: including them moves every number in the table.
+    PUNCT = ":=&?#%/\\.,;\"'<>|()[]{}@+*!$~^`"
+    #: The subset that separates fields or introduces an escape.
+    STRUCTURAL = set(":=%&?#/\\")
+
+    REPRO_EXPECTED = {
+        "emits_ascii_punctuation": 493,
+        "nfkc_is_the_source": 261,
+        "fold_is_the_only_source": 232,
+        "fold_only_and_clean": 174,
+        "fold_only_clean_and_structural": 76,
+    }
+
+    def reproduce(self) -> dict[str, float]:
+        # confusable-fold-delimiter-census.py, method for method. The sweep in
+        # measure() below used a looser punctuation test (anything ASCII, not
+        # alphanumeric, not space), a bare has_anomalies(ch) probe and an
+        # assigned-only domain. Each of those moves the split, and together they
+        # reported the fold at 253 against the census's 232 — a difference in
+        # method that reads as a change in behaviour.
+        import disarm
+
+        punct = set(self.PUNCT)
+        rows = []
+        for cp in range(_MAX_CP):
+            if 0xD800 <= cp <= 0xDFFF:
+                continue
+            ch = chr(cp)
+            if ch in punct:
+                continue
+            got = set(disarm.canonicalize(ch)) & punct
+            if got:
+                rows.append((ch, got))
+
+        fold_only = [
+            (ch, got) for ch, got in rows if not set(unicodedata.normalize("NFKC", ch)) & punct
+        ]
+        clean = [(ch, got) for ch, got in fold_only if not disarm.has_anomalies("ord" + ch + "end")]
+        structural = [(ch, got) for ch, got in clean if got & self.STRUCTURAL]
+        return {
+            "emits_ascii_punctuation": len(rows),
+            "nfkc_is_the_source": len(rows) - len(fold_only),
+            "fold_is_the_only_source": len(fold_only),
+            "fold_only_and_clean": len(clean),
+            "fold_only_clean_and_structural": len(structural),
+        }
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         import disarm
@@ -124,7 +175,7 @@ class ASCIIProducingSteps(SuiteBase):
             if ch.isascii():
                 continue
             out = disarm.canonicalize(ch)
-            gained = {c for c in out if c.isascii() and not c.isalnum() and not c.isspace()}
+            gained = set(out) & set(self.PUNCT)
             if not gained:
                 continue
             nfkc = disarm.normalize(ch, form="NFKC")
@@ -132,7 +183,7 @@ class ASCIIProducingSteps(SuiteBase):
                 via_nfkc += 1
             else:
                 via_fold += 1
-                if gained & self.DANGEROUS and not disarm.has_anomalies(ch):
+                if gained & self.STRUCTURAL and not disarm.has_anomalies("ord" + ch + "end"):
                     dangerous_unreported += 1
         add(outcome, "codepoints", len(domain), unit="codepoints")
         add(outcome, "ascii_via_nfkc", via_nfkc, detail="reported as compat_fold")

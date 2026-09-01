@@ -13,11 +13,20 @@ cannot see over-reach.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from ..base import CACHE, SuiteBase, add, artifact
+from ..base import CACHE, SuiteBase, add, artifact, record
 from ..protocol import Availability, Family, Outcome, Provenance
+
+
+def _altered(fn: Callable[[str], str], text: str) -> bool:
+    """Did this surface change the text? A refusal counts as "no"."""
+    try:
+        return fn(text) != text
+    except Exception:  # noqa: BLE001
+        return False
 
 
 class _AdversarialEvalSuite(SuiteBase):
@@ -181,6 +190,7 @@ class GutenbergBenign(SuiteBase):
     name = "gutenberg-benign"
     family = Family.DATASET
     availability = Availability.MANUAL
+    MULTI_SUBJECT = True
     env_var = "DISARM_META_GUTENBERG"
     summary = "Benign pre-1923 prose: the false-positive axis every attack corpus lacks."
     provenance = Provenance(
@@ -207,10 +217,6 @@ class GutenbergBenign(SuiteBase):
         return artifact(CACHE / "gutenberg_passages.txt", env=self.env_var)
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
-        import disarm
-
-        from ..base import detectors
-
         path = self.locate()
         assert path is not None
         passages = [
@@ -225,7 +231,14 @@ class GutenbergBenign(SuiteBase):
             add(outcome, "passages", 0)
             return
 
-        det = detectors()
+        det = self.detect()
+        surface_map = self.transforms()
+        record(
+            outcome,
+            domain=f"{len(passages)} public-domain prose passages",
+            predicates=[*sorted(surface_map), *sorted(det)],
+            cost_metric="a benign passage a detector flags, or a surface rewrites",
+        )
         false_positives = {name: 0 for name in det}
         altered = 0
         for text in passages:
@@ -235,11 +248,18 @@ class GutenbergBenign(SuiteBase):
                         false_positives[name] += 1
                 except Exception:  # noqa: BLE001
                     continue
-            if disarm.canonicalize(text) != text:
+            if any(_altered(fn, text) for fn in surface_map.values()):
                 altered += 1
         n = len(passages)
         add(outcome, "passages", n, unit="passages")
-        add(outcome, "altered_by_canonicalize", altered, of=n)
+        add(
+            outcome,
+            "altered_by_any_surface",
+            altered,
+            of=n,
+            higher_is_better=False,
+            detail="benign prose the subject rewrites",
+        )
         for name, hits in false_positives.items():
             add(
                 outcome,

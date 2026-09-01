@@ -9,6 +9,7 @@ import argparse
 import sys
 
 from . import baseline as baseline_mod
+from . import subjects as subjects_mod
 from .protocol import Availability, Family, Outcome, Status, Suite
 from .registry import all_suites, select
 from .report import render_json, render_markdown
@@ -67,6 +68,17 @@ def main(argv: list[str] | None = None) -> int:
         help="also run the self-referential sweeps (excluded by default)",
     )
     p.add_argument("--limit", type=int, help="cap rows/code points per suite")
+    p.add_argument(
+        "--subject",
+        nargs="+",
+        metavar="TOOL",
+        help=(
+            "tools to score (default: disarm). 'all' runs every installed "
+            "subject; see --list-subjects. Suites that measure a disarm-specific "
+            "surface skip other subjects rather than scoring them zero."
+        ),
+    )
+    p.add_argument("--list-subjects", action="store_true", help="list tools and exit")
     p.add_argument("--report", metavar="PATH", help="write the markdown report here")
     p.add_argument("--json", metavar="PATH", help="write the machine-readable report here")
     p.add_argument(
@@ -82,7 +94,25 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--quiet", action="store_true", help="suppress per-suite progress")
     args = p.parse_args(argv)
 
+    if args.list_subjects:
+        print("Subjects (from requirements/bench.txt):\n")
+        for subject in subjects_mod.all_subjects():
+            ready, why = subject.available()
+            caps = ",".join(sorted(subject.capabilities())) if ready else "-"
+            mark = "ok " if ready else "-- "
+            print(
+                f"  {mark}{subject.info.name:<16}{subject.info.version:<10}"
+                f"{caps:<26}{subject.info.role}"
+            )
+            if not ready:
+                print(f"     {' ' * 16}{why}")
+        return 0
+
     registered = len(all_suites())
+    subjects = subjects_mod.select(args.subject)
+    if not subjects:
+        print("No requested subject is installed.", file=sys.stderr)
+        return 2
     suites = select(
         patterns=args.select,
         families=args.family,
@@ -110,10 +140,16 @@ def main(argv: list[str] | None = None) -> int:
             return
         tag = {Status.OK: "ok", Status.SKIPPED: "skip", Status.ERROR: "ERROR"}[outcome.status]
         note = outcome.skip_reason or outcome.error or f"{outcome.population:,} rows"
-        print(f"  {tag:>5}  {outcome.suite}: {note}", file=sys.stderr, flush=True)
+        label = f"{outcome.suite} [{outcome.method.subject}]"
+        print(f"  {tag:>5}  {label}: {note}", file=sys.stderr, flush=True)
 
     report = run(
-        suites, registered=registered, limit=args.limit, on_start=started, on_finish=finished
+        suites,
+        registered=registered,
+        limit=args.limit,
+        subjects=subjects,
+        on_start=started,
+        on_finish=finished,
     )
 
     drifts = [] if args.no_baseline else baseline_mod.compare(report.outcomes, args.baseline)

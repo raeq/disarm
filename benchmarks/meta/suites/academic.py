@@ -19,7 +19,8 @@ import json
 from collections.abc import Iterator
 from pathlib import Path
 
-from ..base import CACHE, SuiteBase, add, artifact, detectors, surfaces
+from .. import damage
+from ..base import CACHE, SuiteBase, add, artifact, record
 from ..protocol import Availability, Family, Outcome, Provenance
 
 TEXT_COLUMNS = ("text", "perturbed", "adversarial", "attack", "suffix", "input", "body", "prompt")
@@ -77,6 +78,10 @@ class AttackCorpusSuite(SuiteBase):
 
     family = Family.ACADEMIC
     availability = Availability.MANUAL
+    #: Every tool that rewrites text can be scored on an attack corpus, so these
+    #: are the suites a cross-tool column is worth most on: "30% recovered" only
+    #: means something beside what anything else recovers.
+    MULTI_SUBJECT = True
     #: Filenames the suite will accept from the cache directory.
     filenames: tuple[str, ...] = ()
 
@@ -95,8 +100,20 @@ class AttackCorpusSuite(SuiteBase):
             add(outcome, "rows", 0)
             return
 
-        det = detectors()
-        surface_map = surfaces()
+        det = self.detect()
+        surface_map = self.transforms()
+        record(
+            outcome,
+            domain=f"{len(rows)} rows of {self.provenance.citation}",
+            predicates=[*sorted(surface_map), *sorted(det)],
+            text_columns=list(TEXT_COLUMNS),
+            clean_columns=list(CLEAN_COLUMNS),
+            recovery_metric="exact match after applying the same surface to both sides",
+            corruption_metric=(
+                "the corpus's own clean column is, by its author's definition, "
+                "text needing no repair; anything a surface does to it is cost"
+            ),
+        )
         detected = {name: 0 for name in det}
         xmr = {name: 0 for name in surface_map}
         altered = {name: 0 for name in surface_map}
@@ -122,8 +139,18 @@ class AttackCorpusSuite(SuiteBase):
                     continue
                 if out != text:
                     altered[surface] += 1
-                if clean is not None and out == transform(clean):
+                # A recovery only counts if something survived: mapping both
+                # sides to the empty string is deletion, not recovery.
+                if clean is not None and out and out == transform(clean):
                     xmr[surface] += 1
+
+        # The other direction, using the corpus's own ground truth: whatever a
+        # surface does to the clean side is pure cost, and a tool can only look
+        # good on recovery by destroying if this stays invisible.
+        clean_rows = [c for _t, c in rows if c]
+        if clean_rows:
+            clean_damage = damage.per_surface(surface_map, clean_rows)
+            worst_name, worst_damage = damage.worst(clean_damage)
 
         n = len(rows)
         add(outcome, "rows", n, unit="rows")
@@ -143,10 +170,11 @@ class AttackCorpusSuite(SuiteBase):
         )
         add(
             outcome,
-            "detected_has_anomalies",
-            detected.get("has_anomalies", 0),
+            "rows_detected_by_best_detector",
+            max(detected.values(), default=0),
             of=n,
             higher_is_better=True,
+            detail="the single detector that sees the most rows",
         )
         best_xmr = max(xmr.values()) if labelled else 0
         add(
@@ -159,11 +187,37 @@ class AttackCorpusSuite(SuiteBase):
         )
         add(
             outcome,
-            "altered_by_canonicalize",
-            altered.get("canonicalize", 0),
+            "rows_altered_by_most_active_surface",
+            max(altered.values(), default=0),
             of=n,
             detail="rewritten whether or not anything was detected",
         )
+        if clean_rows:
+            add(
+                outcome,
+                "clean_rows_corrupted",
+                worst_damage.altered,
+                of=len(clean_rows),
+                higher_is_better=False,
+                detail=f"`{worst_name}` rewrites the corpus's own clean text",
+            )
+            add(
+                outcome,
+                "clean_rows_destroyed",
+                worst_damage.destroyed,
+                of=len(clean_rows),
+                higher_is_better=False,
+                detail="clean text reduced to nothing",
+            )
+            add(
+                outcome,
+                "clean_retention",
+                worst_damage.retention,
+                of=1.0,
+                unit="ratio",
+                higher_is_better=True,
+                detail="characters of clean text surviving the worst surface",
+            )
         outcome.extra = {
             "detected": detected,
             "xmr": xmr,

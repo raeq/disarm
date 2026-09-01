@@ -725,6 +725,30 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **#803 fixed the presets and left `list_profiles()` behind (#853).** #757 measured
+  `ml_normalize` turning `film’s` into `film right apostrophe s` — 326 code points carry
+  neither the Unicode `Emoji` nor the `Extended_Pictographic` property and were named as
+  English words. #803 gave `PRESETS` the skip and did not reach the profiles, so
+  `ml_normalize("⛑")` was stable while `get_pipeline("ml_corpus_normalize")` renamed its
+  own output on the next pass.
+
+  That is the second time this boundary swallowed a fix; #757's own title records #614
+  being lost across it one layer in. A **named profile is a curated recommendation**, like
+  a preset, so it now takes the preset policy. `demojize` and a hand-built
+  `TextPipeline(demojize=True)` still name everything: a caller who asked for the step by
+  name gets exactly what it says.
+
+  Measured over the BMP, 130 outputs change in the two demojizing profiles and every one
+  is fewer spurious tokens — `¼` was `1 fraction slash 4` and is now `1/4`. No genuine
+  emoji lost its name; zero pictographic code points are left unnamed.
+
+  **`llm_guardrail` now clears the whole CVE matrix**, joining `canonicalize_strict`,
+  `strip_obfuscation` and `catalog_key`. Naming the non-emoji rows was what broke it:
+  `€xample.com` became `euro xample.com`, so the spoof and the genuine string stopped
+  being equal rather than becoming equal — #614's mechanism, in the profiles.
+  `docs/security/cve-validation.md` records it, because that is the entry point the LLM
+  pipeline pages send a guardrail author to.
+
 - **#847 was silently reverted in full by #851, and `main` stayed green.** Every one of
   its fourteen files: 140 lines of `build.rs`, `data/confusables_lgr.tsv`,
   `tests/test_lgr_pairs.py`, the seventeen ICANN LGR rows in `confusables_to_latin.tsv`,

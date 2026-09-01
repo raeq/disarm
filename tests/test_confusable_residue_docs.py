@@ -33,20 +33,48 @@ PAGE = ROOT / "docs" / "user-guide" / "confusables.md"
 UPSTREAM = ROOT / "data" / "confusables.txt"
 
 
-def _documented(label: str) -> int:
-    """The figure the page states for `label`, from its own table row."""
-    for line in PAGE.read_text(encoding="utf-8").splitlines():
-        if label in line and "|" in line:
+def _table_after(header: str) -> list[str]:
+    """The rows of the first Markdown table whose header line matches `header`.
+
+    Scoped rather than global. `_documented` used to scan the whole page for any line
+    holding the label and a pipe, which quietly matched the wrong table as soon as #792
+    added a section that also mentions Arabic — it returned 373 for a row that says 961.
+    A gate that reads the wrong row is worse than no gate.
+    """
+    lines = PAGE.read_text(encoding="utf-8").splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == header), None)
+    assert start is not None, f"no table in {PAGE.name} with header {header!r}"
+    rows = []
+    for line in lines[start + 2 :]:  # skip the |---|---| separator
+        if not line.strip().startswith("|"):
+            break
+        rows.append(line)
+    return rows
+
+
+def _documented(label: str, header: str = "| | count |") -> int:
+    """The figure the page states for `label`, from the table under `header`."""
+    for line in _table_after(header):
+        if label in line:
             numbers = re.findall(r"\b([\d,]{3,})\b", line)
             if numbers:
                 return int(numbers[-1].replace(",", ""))
-    raise AssertionError(f"no row in {PAGE.name} states {label!r}")
+    raise AssertionError(f"no row under {header!r} in {PAGE.name} states {label!r}")
+
+
+#: The header of the per-script breakdown table.
+SCRIPT_TABLE = "| script | unmapped |"
 
 
 def test_the_page_states_the_residue() -> None:
     """A gate over a missing section passes for the wrong reason."""
     text = PAGE.read_text(encoding="utf-8")
-    assert "only two views" in text, "the section #791 asked for is gone"
+    # Anchored to the *fact* the section exists to state, not to a phrase in it. The
+    # phrase was "only two views" until #792 added two more targets and the sentence had
+    # to change; a gate that pins wording fails on an edit that improves the page.
+    assert "drops the class entirely when no member does" in text, (
+        "the section #791 asked for is gone"
+    )
     assert "unmapped_confusables" in text, "the page must name the way to measure it"
 
 
@@ -105,14 +133,13 @@ def test_the_per_script_breakdown_is_right() -> None:
     scripts = _residue_by_script()
     for label, prefixes in SCRIPT_LABELS.items():
         actual = sum(scripts[prefix] for prefix in prefixes)
-        assert _documented(label) == actual, (
-            f"the page says {_documented(label)} for {label}, measured {actual}"
-        )
+        documented = _documented(label, SCRIPT_TABLE)
+        assert documented == actual, f"the page says {documented} for {label}, measured {actual}"
 
 
 def test_the_per_script_ordering_holds() -> None:
     """The table is also in descending order, which is how the prose reads it."""
-    documented = [_documented(label) for label in SCRIPT_LABELS]
+    documented = [_documented(label, SCRIPT_TABLE) for label in SCRIPT_LABELS]
     assert documented == sorted(documented, reverse=True), documented
     scripts = _residue_by_script()
     assert scripts.most_common(1)[0][0] == "CJK", scripts.most_common(3)

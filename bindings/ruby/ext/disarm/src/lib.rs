@@ -204,7 +204,7 @@ fn transliterate_opts(
 
 // ── Confusables (TR39) ────────────────────────────────────────────────────────
 
-/// `Disarm._normalize_confusables(text, "latin" | "cyrillic")`.
+/// `Disarm._normalize_confusables(text, "latin" | "cyrillic" | "arabic" | "hebrew")`.
 fn normalize_confusables(
     text: Wtf8Text,
     target: String,
@@ -215,7 +215,7 @@ fn normalize_confusables(
     Ok(api::normalize_confusables_with(&text, target, digit_policy).into_owned())
 }
 
-/// `Disarm._confusable?(text, "latin" | "cyrillic")`.
+/// `Disarm._confusable?(text, "latin" | "cyrillic" | "arabic" | "hebrew")`.
 fn is_confusable(text: Wtf8Text, target: String) -> Result<bool, Error> {
     let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
     Ok(api::is_confusable(&text, target))

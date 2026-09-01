@@ -141,7 +141,7 @@ pub struct Untranslatable {
 
 // ── Confusables (TR39) ────────────────────────────────────────────────────────
 
-/// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"`).
+/// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"` | `"arabic"` | `"hebrew"`).
 #[napi]
 pub fn normalize_confusables(
     text: String,

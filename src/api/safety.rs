@@ -14,17 +14,43 @@ pub enum TargetScript {
     Latin,
     /// Fold confusables onto their Cyrillic prototypes.
     Cyrillic,
+    /// Fold confusables onto their Arabic prototypes (#792).
+    ///
+    /// 948 of TR39's 1,007 strong-RTL sources fold to nothing under the Latin and
+    /// Cyrillic targets, because generation drops an equivalence class entirely when no
+    /// member belongs to the target script. This gives those classes somewhere to land.
+    ///
+    /// It does **not** reach an intra-Arabic pair such as `\u{6a9}` against `\u{643}`:
+    /// both members are already in the target script, which the cross-script model
+    /// cannot express. That is #848.
+    Arabic,
+    /// Fold confusables onto their Hebrew prototypes (#792). See [`Arabic`](Self::Arabic).
+    Hebrew,
 }
 
 impl TargetScript {
-    /// The lowercase token the underlying tables are keyed by.
-    /// The canonical string token for this value (the inverse of its `FromStr`,
-    /// and what `Display` prints).
+    /// Every variant, in declaration order.
+    ///
+    /// `validate_target_script` matches on string literals rather than on this type, so
+    /// the two lists can drift — the doc comment there said `"latin"`/`"cyrillic"` for as
+    /// long as it took a review to notice (#792). Tests iterate this to hold them
+    /// together.
+    pub const ALL: &'static [TargetScript] = &[
+        TargetScript::Latin,
+        TargetScript::Cyrillic,
+        TargetScript::Arabic,
+        TargetScript::Hebrew,
+    ];
+
+    /// The canonical string token for this value: the lowercase token the underlying
+    /// tables are keyed by, the inverse of its `FromStr`, and what `Display` prints.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             TargetScript::Latin => "latin",
             TargetScript::Cyrillic => "cyrillic",
+            TargetScript::Arabic => "arabic",
+            TargetScript::Hebrew => "hebrew",
         }
     }
 }
@@ -38,11 +64,13 @@ impl std::fmt::Display for TargetScript {
 impl std::str::FromStr for TargetScript {
     type Err = Error;
 
-    /// Parse `"latin"` / `"cyrillic"`.
+    /// Parse `"latin"` / `"cyrillic"` / `"arabic"` / `"hebrew"`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "latin" => Ok(Self::Latin),
             "cyrillic" => Ok(Self::Cyrillic),
+            "arabic" => Ok(Self::Arabic),
+            "hebrew" => Ok(Self::Hebrew),
             _ => Err(Error::from(crate::ErrorRepr::InvalidTargetScript {
                 got: s.to_owned(),
             })),

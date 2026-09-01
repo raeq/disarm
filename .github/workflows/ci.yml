@@ -588,6 +588,18 @@ jobs:
   cargo-audit:
     name: Cargo audit (RustSec)
     runs-on: ubuntu-latest
+    # #782: on `schedule` there is no pull request to annotate, so `audit-check` reports
+    # by opening an issue — `POST /repos/:owner/:repo/issues`. The workflow grants only
+    # `contents: read`, so that call returned "Resource not accessible by integration"
+    # and the job failed *after* a clean audit. It failed only when the scan had
+    # something to say, which is the worst possible direction for the failure: twelve
+    # consecutive red Mondays, each one a report nobody received.
+    #
+    # Job-scoped rather than workflow-scoped, so the write reaches this job alone.
+    # `contents: read` is restated because naming any permission here drops the rest.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 

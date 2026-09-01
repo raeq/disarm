@@ -157,3 +157,96 @@ def test_perf_gate_takes_its_baseline_from_one_place() -> None:
     assert "merge-base origin/${{ github.base_ref }}" not in executable, (
         "an unguarded use remains outside a comment"
     )
+
+
+# ---------------------------------------------------------------------------
+# #782 — an action that reports by opening an issue needs `issues: write`
+# ---------------------------------------------------------------------------
+
+#: Actions whose non-PR reporting path is `POST /repos/:owner/:repo/issues`.
+#:
+#: `rustsec/audit-check` annotates a pull request with a check run, and on any other
+#: event it has no pull request to annotate — so it opens an issue instead. Under
+#: `contents: read` that call returns *"Resource not accessible by integration"* and the
+#: job fails, **after** a clean audit.
+#:
+#: That direction is what makes it worth a gate. The job passed every week it had nothing
+#: to report and failed every week it did: twelve consecutive red Mondays, each one a
+#: security report nobody received, and none of it visible on the pull-request path that
+#: gates a merge.
+ISSUE_OPENING_ACTIONS = ("rustsec/audit-check",)
+
+
+def _runs_on_schedule(text: str) -> bool:
+    """As `_runs_on_push`, for the `schedule` trigger. Same YAML 1.1 `on`/`True` trap."""
+    document = yaml.safe_load(text) or {}
+    triggers = document.get("on", document.get(True))
+    if isinstance(triggers, str):
+        return triggers == "schedule"
+    if isinstance(triggers, list):
+        return "schedule" in triggers
+    return isinstance(triggers, dict) and "schedule" in triggers
+
+
+def _jobs_using(document: dict, actions: tuple[str, ...]) -> list[tuple[str, dict]]:
+    found = []
+    for name, job in (document.get("jobs") or {}).items():
+        if not isinstance(job, dict):
+            continue
+        for step in job.get("steps") or []:
+            uses = step.get("uses", "") if isinstance(step, dict) else ""
+            if any(uses.startswith(a) for a in actions):
+                found.append((name, job))
+                break
+    return found
+
+
+@pytest.mark.parametrize("path", _workflows(), ids=lambda p: p.name)
+def test_an_issue_opening_action_on_a_schedule_can_open_an_issue(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    if not _runs_on_schedule(text):
+        return
+    document = yaml.safe_load(text) or {}
+    for name, job in _jobs_using(document, ISSUE_OPENING_ACTIONS):
+        # Job permissions REPLACE the workflow's rather than adding to them, so the
+        # workflow-level block is not a fallback and is deliberately not consulted here.
+        permissions = job.get("permissions")
+        assert permissions is not None, (
+            f"{path.name}: job '{name}' runs an issue-opening action on a schedule with "
+            f"no job-level permissions; it inherits the workflow's and cannot report"
+        )
+        # `permissions:` is legally a scalar as well as a mapping — `write-all` and
+        # `read-all` are both valid. Indexing a string raises `AttributeError`, which
+        # reports as an error rather than as a failure and says nothing about the
+        # workflow (#878 review). Handle the scalar form as the answer it is.
+        if isinstance(permissions, str):
+            assert permissions == "write-all", (
+                f"{path.name}: job '{name}' sets `permissions: {permissions}`, which "
+                f"grants no issue write; it cannot report on a non-PR event"
+            )
+            continue
+        assert isinstance(permissions, dict), (
+            f"{path.name}: job '{name}' has an unrecognised `permissions:` shape "
+            f"({type(permissions).__name__}); this gate cannot read it"
+        )
+        assert permissions.get("issues") == "write", (
+            f"{path.name}: job '{name}' needs `issues: write` to report on a non-PR "
+            f"event; it has {permissions}"
+        )
+
+
+def test_the_gate_has_something_to_check() -> None:
+    """Anchored to the registry, not to the symptom (#806).
+
+    If the audit job is renamed, retriggered or moved to its own workflow, this must
+    keep finding it rather than passing over an empty set.
+    """
+    matches = [
+        (path.name, name)
+        for path in _workflows()
+        if _runs_on_schedule(path.read_text(encoding="utf-8"))
+        for name, _ in _jobs_using(
+            yaml.safe_load(path.read_text(encoding="utf-8")) or {}, ISSUE_OPENING_ACTIONS
+        )
+    ]
+    assert matches, "no scheduled issue-opening job found — has the audit job moved?"

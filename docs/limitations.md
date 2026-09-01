@@ -188,6 +188,34 @@ Hiragana and katakana transliteration (Modified Hepburn) is correct and complete
 
 For correct Japanese kanji readings, a morphological dictionary (e.g., MeCab, kuromoji) is required. This is fundamentally different from character-by-character mapping and is outside disarm's design.
 
+### Ideographic Variation Sequences are not distinguished from an arbitrary base plus a selector (#772)
+
+A registered Ideographic Variation Sequence — a CJK ideograph followed by a variation
+selector from `U+E0100`–`U+E01EF`, listed in Unicode's IVD — selects a specific glyph for
+that character. `葛` + `U+E0100` is a different, registered form of `葛`. `A` + `U+E0100`
+is not a sequence at all: no registration exists, and a renderer ignores the selector.
+
+No surface tells them apart:
+
+| input | `canonicalize` | `search_key` | `inspect_anomalies` |
+|---|---|---|---|
+| `葛` + `U+E0100` (registered) | `葛` | `ge` | nothing |
+| `A` + `U+E0100` (not a sequence) | `A` | `a` | nothing |
+
+Both lose the selector, and neither is reported. That is the right answer for the second
+row and a **fidelity loss** for the first: a registered IVS carries information about which
+glyph was meant, and a key built from it cannot distinguish two registered variants of one
+ideograph. For a comparison key that is usually what you want — the variants *are* the same
+character. For anything that round-trips text it is not.
+
+The other direction is the security-relevant one and is not covered either: `A` +
+`U+E0100` is a base carrying an ignorable selector that no registration justifies, which
+is the shape of a smuggling carrier. `canonicalize` removes it, so it does not survive into
+a key; nothing *reports* it, so a caller inspecting rather than transforming sees nothing.
+
+Every other CJK fidelity loss on this page is documented — the single-reading pinyin
+mapping, the missing tone marks, the character-level word boundaries. This one was not.
+
 ## Unicode Normalization
 
 ### Normalization is not losslessly invertible
@@ -269,6 +297,45 @@ Case folding is a locale-independent operation by design. Unlike `str.lower()` w
 
 The case folding table is generated at compile time from Unicode 16.0 CaseFolding.txt. New case folding mappings added in future Unicode versions will not be available until the data file and library are rebuilt.
 
+### The primitives do not compose to `toNFKC_Casefold` (#770)
+
+UTS #39 defines `toNFKC_Casefold` as the identifier-folding operation, and it does three
+things: NFKC, case folding, **and removing `Default_Ignorable_Code_Point`**. disarm exposes
+the first two and not the third, and reaching for them in sequence does not produce the
+operation:
+
+```python
+from disarm import fold_case, normalize
+
+fold_case(normalize("a\u00ada", form="NFKC"))  # 'a\xada' — the soft hyphen is still there
+```
+
+Measured over the 405 assigned Default_Ignorable code points: `fold_case(normalize(s,
+form="NFKC"))` removes **none of them**. 403 pass through byte-identical, and the two
+Hangul fillers map to another Default_Ignorable code point rather than to nothing.
+
+**Use `canonicalize` if what you want is the identifier operation.** It removes **387** of
+the 405 — its invisible-strip is what stands in for the missing third step — and it also
+applies the confusable fold, which `toNFKC_Casefold` does not.
+
+The 18 it keeps are **not** the variation selectors: `COMPARISON_STRIP` removes every one
+of those, including the presentation selectors, which is the whole point of a comparison
+policy. They are:
+
+| | |
+|---|---|
+| `U+17B4`–`U+17B5` | Khmer inherent vowels |
+| `U+180B`–`U+180F` | Mongolian free variation selectors |
+| `U+1BCA0`–`U+1BCA3` | Duployan shorthand format controls |
+| `U+1D173`–`U+1D17A` | musical beam, tie, slur and phrase controls |
+
+Each is a formatting control belonging to a specific script or notation, where removing it
+would damage ordinary text in that script rather than close a smuggling channel.
+
+This is a gap in the *primitives*, not in the presets. It matters when a caller is
+building their own pipeline from the parts and reasoning from the UTS #39 definition: the
+parts are named the same and do not add up to the whole.
+
 ## Confusable/Homoglyph Detection
 
 ### The confusable space is combinatorially large
@@ -320,6 +387,37 @@ drops rows reads as coverage it does not have. See
 
 `is_mixed_script()` reports whether multiple scripts are present in a string. It does not assess whether the mixing is benign (e.g., Latin punctuation in Arabic text, which is universal) or malicious (Cyrillic spoofing Latin). The `is_suspicious_hostname()` function applies stricter heuristics, but a not-suspicious result is a best-effort judgment, not a safety guarantee — it cannot certify the absence of all spoofing (whole-script spoofs and out-of-table confusables are out of scope — the out-of-table
 set is enumerable via `unmapped_confusables()`, see above).
+
+### Five surfaces rewrite printable ASCII (#725)
+
+Exactly three printable ASCII characters are TR39 confusable *sources*, so the fold
+rewrites them like any other lookalike. Until now this was recorded in a Rust comment and
+one paragraph of the LLM-pipelines guide, and nowhere a reader consulting the limits would
+look.
+
+| character | becomes | why |
+|---|---|---|
+| `\|` U+007C | `l` | the vertical bar is a lookalike of lowercase L |
+| `"` U+0022 | `''` | two apostrophes |
+| `` ` `` U+0060 | `'` | one apostrophe |
+
+Measured over `U+0021`–`U+007E`, these are the only printable ASCII characters any surface
+changes, and the surfaces split cleanly:
+
+| surface | rewrites ASCII |
+|---|---|
+| `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`, `catalog_key` | **yes** — all three |
+| `search_key`, `sort_key`, `ml_normalize` | no |
+
+`search_key` and `sort_key` escape it because `strip_accents` and the transliteration step
+consume the characters before the fold runs, not because they were exempted deliberately.
+
+**This matters wherever those three characters are syntax rather than text.** `|` is a
+delimiter in chat templates and a pipe in shell; `"` and `` ` `` are quoting in every
+language that has them. It is the reason `code_context` reports the homoglyph class rather
+than folding it — see
+[Code is not prose](user-guide/llm-pipelines.md#code-is-not-prose-code_context-and-strip-and-report)
+— and the reason a normalizer belongs *before* a parser rather than inside one.
 
 ## Bidirectional Text Security
 

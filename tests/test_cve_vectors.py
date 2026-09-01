@@ -211,6 +211,19 @@ TROJAN_C = "/*\u202e } \u2066if (isAdmin)\u2069 \u2066 begin admins only */"
 #: ``user`` but swallows the rest of the line.
 TROJAN_PY = 'if access_level != "user\u202e \u2066# Check if admin\u2069\u2066":'
 
+#: The same exploit as a **source file**, which is what the CVE is about (#744).
+#:
+#: Both vectors above are single lines, and a single line cannot show the half of this
+#: attack that matters: a reviewer approves one program and the compiler builds another.
+#: Every entry point that removes the control from `TROJAN_PY` also returns a single-line
+#: result, so nothing here distinguished "removed the control" from "returned something
+#: that is still a program".
+TROJAN_PY_FILE = (
+    "#!/usr/bin/env python3\n"
+    'access_level = "user"\n' + TROJAN_PY + "\n"
+    '    print("You are an admin.")\n'
+)
+
 #: Every bidi code point the attack family draws on (UAX#9 embeddings,
 #: overrides, isolates and marks).
 BIDI_CONTROLS = (
@@ -218,6 +231,53 @@ BIDI_CONTROLS = (
     "\u2066\u2067\u2068\u2069"  # LRI RLI FSI PDI
     "\u200e\u200f\u061c"  # LRM RLM ALM
 )
+
+
+class TestTrojanSourceIsASourceFile:
+    """#744 — the CVE's subject is a file, and the matrix answered for a line.
+
+    Every vector in this module was a single line, which cannot distinguish "removed the
+    control" from "returned something that is still a program". Three of the four
+    entry points the matrix listed do the first and not the second.
+    """
+
+    #: Entry points that remove the control **and** return a source file.
+    SOURCE_SAFE = ("strip_bidi", "code_context")
+
+    #: Entry points that remove the control and collapse the file to one line. Not a
+    #: defect — each ends in `collapse_whitespace` by design — but not an answer here.
+    COLLAPSING = ("strip_format", "canonicalize", "strip_obfuscation")
+
+    @staticmethod
+    def _run(name: str, text: str) -> str:
+        if name == "code_context":
+            return disarm.get_pipeline("code_context")(text)
+        return getattr(disarm, name)(text)
+
+    @pytest.mark.parametrize("name", SOURCE_SAFE)
+    def test_the_listed_neutralizers_return_a_source_file(self, name: str) -> None:
+        out = self._run(name, TROJAN_PY_FILE)
+        assert not any(c in out for c in BIDI_CONTROLS), f"{name} left a bidi control"
+        assert out.count("\n") == TROJAN_PY_FILE.count("\n"), (
+            f"{name} changed the line count; the matrix lists it for a CVE about a source file"
+        )
+
+    @pytest.mark.parametrize("name", COLLAPSING)
+    def test_the_unlisted_ones_still_neutralize_but_do_not_return_source(self, name: str) -> None:
+        """Asserted rather than assumed: they are correct about the control.
+
+        If one of these ever stops collapsing the file it becomes listable, and this
+        test failing is how that gets noticed.
+        """
+        out = self._run(name, TROJAN_PY_FILE)
+        assert not any(c in out for c in BIDI_CONTROLS), f"{name} left a bidi control"
+        assert out.count("\n") < TROJAN_PY_FILE.count("\n"), (
+            f"{name} now preserves the line count — it belongs in the matrix row"
+        )
+
+    def test_the_matrix_row_lists_exactly_the_source_safe_ones(self) -> None:
+        """The registry row, against the measurement rather than against itself."""
+        assert BY_ID["CVE-2021-42574"].neutralizers == self.SOURCE_SAFE
 
 
 class TestTrojanSourceBidi:
@@ -2048,7 +2108,11 @@ REGISTRY: tuple[CVE, ...] = (
         cvss=8.3,
         cvss_version="v3.1",
         dispositions=frozenset({NEUTRALIZED, DETECTED}),
-        neutralizers=("strip_bidi", "strip_format", "canonicalize", "strip_obfuscation"),
+        # The two that leave a **source file** (#744). `strip_format`, `canonicalize`
+        # and `strip_obfuscation` do remove the control and are not listed, because each
+        # ends in `collapse_whitespace` and returns the file as one line — an answer a
+        # reader of this row cannot apply to the thing the CVE is about.
+        neutralizers=("strip_bidi", "code_context"),
         detectors=("has_anomalies", "inspect_anomalies"),
         probe=TROJAN_C,
         reference="https://trojansource.codes",

@@ -687,6 +687,52 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **`canonicalize_strict` was not idempotent when a cross-script mark split a mark run
+  (#862).** The zalgo cap ran at step 3 and `ConfusablesMarkFixedPoint` — which carries
+  the #615 cross-script mark strip — at step 4. So a mark whose own script differs from
+  its base split a run for the *count*, was then deleted, and the runs merged for the
+  next pass:
+
+  ```text
+  canonicalize_strict("a" + U+0308*3 + U+0489 + U+0308)  ->  four marks
+  canonicalize_strict(that)                              ->  three
+  ```
+
+  This is #121's rule one step wider than #850 applied it. #850 moved `sort_key`'s cap
+  after the zero-width strip and gated on that step; the cross-script mark strip is a
+  **third** character-removing step, and the one that removes marks specifically.
+
+  Two gates now, because one shape cannot cover it. The source-order gate keeps checking
+  the step list, and deliberately does **not** list `ConfusablesMarkFixedPoint` — that
+  step removes marks only in strict mode, and the list cannot see a mode, so including it
+  would fail `canonicalize` for a bug it does not have. `no_pipeline_truncates_further_on_a_second_pass`
+  asks the pipelines instead: four splitters (zero-width, CGJ, ZWJ, cross-script mark)
+  against four builders at every run length. It is weaker about *why* and stronger about
+  *whether*, which is the pair #121 needs.
+
+  The key-stability corpus gained six rows placing a cross-script mark inside a mark run,
+  taking it from 22,971 to 22,977. It expressed every character involved and never that
+  arrangement, so this change's fixture diff would have been 0 rows — the same blind spot
+  #850 found one class over. With the rows present the diff is **1 row**, in
+  `canonicalize_strict` only.
+
+- **The ruff version was pinned in two files and nothing checked they agree.**
+  `pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each carry a
+  `ruff==` pin, and the pre-commit hooks are `language: system` — they run whichever
+  `ruff` is on PATH. So a stale local ruff passes every local gate and fails CI, with
+  nothing in the failure pointing at a version.
+
+  It is a sharper trap than a version skew usually is: **0.16 formats Python inside
+  Markdown fenced blocks and 0.15 does not**, and this repository's docs carry executable
+  Python in fences. A branch passed `ruff format --check .` on 0.15.17 and failed the
+  *Lint & format* job on 0.16.4, over comment alignment inside two guide pages.
+
+  Both pins move to **0.16.5**, and `tests/test_toolchain_pins.py` now asserts three
+  things: the two pins agree, the pin is at least 0.16 (below that the Markdown blocks
+  stop being formatted, which fails nothing), and the ruff actually on PATH matches —
+  skipped when ruff is absent, since a runner without the `dev` extra is legitimate.
+  CONTRIBUTING.md gains the one-liner that installs the pinned version.
+
 - **`sort_key` was not idempotent when an invisible split a mark run (#850).** #843 added
   the combining-mark cap to `sort_key` as step 4b, before the `StripControl` /
   `StripZeroWidth` pair at step 5. A zero-width between two marks therefore survived into
@@ -1356,6 +1402,39 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **What disarm reaches on an AI watermark (#706).** The words *watermark*, *SynthID* and
+  *C2PA* appeared **zero times** across the README, the threat model and all of `docs/` —
+  and it is a question this library's audience arrives with, usually after finding a page
+  about invisible characters. `docs/security/watermarks.md` answers it.
+
+  "AI watermark" names four different things. disarm reaches one:
+
+  | | disarm |
+  |---|---|
+  | character-level markers — invisible or confusable code points | **yes**, this is what it does |
+  | provenance metadata — C2PA, EXIF, PDF `/Producer` | no, out of scope **by choice** |
+  | statistical token watermarks — SynthID-Text | **no, and no character tool can** |
+  | pixel and audio watermarks | no, disarm does not touch binary media |
+
+  The category it does reach is not uniform, and the page publishes the split because the
+  difference decides which question you can answer. Over the 405 assigned
+  `Default_Ignorable_Code_Point` characters: 117 are removed **and** reported, **266 are
+  removed with nothing reported**, 10 are reported and deliberately not removed, 12
+  neither. So a pipeline that only reports misses most of the class, and one that only
+  transforms cleans text without telling you it was marked.
+
+  Three statements the page makes plainly, because each is a thing a reader could
+  otherwise assume: stripping invisible characters is **not** removing a watermark;
+  disarm makes **no claim** about the provenance of text it has processed — cleaned text
+  is indistinguishable from text that never carried a marker, which is what makes
+  stripping good defence and useless evidence; and a tool claiming to remove a
+  *statistical* text watermark is making a claim you cannot check, since the scheme and
+  key are unpublished.
+
+  Category 2 is recorded as a deliberate exclusion rather than a gap: it is
+  container-format work rather than Unicode text work, and it would be owed across six
+  bindings for a feature that cannot be expressed as string-in, string-out.
+
 - **Four guide pages recommended a function for a job it does not do (#745, #754, #760,
   #761).** Each claim was true of *something* — just not of the thing it was written
   beside.
@@ -1395,6 +1474,82 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
   `tests/test_guide_corrections.py` runs every example and derives every figure, including
   each row of the per-script table.
+
+- **The security and stability pages stated properties of a neighbour of the thing they
+  described (#725, #733, #735, #744).**
+
+  **CVE-2021-42574's subject is a source file, and the matrix answered for a line
+  (#744).** Both Trojan Source vectors in the test corpus were single lines, so nothing
+  distinguished "removed the bidi control" from "returned something that is still a
+  program". Measured on the published four-line proof-of-concept: `strip_bidi` and
+  `code_context` return a source file; `strip_format`, `canonicalize` and
+  `strip_obfuscation` remove the control and return the file **as one line**, because
+  each ends in `collapse_whitespace`. The matrix row now lists the two that leave you
+  with source, and `TROJAN_PY_FILE` is in the corpus so the distinction is tested rather
+  than described.
+
+  **`catalog_key`'s homoglyph warning exempted Cyrillic and Greek, which are not exempt
+  (#735).** It said their lookalikes "do collide with their Latin spellings". They do
+  not: a romanization is a *sound*, not a shape. `раураl` keys as `raural`, not `paypal`;
+  `аррlе` keys as `arrle`. Measured over the letter blocks, **29 of 96** Cyrillic and
+  **31 of 129** Greek letters key off their visual target. The pairs that do line up
+  (`а`/`a`, `е`/`e`, `о`/`o`) line up because sound and shape happen to agree for those
+  letters.
+
+  **Five surfaces rewrite three printable ASCII characters, recorded only in a Rust
+  comment (#725).** `|`→`l`, `"`→`''`, `` ` ``→`'` — the three printable ASCII characters
+  that are TR39 confusable *sources*. `canonicalize`, `canonicalize_strict`,
+  `strip_obfuscation`, `normalize_confusables` and `catalog_key` apply them;
+  `search_key`, `sort_key` and `ml_normalize` do not, as a side effect of consuming the
+  characters earlier. Now a section of `docs/limitations.md`, with a gate asserting these
+  are the *only* printable ASCII any surface changes.
+
+  **The key-stability contract covered three of the eight functions its own gate watches
+  (#733).** `tests/test_key_stability.py` has recomputed eight since #644; the contract
+  named `search_key`, `catalog_key` and `sort_key`. The other five — `canonicalize`,
+  `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`, `fold_case` — were
+  watched, uncovered, and silent in their docstrings. `canonicalize` is the one that
+  matters: it is the comparison entry point, a value you use to decide whether two
+  strings are the same is a value you store, and it has moved twice this release (#805,
+  #842). The contract now extends to all eight, which records a promise the gate was
+  already enforcing rather than making a new one. `tests/test_security_and_stability_docs.py`
+  derives the list from the generator, so a ninth function is covered the day it is added.
+
+- **Three limits that were true and unwritten (#769, #770, #772).** None is a defect. Each
+  is a place where two things that look like they answer the same question do not.
+
+  **`has_bidi_conflict` reads the whole string; `inspect_anomalies` reads one token
+  (#769).** So a label whose directions are split across a space is a conflict by one and
+  clean by the other:
+
+  ```python
+  has_bidi_conflict("hello שלום")  # True  — the whole string
+  inspect_anomalies("hello שלום").kinds  # []    — two clean tokens
+  ```
+
+  Neither is wrong: a label made of two words in two scripts is ordinary multilingual
+  text, and the detector declining to flag it is why it can be run over prose. But
+  `docs/concepts/which-function.md` routed "detecting a bidi attack" only to the
+  token-scoped one. It now has a row for each, and the rule for choosing: a single
+  identifier, filename or hostname label is one token; a display name or a line of prose
+  is not.
+
+  **The primitives do not compose to `toNFKC_Casefold` (#770).** UTS #39 defines it as
+  NFKC, case folding, **and removing `Default_Ignorable_Code_Point`**. disarm exposes the
+  first two, and putting them in sequence does not produce the third. Measured over the
+  405 assigned Default_Ignorable code points, `fold_case(normalize(s, form="NFKC"))`
+  removes **none of them** — 403 pass through byte-identical and the two Hangul fillers
+  map to another ignorable. `canonicalize` removes **387**, which is what a caller
+  reasoning from the UTS #39 definition should reach for.
+
+  **A registered Ideographic Variation Sequence is not distinguished from a base plus a
+  selector (#772).** `葛`+`U+E0100` is a registered IVS; `A`+`U+E0100` is not a sequence
+  at all. Every surface drops the selector from both and reports neither. For a
+  comparison key that is right — the variants are the same character — and for anything
+  that round-trips text it is a fidelity loss. The other direction is the one with
+  security shape: a base carrying an ignorable selector no registration justifies is a
+  smuggling carrier, and while `canonicalize` removes it, nothing *reports* it. Every
+  other CJK fidelity loss on that page was already documented.
 
 - **A doc block documented the block below it, not the member it was written for (#851
   review, #778).** In TypeScript, Java and Kotlin only the *last* doc comment before a

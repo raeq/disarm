@@ -163,6 +163,11 @@ REMOVAL: list[tuple[str, str, Callable[[str], bool]]] = [
 #: Kept here rather than imported from the registry to avoid a benchmark ->
 #: tests dependency; `TestComparatorCorpusDrift` asserts the two agree.
 NAMED_ELSEWHERE: dict[str, str] = {
+    # #744: the matrix used to list canonicalize and strip_obfuscation here, which are
+    # the two fixed columns, so this row scored without a marker. Both do remove the
+    # control and both return the source file as one line, so neither is an answer for a
+    # CVE whose subject is a source file. `strip_bidi` is.
+    "CVE-2021-42574": "strip_bidi",
     "CVE-2019-19844": "canonicalize_strict",
     "CVE-2020-12063": "normalize_confusables",
     "CVE-2026-17084": "search_key",

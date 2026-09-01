@@ -242,6 +242,24 @@ subject scored on materially less of the battery than the others is listed but
 kept out of the composite ordering: one benchmark answered is not a better result
 than four answered.
 
+**The composite is not the only leaderboard, and it is the weakest one.** It
+assumes the benchmarks measure a single construct, which this battery is not
+built to do: coverage and cost are deliberately opposed, so a tool that folds
+more will alter more. Cronbach's alpha correctly refuses it, and Friedman's test
+on the rankings refuses a rank aggregation for the same underlying reason — the
+benchmarks disagree about who is good.
+
+What survives is **Pareto dominance**: a tool is on the frontier when no other
+tool beats it on every axis at once. That needs no weighting and no common
+construct, so it is publishable whenever the composite is not. It yields a
+partial order rather than a league table, which is the honest shape of a result
+where two axes pull against each other.
+
+Friedman's chi-square is k(n-1)W, so the report also prints how many benchmarks
+the observed agreement would need to reach significance. More *tools* do not
+help — they raise the degrees of freedom and so raise the bar. More *benchmarks*
+do.
+
 The interlock matters more than the composite. When the battery has too few
 directed benchmarks, or alpha falls below the conventional 0.70, or no two
 subjects have non-overlapping intervals, no ranking is published and the reason

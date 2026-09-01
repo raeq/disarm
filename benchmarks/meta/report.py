@@ -149,7 +149,10 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
             "",
         ]
 
+    lines += _render_pareto(board)
     lines += [
+        "### Composite",
+        "",
         "| # | subject | composite | 95% CI | Bradley-Terry | benchmarks |",
         "|---|---|---|---|---|---|",
     ]
@@ -278,6 +281,64 @@ def _render_comparison(report: RunReport) -> list[str]:
         "direction. The best value in each directed row is bold.",
         "",
     ]
+    return lines
+
+
+def _render_pareto(board: Leaderboard) -> list[str]:
+    """The ranking that survives when the benchmarks disagree."""
+    from .leaderboard import concordance, pareto
+
+    front = pareto(board)
+    agree = concordance(board)
+    lines: list[str] = []
+    if agree is not None:
+        verdict = (
+            "the benchmarks order the tools more consistently than chance"
+            if agree.significant
+            else "**the benchmarks do not agree on an ordering**"
+        )
+        lines += [
+            "### Do the benchmarks agree?",
+            "",
+            f"Friedman's test over {agree.benchmarks} benchmarks and "
+            f"{agree.tools} tools: Kendall's W **{agree.w:.3f}**, "
+            f"chi-square **{agree.chi_square:.2f}** against a 0.05 critical value "
+            f"of {agree.critical} at {agree.df} degrees of freedom — {verdict}.",
+            "",
+        ]
+        if not agree.significant and agree.benchmarks_needed:
+            lines += [
+                f"Friedman's chi-square is k(n-1)W, so at this level of agreement "
+                f"**{agree.benchmarks_needed} benchmarks** would reach significance "
+                f"against the {agree.benchmarks} here. More *tools* would not help: "
+                "they raise the degrees of freedom and so raise the bar.",
+                "",
+            ]
+    if front is None:
+        return lines
+    lines += [
+        "### Pareto frontier",
+        "",
+        "A tool is on the frontier when no other tool beats it on **every** axis "
+        "at once. Dominance needs no weighting and no assumption that the "
+        "benchmarks measure one thing, so this ranking stands even when a "
+        "composite cannot — it is a partial order rather than a league table, and "
+        "that is the honest shape of the result when coverage and cost pull "
+        "against each other.",
+        "",
+        f"Axes: {', '.join(f'`{a}`' for a in front.axes)}.",
+        "",
+        "| tool | " + " | ".join(f"`{a}`" for a in front.axes) + " | verdict |",
+        "|---|" + "---|" * (len(front.axes) + 1),
+    ]
+    for tool in front.frontier:
+        cells = " | ".join(f"{front.scores[tool][a]:+.2f}" for a in front.axes)
+        lines.append(f"| `{tool}` | {cells} | **non-dominated** |")
+    for tool, by in sorted(front.dominated.items()):
+        cells = " | ".join(f"{front.scores[tool][a]:+.2f}" for a in front.axes)
+        names = ", ".join(f"`{b.split('@')[0]}`" for b in by)
+        lines.append(f"| `{tool}` | {cells} | beaten by {names} |")
+    lines.append("")
     return lines
 
 

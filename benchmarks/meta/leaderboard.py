@@ -477,6 +477,147 @@ def kendall_w(items: list[Item], subjects: Sequence[str]) -> float | None:
     return ss / denominator if denominator else None
 
 
+#: Upper-tail chi-square critical values at alpha = 0.05, by degrees of freedom.
+#: Tabulated rather than computed so the module keeps no numerical dependency.
+_CHI2_05 = {
+    1: 3.84,
+    2: 5.99,
+    3: 7.81,
+    4: 9.49,
+    5: 11.07,
+    6: 12.59,
+    7: 14.07,
+    8: 15.51,
+    9: 16.92,
+    10: 18.31,
+    11: 19.68,
+    12: 21.03,
+    13: 22.36,
+    14: 23.68,
+    15: 25.00,
+    16: 26.30,
+    17: 27.59,
+    18: 28.87,
+    19: 30.14,
+    20: 31.41,
+}
+
+
+@dataclass
+class Concordance:
+    """Friedman's test on the per-benchmark rankings (Friedman, JASA 32, 1937).
+
+    The right diagnostic for a *rank* aggregation, where Cronbach's alpha is the
+    right one for a *score* composite. It asks whether the benchmarks order the
+    tools more consistently than chance would, and it does not assume they
+    measure one construct.
+    """
+
+    benchmarks: int
+    tools: int
+    w: float
+    chi_square: float
+    df: int
+    critical: float | None
+
+    @property
+    def significant(self) -> bool:
+        return self.critical is not None and self.chi_square > self.critical
+
+    @property
+    def benchmarks_needed(self) -> int | None:
+        """How many benchmarks this level of agreement would need to be significant.
+
+        The most useful number in the whole module: it turns "not enough
+        evidence" into a target. Friedman's chi-square is k(n-1)W, so at fixed
+        agreement it grows linearly in the number of benchmarks.
+        """
+        if self.critical is None or self.w <= 0 or self.tools < 2:
+            return None
+        need = self.critical / ((self.tools - 1) * self.w)
+        return max(self.benchmarks, math.ceil(need))
+
+
+@dataclass
+class Pareto:
+    """Non-dominated tools under multi-objective comparison.
+
+    The answer when the benchmarks genuinely disagree, which they do here: a
+    tool that folds aggressively wins coverage and loses cost, and no weighting
+    of the two is more correct than another. Dominance needs no weights and no
+    common construct — A dominates B when A is at least as good on every axis
+    and strictly better on one — so the partial order it yields is a real
+    ranking that cannot be argued with on aggregation grounds. Standard in
+    multi-objective optimisation.
+    """
+
+    axes: list[str] = field(default_factory=list)
+    frontier: list[str] = field(default_factory=list)
+    dominated: dict[str, list[str]] = field(default_factory=dict)
+    scores: dict[str, dict[str, float]] = field(default_factory=dict)
+
+
+def concordance(board: Leaderboard) -> Concordance | None:
+    """Friedman's test over the benchmarks that produced a real ordering."""
+    usable = {
+        suite: [x for x in standings if not x.control and not x.partial]
+        for suite, standings in board.per_benchmark().items()
+    }
+    usable = {s: v for s, v in usable.items() if len(v) >= 2}
+    if not usable:
+        return None
+    shared = set.intersection(*[{x.subject for x in v} for v in usable.values()])
+    tools = sorted(shared)
+    k, n = len(usable), len(tools)
+    if k < 2 or n < 3:
+        return None
+    totals = []
+    for tool in tools:
+        totals.append(sum(next(x.rank for x in v if x.subject == tool) for v in usable.values()))
+    mean_total = _mean(totals)
+    spread = sum((t - mean_total) ** 2 for t in totals)
+    w = 12 * spread / (k**2 * (n**3 - n))
+    chi = k * (n - 1) * w
+    return Concordance(
+        benchmarks=k,
+        tools=n,
+        w=w,
+        chi_square=chi,
+        df=n - 1,
+        critical=_CHI2_05.get(n - 1),
+    )
+
+
+def pareto(board: Leaderboard) -> Pareto | None:
+    """Which tools no other tool beats on every axis at once."""
+    usable = {
+        suite: [x for x in standings if not x.control and not x.partial]
+        for suite, standings in board.per_benchmark().items()
+    }
+    usable = {s: v for s, v in usable.items() if len(v) >= 2}
+    if len(usable) < 2:
+        return None
+    shared = set.intersection(*[{x.subject for x in v} for v in usable.values()])
+    tools = sorted(shared)
+    if len(tools) < 2:
+        return None
+    axes = list(usable)
+    scores = {
+        t: {s: next(x.z for x in v if x.subject == t) for s, v in usable.items()} for t in tools
+    }
+
+    def beats(a: str, b: str) -> bool:
+        return all(scores[a][s] >= scores[b][s] for s in axes) and any(
+            scores[a][s] > scores[b][s] for s in axes
+        )
+
+    frontier = [t for t in tools if not any(beats(o, t) for o in tools if o != t)]
+    dominated = {
+        t: [o for o in tools if o != t and beats(o, t)] for t in tools if t not in frontier
+    }
+    return Pareto(axes=axes, frontier=frontier, dominated=dominated, scores=scores)
+
+
 def build(
     outcomes: Sequence[Outcome],
     include_controls: bool = True,

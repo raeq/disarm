@@ -1030,3 +1030,58 @@ def test_a_benchmark_only_one_subject_answered_is_not_a_ranking():
     report = RunReport(outcomes=outs, selected=1, registered=1, subjects=["disarm@1", "identity@1"])
     md = render_markdown(report, leaderboard=board)
     assert "there is no ordering here" in md
+
+
+def test_friedman_reports_how_many_benchmarks_would_reach_significance():
+    """The useful number: it turns "not enough evidence" into a target."""
+    outs = []
+    for i in range(3):
+        for subj, value in (("a", 0.9), ("b", 0.6), ("c", 0.3), ("d", 0.1)):
+            outs.append(_board_outcome(subj, f"s{i}", "m", value))
+    board = leaderboard.build(outs, bootstrap=10)
+    agree = leaderboard.concordance(board)
+    assert agree is not None
+    assert agree.benchmarks == 3 and agree.tools == 4
+    assert 0.0 <= agree.w <= 1.0
+    # Perfect agreement across benchmarks: chi-square is k(n-1)W = 3*3*1 = 9.
+    assert agree.w == pytest.approx(1.0)
+    assert agree.chi_square == pytest.approx(9.0)
+    assert agree.benchmarks_needed >= agree.benchmarks
+
+
+def test_pareto_frontier_needs_no_weighting():
+    """A tool wins an axis outright and still may not dominate."""
+    outs = []
+    # `a` leads axis one, `b` leads axis two: neither dominates the other, and a
+    # tool trailing on both axes at once is the only kind that can be dominated.
+    for subj, first, second in (
+        ("a", 0.9, 0.1),
+        ("b", 0.1, 0.9),
+        ("c", 0.5, 0.5),
+        ("weak", 0.4, 0.4),
+    ):
+        outs.append(_board_outcome(subj, "one", "m", first))
+        outs.append(_board_outcome(subj, "two", "m", second))
+    board = leaderboard.build(outs, bootstrap=10)
+    front = leaderboard.pareto(board)
+    assert front is not None
+    names = {t.split("@")[0] for t in front.frontier}
+    assert {"a", "b", "c"} <= names, "a tool leading any axis cannot be dominated"
+    assert "weak" not in names, "weak trails c on both axes"
+    beaten = {t.split("@")[0] for t in front.dominated}
+    assert beaten == {"weak"}
+    assert any(o.startswith("c@") for o in front.dominated[next(iter(front.dominated))])
+
+
+def test_the_pareto_frontier_is_published_even_when_the_composite_is_not():
+    outs = []
+    for subj, first, second in (("a", 0.9, 0.1), ("b", 0.1, 0.9), ("c", 0.2, 0.2)):
+        outs.append(_board_outcome(subj, "one", "m", first))
+        outs.append(_board_outcome(subj, "two", "m", second))
+    board = leaderboard.build(outs, bootstrap=10)
+    report = RunReport(outcomes=outs, selected=1, registered=1, subjects=["a@1", "b@1", "c@1"])
+    md = render_markdown(report, leaderboard=board)
+    assert not board.supported, "this battery cannot carry a composite"
+    assert "Pareto frontier" in md
+    assert "non-dominated" in md
+    assert "does not support a ranking" in md

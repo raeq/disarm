@@ -612,17 +612,24 @@ def is_zalgo(text: str, *, threshold: int = 3) -> bool:
     return _is_zalgo(text, threshold=threshold)
 
 
-def strip_zalgo(text: str, *, max_marks: int = 2) -> str:
+def strip_zalgo(text: str, *, max_marks: int = 3) -> str:
     """Strip excessive combining marks, preserving legitimate diacritics.
 
     Caps the number of combining marks per base character at *max_marks*.
     Operates in NFD space and recomposes to NFC.
 
+    The default equals `is_zalgo`'s threshold on purpose (#788). It was ``2`` while the
+    threshold was ``3``, so this stripped from text the library had just declined to call
+    suspicious: pointed and cantillated Hebrew routinely carries a vowel, a dot and an
+    accent on one consonant, `is_zalgo` correctly returns ``False`` for it, and this
+    removed the accent anyway. Three marks is ordinary text in Hebrew and Arabic; the
+    Vietnamese ``ệ`` that set the original figure has two.
+
     Args:
         text: Input string (may contain zalgo abuse).
         max_marks: Maximum combining marks to keep per base character
-            (default: ``2``).  Set to ``0`` to strip all combining marks
-            (equivalent to `strip_accents`).
+            (default: ``3``).  Set to ``0`` to strip all combining marks
+            (equivalent to `strip_accents`), as `ml_normalize` does.
 
     Returns:
         String with excess combining marks removed.

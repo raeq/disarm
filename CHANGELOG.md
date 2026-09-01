@@ -18,6 +18,15 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Upgrade notes
 
+**Stored `canonicalize` output moves for Indic, Hebrew and Arabic text (#788).**
+`strip_zalgo`'s cap rose from 2 to 3 so it stops stripping from text `is_zalgo` calls
+ordinary. 351 of the 22,878 key-stability rows move on `canonicalize` and 340 on
+`canonicalize_strict`, dominated by Myanmar, Sinhala and Bengali clusters the old cap
+truncated. **No row lost a mark** — every change restores something previously cut, so a
+reindexed key is strictly closer to the input. `search_key`, `catalog_key`, `sort_key` and
+`fold_case` are byte-identical. `KEY_SCHEMA_VERSION` goes 1 → 2; if you persist
+`canonicalize` output as a comparison value, reindex.
+
 **Stored comparison output moves for Greek and Cyrillic text (#801).** Closing the
 confusable table's case asymmetry moved 1,202 of the 22,878 rows in the key-stability
 fixture, 5.25%. The four affected functions are `canonicalize`, `canonicalize_strict`,
@@ -242,6 +251,40 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   (Ruby), `DigitPolicy.PRESERVE` (Java/Kotlin).
 
 ### Changed (breaking)
+
+- **`strip_zalgo`'s cap now equals `is_zalgo`'s threshold (#788).** It was 2 while the
+  threshold was 3, so the library removed a mark from text it had just declined to call
+  suspicious:
+
+  ```python
+  is_zalgo("\u05d0\u05b8\u05c1\u0591")  # False — ordinary pointed Hebrew
+  strip_zalgo(...)  # the etnahta was removed anyway
+  ```
+
+  Pointed and cantillated Hebrew routinely puts a vowel, a dot and an accent on one
+  consonant, and the same shape appears in Arabic with shadda + a short vowel + sukun. The
+  direction is forced: lowering the threshold would make `is_zalgo` call Torah text zalgo,
+  so the cap rises. That serves #429's stated goal — the cap exists to preserve legitimate
+  diacritics — rather than reversing it.
+
+  **The measured impact is wider than the issue predicted, and in a different script
+  family.** #788 checked three short Indic and Thai samples and concluded Indic was
+  unaffected. Over the 22,878-row key-stability corpus, 351 `canonicalize` rows and 340
+  `canonicalize_strict` rows move, dominated by **Myanmar, Sinhala and Bengali** — clusters
+  carrying a nukta, a vowel sign and an anusvara, which the old cap truncated:
+  `ইয়াং` came back as `ইয়া`. **No row lost a mark**; every moved row is text that had been
+  cut short.
+
+  Breaking because `canonicalize` and `canonicalize_strict` are byte-stable aliases (#430)
+  and a stored key moves. `KEY_SCHEMA_VERSION` goes 1 → 2. `strip_obfuscation` and
+  `ml_normalize` are unaffected: their caps are 0 by design and were never the default.
+  `search_key`, `catalog_key`, `sort_key` and `fold_case` do not run the step and are
+  byte-identical.
+
+  Both canonicalizers now take the cap from the constant instead of repeating the figure,
+  and `docs/limitations.md` gains a section saying where the bound still bites — a fourth
+  mark on one base is still removed, deliberately, and `max_marks` is the parameter for
+  text where that is ordinary.
 
 - **The CLDR name table only fires for code points that are actually emoji (#757).**
   CLDR `annotationsDerived` names 326 characters that carry neither the Unicode `Emoji`

@@ -11,7 +11,8 @@ pub fn _is_zalgo(text: &str, threshold: usize) -> bool {
     crate::zalgo::is_zalgo(text, threshold)
 }
 
-/// `strip_zalgo(text, *, max_marks=2) -> str`
+/// `strip_zalgo(text, *, max_marks=3) -> str` — the default equals `is_zalgo`'s
+/// threshold, so this never strips from text the library calls ordinary (#788).
 #[pyfunction]
 #[pyo3(signature = (text, *, max_marks = DEFAULT_MAX_MARKS))]
 pub fn _strip_zalgo(text: &str, max_marks: usize) -> String {

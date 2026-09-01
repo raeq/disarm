@@ -53,8 +53,11 @@ impl TargetScript {
     ///
     /// Derived here rather than written out, so a fifth target updates the message by
     /// construction.
+    /// `pub(crate)`, not `pub`: its only caller is the `InvalidTargetScript` message in
+    /// `src/error.rs`, and a formatting helper for an internal error does not need to be
+    /// carried under semver forever (#891 review).
     #[must_use]
-    pub fn accepted_tokens() -> String {
+    pub(crate) fn accepted_tokens() -> String {
         Self::ALL
             .iter()
             .map(|s| format!("'{}'", s.as_str()))

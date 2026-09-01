@@ -46,6 +46,11 @@ assert [name for name, _param in pipe.steps] == [
     # `þ`, and only then folds to `p` — would otherwise need a second call. Added only
     # when both steps are enabled.
     "confusables",
+    # And the case fold that closes it (#751). That second pass can *emit* an uppercase
+    # letter — ten Cherokee small letters fold to a capital — and nothing folded after
+    # it, so the pipeline returned `B` on the first pass and `b` on the second. Gated
+    # identically: added only when both steps are enabled.
+    "fold_case",
     "strip_control",
     "strip_zero_width",
     "collapse_whitespace",

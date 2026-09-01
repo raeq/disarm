@@ -120,4 +120,8 @@ def test_only_the_profile_with_both_steps_changed() -> None:
         "confusables",
         "fold_case",
         "confusables",
+        # #751 closes the pair. The second confusable pass can EMIT an uppercase letter —
+        # ten Cherokee small letters fold to one — and nothing case-folded after it, so
+        # the profile returned `B` on the first pass and `b` on the second.
+        "fold_case",
     ]

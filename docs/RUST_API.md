@@ -105,6 +105,61 @@ That is the contract, and it is what a consumer can plan against:
 
 The same rule holds in every binding, because they all wrap one core.
 
+### What a key does *not* promise: it is not closed under concatenation (#787)
+
+The contract above is about time — a key you stored last year. There is a second thing a
+caller may not rely on, and it holds *within* one release: **normalizing two fields and
+joining them is not the same as joining them and normalizing.**
+
+```python
+from disarm import canonicalize
+
+a, b = "a", "\u0301e"  # part B legitimately begins with a combining acute
+
+assert canonicalize(a) + canonicalize(b) == "a\u0301e"  # U+0061 U+0301 U+0065
+assert canonicalize(a + b) == "\u00e1e"  # U+00E1 U+0065
+```
+
+The two render identically, which is what makes it a comparison bug rather than a display
+one. Four surfaces show it — `canonicalize`, `canonicalize_strict`, `sort_key` and
+`normalize_confusables` — and three do not: `search_key` and `catalog_key` agree because
+`strip_accents` removes the mark either way, and `fold_case` agrees because it normalizes
+nothing. So a caller cannot infer the property from one function to another.
+
+This is a property of Unicode normalization rather than of disarm. NFC composes across a
+boundary that did not exist before the join, and no implementation can avoid that while
+still being NFC.
+
+**Check the boundary, do not normalize the parts.** The cheap test is whether the second
+part begins with a non-starter:
+
+```python
+import unicodedata
+
+
+def unsafe_boundary(a: str, b: str) -> bool:
+    return bool(a and b and unicodedata.combining(unicodedata.normalize("NFD", b)[0]))
+
+
+assert unsafe_boundary("a", "\u0301e")  # composes across the seam
+assert not unsafe_boundary("a", "example")  # a starter cannot compose backwards
+```
+
+Measured over 4,000 random pairs from a 13-character alphabet of bases and marks: **zero
+false negatives** — it never calls a boundary safe when the two routes disagree. It errs
+the other way, calling 813 boundaries unsafe whose results happened to match anyway, which
+is the direction that costs a caller a join rather than a wrong key.
+
+The rule that follows is one line: **normalize the joined string, not the fields.** If the
+fields must be normalized separately — because they are stored that way — then join with a
+separator that is a starter, and the boundary cannot compose.
+
+`find_key_collisions` is the exception, and usefully so. It re-reduces the values it is
+given rather than comparing them, so the field-wise spelling composes on the way in and the
+two land in one group — measured over 600 random pairs, it grouped all 90 that differ. If
+you already run a batch through it, a splice upstream of you does not survive the check.
+The caveat above is about your own comparison, not about that one.
+
 ### This is what has always happened
 
 Measured across every version disarm has published, on 12,285 fixed inputs — the

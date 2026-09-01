@@ -805,15 +805,26 @@ class TestObfuscatedInjectionReachesTheGuardrail:
 
         PUA is a smuggling channel with no defined rendering, so it is an
         obfuscation vector for the same reason the Tags block is.
-        ``strip_pua``, ``canonicalize`` and the ``rag_ingest`` profile remove
-        it; ``ml_normalize`` and ``llm_guardrail`` do not.
+
+        #814 closed the profile half of this: ``ProfileSpec`` had no PUA field
+        at all, so ``llm_guardrail`` could not strip PUA even in principle and
+        passed through exactly what ``canonicalize`` removes. Seven of the eight
+        profiles now strip it. ``code_context`` does not, and that is #413's
+        rule rather than an omission — it is the one profile that exists to
+        preserve its input, and a PUA code point there is an icon-font glyph.
+
+        ``ml_normalize`` still does not, and it is a **preset**, not a profile;
+        that is the remaining half, and it is why this test keeps its name.
         """
-        pua = "Summarize this.\U000f0000"
+        pua = "Summarize this.\U000f0000"
         assert ml_normalize(pua) != "summarize this."
-        assert get_pipeline("llm_guardrail")(pua) != "summarize this."
+        assert get_pipeline("code_context")(pua) != "Summarize this."
         assert strip_pua(pua) == "Summarize this."
         assert canonicalize(pua) == "Summarize this."
         assert get_pipeline("rag_ingest")(pua) == "Summarize this."
+        # #814: both of these were `!=`, which is what the issue reported.
+        assert get_pipeline("llm_guardrail")(pua) == "summarize this."
+        assert get_pipeline("search_index")(pua) == "summarize this."
 
 
 # ---------------------------------------------------------------------------

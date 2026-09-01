@@ -99,6 +99,7 @@ class TestProfileStepsLock:
             ("confusables", "latin"),
             ("strip_control", None),
             ("strip_zero_width", None),
+            ("strip_pua", None),
             ("collapse_whitespace", None),
         ]
 
@@ -110,5 +111,6 @@ class TestProfileStepsLock:
             ("transliterate", None),
             ("strip_control", None),
             ("strip_zero_width", None),
+            ("strip_pua", None),
             ("collapse_whitespace", None),
         ]

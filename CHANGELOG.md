@@ -764,6 +764,41 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **The detector and the neutralizer disagreed about what is invisible (#812, #813, #814).**
+  Three surfaces, one channel.
+
+  Twelve `Cf` code points that Unicode marks `Default_Ignorable_Code_Point` — Duployan
+  `U+1BCA0`–`U+1BCA3` and musical `U+1D173`–`U+1D17A` — were removed by nothing and
+  reported by nothing. `pay` + `U+1D173` + `pal` survived `strip_format`, `canonicalize`,
+  `canonicalize_strict`, `strip_obfuscation` and `llm_guardrail` untouched and screened
+  clean. That is the worked example from the anomaly guide, which is caught with `U+200B`;
+  these are invisible by **property** rather than by name, which is how they escaped every
+  predicate. The other 29 surviving `Cf` code points render and carry meaning — Arabic and
+  Kaithi number signs, Egyptian hieroglyph layout controls — and are still kept.
+
+  A run of Private Use Area code points was removed by `canonicalize` and reported by
+  nothing, so a guardrail screening with `has_anomalies` passed exactly what the
+  comparison presets had already decided was not text. It is a **run** rule at a floor of
+  four, not a neighbour rule: one PUA code point beside a letter is an icon-font glyph,
+  which is the same reason #413 has `strip_format` keep the block at all.
+
+  And `ProfileSpec` had no PUA field, so `llm_guardrail` — the profile the LLM-pipeline
+  docs send a guardrail author to — could not strip the Private Use Area **even in
+  principle**. Seven of the eight profiles now do. `code_context` does not, which is #413's
+  rule applied to the profiles rather than an omission: it is the one profile whose job is
+  to preserve its input.
+
+  `docs/security/watermarks.md` measured this class before any of it was fixed and its
+  "removed by nothing, reported by nothing" row held exactly these 12. That row is now
+  empty.
+
+  The twelve are defined once, in `invisibles.rs`, and both the strip path and the detector
+  read that one definition — #700 found those two drifted apart, and restating the class
+  in the second place is how that happens. One consequence is worth naming: the public
+  `strip_zero_width_chars` widens by those twelve on every surface. It is the function
+  whose own description is *"strip zero-width and invisible characters"*, and a code point
+  that renders as nothing belongs to that set by that description.
+
 - **#803 fixed the presets and left `list_profiles()` behind (#853).** #757 measured
   `ml_normalize` turning `film’s` into `film right apostrophe s` — 326 code points carry
   neither the Unicode `Emoji` nor the `Extended_Pictographic` property and were named as

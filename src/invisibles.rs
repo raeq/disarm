@@ -37,6 +37,28 @@ fn is_tag_letter(ch: char) -> bool {
     matches!(ch, '\u{E0061}'..='\u{E007A}')
 }
 
+/// The `Cf` code points Unicode marks `Default_Ignorable_Code_Point=Yes` that no other
+/// predicate here covers (#813).
+///
+/// - `U+1BCA0`–`U+1BCA3` Duployan shorthand format letters
+/// - `U+1D173`–`U+1D17A` musical symbol BEGIN/END BEAM, TIE, SLUR, PHRASE
+///
+/// Invisible by **property** rather than by convention, which is why they were missed:
+/// they are not zero-width by name, not in the Tags block, not fillers, and not bidi. They
+/// render as nothing, and they split a token for any consumer comparing strings — so
+/// `pay` + `U+1D173` + `pal` survived `strip_format`, `canonicalize`, `strip_obfuscation`
+/// and `llm_guardrail` untouched while reporting clean, which is the exact shape the
+/// `paypal`-split-by-`U+200B` example in the anomaly guide is about.
+///
+/// The other 29 surviving `Cf` code points are deliberately absent: `U+0600`–`U+0605`,
+/// `U+06DD`, `U+070F`, `U+0890`, `U+0891`, `U+08E2` are Arabic number signs that render,
+/// `U+110BD`/`U+110CD` are Kaithi number signs, and `U+13430`–`U+1343F` are Egyptian
+/// hieroglyph layout controls. None is `Default_Ignorable`, and all carry meaning.
+#[inline]
+pub(crate) fn is_default_ignorable_format(ch: char) -> bool {
+    matches!(ch, '\u{1BCA0}'..='\u{1BCA3}' | '\u{1D173}'..='\u{1D17A}')
+}
+
 /// Variation selectors: VS1–VS16 (`U+FE00`–`U+FE0F`) and the Variation
 /// Selectors Supplement VS17–VS256 (`U+E0100`–`U+E01EF`).
 #[inline]
@@ -254,7 +276,8 @@ pub(crate) fn strip_invisible_classes(text: &str, policy: StripPolicy) -> String
 pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out: &mut String) {
     out.clear();
     // Fast path: every class handled here (tags, CGJ, noncharacters, PUA,
-    // variation selectors, the flag base) is non-ASCII, so ASCII passes through.
+    // default-ignorable formats, variation selectors, the flag base) is non-ASCII, so
+    // ASCII passes through.
     if text.is_ascii() {
         out.push_str(text);
         return;
@@ -270,7 +293,7 @@ pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out:
             }
             continue;
         }
-        if is_tag(ch) || ch == CGJ || is_noncharacter(ch) {
+        if is_tag(ch) || ch == CGJ || is_noncharacter(ch) || is_default_ignorable_format(ch) {
             continue;
         }
         if policy.strip_pua && is_pua(ch) {

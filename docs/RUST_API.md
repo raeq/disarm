@@ -77,9 +77,13 @@ romanization standards), the confusable/security functions —
 `canonicalize*` presets — **and the three key builders `search_key`,
 `catalog_key` and `sort_key`** all change behavior when the bundled Unicode /
 TR39 tables are updated, with no signature touched. *When* they are allowed to
-change differs: everything named here may move in any release, except the three
-key builders, which are confined to minor releases by the contract in the next
-section. For example, #336 extended
+change differs, and the line is drawn by whether the key-stability fixture watches
+the function rather than by what it is called: the **eight** functions
+`tests/test_key_stability.py` recomputes — the three key builders plus
+`canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`
+and `fold_case` — are confined to minor releases by the contract in the next
+section. Everything else named here, including `is_suspicious_hostname` and the
+transliteration output, may move in any release. For example, #336 extended
 `normalize_confusables` with cross-script pairs absent from upstream TR39 17.0,
 which changes what a deployed filter chain catches. Such changes are documented
 in the changelog but are **not** treated as semver-breaking. **Pin a version if
@@ -104,6 +108,32 @@ That is the contract, and it is what a consumer can plan against:
 | `0.14.x` → `0.15.0` | Read the changelog's **Upgrade notes** first. Treat it as a possible reindex until they say otherwise. |
 
 The same rule holds in every binding, because they all wrap one core.
+
+### The five the gate watches and the contract did not cover (#733)
+
+`tests/test_key_stability.py` recomputes **eight** functions against a stored fixture. The
+paragraph above names **three**. The other five were watched and uncovered, and their
+docstrings said nothing either way — so a reader asking "may I store this?" got no answer
+for the entry point most likely to be stored.
+
+| function | watched by the gate | covered above | inline note |
+| --- | --- | --- | --- |
+| `search_key`, `catalog_key`, `sort_key` | yes | yes | yes |
+| `canonicalize` | yes | **now yes** | **now yes** |
+| `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`, `fold_case` | yes | **now yes** | **now yes** |
+
+**The contract extends to all eight.** A patch release never changes any of their output;
+a minor release may. That was already the *behaviour* the gate enforced — the fixture has
+watched eight since #644 and a moved row fails CI whichever function moved it — so this
+records a promise already being kept rather than making a new one.
+
+`canonicalize` is called out because it is the comparison entry point. It is what the
+guide pages hand untrusted text to, it is what a caller reaches for to decide whether two
+strings are "the same", and a value you use to decide that is a value you store. It has
+moved twice in this release alone — noncharacters (#805) and the combining-mark class
+rule (#842) — both listed under *Upgrade notes*, which is exactly the mechanism this
+contract exists to point at.
+
 
 ### What a key does *not* promise: it is not closed under concatenation (#787)
 

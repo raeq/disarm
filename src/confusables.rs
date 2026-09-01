@@ -43,28 +43,6 @@ pub(crate) enum DigitPolicy {
     Preserve,
 }
 
-impl DigitPolicy {
-    /// The wire name, which is what the public string parameter still accepts.
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            DigitPolicy::Numeric => "numeric",
-            DigitPolicy::Tr39 => "tr39",
-            DigitPolicy::Preserve => "preserve",
-        }
-    }
-
-    /// Parse the public string form. `None` for anything else, so the caller can raise
-    /// the existing `InvalidDigitPolicy` rather than this deciding the error shape.
-    pub(crate) fn parse(s: &str) -> Option<Self> {
-        match s {
-            "numeric" => Some(DigitPolicy::Numeric),
-            "tr39" => Some(DigitPolicy::Tr39),
-            "preserve" => Some(DigitPolicy::Preserve),
-            _ => None,
-        }
-    }
-}
-
 const MAX_CONFUSABLE_PASSES: usize = 8;
 
 fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {

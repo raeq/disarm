@@ -380,19 +380,21 @@ CORE_FUNCTION_PARAMS = {
     ],
     "set_emoji_provider": ["provider"],
     # Precompiled pipelines
-    "canonicalize": ["text"],
+    # #885 added `digit_policy` to the six key builders. Additive and keyword-only;
+    # `"numeric"` is the default and a byte-identical no-op, so no stored key moves.
+    "canonicalize": ["text", "digit_policy"],
     "ml_normalize": ["text", "lang", "emoji", "fold_case"],
-    "catalog_key": ["text", "lang", "strict_iso9"],
+    "catalog_key": ["text", "lang", "strict_iso9", "digit_policy"],
     "strip_format": ["text"],
-    "search_key": ["text", "lang"],
-    "sort_key": ["text", "lang"],
+    "search_key": ["text", "lang", "digit_policy"],
+    "sort_key": ["text", "lang", "digit_policy"],
     "strip_bidi": ["text"],
     "strip_tags": ["text"],
     "strip_variation_selectors": ["text"],
     "strip_noncharacters": ["text"],
     "strip_pua": ["text"],
-    "canonicalize_strict": ["text"],
-    "strip_obfuscation": ["text"],
+    "canonicalize_strict": ["text", "digit_policy"],
+    "strip_obfuscation": ["text", "digit_policy"],
     # Deprecated preset aliases (#430) — removed in 1.0
     "security_clean": ["text"],
     "display_clean": ["text"],

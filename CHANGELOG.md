@@ -176,6 +176,40 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
   **Python only in this release.** The other five bindings are tracked separately.
 
+- **`digit_policy` is reachable from the six key builders, in Python (#885).** It was
+  accepted by
+  `normalize_confusables` and by nothing else — not a preset, not a profile, not a key
+  builder — so a caller who reached for `canonicalize`, the README's first example, could
+  not express the better answer for this class. `canonicalize`, `canonicalize_strict`,
+  `search_key`, `catalog_key`, `sort_key` and `strip_obfuscation` now take it **on the
+  Python surface**; the Rust API and the other five bindings are tracked separately, as
+  the equivalent split was made for #883.
+
+  Over `confusable-bench.v1` the union of the six goes from **72 of 120** malicious rows
+  to **92** under `"tr39"`.
+
+  **The default does not move, and the issue's case for moving it does not survive
+  measurement.** #885 reported `"tr39"` at "zero false-positive cost". TR39's digit
+  mappings are not the styled Latin variants — they cover every non-Latin numeral system.
+  Arabic-Indic zero folds to `.`, one to `l`, five to `o`:
+
+  | input | `numeric` | `tr39` |
+  |---|---|---|
+  | Arabic year `٢٠٢٤` | `٢0٢٤` | `٢.٢٤` |
+  | Persian `۱۴۰۳` | `1۴0۳` | `l۴.۳` |
+
+  The 20 benign controls that measured that cost contain **no non-Latin digits at all**
+  (`café`, `naïve`, `jalapeño`, `résumé`), so the population that pays was never sampled.
+  Making `"tr39"` the default would have destroyed the numeric reading of Arabic, Persian,
+  Indic and Thai text in every key — in the release that added Arabic and Hebrew targets
+  for those readers.
+
+  `"numeric"` is therefore a **genuine no-op**: passing it is byte-identical to not
+  passing it, pinned over the BMP for all six builders. Pre-folding under it would still
+  have moved output — 78 rows collide rather than 72, because folding both sides before
+  reducing is a different operation from reducing alone — and no stored key moves for a
+  parameter nobody asked for.
+
 - **`duplicate_mark`: the same nonspacing mark twice on one base (#835).** UTS #39 §5.4
   lists a sequence of the same nonspacing mark as an optional detection, and `disarm`
   implemented none of it. `a` + two acutes reports clean at every surface: it is two

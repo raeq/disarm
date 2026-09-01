@@ -11,6 +11,7 @@ import warnings
 
 from disarm._api import TextPipeline
 from disarm._boundary import (
+    InvalidArgumentError,
     _canonicalize,
     _canonicalize_strict,
     _catalog_key,
@@ -18,6 +19,7 @@ from disarm._boundary import (
     _is_zalgo,
     _list_profiles,
     _ml_normalize,
+    _normalize_confusables,
     _search_key,
     _sort_key,
     _strip_bidi,
@@ -33,7 +35,43 @@ from disarm._boundary import (
 # --- Precompiled pipelines ---
 
 
-def canonicalize(text: str) -> str:
+#: Digit-variant policies that are not the pipeline's own. `"numeric"` is what every key
+#: builder already does, so requesting it must change nothing (#885).
+_NON_DEFAULT_DIGIT_POLICIES = ("tr39", "preserve")
+
+
+def _apply_digit_policy(text: str, digit_policy: str) -> str:
+    """Fold digit variants under *digit_policy* before a key builder runs (#885).
+
+    ``"numeric"`` returns *text* untouched, deliberately. It is the policy the key
+    pipelines already use, and pre-folding under it would still change their output — 78
+    of `confusable-bench.v1`'s 120 malicious rows collide instead of 72 — because folding
+    both sides before reducing is a different operation from reducing alone. Moving key
+    output is not what this parameter is for, so the default is a genuine no-op.
+
+    The other two apply `normalize_confusables` first. That is a composition a caller
+    could write by hand; having it here makes it discoverable and pins what it means.
+
+    A pre-pass rather than the policy threaded into the key pipeline's own confusable
+    stage, and that is a deliberate trade rather than an oversight (#895 review). The
+    preset step lists are `static_steps!` **consts** — the monomorphisation #695 and #868
+    built so each preset folds to its own arm and links only the tables it uses. A runtime
+    policy there either duplicates every step list per policy or defeats that, and
+    `scripts/perf_lint.sh` and the wasm size gate exist to catch precisely that. The cost
+    of the pre-pass falls only on the two non-default policies, which are opt-in; the
+    default path does no extra work at all. #896 tracks doing it properly alongside the
+    other bindings.
+    """
+    if digit_policy in _NON_DEFAULT_DIGIT_POLICIES:
+        return _normalize_confusables(text, target_script="latin", digit_policy=digit_policy)
+    if digit_policy != "numeric":
+        raise InvalidArgumentError(
+            f"digit_policy must be 'numeric', 'tr39', or 'preserve', got {digit_policy!r}"
+        )
+    return text
+
+
+def canonicalize(text: str, *, digit_policy: str = "numeric") -> str:
     r"""Canonicalize text for security-sensitive comparison.
 
     For **cleaning untrusted input before comparison**, this is the entry point.
@@ -104,8 +142,25 @@ def canonicalize(text: str) -> str:
     Examples:
         >>> canonicalize("Ηello Ꮤorld")  # Greek Η + Cherokee Ꮤ → Latin
         'Hello World'
+
+    Note:
+        **`digit_policy`, and why the default cannot move (#885).** ``"tr39"`` folds digit
+        variants onto the letters they imitate, and over `confusable-bench.v1` the six key
+        builders reach **92 of 120** malicious rows under it against **72** by default.
+
+        It is still not the right default, and the corpus does not show why. TR39's digit
+        mappings cover **every non-Latin numeral system**, not just the styled Latin ones:
+        Arabic-Indic zero folds to ``.``, one to ``l``, five to ``o``. So the Arabic year
+        ``٢٠٢٤`` keys as ``٢.٢٤`` and the Persian ``۱۴۰۳`` as ``l۴.۳``. The 20 benign
+        controls that measured "zero false-positive cost" contain no non-Latin digits at
+        all, so the population that pays is not in the sample.
+
+        ``"numeric"`` therefore stays the default and is a **genuine no-op** — passing it
+        gives output byte-identical to not passing it, so no stored key moves. Pass
+        ``"tr39"`` when your inputs are Latin identifiers and the extra reach is worth it.
+        Do not pass it to text that may carry Arabic, Persian, Indic or Thai numerals.
     """
-    return _canonicalize(text)
+    return _canonicalize(_apply_digit_policy(text, digit_policy))
 
 
 def security_clean(text: str) -> str:
@@ -198,6 +253,7 @@ def catalog_key(
     *,
     lang: str | None = None,
     strict_iso9: bool = False,
+    digit_policy: str = "numeric",
 ) -> str:
     """Library catalog key generation pipeline.
 
@@ -257,8 +313,14 @@ def catalog_key(
         'cafe resume'
         >>> catalog_key("ΩMEGA  café")
         'omega cafe'
+
+    Note:
+        **`digit_policy`** folds digit variants before the key is built. ``"numeric"`` is
+        the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
+        numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
+        the measurements and the trade (#885).
     """
-    return _catalog_key(text, lang=lang, strict_iso9=strict_iso9)
+    return _catalog_key(_apply_digit_policy(text, digit_policy), lang=lang, strict_iso9=strict_iso9)
 
 
 def strip_format(text: str) -> str:
@@ -313,6 +375,7 @@ def search_key(
     text: str,
     *,
     lang: str | None = None,
+    digit_policy: str = "numeric",
 ) -> str:
     """Search index key generation pipeline.
 
@@ -356,14 +419,21 @@ def search_key(
         'moskva'
         >>> search_key("Über allen Gipfeln")
         'uber allen gipfeln'
+
+    Note:
+        **`digit_policy`** folds digit variants before the key is built. ``"numeric"`` is
+        the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
+        numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
+        the measurements and the trade (#885).
     """
-    return _search_key(text, lang=lang)
+    return _search_key(_apply_digit_policy(text, digit_policy), lang=lang)
 
 
 def sort_key(
     text: str,
     *,
     lang: str | None = None,
+    digit_policy: str = "numeric",
 ) -> str:
     """Sort key generation pipeline.
 
@@ -420,8 +490,14 @@ def sort_key(
         'über allen gipfeln'
         >>> sort_key("  Café  ")
         'café'
+
+    Note:
+        **`digit_policy`** folds digit variants before the key is built. ``"numeric"`` is
+        the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
+        numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
+        the measurements and the trade (#885).
     """
-    return _sort_key(text, lang=lang)
+    return _sort_key(_apply_digit_policy(text, digit_policy), lang=lang)
 
 
 def strip_bidi(text: str) -> str:
@@ -499,7 +575,7 @@ def strip_pua(text: str) -> str:
     return _strip_pua(text)
 
 
-def canonicalize_strict(text: str) -> str:
+def canonicalize_strict(text: str, *, digit_policy: str = "numeric") -> str:
     """Strict Unicode canonicalization of user input — **not** an injection defense.
 
     Warning:
@@ -551,8 +627,14 @@ def canonicalize_strict(text: str) -> str:
         'paypal'
         >>> canonicalize_strict("admin\\u202euser")  # RLO stripped
         'adminuser'
+
+    Note:
+        **`digit_policy`** folds digit variants before the key is built. ``"numeric"`` is
+        the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
+        numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
+        the measurements and the trade (#885).
     """
-    return _canonicalize_strict(text)
+    return _canonicalize_strict(_apply_digit_policy(text, digit_policy))
 
 
 def normalize_user_input(text: str) -> str:
@@ -570,7 +652,7 @@ def normalize_user_input(text: str) -> str:
     return canonicalize_strict(text)
 
 
-def strip_obfuscation(text: str) -> str:
+def strip_obfuscation(text: str, *, digit_policy: str = "numeric") -> str:
     """Maximum-strength text deobfuscation.
 
     Neutralizes homoglyph spoofing, zalgo abuse, invisible character
@@ -632,8 +714,14 @@ def strip_obfuscation(text: str) -> str:
         'Product'
         >>> strip_obfuscation("H\\u0338a\\u0338t\\u0338e\\u0338 speech")
         'Hate speech'
+
+    Note:
+        **`digit_policy`** folds digit variants before the key is built. ``"numeric"`` is
+        the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
+        numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
+        the measurements and the trade (#885).
     """
-    return _strip_obfuscation(text)
+    return _strip_obfuscation(_apply_digit_policy(text, digit_policy))
 
 
 def is_zalgo(text: str, *, threshold: int = 3) -> bool:

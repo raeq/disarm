@@ -773,6 +773,50 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   feature and vanish with it; a data file's absence is a build-level fact a deleted test
   cannot hide.
 
+- **`Step::Confusables` could not express the digit policy, so no preset could (#646 §2).**
+  `digit_policy` reached exactly one function. The step carried a target script and
+  nothing else, and the fold it calls — `normalize_confusables_into` — did a bare map
+  lookup with no policy at all. Two call paths into one fold, and the one every preset
+  uses could not say the security-relevant thing.
+
+  The step now carries a `DigitPolicy`, which is where
+  `docs/architecture/prototype-policy.md` §3 decided it belongs: the policy is a property
+  of the fold, not of one function's signature. All three variants that fold confusables
+  — `Confusables`, `ConfusablesNfcFixedPoint`, `ConfusablesMarkFixedPoint` — take it.
+
+  **No output changes.** Every shipped preset passes `Numeric`, which is what they did
+  implicitly before the step could say anything else, and
+  `no_shipped_preset_uses_a_non_default_digit_policy` asserts that — a preset silently
+  gaining `Tr39` would turn a number into a letter inside a key, which is the damage that
+  page prices at `SKU-100` and `SKU-1O0` sharing one key.
+
+  This widens what is *expressible*. Exposing the choice on `TextPipeline` is a public
+  parameter owed across six bindings and is left to its own change.
+
+- **`llm_guardrail` folded case after the confusable fold, so 126 code points needed a
+  second call (#852).** A cased letter whose *folded* form is in the confusable table and
+  whose original is not folded only on the second pass: `Þ` has no entry, case-folds to
+  `þ`, and only then folds to `p`. The profile was not a fixed point.
+
+  Fixed by running the confusable fold **again after** the case fold, in any pipeline that
+  has both. 126 non-fixed-point code points become 10, and 19 sampled outputs change —
+  all of them recoveries, none a loss.
+
+  **Not by folding case first**, which would also close the class and is the wrong trade.
+  73 cased code points fold to a *different* target than their case pair: `Ð` folds to `D`
+  where `ð` is unmapped, and `Η` folds to `H` where `η` folds to `n`. Pre-folding would
+  lose the uppercase mapping outright rather than reaching it one pass later — measured
+  when a step-order lock caught `Ηello` turning into `nello`.
+
+  The remaining 10 are Cherokee small letters, whose confusable target is an *uppercase*
+  Latin letter, so the pair has to run more than twice. They converge in two further
+  passes, which means the structure that closes them is a fixed-point loop — what the
+  presets use — rather than another fixed pass. Recorded as a named class in
+  `tests/test_guardrail_fold_order.py` rather than left as an unexplained number.
+
+  A pipeline without `confusables` gains no step: reporting one that does nothing would
+  make `explain()` describe a mechanism the pipeline does not run.
+
 - **A preset linked every table any step could reach; `strip_format` cost 663 KB of wasm
   (#695).** `presets::run` walked a `&[Step]` and called `apply_into` with a *runtime*
   value, so the optimiser could not prove any of the eighteen match arms unreachable. A

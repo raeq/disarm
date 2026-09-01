@@ -95,6 +95,8 @@ class TestProfileStepsLock:
             ("strip_accents", None),
             ("confusables", "latin"),
             ("fold_case", None),
+            # Again after the case fold (#852).
+            ("confusables", "latin"),
             ("strip_control", None),
             ("strip_zero_width", None),
             ("collapse_whitespace", None),

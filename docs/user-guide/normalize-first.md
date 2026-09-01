@@ -41,6 +41,11 @@ assert [name for name, _param in pipe.steps] == [
     "normalize",
     "confusables",
     "fold_case",
+    # The fold runs again after the case fold (#852). A cased letter whose *folded* form
+    # is in the confusable table and whose original is not — `Þ` has no entry, folds to
+    # `þ`, and only then folds to `p` — would otherwise need a second call. Added only
+    # when both steps are enabled.
+    "confusables",
     "strip_control",
     "strip_zero_width",
     "collapse_whitespace",

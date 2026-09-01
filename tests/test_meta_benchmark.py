@@ -20,7 +20,7 @@ from benchmarks.meta import leaderboard, registry, subjects
 from benchmarks.meta.base import SuiteBase, surfaces, thin
 from benchmarks.meta.baseline import Drift, compare, snapshot
 from benchmarks.meta.protocol import Availability, Family, Outcome, Provenance, Status
-from benchmarks.meta.report import render_json, render_markdown
+from benchmarks.meta.report import load_outcomes, render_json, render_markdown
 from benchmarks.meta.runner import RunReport, run
 from benchmarks.meta.suites import academic
 
@@ -282,8 +282,8 @@ def test_snapshot_is_keyed_by_subject_as_well_as_suite():
     """
     snap = snapshot([_outcome("s", "k", 5, 10, 10)], "0.0.0")
     round_tripped = json.loads(json.dumps(snap))
-    assert "disarm::s" in round_tripped["suites"]
-    assert round_tripped["suites"]["disarm::s"]["measurements"]["k"]["value"] == 5
+    assert "disarm@0.0.0::s" in round_tripped["suites"]
+    assert round_tripped["suites"]["disarm@0.0.0::s"]["measurements"]["k"]["value"] == 5
     assert round_tripped["unicode_version"]
     assert round_tripped["confusables_version"]
 
@@ -725,14 +725,86 @@ def test_controls_do_not_set_the_scale():
     with_control = tools + [_board_outcome("null-baseline", f"s{i}", "m", 0.0) for i in range(4)]
     without = leaderboard.build(tools, bootstrap=20)
     with_ = leaderboard.build(with_control, bootstrap=20)
-    gap_without = abs(
-        next(s.composite for s in without.standings if s.subject == "a")
-        - next(s.composite for s in without.standings if s.subject == "b")
-    )
-    gap_with = abs(
-        next(s.composite for s in with_.standings if s.subject == "a")
-        - next(s.composite for s in with_.standings if s.subject == "b")
-    )
+
+    def composite_of(board, name: str) -> float:
+        return next(s.composite for s in board.standings if s.subject.startswith(f"{name}@"))
+
+    gap_without = abs(composite_of(without, "a") - composite_of(without, "b"))
+    gap_with = abs(composite_of(with_, "a") - composite_of(with_, "b"))
     assert math.isclose(gap_without, gap_with, rel_tol=1e-9), (
         "adding a control changed the separation between two tools"
     )
+
+
+# --- versioned subject identity ---------------------------------------------
+
+
+def test_subject_identity_carries_the_version():
+    from benchmarks.meta.protocol import Method
+
+    assert Method(subject="disarm", subject_version="0.15.0").subject_key == "disarm@0.15.0"
+
+
+def test_two_builds_of_one_tool_do_not_collide_in_the_baseline():
+    """0.14.1 and 0.15.0 are two subjects, not one overwriting the other."""
+    old = _outcome("s", "k", 5, 10, 10, subject="disarm")
+    old.method.subject_version = "0.14.1"
+    new = _outcome("s", "k", 9, 10, 10, subject="disarm")
+    new.method.subject_version = "0.15.0"
+    snap = snapshot([old, new], "0.15.0")
+    assert "disarm@0.14.1::s" in snap["suites"]
+    assert "disarm@0.15.0::s" in snap["suites"]
+    assert snap["suites"]["disarm@0.14.1::s"]["measurements"]["k"]["value"] == 5
+    assert snap["suites"]["disarm@0.15.0::s"]["measurements"]["k"]["value"] == 9
+
+
+def test_two_builds_of_one_tool_rank_separately():
+    outs = []
+    for version, value in (("0.14.1", 0.30), ("0.15.0", 0.90)):
+        for i in range(6):
+            o = _board_outcome("disarm", f"s{i}", "m", value)
+            o.method.subject_version = version
+            outs.append(o)
+        for i in range(6):
+            o = _board_outcome("ftfy", f"s{i}", "m", 0.50)
+            o.method.subject_version = "6.3.1"
+            outs.append(o)
+    board = leaderboard.build(outs, bootstrap=20)
+    keys = {st.subject for st in board.standings}
+    assert {"disarm@0.14.1", "disarm@0.15.0"} <= keys
+    ranks = {st.subject: st.rank for st in board.standings}
+    assert ranks["disarm@0.15.0"] < ranks["disarm@0.14.1"], "the better build must rank higher"
+
+
+def test_controls_are_matched_on_name_not_on_the_versioned_key():
+    assert leaderboard.is_control("null-baseline@1")
+    assert leaderboard.is_control("identity@1")
+    assert not leaderboard.is_control("disarm@0.15.0")
+
+
+def test_a_merged_run_round_trips_through_json(tmp_path):
+    """Merging is the only way two builds of a compiled extension compete."""
+    report = run(
+        [registry.by_name("uts39-mixed-numbers")],
+        registered=len(registry.all_suites()),
+        subjects=[subjects.by_name("disarm")],
+    )
+    path = tmp_path / "run.json"
+    path.write_text(render_json(report), encoding="utf-8")
+    restored = load_outcomes(str(path))
+    assert restored
+    assert restored[0].method.subject_key == report.outcomes[0].method.subject_key
+    assert [m.key for m in restored[0].measurements] == [
+        m.key for m in report.outcomes[0].measurements
+    ]
+    assert restored[0].method.environment
+
+
+def test_every_rendered_identity_shows_a_version():
+    report = run(
+        [registry.by_name("uts39-mixed-numbers")],
+        registered=len(registry.all_suites()),
+        subjects=[subjects.by_name("disarm")],
+    )
+    md = render_markdown(report)
+    assert "disarm@" in md, "a report must never name a tool without its version"

@@ -13,7 +13,7 @@ from . import subjects as subjects_mod
 from .leaderboard import build as build_leaderboard
 from .protocol import Availability, Family, Outcome, Status, Suite
 from .registry import all_suites, select
-from .report import render_json, render_markdown
+from .report import load_outcomes, render_json, render_markdown
 from .runner import provision, run
 
 
@@ -104,6 +104,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--quiet", action="store_true", help="suppress per-suite progress")
     p.add_argument(
+        "--merge",
+        nargs="+",
+        metavar="RUN.json",
+        help=(
+            "fold earlier JSON runs into the comparison and the leaderboard. "
+            "This is how two builds of one tool compete: a compiled extension "
+            "cannot be imported twice in one process, so each version is measured "
+            "in its own run and the runs are merged here."
+        ),
+    )
+    p.add_argument(
         "--leaderboard",
         action="store_true",
         help=(
@@ -190,6 +201,16 @@ def main(argv: list[str] | None = None) -> int:
         on_start=started,
         on_finish=finished,
     )
+
+    if args.merge:
+        for prior in args.merge:
+            merged = load_outcomes(prior)
+            report.outcomes.extend(merged)
+            for key in dict.fromkeys(o.method.subject_key for o in merged):
+                if key not in report.subjects:
+                    report.subjects.append(key)
+            if not args.quiet:
+                print(f"  merged   {prior}: {len(merged)} outcomes", file=sys.stderr)
 
     drifts = [] if args.no_baseline else baseline_mod.compare(report.outcomes, args.baseline)
     board = build_leaderboard(report.outcomes) if args.leaderboard else None

@@ -89,6 +89,11 @@ MIN_PARCELS = 5
 CONTROL_SUBJECTS = ("null-baseline", "identity")
 
 
+def is_control(subject_key: str) -> bool:
+    """``subject_key`` is ``name@version``; controls are matched on the name."""
+    return subject_key.split("@", 1)[0] in CONTROL_SUBJECTS
+
+
 @dataclass
 class Item:
     """One benchmark measurement, oriented so that higher is better."""
@@ -175,8 +180,9 @@ def collect(outcomes: Sequence[Outcome], include_controls: bool = True) -> list[
     for out in outcomes:
         if out.status is not Status.OK:
             continue
-        subject = out.method.subject
-        if not include_controls and subject in CONTROL_SUBJECTS:
+        # Versioned identity: two builds of one tool are two competitors.
+        subject = out.method.subject_key
+        if not include_controls and out.method.subject in CONTROL_SUBJECTS:
             continue
         for m in out.measurements:
             if m.higher_is_better is None:
@@ -259,7 +265,7 @@ def standardize(
     A benchmark on which every fitted subject scores identically has zero spread
     and contributes zero, which is correct: it separates nothing.
     """
-    basis = list(fit_on) if fit_on else [s for s in subjects if s not in CONTROL_SUBJECTS]
+    basis = list(fit_on) if fit_on else [s for s in subjects if not is_control(s)]
     if len(basis) < 2:
         basis = list(subjects)
     for item in items:
@@ -426,7 +432,7 @@ def build(
                 ci_low=lo,
                 ci_high=hi,
                 items=sum(1 for i in items if s in i.z),
-                control=s in CONTROL_SUBJECTS,
+                control=is_control(s),
             )
         )
     scored.sort(key=lambda st: st.composite, reverse=True)

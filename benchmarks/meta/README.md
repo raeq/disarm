@@ -38,6 +38,22 @@ Inherited guardrail, from #39/#40: these corpora are measuring instruments, neve
 optimization targets. Do not add a confusable mapping to improve a number here.
 Coverage grows from authoritative sources; a principled miss is routed to #40.
 
+## Versions are part of a subject's identity
+
+A subject is `name@version`, never a bare name. Two builds of one tool are two
+competitors — `disarm@0.14.1` against `disarm@0.15.0` is the comparison most worth
+making here — and keying on the name alone would let them overwrite each other in
+the baseline, share a column, and be averaged together in the leaderboard. Every
+rendered identity carries its version, and a test enforces that.
+
+A compiled extension cannot be imported twice in one process, so two builds
+cannot be live at once. Measure each in its own run and merge:
+
+```bash
+python -m benchmarks.meta --run --json v0141.json      # in a v0.14.1 worktree
+python -m benchmarks.meta --run --merge v0141.json --leaderboard
+```
+
 ## More than one tool
 
 A benchmark that only scores one library tells you what that library does, not
@@ -172,6 +188,42 @@ Loaders accept JSONL or delimited files with a header. A text column is required
 and a clean/reference column turns on recovery scoring; both are matched
 case-insensitively against the name lists in `suites/academic.py`, so most
 upstream releases load without conversion.
+
+## Provisioning
+
+A run fetches what the selection needs before any suite executes, and leaves
+untouched anything already on disk — an operator who placed a particular revision
+keeps it. `--offline` never reaches the network; `--refresh` forces a re-fetch.
+Every download is recorded with URL, sha256, size and licence in a manifest
+beside the cache, so a figure can be traced to the bytes it came from. Nothing
+fetched is ever committed.
+
+Only upstreams that were *checked to exist* are wired. A suite with no verified
+artifact stays manual and says so, rather than implying a download nobody has
+demonstrated.
+
+A present artifact that yields nothing is an error, not a score of zero. The
+ICANN suite reported `blocked_pairs: 0` for a while, which reads as perfect
+agreement rather than as a broken parser.
+
+## A leaderboard, when the battery can carry one
+
+`--leaderboard` ranks the subjects, weighting each benchmark by how well it
+separates them. Every step is a named method: corrected item-total correlation
+for the weights (classical test theory), item parcelling within a suite so seven
+related numbers are not seven votes, Bradley-Terry by Hunter's MM algorithm for a
+rank that uses only pairwise order, Cronbach's alpha and Kendall's W for whether
+the battery is coherent, and bootstrap intervals over the benchmark set.
+
+Item Response Theory is the method of record for this and is deliberately not
+fitted: 2PL estimates from single-digit respondents are not stable, and fitting
+one would look more rigorous while being less so.
+
+The interlock matters more than the ranking. When the battery has too few
+directed benchmarks, or alpha falls below the conventional 0.70, or no two
+subjects have non-overlapping intervals, no ranking is published and the reason
+is printed. On the current battery all three fire. A leaderboard that cannot fail
+is not a measurement.
 
 ## Drift
 

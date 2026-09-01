@@ -92,7 +92,7 @@ def snapshot(outcomes: list[Outcome], disarm_version: str) -> dict[str, Any]:
         # Keyed by subject as well as suite: the same measurement means a
         # different thing for a transliterator than for disarm, and subtracting
         # one from the other is meaningless.
-        suites[f"{out.method.subject}::{out.suite}"] = {
+        suites[f"{out.method.subject_key}::{out.suite}"] = {
             "population": out.population,
             "external": out.external,
             "subject": out.method.subject,
@@ -138,7 +138,7 @@ def compare(outcomes: list[Outcome], name: str = "default") -> list[Drift]:
     for out in outcomes:
         if out.status is not Status.OK:
             continue
-        prior = base.get("suites", {}).get(f"{out.method.subject}::{out.suite}")
+        prior = base.get("suites", {}).get(f"{out.method.subject_key}::{out.suite}")
         if not prior:
             continue
         prior_pop = prior.get("population")
@@ -165,7 +165,7 @@ def compare(outcomes: list[Outcome], name: str = "default") -> list[Drift]:
                     after_of=m.of,
                     comparable=comparable and not tables_moved,
                     higher_is_better=m.higher_is_better,
-                    subject=out.method.subject,
+                    subject=out.method.subject_key,
                     tables_moved=tables_moved,
                 )
             )

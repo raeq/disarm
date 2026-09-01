@@ -57,7 +57,7 @@ class RunReport:
     def by_subject(self) -> dict[str, list[Outcome]]:
         out: dict[str, list[Outcome]] = {}
         for o in self.outcomes:
-            out.setdefault(o.method.subject, []).append(o)
+            out.setdefault(o.method.subject_key, []).append(o)
         return out
 
     def comparison(self, suite: str, key: str) -> dict[str, float]:
@@ -72,7 +72,7 @@ class RunReport:
                 continue
             m = o.measurement(key)
             if m is not None:
-                got[o.method.subject] = m.ratio if m.ratio is not None else m.value
+                got[o.method.subject_key] = m.ratio if m.ratio is not None else m.value
         return got
 
 
@@ -118,7 +118,7 @@ def run(
         subjects = [default] if default is not None else []
     report = RunReport(selected=len(suites), registered=registered)
     report.disarm_version, report.unicode_version, report.confusables_version = _versions()
-    report.subjects = [s.info.name for s in subjects]
+    report.subjects = [f"{s.info.name}@{s.info.version}" for s in subjects]
     if provisioning is not None:
         report.provisioning = provisioning
     start = time.perf_counter()

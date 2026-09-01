@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from pathlib import Path
 
 from .baseline import Drift
 from .leaderboard import ALPHA_FLOOR, Leaderboard
-from .protocol import Family, Measurement, Outcome, Status
+from .protocol import Family, Measurement, Outcome, Provenance, Status
 from .runner import RunReport
 
 _FAMILY_TITLE = {
@@ -211,7 +212,7 @@ def _render_method(out: Outcome) -> list[str]:
     bits = [
         "<details><summary>Method</summary>",
         "",
-        f"- subject: `{m.subject}` {m.subject_version}",
+        f"- subject: `{m.subject_key}`",
         f"- domain: {m.domain or 'unstated'} ({m.domain_size:,} units)",
     ]
     if m.predicates:
@@ -240,14 +241,19 @@ def _render_suite(group: list[Outcome]) -> list[str]:
     lines = _render_outcome(head)
     for out in group[1:]:
         if out.status is Status.SKIPPED:
-            lines += [f"> `{out.method.subject}` — not run: {out.skip_reason}", ""]
+            lines += [
+                f"> `{out.method.subject_key}` — not run: {out.skip_reason}",
+                "",
+            ]
             continue
         if out.status is Status.ERROR:
-            lines += [f"> `{out.method.subject}` — errored: `{out.error}`", ""]
+            lines += [
+                f"> `{out.method.subject_key}` — errored: `{out.error}`",
+                "",
+            ]
             continue
         lines += [
-            f"**`{out.method.subject}`** {out.method.subject_version} — "
-            f"population {out.population:,}",
+            f"**`{out.method.subject_key}`** — population {out.population:,}",
             "",
             "| measurement | value | reading |",
             "|---|---|---|",
@@ -298,7 +304,7 @@ def _render_outcome(out: Outcome) -> list[str]:
             lines.append(f"| `{r.key}` | {_num(r.expected)} | {_num(r.actual)}{mark} |")
         lines.append("")
     lines += [
-        f"**`{out.method.subject}`** {out.method.subject_version} — measured now, "
+        f"**`{out.method.subject_key}`** — measured now, "
         f"population {out.population:,}, {out.duration_s:.2f}s:",
         "",
         "| measurement | value | reading |",
@@ -367,6 +373,68 @@ def _render_skips(report: RunReport) -> list[str]:
     return lines
 
 
+def load_outcomes(path: str) -> list[Outcome]:
+    """Rebuild outcomes from a JSON report written by an earlier run.
+
+    This is how two builds of one tool compete. A compiled extension cannot be
+    imported twice in one process, so `disarm@0.14.1` and `disarm@0.15.0` cannot
+    both be live at once — they are measured in separate runs and merged here.
+    Only what the comparison and the leaderboard need is reconstructed; the
+    method record is carried through so a merged row can still be traced.
+    """
+    import json as _json
+
+    from .protocol import Measurement, Method
+
+    payload = _json.loads(Path(path).read_text(encoding="utf-8"))
+    out: list[Outcome] = []
+    for row in payload.get("suites", []):
+        prov = row.get("provenance", {})
+        method = row.get("method", {})
+        outcome = Outcome(
+            suite=row["name"],
+            family=Family(row.get("family", "academic")),
+            provenance=Provenance(
+                origin=prov.get("origin", "?"),
+                citation=prov.get("citation", "?"),
+                url=prov.get("url", ""),
+                version=prov.get("version", "?"),
+                licence=prov.get("licence", "?"),
+                external=prov.get("external", True),
+                issues=tuple(prov.get("issues", ())),
+                finding=prov.get("finding", ""),
+                notes=prov.get("notes", ""),
+            ),
+            status=Status(row.get("status", "ok")),
+            population=row.get("population", 0),
+            method=Method(
+                subject=method.get("subject", "?"),
+                subject_version=method.get("subject_version", "?"),
+                domain=method.get("domain", ""),
+                domain_size=method.get("domain_size", 0),
+                predicates=list(method.get("predicates", [])),
+                parameters=dict(method.get("parameters", {})),
+                artifact=method.get("artifact"),
+                artifact_sha256=method.get("artifact_sha256"),
+                artifact_bytes=method.get("artifact_bytes"),
+                environment=dict(method.get("environment", {})),
+            ),
+            measurements=[
+                Measurement(
+                    key=m["key"],
+                    value=m["value"],
+                    of=m.get("of"),
+                    unit=m.get("unit", "count"),
+                    higher_is_better=m.get("higher_is_better"),
+                    detail=m.get("detail", ""),
+                )
+                for m in row.get("measurements", [])
+            ],
+        )
+        out.append(outcome)
+    return out
+
+
 def render_json(report: RunReport, drifts: Sequence[Drift] = ()) -> str:
     payload = {
         "subjects": report.subjects,
@@ -387,6 +455,7 @@ def render_json(report: RunReport, drifts: Sequence[Drift] = ()) -> str:
                 "method": {
                     "subject": o.method.subject,
                     "subject_version": o.method.subject_version,
+                    "subject_key": o.method.subject_key,
                     "domain": o.method.domain,
                     "domain_size": o.method.domain_size,
                     "predicates": o.method.predicates,

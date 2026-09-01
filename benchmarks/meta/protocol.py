@@ -124,6 +124,17 @@ class Method:
     artifact_bytes: int | None = None
     environment: dict[str, str] = field(default_factory=dict)
 
+    @property
+    def subject_key(self) -> str:
+        """The identity a result is filed under: tool **and** version.
+
+        Two builds of one tool are two subjects. Keying on the bare name would
+        let 0.14.1 and 0.15.0 overwrite each other in the baseline, share a
+        column in the comparison table, and be averaged together in the
+        leaderboard — which is exactly the comparison most worth making here.
+        """
+        return f"{self.subject}@{self.subject_version}"
+
 
 @dataclass
 class Reproduction:

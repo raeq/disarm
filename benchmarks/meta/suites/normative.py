@@ -11,6 +11,7 @@ and none carries a vector of its own.
 
 from __future__ import annotations
 
+import re
 import sys
 import unicodedata
 from collections import Counter
@@ -731,10 +732,57 @@ class DefaultIgnorableCasefold(SuiteBase):
         )
 
 
+def _icann_blocked_homoglyphs(html_text: str) -> list[tuple[int, int]]:
+    """Pairs ICANN blocks as visually identical, from its Variant Set tables.
+
+    The repertoire table only names a set ("set 12"); the pairs live in a second
+    table per set, so this is a join and not a single scan. Columns vary between
+    sets (some carry Required Context), so Source and Target are taken from the
+    two leading hex cells and the type and comment are matched by content.
+
+    Admission is the same rule ``data/confusables_lgr.tsv`` documents: the mapping
+    type is ``blocked`` **and** the Latin Generation Panel's own comment calls the
+    glyphs homoglyphs or nearly identical. The 23 pairs commented "Required for
+    use with Common LGR" are transitivity artefacts of running this LGR beside
+    the Greek and Cyrillic ones, and folding them would strip legitimate
+    diacritics.
+    """
+    import html as _html
+
+    hex_cell = re.compile(r"^[0-9A-Fa-f]{4,6}$")
+    out: list[tuple[int, int]] = []
+    for block in re.findall(r"<tr[^>]*>(.*?)</tr>", html_text, re.S):
+        cells = [
+            " ".join(_html.unescape(re.sub(r"<[^>]+>", " ", c)).split())
+            for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", block, re.S)
+        ]
+        if len(cells) < 4:
+            continue
+        codes = [c for c in cells if hex_cell.match(c)]
+        if len(codes) < 2:
+            continue
+        lowered = [c.lower() for c in cells]
+        if "blocked" not in lowered:
+            continue
+        comment = " ".join(lowered)
+        if "homoglyph" not in comment and "nearly identical" not in comment:
+            continue
+        source, target = int(codes[0], 16), int(codes[1], 16)
+        if source != target:
+            out.append((source, target))
+    return out
+
+
 class ICANNLatinLGR(SuiteBase):
     name = "icann-lgr-latin"
     family = Family.NORMATIVE
     availability = Availability.NETWORK
+    #: #831 counts 23 qualifying pairs; the parser recovers 21. The two it misses
+    #: are not yet identified — most likely continuation rows, where a set table
+    #: splits one mapping across two `<tr>`s with a bare arrow cell. Left visible
+    #: rather than tuned away: a denominator that quietly disagrees with the issue
+    #: it cites is the exact failure this harness exists to catch.
+    EXPECTED_PAIRS = 23
     env_var = "DISARM_META_ICANN_LGR"
     SOURCES = (
         Source(
@@ -756,7 +804,9 @@ class ICANNLatinLGR(SuiteBase):
         issues=(831,),
         finding=(
             "#831: ICANN blocks 23 same-script Latin homoglyph pairs as visually "
-            "identical; canonicalize collided 2 of them."
+            "identical; canonicalize collided 2 of them. Those pairs were then "
+            "shipped as data/confusables_lgr.tsv, so a high collision rate here "
+            "now is the fix having landed, not a coincidence."
         ),
         notes=(
             "Same-script Latin homoglyph pairs ICANN blocks as visually identical; "
@@ -778,15 +828,12 @@ class ICANNLatinLGR(SuiteBase):
         return artifact(CACHE / "lgr-second-level-latin.html", env=self.env_var)
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
-        import re
 
         import disarm
 
         path = self.locate()
         assert path is not None
         text = path.read_text(encoding="utf-8", errors="replace")
-        # Variant pairs appear as "U+XXXX" pairs on a blocked-variant row in the
-        # published LGR, and as two hex columns in the vendored TSV extract.
         pairs: list[tuple[int, int]] = []
         if path.suffix == ".tsv":
             # Vendored extract: hex source, literal target, weight, comment.
@@ -801,10 +848,7 @@ class ICANNLatinLGR(SuiteBase):
                 except ValueError:
                     continue
         else:
-            for row in re.findall(r"<tr[^>]*>(.*?)</tr>", text, re.S):
-                cps = re.findall(r"U\+([0-9A-Fa-f]{4,6})", row)
-                if len(cps) >= 2 and "blocked" in row.lower():
-                    pairs.append((int(cps[0], 16), int(cps[1], 16)))
+            pairs = _icann_blocked_homoglyphs(text)
         if limit is not None:
             pairs = pairs[:limit]
         outcome.population = len(pairs)
@@ -814,6 +858,14 @@ class ICANNLatinLGR(SuiteBase):
             if disarm.catalog_key(chr(a)) == disarm.catalog_key(chr(b)):
                 collide += 1
         add(outcome, "blocked_pairs", len(pairs), unit="pairs")
+        add(
+            outcome,
+            "pairs_recovered_vs_issue",
+            len(pairs),
+            of=self.EXPECTED_PAIRS,
+            higher_is_better=True,
+            detail="#831 counts 23; a shortfall is a parser gap, not a result",
+        )
         add(
             outcome,
             "collide_in_catalog_key",

@@ -73,22 +73,6 @@ bitflags! {
         /// where a post-fold precedes it. Displayed as `fold_case`, because that is what
         /// it does.
         const FOLD_CASE_POST = 0b10_0000_0000_0000;
-        /// The normalization that runs AFTER the folds (#886).
-        ///
-        /// The confusable fold can emit a base that composes with a following mark, and
-        /// nothing put it back together: `normalize_web_input` is `normalize` ->
-        /// `confusables` -> strips, so `U+0430` (Cyrillic a) + combining acute folded to
-        /// `a` + acute and stayed decomposed, while a *second* call composed it to `\u{e1}`.
-        /// Two calls, two byte sequences, one rendering — 6,410 (base, mark) pairs.
-        ///
-        /// Same shape as `CONFUSABLES_POST` (#852), `FOLD_CASE_POST` (#751) and the
-        /// second `DropRepeatedMarks` (#881): a step whose own output re-opens the case
-        /// an earlier step closed. This is the fourth, and the earlier step is
-        /// `NORMALIZE` itself.
-        ///
-        /// Set only where a normalization and a fold both run, so a pipeline that cannot
-        /// produce the problem does not report a step that cannot act.
-        const NORMALIZE_POST = 0b100_0000_0000_0000;
     }
 }
 
@@ -142,9 +126,6 @@ const STEP_ORDER: &[(PipelineSteps, &str)] = &[
     // to one — and there was no case fold after it, so the profile returned `B` on the
     // first pass and `b` on the second. This is the closing half of #852's opening one.
     (PipelineSteps::FOLD_CASE_POST, "fold_case"),
-    // After every fold, because the fold is what emits a decomposed base + mark (#886).
-    // Before the strips, so the composed form is what they see.
-    (PipelineSteps::NORMALIZE_POST, "normalize"),
     (PipelineSteps::STRIP_CONTROL, "strip_control"),
     (PipelineSteps::STRIP_ZERO_WIDTH, "strip_zero_width"),
     // Beside the zero-width strip and after it: both remove what is not text, and the
@@ -365,7 +346,7 @@ impl Pipeline {
         input: &str,
         out: &mut String,
     ) -> Result<bool, ErrorRepr> {
-        if step == PipelineSteps::NORMALIZE || step == PipelineSteps::NORMALIZE_POST {
+        if step == PipelineSteps::NORMALIZE {
             match self.normalize_form {
                 Some(ref form) => {
                     normalize::normalize_into(input, form, out)?;
@@ -416,9 +397,11 @@ impl Pipeline {
             // policy. Exposing the choice on `TextPipeline` is a public parameter owed
             // across six bindings and is left to its own change (#646 §2).
             //
-            // Iterated to a fixed point between NFC passes when the pipeline normalizes
-            // (#886), which is what `canonicalize` has done since #416/#434 and the
-            // profiles never did. TR39 skeletoning is not normalization-stable: it drops
+            // Iterated to a fixed point against the pipeline's OWN form when it normalizes
+            // (#886) — `NFKC` for every profile that configures one, not the `NFC` the
+            // preset loop uses, which is why this is a sibling of
+            // `Step::ConfusablesNfcFixedPoint` rather than a call to it. `canonicalize`
+            // has done the equivalent since #416/#434; the profiles never did. TR39 skeletoning is not normalization-stable: it drops
             // the diacritic on a *composed* accented letter (`\u{e7}` -> `c`) but never on
             // the decomposed form, and it can *emit* a decomposed skeleton. A single pass
             // therefore leaves output whose next pass differs — `normalize_web_input`
@@ -496,7 +479,7 @@ impl Pipeline {
 
     /// The parameter shown for `step` in `steps()` / `__repr__`, or `None`.
     fn step_param(&self, step: PipelineSteps) -> Option<String> {
-        if step == PipelineSteps::NORMALIZE || step == PipelineSteps::NORMALIZE_POST {
+        if step == PipelineSteps::NORMALIZE {
             self.normalize_form.clone()
         } else if step == PipelineSteps::STRIP_ZALGO {
             self.zalgo_max_marks.map(|m| m.to_string())
@@ -785,9 +768,6 @@ mod tests {
             } else if *flag == PipelineSteps::FOLD_CASE || *flag == PipelineSteps::FOLD_CASE_POST {
                 // Both run the same fold; `FOLD_CASE_POST` differs only in when (#751).
                 (None, "ABC")
-            } else if *flag == PipelineSteps::NORMALIZE_POST {
-                // Same transform as `NORMALIZE`, differing only in when (#886).
-                (Some("NFKC"), "\u{fb01}")
             } else if *flag == PipelineSteps::STRIP_CONTROL {
                 (None, "a\u{0000}b")
             } else if *flag == PipelineSteps::STRIP_ZERO_WIDTH {
@@ -1136,7 +1116,6 @@ mod tests {
                 // otherwise fold only on a second call.
                 "confusables",
                 "fold_case",
-                "normalize",
                 "strip_control",
                 "strip_zero_width",
                 "strip_pua",

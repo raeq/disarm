@@ -711,9 +711,14 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   So **every Japanese domain name was reported as a spoof**, by a check the anomaly
   detector called clean on the same input.
 
-  All three now share one resolver — `is_single_augmented_script` — rather than three
-  implementations that agree by inspection. Han + Hangul resolves to Korean and Han +
-  Bopomofo to Chinese, for the same reason.
+  `is_mixed_script` and the hostname path now share one resolver — an `AugmentedState`
+  fed either a character walk or a script list — rather than two implementations that
+  agree by inspection. Han + Hangul resolves to Korean and Han + Bopomofo to Chinese, for
+  the same reason.
+
+  `inspect_anomalies` does not share that resolver and keeps its own wider policy, which
+  is why the three surfaces now agree on the question this is about without being
+  identical.
 
   The sets narrow the answer; they do not remove it. `ひら한` is Japanese beside Korean,
   which share no augmented set, and `例えa` is Japanese beside Latin — both still mixed,

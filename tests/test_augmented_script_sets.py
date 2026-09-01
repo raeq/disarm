@@ -6,8 +6,13 @@ applied them; `is_mixed_script` and the hostname path did not. So `例え` was c
 detector, mixed-script to the predicate, and **suspicious as a hostname** — which meant
 every Japanese domain name was reported as a spoof.
 
-All three now share one resolver rather than three implementations that agree by
+`is_mixed_script` and the hostname path now share one resolver — an `AugmentedState` fed
+either a character walk or a script list — rather than two implementations that agree by
 inspection.
+
+`inspect_anomalies` does **not** share it, and that is the design: it runs over prose and
+exempts CJK beside Latin as well, which the other two must not. What all three now agree
+on is the question this issue was about — whether ordinary Japanese is mixed.
 """
 
 from __future__ import annotations

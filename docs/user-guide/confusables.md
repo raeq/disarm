@@ -258,7 +258,7 @@ Measured against the bundled `confusables.txt` (Unicode 17.0.0):
 | | count |
 |---|---|
 | TR39 sources in the bundled file | 6,565 |
-| unmapped under `target_script="latin"` | 4,331 |
+| unmapped under `target_script="latin"` | 4,330 |
 | …of those, strong-RTL (`Bidi_Class` `R` or `AL`) | 948 |
 
 The residue is not evenly spread, which is the fact that makes this a section rather than

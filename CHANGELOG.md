@@ -617,6 +617,29 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **`sort_key` was not idempotent when an invisible split a mark run (#850).** #843 added
+  the combining-mark cap to `sort_key` as step 4b, before the `StripControl` /
+  `StripZeroWidth` pair at step 5. A zero-width between two marks therefore survived into
+  the count and split one run into two short ones, neither over the cap; the strip then
+  deleted it, the runs merged, and the *second* pass truncated what the first had kept.
+  `sort_key("\u0301\u0301\u0301\u200b\u0301")` returned four marks and `sort_key` of
+  that returned three.
+
+  `canonicalize` has ordered the same two steps correctly since #121, under a comment
+  that states the rule outright — "Runs AFTER the control / zero-width strip above so a
+  stripped invisible between two marks cannot split a mark run and hide the count" — so
+  the fix is to move the step, not to reason about it again. `canonicalize` and
+  `canonicalize_strict` were never affected.
+
+  Two gates now hold the rule rather than the comment. `every_zalgo_cap_runs_after_its_invisible_strip`
+  reads the source and checks the ordering in every pipeline that caps marks, including
+  ones not yet written; `Step::Zalgo(0)` is exempt, because a cap of zero removes every
+  mark whatever the run structure, and `zalgo_zero_is_order_independent` checks that
+  exemption is real. Separately, the key-stability corpus gained eight rows putting an
+  invisible *between two combining marks* — a class it could not express, so #843's
+  fixture diff was 0 rows of 22,963 and the gate built to answer "did key output move"
+  reported nothing. With the rows present the diff for this change is 4 rows.
+
 - **ICANN's Latin second-level LGR blocks 23 same-script homoglyph pairs; `canonicalize`
   collided 2 (#831).** The LGR defines 25 variant sets over a 231-element repertoire, and
   23 of the 51 expanded pairs carry the Latin Generation Panel's own comment *"Glyphs
@@ -1299,7 +1322,7 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   | | count |
   |---|---|
   | TR39 sources in the bundled file | 6,565 |
-  | unmapped under `target_script="latin"` | 4,331 |
+  | unmapped under `target_script="latin"` | 4,330 |
   | …of those, strong-RTL | 948 |
 
   The residue is not evenly spread, which is what makes it a section rather than a
@@ -1316,7 +1339,8 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   `tests/test_confusable_residue_docs.py` derives every figure on the page from the
   tables rather than trusting the prose — the totals, the strong-RTL share and each
   per-script row. These are exactly the numbers that rot: #821 already moved the residue
-  from 4,384 to 4,331 between the issue being filed and this being written. The per-script
+  from 4,384 to 4,331 between the issue being filed and this being written, and #831 then
+  moved it again to 4,330. The per-script
   figures are deliberately left to the page for that reason, where a gate holds them; a
   changelog entry is a record of a release and should not need regenerating.
 

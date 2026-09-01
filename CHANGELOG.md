@@ -1330,6 +1330,39 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **What disarm reaches on an AI watermark (#706).** The words *watermark*, *SynthID* and
+  *C2PA* appeared **zero times** across the README, the threat model and all of `docs/` —
+  and it is a question this library's audience arrives with, usually after finding a page
+  about invisible characters. `docs/security/watermarks.md` answers it.
+
+  "AI watermark" names four different things. disarm reaches one:
+
+  | | disarm |
+  |---|---|
+  | character-level markers — invisible or confusable code points | **yes**, this is what it does |
+  | provenance metadata — C2PA, EXIF, PDF `/Producer` | no, out of scope **by choice** |
+  | statistical token watermarks — SynthID-Text | **no, and no character tool can** |
+  | pixel and audio watermarks | no, disarm does not touch binary media |
+
+  The category it does reach is not uniform, and the page publishes the split because the
+  difference decides which question you can answer. Over the 405 assigned
+  `Default_Ignorable_Code_Point` characters: 117 are removed **and** reported, **266 are
+  removed with nothing reported**, 10 are reported and deliberately not removed, 12
+  neither. So a pipeline that only reports misses most of the class, and one that only
+  transforms cleans text without telling you it was marked.
+
+  Three statements the page makes plainly, because each is a thing a reader could
+  otherwise assume: stripping invisible characters is **not** removing a watermark;
+  disarm makes **no claim** about the provenance of text it has processed — cleaned text
+  is indistinguishable from text that never carried a marker, which is what makes
+  stripping good defence and useless evidence; and a tool claiming to remove a
+  *statistical* text watermark is making a claim you cannot check, since the scheme and
+  key are unpublished.
+
+  Category 2 is recorded as a deliberate exclusion rather than a gap: it is
+  container-format work rather than Unicode text work, and it would be owed across six
+  bindings for a feature that cannot be expressed as string-in, string-out.
+
 - **Four guide pages recommended a function for a job it does not do (#745, #754, #760,
   #761).** Each claim was true of *something* — just not of the thing it was written
   beside.

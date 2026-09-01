@@ -310,6 +310,7 @@ class TestAnomalyKindDoesNotDriftFromTheBindings:
             # #724: the category is the signal, not the count. One enclosing mark per
             # base is below every threshold disarm has.
             "enclosing_mark": "I\u20ddg\u20ddn\u20dd",
+            "duplicate_mark": "a\u0301\u0301",
         }
         assert set(samples) == self._rust_kinds(), "sample set is stale"
         # `leet` and `segmentation` are lexicon-gated by design, so they need one.

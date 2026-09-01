@@ -134,7 +134,13 @@ pub fn unicode_version() -> &'static str {
 /// moved `canonicalize` and `canonicalize_strict` on 351 and 340 of the 22,878
 /// key-stability rows. Nothing lost a mark — every moved row is text the old cap had
 /// been truncating.
-pub const KEY_SCHEMA_VERSION: u32 = 2;
+///
+/// Bumped to 3 by #835: a nonspacing mark repeated on one base is now dropped, so
+/// `a` + two acutes keys the same as `a` + one. That moved `sort_key` and `canonicalize`
+/// on 11 of the 22,977 rows and `canonicalize_strict` on 13; `search_key`, `catalog_key`,
+/// `strip_obfuscation`, `normalize_confusables` and `fold_case` are byte-identical, and
+/// no row grew.
+pub const KEY_SCHEMA_VERSION: u32 = 3;
 
 /// The key-schema counter, as a function (#645).
 ///

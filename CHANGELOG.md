@@ -25,6 +25,22 @@ the fixed point the iterating ones already did: `Apy6ƅi` becomes `Apy6bi`. If y
 `normalize_confusables`, `search_key`, `catalog_key` and `sort_key` are byte-identical —
 they iterate, and were already returning the resolved form.
 
+**The key builders now collapse a nonspacing mark repeated on one base (#835).** `a`
+followed by two identical acutes renders exactly like `a` followed by one, so the two
+spellings now produce the same key: `canonicalize`, `canonicalize_strict` and `sort_key`
+moved on 11, 13 and 11 of the 22,977 key-stability rows. `search_key`, `catalog_key`,
+`strip_obfuscation`, `normalize_confusables` and `fold_case` are byte-identical, and no
+row grew. `KEY_SCHEMA_VERSION` is now `3`, which covers #723's `strip_obfuscation`
+movement above as well as this one.
+
+If you have stored keys, recompute them. The change only merges rows that a reader could
+never have told apart in the first place — every moved row lost a repeat of a mark it
+still carries.
+
+`strip_zalgo` is deliberately unchanged. It is the cap, #788 pairs it with `is_zalgo`, and
+two identical acutes are ordinary by that threshold — so `strip_zalgo("Z" + acute × 8)`
+still keeps three marks while `canonicalize` of the same input now keeps one.
+
 **`is_mixed_script` and the hostname screen no longer call ordinary Japanese, Korean or
 Chinese "mixed" (#776).** They now resolve the UTS #39 §5.1 augmented script sets, which
 `inspect_anomalies` has applied all along. If you store or compare the output of either,
@@ -128,6 +144,16 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 (reading it is unaffected).
 
 ### Added
+
+- **`duplicate_mark`: the same nonspacing mark twice on one base (#835).** UTS #39 §5.4
+  lists a sequence of the same nonspacing mark as an optional detection, and `disarm`
+  implemented none of it. `a` + two acutes reports clean at every surface: it is two
+  marks, so no zalgo threshold reaches it, and it is one script, so `mixed_script` does
+  not see it — while rendering indistinguishably from `a` + one acute. The kind reports
+  after `zalgo` rather than before it, because a heavy stack is usually also a repeat and
+  `zalgo` is the louder fact about that token. Class-0 marks are out of scope: those are
+  positioned rather than stacked, so a doubled Devanagari matra is an orthography
+  question rather than this one.
 
 - **Asking `disarm` for an outcome name now teaches the naming rule (#654).** `clean`,
   `sanitize`, `safe`, `secure`, `escape`, `is_safe` and `make_safe` will never exist —
@@ -373,6 +399,12 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   (Ruby), `DigitPolicy.PRESERVE` (Java/Kotlin).
 
 ### Changed (breaking)
+
+- **A repeated mark no longer survives the key builders (#835).** See *Upgrade notes*
+  for the movement. The collapse is its own pipeline step rather than part of the zalgo
+  cap, and it runs *before* the cap so the cap counts marks a reader can distinguish:
+  `a` + five acutes + five graves capped first keeps three acutes and drops the grave
+  entirely, while deduplicating first keeps one of each.
 
 - **`sort_key` bounds combining marks (#807).** It was the one key builder with neither
   `strip_zalgo` nor `strip_accents`, so nothing bounded them:

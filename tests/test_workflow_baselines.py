@@ -250,3 +250,48 @@ def test_the_gate_has_something_to_check() -> None:
         )
     ]
     assert matches, "no scheduled issue-opening job found — has the audit job moved?"
+
+
+# ---------------------------------------------------------------------------
+# Tier 3 gates the CORE only — one verdict, not one per publisher
+# ---------------------------------------------------------------------------
+
+
+def test_tier3_is_called_by_exactly_one_publish_workflow() -> None:
+    """`uses:` instantiates a fresh job per caller, so N callers are N runs.
+
+    `tier3.yml` contains proptests, which draw random inputs. Four publish workflows
+    calling it meant four independent draws on one artifact: a seed that fails in one
+    and passes in three ships a subset of the bindings, and the three green ones look
+    verified. Cutting v0.15.0 hit the benign version of that — all four failed on the
+    same input, so nothing published and nothing diverged.
+
+    The bindings inherit the gate transitively: each waits for the core on crates.io,
+    and the core cannot get there unless `publish.yml`'s Tier 3 passed. Re-running it
+    per publisher bought nothing and risked disagreement.
+    """
+    callers = []
+    for path in _workflows():
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for name, job in (document.get("jobs") or {}).items():
+            if isinstance(job, dict) and "tier3.yml" in str(job.get("uses", "")):
+                callers.append((path.name, name))
+    assert callers, "nothing calls tier3.yml — has the release gate been dropped entirely?"
+    assert [c[0] for c in callers] == ["publish.yml"], (
+        f"tier3.yml must be called by publish.yml alone; found {callers}. Each extra "
+        "caller is another independent proptest draw on the same artifact."
+    )
+
+
+def test_every_binding_publisher_waits_for_the_core() -> None:
+    """The transitive gate the removal relies on.
+
+    If a binding could publish without the core being on crates.io, dropping its own
+    Tier 3 would leave it ungated rather than gated upstream.
+    """
+    for name in ("publish-node.yml", "publish-ruby.yml", "publish-java.yml"):
+        document = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8")) or {}
+        jobs = document.get("jobs") or {}
+        assert any("wait-for-core" in key for key in jobs), (
+            f"{name} has no wait-for-core job, so it does not inherit the core's gate"
+        )

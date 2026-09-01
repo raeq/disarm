@@ -18,9 +18,14 @@ jobs:
   # workflow .github/workflows/tier3.yml and shared by every publish path. Every
   # build job `needs:` this, and so do `publish` / `publish-crate`, so a Tier-3
   # failure blocks the upload to PyPI and crates.io (no wheels are even built).
-  # The gem (publish-ruby.yml) and the npm addon (publish-node.yml) gate on the
-  # SAME reusable workflow, so the exhaustive net guards the core and every
-  # binding alike — no artifact ships unless it is green.
+  #
+  # It runs HERE AND NOWHERE ELSE. The binding publishers used to call the same
+  # reusable workflow, described as gating "on the SAME reusable workflow" — true of
+  # the definition, false of the execution: `uses:` instantiates a fresh job per
+  # caller, so that was four independent runs of a suite containing proptests, which
+  # draw random inputs. Four stochastic gates on one artifact are atomic only by
+  # luck. The bindings inherit this gate transitively instead: each waits for the
+  # core on crates.io, and the core cannot get there unless this job passed.
   tier3:
     name: Tier 3 (exhaustive + formal)
     uses: ./.github/workflows/tier3.yml

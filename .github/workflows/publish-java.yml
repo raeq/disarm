@@ -157,17 +157,27 @@ jobs:
           path: out/${{ matrix.settings.lib }}
           if-no-files-found: error
 
-  # ── Tier 3 release gate (#159) ──────────────────────────────────
-  # The JVM artifacts must not ship unless the same exhaustive + formal regimen that
-  # gates the other registries is green. Release/dispatch only.
-  tier3:
-    name: Tier 3 (exhaustive + formal)
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/tier3.yml
+  # ── Tier 3 runs on the CORE only (#159, and the 0.15.0 release) ──
+  # This workflow used to call `.github/workflows/tier3.yml` itself, so that "the
+  # exhaustive net guards the core and every binding alike". `uses:` instantiates a
+  # FRESH job per caller, so four publish workflows meant four independent runs of
+  # the same suite rather than one shared verdict — and Tier 3 contains proptests,
+  # which draw random inputs. Four stochastic gates on one artifact make the release
+  # atomic only by luck: a seed that fails in one workflow and passes in three ships
+  # a subset of the bindings, and the three green ones look verified.
+  #
+  # It is also redundant. `wait-for-core` below blocks until the core is on
+  # crates.io, and the core cannot get there unless publish.yml's Tier 3 passed. The
+  # correctness gate is inherited transitively; re-running it here bought nothing and
+  # risked disagreement.
+  #
+  # Cutting v0.15.0 is what surfaced it: all four workflows failed Tier 3 on the same
+  # proptest input, which is the benign draw. Nothing published, which is the only
+  # reason the bindings did not diverge.
 
   publish:
     name: Publish to Maven Central (Central Portal)
-    needs: [build, tier3]
+    needs: build
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Records the publish in the Deployments tab (like crates-io/pypi/rubygems).

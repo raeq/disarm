@@ -53,7 +53,12 @@ bitflags! {
         /// LLM-pipeline docs send a guardrail author to — could not strip PUA even in
         /// principle, and passed through exactly what `canonicalize` removes.
         ///
-        /// Set from `ProfileSpec`, and by a caller through `Pipeline::new`.
+        /// Set by `ProfileSpec::build`, which is the only thing that sets it. It is
+        /// deliberately **not** a `Pipeline::new` parameter: that constructor is the
+        /// public hand-built path across six bindings, and adding a thirteenth positional
+        /// argument to it is a breaking change owed to all of them. #814 is about the
+        /// named profiles, which are curated recommendations and can take the preset
+        /// policy without a signature change. Exposing it to a caller is its own change.
         const STRIP_PUA = 0b1_0000_0000_0000;
     }
 }
@@ -379,6 +384,9 @@ impl Pipeline {
             Ok(true)
         } else if step == PipelineSteps::STRIP_PUA {
             out.clear();
+            // `filter`'s `size_hint` lower bound is 0, so `extend` cannot pre-size the
+            // buffer — the same reason `strip_zero_width_chars_into` reserves (review M-P5).
+            out.reserve(input.len());
             out.extend(input.chars().filter(|&c| !crate::invisibles::is_pua(c)));
             Ok(true)
         } else if step == PipelineSteps::COLLAPSE_WS {

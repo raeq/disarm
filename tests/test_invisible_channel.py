@@ -122,3 +122,20 @@ class TestPrivateUseArea:
         payload = "Hello " + PUA * 4
         assert disarm.canonicalize(payload) != payload
         assert disarm.has_anomalies(payload)
+
+
+def test_a_hand_built_pipeline_does_not_strip_pua() -> None:
+    """The behavioural half of the #876 review note.
+
+    `STRIP_PUA` is set by `ProfileSpec::build` and by nothing else — it is deliberately
+    not a `TextPipeline` parameter, because that constructor is the public hand-built
+    path across six bindings and a new positional argument there is a breaking change
+    owed to all of them. #814 is about the named profiles, which are curated
+    recommendations and can take the preset policy without one.
+
+    Asserted rather than left to the comment, since a comment claiming a setter that does
+    not exist is what prompted the note.
+    """
+    hand_built = disarm.TextPipeline(strip_zero_width=True, strip_control=True)
+    assert PUA in hand_built("Menu " + PUA)
+    assert "strip_pua" not in [name for name, _ in hand_built.steps]

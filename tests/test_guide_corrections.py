@@ -134,27 +134,29 @@ def test_code_context_round_trips_source_and_the_others_do_not() -> None:
 
     Asserted as a floor: adding source files to the repository should not fail the page.
     """
-    files = [
+    # Sorted, so the 300-file slice is the same set on every machine — `glob` yields in
+    # filesystem order, which would make the ratio below vary by checkout. Read once,
+    # rather than twice per file per surface.
+    files = sorted(
         path
         for pattern in ("python/**/*.py", "tests/**/*.py")
         for path in ROOT.glob(pattern)
         if path.stat().st_size < 200_000
-    ][:300]
+    )[:300]
     assert len(files) > 50, "the sample collapsed; this test is no longer measuring anything"
+    sources = [path.read_text(encoding="utf-8") for path in files]
 
     code = disarm.get_pipeline("code_context")
-    kept = [
-        p for p in files if code(p.read_text(encoding="utf-8")) == p.read_text(encoding="utf-8")
-    ]
-    assert len(kept) / len(files) > 0.90, (
-        f"code_context now round-trips {len(kept)}/{len(files)} source files; the page "
+    kept = [text for text in sources if code(text) == text]
+    assert len(kept) / len(sources) > 0.90, (
+        f"code_context now round-trips {len(kept)}/{len(sources)} source files; the page "
         "says it is the structure-preserving entry point"
     )
     for name in ("canonicalize", "strip_format"):
         fn = getattr(disarm, name)
-        assert not any(
-            fn(p.read_text(encoding="utf-8")) == p.read_text(encoding="utf-8") for p in files
-        ), f"{name} now round-trips a source file; the page says none of them do"
+        assert not any(fn(text) == text for text in sources), (
+            f"{name} now round-trips a source file; the page says none of them do"
+        )
 
 
 def test_the_zwj_exception_is_real() -> None:

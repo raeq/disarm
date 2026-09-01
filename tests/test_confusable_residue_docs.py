@@ -11,8 +11,10 @@ are regenerated, and #821 already moved them once between the issue being filed 
 and this being written (4,331). So they are derived here rather than trusted — the same
 discipline `tests/test_doc_table_counts.py` applies to the mapping totals.
 
-The per-script breakdown is checked as an ordering rather than as figures. Which script
-leads the residue is the fact worth holding; the exact number under it is not.
+That applies to the per-script breakdown too. An earlier version of this file checked
+only the *ordering* there while the page went on publishing exact counts beside it —
+which is the failure mode the module docstring is about, one table down. Both the order
+and the figures are derived below.
 """
 
 from __future__ import annotations
@@ -70,22 +72,50 @@ def test_the_rtl_share_is_right() -> None:
     assert _documented("strong-RTL") == rtl
 
 
-def test_the_per_script_ordering_holds() -> None:
-    """Which scripts lead the residue, not their exact counts.
+#: The page's row labels, mapped to the UCD `Name` prefix they stand for. Written out
+#: rather than derived because the labels are prose — "Kangxi radicals", not "KANGXI" —
+#: and a label the page invents should fail this test rather than silently match nothing.
+SCRIPT_LABELS = {
+    "CJK": ("CJK",),
+    "Arabic": ("ARABIC",),
+    "Hangul": ("HANGUL",),
+    "Canadian Aboriginal": ("CANADIAN",),
+    "Kangxi radicals": ("KANGXI",),
+}
 
-    A count here would fail on every table regeneration without telling anyone anything;
-    the ordering is the claim the prose actually makes.
-    """
-    residue = disarm.unmapped_confusables(target_script="latin")
+
+def _residue_by_script() -> collections.Counter[str]:
     scripts: collections.Counter[str] = collections.Counter()
-    for char in residue:
+    for char in disarm.unmapped_confusables(target_script="latin"):
         try:
             scripts[unicodedata.name(char).split()[0]] += 1
         except ValueError:
             continue
-    leaders = [name for name, _ in scripts.most_common(3)]
-    assert leaders[0] == "CJK", leaders
-    assert "ARABIC" in leaders, leaders
+    return scripts
+
+
+def test_the_per_script_breakdown_is_right() -> None:
+    """Every figure in the breakdown table, derived from the same function.
+
+    Review on #845 asked for this: the section explains that these numbers rot, and then
+    published five of them that nothing checked. Deriving them is the option that keeps
+    the magnitudes — "CJK 1,158 against Kangxi 212" is the shape of the residue, and an
+    ordering-only table does not carry it.
+    """
+    scripts = _residue_by_script()
+    for label, prefixes in SCRIPT_LABELS.items():
+        actual = sum(scripts[prefix] for prefix in prefixes)
+        assert _documented(label) == actual, (
+            f"the page says {_documented(label)} for {label}, measured {actual}"
+        )
+
+
+def test_the_per_script_ordering_holds() -> None:
+    """The table is also in descending order, which is how the prose reads it."""
+    documented = [_documented(label) for label in SCRIPT_LABELS]
+    assert documented == sorted(documented, reverse=True), documented
+    scripts = _residue_by_script()
+    assert scripts.most_common(1)[0][0] == "CJK", scripts.most_common(3)
 
 
 # ── the half the page must not over-claim ────────────────────────────────────

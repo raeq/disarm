@@ -1237,7 +1237,7 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   | …of those, strong-RTL | 948 |
 
   The residue is not evenly spread, which is what makes it a section rather than a
-  sentence: CJK 1,158, Arabic 961, Hangul 417. Most of it is deliberate — a class whose
+  sentence: CJK leads by some way, then Arabic, then Hangul. Most of it is deliberate — a class whose
   upstream target is a CJK ideograph does not belong in a to-Latin table — so it reads as
   exposure rather than as a score, and `unmapped_confusables()` /
   `find_unmapped_confusables()` are named as the way to measure it.
@@ -1247,9 +1247,12 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   search_key("ك")` while `normalize_confusables` keeps them apart. Stating only the first
   half would have been an over-claim.
 
-  `tests/test_confusable_residue_docs.py` derives every figure from the tables rather than
-  trusting the prose — these are exactly the numbers that rot, and #821 already moved this
-  one from 4,384 to 4,331 between the issue being filed and this being written.
+  `tests/test_confusable_residue_docs.py` derives every figure on the page from the
+  tables rather than trusting the prose — the totals, the strong-RTL share and each
+  per-script row. These are exactly the numbers that rot: #821 already moved the residue
+  from 4,384 to 4,331 between the issue being filed and this being written. The per-script
+  figures are deliberately left to the page for that reason, where a gate holds them; a
+  changelog entry is a record of a release and should not need regenerating.
 
 - **The reduced-set count beside `find_key_collisions` (#763).** The function returns a
   filtered list, not a partition — a name that collides with nothing never appears — so

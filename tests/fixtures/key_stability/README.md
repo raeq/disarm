@@ -6,7 +6,7 @@ key-builder output; a minor release may.*
 
 | file | what it is |
 |---|---|
-| `corpus.txt` | 22,878 rows: 22,478 natural word forms + 400 hand-built adversarial rows |
+| `corpus.txt` | 22,963 rows: 22,478 natural word forms + 485 hand-built adversarial rows |
 | `golden_keys.tsv.gz` | the corpus crossed with eight key-producing functions, generated on a pinned build |
 
 Regenerate with `python scripts/gen_key_fixture.py`, and read
@@ -32,6 +32,25 @@ and `0.14.0` (soft sign, hard sign, kra, micro sign, Greek mu); the filler block
 from #643; bidi controls and embeddings; Tags, PUA and variation selectors; the
 case-folding minefield (Turkish dotted I, Greek final sigma, Cherokee, ß/ẞ); brand
 homoglyph spoofs; and NFKC amplification edges (`U+FDFA`, `U+1CCD6`, `U+A7F1`).
+
+**The classes added in #806.** Three of the categories above were named here and barely
+present — one tag character, one variation selector, two PUA code points — and
+**noncharacters and soft hyphens did not appear at all**. Those are the classes most likely
+to move a key, so a corpus without them reports them as free. #805 was a live key evasion
+using a noncharacter, and against the old corpus its fixture diff would have been **0 rows
+of 22,878**. 85 rows now carry noncharacters at each edge and inside a word, soft hyphens
+in four words, and thicker coverage of PUA, tags, variation selectors, ZWSP, word joiner
+and the BOM — each beside a clean control, so a diff shows two keys converging rather than
+one key appearing.
+
+**Burmese is load-bearing (#842).** The 669 Myanmar rows carry the deepest combining
+sequences in the corpus: a syllable takes a base, a medial, two vowel signs and a tone.
+They are what showed that a flat mark count cannot separate orthography from stacking —
+`is_zalgo` called 142 of them zalgo and `strip_zalgo` deleted a tone mark from each. Keep
+them.
+
+`tests/test_key_stability.py` asserts a floor per class and the row count in the table
+above, rather than this paragraph, so adding rows stays free and losing a class fails.
 
 `tests/test_key_stability.py` asserts the breadth rather than trusting this
 paragraph: a corpus that lost the soft sign, or its non-ASCII digits, or its

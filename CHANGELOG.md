@@ -18,6 +18,14 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Upgrade notes
 
+**Stored `canonicalize` output moves for Burmese and other complex scripts (#842).** The
+zalgo bound now counts marks per canonical combining class rather than per base, so 142 of
+the 22,963 key-stability rows move on `canonicalize` and `canonicalize_strict`, and 38 on
+`strip_obfuscation`. Every one is a Myanmar place name **regaining** a tone mark the old
+bound deleted, so a reindexed key is strictly closer to its input. `search_key`,
+`catalog_key`, `sort_key` and `fold_case` are byte-identical — they transliterate Myanmar
+before the step runs.
+
 **Stored `canonicalize` output moves for Indic, Hebrew and Arabic text (#788).**
 `strip_zalgo`'s cap rose from 2 to 3 so it stops stripping from text `is_zalgo` calls
 ordinary. 351 of the 22,878 key-stability rows move on `canonicalize` and 340 on
@@ -609,6 +617,31 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   an interpreter whose Unicode version predates the data.
 
 ### Fixed
+
+- **`is_zalgo` flagged 142 ordinary Burmese place names, and `strip_zalgo` deleted a tone
+  mark from each (#842).** `မြို့` is one syllable — a base consonant, a medial, two vowel
+  signs and a tone — and that is how Burmese is written. `canonicalize` carried the
+  truncation into a key.
+
+  #788 fixed the *disagreement* between the cap and the threshold by raising the cap to 3.
+  It did not ask whether 3 is right, and for Myanmar it is not. Raising it to 4 would clear
+  this corpus and stop nowhere principled: Burmese takes a second medial, so more of the
+  language pushes it up again, and each raise costs detection at the top end for every
+  other script.
+
+  The discriminator is not the count, it is **canonical combining class**. A mark of class
+  0 is positioned by the renderer — Burmese vowel signs and medials, Indic matras, Thai
+  vowels — and does not stack. Zalgo is many marks at *one* position, which means many
+  marks of one non-zero class. Both `is_zalgo` and `strip_zalgo` now count per class.
+
+  Interleaving classes does not evade it, and not by a rule: NFD canonically reorders marks
+  by class, so `("\u0301" + "\u0323") * 10` sorts into ten of each and reads as a run of ten
+  either way. The normalization does the work.
+
+  Measured over the corpus: **142 false positives → 0**, with every zalgo form still
+  caught. One semantic change to note — `max_marks` now bounds marks at one *position*, so
+  a base can carry more than that in total: a mark above and a mark below are two
+  positions.
 
 - **`perf-gate.yml` has never run on `main` (#832).** It triggers on `push` as well as
   `pull_request`, and two of its three jobs computed the baseline as

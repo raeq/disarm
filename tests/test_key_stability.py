@@ -23,6 +23,7 @@ licensing.
 from __future__ import annotations
 
 import gzip
+import re
 import importlib.util
 import sys
 from pathlib import Path
@@ -169,6 +170,21 @@ class TestTheFixtureCoversWhatItClaims:
             ("μ", "GREEK SMALL LETTER MU"),
         ):
             assert char in joined, f"corpus no longer contains {name} ({char!r})"
+
+    def test_the_readme_states_the_row_count_it_has(self) -> None:
+        """The README's row count drifted from the corpus and nothing noticed (#842).
+
+        #839 added 85 rows and its README edit was lost in a rebase, so the file said
+        22,878 while the corpus held 22,963. Nobody reads a provenance paragraph against
+        the data it describes, which is what makes it worth a gate — the same reason
+        `tests/test_doc_table_counts.py` exists for the mapping totals.
+        """
+        readme = (CORPUS.parent / "README.md").read_text(encoding="utf-8")
+        stated = re.search(r"\|\s*`corpus\.txt`\s*\|\s*([\d,]+) rows", readme)
+        assert stated, "the README has no `corpus.txt` row-count line"
+        assert int(stated.group(1).replace(",", "")) == len(gen.read_corpus()), (
+            f"README says {stated.group(1)} rows, corpus has {len(gen.read_corpus())}"
+        )
 
     def test_it_contains_the_classes_most_likely_to_move_a_key(self) -> None:
         """#806 — the corpus had **zero** noncharacters and **zero** soft hyphens.

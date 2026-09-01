@@ -13,7 +13,7 @@
 //! Layer 1 (pure-Rust core): no pyo3. Shim in `src/py/zalgo.rs`; crates.io
 //! surface is `crate::api::{is_zalgo, strip_zalgo}`.
 
-use unicode_normalization::char::is_combining_mark;
+use unicode_normalization::char::{canonical_combining_class, is_combining_mark};
 use unicode_normalization::UnicodeNormalization;
 
 /// Default threshold: a base character with more than this many combining marks
@@ -52,14 +52,33 @@ pub(crate) const DEFAULT_MAX_MARKS: usize = DEFAULT_THRESHOLD;
 /// full NFD walk once the verdict is decided (review H-P2/H-P3).
 fn exceeds_combining_run(text: &str, threshold: usize) -> bool {
     let mut run: usize = 0;
+    let mut previous: u8 = 0;
     for ch in text.nfd() {
         if is_combining_mark(ch) {
-            run += 1;
+            let class = canonical_combining_class(ch);
+            // Marks with combining class 0 are POSITIONED by the renderer rather than
+            // stacked at one spot — Burmese vowel signs and medials, Indic matras, Thai
+            // vowels. Counting them as stacking is what made `is_zalgo` call 142 ordinary
+            // Burmese place names zalgo (#842): `မြို့` is one syllable carrying a base,
+            // a medial, two vowel signs and a tone, and no count of marks can tell that
+            // from `U+0301` repeated forty times.
+            //
+            // What zalgo actually is, is many marks at ONE position, and that means many
+            // marks of one non-zero class. Runs are per class, so a legitimate cluster of
+            // distinct marks never accumulates.
+            if class == 0 {
+                run = 0;
+                previous = 0;
+                continue;
+            }
+            run = if class == previous { run + 1 } else { 1 };
+            previous = class;
             if run > threshold {
                 return true;
             }
         } else {
             run = 0;
+            previous = 0;
         }
     }
     false
@@ -119,6 +138,7 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
 
     let mut filtered = String::with_capacity(text.len());
     let mut mark_count: usize = 0;
+    let mut mark_class: u8 = 0;
 
     // The cap is counted over the *NFD (decomposed)* sequence, so it bounds the
     // number of combining marks per base in decomposed space — a precomposed
@@ -146,13 +166,30 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
             negation_kept = true;
             filtered.push(ch);
         } else if is_combining_mark(ch) {
-            mark_count += 1;
-            if mark_count <= max_marks {
+            // Counted per combining class, matching the predicate (#842). A class-0 mark
+            // is positioned rather than stacked, so it never counts toward the cap and
+            // never gets dropped: capping those truncated ordinary Burmese, Bengali and
+            // Thai, deleting a tone mark from `မြို့`.
+            let class = canonical_combining_class(ch);
+            if class == 0 {
+                mark_count = 0;
+                mark_class = 0;
                 filtered.push(ch);
+            } else {
+                mark_count = if class == mark_class {
+                    mark_count + 1
+                } else {
+                    1
+                };
+                mark_class = class;
+                if mark_count <= max_marks {
+                    filtered.push(ch);
+                }
+                // else: drop the excess mark at this position
             }
-            // else: drop the excess combining mark
         } else {
             mark_count = 0;
+            mark_class = 0;
             negation_kept = false;
             base = Some(ch);
             filtered.push(ch);

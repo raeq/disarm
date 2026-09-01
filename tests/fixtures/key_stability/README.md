@@ -6,7 +6,7 @@ key-builder output; a minor release may.*
 
 | file | what it is |
 |---|---|
-| `corpus.txt` | 22,971 rows: 22,478 natural word forms + 493 hand-built adversarial rows |
+| `corpus.txt` | 22,977 rows: 22,478 natural word forms + 499 hand-built adversarial rows |
 | `golden_keys.tsv.gz` | the corpus crossed with eight key-producing functions, generated on a pinned build |
 
 Regenerate with `python scripts/gen_key_fixture.py`, and read
@@ -48,6 +48,12 @@ ZWJ, soft hyphen or BOM *inside* a mark run rather than beside one. The corpus e
 every character involved and never that arrangement, so a mark-capping step placed before
 the invisible strip counted two short runs where there was one long one, and #843's
 fixture diff was **0 rows of 22,963**. With the rows present that change moves 4.
+
+**A cross-script mark between two mark runs (#862).** 6 rows place a mark whose own
+script differs from its base *inside* a run of ordinary ones. It is a different class from
+the #850 rows above: the #615 cross-script strip removes it in strict mode only, so it
+splits the run for the count and is then deleted. The corpus expressed every character
+involved and never that arrangement, so #862's fixture diff would have been **0 rows**.
 
 **Burmese is load-bearing (#842).** The 669 Myanmar rows carry the deepest combining
 sequences in the corpus: a syllable takes a base, a medial, two vowel signs and a tone.

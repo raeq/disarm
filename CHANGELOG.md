@@ -110,6 +110,32 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Added
 
+- **Asking `disarm` for an outcome name now teaches the naming rule (#654).** `clean`,
+  `sanitize`, `safe`, `secure`, `escape`, `is_safe` and `make_safe` will never exist —
+  CONTRIBUTING.md's rule is that a public name describes the operation and never the
+  outcome. That left a reader who reached for one holding a bare `AttributeError` at
+  exactly the moment they were asking the question the threat model answers:
+
+  ```text
+  >>> disarm.clean
+  AttributeError: disarm has no 'clean', and will not: a public name here describes the
+  operation, never the outcome. Nothing in this library makes text safe to emit.
+
+    comparison / canonical form   canonicalize()
+    display-safe cleanup          strip_format()
+    untrusted LLM input           get_pipeline("llm_guardrail")
+    output safety                 encode at the sink — see THREAT_MODEL.md
+  ```
+
+  It refuses and explains in the same breath, so it promises nothing and stays compatible
+  with the rule it teaches. Every other missing name gets the ordinary message unchanged,
+  and the exception keeps its `name` and `obj` so REPL "did you mean" tooling still works.
+
+  #654's two preconditions are tests rather than assumptions: nothing requires `dir()` and
+  `getattr()` to agree — `hasattr`, `getattr(..., default)` and `__all__` all behave as
+  before — and the hook cannot mask an `AttributeError` raised from inside an import,
+  checked in a subprocess against a genuinely failing one.
+
 - **`mixed_numbers` — UTS #39 §5.3 Mixed Numbers (#777).** An identifier should not carry
   digits from more than one decimal numbering system. Nothing checked it, and the reason
   the gap survived is worth stating: **digits carry the script of nothing**, so
@@ -686,6 +712,35 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   an interpreter whose Unicode version predates the data.
 
 ### Fixed
+
+- **`canonicalize_strict` was not idempotent when a cross-script mark split a mark run
+  (#862).** The zalgo cap ran at step 3 and `ConfusablesMarkFixedPoint` — which carries
+  the #615 cross-script mark strip — at step 4. So a mark whose own script differs from
+  its base split a run for the *count*, was then deleted, and the runs merged for the
+  next pass:
+
+  ```text
+  canonicalize_strict("a" + U+0308*3 + U+0489 + U+0308)  ->  four marks
+  canonicalize_strict(that)                              ->  three
+  ```
+
+  This is #121's rule one step wider than #850 applied it. #850 moved `sort_key`'s cap
+  after the zero-width strip and gated on that step; the cross-script mark strip is a
+  **third** character-removing step, and the one that removes marks specifically.
+
+  Two gates now, because one shape cannot cover it. The source-order gate keeps checking
+  the step list, and deliberately does **not** list `ConfusablesMarkFixedPoint` — that
+  step removes marks only in strict mode, and the list cannot see a mode, so including it
+  would fail `canonicalize` for a bug it does not have. `no_pipeline_truncates_further_on_a_second_pass`
+  asks the pipelines instead: four splitters (zero-width, CGJ, ZWJ, cross-script mark)
+  against four builders at every run length. It is weaker about *why* and stronger about
+  *whether*, which is the pair #121 needs.
+
+  The key-stability corpus gained six rows placing a cross-script mark inside a mark run,
+  taking it from 22,971 to 22,977. It expressed every character involved and never that
+  arrangement, so this change's fixture diff would have been 0 rows — the same blind spot
+  #850 found one class over. With the rows present the diff is **1 row**, in
+  `canonicalize_strict` only.
 
 - **The ruff version was pinned in two files and nothing checked they agree.**
   `pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each carry a
@@ -1485,6 +1540,42 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   #842). The contract now extends to all eight, which records a promise the gate was
   already enforcing rather than making a new one. `tests/test_security_and_stability_docs.py`
   derives the list from the generator, so a ninth function is covered the day it is added.
+
+- **Three limits that were true and unwritten (#769, #770, #772).** None is a defect. Each
+  is a place where two things that look like they answer the same question do not.
+
+  **`has_bidi_conflict` reads the whole string; `inspect_anomalies` reads one token
+  (#769).** So a label whose directions are split across a space is a conflict by one and
+  clean by the other:
+
+  ```python
+  has_bidi_conflict("hello שלום")  # True  — the whole string
+  inspect_anomalies("hello שלום").kinds  # []    — two clean tokens
+  ```
+
+  Neither is wrong: a label made of two words in two scripts is ordinary multilingual
+  text, and the detector declining to flag it is why it can be run over prose. But
+  `docs/concepts/which-function.md` routed "detecting a bidi attack" only to the
+  token-scoped one. It now has a row for each, and the rule for choosing: a single
+  identifier, filename or hostname label is one token; a display name or a line of prose
+  is not.
+
+  **The primitives do not compose to `toNFKC_Casefold` (#770).** UTS #39 defines it as
+  NFKC, case folding, **and removing `Default_Ignorable_Code_Point`**. disarm exposes the
+  first two, and putting them in sequence does not produce the third. Measured over the
+  405 assigned Default_Ignorable code points, `fold_case(normalize(s, form="NFKC"))`
+  removes **none of them** — 403 pass through byte-identical and the two Hangul fillers
+  map to another ignorable. `canonicalize` removes **387**, which is what a caller
+  reasoning from the UTS #39 definition should reach for.
+
+  **A registered Ideographic Variation Sequence is not distinguished from a base plus a
+  selector (#772).** `葛`+`U+E0100` is a registered IVS; `A`+`U+E0100` is not a sequence
+  at all. Every surface drops the selector from both and reports neither. For a
+  comparison key that is right — the variants are the same character — and for anything
+  that round-trips text it is a fidelity loss. The other direction is the one with
+  security shape: a base carrying an ignorable selector no registration justifies is a
+  smuggling carrier, and while `canonicalize` removes it, nothing *reports* it. Every
+  other CJK fidelity loss on that page was already documented.
 
 - **A doc block documented the block below it, not the member it was written for (#851
   review, #778).** In TypeScript, Java and Kotlin only the *last* doc comment before a

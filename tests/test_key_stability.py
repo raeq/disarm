@@ -221,6 +221,24 @@ class TestTheFixtureCoversWhatItClaims:
             # truncates further. That is #850, and the corpus expressed every character
             # involved without ever putting them in that order — so the fixture diff for
             # #843 was 0 rows and the gate reported the regression as free.
+            # A class-0 mark inside a mark run. Named for what the predicate *checks*
+            # rather than for the case that motivated it: #862 is about a mark whose own
+            # script differs from its base, and this counts any `Mn`/`Me` with combining
+            # class 0 between two marks. The narrower property needs a script lookup the
+            # UCD does not expose here, and the wider one is the right floor anyway —
+            # what breaks a run count is a mark that a later step may remove, and
+            # cross-script is one reason among several. (#863 review.)
+            "class-0 mark inside a mark run": sum(
+                1
+                for line in gen.read_corpus()
+                for i, c in enumerate(line)
+                if i > 0
+                and i + 1 < len(line)
+                and unicodedata.combining(line[i - 1])
+                and unicodedata.combining(line[i + 1])
+                and unicodedata.category(c) in {"Mn", "Me"}
+                and unicodedata.combining(c) == 0
+            ),
             "invisible inside a mark run": sum(
                 1
                 for line in gen.read_corpus()

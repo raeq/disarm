@@ -1207,3 +1207,37 @@ def test_every_subject_declares_a_role_or_measures_nothing():
             assert subject.ROLES.get(Role.SANITIZER), (
                 f"{subject.info.name} exposes transforms but declares no sanitizer"
             )
+
+
+def test_the_confusable_target_script_is_recorded_not_inherited():
+    """`target_script` changes the result, so it cannot stay implicit.
+
+    disarm's fold takes a target script defaulting to "latin", and
+    `canonicalize` uses that default. Only 30% of UTS #39 pairs have a Latin
+    target, so the full table asks a Latin-targeting fold to produce CJK and
+    Arabic targets it does not aim at.
+    """
+    subject = subjects.by_name("disarm")
+    if subject is None or not subject.available()[0]:
+        pytest.skip("disarm is not importable")
+    out = registry.by_name("uts39-confusables").run(limit=500, subject=subject)
+    fold = out.method.parameters["confusable_fold"]
+    assert "latin" in fold["target_script"]
+    assert "numeric" in fold["digit_policy"], "the digit policy is a knob too"
+    assert "no" in fold["exposed_by_scored_surface"], (
+        "canonicalize() takes no arguments, so neither knob is reachable from the "
+        "surface a reader arrives at — that is the finding, and it must be recorded"
+    )
+    assert out.method.parameters["latin_target_pairs"] > 0
+
+
+def test_latin_target_coverage_is_reported_beside_the_whole_table():
+    subject = subjects.by_name("disarm")
+    if subject is None or not subject.available()[0]:
+        pytest.skip("disarm is not importable")
+    out = registry.by_name("uts39-confusables").run(limit=800, subject=subject)
+    whole = out.measurement("folded")
+    subset = out.measurement("folded_latin_target")
+    assert whole is not None and subset is not None
+    assert subset.of < whole.of, "the subset must be a strict subset of the table"
+    assert subset.higher_is_better is True

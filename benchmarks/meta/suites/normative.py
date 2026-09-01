@@ -47,6 +47,49 @@ def _fires(fn: Callable[[str], bool], text: str) -> bool:
         return False
 
 
+def _is_latin_target(target: str) -> bool:
+    """Does this UTS #39 pair resolve to a Latin character?"""
+    if not target:
+        return False
+    try:
+        return unicodedata.name(target[0]).startswith("LATIN")
+    except ValueError:
+        return False
+
+
+def _fold_configuration(subject: object) -> dict[str, str]:
+    """How the subject's confusable resolution is configured.
+
+    Both of disarm's knobs change the result and both were being inherited
+    rather than chosen, so both are recorded.
+
+    ``target_script`` defaults to ``latin``. Only 1,968 of the 6,565 pairs
+    (30.0%) have a Latin target; 21.2% target CJK and 14.2% Arabic. disarm
+    accepts latin, cyrillic, arabic and hebrew, and **rejects greek** although
+    159 pairs in the table target Greek.
+
+    ``digit_policy`` defaults to ``numeric`` and differs from ``tr39`` on 45
+    code points, in opposite directions: U+0660 ARABIC-INDIC DIGIT ZERO folds to
+    ``0`` under numeric and to ``.`` under tr39. Scoring against the TR39 table
+    with disarm's own policy costs it 0.7 points here (27.1% against 27.8%), so
+    the inherited default understates it.
+
+    The finding underneath: **neither knob is reachable from the surface being
+    scored.** `canonicalize` takes no arguments, so the configurable fold lives
+    on `normalize_confusables`, which is not the entry point a reader arrives at.
+    """
+    if subject is None or getattr(subject, "info", None) is None:
+        return {"fold": "n/a"}
+    if subject.info.name != "disarm":  # type: ignore[attr-defined]
+        return {"fold": "no target-script or digit-policy parameter"}
+    return {
+        "target_script": "latin (default)",
+        "digit_policy": "numeric (default)",
+        "exposed_by_scored_surface": "no — canonicalize() takes no arguments",
+        "alternatives_reachable_only_via": "normalize_confusables()",
+    }
+
+
 def _word_joiners() -> list[int]:
     """General categories Pd and Pc — every code point that renders as a
     within-word joiner, and the denominator the published census uses."""
@@ -137,7 +180,18 @@ class UTS39ConfusableCoverage(SuiteBase):
         declared = self.subject.role(Role.SANITIZER) if self.subject else {}
         scored = declared or text_surfaces
 
+        # UTS #39 targets are mostly NOT Latin: of 6,565 single-source pairs only
+        # 1,968 (30.0%) have a Latin target, while 21.2% target CJK and 14.2%
+        # Arabic. disarm's fold takes a `target_script`, defaulting to "latin",
+        # and `canonicalize` uses that default — so 70% of the full table asks a
+        # Latin-targeting fold to produce a target it does not aim at, and any
+        # coverage it does get there comes from the NFKC step rather than the
+        # confusable fold. The subset is reported alongside the whole table
+        # because the two answer different questions, and the profile in force is
+        # recorded rather than left implicit.
+        latin_target = [cp for cp in ordered if _is_latin_target(pairs[cp])]
         probes = [(chr(cp), pairs[cp]) for cp in ordered]
+        latin_probes = [(chr(cp), pairs[cp]) for cp in latin_target]
         winner = next(iter(scored), "")
         folded = sum(1 for left, right in probes if damage.collides(scored.values(), left, right))
         best_name, best_of_n = damage.best_surface(text_surfaces, probes)
@@ -154,6 +208,8 @@ class UTS39ConfusableCoverage(SuiteBase):
             scored_surface=winner,
             best_available_surface=best_name,
             surfaces_offered=len(text_surfaces),
+            confusable_fold=_fold_configuration(self.subject),
+            latin_target_pairs=len(latin_target),
             note=(
                 "Best single surface, not a union over all of them: a union asks "
                 "whether any of N entry points got it, which rewards shipping "
@@ -190,6 +246,19 @@ class UTS39ConfusableCoverage(SuiteBase):
             detail=f"the declared sanitizer (`{winner or 'none'}`) maps source and "
             "target onto one form",
         )
+        if latin_probes:
+            latin_folded = sum(
+                1 for left, right in latin_probes if damage.collides(scored.values(), left, right)
+            )
+            add(
+                outcome,
+                "folded_latin_target",
+                latin_folded,
+                of=len(latin_probes),
+                higher_is_better=True,
+                detail="restricted to the 30% of pairs whose UTS #39 target is "
+                "Latin — the like-for-like number for a Latin-targeting fold",
+            )
         add(
             outcome,
             "selection_effect_best_of_n",

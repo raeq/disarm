@@ -67,12 +67,20 @@ enum Step {
         only_if_lang: bool,
     },
     TranslitPreservingLatin,
-    Confusables(&'static str),
-    ConfusablesNfcFixedPoint(&'static str),
+    /// The confusable fold, with the digit policy it runs under (#646 §2).
+    ///
+    /// The policy rides on the step rather than on one function's signature, which is
+    /// what `docs/architecture/prototype-policy.md` §3 decided: it is a property of the
+    /// fold, and a preset could not express it while it lived on `normalize_confusables`
+    /// alone. Every shipped preset passes `Numeric`, which is what they did implicitly
+    /// before the step could say anything else — so this widens what is expressible
+    /// without changing any output.
+    Confusables(&'static str, crate::confusables::DigitPolicy),
+    ConfusablesNfcFixedPoint(&'static str, crate::confusables::DigitPolicy),
     /// The confusables→NFC fixed point and the #615 cross-script mark strip,
     /// iterated *together* (#638). Neither is a fixed point in the presence of the
     /// other; see `canonicalize_strict` for why, and for the convergence argument.
-    ConfusablesMarkFixedPoint(&'static str),
+    ConfusablesMarkFixedPoint(&'static str, crate::confusables::DigitPolicy),
     /// Iterate an inner step list to a fixed point (#467). The catalog key's
     /// romanization core (`transliterate → confusables → strip_accents`) is not a
     /// fixed point in a single pass: `strip_accents` can drop the U+0338 overlay of
@@ -237,11 +245,11 @@ fn apply_into(
             transliterate_preserving_latin_into(input, ctx.lang, out);
             Ok(true)
         }
-        Step::Confusables(target) => {
-            confusables::normalize_confusables_into(input, target, out)?;
+        Step::Confusables(target, digits) => {
+            confusables::normalize_confusables_into(input, target, digits, out)?;
             Ok(true)
         }
-        Step::ConfusablesNfcFixedPoint(target) => {
+        Step::ConfusablesNfcFixedPoint(target, digits) => {
             // #416/#434: confusables→NFC iterated to a fixed point. Reuse buffers
             // across iterations (PR #454 review) instead of allocating a fresh
             // `String` per pass — `cur` holds the running text, `conf` the
@@ -261,7 +269,7 @@ fn apply_into(
             // byte-identical to normalizing on every pass.
             let mut cur_is_nfc = false;
             for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
-                confusables::normalize_confusables_into(&cur, target, &mut conf)?;
+                confusables::normalize_confusables_into(&cur, target, digits, &mut conf)?;
                 if conf == cur && cur_is_nfc {
                     break;
                 }
@@ -279,7 +287,7 @@ fn apply_into(
                 Ok(true)
             }
         }
-        Step::ConfusablesMarkFixedPoint(target) => {
+        Step::ConfusablesMarkFixedPoint(target, digits) => {
             // #638. The generic `FixedPoint` combinator would do this, but it
             // allocates a fresh `String` per inner step per pass and pushed
             // `canonicalize_strict` from 6 allocations per call to 12, which
@@ -296,7 +304,7 @@ fn apply_into(
                 // Inner fold-to-fixed-point, same shape as ConfusablesNfcFixedPoint.
                 let mut cur_is_nfc = false;
                 for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
-                    confusables::normalize_confusables_into(&cur, target, &mut conf)?;
+                    confusables::normalize_confusables_into(&cur, target, digits, &mut conf)?;
                     if conf == cur && cur_is_nfc {
                         break;
                     }
@@ -421,9 +429,9 @@ impl Actionable {
                 Step::StripControl => m.controls = true,
                 Step::CollapseWs => m.collapse_ws = true,
                 Step::FoldCase => m.fold_case = true,
-                Step::Confusables(target)
-                | Step::ConfusablesNfcFixedPoint(target)
-                | Step::ConfusablesMarkFixedPoint(target) => {
+                Step::Confusables(target, _)
+                | Step::ConfusablesNfcFixedPoint(target, _)
+                | Step::ConfusablesMarkFixedPoint(target, _) => {
                     // The guard's confusable-source check is Latin-specific (the
                     // ASCII set is generated from confusables_to_latin.tsv and the
                     // non-ASCII check uses `resolve_confusable_map("latin")`). Other
@@ -971,7 +979,7 @@ pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr>
             //    reattaches the *spare* mark, re-creating a foldable composed char the
             //    next call would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping until stable
             //    makes the preset a true fixed point (`f(f(x)) == f(x)`).
-            Step::ConfusablesNfcFixedPoint("latin"),
+            Step::ConfusablesNfcFixedPoint("latin", crate::confusables::DigitPolicy::Numeric),
         ]
     }
     // #431: no path-separator neutralization. Mapping a synthesised '/' (e.g. a
@@ -1189,7 +1197,7 @@ pub(crate) fn catalog_key<'a>(
                     mode: crate::ErrorMode::Preserve,
                     only_if_lang: false,
                 },
-                Step::Confusables("latin"),
+                Step::Confusables("latin", crate::confusables::DigitPolicy::Numeric),
                 Step::StripAccents,
             ]),
             // 6b. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
@@ -1578,7 +1586,7 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
             //     #615, CVE-2017-7833): the zalgo cap above is a COUNT, and by count one
             //     Arabic shadda is indistinguishable from one acute accent, so no
             //     threshold removes the spoof and keeps `café`.
-            Step::ConfusablesMarkFixedPoint("latin"),
+            Step::ConfusablesMarkFixedPoint("latin", crate::confusables::DigitPolicy::Numeric),
             // 4c. Cap combining marks (#862). Runs AFTER the fold above, not before it,
             //     because `ConfusablesMarkFixedPoint` carries the #615 cross-script mark
             //     strip — and that strip DELETES marks. A cross-script mark sitting between
@@ -1676,7 +1684,7 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
             //    Runs AFTER demojize so that typographic punctuation in emoji names
             //    (e.g. the ’ in "woman’s hat") is folded too; otherwise a second pass
             //    would fold it and strip_obfuscation would not be idempotent.
-            Step::Confusables("latin"),
+            Step::Confusables("latin", crate::confusables::DigitPolicy::Numeric),
             // 7. Strip accents (NFD decompose + strip combining marks)
             Step::StripAccents,
             // 8. Strip non-whitespace controls, then fold whitespace (#433: split out of
@@ -1700,6 +1708,69 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
 
 #[cfg(test)]
 mod tests {
+    /// #646 §2: `Step::Confusables` can now express the digit policy, and the fold it
+    /// calls actually applies it.
+    ///
+    /// Before this the step held only a target script and
+    /// `normalize_confusables_into` did a bare map lookup, so every preset was pinned to
+    /// `Numeric` while the public `normalize_confusables` could be told otherwise — two
+    /// call paths into one fold, one of which could not say the security-relevant thing.
+    #[test]
+    fn the_confusables_step_carries_and_applies_a_digit_policy() {
+        use crate::confusables::DigitPolicy;
+        let ctx = PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+        };
+        // Devanagari zero: `Numeric` reads it as a number, `Tr39` as an identifier
+        // skeleton, `Preserve` leaves it in its own script.
+        let input = "\u{0966}";
+        let mut out = String::new();
+        for (policy, expected) in [
+            (DigitPolicy::Numeric, "0"),
+            (DigitPolicy::Tr39, "o"),
+            (DigitPolicy::Preserve, "\u{0966}"),
+        ] {
+            apply_into(Step::Confusables("latin", policy), input, &ctx, &mut out)
+                .expect("the latin target is valid");
+            assert_eq!(out, expected, "{policy:?} on U+0966");
+        }
+    }
+
+    /// Every shipped preset still passes `Numeric`, which is what they did implicitly.
+    ///
+    /// The point of #646 §2 is to widen what is *expressible*, not to change what any
+    /// preset does. A preset silently gaining `Tr39` would turn a number into a letter
+    /// inside a key — the damage `docs/architecture/prototype-policy.md` §2 prices at
+    /// `SKU-100` and `SKU-1O0` sharing one key.
+    #[test]
+    fn no_shipped_preset_uses_a_non_default_digit_policy() {
+        // Only the module body: the test module below names `DigitPolicy::Tr39` in its
+        // own assertions, and a scan over the whole file matched itself.
+        let src = include_str!("presets.rs");
+        let body = &src[..src.find("\nmod tests {").unwrap_or(src.len())];
+        // Search for the non-default variants directly rather than for a line holding
+        // both `Step::Confusables` and a policy. A step formatted across two lines has
+        // neither token on the same line, so the paired search would miss exactly the
+        // case a reviewer would reformat into existence (#869 review).
+        let offenders: Vec<&str> = body
+            .lines()
+            .filter(|l| l.contains("DigitPolicy::Tr39") || l.contains("DigitPolicy::Preserve"))
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "a preset names a digit policy other than Numeric, which changes key output: \
+             {offenders:?}",
+        );
+        // The default is the variant every preset names; asserted on the enum rather
+        // than through an `as_str` that nothing in the library needs yet.
+        assert!(
+            body.contains("DigitPolicy::Numeric"),
+            "no preset names a digit policy"
+        );
+    }
+
     use super::*;
 
     /// Every preset as a `&str -> String` closure, for the #458 fast-path checks.
@@ -1781,7 +1852,10 @@ mod tests {
     #[test]
     #[should_panic(expected = "only Latin confusable targets")]
     fn fast_path_rejects_non_latin_confusable_target() {
-        let _ = Actionable::for_steps(&[Step::Confusables("cyrillic")]);
+        let _ = Actionable::for_steps(&[Step::Confusables(
+            "cyrillic",
+            crate::confusables::DigitPolicy::Numeric,
+        )]);
     }
 
     /// L-2: the confusables fold composes base+mark clusters at lookup (#475), so it acts
@@ -1791,11 +1865,19 @@ mod tests {
     #[test]
     fn confusables_step_marks_clusters_actionable() {
         assert!(
-            Actionable::for_steps(&[Step::Confusables("latin")]).marks,
+            Actionable::for_steps(&[Step::Confusables(
+                "latin",
+                crate::confusables::DigitPolicy::Numeric
+            )])
+            .marks,
             "Confusables step must set marks (decomposed-homoglyph bypass)"
         );
         assert!(
-            Actionable::for_steps(&[Step::ConfusablesNfcFixedPoint("latin")]).marks,
+            Actionable::for_steps(&[Step::ConfusablesNfcFixedPoint(
+                "latin",
+                crate::confusables::DigitPolicy::Numeric
+            )])
+            .marks,
             "ConfusablesNfcFixedPoint step must set marks"
         );
     }

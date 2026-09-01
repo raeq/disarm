@@ -330,7 +330,15 @@ impl Pipeline {
                 }
             }
         } else if step == PipelineSteps::CONFUSABLES || step == PipelineSteps::CONFUSABLES_POST {
-            confusables::normalize_confusables_into(input, "latin", out)?;
+            // `Numeric`, which is what this did implicitly before the fold took a
+            // policy. Exposing the choice on `TextPipeline` is a public parameter owed
+            // across six bindings and is left to its own change (#646 §2).
+            confusables::normalize_confusables_into(
+                input,
+                "latin",
+                confusables::DigitPolicy::Numeric,
+                out,
+            )?;
             Ok(true)
         } else if step == PipelineSteps::FOLD_CASE {
             case_fold::fold_case_into(input, out);

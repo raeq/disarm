@@ -98,7 +98,10 @@ pub(crate) enum ErrorRepr {
     },
 
     /// Invalid `target_script` for confusables functions.
-    #[error("target_script must be 'latin' or 'cyrillic', got '{got}'")]
+    #[error(
+        "target_script must be one of {}, got '{got}'",
+        crate::api::TargetScript::accepted_tokens()
+    )]
     InvalidTargetScript {
         /// The offending value.
         got: String,

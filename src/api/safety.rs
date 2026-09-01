@@ -456,16 +456,58 @@ pub fn is_mixed_script(text: &str) -> bool {
 /// | `"invoice\u{202E}gpj.exe"` | `false` | `bidi` |
 /// | `"varonis.com.\u{05D5}"` | `true` | `bidi_mixed` |
 ///
-/// To cover an override instead: detect it with [`inspect_anomalies`] (kind
-/// `bidi`), and remove it with [`strip_bidi`]. Note [`strip_bidi`] does **not**
-/// close this function's case — on a real-letter conflict it returns the input
-/// unchanged, because there is no format character to remove.
+/// To cover an override instead, there are two routes and they answer different
+/// questions. [`has_bidi_control`] is the raw predicate: does the text carry any of
+/// the twelve UAX #9 controls, with no context taken into account.
+/// [`inspect_anomalies`] (kind `bidi`) is the *judged* one — it reports nine of the
+/// twelve, holding back LRM, RLM and ALM because a lone directional mark is ordinary
+/// in right-to-left text and reporting it would fire on every Hebrew or Arabic page
+/// that uses one. Remove any of them with [`strip_bidi`], which does **not** close
+/// this function's case: on a real-letter conflict it returns the input unchanged,
+/// because there is no format character to remove.
 ///
 /// [`inspect_anomalies`]: crate::api::inspect_anomalies
 /// [`strip_bidi`]: crate::api::strip_bidi
+/// [`has_bidi_control`]: crate::api::has_bidi_control
 #[must_use]
 pub fn has_bidi_conflict(text: &str) -> bool {
     crate::scripts::has_bidi_conflict(text)
+}
+
+/// True when `text` carries any of the twelve UAX #9 explicit formatting characters
+/// (#778).
+///
+/// The uncontexted counterpart to [`has_bidi_conflict`], which reads strong-direction
+/// **letters** and is structurally blind to these. The two are disjoint: a string can
+/// satisfy either, both or neither.
+///
+/// | input | `has_bidi_control` | [`has_bidi_conflict`] |
+/// |---|---|---|
+/// | `"invoice\u{202E}gpj.exe"` | `true` | `false` |
+/// | `"varonis.com.\u{05D5}"` | `false` | `true` |
+///
+/// **All twelve, with no judgement applied.** [`inspect_anomalies`]'s `bidi` kind
+/// reports nine — it holds back LRM, RLM and ALM, because a lone directional mark is
+/// ordinary in right-to-left text and flagging it would fire on any page that uses
+/// one. This predicate makes no such distinction, which is what makes it the right
+/// tool for a caller who has already decided their input should contain no bidi
+/// control at all: a filename, an identifier, a source file.
+///
+/// The complete answer already existed and was reachable only through
+/// `HostnameAnalysis::bidi_control`, which meant calling
+/// [`is_suspicious_hostname`](crate::api::is_suspicious_hostname) on something that is
+/// not a hostname.
+///
+/// ```
+/// use disarm::api;
+/// assert!(api::has_bidi_control("invoice\u{202E}gpj.exe"));
+/// assert!(!api::has_bidi_conflict("invoice\u{202E}gpj.exe"));
+/// assert!(api::has_bidi_control("\u{200E}"));  // a mark counts here
+/// assert!(!api::has_bidi_control("plain text"));
+/// ```
+#[must_use]
+pub fn has_bidi_control(text: &str) -> bool {
+    crate::scripts::has_bidi_control(text)
 }
 
 /// How disarm's auto-language detection resolved a string — returned by

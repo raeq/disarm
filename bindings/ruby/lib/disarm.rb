@@ -454,6 +454,15 @@ module Disarm
       translate_errors { _has_bidi_conflict?(text) }
     end
 
+    # Whether `text` carries any of the twelve UAX #9 explicit formatting characters,
+    # with no context taken into account. The counterpart to `bidi_conflict?`, which
+    # reads strong-direction letters and is blind to these; the two are disjoint. The
+    # anomaly detector's `bidi` kind reports nine of the twelve, holding back LRM, RLM
+    # and ALM because a lone directional mark is ordinary in right-to-left text.
+    def bidi_control?(text)
+      _has_bidi_control?(text)
+    end
+
     # Explain how `lang: "auto"` detection resolves `text`: a hash with
     # `:script`, `:chosen_lang` (both nil if undetected), `:reason`, and
     # `:discriminators_hit`.

@@ -242,6 +242,12 @@ fun String.isMixedScript(): Boolean = JDisarm.isMixedScript(this)
 
 fun String.hasBidiConflict(): Boolean = JDisarm.hasBidiConflict(this)
 
+/**
+ * All twelve UAX #9 explicit formatting characters, uncontexted. Disjoint from
+ * [hasBidiConflict], which reads strong-direction letters.
+ */
+fun String.hasBidiControl(): Boolean = JDisarm.hasBidiControl(this)
+
 fun String.detectScripts(): List<String> = JDisarm.detectScripts(this)
 
 fun String.inspectAutoLang(): AutoLangInspection = JDisarm.inspectAutoLang(this)

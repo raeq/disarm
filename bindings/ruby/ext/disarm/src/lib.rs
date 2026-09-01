@@ -634,6 +634,15 @@ fn has_bidi_conflict(text: Wtf8Text) -> bool {
     api::has_bidi_conflict(&text)
 }
 
+/// `Disarm._has_bidi_control?(text)` — All twelve UAX #9 explicit formatting characters, uncontexted (#778).
+/// The counterpart to `has_bidi_conflict`, which reads strong-direction letters and is
+/// blind to these; the two are disjoint. The anomaly detector's `bidi` kind reports nine
+/// of the twelve, holding back LRM, RLM and ALM because a lone directional mark is
+/// ordinary in right-to-left text.
+fn has_bidi_control(text: Wtf8Text) -> bool {
+    api::has_bidi_control(&text)
+}
+
 /// `Disarm._inspect_auto_lang(text)` — `[script, chosen_lang, reason,
 /// discriminators_hit]` (the Ruby layer maps it to a hash). `script`/`chosen_lang`
 /// are nil when nothing was detected.
@@ -907,6 +916,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_detect_scripts", function!(detect_scripts, 1))?;
     module.define_singleton_method("_is_mixed_script?", function!(is_mixed_script, 1))?;
     module.define_singleton_method("_has_bidi_conflict?", function!(has_bidi_conflict, 1))?;
+    module.define_singleton_method("_has_bidi_control?", function!(has_bidi_control, 1))?;
     module.define_singleton_method("_inspect_auto_lang", function!(inspect_auto_lang, 1))?;
 
     // Metadata introspection (#404 phase 3 parity backfill).

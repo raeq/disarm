@@ -108,6 +108,7 @@ RUBY_PRED = {
     "normalized": "is_normalized",
     "mixed_script": "is_mixed_script",
     "bidi_conflict": "has_bidi_conflict",
+    "bidi_control": "has_bidi_control",
     "zalgo": "is_zalgo",
     "confusable": "is_confusable",
     "ascii": "is_ascii",

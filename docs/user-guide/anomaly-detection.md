@@ -41,6 +41,31 @@ exception — it is anchored on Latin, and fires on Latin combined with Cyrillic
 | `compat_fold` | a token mixing a Unicode **compatibility** form with ASCII, where the non-ASCII part folds *to ASCII* — `ａdmin`, `ｅxample.com`, `＜script＞`. `canonicalize` performs that fold as its first step, so the class was neutralized and reported clean | ordinary fullwidth typography with no ASCII letter (`ＮＨＫ`, `Ｑ＆Ａ`, `１９９５年`, `ＣＤ－ＲＯＭ`); unit symbols whose fold is Greek, not ASCII (`kΩ`, `µF`), and the squared CJK units that do fold to ASCII but carry no letter (`10㎏` → `10kg`, `5㎞` → `5km`); and a token spelled *wholly* in a compatibility form (`ｐａｙｐａｌ`), which cannot be told from `ＮＨＫ` by character class |
 | `confusable` | a token where the **confusable fold** — not NFKC — produces ASCII the input did not carry: `pɑypal` (`U+0251`), `gıthub` (`U+0131`), `ord∶end` (`U+2236` → `:`). `canonicalize` has two ASCII-producing steps and `compat_fold` reported only the first; the second is the largest table disarm ships and the detector never consulted it. The slice with no compatibility decomposition is also single-script, so `mixed_script` cannot see it either. 232 code points reach ASCII by the fold alone, 76 producing one of `: = % & ? # / \` | text where every letter folds to Latin and none is ASCII — `Привет`, `Ελλάδα`, which is the whole-legitimate-non-Latin-web over-flagging #545 removed from `is_suspicious_hostname`; accented Latin, which the fold leaves alone (`café`, `naïve`, `straße`); unit symbols (`µF`, `kΩ`); and a word boundary — `IT-специалист` is two words, judged separately |
 
+### The `bidi` kind is a judgement, not a census (#778)
+
+The row above spares `LRM` everywhere and `RLM`/`ALM` outside a number run, on purpose: a
+lone directional mark is ordinary in right-to-left text, and reporting one would fire on
+any page that uses it. So the kind answers **9 of the 12** UAX #9 controls.
+
+When the question is the census rather than the judgement — a filename, an identifier, a
+source file, anywhere the caller has already decided their input should carry no bidi
+control at all — use `has_bidi_control`, which answers all twelve and applies no context:
+
+```python
+from disarm import has_bidi_conflict, has_bidi_control, inspect_anomalies
+
+assert has_bidi_control("\u200e")  # a mark counts
+assert inspect_anomalies("\u200e").kinds == []  # and is deliberately not an anomaly
+
+assert has_bidi_control("invoice\u202egpj.exe")  # so does an override
+assert not has_bidi_conflict("invoice\u202egpj.exe")  # which reads letters, not controls
+```
+
+The three predicates are disjoint answers to different questions: `has_bidi_control` is the
+raw set, `inspect_anomalies` is the judged subset, and `has_bidi_conflict` reads
+strong-direction **letters** and is structurally blind to controls altogether.
+
+
 !!! note "`canonicalize` preserves enclosing marks; `strip_obfuscation` removes them"
 
     That asymmetry is deliberate and is the same one the accent-preserving decision

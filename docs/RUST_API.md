@@ -152,7 +152,11 @@ is the direction that costs a caller a join rather than a wrong key.
 
 The rule that follows is one line: **normalize the joined string, not the fields.** If the
 fields must be normalized separately — because they are stored that way — then join with a
-separator that is a starter, and the boundary cannot compose.
+separator that is a starter **and that survives the pipeline**. Both halves are load-bearing.
+`U+0000` is a starter, so the first half admits it; but `canonicalize` strips it as an
+invisible, the two parts become adjacent again, and the mark composes exactly as it would
+have with no separator at all. A space, `-` or `/` all hold. Test the separator you pick
+rather than reasoning from its combining class.
 
 `find_key_collisions` is the exception, and usefully so. It re-reduces the values it is
 given rather than comparing them, so the field-wise spelling composes on the way in and the

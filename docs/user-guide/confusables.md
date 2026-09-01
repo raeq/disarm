@@ -246,6 +246,63 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
 Characters without a confusable equivalent in the target script pass through unchanged. This is pure visual mapping — not transliteration. Latin `f` has no Cyrillic lookalike, so it stays as `f`.
 
+### These are the only two views, not two views of one table
+
+The table above reads like a menu, and it is worth being precise about what it is not.
+Generation keeps the members of an equivalence class that belong to the target script and
+**drops the class entirely when no member does**. So a class whose members are all Arabic,
+or all CJK, survives into neither table — there is no third view to select.
+
+Measured against the bundled `confusables.txt` (Unicode 17.0.0):
+
+| | count |
+|---|---|
+| TR39 sources in the bundled file | 6,565 |
+| unmapped under `target_script="latin"` | 4,331 |
+| …of those, strong-RTL (`Bidi_Class` `R` or `AL`) | 948 |
+
+The residue is not evenly spread, which is the fact that makes this a section rather than
+a sentence:
+
+| script | unmapped |
+|---|---|
+| CJK | 1,158 |
+| Arabic | 961 |
+| Hangul | 417 |
+| Canadian Aboriginal | 243 |
+| Kangxi radicals | 212 |
+
+**Read it as exposure, not as a score.** Most of it is deliberate: a class whose upstream
+target is a CJK ideograph does not belong in a to-Latin table, and folding it there would
+be worse than leaving it. What the number tells you is where an adaptive attacker goes
+when the mapped sources stop working.
+
+It is measurable rather than inferred, and that is the point of saying it here:
+
+```python
+from disarm import find_unmapped_confusables, unmapped_confusables
+
+len(unmapped_confusables(target_script="latin"))  # every unfolded upstream source
+find_unmapped_confusables("مرحبا")  # the ones in one input
+```
+
+### The key builders are not affected the same way
+
+This gap is in the **confusable fold**, and it does not follow that the key builders share
+it. They transliterate first, which reaches pairs the fold does not:
+
+```python
+from disarm import normalize_confusables, search_key
+
+# Persian keheh vs Arabic kaf — one letter to a reader, two code points
+normalize_confusables("\u06a9") == normalize_confusables("\u0643")  # False
+search_key("\u06a9") == search_key("\u0643")  # True — both romanize to "k"
+```
+
+The same holds for Farsi yeh against Arabic yeh. So a caller comparing identities with
+`search_key` or `catalog_key` is not exposed to the intra-Arabic gap that
+`normalize_confusables` has, and a caller using the fold directly is.
+
 ## Script detection
 
 Identify which Unicode scripts are present in a string:

@@ -1201,6 +1201,34 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **The confusable tables drop whole equivalence classes, and the page now says so
+  (#791).** `docs/user-guide/confusables.md` presents `target_script` as a menu of two.
+  What it did not say is that generation keeps the members of a class belonging to the
+  target script and **drops the class entirely when no member does** — so the two options
+  are not two views of one table, they are the only two views that exist. A class whose
+  members are all Arabic or all CJK survives into neither.
+
+  | | count |
+  |---|---|
+  | TR39 sources in the bundled file | 6,565 |
+  | unmapped under `target_script="latin"` | 4,331 |
+  | …of those, strong-RTL | 948 |
+
+  The residue is not evenly spread, which is what makes it a section rather than a
+  sentence: CJK 1,158, Arabic 961, Hangul 417. Most of it is deliberate — a class whose
+  upstream target is a CJK ideograph does not belong in a to-Latin table — so it reads as
+  exposure rather than as a score, and `unmapped_confusables()` /
+  `find_unmapped_confusables()` are named as the way to measure it.
+
+  The page also says what the gap is **not**. It is in the confusable fold, and the key
+  builders do not share it: they transliterate first, so `search_key("ک") ==
+  search_key("ك")` while `normalize_confusables` keeps them apart. Stating only the first
+  half would have been an over-claim.
+
+  `tests/test_confusable_residue_docs.py` derives every figure from the tables rather than
+  trusting the prose — these are exactly the numbers that rot, and #821 already moved this
+  one from 4,384 to 4,331 between the issue being filed and this being written.
+
 - **The reduced-set count beside `find_key_collisions` (#763).** The function returns a
   filtered list, not a partition — a name that collides with nothing never appears — so
   the quantity a registry actually wants next, *after reduction, how many distinct

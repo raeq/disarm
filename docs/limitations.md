@@ -188,6 +188,34 @@ Hiragana and katakana transliteration (Modified Hepburn) is correct and complete
 
 For correct Japanese kanji readings, a morphological dictionary (e.g., MeCab, kuromoji) is required. This is fundamentally different from character-by-character mapping and is outside disarm's design.
 
+### Ideographic Variation Sequences are not distinguished from an arbitrary base plus a selector (#772)
+
+A registered Ideographic Variation Sequence — a CJK ideograph followed by a variation
+selector from `U+E0100`–`U+E01EF`, listed in Unicode's IVD — selects a specific glyph for
+that character. `葛` + `U+E0100` is a different, registered form of `葛`. `A` + `U+E0100`
+is not a sequence at all: no registration exists, and a renderer ignores the selector.
+
+No surface tells them apart:
+
+| input | `canonicalize` | `search_key` | `inspect_anomalies` |
+|---|---|---|---|
+| `葛` + `U+E0100` (registered) | `葛` | `ge` | nothing |
+| `A` + `U+E0100` (not a sequence) | `A` | `a` | nothing |
+
+Both lose the selector, and neither is reported. That is the right answer for the second
+row and a **fidelity loss** for the first: a registered IVS carries information about which
+glyph was meant, and a key built from it cannot distinguish two registered variants of one
+ideograph. For a comparison key that is usually what you want — the variants *are* the same
+character. For anything that round-trips text it is not.
+
+The other direction is the security-relevant one and is not covered either: `A` +
+`U+E0100` is a base carrying an ignorable selector that no registration justifies, which
+is the shape of a smuggling carrier. `canonicalize` removes it, so it does not survive into
+a key; nothing *reports* it, so a caller inspecting rather than transforming sees nothing.
+
+Every other CJK fidelity loss on this page is documented — the single-reading pinyin
+mapping, the missing tone marks, the character-level word boundaries. This one was not.
+
 ## Unicode Normalization
 
 ### Normalization is not losslessly invertible
@@ -268,6 +296,33 @@ Case folding is a locale-independent operation by design. Unlike `str.lower()` w
 ### PHF table is static
 
 The case folding table is generated at compile time from Unicode 16.0 CaseFolding.txt. New case folding mappings added in future Unicode versions will not be available until the data file and library are rebuilt.
+
+### The primitives do not compose to `toNFKC_Casefold` (#770)
+
+UTS #39 defines `toNFKC_Casefold` as the identifier-folding operation, and it does three
+things: NFKC, case folding, **and removing `Default_Ignorable_Code_Point`**. disarm exposes
+the first two and not the third, and reaching for them in sequence does not produce the
+operation:
+
+```python
+from disarm import fold_case, normalize
+
+fold_case(normalize("a\u00ada", form="NFKC"))  # 'a\xada' — the soft hyphen is still there
+```
+
+Measured over the 405 assigned Default_Ignorable code points: `fold_case(normalize(s,
+form="NFKC"))` removes **none of them**. 403 pass through byte-identical, and the two
+Hangul fillers map to another Default_Ignorable code point rather than to nothing.
+
+**Use `canonicalize` if what you want is the identifier operation.** It removes **387** of
+the 405 — its invisible-strip is what stands in for the missing third step — and it also
+applies the confusable fold, which `toNFKC_Casefold` does not. The 18 it keeps are the
+variation selectors and the musical-notation controls, which the rendering policy
+preserves deliberately.
+
+This is a gap in the *primitives*, not in the presets. It matters when a caller is
+building their own pipeline from the parts and reasoning from the UTS #39 definition: the
+parts are named the same and do not add up to the whole.
 
 ## Confusable/Homoglyph Detection
 

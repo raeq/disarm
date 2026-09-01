@@ -44,7 +44,8 @@ chose, not of confusable mapping.
 |---|---|---|
 | Homoglyph spoofing in a name / address / prose | `normalize_confusables` | Nothing beyond the fold |
 | Homoglyph spoofing in an identifier or hostname | `is_suspicious_hostname` (`analyzeHostname` in Node, Java and Kotlin; `analyze_hostname` in Ruby) | Nothing — these report, they do not transform |
-| A bidi attack — detecting one | `inspect_anomalies` — kind `bidi` is a `U+202x` override, kind `bidi_mixed` is a real-letter direction conflict | Nothing — it reports, it does not transform |
+| A bidi attack — detecting one, in a **single token** (identifier, filename, hostname label) | `inspect_anomalies` — kind `bidi` is a `U+202x` override, kind `bidi_mixed` is a real-letter direction conflict | Nothing — it reports, it does not transform |
+| A bidi attack — detecting one **across a whole string** (a display name, a line of prose) | `has_bidi_conflict` — it reads the whole string, so it sees across a space where `bidi_mixed` does not (#769) | Nothing |
 | A bidi attack — removing one | `strip_bidi` for the override; there is no removal for a real-letter conflict, because there is no format character to remove | The `U+202x` characters |
 | Untrusted input into a store or a key | `canonicalize_strict` | Invisibles, bidi, zalgo |
 | Maximum deobfuscation of adversarial text | `strip_obfuscation` | **Accents** |

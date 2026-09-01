@@ -1999,6 +1999,29 @@ def has_bidi_conflict(text: str) -> bool:
         conflict it returns the input unchanged, because there is no format
         character to remove.
 
+    Warning:
+        **This reads the whole string; `inspect_anomalies` reads one token at a
+        time** (#769). ``bidi_mixed`` is the closest thing the detector has to
+        this check, and it fires on a *token* that mixes directions. So a string
+        whose directions are split across two whitespace-separated words is a
+        conflict here and clean there::
+
+            has_bidi_conflict("hello שלום")            True
+            inspect_anomalies("hello שלום").kinds      []
+            has_bidi_conflict("helloשלום")             True
+            inspect_anomalies("helloשלום").kinds       ['bidi_mixed']
+
+        Neither is wrong. A label made of two words in two scripts is ordinary
+        multilingual text, and the detector declining to flag it is why it can
+        be run over prose. This function asks the *structural* question — can
+        UAX #9 reorder this string — and the answer for two words is yes.
+
+        Pick by what you are protecting. A single identifier, filename or
+        hostname label is one token, and the detector is the better fit because
+        it says which token and why. A whole line, a display name or anything
+        that may legitimately contain a space needs this function, because the
+        detector will not look across the space.
+
     Args:
         text: Input string.
 
@@ -2010,6 +2033,10 @@ def has_bidi_conflict(text: str) -> bool:
         False
         >>> has_bidi_conflict("helloא")  # Latin + Hebrew
         True
+        >>> has_bidi_conflict("hello שלום")  # whole string, so the space is no barrier
+        True
+        >>> inspect_anomalies("hello שלום").kinds  # per token, so it is two clean words
+        []
         >>> has_bidi_conflict("invoice\\u202Egpj.exe")  # RLO override, not letters
         False
         >>> inspect_anomalies("invoice\\u202Egpj.exe").kinds  # this is the check

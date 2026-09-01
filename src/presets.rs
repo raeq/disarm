@@ -1000,6 +1000,25 @@ pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr>
             //    next call would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping until stable
             //    makes the preset a true fixed point (`f(f(x)) == f(x)`).
             Step::ConfusablesNfcFixedPoint("latin", crate::confusables::DigitPolicy::Numeric),
+            // AGAIN, after the fold. The fold does not merely reveal a repeated mark, it
+            // can MANUFACTURE one: `U+1EF3` (y with grave) folds to `U+00FD` (y with
+            // acute), whose NFD is `y` + acute — so `U+1EF3` followed by a combining
+            // acute becomes a base carrying the same mark twice, created by a step that
+            // ran after the one which removes them. `canonicalize` stopped being
+            // idempotent on 16 (base, mark) pairs.
+            //
+            // The pass above is NOT moved down to cover this. It runs before the cap on
+            // purpose (#835): the cap must count marks a reader can distinguish, or
+            // `a` + five acutes + five graves keeps three acutes and loses the grave
+            // entirely. Both positions are needed, which is the same shape as
+            // `CONFUSABLES_POST` (#852) and `FOLD_CASE_POST` (#751) — a step whose own
+            // output re-opens the case an earlier step closed.
+            //
+            // `canonicalize_strict` and `sort_key` need no second pass and have none:
+            // #862 already put their cap after the fold, so their single
+            // `DropRepeatedMarks` is downstream of it. Measured, not assumed — both are
+            // clean over every (base, mark) pair.
+            Step::DropRepeatedMarks,
         ]
     }
     // #431: no path-separator neutralization. Mapping a synthesised '/' (e.g. a
@@ -2695,6 +2714,53 @@ mod tests {
             !once.contains('\u{301}'),
             "cap 0 must leave no marks: {once:?}"
         );
+    }
+
+    /// A confusable fold can *create* a repeated mark, after the pass that drops them.
+    ///
+    /// `no_pipeline_truncates_further_on_a_second_pass` uses `'a'` as its base, so its
+    /// fold is a no-op and it can only ever exercise repeats present in the *input*. This
+    /// class needs a base whose fold target carries a mark of its own: `U+1EF3` (y with
+    /// grave) folds to `U+00FD` (y with acute), whose NFD is `y` + acute — so a following
+    /// combining acute becomes a duplicate the fold manufactured, one step after the pass
+    /// that removes duplicates already ran.
+    ///
+    /// `canonicalize` was not idempotent on 16 such pairs, and every idempotence sweep in
+    /// this repository walked single code points. This needs a base *and* a mark, so none
+    /// of them could see it.
+    #[test]
+    fn a_fold_that_creates_a_repeated_mark_is_still_a_fixed_point() {
+        for (base, mark) in [
+            ('\u{1ef3}', '\u{301}'), // y with grave  -> y with acute
+            ('\u{1ef7}', '\u{301}'), // y with hook   -> y with acute
+            ('\u{010b}', '\u{301}'), // c with dot    -> c with acute
+            ('\u{0101}', '\u{303}'), // a with macron -> a with tilde
+            ('\u{01e7}', '\u{306}'), // g with caron  -> g with breve
+        ] {
+            let input: String = [base, mark].into_iter().collect();
+            let once = canonicalize(&input).unwrap().into_owned();
+            let twice = canonicalize(&once).unwrap().into_owned();
+            assert_eq!(
+                once, twice,
+                "canonicalize is not a fixed point on {input:?}: the fold created a \
+                 repeated mark after the pass that removes them (#835)",
+            );
+            // The other two builders are already clean — #862 put their cap after the
+            // fold, so their single `DropRepeatedMarks` is downstream of it — and they
+            // are asserted here so a future reordering cannot quietly break them.
+            let strict = canonicalize_strict(&input).unwrap().into_owned();
+            assert_eq!(
+                strict,
+                canonicalize_strict(&strict).unwrap().into_owned(),
+                "canonicalize_strict is not a fixed point on {input:?}",
+            );
+            let sorted = sort_key(&input, None).unwrap().into_owned();
+            assert_eq!(
+                sorted,
+                sort_key(&sorted, None).unwrap().into_owned(),
+                "sort_key is not a fixed point on {input:?}",
+            );
+        }
     }
 
     /// Every step that can delete a character sitting between two combining marks.

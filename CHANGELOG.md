@@ -406,6 +406,15 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   `a` + five acutes + five graves capped first keeps three acutes and drops the grave
   entirely, while deduplicating first keeps one of each.
 
+  In `canonicalize` it runs a **second** time, after the confusable fold, because the fold
+  can *create* a repeat rather than merely reveal one: `U+1EF3` (y with grave) folds to
+  `U+00FD` (y with acute), whose NFD is `y` + acute. So `U+1EF3` followed by a combining
+  acute became a base carrying the same mark twice, manufactured by a step downstream of
+  the one that removes them, and `canonicalize` was not idempotent on 16 such pairs.
+  `canonicalize_strict` and `sort_key` need no second pass and have none — #862 already
+  put their cap after the fold. Every idempotence sweep in the repository walked single
+  code points; this class needs a base *and* a mark, so the sweeps are now over pairs.
+
 - **`sort_key` bounds combining marks (#807).** It was the one key builder with neither
   `strip_zalgo` nor `strip_accents`, so nothing bounded them:
   `sort_key("a" + U+0301 × 40 + "b")` returned 41 characters and `has_anomalies` called

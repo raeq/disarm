@@ -2,7 +2,7 @@
   "confusables_version": "17.0.0",
   "disarm_version": "0.14.1",
   "host_ucd": "16.0.0",
-  "recorded_utc": "2026-09-01T16:34:47+00:00",
+  "recorded_utc": "2026-09-01T16:37:50+00:00",
   "suites": {
     "anyascii::corruption-cost": {
       "external": true,
@@ -478,13 +478,13 @@
       "measurements": {
         "altered_but_not_onto_target": {
           "higher_is_better": false,
-          "of": 2245,
-          "value": 2241
+          "of": 2238,
+          "value": 2234
         },
         "folded": {
           "higher_is_better": true,
           "of": 6565,
-          "value": 4320
+          "value": 4327
         },
         "sources": {
           "higher_is_better": null,
@@ -494,11 +494,11 @@
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
-          "value": 2245
+          "value": 2238
         },
         "unreached_strong_rtl": {
           "higher_is_better": null,
-          "of": 2245,
+          "of": 2238,
           "value": 341
         }
       },
@@ -517,7 +517,7 @@
         "closed_under_canonicalize": {
           "higher_is_better": true,
           "of": 3416,
-          "value": 1928
+          "value": 1932
         },
         "no_ascii_reachable_member": {
           "higher_is_better": false,

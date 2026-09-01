@@ -36,8 +36,12 @@ pub(crate) const DEFAULT_THRESHOLD: usize = 3;
 /// preserve legitimate diacritics, and 3-mark Hebrew is legitimate — so this serves
 /// that decision rather than reversing it.
 ///
-/// `tests/test_zalgo_cap.py` holds the invariant: `strip_zalgo(s) == s` for every `s`
-/// where `is_zalgo(s)` is false.
+/// `tests/test_zalgo_cap.py` holds the invariant, stated as **marks preserved** rather
+/// than string equality: for every `s` where `is_zalgo(s)` is false,
+/// `strip_zalgo(s)` loses no combining mark. Byte equality is the wrong claim — this
+/// function recomposes to NFC, so a decomposed input legitimately comes back spelled
+/// differently, and an earlier draft of that test reported 750 "violations" that were
+/// all recomposition.
 pub(crate) const DEFAULT_MAX_MARKS: usize = DEFAULT_THRESHOLD;
 
 /// Streaming check: does any base character carry **more than** `threshold`

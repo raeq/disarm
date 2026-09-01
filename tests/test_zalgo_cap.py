@@ -38,7 +38,10 @@ def marks(text: str) -> int:
     return sum(1 for char in unicodedata.normalize("NFD", text) if unicodedata.combining(char))
 
 
-#: The four rows #788 measured. Written as escapes, per #802.
+#: The four rows #788 measured. Left as literals: these are Hebrew and Arabic letters
+#: with their points, which render as themselves — #802's convention is about
+#: characters that render as *nothing*, and applying it here would make the vectors
+#: unreadable to anyone who can read the scripts they are about.
 ORDINARY_THREE_MARK = [
     ("Hebrew alef + qamats + shin dot + etnahta", "אָׁ֑"),
     ("Hebrew bet + dagesh + qamats + tipeha", "בָּ֖"),
@@ -47,7 +50,9 @@ ORDINARY_THREE_MARK = [
 ]
 
 
-@pytest.mark.parametrize(("name", "text"), ORDINARY_THREE_MARK, ids=lambda v: v[:18])
+@pytest.mark.parametrize(
+    ("name", "text"), ORDINARY_THREE_MARK, ids=[name for name, _ in ORDINARY_THREE_MARK]
+)
 def test_the_predicate_calls_it_ordinary(name: str, text: str) -> None:
     """Establish the premise before asserting the consequence.
 
@@ -59,13 +64,17 @@ def test_the_predicate_calls_it_ordinary(name: str, text: str) -> None:
     assert marks(text) == 3, name
 
 
-@pytest.mark.parametrize(("name", "text"), ORDINARY_THREE_MARK, ids=lambda v: v[:18])
+@pytest.mark.parametrize(
+    ("name", "text"), ORDINARY_THREE_MARK, ids=[name for name, _ in ORDINARY_THREE_MARK]
+)
 def test_the_transform_leaves_it_alone(name: str, text: str) -> None:
     """The defect: one mark was removed from each of these."""
     assert marks(disarm.strip_zalgo(text)) == marks(text), f"{name} lost a mark"
 
 
-@pytest.mark.parametrize(("name", "text"), ORDINARY_THREE_MARK, ids=lambda v: v[:18])
+@pytest.mark.parametrize(
+    ("name", "text"), ORDINARY_THREE_MARK, ids=[name for name, _ in ORDINARY_THREE_MARK]
+)
 def test_canonicalize_leaves_it_alone_too(name: str, text: str) -> None:
     """The cap reaches further than `strip_zalgo`.
 

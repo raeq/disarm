@@ -2302,10 +2302,16 @@ mod tests {
                 continue;
             }
             let before = &body[..z];
+            // `StripZeroWidth` specifically, not "any strip". `StripInvisible` handles
+            // the #413 smuggling classes and leaves U+200B alone, so accepting it here
+            // would have passed the exact pipeline this test was written for: `sort_key`
+            // ran `StripInvisible` at step 3, `Zalgo` at 4b and `StripZeroWidth` at 5.
+            // A gate that admits the bug it was written for is decoration (#850 review).
             assert!(
-                before.contains("Step::StripZeroWidth") || before.contains("Step::StripInvisible"),
-                "{name}: Step::Zalgo runs before the invisible strip; a stripped \
-                 invisible can split a mark run and break idempotency (#121)",
+                before.contains("Step::StripZeroWidth"),
+                "{name}: Step::Zalgo runs before Step::StripZeroWidth; a stripped \
+                 zero-width can split a mark run, survive the count and then merge the \
+                 runs for the next pass (#121, #850)",
             );
             checked += 1;
         }
@@ -2332,22 +2338,73 @@ mod tests {
         );
     }
 
-    /// Split the source into `(preceding fn name, const STEPS body)` pairs.
+    /// Split the source into `(enclosing fn name, const STEPS body)` pairs.
+    ///
+    /// The name is only used to make a failure legible, but a wrong one is worse than
+    /// none: it sends the reader to a function that is fine. So the scan is anchored to a
+    /// *definition line* — one starting at column 0 with `fn ` or `pub…fn ` — rather than
+    /// to the first `fn ` found anywhere backwards, which matches prose in the comments
+    /// these pipelines are thick with (#850 review).
     fn step_arrays(src: &str) -> Vec<(&str, &str)> {
         let mut out = Vec::new();
-        let mut fn_name = "<none>";
         let mut rest = src;
         while let Some(i) = rest.find("\n    const STEPS") {
-            if let Some(f) = rest[..i].rfind("fn ") {
-                let tail = &rest[f + 3..];
-                fn_name = &tail[..tail.find(['<', '(']).unwrap_or(0)];
+            // Only an array *literal*. `const STEPS_NO_FOLD: [Step; 8] =
+            // without_fold_case(STEPS);` is one line with no `];` terminator, so treating
+            // it as a pipeline made the scan swallow the whole of the next function's
+            // array and drop `catalog_key` from the list entirely — a gate silently
+            // covering one pipeline fewer than it reports.
+            let decl_end = rest[i + 1..].find('\n').map_or(rest.len(), |n| i + 1 + n);
+            if !rest[i..decl_end].trim_end().ends_with('[') {
+                rest = &rest[decl_end..];
+                continue;
             }
+            let name = rest[..i]
+                .lines()
+                .rev()
+                .find_map(|line| {
+                    let sig = line.strip_prefix("pub(crate) fn ").or_else(|| {
+                        line.strip_prefix("pub fn ")
+                            .or_else(|| line.strip_prefix("fn "))
+                    })?;
+                    Some(&sig[..sig.find(['<', '(']).unwrap_or(sig.len())])
+                })
+                .unwrap_or("<unknown fn>");
             let body = &rest[i..];
             let end = body.find("\n    ];").unwrap_or(body.len());
-            out.push((fn_name, &body[..end]));
+            out.push((name, &body[..end]));
             rest = &body[end..];
         }
         out
+    }
+
+    /// `step_arrays` names the right function, since the ordering gate's failure message
+    /// is only useful if it does.
+    #[test]
+    fn step_arrays_names_the_enclosing_function() {
+        let names: Vec<&str> = step_arrays(include_str!("presets.rs"))
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        for expected in [
+            "canonicalize",
+            "canonicalize_strict",
+            "sort_key",
+            "search_key",
+            "catalog_key",
+            "strip_obfuscation",
+            "strip_format",
+            "ml_normalize",
+        ] {
+            assert!(
+                names.contains(&expected),
+                "{expected} missing from {names:?}"
+            );
+        }
+        assert!(
+            !names.contains(&"<unknown fn>"),
+            "a STEPS array was not attributed to a function: {names:?}",
+        );
     }
 
     #[test]

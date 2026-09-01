@@ -773,6 +773,35 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **`normalize_web_input` was not a fixed point on 6,410 (base, mark) pairs (#886).**
+  Its steps are `normalize` → `confusables` → strips, and nothing normalized after the
+  fold — so the fold emitted a decomposed base and the *next* call composed it. Two
+  calls, two byte sequences, one rendering:
+
+  | input | once | twice |
+  |---|---|---|
+  | `U+0430` + `U+0301` | `0061 0301` | `00E1` |
+  | `caf` + `U+0435` + `U+0301` | `63 61 66 0065 0301` | `63 61 66 00E9` |
+
+  The second is the shape that matters: a spoofed `café` built from Cyrillic `е`. A
+  registry storing one call's output and comparing against another's gets two keys for
+  one input.
+
+  The fold now iterates to a fixed point between normalization passes when a form is
+  configured, which is what `canonicalize` has done since #416/#434 and the profiles
+  never did. A single post-fold normalization is not enough and was the first attempt:
+  TR39 skeletoning is not normalization-stable — it drops the diacritic on a *composed*
+  accented letter (`ç` → `c`) but never on the decomposed form — so composing once left
+  409 pairs whose next pass folded further.
+
+  **No single-code-point output changed on any of the eight profiles.** The fix is
+  invisible except on the sequences that were broken, and all eight are now fixed points
+  over every (base, mark) pair.
+
+  `tests/test_profiles_are_fixed_points.py` sweeps pairs as well as code points. The
+  single-code-point sweep it had passed throughout — the same blind spot that let #835's
+  regression reach `main`, closed for the key builders in #881 and now for the profiles.
+
 - **The last profile that was not a fixed point (#751).** `llm_guardrail` returned `B`
   for `U+13F8` CHEROKEE SMALL LETTER YE on the first pass and `b` on the second, so its
   output depended on how many times you called it — which makes it unusable for a key.

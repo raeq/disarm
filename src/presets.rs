@@ -25,7 +25,7 @@ const RENDERING_STRIP: invisibles::StripPolicy = invisibles::StripPolicy {
 /// preset is non-idempotent). The loop converges in a couple of iterations —
 /// each folding pass removes at least one mark — and this bound is only a
 /// guard against an unexpected non-converging input.
-const CONFUSABLE_FIXED_POINT_ITERS: usize = 8;
+pub(crate) const CONFUSABLE_FIXED_POINT_ITERS: usize = 8;
 
 // disarm does not cap input size in the pipeline presets — bounding untrusted
 // input is the caller's responsibility (every stage is linear time/memory;

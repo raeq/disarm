@@ -121,11 +121,15 @@ pub fn unicode_version() -> &'static str {
 /// byte-identical (#801).
 ///
 /// The counter is only worth anything if something notices the output moved, which is
-/// what that fixture is for (#644). The two are wired together: the version is written
-/// into the fixture header when it is regenerated, and `tests/test_key_stability.py`
-/// fails when the constant and the header disagree. Regenerating the fixture without
-/// bumping the constant — the exact way a counter like this goes stale — is a test
-/// failure rather than a silent lie.
+/// what that fixture is for (#644). The version is written into the fixture header when
+/// it is regenerated, and `tests/test_key_stability.py` fails when the constant and the
+/// header disagree — that catches a constant that moved without the fixture.
+///
+/// It does **not** catch the other direction, and this comment claimed it did until #887.
+/// The generator writes the current constant into the header, so a regenerated fixture
+/// agrees with whatever the constant happens to be, stale or not. #873 regenerated the
+/// fixture, left the counter at 2, and stayed green. [`KEY_FIXTURE_SHA256`] below is the
+/// anchor the generator does not author, and is what makes the claim true.
 ///
 /// ```
 /// assert!(disarm::api::KEY_SCHEMA_VERSION >= 1);
@@ -148,6 +152,33 @@ pub fn unicode_version() -> &'static str {
 /// away from, since the whole defect was that `canonicalize` answered them differently on
 /// a second call, and neither #835 nor this has shipped.
 pub const KEY_SCHEMA_VERSION: u32 = 3;
+
+/// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
+///
+/// [`KEY_SCHEMA_VERSION`]'s doc comment claims that regenerating the fixture without
+/// bumping the constant "is a test failure rather than a silent lie". It was not.
+/// `tests/test_key_stability.py` compared the fixture header against the constant, and
+/// `scripts/gen_key_fixture.py` *writes the current constant into that header* — so a
+/// regenerated fixture always agreed with whatever the constant happened to be, stale or
+/// not. The gate was anchored to the thing that drifts.
+///
+/// #873 tripped it: that change moved `strip_obfuscation` on 90 rows, the fixture was
+/// regenerated, `src/api/metadata.rs` was not touched, and the counter stayed at 2 with
+/// every test green. Nothing shipped wrong only because #874 bumped it in the same
+/// unreleased cycle.
+///
+/// This is the anchor the generator does not author. Regenerating the fixture changes the
+/// digest and fails the gate; fixing it means editing *this file* — with the version on
+/// the line above. Forgetting the bump becomes a deliberate act instead of an invisible
+/// one.
+///
+/// Hashed decompressed rather than as stored. The generator already writes with
+/// `mtime=0`, so the timestamp is not the problem — but DEFLATE output still varies
+/// across zlib builds and compression-level changes, and a digest that moves when
+/// somebody's toolchain moves is a gate that cries wolf. The decompressed content is the
+/// semantic anchor: it changes when, and only when, a key moved.
+pub const KEY_FIXTURE_SHA256: &str =
+    "fd718135d678e6e5f257d69a80a3e5dcac1f1e70696d92194018baa5c9f36784";
 
 /// The key-schema counter, as a function (#645).
 ///

@@ -23,6 +23,7 @@ licensing.
 from __future__ import annotations
 
 import gzip
+import hashlib
 import importlib.util
 import re
 import sys
@@ -377,6 +378,36 @@ class TestTheSchemaCounterCannotGoStale:
             "moved without the fixture being regenerated, or the fixture was regenerated "
             "without the constant being bumped — and the second is what makes the constant "
             "a lie for anyone comparing two artifacts."
+        )
+
+    def test_the_fixture_matches_the_digest_recorded_beside_the_constant(self) -> None:
+        """The gate the two tests above could not be (#887).
+
+        They compare the fixture header against the constant — and
+        `scripts/gen_key_fixture.py` writes the current constant *into* that header. So a
+        regenerated fixture always agreed with whatever the constant happened to be,
+        stale or not: the check was anchored to the thing that drifts.
+
+        #873 tripped it. That change moved `strip_obfuscation` on 90 rows, regenerated
+        the fixture, did not touch `src/api/metadata.rs`, and stayed green with the
+        counter at 2.
+
+        `KEY_FIXTURE_SHA256` is the anchor the generator does not author. Regenerating
+        changes the digest and fails this; fixing it means editing the file that holds
+        the version, with the version on the adjacent line.
+        """
+        recorded = re.search(
+            r'pub const KEY_FIXTURE_SHA256: &str =\s*\n?\s*"([0-9a-f]{64})"',
+            (ROOT / "src" / "api" / "metadata.rs").read_text(encoding="utf-8"),
+        )
+        assert recorded is not None, "KEY_FIXTURE_SHA256 is missing from src/api/metadata.rs"
+        with gzip.open(GOLDEN, "rb") as handle:
+            actual = hashlib.sha256(handle.read()).hexdigest()
+        assert actual == recorded.group(1), (
+            f"the fixture's digest is {actual}, but src/api/metadata.rs records "
+            f"{recorded.group(1)}. The fixture was regenerated: decide whether the key "
+            "movement is intended, bump KEY_SCHEMA_VERSION on the line above the digest "
+            "if it is, and update the digest in the same edit."
         )
 
     def test_the_constant_is_a_counter_not_a_version_string(self) -> None:

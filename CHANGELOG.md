@@ -802,6 +802,28 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   single-code-point sweep it had passed throughout — the same blind spot that let #835's
   regression reach `main`, closed for the key builders in #881 and now for the profiles.
 
+- **The key-schema gate could not detect a missed bump (#887).**
+  `KEY_SCHEMA_VERSION`'s doc comment claimed that regenerating the fixture without
+  bumping the constant *"is a test failure rather than a silent lie"*. It was not: the
+  check compared the fixture header against the constant, and `gen_key_fixture.py` writes
+  the current constant **into** that header. A regenerated fixture always agreed with
+  whatever the constant happened to be, stale or not. The gate was anchored to the thing
+  that drifts.
+
+  #873 tripped it. That change moved `strip_obfuscation` on 90 rows, regenerated the
+  fixture, did not touch `src/api/metadata.rs`, and stayed green with the counter at `2`.
+  Nothing shipped wrong only because #874 bumped it in the same unreleased cycle.
+
+  `KEY_FIXTURE_SHA256` is the anchor the generator does not author — the SHA-256 of the
+  fixture's decompressed bytes, recorded on the line below the version. Regenerating
+  changes the digest and fails the gate, and fixing it means editing the file that holds
+  the version, with the version adjacent. Forgetting the bump becomes a deliberate act
+  rather than an invisible one.
+
+  The generator now prints both lines to update, so the workflow is a two-line edit
+  rather than a failing test to decode. The version's doc comment says what is actually
+  guaranteed.
+
 - **The last profile that was not a fixed point (#751).** `llm_guardrail` returned `B`
   for `U+13F8` CHEROKEE SMALL LETTER YE on the first pass and `b` on the second, so its
   output depended on how many times you called it — which makes it unusable for a key.

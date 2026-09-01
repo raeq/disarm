@@ -140,6 +140,13 @@ pub fn unicode_version() -> &'static str {
 /// on 11 of the 22,977 rows and `canonicalize_strict` on 13; `search_key`, `catalog_key`,
 /// `strip_obfuscation`, `normalize_confusables` and `fold_case` are byte-identical, and
 /// no row grew.
+///
+/// Still 3 after the correction to that change: the repeat pass runs a second time, after
+/// the confusable fold, because the fold can *create* a repeat rather than merely reveal
+/// one. That moved `canonicalize` on 16 (base, mark) pairs — none of them in the fixture,
+/// which is why it is unchanged. No further bump: those 16 had no stable value to move
+/// away from, since the whole defect was that `canonicalize` answered them differently on
+/// a second call, and neither #835 nor this has shipped.
 pub const KEY_SCHEMA_VERSION: u32 = 3;
 
 /// The key-schema counter, as a function (#645).

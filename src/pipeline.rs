@@ -103,6 +103,15 @@ pub(crate) struct Pipeline {
     lang: Option<String>,
     strict_iso9: bool,
     gost7034: bool,
+    /// Which CLDR name rows the `demojize` step is allowed to name (#853).
+    ///
+    /// `NAME_EVERYTHING` for a hand-built `TextPipeline`, where the caller asked for the
+    /// step by name and gets exactly what it says. A **named profile** is a curated
+    /// recommendation like a preset, so it skips the non-emoji rows: #757 measured
+    /// `ml_normalize` turning `film\u{2019}s` into `film right apostrophe s`, and #803
+    /// fixed that for `PRESETS` and left `list_profiles()` behind — the same boundary
+    /// #757's own title says #614 had already been lost across once.
+    emoji_name_policy: emoji::NamePolicy,
 }
 
 impl Pipeline {
@@ -190,6 +199,9 @@ impl Pipeline {
         }
 
         let pipeline = Self {
+            // A hand-built pipeline names every row: the caller asked for `demojize` by
+            // name. `ProfileSpec::build` overrides this (#853).
+            emoji_name_policy: emoji::NamePolicy::NAME_EVERYTHING,
             steps,
             normalize_form: normalize.map(std::borrow::ToOwned::to_owned),
             zalgo_max_marks,
@@ -301,8 +313,13 @@ impl Pipeline {
             crate::presets::strip_bidi_into(input, out);
             Ok(true)
         } else if step == PipelineSteps::DEMOJIZE {
-            // The caller composed this step by name, so every row is named (#757).
-            emoji::demojize_rust_into(input, false, emoji::NamePolicy::NAME_EVERYTHING, out);
+            // Which rows are named depends on how the pipeline was built (#853). A
+            // hand-composed `TextPipeline` names every row — the caller asked for the step
+            // by name. A **named profile** is a curated recommendation like a preset, so
+            // it skips the 326 rows carrying neither `Emoji` nor `Extended_Pictographic`;
+            // naming those is what turned `film\u{2019}s` into `film right apostrophe s`
+            // (#757). `Pipeline::new` sets the default and `ProfileSpec::build` overrides.
+            emoji::demojize_rust_into(input, false, self.emoji_name_policy, out);
             Ok(true)
         } else if step == PipelineSteps::STRIP_ACCENTS {
             transliterate::strip_accents_into(input, out);
@@ -402,7 +419,7 @@ struct ProfileSpec {
 
 impl ProfileSpec {
     fn build(&self) -> Result<Pipeline, ErrorRepr> {
-        Pipeline::new(
+        let mut pipeline = Pipeline::new(
             self.normalize,
             self.transliterate,
             None, // lang
@@ -417,7 +434,16 @@ impl ProfileSpec {
             self.demojize,
             self.strip_bidi,
             self.strip_zalgo,
-        )
+        )?;
+        // A named profile is a curated recommendation, so it takes the preset policy:
+        // the 326 code points carrying neither `Emoji` nor `Extended_Pictographic` are
+        // left for the rest of the pipeline rather than named (#757, #853). `demojize`
+        // and a hand-built `TextPipeline` still name everything.
+        pipeline.emoji_name_policy = emoji::NamePolicy {
+            skip_tr39_claimed: false,
+            skip_non_emoji: true,
+        };
+        Ok(pipeline)
     }
 }
 
@@ -564,6 +590,7 @@ mod tests {
             lang: None,
             strict_iso9: false,
             gost7034: false,
+            emoji_name_policy: emoji::NamePolicy::NAME_EVERYTHING,
         }
     }
 

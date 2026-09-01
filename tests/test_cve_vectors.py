@@ -2957,7 +2957,7 @@ class TestOneCall:
         written so that closing a gap would fail loudly rather than leave the published
         advice stale. It did exactly that, and this is the rewrite it asked for.
 
-        Three entry points now clear the whole matrix. The first two are not a
+        Four entry points now clear the whole matrix. The first two are not a
         coincidence: both carry a confusable fold *and* something that removes a
         combining mark.
 
@@ -2969,6 +2969,13 @@ class TestOneCall:
         matrix from a call they were making anyway, instead of needing a cleaning pass
         beside it.
 
+        `llm_guardrail` joined in #853 and fired it a third time. Naming the 326
+        non-emoji CLDR rows was what broke it: `\u20acxample.com` became
+        "euro xample.com", so the spoof and the genuine string stopped being *equal*
+        rather than becoming equal — #614's mechanism, surviving in the profiles after
+        #803 fixed it for `PRESETS`. That one is worth stating in the guidance too,
+        because it is the entry point the LLM pipeline pages send a guardrail author to.
+
         Everything else is still short, so "clean unconditionally" survives as advice.
         """
         everything = set(NEUTRALIZABLE) | set(self.RANKING_VECTORS)
@@ -2977,6 +2984,10 @@ class TestOneCall:
             "strip_obfuscation": strip_obfuscation,
             # #805: the invisible-class strip closed its one remaining row.
             "catalog_key": catalog_key,
+            # #853: named profiles stopped naming the 326 non-emoji CLDR rows, so the
+            # euro sign reaches the confusable fold instead of becoming "euro". That is
+            # the #614 mechanism, which #803 fixed for PRESETS and not for the profiles.
+            "llm_guardrail": get_pipeline("llm_guardrail"),
         }
         for name, fn in sufficient.items():
             missed = {c for c in everything if not self._clears_any(fn, c)}
@@ -2991,7 +3002,6 @@ class TestOneCall:
             "normalize_confusables": normalize_confusables,
             "strip_format": strip_format,
             "ml_normalize": ml_normalize,
-            "llm_guardrail": get_pipeline("llm_guardrail"),
             "rag_ingest": get_pipeline("rag_ingest"),
         }
         for name, fn in candidates.items():

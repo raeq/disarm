@@ -962,13 +962,26 @@ def strip_accents(text: str | list[str]) -> str | list[str]:
     NFD decompose → strip combining marks → NFC recompose.
     Accepts a single string or a list of strings.
 
-    **Destructive for Indic scripts, and not in the way "accent" suggests** (#624).
-    A Latin acute and a Devanagari vowel sign are both general category ``Mn``, so
-    both are removed — but in Latin an ``Mn`` is decoration and in an Indic script
-    it carries the vowel. ``José`` → ``Jose`` is readable; ``বাংলা`` → ``বল`` is not
-    a word. Use this for identifiers, filenames and search keys; not for body text
-    in Devanagari, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati or Khmer.
-    See `Limitations` (docs/limitations.md).
+    **Destructive wherever a combining mark carries meaning, which is not only the
+    Indic scripts** (#624, #761). A Latin acute and a Devanagari vowel sign are both
+    general category ``Mn``, so both are removed — but in Latin an ``Mn`` is
+    decoration and elsewhere it is part of the letter. ``José`` → ``Jose`` is
+    readable. These are not::
+
+        বাংলা      → বল        Bengali, the vowel signs carry the word
+        हिन्दी      → हनद        Devanagari
+        မြန်မာ      → မနမ        Myanmar
+        かばん      → かはん      Japanese: the dakuten is the difference between
+                                 ば /ba/ and は /ha/, so this is a different word
+        Чайковский → Чаиковскии  Russian: й is a letter, not и with a mark; ё → е
+
+    Kana and Cyrillic are the two an "Indic scripts" warning sends a reader past.
+    In kana the dakuten and handakuten are voicing, not decoration; in Cyrillic
+    ``й`` and ``ё`` are letters of the alphabet that happen to decompose.
+
+    Use this for identifiers, filenames and search keys — where a deliberate
+    many-to-one collapse is the point — and not for body text in any script whose
+    marks are load-bearing. See `Limitations` (docs/limitations.md).
 
     Args:
         text: Input string, or list of strings for batch processing.

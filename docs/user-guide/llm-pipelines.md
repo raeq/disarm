@@ -23,7 +23,7 @@ snippet is [executed and asserted in CI](https://github.com/raeq/disarm/blob/mai
 ## The NFKC-first convention
 
 Matching frameworks normalise before they compare, because an attacker controls
-the *encoding* of a string, not just its letters. disarm's defense functions
+the *encoding* of a string, not just its letters. Most of disarm's defense functions
 follow the same convention — NFKC is their first step — so they are safe to call
 on raw, untrusted input:
 
@@ -67,7 +67,34 @@ on raw, untrusted input:
     ```
 
 You do not need to pre-normalise before handing text to `strip_obfuscation()` or
-`normalize_confusables()`; they start from NFKC themselves.
+`canonicalize()`; they start from NFKC themselves.
+
+!!! warning "`normalize_confusables` is the exception (#760)"
+
+    It is **NFC**-first, not NFKC-first (#475). It folds what its *confusable table*
+    covers, and compatibility forms the table does not name pass through:
+
+    ```python
+    from disarm import normalize_confusables, strip_obfuscation
+
+    normalize_confusables("ﬁ")  # 'fi'  — in the table
+    normalize_confusables("Ａ")  # 'A'   — in the table
+    normalize_confusables("²")  # '²'   — NOT in the table, and NFKC would give '2'
+
+    strip_obfuscation("²")  # '2'   — this one is NFKC-first
+    ```
+
+    Measured over `U+0020`–`U+2FFFF` against the bundled UCD 17.0.0: of the **4,965**
+    code points NFKC would change, `normalize_confusables` leaves **3,722 unchanged —
+    75.0%**.
+
+    That is not a defect. The two functions answer different questions: the fold asks
+    "does this look like something else", and NFKC asks "is this a compatibility
+    spelling of something else". They overlap without one containing the other. But a
+    guardrail author who reads "NFKC is their first step" and reaches for
+    `normalize_confusables` gets three quarters less compatibility folding than the
+    sentence promises. If you want both, normalize first or use `canonicalize`, which
+    does both in order.
 
 ## Guardrail primitives
 
@@ -361,6 +388,18 @@ assert "    if user.is_admin:" in cleaned  # indentation intact
 | homoglyph confusables | **reported only** | see below |
 | compatibility forms | **reported only** | NFKC rewrites fullwidth forms and ligatures, which changes source text |
 | whitespace, case | **untouched** | they are the structure |
+
+**Byte-for-byte on 149 of 155 files (#745).** Measured over this repository's own Python
+sources: `canonicalize`, `strip_format` and `normalize_confusables` round-trip **0** of
+them; `code_context` round-trips 149.
+
+The six exceptions are one class, and it is worth knowing rather than working around: a
+**ZWJ inside a string literal or a comment**. A ZWJ-joined emoji (`"👨‍👩‍👧‍👦"`) loses its
+joiners and a Sinhala conjunct (`"ශ්‍රී"`) loses the one holding it together. That is
+`code_context` doing its job — U+200D is the Trojan Source carrier and the table above
+removes it unconditionally — but if your source *embeds* ZWJ-joined text in literals, the
+literal changes and the file still parses, so nothing will tell you. Compare before and
+after if that describes your corpus.
 
 **The confusable fold cannot run on code, and that is the design rather than an omission.**
 Exactly three ASCII code points are TR39 confusable sources: `"` folds to two apostrophes,

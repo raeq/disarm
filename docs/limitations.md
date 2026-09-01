@@ -398,6 +398,35 @@ drops rows reads as coverage it does not have. See
 [Knowing what is NOT covered](user-guide/confusables.md#knowing-what-is-not-covered) and
 [Provenance](provenance.md).
 
+### 68 table rows are shadowed by the preceding NFKC (#834)
+
+The paragraph above insists nothing is filtered out of the coverage report, because *"a
+coverage number that quietly drops rows reads as coverage it does not have"*. The same rule
+applies to a row the pipeline order makes unreachable, and there are 68 of them.
+
+Every preset and profile that folds confusables normalizes to NFKC first, so the fold sees a
+decomposed image of the input and 68 code points get a different answer than
+`normalize_confusables` gives on its own (8 for the Cyrillic target):
+
+| class | count | standalone | after NFKC |
+|---|---:|---|---|
+| number forms (`⑴`, `⒈`, `ⅿ`) | 30 | `(l)`, `l.`, `rn` | `(1)`, `1.`, `m` |
+| mathematical alphanumerics (`𝐦`) | 14 | `rn` | `m` |
+| spacing modifiers (`´`, `¸`, `˜`) | 15 | `'`, `,`, `~` | space + combining mark |
+| the rest (`ſ`, `ϲ`, `℧`) | 9 | `f`, `c`, `E` | `s`, `ς`, `Ɛ` |
+
+These are not filtered and not dead: they are reachable through `normalize_confusables` and
+shadowed through every preset. Which is why they are listed here rather than quietly
+subtracted — 44 favour the preset answer, 15 favour the standalone one, and 9 are a genuine
+call between "looks like" and "decomposes to".
+
+The consequence worth knowing is about keys. `normalize_confusables` on its own is **not** a
+canonical skeleton: `⑴` folds to `(l)` while ASCII `(1)` stays `(1)`, because the table has
+only three ASCII sources (below, #725). Two strings a reader cannot tell apart get different
+keys from the standalone call and the same key from any preset. Build keys with a preset.
+
+See [The fold is not order-independent](user-guide/confusables.md#the-fold-is-not-order-independent).
+
 ### Mixed-script detection is heuristic
 
 `is_mixed_script()` reports whether multiple scripts are present in a string. It does not assess whether the mixing is benign (e.g., Latin punctuation in Arabic text, which is universal) or malicious (Cyrillic spoofing Latin). The `is_suspicious_hostname()` function applies stricter heuristics, but a not-suspicious result is a best-effort judgment, not a safety guarantee — it cannot certify the absence of all spoofing (whole-script spoofs and out-of-table confusables are out of scope — the out-of-table

@@ -1756,6 +1756,47 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **The fold is not order-independent, and nothing said so (#834).**
+  `normalize_confusables` folds the TR39 table against the input as written. Every preset
+  and profile that folds confusables normalizes to NFKC first, so the fold there sees a
+  decomposed image — and **68 code points get a different answer** for the Latin target, 8
+  for Cyrillic. `normalize_confusables("ſ")` is `"f"`; `canonicalize("ſ")` is `"s"`.
+
+  Both are defensible — TR39 assesses a long s as visually an `f`, NFKC says it is an `s` —
+  and neither order wins everywhere:
+
+  | class | count | standalone | after NFKC | better |
+  |---|---:|---|---|---|
+  | number forms (`⑴`, `⒈`, `ⅿ`) | 30 | `(l)`, `l.`, `rn` | `(1)`, `1.`, `m` | NFKC |
+  | mathematical alphanumerics (`𝐦`) | 14 | `rn` | `m` | NFKC |
+  | spacing modifiers (`´`, `¸`, `˜`) | 15 | `'`, `,`, `~` | space + combining mark | standalone |
+  | the rest (`ſ`, `ϲ`, `℧`) | 9 | `f`, `c`, `E` | `s`, `ς`, `Ɛ` | judgment |
+
+  44 favour the preset answer, 15 favour the standalone one, 9 are a genuine call between
+  "looks like" and "decomposes to". disarm ships both because both are wanted; the defect
+  was that two names reading as the same operation gave different answers silently.
+
+  `docs/limitations.md` lists the shadowed rows rather than subtracting them, for the same
+  reason that page refuses to filter the coverage report — *"a coverage number that quietly
+  drops rows reads as coverage it does not have"* applies just as well to a row the
+  pipeline order makes unreachable.
+
+  The consequence for a caller building keys is now stated plainly on all three surfaces:
+  **`normalize_confusables` alone is not a canonical skeleton.** `⑴` folds to `(l)` while
+  ASCII `(1)` stays `(1)`, because the table carries only three ASCII sources (#725) — so
+  two strings a reader cannot tell apart get different keys from the standalone call and
+  the same key from any preset.
+
+  This is the disarm-side instance of PRI #540 feedback ID20260222084837, which asks the
+  UTC to document in UTS #39 that a pipeline running NFKC before confusable detection
+  should filter the table against NFKC. disarm ships both orders as public API, so the
+  rows are not dead here — they are reachable through one entry point and shadowed through
+  the other.
+
+  No behaviour changes. `tests/test_fold_order_divergence.py` pins the counts, the worked
+  examples and the bucket totals to the pages that state them, keyed on the number rather
+  than on the phrasing.
+
 - **What disarm reaches on an AI watermark (#706).** The words *watermark*, *SynthID* and
   *C2PA* appeared **zero times** across the README, the threat model and all of `docs/` —
   and it is a question this library's audience arrives with, usually after finding a page

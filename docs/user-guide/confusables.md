@@ -15,6 +15,55 @@ For those rows the rule is **observed attacker substitution**, which is wider th
 confusability. Unicode would not accept them upstream, and they are marked tier `2a` and
 `2b` in that file.
 
+## The fold is not order-independent
+
+`normalize_confusables` folds the table against the input as written. Every **preset** and
+**profile** that folds confusables normalizes to NFKC first — `STEP_ORDER` puts `normalize`
+ahead of `confusables` — so the fold there sees a decomposed image instead. **68 code points
+get a different answer** for the Latin target, and 8 for Cyrillic.
+
+```python
+import disarm
+
+assert disarm.normalize_confusables("\u017fecure") == "fecure"  # TR39: a long s looks like f
+assert disarm.canonicalize("\u017fecure") == "secure"  # NFKC decomposed it to s
+```
+
+Both verdicts are defensible, and neither order wins everywhere:
+
+| the 68, by class | count | standalone | after NFKC | better |
+|---|---:|---|---|---|
+| number forms (`⑴`, `⒈`, `ⅿ`) | 30 | `(l)`, `l.`, `rn` | `(1)`, `1.`, `m` | **NFKC** |
+| mathematical alphanumerics (`𝐦`) | 14 | `rn` | `m` | **NFKC** |
+| spacing modifiers (`´`, `¸`, `˜`) | 15 | `'`, `,`, `~` | space + combining mark | **standalone** |
+| the rest (`ſ`, `ϲ`, `℧`) | 9 | `f`, `c`, `E` | `s`, `ς`, `Ɛ` | judgment |
+
+So 44 favour the preset answer, 15 favour the standalone one, and 9 are a genuine call
+between "looks like" and "decomposes to". disarm ships both because both are wanted; what it
+was missing is anyone saying so.
+
+This is the disarm-side instance of PRI #540 feedback ID20260222084837, which asks the UTC to
+document in UTS #39 that a pipeline running NFKC before confusable detection should filter
+the table against NFKC — *"to avoid dead code and potential incorrect mappings if pipeline
+order is changed"*. disarm ships both orders as public API, so the rows are not dead here;
+they are reachable through one entry point and shadowed through the other.
+
+### Which one to call
+
+**Building a key or comparing two strings: use a preset.** `normalize_confusables` alone is
+not a canonical skeleton. `⑴` folds to `(l)` while ASCII `(1)` stays `(1)`, because the table
+carries only three ASCII sources (see *Limitations* → the five ASCII rows, #725). Two strings
+a reader cannot tell apart therefore get **different** keys from the standalone call and the
+**same** key from any preset.
+
+```python
+assert disarm.normalize_confusables("\u2474") != disarm.normalize_confusables("(1)")
+assert disarm.canonicalize("\u2474") == disarm.canonicalize("(1)")
+```
+
+**Asking what a character looks like: use `normalize_confusables`.** That is the TR39
+question, and NFKC is not part of it.
+
 ## Detecting confusables
 
 === "Python"

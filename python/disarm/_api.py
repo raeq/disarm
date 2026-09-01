@@ -788,6 +788,28 @@ def normalize_confusables(
         `canonicalize` or `strip_obfuscation` when the input is
         untrusted rather than merely mixed-script.
 
+    Warning:
+        **The presets fold a different table, because NFKC runs first (#834).**
+        Every preset and profile that folds confusables normalizes to NFKC
+        before doing it, so the fold sees a decomposed image of the input and
+        **68 code points get a different answer** than they do here (8 for the
+        Cyrillic target)::
+
+            normalize_confusables("\u017f")   # 'f'  — TR39: a long s looks like an f
+            canonicalize("\u017f")            # 's'  — NFKC decomposed it first
+
+        Neither order is right everywhere, which is why both ship: 44 of the 68
+        favour the preset answer (``\u2474`` is ``(1)`` rather than ``(l)``, and
+        the mathematical ``m`` is ``m`` rather than ``rn``), 15 favour this one
+        (``\u00b4`` is ``'`` here and a space plus a combining acute there), and
+        9 are judgment calls. What matters is that they differ.
+
+        The consequence for keys: this function alone is **not** a canonical
+        skeleton. ``\u2474`` folds to ``(l)`` while ASCII ``(1)`` stays ``(1)``,
+        because the table has only three ASCII sources (#725) — so two strings
+        a reader cannot tell apart get different keys here and the same key
+        under any preset. Build keys with ``canonicalize`` or ``search_key``.
+
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
         minor upgrade may, and is a possible reindex event (#644, #733). Read the

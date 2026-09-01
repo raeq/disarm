@@ -1241,3 +1241,42 @@ def test_latin_target_coverage_is_reported_beside_the_whole_table():
     assert whole is not None and subset is not None
     assert subset.of < whole.of, "the subset must be a strict subset of the table"
     assert subset.higher_is_better is True
+
+
+def test_each_target_script_is_scored_on_the_pairs_it_aims_at():
+    """Scoring one target against the whole table repeats the fixed bias.
+
+    70% of UTS #39 pairs resolve to something other than Latin, so asking the
+    Latin profile about them measures NFKC, not the fold. This suite partitions
+    first and asks each profile only about its own targets.
+    """
+    out = registry.by_name("uts39-target-scripts").run()
+    assert out.status is Status.OK
+    for name in ("latin", "cyrillic", "arabic", "hebrew"):
+        pairs = out.measurement(f"pairs_targeting_{name}")
+        resolved = out.measurement(f"resolved_{name}")
+        assert pairs is not None and pairs.value > 0
+        assert resolved is not None, f"{name} is accepted, so it must be scored"
+        assert resolved.of == pairs.value, (
+            f"{name} must be scored against its own subset, not the whole table"
+        )
+
+
+def test_an_unsupported_target_script_is_reported_not_skipped():
+    """Greek is rejected while having more pairs than Cyrillic and Hebrew combined."""
+    out = registry.by_name("uts39-target-scripts").run()
+    greek_pairs = out.measurement("pairs_targeting_greek")
+    supported = out.measurement("supported_greek")
+    assert greek_pairs is not None and greek_pairs.value > 0
+    assert supported is not None and supported.value == 0.0
+    cyr = out.measurement("pairs_targeting_cyrillic").value
+    heb = out.measurement("pairs_targeting_hebrew").value
+    assert greek_pairs.value > cyr + heb, (
+        "the point of the row: the rejected target is larger than two accepted ones"
+    )
+
+
+def test_the_partition_oracle_is_external():
+    """Partitioning with disarm's own script table would be circular."""
+    out = registry.by_name("uts39-target-scripts").run(limit=500)
+    assert "UCD" in out.method.parameters["partition_oracle"]

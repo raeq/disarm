@@ -1450,8 +1450,135 @@ class CorruptionCost(SuiteBase):
         }
 
 
+class UTS39TargetScripts(SuiteBase):
+    name = "uts39-target-scripts"
+    family = Family.NORMATIVE
+    availability = Availability.VENDORED
+    # No other tool has a target-script parameter, so there is nothing to
+    # compare against. This scores four configurations of one library.
+    MULTI_SUBJECT = False
+    summary = "Each confusable target script against the pairs it actually aims at."
+    provenance = Provenance(
+        origin="Unicode Consortium",
+        citation="UTS #39 confusables.txt, partitioned by target script",
+        url="https://www.unicode.org/Public/security/latest/confusables.txt",
+        version="17.0.0 (vendored at data/confusables.txt)",
+        licence="Unicode License v3",
+        issues=(792, 791, 848, 831),
+        finding=(
+            "#792 added Arabic and Hebrew targets because intra-RTL confusables "
+            "had no representation in either shipped table. #791: the generator "
+            "drops whole equivalence classes with no target-script member, and 948 "
+            "of the 1,007 strong-RTL sources were among them. #848: a class whose "
+            "members are all in the target script is discarded by construction, "
+            "which is the canonical Persian/Arabic keheh/kaf case."
+        ),
+        notes=(
+            "Every other measurement of the fold scores one target script against "
+            "the whole table, where 70% of the pairs aim somewhere it does not. "
+            "This asks the fair question instead: of the pairs that resolve TO "
+            "Arabic, how many does the Arabic target reach? Pairs are partitioned "
+            "by the UCD name of the target's first character, which is external "
+            "and needs no disarm table to compute."
+        ),
+    )
+
+    #: The four disarm accepts, plus Greek, which it rejects.
+    CANDIDATES = ("latin", "cyrillic", "arabic", "hebrew", "greek")
+
+    def locate(self) -> Path | None:
+        return artifact(DATA / "confusables.txt", env="DISARM_META_CONFUSABLES")
+
+    def measure(self, outcome: Outcome, limit: int | None) -> None:
+        import disarm
+
+        path = self.locate()
+        assert path is not None
+        pairs: dict[int, str] = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            cols = [c.strip() for c in line.split(";")]
+            if len(cols) < 2 or not cols[0] or not cols[1]:
+                continue
+            try:
+                pairs[int(cols[0], 16)] = "".join(chr(int(h, 16)) for h in cols[1].split())
+            except ValueError:
+                continue
+        ordered = thin(sorted(pairs), limit)
+        outcome.population = len(ordered)
+
+        def script_of(ch: str) -> str:
+            try:
+                return unicodedata.name(ch).split()[0].lower()
+            except ValueError:
+                return "?"
+
+        subsets = {
+            name: [(chr(cp), pairs[cp]) for cp in ordered if script_of(pairs[cp][0]) == name]
+            for name in self.CANDIDATES
+        }
+        record(
+            outcome,
+            domain=f"{len(ordered)} UTS #39 pairs partitioned by target script",
+            predicates=[f"normalize_confusables(target_script={n})" for n in self.CANDIDATES],
+            partition_oracle="UCD character name of the target's first character",
+            digit_policy="numeric (the default)",
+        )
+
+        add(outcome, "pairs", len(ordered), unit="pairs")
+        supported = 0
+        for name in self.CANDIDATES:
+            subset = subsets[name]
+            add(
+                outcome,
+                f"pairs_targeting_{name}",
+                len(subset),
+                of=len(ordered),
+                detail=f"how much of the table aims at {name}",
+            )
+            if not subset:
+                continue
+            try:
+
+                def fold(text: str, target: str = name) -> str:
+                    return disarm.normalize_confusables(text, target_script=target)
+
+                fold("a")
+            except Exception as exc:  # noqa: BLE001 - an unsupported target is the finding
+                add(
+                    outcome,
+                    f"supported_{name}",
+                    0.0,
+                    of=1.0,
+                    higher_is_better=True,
+                    detail=f"target script rejected — {exc}",
+                )
+                continue
+            supported += 1
+            hit = sum(1 for left, right in subset if damage.collides([fold], left, right))
+            add(
+                outcome,
+                f"resolved_{name}",
+                hit,
+                of=len(subset),
+                higher_is_better=True,
+                detail=f"pairs targeting {name} that the {name} profile resolves",
+            )
+        add(
+            outcome,
+            "target_scripts_supported",
+            supported,
+            of=len(self.CANDIDATES),
+            higher_is_better=True,
+            detail="of the target scripts the table actually uses",
+        )
+
+
 SUITES = [
     UTS39ConfusableCoverage(),
+    UTS39TargetScripts(),
     CorruptionCost(),
     UTS39EquivalenceClasses(),
     UTS39MixedNumbers(),

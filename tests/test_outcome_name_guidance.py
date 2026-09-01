@@ -15,7 +15,6 @@ tooling needs `dir()` and `getattr()` to agree, and that the hook cannot mask a 
 
 from __future__ import annotations
 
-import pickle
 import subprocess
 import sys
 
@@ -101,11 +100,21 @@ def test_the_hook_does_not_mask_an_attributeerror_from_an_import() -> None:
     assert "MASKED" not in out
 
 
-def test_the_module_is_still_picklable_and_callable() -> None:
-    """`__class__` is reassigned to a custom type; the hook must not disturb that."""
+def test_the_callable_module_still_works() -> None:
+    """`__class__` is reassigned to a custom type; the hook must not disturb that.
+
+    An earlier version of this was called "picklable" and pickled the *return value* of
+    `canonicalize` — a plain `str`, which proves nothing about the module (#861 review).
+    What is worth asserting is that reassigned `__class__`: `disarm(...)` is shorthand for
+    `transliterate`, and adding `__getattr__` to that class must not break it.
+    """
     assert disarm("Привет") == disarm.transliterate("Привет")
-    # `canonicalize` keeps the accent — it is not `strip_accents`.
-    assert pickle.loads(pickle.dumps(disarm.canonicalize("café"))) == "café"
+    assert type(disarm).__name__ == "_CallableModule", (
+        "the module's __class__ is no longer the callable type the hook lives on"
+    )
+    assert "__getattr__" in vars(type(disarm)), (
+        "the hook is not on _CallableModule, so it is not reached by attribute lookup"
+    )
 
 
 def test_the_guidance_names_only_things_that_exist() -> None:

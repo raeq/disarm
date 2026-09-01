@@ -110,6 +110,32 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Added
 
+- **Asking `disarm` for an outcome name now teaches the naming rule (#654).** `clean`,
+  `sanitize`, `safe`, `secure`, `escape`, `is_safe` and `make_safe` will never exist —
+  CONTRIBUTING.md's rule is that a public name describes the operation and never the
+  outcome. That left a reader who reached for one holding a bare `AttributeError` at
+  exactly the moment they were asking the question the threat model answers:
+
+  ```text
+  >>> disarm.clean
+  AttributeError: disarm has no 'clean', and will not: a public name here describes the
+  operation, never the outcome. Nothing in this library makes text safe to emit.
+
+    comparison / canonical form   canonicalize()
+    display-safe cleanup          strip_format()
+    untrusted LLM input           get_pipeline("llm_guardrail")
+    output safety                 encode at the sink — see THREAT_MODEL.md
+  ```
+
+  It refuses and explains in the same breath, so it promises nothing and stays compatible
+  with the rule it teaches. Every other missing name gets the ordinary message unchanged,
+  and the exception keeps its `name` and `obj` so REPL "did you mean" tooling still works.
+
+  #654's two preconditions are tests rather than assumptions: nothing requires `dir()` and
+  `getattr()` to agree — `hasattr`, `getattr(..., default)` and `__all__` all behave as
+  before — and the hook cannot mask an `AttributeError` raised from inside an import,
+  checked in a subprocess against a genuinely failing one.
+
 - **`target_script="arabic"` and `"hebrew"` (#792).** Generation drops an equivalence class
   entirely when no member belongs to the target script, so a class whose members are all
   Arabic folded to nothing under either shipped table — 948 of TR39's 1,007 strong-RTL
@@ -660,6 +686,43 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   an interpreter whose Unicode version predates the data.
 
 ### Fixed
+
+- **A preset linked every table any step could reach; `strip_format` cost 663 KB of wasm
+  (#695).** `presets::run` walked a `&[Step]` and called `apply_into` with a *runtime*
+  value, so the optimiser could not prove any of the eighteen match arms unreachable. A
+  preset's declared step list had no bearing on what linked.
+
+  `strip_format` declares five steps that neither transliterate nor demojize, and its own
+  docstring calls it "lightweight cleanup". It linked the Hanzi pinyin **and** CLDR emoji
+  tables.
+
+  | single-export `wasm32-unknown-unknown` module | before | after |
+  |---|---:|---:|
+  | `strip_format` | 662,974 | **27,384** |
+  | `canonicalize` | 663,299 | 209,949 |
+  | `canonicalize_strict` | 663,458 | 219,112 |
+  | `strip_obfuscation` | 663,281 | 426,933 |
+
+  **−95.9%** for `strip_format`, with both tables gone. `strip_obfuscation` keeps the emoji
+  table and is right to: it has a `Demojize` step. That is now the rule — a preset links
+  what its own steps reach and nothing else.
+
+  Two changes, and the second was the larger one. The step lists moved into a
+  `static_steps!` macro that unrolls them into straight-line calls, so each `apply_into`
+  call gets a `const` step it can fold to one arm. That alone got `strip_format` to
+  275 KB. The rest was the **fast-path guard**: `Actionable::for_steps` took a runtime
+  `&[Step]` and matched every variant, which kept the payload types and the emoji table
+  alive through a function that only sets booleans. It is now a `const fn` and each preset
+  computes its mask at compile time.
+
+  `ml_normalize` deliberately keeps the dynamic path — it selects between two step lists at
+  runtime, and links every table through its own steps anyway. `TextPipeline` keeps it too,
+  and correctly: it is configured at runtime and can name any step.
+
+  `tests/test_wasm_table_coupling.py` asserts the table presence exactly and the sizes as
+  generous ceilings. The presence is the real check: a module's size drifts for ordinary
+  reasons, but a table appearing in a surface that cannot reach it is categorical, and it
+  is what regressed.
 
 - **The script table contradicted the UCD for 33 code points; 19 of them reported as
   Latin (#819).** `detect_char_script` binary-searches a curated table of **block** ranges,

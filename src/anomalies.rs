@@ -236,6 +236,16 @@ pub enum AnomalyKind {
     /// same shape as the subdivision-flag allowlist. Cyrillic `Me` on a Cyrillic base is
     /// exempt too; `U+0488` is historic Cyrillic notation, not a disguise.
     EnclosingMark,
+    /// A token drawing digits from more than one decimal numbering system — UTS #39 §5.3
+    /// *Mixed Numbers*.
+    ///
+    /// `1٢۳４५` reads as `12345` and is five systems; `12٣` is two and was clean at every
+    /// surface. Digits carry the script of nothing, so
+    /// [`MixedScript`](Self::MixedScript) cannot see the common shape — a token that is
+    /// mostly ASCII with one substituted digit is one script to every other check here.
+    ///
+    /// A single system is never flagged however unusual it looks: `٢٠٢٤` is a year.
+    MixedNumbers,
 }
 
 impl AnomalyKind {
@@ -254,6 +264,7 @@ impl AnomalyKind {
             AnomalyKind::CompatFold => "compat_fold",
             AnomalyKind::Confusable => "confusable",
             AnomalyKind::EnclosingMark => "enclosing_mark",
+            AnomalyKind::MixedNumbers => "mixed_numbers",
         }
     }
 }
@@ -317,6 +328,10 @@ impl Finding {
             }
             AnomalyKind::EnclosingMark => format!(
                 "{:?} carries enclosing marks that hide the base text: {}",
+                self.token, self.detail
+            ),
+            AnomalyKind::MixedNumbers => format!(
+                "{:?} mixes digits from {} (UTS #39 Mixed Numbers)",
                 self.token, self.detail
             ),
         }
@@ -794,6 +809,22 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         .find(|&c| c.is_control() && !crate::whitespace::is_fold_whitespace(c))
     {
         return Some(mk(AnomalyKind::Control, codepoint(c)));
+    }
+
+    // Mixed numbers — UTS #39 §5.3 (#777). Checked before the ASCII fast-path for the
+    // same reason as controls: the common shape mixes ASCII with one other system, so a
+    // token that is *mostly* ASCII must still reach this.
+    //
+    // Two or more systems, not "any non-ASCII digit". `٢٠٢٤` is a year written entirely
+    // in Arabic-Indic digits and is ordinary text; `12٣` is not, and it was clean at
+    // every surface — `is_mixed_script` sees one script because digits carry the script
+    // of nothing, and no other check looked at numbering systems at all.
+    let systems = crate::digits::system_count(tok);
+    if systems > 1 {
+        return Some(mk(
+            AnomalyKind::MixedNumbers,
+            format!("{systems} decimal numbering systems"),
+        ));
     }
 
     // ASCII fast-path: the invisible / bidi / zalgo / mixed-script branches can only fire

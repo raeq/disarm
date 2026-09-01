@@ -77,9 +77,13 @@ romanization standards), the confusable/security functions —
 `canonicalize*` presets — **and the three key builders `search_key`,
 `catalog_key` and `sort_key`** all change behavior when the bundled Unicode /
 TR39 tables are updated, with no signature touched. *When* they are allowed to
-change differs: everything named here may move in any release, except the three
-key builders, which are confined to minor releases by the contract in the next
-section. For example, #336 extended
+change differs, and the line is drawn by whether the key-stability fixture watches
+the function rather than by what it is called: the **eight** functions
+`tests/test_key_stability.py` recomputes — the three key builders plus
+`canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`
+and `fold_case` — are confined to minor releases by the contract in the next
+section. Everything else named here, including `is_suspicious_hostname` and the
+transliteration output, may move in any release. For example, #336 extended
 `normalize_confusables` with cross-script pairs absent from upstream TR39 17.0,
 which changes what a deployed filter chain catches. Such changes are documented
 in the changelog but are **not** treated as semver-breaking. **Pin a version if

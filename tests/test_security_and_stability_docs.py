@@ -67,10 +67,22 @@ def test_the_others_do_not(name: str, char: str) -> None:
 
 
 def test_the_limitations_page_names_all_three() -> None:
+    """Each character in its own row, by code point.
+
+    The first version of this asserted ``... or "U+007C" in page``, which is true for
+    every iteration once the `|` row exists — so it would have passed with `"` and
+    `` ` `` missing entirely (#856 review). Matching on the code point also side-steps
+    the `\\|` the Markdown table needs for the pipe.
+    """
     page = LIMITATIONS.read_text(encoding="utf-8")
-    assert "Five surfaces rewrite printable ASCII" in page, "the #725 section is gone"
-    for char in ASCII_REWRITES:
-        assert f"`{char}`" in page or f"`` {char} ``" in page or "U+007C" in page
+    section = page[page.index("Five surfaces rewrite printable ASCII") :]
+    section = section[: section.index("\n## ")]
+    for char, becomes in ASCII_REWRITES.items():
+        code_point = f"U+{ord(char):04X}"
+        assert code_point in section, f"the #725 table no longer names {char!r} ({code_point})"
+        assert f"`{becomes}`" in section, (
+            f"the table names {code_point} but not what it becomes ({becomes!r})"
+        )
 
 
 @pytest.mark.parametrize(
@@ -102,10 +114,18 @@ def test_every_watched_function_carries_a_stability_note() -> None:
     Derived from the generator's own list, so a ninth function added there is covered on
     the day it is added rather than whenever someone next reads the page.
     """
-    import sys
+    # Loaded by path rather than by mutating `sys.path`, which never gets restored and
+    # leaks into every later test in the session. The rest of this suite loads scripts
+    # the same way (#856 review).
+    import importlib.util
 
-    sys.path.insert(0, str(ROOT / "scripts"))
-    from gen_key_fixture import FUNCTIONS
+    spec = importlib.util.spec_from_file_location(
+        "gen_key_fixture", ROOT / "scripts" / "gen_key_fixture.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    functions = module.FUNCTIONS
 
     documented: dict[str, bool] = {}
     for path in (
@@ -120,7 +140,7 @@ def test_every_watched_function_carries_a_stability_note() -> None:
                     "**Stability.**" in doc
                 )
 
-    missing = [name for name in FUNCTIONS if not documented.get(name)]
+    missing = [name for name in functions if not documented.get(name)]
     assert not missing, (
         f"watched by tests/test_key_stability.py and carrying no stability note: {missing}. "
         "A reader asking 'may I store this?' gets no answer for these."

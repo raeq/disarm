@@ -1876,6 +1876,29 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Documentation
 
+- **Detection and reduction answer different questions, and nothing said so (#882).**
+  `find_confusables` reports what *looks like* something else; `canonicalize` and the
+  other key reducers report what two strings *collapse to*. Each interface reads as
+  complete on its own, and neither is.
+
+  Measured over `confusable-bench.v1` — 120 malicious identifiers, 20 benign controls:
+
+  | surface | caught /120 | composability | impersonation | evasion | FP /20 |
+  |---|---:|---:|---:|---:|---:|
+  | six key reducers, union | 72 | 0/31 | 30/35 | **42/54** | 0 |
+  | `find_confusables` | 66 | **31/31** | **35/35** | 0/54 | 0 |
+  | **either firing** | **108** | 31/31 | 35/35 | 42/54 | **0** |
+
+  A caller who picks one interface leaves between a third and a half of the corpus
+  unreached, at **no** false-positive saving — both are 0/20 alone and together. The
+  split is structural: the detector sees a character that has a fold target, so it takes
+  composability and impersonation and cannot see evasion; the reducers are the mirror.
+
+  Documented in the confusables guide with a worked registry example, and on both entry
+  points. `tests/test_detector_and_reducers_pair.py` pins the structural claim — cases
+  each surface catches and the other cannot — without fetching the corpus; the scoring
+  itself belongs in `benchmarks/meta`, where a network dependency is declared.
+
 - **The fold is not order-independent, and nothing said so (#834).**
   `normalize_confusables` folds the TR39 table against the input as written. Every preset
   and profile that folds confusables normalizes to NFKC first, so the fold there sees a

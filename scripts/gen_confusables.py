@@ -998,9 +998,10 @@ def _resolve_target_chains(mappings: list[tuple[int, str]]) -> list[tuple[int, s
             break
     else:
         raise ValueError(
-            f"target chains did not converge in {MAX_PASSES} passes; "
-            "two rows fold into each other, which is a data defect rather than a bound "
-            "to raise"
+            f"target chains did not converge in {MAX_PASSES} passes. Most likely a "
+            "cycle — two rows folding into each other, or a longer loop — but a chain "
+            "genuinely deeper than the bound would look the same. Read the rows before "
+            "raising it: a cycle is a data defect and no bound fixes it."
         )
     return sorted(table.items())
 

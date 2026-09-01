@@ -83,13 +83,16 @@ def test_the_other_row_is_a_fixed_point_even_though_the_two_differ() -> None:
 
 def test_strip_obfuscation_is_a_fixed_point_over_the_bmp() -> None:
     """The exhaustive form, on the function the original gate did not cover."""
-    unstable = [
-        chr(cp)
-        for cp in range(0x20, 0x10000)
-        if not 0xD800 <= cp <= 0xDFFF
-        and disarm.strip_obfuscation(chr(cp))
-        != disarm.strip_obfuscation(disarm.strip_obfuscation(chr(cp)))
-    ]
+    unstable = []
+    for cp in range(0x20, 0x10000):
+        if 0xD800 <= cp <= 0xDFFF:
+            continue
+        # Two calls per code point, not four. The comprehension this replaces evaluated
+        # `strip_obfuscation` twice on the left of the comparison and twice more nested
+        # on the right (#873 review).
+        once = disarm.strip_obfuscation(chr(cp))
+        if disarm.strip_obfuscation(once) != once:
+            unstable.append(chr(cp))
     assert not unstable, (
         f"{len(unstable)} code points where strip_obfuscation is not a fixed point: "
         f"{[hex(ord(c)) for c in unstable[:6]]}"

@@ -755,6 +755,7 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   being equal rather than becoming equal — #614's mechanism, in the profiles.
   `docs/security/cve-validation.md` records it, because that is the entry point the LLM
   pipeline pages send a guardrail author to.
+
 - **`strip_obfuscation` was not a fixed point: a fold target contained a source (#723).**
   `044B` ы mapped to `ƅi`, and `ƅ` (`U+0185`) is a source folding to `b`. The entry points
   that iterate reached `bi`; the single-pass ones — `strip_obfuscation`, and the

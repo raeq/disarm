@@ -13,6 +13,8 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
+from .fetch import Provisioning, Source
+from .fetch import provision as provision_sources
 from .protocol import Family, Outcome, Provenance, Status, Suite
 from .subjects import Subject
 from .subjects import by_name as subject_by_name
@@ -28,6 +30,7 @@ class RunReport:
     unicode_version: str = "?"
     confusables_version: str = "?"
     subjects: list[str] = field(default_factory=list)
+    provisioning: Provisioning = field(default_factory=Provisioning)
 
     @property
     def ran(self) -> list[Outcome]:
@@ -73,11 +76,34 @@ class RunReport:
         return got
 
 
+def provision(
+    suites: Sequence[Suite],
+    offline: bool = False,
+    refresh: bool = False,
+) -> Provisioning:
+    """Pull every artifact the selection needs, before any suite runs.
+
+    Anything already on disk is left exactly as it is, so an operator who placed
+    a particular revision keeps it. A failed fetch is recorded and the run
+    continues: the suite then reports SKIPPED, the same answer it gave before
+    provisioning existed.
+    """
+    sources: list[Source] = []
+    seen: set[str] = set()
+    for suite in suites:
+        for source in getattr(suite, "SOURCES", ()):
+            if source.url not in seen:
+                seen.add(source.url)
+                sources.append(source)
+    return provision_sources(sources, offline=offline, refresh=refresh)
+
+
 def run(
     suites: Sequence[Suite],
     registered: int,
     limit: int | None = None,
     subjects: Sequence[Subject] | None = None,
+    provisioning: Provisioning | None = None,
     on_start: Callable[[Suite], None] | None = None,
     on_finish: Callable[[Outcome], None] | None = None,
 ) -> RunReport:
@@ -93,6 +119,8 @@ def run(
     report = RunReport(selected=len(suites), registered=registered)
     report.disarm_version, report.unicode_version, report.confusables_version = _versions()
     report.subjects = [s.info.name for s in subjects]
+    if provisioning is not None:
+        report.provisioning = provisioning
     start = time.perf_counter()
     for suite in suites:
         if on_start:

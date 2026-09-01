@@ -13,6 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ..base import CACHE, DATA, SuiteBase, add, artifact
+from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
 
 
@@ -21,6 +22,15 @@ class ConfusableBenchV1(SuiteBase):
     family = Family.COMPARATOR
     availability = Availability.NETWORK
     env_var = "DISARM_META_CONFUSABLE_BENCH"
+    SOURCES = (
+        Source(
+            url="https://raw.githubusercontent.com/paultendo/namespace-guard/main"
+            "/docs/data/confusable-bench.v1.json",
+            filename="confusable-bench.v1.json",
+            licence="MIT",
+            note="140 rows: 120 malicious, 20 benign controls",
+        ),
+    )
     summary = "140 labelled identifier rows: precision and recall per policy."
     provenance = Provenance(
         origin="Paul Wood FRSA (@paultendo) — namespace-guard",
@@ -46,11 +56,24 @@ class ConfusableBenchV1(SuiteBase):
     )
 
     def locate(self) -> Path | None:
-        return artifact(
+        return self.provisioned() or artifact(
             CACHE / "confusable-bench.v1.json",
             DATA / "confusable-bench.v1.json",
             env=self.env_var,
         )
+
+    @staticmethod
+    def _is_malicious(row: dict[str, object]) -> bool:
+        """Use the corpus's own `label`; fall back to threatClass.
+
+        The publisher labels every row explicitly (120 malicious, 20 benign).
+        Inferring it from `threatClass` instead would be this harness deciding
+        what counts as an attack in somebody else's benchmark.
+        """
+        label = str(row.get("label", "")).lower()
+        if label in ("malicious", "benign"):
+            return label == "malicious"
+        return str(row.get("threatClass", "")).lower() not in ("control", "benign", "")
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         import disarm
@@ -68,9 +91,7 @@ class ConfusableBenchV1(SuiteBase):
             add(outcome, "rows", 0)
             return
 
-        def is_malicious(row: dict[str, object]) -> bool:
-            klass = str(row.get("threatClass", "")).lower()
-            return klass not in ("control", "benign", "")
+        is_malicious = self._is_malicious
 
         def collides(builder: Callable[[str], str], row: dict[str, object]) -> bool:
             ident = str(row.get("identifier", ""))
@@ -151,6 +172,16 @@ class ConfusableVision(SuiteBase):
     family = Family.COMPARATOR
     availability = Availability.NETWORK
     env_var = "DISARM_META_CONFUSABLE_VISION"
+    SOURCES = (
+        Source(
+            url="https://raw.githubusercontent.com/paultendo/confusable-vision/main"
+            "/data/output/confusable-weights-v2.json",
+            filename="confusable-vision.json",
+            licence="CC-BY-4.0 (datasets); repository licence unspecified",
+            note="the exact file data/confusables_supplement.tsv cites as its "
+            "provenance — 4,174 pairs, v2026-03-02",
+        ),
+    )
     summary = "Measured visual-confusability pairs: how many does any disarm surface reach?"
     provenance = Provenance(
         origin="Paul Wood FRSA (@paultendo) — confusable-vision",
@@ -175,7 +206,7 @@ class ConfusableVision(SuiteBase):
     )
 
     def locate(self) -> Path | None:
-        return artifact(
+        return self.provisioned() or artifact(
             CACHE / "confusable-vision.json",
             CACHE / "confusable-vision.tsv",
             env=self.env_var,
@@ -189,11 +220,15 @@ class ConfusableVision(SuiteBase):
         pairs: list[tuple[str, str, float]] = []
         if path.suffix == ".json":
             blob = json.loads(path.read_text(encoding="utf-8"))
-            records = blob if isinstance(blob, list) else blob.get("pairs", [])
+            # The published shape is {"meta": {...}, "edges": [...]}; each edge
+            # carries `source`, `target` and a measured `danger` score.
+            records = (
+                blob if isinstance(blob, list) else blob.get("edges") or blob.get("pairs") or []
+            )
             for rec in records:
                 if not isinstance(rec, dict):
                     continue
-                src = rec.get("source") or rec.get("from") or rec.get("a")
+                src = rec.get("source") or rec.get("from") or rec.get("a")  # noqa: E501
                 tgt = rec.get("target") or rec.get("to") or rec.get("b")
                 if isinstance(src, str) and isinstance(tgt, str):
                     score_raw = rec.get("score", rec.get("danger", 0)) or 0
@@ -244,6 +279,16 @@ class UntraceTechniques(SuiteBase):
     family = Family.COMPARATOR
     availability = Availability.MANUAL
     env_var = "DISARM_META_UNTRACE"
+    SOURCES = (
+        Source(
+            url="https://codeload.github.com/juriku/untrace/tar.gz/refs/heads/main",
+            filename="untrace",
+            licence="MIT",
+            kind="tar.gz",
+            member="untrace-main/testdata",
+            note="the rival's own test corpus — its technique taxonomy, not ours",
+        ),
+    )
     summary = "A rival detector's technique list: which does disarm report, and which decode?"
     provenance = Provenance(
         origin="juriku",
@@ -267,7 +312,7 @@ class UntraceTechniques(SuiteBase):
     )
 
     def locate(self) -> Path | None:
-        return artifact(CACHE / "untrace_techniques.tsv", env=self.env_var)
+        return self.provisioned() or artifact(CACHE / "untrace_techniques.tsv", env=self.env_var)
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         import disarm
@@ -277,12 +322,30 @@ class UntraceTechniques(SuiteBase):
         path = self.locate()
         assert path is not None
         probes: list[tuple[str, str]] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if not line.strip() or line.startswith("#"):
-                continue
-            technique, _, text = line.partition("\t")
-            if text:
-                probes.append((technique.strip(), text))
+        if path.is_dir():
+            # untrace's own case tree: testdata/cases/<technique>/in/<file>.
+            # The directory name IS the technique label, which is the point —
+            # the taxonomy is theirs, not ours, and disarm's detector cannot
+            # nominate the techniques it is blind to.
+            cases = path / "cases" if (path / "cases").is_dir() else path
+            for case in sorted(d for d in cases.iterdir() if d.is_dir()):
+                for f in sorted(case.rglob("*")):
+                    if not f.is_file() or f.suffix.lower() in _BINARY_SUFFIXES:
+                        continue
+                    try:
+                        text = f.read_text(encoding="utf-8")
+                    except (UnicodeDecodeError, OSError):
+                        continue
+                    if text.strip():
+                        probes.append((case.name, text))
+                        break
+        else:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if not line.strip() or line.startswith("#"):
+                    continue
+                technique, _, text = line.partition("\t")
+                if text:
+                    probes.append((technique.strip(), text))
         if limit is not None:
             probes = probes[:limit]
         outcome.population = len(probes)
@@ -313,6 +376,12 @@ class UntraceTechniques(SuiteBase):
         )
         add(outcome, "silent", n - reported, of=n, higher_is_better=False)
         outcome.extra = {"silent_techniques": sorted(set(silent))}
+
+
+#: Fixtures untrace ships that are not text probes.
+_BINARY_SUFFIXES = frozenset(
+    {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".epub", ".docx", ".woff", ".ico"}
+)
 
 
 def _safe(fn: Callable[[str], object], text: str) -> bool:

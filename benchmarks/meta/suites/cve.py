@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..base import CACHE, FIXTURES, SuiteBase, add, artifact, surfaces
+from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
 
 
@@ -135,6 +136,17 @@ class TrojanSourcePoC(SuiteBase):
     family = Family.CVE
     availability = Availability.MANUAL
     env_var = "DISARM_META_TROJAN_SOURCE"
+    SOURCES = (
+        Source(
+            url="https://codeload.github.com/nickboucher/trojan-source/tar.gz/refs/heads/main",
+            filename="trojan-source",
+            licence="MIT",
+            kind="tar.gz",
+            member="trojan-source-main",
+            note="the authors' own PoC files, per language — real source files, "
+            "not the single-line fragments the CI gate uses",
+        ),
+    )
     summary = "The published multi-line Trojan Source PoC files, not a one-line fragment."
     provenance = Provenance(
         origin="Boucher & Anderson",
@@ -156,7 +168,7 @@ class TrojanSourcePoC(SuiteBase):
     )
 
     def locate(self) -> Path | None:
-        return artifact(CACHE / "trojan-source", env=self.env_var)
+        return self.provisioned() or artifact(CACHE / "trojan-source", env=self.env_var)
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         root = self.locate()

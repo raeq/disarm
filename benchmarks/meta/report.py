@@ -12,6 +12,7 @@ import json
 from collections.abc import Sequence
 
 from .baseline import Drift
+from .leaderboard import ALPHA_FLOOR, Leaderboard
 from .protocol import Family, Measurement, Outcome, Status
 from .runner import RunReport
 
@@ -48,6 +49,7 @@ def render_markdown(
     report: RunReport,
     drifts: Sequence[Drift] = (),
     baseline_name: str = "default",
+    leaderboard: Leaderboard | None = None,
 ) -> str:
     lines: list[str] = [
         "# disarm meta-benchmark",
@@ -78,6 +80,8 @@ def render_markdown(
             "",
         ]
 
+    if leaderboard is not None:
+        lines += _render_leaderboard(leaderboard)
     lines += _render_comparison(report)
     by_family = report.by_family()
     for family in Family:
@@ -97,6 +101,73 @@ def render_markdown(
         lines += _render_drift(drifts, baseline_name)
     lines += _render_skips(report)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_leaderboard(board: Leaderboard) -> list[str]:
+    """Rank the subjects, or say plainly why the battery cannot."""
+    lines = ["## Leaderboard", ""]
+    if not board.usable:
+        return lines + ["Not enough directed measurements to compute anything.", ""]
+
+    lines += [
+        "Composite of discrimination-weighted z-scores. Each benchmark's weight is "
+        "its corrected item-total correlation (classical test theory); measurements "
+        "are averaged within a benchmark first so a suite reporting seven related "
+        "numbers does not get seven votes; the scale is fitted on the tools and the "
+        "controls are placed on it; intervals are bootstrapped over the benchmark "
+        "set. Bradley-Terry strengths are fitted by Hunter's MM algorithm and use "
+        "only the order of each pairwise result.",
+        "",
+        f"Battery: **{len(board.items)}** benchmarks, **{len(board.subjects)}** "
+        f"subjects. Cronbach's alpha "
+        f"**{board.alpha:.2f}**"
+        if board.alpha is not None
+        else "alpha n/a",
+    ]
+    lines[-1] += (
+        f" (floor {ALPHA_FLOOR:.2f}), Kendall's W **{board.kendall_w:.2f}**"
+        if board.kendall_w is not None
+        else ""
+    )
+    lines[-1] += (
+        f". {board.excluded_census_measurements} census measurements excluded for "
+        "having no direction."
+    )
+    lines.append("")
+
+    if not board.supported:
+        lines += [
+            "**This battery does not support a ranking, and none is published.**",
+            "",
+        ]
+        lines += [f"- {why}" for why in board.blockers]
+        lines += [
+            "",
+            "The composites below are recorded so the shortfall is auditable. They "
+            "are not a result and must not be quoted as one.",
+            "",
+        ]
+
+    lines += [
+        "| # | subject | composite | 95% CI | Bradley-Terry | benchmarks |",
+        "|---|---|---|---|---|---|",
+    ]
+    for st in board.standings:
+        name = f"`{st.subject}`" + (" *(control)*" if st.control else "")
+        composite = "off-scale" if st.control and abs(st.composite) > 10 else f"{st.composite:.3f}"
+        lines.append(
+            f"| {st.rank} | {name} | {composite} | "
+            f"[{st.ci_low:.2f}, {st.ci_high:.2f}] | {st.bt_strength:.3f} | {st.items} |"
+        )
+    lines += [
+        "",
+        "| benchmark | discrimination | measurements |",
+        "|---|---|---|",
+    ]
+    for item in sorted(board.items, key=lambda i: -i.discrimination):
+        lines.append(f"| `{item.suite}` | {item.discrimination:.3f} | {item.key} |")
+    lines.append("")
+    return lines
 
 
 def _render_comparison(report: RunReport) -> list[str]:

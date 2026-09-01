@@ -19,6 +19,7 @@ from pathlib import Path
 
 from .. import damage
 from ..base import DATA, FIXTURES, SuiteBase, add, artifact, record, thin
+from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
 
 _MAX_CP = sys.maxunicode + 1
@@ -667,6 +668,14 @@ class DefaultIgnorableCasefold(SuiteBase):
     family = Family.NORMATIVE
     availability = Availability.NETWORK
     env_var = "DISARM_META_DERIVEDCORE"
+    SOURCES = (
+        Source(
+            url="https://www.unicode.org/Public/UCD/latest/ucd/DerivedCoreProperties.txt",
+            filename="DerivedCoreProperties.txt",
+            licence="Unicode License v3",
+            note="tracks `latest` deliberately — the drift is the point",
+        ),
+    )
     summary = "Do the primitives compose to toNFKC_Casefold? (Default_Ignorable survival)"
     provenance = Provenance(
         origin="Unicode Consortium",
@@ -727,6 +736,16 @@ class ICANNLatinLGR(SuiteBase):
     family = Family.NORMATIVE
     availability = Availability.NETWORK
     env_var = "DISARM_META_ICANN_LGR"
+    SOURCES = (
+        Source(
+            url="https://www.icann.org/sites/default/files/packages/lgr/"
+            "lgr-second-level-latin-script-25oct24-en.html",
+            filename="lgr-second-level-latin.html",
+            licence="ICANN publication terms",
+            note="the published LGR itself, never data/confusables_lgr.tsv — the "
+            "shipped fold was built from that file",
+        ),
+    )
     summary = "ICANN's Latin second-level LGR variant pairs vs disarm's key forms."
     provenance = Provenance(
         origin="ICANN",

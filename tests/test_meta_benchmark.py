@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import inspect
 import json
+import math
 import os
 
 import pytest
 
-from benchmarks.meta import registry, subjects
+from benchmarks.meta import leaderboard, registry, subjects
 from benchmarks.meta.base import SuiteBase, surfaces, thin
 from benchmarks.meta.baseline import Drift, compare, snapshot
 from benchmarks.meta.protocol import Availability, Family, Outcome, Provenance, Status
@@ -576,3 +577,162 @@ def test_a_reproduction_mismatch_is_visible_in_the_report():
     assert out.reproduces_its_finding is False
     report = RunReport(outcomes=[out], selected=1, registered=1, subjects=["disarm"])
     assert "does NOT reproduce" in render_markdown(report)
+
+
+# --- provisioning -----------------------------------------------------------
+
+
+def test_declared_sources_carry_a_licence_and_a_real_url():
+    for suite in registry.all_suites():
+        for source in suite.SOURCES:
+            assert source.url.startswith("https://"), suite.name
+            assert source.licence, f"{suite.name}: {source.filename} has no licence"
+            assert source.kind in ("file", "zip", "tar.gz"), source.kind
+
+
+def test_provisioning_never_overwrites_an_existing_file(tmp_path):
+    """An operator who placed a specific revision must keep it."""
+    from benchmarks.meta.fetch import Source, ensure
+
+    source = Source(url="https://example.invalid/x", filename="x.json", licence="MIT")
+    placed = tmp_path / "x.json"
+    placed.write_text("operator's own copy", encoding="utf-8")
+    got = ensure(source, cache=tmp_path)
+    assert got is not None and got.from_cache
+    assert placed.read_text(encoding="utf-8") == "operator's own copy"
+
+
+def test_offline_never_reaches_the_network(tmp_path):
+    from benchmarks.meta.fetch import Source, provision
+
+    source = Source(url="https://example.invalid/x", filename="x.json", licence="MIT")
+    got = provision([source], cache=tmp_path, offline=True)
+    assert got.skipped_offline == [source]
+    assert not got.fetched
+
+
+def test_an_archive_member_escaping_the_destination_is_refused(tmp_path):
+    import io
+    import tarfile
+
+    from benchmarks.meta.fetch import _safe_extract
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        info = tarfile.TarInfo(name="../escaped.txt")
+        payload = b"nope"
+        info.size = len(payload)
+        tar.addfile(info, io.BytesIO(payload))
+    buf.seek(0)
+    with tarfile.open(fileobj=buf, mode="r:gz") as tar, pytest.raises(ValueError, match="escapes"):
+        _safe_extract(tar, tmp_path)
+
+
+def test_an_empty_parse_of_a_present_artifact_is_an_error_not_a_zero():
+    """A parser that extracts nothing is broken; 0 would read as a result.
+
+    The ICANN LGR suite reported `blocked_pairs: 0` while its two-table join was
+    wrong, which looks like perfect agreement rather than a fault.
+    """
+    src = inspect.getsource(SuiteBase.run)
+    assert "parser fault" in src
+
+
+# --- leaderboard ------------------------------------------------------------
+
+
+def _board_outcome(subject: str, suite: str, key: str, value: float) -> Outcome:
+    from benchmarks.meta.protocol import Measurement, Method
+
+    return Outcome(
+        suite=suite,
+        family=Family.NORMATIVE,
+        provenance=Provenance(
+            origin="o", citation="c", url="http://x", version="1", licence="l", issues=(1,)
+        ),
+        method=Method(subject=subject),
+        population=10,
+        measurements=[Measurement(key=key, value=value, of=1.0, higher_is_better=True)],
+    )
+
+
+def test_census_measurements_never_enter_the_ranking():
+    """A number with no declared direction cannot be scored."""
+    from benchmarks.meta.protocol import Measurement, Method
+
+    out = Outcome(
+        suite="s",
+        family=Family.NORMATIVE,
+        provenance=Provenance(
+            origin="o", citation="c", url="http://x", version="1", licence="l", issues=(1,)
+        ),
+        method=Method(subject="disarm"),
+        measurements=[Measurement(key="census", value=5, of=10, higher_is_better=None)],
+    )
+    board = leaderboard.build([out])
+    assert board.items == []
+    assert board.excluded_census_measurements == 1
+
+
+def test_measurements_are_parcelled_so_one_suite_gets_one_vote():
+    outs = [
+        _board_outcome(subj, "wide", f"m{i}", value)
+        for subj, value in (("a", 0.9), ("b", 0.1))
+        for i in range(7)
+    ]
+    outs += [_board_outcome(subj, "narrow", "m", v) for subj, v in (("a", 0.5), ("b", 0.6))]
+    board = leaderboard.build(outs, bootstrap=20)
+    assert len(board.items) == 2, "seven correlated measurements must not be seven items"
+    assert {i.suite for i in board.items} == {"wide", "narrow"}
+
+
+def test_a_thin_or_incoherent_battery_refuses_to_rank():
+    outs = [
+        _board_outcome(subj, f"s{i}", "m", value)
+        for i in range(3)
+        for subj, value in (("a", 0.9 - 0.1 * i), ("b", 0.2 + 0.1 * i))
+    ]
+    board = leaderboard.build(outs, bootstrap=50)
+    assert not board.supported
+    assert board.blockers
+    assert any("benchmarks contribute" in b for b in board.blockers)
+
+
+def test_the_refusal_is_stated_in_the_report():
+    outs = [
+        _board_outcome(subj, f"s{i}", "m", value)
+        for i in range(3)
+        for subj, value in (("a", 0.9), ("b", 0.2))
+    ]
+    board = leaderboard.build(outs, bootstrap=20)
+    report = RunReport(outcomes=outs, selected=1, registered=1, subjects=["a", "b"])
+    md = render_markdown(report, leaderboard=board)
+    assert "does not support a ranking" in md
+    assert "must not be quoted" in md
+
+
+def test_controls_do_not_set_the_scale():
+    """A strawman must not compress the tools into a band near the mean.
+
+    Three tools minimum: a corrected item-total correlation over two points is
+    undefined, so a two-tool battery legitimately scores nothing at all.
+    """
+    tools = [
+        _board_outcome(subj, f"s{i}", "m", value)
+        for i in range(4)
+        for subj, value in (("a", 0.80), ("b", 0.60), ("c", 0.40))
+    ]
+    with_control = tools + [_board_outcome("null-baseline", f"s{i}", "m", 0.0) for i in range(4)]
+    without = leaderboard.build(tools, bootstrap=20)
+    with_ = leaderboard.build(with_control, bootstrap=20)
+    gap_without = abs(
+        next(s.composite for s in without.standings if s.subject == "a")
+        - next(s.composite for s in without.standings if s.subject == "b")
+    )
+    gap_with = abs(
+        next(s.composite for s in with_.standings if s.subject == "a")
+        - next(s.composite for s in with_.standings if s.subject == "b")
+    )
+    assert math.isclose(gap_without, gap_with, rel_tol=1e-9), (
+        "adding a control changed the separation between two tools"
+    )

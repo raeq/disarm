@@ -14,6 +14,8 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
+from .fetch import CACHE as FETCH_CACHE
+from .fetch import Provisioning, Source, provision
 from .protocol import (
     Availability,
     Family,
@@ -174,7 +176,13 @@ class SuiteBase:
     provenance: Provenance
     summary: str = ""
     #: Environment variable an operator sets to point at the downloaded artifact.
+    #: Always honoured first, so an operator who has pinned a specific revision
+    #: keeps it and provisioning never overwrites their copy.
     env_var: str | None = None
+    #: Verified upstreams this suite provisions for itself. Empty means no
+    #: fetchable artifact has been *shown* to exist — the suite stays manual and
+    #: says so, rather than implying a download nobody has demonstrated.
+    SOURCES: tuple[Source, ...] = ()
     #: Can this suite score a tool other than disarm? False where the question is
     #: about a disarm-specific surface (a key builder, a named anomaly kind) that
     #: no other tool exposes — running such a suite against `ftfy` would produce a
@@ -194,7 +202,25 @@ class SuiteBase:
 
     def locate(self) -> Path | None:
         """Where the external artifact lives, or ``None``. Override as needed."""
+        return self.provisioned()
+
+    def provisioned(self) -> Path | None:
+        """The first declared source already present in the cache."""
+        if self.env_var:
+            override = os.environ.get(self.env_var)
+            if override and Path(override).exists():
+                return Path(override)
+        for source in self.SOURCES:
+            path = FETCH_CACHE / source.filename
+            if source.member and source.kind != "file":
+                path = path / source.member
+            if path.exists():
+                return path
         return None
+
+    def provision(self, offline: bool = False, refresh: bool = False) -> Provisioning:
+        """Pull this suite's artifacts, leaving anything already present alone."""
+        return provision(self.SOURCES, offline=offline, refresh=refresh)
 
     def available(self) -> tuple[bool, str]:
         if self.availability in (Availability.VENDORED, Availability.DERIVED):
@@ -252,14 +278,28 @@ class SuiteBase:
         )
         located = self.locate()
         if located is not None:
-            digest, size = sha256_of(located)
             outcome.method.artifact = str(located)
-            outcome.method.artifact_sha256 = digest
-            outcome.method.artifact_bytes = size
+            if located.is_file():
+                digest, size = sha256_of(located)
+                outcome.method.artifact_sha256 = digest
+                outcome.method.artifact_bytes = size
+            else:
+                outcome.method.artifact_bytes = sum(
+                    p.stat().st_size for p in located.rglob("*") if p.is_file()
+                )
         with timed(outcome):
             try:
                 self.measure(outcome, limit)
                 outcome.method.domain_size = outcome.population
+                # A present artifact that yields nothing is a broken parser, not
+                # a score of zero. Reporting 0 would read as a result — the
+                # ICANN LGR suite did exactly that while its two-table join was
+                # wrong, and 0/0 blocked pairs looks like perfect agreement.
+                if located is not None and outcome.population == 0:
+                    raise ValueError(
+                        f"parsed 0 units from {located} — the artifact is present, "
+                        "so this is a parser fault, not an empty result"
+                    )
                 # A reproduction pins a published disarm measurement, so it is
                 # meaningless for any other subject.
                 if self.REPRO_EXPECTED and outcome.method.subject == "disarm":

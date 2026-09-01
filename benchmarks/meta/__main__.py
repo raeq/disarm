@@ -10,10 +10,11 @@ import sys
 
 from . import baseline as baseline_mod
 from . import subjects as subjects_mod
+from .leaderboard import build as build_leaderboard
 from .protocol import Availability, Family, Outcome, Status, Suite
 from .registry import all_suites, select
 from .report import render_json, render_markdown
-from .runner import run
+from .runner import provision, run
 
 
 def _list(suites: list[Suite], registered: int) -> None:
@@ -69,6 +70,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--limit", type=int, help="cap rows/code points per suite")
     p.add_argument(
+        "--offline",
+        action="store_true",
+        help="never reach the network; use only what is already cached",
+    )
+    p.add_argument(
+        "--refresh",
+        action="store_true",
+        help="re-download even when a cached copy exists (default: leave it alone)",
+    )
+    p.add_argument(
         "--subject",
         nargs="+",
         metavar="TOOL",
@@ -92,6 +103,15 @@ def main(argv: list[str] | None = None) -> int:
         "--update-baseline", action="store_true", help="rewrite the baseline from this run"
     )
     p.add_argument("--quiet", action="store_true", help="suppress per-suite progress")
+    p.add_argument(
+        "--leaderboard",
+        action="store_true",
+        help=(
+            "rank the subjects, weighting each benchmark by its corrected "
+            "item-total correlation. Refuses to publish a ranking when the "
+            "battery's own diagnostics say it cannot carry one."
+        ),
+    )
     args = p.parse_args(argv)
 
     if args.list_subjects:
@@ -143,17 +163,37 @@ def main(argv: list[str] | None = None) -> int:
         label = f"{outcome.suite} [{outcome.method.subject}]"
         print(f"  {tag:>5}  {label}: {note}", file=sys.stderr, flush=True)
 
+    # Provision before anything runs. An existing file is never overwritten, so
+    # an operator who placed a specific revision keeps it.
+    if not args.quiet:
+        print("Provisioning artifacts ...", file=sys.stderr, flush=True)
+    got = provision(suites, offline=args.offline, refresh=args.refresh)
+    if not args.quiet:
+        for item in got.downloaded:
+            print(
+                f"  fetched  {item.source.filename} ({item.bytes:,} bytes, {item.source.licence})",
+                file=sys.stderr,
+            )
+        for item in got.reused:
+            print(f"  cached   {item.source.filename} (left intact)", file=sys.stderr)
+        for source, why in got.failed:
+            print(f"  FAILED   {source.filename}: {why}", file=sys.stderr)
+        for source in got.skipped_offline:
+            print(f"  offline  {source.filename}: not cached", file=sys.stderr)
+
     report = run(
         suites,
         registered=registered,
         limit=args.limit,
         subjects=subjects,
+        provisioning=got,
         on_start=started,
         on_finish=finished,
     )
 
     drifts = [] if args.no_baseline else baseline_mod.compare(report.outcomes, args.baseline)
-    markdown = render_markdown(report, drifts, args.baseline)
+    board = build_leaderboard(report.outcomes) if args.leaderboard else None
+    markdown = render_markdown(report, drifts, args.baseline, leaderboard=board)
     print(markdown)
 
     if args.report:

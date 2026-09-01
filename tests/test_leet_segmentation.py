@@ -57,20 +57,30 @@ def test_the_control_case_was_never_broken() -> None:
 
 
 @pytest.mark.parametrize(
-    ("token", "decodes_to"),
-    [("gn0r3!", "gnorei"), ("!dm1n", "idmin")],
+    ("token", "decodes_to", "reports"),
+    [("gn0r3!", "gnorei", "ignore"), ("!dm1n", "idmin", "admin")],
 )
-def test_the_rows_that_stay_clean_decode_to_nothing(token: str, decodes_to: str) -> None:
-    """#726's table lists these beside `!gn0r3`; only one of the three is a word.
+def test_the_rows_that_decode_to_nothing_are_still_caught_one_edit_out(
+    token: str, decodes_to: str, reports: str
+) -> None:
+    """#726's table lists these beside `!gn0r3`; only one of the three decodes to a word.
 
-    The trim did eat a substitute in all three, but `!` maps to `i`, so `gn0r3!` is
-    `gnorei` and `!dm1n` is `idmin` — neither is `ignore` or `admin`. Clean is the correct
-    answer, and `nearest()`'s single-edit rescue declines them too because it requires a
-    six-character decode. Asserted so the distinction is recorded rather than read as an
-    unfixed defect.
+    The exact path cannot reach them and never will: `!` maps to `i`, so `gn0r3!` decodes
+    to `gnorei` and `!dm1n` to `idmin`, and neither is a word. That much is unchanged.
+
+    What changed is the verdict. This test used to assert both were **clean**, and gave
+    `nearest()`'s six-character floor as the reason — freezing the floor's own defect as
+    the correct answer. #825 measured that floor and moved it to five, and at five both
+    are one edit from the word they are imitating. `gn0r3!` is a spoof of `ignore` and
+    `!dm1n` is a spoof of `admin`; reporting them is right and the old assertion was
+    recording a miss.
     """
     assert decodes_to not in LEXICON
-    assert _kinds(token) == []
+    assert _kinds(token) == ["leet"]
+    # Equality, not containment: `Finding.detail` for `leet` is exactly the matched
+    # lexicon word — the code passes `near` straight into the `Finding` — so a substring
+    # check would accept a longer word that merely contains it (#877 review).
+    assert _detail(token) == reports
 
 
 # ── #750: the separator set ──────────────────────────────────────────────────

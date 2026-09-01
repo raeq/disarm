@@ -117,6 +117,27 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Added
 
+- **`target_script="arabic"` and `"hebrew"` (#792).** Generation drops an equivalence class
+  entirely when no member belongs to the target script, so a class whose members are all
+  Arabic folded to nothing under either shipped table — 948 of TR39's 1,007 strong-RTL
+  sources were in that position (#791). These give them somewhere to land: **373 rows** and
+  **261 rows** of cross-script punctuation, letterlike symbols and digits.
+
+  Opt-in, like `cyrillic`. No preset consumes a non-Latin target, so this adds a view
+  rather than changing any existing answer — which is what resolved the blocking question
+  #792 §1 raised about colliding with #735.
+
+  **They do not reach an intra-Arabic pair.** #792 was filed believing an Arabic target
+  would fold Persian keheh onto Arabic kaf; prototyping it first showed all four code
+  points in its motivating table absent from the generated table, because both members of
+  each pair are already in the target script. TR39 does put them in one class — the data is
+  not the problem, the cross-script model is. Split out as #848, which needs the generator
+  to stop discarding same-script classes, and which is #831's machinery one script over.
+
+  `is_suspicious_hostname` is unaffected and says so: it computes whole-script-confusable
+  against Latin with the fold's target hardcoded, so an Arabic label whose skeleton stays
+  Arabic cannot qualify whatever these tables hold.
+
 - **`UNICODE_VERSION` and `KEY_SCHEMA_VERSION`, on all seven surfaces (#645, #642, #644).**
   #641, #642 and #644 were filed separately and are one failure repeated: disarm knows
   something an integrator needs and has no channel to say it. `CONFUSABLES_VERSION` (#560)

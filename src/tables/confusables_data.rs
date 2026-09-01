@@ -20,6 +20,8 @@ include!(concat!(env!("OUT_DIR"), "/ascii_confusable_latin.rs"));
 
 // Non-Cyrillic → Cyrillic confusable mappings.
 include!(concat!(env!("OUT_DIR"), "/confusables_to_cyrillic_phf.rs"));
+include!(concat!(env!("OUT_DIR"), "/confusables_to_arabic_phf.rs"));
+include!(concat!(env!("OUT_DIR"), "/confusables_to_hebrew_phf.rs"));
 
 // The upstream `confusables.txt` release both tables were folded from (#560), parsed
 // from the TSV header by build.rs rather than typed here a second time.
@@ -106,6 +108,10 @@ pub fn resolve_map(target_script: &str) -> Option<&'static phf::Map<char, &'stat
     match target_script {
         "latin" => Some(&TO_LATIN),
         "cyrillic" => Some(&TO_CYRILLIC),
+        // #792: the RTL targets. Opt-in like `cyrillic` — no preset consumes a non-Latin
+        // target, so these add a view rather than changing any existing answer.
+        "arabic" => Some(&TO_ARABIC),
+        "hebrew" => Some(&TO_HEBREW),
         _ => None,
     }
 }

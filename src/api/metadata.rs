@@ -239,7 +239,7 @@ mod tests {
         );
     }
 
-    /// Both bundled tables are folded from one upstream release, which is what lets a
+    /// All four bundled tables are folded from one upstream release, which is what lets a
     /// single const cover them. build.rs asserts it at build time; assert it here too so
     /// the reason for the single const is visible in the test suite.
     #[test]

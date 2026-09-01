@@ -17,6 +17,19 @@ use std::fs;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
+/// Every bundled confusables table: `(script token, TSV file name, generated ident)`.
+///
+/// One list, because there were three before this: the Latin and Cyrillic tables were
+/// built by hand-written blocks, Arabic and Hebrew by a loop, and the upstream-version
+/// agreement check compared only the first two. #792 added two tables and the check did
+/// not notice (#849 review). Adding a target here now reaches the version check for free.
+const CONFUSABLE_TABLES: [(&str, &str, &str); 4] = [
+    ("latin", "confusables_to_latin.tsv", "TO_LATIN"),
+    ("cyrillic", "confusables_to_cyrillic.tsv", "TO_CYRILLIC"),
+    ("arabic", "confusables_to_arabic.tsv", "TO_ARABIC"),
+    ("hebrew", "confusables_to_hebrew.tsv", "TO_HEBREW"),
+];
+
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let data_dir = Path::new("src/tables/data");
@@ -165,6 +178,24 @@ fn main() {
         fs::write(out_dir.join("confusables_to_cyrillic_phf.rs"), code).unwrap();
     }
 
+    // --- Confusables (Arabic and Hebrew targets, #792) ---
+    // The RTL targets. 948 of TR39's 1,007 strong-RTL sources were unmapped under both
+    // existing targets (#791), because generation drops a class entirely when no member
+    // belongs to the target script — so a class whose members are all Arabic survived
+    // into neither table. No `inject_folding_singleton_rows` here: that pass (#481) is
+    // about a canonical singleton resolving as its target, and both of these tables are
+    // generated from classes whose target is already the script's own letter.
+    for &(script, table, ident) in &CONFUSABLE_TABLES[2..] {
+        let entries = read_char_str_tsv(&data_dir.join(table));
+        assert!(!entries.is_empty(), "{table}: expected ≥1 entries, got 0");
+        let code = build_char_str_map(&entries, ident, "");
+        fs::write(
+            out_dir.join(format!("confusables_to_{script}_phf.rs")),
+            code,
+        )
+        .unwrap();
+    }
+
     // --- Bundled confusables.txt version (#560) ---
     // The upstream version is already written in the TSV header line that
     // `read_char_str_tsv` skips as a comment. Parse it here and emit it as a const so a
@@ -173,15 +204,28 @@ fn main() {
     // shape, which is the build-time assertion the acceptance criteria ask for: the
     // constant cannot silently go stale, and the version is never typed a second time.
     {
-        let latin = read_confusables_version(&data_dir.join("confusables_to_latin.tsv"));
-        let cyrillic = read_confusables_version(&data_dir.join("confusables_to_cyrillic.tsv"));
-        assert_eq!(
-            latin, cyrillic,
-            "confusables tables disagree on the upstream version (latin {latin}, cyrillic \
-             {cyrillic}); both are generated from one confusables.txt release, so a single \
-             CONFUSABLES_VERSION const no longer covers them. Either regenerate both from the \
-             same release, or split the const per table."
-        );
+        // Every bundled confusables table, not just the first two. #792 added Arabic and
+        // Hebrew, and this check kept comparing Latin against Cyrillic — so a mixed
+        // upstream release would have shipped with one CONFUSABLES_VERSION describing
+        // four tables it no longer described (#849 review). Derived from the table list
+        // above rather than written out again, so the next target is covered by adding it
+        // in one place.
+        let versions: Vec<(&str, String)> = CONFUSABLE_TABLES
+            .iter()
+            .map(|(script, table, _)| (*script, read_confusables_version(&data_dir.join(table))))
+            .collect();
+        let (first_script, first) = &versions[0];
+        for (script, version) in &versions[1..] {
+            assert_eq!(
+                first, version,
+                "confusables tables disagree on the upstream version ({first_script} \
+                 {first}, {script} {version}); all are generated from one confusables.txt \
+                 release, so a single CONFUSABLES_VERSION const no longer covers them. \
+                 Either regenerate them all from the same release, or split the const per \
+                 table."
+            );
+        }
+        let latin = first.clone();
         fs::write(
             out_dir.join("confusables_version.rs"),
             format!(

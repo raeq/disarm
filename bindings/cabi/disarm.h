@@ -264,7 +264,7 @@ disarm_normalize (
     char const * form);
 
 /** \brief
- *  Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"`).
+ *  Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"` | `"arabic"` | `"hebrew"`).
  */
 DisarmResult_t
 disarm_normalize_confusables (

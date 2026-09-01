@@ -372,6 +372,29 @@ ASCII_FOLD = _close_under_case({**_small_capital_folds(), **ASCII_FOLD})
 # Target script definitions
 # ---------------------------------------------------------------------------
 
+
+def is_arabic(cp: int) -> bool:
+    """True if codepoint is in an Arabic block (#792).
+
+    Includes the presentation-form blocks. They are removed by the NFKC step every preset
+    runs before the fold, so a row keyed on one is unreachable through a preset — but
+    `normalize_confusables` is callable directly, and the caller who does that is exactly
+    the one who has not normalized first.
+    """
+    return (
+        (0x0600 <= cp <= 0x06FF)  # Arabic
+        or (0x0750 <= cp <= 0x077F)  # Arabic Supplement
+        or (0x08A0 <= cp <= 0x08FF)  # Arabic Extended-A
+        or (0xFB50 <= cp <= 0xFDFF)  # Arabic Presentation Forms-A
+        or (0xFE70 <= cp <= 0xFEFF)  # Arabic Presentation Forms-B
+    )
+
+
+def is_hebrew(cp: int) -> bool:
+    """True if codepoint is in a Hebrew block (#792)."""
+    return (0x0590 <= cp <= 0x05FF) or (0xFB1D <= cp <= 0xFB4F)
+
+
 SCRIPTS = {
     "latin": {
         "is_target": is_latin,
@@ -380,6 +403,23 @@ SCRIPTS = {
     "cyrillic": {
         "is_target": is_cyrillic,
         "is_target_or_common": lambda cp: is_cyrillic(cp) or is_combining_mark(cp),
+    },
+    # #792: the RTL targets. 948 of the 1,007 strong-RTL sources in TR39 are unmapped
+    # under both existing targets (#791), because generation drops a class entirely when
+    # no member belongs to the target script — so a class whose members are all Arabic
+    # survives into neither table. These give those classes somewhere to land.
+    #
+    # They do NOT reach an intra-Arabic pair such as `\u06a9` / `\u0643`: both members are
+    # already in the target script, which `filter_direct` skips and `filter_via_classes`
+    # has nothing to map from. That is #848, and it needs the generator to stop discarding
+    # same-script classes rather than a new target.
+    "arabic": {
+        "is_target": is_arabic,
+        "is_target_or_common": lambda cp: is_arabic(cp) or is_combining_mark(cp),
+    },
+    "hebrew": {
+        "is_target": is_hebrew,
+        "is_target_or_common": lambda cp: is_hebrew(cp) or is_combining_mark(cp),
     },
 }
 

@@ -49,6 +49,7 @@ from disarm._boundary import (
     _has_anomalies,
     _has_anomalies_lex,
     _has_bidi_conflict,
+    _has_bidi_control,
     _inspect_anomalies,
     _inspect_anomalies_lex,
     _inspect_auto_lang,
@@ -790,7 +791,7 @@ def normalize_confusables(
     Args:
         text: Input string potentially containing homoglyphs.
         target_script: Script to normalize toward. Supported values:
-            ``"latin"`` (default, 2,290 mappings), ``"cyrillic"`` (1,349 mappings),
+            ``"latin"`` (default, 2,273 mappings), ``"cyrillic"`` (1,349 mappings),
             ``"arabic"`` (373 mappings) and ``"hebrew"`` (261 mappings).
 
             The two RTL targets exist because generation drops an equivalence
@@ -2015,6 +2016,45 @@ def has_bidi_conflict(text: str) -> bool:
         ['bidi']
     """
     return _has_bidi_conflict(text)
+
+
+def has_bidi_control(text: str) -> bool:
+    """True if text carries any of the twelve UAX #9 explicit formatting characters.
+
+    The uncontexted counterpart to `has_bidi_conflict`, which reads strong-direction
+    **letters** and is structurally blind to these. The two are disjoint — a string can
+    satisfy either, both or neither.
+
+    **All twelve, with no judgement applied.** `inspect_anomalies`'s ``bidi`` kind reports
+    nine: it holds back LRM, RLM and ALM, because a lone directional mark is ordinary in
+    right-to-left text and flagging it would fire on any page that uses one. This predicate
+    makes no such distinction, which is what makes it the right tool when the caller has
+    already decided their input should carry no bidi control at all — a filename, an
+    identifier, a source file.
+
+    The complete answer already existed and was reachable only through
+    ``is_suspicious_hostname(...)[1].bidi_control``, which meant calling a hostname
+    analyser on something that is not a hostname (#778).
+
+    Args:
+        text: Input string.
+
+    Returns:
+        ``True`` if any UAX #9 control is present.
+
+    Examples:
+        >>> has_bidi_control("invoice\u202egpj.exe")
+        True
+        >>> has_bidi_conflict("invoice\u202egpj.exe")  # disjoint: reads letters
+        False
+        >>> has_bidi_control("\u200e")  # a directional mark counts here
+        True
+        >>> inspect_anomalies("\u200e").kinds  # and is deliberately not an anomaly
+        []
+        >>> has_bidi_control("plain text")
+        False
+    """
+    return _has_bidi_control(text)
 
 
 def is_confusable(

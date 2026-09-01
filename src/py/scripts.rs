@@ -27,6 +27,13 @@ pub fn _has_bidi_conflict(text: &str) -> bool {
     crate::scripts::has_bidi_conflict(text)
 }
 
+/// `has_bidi_control(text) -> bool` — all twelve UAX #9 controls, uncontexted (#778).
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _has_bidi_control(text: &str) -> bool {
+    crate::scripts::has_bidi_control(text)
+}
+
 /// `inspect_auto_lang(text) -> dict` with keys `script`, `chosen_lang`,
 /// `reason`, `discriminators_hit`.
 #[pyfunction]

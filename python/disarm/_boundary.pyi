@@ -120,6 +120,9 @@ from disarm._core import (
     _has_bidi_conflict as _has_bidi_conflict,
 )
 from disarm._core import (
+    _has_bidi_control as _has_bidi_control,
+)
+from disarm._core import (
     _inspect_anomalies as _inspect_anomalies,
 )
 from disarm._core import (

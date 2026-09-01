@@ -8,9 +8,7 @@ into neither.
 
 The counts in that section are the kind that rot: they move whenever the confusable tables
 are regenerated, and #821 already moved them once between the issue being filed (4,384)
-and this being written (4,331), and #831 moved it again to 4,330 by mapping one of the
-17 ICANN LGR sources that had been unmapped. So they are derived here rather than trusted
-— the same
+and this being written (4,331). So they are derived here rather than trusted — the same
 discipline `tests/test_doc_table_counts.py` applies to the mapping totals.
 
 That applies to the per-script breakdown too. An earlier version of this file checked

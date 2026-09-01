@@ -34,34 +34,34 @@ import disarm
 #: Written as escapes: several are indistinguishable from each other on the page, which is
 #: the entire reason they are in this file.
 HOMOGLYPH_PAIRS = [
-    ("ò", "ỏ", "o-grave / o-hook"),
-    ("i", "ỉ", "i / i-hook"),
-    ("õ", "ō", "o-tilde / o-macron"),
-    ("ı", "ỉ", "dotless i / i-hook"),
-    ("ù", "ủ", "u-grave / u-hook"),
-    ("ɩ", "ỉ", "iota / i-hook"),
-    ("ý", "ỷ", "y-acute / y-hook"),
-    ("ń", "ṅ", "n-acute / n-dot"),
-    ("ỳ", "ỷ", "y-grave / y-hook"),
-    ("ć", "ċ", "c-acute / c-dot"),
-    ("à", "ả", "a-grave / a-hook"),
-    ("ē", "ẽ", "e-macron / e-tilde"),
-    ("ã", "ā", "a-tilde / a-macron"),
-    ("ğ", "ǧ", "g-breve / g-caron"),
-    ("ġ", "ģ", "g-dot / g-cedilla"),
-    ("ĩ", "ī", "i-tilde / i-macron"),
-    ("ũ", "ū", "u-tilde / u-macron"),
-    ("ź", "ż", "z-acute / z-dot"),
-    ("ǝ", "ə", "turned e / schwa"),
+    ("\u00f2", "\u1ecf", "o-grave / o-hook"),
+    ("i", "\u1ec9", "i / i-hook"),
+    ("\u00f5", "\u014d", "o-tilde / o-macron"),
+    ("\u0131", "\u1ec9", "dotless i / i-hook"),
+    ("\u00f9", "\u1ee7", "u-grave / u-hook"),
+    ("\u0269", "\u1ec9", "iota / i-hook"),
+    ("\u00fd", "\u1ef7", "y-acute / y-hook"),
+    ("\u0144", "\u1e45", "n-acute / n-dot"),
+    ("\u1ef3", "\u1ef7", "y-grave / y-hook"),
+    ("\u0107", "\u010b", "c-acute / c-dot"),
+    ("\u00e0", "\u1ea3", "a-grave / a-hook"),
+    ("\u0113", "\u1ebd", "e-macron / e-tilde"),
+    ("\u00e3", "\u0101", "a-tilde / a-macron"),
+    ("\u011f", "\u01e7", "g-breve / g-caron"),
+    ("\u0121", "\u0123", "g-dot / g-cedilla"),
+    ("\u0129", "\u012b", "i-tilde / i-macron"),
+    ("\u0169", "\u016b", "u-tilde / u-macron"),
+    ("\u017a", "\u017c", "z-acute / z-dot"),
+    ("\u01dd", "\u0259", "turned e / schwa"),
 ]
 
 #: Pairs the LGR blocks only for Common-LGR transitivity, which must NOT collide.
 COMMON_LGR_ONLY = [
-    ("u", "ü", "u / u-diaeresis"),
-    ("a", "á", "a / a-acute"),
-    ("o", "ó", "o / o-acute"),
-    ("n", "ń", "n / n-acute"),
-    ("e", "é", "e / e-acute"),
+    ("u", "\u00fc", "u / u-diaeresis"),
+    ("a", "\u00e1", "a / a-acute"),
+    ("o", "\u00f3", "o / o-acute"),
+    ("n", "\u0144", "n / n-acute"),
+    ("e", "\u00e9", "e / e-acute"),
 ]
 
 

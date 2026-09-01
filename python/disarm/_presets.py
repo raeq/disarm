@@ -77,6 +77,13 @@ def canonicalize(text: str) -> str:
         on the way out, not less. Encode at the sink; never emit this result
         into markup or a query unescaped.
 
+    Note:
+        **Stability.** A patch upgrade never changes this function's output; a
+        minor upgrade may, and is a possible reindex event (#644, #733). Read the
+        *Upgrade notes* of any minor release before deploying it against stored
+        values. The contract, and what has moved so far, is in ``docs/RUST_API.md``
+        under *Key stability*.
+
     Args:
         text: Input string (user-submitted, network-received, etc.).
 
@@ -193,12 +200,30 @@ def catalog_key(
 
     Warning:
         **The confusable fold runs after transliteration, so it rarely sees a
-        homoglyph.** Cyrillic and Greek lookalikes do collide with their Latin
-        spellings, but through romanization rather than the fold. Anything that
-        romanizes to something other than its lookalike is consumed before the
-        fold can act: Cherokee ``Ꮃ`` *looks* like ``W`` and romanizes to ``la``,
-        so ``Ꮃorld`` keys as ``laorld``. Private-use characters survive into the
-        key. This builds a key; screen adversarial input separately.
+        homoglyph.** Anything that romanizes to something other than its
+        lookalike is consumed before the fold can act: Cherokee ``Ꮃ`` *looks*
+        like ``W`` and romanizes to ``la``, so ``Ꮃorld`` keys as ``laorld``.
+
+        **Cyrillic and Greek are not the exception this warning used to claim**
+        (#735). They romanize like every other non-Latin script, and a
+        romanization is a *sound*, not a shape — so a letter that looks like one
+        Latin letter routinely keys as a different one::
+
+            раураl  → raural     not "paypal"  (Cyrillic а, р, у)
+            аррlе   → arrle      not "apple"
+            В       → v          looks like B
+            Ѕ       → dz         looks like S
+            Η       → i          Greek Eta, looks like H
+
+        Measured over the Cyrillic and Greek letter blocks, 29 of 96 and 31 of
+        129 letters key off their visual target. The ones that *do* line up —
+        ``а``/``a``, ``е``/``e``, ``о``/``o`` — line up because the sound and the
+        shape happen to agree, which is a coincidence of those letters rather
+        than a property of the pipeline.
+
+        Private-use characters survive into the key. This builds a key; screen
+        adversarial input separately, and use ``normalize_confusables`` or
+        ``is_confusable`` if what you need is the *visual* question.
 
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
@@ -496,6 +521,13 @@ def canonicalize_strict(text: str) -> str:
     combining-mark runs, and the terminal NFC recomposes any base+mark left
     adjacent by a stripped invisible — keeping the output idempotent, #416/#413)
 
+    Note:
+        **Stability.** A patch upgrade never changes this function's output; a
+        minor upgrade may, and is a possible reindex event (#644, #733). Read the
+        *Upgrade notes* of any minor release before deploying it against stored
+        values. The contract, and what has moved so far, is in ``docs/RUST_API.md``
+        under *Key stability*.
+
     Args:
         text: User-submitted input string.
 
@@ -569,6 +601,13 @@ def strip_obfuscation(text: str) -> str:
     → demojize → confusables → strip_accents → collapse_whitespace``
     (confusables runs after demojize so typographic punctuation in emoji names is
     folded too, keeping the output idempotent)
+
+    Note:
+        **Stability.** A patch upgrade never changes this function's output; a
+        minor upgrade may, and is a possible reindex event (#644, #733). Read the
+        *Upgrade notes* of any minor release before deploying it against stored
+        values. The contract, and what has moved so far, is in ``docs/RUST_API.md``
+        under *Key stability*.
 
     Args:
         text: Input text (user-generated, adversarial, multilingual).

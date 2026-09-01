@@ -321,6 +321,37 @@ drops rows reads as coverage it does not have. See
 `is_mixed_script()` reports whether multiple scripts are present in a string. It does not assess whether the mixing is benign (e.g., Latin punctuation in Arabic text, which is universal) or malicious (Cyrillic spoofing Latin). The `is_suspicious_hostname()` function applies stricter heuristics, but a not-suspicious result is a best-effort judgment, not a safety guarantee — it cannot certify the absence of all spoofing (whole-script spoofs and out-of-table confusables are out of scope — the out-of-table
 set is enumerable via `unmapped_confusables()`, see above).
 
+### Five surfaces rewrite printable ASCII (#725)
+
+Exactly three printable ASCII characters are TR39 confusable *sources*, so the fold
+rewrites them like any other lookalike. Until now this was recorded in a Rust comment and
+one paragraph of the LLM-pipelines guide, and nowhere a reader consulting the limits would
+look.
+
+| character | becomes | why |
+|---|---|---|
+| `\|` U+007C | `l` | the vertical bar is a lookalike of lowercase L |
+| `"` U+0022 | `''` | two apostrophes |
+| `` ` `` U+0060 | `'` | one apostrophe |
+
+Measured over `U+0021`–`U+007E`, these are the only printable ASCII characters any surface
+changes, and the surfaces split cleanly:
+
+| surface | rewrites ASCII |
+|---|---|
+| `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`, `catalog_key` | **yes** — all three |
+| `search_key`, `sort_key`, `ml_normalize` | no |
+
+`search_key` and `sort_key` escape it because `strip_accents` and the transliteration step
+consume the characters before the fold runs, not because they were exempted deliberately.
+
+**This matters wherever those three characters are syntax rather than text.** `|` is a
+delimiter in chat templates and a pipe in shell; `"` and `` ` `` are quoting in every
+language that has them. It is the reason `code_context` reports the homoglyph class rather
+than folding it — see
+[Code is not prose](user-guide/llm-pipelines.md#code-is-not-prose-code_context-and-strip-and-report)
+— and the reason a normalizer belongs *before* a parser rather than inside one.
+
 ## Bidirectional Text Security
 
 ### Bidi overrides are a real attack vector

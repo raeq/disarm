@@ -158,6 +158,14 @@ const WRAP: &[char] = &[
 ];
 /// CJK script names: legitimately mixed with Latin in ordinary text (annotations,
 /// product names, mixed-language prose), so they are exempt from the mixed-script branch.
+///
+/// **Wider than the UTS #39 §5.1 augmented sets, on purpose** (#776).
+/// [`crate::scripts::is_mixed_script`] resolves those sets exactly, so it calls Latin
+/// beside Japanese mixed — a *label* doing that is the shape the rule exists to catch.
+/// This detector runs over prose, where a Japanese sentence carrying a product name in
+/// Latin is ordinary text, so it exempts the combination as well. The two answers differ
+/// for `例えa` and that is a policy, recorded in
+/// `tests/test_augmented_script_sets.py::test_the_detector_stays_wider_on_purpose`.
 const CJK_SCRIPTS: &[&str] = &["Han", "Hiragana", "Katakana", "Hangul", "Bopomofo"];
 
 /// Legitimate spoof-looking unit symbols (lowercased), exempt from the mixed-script branch.

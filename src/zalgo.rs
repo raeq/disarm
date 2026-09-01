@@ -107,6 +107,66 @@ pub(crate) fn is_zalgo(text: &str, threshold: usize) -> bool {
     exceeds_combining_run(text, threshold)
 }
 
+/// Drop a nonspacing mark that repeats immediately on the same base (#835).
+///
+/// UTS #39 §5.4 lists a sequence of the same nonspacing mark as an optional detection,
+/// and the reason is legibility rather than volume: `a` + two acutes renders exactly like
+/// `a` + one, so the two spellings are indistinguishable to a reader while producing
+/// different bytes, and therefore different keys.
+///
+/// Deliberately NOT part of [`strip_zalgo_into`]. That function is the cap, and #788
+/// paired it with [`is_zalgo`] so the two agree: `strip_zalgo` must not remove a mark
+/// from a string `is_zalgo` calls ordinary. Two acutes IS ordinary by the threshold —
+/// the repeat is a different fact about the text, not a larger amount of the same one —
+/// so folding this into the cap broke that pairing on 540 strings. It is its own step,
+/// used by the key builders, and the cap keeps its contract.
+///
+/// Nonzero combining class only, matching the cap's own discriminator (#842): a class-0
+/// mark is positioned rather than stacked, so a doubled Indic matra is an orthography
+/// question rather than this one.
+pub(crate) fn drop_repeated_marks_into(text: &str, out: &mut String) {
+    out.clear();
+    // Same shape as the cap's fast path: the check is cheaper than the rewrite, and most
+    // text has no repeat at all.
+    if !has_repeated_mark(text) {
+        out.extend(text.nfc());
+        return;
+    }
+    let mut filtered = String::with_capacity(text.len());
+    let mut previous: Option<char> = None;
+    for ch in text.nfd() {
+        if is_combining_mark(ch) && canonical_combining_class(ch) != 0 {
+            if previous == Some(ch) {
+                continue;
+            }
+            previous = Some(ch);
+        } else {
+            previous = None;
+        }
+        filtered.push(ch);
+    }
+    out.extend(filtered.nfc());
+}
+
+/// Whether any base carries the same stacking mark twice in a row (#835).
+///
+/// Cheap and streaming like [`exceeds_combining_run`], and needed for the same reason:
+/// the rewrite above cannot run if this decides there is nothing to do.
+fn has_repeated_mark(text: &str) -> bool {
+    let mut previous: Option<char> = None;
+    for ch in text.nfd() {
+        if is_combining_mark(ch) && canonical_combining_class(ch) != 0 {
+            if previous == Some(ch) {
+                return true;
+            }
+            previous = Some(ch);
+        } else {
+            previous = None;
+        }
+    }
+    false
+}
+
 /// Strip excessive combining marks, keeping at most `max_marks` per base
 /// character.  Operates in NFD (decomposed) space and recomposes to NFC.
 ///

@@ -177,10 +177,11 @@ assert not unsafe_boundary("a", "example")  # a starter cannot compose backwards
 
 Measured over 4,000 random pairs from a 13-character alphabet of bases and marks: **zero
 false negatives** — it never calls a boundary safe when the two routes disagree. It errs
-the other way, calling 838 boundaries unsafe whose results happened to match anyway, which
+the other way, calling 693 boundaries unsafe whose results happened to match anyway, which
 is the direction that costs a caller a join rather than a wrong key. (That figure was 813
-before #842 stopped `canonicalize` truncating class-0 marks; the check itself did not
-change, the text it is measured over did. It is asserted in
+before #842 stopped `canonicalize` truncating class-0 marks, and 838 before #835 made
+`canonicalize` collapse a mark repeated on one base; the check itself did not change, the
+text it is measured over did. It is asserted in
 `tests/test_concat_normalization.py` rather than trusted, which is how the move was
 noticed.)
 

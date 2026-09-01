@@ -254,6 +254,26 @@ pub enum AnomalyKind {
     ///
     /// A single system is never flagged however unusual it looks: `٢٠٢٤` is a year.
     MixedNumbers,
+    /// A base carrying the **same stacking mark twice** — UTS #39 5.4's first
+    /// optional-detection rule, *"forbid sequences of the same nonspacing mark"*.
+    ///
+    /// Its own kind rather than a [`Zalgo`](Self::Zalgo) finding, for the reason #724
+    /// gave for [`EnclosingMark`](Self::EnclosingMark): a different fact, not "too many
+    /// marks" but "the same mark twice", which no count reaches — two is below
+    /// `is_zalgo`'s threshold by construction.
+    ///
+    /// It is not removable by the cap either. `strip_zalgo` keeps up to
+    /// `DEFAULT_MAX_MARKS` per position, so a duplicate survives canonicalization
+    /// whatever the cap is set to: a base with two acutes does not canonicalize to the
+    /// same string as the same base with one. Two spellings a reader sees as one word
+    /// produce different keys, and nothing reported it (#835).
+    ///
+    /// Restricted to marks of **nonzero combining class**, which is #842's discriminator:
+    /// a class-0 mark is positioned by the renderer rather than stacked, and a repeated
+    /// Indic matra or Thai vowel is an orthography question rather than this one. The
+    /// `Me` half of the same UTS #39 rule is [`EnclosingMark`](Self::EnclosingMark),
+    /// which #724 already triggers on two.
+    DuplicateMark,
 }
 
 impl AnomalyKind {
@@ -273,6 +293,7 @@ impl AnomalyKind {
             AnomalyKind::Confusable => "confusable",
             AnomalyKind::EnclosingMark => "enclosing_mark",
             AnomalyKind::MixedNumbers => "mixed_numbers",
+            AnomalyKind::DuplicateMark => "duplicate_mark",
         }
     }
 }
@@ -340,6 +361,10 @@ impl Finding {
             ),
             AnomalyKind::MixedNumbers => format!(
                 "{:?} mixes digits from {} (UTS #39 Mixed Numbers)",
+                self.token, self.detail
+            ),
+            AnomalyKind::DuplicateMark => format!(
+                "{:?} repeats the same combining mark ({}), which renders as one",
                 self.token, self.detail
             ),
         }
@@ -530,6 +555,36 @@ fn whole_token_compat_is_ordinary(ch: char) -> bool {
         | '\u{1D80}'..='\u{1DBF}'    // Phonetic Extensions Supplement
         | '\u{1F100}'..='\u{1F1FF}'  // Enclosed Alphanumeric Supplement
     )
+}
+
+/// The first stacking mark that appears twice in a row on one base (#835).
+///
+/// Compared over NFD. Canonical ordering sorts a base's marks by combining class, so two
+/// copies of one mark end up adjacent however they were typed — the same property that
+/// makes `strip_zalgo`'s per-class count un-evadable by interleaving (#842).
+///
+/// Nonzero combining class only, which is #842's discriminator: a class-0 mark is
+/// positioned by the renderer rather than stacked, so a repeated Indic matra or Thai
+/// vowel is an orthography question and not this one.
+///
+/// A run is bounded by any non-mark, so `a` + acute + `b` + acute is two bases carrying
+/// one mark each and is not a finding.
+fn duplicate_stacking_mark(tok: &str) -> Option<char> {
+    use unicode_normalization::char::{canonical_combining_class, is_combining_mark};
+    use unicode_normalization::UnicodeNormalization;
+
+    let mut previous: Option<char> = None;
+    for ch in tok.nfd() {
+        if is_combining_mark(ch) && canonical_combining_class(ch) != 0 {
+            if previous == Some(ch) {
+                return Some(ch);
+            }
+            previous = Some(ch);
+        } else {
+            previous = None;
+        }
+    }
+    None
 }
 
 /// The ASCII a confusable fold introduces that the input did not have (#719, #737).
@@ -927,6 +982,16 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
                 AnomalyKind::Zalgo,
                 "stacked combining marks".to_string(),
             ));
+        }
+        // #835, UTS #39 5.4: the same stacking mark twice on one base. AFTER the zalgo
+        // rule, unlike the enclosing-mark rule above it. #724 could go first because one
+        // enclosing mark per base is below every count threshold by construction, so the
+        // two rules can never both fire. A repeat has no such bound — four identical
+        // acutes are a repeat AND a stack — and putting this first made every zalgo
+        // finding report as `duplicate_mark` instead, since heavy stacks repeat. Zalgo is
+        // the louder fact about that token; this rule is for the repeats no count reaches.
+        if let Some(dup) = duplicate_stacking_mark(tok) {
+            return Some(mk(AnomalyKind::DuplicateMark, codepoint(dup)));
         }
         // #702: per WORD, not per token. `IT-специалист` reported `Latin and Cyrillic` —
         // byte-for-byte the finding `раypal` produces — because a hyphen did not end a

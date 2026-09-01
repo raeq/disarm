@@ -57,7 +57,7 @@ export { Lexicon }
 export { Pipeline }
 
 /** The anomaly branch that fired for a finding. */
-export type AnomalyKind = 'invisible' | 'bidi' | 'bidi_mixed' | 'zalgo' | 'mixed_script' | 'leet' | 'segmentation' | 'control' | 'compat_fold' | 'confusable' | 'enclosing_mark' | 'mixed_numbers'
+export type AnomalyKind = 'invisible' | 'bidi' | 'bidi_mixed' | 'zalgo' | 'mixed_script' | 'leet' | 'segmentation' | 'control' | 'compat_fold' | 'confusable' | 'enclosing_mark' | 'mixed_numbers' | 'duplicate_mark'
 
 /**
  * One reason a token is anomalous. Re-typed over the generated {@link NativeFinding}

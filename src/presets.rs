@@ -60,6 +60,12 @@ enum Step {
     StripZeroWidth,
     CollapseWs,
     Zalgo(usize),
+    /// Drop a nonspacing mark that repeats on one base (UTS #39 §5.4, #835).
+    ///
+    /// Separate from [`Step::Zalgo`] on purpose: the cap is paired with `is_zalgo` by
+    /// #788 and must not touch a string the predicate calls ordinary, and two identical
+    /// acutes are ordinary by count. This is about the repeat, not the amount.
+    DropRepeatedMarks,
     FoldCase,
     StripAccents,
     Transliterate {
@@ -211,6 +217,10 @@ fn apply_into(
         }
         Step::Zalgo(cap) => {
             zalgo::strip_zalgo_into(input, cap, out);
+            Ok(true)
+        }
+        Step::DropRepeatedMarks => {
+            zalgo::drop_repeated_marks_into(input, out);
             Ok(true)
         }
         Step::FoldCase => {
@@ -490,6 +500,9 @@ impl Actionable {
                     m.marks = true; // a run of standalone marks can exceed the cap
                     m.zalgo_cap = Some(cap);
                 }
+                // A standalone run of marks can repeat without any base at all, so this
+                // is mark-touching for the same reason the cap is.
+                Step::DropRepeatedMarks => m.marks = true,
                 Step::StripAccents => {
                     m.marks = true;
                     m.strip_accents = true;
@@ -962,6 +975,14 @@ pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr>
             //     AFTER the control / zero-width strip above so a stripped invisible
             //     between two marks cannot split a mark run and hide the count (the #121
             //     lesson); a later strip would merge the runs and break idempotency.
+            // 3a. Drop a mark that repeats on one base (UTS #39 5.4, #835). BEFORE the
+            //     cap, not after, so the cap counts distinct marks: `a` + five acutes +
+            //     five graves capped first keeps three acutes and loses the grave
+            //     entirely, while deduping first keeps one of each — the marks a reader
+            //     can actually tell apart. Shares the cap's ordering requirement and so
+            //     its position: after the zero-width strip, because an invisible between
+            //     two identical marks would otherwise hide the repeat (#121, #850).
+            Step::DropRepeatedMarks,
             Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
             // 4. NFC (#416): the strips above can leave a base character next to a
             //    combining mark that was non-adjacent before (e.g. separated by a
@@ -1445,6 +1466,14 @@ pub(crate) fn sort_key<'a>(
             //     count. #843 first placed it before them, and the split run then merged on
             //     the next pass and truncated further: `sort_key` of U+0301 * 3 + ZWSP +
             //     U+0301 returned four marks, and `sort_key` of *that* returned three.
+            // 3a. Drop a mark that repeats on one base (UTS #39 5.4, #835). BEFORE the
+            //     cap, not after, so the cap counts distinct marks: `a` + five acutes +
+            //     five graves capped first keeps three acutes and loses the grave
+            //     entirely, while deduping first keeps one of each — the marks a reader
+            //     can actually tell apart. Shares the cap's ordering requirement and so
+            //     its position: after the zero-width strip, because an invisible between
+            //     two identical marks would otherwise hide the repeat (#121, #850).
+            Step::DropRepeatedMarks,
             Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
             // 6. Terminal NFC (#416): because sort_key now *preserves* Latin accents
             //    (#411) instead of folding them away, a combining mark separated from its
@@ -1600,6 +1629,14 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
             //     `sort_key`'s cap after the zero-width strip; the cross-script mark strip
             //     is a third character-removing step, and the one that removes marks
             //     specifically. Every removing step has to precede the count.
+            // 3a. Drop a mark that repeats on one base (UTS #39 5.4, #835). BEFORE the
+            //     cap, not after, so the cap counts distinct marks: `a` + five acutes +
+            //     five graves capped first keeps three acutes and loses the grave
+            //     entirely, while deduping first keeps one of each — the marks a reader
+            //     can actually tell apart. Shares the cap's ordering requirement and so
+            //     its position: after the zero-width strip, because an invisible between
+            //     two identical marks would otherwise hide the repeat (#121, #850).
+            Step::DropRepeatedMarks,
             Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
             // 5. Fold whitespace (#433: fold-only — control/zero-width were already
             //    stripped explicitly above, before the zalgo cap, per #121). The line
@@ -2266,10 +2303,15 @@ mod tests {
         // string is ordinary text by the library's own predicate, and `canonicalize` was
         // removing a mark from it anyway. The fixture had frozen that. `strip_format`
         // does not run the zalgo step and is unchanged, which is the control.
+        //
+        // #835 moved the same entry again, for the opposite reason: three acutes is not
+        // too MANY marks, it is the same mark three times, which renders as one and which
+        // no keyboard produces. So the row now folds to a single acute. `strip_format` is
+        // still the control and still unchanged.
         let alias_in = "Ηеllо\u{202E}\u{200B}Wo\u{0301}\u{0301}\u{0301}rld\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}";
         assert_eq!(
             canonicalize(alias_in).unwrap(),
-            "HelloW\u{f3}\u{301}\u{301}rld\u{1f3f4}\u{e0067}\u{e0062}\u{e0073}\u{e0063}\u{e0074}\u{e007f}"
+            "HelloW\u{f3}rld\u{1f3f4}\u{e0067}\u{e0062}\u{e0073}\u{e0063}\u{e0074}\u{e007f}"
         );
         assert_eq!(
             strip_format(alias_in),
@@ -2277,7 +2319,7 @@ mod tests {
         );
         assert_eq!(
             canonicalize_strict(alias_in).unwrap(),
-            "HelloW\u{f3}\u{301}\u{301}rld\u{1f3f4}\u{e0067}\u{e0062}\u{e0073}\u{e0063}\u{e0074}\u{e007f}"
+            "HelloW\u{f3}rld\u{1f3f4}\u{e0067}\u{e0062}\u{e0073}\u{e0063}\u{e0074}\u{e007f}"
         );
         assert_eq!(search_key("CAFÉ\u{200B} ИМЯ", None).unwrap(), "cafe imya");
         assert_eq!(
@@ -2509,16 +2551,21 @@ mod tests {
     /// later PR's CI, minimal input below.
     #[test]
     fn sort_key_zalgo_cap_runs_after_the_zero_width_strip() {
-        let input = "\u{301}\u{301}\u{301}\u{200b}\u{301}";
+        // Four DISTINCT marks, all combining class 230, split by a zero-width. Distinct
+        // deliberately: #835 made the cap drop a repeat of the same mark whatever the cap
+        // allows, so the original four-identical-acutes input now collapses to one mark
+        // for that reason and stops exercising the ordering this test is about.
+        let input = "\u{300}\u{301}\u{302}\u{200b}\u{303}";
         let once = sort_key(input, None).unwrap();
         let twice = sort_key(&once, None).unwrap();
         assert_eq!(once, twice, "sort_key must be idempotent on {input:?}");
-        // The four marks are one run once the ZWSP is gone, so the cap applies to all
-        // four on the first pass rather than to two runs of three and one.
-        assert_eq!(
-            once.chars().filter(|c| *c == '\u{301}').count(),
-            crate::zalgo::DEFAULT_MAX_MARKS,
-        );
+        // The four are one run once the ZWSP is gone, so the cap applies to all four on
+        // the first pass rather than to two runs of three and one.
+        let marks = once
+            .chars()
+            .filter(|c| unicode_normalization::char::canonical_combining_class(*c) == 230)
+            .count();
+        assert_eq!(marks, crate::zalgo::DEFAULT_MAX_MARKS);
     }
 
     /// The ordering constraint itself, for every pipeline that caps marks.
@@ -2533,43 +2580,52 @@ mod tests {
         let src = include_str!("presets.rs");
         let mut checked = 0;
         for (name, body) in step_arrays(src) {
-            let Some(z) = body.find("Step::Zalgo(") else {
-                continue;
-            };
-            // `Step::Zalgo(0)` removes every mark whatever the run structure, so a
-            // split run cannot change its output and the ordering does not bind.
-            // `strip_obfuscation` relies on this;
-            // `zalgo_zero_is_order_independent` below checks the exemption is real
-            // rather than assumed.
-            if body[z..].starts_with("Step::Zalgo(0)") {
-                continue;
-            }
-            let before = &body[..z];
-            // EVERY step that can delete a character from between two marks, not just
-            // the one this gate was first written for. #850 checked `StripZeroWidth`
-            // alone, which is why it did not see #862: `ConfusablesMarkFixedPoint`
-            // carries the #615 cross-script mark strip, and that removes *marks* —
-            // so a cross-script mark split two runs, survived the count, was deleted,
-            // and the runs merged for the next pass.
-            //
-            // Naming them rather than accepting "any strip" is deliberate: an
-            // over-broad gate is what let #850's own bug through. Add to this list when
-            // a step gains the ability to remove a character, and the ordering is
-            // enforced for every pipeline at once.
-            for remover in MARK_RUN_SPLITTERS {
-                assert!(
-                    before.contains(remover),
-                    "{name}: Step::Zalgo runs before {remover}, which can delete a \
+            // Every step whose result depends on how marks are grouped into runs, not
+            // just the cap. #835's `DropRepeatedMarks` has the identical hazard for the
+            // identical reason — a zero-width between two acutes hides the repeat from
+            // it exactly as it hides the count from the cap — and a gate that names only
+            // `Step::Zalgo(` would have gone on passing while a new step reintroduced
+            // the bug it exists to catch.
+            for step in ["Step::Zalgo(", "Step::DropRepeatedMarks"] {
+                let Some(z) = body.find(step) else {
+                    continue;
+                };
+                // `Step::Zalgo(0)` removes every mark whatever the run structure, so a
+                // split run cannot change its output and the ordering does not bind.
+                // `strip_obfuscation` relies on this;
+                // `zalgo_zero_is_order_independent` below checks the exemption is real
+                // rather than assumed.
+                if body[z..].starts_with("Step::Zalgo(0)") {
+                    continue;
+                }
+                let before = &body[..z];
+                // EVERY step that can delete a character from between two marks, not just
+                // the one this gate was first written for. #850 checked `StripZeroWidth`
+                // alone, which is why it did not see #862: `ConfusablesMarkFixedPoint`
+                // carries the #615 cross-script mark strip, and that removes *marks* —
+                // so a cross-script mark split two runs, survived the count, was deleted,
+                // and the runs merged for the next pass.
+                //
+                // Naming them rather than accepting "any strip" is deliberate: an
+                // over-broad gate is what let #850's own bug through. Add to this list when
+                // a step gains the ability to remove a character, and the ordering is
+                // enforced for every pipeline at once.
+                for remover in MARK_RUN_SPLITTERS {
+                    assert!(
+                        before.contains(remover),
+                        "{name}: {step} runs before {remover}, which can delete a \
                      character from between two mark runs — the runs then merge on the \
-                     next pass and the cap truncates further (#121, #850, #862)",
-                );
+                     next pass and the mark rule sees a different grouping (#121, #850, \
+                     #862, #835)",
+                    );
+                }
+                checked += 1;
             }
-            checked += 1;
         }
         assert!(
-            checked >= 3,
-            "expected at least canonicalize, canonicalize_strict and sort_key to cap \
-             marks; found {checked} — has the parser drifted?",
+            checked >= 6,
+            "expected the cap AND the repeat rule in each of canonicalize, \
+             canonicalize_strict and sort_key; found {checked} — has the parser drifted?",
         );
     }
 

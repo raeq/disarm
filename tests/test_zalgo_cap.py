@@ -110,7 +110,17 @@ def test_real_zalgo_is_still_stripped() -> None:
     zalgo = "Z" + "́" * 8
     assert disarm.is_zalgo(zalgo)
     assert marks(disarm.strip_zalgo(zalgo)) == 3
-    assert marks(disarm.canonicalize(zalgo)) == 3
+    # #835 split these two deliberately. Eight acutes is one mark repeated, so the key
+    # builders collapse it to one; `strip_zalgo` is the cap alone and still keeps three,
+    # because #788 pairs it with `is_zalgo` and the pairing is what stops it removing
+    # marks from text the predicate calls ordinary.
+    assert marks(disarm.canonicalize(zalgo)) == 1
+
+    # The cap itself is unchanged inside `canonicalize`: eight DISTINCT class-230 marks
+    # have nothing to dedupe, so three survive exactly as before.
+    distinct = "Z" + "̀́̂̃̄̆̇̈"
+    assert disarm.is_zalgo(distinct)
+    assert marks(disarm.canonicalize(distinct)) == 3
 
 
 @pytest.mark.parametrize(

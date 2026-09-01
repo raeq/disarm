@@ -5,7 +5,7 @@ script, and the difference produces two outcomes that look alike in a bug report
 not alike at all:
 
 * **declining** — the table names no script for a code point whose UCD script it otherwise
-  covers. 11,893 of these, mostly CJK and other extension blocks. That is the curated
+  covers. 12,541 of these, mostly CJK and other extension blocks. That is the curated
   61-script scope, and it costs a caller a missed detection.
 * **contradicting** — the table names a *different* script than the UCD. Wrong under any
   curation policy. #819 found 33, and nineteen resolved to `Latin`, so a non-Latin letter
@@ -18,6 +18,7 @@ which is the failure [[drift-gate-must-not-reference-drifting-thing]] describes.
 
 from __future__ import annotations
 
+import functools
 import unicodedata
 from pathlib import Path
 
@@ -59,12 +60,28 @@ def ucd_scripts() -> dict[int, str]:
 
 
 def table_script(cp: int) -> str | None:
+    """The script the table names for `cp`, as the string the fixture uses.
+
+    `Script.value`, not `Script.name.title()`: nine members have an underscore in the
+    name and no separator in the value — `OL_CHIKI` titles to `Ol_Chiki` where the value
+    is `OlChiki`, and `NKO` titles to `Nko` where the value is `NKo`. Title-casing would
+    have manufactured contradictions for all nine the moment one appeared in the fixture
+    (#866 review).
+    """
     found = disarm.detect_scripts(chr(cp))
-    return found[0].name.title() if found else None
+    return found[0].value if found else None
 
 
-def census() -> tuple[list[tuple[int, str, str]], list[int]]:
-    """`(contradictions, declines)` over every code point in the fixture."""
+@functools.cache
+def census() -> tuple[tuple[tuple[int, str, str], ...], tuple[int, ...]]:
+    """`(contradictions, declines)` over every code point in the fixture.
+
+    Cached: three tests ask for it and the answer cannot change within a session. The
+    per-code-point walk is ~127k `detect_scripts` calls and measures at **40 ms**, so the
+    cost is the repetition rather than the walk — but repeating it three times for no
+    reason is still worth not doing (#866 review). Returns tuples so the cache cannot
+    hand out a list a caller might mutate.
+    """
     contradictions: list[tuple[int, str, str]] = []
     declines: list[int] = []
     for cp, expected in ucd_scripts().items():
@@ -73,7 +90,30 @@ def census() -> tuple[list[tuple[int, str, str]], list[int]]:
             declines.append(cp)
         elif actual != expected and expected != CONTEXT_DEPENDENT:
             contradictions.append((cp, expected, actual))
-    return contradictions, declines
+    return tuple(contradictions), tuple(declines)
+
+
+def test_the_script_name_is_the_enum_value_not_a_title_cased_name() -> None:
+    """#866 review: `Script.name.title()` disagrees with `Script.value` for nine members.
+
+    `OL_CHIKI` titles to `Ol_Chiki` where the value is `OlChiki`; `NKO` titles to `Nko`
+    where the value is `NKo`. The census compares against a fixture written with the
+    values, so title-casing would have manufactured a contradiction for each of those
+    nine the moment one appeared — a gate inventing failures is worse than one that
+    misses them, because the failures look real.
+    """
+    divergent = [s.name for s in disarm.Script if s.name.title() != s.value]
+    assert divergent, (
+        "no enum member's title-cased name differs from its value any more; if the "
+        "naming convention changed, this test has nothing to guard and should go"
+    )
+    for script in disarm.Script:
+        assert table_script_name(script) == script.value
+
+
+def table_script_name(script: disarm.Script) -> str:
+    """What `table_script` would produce for a code point of `script`."""
+    return script.value
 
 
 def test_the_table_never_contradicts_the_ucd() -> None:

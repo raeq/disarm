@@ -6,7 +6,7 @@
 in two ways that need to be told apart:
 
 * the table **declines** to name a script for a code point whose UCD script it otherwise
-  covers — 11,893 of them, mostly CJK and other extension blocks. That is the curated
+  covers — 12,541 of them, mostly CJK and other extension blocks. That is the curated
   61-script scope doing its job, and it costs a caller a missed detection rather than a
   wrong answer.
 * the table names a **different** script than the UCD does. That is wrong under any

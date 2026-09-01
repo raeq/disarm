@@ -880,7 +880,8 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
   Found by `exhaustive_preset_idempotency` in the publish workflow while cutting the
   release — after the same suite passed locally on the same commit with a different draw.
-  That is also why Tier 3 no longer runs in four workflows at once (see *Fixed*, above).
+  That non-determinism is why Tier 3 no longer runs in four publish workflows at once
+  (#898).
 
 - **The key-fixture digest moved on every version bump (#887 follow-up).** `#887` added
   `KEY_FIXTURE_SHA256` so that regenerating the fixture without bumping

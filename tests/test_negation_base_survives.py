@@ -50,7 +50,21 @@ PRESETS = {
 }
 
 
-@pytest.mark.parametrize(("base", "category", "why"), NON_SURVIVING_BASES, ids=lambda v: v)
+def _base_id(value: str) -> str:
+    """A selectable id for one parametrized value.
+
+    pytest calls `ids` once per *argument*, not once per tuple, so this sees the base,
+    then the category, then the prose. Returning them verbatim collected fine — pytest
+    escapes `\x00` itself — but produced ids carrying a whole sentence and a bare space,
+    which cannot be typed after `-k` (#899 review). Code points for the characters,
+    passthrough for the short category, and nothing for the prose.
+    """
+    if len(value) == 1 and (value.isspace() or not value.isprintable() or ord(value) > 0x7F):
+        return f"U+{ord(value):04X}"
+    return value if len(value) <= 3 else ""
+
+
+@pytest.mark.parametrize(("base", "category", "why"), NON_SURVIVING_BASES, ids=_base_id)
 @pytest.mark.parametrize("overlay", OVERLAYS, ids=lambda v: f"U+{ord(v):04X}")
 def test_an_overlay_on_a_disappearing_base_is_idempotent(
     base: str, category: str, why: str, overlay: str

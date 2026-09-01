@@ -1282,7 +1282,11 @@ pub(crate) fn sort_key<'a>(
         //     strips accents), so accent preservation — the sort_key invariant
         //     (`Über` → `über`) — is unaffected.
         Step::FoldCase,
-        // 4b. Cap combining marks (#807). `sort_key` was the one key builder with
+        // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
+        Step::StripControl,
+        Step::StripZeroWidth,
+        Step::CollapseWs,
+        // 5b. Cap combining marks (#807). `sort_key` was the one key builder with
         //     neither `strip_zalgo` nor `strip_accents`, so nothing bounded them:
         //     `sort_key("a" + U+0301 * 40 + "b")` returned 41 characters and
         //     `has_anomalies` called its own output `zalgo`. The other two builders are
@@ -1295,11 +1299,13 @@ pub(crate) fn sort_key<'a>(
         //     library already calls abuse and nothing it calls ordinary — which is why
         //     #788 had to land first. A three-mark Bengali cluster or a pointed Hebrew
         //     consonant sorts unchanged.
+        //
+        //     Runs AFTER the strips above, matching `canonicalize` step 3b, so a
+        //     stripped invisible between two marks cannot split a run and hide the
+        //     count. #843 first placed it before them, and the split run then merged on
+        //     the next pass and truncated further: `sort_key` of U+0301 * 3 + ZWSP +
+        //     U+0301 returned four marks, and `sort_key` of *that* returned three.
         Step::Zalgo(crate::zalgo::DEFAULT_MAX_MARKS),
-        // 5. Strip non-whitespace controls + zero-width, then fold whitespace (#433).
-        Step::StripControl,
-        Step::StripZeroWidth,
-        Step::CollapseWs,
         // 6. Terminal NFC (#416): because sort_key now *preserves* Latin accents
         //    (#411) instead of folding them away, a combining mark separated from its
         //    base by a now-stripped zero-width would otherwise survive in decomposed
@@ -2251,6 +2257,153 @@ mod tests {
         assert_eq!(
             canonicalize_strict("c").unwrap(),
             canonicalize_strict(input).unwrap()
+        );
+    }
+
+    /// #843's zalgo cap was placed before the zero-width strip, so an invisible could
+    /// split a mark run, survive the count, and then be deleted — merging the runs for
+    /// the next pass, which truncated further. Found by `sort_key_idempotent` on a
+    /// later PR's CI, minimal input below.
+    #[test]
+    fn sort_key_zalgo_cap_runs_after_the_zero_width_strip() {
+        let input = "\u{301}\u{301}\u{301}\u{200b}\u{301}";
+        let once = sort_key(input, None).unwrap();
+        let twice = sort_key(&once, None).unwrap();
+        assert_eq!(once, twice, "sort_key must be idempotent on {input:?}");
+        // The four marks are one run once the ZWSP is gone, so the cap applies to all
+        // four on the first pass rather than to two runs of three and one.
+        assert_eq!(
+            once.chars().filter(|c| *c == '\u{301}').count(),
+            crate::zalgo::DEFAULT_MAX_MARKS,
+        );
+    }
+
+    /// The ordering constraint itself, for every pipeline that caps marks.
+    ///
+    /// `canonicalize` has carried this rule as a prose comment since #121 — a stripped
+    /// invisible between two marks must not be able to split a run and hide the count —
+    /// and nothing checked it. #843 then violated it in `sort_key`. The `STEPS` arrays
+    /// are function-local consts, so this reads the source: it is the only way to see
+    /// every pipeline at once, and a new builder is covered the day it is written.
+    #[test]
+    fn every_zalgo_cap_runs_after_its_invisible_strip() {
+        let src = include_str!("presets.rs");
+        let mut checked = 0;
+        for (name, body) in step_arrays(src) {
+            let Some(z) = body.find("Step::Zalgo(") else {
+                continue;
+            };
+            // `Step::Zalgo(0)` removes every mark whatever the run structure, so a
+            // split run cannot change its output and the ordering does not bind.
+            // `strip_obfuscation` relies on this;
+            // `zalgo_zero_is_order_independent` below checks the exemption is real
+            // rather than assumed.
+            if body[z..].starts_with("Step::Zalgo(0)") {
+                continue;
+            }
+            let before = &body[..z];
+            // `StripZeroWidth` specifically, not "any strip". `StripInvisible` handles
+            // the #413 smuggling classes and leaves U+200B alone, so accepting it here
+            // would have passed the exact pipeline this test was written for: `sort_key`
+            // ran `StripInvisible` at step 3, `Zalgo` at 4b and `StripZeroWidth` at 5.
+            // A gate that admits the bug it was written for is decoration (#850 review).
+            assert!(
+                before.contains("Step::StripZeroWidth"),
+                "{name}: Step::Zalgo runs before Step::StripZeroWidth; a stripped \
+                 zero-width can split a mark run, survive the count and then merge the \
+                 runs for the next pass (#121, #850)",
+            );
+            checked += 1;
+        }
+        assert!(
+            checked >= 3,
+            "expected at least canonicalize, canonicalize_strict and sort_key to cap \
+             marks; found {checked} — has the parser drifted?",
+        );
+    }
+
+    /// The exemption the ordering gate grants `Step::Zalgo(0)`: with a cap of zero, an
+    /// invisible splitting a mark run cannot change the result, because every mark goes
+    /// either way. Checked rather than assumed.
+    #[test]
+    fn zalgo_zero_is_order_independent() {
+        let split = "a\u{301}\u{301}\u{301}\u{200b}\u{301}b";
+        let joined = "a\u{301}\u{301}\u{301}\u{301}b";
+        let once = strip_obfuscation(split).unwrap();
+        assert_eq!(once, strip_obfuscation(joined).unwrap());
+        assert_eq!(once, strip_obfuscation(&once).unwrap());
+        assert!(
+            !once.contains('\u{301}'),
+            "cap 0 must leave no marks: {once:?}"
+        );
+    }
+
+    /// Split the source into `(enclosing fn name, const STEPS body)` pairs.
+    ///
+    /// The name is only used to make a failure legible, but a wrong one is worse than
+    /// none: it sends the reader to a function that is fine. So the scan is anchored to a
+    /// *definition line* — one starting at column 0 with `fn ` or `pub…fn ` — rather than
+    /// to the first `fn ` found anywhere backwards, which matches prose in the comments
+    /// these pipelines are thick with (#850 review).
+    fn step_arrays(src: &str) -> Vec<(&str, &str)> {
+        let mut out = Vec::new();
+        let mut rest = src;
+        while let Some(i) = rest.find("\n    const STEPS") {
+            // Only an array *literal*. `const STEPS_NO_FOLD: [Step; 8] =
+            // without_fold_case(STEPS);` is one line with no `];` terminator, so treating
+            // it as a pipeline made the scan swallow the whole of the next function's
+            // array and drop `catalog_key` from the list entirely — a gate silently
+            // covering one pipeline fewer than it reports.
+            let decl_end = rest[i + 1..].find('\n').map_or(rest.len(), |n| i + 1 + n);
+            if !rest[i..decl_end].trim_end().ends_with('[') {
+                rest = &rest[decl_end..];
+                continue;
+            }
+            let name = rest[..i]
+                .lines()
+                .rev()
+                .find_map(|line| {
+                    let sig = line.strip_prefix("pub(crate) fn ").or_else(|| {
+                        line.strip_prefix("pub fn ")
+                            .or_else(|| line.strip_prefix("fn "))
+                    })?;
+                    Some(&sig[..sig.find(['<', '(']).unwrap_or(sig.len())])
+                })
+                .unwrap_or("<unknown fn>");
+            let body = &rest[i..];
+            let end = body.find("\n    ];").unwrap_or(body.len());
+            out.push((name, &body[..end]));
+            rest = &body[end..];
+        }
+        out
+    }
+
+    /// `step_arrays` names the right function, since the ordering gate's failure message
+    /// is only useful if it does.
+    #[test]
+    fn step_arrays_names_the_enclosing_function() {
+        let names: Vec<&str> = step_arrays(include_str!("presets.rs"))
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        for expected in [
+            "canonicalize",
+            "canonicalize_strict",
+            "sort_key",
+            "search_key",
+            "catalog_key",
+            "strip_obfuscation",
+            "strip_format",
+            "ml_normalize",
+        ] {
+            assert!(
+                names.contains(&expected),
+                "{expected} missing from {names:?}"
+            );
+        }
+        assert!(
+            !names.contains(&"<unknown fn>"),
+            "a STEPS array was not attributed to a function: {names:?}",
         );
     }
 

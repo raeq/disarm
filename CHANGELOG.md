@@ -631,6 +631,29 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **`sort_key` was not idempotent when an invisible split a mark run (#850).** #843 added
+  the combining-mark cap to `sort_key` as step 4b, before the `StripControl` /
+  `StripZeroWidth` pair at step 5. A zero-width between two marks therefore survived into
+  the count and split one run into two short ones, neither over the cap; the strip then
+  deleted it, the runs merged, and the *second* pass truncated what the first had kept.
+  `sort_key("\u0301\u0301\u0301\u200b\u0301")` returned four marks and `sort_key` of
+  that returned three.
+
+  `canonicalize` has ordered the same two steps correctly since #121, under a comment
+  that states the rule outright — "Runs AFTER the control / zero-width strip above so a
+  stripped invisible between two marks cannot split a mark run and hide the count" — so
+  the fix is to move the step, not to reason about it again. `canonicalize` and
+  `canonicalize_strict` were never affected.
+
+  Two gates now hold the rule rather than the comment. `every_zalgo_cap_runs_after_its_invisible_strip`
+  reads the source and checks the ordering in every pipeline that caps marks, including
+  ones not yet written; `Step::Zalgo(0)` is exempt, because a cap of zero removes every
+  mark whatever the run structure, and `zalgo_zero_is_order_independent` checks that
+  exemption is real. Separately, the key-stability corpus gained eight rows putting an
+  invisible *between two combining marks* — a class it could not express, so #843's
+  fixture diff was 0 rows of 22,963 and the gate built to answer "did key output move"
+  reported nothing. With the rows present the diff for this change is 4 rows.
+
 - **`perf-gate.yml` has never run on `main` (#832).** It triggers on `push` as well as
   `pull_request`, and two of its three jobs computed the baseline as
   `git merge-base origin/${{ github.base_ref }} HEAD`. `github.base_ref` is the target
@@ -1266,6 +1289,37 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   because it is handed values joined elsewhere. Measured, it can — it **re-reduces** its
   inputs rather than comparing them, so the field-wise spelling composes on the way in.
   Over 600 random pairs it grouped all 90 that differ.
+
+- **The confusable tables drop whole equivalence classes, and the page now says so
+  (#791).** `docs/user-guide/confusables.md` presents `target_script` as a menu of two.
+  What it did not say is that generation keeps the members of a class belonging to the
+  target script and **drops the class entirely when no member does** — so the two options
+  are not two views of one table, they are the only two views that exist. A class whose
+  members are all Arabic or all CJK survives into neither.
+
+  | | count |
+  |---|---|
+  | TR39 sources in the bundled file | 6,565 |
+  | unmapped under `target_script="latin"` | 4,331 |
+  | …of those, strong-RTL | 948 |
+
+  The residue is not evenly spread, which is what makes it a section rather than a
+  sentence: CJK leads by some way, then Arabic, then Hangul. Most of it is deliberate — a class whose
+  upstream target is a CJK ideograph does not belong in a to-Latin table — so it reads as
+  exposure rather than as a score, and `unmapped_confusables()` /
+  `find_unmapped_confusables()` are named as the way to measure it.
+
+  The page also says what the gap is **not**. It is in the confusable fold, and the key
+  builders do not share it: they transliterate first, so `search_key("ک") ==
+  search_key("ك")` while `normalize_confusables` keeps them apart. Stating only the first
+  half would have been an over-claim.
+
+  `tests/test_confusable_residue_docs.py` derives every figure on the page from the
+  tables rather than trusting the prose — the totals, the strong-RTL share and each
+  per-script row. These are exactly the numbers that rot: #821 already moved the residue
+  from 4,384 to 4,331 between the issue being filed and this being written. The per-script
+  figures are deliberately left to the page for that reason, where a gate holds them; a
+  changelog entry is a record of a release and should not need regenerating.
 
 - **The reduced-set count beside `find_key_collisions` (#763).** The function returns a
   filtered list, not a partition — a name that collides with nothing never appears — so

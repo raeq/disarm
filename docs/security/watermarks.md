@@ -53,7 +53,7 @@ from disarm import canonicalize, inspect_anomalies
 marked = "The quick\u200b brown\u200b fox"
 clean = "The quick brown fox"
 
-assert inspect_anomalies(marked).kinds == ["zero_width"]  # something is here
+assert inspect_anomalies(marked).kinds == ["invisible"]  # something is here
 assert canonicalize(marked) == clean  # and now it is not
 
 # And the point of the section: the cleaned text is indistinguishable from text that

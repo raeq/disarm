@@ -135,7 +135,9 @@ features = ["extension-module"]
 
 [tool.pytest.ini_options]
 # Cookbook doc-tests live under docs/ and run as a separate invocation
-# (`pytest docs/`, see CONTRIBUTING.md). They are deliberately NOT in testpaths:
+# (`python scripts/run_doc_tests.py`, see CONTRIBUTING.md — `pytest docs/` in one
+# process is NOT the gate, because `register_lang` is irreversible and one page's
+# registration leaks into another). They are deliberately NOT in testpaths:
 # docs/conftest.py would otherwise shadow tests/conftest.py, which the suite
 # imports shared fixtures from via `from conftest import ...`.
 testpaths = ["tests"]

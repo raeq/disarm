@@ -333,6 +333,22 @@ ruff format --check .
 mypy python/disarm --ignore-missing-imports
 ```
 
+**Run CI's ruff, not whichever one is on your PATH.** The pre-commit hooks are
+`language: system`, so they use the `ruff` your shell finds, and it is easy for that to
+be older than the pin. It matters more than a version number usually does: **0.16
+formats Python inside Markdown fenced blocks and 0.15 does not**, and this repository's
+docs are full of executable Python in fences. A stale ruff passes `ruff format --check .`
+locally and fails the *Lint & format* job with no hint that a version is involved.
+
+```bash
+uv pip install "ruff==$(python3 -c "
+import re,pathlib
+print(re.search(r'ruff==([0-9.]+)', pathlib.Path('pyproject.toml').read_text()).group(1))")"
+```
+
+`tests/test_toolchain_pins.py` asserts the two pins agree and that the ruff you are
+running matches them, so this is caught by `pytest` rather than by a pull request.
+
 ### Three gates CI runs that the block above does not
 
 Each of these has sent an avoidable red build. They are listed here because running the

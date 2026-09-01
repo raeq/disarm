@@ -830,6 +830,26 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   defect as correct. Both are one edit from the word they imitate, `ignore` and `admin`,
   and both are now reported.
 
+- **The weekly advisory scan failed whenever it found something (#782).** On `schedule`
+  there is no pull request to annotate, so `rustsec/audit-check` reports by opening an
+  issue — `POST /repos/:owner/:repo/issues`. `ci.yml` grants `contents: read`, so that
+  call returned *"Resource not accessible by integration"* and the job failed **after** a
+  clean audit.
+
+  The direction is the problem. The job passed every week it had nothing to say and
+  failed every week it did: twelve consecutive red Mondays, each one a security report
+  nobody received. None of it was visible on the pull-request path, which is the only
+  path that gates a merge — so a workflow's non-PR triggers can rot indefinitely without
+  anything going red where anyone looks.
+
+  Fixed with a job-scoped `issues: write` (job permissions *replace* the workflow's
+  rather than adding to them, so `contents: read` is restated). The last scan is on
+  record as clean: no vulnerabilities, two `unmaintained` informational warnings —
+  `bincode` and `proc-macro-error2`, both transitive.
+
+  `tests/test_workflow_baselines.py` gains the gate, and it is anchored to the action
+  rather than to the job name, so moving or renaming the job does not quietly empty it.
+
 - **#803 fixed the presets and left `list_profiles()` behind (#853).** #757 measured
   `ml_normalize` turning `film’s` into `film right apostrophe s` — 326 code points carry
   neither the Unicode `Emoji` nor the `Extended_Pictographic` property and were named as

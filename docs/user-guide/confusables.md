@@ -648,6 +648,62 @@ One pass is a fixed point by construction: `build.rs` asserts no rule's output o
 inside any rule's input, so a pass can never expose a fresh match. A data edit that
 introduced such a chain would fail the build.
 
+## The class disarm deliberately does not fold
+
+`paypa1`, `g1thub`, `adm1n`, `supp0rt` — ASCII substitutions. Every key reducer misses
+them and so does `find_confusables`, and **that is correct**: no confusable table should
+fold ASCII `1` onto `l`, because doing so would rewrite ordinary text. These are not
+Unicode attacks, and disarm's Unicode machinery should not reach them.
+
+Edit distance is the defence, and all twelve such rows in `confusable-bench.v1` are
+**distance 1** from the name they imitate:
+
+```python
+from disarm import canonicalize, edit_distance, find_confusables, nearest_match
+
+RESERVED = ["admin", "github", "openai", "paypal", "stripe", "support", "vercel"]
+
+assert edit_distance("paypa1", "paypal") == 1
+hit = nearest_match("paypa1", RESERVED, max_distance=1)
+assert (hit.value, hit.distance) == ("paypal", 1)
+
+# ...and the Unicode surfaces correctly do not see it
+assert not find_confusables("paypa1")
+assert canonicalize("paypa1") != canonicalize("paypal")
+```
+
+`nearest_match` **reports** — it returns the distance so you apply the policy, the way
+`find_key_collisions` does. It reports exact matches too, with distance 0, which disarm's
+internal *"did you mean …?"* helper does not: that one skips them because its caller has
+already rejected the input, and a registry asking about a name it protects verbatim would
+have been told nothing.
+
+Distance 0 means *"this is the reserved name"*, which is a different verdict from *"this
+is one edit from it"* — a registry usually already owns that case through a set
+membership test, and wants this one for the near misses:
+
+```python
+assert nearest_match("stripe", RESERVED, max_distance=1).distance == 0
+assert nearest_match("str1pe", RESERVED, max_distance=1).distance == 1
+```
+
+A registry wants both questions asked — the Unicode one and this one:
+
+```python
+def rejected(identifier: str) -> str | None:
+    if find_confusables(identifier):
+        return "contains characters that imitate others"
+    near = nearest_match(identifier, RESERVED, max_distance=1)
+    if near is not None and near.distance > 0:
+        return f"one edit from the reserved name {near.value!r}"
+    return None
+
+
+assert rejected("paypa1") is not None
+assert rejected("p\u0430ypal") is not None  # Cyrillic а
+assert rejected("cloudflare") is None  # not reserved, not near one
+```
+
 ## Knowing what is NOT covered
 
 Coverage is not a score. A tool that folds 95% of known confusable sources is not 95%

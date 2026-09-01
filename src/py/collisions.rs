@@ -66,3 +66,52 @@ pub fn _find_key_collisions(
         .map(KeyCollision::from)
         .collect())
 }
+
+/// `edit_distance(a, b) -> int`
+#[pyfunction]
+pub fn _edit_distance(a: &str, b: &str) -> usize {
+    crate::api::edit_distance(a, b)
+}
+
+/// One candidate name and how far it is from the value asked about (#883).
+#[pyclass(skip_from_py_object)]
+pub struct NearestMatch {
+    /// The candidate, in the spelling the caller supplied.
+    #[pyo3(get)]
+    pub value: String,
+    /// Its edit distance. `0` means the value *is* this candidate, which is reported
+    /// rather than skipped — see `nearest_match`.
+    #[pyo3(get)]
+    pub distance: usize,
+}
+
+#[pymethods]
+impl NearestMatch {
+    fn __repr__(&self) -> String {
+        format!(
+            "NearestMatch(value={:?}, distance={})",
+            self.value, self.distance
+        )
+    }
+}
+
+impl From<crate::api::NearestMatch> for NearestMatch {
+    fn from(m: crate::api::NearestMatch) -> Self {
+        Self {
+            value: m.value,
+            distance: m.distance,
+        }
+    }
+}
+
+/// `nearest_match(value, candidates, *, max_distance=1) -> NearestMatch | None`
+#[pyfunction]
+#[pyo3(signature = (value, candidates, *, max_distance=1))]
+pub fn _nearest_match(
+    value: &str,
+    candidates: Vec<String>,
+    max_distance: usize,
+) -> Option<NearestMatch> {
+    crate::api::nearest_match(value, candidates.iter().map(String::as_str), max_distance)
+        .map(NearestMatch::from)
+}

@@ -64,6 +64,8 @@ SKIP = frozenset(
         "Finding",
         # Collision report object (#620), return-only like the two above
         "KeyCollision",
+        # Nearest-name report object (#883), return-only like the four above
+        "NearestMatch",
     }
 )
 

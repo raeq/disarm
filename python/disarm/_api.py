@@ -24,6 +24,7 @@ from disarm._boundary import (
     KeyCollision,
     # Reusable anomaly lexicon handle (HAI-SDLC 6.1)
     Lexicon,
+    NearestMatch,
     ResourceLimitError,
     _clear_replacements,
     _collapse_whitespace,
@@ -33,6 +34,7 @@ from disarm._boundary import (
     _detect_encoding,
     # Predicates
     _detect_scripts,
+    _edit_distance,
     _escape_html,
     _find_confusables,
     _find_key_collisions,
@@ -63,6 +65,7 @@ from disarm._boundary import (
     _is_suspicious_hostname,
     # Language profiles
     _list_langs,
+    _nearest_match,
     _normalize,  # noqa: F401  (used by normalize() and internal pipelines)
     _normalize_batch,
     _normalize_confusables,
@@ -3223,3 +3226,95 @@ def make_cached_transliterator(
     cached.cache_clear = _cached.cache_clear  # type: ignore[attr-defined]
     cached.cache_info = _cached.cache_info  # type: ignore[attr-defined]
     return cast(CachedTransliterator, cached)
+
+
+def edit_distance(a: str, b: str) -> int:
+    """Levenshtein edit distance between *a* and *b*, in **characters**.
+
+    The one class of registry spoofing disarm's Unicode machinery deliberately does not
+    model. ``paypa1``, ``g1thub``, ``adm1n`` and ``supp0rt`` are ASCII substitutions, and
+    no confusable table should fold ASCII ``1`` onto ``l`` — doing so would wreck ordinary
+    text. So every key reducer misses all twelve such rows in ``confusable-bench.v1``, and
+    so does `find_confusables`. That is correct behaviour, and it left the class with no
+    reachable defence from Python even though the function was already compiled into the
+    wheel (#883).
+
+    All twelve are **distance 1** from the name they imitate, so guarding a reserved list
+    needs only ``edit_distance(candidate, reserved) <= 1``.
+
+    Counts **Unicode scalar values**, not UTF-8 bytes: ``"é"`` is one unit, so ``"é"`` and
+    ``"e"`` are one edit apart rather than two.
+
+    That is not the same as ignoring composition. A composed ``"café"`` and a decomposed
+    ``"cafe\u0301"`` are **2** edits apart, because the decomposed form is one scalar
+    longer and the letter differs. Reduce first when you want them to compare equal —
+    ``edit_distance(canonicalize(a), canonicalize(b))`` is 0 for that pair.
+
+    Args:
+        a: First string.
+        b: Second string.
+
+    Returns:
+        The number of single-character insertions, deletions or substitutions
+        that turn *a* into *b*. ``0`` when they are equal.
+
+    Examples:
+        >>> edit_distance("paypa1", "paypal")
+        1
+        >>> edit_distance("stripe", "stripe")
+        0
+        >>> edit_distance("xx", "paypal")
+        6
+
+    See Also:
+        `nearest_match`: the same distance against a list of protected names.
+    """
+    return _edit_distance(a, b)
+
+
+def nearest_match(
+    value: str, candidates: list[str], *, max_distance: int = 1
+) -> NearestMatch | None:
+    """The candidate closest to *value*, with its distance — or ``None`` if none is close.
+
+    Reports; it does not decide. `find_key_collisions` set that precedent and this follows
+    it: the distance comes back so **you** apply the policy, rather than the library
+    applying one it cannot know.
+
+    Note:
+        **Exact matches are reported, with distance 0.** disarm's internal *"did you
+        mean …?"* helper skips them, because there the caller has already rejected the
+        input — a registry asking about a name it protects verbatim would have been told
+        ``None``. That, and a threshold tuned for two-letter language codes, is why this
+        is a separate function rather than that one exposed (#883).
+
+    Ties go to the **first** candidate at the lowest distance, so the order you supply
+    decides. Sort *candidates* if that matters to you.
+
+    Args:
+        value: The identifier to check.
+        candidates: The protected names to check it against.
+        max_distance: Largest distance to report. ``1`` catches every ASCII
+            substitution in ``confusable-bench.v1``; raising it trades precision
+            for reach and is your call to make.
+
+    Returns:
+        A `NearestMatch` with ``value`` and ``distance`` for the closest candidate
+        within *max_distance*, or ``None``. A named object rather than a tuple,
+        because ``(str, int)`` at a call site does not say which number is which.
+
+    Examples:
+        >>> RESERVED = ["paypal", "stripe", "admin"]
+        >>> hit = nearest_match("paypa1", RESERVED)
+        >>> hit.value, hit.distance
+        ('paypal', 1)
+        >>> nearest_match("admin", RESERVED).distance
+        0
+        >>> nearest_match("something-else", RESERVED) is None
+        True
+
+    See Also:
+        `find_confusables`: the Unicode half of the same question.
+        `canonicalize`: reduce first when you want accents and homoglyphs ignored too.
+    """
+    return _nearest_match(value, candidates, max_distance=max_distance)

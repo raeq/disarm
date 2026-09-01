@@ -254,6 +254,9 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::case_fold::_fold_case, m)?)?;
     m.add_function(wrap_pyfunction!(py::case_fold::_is_case_fold_stable, m)?)?;
     m.add_function(wrap_pyfunction!(py::collisions::_find_key_collisions, m)?)?;
+    m.add_function(wrap_pyfunction!(py::collisions::_edit_distance, m)?)?;
+    m.add_function(wrap_pyfunction!(py::collisions::_nearest_match, m)?)?;
+    m.add_class::<py::collisions::NearestMatch>()?;
     m.add_function(wrap_pyfunction!(py::whitespace::_collapse_whitespace, m)?)?;
     m.add_function(wrap_pyfunction!(py::whitespace::_strip_control_chars, m)?)?;
     m.add_function(wrap_pyfunction!(

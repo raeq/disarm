@@ -499,6 +499,30 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
+#: Names a reader reaches for when they want an outcome rather than an operation, and
+#: what to point them at instead (#654).
+#:
+#: CONTRIBUTING.md's naming rule says a public name may describe the operation and never
+#: the outcome, so none of these will ever exist. That leaves a reader who searches for
+#: one with a bare ``AttributeError`` at exactly the moment they are asking the question
+#: the threat model answers. The hook below refuses and explains in the same breath —
+#: which is compatible with the rule, because it promises nothing.
+_OUTCOME_NAMES = frozenset(
+    {"clean", "sanitize", "sanitise", "safe", "secure", "escape", "is_safe", "make_safe"}
+)
+
+_OUTCOME_GUIDANCE = """disarm has no {name!r}, and will not: a public name here describes the operation, \
+never the outcome. Nothing in this library makes text safe to emit.
+
+  comparison / canonical form   canonicalize()
+  display-safe cleanup          strip_format()
+  untrusted LLM input           get_pipeline("llm_guardrail")
+  output safety                 encode at the sink — see THREAT_MODEL.md
+
+For filenames see sanitize_filename(); it is named for what it does to a filename, not \
+for a guarantee about one."""
+
+
 class _CallableModule(_stdlib_types.ModuleType):
     """Make ``import disarm; disarm(...)`` a shorthand for ``transliterate()``."""
 
@@ -527,6 +551,21 @@ class _CallableModule(_stdlib_types.ModuleType):
             gost7034=gost7034,
             tones=tones,
             context=context,
+        )
+
+    def __getattr__(self, name: str) -> object:
+        """Teach the naming rule at the moment someone runs into it (#654).
+
+        Only reached when normal lookup has already failed, so it cannot shadow a real
+        attribute. It re-raises the ordinary message for every name outside
+        `_OUTCOME_NAMES`, which keeps `hasattr`, `getattr(..., default)` and the import
+        machinery behaving exactly as before — including for any `AttributeError` raised
+        from inside a submodule import, which this must not swallow.
+        """
+        if name in _OUTCOME_NAMES:
+            raise AttributeError(_OUTCOME_GUIDANCE.format(name=name), name=name, obj=self)
+        raise AttributeError(
+            f"module {self.__name__!r} has no attribute {name!r}", name=name, obj=self
         )
 
     def __repr__(self) -> str:

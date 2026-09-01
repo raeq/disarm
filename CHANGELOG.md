@@ -110,6 +110,32 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Added
 
+- **Asking `disarm` for an outcome name now teaches the naming rule (#654).** `clean`,
+  `sanitize`, `safe`, `secure`, `escape`, `is_safe` and `make_safe` will never exist —
+  CONTRIBUTING.md's rule is that a public name describes the operation and never the
+  outcome. That left a reader who reached for one holding a bare `AttributeError` at
+  exactly the moment they were asking the question the threat model answers:
+
+  ```text
+  >>> disarm.clean
+  AttributeError: disarm has no 'clean', and will not: a public name here describes the
+  operation, never the outcome. Nothing in this library makes text safe to emit.
+
+    comparison / canonical form   canonicalize()
+    display-safe cleanup          strip_format()
+    untrusted LLM input           get_pipeline("llm_guardrail")
+    output safety                 encode at the sink — see THREAT_MODEL.md
+  ```
+
+  It refuses and explains in the same breath, so it promises nothing and stays compatible
+  with the rule it teaches. Every other missing name gets the ordinary message unchanged,
+  and the exception keeps its `name` and `obj` so REPL "did you mean" tooling still works.
+
+  #654's two preconditions are tests rather than assumptions: nothing requires `dir()` and
+  `getattr()` to agree — `hasattr`, `getattr(..., default)` and `__all__` all behave as
+  before — and the hook cannot mask an `AttributeError` raised from inside an import,
+  checked in a subprocess against a genuinely failing one.
+
 - **`target_script="arabic"` and `"hebrew"` (#792).** Generation drops an equivalence class
   entirely when no member belongs to the target script, so a class whose members are all
   Arabic folded to nothing under either shipped table — 948 of TR39's 1,007 strong-RTL

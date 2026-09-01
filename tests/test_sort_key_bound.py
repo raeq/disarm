@@ -40,9 +40,21 @@ def marks(text: str) -> int:
 
 @pytest.mark.parametrize("count", [10, 40, 200, 1000], ids=lambda n: f"{n}-marks")
 def test_the_output_length_is_not_the_attackers_to_set(count: int) -> None:
-    """The amplification: output length tracked input mark count 1:1."""
+    """The amplification: output length tracked input mark count 1:1.
+
+    The bound is derived from the capped case rather than written as a number. A literal
+    would encode no reason and would break on an unrelated formatting change; this says
+    what the property is — the same input at the cap produces the same length as the same
+    input far above it.
+    """
+    # The cap itself is not exported, and naming it here would only move the literal.
+    # The property is what matters: above the threshold, the output stops growing — so
+    # this compares against the smallest input that is already over it.
+    over_the_threshold = disarm.sort_key("a" + ACUTE * 4 + "b")
     key = disarm.sort_key("a" + ACUTE * count + "b")
-    assert len(key) <= 8, f"{count} marks produced {len(key)} characters"
+    assert len(key) == len(over_the_threshold), (
+        f"{count} marks produced {len(key)} characters; 4 marks produces {len(over_the_threshold)}"
+    )
 
 
 def test_the_length_is_constant_across_mark_counts() -> None:
@@ -81,7 +93,10 @@ def test_diacritics_still_distinguish(accented: str, plain: str) -> None:
     [
         ("Hebrew, three marks", "אָׁ֑"),
         ("Arabic, three marks", "بَّْ"),
-        ("Vietnamese NFD", "ệ"),
+        # Genuinely decomposed: e + dot below + circumflex. Written as escapes because
+        # the precomposed and decomposed spellings are indistinguishable on the page, and
+        # an earlier version of this row was precomposed while claiming to be NFD.
+        ("Vietnamese NFD", "e\u0323\u0302"),
         ("cafe", "café"),
     ],
     ids=["hebrew", "arabic", "vietnamese", "french"],

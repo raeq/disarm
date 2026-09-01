@@ -969,6 +969,42 @@ def generate_mappings(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_target_chains(mappings: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """Rewrite every target through the map until it is a fixed point (#723).
+
+    A target may itself contain a source. `044B` ы mapped to `\u0185i`, and `\u0185` ƅ is
+    a source that folds to `b` — so the entry points that iterate (`normalize_confusables`,
+    `canonicalize`) reached `bi` while the single-pass ones (`strip_obfuscation`, and the
+    `confusables` step inside `get_pipeline`) stopped at `ƅi`. The exhaustive idempotence
+    gate tested only the function that iterates, so the class was invisible.
+
+    Resolving here rather than in the consumer is what makes it stay fixed: build.rs
+    asserts no target contains a source, and that assert can only hold if the data
+    already satisfies it. A `MAX_PASSES` bound rather than `while` because a cycle in the
+    data would otherwise hang the generator; a cycle is a data defect and should say so.
+    """
+    MAX_PASSES = 8
+    table = dict(mappings)
+    for _ in range(MAX_PASSES):
+        changed = False
+        for source, target in list(table.items()):
+            # Each character of the target, replaced by its own target if it has one.
+            # `table.get(ord(ch), ch)` leaves a character that is not a source alone.
+            resolved = "".join(table.get(ord(ch), ch) for ch in target)
+            if resolved != target:
+                table[source] = resolved
+                changed = True
+        if not changed:
+            break
+    else:
+        raise ValueError(
+            f"target chains did not converge in {MAX_PASSES} passes; "
+            "two rows fold into each other, which is a data defect rather than a bound "
+            "to raise"
+        )
+    return sorted(table.items())
+
+
 def write_tsv(mappings: list[tuple[int, str]], path: Path, script_name: str) -> None:
     """Write mappings as TSV: HEX_CODEPOINT<tab>value, with a provenance header.
 
@@ -1206,6 +1242,9 @@ def main() -> None:
     by_script: dict[str, list[tuple[int, str]]] = {}
     for script_name in SCRIPTS:
         mappings = generate_mappings(entries, script_name, supplement.get(script_name, {}))
+        # #723: a target may contain a source, which leaves single-pass callers one step
+        # short of the fixed point the iterating ones reach. Resolve it in the data.
+        mappings = _resolve_target_chains(mappings)
         by_script[script_name] = mappings
         out_path = args.output_dir / f"confusables_to_{script_name}.tsv"
         write_tsv(mappings, out_path, script_name)

@@ -125,12 +125,24 @@ fn main() {
                 );
             }
             let target: Vec<char> = value.chars().collect();
-            if target.len() == 1 {
+            // EVERY character of the target, not just a single-character one (#723).
+            //
+            // The `len() == 1` form let `044B` -> `\u{0185}i` through: the target is two
+            // characters, and `0185` is itself a source that folds to `b`. So the
+            // iterating entry points reached `bi` and the single-pass ones stopped at
+            // `\u{0185}i` — `strip_obfuscation` was not a fixed point, and the exhaustive
+            // idempotence gate tested only the function that iterates.
+            //
+            // A multi-character target is not exempt from the rule; it was exempt from
+            // the check.
+            for (i, &ch) in target.iter().enumerate() {
                 assert!(
-                    !entries.contains_key(&(target[0] as u32)),
-                    "confusables_to_latin.tsv: U+{cp:04X} maps to {value:?}, which is \
-                     itself a source. That chains the fold and gives the fixed-point loop \
-                     a second pass to do (#831)."
+                    !entries.contains_key(&(ch as u32)),
+                    "confusables_to_latin.tsv: U+{cp:04X} maps to {value:?}, whose \
+                     character {i} (U+{:04X}) is itself a source. That chains the fold, \
+                     so a single-pass caller stops one step short of the fixed point the \
+                     iterating ones reach (#831, #723).",
+                    ch as u32
                 );
             }
         }

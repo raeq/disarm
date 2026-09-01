@@ -1363,8 +1363,9 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 - **`THREAT_MODEL.md` names nine classes it was silent on (#729, #743, #747, #748, #753,
   #755, #756, #758, #804).** The *Out of scope* section is the page a reader consults to
-  decide whether a class is disarm's problem, and silence there reads as coverage. Each
-  gap is now a named entry rather than an absence:
+  decide whether a class is disarm's problem, and silence there reads as coverage. Nine
+  issues, eight entries — visible fragmentation covers #755 and #804 together, because
+  they are one class described from either side:
 
   | class | why it is out of scope |
   |---|---|

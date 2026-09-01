@@ -54,7 +54,10 @@ def spellings_reaching_one_key(trigger: str) -> list[str]:
     variants = {
         trigger[:i] + alt + trigger[i + 1 :]
         for i, letter in enumerate(trigger)
-        for alt in folds.get(letter, ())
+        # `.lower()`: `ascii_letter_folds` is keyed by the lowercased letter, so a
+        # trigger with any uppercase in it would silently contribute no substitutions
+        # and make the count depend on its casing (#854 review).
+        for alt in folds.get(letter.lower(), ())
     } - {trigger}
     base = disarm.search_key(trigger)
     return [v for v in variants if disarm.search_key(v) == base]
@@ -136,6 +139,22 @@ def test_nfkc_still_manufactures_the_delimiters() -> None:
         assert documented <= hits, (
             f"the page says {documented} profiles for {src!r}, measured {hits}"
         )
+
+
+def test_the_sweep_does_not_depend_on_the_trigger_casing() -> None:
+    """#854 review: the lookup key was the raw letter, the map is keyed lowercased.
+
+    With an all-lowercase trigger nothing showed. An uppercase letter contributed **no**
+    substitutions at all, so the figure the page publishes would have depended on how the
+    trigger happened to be spelled — silently, and in the direction of understating it.
+    """
+    lower = spellings_reaching_one_key("admin")
+    upper = spellings_reaching_one_key("Admin")
+    assert len(upper) >= len(lower) * 0.9, (
+        f"'Admin' yields {len(upper)} spellings against 'admin' at {len(lower)}; the "
+        "fold lookup is case-sensitive again"
+    )
+    assert spellings_reaching_one_key("ADMIN"), "an all-uppercase trigger yields nothing"
 
 
 def test_the_fold_still_widens_what_reaches_one_key() -> None:

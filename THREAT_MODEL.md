@@ -215,7 +215,7 @@ behavior, not a vulnerability:
   association.**
 
   Against such a model the fold does not remove the association. It is many-to-one, so it
-  *widens* the set of inputs that arrive at it. Measured on one five-letter trigger, using
+  *widens* the set of inputs that arrive at it. Measured on the trigger `admin`, using
   only single-position substitutions by code points that fold to the letter they replace:
   **226 of 312 spellings reach the same `search_key`.** Every one of those is an input the
   model now receives as the trigger and would not have without the normalizer.

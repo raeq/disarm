@@ -33,9 +33,9 @@ REDUCERS = {
 
 def _any_reducer_collides(identifier: str, target: str) -> bool:
     """Score as a registry would: does it reduce to the same non-empty form as the name?"""
-    for reduce in REDUCERS.values():
-        reduced = reduce(identifier)
-        if reduced and reduced == reduce(target):
+    for reducer in REDUCERS.values():
+        reduced = reducer(identifier)
+        if reduced and reduced == reducer(target):
             return True
     return False
 
@@ -52,13 +52,21 @@ ONLY_THE_REDUCERS = [
     ("pay\ufeffpal", "paypal"),  # BOM
 ]
 
-#: Cases `find_confusables` catches and the reducers cannot — the composability class.
-#: The two strings are already equal by the time the divergence matters, so no reduction
-#: separates them, but the identifier still carries a character imitating another.
+#: Cases `find_confusables` catches and no reducer can — the composability class.
+#:
+#: These are the rows where TR39 and NFKC disagree about what the character is (#834), so
+#: the reducer takes the NFKC answer and never collides with the TR39 target a registry is
+#: protecting. `U+017F` is `f` to TR39 and `s` to NFKC; `U+2110` is `l` and `i`.
+#:
+#: A first draft of this list used Cyrillic lookalikes — `аpple`, `gоnfig`. Those are the
+#: *impersonation* class, and the reducers catch 30 of 35 of them, so `аpple` was not a
+#: detector-only case at all and the comment above it overclaimed (#892 review). Each row
+#: below is asserted in both directions rather than described.
 ONLY_THE_DETECTOR = [
-    "аpple",  # Cyrillic а
-    "ԁoinbase",  # Cyrillic ԁ
-    "gоnfig",  # Cyrillic о
+    ("ſ", "f"),  # U+017F LATIN SMALL LETTER LONG S
+    ("ℐ", "l"),  # U+2110 SCRIPT CAPITAL I
+    ("Ⅰ", "l"),  # U+2160 ROMAN NUMERAL ONE
+    ("Ｉ", "l"),  # U+FF29 FULLWIDTH LATIN CAPITAL LETTER I
 ]
 
 #: Benign controls. Neither surface may fire.
@@ -74,22 +82,31 @@ def test_the_reducers_catch_what_the_detector_cannot(identifier: str, target: st
     )
 
 
-@pytest.mark.parametrize("identifier", ONLY_THE_DETECTOR, ids=lambda v: repr(v))
-def test_the_detector_catches_what_the_reducers_cannot(identifier: str) -> None:
+@pytest.mark.parametrize(("identifier", "target"), ONLY_THE_DETECTOR, ids=lambda v: repr(v))
+def test_the_detector_catches_what_the_reducers_cannot(identifier: str, target: str) -> None:
     assert disarm.find_confusables(identifier)
+    assert not _any_reducer_collides(identifier, target), (
+        "if a reducer reaches this, it is not a detector-only case and the documented "
+        "0/31 on composability needs re-measuring"
+    )
 
 
 @pytest.mark.parametrize("identifier", BENIGN)
 def test_neither_fires_on_a_benign_name(identifier: str) -> None:
-    """The pairing costs nothing in false positives, which is why it is a recommendation."""
+    """The pairing costs nothing in false positives, which is why it is a recommendation.
+
+    Across every reducer, not just `canonicalize`: the documented 0/20 is the union's
+    figure, so checking one of the six would understate what is being claimed.
+    """
     assert not disarm.find_confusables(identifier)
-    assert not any(reduce(identifier) != identifier for reduce in (disarm.canonicalize,))
+    for name, reducer in REDUCERS.items():
+        assert reducer(identifier) == identifier, f"{name} altered the benign {identifier!r}"
 
 
 def test_the_union_is_strictly_larger_than_either_side() -> None:
     """The claim in one assertion: neither surface is a superset of the other."""
     reducer_only = {i for i, t in ONLY_THE_REDUCERS if _any_reducer_collides(i, t)}
-    detector_only = {i for i in ONLY_THE_DETECTOR if disarm.find_confusables(i)}
+    detector_only = {i for i, t in ONLY_THE_DETECTOR if not _any_reducer_collides(i, t)}
     assert reducer_only, "no case is reducer-only; the split has changed"
     assert detector_only, "no case is detector-only; the split has changed"
     assert not any(disarm.find_confusables(i) for i in reducer_only)

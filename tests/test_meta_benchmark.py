@@ -447,9 +447,9 @@ def test_deleting_everything_scores_zero_coverage(suite_name, key):
 
 def test_doing_nothing_scores_zero_coverage_and_zero_cost():
     identity = registry.by_name("corruption-cost").run(subject=subjects.by_name("identity"))
-    assert identity.measurement("destroyed_worst_surface").value == 0
-    assert identity.measurement("destroyed_gentlest_surface").value == 0
-    assert identity.measurement("clean_ascii_altered_worst").value == 0
+    assert identity.measurement("destroyed").value == 0
+    assert identity.measurement("clean_ascii_altered").value == 0
+    assert identity.measurement("identity_retention").value == 1.0
     assert identity.measurement("degenerate").value == 0
 
 
@@ -1162,3 +1162,48 @@ def test_removing_an_identity_free_codepoint_is_not_counted_as_damage():
     d = damage.per_surface(strip_pua, corpus)["strip"]
     assert d.retention < 1.0, "raw retention still records the removal"
     assert d.identity_retention == 1.0, "no letter or symbol was lost"
+
+
+def test_coverage_and_cost_are_charged_to_the_same_declared_surface():
+    """A published point must describe a configuration somebody could deploy.
+
+    Coverage was the best of thirteen surfaces (`llm_guardrail`, a ten-step
+    application pipeline) while cost averaged two *others* (`rag_ingest` and
+    `code_context`). No caller could reach that combination.
+    """
+    from benchmarks.meta.subjects import Role
+
+    subject = subjects.by_name("disarm")
+    if subject is None or not subject.available()[0]:
+        pytest.skip("disarm is not importable")
+    declared = subject.role(Role.SANITIZER)
+    assert list(declared) == ["canonicalize"], "the scored surface is declared, not won"
+
+    coverage = registry.by_name("uts39-confusables").run(limit=400, subject=subject)
+    cost = registry.by_name("corruption-cost").run(limit=400, subject=subject)
+    assert coverage.method.parameters["scored_surface"] == "canonicalize"
+    assert cost.method.parameters["scored_surface"] == "canonicalize"
+
+
+def test_the_selection_effect_of_best_of_n_is_measured_not_hidden():
+    subject = subjects.by_name("disarm")
+    if subject is None or not subject.available()[0]:
+        pytest.skip("disarm is not importable")
+    out = registry.by_name("uts39-confusables").run(limit=600, subject=subject)
+    effect = out.measurement("selection_effect_best_of_n")
+    assert effect is not None, "what best-of-N would add must be a reported number"
+    assert effect.higher_is_better is None, "it is a census, not a score"
+    assert effect.value >= 0
+
+
+def test_every_subject_declares_a_role_or_measures_nothing():
+    """A subject with no declared role falls back, and that must be visible."""
+    from benchmarks.meta.subjects import Role
+
+    for subject in subjects.all_subjects():
+        if not subject.available()[0]:
+            continue
+        if subject.transforms():
+            assert subject.ROLES.get(Role.SANITIZER), (
+                f"{subject.info.name} exposes transforms but declares no sanitizer"
+            )

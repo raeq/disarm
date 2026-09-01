@@ -29,6 +29,21 @@ from dataclasses import dataclass, field
 from typing import ClassVar, Protocol, runtime_checkable
 
 
+class Role:
+    """The job a declared surface does.
+
+    A benchmark should score a *configuration* somebody could deploy, not a
+    library's best surface out of however many it ships. Scoring best-of-N asks
+    "what is the most this library could do for me", which assumes a reader who
+    already knows which of thirteen entry points to reach for — the very problem
+    the library exists to solve.
+    """
+
+    SANITIZER = "sanitizer"  # the general-purpose text-cleaning entry point
+    KEY = "key"  # the comparison-key builder
+    DETECTOR = "detector"  # the report-without-rewriting predicate
+
+
 class Capability:
     """What a subject can be asked to do."""
 
@@ -49,12 +64,16 @@ class SubjectInfo:
 @runtime_checkable
 class Subject(Protocol):
     info: SubjectInfo
+    #: One declared surface per role, so a score describes a configuration
+    #: somebody could deploy rather than a library's best of however many.
+    ROLES: ClassVar[dict[str, str]]
 
     def available(self) -> tuple[bool, str]: ...
     def capabilities(self) -> set[str]: ...
     def transforms(self) -> dict[str, Callable[[str], str]]: ...
     def detectors(self) -> dict[str, Callable[[str], bool]]: ...
     def keys(self) -> dict[str, Callable[[str], str]]: ...
+    def role(self, which: str) -> dict[str, Callable[[str], str]]: ...
 
 
 @dataclass
@@ -78,6 +97,11 @@ class _Base:
             caps.add(Capability.KEY)
         return caps
 
+    #: The one surface per role this subject is scored on, by name. Declared
+    #: before any run, so the choice is visible and arguable rather than being
+    #: whichever surface happened to win.
+    ROLES: ClassVar[dict[str, str]] = {}
+
     def transforms(self) -> dict[str, Callable[[str], str]]:
         return {}
 
@@ -86,6 +110,21 @@ class _Base:
 
     def keys(self) -> dict[str, Callable[[str], str]]:
         return {}
+
+    def role(self, which: str) -> dict[str, Callable[[str], str]]:
+        """The declared surface for ``which``, as a one-entry mapping.
+
+        Empty when the subject declares no surface for that role — which is a
+        real answer (`unidecode` builds no keys) and must not be read as zero.
+        Falls back to the whole set only when nothing is declared at all, so a
+        subject that has not been given roles still measures something.
+        """
+        name = self.ROLES.get(which)
+        pool = self.keys() if which == Role.KEY else self.transforms()
+        if name is None:
+            return {} if self.ROLES else pool
+        fn = pool.get(name) or self.transforms().get(name)
+        return {name: fn} if fn is not None else {}
 
     def available(self) -> tuple[bool, str]:
         return True, ""
@@ -158,6 +197,16 @@ class DisarmSubject(_Base):
             role="Unicode security normalization, detection and key building",
         )
 
+    #: `canonicalize` is the documented general-purpose comparison form — the
+    #: entry point a reader arrives at. Not `llm_guardrail`, which wins the
+    #: coverage axis on best-of-N and is a ten-step application pipeline nobody
+    #: reaches for to clean a username.
+    ROLES: ClassVar[dict[str, str]] = {
+        Role.SANITIZER: "canonicalize",
+        Role.KEY: "search_key",
+        Role.DETECTOR: "is_confusable",
+    }
+
     def available(self) -> tuple[bool, str]:
         return (True, "") if _import("disarm") else (False, "disarm is not importable")
 
@@ -224,6 +273,7 @@ class StdlibSubject(_Base):
         url="https://docs.python.org/3/library/unicodedata.html",
         role="NFC/NFD/NFKC/NFKD and str.casefold",
     )
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "NFKC"}
 
     def transforms(self) -> dict[str, Callable[[str], str]]:
         return {
@@ -245,6 +295,7 @@ class FtfySubject(_Base):
         url="https://github.com/rspeer/python-ftfy",
         role="repairs text that was decoded with the wrong codec",
     )
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "fix_text"}
 
     def available(self) -> tuple[bool, str]:
         return (True, "") if _import("ftfy") else (False, "pip install ftfy")
@@ -268,6 +319,7 @@ class UnidecodeSubject(_Base):
         url="https://pypi.org/project/Unidecode/",
         role="lossy ASCII transliteration",
     )
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "unidecode"}
 
     def available(self) -> tuple[bool, str]:
         return (True, "") if _import("unidecode") else (False, "pip install Unidecode")
@@ -286,6 +338,7 @@ class TextUnidecodeSubject(_Base):
         url="https://github.com/kmike/text-unidecode",
         role="lossy ASCII transliteration, GPL-free reimplementation",
     )
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "text_unidecode"}
 
     def available(self) -> tuple[bool, str]:
         return (True, "") if _import("text_unidecode") else (False, "pip install text-unidecode")
@@ -304,6 +357,7 @@ class AnyAsciiSubject(_Base):
         url="https://github.com/anyascii/anyascii",
         role="lossy ASCII transliteration, ISC-licensed",
     )
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "anyascii"}
 
     def available(self) -> tuple[bool, str]:
         return (True, "") if _import("anyascii") else (False, "pip install anyascii")
@@ -324,6 +378,7 @@ class DecancerSubject(_Base):
         url="https://github.com/null8626/decancer",
         role="removes homoglyphs, diacritics and zero-width from usernames",
     )
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "decancer_parse"}
 
     def available(self) -> tuple[bool, str]:
         return (True, "") if _import("decancer_py") else (False, "pip install decancer-py")
@@ -350,6 +405,7 @@ class ConfusableHomoglyphsSubject(_Base):
         url="https://github.com/vhf/confusable_homoglyphs",
         role="detects confusable and mixed-script identifiers (UTS #39 data)",
     )
+    ROLES: ClassVar[dict[str, str]] = {Role.DETECTOR: "is_confusable"}
 
     def available(self) -> tuple[bool, str]:
         return (
@@ -383,6 +439,7 @@ class PyUnormalizeSubject(_Base):
         url="https://github.com/mlodewijck/pyunormalize",
         role="NFC/NFD/NFKC/NFKD against its own bundled UCD",
     )
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "NFKC"}
 
     def available(self) -> tuple[bool, str]:
         return (True, "") if _import("pyunormalize") else (False, "pip install pyunormalize")
@@ -473,6 +530,7 @@ class NullBaselineSubject(_Base):
         role="deletes everything — the degenerate solution every metric must reject",
     )
     control: ClassVar[bool] = True
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "delete_all"}
 
     def transforms(self) -> dict[str, Callable[[str], str]]:
         return {"delete_all": lambda _s: ""}
@@ -495,6 +553,7 @@ class IdentitySubject(_Base):
         role="returns input unchanged — the do-nothing floor",
     )
     control: ClassVar[bool] = True
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "identity"}
 
     def transforms(self) -> dict[str, Callable[[str], str]]:
         return {"identity": lambda s: s}

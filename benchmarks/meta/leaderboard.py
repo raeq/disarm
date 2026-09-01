@@ -151,6 +151,7 @@ class Leaderboard:
     items: list[Item] = field(default_factory=list)
     alpha: float | None = None
     kendall_w: float | None = None
+    correlations: dict[tuple[str, str], float] = field(default_factory=dict)
     subjects: list[str] = field(default_factory=list)
     excluded_census_measurements: int = 0
 
@@ -176,14 +177,20 @@ class Leaderboard:
                 f"({MIN_PARCELS} is the floor); a composite over this few is "
                 "decided by whichever one moves"
             )
-        if self.alpha is not None and self.alpha < ALPHA_FLOOR:
+        # Cronbach's alpha is deliberately NOT a blocker. It assumes positively
+        # related items, and these axes are opposed by design, so it is the wrong
+        # instrument rather than a failed threshold. Rank agreement is the right
+        # gate for aggregating orderings, and Friedman tests it without assuming
+        # a common construct.
+        opposed = [(pair, r) for pair, r in self.correlations.items() if r < -0.5]
+        if opposed:
+            worst = min(opposed, key=lambda kv: kv[1])
             why.append(
-                f"Cronbach's alpha is {self.alpha:.2f}, below the conventional "
-                f"{ALPHA_FLOOR:.2f} floor — the benchmarks do not measure one "
-                "construct, so a weighted average of them is not a quantity"
+                f"the benchmarks are opposed, not merely unrelated: "
+                f"`{worst[0][0]}` and `{worst[0][1]}` correlate at r = {worst[1]:.2f} "
+                "across the tools, so no single weighting of them is more correct "
+                "than another"
             )
-        if self.alpha is None:
-            why.append("internal consistency could not be estimated")
         if self.separated_pairs() == 0 and len(self.standings) > 1:
             why.append(
                 "no two subjects have non-overlapping bootstrap intervals — "
@@ -454,12 +461,47 @@ def bradley_terry(
     return p
 
 
+def axis_correlations(items: list[Item], subjects: Sequence[str]) -> dict[tuple[str, str], float]:
+    """Pearson r between every pair of benchmarks, over the tools.
+
+    The diagnostic Cronbach's alpha cannot give here. Alpha collapses the whole
+    correlation structure to one number that assumes the items are positively
+    related; this shows *which* pairs oppose, which is the actual finding when a
+    battery is built from axes that trade against each other.
+    """
+    tools = [s for s in subjects if not is_control(s)]
+    out: dict[tuple[str, str], float] = {}
+    for a_idx, a in enumerate(items):
+        for b in items[a_idx + 1 :]:
+            shared = [s for s in tools if s in a.z and s in b.z]
+            if len(shared) < 3:
+                continue
+            out[(a.suite, b.suite)] = _pearson([a.z[s] for s in shared], [b.z[s] for s in shared])
+    return out
+
+
 def cronbach_alpha(items: list[Item], subjects: Sequence[str]) -> float | None:
-    """Internal consistency of the battery (Cronbach 1951)."""
+    """Internal consistency (Cronbach 1951) — reported, never used as a gate.
+
+    Two reasons it does not apply to this battery, both load-bearing.
+
+    It assumes the items are positively related measures of one construct. These
+    axes are opposed by design: corruption-cost against equivalence-class closure
+    correlates at r = -0.80. On opposed items a *negative* alpha is the expected
+    signature, not a low score, so quoting it against the conventional 0.70 floor
+    would imply a standard was missed when the statistic simply does not apply.
+
+    And it must be computed over the tools alone. The two synthetic controls
+    score badly on every axis at once, which manufactures positive inter-item
+    correlation: alpha reads 0.64 with them and -0.33 without. Including them
+    made the battery look coherent purely because a strawman is bad at
+    everything.
+    """
     k = len(items)
     if k < 2:
         return None
-    shared = [s for s in subjects if all(s in i.z for i in items)]
+    tools = [s for s in subjects if not is_control(s)]
+    shared = [s for s in tools if all(s in i.z for i in items)]
     if len(shared) < 3:
         return None
     item_var = sum(_sd([i.z[s] for s in shared]) ** 2 for i in items)
@@ -550,6 +592,8 @@ class Concordance:
 
 @dataclass
 class Pareto:
+    """Non-dominated tools under multi-objective comparison."""
+
     """Non-dominated tools under multi-objective comparison.
 
     The answer when the benchmarks genuinely disagree, which they do here: a
@@ -565,6 +609,18 @@ class Pareto:
     frontier: list[str] = field(default_factory=list)
     dominated: dict[str, list[str]] = field(default_factory=dict)
     scores: dict[str, dict[str, float]] = field(default_factory=dict)
+
+    @property
+    def separating(self) -> bool:
+        """Does dominance actually distinguish anything?
+
+        With enough axes almost everything is non-dominated, because a tool need
+        only lead on one axis to be safe. A frontier holding most of the field is
+        a weak result wearing the language of a strong one, and a reader seeing
+        their own tool on it should be told how much company it has.
+        """
+        total = len(self.frontier) + len(self.dominated)
+        return bool(total) and len(self.frontier) / total < 0.5
 
 
 def concordance(board: Leaderboard) -> Concordance | None:
@@ -653,6 +709,7 @@ def build(
     strengths = bradley_terry(items, subjects)
     board.alpha = cronbach_alpha(items, subjects)
     board.kendall_w = kendall_w(items, subjects)
+    board.correlations = axis_correlations(items, subjects)
 
     # Bootstrap over the benchmark set: the question is whether the ranking
     # survives a different draw of benchmarks, which is the sampling that

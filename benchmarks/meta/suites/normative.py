@@ -22,7 +22,7 @@ from .. import damage
 from ..base import DATA, FIXTURES, SuiteBase, add, artifact, record, thin
 from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
-from ..subjects import Capability
+from ..subjects import Capability, Role
 
 _MAX_CP = sys.maxunicode + 1
 
@@ -129,9 +129,18 @@ class UTS39ConfusableCoverage(SuiteBase):
         collapsing = set(self.subject.keys()) if self.subject else set()
         text_surfaces, key_surfaces = damage.split_by_intent(all_surfaces, collapsing)
         text_surfaces = text_surfaces or all_surfaces
+        # The declared configuration, not the library's best surface. Best-of-N
+        # is still a selection effect: it was worth +4.6 points to disarm, whose
+        # winner was `llm_guardrail` — a ten-step application pipeline nobody
+        # reaches for to clean a username — while the cost axis was averaging two
+        # *other* surfaces. The published point described no deployable setup.
+        declared = self.subject.role(Role.SANITIZER) if self.subject else {}
+        scored = declared or text_surfaces
 
         probes = [(chr(cp), pairs[cp]) for cp in ordered]
-        winner, folded = damage.best_surface(text_surfaces, probes)
+        winner = next(iter(scored), "")
+        folded = sum(1 for left, right in probes if damage.collides(scored.values(), left, right))
+        best_name, best_of_n = damage.best_surface(text_surfaces, probes)
         key_winner, key_folded = damage.best_surface(key_surfaces, probes)
         record(
             outcome,
@@ -139,10 +148,11 @@ class UTS39ConfusableCoverage(SuiteBase):
             predicates=sorted(text_surfaces),
             collapsing_surfaces_scored_separately=sorted(key_surfaces),
             reached_if=(
-                "the subject's single best NON-KEY surface maps the source and "
-                "its UTS #39 target to one NON-EMPTY form"
+                "the subject's DECLARED sanitizer maps the source and its UTS #39 "
+                "target to one NON-EMPTY form"
             ),
-            best_surface=winner,
+            scored_surface=winner,
+            best_available_surface=best_name,
             surfaces_offered=len(text_surfaces),
             note=(
                 "Best single surface, not a union over all of them: a union asks "
@@ -177,8 +187,17 @@ class UTS39ConfusableCoverage(SuiteBase):
             folded,
             of=n,
             higher_is_better=True,
-            detail=f"best single non-key surface (`{winner or 'none'}`) maps source "
-            "and target onto one form",
+            detail=f"the declared sanitizer (`{winner or 'none'}`) maps source and "
+            "target onto one form",
+        )
+        add(
+            outcome,
+            "selection_effect_best_of_n",
+            best_of_n - folded,
+            of=n,
+            detail=f"what picking the best of {len(text_surfaces)} surfaces "
+            f"(`{best_name or 'none'}`) would add over the declared one — a "
+            "census, so the advantage of shipping many is measured, not hidden",
         )
         if key_surfaces:
             add(
@@ -1056,6 +1075,8 @@ class UTS39EquivalenceClasses(SuiteBase):
         collapsing = set(self.subject.keys()) if self.subject else set()
         text_surfaces, key_surfaces = damage.split_by_intent(all_surfaces, collapsing)
         text_surfaces = text_surfaces or all_surfaces
+        declared = self.subject.role(Role.SANITIZER) if self.subject else {}
+        scored = declared or text_surfaces
 
         def closes(fn: Callable[[str], str], target: str) -> bool:
             forms = {_apply(fn, m) for m in (*classes[target], target)}
@@ -1069,16 +1090,19 @@ class UTS39EquivalenceClasses(SuiteBase):
                     winner, best = name, hits
             return winner, best
 
-        winner, closed = best_closer(text_surfaces)
+        winner = next(iter(scored), "")
+        closed = sum(1 for t in keys if any(closes(fn, t) for fn in scored.values()))
+        best_name, best_of_n = best_closer(text_surfaces)
         key_winner, key_closed = best_closer(key_surfaces)
         record(
             outcome,
             domain=f"{len(keys)} UTS #39 equivalence classes",
             predicates=sorted(text_surfaces),
             collapsing_surfaces_scored_separately=sorted(key_surfaces),
-            closed_if="the single best non-key surface maps every member and the "
-            "prototype to one non-empty form",
-            best_surface=winner,
+            closed_if="the DECLARED sanitizer maps every member and the prototype "
+            "to one non-empty form",
+            scored_surface=winner,
+            best_available_surface=best_name,
             surfaces_offered=len(text_surfaces),
         )
         intra_script_only = sum(
@@ -1114,7 +1138,7 @@ class UTS39EquivalenceClasses(SuiteBase):
             closed,
             of=n,
             higher_is_better=True,
-            detail=f"best single non-key surface (`{winner or 'none'}`) lands every "
+            detail=f"the declared sanitizer (`{winner or 'none'}`) lands every "
             "member and the prototype on one form",
         )
         add(
@@ -1170,6 +1194,12 @@ class CorruptionCost(SuiteBase):
         collapsing = set(self.subject.keys()) if self.subject else set()
         surface_map, key_map = damage.split_by_intent(all_surfaces, collapsing)
 
+        # Resolved before record(), because the method record names the surface
+        # that is actually scored.
+        declared = self.subject.role(Role.SANITIZER) if self.subject else {}
+        scored = declared or surface_map
+        scored_name = next(iter(scored), "")
+
         codepoints = thin(damage.assigned_sample(self.STRIDE), limit)
         carried = damage.carried(codepoints)
         clean = damage.clean_ascii_corpus(min(limit or 1200, 1200))
@@ -1180,17 +1210,27 @@ class CorruptionCost(SuiteBase):
                 f"{len(carried)} assigned code points in an ASCII carrier, plus "
                 f"{len(clean)} pure-ASCII strings"
             ),
-            predicates=sorted(surface_map),
+            predicates=sorted(scored),
+            scored_surface=scored_name,
+            surfaces_available=sorted(surface_map),
             collapsing_surfaces_excluded=sorted(key_map),
             stride=self.STRIDE,
             carriers=list(damage.CARRIERS),
             degenerate_if="destruction > 50% or injectivity < 10%",
         )
 
+        # Cost is charged to the SAME surface that earns the coverage. Averaging a
+        # worst and a gentlest surface let the one earning coverage escape its own
+        # cost: coverage came from `llm_guardrail` while cost averaged `rag_ingest`
+        # and `code_context`, so the published point described a configuration
+        # nobody could deploy. The worst/gentlest pair is still reported, as a
+        # census, because the range a library offers is real information.
         per = damage.per_surface(surface_map, carried)
+        declared_damage = damage.per_surface(scored, carried)[scored_name]
         worst_name, worst = damage.worst(per)
         gentle_name, gentle = damage.gentlest(per)
         clean_per = damage.per_surface(surface_map, clean)
+        declared_clean = damage.per_surface(scored, clean)[scored_name]
         cw_name, cw = damage.worst(clean_per)
         cg_name, cg = damage.gentlest(clean_per)
 
@@ -1198,24 +1238,23 @@ class CorruptionCost(SuiteBase):
         # Both ends, always. Either alone misrepresents.
         add(
             outcome,
+            "destroyed",
+            declared_damage.destroyed,
+            of=declared_damage.inputs,
+            higher_is_better=False,
+            detail=f"the declared sanitizer (`{scored_name}`) maps a carried code point to nothing",
+        )
+        add(
+            outcome,
             "destroyed_worst_surface",
             worst.destroyed,
             of=worst.inputs,
-            higher_is_better=False,
-            detail=f"`{worst_name}` — the costliest text surface on offer",
+            detail=f"`{worst_name}` — census of the range, not scored",
         )
         add(
             outcome,
-            "destroyed_gentlest_surface",
-            gentle.destroyed,
-            of=gentle.inputs,
-            higher_is_better=False,
-            detail=f"`{gentle_name}` — the least costly text surface on offer",
-        )
-        add(
-            outcome,
-            "injectivity_worst_surface",
-            worst.injectivity,
+            "injectivity",
+            declared_damage.injectivity,
             of=1.0,
             unit="ratio",
             detail="distinct outputs per distinct input; low means merging, which "
@@ -1223,8 +1262,8 @@ class CorruptionCost(SuiteBase):
         )
         add(
             outcome,
-            "injectivity_gentlest_surface",
-            gentle.injectivity,
+            "injectivity_worst_surface",
+            worst.injectivity,
             of=1.0,
             unit="ratio",
             detail=f"`{gentle_name}`",
@@ -1236,13 +1275,22 @@ class CorruptionCost(SuiteBase):
         # is kept as a census so the difference stays inspectable.
         add(
             outcome,
+            "identity_retention",
+            declared_damage.identity_retention,
+            of=1.0,
+            unit="ratio",
+            higher_is_better=True,
+            detail=f"letters and symbols surviving the declared sanitizer "
+            f"(`{scored_name}`) — the same surface the coverage axis scores, so "
+            "the two describe one configuration",
+        )
+        add(
+            outcome,
             "identity_retention_worst_surface",
             worst.identity_retention,
             of=1.0,
             unit="ratio",
-            higher_is_better=True,
-            detail=f"letters and symbols surviving `{worst_name}` — format, control "
-            "and private-use removal is the job, not damage",
+            detail=f"`{worst_name}` — a census of the range on offer, not scored",
         )
         add(
             outcome,
@@ -1250,13 +1298,12 @@ class CorruptionCost(SuiteBase):
             gentle.identity_retention,
             of=1.0,
             unit="ratio",
-            higher_is_better=True,
-            detail=f"letters and symbols surviving `{gentle_name}`",
+            detail=f"`{gentle_name}` — census",
         )
         add(
             outcome,
-            "retention_worst_surface",
-            worst.retention,
+            "retention",
+            declared_damage.retention,
             of=1.0,
             unit="ratio",
             detail=f"all input characters surviving `{worst_name}`, identity-free "
@@ -1273,31 +1320,32 @@ class CorruptionCost(SuiteBase):
         )
         add(
             outcome,
-            "max_expansion_worst_surface",
-            worst.expansion,
+            "max_expansion",
+            declared_damage.expansion,
             higher_is_better=False,
-            detail="largest single-input amplification (#768 found 18x with no cap)",
+            detail=f"largest single-input amplification under `{scored_name}` "
+            "(#768 found 18x with no cap)",
         )
         add(
             outcome,
-            "clean_ascii_altered_worst",
+            "clean_ascii_altered",
+            declared_clean.altered,
+            of=declared_clean.inputs,
+            higher_is_better=False,
+            detail=f"the declared sanitizer (`{scored_name}`) rewrites pure ASCII "
+            "that has nothing to fix",
+        )
+        add(
+            outcome,
+            "clean_ascii_altered_worst_surface",
             cw.altered,
             of=cw.inputs,
-            higher_is_better=False,
-            detail=f"`{cw_name}` rewrites text with nothing to fix",
-        )
-        add(
-            outcome,
-            "clean_ascii_altered_gentlest",
-            cg.altered,
-            of=cg.inputs,
-            higher_is_better=False,
-            detail=f"`{cg_name}`",
+            detail=f"`{cw_name}` — census of the range, not scored",
         )
         add(
             outcome,
             "degenerate",
-            1.0 if (worst.degenerate and gentle.degenerate) else 0.0,
+            1.0 if declared_damage.degenerate else 0.0,
             of=1.0,
             higher_is_better=False,
             detail="every text surface scores by destroying rather than resolving",

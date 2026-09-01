@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .baseline import Drift
-from .leaderboard import ALPHA_FLOOR, Leaderboard, is_control
+from .leaderboard import ALPHA_FLOOR, Leaderboard, is_control, pareto
 from .protocol import Family, Measurement, Outcome, Provenance, Status
 from .runner import RunReport
 
@@ -110,6 +110,17 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
     if not board.usable:
         return lines + ["Not enough directed measurements to compute anything.", ""]
 
+    front_now = pareto(board)
+    if front_now is not None and not front_now.separating:
+        total = len(front_now.frontier) + len(front_now.dominated)
+        lines += [
+            f"> **Dominance separates almost nothing here: "
+            f"{len(front_now.frontier)} of {total} tools are non-dominated.** With "
+            "this many axes a tool need only lead on one to be safe, so a place on "
+            "the frontier is close to the default rather than an achievement. Read "
+            "it as *not strictly beaten*, and check how much company it has.",
+            "",
+        ]
     lines += [
         "Composite of discrimination-weighted z-scores. Each benchmark's weight is "
         "its corrected item-total correlation (classical test theory); measurements "
@@ -120,21 +131,34 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
         "only the order of each pairwise result.",
         "",
         f"Battery: **{len(board.items)}** benchmarks, **{len(board.subjects)}** "
-        f"subjects. Cronbach's alpha "
-        f"**{board.alpha:.2f}**"
-        if board.alpha is not None
-        else "alpha n/a",
+        f"subjects. {board.excluded_census_measurements} census measurements "
+        "excluded for having no direction.",
+        "",
     ]
-    lines[-1] += (
-        f" (floor {ALPHA_FLOOR:.2f}), Kendall's W **{board.kendall_w:.2f}**"
-        if board.kendall_w is not None
-        else ""
-    )
-    lines[-1] += (
-        f". {board.excluded_census_measurements} census measurements excluded for "
-        "having no direction."
-    )
-    lines.append("")
+    if board.correlations:
+        lines += [
+            "**How the axes relate.** Cronbach's alpha appears below only to show "
+            "that it does not apply. It assumes positively related measures of one "
+            "construct; these axes are opposed by design, and on opposed items a "
+            "*negative* alpha is the expected signature rather than a missed "
+            "threshold. It is also computed over the tools alone — the two "
+            "synthetic controls are bad at everything at once, which manufactures "
+            "positive correlation and reads as coherence (0.64 with them, -0.33 "
+            "without).",
+            "",
+            "| benchmark | benchmark | r |",
+            "|---|---|---|",
+        ]
+        for (x, y), r in sorted(board.correlations.items(), key=lambda kv: kv[1]):
+            lines.append(f"| `{x}` | `{y}` | {r:+.3f} |")
+        if board.alpha is not None:
+            lines += [
+                "",
+                f"Cronbach's alpha over the tools: **{board.alpha:+.2f}** — reported, "
+                f"not a gate, and not comparable to the conventional "
+                f"{ALPHA_FLOOR:.2f} floor.",
+            ]
+        lines.append("")
 
     if not board.supported:
         lines += [

@@ -2,7 +2,7 @@
   "confusables_version": "17.0.0",
   "disarm_version": "0.14.1",
   "host_ucd": "16.0.0",
-  "recorded_utc": "2026-09-01T18:10:28+00:00",
+  "recorded_utc": "2026-09-01T18:31:55+00:00",
   "suites": {
     "anyascii@0.3.3::bad-characters": {
       "external": true,
@@ -65,13 +65,13 @@
     "anyascii@0.3.3::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 0
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 0
         },
@@ -85,27 +85,32 @@
           "of": 1.0,
           "value": 0.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 0
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 0
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9487829146450296
         },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9487829146450296
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.297096842551388
@@ -120,12 +125,12 @@
           "of": 1.0,
           "value": 1.0258317063838553
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
           "value": 3.1818181818181817
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.9074551893965407
@@ -165,6 +170,11 @@
           "higher_is_better": true,
           "of": 6565,
           "value": 3646
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 0
         },
         "sources": {
           "higher_is_better": null,
@@ -298,13 +308,13 @@
     "decancer@0.4.1::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 0
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 0
         },
@@ -318,27 +328,32 @@
           "of": 1.0,
           "value": 0.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 0
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 0
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9943377065660036
+        },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9943377065660036
         },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9943377065660036
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.4972451790633609
@@ -353,12 +368,12 @@
           "of": 1.0,
           "value": 0.9564402672448469
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
           "value": 1.3333333333333333
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.9510443544035554
@@ -398,6 +413,11 @@
           "higher_is_better": true,
           "of": 6565,
           "value": 2857
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 0
         },
         "sources": {
           "higher_is_better": null,
@@ -452,7 +472,7 @@
       "subject": "decancer",
       "subject_version": "0.4.1"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::bad-characters": {
+    "disarm@0.14.1+g3ccf1e7.dirty::bad-characters": {
       "external": true,
       "measurements": {
         "clean_retention": {
@@ -508,9 +528,9 @@
       },
       "population": 22370,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::cldr-emoji-annotations": {
+    "disarm@0.14.1+g3ccf1e7.dirty::cldr-emoji-annotations": {
       "external": true,
       "measurements": {
         "annotated_codepoints": {
@@ -526,9 +546,9 @@
       },
       "population": 1765,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::confusable-bench-v1": {
+    "disarm@0.14.1+g3ccf1e7.dirty::confusable-bench-v1": {
       "external": true,
       "measurements": {
         "benign_controls": {
@@ -614,9 +634,9 @@
       },
       "population": 140,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::confusable-vision": {
+    "disarm@0.14.1+g3ccf1e7.dirty::confusable-vision": {
       "external": true,
       "measurements": {
         "collide_in_canonicalize": {
@@ -642,18 +662,18 @@
       },
       "population": 4174,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::corruption-cost": {
+    "disarm@0.14.1+g3ccf1e7.dirty::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 0
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 0
         },
@@ -672,30 +692,35 @@
           "of": 1.0,
           "value": 0.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 0
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 0
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9979792177418527
+        },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
           "of": 1.0,
           "value": 1.0
         },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9487829146450296
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
-          "value": 0.9998940453485908
+          "value": 0.5281839372748464
         },
         "injectivity_worst_surface": {
           "higher_is_better": null,
@@ -712,22 +737,22 @@
           "of": 1.0,
           "value": 0.9720982252352127
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
-          "value": 1.8888888888888888
+          "value": 1.3636363636363635
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
-          "value": 0.9074355678952997
+          "value": 0.9544879278713614
         }
       },
       "population": 9438,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::cve-2021-42574-trojan-source": {
+    "disarm@0.14.1+g3ccf1e7.dirty::cve-2021-42574-trojan-source": {
       "external": true,
       "measurements": {
         "poc_files": {
@@ -748,9 +773,9 @@
       },
       "population": 311,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::cve-2026-17084-stringprep": {
+    "disarm@0.14.1+g3ccf1e7.dirty::cve-2026-17084-stringprep": {
       "external": true,
       "measurements": {
         "collides_catalog_key": {
@@ -786,9 +811,9 @@
       },
       "population": 711,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::icann-lgr-latin": {
+    "disarm@0.14.1+g3ccf1e7.dirty::icann-lgr-latin": {
       "external": true,
       "measurements": {
         "blocked_pairs": {
@@ -809,9 +834,9 @@
       },
       "population": 21,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::uax29-word-joiners": {
+    "disarm@0.14.1+g3ccf1e7.dirty::uax29-word-joiners": {
       "external": true,
       "measurements": {
         "detected": {
@@ -832,9 +857,9 @@
       },
       "population": 37,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::ucd-bidi-class": {
+    "disarm@0.14.1+g3ccf1e7.dirty::ucd-bidi-class": {
       "external": true,
       "measurements": {
         "conflict_detected": {
@@ -855,9 +880,9 @@
       },
       "population": 3018,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::ucd-scripts": {
+    "disarm@0.14.1+g3ccf1e7.dirty::ucd-scripts": {
       "external": true,
       "measurements": {
         "agree": {
@@ -888,9 +913,9 @@
       },
       "population": 126761,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::ucd-toNFKC-casefold": {
+    "disarm@0.14.1+g3ccf1e7.dirty::ucd-toNFKC-casefold": {
       "external": true,
       "measurements": {
         "default_ignorable": {
@@ -906,9 +931,9 @@
       },
       "population": 405,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::untrace-techniques": {
+    "disarm@0.14.1+g3ccf1e7.dirty::untrace-techniques": {
       "external": true,
       "measurements": {
         "altered_by_strip_obfuscation": {
@@ -934,9 +959,9 @@
       },
       "population": 64,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::uts39-augmented-scripts": {
+    "disarm@0.14.1+g3ccf1e7.dirty::uts39-augmented-scripts": {
       "external": true,
       "measurements": {
         "cases": {
@@ -972,25 +997,30 @@
       },
       "population": 6,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::uts39-confusables": {
+    "disarm@0.14.1+g3ccf1e7.dirty::uts39-confusables": {
       "external": true,
       "measurements": {
         "altered_but_not_onto_target": {
           "higher_is_better": false,
-          "of": 2545,
+          "of": 2791,
           "value": 2290
         },
         "folded": {
           "higher_is_better": true,
           "of": 6565,
-          "value": 4020
+          "value": 3774
         },
         "folded_by_key_builder": {
           "higher_is_better": true,
           "of": 6565,
           "value": 3790
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 246
         },
         "sources": {
           "higher_is_better": null,
@@ -1005,19 +1035,19 @@
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
-          "value": 2545
+          "value": 2791
         },
         "unreached_strong_rtl": {
           "higher_is_better": null,
-          "of": 2545,
+          "of": 2791,
           "value": 341
         }
       },
       "population": 6565,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::uts39-equivalence-classes": {
+    "disarm@0.14.1+g3ccf1e7.dirty::uts39-equivalence-classes": {
       "external": true,
       "measurements": {
         "classes": {
@@ -1033,7 +1063,7 @@
         "closed_under_canonicalize": {
           "higher_is_better": true,
           "of": 3416,
-          "value": 1739
+          "value": 1593
         },
         "no_ascii_reachable_member": {
           "higher_is_better": false,
@@ -1048,9 +1078,9 @@
       },
       "population": 3416,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::uts39-mixed-numbers": {
+    "disarm@0.14.1+g3ccf1e7.dirty::uts39-mixed-numbers": {
       "external": true,
       "measurements": {
         "ascii_mixed_flagged": {
@@ -1071,9 +1101,9 @@
       },
       "population": 75,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
-    "disarm@0.14.1+g3bdb14f.dirty::youtube-spam": {
+    "disarm@0.14.1+g3ccf1e7.dirty::youtube-spam": {
       "external": true,
       "measurements": {
         "misses_novel": {
@@ -1104,7 +1134,7 @@
       },
       "population": 1956,
       "subject": "disarm",
-      "subject_version": "0.14.1+g3bdb14f.dirty"
+      "subject_version": "0.14.1+g3ccf1e7.dirty"
     },
     "ftfy@6.3.1::bad-characters": {
       "external": true,
@@ -1167,13 +1197,13 @@
     "ftfy@6.3.1::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 0
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 0
         },
@@ -1187,27 +1217,32 @@
           "of": 1.0,
           "value": 0.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 0
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 0
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
           "of": 1.0,
           "value": 0.9995999466595547
         },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 0.9995999466595547
+        },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9984613333059793
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 1.0
@@ -1222,15 +1257,15 @@
           "of": 1.0,
           "value": 1.0004414837779239
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
-          "value": 1.3636363636363635
+          "value": 1.0
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
-          "value": 0.9984989551550589
+          "value": 0.9995879484739377
         }
       },
       "population": 9438,
@@ -1260,13 +1295,18 @@
       "measurements": {
         "altered_but_not_onto_target": {
           "higher_is_better": false,
-          "of": 3628,
+          "of": 5501,
           "value": 853
         },
         "folded": {
           "higher_is_better": true,
           "of": 6565,
-          "value": 2937
+          "value": 1064
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 1873
         },
         "sources": {
           "higher_is_better": null,
@@ -1281,11 +1321,11 @@
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
-          "value": 3628
+          "value": 5501
         },
         "unreached_strong_rtl": {
           "higher_is_better": null,
-          "of": 3628,
+          "of": 5501,
           "value": 466
         }
       },
@@ -1304,7 +1344,7 @@
         "closed_under_canonicalize": {
           "higher_is_better": true,
           "of": 3416,
-          "value": 1454
+          "value": 871
         },
         "no_ascii_reachable_member": {
           "higher_is_better": false,
@@ -1382,13 +1422,13 @@
     "identity@1::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 0
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 0
         },
@@ -1402,27 +1442,32 @@
           "of": 1.0,
           "value": 0.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 0
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 0
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
           "of": 1.0,
           "value": 1.0
         },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 1.0
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 1.0
@@ -1437,12 +1482,12 @@
           "of": 1.0,
           "value": 1.0
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
           "value": 1.0
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 1.0
@@ -1480,6 +1525,11 @@
         },
         "folded": {
           "higher_is_better": true,
+          "of": 6565,
+          "value": 0
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
           "of": 6565,
           "value": 0
         },
@@ -1597,13 +1647,13 @@
     "null-baseline@1::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 1200
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 1200
         },
@@ -1617,27 +1667,32 @@
           "of": 1.0,
           "value": 1.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 9438
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 9438
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.0
+        },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.0
         },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.0
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.00010595465140919687
@@ -1652,12 +1707,12 @@
           "of": 1.0,
           "value": 0.0
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
           "value": 1.0
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.0
@@ -1695,6 +1750,11 @@
         },
         "folded": {
           "higher_is_better": true,
+          "of": 6565,
+          "value": 0
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
           "of": 6565,
           "value": 0
         },
@@ -1812,13 +1872,13 @@
     "pyunormalize@17.0.0::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 0
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 0
         },
@@ -1832,27 +1892,32 @@
           "of": 1.0,
           "value": 0.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 0
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 0
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9984613333059793
+        },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9996614933273155
         },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9944710576794855
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 1.0
@@ -1867,15 +1932,15 @@
           "of": 1.0,
           "value": 1.0078191682445623
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
-          "value": 1.4545454545454546
+          "value": 1.3636363636363635
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
-          "value": 0.9947120054155344
+          "value": 0.9985283874069205
         }
       },
       "population": 9438,
@@ -1912,6 +1977,11 @@
           "higher_is_better": true,
           "of": 6565,
           "value": 2932
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 0
         },
         "sources": {
           "higher_is_better": null,
@@ -2027,13 +2097,13 @@
     "stdlib@16.0.0::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 0
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 0
         },
@@ -2047,27 +2117,32 @@
           "of": 1.0,
           "value": 0.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 0
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 0
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9984613333059793
+        },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9996614933273155
         },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9944710576794855
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 1.0
@@ -2082,15 +2157,15 @@
           "of": 1.0,
           "value": 1.0078191682445623
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
-          "value": 1.4545454545454546
+          "value": 1.3636363636363635
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
-          "value": 0.9947120054155344
+          "value": 0.9985283874069205
         }
       },
       "population": 9438,
@@ -2120,13 +2195,18 @@
       "measurements": {
         "altered_but_not_onto_target": {
           "higher_is_better": false,
-          "of": 3630,
+          "of": 3633,
           "value": 1163
         },
         "folded": {
           "higher_is_better": true,
           "of": 6565,
-          "value": 2935
+          "value": 2932
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 3
         },
         "sources": {
           "higher_is_better": null,
@@ -2141,11 +2221,11 @@
         "unreached": {
           "higher_is_better": false,
           "of": 6565,
-          "value": 3630
+          "value": 3633
         },
         "unreached_strong_rtl": {
           "higher_is_better": null,
-          "of": 3630,
+          "of": 3633,
           "value": 466
         }
       },
@@ -2164,7 +2244,7 @@
         "closed_under_canonicalize": {
           "higher_is_better": true,
           "of": 3416,
-          "value": 1454
+          "value": 1453
         },
         "no_ascii_reachable_member": {
           "higher_is_better": false,
@@ -2242,13 +2322,13 @@
     "text-unidecode@1.3::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 0
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 0
         },
@@ -2262,27 +2342,32 @@
           "of": 1.0,
           "value": 0.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 0
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 0
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9487829146450296
         },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9487829146450296
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.11909302818393727
@@ -2297,12 +2382,12 @@
           "of": 1.0,
           "value": 0.9804962277663865
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
           "value": 1.7272727272727273
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.9074551893965407
@@ -2342,6 +2427,11 @@
           "higher_is_better": true,
           "of": 6565,
           "value": 720
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 0
         },
         "sources": {
           "higher_is_better": null,
@@ -2457,13 +2547,13 @@
     "unidecode@1.4.0::corruption-cost": {
       "external": true,
       "measurements": {
-        "clean_ascii_altered_gentlest": {
+        "clean_ascii_altered": {
           "higher_is_better": false,
           "of": 1200,
           "value": 0
         },
-        "clean_ascii_altered_worst": {
-          "higher_is_better": false,
+        "clean_ascii_altered_worst_surface": {
+          "higher_is_better": null,
           "of": 1200,
           "value": 0
         },
@@ -2477,27 +2567,32 @@
           "of": 1.0,
           "value": 0.0
         },
-        "destroyed_gentlest_surface": {
+        "destroyed": {
           "higher_is_better": false,
           "of": 9438,
           "value": 0
         },
         "destroyed_worst_surface": {
-          "higher_is_better": false,
+          "higher_is_better": null,
           "of": 9438,
           "value": 0
         },
-        "identity_retention_gentlest_surface": {
+        "identity_retention": {
           "higher_is_better": true,
+          "of": 1.0,
+          "value": 0.9487829146450296
+        },
+        "identity_retention_gentlest_surface": {
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9487829146450296
         },
         "identity_retention_worst_surface": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 1.0,
           "value": 0.9487829146450296
         },
-        "injectivity_gentlest_surface": {
+        "injectivity": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.12227166772621319
@@ -2512,12 +2607,12 @@
           "of": 1.0,
           "value": 0.9566168607560165
         },
-        "max_expansion_worst_surface": {
+        "max_expansion": {
           "higher_is_better": false,
           "of": null,
           "value": 1.7272727272727273
         },
-        "retention_worst_surface": {
+        "retention": {
           "higher_is_better": null,
           "of": 1.0,
           "value": 0.9074551893965407
@@ -2557,6 +2652,11 @@
           "higher_is_better": true,
           "of": 6565,
           "value": 1462
+        },
+        "selection_effect_best_of_n": {
+          "higher_is_better": null,
+          "of": 6565,
+          "value": 0
         },
         "sources": {
           "higher_is_better": null,

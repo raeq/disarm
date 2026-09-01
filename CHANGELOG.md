@@ -713,6 +713,43 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Fixed
 
+- **A preset linked every table any step could reach; `strip_format` cost 663 KB of wasm
+  (#695).** `presets::run` walked a `&[Step]` and called `apply_into` with a *runtime*
+  value, so the optimiser could not prove any of the eighteen match arms unreachable. A
+  preset's declared step list had no bearing on what linked.
+
+  `strip_format` declares five steps that neither transliterate nor demojize, and its own
+  docstring calls it "lightweight cleanup". It linked the Hanzi pinyin **and** CLDR emoji
+  tables.
+
+  | single-export `wasm32-unknown-unknown` module | before | after |
+  |---|---:|---:|
+  | `strip_format` | 662,974 | **27,384** |
+  | `canonicalize` | 663,299 | 209,949 |
+  | `canonicalize_strict` | 663,458 | 219,112 |
+  | `strip_obfuscation` | 663,281 | 426,933 |
+
+  **−95.9%** for `strip_format`, with both tables gone. `strip_obfuscation` keeps the emoji
+  table and is right to: it has a `Demojize` step. That is now the rule — a preset links
+  what its own steps reach and nothing else.
+
+  Two changes, and the second was the larger one. The step lists moved into a
+  `static_steps!` macro that unrolls them into straight-line calls, so each `apply_into`
+  call gets a `const` step it can fold to one arm. That alone got `strip_format` to
+  275 KB. The rest was the **fast-path guard**: `Actionable::for_steps` took a runtime
+  `&[Step]` and matched every variant, which kept the payload types and the emoji table
+  alive through a function that only sets booleans. It is now a `const fn` and each preset
+  computes its mask at compile time.
+
+  `ml_normalize` deliberately keeps the dynamic path — it selects between two step lists at
+  runtime, and links every table through its own steps anyway. `TextPipeline` keeps it too,
+  and correctly: it is configured at runtime and can name any step.
+
+  `tests/test_wasm_table_coupling.py` asserts the table presence exactly and the sizes as
+  generous ceilings. The presence is the real check: a module's size drifts for ordinary
+  reasons, but a table appearing in a surface that cannot reach it is categorical, and it
+  is what regressed.
+
 - **`canonicalize_strict` was not idempotent when a cross-script mark split a mark run
   (#862).** The zalgo cap ran at step 3 and `ConfusablesMarkFixedPoint` — which carries
   the #615 cross-script mark strip — at step 4. So a mark whose own script differs from

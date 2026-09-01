@@ -145,6 +145,35 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
 
 ### Added
 
+- **`edit_distance` and `nearest_match`, for the class the confusable tables correctly
+  do not reach (#883).** `paypa1`, `g1thub`, `adm1n`, `supp0rt` are ASCII substitutions.
+  Every key reducer misses all twelve such rows in `confusable-bench.v1`, and so does
+  `find_confusables` — **correctly**, because no confusable table should fold ASCII `1`
+  onto `l` without wrecking ordinary text. So the one class disarm does not model in
+  Unicode was also the one whose existing answer was unreachable from Python, though
+  `utils::edit_distance` has been compiled into the wheel all along.
+
+  All twelve are **distance 1** from the name they imitate, so a reserved list needs only
+  `nearest_match(candidate, RESERVED, max_distance=1)`.
+
+  `nearest_match` rather than exposing the internal `closest_match`, and the difference is
+  deliberate. That helper exists for *"did you mean …?"* hints on language codes: it
+  **skips exact matches**, because its caller has already rejected the input — so a
+  registry asking about a name it protects verbatim would have been told nothing — and its
+  threshold is two edits plus a minority-of-the-longer-string rule tuned for two-letter
+  codes. `nearest_match` reports exact matches with distance 0, takes the threshold from
+  the caller, and returns the distance so the policy stays the caller's, which is the
+  precedent `find_key_collisions` set.
+
+  It returns a named `NearestMatch` with `value` and `distance`, not a tuple — the repo's
+  `api_surface_contract` gate caught the tuple, and it is right that `(str, int)` at a
+  call site does not say which number is which.
+
+  Ties go to the first candidate at the lowest distance, so the caller's ordering decides;
+  documented, and tested in both directions.
+
+  **Python only in this release.** The other five bindings are tracked separately.
+
 - **`duplicate_mark`: the same nonspacing mark twice on one base (#835).** UTS #39 §5.4
   lists a sequence of the same nonspacing mark as an optional detection, and `disarm`
   implemented none of it. `a` + two acutes reports clean at every surface: it is two

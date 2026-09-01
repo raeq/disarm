@@ -1141,3 +1141,98 @@ pub fn find_key_collisions<S: AsRef<str>>(
 pub use crate::anomalies::{
     has_anomalies, inspect_anomalies, lexicon, AnomalyKind, AnomalyReport, Finding,
 };
+
+// ── Edit distance (#883) ─────────────────────────────────────────────────────
+
+/// Levenshtein edit distance between `a` and `b`, in **characters**.
+///
+/// The one class of registry spoofing disarm's Unicode machinery deliberately does not
+/// model. `paypa1`, `g1thub`, `adm1n` and `supp0rt` are ASCII substitutions: no confusable
+/// table should fold ASCII `1` onto `l`, because doing so would wreck ordinary text. So
+/// every key reducer misses all twelve such rows in `confusable-bench.v1`, and so does
+/// `find_confusables` — correctly. Edit distance is the defence for that class, and
+/// disarm has had it compiled into the wheel all along without exposing it (#883).
+///
+/// All twelve are **distance 1** from the name they imitate, so a registry guarding a
+/// reserved list needs only `edit_distance(candidate, reserved) <= 1`.
+///
+/// Counts characters rather than bytes, so `"é"` and `"e"` are one edit apart whether the
+/// accent is composed or not — feed it [`crate::api::canonicalize`] output if you want the comparison
+/// to ignore that difference too.
+///
+/// ```
+/// assert_eq!(disarm::api::edit_distance("paypa1", "paypal"), 1);
+/// assert_eq!(disarm::api::edit_distance("stripe", "stripe"), 0);
+/// assert_eq!(disarm::api::edit_distance("xx", "paypal"), 6);
+/// ```
+#[must_use]
+pub fn edit_distance(a: &str, b: &str) -> usize {
+    crate::utils::edit_distance(a, b)
+}
+
+/// A candidate name and how far `nearest_match` found it from the value asked about.
+///
+/// A named struct rather than a tuple, per `api_surface_contract`: `(String, usize)` at a
+/// call site says nothing about which number is which.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NearestMatch {
+    /// The candidate, in the spelling the caller supplied.
+    pub value: String,
+    /// Its edit distance from the value asked about. `0` means the value *is* this
+    /// candidate — which `nearest_match` reports, unlike the internal did-you-mean helper.
+    pub distance: usize,
+}
+
+/// The candidate closest to `value`, with its distance, or `None` beyond `max_distance`.
+///
+/// Reports; it does not decide. `find_key_collisions` set that precedent and this follows
+/// it: the distance comes back so the caller can apply a policy, rather than the library
+/// applying one it cannot know.
+///
+/// **Not the internal `utils::closest_match`.** That one exists for *"did you mean …?"*
+/// hints on language codes, and two of its behaviours are wrong here: it **skips exact
+/// matches** — because the caller has already rejected the input — so a registry asking
+/// about a reserved name it protects verbatim would be told `None`; and its threshold is
+/// a fixed two edits plus a minority-of-the-longer-string rule tuned for two- and
+/// three-letter codes. A registry needs exact matches reported and its own threshold.
+///
+/// Ties go to the **first** candidate at the lowest distance, so the iteration order the
+/// caller supplies decides. Sort the reserved list if that matters.
+///
+/// ```
+/// let reserved = ["paypal", "stripe", "admin"];
+/// let hit = disarm::api::nearest_match("paypa1", reserved, 1).unwrap();
+/// assert_eq!((hit.value.as_str(), hit.distance), ("paypal", 1));
+///
+/// // An exact match is reported, with distance 0 — unlike the internal helper.
+/// let exact = disarm::api::nearest_match("admin", reserved, 1).unwrap();
+/// assert_eq!((exact.value.as_str(), exact.distance), ("admin", 0));
+///
+/// // And nothing beyond the threshold the caller set.
+/// assert_eq!(disarm::api::nearest_match("something-else", reserved, 1), None);
+/// ```
+#[must_use]
+pub fn nearest_match<'a>(
+    value: &str,
+    candidates: impl IntoIterator<Item = &'a str>,
+    max_distance: usize,
+) -> Option<NearestMatch> {
+    let mut best: Option<(&str, usize)> = None;
+    for candidate in candidates {
+        let distance = crate::utils::edit_distance(value, candidate);
+        if distance > max_distance {
+            continue;
+        }
+        // Strictly less than, so ties keep the earlier candidate.
+        if best.is_none_or(|(_, b)| distance < b) {
+            best = Some((candidate, distance));
+        }
+        if distance == 0 {
+            break;
+        }
+    }
+    best.map(|(value, distance)| NearestMatch {
+        value: value.to_string(),
+        distance,
+    })
+}

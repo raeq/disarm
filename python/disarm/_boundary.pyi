@@ -45,6 +45,9 @@ from disarm._core import (
     Lexicon as Lexicon,
 )
 from disarm._core import (
+    NearestMatch as NearestMatch,
+)
+from disarm._core import (
     ResourceLimitError as ResourceLimitError,
 )
 from disarm._core import (
@@ -76,6 +79,9 @@ from disarm._core import (
 )
 from disarm._core import (
     _detect_scripts as _detect_scripts,
+)
+from disarm._core import (
+    _edit_distance as _edit_distance,
 )
 from disarm._core import (
     _escape_html as _escape_html,
@@ -163,6 +169,9 @@ from disarm._core import (
 )
 from disarm._core import (
     _ml_normalize as _ml_normalize,
+)
+from disarm._core import (
+    _nearest_match as _nearest_match,
 )
 from disarm._core import (
     _normalize as _normalize,

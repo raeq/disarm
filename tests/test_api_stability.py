@@ -111,7 +111,11 @@ EXPECTED_ALL = {
     "unmapped_confusables",
     "find_confusables",
     "find_unmapped_confusables",
+    # #883: the ASCII-substitution class, which the confusable tables correctly do not
+    # reach. Additive — no existing name changed.
+    "edit_distance",
     "find_key_collisions",
+    "nearest_match",
     "KeyCollision",
     "is_ascii",
     "is_case_fold_stable",

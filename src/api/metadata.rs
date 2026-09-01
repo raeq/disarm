@@ -172,8 +172,11 @@ pub const KEY_SCHEMA_VERSION: u32 = 3;
 /// the line above. Forgetting the bump becomes a deliberate act instead of an invisible
 /// one.
 ///
-/// Hashed decompressed rather than as stored, because gzip output carries a timestamp and
-/// is not reproducible byte-for-byte.
+/// Hashed decompressed rather than as stored. The generator already writes with
+/// `mtime=0`, so the timestamp is not the problem — but DEFLATE output still varies
+/// across zlib builds and compression-level changes, and a digest that moves when
+/// somebody's toolchain moves is a gate that cries wolf. The decompressed content is the
+/// semantic anchor: it changes when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
     "fd718135d678e6e5f257d69a80a3e5dcac1f1e70696d92194018baa5c9f36784";
 

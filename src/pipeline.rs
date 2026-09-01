@@ -66,22 +66,20 @@ const STEP_ORDER: &[(PipelineSteps, &str)] = &[
     (PipelineSteps::STRIP_ZALGO, "strip_zalgo"),
     (PipelineSteps::STRIP_BIDI, "strip_bidi"),
     (PipelineSteps::DEMOJIZE, "demojize"),
-    // Case folded BEFORE the folds below as well as after (#852, the #419 lesson).
+    // The confusable fold runs a second time after `fold_case` — see
+    // `CONFUSABLES_POST` below the `strip_accents`/`transliterate`/`confusables` run.
     //
-    // A cased letter whose *folded* form is in the confusable or transliteration table
-    // but whose original form is not folds only on the second pass, which breaks
-    // idempotency: `\u{00DE}` is absent from the table, folds to `\u{00FE}`, and only
-    // then folds to `p`. Measured over the BMP, 126 code points behaved that way in
-    // `llm_guardrail` — Latin, Cyrillic, Greek, Armenian, Cherokee and Georgian.
+    // A cased letter whose *folded* form is in the confusable table and whose original is
+    // not folded only on a second call: `\u{00DE}` has no entry, case-folds to
+    // `\u{00FE}`, and only then folds to `p`. Measured over the BMP, 126 code points
+    // behaved that way in `llm_guardrail`.
     //
-    // Folding first makes both passes see the same form. Folding *again* afterwards is
-    // what #419 added to `sort_key` and is still needed: the fold can itself emit
-    // uppercase from a source the first pass could not reach.
-    //
-    // Placed after `strip_accents`, not before it. `U+0345 COMBINING GREEK
-    // YPOGEGRAMMENI` case-folds to `\u{03B9}` — a *letter* — so folding first would
-    // carry it past the mark strip and out as `i` where it is removed today. That is a
-    // change of kind rather than of case, and none of it is what #852 is about.
+    // `fold_case` itself is NOT moved earlier, and an earlier draft of this comment said
+    // it was (#871 review). Folding before the confusable fold would also close the class
+    // and is the wrong trade: 73 cased code points fold to a different target than their
+    // case pair — `\u{00D0}` is `D` where `\u{00F0}` is unmapped, `\u{0397}` is `H` where
+    // `\u{03B7}` is `n` — so pre-folding loses the uppercase mapping outright rather than
+    // reaching it one pass later.
     (PipelineSteps::STRIP_ACCENTS, "strip_accents"),
     (PipelineSteps::TRANSLITERATE, "transliterate"),
     (PipelineSteps::CONFUSABLES, "confusables"),

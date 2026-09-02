@@ -324,6 +324,10 @@ def watch(pr: int, repo: str, interval: int, max_polls: int, allow_merge: bool) 
     for poll in range(1, max_polls + 1):
         snap = fetch(pr, repo)
         if snap is None:
+            # A failed read is not a sighting. Keeping the streak across it would let two
+            # observations separated by a network blip count as consecutive, which is the
+            # guarantee the threshold exists to provide (#922 review).
+            stuck_polls = 0
             time.sleep(interval)
             continue
 

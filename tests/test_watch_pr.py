@@ -253,3 +253,35 @@ def test_a_mergeable_pr_never_counts_as_stuck() -> None:
     snap = Snapshot("OPEN", "CLEAN", checks=(GREEN,))
     d = decide(snap, stuck_polls=watch_pr.STUCK_POLLS)
     assert d.action is Action.MERGE
+
+
+def test_a_failed_read_resets_the_streak(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#922 review: a network blip must not join two sightings into a "consecutive" pair.
+
+    `watch()` used to `continue` past a failed `fetch()` without clearing the counter, so
+    stuck-blip-stuck read as two consecutive polls and could stop early.
+    """
+    stuck = Snapshot("OPEN", "BLOCKED", threads=(DONE_THREAD,), checks=(GREEN,))
+    reads = [stuck, None, stuck, None, stuck]
+    monkeypatch.setattr(watch_pr, "fetch", lambda *a, **k: reads.pop(0) if reads else stuck)
+    monkeypatch.setattr(watch_pr.time, "sleep", lambda _: None)
+    # Five reads, three of them stuck but never two in a row: must not stop as stuck.
+    assert watch_pr.watch(1, "o/r", interval=0, max_polls=5, allow_merge=False) == 3
+
+
+def test_an_unbroken_streak_still_stops(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The other half — the reset must not make the stop condition unreachable."""
+    stuck = Snapshot("OPEN", "BLOCKED", threads=(DONE_THREAD,), checks=(GREEN,))
+    monkeypatch.setattr(watch_pr, "fetch", lambda *a, **k: stuck)
+    monkeypatch.setattr(watch_pr.time, "sleep", lambda _: None)
+    assert watch_pr.watch(1, "o/r", interval=0, max_polls=10, allow_merge=False) == 2
+
+
+def test_contributing_states_the_current_threshold() -> None:
+    """#922 review: the page hardcoded "three" beside a constant that can change."""
+    from pathlib import Path
+
+    page = Path(__file__).resolve().parent.parent / "CONTRIBUTING.md"
+    text = page.read_text(encoding="utf-8")
+    assert "`STUCK_POLLS` consecutive polls" in text
+    assert f"(currently {watch_pr.STUCK_POLLS})" in text

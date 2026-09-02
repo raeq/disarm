@@ -2779,6 +2779,7 @@ class TextPipeline:
         demojize: bool = False,
         strip_bidi: bool = False,
         strip_zalgo: int | None = None,
+        strip_pua: bool = False,
     ) -> None:
         # Validation (e.g. strip_zalgo >= 0) lives in the Rust core's
         # _TextPipeline constructor, the single source of truth for every
@@ -2798,6 +2799,7 @@ class TextPipeline:
             demojize=demojize,
             strip_bidi=strip_bidi,
             strip_zalgo=strip_zalgo,
+            strip_pua=strip_pua,
         )
 
     @classmethod

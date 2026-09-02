@@ -18,6 +18,34 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`TextPipeline(strip_pua=...)` — the one `ProfileSpec` field composition could not
+  express (#911).** `strip_pua` was set post-hoc inside `ProfileSpec::build` rather than
+  taken by `Pipeline::new`, so it was reachable from named profiles and from nowhere
+  else. A caller compiling their own pipeline silently kept all **137,468** Private Use
+  Area code points that #814 strips in every screening profile:
+
+  ```python
+  probe = "a\ue000b"
+  get_pipeline("llm_guardrail")(probe)          # 'ab'
+  TextPipeline(normalize="NFKC", ...)(probe)    # 'a\ue000b' — every PUA code point kept
+  ```
+
+  `Pipeline::new` takes it as a parameter now, so every construction site has to decide
+  and none can forget. The default is `False`, so no existing pipeline moves. Plain
+  `bool` rather than the `Option<bool>` the issue proposed: `strip_control` and
+  `strip_zero_width` use `None` to *derive* from `collapse_whitespace`, and `strip_pua`
+  has no such rule, so `None` would be a third state meaning exactly what `False` means.
+
+  Four of the seven `strip_pua` profiles never showed the gap, which is why it survived:
+  they set `transliterate`, and transliteration already drops PUA. That masking is
+  incidental rather than protection — the three that do not transliterate
+  (`llm_guardrail`, `normalize_web_input`, `ml_corpus_normalize`) lost the whole area.
+
+- **`strict_iso9` and `gost7034` are reachable from `disarm pipeline --steps` (#911).**
+  Found by the new composability gate. Both were on `TextPipeline` and absent from the
+  CLI allowlist, the same way `strip_bidi` had been before #250. `lang` stays out
+  deliberately: it takes a value, so it needs its own flag rather than a step name.
+
 - **`benchmarks/adversarial_eval` scores a named surface (#903).** `metrics.py` imported
   `strip_obfuscation` at module level and applied it to both the perturbed text and the
   clean target, so the harness measured one surface in one role. It could not answer "how

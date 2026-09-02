@@ -181,6 +181,12 @@ impl Pipeline {
         demojize: bool,
         strip_bidi: bool,
         zalgo_max_marks: Option<usize>,
+        // Taken here rather than set on the built `Pipeline` afterwards (#911). It was a
+        // post-hoc `pipeline.steps |= STRIP_PUA` in `ProfileSpec::build`, reachable only
+        // from that one call site, so the PyO3 constructor could not express it and no
+        // composed pipeline stripped the PUA. A parameter makes every construction site
+        // decide.
+        strip_pua: bool,
     ) -> Result<Self, ErrorRepr> {
         let mut steps = PipelineSteps::empty();
 
@@ -220,6 +226,9 @@ impl Pipeline {
         }
         if demojize {
             steps |= PipelineSteps::DEMOJIZE;
+        }
+        if strip_pua {
+            steps |= PipelineSteps::STRIP_PUA;
         }
         if strip_bidi {
             steps |= PipelineSteps::STRIP_BIDI;
@@ -543,10 +552,8 @@ impl ProfileSpec {
             self.demojize,
             self.strip_bidi,
             self.strip_zalgo,
+            self.strip_pua,
         )?;
-        if self.strip_pua {
-            pipeline.steps |= PipelineSteps::STRIP_PUA;
-        }
         // A named profile is a curated recommendation, so it takes the preset policy:
         // the 326 code points carrying neither `Emoji` nor `Extended_Pictographic` are
         // left for the rest of the pipeline rather than named (#757, #853). `demojize`
@@ -1157,6 +1164,7 @@ mod tests {
             false, // demojize
             false, // strip_bidi
             None,  // strip_zalgo
+            false, // strip_pua (#911)
         )
         .unwrap();
         assert!(p.steps.contains(PipelineSteps::COLLAPSE_WS));
@@ -1182,6 +1190,7 @@ mod tests {
             false,       // demojize
             false,       // strip_bidi
             None,        // strip_zalgo
+            false,       // strip_pua (#911)
         )
         .unwrap();
         assert!(p.steps.contains(PipelineSteps::COLLAPSE_WS));
@@ -1207,6 +1216,7 @@ mod tests {
             false,      // demojize
             false,      // strip_bidi
             None,       // strip_zalgo
+            false,      // strip_pua (#911)
         )
         .unwrap();
         assert!(!p.steps.contains(PipelineSteps::COLLAPSE_WS));
@@ -1219,7 +1229,7 @@ mod tests {
         // Default constructor — no steps
         let p = Pipeline::new(
             None, false, None, false, false, false, false, false, false, None, None, false, false,
-            None,
+            None, false, // strip_pua (#911)
         )
         .unwrap();
         assert!(p.steps.is_empty());
@@ -1243,6 +1253,7 @@ mod tests {
             false,
             false,
             None,
+            false, // strip_pua (#911)
         );
         assert!(matches!(
             res,
@@ -1267,6 +1278,7 @@ mod tests {
             false,
             false,
             None,
+            false, // strip_pua (#911)
         );
         assert!(matches!(res, Err(ErrorRepr::MutuallyExclusivePipeline)));
     }

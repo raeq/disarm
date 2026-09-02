@@ -11,10 +11,25 @@
 //! our code.
 //!
 //! `stats_alloc` instruments the *process-wide* allocator, so a `Region` measures
-//! allocations on every thread, not just the current one. To keep the count exact
-//! and deterministic we measure both presets inside a single `#[test]` (the only
-//! test in this binary), so there is no concurrent test thread to pollute the
-//! global counters.
+//! allocations on every thread, not just the current one. Measuring every preset inside a
+//! single `#[test]` (the only test in this binary) removes concurrent *test* threads —
+//! but not the rest of the process, and that is not the same thing (#905).
+//!
+//! This gate failed a pull request that changed no Rust at all, reporting `search_key`
+//! at 7 against a bound of 4, and passed on re-run of the same commit. The bound is
+//! `measured + 1`, so one stray allocation anywhere in the process blocks a merge.
+//!
+//! The fix rests on the noise being **one-sided**. Another thread allocating inside the
+//! measured window can only ADD to the count; nothing subtracts. So the minimum over
+//! several runs is the tightest true observation, and a transient disturbance — which is
+//! what CI hit — no longer decides the verdict.
+//!
+//! It does not make a process-wide counter safe against *sustained* interference, and
+//! nothing can: measured with a thread allocating continuously, the minimum over nine
+//! runs still read 39 against a true 3, because no window is quiet. That is why this
+//! binary must keep exactly one `#[test]` — a second one runs concurrently by default and
+//! reintroduces precisely that condition. `only_one_test_in_this_binary` below asserts
+//! it, because the premise was previously a comment and a comment cannot fail.
 use std::alloc::System;
 
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
@@ -22,19 +37,46 @@ use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 #[global_allocator]
 static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
-/// Count the number of heap allocations during one call of `f`, after a warm-up
-/// call (so one-time statics / lazy tables are not charged to the measured call).
+/// How many times each measurement is repeated. Ambient noise is rare, so a handful of
+/// runs is enough for at least one to land in a quiet window; the cost is microseconds.
+const MEASUREMENT_RUNS: usize = 9;
+
+/// The smallest number of heap allocations observed across [`MEASUREMENT_RUNS`] calls of
+/// `f`, after a warm-up call (so one-time statics / lazy tables are not charged).
+///
+/// The minimum, not the mean or a single sample, because the counter is process-wide and
+/// the noise only ever adds (#905). A mean would drift with load; one sample is what made
+/// this gate unreliable.
 fn allocs_for(f: impl Fn()) -> usize {
     f(); // warm up lazy statics / tables
-    let region = Region::new(GLOBAL);
-    f();
-    region.change().allocations
+    (0..MEASUREMENT_RUNS)
+        .map(|_| {
+            let region = Region::new(GLOBAL);
+            f();
+            region.change().allocations
+        })
+        .min()
+        .expect("MEASUREMENT_RUNS is non-zero")
 }
 
 /// Both presets are measured in one test so the process-wide `stats_alloc`
 /// counters are never read while another test thread is allocating.
 #[test]
 fn preset_per_call_allocations_are_bounded() {
+    // The file's premise, asserted rather than assumed (#905). A second `#[test]` here
+    // runs concurrently with this one and allocates while the counters are open, which
+    // is the sustained-noise case the minimum cannot survive. Checked from the source so
+    // adding one fails here rather than as an unexplained count.
+    let source = include_str!("preset_alloc_count.rs");
+    // Lines that ARE the attribute, not lines that mention it — this comment and the
+    // message below both contain the string.
+    let tests = source.lines().filter(|l| l.trim() == "#[test]").count();
+    assert_eq!(
+        tests, 1,
+        "this binary must contain exactly one #[test]; found {tests}. `stats_alloc` counts \
+         process-wide, so a concurrent test thread allocates into this measurement (#905)."
+    );
+
     // Short, mixed-script input (homoglyphs + bidi override + zero-width).
     let canon_input = "Ηеllо\u{202E}\u{200B}Wоrld";
     let canon = allocs_for(|| {

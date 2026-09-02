@@ -82,10 +82,13 @@ def test_no_row_is_left_unreachable_behind_nfkc() -> None:
             alone = disarm.normalize_confusables(ch, target_script=target)
             if alone == ch:
                 continue
-            after = disarm.normalize_confusables(_nfkc(ch), target_script=target)
+            # Normalize once: this sweeps the whole code space twice over, and #919's
+            # review measured the duplicate call as roughly doubling the cost.
+            image = _nfkc(ch)
+            after = disarm.normalize_confusables(image, target_script=target)
             if alone == after:
                 continue
-            if after == _nfkc(ch) and any(c.isalpha() and not c.isascii() for c in after):
+            if after == image and any(c.isalpha() and not c.isascii() for c in after):
                 unreachable.append(f"U+{cp:04X}")
         assert not unreachable, f"[{target}] rows unreachable behind NFKC: {unreachable}"
 

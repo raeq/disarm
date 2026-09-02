@@ -75,8 +75,8 @@ they are comparing are already equal by the time the divergence matters.
 
 `normalize_confusables` folds the table against the input as written. Every **preset** and
 **profile** that folds confusables normalizes to NFKC first — `STEP_ORDER` puts `normalize`
-ahead of `confusables` — so the fold there sees a decomposed image instead. **68 code points
-get a different answer** for the Latin target, and 8 for Cyrillic.
+ahead of `confusables` — so the fold there sees a decomposed image instead. **65 code points
+get a different answer** for the Latin target, and 5 for Cyrillic.
 
 ```python
 import disarm
@@ -98,7 +98,7 @@ So 43 favour the preset answer, 15 favour the standalone one, and 7 are a genuin
 between "looks like" and "decomposes to". disarm ships both because both are wanted; what it
 was missing is anyone saying so.
 
-Three rows left this table in #833, and they are the reason to read it carefully: `ϲ`, `℧`
+Three rows left this table in #833, and they are the reason to read it carefully: `ϲ`, `ℇ`
 and `𝚥` diverged because the source had a row and its NFKC image had none, so the fold that
 existed could not fire from any preset. That is not two defensible answers — it is one
 answer and one gap. The rows above are the former.

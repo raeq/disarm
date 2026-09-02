@@ -285,6 +285,37 @@ truncating, because the first N code points of any sorted domain are Latin, Gree
 and Cyrillic — the best-covered part of every table here — and a quick pass that
 samples only those would disagree with a full one for the wrong reason.
 
+## What is not a benchmark
+
+Mining paper lists produces more rejections than additions, and the reasons are
+worth writing down so the same paper is not re-evaluated from scratch. Three
+tests, applied in order:
+
+**Is there an artifact?** A citation is not a benchmark. Check the abstract page,
+GitHub, *and* `arxiv.org/src/` — the LaTeX bundle often carries the construction
+when no dataset was released, which is where `mcp-tag-block-concealment`,
+`rag-pull-invisibles`, `zero-width-stylometry` and `encoding-obfuscation` came
+from. Only when nothing is published, and the construction is not specified
+either, does a paper drop out here.
+
+**Is it licensed?** Read the README, not just the licence field and a file named
+LICENSE. `reverse-captcha-eval` declares MIT in prose and was wrongly excluded
+once for having no licence file.
+
+**Is it in scope?** Measure before judging. A jailbreak corpus written in valid
+text has no Unicode signal to find, so scoring detection on it is a category
+error — `jailbreakbench` is registered for what it *can* answer, which is what a
+sanitizer costs on traffic it should not be defending against.
+
+Rejected so far, with the reason:
+
+| paper | reason |
+|---|---|
+| arXiv:1712.06751 (HotFlip) | ASCII alphabet; no released corpus; and the attack is white-box, so vectors cannot be derived without the model's gradients. Its descendants `bad-characters` and `rag-pull-invisibles` carry the lineage into Unicode, and both are wired |
+| arXiv:2406.18510 (WildTeaming) | zero mentions of unicode, homoglyph, zero-width, invisible or confusable; a third valid-text jailbreak corpus duplicates `jailbreakbench` |
+| arXiv:2512.13325 (Unicode watermarking) | source bundle carries no construction — three mentions of "zero-width" and no scheme |
+| arXiv:2604.10271 (Doppelgänger Injection) | on topic, but isolated examples only: no table, no listing, so the substitution mapping would be ours rather than the paper's |
+
 ## Adding a benchmark
 
 A suite is one class: set `name`, `family`, `availability` and a `Provenance`, then

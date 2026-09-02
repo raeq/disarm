@@ -357,11 +357,22 @@ pub struct NamePolicy {
 }
 
 impl NamePolicy {
-    /// Name every row — standalone `demojize` and the explicit `TextPipeline` step,
-    /// where the caller asked for the name by name.
+    /// Name every row — standalone `demojize` only, where the caller asked for the name
+    /// by name and there is no later step to leave anything for.
     pub const NAME_EVERYTHING: Self = Self {
         skip_tr39_claimed: false,
         skip_non_emoji: false,
+    };
+
+    /// The policy every *pipeline* uses: leave the non-emoji CLDR rows for the confusable
+    /// fold (#757), and let the fold answer the TR39-claimed rows too where a preset asks
+    /// for that separately (#614).
+    ///
+    /// Named once rather than spelled out at each construction site, because spelling it
+    /// out is how `ProfileSpec::build` and `Pipeline::new` came to disagree (#918).
+    pub const PRESET: Self = Self {
+        skip_tr39_claimed: false,
+        skip_non_emoji: true,
     };
 
     /// Whether `ch` is left for the rest of the pipeline instead of being named.

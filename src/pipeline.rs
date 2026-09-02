@@ -149,12 +149,24 @@ pub(crate) struct Pipeline {
     gost7034: bool,
     /// Which CLDR name rows the `demojize` step is allowed to name (#853).
     ///
-    /// `NAME_EVERYTHING` for a hand-built `TextPipeline`, where the caller asked for the
-    /// step by name and gets exactly what it says. A **named profile** is a curated
-    /// recommendation like a preset, so it skips the non-emoji rows: #757 measured
-    /// `ml_normalize` turning `film\u{2019}s` into `film right apostrophe s`, and #803
-    /// fixed that for `PRESETS` and left `list_profiles()` behind — the same boundary
-    /// #757's own title says #614 had already been lost across once.
+    /// One policy for every pipeline: skip the non-emoji CLDR rows and leave them for the
+    /// confusable fold. Presets, named profiles and hand-built `TextPipeline`s all use it.
+    ///
+    /// It used to be `NAME_EVERYTHING` for a hand-built pipeline, on the reasoning that
+    /// the caller asked for the step by name and should get exactly what it says. That
+    /// reading lost the same boundary three times: #614 for `strip_obfuscation`, #757 and
+    /// #803 for `PRESETS` against `list_profiles()`, and #918 for a named profile against
+    /// the `TextPipeline` transcribed from its own `ProfileSpec` — 413 code points named
+    /// where the profile folds them.
+    ///
+    /// The reasoning does not survive its own evidence. #757 measured `ml_normalize`
+    /// turning `film\u{2019}s` into `film right apostrophe s`, one token to four with the
+    /// possessive gone, and a hand-built pipeline aimed at a tokenizer meets that
+    /// identically. A caller asking for `demojize` is asking to name **emoji**; the step's
+    /// name says so, and typographic punctuation is not what they meant.
+    ///
+    /// Standalone `demojize()` still names every row. That is where "the caller asked by
+    /// name" genuinely holds: one function, no other steps, nothing downstream to fold.
     emoji_name_policy: emoji::NamePolicy,
 }
 
@@ -256,9 +268,12 @@ impl Pipeline {
         }
 
         let pipeline = Self {
-            // A hand-built pipeline names every row: the caller asked for `demojize` by
-            // name. `ProfileSpec::build` overrides this (#853).
-            emoji_name_policy: emoji::NamePolicy::NAME_EVERYTHING,
+            // #918: the same policy a named profile gets. A `TextPipeline` transcribed
+            // from a `ProfileSpec` field for field must behave like the profile, or
+            // composition silently returns text that is not equal to what the profile
+            // produces — #614's failure mode, on the surface the docs point callers at
+            // when no profile fits.
+            emoji_name_policy: emoji::NamePolicy::PRESET,
             steps,
             normalize_form: normalize.map(std::borrow::ToOwned::to_owned),
             zalgo_max_marks,
@@ -554,14 +569,11 @@ impl ProfileSpec {
             self.strip_zalgo,
             self.strip_pua,
         )?;
-        // A named profile is a curated recommendation, so it takes the preset policy:
-        // the 326 code points carrying neither `Emoji` nor `Extended_Pictographic` are
-        // left for the rest of the pipeline rather than named (#757, #853). `demojize`
-        // and a hand-built `TextPipeline` still name everything.
-        pipeline.emoji_name_policy = emoji::NamePolicy {
-            skip_tr39_claimed: false,
-            skip_non_emoji: true,
-        };
+        // Redundant since #918 — `Pipeline::new` sets the same policy — and kept as the
+        // explicit statement that a profile takes it. Assigning here is what let the two
+        // drift in the first place, so the value is now a shared constant rather than a
+        // literal spelled out twice.
+        pipeline.emoji_name_policy = emoji::NamePolicy::PRESET;
         Ok(pipeline)
     }
 }
@@ -716,7 +728,7 @@ mod tests {
             lang: None,
             strict_iso9: false,
             gost7034: false,
-            emoji_name_policy: emoji::NamePolicy::NAME_EVERYTHING,
+            emoji_name_policy: emoji::NamePolicy::PRESET,
         }
     }
 

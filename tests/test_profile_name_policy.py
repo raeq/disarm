@@ -72,15 +72,29 @@ def test_a_genuine_emoji_is_still_named(emoji: str, expected: str) -> None:
     assert disarm.get_pipeline("ml_corpus_normalize")(emoji) == expected
 
 
-def test_demojize_and_a_hand_built_pipeline_still_name_everything() -> None:
-    """The distinction the fix rests on.
+def test_standalone_demojize_still_names_everything() -> None:
+    """Where "the caller asked for it by name" genuinely holds: one function, no pipeline.
 
-    A caller who writes `demojize` or `TextPipeline(demojize=True)` asked for the step by
-    name and gets exactly what it says. A *named profile* is a recommendation, and a
-    recommendation carrying a known token-inflation hazard is the thing #757 is about.
+    There is no later step to leave anything for, so naming every row is the only thing
+    `demojize` could mean.
     """
     assert disarm.demojize("’") == "right apostrophe"
-    assert disarm.TextPipeline(demojize=True)("’") == "right apostrophe"
+    assert disarm.demojize("❤") == "red heart"
+
+
+def test_a_pipeline_demojize_names_emoji_and_leaves_the_rest_to_the_fold() -> None:
+    """#918 moved this. It used to name everything, like the standalone function.
+
+    That reading lost the same boundary three times — #614, then #757/#803, then a named
+    profile against the `TextPipeline` built from its own `ProfileSpec` — and it does not
+    survive its own evidence: a hand-built pipeline aimed at a tokenizer meets #757's
+    `film’s` → `film right apostrophe s` identically. Asking for `demojize` is asking to
+    name **emoji**.
+    """
+    assert disarm.TextPipeline(demojize=True)("❤") == "red heart"  # still named
+    assert disarm.TextPipeline(demojize=True)("’") == "’"  # left for the fold
+    # …and the fold answers it when the caller asked for one.
+    assert disarm.TextPipeline(demojize=True, confusables=True)("’") == "'"
 
 
 def test_llm_guardrail_now_clears_the_whole_cve_matrix() -> None:

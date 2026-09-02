@@ -23,14 +23,18 @@ from __future__ import annotations
 
 import os
 from collections import Counter
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
+from importlib import import_module
 from multiprocessing import Pool
 from pathlib import Path
 
-from disarm import strip_obfuscation
-
 from .corpora import Record
+
+#: The surface scored when the caller names none. Kept as `strip_obfuscation` so the
+#: committed reports and the pre-release BitAbuse cadence are unchanged (#903).
+DEFAULT_TRANSFORM = "disarm.strip_obfuscation"
+
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFUSABLES = _REPO_ROOT / "data" / "confusables.txt"
@@ -91,6 +95,8 @@ class _Partial:
 class EvalResult:
     corpus: str
     labeled: bool
+    #: The dotted name of the surface these numbers describe (#903).
+    transform: str = DEFAULT_TRANSFORM
     n_rows: int = 0
     rows_with_nonascii: int = 0
     nonascii_before: int = 0
@@ -127,19 +133,50 @@ def _word_recovery(recovered: str, clean: str) -> float:
 # --- multiprocessing worker -------------------------------------------------
 
 _WORKER_SOURCES: set[int] = set()
+_WORKER_TRANSFORM: Callable[[str], str] | None = None
 
 
-def _init_worker(confusables_path: str) -> None:
-    global _WORKER_SOURCES
+def resolve_transform(dotted: str) -> Callable[[str], str]:
+    """Import `module.attr` and return it, checking it is callable.
+
+    A dotted string rather than a callable because the workers are separate processes: a
+    function object cannot cross that boundary, and a name can. Resolved inside each
+    worker, beside the confusables table, for the same reason (#903).
+    """
+    module, _, attr = dotted.rpartition(".")
+    if not module:
+        raise ValueError(
+            f"transform must be a dotted path like 'disarm.canonicalize', got {dotted!r}"
+        )
+    try:
+        imported = import_module(module)
+    except ImportError as exc:
+        # Uniformly a ValueError, so a caller catches one type — and so the failure reads
+        # as "you named something that is not there" rather than surfacing an ImportError
+        # from inside a pool initializer (#904 review).
+        raise ValueError(f"{dotted!r}: cannot import {module!r} ({exc})") from exc
+    obj = getattr(imported, attr, None)
+    if obj is None:
+        raise ValueError(f"{dotted!r} does not exist")
+    if not callable(obj):
+        raise ValueError(f"{dotted!r} is not callable")
+    return obj
+
+
+def _init_worker(confusables_path: str, transform: str = DEFAULT_TRANSFORM) -> None:
+    global _WORKER_SOURCES, _WORKER_TRANSFORM
     _WORKER_SOURCES = load_uts39_sources(confusables_path)
+    _WORKER_TRANSFORM = resolve_transform(transform)
 
 
 def _score_chunk(chunk: list[tuple[str, str | None]]) -> _Partial:
     sources = _WORKER_SOURCES
+    transform = _WORKER_TRANSFORM
+    assert transform is not None, "_init_worker must run before _score_chunk"
     p = _Partial()
     for text, clean in chunk:
         p.n_rows += 1
-        cleaned = strip_obfuscation(text)
+        cleaned = transform(text)
         before = _nonascii(text)
         after = _nonascii(cleaned)
         if before:
@@ -156,7 +193,7 @@ def _score_chunk(chunk: list[tuple[str, str | None]]) -> _Partial:
                 p.missed_novel[cp] += count
         if clean is not None:
             p.labeled_rows += 1
-            clean_canon = strip_obfuscation(clean)
+            clean_canon = transform(clean)
             if cleaned == clean_canon:
                 p.xmr_hits += 1
             if cleaned == clean:
@@ -184,26 +221,35 @@ def evaluate(
     confusables_path: Path | str = DEFAULT_CONFUSABLES,
     processes: int | None = None,
     chunk_size: int = 4000,
+    transform: str = DEFAULT_TRANSFORM,
 ) -> EvalResult:
-    """Scan ``records`` through ``strip_obfuscation`` and accumulate metrics.
+    """Scan ``records`` through ``transform`` and accumulate metrics.
+
+    ``transform`` is a dotted import path, resolved inside each worker. It defaults to
+    `strip_obfuscation`, which is what every committed report was produced with; naming
+    another surface — `disarm.canonicalize`, say — scores that one instead, and the
+    report records which (#903).
 
     The scan runs across ``processes`` worker processes (default: all CPUs). Pass
     ``processes=1`` to run inline (useful for tests / tiny inputs).
     """
+    # Resolve once here as well as in the workers, so a bad name fails immediately
+    # rather than inside a pool, where the traceback names the initializer.
+    resolve_transform(transform)
     if processes is None:
         processes = os.cpu_count() or 1
 
     total = _Partial()
     chunks = _chunked(records, chunk_size)
     if processes <= 1:
-        _init_worker(str(confusables_path))
+        _init_worker(str(confusables_path), transform)
         for chunk in chunks:
             total.merge(_score_chunk(chunk))
     else:
         with Pool(
             processes=processes,
             initializer=_init_worker,
-            initargs=(str(confusables_path),),
+            initargs=(str(confusables_path), transform),
         ) as pool:
             for partial in pool.imap_unordered(_score_chunk, chunks):
                 total.merge(partial)
@@ -211,6 +257,7 @@ def evaluate(
     res = EvalResult(
         corpus=corpus,
         labeled=labeled,
+        transform=transform,
         n_rows=total.n_rows,
         rows_with_nonascii=total.rows_with_nonascii,
         nonascii_before=total.nonascii_before,

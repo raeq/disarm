@@ -211,29 +211,60 @@ def test_every_profile_is_reproducible_by_a_composed_pipeline(name: str) -> None
         assert profile(probe) == composed(probe), f"{name} diverges on PUA U+{lo:04X}"
 
 
-@pytest.mark.parametrize("name", sorted(NOT_EXACTLY_REPRODUCIBLE))
-def test_demojize_profiles_diverge_only_by_naming_more(name: str) -> None:
-    """The documented exception, bounded so a *new* kind of divergence still fails.
+#: Where every divergence observed to date lives. Above this the emoji and confusable
+#: tables have no entries, so the scan is looking for something unexpected rather than
+#: confirming something known — which is worth doing, but not on every local run.
+NAMING_RANGE_END = 0x1FFFD
 
-    `ProfileSpec::build` sets `skip_non_emoji`, so a profile leaves these characters
-    alone and a hand-built `demojize` pipeline names them. Every divergence must be of
-    that shape: the composed output is strictly longer. A divergence where the profile
-    produced more, or where both produced different non-empty text of the same length,
-    is something else and fails here.
+
+def _wrong_shaped_divergences(name: str, first: int, last: int) -> list[tuple[int, str, str]]:
+    """Divergences that are NOT the emoji-naming policy, over ``[first, last]``.
+
+    The policy makes the composed pipeline name a character the profile leaves alone,
+    so a legitimate divergence always has the composed output strictly longer. Anything
+    else — the profile producing more, or equal-length disagreement — is a different
+    bug wearing the exception's clothes.
     """
     profile = disarm.get_pipeline(name)
     composed = disarm.TextPipeline(**PROFILE_EQUIVALENTS[name])  # type: ignore[arg-type]
-    wrong_shape = []
-    for cp in range(0x20, sys.maxunicode + 1):
+    out = []
+    for cp in range(first, last + 1):
         if 0xD800 <= cp <= 0xDFFF:
             continue
         ch = chr(cp)
         a, b = profile(ch), composed(ch)
         if a != b and len(b) <= len(a):
-            wrong_shape.append((cp, a, b))
-    assert not wrong_shape, (
-        f"{name}: {len(wrong_shape)} divergence(s) that are not the emoji-naming "
-        f"policy, e.g. {wrong_shape[:3]}"
+            out.append((cp, a, b))
+    return out
+
+
+@pytest.mark.parametrize("name", sorted(NOT_EXACTLY_REPRODUCIBLE))
+def test_demojize_profiles_diverge_only_by_naming_more(name: str) -> None:
+    """The documented exception, bounded so a *new* kind of divergence still fails."""
+    wrong = _wrong_shaped_divergences(name, 0x20, NAMING_RANGE_END)
+    assert not wrong, (
+        f"{name}: {len(wrong)} divergence(s) that are not the emoji-naming policy, e.g. {wrong[:3]}"
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("name", sorted(NOT_EXACTLY_REPRODUCIBLE))
+def test_demojize_divergence_shape_holds_above_the_naming_range(name: str) -> None:
+    """The other ~1.05M code points (#912 review).
+
+    Splitting here rather than dropping the tail: above `NAMING_RANGE_END` sit the Tags
+    block, Variation Selectors Supplement and **both supplementary Private Use planes**
+    — 131,068 PUA code points, which is what this whole change is about. Capping the
+    scan would stop asserting anything there.
+
+    It is `slow` because it is ~1.7s of the file's ~2s and confirms a negative. Bare
+    `pytest` skips the `slow` tier; CI's `-m "not formal and not hypothesis"` runs it,
+    so the codespace stays covered where it counts (#658).
+    """
+    wrong = _wrong_shaped_divergences(name, NAMING_RANGE_END + 1, sys.maxunicode)
+    assert not wrong, (
+        f"{name}: {len(wrong)} divergence(s) above U+{NAMING_RANGE_END:04X} that are "
+        f"not the emoji-naming policy, e.g. {wrong[:3]}"
     )
 
 

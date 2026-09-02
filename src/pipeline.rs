@@ -73,6 +73,18 @@ bitflags! {
         /// where a post-fold precedes it. Displayed as `fold_case`, because that is what
         /// it does.
         const FOLD_CASE_POST = 0b10_0000_0000_0000;
+
+        /// Strip the Plane 14 TAG block, U+E0000–U+E007F (#914).
+        ///
+        /// Removing it was reachable only by enabling `demojize` or `transliterate`, and
+        /// neither belongs in a screening pipeline — so a composed `TextPipeline` could
+        /// not remove the concealment carrier behind #700, #701, #812 and #748 without
+        /// also glossing emoji into words or romanizing the text.
+        ///
+        /// A valid emoji subdivision flag (a flag base, tag letters, CANCEL TAG) is kept:
+        /// `invisibles::strip_tags` already draws that line for `canonicalize` (#413) and
+        /// this reuses it rather than inventing a second rule that could disagree.
+        const STRIP_PLANE14 = 0b100_0000_0000_0000;
     }
 }
 
@@ -93,6 +105,11 @@ const STEP_ORDER: &[(PipelineSteps, &str)] = &[
     (PipelineSteps::NORMALIZE, "normalize"),
     (PipelineSteps::STRIP_ZALGO, "strip_zalgo"),
     (PipelineSteps::STRIP_BIDI, "strip_bidi"),
+    // Before `demojize`, deliberately: the TAG block is a concealment carrier, and a
+    // carrier should be removed before any step is given the chance to gloss it into
+    // words. It is also the order that keeps the six profiles which strip it today via
+    // `demojize`/`transliterate` byte-identical (#914).
+    (PipelineSteps::STRIP_PLANE14, "strip_plane14"),
     (PipelineSteps::DEMOJIZE, "demojize"),
     // The confusable fold runs a second time after `fold_case` — see
     // `CONFUSABLES_POST` below the `strip_accents`/`transliterate`/`confusables` run.
@@ -203,6 +220,9 @@ impl Pipeline {
         // composed pipeline stripped the PUA. A parameter makes every construction site
         // decide.
         strip_pua: bool,
+        // #914, the same shape and for the same reason: reachable only as a side effect
+        // of `demojize` or `transliterate` before this.
+        strip_plane14: bool,
     ) -> Result<Self, ErrorRepr> {
         let mut steps = PipelineSteps::empty();
 
@@ -245,6 +265,9 @@ impl Pipeline {
         }
         if strip_pua {
             steps |= PipelineSteps::STRIP_PUA;
+        }
+        if strip_plane14 {
+            steps |= PipelineSteps::STRIP_PLANE14;
         }
         if strip_bidi {
             steps |= PipelineSteps::STRIP_BIDI;
@@ -486,6 +509,10 @@ impl Pipeline {
         } else if step == PipelineSteps::STRIP_ZERO_WIDTH {
             whitespace::strip_zero_width_chars_into(input, out);
             Ok(true)
+        } else if step == PipelineSteps::STRIP_PLANE14 {
+            out.clear();
+            out.push_str(&crate::invisibles::strip_tags(input));
+            Ok(true)
         } else if step == PipelineSteps::STRIP_PUA {
             out.clear();
             // `filter`'s `size_hint` lower bound is 0, so `extend` cannot pre-size the
@@ -552,6 +579,14 @@ struct ProfileSpec {
     /// rendering as an icon-font glyph is exactly the case #413 carved `strip_format`
     /// out for.
     strip_pua: bool,
+    /// Strip the Plane 14 TAG block (#914).
+    ///
+    /// `true` for the six profiles that already strip it as a side effect of `demojize`
+    /// or `transliterate`, so none of them changes behaviour. `false` for `code_context`,
+    /// which exists to preserve its input, and for `normalize_web_input`, which never
+    /// stripped it — recorded rather than changed here, because whether a profile named
+    /// for screening web input should pass a concealment carrier is a separate call.
+    strip_plane14: bool,
 }
 
 impl ProfileSpec {
@@ -572,6 +607,7 @@ impl ProfileSpec {
             self.strip_bidi,
             self.strip_zalgo,
             self.strip_pua,
+            self.strip_plane14,
         )?;
         // Redundant since #918 — `Pipeline::new` sets the same policy — and kept as the
         // explicit statement that a profile takes it. Assigning here is what let the two
@@ -603,6 +639,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             fold_case: true,
             collapse_whitespace: true,
             strip_pua: true,
+            strip_plane14: true,
             ..ProfileSpec::default()
         },
         "library_catalog_key_eu" => ProfileSpec {
@@ -613,6 +650,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             fold_case: true,
             collapse_whitespace: true,
             strip_pua: true,
+            strip_plane14: true,
             ..ProfileSpec::default()
         },
         "normalize_web_input" => ProfileSpec {
@@ -629,6 +667,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             fold_case: true,
             collapse_whitespace: true,
             strip_pua: true,
+            strip_plane14: true,
             ..ProfileSpec::default()
         },
         "search_index" => ProfileSpec {
@@ -638,6 +677,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             fold_case: true,
             collapse_whitespace: true,
             strip_pua: true,
+            strip_plane14: true,
             ..ProfileSpec::default()
         },
         // #746: the only STRUCTURE-PRESERVING entry point. Every other profile and every
@@ -677,6 +717,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             fold_case: true,
             collapse_whitespace: true,
             strip_pua: true,
+            strip_plane14: true,
             ..ProfileSpec::default()
         },
         // rag_ingest canonicalizes by phonetic *romanization* (transliterate),
@@ -697,6 +738,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             strip_accents: true,
             collapse_whitespace: true,
             strip_pua: true,
+            strip_plane14: true,
             ..ProfileSpec::default()
         },
         _ => return None,
@@ -795,6 +837,8 @@ mod tests {
                 (None, "a\u{0000}b")
             } else if *flag == PipelineSteps::STRIP_ZERO_WIDTH {
                 (None, "a\u{200b}b")
+            } else if *flag == PipelineSteps::STRIP_PLANE14 {
+                (None, "a\u{e0041}b")
             } else if *flag == PipelineSteps::STRIP_PUA {
                 (None, "a\u{e000}b")
             } else if *flag == PipelineSteps::COLLAPSE_WS {
@@ -1129,6 +1173,7 @@ mod tests {
                 "normalize",
                 "strip_zalgo",
                 "strip_bidi",
+                "strip_plane14",
                 "demojize",
                 "strip_accents",
                 "transliterate",
@@ -1181,6 +1226,7 @@ mod tests {
             false, // strip_bidi
             None,  // strip_zalgo
             false, // strip_pua (#911)
+            false, // strip_plane14 (#914)
         )
         .unwrap();
         assert!(p.steps.contains(PipelineSteps::COLLAPSE_WS));
@@ -1207,6 +1253,7 @@ mod tests {
             false,       // strip_bidi
             None,        // strip_zalgo
             false,       // strip_pua (#911)
+            false,       // strip_plane14 (#914)
         )
         .unwrap();
         assert!(p.steps.contains(PipelineSteps::COLLAPSE_WS));
@@ -1233,6 +1280,7 @@ mod tests {
             false,      // strip_bidi
             None,       // strip_zalgo
             false,      // strip_pua (#911)
+            false,      // strip_plane14 (#914)
         )
         .unwrap();
         assert!(!p.steps.contains(PipelineSteps::COLLAPSE_WS));
@@ -1246,6 +1294,7 @@ mod tests {
         let p = Pipeline::new(
             None, false, None, false, false, false, false, false, false, None, None, false, false,
             None, false, // strip_pua (#911)
+            false, // strip_plane14 (#914)
         )
         .unwrap();
         assert!(p.steps.is_empty());
@@ -1270,6 +1319,7 @@ mod tests {
             false,
             None,
             false, // strip_pua (#911)
+            false, // strip_plane14 (#914)
         );
         assert!(matches!(
             res,
@@ -1295,6 +1345,7 @@ mod tests {
             false,
             None,
             false, // strip_pua (#911)
+            false, // strip_plane14 (#914)
         );
         assert!(matches!(res, Err(ErrorRepr::MutuallyExclusivePipeline)));
     }

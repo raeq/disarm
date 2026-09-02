@@ -18,6 +18,40 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`strip_plane14` — the TAG block is a composable step, not a side effect (#914).**
+  Removing U+E0000–U+E007F was reachable only by enabling `demojize` or `transliterate`.
+  Neither belongs in a screening pipeline, so a composed `TextPipeline` could not remove
+  the concealment carrier behind #700, #701, #812 and #748 without also glossing emoji
+  into words or romanizing the text:
+
+  ```python
+  screening = dict(normalize="NFKC", strip_bidi=True, strip_zero_width=True,
+                   strip_control=True, strip_pua=True, confusables=True, ...)
+
+  TextPipeline(**screening)(concealed)                      # payload intact
+  TextPipeline(**screening, strip_plane14=True)(concealed)  # 'formats code neatly.'
+  ```
+
+  A real `PipelineSteps` flag in `STEP_ORDER`, taken by `Pipeline::new` so every
+  construction site has to decide — the shape #911 gave `strip_pua`. It runs **before**
+  `demojize`: a concealment carrier should be removed before any step can gloss it into
+  words, and that order also keeps the six profiles that strip it today byte-identical.
+
+  Named for the Unicode region, like `strip_pua`. `strip_tags` reads as markup.
+
+  A valid emoji subdivision flag survives — `invisibles::strip_tags` already draws that
+  line for `canonicalize` (#413) and the step reuses it rather than inventing a second
+  rule that could disagree.
+
+  Default `false`; the six profiles that already stripped it set it explicitly, so no
+  shipped profile moves. `code_context` keeps its input by design. **`normalize_web_input`
+  never stripped the carrier and still does not** — recorded in a test rather than changed,
+  because whether a profile named for screening web input should pass a concealment
+  channel is a separate call from adding the capability.
+
+  This unblocks #910: turning `demojize` off no longer silently disables TAG stripping,
+  so a text-injection primitive is no longer traded for a concealment channel.
+
 - **Six confusable rows were unreachable from every preset (#833).** `STEP_ORDER` runs
   `normalize` at position 1 and `confusables` at position 7, so a preset folds the NFKC
   *image* of the input, never the input. When the image had no row of its own, the row

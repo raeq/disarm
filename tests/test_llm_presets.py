@@ -25,6 +25,7 @@ def test_llm_guardrail_step_order() -> None:
         "normalize",
         "strip_zalgo",
         "strip_bidi",
+        "strip_plane14",
         "demojize",
         "strip_accents",
         "confusables",
@@ -48,6 +49,7 @@ def test_rag_ingest_step_order() -> None:
     assert steps == [
         "normalize",
         "strip_bidi",
+        "strip_plane14",
         "strip_accents",
         "transliterate",
         "strip_control",

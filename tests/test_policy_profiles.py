@@ -91,6 +91,7 @@ class TestProfileStepsLock:
             ("normalize", "NFKC"),
             ("strip_zalgo", "0"),
             ("strip_bidi", None),
+            ("strip_plane14", None),
             ("demojize", None),
             ("strip_accents", None),
             ("confusables", "latin"),
@@ -108,6 +109,7 @@ class TestProfileStepsLock:
         assert get_pipeline("rag_ingest").steps == [
             ("normalize", "NFKC"),
             ("strip_bidi", None),
+            ("strip_plane14", None),
             ("strip_accents", None),
             ("transliterate", None),
             ("strip_control", None),

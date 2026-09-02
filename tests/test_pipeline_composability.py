@@ -50,6 +50,7 @@ PROFILE_EQUIVALENTS: dict[str, dict[str, object]] = {
         fold_case=True,
         collapse_whitespace=True,
         strip_pua=True,
+        strip_plane14=True,
     ),
     "library_catalog_key_eu": dict(
         normalize="NFKC",
@@ -59,6 +60,7 @@ PROFILE_EQUIVALENTS: dict[str, dict[str, object]] = {
         fold_case=True,
         collapse_whitespace=True,
         strip_pua=True,
+        strip_plane14=True,
     ),
     "normalize_web_input": dict(
         normalize="NFKC",
@@ -73,6 +75,7 @@ PROFILE_EQUIVALENTS: dict[str, dict[str, object]] = {
         fold_case=True,
         collapse_whitespace=True,
         strip_pua=True,
+        strip_plane14=True,
     ),
     "search_index": dict(
         normalize="NFKC",
@@ -81,6 +84,7 @@ PROFILE_EQUIVALENTS: dict[str, dict[str, object]] = {
         fold_case=True,
         collapse_whitespace=True,
         strip_pua=True,
+        strip_plane14=True,
     ),
     "code_context": dict(strip_bidi=True, strip_zero_width=True, strip_control=True),
     "llm_guardrail": dict(
@@ -95,6 +99,7 @@ PROFILE_EQUIVALENTS: dict[str, dict[str, object]] = {
         fold_case=True,
         collapse_whitespace=True,
         strip_pua=True,
+        strip_plane14=True,
     ),
     "rag_ingest": dict(
         normalize="NFKC",
@@ -105,6 +110,7 @@ PROFILE_EQUIVALENTS: dict[str, dict[str, object]] = {
         strip_accents=True,
         collapse_whitespace=True,
         strip_pua=True,
+        strip_plane14=True,
     ),
 }
 

@@ -79,6 +79,10 @@ from .protocol import Outcome, Status
 
 #: Below this, a benchmark is treated as carrying no ranking information.
 MIN_DISCRIMINATION = 0.0
+#: How many *other* benchmarks must cover a subject before that subject can
+#: enter an item's corrected item-total correlation. Guards the rest-score
+#: from resting on a single other item.
+MIN_REST_ITEMS = 2
 #: Conventional floor for acceptable internal consistency (Nunnally,
 #: *Psychometric Theory*, 1978). Below it, a composite is an average over
 #: quantities the battery itself says are unrelated.
@@ -395,14 +399,34 @@ def standardize(
 
 
 def discriminations(items: list[Item], subjects: Sequence[str]) -> None:
-    """Corrected item-total correlation for every benchmark, in place."""
+    """Corrected item-total correlation for every benchmark, in place.
+
+    Missing data is handled by **pairwise** deletion, not listwise. A benchmark
+    that only some subjects can answer is normal here — ``flagged_by_a_detector``
+    exists only for the subjects in the detector role, so a detector-only suite
+    legitimately covers two of eleven subjects. Under listwise deletion that one
+    narrow item caps the shared-subject set for *every other* item at two, every
+    item then falls below the three-subject floor, and the whole battery reports
+    a discrimination of exactly zero — which in turn makes every composite zero.
+    The narrowness of one benchmark must not propagate to the rest.
+
+    So the rest-score is the **mean** of whichever other items cover the subject,
+    not the sum over all of them: a sum would score a subject answering ten items
+    on a different scale from one answering four. An item still needs
+    ``MIN_REST_ITEMS`` other items behind each subject for the rest-score to mean
+    anything, and three subjects before a correlation is worth computing.
+    """
     for item in items:
         others = [o for o in items if o is not item]
-        shared = [s for s in subjects if s in item.z and all(s in o.z for o in others)]
+        shared = [
+            s
+            for s in subjects
+            if s in item.z and sum(1 for o in others if s in o.z) >= MIN_REST_ITEMS
+        ]
         if len(shared) < 3 or not others:
             item.discrimination = 0.0
             continue
-        rest_total = [sum(o.z[s] for o in others) for s in shared]
+        rest_total = [_mean([o.z[s] for o in others if s in o.z]) for s in shared]
         own = [item.z[s] for s in shared]
         item.discrimination = max(MIN_DISCRIMINATION, _pearson(own, rest_total))
 

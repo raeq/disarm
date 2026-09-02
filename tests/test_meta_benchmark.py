@@ -1510,3 +1510,53 @@ def test_only_deterministic_encodings_are_reconstructed():
     assert set(EncodingObfuscation.encodings()) == {"base64", "hex", "rot13"}
     out = registry.by_name("encoding-obfuscation").run(subject=subjects.by_name("disarm"))
     assert "leetspeak" in out.method.parameters["excluded"]
+
+
+def test_one_narrow_benchmark_does_not_zero_every_discrimination():
+    """A detector-only suite must not flatten the whole battery.
+
+    `weaponizing-unicode` reports `flagged_by_a_detector`, which only subjects in
+    the detector role can answer — two of eleven. Under listwise deletion that
+    capped every *other* item's shared-subject set at those same two, put every
+    item below the three-subject floor, and produced a battery in which every
+    discrimination and therefore every composite was exactly zero.
+    """
+    wide = [
+        leaderboard.Item(
+            suite=f"wide-{i}",
+            key="score",
+            scores={},
+            z={f"tool-{j}": float((j * (i + 1)) % 5) for j in range(6)},
+        )
+        for i in range(4)
+    ]
+    narrow = leaderboard.Item(
+        suite="detector-only",
+        key="flagged_by_a_detector",
+        scores={},
+        z={"tool-0": 1.0, "tool-3": -1.0},
+    )
+    items = [*wide, narrow]
+    subjects = [f"tool-{j}" for j in range(6)]
+
+    leaderboard.discriminations(items, subjects)
+
+    assert any(i.discrimination > 0.0 for i in wide), (
+        "one narrow item zeroed every wide item's discrimination"
+    )
+    assert narrow.discrimination == 0.0, "a 2-subject item cannot be discriminating"
+
+
+def test_rest_score_is_a_mean_so_uneven_coverage_does_not_rescale_subjects():
+    """The rest-score must not grow with how many items a subject answered."""
+    covered = leaderboard.Item(suite="a", key="k", scores={}, z={"x": 1.0, "y": 2.0, "z": 3.0})
+    partial = leaderboard.Item(suite="b", key="k", scores={}, z={"x": 1.0, "y": 2.0})
+    full = leaderboard.Item(suite="c", key="k", scores={}, z={"x": 1.0, "y": 2.0, "z": 3.0})
+    also_full = leaderboard.Item(suite="d", key="k", scores={}, z={"x": 1.0, "y": 2.0, "z": 3.0})
+    items = [covered, partial, full, also_full]
+    leaderboard.discriminations(items, ["x", "y", "z"])
+
+    # Subject "z" is absent from `partial`. Summing would score it over one item
+    # while x and y are scored over two, so a perfectly consistent battery would
+    # register as inconsistent. The mean keeps all three on one scale.
+    assert covered.discrimination == pytest.approx(1.0)

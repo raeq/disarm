@@ -20,7 +20,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from .. import damage
-from ..base import CACHE, SuiteBase, add, artifact, record
+from ..base import CACHE, SuiteBase, add, artifact, record, thin
 from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
 from ..subjects import Capability, Role
@@ -1089,6 +1089,213 @@ class EncodingObfuscation(SuiteBase):
             )
 
 
+class EmojiDelimiterSegmentation(SuiteBase):
+    name = "emoji-delimiter-segmentation"
+    family = Family.ACADEMIC
+    availability = Availability.NETWORK
+    MULTI_SUBJECT = True
+    REQUIRES = (Capability.TRANSFORM,)
+    env_var = "DISARM_META_EMOJI_DATA"
+    SOURCES = (
+        Source(
+            url="https://www.unicode.org/Public/UCD/latest/ucd/emoji/emoji-data.txt",
+            filename="emoji-data.txt",
+            licence="Unicode License v3",
+            note="Emoji_Presentation, the normative default-emoji set (UTS #51)",
+        ),
+    )
+    summary = "A visible emoji inserted inside a word: does the sanitizer rejoin it?"
+    provenance = Provenance(
+        origin="arXiv:2411.01077",
+        citation="Emoji Attack: Enhancing Jailbreak Attacks Against Judge LLM "
+        "Detection (Wei, Liu, Erichson) — ICML 2025",
+        url="https://arxiv.org/abs/2411.01077",
+        version="v5; the construction, not the repository",
+        licence=(
+            "the paper's repository (github.com/zhipeng-wei/EmojiAttack) carries no "
+            "licence in its metadata or its README, so nothing from it is used"
+        ),
+        external=True,
+        issues=(757,),
+        finding=(
+            "The paper's mechanism is token segmentation, not concealment: an "
+            "emoji inserted inside a word is fully visible to a human reader and "
+            "splits the word for a subword tokenizer. That makes it the only "
+            "vector in this battery that hides nothing — every other academic "
+            "suite here turns on an invisible or a confusable character."
+        ),
+        notes=(
+            "DERIVED, on the same footing as the TAG-block and zero-width suites: "
+            "the construction is quoted from the paper and the inputs come from "
+            "elsewhere. The emoji set is every Emoji_Presentation code point in "
+            "the UCD, which is a normative definition rather than a chosen list; "
+            "the carrier is the neutral ASCII pair already used by "
+            "`damage.classify_removal`, so the result is a property of the "
+            "subject's emoji handling and of nothing else. The paper's own "
+            "corpora (402 offensive phrases; AdvBench responses) are not needed "
+            "— the mechanism is word-agnostic, and picking a vocabulary here "
+            "would be picking the benchmark.\n\n"
+            "What is scored is the sanitizer's response to a split, not a "
+            "tokenizer's. A subject that names the emoji in words is not thereby "
+            "wrong — naming preserves content a downstream reader may want — but "
+            "on this axis it is the worst outcome, because it converts one soft "
+            "tokenizer split into two hard whitespace boundaries.\n\n"
+            "`letter_substituted` is likewise not by itself a defect. Every "
+            "subject that reaches it through NFKC reaches it on the same 13 code "
+            "points — the Squared and Circled CJK emoji (U+1F201, U+1F21A, "
+            "U+1F22F, U+1F232..U+1F23A, U+1F250, U+1F251) whose compatibility "
+            "decomposition is the bare ideograph. That mapping is normative. It "
+            "is scored here because the *segmentation* consequence is real "
+            "whatever its provenance: the word closes back up into one run "
+            "around a character the reader did not write.\n\n"
+            "Cites #757 because `split_widened` is that issue's mechanism seen "
+            "from the other side. #757 is about which code points the CLDR name "
+            "table should fire on; this suite measures what firing costs when "
+            "the emoji sits inside a word rather than beside one. The two are "
+            "the same table and the same gloss — `cldr-emoji-annotations` counts "
+            "how often it fires, and this counts what it does to a word boundary."
+        ),
+        reproduces="the emoji-as-delimiter insertion described in Section 3",
+    )
+
+    #: The paper inserts a delimiter *inside* a word. `damage` already keeps a
+    #: neutral ASCII carrier for exactly this shape, and reusing it means the
+    #: vocabulary is not a choice made here.
+    LEFT, RIGHT = damage._CARRIER
+
+    def locate(self) -> Path | None:
+        return artifact(CACHE / "emoji-data.txt", env=self.env_var)
+
+    @staticmethod
+    def _runs(text: str) -> int:
+        """How many alphanumeric runs the text breaks into.
+
+        The ladder this suite scores is a run count, not a whitespace split,
+        because the ways a subject can widen a split are not all whitespace:
+        `anyascii` renders the emoji as `:bomb:`, which introduces the same two
+        extra boundaries as a naming pass without introducing a space.
+        """
+        runs, in_run = 0, False
+        for ch in text:
+            if ch.isalnum():
+                if not in_run:
+                    runs += 1
+                in_run = True
+            else:
+                in_run = False
+        return runs
+
+    def measure(self, outcome: Outcome, limit: int | None) -> None:
+        path = self.locate()
+        assert path is not None
+        cps: set[int] = set()
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw.split("#")[0].strip()
+            if not line or ";" not in line:
+                continue
+            parts = [p.strip() for p in line.split(";")]
+            if len(parts) < 2 or parts[1] != "Emoji_Presentation":
+                continue
+            field = parts[0]
+            if ".." in field:
+                lo, hi = field.split("..")
+                cps.update(range(int(lo, 16), int(hi, 16) + 1))
+            else:
+                cps.add(int(field, 16))
+        if not cps:
+            raise AssertionError(
+                "emoji-data.txt present but no Emoji_Presentation code point parsed "
+                "— parser fault, not an empty result"
+            )
+
+        ordered = thin(sorted(cps), limit)
+        outcome.population = len(ordered)
+        clean = self.LEFT + self.RIGHT
+
+        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        record(
+            outcome,
+            domain=f"{len(ordered)} Emoji_Presentation code points, each inserted "
+            f"between {self.LEFT!r} and {self.RIGHT!r}",
+            predicates=sorted(surfaces),
+            construction=f"{self.LEFT} + chr(cp) + {self.RIGHT}; clean form {clean!r}",
+            emoji_property="Emoji_Presentation (UTS #51)",
+        )
+        add(outcome, "emoji_tested", len(ordered), unit="codepoints")
+        if not surfaces:
+            return
+
+        fn = next(iter(surfaces.values()))
+        rejoined = survives = widened = substituted = destroyed = 0
+        for cp in ordered:
+            attacked = self.LEFT + chr(cp) + self.RIGHT
+            out = _apply(fn, attacked)
+            runs = self._runs(out)
+            if out == clean:
+                rejoined += 1
+            elif self.LEFT not in out or self.RIGHT not in out:
+                # The carrier itself did not survive. This branch has to come
+                # before the run-count ladder: `null-baseline` returns the empty
+                # string, which has no runs, and without it every deletion was
+                # being counted as a letter substitution — scoring the degenerate
+                # control at 100% on a metric describing an emoji that became a
+                # word.
+                destroyed += 1
+            elif runs <= 1:
+                # One run, but not the clean word: the emoji became letters and
+                # the reader now sees a different, plausible word.
+                substituted += 1
+            elif runs == 2:
+                survives += 1
+            else:
+                widened += 1
+
+        n = float(len(ordered))
+        add(
+            outcome,
+            "rejoined",
+            rejoined,
+            of=n,
+            higher_is_better=True,
+            detail="the emoji is removed and the split word is restored exactly",
+        )
+        add(
+            outcome,
+            "split_widened",
+            widened,
+            of=n,
+            higher_is_better=False,
+            detail="the emoji expanded into extra alphanumeric runs (a name, or "
+            "a delimited gloss) — one soft split became two hard ones",
+        )
+        add(
+            outcome,
+            "split_survives",
+            survives,
+            of=n,
+            higher_is_better=False,
+            detail="the word is still broken into the same two runs",
+        )
+        add(
+            outcome,
+            "letter_substituted",
+            substituted,
+            of=n,
+            higher_is_better=False,
+            detail="the emoji became letters inside the word, so the split is "
+            "hidden rather than removed and the result reads as a different word",
+        )
+        add(
+            outcome,
+            "carrier_destroyed",
+            destroyed,
+            of=n,
+            higher_is_better=False,
+            detail="the surrounding ASCII did not survive either — the split is "
+            "gone because the word is",
+        )
+
+
 SUITES = [
     BadCharacters(),
     EncodingObfuscation(),
@@ -1096,6 +1303,7 @@ SUITES = [
     TagBlockConcealment(),
     RagPullInvisibles(),
     ZeroWidthStylometry(),
+    EmojiDelimiterSegmentation(),
     NonStandardUnicodeSets(),
     SpecialCharAttack(),
     GCGSuffixes(),

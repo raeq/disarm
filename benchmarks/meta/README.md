@@ -288,7 +288,7 @@ samples only those would disagree with a full one for the wrong reason.
 ## What is not a benchmark
 
 Mining paper lists produces more rejections than additions, and the reasons are
-worth writing down so the same paper is not re-evaluated from scratch. Three
+worth writing down so the same paper is not re-evaluated from scratch. Four
 tests, applied in order:
 
 **Is there an artifact?** A citation is not a benchmark. Check the abstract page,
@@ -301,6 +301,17 @@ either, does a paper drop out here.
 **Is it licensed?** Read the README, not just the licence field and a file named
 LICENSE. `reverse-captcha-eval` declares MIT in prose and was wrongly excluded
 once for having no licence file.
+
+**Is it derivable?** Separate from licensing, and the reason the emoji cluster
+split four ways to one. An unlicensed repository is not the end of the enquiry:
+if the paper states the construction, the construction can be quoted and the
+inputs taken from a normative source instead. `emoji-delimiter-segmentation`
+is built that way — the repository behind arXiv:2411.01077 carries no licence in
+either its metadata or its README, so nothing from it is used; the emoji set is
+the UCD's `Emoji_Presentation` property and the carrier is the neutral ASCII pair
+`damage` already uses. What cannot be recovered this way is an attack whose
+vectors are a function of a trained model, which is what rules out HotFlip and
+Emoti-Attack.
 
 **Is it in scope?** Measure before judging. A jailbreak corpus written in valid
 text has no Unicode signal to find, so scoring detection on it is a category
@@ -315,6 +326,9 @@ Rejected so far, with the reason:
 | arXiv:2406.18510 (WildTeaming) | zero mentions of unicode, homoglyph, zero-width, invisible or confusable; a third valid-text jailbreak corpus duplicates `jailbreakbench` |
 | arXiv:2512.13325 (Unicode watermarking) | source bundle carries no construction — three mentions of "zero-width" and no scheme |
 | arXiv:2604.10271 (Doppelgänger Injection) | on topic, but isolated examples only: no table, no listing, so the substitution mapping would be ours rather than the paper's |
+| arXiv:2601.00936, arXiv:2608.18164 (emoji jailbreaking) | the 50-prompt set is explicitly withheld, and "emoji stuffing"/"emoji chaining" are described qualitatively — no mapping, no algorithm |
+| arXiv:2509.11141 (When 😊 Turns Hostile) | supplementary code is claimed but no URL is given; the craft step needs the target model's gradients |
+| arXiv:2502.17392 (Emoti-Attack) | no artifact, and the sequence generator is a trained component — reimplementing it means retraining it |
 
 ## Adding a benchmark
 

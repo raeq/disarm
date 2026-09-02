@@ -173,21 +173,29 @@ class AttackCorpusSuite(SuiteBase):
             of=n,
             detail="rows carrying any non-ASCII code point",
         )
-        add(
-            outcome,
-            "detected_any",
-            sum(1 for v in detected.values() if v),
-            of=len(det),
-            detail="detector surfaces that fire on at least one row",
-        )
-        add(
-            outcome,
-            "rows_detected_by_best_detector",
-            max(detected.values(), default=0),
-            of=n,
-            higher_is_better=True,
-            detail="the single detector that sees the most rows",
-        )
+        # Only recorded when the subject actually has a detector. Zero-filling
+        # these is not a neutral default: eight of eleven subjects claim no
+        # DETECT capability at all, so a 0/22,370 for each turned "has a
+        # detector" into a large z-score advantage for the one subject that
+        # does, and the composite inherited it. The harness's rule elsewhere is
+        # that a surface a subject lacks is absent rather than zero; these two
+        # measurements were the exception.
+        if det:
+            add(
+                outcome,
+                "detected_any",
+                sum(1 for v in detected.values() if v),
+                of=len(det),
+                detail="detector surfaces that fire on at least one row",
+            )
+            add(
+                outcome,
+                "rows_detected_by_best_detector",
+                max(detected.values(), default=0),
+                of=n,
+                higher_is_better=True,
+                detail="the single detector that sees the most rows",
+            )
         best_xmr = max(xmr.values()) if labelled else 0
         add(
             outcome,
@@ -633,10 +641,11 @@ class TagBlockConcealment(SuiteBase):
                 higher_is_better=True,
                 detail="no Plane 14 language-tag code point survives",
             )
+            rendered_label = _apply(fn, self.VISIBLE_LABEL)
             add(
                 outcome,
                 "visible_label_intact",
-                1.0 if self.VISIBLE_LABEL in cleaned else 0.0,
+                1.0 if rendered_label and rendered_label in cleaned else 0.0,
                 of=1.0,
                 higher_is_better=True,
                 detail="the label a reviewer actually reads is still there — "
@@ -840,13 +849,21 @@ class ZeroWidthStylometry(SuiteBase):
                 higher_is_better=True,
                 detail="no carrier survives the declared sanitizer",
             )
+            # Compared against the cover text *put through the same surface*,
+            # not against the original bytes. A configuration that case-folds
+            # has not destroyed the sentence, and scoring it 0 alongside a
+            # subject that deleted the sentence outright says the two did the
+            # same thing. The transformed form must be non-empty, or a
+            # delete-everything surface would trivially be "intact" — the same
+            # guard `damage.collides` applies.
+            rendered = _apply(fn, self.COVER).replace(" ", "")
             add(
                 outcome,
                 "cover_text_intact",
-                1.0 if self.COVER.replace(" ", "") in out.replace(" ", "") else 0.0,
+                1.0 if rendered and rendered in out.replace(" ", "") else 0.0,
                 of=1.0,
                 higher_is_better=True,
-                detail="the visible sentence survives, ignoring whitespace",
+                detail="the visible sentence survives, as this surface renders it",
             )
 
 
@@ -1116,7 +1133,7 @@ class EmojiDelimiterSegmentation(SuiteBase):
             "licence in its metadata or its README, so nothing from it is used"
         ),
         external=True,
-        issues=(757,),
+        issues=(910, 757),
         finding=(
             "The paper's mechanism is token segmentation, not concealment: an "
             "emoji inserted inside a word is fully visible to a human reader and "

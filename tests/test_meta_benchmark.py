@@ -1560,3 +1560,64 @@ def test_rest_score_is_a_mean_so_uneven_coverage_does_not_rescale_subjects():
     # while x and y are scored over two, so a perfectly consistent battery would
     # register as inconsistent. The mean keeps all three on one scale.
     assert covered.discrimination == pytest.approx(1.0)
+
+
+def test_detector_measurements_are_absent_for_subjects_without_a_detector(tmp_path):
+    """A capability a subject does not claim must not be scored as zero.
+
+    Eight of eleven subjects expose no detector. Recording 0/22,370 for each
+    turned "has a detector at all" into a large z-score advantage for the one
+    subject that does, and the composite inherited it — the ranking was partly
+    measuring API surface rather than behaviour.
+    """
+    from benchmarks.meta.suites import academic
+
+    corpus = tmp_path / "rows.jsonl"
+    corpus.write_text(
+        '{"text": "a\u200bb", "clean": "ab"}\n{"text": "plain", "clean": "plain"}\n',
+        encoding="utf-8",
+    )
+
+    def keys_for(subject):
+        suite = academic.BadCharacters()
+        suite.subject = subject
+        outcome = Outcome(suite=suite.name, family=suite.family, provenance=suite.provenance)
+        suite.measure(outcome, None)
+        return {m.key for m in outcome.measurements}
+
+    detector_keys = {"rows_detected_by_best_detector", "detected_any"}
+    with_detector = without = None
+    for subject in subjects.all_subjects():
+        if not subject.available()[0]:
+            continue
+        if subject.detectors():
+            with_detector = with_detector or subject
+        elif subject.transforms():
+            without = without or subject
+
+    assert with_detector is not None and without is not None, "need one of each"
+    os.environ["DISARM_META_BAD_CHARACTERS"] = str(corpus)
+    try:
+        assert detector_keys <= keys_for(with_detector)
+        assert not (detector_keys & keys_for(without)), (
+            f"{without.info.name} claims no detector but was scored on one"
+        )
+    finally:
+        os.environ.pop("DISARM_META_BAD_CHARACTERS", None)
+
+
+def test_cover_text_intactness_survives_a_case_fold():
+    """Intactness is judged against the surface's own rendering of the text.
+
+    A pipeline with `fold_case=True` lowercases the cover sentence. Comparing
+    the original bytes scored that 0 — the same score as deleting the sentence —
+    so a case-folding configuration read as destroying text it had preserved.
+    """
+    from benchmarks.meta.suites import academic
+
+    suite = academic.ZeroWidthStylometry()
+    cover = suite.COVER
+
+    # A case-folding surface preserves the sentence; the empty surface does not.
+    assert academic._apply(str.lower, cover).replace(" ", "") in cover.lower().replace(" ", "")
+    assert not academic._apply(lambda _s: "", cover)

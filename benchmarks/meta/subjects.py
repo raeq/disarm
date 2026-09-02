@@ -22,6 +22,8 @@ provide it, and every unmatched pair is reported as a skip with the reason.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import pathlib
 import unicodedata
 from collections.abc import Callable
@@ -283,6 +285,91 @@ class DisarmSubject(_Base):
             if profile in available:
                 out[f"profile:{profile}"] = disarm.get_pipeline(profile)
         return out
+
+
+class DisarmComposedSubject(_Base):
+    """A pipeline compiled for a purpose, rather than a profile picked off the shelf.
+
+    Composition is disarm's answer to "no shipped profile covers my policy", and
+    scoring only presets and profiles leaves the whole capability unmeasured.
+    It is entered here as a *separate subject* rather than as another disarm
+    surface, on the precedent that two versions of one tool may both compete: a
+    composed pipeline is a different deployable artifact with different
+    properties, not a better view of the same one.
+
+    **The steps are declared once, here, and never varied per benchmark.** That
+    is the whole discipline — a composition chosen per suite would be best-of-N
+    with extra steps, which is what `ROLES` exists to prevent. The declaration is
+    hashed into the version string, so changing a single flag changes the subject
+    key and cannot be mistaken for the same configuration measured twice.
+
+    The composition is not invented here either: it is exactly the change #910
+    proposes for `llm_guardrail` — the profile with `demojize` off — so what this
+    subject scores is a proposal that is already on the table.
+
+    It is knowingly *not* equivalent to `llm_guardrail`. Per #911, `strip_pua` is
+    the one `ProfileSpec` field `TextPipeline` cannot express, so this pipeline
+    strips none of the 137,468 Private Use Area code points the profile strips.
+    That gap is a true property of the composed API and is left in rather than
+    papered over — a subject that quietly matched the profile would be measuring
+    a pipeline no caller can actually build.
+    """
+
+    #: The declared composition. Frozen: see the class docstring.
+    STEPS: ClassVar[dict[str, object]] = {
+        "normalize": "NFKC",
+        "strip_zalgo": 0,
+        "strip_bidi": True,
+        "strip_zero_width": True,
+        "strip_control": True,
+        "confusables": True,
+        "strip_accents": True,
+        "fold_case": True,
+        "collapse_whitespace": True,
+        "demojize": False,
+    }
+
+    ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "composed"}
+
+    def __init__(self) -> None:
+        super().__init__()
+        import disarm
+
+        released = getattr(disarm, "__version__", "?")
+        # The digest makes the configuration part of the identity. Two runs whose
+        # step lists differ can never collide on one subject key, which is the
+        # same rule the perf harness applies to its corpus.
+        digest = hashlib.sha256(json.dumps(self.STEPS, sort_keys=True).encode("utf-8")).hexdigest()[
+            :8
+        ]
+        self.info = SubjectInfo(
+            name="disarm-composed",
+            version=f"{released}{_git_describe(getattr(disarm, '__file__', ''))}+composed.{digest}",
+            origin="raeq/disarm",
+            url="https://github.com/raeq/disarm",
+            role="a TextPipeline compiled from declared steps: "
+            + ", ".join(f"{k}={v!r}" for k, v in sorted(self.STEPS.items())),
+        )
+
+    def available(self) -> tuple[bool, str]:
+        if not _import("disarm"):
+            return (False, "disarm is not importable")
+        import disarm
+
+        if not hasattr(disarm, "TextPipeline"):
+            return (False, "this build has no TextPipeline")
+        try:
+            disarm.TextPipeline(**self.STEPS)  # type: ignore[arg-type]
+        except TypeError as exc:
+            # A build that does not accept a declared step must not be scored on
+            # a silently different pipeline.
+            return (False, f"TextPipeline rejects a declared step: {exc}")
+        return (True, "")
+
+    def transforms(self) -> dict[str, Callable[[str], str]]:
+        import disarm
+
+        return {"composed": disarm.TextPipeline(**self.STEPS)}  # type: ignore[arg-type]
 
 
 class StdlibSubject(_Base):
@@ -588,6 +675,7 @@ class IdentitySubject(_Base):
 
 ALL: tuple[type[_Base], ...] = (
     DisarmSubject,
+    DisarmComposedSubject,
     StdlibSubject,
     DecancerSubject,
     FtfySubject,

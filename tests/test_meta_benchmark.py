@@ -1631,12 +1631,20 @@ def test_the_composed_subject_declares_every_step_it_relies_on():
     pipeline keeping all 137,468 PUA code points that every screening profile
     strips — and nothing in the run output would say so.
     """
-    composed = subjects.DisarmComposedSubject()
-    ready, why = composed.available()
-    assert ready, why
-    assert composed.STEPS.get("strip_pua") is True, (
-        "strip_pua must be declared, not inherited from the default"
-    )
+    seen = set()
+    for cls in (
+        subjects.ComposedPromptHygiene,
+        subjects.ComposedRetrievalKey,
+        subjects.ComposedReviewDisplay,
+    ):
+        composed = cls()
+        ready, why = composed.available()
+        assert ready, why
+        assert composed.STEPS.get("strip_pua") is True, (
+            f"{cls.__name__}: strip_pua must be declared, not inherited"
+        )
+        seen.add(composed.info.version)
+    assert len(seen) == 3, "each use case must have its own subject key"
 
 
 def test_changing_the_composition_changes_the_subject_key():
@@ -1645,12 +1653,70 @@ def test_changing_the_composition_changes_the_subject_key():
     Two runs whose step lists differ must not collide on one subject key, or a
     report would show a configuration being compared against itself.
     """
-    before = subjects.DisarmComposedSubject().info.version
-    original = dict(subjects.DisarmComposedSubject.STEPS)
+    before = subjects.ComposedPromptHygiene().info.version
+    original = dict(subjects.ComposedPromptHygiene.STEPS)
     try:
-        subjects.DisarmComposedSubject.STEPS = {**original, "fold_case": False}
-        after = subjects.DisarmComposedSubject().info.version
+        subjects.ComposedPromptHygiene.STEPS = {**original, "fold_case": False}
+        after = subjects.ComposedPromptHygiene().info.version
     finally:
-        subjects.DisarmComposedSubject.STEPS = original
+        subjects.ComposedPromptHygiene.STEPS = original
     assert before != after
-    assert subjects.DisarmComposedSubject().info.version == before
+    assert subjects.ComposedPromptHygiene().info.version == before
+
+
+def test_every_composed_pipeline_is_scored_on_the_whole_battery():
+    """No composition may select the benchmarks it is measured on.
+
+    A pipeline hand-crafted per *benchmark* would be best-of-N with extra steps —
+    map the cost suites to a light pipeline and the coverage suites to a heavy
+    one and the mapping does the winning. Each use case is therefore a separate
+    subject facing everything, so a prompt-hygiene pipeline meets the cost suites
+    it loses and a review pipeline meets the coverage suites it loses.
+    """
+    composed = [s for s in subjects.all_subjects() if s.info.name.startswith("disarm-composed:")]
+    assert len(composed) >= 3, "expected one subject per declared use case"
+    for subject in composed:
+        # The only per-subject selection allowed anywhere is the declared role.
+        assert set(subject.ROLES) == {subjects.Role.SANITIZER}
+        assert not hasattr(subject, "SUITES"), "a subject may not name its benchmarks"
+        assert not hasattr(subject, "use_case_for"), "no benchmark-to-pipeline mapping"
+
+
+def test_the_composed_pipelines_are_actually_different():
+    """Three names for one configuration would measure nothing new."""
+    steps = [
+        tuple(sorted(cls.STEPS.items()))
+        for cls in (
+            subjects.ComposedPromptHygiene,
+            subjects.ComposedRetrievalKey,
+            subjects.ComposedReviewDisplay,
+        )
+    ]
+    assert len(set(steps)) == 3
+    # And they differ where their purposes differ: only the key builder romanizes,
+    # and only the review pipeline leaves the reviewer's text alone.
+    assert subjects.ComposedRetrievalKey.STEPS.get("transliterate") is True
+    assert subjects.ComposedPromptHygiene.STEPS.get("transliterate") is not True
+    assert subjects.ComposedReviewDisplay.STEPS.get("fold_case") is False
+
+
+def test_the_prompt_hygiene_composition_records_the_tag_block_gap():
+    """#914: `demojize` is the only composable step that strips Plane 14 tags.
+
+    The prompt-hygiene pipeline leaves `demojize` off because #910 asks for it,
+    and thereby cannot remove the TAG block at all. Pinned so the trade-off is
+    not quietly reversed to improve a score — the gap is what the run is
+    reporting.
+    """
+    import disarm
+
+    steps = subjects.ComposedPromptHygiene.STEPS
+    assert steps.get("demojize") is False
+    assert steps.get("transliterate") is not True
+
+    tag = "".join(chr(0xE0000 + (ord(c) & 0x7F)) for c in "payload")
+    out = disarm.TextPipeline(**steps)(f"visible label{tag}")
+    assert any(0xE0000 <= ord(c) <= 0xE007F for c in out), (
+        "if this passes the TAG block is being stripped, so #914 is fixed — "
+        "revisit this pipeline and #910 together"
+    )

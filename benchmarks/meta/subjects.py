@@ -287,56 +287,42 @@ class DisarmSubject(_Base):
         return out
 
 
-class DisarmComposedSubject(_Base):
-    """A pipeline compiled for a purpose, rather than a profile picked off the shelf.
+class _ComposedBase(_Base):
+    """A pipeline hand-compiled for one use case.
 
     Composition is disarm's answer to "no shipped profile covers my policy", and
-    scoring only presets and profiles leaves the whole capability unmeasured.
-    It is entered here as a *separate subject* rather than as another disarm
-    surface, on the precedent that two versions of one tool may both compete: a
-    composed pipeline is a different deployable artifact with different
-    properties, not a better view of the same one.
+    scoring only presets and profiles left the whole capability unmeasured.
 
-    **The steps are declared once, here, and never varied per benchmark.** That
-    is the whole discipline — a composition chosen per suite would be best-of-N
-    with extra steps, which is what `ROLES` exists to prevent. The declaration is
-    hashed into the version string, so changing a single flag changes the subject
-    key and cannot be mistaken for the same configuration measured twice.
+    **One pipeline is not composability.** An earlier version of this entered a
+    single composed pipeline and ran it against everything, which measured one
+    more fixed configuration and nothing about compiling for a purpose. The point
+    of the feature is that each use case gets its own pipeline.
 
-    The composition is not invented here either: it is exactly the change #910
-    proposes for `llm_guardrail` — the profile with `demojize` off — so what this
-    subject scores is a proposal that is already on the table.
+    **But a pipeline chosen per benchmark is best-of-N wearing a different hat.**
+    Mapping the cost suites to a light pipeline and the coverage suites to a
+    heavy one recovers exactly the union-as-max effect that `ROLES` exists to
+    stop; the mapping would be doing the winning, and it would be mine.
 
-    When this subject was first written it was knowingly *not* equivalent to
-    `llm_guardrail`: `strip_pua` was the one `ProfileSpec` field `TextPipeline`
-    could not express, so the composed pipeline kept all 137,468 Private Use Area
-    code points the profile strips. #911 fixed that (merged as #912, which also
-    added a composability gate), and `strip_pua` is now declared below. The two
-    now agree on the PUA: 137,468 of 137,468 either way.
+    So there is no mapping. Each use case is a **separate subject** scored on the
+    **whole battery**, exactly like every other competitor. A pipeline built for
+    prompt hygiene meets the corruption-cost suites it is going to lose, and a
+    pipeline built for review meets the coverage suites it is going to lose.
+    Nothing selects its own favourable benchmarks, and the trade-off each
+    composition makes is visible as a shape across the report rather than
+    collapsed into one number.
 
-    The gap is recorded rather than deleted because it is why this subject earns
-    a separate entry. A composed pipeline is not a view of a profile; it is a
-    distinct artifact that can silently diverge from one, and it did.
+    Subclasses set `USE_CASE`, `PURPOSE` and `STEPS`. The step list is declared
+    once, never varied per benchmark, and hashed into the version string, so
+    changing a flag changes the subject key and cannot be mistaken for the same
+    configuration measured twice.
     """
 
+    #: Short slug naming the deployment this pipeline was compiled for.
+    USE_CASE: ClassVar[str] = ""
+    #: One line: what the text is and what the pipeline therefore has to do.
+    PURPOSE: ClassVar[str] = ""
     #: The declared composition. Frozen: see the class docstring.
-    STEPS: ClassVar[dict[str, object]] = {
-        "normalize": "NFKC",
-        "strip_zalgo": 0,
-        "strip_bidi": True,
-        "strip_zero_width": True,
-        "strip_control": True,
-        "confusables": True,
-        "strip_accents": True,
-        "fold_case": True,
-        "collapse_whitespace": True,
-        "demojize": False,
-        # Reachable only since #911/#912. Declared explicitly rather than left to
-        # the default: the whole point of this subject is that the composition is
-        # stated, and `strip_pua` defaults to False, so omitting it would quietly
-        # reintroduce exactly the divergence #911 was filed about.
-        "strip_pua": True,
-    }
+    STEPS: ClassVar[dict[str, object]] = {}
 
     ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "composed"}
 
@@ -352,12 +338,13 @@ class DisarmComposedSubject(_Base):
             :8
         ]
         self.info = SubjectInfo(
-            name="disarm-composed",
+            name=f"disarm-composed:{self.USE_CASE}",
             version=f"{released}{_git_describe(getattr(disarm, '__file__', ''))}+composed.{digest}",
             origin="raeq/disarm",
             url="https://github.com/raeq/disarm",
-            role="a TextPipeline compiled from declared steps: "
-            + ", ".join(f"{k}={v!r}" for k, v in sorted(self.STEPS.items())),
+            role=f"{self.PURPOSE} — TextPipeline("
+            + ", ".join(f"{k}={v!r}" for k, v in sorted(self.STEPS.items()))
+            + ")",
         )
 
     def available(self) -> tuple[bool, str]:
@@ -379,6 +366,81 @@ class DisarmComposedSubject(_Base):
         import disarm
 
         return {"composed": disarm.TextPipeline(**self.STEPS)}  # type: ignore[arg-type]
+
+
+class ComposedPromptHygiene(_ComposedBase):
+    """Untrusted text on its way into a model prompt."""
+
+    USE_CASE = "prompt-hygiene"
+    PURPOSE = "untrusted text entering an LLM prompt"
+    #: Every hidden channel goes; the text still has to read as itself, so no
+    #: transliteration. `demojize` is off — that is the change #910 proposes,
+    #: because glossing hands an attacker words in the prompt.
+    #:
+    #: Left off deliberately even though it costs this pipeline the whole of
+    #: `mcp-tag-block-concealment`. Per #914, `demojize` is the only composable
+    #: step that removes the Plane 14 TAG block, so #910's flip silently trades a
+    #: text-injection primitive for a concealment channel. Turning it back on
+    #: here would hide that from the report — which is the finding.
+    STEPS: ClassVar[dict[str, object]] = {
+        "normalize": "NFKC",
+        "strip_zalgo": 0,
+        "strip_bidi": True,
+        "strip_zero_width": True,
+        "strip_control": True,
+        "strip_pua": True,
+        "confusables": True,
+        "strip_accents": True,
+        "fold_case": True,
+        "collapse_whitespace": True,
+        "demojize": False,
+    }
+
+
+class ComposedRetrievalKey(_ComposedBase):
+    """Text reduced to a key two spellings must share."""
+
+    USE_CASE = "retrieval-key"
+    PURPOSE = "a comparison key, where readability is not a requirement"
+    #: A key may be unreadable, so this folds as hard as the library allows —
+    #: including romanization, which no screening pipeline should do.
+    STEPS: ClassVar[dict[str, object]] = {
+        "normalize": "NFKC",
+        "transliterate": True,
+        "strip_zalgo": 0,
+        "strip_bidi": True,
+        "strip_zero_width": True,
+        "strip_control": True,
+        "strip_pua": True,
+        "confusables": True,
+        "strip_accents": True,
+        "fold_case": True,
+        "collapse_whitespace": True,
+        "demojize": False,
+    }
+
+
+class ComposedReviewDisplay(_ComposedBase):
+    """Text a human is going to read and approve."""
+
+    USE_CASE = "review-display"
+    PURPOSE = "text shown to a reviewer, which must survive legibly"
+    #: Removes what a reviewer cannot see and would therefore not be reviewing;
+    #: changes nothing they can. No case fold, no confusable fold, no whitespace
+    #: collapse — all three alter text the reviewer is being asked to approve.
+    STEPS: ClassVar[dict[str, object]] = {
+        "normalize": "NFC",
+        "strip_zalgo": 0,
+        "strip_bidi": True,
+        "strip_zero_width": True,
+        "strip_control": True,
+        "strip_pua": True,
+        "confusables": False,
+        "strip_accents": False,
+        "fold_case": False,
+        "collapse_whitespace": False,
+        "demojize": False,
+    }
 
 
 class StdlibSubject(_Base):
@@ -684,7 +746,9 @@ class IdentitySubject(_Base):
 
 ALL: tuple[type[_Base], ...] = (
     DisarmSubject,
-    DisarmComposedSubject,
+    ComposedPromptHygiene,
+    ComposedRetrievalKey,
+    ComposedReviewDisplay,
     StdlibSubject,
     DecancerSubject,
     FtfySubject,

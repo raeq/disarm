@@ -1576,6 +1576,186 @@ class UTS39TargetScripts(SuiteBase):
         )
 
 
+class UCDPrivateUse(SuiteBase):
+    name = "ucd-private-use"
+    family = Family.NORMATIVE
+    availability = Availability.NETWORK
+    MULTI_SUBJECT = True
+    REQUIRES = (Capability.TRANSFORM,)
+    env_var = "DISARM_META_DERIVEDGC"
+    SOURCES = (
+        Source(
+            url="https://www.unicode.org/Public/UCD/latest/ucd/extracted/"
+            "DerivedGeneralCategory.txt",
+            filename="DerivedGeneralCategory.txt",
+            licence="Unicode License v3",
+            note="General_Category=Co — the whole Private Use Area, normatively",
+        ),
+        Source(
+            url="https://www.unicode.org/Public/security/latest/IdentifierStatus.txt",
+            filename="IdentifierStatus.txt",
+            licence="Unicode License v3",
+            note="carries the direction: no Co code point is ever Allowed",
+        ),
+    )
+    summary = "Does the declared sanitizer remove Private Use, which UTS #39 never allows?"
+    provenance = Provenance(
+        origin="Unicode Consortium",
+        citation="UCD DerivedGeneralCategory.txt (Co) and UTS #39 IdentifierStatus.txt",
+        url="https://www.unicode.org/Public/UCD/latest/ucd/extracted/DerivedGeneralCategory.txt",
+        version="latest",
+        licence="Unicode License v3",
+        issues=(814, 911),
+        finding=(
+            "#911 found that `strip_pua` was reachable from named profiles and "
+            "from nowhere else, so every composed `TextPipeline` kept all 137,468 "
+            "Private Use code points that #814 strips in every screening profile. "
+            "It merged as #912 — and the battery could not see the fix, because "
+            "the only suite that touched the PUA excluded it. This one exists so "
+            "that a repeat is measurable rather than merely arguable."
+        ),
+        notes=(
+            "**The direction is Unicode's, not this harness's.** `removed` is "
+            "scored higher-is-better on one checked fact: of the 137,468 code "
+            "points with General_Category=Co, exactly zero appear in UTS #39's "
+            "`IdentifierStatus.txt` as `Allowed`. Every one is `Restricted`. The "
+            "count is reported below as `identifier_allowed` so the claim can be "
+            "recomputed from the page rather than taken on trust.\n\n"
+            "That is a judgement about identifiers and screening, and it is not "
+            "universal. A Private Use code point is exactly what a private "
+            "agreement is for — an icon font is the standard example — and "
+            "disarm's `code_context` profile keeps the PUA on purpose for that "
+            "reason. What is scored here is each subject's *declared sanitizer*, "
+            "whose job is screening; a subject that preserves PUA elsewhere is "
+            "not thereby wrong, and `weaponizing-unicode` deliberately excludes "
+            "the same code points because confusability decided by rendering "
+            "glyphs makes them an artefact rather than a finding.\n\n"
+            "The carrier is the neutral ASCII pair `damage` already uses, so what "
+            "is measured is PUA handling and not incidental damage."
+        ),
+    )
+
+    LEFT, RIGHT = damage._CARRIER
+
+    def locate(self) -> Path | None:
+        from ..base import CACHE
+
+        return artifact(CACHE / "DerivedGeneralCategory.txt", env=self.env_var)
+
+    def _status_path(self) -> Path | None:
+        from ..base import CACHE
+
+        return artifact(CACHE / "IdentifierStatus.txt")
+
+    @staticmethod
+    def _ranges(path: Path, field: str, wanted: str) -> set[int]:
+        out: set[int] = set()
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw.split("#")[0].strip()
+            if not line or ";" not in line:
+                continue
+            parts = [p.strip() for p in line.split(";")]
+            if len(parts) < 2 or parts[1] != wanted:
+                continue
+            span = parts[0]
+            if ".." in span:
+                lo, hi = span.split("..")
+                out.update(range(int(lo, 16), int(hi, 16) + 1))
+            else:
+                out.add(int(span, 16))
+        if not out:
+            raise AssertionError(
+                f"{path.name} present but no {field}={wanted} row parsed "
+                "— parser fault, not an empty result"
+            )
+        return out
+
+    def measure(self, outcome: Outcome, limit: int | None) -> None:
+        path = self.locate()
+        assert path is not None
+        private_use = self._ranges(path, "General_Category", "Co")
+
+        ordered = thin(sorted(private_use), limit)
+        outcome.population = len(ordered)
+        clean = self.LEFT + self.RIGHT
+
+        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        record(
+            outcome,
+            domain=f"{len(ordered)} General_Category=Co code points, each between "
+            f"{self.LEFT!r} and {self.RIGHT!r}",
+            predicates=sorted(surfaces),
+            direction_anchor="UTS #39 IdentifierStatus.txt — no Co code point is Allowed",
+        )
+        add(outcome, "private_use_codepoints", len(ordered), unit="codepoints")
+
+        # The direction, recomputable from the page. Reported whether or not the
+        # subject has a surface, because it is a property of the tables.
+        status = self._status_path()
+        if status is not None:
+            allowed = self._ranges(status, "Identifier_Status", "Allowed")
+            add(
+                outcome,
+                "identifier_allowed",
+                len(private_use & allowed),
+                of=len(private_use),
+                higher_is_better=None,
+                detail="Co code points UTS #39 lists as Allowed — the basis for "
+                "scoring removal as an improvement",
+            )
+        if not surfaces:
+            return
+
+        fn = next(iter(surfaces.values()))
+        removed = survives = substituted = destroyed = 0
+        for cp in ordered:
+            probe = self.LEFT + chr(cp) + self.RIGHT
+            out = _apply(fn, probe)
+            if out == clean:
+                removed += 1
+            elif self.LEFT not in out or self.RIGHT not in out:
+                destroyed += 1
+            elif chr(cp) in out:
+                survives += 1
+            else:
+                substituted += 1
+
+        n = float(len(ordered))
+        add(
+            outcome,
+            "removed",
+            removed,
+            of=n,
+            higher_is_better=True,
+            detail="the Private Use code point is gone and the carrier is intact",
+        )
+        add(
+            outcome,
+            "survives",
+            survives,
+            of=n,
+            higher_is_better=False,
+            detail="the code point reaches the output unchanged",
+        )
+        add(
+            outcome,
+            "substituted",
+            substituted,
+            of=n,
+            higher_is_better=None,
+            detail="replaced by other text rather than removed — neither a pass "
+            "nor a failure, since a replacement carries no standard meaning either",
+        )
+        add(
+            outcome,
+            "carrier_destroyed",
+            destroyed,
+            of=n,
+            higher_is_better=False,
+            detail="the surrounding ASCII did not survive either",
+        )
+
+
 SUITES = [
     UTS39ConfusableCoverage(),
     UTS39TargetScripts(),
@@ -1589,4 +1769,5 @@ SUITES = [
     DefaultIgnorableCasefold(),
     ICANNLatinLGR(),
     CLDRNonEmojiNames(),
+    UCDPrivateUse(),
 ]

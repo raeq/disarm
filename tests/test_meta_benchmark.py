@@ -1621,3 +1621,36 @@ def test_cover_text_intactness_survives_a_case_fold():
     # A case-folding surface preserves the sentence; the empty surface does not.
     assert academic._apply(str.lower, cover).replace(" ", "") in cover.lower().replace(" ", "")
     assert not academic._apply(lambda _s: "", cover)
+
+
+def test_the_composed_subject_declares_every_step_it_relies_on():
+    """A default must never stand in for a declaration.
+
+    `strip_pua` defaults to False on `TextPipeline`. Omitting it from `STEPS`
+    would silently reintroduce the divergence #911 was filed about — the composed
+    pipeline keeping all 137,468 PUA code points that every screening profile
+    strips — and nothing in the run output would say so.
+    """
+    composed = subjects.DisarmComposedSubject()
+    ready, why = composed.available()
+    assert ready, why
+    assert composed.STEPS.get("strip_pua") is True, (
+        "strip_pua must be declared, not inherited from the default"
+    )
+
+
+def test_changing_the_composition_changes_the_subject_key():
+    """The declaration is part of the identity, as a corpus digest is.
+
+    Two runs whose step lists differ must not collide on one subject key, or a
+    report would show a configuration being compared against itself.
+    """
+    before = subjects.DisarmComposedSubject().info.version
+    original = dict(subjects.DisarmComposedSubject.STEPS)
+    try:
+        subjects.DisarmComposedSubject.STEPS = {**original, "fold_case": False}
+        after = subjects.DisarmComposedSubject().info.version
+    finally:
+        subjects.DisarmComposedSubject.STEPS = original
+    assert before != after
+    assert subjects.DisarmComposedSubject().info.version == before

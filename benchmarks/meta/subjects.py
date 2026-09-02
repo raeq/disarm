@@ -307,12 +307,16 @@ class DisarmComposedSubject(_Base):
     proposes for `llm_guardrail` — the profile with `demojize` off — so what this
     subject scores is a proposal that is already on the table.
 
-    It is knowingly *not* equivalent to `llm_guardrail`. Per #911, `strip_pua` is
-    the one `ProfileSpec` field `TextPipeline` cannot express, so this pipeline
-    strips none of the 137,468 Private Use Area code points the profile strips.
-    That gap is a true property of the composed API and is left in rather than
-    papered over — a subject that quietly matched the profile would be measuring
-    a pipeline no caller can actually build.
+    When this subject was first written it was knowingly *not* equivalent to
+    `llm_guardrail`: `strip_pua` was the one `ProfileSpec` field `TextPipeline`
+    could not express, so the composed pipeline kept all 137,468 Private Use Area
+    code points the profile strips. #911 fixed that (merged as #912, which also
+    added a composability gate), and `strip_pua` is now declared below. The two
+    now agree on the PUA: 137,468 of 137,468 either way.
+
+    The gap is recorded rather than deleted because it is why this subject earns
+    a separate entry. A composed pipeline is not a view of a profile; it is a
+    distinct artifact that can silently diverge from one, and it did.
     """
 
     #: The declared composition. Frozen: see the class docstring.
@@ -327,6 +331,11 @@ class DisarmComposedSubject(_Base):
         "fold_case": True,
         "collapse_whitespace": True,
         "demojize": False,
+        # Reachable only since #911/#912. Declared explicitly rather than left to
+        # the default: the whole point of this subject is that the composition is
+        # stated, and `strip_pua` defaults to False, so omitting it would quietly
+        # reintroduce exactly the divergence #911 was filed about.
+        "strip_pua": True,
     }
 
     ROLES: ClassVar[dict[str, str]] = {Role.SANITIZER: "composed"}

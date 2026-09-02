@@ -16,6 +16,29 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Added
+
+- **`benchmarks/adversarial_eval` scores a named surface (#903).** `metrics.py` imported
+  `strip_obfuscation` at module level and applied it to both the perturbed text and the
+  clean target, so the harness measured one surface in one role. It could not answer "how
+  does `canonicalize` recover this corpus compared with `strip_obfuscation`", and it
+  scored the wrong surface for any consumer whose declared sanitise entry point is not
+  `strip_obfuscation`.
+
+  `evaluate(..., transform="disarm.canonicalize")` and `--transform` on the CLI. A dotted
+  **string** rather than a callable, because the scan runs across a process pool: a
+  function object cannot cross that boundary and a name can. It is resolved inside each
+  worker beside the confusables table, and once up front so a bad name fails before the
+  pool starts rather than inside the initializer.
+
+  `EvalResult.transform` and the report header record which surface produced the numbers,
+  so a report can never be read as a `strip_obfuscation` figure when it is not.
+
+  **The default is unchanged**, deliberately: every committed report and the pre-release
+  BitAbuse cadence are `strip_obfuscation` figures, and a default that moved would
+  silently reinterpret all of them. No metric changed.
+
+
 ### Fixed
 
 - **The Tier 3 release gate ran four times, independently, on one artifact.**

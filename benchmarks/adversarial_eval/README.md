@@ -1,7 +1,8 @@
 # Adversarial-text robustness evaluation harness (#49)
 
 A reusable benchmark that measures how disarm's defense transform
-(`strip_obfuscation`) behaves on **real-world** spam/phishing corpora — turning
+(`strip_obfuscation` by default; any surface via `--transform`) behaves on
+**real-world** spam/phishing corpora — turning
 scattered datasets into one principled, repeatable evaluation.
 
 This is a **benchmark, not CI.** It pulls large external datasets over the
@@ -50,6 +51,29 @@ maintainer-run.
 `labeled` / `requires_credentials` and implement `load()` to yield `Record`s.
 
 ## Metrics
+
+### Choosing the surface (#903)
+
+The scan defaults to `strip_obfuscation` — every committed report is a
+`strip_obfuscation` figure, and the default is fixed so those stay readable. Name another
+surface with a dotted path to score it instead:
+
+```sh
+python -m benchmarks.adversarial_eval --corpus bitabuse --transform disarm.canonicalize
+```
+
+One transform per run; a comparison is two runs. The report header records which surface
+produced the numbers, so a report can never be read as a `strip_obfuscation` figure when
+it is not.
+
+A dotted **string** rather than a callable because the scan runs across a process pool: a
+function object cannot cross that boundary and a name can. It is resolved inside each
+worker, beside the confusables table, and once up front so a bad name fails before the
+pool starts rather than inside the initializer.
+
+**The guardrail applies to every transform the parameter admits.** No table edit to
+improve a number, for any surface, in either direction. These are measuring instruments,
+never optimization targets.
 
 - **Recovery** (labeled corpora, e.g. BitAbuse):
   - **XMR / exact-match recovery** — `strip_obfuscation(perturbed) == strip_obfuscation(clean)`.

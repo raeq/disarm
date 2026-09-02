@@ -10,7 +10,7 @@ import argparse
 import sys
 
 from .corpora import ADAPTERS
-from .metrics import EvalResult, evaluate
+from .metrics import DEFAULT_TRANSFORM, EvalResult, evaluate
 
 
 def _fmt_pct(value: float | None) -> str:
@@ -25,7 +25,7 @@ def render_markdown(res: EvalResult, limit: int | None) -> str:
     lines = [
         f"# Adversarial-text robustness — {res.corpus}",
         "",
-        f"_disarm {getattr(disarm, '__version__', '?')}; `strip_obfuscation`. "
+        f"_disarm {getattr(disarm, '__version__', '?')}; `{res.transform}`. "
         "Numbers reflect the current version and may differ from the historical "
         "baseline in the README as coverage grows._",
         "",
@@ -33,7 +33,7 @@ def render_markdown(res: EvalResult, limit: int | None) -> str:
         f"- perturbation-bearing rows (contain non-ASCII): "
         f"**{_fmt_pct(res.perturbation_bearing_rate)}** "
         f"({res.rows_with_nonascii}/{res.n_rows})",
-        f"- non-ASCII codepoints folded by `strip_obfuscation`: "
+        f"- non-ASCII codepoints folded by `{res.transform}`: "
         f"**{_fmt_pct(res.folded_fraction)}** "
         f"({res.nonascii_before - res.nonascii_after}/{res.nonascii_before})",
     ]
@@ -85,6 +85,16 @@ def main(argv: list[str] | None = None) -> int:
         help="worker processes (default: all CPUs; 1 = inline)",
     )
     parser.add_argument("--chunk-size", type=int, default=4000, help="rows per worker chunk")
+    parser.add_argument(
+        "--transform",
+        type=str,
+        default=DEFAULT_TRANSFORM,
+        metavar="DOTTED.PATH",
+        help=(
+            "surface to score, as a dotted import path "
+            f"(default: {DEFAULT_TRANSFORM}). One transform per run; a comparison is two runs."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.list or not args.corpus:
@@ -105,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         labeled=adapter.labeled,
         processes=args.processes,
         chunk_size=args.chunk_size,
+        transform=args.transform,
     )
     report = render_markdown(result, args.limit)
     print(report)

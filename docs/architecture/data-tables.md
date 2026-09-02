@@ -30,7 +30,7 @@ membership is the whole question and there is no value to store:
 | Table | Key type | Entries | Purpose |
 |---|---|---|---|
 | Hanzi pinyin | `char` | ~21K | CJK ideograph → pinyin |
-| Confusables (Latin) | `char` | 2,290 | TR39 + supplement (#342) + attested (#597) + ICANN LGR (#831) → Latin |
+| Confusables (Latin) | `char` | 2,297 | TR39 + supplement (#342) + attested (#597) + ICANN LGR (#831) → Latin |
 | Confusables (Cyrillic) | `char` | ~1,349 | TR39 confusable → Cyrillic |
 | Upstream confusable sources | `char` (set) | 6,565 | Coverage denominator (#563) |
 | Case folding | `char` | 1,557 | Unicode CaseFolding.txt |

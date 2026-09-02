@@ -37,6 +37,29 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   four without a network, and each bug was re-introduced to confirm the matching test
   fails. Exit codes: `0` merged, `1` closed or unconfirmed, `2` a human is needed,
   `3` gave up.
+- **Single-letter Latin small capitals fold to their letter (#815).** `ᴀ` `ᴅ` `ᴊ` `ᴘ` `ᴛ`
+  `ꜰ` `ꞯ` reached ASCII on no surface, because TR39 lists them only as *destinations*.
+  `ASCII_FOLD` (#341) resolves a small capital when it is a row's target — which is why
+  `ᴍ` folded, U+1D0D being a TR39 source as well — but a glyph nothing points at has no
+  row to resolve. The result was a half-conversion, which is worse than a clean miss:
+
+  ```python
+  canonicalize("ᴄᴀɴ ʏᴏᴜ ᴜɴᴅᴇʀsᴛᴀɴᴅ ᴍᴇ")  # was 'cᴀn you unᴅersᴛᴀnᴅ me', now 'can you understand me'
+  ```
+
+  A mangling matches neither the attack nor the target, and `llm_guardrail` handed it to
+  the model in that state. Seven rows, derived from the UCD name rather than enumerated,
+  so a future small capital is covered without an edit. The digraph and barred forms
+  (`ᴁ`, `ᴃ`, `ᴆ`) are deliberately left: folding those is a visual judgment, which is the
+  open policy question in #815 rather than something this decides.
+
+  **Upgrade note — `catalog_key` output moves for these seven code points.**
+  `KEY_SCHEMA_VERSION` goes 3 → 4. `search_key` and `sort_key` do not move; they carry no
+  confusable step. Reindex if you persist `catalog_key` values containing small capitals.
+
+  The key-stability corpus contained **zero** small capitals in 22,977 rows, which is why
+  the fixture stayed green through a key change. 75 rows added, and
+  `tests/test_small_capital_folds.py` asserts the class derivationally.
 
 - **`TextPipeline(strip_pua=...)` — the one `ProfileSpec` field composition could not
   express (#911).** `strip_pua` was set post-hoc inside `ProfileSpec::build` rather than

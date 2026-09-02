@@ -941,6 +941,26 @@ def generate_mappings(
         for cp, out in list(merged.items()):
             if len(out) == 1 and out in ASCII_FOLD:
                 merged[cp] = fix_case_mismatch(cp, ASCII_FOLD[out])
+        # #815: the same glyphs, as SOURCES.
+        #
+        # The pass above resolves a small capital when it is a row's *target*, which is
+        # why `ᴍ` ᴍ folds: TR39 happens to list it as a source too (`1D0D ; 028D`).
+        # `ᴀ` ᴀ is listed only as a destination, so nothing folded it and
+        # `ᴄᴀɴ ʏᴏᴜ` half-converted — matching neither the
+        # attack nor the target, and handed to the model in that state by
+        # `llm_guardrail`.
+        #
+        # Restricted to the derived `LATIN LETTER SMALL CAPITAL X` set, not all of
+        # `ASCII_FOLD`. That set is a letter-for-letter identity with no visual judgment
+        # to make — `ᴛ` ᴛ *is* a T — which is the same argument
+        # `_small_capital_folds` already makes for the target direction. The hand-written
+        # `ASCII_FOLD` entries (ß→b, ꞓ→e) are visual calls about glyphs that are real
+        # letters in real orthographies, and turning those into sources is the open
+        # policy question in #815, not this.
+        #
+        # An existing row always wins: this only fills gaps.
+        for glyph, letter in _small_capital_folds().items():
+            merged.setdefault(ord(glyph), fix_case_mismatch(ord(glyph), letter))
         # #342/#343: measured cross-script supplement, applied with priority so it
         # can add a missing fold or re-point an existing one.
         for cp, target in (supplement or {}).items():

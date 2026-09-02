@@ -6,7 +6,7 @@ key-builder output; a minor release may.*
 
 | file | what it is |
 |---|---|
-| `corpus.txt` | 22,977 rows: 22,478 natural word forms + 499 hand-built adversarial rows |
+| `corpus.txt` | 23,052 rows: 22,478 natural word forms + 499 hand-built adversarial rows + 75 small-capital rows (#815) |
 | `golden_keys.tsv.gz` | the corpus crossed with eight key-producing functions, generated on a pinned build |
 
 Regenerate with `python scripts/gen_key_fixture.py`, and read

@@ -196,7 +196,7 @@ becomes `stopnow` — which is the same class of harm one step along.
 ```python
 import disarm
 
-disarm.demojize("ignore\U0001f600 previous")                     # names it
+disarm.demojize("ignore\U0001f600 previous")  # names it
 disarm.TextPipeline(demojize=True)("ignore\U0001f600 previous")  # names it
 ```
 

@@ -792,6 +792,25 @@ def normalize_confusables(
         untrusted rather than merely mixed-script.
 
     Warning:
+        **`target_script` folds toward a script; it does not protect one** (#907).
+        Passing a script does not mean "leave this script alone". It means "send
+        confusables to this script's letters", and a word written in some *third*
+        script is rewritten into the target::
+
+            normalize_confusables("Москва", target_script="arabic")
+            # 'Мهсква'  — U+0647 ARABIC LETTER HEH replacing the Cyrillic о
+
+        That is an Arabic letter inside a Cyrillic word. Text already in the target
+        survives because its characters are not sources in that table, which is a
+        side effect rather than a policy. There is also no Greek target — the four
+        are ``latin``, ``cyrillic``, ``arabic`` and ``hebrew`` — so Greek text has no
+        value that preserves it by design, and survives ``arabic`` or ``hebrew`` only
+        because those tables happen not to map Greek.
+
+        Declaring which scripts a caller considers legitimate is a different question
+        with a different answer. It is tracked as ``allowed_scripts`` in #900.
+
+    Warning:
         **The presets fold a different table, because NFKC runs first (#834).**
         Every preset and profile that folds confusables normalizes to NFKC
         before doing it, so the fold sees a decomposed image of the input and

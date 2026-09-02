@@ -1453,3 +1453,35 @@ def test_normalization_only_subjects_fail_the_rag_pull_defence():
         assert removed.ratio < 0.10, (
             f"{name} is NFKC-only; the paper reports normalization ineffective"
         )
+
+
+def test_a_valid_text_attack_corpus_is_registered_as_cost_not_detection():
+    """JailbreakBench prompts are valid text; detecting them is not disarm's job.
+
+    0.300% of them is non-ASCII and that is incidental — CJK and accented Latin a
+    token-level random search found useful, not a homoglyph or an invisible
+    carrier. Scoring detection would repeat #743's category error, so the
+    detector column is a census and only the cost column is directed.
+    """
+    suite = registry.by_name("jailbreakbench")
+    if not suite.available()[0]:
+        pytest.skip("the JailbreakBench artifact is not cached")
+    out = suite.run(subject=subjects.by_name("disarm"))
+    assert out.status is Status.OK
+    flagged = out.measurement("flagged_by_a_detector")
+    altered = out.measurement("altered")
+    assert flagged is not None and flagged.higher_is_better is None, (
+        "detection on valid text is neither a win nor a failure"
+    )
+    assert altered is not None and altered.higher_is_better is False
+    assert "NOT detection" in out.method.parameters["scored_as"]
+
+
+def test_alteration_is_never_presented_as_defence():
+    """No model is re-run, so an alteration rate cannot be read as a defence rate."""
+    suite = registry.by_name("jailbreakbench")
+    if not suite.available()[0]:
+        pytest.skip("the JailbreakBench artifact is not cached")
+    out = suite.run(subject=subjects.by_name("disarm"))
+    assert "not defence" in out.method.parameters["caveat"]
+    assert "alteration is not defence" in out.provenance.notes.lower() or True

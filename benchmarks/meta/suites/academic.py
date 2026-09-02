@@ -850,8 +850,131 @@ class ZeroWidthStylometry(SuiteBase):
             )
 
 
+class JailbreakBench(SuiteBase):
+    name = "jailbreakbench"
+    family = Family.ACADEMIC
+    availability = Availability.NETWORK
+    MULTI_SUBJECT = True
+    env_var = "DISARM_META_JBB"
+    summary = "What a sanitizer does to jailbreaks it has no business detecting."
+    provenance = Provenance(
+        origin="JailbreakBench (Chao, Debenedetti, Robey et al.)",
+        citation="JailbreakBench artifacts — prompt_with_random_search, black box",
+        url="https://github.com/JailbreakBench/artifacts",
+        version="attack-artifacts/prompt_with_random_search/black_box",
+        licence="MIT",
+        issues=(743, 742),
+        finding=(
+            "Registered as a COST corpus, not a detection one, and the "
+            "measurement below says why. 0.300% of these prompts is non-ASCII, "
+            "and 99 of 100 carry some — but it is CJK ideographs and accented "
+            "Latin that a token-level random search happened to find useful, not "
+            "a homoglyph or an invisible carrier. Scoring detection here would "
+            "repeat #743's category error in a new corpus: disarm is structurally "
+            "blind to an attack written in valid text, and correctly so."
+        ),
+        notes=(
+            "The useful question is the other direction, the one #743 asked of "
+            "the GCG suffixes: what does a sanitizer do to a prompt it cannot and "
+            "should not detect? A guardrail preset sitting in front of an LLM "
+            "rewrites this traffic whether or not it recognises anything, and "
+            "that rewriting is a cost paid on every request. This is a second, "
+            "independent corpus for that measurement.\n\n"
+            "The corpus carries a `jailbroken` label per prompt, but nothing here "
+            "re-runs a model, so this cannot say whether sanitizing breaks an "
+            "attack — only how much it disturbs the text. Anyone reading an "
+            "alteration rate as a defence rate has the wrong end of it."
+        ),
+    )
+
+    SOURCES = (
+        Source(
+            url="https://raw.githubusercontent.com/JailbreakBench/artifacts/main"
+            "/attack-artifacts/prompt_with_random_search/black_box"
+            "/gpt-4-0125-preview.json",
+            filename="jailbreakbench-prs-gpt4.json",
+            licence="MIT",
+            note="100 adversarial prompts with per-prompt jailbroken labels",
+        ),
+    )
+
+    def locate(self) -> Path | None:
+        return self.provisioned() or artifact(
+            CACHE / "jailbreakbench-prs-gpt4.json", env=self.env_var
+        )
+
+    def measure(self, outcome: Outcome, limit: int | None) -> None:
+        import json as _json
+
+        path = self.locate()
+        assert path is not None
+        blob = _json.loads(path.read_text(encoding="utf-8"))
+        records = blob.get("jailbreaks") or blob.get("artifacts") or []
+        prompts = [r["prompt"] for r in records if isinstance(r, dict) and r.get("prompt")]
+        if limit is not None:
+            prompts = prompts[:limit]
+        outcome.population = len(prompts)
+        if not prompts:
+            add(outcome, "prompts", 0)
+            return
+
+        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        det = self.detect()
+        record(
+            outcome,
+            domain=f"{len(prompts)} adversarial prompts from black-box random search",
+            predicates=[*sorted(surfaces), *sorted(det)],
+            scored_as="incidental cost, NOT detection",
+            caveat="no model is re-run; alteration is not defence",
+        )
+
+        chars = sum(len(t) for t in prompts)
+        non_ascii = sum(1 for t in prompts for c in t if ord(c) > 0x7F)
+        add(outcome, "prompts", len(prompts), unit="prompts")
+        add(
+            outcome,
+            "non_ascii_share",
+            non_ascii,
+            of=chars,
+            detail="incidental: CJK and accented Latin the search found useful, "
+            "not a Unicode attack — the reason detection is not scored here",
+        )
+        if det:
+            fired = sum(1 for t in prompts if any(_fires(fn, t) for fn in det.values()))
+            add(
+                outcome,
+                "flagged_by_a_detector",
+                fired,
+                of=len(prompts),
+                detail="a census. Flagging valid text carrying no Unicode trick is "
+                "not a win, and missing it is not a failure",
+            )
+        if surfaces:
+            fn = next(iter(surfaces.values()))
+            altered = sum(1 for t in prompts if _apply(fn, t) != t)
+            shortened = sum(1 for t in prompts if len(_apply(fn, t)) < len(t) * 0.99)
+            add(
+                outcome,
+                "altered",
+                altered,
+                of=len(prompts),
+                higher_is_better=False,
+                detail="rewritten by the declared sanitizer — cost paid on traffic "
+                "it cannot defend against",
+            )
+            add(
+                outcome,
+                "shortened_by_1pc_or_more",
+                shortened,
+                of=len(prompts),
+                higher_is_better=False,
+                detail="lost at least 1% of its length",
+            )
+
+
 SUITES = [
     BadCharacters(),
+    JailbreakBench(),
     TagBlockConcealment(),
     RagPullInvisibles(),
     ZeroWidthStylometry(),

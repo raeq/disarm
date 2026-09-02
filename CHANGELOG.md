@@ -18,6 +18,26 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`scripts/watch_pr.py` — a PR watcher whose decision logic is tested.** Shepherding
+  loops kept being written by hand, and four bugs kept coming back:
+
+  1. **A reviewer comment waited on CI.** Threads polled after checks meant a comment
+     sat through an entire run before anyone noticed.
+  2. **A running check was reported as a failure.** GitHub gives an in-flight check
+     `conclusion: ""`, not `null`; a loop waiting for `null` to clear exits early and
+     then prints the running jobs as failures.
+  3. **A structurally blocked PR was slept on.** `BLOCKED` with nothing pending and
+     nothing unresolved means a required review or a protection rule. Waiting cannot
+     fix it, so it is now a stop condition.
+  4. **A mergeable PR was held.** `UNSTABLE` and `HAS_HOOKS` are mergeable; gating on
+     "every check COMPLETED" waits on jobs that never gate the merge. #912 merged with
+     a check still in flight.
+
+  `decide()` is a pure function of a snapshot, so `tests/test_watch_pr.py` covers all
+  four without a network, and each bug was re-introduced to confirm the matching test
+  fails. Exit codes: `0` merged, `1` closed or unconfirmed, `2` a human is needed,
+  `3` gave up.
+
 - **`TextPipeline(strip_pua=...)` — the one `ProfileSpec` field composition could not
   express (#911).** `strip_pua` was set post-hoc inside `ProfileSpec::build` rather than
   taken by `Pipeline::new`, so it was reachable from named profiles and from nowhere

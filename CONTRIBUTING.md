@@ -699,3 +699,20 @@ protection.
 
 A PR that arrives with a passing CI run and a focused test is the easiest kind to
 review and merge. Thank you for contributing.
+
+### Watching a PR to merge
+
+`scripts/watch_pr.py` polls a PR and stops the moment a human has to act:
+
+```bash
+python scripts/watch_pr.py 912              # poll, then squash when mergeable
+python scripts/watch_pr.py 912 --no-merge   # report only
+```
+
+It exits `0` merged, `1` closed without merging (or a merge it could not confirm),
+`2` when you are needed — an unresolved review thread, printed with its file, line and
+body; a failed check; a stale branch; a structural block; or a thread listing too long
+to read in one page — and `3` if it gave up. Two behaviours are worth knowing, because hand-written loops keep getting
+them wrong: review threads are polled *before* checks, so a comment never waits out a
+CI run, and `UNSTABLE` counts as mergeable, so a still-running non-required job does
+not hold the merge. `tests/test_watch_pr.py` pins both.

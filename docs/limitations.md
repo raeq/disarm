@@ -344,6 +344,33 @@ The foundational problem is established in the [Unicode Technical Report #39](ht
 
 **The fold has a direction.** TR39 names one member of each equivalence class the *prototype* and points the others at it, so a block upstream only ever points *at* is a destination and never a source. disarm inherits that direction. `ASCII_FOLD` (#341) resolves a prototype that is itself non-ASCII, but only where a row already exists — so a glyph nothing points at has no row to resolve. #815 censuses the result: 401 code points whose Unicode name identifies them as Latin letter shapes reach ASCII on no surface. The single-letter Latin small capitals were the sharpest case and now fold as sources (#815); the digraph and barred forms (`ᴁ`, `ᴃ`, `ᴆ`) do not, because folding them is a visual judgment rather than a letter-for-letter identity.
 
+**The direction is an orientation assumption, and rotated text inverts it (#916).** TR39
+pairs a glyph with the letter it resembles *upright*. An "upside-down text" generator
+substitutes each letter for the glyph that looks like it rotated 180°, then reverses the
+string — so in that text a glyph means its *rotated* form, which is the opposite reading.
+Five glyphs therefore fold to a different letter than such a generator meant by them:
+
+| glyph | | rotated text meant | disarm folds to |
+|---|---|---|---|
+| `ɯ` | U+026F TURNED M | `m` | `w` |
+| `ʍ` | U+028D TURNED W | `w` | `m` |
+| `ʌ` | U+028C TURNED V | `v` | `a` |
+| `ƃ` | U+0183 B WITH TOPBAR | `g` | `b` |
+| `ɾ` | U+027E R WITH FISHHOOK | `j` | `r` |
+
+`ɯ` and `ʍ` are a swapped pair, so `gap` flipped and canonicalized reads back as `bad`.
+
+**Upright wins, and that is a decision rather than an oversight.** Recovering rotated text
+would require reversing the string, and no disarm surface reverses anything — reversal is
+out of scope by the same rule that excludes ROT-n and base64. So pointing the fold the
+other way would buy nothing: the output would still be reversed and still unreadable.
+Meanwhile the upright reading catches real spoofs, which is what the table is for:
+`canonicalize("ʍicrosoft")` is `microsoft`, and `canonicalize("ɯindows")` is `windows`.
+
+The consequence to know: on rotated text the output is a *different plausible word* rather
+than a partial result. Do not treat a canonicalized string as evidence about text that may
+have been rotated; ask `has_anomalies`, which fires on the mixed-script shape.
+
 The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/54) proposes ML-based detection using hash functions but notes the fundamental difficulty: the confusable space grows combinatorially with string length.
 
 **disarm implication**: `normalize_confusables()`, `is_confusable()`, and `is_suspicious_hostname()` use the TR39 confusables table, which is the standard mitigation. However, confusable detection is necessarily conservative. Legitimate multilingual text (e.g., a Russian name in an otherwise English sentence) will trigger warnings. False positives are an inherent tradeoff of any confusable detection system.

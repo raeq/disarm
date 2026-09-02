@@ -239,6 +239,32 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **The confusable fold has an orientation assumption, and rotated text inverts it
+  (#916).** TR39 pairs a glyph with the letter it resembles *upright*. An "upside-down
+  text" generator substitutes each letter for the glyph that looks like it rotated 180°
+  and then reverses the string, so in that text a glyph means its *rotated* form — the
+  opposite reading. Five glyphs fold to a different letter than such a generator meant,
+  and `ɯ`/`ʍ` are a swapped pair, so `gap` flipped and canonicalized reads back as `bad`.
+
+  **Upright wins, and that is a decision.** Recovering rotated text needs the string
+  reversed, and no disarm surface reverses anything — reversal is out of scope by the
+  rule that excludes ROT-n and base64 (#917). Pointing the fold the other way would leave
+  the output reversed and unreadable while giving up the upright spoofs the table exists
+  for: `canonicalize("ʍicrosoft")` is `microsoft`. No behaviour changes here.
+
+  `docs/limitations.md` states the assumption, lists the five, and says the observable
+  consequence: on rotated text the output is a *different plausible word* rather than a
+  partial result, so it is not evidence about text that may have been rotated. Ask
+  `has_anomalies` instead, which fires on the mixed-script shape.
+
+  `tests/test_turned_letter_orientation.py` pins the decision from both sides, including
+  a guard that fails if any surface ever starts reversing — the premise the decision
+  rests on — and the three-way split (1 agrees, 5 fold elsewhere, 9 unfolded). That split
+  is #916's scope item 3 in durable form: #815's census asks only whether a code point
+  reaches ASCII on *some* surface, so it scores all five as covered, and a number that
+  cannot separate "folds to the wrong letter" from "folds correctly" reads as coverage it
+  does not have.
+
 - **The confusable fold is not a romanization, and the docstrings now say so (#907).**
   `canonicalize("Москва")` is `Mockba`, where `search_key` and `catalog_key` give
   `moskva`. Three surfaces, three answers, and nothing said which was which. `Mockba` is

@@ -269,9 +269,11 @@ def test_reproduction_holds_across_the_whole_codespace(name: str) -> None:
     """The exhaustive form of the test above (#918).
 
     The fast one walks a corpus and three PUA probes, which samples. This walks every
-    assigned code point, which is how #918's 413 were counted in the first place — a
-    sample would not have found them, because they are ordinary typographic punctuation
-    rather than anything a hand-written corpus reaches for.
+    scalar value from U+0020 to U+10FFFF apart from the surrogates — unassigned code
+    points included, C0 controls excluded, since those are the strip steps' business and
+    not the naming policy's. That range is how #918's 413 were counted in the first
+    place; a sample would not have found them, because they are ordinary typographic
+    punctuation rather than anything a hand-written corpus reaches for.
 
     `slow`, so bare `pytest` skips it and CI's selection runs it (#658).
     """

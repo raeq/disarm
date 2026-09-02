@@ -149,8 +149,12 @@ pub(crate) struct Pipeline {
     gost7034: bool,
     /// Which CLDR name rows the `demojize` step is allowed to name (#853).
     ///
-    /// One policy for every pipeline: skip the non-emoji CLDR rows and leave them for the
-    /// confusable fold. Presets, named profiles and hand-built `TextPipeline`s all use it.
+    /// One policy for every `Pipeline`: skip the non-emoji CLDR rows and leave them for
+    /// the confusable fold. Named profiles and hand-built `TextPipeline`s both take it.
+    ///
+    /// The presets are a separate code path — each carries its own policy on its own
+    /// `Step::Demojize` and never reads this field — so what they share with a pipeline
+    /// since #918 is the intent, not the mechanism.
     ///
     /// It used to be `NAME_EVERYTHING` for a hand-built pipeline, on the reasoning that
     /// the caller asked for the step by name and should get exactly what it says. That
@@ -273,7 +277,7 @@ impl Pipeline {
             // composition silently returns text that is not equal to what the profile
             // produces — #614's failure mode, on the surface the docs point callers at
             // when no profile fits.
-            emoji_name_policy: emoji::NamePolicy::PRESET,
+            emoji_name_policy: emoji::NamePolicy::PIPELINE_BASELINE,
             steps,
             normalize_form: normalize.map(std::borrow::ToOwned::to_owned),
             zalgo_max_marks,
@@ -573,7 +577,7 @@ impl ProfileSpec {
         // explicit statement that a profile takes it. Assigning here is what let the two
         // drift in the first place, so the value is now a shared constant rather than a
         // literal spelled out twice.
-        pipeline.emoji_name_policy = emoji::NamePolicy::PRESET;
+        pipeline.emoji_name_policy = emoji::NamePolicy::PIPELINE_BASELINE;
         Ok(pipeline)
     }
 }
@@ -728,7 +732,7 @@ mod tests {
             lang: None,
             strict_iso9: false,
             gost7034: false,
-            emoji_name_policy: emoji::NamePolicy::PRESET,
+            emoji_name_policy: emoji::NamePolicy::PIPELINE_BASELINE,
         }
     }
 

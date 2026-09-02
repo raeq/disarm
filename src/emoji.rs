@@ -364,13 +364,19 @@ impl NamePolicy {
         skip_non_emoji: false,
     };
 
-    /// The policy every *pipeline* uses: leave the non-emoji CLDR rows for the confusable
-    /// fold (#757), and let the fold answer the TR39-claimed rows too where a preset asks
-    /// for that separately (#614).
+    /// The baseline for a [`crate::pipeline::Pipeline`]: leave the non-emoji CLDR rows for
+    /// the confusable fold (#757), and name the TR39-claimed rows.
     ///
-    /// Named once rather than spelled out at each construction site, because spelling it
-    /// out is how `ProfileSpec::build` and `Pipeline::new` came to disagree (#918).
-    pub const PRESET: Self = Self {
+    /// Used by `Pipeline::new` and `ProfileSpec::build`, which is every hand-built
+    /// `TextPipeline` and every named profile. Named once rather than spelled out at each
+    /// site, because spelling it out is how those two came to disagree (#918).
+    ///
+    /// **Not** what the presets use. A preset carries its own policy on its own
+    /// `Step::Demojize` and never reads `Pipeline::emoji_name_policy` — a separate code
+    /// path with, since #918, the same intent. A *comparison* preset tightens this
+    /// further: `strip_obfuscation` sets `skip_tr39_claimed` so the fold wins over the
+    /// name (#614), which this baseline deliberately does not do.
+    pub const PIPELINE_BASELINE: Self = Self {
         skip_tr39_claimed: false,
         skip_non_emoji: true,
     };

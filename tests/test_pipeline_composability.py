@@ -108,12 +108,12 @@ PROFILE_EQUIVALENTS: dict[str, dict[str, object]] = {
     ),
 }
 
-#: `ProfileSpec::build` overrides `emoji_name_policy` so a *profile* leaves the 326 code
-#: points carrying neither `Emoji` nor `Extended_Pictographic` for later steps, while
-#: `demojize` on a hand-built pipeline names everything (#757, #853). That is deliberate
-#: and is the one thing composition cannot reproduce, so these two are checked by
-#: `test_demojize_profiles_diverge_only_by_naming_more` instead.
-NOT_EXACTLY_REPRODUCIBLE = frozenset({"ml_corpus_normalize", "llm_guardrail"})
+#: Empty since #918. `ProfileSpec::build` used to override `emoji_name_policy` while
+#: `Pipeline::new` left it at NAME_EVERYTHING, so the two demojize profiles diverged from
+#: their own transcription on 413 code points each. One constant decides it now, and every
+#: profile reproduces exactly — which is what `test_every_profile_is_reproducible…` asserts
+#: for all eight rather than six.
+NOT_EXACTLY_REPRODUCIBLE: frozenset[str] = frozenset()
 
 #: Inputs that exercise each step at least once.
 CORPUS = (
@@ -238,46 +238,56 @@ def _wrong_shaped_divergences(name: str, first: int, last: int) -> list[tuple[in
     return out
 
 
-@pytest.mark.parametrize("name", sorted(NOT_EXACTLY_REPRODUCIBLE))
-def test_demojize_profiles_diverge_only_by_naming_more(name: str) -> None:
-    """The documented exception, bounded so a *new* kind of divergence still fails."""
-    wrong = _wrong_shaped_divergences(name, 0x20, NAMING_RANGE_END)
-    assert not wrong, (
-        f"{name}: {len(wrong)} divergence(s) that are not the emoji-naming policy, e.g. {wrong[:3]}"
+def test_no_profile_diverges_from_its_own_transcription() -> None:
+    """#918. The exception list is empty, and this is what makes that checkable.
+
+    Asserted as a property of the *set* rather than by parametrizing over an empty
+    frozenset, which would collect zero tests and pass by finding nothing to run.
+    """
+    assert not NOT_EXACTLY_REPRODUCIBLE, (
+        f"profiles excluded from exact reproduction: {sorted(NOT_EXACTLY_REPRODUCIBLE)}"
     )
+    assert sorted(PROFILE_EQUIVALENTS) == sorted(disarm.list_profiles())
+
+
+def test_the_two_demojize_profiles_are_the_ones_that_used_to_diverge() -> None:
+    """Pins the specific pairs #918 measured, so a regression names itself.
+
+    `ml_corpus_normalize` and `llm_guardrail` are the profiles that set `demojize` and do
+    not also `transliterate`; they were the two that diverged, on 413 code points each.
+    """
+    for name in ("ml_corpus_normalize", "llm_guardrail"):
+        profile = disarm.get_pipeline(name)
+        composed = disarm.TextPipeline(**PROFILE_EQUIVALENTS[name])  # type: ignore[arg-type]
+        for probe in ("aa\u2011bb", "\u00bd", "film\u2019s", "\u201cq\u201d", "\u2032"):
+            assert profile(probe) == composed(probe), f"{name} diverges on {probe!r}"
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("name", sorted(NOT_EXACTLY_REPRODUCIBLE))
-def test_demojize_divergence_shape_holds_above_the_naming_range(name: str) -> None:
-    """The other ~1.05M code points (#912 review).
+@pytest.mark.parametrize("name", sorted(PROFILE_EQUIVALENTS))
+def test_reproduction_holds_across_the_whole_codespace(name: str) -> None:
+    """The exhaustive form of the test above (#918).
 
-    Splitting here rather than dropping the tail: above `NAMING_RANGE_END` sit the Tags
-    block, Variation Selectors Supplement and **both supplementary Private Use planes**
-    — 131,068 PUA code points, which is what this whole change is about. Capping the
-    scan would stop asserting anything there.
+    The fast one walks a corpus and three PUA probes, which samples. This walks every
+    scalar value from U+0020 to U+10FFFF apart from the surrogates — unassigned code
+    points included, C0 controls excluded, since those are the strip steps' business and
+    not the naming policy's. That range is how #918's 413 were counted in the first
+    place; a sample would not have found them, because they are ordinary typographic
+    punctuation rather than anything a hand-written corpus reaches for.
 
-    It is `slow` because it is ~1.7s of the file's ~2s and confirms a negative. Bare
-    `pytest` skips the `slow` tier; CI's `-m "not formal and not hypothesis"` runs it,
-    so the codespace stays covered where it counts (#658).
-    """
-    wrong = _wrong_shaped_divergences(name, NAMING_RANGE_END + 1, sys.maxunicode)
-    assert not wrong, (
-        f"{name}: {len(wrong)} divergence(s) above U+{NAMING_RANGE_END:04X} that are "
-        f"not the emoji-naming policy, e.g. {wrong[:3]}"
-    )
-
-
-@pytest.mark.parametrize("name", sorted(NOT_EXACTLY_REPRODUCIBLE))
-def test_the_demojize_exception_is_real_and_not_a_vacuous_pass(name: str) -> None:
-    """Guards the test above: if the policies converged, it would pass by finding nothing.
-
-    That would be good news, but it would mean the exception list is stale and the two
-    profiles belong in the exact-reproduction test instead.
+    `slow`, so bare `pytest` skips it and CI's selection runs it (#658).
     """
     profile = disarm.get_pipeline(name)
     composed = disarm.TextPipeline(**PROFILE_EQUIVALENTS[name])  # type: ignore[arg-type]
-    assert profile("‐") != composed("‐")
+    divergent = [
+        f"U+{cp:04X}"
+        for cp in range(0x20, sys.maxunicode + 1)
+        if not (0xD800 <= cp <= 0xDFFF) and profile(chr(cp)) != composed(chr(cp))
+    ]
+    assert not divergent, (
+        f"{name}: {len(divergent)} code point(s) differ between the profile and the "
+        f"TextPipeline built from its own ProfileSpec, e.g. {divergent[:5]}"
+    )
 
 
 def test_every_shipped_profile_has_a_transcription() -> None:

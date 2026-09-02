@@ -170,6 +170,37 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **A `TextPipeline` built from a profile's own `ProfileSpec` behaved differently (#918).**
+  `ProfileSpec::build` set `emoji_name_policy` and `Pipeline::new` left it at
+  `NAME_EVERYTHING`, so the two profiles that set `demojize` without `transliterate`
+  diverged from their own transcription on **413 code points each** — every one *named*
+  by the composed pipeline where the profile *folds* it:
+
+  ```python
+  get_pipeline("llm_guardrail")("aa‑bb")  # 'aa-bb'
+  TextPipeline(**that_profile_s_flags)("aa‑bb")  # was 'aa hyphen bb', now 'aa-bb'
+  ```
+
+  That is #614's failure mode on the composed surface: a spoof and its target stop being
+  equal rather than become equal, so every downstream equality check is wrong in the
+  direction the CVE describes. Worse than a missing capability, because the composed
+  pipeline reported no failure — it returned plausible text that was not the profile's.
+
+  The old reasoning was that a caller writing `demojize` asked for the step by name. It
+  does not survive its own evidence: #757 measured `ml_normalize` turning `film’s` into
+  `film right apostrophe s`, and a hand-built pipeline aimed at a tokenizer meets that
+  identically. Asking for `demojize` is asking to name **emoji**.
+
+  One `NamePolicy::PRESET` constant now, used by presets, profiles and hand-built
+  pipelines alike — spelling the value out at each construction site is how the two came
+  to disagree. **Standalone `demojize()` still names every row**, which is the one place
+  "the caller asked by name" holds: one function, nothing downstream to fold.
+
+  All eight profiles now reproduce exactly across the whole assigned code space, up from
+  six. `tests/test_pipeline_composability.py` asserts it per profile, with the exhaustive
+  sweep in the `slow` tier. The presets were checked too and do not have this divergence —
+  #803 closed it for `PRESETS`; they name 0 of 5 of #918's sample.
+
 - **The allocation gate was stochastic (#905).** `tests/preset_alloc_count.rs` blocked
   merges on a `stats_alloc` counter that measures the whole process, with a bound of
   `measured + 1`. It failed #904 — a pull request that changes no Rust — reporting

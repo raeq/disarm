@@ -1870,3 +1870,115 @@ def test_the_overlap_blocker_says_what_it_actually_checked():
     if "bootstrap" in text:
         assert "no two subjects" not in text
         assert "1 of 3" in text
+
+
+def test_discrimination_is_fitted_on_tools_not_on_the_controls():
+    """The controls manufacture agreement between axes that oppose.
+
+    `cronbach_alpha` and `axis_correlations` already excluded them, with a
+    comment saying why; `discriminations` was the one member of the same family
+    still computed over the whole field. It changed the answer:
+    `uts39-confusables` weighed +0.11 with the controls in and 0.00 without.
+    """
+    src = inspect.getsource(leaderboard.discriminations)
+    assert "is_control" in src, "discrimination must exclude controls from its fit"
+
+
+def test_a_control_outranking_a_library_blocks_the_ranking():
+    """The degenerate controls exist to make this unpublishable.
+
+    With five axes at zero weight — the cost axis among them — the composite
+    began rewarding destruction, and `null-baseline` scored above five real
+    libraries. No amount of interval overlap makes that a publishable ordering.
+    """
+    standings = [
+        leaderboard.Standing(
+            subject="null-baseline@1",
+            composite=0.5,
+            bt_strength=0.0,
+            rank=1,
+            ci_low=0.0,
+            ci_high=1.0,
+            items=3,
+            control=True,
+        ),
+        leaderboard.Standing(
+            subject="real@1",
+            composite=0.1,
+            bt_strength=0.0,
+            rank=2,
+            ci_low=0.0,
+            ci_high=1.0,
+            items=3,
+        ),
+    ]
+    board = leaderboard.Leaderboard(
+        items=[], subjects=["null-baseline@1", "real@1"], standings=standings
+    )
+    text = " ".join(board.blockers)
+    assert "refuses the job" in text
+    assert not board.supported
+
+
+def test_zero_weight_axes_are_named_in_the_blockers():
+    """A weighting that deletes an axis must say which, and that it did."""
+    board = leaderboard.Leaderboard(
+        items=[leaderboard.Item(suite="cost", key="k", scores={}, discrimination=0.0)],
+        subjects=["a"],
+    )
+    text = " ".join(board.blockers)
+    assert "`cost`" in text and "zero weight" in text
+
+
+def test_the_z_scale_is_fitted_on_one_subject_per_library():
+    """Entering three compositions of one library let it set a third of the scale."""
+    subjects = [
+        "disarm@1",
+        "disarm-composed:a@1",
+        "disarm-composed:b@1",
+        "ftfy@1",
+        "null-baseline@1",
+    ]
+    basis = leaderboard.fit_basis(subjects)
+    assert basis == ["disarm@1", "ftfy@1"], basis
+    assert leaderboard.library_of("disarm-composed:review-display@0.15.0") == "disarm"
+
+
+def test_an_incomparable_subject_is_not_called_non_dominated():
+    """Never being beaten because nobody could meet you is not a result.
+
+    `confusable-homoglyphs` answers 4 of 13 axes and the shared-axis floor needs
+    6, so it met nobody and landed on the frontier untested — while the comment
+    above the floor claimed it prevented exactly that.
+    """
+    wide = [
+        leaderboard.Item(
+            suite=f"w{i}",
+            key="k",
+            scores={"a": float(i), "b": float(i) - 1},
+            z={"a": float(i), "b": float(i) - 1},
+            member_keys={"a": {"k"}, "b": {"k"}},
+            all_keys={"k"},
+            peer_keys={"a": {"k"}, "b": {"k"}},
+        )
+        for i in range(6)
+    ]
+    # `c` appears on two axes, both shared only with `a`. With eight axes the
+    # floor is four, so `c` can never be compared to anyone at all.
+    narrow = [
+        leaderboard.Item(
+            suite=f"n{i}",
+            key="k",
+            scores={"a": 0.0, "c": 9.0},
+            z={"a": 0.0, "c": 9.0},
+            member_keys={"a": {"k"}, "c": {"k"}},
+            all_keys={"k"},
+            peer_keys={"a": {"k"}, "c": {"k"}},
+        )
+        for i in range(2)
+    ]
+    board = leaderboard.Leaderboard(items=[*wide, *narrow], subjects=["a", "b", "c"])
+    par = leaderboard.pareto(board)
+    assert par is not None
+    assert "c" in par.incomparable
+    assert "c" not in par.frontier

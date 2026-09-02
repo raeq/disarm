@@ -98,6 +98,42 @@ MIN_COVERAGE = 0.75
 CONTROL_SUBJECTS = ("null-baseline", "identity")
 
 
+def library_of(subject: str) -> str:
+    """The library a subject belongs to, ignoring version and configuration.
+
+    `disarm`, `disarm-composed:prompt-hygiene`, `disarm-composed:retrieval-key`
+    and `disarm-composed:review-display` are four subjects and one library.
+    """
+    name = subject.split("@")[0]
+    return name.split(":")[0].removesuffix("-composed")
+
+
+def fit_basis(subjects: Sequence[str]) -> list[str]:
+    """One subject per library, for fitting the z-scale.
+
+    Standardising on every subject let one library set the units in proportion
+    to how many of its configurations were entered. Four of the twelve fitted
+    tools were disarm — a third of the scale — because this harness composed
+    three pipelines for disarm and none for anybody else. The scale is the
+    common yardstick, so it is fitted on the field of *libraries*; the extra
+    configurations are still scored, they just no longer vote on where zero is.
+
+    The representative is the subject whose name is the bare library name where
+    one exists (`disarm` over `disarm-composed:*`), else the first by name, so
+    the choice is deterministic and never a function of a score.
+    """
+    by_lib: dict[str, list[str]] = {}
+    for subject in subjects:
+        if is_control(subject):
+            continue
+        by_lib.setdefault(library_of(subject), []).append(subject)
+    out = []
+    for lib, members in sorted(by_lib.items()):
+        exact = [m for m in members if m.split("@")[0] == lib]
+        out.append(sorted(exact or members)[0])
+    return out
+
+
 def is_control(subject_key: str) -> bool:
     """``subject_key`` is ``name@version``; controls are matched on the name."""
     return subject_key.split("@", 1)[0] in CONTROL_SUBJECTS
@@ -205,6 +241,36 @@ class Leaderboard:
                 f"`{worst[0][0]}` and `{worst[0][1]}` correlate at r = {worst[1]:.2f} "
                 "across the tools, so no single weighting of them is more correct "
                 "than another"
+            )
+        # The controls exist for exactly this check. `null-baseline` deletes all
+        # input and `identity` changes nothing; either outranking a real library
+        # means the aggregate is rewarding a refusal to do the job, and no amount
+        # of interval overlap makes that publishable.
+        controls = [st for st in self.standings if st.control]
+        tools_ranked = [st for st in self.standings if not st.control and not st.partial]
+        for ctl in controls:
+            beaten = [t.subject for t in tools_ranked if t.composite < ctl.composite]
+            if beaten:
+                why.append(
+                    f"the control `{ctl.subject}` scores {ctl.composite:+.3f}, above "
+                    f"{len(beaten)} real "
+                    f"{'library' if len(beaten) == 1 else 'libraries'} "
+                    f"({', '.join('`' + b.split('@')[0] + '`' for b in sorted(beaten))}) "
+                    "— a subject that refuses the job is outscoring subjects that "
+                    "attempt it, so the aggregate is measuring something other "
+                    "than doing the job well"
+                )
+        zeroed = [i.suite for i in self.items if i.discrimination == 0.0]
+        if zeroed:
+            why.append(
+                f"the discrimination weighting has given zero weight to "
+                f"{len(zeroed)} of {len(self.items)} axes "
+                f"({', '.join('`' + z + '`' for z in sorted(zeroed))}), so the "
+                "composite is not an average over this battery — it is an average "
+                "over the axes that happen to agree with each other. A corrected "
+                "item-total correlation is negative for an axis that opposes the "
+                "rest, and the clamp turns that into exclusion, so the opposed "
+                "pole of a trade-off is precisely what the weighting deletes"
             )
         if self.separated_pairs() == 0 and len(self.standings) > 1:
             sep, total = self.separated_pairs_any()
@@ -466,12 +532,18 @@ def discriminations(items: list[Item], subjects: Sequence[str]) -> None:
     ``MIN_REST_ITEMS`` other items behind each subject for the rest-score to mean
     anything, and three subjects before a correlation is worth computing.
     """
+    # Controls are excluded from the fit, for the reason the alpha and the
+    # correlation matrix already exclude them: `null-baseline` and `identity` are
+    # bad at everything at once, so including them manufactures agreement between
+    # axes that actually oppose. Discrimination is a corrected item-total
+    # correlation — the same family of statistic as alpha — and was the only one
+    # of the three still computed over the whole field. It mattered:
+    # `uts39-confusables` read +0.11 with the controls in and -0.35 without.
+    tools = [s for s in subjects if not is_control(s)]
     for item in items:
         others = [o for o in items if o is not item]
         shared = [
-            s
-            for s in subjects
-            if s in item.z and sum(1 for o in others if s in o.z) >= MIN_REST_ITEMS
+            s for s in tools if s in item.z and sum(1 for o in others if s in o.z) >= MIN_REST_ITEMS
         ]
         if len(shared) < 3 or not others:
             item.discrimination = 0.0
@@ -683,6 +755,10 @@ class Pareto:
     frontier: list[str] = field(default_factory=list)
     dominated: dict[str, list[str]] = field(default_factory=dict)
     scores: dict[str, dict[str, float]] = field(default_factory=dict)
+    #: Subjects that share too few axes with anyone to be placed at all. Held
+    #: out of the frontier rather than added to it: never being beaten because
+    #: nobody could meet you is not the same as not being beaten.
+    incomparable: list[str] = field(default_factory=list)
 
     @property
     def separating(self) -> bool:
@@ -755,22 +831,38 @@ def pareto(board: Leaderboard) -> Pareto | None:
         for t in tools
     }
 
-    def beats(a: str, b: str) -> bool:
-        # Compare on the axes BOTH answered. A pair sharing too few axes is not
-        # comparable, and saying so is better than declaring one non-dominated
-        # because the other never met it.
+    # A subject that cannot be compared to anyone is not thereby non-dominated.
+    # `confusable-homoglyphs` answers 4 of 13 axes, the floor below needs 6, and
+    # so it met nobody and landed on the frontier untested — while the comment
+    # here claimed the floor prevented exactly that. Such subjects are held out
+    # of the frontier entirely and reported as incomparable.
+    min_shared = max(2, len(axes) // 2)
+
+    def comparable(a: str, b: str) -> bool:
         shared = [s for s in axes if scores[a][s] is not None and scores[b][s] is not None]
-        if len(shared) < max(2, len(axes) // 2):
+        return len(shared) >= min_shared
+
+    def beats(a: str, b: str) -> bool:
+        shared = [s for s in axes if scores[a][s] is not None and scores[b][s] is not None]
+        if len(shared) < min_shared:
             return False
         return all(scores[a][s] >= scores[b][s] for s in shared) and any(
             scores[a][s] > scores[b][s] for s in shared
         )
 
-    frontier = [t for t in tools if not any(beats(o, t) for o in tools if o != t)]
+    incomparable = [t for t in tools if not any(comparable(t, o) for o in tools if o != t)]
+    judged = [t for t in tools if t not in incomparable]
+    frontier = [t for t in judged if not any(beats(o, t) for o in judged if o != t)]
     dominated = {
-        t: [o for o in tools if o != t and beats(o, t)] for t in tools if t not in frontier
+        t: [o for o in judged if o != t and beats(o, t)] for t in judged if t not in frontier
     }
-    return Pareto(axes=axes, frontier=frontier, dominated=dominated, scores=scores)
+    return Pareto(
+        axes=axes,
+        frontier=frontier,
+        dominated=dominated,
+        scores=scores,
+        incomparable=incomparable,
+    )
 
 
 def build(
@@ -793,7 +885,7 @@ def build(
     if not board.usable:
         return board
 
-    standardize(items, subjects)
+    standardize(items, subjects, fit_on=fit_basis(subjects))
     discriminations(items, subjects)
     strengths = bradley_terry(items, subjects)
     board.alpha = cronbach_alpha(items, subjects)
@@ -807,11 +899,11 @@ def build(
     draws: dict[str, list[float]] = {s: [] for s in subjects}
     for _ in range(bootstrap):
         sample = [items[rng.randrange(len(items))] for _ in items]
-        standardize(sample, subjects)
+        standardize(sample, subjects, fit_on=fit_basis(subjects))
         discriminations(sample, subjects)
         for s in subjects:
             draws[s].append(composite(sample, s))
-    standardize(items, subjects)
+    standardize(items, subjects, fit_on=fit_basis(subjects))
     discriminations(items, subjects)
 
     scored = []

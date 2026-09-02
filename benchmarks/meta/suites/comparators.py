@@ -15,7 +15,7 @@ from pathlib import Path
 from ..base import CACHE, DATA, SuiteBase, add, artifact, record
 from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
-from ..subjects import Capability, Role
+from ..subjects import Capability, Job, Role
 
 
 class ConfusableBenchV1(SuiteBase):
@@ -417,6 +417,7 @@ def _safe(fn: Callable[[str], object], text: str) -> bool:
 
 class WeaponizingUnicode(SuiteBase):
     name = "weaponizing-unicode"
+    JOB = Job.CONFUSABLE_FOLD
     family = Family.COMPARATOR
     availability = Availability.NETWORK
     MULTI_SUBJECT = True
@@ -498,7 +499,9 @@ class WeaponizingUnicode(SuiteBase):
         scored = [cp for cp in codepoints if category(cp) not in ("Co", "Cn", "Cs")]
 
         det = self.detect()
-        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        surfaces = (
+            self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject is not None else {}
+        )
         record(
             outcome,
             domain=f"{len(scored)} assigned non-private-use candidates "
@@ -549,6 +552,7 @@ def _changed_by(fn: Callable[[str], str], ch: str) -> bool:
 
 class ReverseCaptcha(SuiteBase):
     name = "reverse-captcha"
+    JOB = Job.PROMPT_HYGIENE
     family = Family.ACADEMIC
     availability = Availability.NETWORK
     MULTI_SUBJECT = True
@@ -614,7 +618,9 @@ class ReverseCaptcha(SuiteBase):
         attacks = [r for r in rows if r.get("scheme") != "control"]
         controls = [r for r in rows if r.get("scheme") == "control"]
         det = self.detect()
-        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        surfaces = (
+            self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject is not None else {}
+        )
         record(
             outcome,
             domain=f"{len(attacks)} zero-width injections and {len(controls)} controls",

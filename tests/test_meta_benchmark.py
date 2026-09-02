@@ -1720,3 +1720,57 @@ def test_the_prompt_hygiene_composition_records_the_tag_block_gap():
         "if this passes the TAG block is being stripped, so #914 is fixed — "
         "revisit this pipeline and #910 together"
     )
+
+
+def test_every_multi_subject_benchmark_declares_the_job_it_represents():
+    """A benchmark that names no job is scored through whatever surface is default.
+
+    That is how a confusables benchmark came to be answered by a pipeline built
+    to preserve text for a reviewer. The job is a property of what the
+    benchmark's source deploys into, so it is declared on the suite and is
+    identical for every subject — it cannot become a per-tool advantage.
+    """
+    known = {
+        v for k, v in vars(subjects.Job).items() if not k.startswith("_") and isinstance(v, str)
+    }
+    missing = []
+    for suite in registry.all_suites():
+        if not getattr(suite, "MULTI_SUBJECT", False):
+            continue
+        job = getattr(suite, "JOB", "")
+        if not job:
+            # Allowed only for a suite that deliberately scans every surface
+            # rather than one declared surface.
+            src = inspect.getsource(type(suite).measure)
+            assert "surface_map" in src or "surfaces(" in src, (
+                f"{suite.name} declares no JOB but scores a single declared surface"
+            )
+            continue
+        if job not in known:
+            missing.append((suite.name, job))
+    assert not missing, f"unknown job slugs: {missing}"
+
+
+def test_the_confusable_job_is_not_the_highest_scoring_surface():
+    """The mapping must survive its own temptation.
+
+    `strip_obfuscation` folds more of `confusables.txt` onto a shared form than
+    `canonicalize` does, and is still the wrong answer: #614 found it *names* 49
+    rows the TR39 table folds, so a spoof and its target stop being equal rather
+    than becoming equal. Picking the higher number would make the mapping
+    best-of-N with a declaration stapled to it.
+    """
+    assert subjects.DisarmSubject.JOBS[subjects.Job.CONFUSABLE_FOLD] == "canonicalize", (
+        "the confusable job must stay on the documented comparison form"
+    )
+
+
+def test_standalone_entry_points_are_in_the_surface_census():
+    """`normalize_confusables` was invisible to every suite for the whole build.
+
+    `transforms()` enumerated `PRESETS` and profiles only, so the surface whose
+    name most suggests it belongs on a confusables benchmark was never scored.
+    """
+    subject = subjects.by_name("disarm")
+    assert subject is not None
+    assert "normalize_confusables" in subject.transforms()

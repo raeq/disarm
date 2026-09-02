@@ -46,6 +46,34 @@ class Role:
     DETECTOR = "detector"  # the report-without-rewriting predicate
 
 
+class Job:
+    """The deployment a benchmark represents — the thing a user is actually doing.
+
+    A benchmark defines a job, and a competent user picks the surface that fits
+    it: nobody reaches for a display-preserving pipeline to fold confusables. So
+    the subject answers each benchmark with the surface it ships *for that job*,
+    and scoring disarm's confusable coverage through a preset that does not fold
+    confusables measures the harness's choice rather than the library.
+
+    This is not best-of-N, and the difference is where the choice is declared.
+    Best-of-N picks the winning surface per *measurement*, after seeing scores.
+    Here the job is declared on the **benchmark**, from what its source deploys
+    into, identically for every subject; one surface answers each benchmark; and
+    that same surface pays the benchmark's cost measurements. A subject cannot
+    fold hard for coverage and gently for damage on the same suite.
+
+    `selection_effect` in the report is what this buys over one fixed surface, so
+    the size of the choice stays visible.
+    """
+
+    CONFUSABLE_FOLD = "confusable-fold"  # decide two spellings are the same
+    PROMPT_HYGIENE = "prompt-hygiene"  # untrusted text entering a model
+    RETRIEVAL_KEY = "retrieval-key"  # an index or comparison key
+    REVIEW_DISPLAY = "review-display"  # text a human is going to read
+    SOURCE_CONTEXT = "source-context"  # source code, which must survive verbatim
+    CLEAN_COST = "clean-cost"  # text that needed nothing
+
+
 class Capability:
     """What a subject can be asked to do."""
 
@@ -75,7 +103,7 @@ class Subject(Protocol):
     def transforms(self) -> dict[str, Callable[[str], str]]: ...
     def detectors(self) -> dict[str, Callable[[str], bool]]: ...
     def keys(self) -> dict[str, Callable[[str], str]]: ...
-    def role(self, which: str) -> dict[str, Callable[[str], str]]: ...
+    def role(self, which: str, job: str | None = None) -> dict[str, Callable[[str], str]]: ...
 
 
 @dataclass
@@ -103,6 +131,10 @@ class _Base:
     #: before any run, so the choice is visible and arguable rather than being
     #: whichever surface happened to win.
     ROLES: ClassVar[dict[str, str]] = {}
+    #: job -> the surface this subject ships for that job. A subject with one
+    #: entry point leaves this empty and answers every job with its `ROLES`
+    #: surface, which is the honest answer for a tool that offers no choice.
+    JOBS: ClassVar[dict[str, str]] = {}
 
     def transforms(self) -> dict[str, Callable[[str], str]]:
         return {}
@@ -113,15 +145,19 @@ class _Base:
     def keys(self) -> dict[str, Callable[[str], str]]:
         return {}
 
-    def role(self, which: str) -> dict[str, Callable[[str], str]]:
+    def role(self, which: str, job: str | None = None) -> dict[str, Callable[[str], str]]:
         """The declared surface for ``which``, as a one-entry mapping.
+
+        ``job`` selects the surface the subject ships for that deployment; see
+        :class:`Job`. Falls back to the role default when the subject offers no
+        choice for it.
 
         Empty when the subject declares no surface for that role — which is a
         real answer (`unidecode` builds no keys) and must not be read as zero.
         Falls back to the whole set only when nothing is declared at all, so a
         subject that has not been given roles still measures something.
         """
-        name = self.ROLES.get(which)
+        name = self.JOBS.get(job or "") or self.ROLES.get(which)
         pool = self.keys() if which == Role.KEY else self.transforms()
         if name is None:
             return {} if self.ROLES else pool
@@ -209,6 +245,33 @@ class DisarmSubject(_Base):
         Role.DETECTOR: "is_confusable",
     }
 
+    #: What a well-versed user reaches for, per job. Every entry is a surface the
+    #: library ships and documents for exactly that purpose — none is composed
+    #: here, and none is chosen by looking at a score.
+    #:
+    #: Two of these were checked against the alternative and kept anyway, which
+    #: is the discipline the mapping needs to be worth anything:
+    #:
+    #: * `CONFUSABLE_FOLD` is `canonicalize`, not `strip_obfuscation`, although
+    #:   `strip_obfuscation` folds more of `confusables.txt` onto a shared form
+    #:   (64.1% against 57.8%). #614 is why: `strip_obfuscation` *names* 49 rows
+    #:   the TR39 table folds, so it renders `€xample.com` as `euro xample.com`
+    #:   while `canonicalize` gives `example.com`. A higher score there partly
+    #:   reflects both sides of a pair being named the same, which is not the
+    #:   spoof being resolved. Taking the higher number would be best-of-N.
+    #: * It is also not `normalize_confusables`, the surface whose name most
+    #:   suggests it. That is the bare TR39 fold with no normalization and
+    #:   reaches 27.1% — less than half of `canonicalize` — because a large part
+    #:   of the table is resolved by NFKC rather than by the confusable map.
+    JOBS: ClassVar[dict[str, str]] = {
+        Job.CONFUSABLE_FOLD: "canonicalize",
+        Job.PROMPT_HYGIENE: "profile:llm_guardrail",
+        Job.RETRIEVAL_KEY: "profile:rag_ingest",
+        Job.REVIEW_DISPLAY: "strip_format",
+        Job.SOURCE_CONTEXT: "profile:code_context",
+        Job.CLEAN_COST: "canonicalize",
+    }
+
     def available(self) -> tuple[bool, str]:
         return (True, "") if _import("disarm") else (False, "disarm is not importable")
 
@@ -229,6 +292,14 @@ class DisarmSubject(_Base):
                 out[f"profile:{profile}"] = disarm.get_pipeline(profile)
             except Exception:  # noqa: BLE001 - an unavailable profile is absent
                 continue
+        # Standalone entry points that are not presets and not profiles. The
+        # census listed neither for a long time, so `normalize_confusables` —
+        # the surface a reader would most expect to see on a confusables
+        # benchmark — was never scored at all.
+        for extra in ("normalize_confusables", "demojize"):
+            fn = getattr(disarm, extra, None)
+            if callable(fn):
+                out[extra] = fn
         return out
 
     def detectors(self) -> dict[str, Callable[[str], bool]]:
@@ -298,18 +369,20 @@ class _ComposedBase(_Base):
     more fixed configuration and nothing about compiling for a purpose. The point
     of the feature is that each use case gets its own pipeline.
 
-    **But a pipeline chosen per benchmark is best-of-N wearing a different hat.**
-    Mapping the cost suites to a light pipeline and the coverage suites to a
-    heavy one recovers exactly the union-as-max effect that `ROLES` exists to
-    stop; the mapping would be doing the winning, and it would be mine.
+    These are the **compiled** answer to a job, beside `disarm`'s **shipped**
+    answer: where `DisarmSubject.JOBS` names the preset a well-versed user
+    reaches for, each of these is the pipeline that same user would compile when
+    no preset fits. Both are scored, so the report shows what composition costs
+    or buys against the profile it replaces.
 
-    So there is no mapping. Each use case is a **separate subject** scored on the
-    **whole battery**, exactly like every other competitor. A pipeline built for
-    prompt hygiene meets the corruption-cost suites it is going to lose, and a
-    pipeline built for review meets the coverage suites it is going to lose.
-    Nothing selects its own favourable benchmarks, and the trade-off each
-    composition makes is visible as a shape across the report rather than
-    collapsed into one number.
+    Each is scored on the **whole battery**, not only on the job it was compiled
+    for. That is the point: a pipeline built for prompt hygiene meets the
+    corruption-cost suites it is going to lose, and one built for review meets
+    the coverage suites it is going to lose. What a fixed composition gives up
+    away from its own job is exactly what a reader needs in order to decide
+    whether to deploy one pipeline or pick per call site — and it is the
+    difference between these subjects and `disarm`, which answers each job with
+    the surface built for it.
 
     Subclasses set `USE_CASE`, `PURPOSE` and `STEPS`. The step list is declared
     once, never varied per benchmark, and hashed into the version string, so

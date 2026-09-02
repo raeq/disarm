@@ -22,7 +22,7 @@ from .. import damage
 from ..base import DATA, FIXTURES, SuiteBase, add, artifact, record, thin
 from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
-from ..subjects import Capability, Role
+from ..subjects import Capability, Job, Role
 
 _MAX_CP = sys.maxunicode + 1
 
@@ -117,6 +117,7 @@ def _strong_rtl() -> list[int]:
 
 class UTS39ConfusableCoverage(SuiteBase):
     name = "uts39-confusables"
+    JOB = Job.CONFUSABLE_FOLD
     family = Family.NORMATIVE
     availability = Availability.VENDORED
     MULTI_SUBJECT = True
@@ -177,7 +178,7 @@ class UTS39ConfusableCoverage(SuiteBase):
         # winner was `llm_guardrail` — a ten-step application pipeline nobody
         # reaches for to clean a username — while the cost axis was averaging two
         # *other* surfaces. The published point described no deployable setup.
-        declared = self.subject.role(Role.SANITIZER) if self.subject else {}
+        declared = self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject else {}
         scored = declared or text_surfaces
 
         # UTS #39 targets are mostly NOT Latin: of 6,565 single-source pairs only
@@ -688,6 +689,7 @@ class UCDBidiClass(SuiteBase):
 
 class UAX29WordJoiners(SuiteBase):
     name = "uax29-word-joiners"
+    JOB = Job.RETRIEVAL_KEY
     family = Family.NORMATIVE
     availability = Availability.DERIVED
     # "Is a fragmented word detected, and is it rejoined" is a tool-neutral
@@ -1082,6 +1084,7 @@ class CLDRNonEmojiNames(SuiteBase):
 
 class UTS39EquivalenceClasses(SuiteBase):
     name = "uts39-equivalence-classes"
+    JOB = Job.RETRIEVAL_KEY
     family = Family.NORMATIVE
     availability = Availability.VENDORED
     MULTI_SUBJECT = True
@@ -1144,7 +1147,7 @@ class UTS39EquivalenceClasses(SuiteBase):
         collapsing = set(self.subject.keys()) if self.subject else set()
         text_surfaces, key_surfaces = damage.split_by_intent(all_surfaces, collapsing)
         text_surfaces = text_surfaces or all_surfaces
-        declared = self.subject.role(Role.SANITIZER) if self.subject else {}
+        declared = self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject else {}
         scored = declared or text_surfaces
 
         def closes(fn: Callable[[str], str], target: str) -> bool:
@@ -1222,6 +1225,7 @@ class UTS39EquivalenceClasses(SuiteBase):
 
 class CorruptionCost(SuiteBase):
     name = "corruption-cost"
+    JOB = Job.CLEAN_COST
     family = Family.NORMATIVE
     availability = Availability.DERIVED
     MULTI_SUBJECT = True
@@ -1265,7 +1269,7 @@ class CorruptionCost(SuiteBase):
 
         # Resolved before record(), because the method record names the surface
         # that is actually scored.
-        declared = self.subject.role(Role.SANITIZER) if self.subject else {}
+        declared = self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject else {}
         scored = declared or surface_map
         scored_name = next(iter(scored), "")
 
@@ -1578,6 +1582,7 @@ class UTS39TargetScripts(SuiteBase):
 
 class UCDPrivateUse(SuiteBase):
     name = "ucd-private-use"
+    JOB = Job.PROMPT_HYGIENE
     family = Family.NORMATIVE
     availability = Availability.NETWORK
     MULTI_SUBJECT = True
@@ -1679,7 +1684,9 @@ class UCDPrivateUse(SuiteBase):
         outcome.population = len(ordered)
         clean = self.LEFT + self.RIGHT
 
-        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        surfaces = (
+            self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject is not None else {}
+        )
         record(
             outcome,
             domain=f"{len(ordered)} General_Category=Co code points, each between "

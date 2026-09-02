@@ -19,7 +19,7 @@ from typing import Any
 
 from ..base import CACHE, SuiteBase, add, artifact, record
 from ..protocol import Availability, Family, Outcome, Provenance
-from ..subjects import Role
+from ..subjects import Job, Role
 
 
 def _altered(fn: Callable[[str], str], text: str) -> bool:
@@ -42,7 +42,7 @@ class _RemovalSplitMixin:
         from .. import damage
 
         subject = getattr(self, "subject", None)
-        surfaces = subject.role(Role.SANITIZER) if subject is not None else {}
+        surfaces = subject.role(Role.SANITIZER, job=self.JOB) if subject is not None else {}
         if not surfaces or not universe:
             return
         fn = next(iter(surfaces.values()))
@@ -133,7 +133,7 @@ class _AdversarialEvalSuite(_RemovalSplitMixin, SuiteBase):
         # a callable does not survive being handed to a worker process. The
         # declared role gives the attribute name; the module comes from the
         # resolved surface, so this keeps working if a surface moves.
-        declared = self.subject.role(Role.SANITIZER) if self.subject else {}
+        declared = self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject else {}
         name, fn = next(iter(declared.items()), (None, None))
         surface = f"{fn.__module__.split('.')[0]}.{name}" if fn is not None else None
         res = evaluate(
@@ -262,6 +262,7 @@ class MeAJOR(_AdversarialEvalSuite):
 
 class GutenbergBenign(SuiteBase):
     name = "gutenberg-benign"
+    JOB = Job.CLEAN_COST
     family = Family.DATASET
     availability = Availability.MANUAL
     MULTI_SUBJECT = True

@@ -23,7 +23,7 @@ from .. import damage
 from ..base import CACHE, SuiteBase, add, artifact, record, thin
 from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
-from ..subjects import Capability, Role
+from ..subjects import Capability, Job, Role
 
 TEXT_COLUMNS = ("text", "perturbed", "adversarial", "attack", "suffix", "input", "body", "prompt")
 CLEAN_COLUMNS = ("clean", "original", "reference", "label", "benign", "source")
@@ -256,6 +256,7 @@ class AttackCorpusSuite(SuiteBase):
 
 class BadCharacters(AttackCorpusSuite):
     name = "bad-characters"
+    JOB = Job.CONFUSABLE_FOLD
     availability = Availability.NETWORK
     env_var = "DISARM_META_BAD_CHARACTERS"
     filenames = ("bad_characters.jsonl", "bad_characters.tsv", "bad_characters.csv")
@@ -327,6 +328,7 @@ class BadCharacters(AttackCorpusSuite):
 
 class SpecialCharAttack(AttackCorpusSuite):
     name = "special-char-attack"
+    JOB = Job.PROMPT_HYGIENE
     env_var = "DISARM_META_SPECIAL_CHAR"
     filenames = ("special_char_attack.jsonl", "special_char_attack.csv")
     summary = "591 variants across 15 structural-perturbation subtypes."
@@ -348,6 +350,7 @@ class SpecialCharAttack(AttackCorpusSuite):
 
 class GCGSuffixes(AttackCorpusSuite):
     name = "gcg-suffixes"
+    JOB = Job.PROMPT_HYGIENE
     availability = Availability.CREDENTIALED
     env_var = "DISARM_META_GCG"
     filenames = ("gcg_evaluated_data.jsonl", "gcg-evaluated-data.csv")
@@ -374,6 +377,7 @@ class GCGSuffixes(AttackCorpusSuite):
 
 class GAversary(AttackCorpusSuite):
     name = "gaversary-word-substitution"
+    JOB = Job.CONFUSABLE_FOLD
     env_var = "DISARM_META_GAVERSARY"
     filenames = ("gaversary_tables_5_9.tsv", "gaversary.jsonl")
     summary = "The 20 published word-substitution adversarial texts (Tables 5-9)."
@@ -397,6 +401,7 @@ class GAversary(AttackCorpusSuite):
 
 class SmishingRobustness(AttackCorpusSuite):
     name = "smishing-robustness"
+    JOB = Job.CONFUSABLE_FOLD
     env_var = "DISARM_META_SMISHING"
     filenames = ("smishing_attacks.tsv", "smishing.jsonl")
     summary = "Three smishing attack classes from the adversarial-robustness study."
@@ -418,6 +423,7 @@ class SmishingRobustness(AttackCorpusSuite):
 
 class XOXOCodeContext(AttackCorpusSuite):
     name = "xoxo-code-context"
+    JOB = Job.SOURCE_CONTEXT
     env_var = "DISARM_META_XOXO"
     filenames = ("xoxo_snippets.jsonl", "xoxo.tsv")
     summary = "Source code as untrusted LLM context — does a surface return source code?"
@@ -442,6 +448,7 @@ class XOXOCodeContext(AttackCorpusSuite):
 
 class ESTIAgentState(AttackCorpusSuite):
     name = "esti-agent-state"
+    JOB = Job.PROMPT_HYGIENE
     env_var = "DISARM_META_ESTI"
     filenames = ("esti_state_records.jsonl", "esti.tsv")
     summary = "Serialized agent state / tool-result records as a third channel."
@@ -468,6 +475,7 @@ class ESTIAgentState(AttackCorpusSuite):
 
 class BackdoorTrigger(AttackCorpusSuite):
     name = "backdoor-trigger-reach"
+    JOB = Job.CONFUSABLE_FOLD
     env_var = "DISARM_META_BACKDOOR"
     filenames = ("backdoor_triggers.tsv", "backdoor.jsonl")
     summary = "Model-as-sink: how many Unicode spellings a fold merges onto one trigger."
@@ -492,6 +500,7 @@ class BackdoorTrigger(AttackCorpusSuite):
 
 class CanonicalizationObligation(AttackCorpusSuite):
     name = "canonicalization-obligation"
+    JOB = Job.CONFUSABLE_FOLD
     env_var = "DISARM_META_CANON_OBLIGATION"
     filenames = ("canonicalization_cases.tsv", "canon_obligation.jsonl")
     summary = "Composition canonicity vs value canonicity (§7.3) over composite objects."
@@ -516,6 +525,7 @@ class CanonicalizationObligation(AttackCorpusSuite):
 
 class NonStandardUnicodeSets(AttackCorpusSuite):
     name = "nonstandard-unicode-sets"
+    JOB = Job.PROMPT_HYGIENE
     env_var = "DISARM_META_NONSTANDARD"
     filenames = ("nonstandard_unicode_sets.tsv", "nonstandard_unicode_sets.jsonl")
     summary = "38 non-standard character sets scored against 15 models by the paper itself."
@@ -545,6 +555,7 @@ class NonStandardUnicodeSets(AttackCorpusSuite):
 
 class TagBlockConcealment(SuiteBase):
     name = "mcp-tag-block-concealment"
+    JOB = Job.PROMPT_HYGIENE
     family = Family.ACADEMIC
     availability = Availability.DERIVED
     MULTI_SUBJECT = True
@@ -604,7 +615,9 @@ class TagBlockConcealment(SuiteBase):
         outcome.population = 2
 
         det = self.detect()
-        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        surfaces = (
+            self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject is not None else {}
+        )
         record(
             outcome,
             domain="T7 (TAG-block concealed) and T1 (same instruction, plain ASCII)",
@@ -680,6 +693,7 @@ def _apply(fn: Callable[[str], str], text: str) -> str:
 
 class RagPullInvisibles(SuiteBase):
     name = "rag-pull-invisibles"
+    JOB = Job.RETRIEVAL_KEY
     family = Family.ACADEMIC
     availability = Availability.DERIVED
     MULTI_SUBJECT = True
@@ -734,7 +748,9 @@ class RagPullInvisibles(SuiteBase):
             limit,
         )
         outcome.population = len(carriers)
-        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        surfaces = (
+            self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject is not None else {}
+        )
         det = self.detect()
         record(
             outcome,
@@ -772,6 +788,7 @@ class RagPullInvisibles(SuiteBase):
 
 class ZeroWidthStylometry(SuiteBase):
     name = "zero-width-stylometry"
+    JOB = Job.REVIEW_DISPLAY
     family = Family.ACADEMIC
     availability = Availability.DERIVED
     MULTI_SUBJECT = True
@@ -818,7 +835,9 @@ class ZeroWidthStylometry(SuiteBase):
         outcome.population = 1
 
         carriers = {self.ZW0, self.ZW1, self.SEP, self.END}
-        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        surfaces = (
+            self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject is not None else {}
+        )
         det = self.detect()
         record(
             outcome,
@@ -869,6 +888,7 @@ class ZeroWidthStylometry(SuiteBase):
 
 class JailbreakBench(SuiteBase):
     name = "jailbreakbench"
+    JOB = Job.PROMPT_HYGIENE
     family = Family.ACADEMIC
     availability = Availability.NETWORK
     MULTI_SUBJECT = True
@@ -935,7 +955,9 @@ class JailbreakBench(SuiteBase):
             add(outcome, "prompts", 0)
             return
 
-        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        surfaces = (
+            self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject is not None else {}
+        )
         det = self.detect()
         record(
             outcome,
@@ -991,6 +1013,7 @@ class JailbreakBench(SuiteBase):
 
 class EncodingObfuscation(SuiteBase):
     name = "encoding-obfuscation"
+    JOB = Job.PROMPT_HYGIENE
     family = Family.ACADEMIC
     availability = Availability.DERIVED
     MULTI_SUBJECT = True
@@ -1055,7 +1078,9 @@ class EncodingObfuscation(SuiteBase):
         encodings = self.encodings()
         outcome.population = len(prompts) * len(encodings)
 
-        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        surfaces = (
+            self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject is not None else {}
+        )
         det = self.detect()
         record(
             outcome,
@@ -1108,6 +1133,7 @@ class EncodingObfuscation(SuiteBase):
 
 class EmojiDelimiterSegmentation(SuiteBase):
     name = "emoji-delimiter-segmentation"
+    JOB = Job.PROMPT_HYGIENE
     family = Family.ACADEMIC
     availability = Availability.NETWORK
     MULTI_SUBJECT = True
@@ -1229,7 +1255,9 @@ class EmojiDelimiterSegmentation(SuiteBase):
         outcome.population = len(ordered)
         clean = self.LEFT + self.RIGHT
 
-        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        surfaces = (
+            self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject is not None else {}
+        )
         record(
             outcome,
             domain=f"{len(ordered)} Emoji_Presentation code points, each inserted "

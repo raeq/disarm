@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from typing import ClassVar
 
 from .fetch import CACHE as FETCH_CACHE
 from .fetch import Provisioning, Source, provision
@@ -169,6 +170,13 @@ class SuiteBase:
     handles availability, timing, error capture and the ``SKIPPED`` path, so a
     suite that cannot find its corpus reports that fact instead of a zero.
     """
+
+    #: The deployment this benchmark represents. Subjects answer it with the
+    #: surface they ship for that job — see :class:`..subjects.Job`. Declared per
+    #: benchmark and identical for every subject, so it cannot become a per-tool
+    #: advantage. Empty means "use the subject's default role", which is right
+    #: for a census that names no deployment.
+    JOB: ClassVar[str] = ""
 
     name: str = ""
     family: Family = Family.ACADEMIC

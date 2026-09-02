@@ -4,9 +4,12 @@
 Every shepherding loop written by hand in this repo has had at least one of the four
 bugs below, and each cost a real wait or a wrong report:
 
-1. **A reviewer comment waited on CI.** A loop that polls checks and only then looks at
+1. **A reviewer comment waited on CI.** A loop that acts on checks before it looks at
    review threads will sit through a whole CI run before noticing the PR is blocked on
-   a comment. Threads are polled FIRST here, every cycle, before anything else.
+   a comment. Here every cycle fetches threads and checks into one `Snapshot`, and
+   `decide()` ranks unresolved threads above check state and above merging. The order
+   of the two network calls in `fetch()` is irrelevant; the priority is in `decide()`,
+   which is where it can be tested.
 
 2. **`conclusion` is `""` for a running check, not `null`.** A loop that waits for
    `conclusion == null` to clear exits while checks are still in flight and then reports
@@ -23,6 +26,13 @@ bugs below, and each cost a real wait or a wrong report:
 The decision is a pure function of a `Snapshot`, so it is unit-tested in
 `tests/test_watch_pr.py` without touching the network. The I/O layer around it is thin
 on purpose.
+
+Exit codes:
+    0  merged (re-read from GitHub to confirm, not trusted from the loop)
+    1  closed without merging, or reported merged but not confirmed
+    2  a human is needed: an unresolved review thread, a failed check, a structural
+       block, a stale branch, or a thread listing too long to read in one page
+    3  gave up after --max-polls
 
 Usage:
     python scripts/watch_pr.py 912
@@ -49,6 +59,11 @@ MERGEABLE = frozenset({"CLEAN", "UNSTABLE", "HAS_HOOKS"})
 
 #: States where the branch needs a rebase before anything else can happen.
 NEEDS_REBASE = frozenset({"DIRTY", "BEHIND"})
+
+#: GitHub's maximum page size for `reviewThreads`. Past this the listing silently
+#: truncates, so `Snapshot.threads_truncated` records it rather than letting an unseen
+#: thread read as an absent one.
+THREAD_PAGE_SIZE = 100
 
 #: Conclusions that mean a check will not go green on its own. `CANCELLED` belongs
 #: here — a cancelled required check blocks exactly like a failed one.
@@ -102,6 +117,8 @@ class Snapshot:
     merge_state: str
     threads: tuple[Thread, ...] = ()
     checks: tuple[Check, ...] = ()
+    #: True when the thread listing hit the page size, so `threads` is incomplete.
+    threads_truncated: bool = False
 
     @property
     def unresolved(self) -> tuple[Thread, ...]:
@@ -142,6 +159,15 @@ def decide(snap: Snapshot, *, allow_merge: bool = True) -> Decision:
             Action.STOP_THREADS,
             f"{len(snap.unresolved)} unresolved review thread(s)",
             threads=snap.unresolved,
+        )
+
+    # An incomplete thread listing cannot support "nothing unresolved". Stop rather
+    # than merge on a view that may be missing the one thread that matters.
+    if snap.threads_truncated:
+        return Decision(
+            Action.STOP_STUCK,
+            f"review-thread listing truncated at {THREAD_PAGE_SIZE}; cannot confirm "
+            "there are no unresolved threads",
         )
 
     # 2. Something is red and will not fix itself.
@@ -211,13 +237,18 @@ def fetch(pr: int, repo: str) -> Snapshot | None:
     )
 
     owner, name = repo.split("/", 1)
+    # 100 is GitHub's max page size. `pageInfo` comes back too: a PR with more threads
+    # than one page would otherwise let this report "no unresolved threads" for threads
+    # it never saw, which is the exact failure this script exists to prevent.
     query = (
         f'{{repository(owner:"{owner}",name:"{name}")'
-        f"{{pullRequest(number:{pr}){{reviewThreads(last:50){{nodes{{"
+        f"{{pullRequest(number:{pr}){{reviewThreads(last:{THREAD_PAGE_SIZE}){{"
+        "pageInfo{hasPreviousPage} nodes{"
         "id isResolved comments(first:1){nodes{body path line}}}}}}}"
     )
     raw_threads = _gh(["api", "graphql", "-f", f"query={query}"])
     threads: tuple[Thread, ...] = ()
+    truncated = False
     if raw_threads:
         try:
             nodes = json.loads(raw_threads)["data"]["repository"]["pullRequest"]["reviewThreads"][
@@ -241,6 +272,7 @@ def fetch(pr: int, repo: str) -> Snapshot | None:
         merge_state=data.get("mergeStateStatus") or "",
         threads=threads,
         checks=checks,
+        threads_truncated=truncated,
     )
 
 
@@ -302,12 +334,20 @@ def watch(pr: int, repo: str, interval: int, max_polls: int, allow_merge: bool) 
     return 3
 
 
+def _repo_arg(value: str) -> str:
+    """`OWNER/REPO`, validated here so a typo is an argparse error, not a traceback."""
+    owner, _, name = value.partition("/")
+    if not owner or not name or "/" in name:
+        raise argparse.ArgumentTypeError(f"expected OWNER/REPO, got {value!r}")
+    return value
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("pr", type=int)
-    ap.add_argument("--repo", default=DEFAULT_REPO)
+    ap.add_argument("--repo", default=DEFAULT_REPO, type=_repo_arg)
     ap.add_argument("--interval", type=int, default=20, help="seconds between polls")
     ap.add_argument("--max-polls", type=int, default=200)
     ap.add_argument("--no-merge", action="store_true", help="report only, never merge")

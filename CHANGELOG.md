@@ -35,7 +35,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
   `decide()` is a pure function of a snapshot, so `tests/test_watch_pr.py` covers all
   four without a network, and each bug was re-introduced to confirm the matching test
-  fails. Exit codes: `0` merged, `2` a human is needed, `3` gave up.
+  fails. Exit codes: `0` merged, `1` closed or unconfirmed, `2` a human is needed,
+  `3` gave up.
 
 - **`TextPipeline(strip_pua=...)` — the one `ProfileSpec` field composition could not
   express (#911).** `strip_pua` was set post-hoc inside `ProfileSpec::build` rather than

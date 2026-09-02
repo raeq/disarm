@@ -13,6 +13,7 @@ The decision is a pure function of a snapshot, so none of this touches the netwo
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import sys
 from pathlib import Path
@@ -156,3 +157,56 @@ def test_no_merge_mode_reports_instead_of_merging() -> None:
 def test_the_state_sets_do_not_overlap() -> None:
     """A state in two sets would make the priority order depend on branch order."""
     assert not (watch_pr.MERGEABLE & watch_pr.NEEDS_REBASE)
+
+
+# --- #913 review: two more ways to report "nothing unresolved" wrongly -------
+
+
+def test_a_truncated_thread_listing_never_merges() -> None:
+    """A PR with more threads than one page must not read as having none.
+
+    `reviewThreads(last:N)` silently drops the overflow, so an unseen thread would look
+    exactly like an absent one — the failure this whole script exists to prevent, in
+    the script itself.
+    """
+    snap = Snapshot(
+        "OPEN", "CLEAN", threads=(DONE_THREAD,), checks=(GREEN,), threads_truncated=True
+    )
+    d = decide(snap)
+    assert d.action is Action.STOP_STUCK
+    assert "truncated" in d.detail
+    # Both halves: the same snapshot merges when the listing is complete.
+    assert (
+        decide(Snapshot("OPEN", "CLEAN", threads=(DONE_THREAD,), checks=(GREEN,))).action
+        is Action.MERGE
+    )
+
+
+def test_truncation_does_not_mask_a_thread_it_did_see() -> None:
+    """A visible unresolved thread still wins: it is actionable, truncation is not."""
+    snap = Snapshot(
+        "OPEN", "CLEAN", threads=(OPEN_THREAD,), checks=(GREEN,), threads_truncated=True
+    )
+    assert decide(snap).action is Action.STOP_THREADS
+
+
+def test_truncation_does_not_override_a_terminal_state() -> None:
+    snap = Snapshot("MERGED", "UNKNOWN", threads=(), checks=(), threads_truncated=True)
+    assert decide(snap).action is Action.STOP_MERGED
+
+
+def test_the_page_size_is_githubs_maximum() -> None:
+    """Below 100 truncates more often than it has to; above 100 the API rejects it."""
+    assert watch_pr.THREAD_PAGE_SIZE == 100
+
+
+@pytest.mark.parametrize("bad", ["bogus", "", "/repo", "owner/", "a/b/c"])
+def test_repo_argument_is_validated_before_it_is_split(bad: str) -> None:
+    """`fetch()` does `repo.split("/", 1)`; a bad value used to reach it as a traceback."""
+    with pytest.raises(argparse.ArgumentTypeError):
+        watch_pr._repo_arg(bad)
+
+
+@pytest.mark.parametrize("good", ["raeq/disarm", "o/r"])
+def test_valid_repo_arguments_pass(good: str) -> None:
+    assert watch_pr._repo_arg(good) == good

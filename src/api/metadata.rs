@@ -151,7 +151,13 @@ pub fn unicode_version() -> &'static str {
 /// which is why it is unchanged. No further bump: those 16 had no stable value to move
 /// away from, since the whole defect was that `canonicalize` answered them differently on
 /// a second call, and neither #835 nor this has shipped.
-pub const KEY_SCHEMA_VERSION: u32 = 3;
+///
+/// Bumped to 4 by #815: the seven single-letter Latin small capitals (`ᴀ ᴅ ᴊ ᴘ ᴛ ꜰ ꞯ`)
+/// now fold as confusable *sources*, not only as targets. That moves `catalog_key`, which
+/// carries a confusable step; `search_key` and `sort_key` do not, having none. The fixture
+/// could not have caught it — its corpus held no small capital at all across 22,977 rows,
+/// so 75 were added in the same change and the digest moves for that reason as well.
+pub const KEY_SCHEMA_VERSION: u32 = 4;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -186,7 +192,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 3;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "ab034956526ef58babba2a2612cbe6a4f073564ebca3e94a40dbf6f39bf6381c";
+    "8ee36a98091a90344f34aedf3149127781a5276bccca071a4caa88b5fe29c508";
 
 /// The key-schema counter, as a function (#645).
 ///

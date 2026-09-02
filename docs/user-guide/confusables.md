@@ -346,7 +346,7 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
 | Target | Mappings | Description |
 |--------|----------|-------------|
-| `"latin"` (default) | 2,290 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
+| `"latin"` (default) | 2,297 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
 | `"cyrillic"` | 1,349 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
 | `"arabic"` | 373 | Non-Arabic → Arabic. `⸮`→`؟`, `𞣉`→`٣`, etc. |
 | `"hebrew"` | 261 | Non-Hebrew → Hebrew. `ℵ`→`א`, `∸`→`﬩`, etc. |

@@ -342,6 +342,8 @@ parts are named the same and do not add up to the whole.
 
 The foundational problem is established in the [Unicode Technical Report #39](https://www.unicode.org/reports/tr39/) and analyzed by [Haase et al.](https://www.researchgate.net/publication/221194427_Finding_Homoglyphs_-_A_Step_towards_Detecting_Unicode-Based_Visual_Spoofing_Attacks), who demonstrated systematic methods for identifying visually similar characters across scripts. Cyrillic is the most exploited alphabet — 11 lowercase glyphs are identical or near-identical to Latin (а, с, е, о, р, etc.). Xudong Zheng's 2017 demonstration showed that `аррӏе.com` (entirely Cyrillic) displayed identically to `apple.com` in Chrome's address bar while resolving to a different server.
 
+**The fold has a direction.** TR39 names one member of each equivalence class the *prototype* and points the others at it, so a block upstream only ever points *at* is a destination and never a source. disarm inherits that direction. `ASCII_FOLD` (#341) resolves a prototype that is itself non-ASCII, but only where a row already exists — so a glyph nothing points at has no row to resolve. #815 censuses the result: 401 code points whose Unicode name identifies them as Latin letter shapes reach ASCII on no surface. The single-letter Latin small capitals were the sharpest case and now fold as sources (#815); the digraph and barred forms (`ᴁ`, `ᴃ`, `ᴆ`) do not, because folding them is a visual judgment rather than a letter-for-letter identity.
+
 The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/54) proposes ML-based detection using hash functions but notes the fundamental difficulty: the confusable space grows combinatorially with string length.
 
 **disarm implication**: `normalize_confusables()`, `is_confusable()`, and `is_suspicious_hostname()` use the TR39 confusables table, which is the standard mitigation. However, confusable detection is necessarily conservative. Legitimate multilingual text (e.g., a Russian name in an otherwise English sentence) will trigger warnings. False positives are an inherent tradeoff of any confusable detection system.
@@ -349,7 +351,7 @@ The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/
 ### The bundled table does not cover every confusable, and the gap is now measurable
 
 A TR39 fold is only as good as the table behind it, and disarm's to-Latin table is a
-*subset* of upstream `confusables.txt`: 6,565 sources upstream, 2,290 rows bundled. The
+*subset* of upstream `confusables.txt`: 6,565 sources upstream, 2,297 rows bundled. The
 gap is mostly deliberate — a source whose upstream target is CJK, Arabic or Hangul does
 not belong in a to-Latin table — but "mostly deliberate" is not a claim a deployment
 should have to take on trust.

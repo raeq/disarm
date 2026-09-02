@@ -65,6 +65,12 @@ NEEDS_REBASE = frozenset({"DIRTY", "BEHIND"})
 #: thread read as an absent one.
 THREAD_PAGE_SIZE = 100
 
+#: How many consecutive polls must show the stuck shape before it is reported. One is
+#: not enough: for a few seconds after a push GitHub reports BLOCKED with the previous
+#: run's checks COMPLETED and the new ones not yet created, which is indistinguishable
+#: from a structural block in a single snapshot.
+STUCK_POLLS = 3
+
 #: Conclusions that mean a check will not go green on its own. `CANCELLED` belongs
 #: here — a cancelled required check blocks exactly like a failed one.
 BAD_CONCLUSIONS = frozenset({"FAILURE", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE"})
@@ -139,9 +145,11 @@ class Decision:
     detail: str = ""
     threads: tuple[Thread, ...] = field(default_factory=tuple)
     checks: tuple[Check, ...] = field(default_factory=tuple)
+    #: True when this poll saw the stuck shape but has not seen it enough times yet.
+    stuck: bool = False
 
 
-def decide(snap: Snapshot, *, allow_merge: bool = True) -> Decision:
+def decide(snap: Snapshot, *, allow_merge: bool = True, stuck_polls: int = 0) -> Decision:
     """What to do about `snap`, in priority order.
 
     The order is the whole point. Threads outrank checks because a human is waiting;
@@ -188,11 +196,22 @@ def decide(snap: Snapshot, *, allow_merge: bool = True) -> Decision:
 
     # 3. BLOCKED with nothing running and nothing unresolved is structural: a required
     #    review, a branch-protection rule, a required check that never reported. No
-    #    amount of waiting changes it.
+    #    amount of waiting changes it — but it is also what a PR looks like for a few
+    #    seconds after a push, while the previous run's checks read COMPLETED and the new
+    #    ones do not exist yet. So it is reported only once it has held for
+    #    `STUCK_POLLS` consecutive polls; the caller passes the running count.
     if not snap.pending:
+        if stuck_polls + 1 < STUCK_POLLS:
+            return Decision(
+                Action.WAIT,
+                f"{snap.merge_state} with nothing pending "
+                f"({stuck_polls + 1}/{STUCK_POLLS} before calling it stuck)",
+                stuck=True,
+            )
         return Decision(
             Action.STOP_STUCK,
-            f"{snap.merge_state} with no pending checks and no unresolved threads",
+            f"{snap.merge_state} with no pending checks and no unresolved threads, "
+            f"for {STUCK_POLLS} consecutive polls",
         )
 
     return Decision(Action.WAIT, f"{len(snap.pending)} check(s) pending")
@@ -301,13 +320,19 @@ def _report(decision: Decision, pr: int) -> None:
 
 
 def watch(pr: int, repo: str, interval: int, max_polls: int, allow_merge: bool) -> int:
+    stuck_polls = 0
     for poll in range(1, max_polls + 1):
         snap = fetch(pr, repo)
         if snap is None:
+            # A failed read is not a sighting. Keeping the streak across it would let two
+            # observations separated by a network blip count as consecutive, which is the
+            # guarantee the threshold exists to provide (#922 review).
+            stuck_polls = 0
             time.sleep(interval)
             continue
 
-        decision = decide(snap, allow_merge=allow_merge)
+        decision = decide(snap, allow_merge=allow_merge, stuck_polls=stuck_polls)
+        stuck_polls = stuck_polls + 1 if decision.stuck else 0
 
         if decision.action is Action.STOP_MERGED:
             ok = verify_merged(pr, repo)

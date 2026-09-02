@@ -71,11 +71,20 @@ def test_the_result_records_which_surface_it_describes() -> None:
         ("nope", "no module part"),
         ("disarm.does_not_exist", "attribute missing"),
         ("disarm.__version__", "not callable"),
+        # An unimportable module used to escape as ImportError rather than ValueError,
+        # so a caller could not catch one type — and inside a pool the traceback came
+        # from the initializer (#904 review).
+        ("no_such_module.thing", "module cannot be imported"),
     ],
 )
 def test_a_bad_transform_is_rejected(dotted: str, why: str) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as caught:
         resolve_transform(dotted)
+    # `why` in the message, so a failure says which rejection path was expected rather
+    # than only that some ValueError did not arrive (#904 review).
+    assert dotted in str(caught.value), (
+        f"the {why!r} case must name the path it rejected, got: {caught.value}"
+    )
 
 
 def test_a_bad_transform_fails_before_the_pool_starts() -> None:

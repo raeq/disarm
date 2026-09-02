@@ -148,7 +148,14 @@ def resolve_transform(dotted: str) -> Callable[[str], str]:
         raise ValueError(
             f"transform must be a dotted path like 'disarm.canonicalize', got {dotted!r}"
         )
-    obj = getattr(import_module(module), attr, None)
+    try:
+        imported = import_module(module)
+    except ImportError as exc:
+        # Uniformly a ValueError, so a caller catches one type — and so the failure reads
+        # as "you named something that is not there" rather than surfacing an ImportError
+        # from inside a pool initializer (#904 review).
+        raise ValueError(f"{dotted!r}: cannot import {module!r} ({exc})") from exc
+    obj = getattr(imported, attr, None)
     if obj is None:
         raise ValueError(f"{dotted!r} does not exist")
     if not callable(obj):

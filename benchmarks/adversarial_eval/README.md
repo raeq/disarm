@@ -76,10 +76,11 @@ improve a number, for any surface, in either direction. These are measuring inst
 never optimization targets.
 
 - **Recovery** (labeled corpora, e.g. BitAbuse):
-  - **XMR / exact-match recovery** — `strip_obfuscation(perturbed) == strip_obfuscation(clean)`.
-  - **line-exact recovery** — `strip_obfuscation(perturbed) == clean`.
+  - **XMR / exact-match recovery** — `T(perturbed) == T(clean)`, where `T` is the
+    selected transform (`--transform`, default `strip_obfuscation`).
+  - **line-exact recovery** — `T(perturbed) == clean`.
   - **word-level recovery** — multiset word overlap with the *canonicalized*
-    clean text (`strip_obfuscation(clean)`), consistent with how XMR compares
+    clean text (`T(clean)`), consistent with how XMR compares
     both sides.
 - **Canonicalization stats** (all corpora): % of perturbation-bearing rows and
   % of non-ASCII codepoints folded by `strip_obfuscation`.

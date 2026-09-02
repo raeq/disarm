@@ -20,14 +20,17 @@ import pytest
 
 import disarm
 
-#: The five whose fold disagrees with what a flip generator meant. Escapes rather than
-#: literals: several are near-indistinguishable from the letter they fold to.
+#: The five whose fold disagrees with what a flip generator meant, as
+#: ``glyph -> (what the rotation meant, what disarm folds to)``.
+#:
+#: Escapes, with the glyph in the trailing comment: several are near-indistinguishable
+#: in a diff from the letter they fold to, which is the whole reason they are confusable.
 DISAGREEING = {
-    "ɯ": ("m", "w"),  # ɯ TURNED M      — rotated means m, folds to w
-    "ʍ": ("w", "m"),  # ʍ TURNED W      — rotated means w, folds to m
-    "ʌ": ("v", "a"),  # ʌ TURNED V
-    "ƃ": ("g", "b"),  # ƃ B WITH TOPBAR
-    "ɾ": ("j", "r"),  # ɾ R WITH FISHHOOK
+    "\u026f": ("m", "w"),  # ɯ TURNED M — rotated means m, folds to w
+    "\u028d": ("w", "m"),  # ʍ TURNED W — rotated means w, folds to m
+    "\u028c": ("v", "a"),  # ʌ TURNED V
+    "\u0183": ("g", "b"),  # ƃ B WITH TOPBAR
+    "\u027e": ("j", "r"),  # ɾ R WITH FISHHOOK
 }
 
 
@@ -55,17 +58,22 @@ def test_the_upright_reading_catches_real_spoofs() -> None:
 def test_no_surface_reverses_a_string() -> None:
     """The premise the decision rests on, asserted rather than assumed.
 
+    Over `disarm.__all__` rather than `dir(disarm)`, and skipping types: the declared
+    API is the surface a caller has, and a constructor is not a transform.
+
     If some surface ever did reverse, recovering rotated text would become possible and
     the trade above would be worth re-opening. Until then it is not a trade at all: the
     rotated reading is unreachable whichever way the fold points.
     """
-    reversing = [
-        name
-        for name in dir(disarm)
-        if not name.startswith("_") and callable(getattr(disarm, name))
-        for out in [_try(getattr(disarm, name), "abc")]
-        if out == "cba"
-    ]
+    reversing = []
+    for name in disarm.__all__:
+        obj = getattr(disarm, name, None)
+        # Types only: `Lexicon("abc")` crosses the Rust boundary and builds something
+        # (#923 review). The question is about transforms, and a constructor is not one.
+        if not callable(obj) or isinstance(obj, type):
+            continue
+        if _try(obj, "abc") == "cba":
+            reversing.append(name)
     assert not reversing, f"a surface now reverses; #916's decision needs revisiting: {reversing}"
 
 

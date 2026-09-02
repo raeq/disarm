@@ -38,8 +38,11 @@ EXPECTED = {
     "strip_format": (False, False, 60_000),
     "canonicalize": (False, False, 320_000),
     "canonicalize_strict": (False, False, 330_000),
-    # Demojizes by its own step list, so the emoji table is correct here.
-    "strip_obfuscation": (False, True, 640_000),
+    # No longer demojizes (#910), so the emoji table must NOT be linked. This gate caught
+    # the change the moment the step came out, which is what it is for — and the ceiling
+    # drops with it: a preset that stopped naming emoji has no business carrying the CLDR
+    # name table into a wasm build.
+    "strip_obfuscation": (False, False, 400_000),
     "strip_bidi": (False, False, 40_000),
     "collapse_whitespace": (False, False, 40_000),
 }

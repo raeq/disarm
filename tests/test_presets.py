@@ -638,9 +638,10 @@ class TestInvisibleNonInterchangeStripping:
         # …but stripped in the comparison presets.
         assert "\ufe0f" not in canonicalize("❤\ufe0f")
 
-    def test_strip_obfuscation_demojize_unchanged(self):
-        # The emoji path is untouched: heart + VS16 still demojizes to "red heart".
-        assert strip_obfuscation("❤\ufe0f") == "red heart"
+    def test_strip_obfuscation_drops_the_presentation_selector_without_naming(self):
+        # #910 removed the demojize step here; the VS16 strip is `StripInvisible`'s job
+        # and is unaffected, which is the point of asserting it separately.
+        assert strip_obfuscation("❤\ufe0f") == "❤"
 
     # -- idempotency (the strips must not break the fixed-point invariant) --
 

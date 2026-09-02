@@ -26,7 +26,10 @@ def test_llm_guardrail_step_order() -> None:
         "strip_zalgo",
         "strip_bidi",
         "strip_plane14",
-        "demojize",
+        # No `demojize` (#910): a security profile must not gloss an attacker-chosen
+        # emoji into attacker-chosen English inside the prompt. `strip_plane14` above is
+        # what made this removable — demojize used to be the only step taking the TAG
+        # block with it (#914).
         "strip_accents",
         "confusables",
         "fold_case",

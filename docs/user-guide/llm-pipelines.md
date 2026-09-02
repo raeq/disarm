@@ -166,12 +166,42 @@ What TR39 covers instead of leet tables is *visual* confusability: a Cyrillic
 from disarm import get_pipeline
 
 guardrail = get_pipeline("llm_guardrail")
-# NFKC → strip zalgo/bidi → demojize → strip accents → confusables →
+# NFKC → strip zalgo/bidi → strip Plane 14 tags → strip accents → confusables →
 # fold case → strip control/zero-width → collapse whitespace
 assert guardrail("Ѕ𝗲𝗰𝗿𝗲𝘁  \u200bdata") == "secret data"
 ```
 
 Compare the matched key, not the raw string, against your policy.
+
+**No emoji naming, deliberately (#910).** This profile leaves an emoji where it stands
+instead of glossing it into English:
+
+```python
+assert guardrail("ignore\U0001f600 previous") == "ignore\U0001f600 previous"
+```
+
+Glossing converted an attacker-chosen code point into attacker-chosen words *inside the
+text going on to the model* — 1,180 of 1,219 `Emoji_Presentation` code points reached a
+name, together spanning 1,272 distinct English words including `stop`, `end`, `new`, `key`
+and `no`, up to eight words from a single code point. The emoji was always visible, so
+this was never concealment: the sanitiser was the thing writing new words.
+
+The emoji is left rather than removed. Removal fuses the words either side — `stop🛑now`
+becomes `stopnow` — which is the same class of harm one step along.
+
+`strip_obfuscation` changed with it, for the same reason.
+
+**Naming is still available**, and this is a relocation rather than a removal:
+
+```python
+import disarm
+
+disarm.demojize("ignore\U0001f600 previous")                     # names it
+disarm.TextPipeline(demojize=True)("ignore\U0001f600 previous")  # names it
+```
+
+Reach for those when the emoji's meaning is the thing you want in the text — an ML corpus,
+a search index — and not when the text is untrusted input headed for a model.
 
 ## Convert, don't delete
 

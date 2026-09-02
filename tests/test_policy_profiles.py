@@ -92,7 +92,7 @@ class TestProfileStepsLock:
             ("strip_zalgo", "0"),
             ("strip_bidi", None),
             ("strip_plane14", None),
-            ("demojize", None),
+            # No `demojize` (#910).
             ("strip_accents", None),
             ("confusables", "latin"),
             ("fold_case", None),

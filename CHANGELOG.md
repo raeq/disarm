@@ -41,6 +41,26 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The allocation gate was stochastic (#905).** `tests/preset_alloc_count.rs` blocked
+  merges on a `stats_alloc` counter that measures the whole process, with a bound of
+  `measured + 1`. It failed #904 — a pull request that changes no Rust — reporting
+  `search_key` at 7 against a bound of 4, and passed on re-run of the same commit.
+
+  The file's own header shows how: it crams every measurement into one `#[test]` so no
+  concurrent *test* thread pollutes the counters. That is half the hazard. A process-wide
+  counter is moved by anything in the process, and being the only test in a binary does
+  not make the process single-threaded.
+
+  `allocs_for` now takes the **minimum** over nine runs. The noise is one-sided — another
+  thread can only add allocations, never remove them — so the minimum is the tightest
+  true observation and a transient disturbance no longer decides the verdict.
+
+  It does not make a process-wide counter safe against *sustained* interference, and
+  nothing can: measured with a thread allocating continuously, the minimum over nine runs
+  still read 39 against a true 3. That is why the one-test premise now fails as an
+  assertion rather than resting on a comment — a second `#[test]` in that binary runs
+  concurrently and recreates exactly that condition.
+
 - **The Tier 3 release gate ran four times, independently, on one artifact.**
   `publish.yml`, `publish-node.yml`, `publish-ruby.yml` and `publish-java.yml` each
   called the reusable `tier3.yml`, described as gating "on the SAME reusable workflow".

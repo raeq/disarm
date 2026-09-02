@@ -157,7 +157,14 @@ pub fn unicode_version() -> &'static str {
 /// carries a confusable step; `search_key` and `sort_key` do not, having none. The fixture
 /// could not have caught it — its corpus held no small capital at all across 22,977 rows,
 /// so 75 were added in the same change and the digest moves for that reason as well.
-pub const KEY_SCHEMA_VERSION: u32 = 4;
+///
+/// Bumped to 5 by #833: every confusable-bearing preset normalizes before it folds, so six
+/// rows whose NFKC image had no row of its own were unreachable from every preset. The
+/// image now carries the source's target — `\u03c2` ς to `c`/`с`, `\u0190` Ɛ to `E`,
+/// `\u0237` ȷ to `j`, `\u03a3` Σ to `С`, `\u2502` │ to `ӏ`. That moves `canonicalize`,
+/// `canonicalize_strict`, `strip_obfuscation` and `normalize_confusables`; the three key
+/// builders do not fold confusables through this path and are byte-identical.
+pub const KEY_SCHEMA_VERSION: u32 = 5;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -192,7 +199,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 4;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "8ee36a98091a90344f34aedf3149127781a5276bccca071a4caa88b5fe29c508";
+    "e57cb67ff92953a3fe31e41522436d59b8d133651f8fa51c2841a6f619dae5b6";
 
 /// The key-schema counter, as a function (#645).
 ///

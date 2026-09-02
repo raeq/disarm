@@ -18,6 +18,40 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **Six confusable rows were unreachable from every preset (#833).** `STEP_ORDER` runs
+  `normalize` at position 1 and `confusables` at position 7, so a preset folds the NFKC
+  *image* of the input, never the input. When the image had no row of its own, the row
+  that existed for the source could never fire:
+
+  ```python
+  get_pipeline("llm_guardrail")("ϲecure")  # was 'oecure', now 'cecure'
+  ```
+
+  `ϲ` U+03F2 normalises to `ς` U+03C2, which had no row; the case fold then made it `σ`,
+  which folds to `o`. Three steps to the wrong answer, and the `c` the table already
+  carried was never reachable.
+
+  #245 diagnosed exactly this for U+2502 and fixed it with one literal in
+  `CUSTOM_LATIN_OVERRIDES` — Latin only, by that dict's own name, which is why the
+  Cyrillic half stayed open. The generator derives the rows now, so the next class that
+  routes through an unmapped image is covered without an edit: `ς` → `c`/`с`, `Ɛ` → `E`,
+  `ȷ` → `j`, `Σ` → `С`, `│` → `ӏ`.
+
+  Latin and Cyrillic only, deliberately. The RTL tables are built by inverting equivalence
+  classes, so a source there is often an Arabic *mathematical* variant whose NFKC image is
+  the ordinary letter; propagating those rows would fold the base letter and turn `ث` into
+  `ى`. That is #848's intra-script case and needs its own analysis.
+
+  The order-dependent count drops from 68 to 65 for Latin and 8 to 5 for Cyrillic, and
+  #834's "actionable set" is now empty. The rows that remain diverge because both readings
+  are defensible, which is what that documentation is about.
+
+  **Upgrade note — `KEY_SCHEMA_VERSION` goes 4 → 5.** `canonicalize`,
+  `canonicalize_strict`, `strip_obfuscation` and `normalize_confusables` move; the three
+  key builders are byte-identical, having no confusable step on this path. Greek prose
+  containing a final sigma changes, though `canonicalize` already rewrote Greek before
+  this — `κόσμος` was `koouoς` and is now `koouoc`.
+
 - **`scripts/watch_pr.py` — a PR watcher whose decision logic is tested.** Shepherding
   loops kept being written by hand, and four bugs kept coming back:
 

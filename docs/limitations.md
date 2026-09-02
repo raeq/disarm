@@ -351,7 +351,7 @@ The [MDPI homoglyph detection paper (2022)](https://www.mdpi.com/2224-2708/11/3/
 ### The bundled table does not cover every confusable, and the gap is now measurable
 
 A TR39 fold is only as good as the table behind it, and disarm's to-Latin table is a
-*subset* of upstream `confusables.txt`: 6,565 sources upstream, 2,297 rows bundled. The
+*subset* of upstream `confusables.txt`: 6,565 sources upstream, 2,300 rows bundled. The
 gap is mostly deliberate — a source whose upstream target is CJK, Arabic or Hangul does
 not belong in a to-Latin table — but "mostly deliberate" is not a claim a deployment
 should have to take on trust.
@@ -400,22 +400,23 @@ drops rows reads as coverage it does not have. See
 [Knowing what is NOT covered](user-guide/confusables.md#knowing-what-is-not-covered) and
 [Provenance](provenance.md).
 
-### 68 table rows are shadowed by the preceding NFKC (#834)
+### 65 table rows are shadowed by the preceding NFKC (#834)
 
 The paragraph above insists nothing is filtered out of the coverage report, because *"a
 coverage number that quietly drops rows reads as coverage it does not have"*. The same rule
-applies to a row the pipeline order makes unreachable, and there are 68 of them.
+applies to a row the pipeline order makes unreachable, and there are 65 of them.
 
 Every preset and profile that folds confusables normalizes to NFKC first, so the fold sees a
-decomposed image of the input and 68 code points get a different answer than
-`normalize_confusables` gives on its own (8 for the Cyrillic target):
+decomposed image of the input and 65 code points get a different answer than
+`normalize_confusables` gives on its own (5 for the Cyrillic target). It was 68 and 8
+until #833 gave the six unreachable rows a row for their NFKC image:
 
 | class | count | standalone | after NFKC |
 |---|---:|---|---|
 | number forms (`⑴`, `⒈`, `ⅿ`) | 30 | `(l)`, `l.`, `rn` | `(1)`, `1.`, `m` |
-| mathematical alphanumerics (`𝐦`) | 14 | `rn` | `m` |
+| mathematical alphanumerics (`𝐦`) | 13 | `rn` | `m` |
 | spacing modifiers (`´`, `¸`, `˜`) | 15 | `'`, `,`, `~` | space + combining mark |
-| the rest (`ſ`, `ϲ`, `℧`) | 9 | `f`, `c`, `E` | `s`, `ς`, `Ɛ` |
+| the rest (`ſ`, `Ϲ`) | 7 | `f`, `C` | `s`, `S` |
 
 These are not filtered and not dead: they are reachable through `normalize_confusables` and
 shadowed through every preset. Which is why they are listed here rather than quietly

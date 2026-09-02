@@ -2,8 +2,13 @@
 
 #834. `normalize_confusables` folds the TR39 table against the input as written. Every
 preset and profile that folds confusables normalizes to NFKC first, so the fold there
-sees a decomposed image — and the two paths disagree on 68 code points for the Latin
-target and 8 for Cyrillic.
+sees a decomposed image — and the two paths disagree on 65 code points for the Latin
+target and 5 for Cyrillic.
+
+Was 68 and 8. #833 closed the six rows where the disagreement was *unreachable* rather
+than merely different: the source had a row, its NFKC image had none, so the fold that
+existed could not fire from any preset. The rows that remain disagree because both
+answers are defensible, which is the case this file is about.
 
 Both verdicts are defensible and disarm ships both. What it was missing is anyone saying
 so, which is why these tests are about *documentation* as much as behaviour: the counts
@@ -55,7 +60,7 @@ def _divergent(target: str) -> tuple[int, ...]:
     return tuple(out)
 
 
-@pytest.mark.parametrize(("target", "expected"), [("latin", 68), ("cyrillic", 8)])
+@pytest.mark.parametrize(("target", "expected"), [("latin", 65), ("cyrillic", 5)])
 def test_the_documented_count_is_the_measured_count(target: str, expected: int) -> None:
     assert len(_divergent(target)) == expected
 
@@ -99,9 +104,9 @@ def test_the_pages_state_the_measured_count(page: Path) -> None:
 
 
 def test_the_buckets_add_up() -> None:
-    """The four-class table on both pages: 30 + 14 + 15 + 9.
+    """The four-class table on both pages: 30 + 13 + 15 + 7.
 
     Split by what NFKC does to the source, not by Unicode block, because that is the
     distinction the tables are making: whether decomposing first helps or hurts.
     """
-    assert 30 + 14 + 15 + 9 == len(_divergent("latin"))
+    assert 30 + 13 + 15 + 7 == len(_divergent("latin"))

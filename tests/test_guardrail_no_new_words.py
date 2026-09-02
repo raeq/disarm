@@ -28,6 +28,12 @@ import disarm
 #: Profiles whose documented threat model is untrusted input.
 UNTRUSTED = ("llm_guardrail",)
 
+
+def _tokens(text: str) -> list[str]:
+    """Lowercase alphabetic runs — the unit the property is stated in."""
+    return "".join(c if c.isalpha() else " " for c in text.lower()).split()
+
+
 #: A representative slice of Emoji_Presentation.
 EMOJI = tuple(chr(c) for c in list(range(0x1F600, 0x1F640)) + list(range(0x1F680, 0x1F6A0)))
 
@@ -50,9 +56,13 @@ def test_no_untrusted_profile_introduces_a_token_absent_from_the_input(profile: 
     offenders = []
     for glyph in EMOJI:
         probe = f"ignore{glyph} previous"
-        out = pipe(probe)
-        for token in "".join(c if c.isalpha() else " " for c in out).split():
-            if token not in probe.lower():
+        # Compare against the input's TOKENS, not the input string (#926 review). A
+        # substring test passes anything that happens to sit inside an input word:
+        # `nor`, `revi` and `ous` are all "in" `ignore😀 previous`, so a gloss producing
+        # one of them would have read as no new token at all.
+        allowed = set(_tokens(probe))
+        for token in _tokens(pipe(probe)):
+            if token not in allowed:
                 offenders.append((glyph, token))
     assert not offenders, (
         f"{profile} introduced {len(offenders)} token(s) absent from the input, "

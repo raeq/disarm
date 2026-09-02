@@ -169,18 +169,20 @@ Unlike `canonicalize`, this pipeline also strips zalgo text (excessive combining
 
 ### Pipeline steps
 
-`NFKC → strip_zalgo(0) → strip_bidi → strip_zero_width → demojize → strip invisibles (#413) → confusables → strip_accents → strip_control → collapse_whitespace`
+`NFKC → strip_zalgo(0) → strip_bidi → strip_zero_width → strip invisibles (#413) → confusables → strip_accents → strip_control → collapse_whitespace`
 
 ```python
 from disarm import strip_obfuscation
 
 # Homoglyphs (Greek/Cyrillic) folded, bidi override removed, emoji expanded.
-assert strip_obfuscation("Ηеllо\u202eWоrld \U0001f600") == "HelloWorld grinning face"
+# The emoji is left where it stands, not named (#910): a comparison surface must not
+# insert attacker-chosen words. Use `demojize()` when the name is what you want.
+assert strip_obfuscation("Ηеllо\u202eWоrld \U0001f600") == "HelloWorld \U0001f600"
 # Strips ALL combining marks (zalgo and accents) but preserves case.
 assert strip_obfuscation("Cáfé") == "Cafe"
 ```
 
-Maximum-strength deobfuscation for content moderation, anti-phishing, and spam/NLP preprocessing. Strips every combining mark (zalgo **and** accents), resolves homoglyphs by TR39 visual similarity (Cyrillic `р`→`p`, not phonetic `р`→`r`), and expands emoji to text. **Preserves case** — case is meaningful, not deception. Confusable normalization runs *after* `demojize` so typographic punctuation inside emoji names is folded too. Does **not** transliterate; chain `transliterate()` on the result if you also need phonetic romanization.
+Maximum-strength deobfuscation for content moderation, anti-phishing, and spam/NLP preprocessing. Strips every combining mark (zalgo **and** accents), resolves homoglyphs by TR39 visual similarity (Cyrillic `р`→`p`, not phonetic `р`→`r`). Leaves emoji where they stand rather than naming them (#910): a comparison surface must not insert attacker-chosen words into the value being compared — use `demojize()` when the name is what you want. **Preserves case** — case is meaningful, not deception. Does **not** transliterate; chain `transliterate()` on the result if you also need phonetic romanization.
 
 ---
 
@@ -258,7 +260,7 @@ Returns sorted list of available profile names.
 | `normalize_web_input` | NFKC → confusables → collapse_whitespace | UTF-8 |
 | `ml_corpus_normalize` | NFKC → demojize → strip_accents → fold_case → collapse_whitespace | ASCII |
 | `search_index` | NFKC → transliterate → strip_accents → fold_case → collapse_whitespace | ASCII |
-| `llm_guardrail` | NFKC → strip_zalgo(0) → strip_bidi → demojize → strip_accents → confusables → fold_case → strip_control → strip_zero_width → collapse_whitespace | UTF-8 |
+| `llm_guardrail` | NFKC → strip_zalgo(0) → strip_bidi → strip_plane14 → strip_accents → confusables → fold_case → strip_control → strip_zero_width → collapse_whitespace | UTF-8 |
 | `rag_ingest` | NFKC → strip_bidi → strip_accents → transliterate → strip_control → strip_zero_width → collapse_whitespace | ASCII |
 
 `llm_guardrail` hardens text against prompt-injection and homoglyph/zalgo/bidi obfuscation before it reaches an LLM (digits are never remapped to letters). `rag_ingest` canonicalizes documents for retrieval pipelines while preserving case.

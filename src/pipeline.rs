@@ -713,13 +713,34 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             strip_control: Some(true),
             ..ProfileSpec::default()
         },
+        // #910: `demojize` is OFF here, and that is the whole point of the profile.
+        //
+        // Glossing converts an attacker-chosen emoji into attacker-chosen English inside
+        // the text that goes on to the model: `ignore\u{1F600} previous` became
+        // `ignore grinning face previous`. Over `Emoji_Presentation` that reached 1,272
+        // distinct words from 1,180 of 1,219 code points, up to eight words from one, and
+        // the reachable vocabulary includes `stop`, `end`, `new`, `key` and `no`. The
+        // emoji is fully visible, so this was never concealment — the sanitiser was the
+        // thing writing new words into the prompt.
+        //
+        // The emoji is LEFT IN PLACE rather than removed. #910 suggested removal as "the
+        // better answer on the segmentation axis"; measured over 144 emoji with the probe
+        // `stop<emoji>now`, removal fuses the two words into `stopnow` 144 times out of
+        // 144 while leaving keeps them apart 144 out of 144. Removal does not close a
+        // split word, it creates a joined one.
+        //
+        // This default could not move until #914: `demojize` was the only step in the
+        // composed surface removing the Plane 14 TAG block, so flipping it alone traded a
+        // text-injection primitive for a concealment channel. `strip_plane14` carries it.
+        //
+        // Naming stays reachable through `demojize()` and `TextPipeline(demojize=True)`.
         "llm_guardrail" => ProfileSpec {
             normalize: Some("NFKC"),
             strip_zalgo: Some(0),
             strip_bidi: true,
             strip_zero_width: Some(true),
             strip_control: Some(true),
-            demojize: true,
+            demojize: false,
             confusables: true,
             strip_accents: true,
             fold_case: true,

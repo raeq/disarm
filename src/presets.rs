@@ -1719,26 +1719,31 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
             Step::StripBidi,
             // 4. Strip zero-width chars (ZWS, ZWNJ, ZWJ, WJ, BOM)
             Step::StripZeroWidth,
-            // 5. Demojize — expand emoji to text names with spacing
-            Step::Demojize {
-                only_if_cldr: false,
-                policy: crate::emoji::NamePolicy {
-                    // #614: this is a comparison preset, so the TR39 fold wins over the name.
-                    skip_tr39_claimed: true,
-                    // #757: and a row that is not emoji at all is named by no rule worth
-                    // having here — `a†b` became `a dagger signb`.
-                    skip_non_emoji: true,
-                },
-            },
-            // 5b. Strip the #413 smuggling / non-interchange classes. Runs AFTER demojize
-            //     so the emoji pass sees flags/presentation selectors intact; whatever
-            //     demojize leaves (stray Tags, variation selectors, noncharacters, PUA) is
-            //     removed here. CGJ is already gone via the zalgo(0) combining-mark strip.
+            // 5. NO demojize (#910).
+            //
+            //    This preset named 1,177 emoji into English words, which is the same
+            //    defect the `llm_guardrail` profile had: a surface used for comparison
+            //    against untrusted text inserted attacker-chosen words into the value
+            //    being compared. `\u{1F600}` reached `grinning face`, and the reachable
+            //    vocabulary over `Emoji_Presentation` was 1,272 distinct words.
+            //
+            //    #614 and #757 narrowed WHAT it named — the TR39-claimed rows, then the
+            //    non-emoji rows — twice. Neither could reach the case where the naming is
+            //    correct and the profile should not be doing it at all.
+            //
+            //    Nothing else was riding on the step here. Unlike the composed pipeline
+            //    in #914, TAG stripping is `StripInvisible`'s job below and always was.
+            //
+            //    Naming stays reachable: `demojize()` and `TextPipeline(demojize=True)`.
+            // 5b. Strip the #413 smuggling / non-interchange classes: stray Tags,
+            //     variation selectors, noncharacters and PUA. CGJ is already gone via the
+            //     zalgo(0) combining-mark strip above.
             Step::StripInvisible(COMPARISON_STRIP),
             // 6. Confusables → Latin (TR39 visual mapping: Cyrillic р→p, с→c, В→B).
-            //    Runs AFTER demojize so that typographic punctuation in emoji names
-            //    (e.g. the ’ in "woman’s hat") is folded too; otherwise a second pass
-            //    would fold it and strip_obfuscation would not be idempotent.
+            //    The note that used to sit here — that this must follow demojize so the
+            //    `\u{2019}` in "woman\u{2019}s hat" is folded, or a second pass would fold
+            //    it and break idempotence — no longer applies: there are no emoji names to
+            //    carry typographic punctuation into the string.
             Step::Confusables("latin", crate::confusables::DigitPolicy::Numeric),
             // 7. Strip accents (NFD decompose + strip combining marks)
             Step::StripAccents,
@@ -2197,40 +2202,37 @@ mod tests {
         assert_eq!(out, "I red heart euro 5");
     }
 
-    /// A skipped row must not fuse onto the emoji name before it (#614 review).
+    /// The TR39 folds that #614's separator logic was protecting still happen (#910).
     ///
-    /// The separator decision has to look at what the character will BECOME. `\u{20AC}`
-    /// is not alphanumeric, but TR39 folds it to `e`, so emitting it bare after a name
-    /// produced "woman's hat" + "e" -> "woman's hate" once the fold ran — a word present
-    /// in neither the input nor any emoji name.
+    /// That review found `\u{20AC}` fusing onto the emoji name before it: the euro is not
+    /// alphanumeric, but TR39 folds it to `e`, so emitting it bare after "woman's hat"
+    /// produced "woman's hate" — a word in neither the input nor any emoji name.
+    ///
+    /// There is no name to fuse onto now, so the separator question is gone. The folds
+    /// themselves are what mattered underneath it, and they are asserted here so removing
+    /// the naming step did not quietly take them along.
     #[test]
-    fn a_skipped_row_does_not_fuse_onto_the_preceding_name() {
+    fn the_tr39_folds_behind_the_separator_rule_still_happen() {
         for (input, expected) in [
-            ("\u{1F452}\u{20AC}", "woman's hat e"),
-            ("\u{1F452}\u{2211}", "woman's hat s"),
-            ("\u{1F452}\u{2200}", "woman's hat a"),
+            ("\u{1F452}\u{20AC}", "\u{1F452}e"),
+            ("\u{1F452}\u{2211}", "\u{1F452}s"),
+            ("\u{1F452}\u{2200}", "\u{1F452}a"),
+            ("\u{1F452}\u{2010}", "\u{1F452}-"),
         ] {
             assert_eq!(strip_obfuscation(input).unwrap(), expected, "{input:?}");
         }
-        // A punctuation target takes no separator, matching every other
-        // non-alphanumeric emitted here.
-        assert_eq!(
-            strip_obfuscation("\u{1F452}\u{2010}").unwrap(),
-            "woman's hat-"
-        );
-        // And the spaced form agrees with the unspaced one.
-        assert_eq!(
-            strip_obfuscation("\u{1F452}\u{20AC}").unwrap(),
-            strip_obfuscation("\u{1F452} \u{20AC}").unwrap()
-        );
     }
 
-    /// The reason the steps were NOT reordered: punctuation inside an emoji *name*
-    /// still has to be folded by the confusable pass, or the preset is not idempotent.
+    /// Idempotence, which the naming step used to complicate (#910).
+    ///
+    /// The confusable pass ran after `demojize` precisely so the `\u{2019}` inside
+    /// "woman's hat" was folded; otherwise a second call folded it and the preset was not
+    /// a fixed point. With no names emitted there is no punctuation to chase, and this
+    /// asserts the property directly rather than through the arrangement that protected it.
     #[test]
-    fn emoji_name_punctuation_is_still_folded() {
+    fn strip_obfuscation_is_a_fixed_point_on_an_emoji() {
         let once = strip_obfuscation("\u{1F452}").unwrap();
-        assert_eq!(once, "woman's hat");
+        assert_eq!(once, "\u{1F452}");
         assert_eq!(strip_obfuscation(&once).unwrap(), once);
     }
 
@@ -2351,7 +2353,7 @@ mod tests {
         );
         assert_eq!(
             strip_obfuscation("Ηеllо\u{202E}Wоrld \u{1F600}").unwrap(),
-            "HelloWorld grinning face"
+            "HelloWorld \u{1F600}"
         );
     }
 

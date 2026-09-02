@@ -202,6 +202,46 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   silently reinterpret all of them. No metric changed.
 
 
+### Changed (breaking)
+
+- **`llm_guardrail` and `strip_obfuscation` no longer name emoji (#910).** Both converted
+  an attacker-chosen emoji into attacker-chosen English *inside the text being screened*:
+
+  ```python
+  get_pipeline("llm_guardrail")("ignore😀 previous")
+  # was 'ignore grinning face previous', now 'ignore😀 previous'
+  ```
+
+  Measured over `Emoji_Presentation`, 1,180 of 1,219 code points reached a name, together
+  spanning **1,272 distinct English words** — including `stop`, `end`, `new`, `key` and
+  `no` — with up to eight words from a single code point. The emoji was always visible, so
+  this was never concealment: the sanitiser was the thing writing new words.
+
+  This is the third time naming won over neutralizing, and the first where no table was at
+  fault. #614 narrowed *what* was named (the TR39-claimed rows), #757 narrowed it again
+  (the non-emoji rows); neither could reach the case where the naming is correct and a
+  security surface should not be doing it.
+
+  **The emoji is left in place, not removed.** Removal fuses the words either side —
+  `stop🛑now` becomes `stopnow` — 144 times out of 144 measured, while leaving keeps them
+  apart 144 out of 144. Removal does not close a split word; it creates a joined one.
+
+  Only these two move. `ml_normalize` and `ml_corpus_normalize` keep naming, because
+  glossing is the point of an ML-corpus surface and neither is a security preset.
+
+  **Naming is a relocation, not a removal:** `demojize()` and `TextPipeline(demojize=True)`.
+
+  Two side effects worth knowing. `llm_guardrail` now *folds* the dual-purpose enclosed
+  letters instead of naming them, so `🅿AYPAL` reaches `paypal` rather than
+  `p buttonaypal` — the #918/#920 tension for those four resolves itself. And
+  `strip_obfuscation` no longer links the CLDR name table into a wasm build, which the
+  #695 coupling gate caught the moment the step came out.
+
+  **Upgrade note — `KEY_SCHEMA_VERSION` goes 6 → 7.** `strip_obfuscation` is a
+  key-stability column and its output moves for any input containing emoji. Reindex if you
+  persist it. This one the fixture *did* catch: its corpus carries 54 emoji, unlike the
+  three classes earlier in this cycle that it could not see.
+
 ### Fixed
 
 - **A `TextPipeline` built from a profile's own `ProfileSpec` behaved differently (#918).**

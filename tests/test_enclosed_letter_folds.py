@@ -106,12 +106,15 @@ def test_the_dual_purpose_buttons_fold_under_canonicalize(glyph: str, letter: st
     """`🅰` is NEGATIVE SQUARED LATIN CAPITAL LETTER A *and* the blood-type A button.
 
     `canonicalize` folds it, following #614: inside a comparison preset the fold wins over
-    the name, or a spoof and its target stop being equal. `llm_guardrail` still names it,
-    because demojize runs before the fold there and these carry the Emoji property — that
-    divergence is #918's subject, not something this change introduces.
+    the name, or a spoof and its target stop being equal.
+
+    `llm_guardrail` used to *name* it — demojize ran before the fold and these carry the
+    Emoji property — which #918 recorded and #910 removed by turning `demojize` off for
+    that profile. So the guardrail folds them too now, and `\U0001f17fAYPAL` reaches
+    `paypal` instead of `p buttonaypal`.
     """
     assert disarm.canonicalize(glyph) == letter
-    assert "button" in disarm.get_pipeline("llm_guardrail")(glyph)
+    assert disarm.get_pipeline("llm_guardrail")(glyph) == letter.lower()
 
 
 def test_the_class_is_in_the_key_stability_corpus() -> None:

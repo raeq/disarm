@@ -27,15 +27,21 @@ class TestStripObfuscationBasic:
             f"expected surviving non-ASCII (no transliteration), got {result!r}"
         )
 
-    def test_emoji_expanded(self):
-        result = strip_obfuscation("hello 🔥 world")
-        assert "fire" in result
+    def test_emoji_left_in_place(self):
+        """#910: this preset used to name emoji into English words.
 
-    def test_adjacent_emoji_spaced(self):
-        result = strip_obfuscation("🔥🔥🔥")
-        assert "firefire" not in result
-        parts = result.strip().split()
-        assert parts.count("fire") == 3
+        A comparison surface must not insert attacker-chosen words into the value being
+        compared. `demojize()` still names, and so does `TextPipeline(demojize=True)`.
+        """
+        assert strip_obfuscation("hello 🔥 world") == "hello 🔥 world"
+
+    def test_adjacent_emoji_are_not_glossed_and_do_not_fuse(self):
+        """The old test asserted three `fire` tokens with no `firefire`.
+
+        Leaving the emoji satisfies the underlying concern — nothing fuses — without
+        writing three English words that were not in the input.
+        """
+        assert strip_obfuscation("🔥🔥🔥") == "🔥🔥🔥"
 
     def test_latin_text_unchanged(self):
         result = strip_obfuscation("hello world")

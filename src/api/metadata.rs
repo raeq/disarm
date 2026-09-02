@@ -172,7 +172,17 @@ pub fn unicode_version() -> &'static str {
 /// these either — third time in this cycle that the fixture stayed green through a key
 /// change because its corpus did not sample the class being fixed, so 58 rows were added
 /// with it.
-pub const KEY_SCHEMA_VERSION: u32 = 6;
+///
+/// Bumped to 7 by #910: `strip_obfuscation` no longer names emoji. It wrote 1,177 of them
+/// into English words, so a comparison surface was inserting attacker-chosen text into
+/// the value being compared — the same defect as the `llm_guardrail` profile, which moved
+/// in the same change. The emoji is left in place rather than removed: measured over 144
+/// emoji, removal fuses `stop<emoji>now` into `stopnow` every time, while leaving keeps
+/// the words apart every time.
+///
+/// This one the fixture DID catch: its corpus carries 54 emoji, unlike the three classes
+/// earlier in this cycle that it could not see.
+pub const KEY_SCHEMA_VERSION: u32 = 7;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -207,7 +217,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 6;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "6a1c8a2781e586210088c7322c4ad18248c414185815a9531859e94ee9f40435";
+    "1cf3ef3dbc1d960fe02ac77db64679b23ffd402e378b1f697415e30e0642f871";
 
 /// The key-schema counter, as a function (#645).
 ///

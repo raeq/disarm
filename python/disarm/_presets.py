@@ -116,6 +116,21 @@ def canonicalize(text: str, *, digit_policy: str = "numeric") -> str:
     usernames, hostnames, filenames and log lines; see `Limitations` (docs/limitations.md)
     before pointing it at a sentence.
 
+    **The fold is not a romanization** (#907). It runs without transliterating first, so a
+    Cyrillic word reaches the Latin table as shapes rather than as sounds: ``Москва`` comes
+    back ``Mockba``, where ``search_key`` and ``catalog_key`` give the romanization
+    ``moskva``. ``Mockba`` is not a spelling of anything. It is what the confusable table
+    does to letters that no transliteration step has already handled, and ``catalog_key``'s
+    own step list states the rule: transliterate first, so non-Latin scripts are romanized
+    before confusables.
+
+    Here that order is a decision rather than an omission, because the collapse is the
+    point: an attacker's Latin ``Mockba`` and a Cyrillic ``Москва`` are meant to meet, and
+    the romanizing surfaces cannot make them —
+    ``find_key_collisions(["Москва", "Mockba"], key="search_key")`` is empty. Pick by what
+    you need. `normalize` keeps the text unchanged, the key builders give a romanization,
+    and this gives the collapse.
+
     Warning:
         Canonicalizes Unicode for *comparison*; it is **not** an output
         sanitizer and provides no XSS/HTML/SQL/injection protection. The NFKC
@@ -596,9 +611,16 @@ def canonicalize_strict(text: str, *, digit_policy: str = "numeric") -> str:
     usernames, hostnames, filenames and log lines; see `Limitations` (docs/limitations.md)
     before pointing it at a sentence.
 
-    Preserves the original script (no transliteration) while neutralizing
-    Unicode-level attack vectors: zalgo stacking, homoglyph spoofing, bidi
-    overrides, zero-width injections, and control characters.
+    **The fold is not a romanization** (#907). ``Москва`` comes back ``Mockba``, where the
+    key builders give ``moskva``; the confusable table runs without transliterating first,
+    so a non-Latin word reaches it as shapes rather than as sounds. See `canonicalize` for
+    why that order is deliberate and what to use instead.
+
+    Runs no transliteration step while neutralizing Unicode-level attack vectors:
+    zalgo stacking, homoglyph spoofing, bidi overrides, zero-width injections, and
+    control characters. It used to say it "preserves the original script", which the
+    paragraph above disproves: the confusable fold rewrites individual letters, and
+    only the *romanization* step is absent (#907).
 
     Pipeline: ``NFKC → strip_bidi → strip_zero_width → strip_control → strip
     invisible classes (#413) → strip_zalgo → confusables → collapse_whitespace →
@@ -683,6 +705,11 @@ def strip_obfuscation(text: str, *, digit_policy: str = "numeric") -> str:
     Nothing flags this first, because ordinary Persian is not an anomaly. Use it on
     usernames, hostnames, filenames and log lines; see `Limitations` (docs/limitations.md)
     before pointing it at a sentence.
+
+    **The fold is not a romanization** (#907). ``Москва`` comes back ``Mockba``, where the
+    key builders give ``moskva``; the confusable table runs without transliterating first,
+    so a non-Latin word reaches it as shapes rather than as sounds. See `canonicalize` for
+    why that order is deliberate and what to use instead.
 
     **Preserves case.** Case is not deception — proper nouns, acronyms,
     and sentence boundaries are meaningful. Chain with ``fold_case()``

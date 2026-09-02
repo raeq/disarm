@@ -77,6 +77,42 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   passed — so nothing is left ungated. `tests/test_workflow_baselines.py` asserts the
   single caller and the transitive wait.
 
+### Documentation
+
+- **The confusable fold is not a romanization, and the docstrings now say so (#907).**
+  `canonicalize("Москва")` is `Mockba`, where `search_key` and `catalog_key` give
+  `moskva`. Three surfaces, three answers, and nothing said which was which. `Mockba` is
+  not a spelling of anything: it is the confusable table applied to letters no
+  transliteration step has handled, and `catalog_key`'s own step list records the rule
+  it departs from — transliterate first, so non-Latin scripts are romanized before
+  confusables.
+
+  The order is a decision, not an omission. The collapse is the point — an attacker's
+  Latin `Mockba` and a Cyrillic `Москва` are meant to meet, and the romanizing surfaces
+  cannot make them: `find_key_collisions(["Москва", "Mockba"], key="search_key")` is
+  empty. What was missing was the sentence telling a caller to pick by what they need,
+  and that `normalize` keeps the text unchanged.
+
+- **`target_script` folds toward a script; it does not protect one (#907).**
+  `normalize_confusables` was the only surface exposing the parameter and the only one
+  whose docstring never described this class of effect at all. Passing a third script
+  rewrites the word into it — `normalize_confusables("Москва", target_script="arabic")`
+  puts an ARABIC LETTER HEH where the Cyrillic о was. There is also no Greek target, so
+  Greek text has no value that preserves it by design. Declaring which scripts a caller
+  considers legitimate is a different question, tracked as `allowed_scripts` in #900.
+
+  No behaviour changed in either case. `tests/test_fold_is_not_romanization.py` pins the
+  three-way split, both halves of the collapse trade, and — because nothing in this repo
+  runs Python docstrings as doctests — that the value quoted for the Arabic target is the
+  one the function returns.
+
+- **`canonicalize_strict` said it "preserves the original script"; it does not (#907).**
+  Found while adding the paragraph above, four lines below it. The parenthesis — "(no
+  transliteration)" — was the true half: there is no romanization step, so the output
+  never reaches `moskva`. The claim around it was false for every non-Latin input with a
+  Latin lookalike, which is the whole population the sentence was about: `Москва` folds
+  to `Mockba`, `Ελλάδα` to `Eλλάda`, `שלום` to `שלlם`. Reworded to the half that is true.
+
 ## [0.15.0] — 2026-09-01
 
 ### Upgrade notes

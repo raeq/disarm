@@ -430,9 +430,9 @@ fn main() {
             .collect();
         assert_eq!(
             overlap.len(),
-            50,
-            "emoji_single.tsv ∩ confusables_to_latin.tsv changed: expected the 50 rows \
-             reviewed in #614 and #801, found {}. A new row means a confusable source is \
+            54,
+            "emoji_single.tsv ∩ confusables_to_latin.tsv changed: expected the 54 rows \
+             reviewed in #614, #801 and #815, found {}. A new row means a confusable source is \
              now named instead of folded inside strip_obfuscation. Review it, then update \
              this count.",
             overlap.len()

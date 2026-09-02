@@ -26,6 +26,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import unicodedata
 import urllib.request
@@ -344,6 +345,55 @@ def _small_capital_folds() -> dict[str, str]:
     return out
 
 
+def _enclosed_letter_folds() -> dict[str, str]:
+    """`<prefix> LATIN {CAPITAL,SMALL} LETTER X` -> `x`, derived from the UCD name (#815).
+
+    U+1F150 and U+1F170 fold on no surface. Their *positive* counterparts `\u24d0` and
+    `\u1f130` fold via NFKC, which decomposes those and does not decompose these — two
+    neighbouring blocks, opposite outcomes, and nothing said so. A generator offering
+    "circled" and "circled (negative)" side by side gets one neutralised and one through
+    untouched.
+
+    Same shape as `_small_capital_folds`: the name states the letter, so there is no
+    visual judgment to make. Two families matching the pattern are deliberately excluded,
+    because both are already handled correctly and folding them would be wrong:
+
+    * **Tags** (U+E0041 and 51 more) are stripped as a smuggling class (#413), not folded.
+      `canonicalize` already returns `ab` for a tag between two letters, and
+      `has_anomalies` fires on it.
+    * **Combining letters** (`\u0363` and 22 more) are category `Mn` — diacritics written
+      above a base in medieval manuscripts, not letters standing in for one. They are
+      `strip_accents`' business.
+
+    The filter is therefore on category: a letter or a symbol, never a mark and never a
+    format character.
+    """
+    out: dict[str, str] = {}
+    for cp in range(0x110000):
+        ch = chr(cp)
+        # `.+` rather than `.*`: a bare `LATIN CAPITAL LETTER A` is ASCII `A` itself, and
+        # matching it would emit 52 identity rows.
+        match = re.fullmatch(r".+\bLATIN (CAPITAL|SMALL) LETTER ([A-Z])", unicodedata.name(ch, ""))
+        if not match or ch.isascii():
+            continue
+        if ucd_category(cp)[0] not in ("L", "S"):
+            continue
+        # The whole point of the set: NFKC already decomposes the positive forms, and
+        # a row for one of those would be redundant with a step that runs before the
+        # fold. What is left is what NFKC leaves alone — 54 code points, all of them
+        # negative, crossed or otherwise unmapped by the compatibility data.
+        if ucd_nfkc(cp) != ch:
+            continue
+        # Case comes from the NAME, not from `fix_case_mismatch`. These are category `So`,
+        # so the case reconciler cannot tell a capital from a small letter and left every
+        # row lowercase — which made U+1F170 fold to `a` while its positive counterpart
+        # U+1F130 reaches `A` through NFKC. Two spellings of the same style disagreeing is
+        # the asymmetry this set exists to remove, so it must not be reintroduced here.
+        letter = match.group(2)
+        out[ch] = letter if match.group(1) == "CAPITAL" else letter.lower()
+    return out
+
+
 def _close_under_case(fold: dict[str, str]) -> dict[str, str]:
     """Give every entry's case pair the same ASCII letter (#801).
 
@@ -365,7 +415,7 @@ def _close_under_case(fold: dict[str, str]) -> dict[str, str]:
     return out
 
 
-ASCII_FOLD = _close_under_case({**_small_capital_folds(), **ASCII_FOLD})
+ASCII_FOLD = _close_under_case({**_enclosed_letter_folds(), **_small_capital_folds(), **ASCII_FOLD})
 
 
 # ---------------------------------------------------------------------------
@@ -959,8 +1009,14 @@ def generate_mappings(
         # policy question in #815, not this.
         #
         # An existing row always wins: this only fills gaps.
-        for glyph, letter in _small_capital_folds().items():
-            merged.setdefault(ord(glyph), fix_case_mismatch(ord(glyph), letter))
+        #
+        # `_enclosed_letter_folds` joins it for the same reason and on the same terms
+        # (#815). U+1F150 and U+1F170 fold on no surface while their positive
+        # counterparts fold via NFKC, so a generator offering "circled" and "circled
+        # (negative)" side by side gets one neutralised and one through untouched.
+        for source in (_small_capital_folds(), _enclosed_letter_folds()):
+            for glyph, letter in source.items():
+                merged.setdefault(ord(glyph), fix_case_mismatch(ord(glyph), letter))
         # #342/#343: measured cross-script supplement, applied with priority so it
         # can add a missing fold or re-point an existing one.
         for cp, target in (supplement or {}).items():

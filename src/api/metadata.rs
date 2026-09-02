@@ -164,7 +164,15 @@ pub fn unicode_version() -> &'static str {
 /// `\u0237` ȷ to `j`, `\u03a3` Σ to `С`, `\u2502` │ to `ӏ`. That moves `canonicalize`,
 /// `canonicalize_strict`, `strip_obfuscation` and `normalize_confusables`; the three key
 /// builders do not fold confusables through this path and are byte-identical.
-pub const KEY_SCHEMA_VERSION: u32 = 5;
+///
+/// Bumped to 6 by #815, for the negative enclosed letters. U+1F150 and U+1F170 fold
+/// on no surface while their positive counterparts fold via NFKC, so a generator offering
+/// "circled" and "circled (negative)" side by side got one neutralised and one through
+/// untouched. 54 rows, and `catalog_key` moves for all of them. The corpus held none of
+/// these either — third time in this cycle that the fixture stayed green through a key
+/// change because its corpus did not sample the class being fixed, so 58 rows were added
+/// with it.
+pub const KEY_SCHEMA_VERSION: u32 = 6;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -199,7 +207,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 5;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "e57cb67ff92953a3fe31e41522436d59b8d133651f8fa51c2841a6f619dae5b6";
+    "6a1c8a2781e586210088c7322c4ad18248c414185815a9531859e94ee9f40435";
 
 /// The key-schema counter, as a function (#645).
 ///

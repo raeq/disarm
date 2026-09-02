@@ -141,3 +141,22 @@ def test_the_carrier_really_is_unreachable_without_the_flag() -> None:
     assert not removers, f"a step other than strip_plane14 now removes it: {removers}"
     for form in ("NFC", "NFD", "NFKC", "NFKD"):
         assert "\U000e0042" in disarm.TextPipeline(normalize=form)(CONCEALED)
+
+
+def test_the_step_is_a_no_op_when_no_tag_character_is_present() -> None:
+    """#924 review: the common case must not allocate or swap buffers.
+
+    The step used to build a copy of the whole string and return `true` regardless, so
+    the six profiles that enable it paid a full-string allocation on every ordinary input.
+    It short-circuits on "no TAG character present" now.
+
+    Asserted through behaviour rather than by counting allocations, which
+    `preset_alloc_count.rs` already gates: output identity is what a no-op means here, and
+    a regression that reintroduced the copy would still have to keep it.
+    """
+    plain = "The quick brown fox jumps over the lazy dog."
+    pipe = disarm.TextPipeline(strip_plane14=True)
+    assert pipe(plain) == plain
+    # …and the non-trivial path still works, so the fast path cannot be over-eager.
+    assert pipe(CONCEALED) == "Formats code neatly."
+    assert pipe(SCOTLAND) == SCOTLAND

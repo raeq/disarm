@@ -510,8 +510,16 @@ impl Pipeline {
             whitespace::strip_zero_width_chars_into(input, out);
             Ok(true)
         } else if step == PipelineSteps::STRIP_PLANE14 {
-            out.clear();
-            out.push_str(&crate::invisibles::strip_tags(input));
+            // Nothing to do unless a TAG character is actually present, which is the
+            // common case for the six profiles that enable this step. Returning `false`
+            // keeps the caller on the same buffer instead of swapping for an identical
+            // copy (#924 review).
+            if !input.chars().any(crate::invisibles::is_tag) {
+                return Ok(false);
+            }
+            // Move the result in rather than `push_str` it: `strip_tags` already built
+            // the String, and copying it into `out` would allocate a second time.
+            *out = crate::invisibles::strip_tags(input);
             Ok(true)
         } else if step == PipelineSteps::STRIP_PUA {
             out.clear();

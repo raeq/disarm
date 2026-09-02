@@ -28,7 +28,7 @@
 //! nothing can: measured with a thread allocating continuously, the minimum over nine
 //! runs still read 39 against a true 3, because no window is quiet. That is why this
 //! binary must keep exactly one `#[test]` — a second one runs concurrently by default and
-//! reintroduces precisely that condition. `only_one_test_in_this_binary` below asserts
+//! reintroduces precisely that condition. The first assertion in the test below checks
 //! it, because the premise was previously a comment and a comment cannot fail.
 use std::alloc::System;
 
@@ -68,9 +68,14 @@ fn preset_per_call_allocations_are_bounded() {
     // is the sustained-noise case the minimum cannot survive. Checked from the source so
     // adding one fails here rather than as an unexplained count.
     let source = include_str!("preset_alloc_count.rs");
-    // Lines that ARE the attribute, not lines that mention it — this comment and the
-    // message below both contain the string.
-    let tests = source.lines().filter(|l| l.trim() == "#[test]").count();
+    // Lines that START with the attribute, not lines that merely mention it. Equality
+    // would let `#[test] // why` and a trailing space through (#906 review); `starts_with`
+    // does not, and it still skips this comment and the message below, which contain the
+    // string but do not begin with it.
+    let tests = source
+        .lines()
+        .filter(|l| l.trim_start().starts_with("#[test]"))
+        .count();
     assert_eq!(
         tests, 1,
         "this binary must contain exactly one #[test]; found {tests}. `stats_alloc` counts \

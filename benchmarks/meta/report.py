@@ -135,6 +135,15 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
         "excluded for having no direction.",
         "",
     ]
+    if board.null_draws:
+        lines += [
+            f"**{board.null_draws} bootstrap draws were discarded** for containing "
+            "no axis with a non-zero weight. A composite over no weighted axis has "
+            "no value; scoring one as 0.0 puts a placeholder into the distribution "
+            "the quantiles are read from, and at this rate that placeholder lands "
+            "on the 2.5% bound itself.",
+            "",
+        ]
     if board.correlations:
         lines += [
             "**How the axes relate.** Cronbach's alpha appears below only to show "

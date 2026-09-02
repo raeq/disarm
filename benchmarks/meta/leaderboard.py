@@ -205,6 +205,8 @@ class Leaderboard:
     correlations: dict[tuple[str, str], float] = field(default_factory=dict)
     subjects: list[str] = field(default_factory=list)
     excluded_census_measurements: int = 0
+    #: Bootstrap draws discarded for having no weighted axis at all.
+    null_draws: int = 0
 
     @property
     def usable(self) -> bool:
@@ -897,14 +899,27 @@ def build(
     # actually happened here.
     rng = random.Random(seed)
     draws: dict[str, list[float]] = {s: [] for s in subjects}
+    null_draws = 0
     for _ in range(bootstrap):
         sample = [items[rng.randrange(len(items))] for _ in items]
         standardize(sample, subjects, fit_on=fit_basis(subjects))
         discriminations(sample, subjects)
+        # A draw in which every axis clamps to zero weight has no composite to
+        # report. `composite` returns 0.0 there because its denominator is zero
+        # — a placeholder, not a measurement — and appending it puts a run of
+        # exact zeros into the distribution the quantiles are read from. With
+        # five axes already at zero weight this happened in 10 of 400 draws,
+        # which is exactly the 2.5% tail, so the placeholder *became* the lower
+        # bound: six intervals were reported with a bound of precisely 0.00 and
+        # every interval was made to span zero. Such draws are dropped.
+        if sum(i.discrimination for i in sample) == 0.0:
+            null_draws += 1
+            continue
         for s in subjects:
             draws[s].append(composite(sample, s))
     standardize(items, subjects, fit_on=fit_basis(subjects))
     discriminations(items, subjects)
+    board.null_draws = null_draws
 
     scored = []
     for s in subjects:

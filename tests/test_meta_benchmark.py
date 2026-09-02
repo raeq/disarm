@@ -9,6 +9,7 @@ pass on a missing corpus is the one failure mode this harness exists to prevent.
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import json
 import math
@@ -1982,3 +1983,30 @@ def test_an_incomparable_subject_is_not_called_non_dominated():
     assert par is not None
     assert "c" in par.incomparable
     assert "c" not in par.frontier
+
+
+def test_a_bootstrap_draw_with_no_weighted_axis_is_dropped_not_scored_zero():
+    """`composite` returns 0.0 when its denominator is zero. That is a placeholder.
+
+    Appending it puts exact zeros into the distribution the quantiles read. With
+    five axes already clamped to zero weight it happened in 10 of 400 draws —
+    exactly the 2.5% tail — so the placeholder became the lower bound: six
+    intervals were published with a bound of precisely 0.00, every interval was
+    made to span zero, and the page reported 0 of 55 separating pairs where the
+    true count is 11.
+    """
+    # An item whose scores are identical across subjects discriminates zero, so
+    # any resample drawn only from these has no weighted axis at all.
+    flat = [leaderboard.Item(suite=f"f{i}", key="k", scores={"a": 1.0, "b": 1.0}) for i in range(3)]
+    leaderboard.discriminations(flat, ["a", "b"])
+    assert all(i.discrimination == 0.0 for i in flat)
+    assert leaderboard.composite(flat, "a") == 0.0, "the placeholder this guards against"
+
+    src = inspect.getsource(leaderboard.build)
+    assert "null_draws" in src, "build must count and skip weightless draws"
+    assert "continue" in src.split("null_draws += 1")[1][:40]
+
+
+def test_the_run_reports_how_many_draws_it_discarded():
+    """A silently dropped draw is as unauditable as a silently scored zero."""
+    assert "null_draws" in {f.name for f in dataclasses.fields(leaderboard.Leaderboard)}

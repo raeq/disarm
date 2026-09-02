@@ -944,15 +944,15 @@ def generate_mappings(
         # #815: the same glyphs, as SOURCES.
         #
         # The pass above resolves a small capital when it is a row's *target*, which is
-        # why `ᴍ` ᴍ folds: TR39 happens to list it as a source too (`1D0D ; 028D`).
-        # `ᴀ` ᴀ is listed only as a destination, so nothing folded it and
-        # `ᴄᴀɴ ʏᴏᴜ` half-converted — matching neither the
-        # attack nor the target, and handed to the model in that state by
-        # `llm_guardrail`.
+        # why `\u1d0d` ᴍ folds — TR39 happens to list it as a source too
+        # (`1D0D ; 028D`). `\u1d00` ᴀ is listed only as a destination, so nothing folded
+        # it and a word written in small capitals half-converted: `can you` came back as
+        # `cᴀn you`, matching neither the attack nor the target, and `llm_guardrail`
+        # handed it to the model in that state.
         #
         # Restricted to the derived `LATIN LETTER SMALL CAPITAL X` set, not all of
         # `ASCII_FOLD`. That set is a letter-for-letter identity with no visual judgment
-        # to make — `ᴛ` ᴛ *is* a T — which is the same argument
+        # to make — `\u1d1b` ᴛ *is* a T — which is the same argument
         # `_small_capital_folds` already makes for the target direction. The hand-written
         # `ASCII_FOLD` entries (ß→b, ꞓ→e) are visual calls about glyphs that are real
         # letters in real orthographies, and turning those into sources is the open

@@ -24,13 +24,13 @@ import disarm
 #: Written as escapes, not literals: at small sizes `ᴀ` and `a` are hard to tell apart
 #: in a diff, which is the whole point of the class.
 NEW_FOLDS = {
-    "ᴀ": "a",  # LATIN LETTER SMALL CAPITAL A
-    "ᴅ": "d",  # LATIN LETTER SMALL CAPITAL D
-    "ᴊ": "j",  # LATIN LETTER SMALL CAPITAL J
-    "ᴘ": "p",  # LATIN LETTER SMALL CAPITAL P
-    "ᴛ": "t",  # LATIN LETTER SMALL CAPITAL T
-    "ꜰ": "f",  # LATIN LETTER SMALL CAPITAL F
-    "ꞯ": "q",  # LATIN LETTER SMALL CAPITAL Q
+    "\u1d00": "a",  # ᴀ LATIN LETTER SMALL CAPITAL A
+    "\u1d05": "d",  # ᴅ LATIN LETTER SMALL CAPITAL D
+    "\u1d0a": "j",  # ᴊ LATIN LETTER SMALL CAPITAL J
+    "\u1d18": "p",  # ᴘ LATIN LETTER SMALL CAPITAL P
+    "\u1d1b": "t",  # ᴛ LATIN LETTER SMALL CAPITAL T
+    "\ua730": "f",  # ꜰ LATIN LETTER SMALL CAPITAL F
+    "\ua7af": "q",  # ꞯ LATIN LETTER SMALL CAPITAL Q
 }
 
 
@@ -69,14 +69,17 @@ def test_every_single_letter_latin_small_capital_folds() -> None:
 
 
 def test_the_derived_sweep_is_pointed_at_something() -> None:
-    """A name prefix that matched nothing would make the test above vacuous."""
-    found = sum(
-        1
-        for cp in range(sys.maxunicode + 1)
-        if not (0xD800 <= cp <= 0xDFFF)
-        and unicodedata.name(chr(cp), "").startswith("LATIN LETTER SMALL CAPITAL ")
-    )
-    assert found >= 30, f"only {found} small capitals found; the prefix may have changed"
+    """A name prefix that matched nothing would make the test above vacuous.
+
+    Three known code points rather than a second sweep of the codespace (#915 review):
+    the prefix either matches or it does not, and re-walking 1.1M names to learn that
+    duplicates the sweep above at real cost.
+    """
+    prefix = "LATIN LETTER SMALL CAPITAL "
+    for cp in (0x1D00, 0x1D1B, 0xA730):
+        assert unicodedata.name(chr(cp), "").startswith(prefix), (
+            f"U+{cp:04X} no longer matches {prefix!r}; the derived sweep above is vacuous"
+        )
 
 
 def test_multi_letter_small_capitals_are_left_alone() -> None:
@@ -85,7 +88,8 @@ def test_multi_letter_small_capitals_are_left_alone() -> None:
     Folding it would be a visual judgment, which is the open policy question in #815
     rather than something this change decides.
     """
-    for glyph in ("ᴁ", "ᴆ"):  # SMALL CAPITAL AE, SMALL CAPITAL ETH
+    # All three the docstring names, not two of them (#915 review).
+    for glyph in ("\u1d01", "\u1d03", "\u1d06"):  # ᴁ AE, ᴃ BARRED B, ᴆ ETH
         assert disarm.canonicalize(glyph) == glyph
 
 

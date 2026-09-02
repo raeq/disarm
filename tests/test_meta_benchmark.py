@@ -1410,3 +1410,46 @@ def test_a_weakly_labelled_set_does_not_score_the_transform():
     rewritten = out.measurement("rewritten_by_the_sanitizer")
     assert rewritten is not None
     assert rewritten.higher_is_better is None, "reported as a census, not a score"
+
+
+def test_derived_vectors_reproduce_the_published_construction():
+    """Three suites build their vectors from a paper's own listing.
+
+    The arXiv source bundle carries the encoder even when no dataset was
+    released, so the vector is derived from the published construction rather
+    than transcribed — the same footing as the fullwidth delimiter spellings.
+    """
+    from benchmarks.meta.suites.academic import TagBlockConcealment, ZeroWidthStylometry
+
+    # Listing 1 of arXiv:2607.05744, verbatim.
+    assert TagBlockConcealment.tag_encode("e") == chr(0xE0065)
+    assert TagBlockConcealment.conceal("x").startswith("Formats code neatly.")
+
+    # Token table of Zero_Width_Steganography_Part_02.py.
+    encoded = ZeroWidthStylometry.encode("A")
+    assert encoded.endswith(ZeroWidthStylometry.END)
+    assert set(encoded) <= {
+        ZeroWidthStylometry.ZW0,
+        ZeroWidthStylometry.ZW1,
+        ZeroWidthStylometry.SEP,
+        ZeroWidthStylometry.END,
+    }
+
+
+def test_normalization_only_subjects_fail_the_rag_pull_defence():
+    """The paper publishes that NFKC leaves its attack at 50.2%, unchanged.
+
+    If a normalization-only subject scored well here, this suite would be
+    measuring something other than what the paper measured.
+    """
+    suite = registry.by_name("rag-pull-invisibles")
+    for name in ("stdlib", "pyunormalize"):
+        subject = subjects.by_name(name)
+        if subject is None or not subject.available()[0]:
+            continue
+        out = suite.run(limit=600, subject=subject)
+        removed = out.measurement("carriers_removed")
+        assert removed is not None
+        assert removed.ratio < 0.10, (
+            f"{name} is NFKC-only; the paper reports normalization ineffective"
+        )

@@ -1337,3 +1337,49 @@ def test_the_corpus_metric_scores_the_declared_surface():
 
     assert "transform" in _inspect.signature(evaluate).parameters
     assert "transform" in _inspect.getsource(_AdversarialEvalSuite.measure)
+
+
+def test_an_unlicensed_corpus_is_registered_but_never_fetched():
+    """Absence of a licence is not permission.
+
+    `reverse-captcha-eval` is directly on topic and its repository holds a prompt
+    set, but it carries no licence file. It is listed so the registry records
+    that the corpus was found and why it is unused, rather than leaving a reader
+    to assume it was missed.
+    """
+    suite = registry.by_name("reverse-captcha")
+    assert suite is not None
+    assert suite.SOURCES == (), "an unlicensed upstream must not be provisioned"
+    assert "NONE" in suite.provenance.licence
+    ready, why = suite.available()
+    assert not ready and why
+
+
+def test_private_use_is_excluded_from_the_discovered_homoglyph_score():
+    """Stripping PUA is unrelated to confusability.
+
+    12.4% of the released set is Private Use — an artefact of deciding
+    confusability by rendering glyphs. Crediting a tool for handling those would
+    repeat the mistake raw retention made with format characters.
+    """
+    suite = registry.by_name("weaponizing-unicode")
+    if not suite.available()[0]:
+        pytest.skip("the weaponizing_unicode set is not cached")
+    out = suite.run(subject=subjects.by_name("disarm"))
+    assert out.status is Status.OK
+    excluded = out.measurement("private_use_excluded")
+    flagged = out.measurement("flagged_by_a_detector")
+    assert excluded is not None and excluded.value > 0
+    assert flagged is not None
+    assert flagged.of < excluded.of, "PUA must be out of the scored denominator"
+
+
+def test_a_weakly_labelled_set_does_not_score_the_transform():
+    """A model's weak label is not authority that a character should be rewritten."""
+    suite = registry.by_name("weaponizing-unicode")
+    if not suite.available()[0]:
+        pytest.skip("the weaponizing_unicode set is not cached")
+    out = suite.run(subject=subjects.by_name("disarm"))
+    rewritten = out.measurement("rewritten_by_the_sanitizer")
+    assert rewritten is not None
+    assert rewritten.higher_is_better is None, "reported as a census, not a score"

@@ -12,9 +12,10 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from ..base import CACHE, DATA, SuiteBase, add, artifact
+from ..base import CACHE, DATA, SuiteBase, add, artifact, record
 from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
+from ..subjects import Capability, Role
 
 
 class ConfusableBenchV1(SuiteBase):
@@ -414,4 +415,175 @@ def _safe(fn: Callable[[str], object], text: str) -> bool:
         return False
 
 
-SUITES = [ConfusableBenchV1(), ConfusableVision(), UntraceTechniques()]
+class WeaponizingUnicode(SuiteBase):
+    name = "weaponizing-unicode"
+    family = Family.COMPARATOR
+    availability = Availability.NETWORK
+    MULTI_SUBJECT = True
+    REQUIRES_ANY = (Capability.DETECT, Capability.TRANSFORM)
+    env_var = "DISARM_META_WEAPONIZING"
+    summary = "Homoglyph candidates a neural model found, not a table or a human."
+    provenance = Provenance(
+        origin="Perry Deng & Cooper Linsky",
+        citation="arXiv:2010.04382 — Weaponizing Unicodes with Deep Learning: "
+        "Identifying Homoglyphs with Weakly Labeled Data",
+        url="https://github.com/PerryXDeng/weaponizing_unicode",
+        version="new_predicted_homoglyphs.txt, 8,452 code points",
+        licence="MIT",
+        issues=(40, 791, 738),
+        finding=(
+            "New in this registry — no prior disarm issue rests on it. It is the "
+            "third independent way of deciding what a homoglyph is: UTS #39 is a "
+            "curated committee table, confusable-vision is measured by rendering "
+            "and comparing glyphs, and this is a triplet-loss model trained on "
+            "weakly labelled font renderings. Where the three disagree is where "
+            "the coverage question is actually open."
+        ),
+        notes=(
+            "Weak labels, so a miss is not automatically an error — the set is a "
+            "model's candidates rather than ground truth, and the paper says so. "
+            "It is a code-point SET, not source->target pairs, which is why this "
+            "scores detection rather than folding. The 12.4% Private Use tail is "
+            "excluded from the scored denominator: a tool that strips PUA handles "
+            "those for a reason that has nothing to do with confusability, and "
+            "crediting it would repeat the mistake retention made with format "
+            "characters."
+        ),
+    )
+
+    SOURCES = (
+        Source(
+            url="https://raw.githubusercontent.com/PerryXDeng/weaponizing_unicode"
+            "/master/new_predicted_homoglyphs.txt",
+            filename="weaponizing-unicode-homoglyphs.txt",
+            licence="MIT",
+            note="one `U+hex, decimal` per line; the model's predicted homoglyphs",
+        ),
+    )
+
+    def locate(self) -> Path | None:
+        return self.provisioned() or artifact(
+            CACHE / "weaponizing-unicode-homoglyphs.txt", env=self.env_var
+        )
+
+    def measure(self, outcome: Outcome, limit: int | None) -> None:
+        import unicodedata
+
+        from ..base import thin
+
+        path = self.locate()
+        assert path is not None
+        codepoints: list[int] = []
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            head = line.split(",", 1)[0].strip()
+            if not head.upper().startswith("U+"):
+                continue
+            try:
+                codepoints.append(int(head[2:], 16))
+            except ValueError:
+                continue
+        codepoints = thin(sorted(set(codepoints)), limit)
+        outcome.population = len(codepoints)
+        if not codepoints:
+            add(outcome, "codepoints", 0)
+            return
+
+        def category(cp: int) -> str:
+            try:
+                return unicodedata.category(chr(cp))
+            except ValueError:
+                return "Cs"
+
+        private_use = [cp for cp in codepoints if category(cp) == "Co"]
+        scored = [cp for cp in codepoints if category(cp) not in ("Co", "Cn", "Cs")]
+
+        det = self.detect()
+        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        record(
+            outcome,
+            domain=f"{len(scored)} assigned non-private-use candidates "
+            f"of {len(codepoints)} in the released set",
+            predicates=[*sorted(surfaces), *sorted(det)],
+            excluded="Private Use, unassigned and surrogate code points",
+            label_quality="weak — the paper trains on weakly labelled data",
+        )
+
+        add(outcome, "codepoints", len(codepoints), unit="codepoints")
+        add(
+            outcome,
+            "private_use_excluded",
+            len(private_use),
+            of=len(codepoints),
+            detail="stripping these is unrelated to confusability, so they are not "
+            "scored — the artefact of a font-rendering method",
+        )
+        if det:
+            flagged = sum(1 for cp in scored if any(_safe(fn, chr(cp)) for fn in det.values()))
+            add(
+                outcome,
+                "flagged_by_a_detector",
+                flagged,
+                of=len(scored),
+                higher_is_better=True,
+                detail="the subject considers this candidate suspicious",
+            )
+        if surfaces:
+            fn = next(iter(surfaces.values()))
+            changed = sum(1 for cp in scored if _changed_by(fn, chr(cp)))
+            add(
+                outcome,
+                "rewritten_by_the_sanitizer",
+                changed,
+                of=len(scored),
+                detail="the declared sanitizer alters it — a census, because a "
+                "model's weak label is not authority that it should",
+            )
+
+
+def _changed_by(fn: Callable[[str], str], ch: str) -> bool:
+    try:
+        return fn(f"aa{ch}bb") != f"aa{ch}bb"
+    except Exception:  # noqa: BLE001
+        return False
+
+
+class ReverseCaptcha(SuiteBase):
+    name = "reverse-captcha"
+    family = Family.ACADEMIC
+    availability = Availability.MANUAL
+    env_var = "DISARM_META_REVERSE_CAPTCHA"
+    summary = "Invisible Unicode instruction injection against LLMs — unlicensed."
+    provenance = Provenance(
+        origin="canonicalmg",
+        citation="arXiv:2603.00164 — Reverse CAPTCHA: Evaluating LLM "
+        "Susceptibility to Invisible Unicode Instruction Injection",
+        url="https://github.com/canonicalmg/reverse-captcha-eval",
+        version="scripts/prompts.json and results/*.csv",
+        licence="NONE — the repository carries no licence file",
+        issues=(742, 743, 748),
+        finding=(
+            "Directly on topic: invisible Unicode carrying instructions into an "
+            "LLM is the channel #742 and #748 describe, and the repository holds "
+            "a prompt set and graded results."
+        ),
+        notes=(
+            "Registered but deliberately NOT provisioned. The upstream has no "
+            "licence file, which means no permission to redistribute or reuse it "
+            "— absence of a licence is not permission. It is listed so the "
+            "registry records that the corpus was found and why it is unused, "
+            "rather than leaving a reader to assume it was missed. If the authors "
+            "add a licence, wire SOURCES and it runs."
+        ),
+    )
+
+    def locate(self) -> Path | None:
+        return artifact(CACHE / "reverse-captcha-prompts.json", env=self.env_var)
+
+
+SUITES = [
+    ConfusableBenchV1(),
+    ConfusableVision(),
+    UntraceTechniques(),
+    WeaponizingUnicode(),
+    ReverseCaptcha(),
+]

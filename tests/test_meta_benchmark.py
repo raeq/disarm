@@ -1485,3 +1485,28 @@ def test_alteration_is_never_presented_as_defence():
     out = suite.run(subject=subjects.by_name("disarm"))
     assert "not defence" in out.method.parameters["caveat"]
     assert "alteration is not defence" in out.provenance.notes.lower() or True
+
+
+def test_the_encoding_boundary_expects_a_low_score():
+    """Decoding base64 is not a Unicode sanitizer's job.
+
+    #729 says the boundary is unnamed and `detect_encoding` is the name a reader
+    finds first. The suite makes it measurable, and zero is the correct answer —
+    so neither column is directed.
+    """
+    out = registry.by_name("encoding-obfuscation").run(subject=subjects.by_name("disarm"))
+    assert out.status is Status.OK
+    for key in ("flagged", "decoded_back_to_plaintext"):
+        m = out.measurement(key)
+        assert m is not None, key
+        assert m.higher_is_better is None, f"{key} must not be scored in either direction"
+    assert "correct" in out.method.parameters["expectation"]
+
+
+def test_only_deterministic_encodings_are_reconstructed():
+    """Leetspeak's substitution table is a free choice, so it is left out."""
+    from benchmarks.meta.suites.academic import EncodingObfuscation
+
+    assert set(EncodingObfuscation.encodings()) == {"base64", "hex", "rot13"}
+    out = registry.by_name("encoding-obfuscation").run(subject=subjects.by_name("disarm"))
+    assert "leetspeak" in out.method.parameters["excluded"]

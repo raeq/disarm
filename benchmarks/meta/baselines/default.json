@@ -2,7 +2,7 @@
   "confusables_version": "17.0.0",
   "disarm_version": "0.15.0",
   "host_ucd": "16.0.0",
-  "recorded_utc": "2026-09-02T16:05:59+00:00",
+  "recorded_utc": "2026-09-02T16:17:43+00:00",
   "suites": {
     "anyascii@0.3.3::bad-characters": {
       "external": true,
@@ -137,6 +137,29 @@
         }
       },
       "population": 9438,
+      "subject": "anyascii",
+      "subject_version": "0.3.3"
+    },
+    "anyascii@0.3.3::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
       "subject": "anyascii",
       "subject_version": "0.3.3"
     },
@@ -386,6 +409,29 @@
       "population": 1,
       "subject": "anyascii",
       "subject_version": "0.3.3"
+    },
+    "confusable-homoglyphs@3.3.1::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "flagged": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 15
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
+      "subject": "confusable-homoglyphs",
+      "subject_version": "3.3.1"
     },
     "confusable-homoglyphs@3.3.1::mcp-tag-block-concealment": {
       "external": true,
@@ -638,6 +684,29 @@
       "subject": "decancer",
       "subject_version": "0.4.1"
     },
+    "decancer@0.4.1::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
+      "subject": "decancer",
+      "subject_version": "0.4.1"
+    },
     "decancer@0.4.1::jailbreakbench": {
       "external": true,
       "measurements": {
@@ -885,7 +954,7 @@
       "subject": "decancer",
       "subject_version": "0.4.1"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::bad-characters": {
+    "disarm@0.15.0+g6f485b1.dirty::bad-characters": {
       "external": true,
       "measurements": {
         "clean_retention": {
@@ -941,9 +1010,9 @@
       },
       "population": 22370,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::cldr-emoji-annotations": {
+    "disarm@0.15.0+g6f485b1.dirty::cldr-emoji-annotations": {
       "external": true,
       "measurements": {
         "annotated_codepoints": {
@@ -959,9 +1028,9 @@
       },
       "population": 1765,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::confusable-bench-v1": {
+    "disarm@0.15.0+g6f485b1.dirty::confusable-bench-v1": {
       "external": true,
       "measurements": {
         "benign_controls": {
@@ -1047,9 +1116,9 @@
       },
       "population": 140,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::confusable-vision": {
+    "disarm@0.15.0+g6f485b1.dirty::confusable-vision": {
       "external": true,
       "measurements": {
         "collide_in_canonicalize": {
@@ -1080,9 +1149,9 @@
       },
       "population": 4174,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::corruption-cost": {
+    "disarm@0.15.0+g6f485b1.dirty::corruption-cost": {
       "external": true,
       "measurements": {
         "clean_ascii_altered": {
@@ -1168,9 +1237,9 @@
       },
       "population": 9438,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::cve-2021-42574-trojan-source": {
+    "disarm@0.15.0+g6f485b1.dirty::cve-2021-42574-trojan-source": {
       "external": true,
       "measurements": {
         "poc_files": {
@@ -1191,9 +1260,9 @@
       },
       "population": 311,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::cve-2026-17084-stringprep": {
+    "disarm@0.15.0+g6f485b1.dirty::cve-2026-17084-stringprep": {
       "external": true,
       "measurements": {
         "collides_catalog_key": {
@@ -1229,9 +1298,37 @@
       },
       "population": 711,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::icann-lgr-latin": {
+    "disarm@0.15.0+g6f485b1.dirty::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "flagged": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
+      "subject": "disarm",
+      "subject_version": "0.15.0+g6f485b1.dirty"
+    },
+    "disarm@0.15.0+g6f485b1.dirty::icann-lgr-latin": {
       "external": true,
       "measurements": {
         "blocked_pairs": {
@@ -1252,9 +1349,9 @@
       },
       "population": 21,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::jailbreakbench": {
+    "disarm@0.15.0+g6f485b1.dirty::jailbreakbench": {
       "external": true,
       "measurements": {
         "altered": {
@@ -1285,9 +1382,9 @@
       },
       "population": 100,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::mcp-tag-block-concealment": {
+    "disarm@0.15.0+g6f485b1.dirty::mcp-tag-block-concealment": {
       "external": true,
       "measurements": {
         "detected_t1_plain": {
@@ -1323,9 +1420,9 @@
       },
       "population": 2,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::rag-pull-invisibles": {
+    "disarm@0.15.0+g6f485b1.dirty::rag-pull-invisibles": {
       "external": true,
       "measurements": {
         "carriers": {
@@ -1346,9 +1443,9 @@
       },
       "population": 2190,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::reverse-captcha": {
+    "disarm@0.15.0+g6f485b1.dirty::reverse-captcha": {
       "external": true,
       "measurements": {
         "attack_cases": {
@@ -1389,9 +1486,9 @@
       },
       "population": 50,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::uax29-word-joiners": {
+    "disarm@0.15.0+g6f485b1.dirty::uax29-word-joiners": {
       "external": true,
       "measurements": {
         "detected": {
@@ -1412,9 +1509,9 @@
       },
       "population": 37,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::ucd-bidi-class": {
+    "disarm@0.15.0+g6f485b1.dirty::ucd-bidi-class": {
       "external": true,
       "measurements": {
         "conflict_detected": {
@@ -1435,9 +1532,9 @@
       },
       "population": 3018,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::ucd-scripts": {
+    "disarm@0.15.0+g6f485b1.dirty::ucd-scripts": {
       "external": true,
       "measurements": {
         "agree": {
@@ -1468,9 +1565,9 @@
       },
       "population": 126761,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::ucd-toNFKC-casefold": {
+    "disarm@0.15.0+g6f485b1.dirty::ucd-toNFKC-casefold": {
       "external": true,
       "measurements": {
         "default_ignorable": {
@@ -1486,9 +1583,9 @@
       },
       "population": 405,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::untrace-techniques": {
+    "disarm@0.15.0+g6f485b1.dirty::untrace-techniques": {
       "external": true,
       "measurements": {
         "altered_by_strip_obfuscation": {
@@ -1514,9 +1611,9 @@
       },
       "population": 64,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::uts39-augmented-scripts": {
+    "disarm@0.15.0+g6f485b1.dirty::uts39-augmented-scripts": {
       "external": true,
       "measurements": {
         "cases": {
@@ -1552,9 +1649,9 @@
       },
       "population": 6,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::uts39-confusables": {
+    "disarm@0.15.0+g6f485b1.dirty::uts39-confusables": {
       "external": true,
       "measurements": {
         "altered_but_not_onto_target": {
@@ -1605,9 +1702,9 @@
       },
       "population": 6565,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::uts39-equivalence-classes": {
+    "disarm@0.15.0+g6f485b1.dirty::uts39-equivalence-classes": {
       "external": true,
       "measurements": {
         "classes": {
@@ -1638,9 +1735,9 @@
       },
       "population": 3416,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::uts39-mixed-numbers": {
+    "disarm@0.15.0+g6f485b1.dirty::uts39-mixed-numbers": {
       "external": true,
       "measurements": {
         "ascii_mixed_flagged": {
@@ -1661,9 +1758,9 @@
       },
       "population": 75,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::uts39-target-scripts": {
+    "disarm@0.15.0+g6f485b1.dirty::uts39-target-scripts": {
       "external": true,
       "measurements": {
         "pairs": {
@@ -1729,9 +1826,9 @@
       },
       "population": 6565,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::weaponizing-unicode": {
+    "disarm@0.15.0+g6f485b1.dirty::weaponizing-unicode": {
       "external": true,
       "measurements": {
         "codepoints": {
@@ -1757,9 +1854,9 @@
       },
       "population": 8452,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::youtube-spam": {
+    "disarm@0.15.0+g6f485b1.dirty::youtube-spam": {
       "external": true,
       "measurements": {
         "deleted_outright": {
@@ -1805,9 +1902,9 @@
       },
       "population": 1956,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
-    "disarm@0.15.0+gaf5c67f.dirty::zero-width-stylometry": {
+    "disarm@0.15.0+g6f485b1.dirty::zero-width-stylometry": {
       "external": true,
       "measurements": {
         "cover_text_intact": {
@@ -1833,7 +1930,7 @@
       },
       "population": 1,
       "subject": "disarm",
-      "subject_version": "0.15.0+gaf5c67f.dirty"
+      "subject_version": "0.15.0+g6f485b1.dirty"
     },
     "ftfy@6.3.1::bad-characters": {
       "external": true,
@@ -1968,6 +2065,29 @@
         }
       },
       "population": 9438,
+      "subject": "ftfy",
+      "subject_version": "6.3.1"
+    },
+    "ftfy@6.3.1::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
       "subject": "ftfy",
       "subject_version": "6.3.1"
     },
@@ -2354,6 +2474,29 @@
       "subject": "identity",
       "subject_version": "1"
     },
+    "identity@1::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
+      "subject": "identity",
+      "subject_version": "1"
+    },
     "identity@1::jailbreakbench": {
       "external": true,
       "measurements": {
@@ -2734,6 +2877,29 @@
         }
       },
       "population": 9438,
+      "subject": "null-baseline",
+      "subject_version": "1"
+    },
+    "null-baseline@1::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
       "subject": "null-baseline",
       "subject_version": "1"
     },
@@ -3120,6 +3286,29 @@
       "subject": "pyunormalize",
       "subject_version": "17.0.0"
     },
+    "pyunormalize@17.0.0::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
+      "subject": "pyunormalize",
+      "subject_version": "17.0.0"
+    },
     "pyunormalize@17.0.0::jailbreakbench": {
       "external": true,
       "measurements": {
@@ -3500,6 +3689,29 @@
         }
       },
       "population": 9438,
+      "subject": "stdlib",
+      "subject_version": "16.0.0"
+    },
+    "stdlib@16.0.0::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
       "subject": "stdlib",
       "subject_version": "16.0.0"
     },
@@ -3886,6 +4098,29 @@
       "subject": "text-unidecode",
       "subject_version": "1.3"
     },
+    "text-unidecode@1.3::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
+      "subject": "text-unidecode",
+      "subject_version": "1.3"
+    },
     "text-unidecode@1.3::jailbreakbench": {
       "external": true,
       "measurements": {
@@ -4266,6 +4501,29 @@
         }
       },
       "population": 9438,
+      "subject": "unidecode",
+      "subject_version": "1.4.0"
+    },
+    "unidecode@1.4.0::encoding-obfuscation": {
+      "external": true,
+      "measurements": {
+        "all_ascii": {
+          "higher_is_better": null,
+          "of": 1.0,
+          "value": 1.0
+        },
+        "decoded_back_to_plaintext": {
+          "higher_is_better": null,
+          "of": 15,
+          "value": 0
+        },
+        "vectors": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 15
+        }
+      },
+      "population": 15,
       "subject": "unidecode",
       "subject_version": "1.4.0"
     },

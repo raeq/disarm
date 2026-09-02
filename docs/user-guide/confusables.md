@@ -87,16 +87,21 @@ assert disarm.canonicalize("\u017fecure") == "secure"  # NFKC decomposed it to s
 
 Both verdicts are defensible, and neither order wins everywhere:
 
-| the 68, by class | count | standalone | after NFKC | better |
+| the 65, by class | count | standalone | after NFKC | better |
 |---|---:|---|---|---|
 | number forms (`⑴`, `⒈`, `ⅿ`) | 30 | `(l)`, `l.`, `rn` | `(1)`, `1.`, `m` | **NFKC** |
-| mathematical alphanumerics (`𝐦`) | 14 | `rn` | `m` | **NFKC** |
+| mathematical alphanumerics (`𝐦`) | 13 | `rn` | `m` | **NFKC** |
 | spacing modifiers (`´`, `¸`, `˜`) | 15 | `'`, `,`, `~` | space + combining mark | **standalone** |
-| the rest (`ſ`, `ϲ`, `℧`) | 9 | `f`, `c`, `E` | `s`, `ς`, `Ɛ` | judgment |
+| the rest (`ſ`, `Ϲ`) | 7 | `f`, `C` | `s`, `S` | judgment |
 
-So 44 favour the preset answer, 15 favour the standalone one, and 9 are a genuine call
+So 43 favour the preset answer, 15 favour the standalone one, and 7 are a genuine call
 between "looks like" and "decomposes to". disarm ships both because both are wanted; what it
 was missing is anyone saying so.
+
+Three rows left this table in #833, and they are the reason to read it carefully: `ϲ`, `℧`
+and `𝚥` diverged because the source had a row and its NFKC image had none, so the fold that
+existed could not fire from any preset. That is not two defensible answers — it is one
+answer and one gap. The rows above are the former.
 
 This is the disarm-side instance of PRI #540 feedback ID20260222084837, which asks the UTC to
 document in UTS #39 that a pipeline running NFKC before confusable detection should filter
@@ -346,8 +351,8 @@ By default, confusables are normalized to Latin. You can specify a different tar
 
 | Target | Mappings | Description |
 |--------|----------|-------------|
-| `"latin"` (default) | 2,297 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
-| `"cyrillic"` | 1,349 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
+| `"latin"` (default) | 2,300 | Non-Latin → Latin. Cyrillic а→a, Greek Ρ→P, etc. |
+| `"cyrillic"` | 1,352 | Non-Cyrillic → Cyrillic. Latin A→А, p→р, etc. |
 | `"arabic"` | 373 | Non-Arabic → Arabic. `⸮`→`؟`, `𞣉`→`٣`, etc. |
 | `"hebrew"` | 261 | Non-Hebrew → Hebrew. `ℵ`→`א`, `∸`→`﬩`, etc. |
 

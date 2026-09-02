@@ -989,6 +989,77 @@ def generate_mappings(
 # ---------------------------------------------------------------------------
 
 
+def _nfkc_image_rows(
+    mappings: dict[int, str], script_name: str, latin_rows: frozenset[int]
+) -> dict[int, str]:
+    """Rows for the NFKC image of a source, where the image has no row of its own (#833).
+
+    Every confusable-bearing preset runs `normalize` before `confusables` (`STEP_ORDER`),
+    so the fold never sees the source code point — it sees the NFKC image. When the image
+    has no row, the row that exists for the source is unreachable from every preset:
+
+        U+03F2 GREEK LUNATE SIGMA -> `c` in the table
+        NFKC(U+03F2)              -> U+03C2 GREEK SMALL FINAL SIGMA, no row
+        llm_guardrail("ϲecure")   -> "oecure", never "cecure"
+
+    #245 diagnosed this correctly for U+2502 and fixed it with one hand-written entry in
+    `CUSTOM_LATIN_OVERRIDES`. The diagnosis generalises and a literal does not, which is
+    why this is derived: any future `confusables.txt` that routes a new class through an
+    unmapped NFKC image is covered without an edit.
+
+    Four filters, each of which excludes rows that would be wrong rather than merely
+    unnecessary:
+
+    * The image must differ from the source and be a single code point. A multi-character
+      image is a decomposition, not a look-alike.
+    * The image must have no row already. An existing row is a decision; this only fills
+      gaps.
+    * The image must be non-ASCII. An ASCII image needs no fold, and emitting one would
+      add 26 identity rows (`A` -> `A`) and break the three-ASCII-sources contract (#725).
+    * The image must be a letter, or already carry a row in the Latin table. The second
+      clause is what brings U+2502 to the Cyrillic side: #245 decided a box-drawing
+      vertical folds to a letter shape, and that decision was applied to one target only.
+      Without it the em dash would join too — U+FE58 SMALL EM DASH normalises to U+2014,
+      which is a dash rather than a look-alike letter and is nobody's spoof.
+    """
+    # Latin and Cyrillic only, deliberately. The RTL tables are built the other way
+    # round — #791/#792 invert equivalence classes and drop any class with no
+    # target-script member — so a source there is often an Arabic *mathematical* variant
+    # whose NFKC image is the ordinary letter. Propagating the row would fold the base
+    # letter: `\u062b` ث would become `\u0649` ى, corrupting every Arabic word that
+    # contains it. That is #848's intra-script case, which a cross-script table cannot
+    # express, and it needs its own analysis rather than this derivation.
+    if script_name not in ("latin", "cyrillic"):
+        return {}
+
+    out: dict[int, str] = {}
+    for source, target in mappings.items():
+        image = ucd_nfkc(source)
+        if len(image) != 1 or ord(image) == source:
+            continue
+        image_cp = ord(image)
+        if image_cp in mappings or image.isascii():
+            continue
+        # An image that already IS the target is an identity row. Common for the RTL
+        # targets, where a presentation form's NFKC image is the very letter the row
+        # points at: 33 such rows for Arabic and 4 for Hebrew, every one of them
+        # `X -> X`. They fold nothing and would inflate the tables the size gates watch.
+        if image == target:
+            continue
+        if not (ucd_category(image_cp).startswith("L") or image_cp in latin_rows):
+            continue
+        if script_name == "latin" and not target.isascii():
+            continue
+        previous = out.get(image_cp)
+        if previous is not None and previous != target:
+            # Two sources whose images collide on different targets. Dropping both is the
+            # safe read: picking one would be an undocumented visual judgment.
+            out.pop(image_cp, None)
+            continue
+        out[image_cp] = target
+    return out
+
+
 def _resolve_target_chains(mappings: list[tuple[int, str]]) -> list[tuple[int, str]]:
     """Rewrite every target through the map until it is a fixed point (#723).
 
@@ -1260,17 +1331,33 @@ def main() -> None:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Built in two passes because #833's image rule needs the finished Latin row set:
+    # a box-drawing vertical folds to a letter shape in Latin (#245) and that decision
+    # should carry to the Cyrillic table, which is the half #245 left open.
+    raw: dict[str, dict[int, str]] = {
+        script_name: dict(generate_mappings(entries, script_name, supplement.get(script_name, {})))
+        for script_name in SCRIPTS
+    }
+    latin_rows = frozenset(raw["latin"])
+
     by_script: dict[str, list[tuple[int, str]]] = {}
     for script_name in SCRIPTS:
-        mappings = generate_mappings(entries, script_name, supplement.get(script_name, {}))
+        mappings_map = raw[script_name]
+        # #833: every confusable-bearing preset normalizes before it folds, so the step
+        # sees the NFKC image of a source rather than the source. Give the image the
+        # source's target when it has no row of its own, or the row that exists is
+        # unreachable from every preset that normalizes.
+        image_rows = _nfkc_image_rows(mappings_map, script_name, latin_rows)
+        mappings_map.update(image_rows)
         # #723: a target may contain a source, which leaves single-pass callers one step
         # short of the fixed point the iterating ones reach. Resolve it in the data.
-        mappings = _resolve_target_chains(mappings)
+        mappings = _resolve_target_chains(list(mappings_map.items()))
         by_script[script_name] = mappings
         out_path = args.output_dir / f"confusables_to_{script_name}.tsv"
         write_tsv(mappings, out_path, script_name)
         print(
-            f"  → {script_name}: {len(mappings)} mappings → {out_path.name}",
+            f"  → {script_name}: {len(mappings)} mappings "
+            f"(+{len(image_rows)} NFKC-image rows, #833) → {out_path.name}",
             file=sys.stderr,
         )
 

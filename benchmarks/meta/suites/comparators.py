@@ -550,34 +550,144 @@ def _changed_by(fn: Callable[[str], str], ch: str) -> bool:
 class ReverseCaptcha(SuiteBase):
     name = "reverse-captcha"
     family = Family.ACADEMIC
-    availability = Availability.MANUAL
+    availability = Availability.NETWORK
+    MULTI_SUBJECT = True
+    REQUIRES_ANY = (Capability.DETECT, Capability.TRANSFORM)
     env_var = "DISARM_META_REVERSE_CAPTCHA"
-    summary = "Invisible Unicode instruction injection against LLMs — unlicensed."
+    summary = "Invisible zero-width instructions hidden in prompts, with benign controls."
     provenance = Provenance(
         origin="canonicalmg",
         citation="arXiv:2603.00164 — Reverse CAPTCHA: Evaluating LLM "
         "Susceptibility to Invisible Unicode Instruction Injection",
         url="https://github.com/canonicalmg/reverse-captcha-eval",
-        version="scripts/prompts.json and results/*.csv",
-        licence="NONE — the repository carries no licence file",
-        issues=(742, 743, 748),
+        version="scripts/prompts.json — 50 cases, 5 schemes",
+        licence="MIT (declared in the README, not as a LICENSE file)",
+        issues=(742, 743, 748, 700),
         finding=(
-            "Directly on topic: invisible Unicode carrying instructions into an "
-            "LLM is the channel #742 and #748 describe, and the repository holds "
-            "a prompt set and graded results."
+            "The channel #742 and #748 describe, with a released corpus: a "
+            "zero-width payload encoding an instruction the model obeys and the "
+            "reader never sees. Each case carries the answer a clean model gives "
+            "and the answer a compromised one gives, so the attack has ground "
+            "truth rather than a judgement call."
         ),
         notes=(
-            "Registered but deliberately NOT provisioned. The upstream has no "
-            "licence file, which means no permission to redistribute or reuse it "
-            "— absence of a licence is not permission. It is listed so the "
-            "registry records that the corpus was found and why it is unused, "
-            "rather than leaving a reader to assume it was missed. If the authors "
-            "add a licence, wire SOURCES and it runs."
+            "Four attack schemes of ten (zero-width unhinted, hint-aware, "
+            "hint-codepoints, hint-full) plus ten benign controls, so false "
+            "positives are defined by the corpus author rather than by disarm. "
+            "Removing the payload is only half the job — a sanitizer that also "
+            "mangles the visible question has not helped, so the visible text is "
+            "scored beside the removal."
         ),
     )
 
+    SOURCES = (
+        Source(
+            url="https://raw.githubusercontent.com/canonicalmg/reverse-captcha-eval"
+            "/main/scripts/prompts.json",
+            filename="reverse-captcha-prompts.json",
+            licence="MIT",
+            note="50 cases: 40 zero-width injections across four schemes, 10 benign controls",
+        ),
+    )
+
+    #: Carriers the corpus uses to encode a hidden instruction.
+    INVISIBLE = frozenset({0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF})
+
     def locate(self) -> Path | None:
-        return artifact(CACHE / "reverse-captcha-prompts.json", env=self.env_var)
+        return self.provisioned() or artifact(
+            CACHE / "reverse-captcha-prompts.json", env=self.env_var
+        )
+
+    def measure(self, outcome: Outcome, limit: int | None) -> None:
+        path = self.locate()
+        assert path is not None
+        rows = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(rows, list):
+            rows = rows.get("cases") or rows.get("prompts") or []
+        if limit is not None:
+            rows = rows[:limit]
+        outcome.population = len(rows)
+        if not rows:
+            add(outcome, "cases", 0)
+            return
+
+        attacks = [r for r in rows if r.get("scheme") != "control"]
+        controls = [r for r in rows if r.get("scheme") == "control"]
+        det = self.detect()
+        surfaces = self.subject.role(Role.SANITIZER) if self.subject is not None else {}
+        record(
+            outcome,
+            domain=f"{len(attacks)} zero-width injections and {len(controls)} controls",
+            predicates=[*sorted(surfaces), *sorted(det)],
+            carriers=sorted(f"U+{c:04X}" for c in self.INVISIBLE),
+            removal_means="no carrier code point survives in the output",
+        )
+
+        def carriers_in(text: str) -> int:
+            return sum(1 for c in text if ord(c) in self.INVISIBLE)
+
+        def visible(text: str) -> str:
+            return "".join(c for c in text if ord(c) not in self.INVISIBLE)
+
+        add(outcome, "cases", len(rows), unit="cases")
+        add(outcome, "attack_cases", len(attacks), of=len(rows))
+        add(outcome, "control_cases", len(controls), of=len(rows))
+
+        if det:
+            caught = sum(1 for r in attacks if any(_safe(fn, r["prompt"]) for fn in det.values()))
+            add(
+                outcome,
+                "attacks_detected",
+                caught,
+                of=len(attacks) or None,
+                higher_is_better=True,
+                detail="some detector fires on a prompt carrying a hidden instruction",
+            )
+            if controls:
+                fp = sum(1 for r in controls if any(_safe(fn, r["prompt"]) for fn in det.values()))
+                add(
+                    outcome,
+                    "controls_false_positive",
+                    fp,
+                    of=len(controls),
+                    higher_is_better=False,
+                    detail="fires on a benign control — the corpus author's "
+                    "definition of a false positive, not ours",
+                )
+
+        if surfaces and attacks:
+            fn = next(iter(surfaces.values()))
+            removed = intact = 0
+            for r in attacks:
+                out = _apply_text(fn, r["prompt"])
+                if carriers_in(out) == 0:
+                    removed += 1
+                if visible(out) == visible(r["prompt"]):
+                    intact += 1
+            add(
+                outcome,
+                "payload_removed",
+                removed,
+                of=len(attacks),
+                higher_is_better=True,
+                detail="no carrier code point survives the declared sanitizer",
+            )
+            add(
+                outcome,
+                "visible_text_intact",
+                intact,
+                of=len(attacks),
+                higher_is_better=True,
+                detail="the question a human reads is unchanged — removing the "
+                "payload while mangling the prompt is not a win",
+            )
+
+
+def _apply_text(fn: Callable[[str], str], text: str) -> str:
+    try:
+        return fn(text)
+    except Exception:  # noqa: BLE001
+        return text
 
 
 SUITES = [

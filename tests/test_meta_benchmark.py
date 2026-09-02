@@ -1339,20 +1339,47 @@ def test_the_corpus_metric_scores_the_declared_surface():
     assert "transform" in _inspect.getsource(_AdversarialEvalSuite.measure)
 
 
-def test_an_unlicensed_corpus_is_registered_but_never_fetched():
-    """Absence of a licence is not permission.
+def test_a_licence_declared_in_prose_still_counts():
+    """A licence in the README is a licence.
 
-    `reverse-captcha-eval` is directly on topic and its repository holds a prompt
-    set, but it carries no licence file. It is listed so the registry records
-    that the corpus was found and why it is unused, rather than leaving a reader
-    to assume it was missed.
+    `reverse-captcha-eval` was first recorded as unlicensed and excluded, because
+    the check read GitHub's detected `license` field and looked for a file named
+    LICENSE. It declares MIT in README prose, which neither of those sees — a
+    false negative that would have dropped a usable corpus.
     """
     suite = registry.by_name("reverse-captcha")
     assert suite is not None
-    assert suite.SOURCES == (), "an unlicensed upstream must not be provisioned"
-    assert "NONE" in suite.provenance.licence
-    ready, why = suite.available()
-    assert not ready and why
+    assert suite.SOURCES, "a licensed upstream must be provisioned"
+    assert "MIT" in suite.provenance.licence
+    assert "README" in suite.provenance.licence, (
+        "record where the licence was found, since it is not where tools look"
+    )
+
+
+def test_the_injection_corpus_scores_removal_and_preservation_together():
+    """Removing the payload while mangling the prompt is not a win."""
+    suite = registry.by_name("reverse-captcha")
+    if not suite.available()[0]:
+        pytest.skip("the reverse-captcha corpus is not cached")
+    out = suite.run(subject=subjects.by_name("disarm"))
+    assert out.status is Status.OK
+    removed = out.measurement("payload_removed")
+    intact = out.measurement("visible_text_intact")
+    assert removed is not None and intact is not None
+    assert removed.higher_is_better and intact.higher_is_better
+    assert removed.of == intact.of, "both are scored over the attack cases"
+
+
+def test_the_injection_corpus_uses_its_own_controls():
+    """False positives are the corpus author's definition, not ours."""
+    suite = registry.by_name("reverse-captcha")
+    if not suite.available()[0]:
+        pytest.skip("the reverse-captcha corpus is not cached")
+    out = suite.run(subject=subjects.by_name("disarm"))
+    controls = out.measurement("control_cases")
+    fp = out.measurement("controls_false_positive")
+    assert controls is not None and controls.value == 10
+    assert fp is not None and fp.higher_is_better is False
 
 
 def test_private_use_is_excluded_from_the_discovered_homoglyph_score():

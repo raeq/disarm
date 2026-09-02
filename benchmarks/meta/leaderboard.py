@@ -116,10 +116,21 @@ class Item:
     member_keys: dict[str, set[str]] = field(default_factory=dict)
     #: Every key any subject contributed to this parcel.
     all_keys: set[str] = field(default_factory=set)
+    #: subject -> the keys its own cohort answered. See :func:`parcel`.
+    peer_keys: dict[str, set[str]] = field(default_factory=dict)
 
     def complete(self, subject: str) -> bool:
-        """Did ``subject`` answer every measurement this benchmark reports?"""
-        return self.member_keys.get(subject, set()) == self.all_keys
+        """Did ``subject`` answer every measurement its peers answered?
+
+        Not every measurement *any* subject answered: a subject with no detector
+        cannot earn a detection score, and holding that against it excludes it
+        from the benchmark entirely rather than scoring it fairly on the
+        measurements it can answer.
+        """
+        answered = self.member_keys.get(subject, set())
+        if not answered:
+            return False
+        return answered == self.peer_keys.get(subject, self.all_keys)
 
 
 @dataclass
@@ -196,8 +207,11 @@ class Leaderboard:
                 "than another"
             )
         if self.separated_pairs() == 0 and len(self.standings) > 1:
+            sep, total = self.separated_pairs_any()
             why.append(
-                "no two subjects have non-overlapping bootstrap intervals — "
+                "no adjacently ranked pair has non-overlapping bootstrap "
+                f"intervals ({sep} of {total} pairs separate anywhere in the "
+                "table, none of them neighbours) — "
                 "the ordering is not distinguishable from noise"
             )
         return why
@@ -271,9 +285,27 @@ class Leaderboard:
         return out
 
     def separated_pairs(self) -> int:
-        """Adjacent pairs whose 95% intervals do not overlap."""
+        """Adjacent pairs whose 95% intervals do not overlap.
+
+        Adjacency is the right test for whether the *ordering* means anything:
+        if no subject separates from the one directly below it, no rank position
+        is distinguishable from its neighbour. It is a strictly weaker statement
+        than "no two subjects separate" — see :meth:`separated_pairs_any`, which
+        counts every pair — and the two must not be conflated in a message.
+        """
         ranked = [s for s in self.standings if not s.control]
         return sum(1 for a, b in zip(ranked, ranked[1:], strict=False) if a.ci_low > b.ci_high)
+
+    def separated_pairs_any(self) -> tuple[int, int]:
+        """(separated, total) over *every* pair of ranked subjects."""
+        ranked = [s for s in self.standings if not s.control and not s.partial]
+        sep = total = 0
+        for i, a in enumerate(ranked):
+            for b in ranked[i + 1 :]:
+                total += 1
+                if a.ci_low > b.ci_high or b.ci_low > a.ci_high:
+                    sep += 1
+        return sep, total
 
 
 def collect(outcomes: Sequence[Outcome], include_controls: bool = True) -> list[Item]:
@@ -361,13 +393,31 @@ def parcel(items: list[Item]) -> list[Item]:
         # `disarm` on the word-joiner benchmark while recovering 24.3% to its
         # 43.2%, because disarm's average also carried a detection score that
         # `unidecode` has no surface to earn.
+        # Completeness is judged against a subject's PEERS, not against every
+        # subject that answered anything. `disarm` answers four directed
+        # measurements on the TAG-block suite because it has a detector; every
+        # transform-only subject answers two. Taking the union as the bar marked
+        # all ten of them incomplete and left one tool on three benchmarks, which
+        # collapsed the Pareto frontier to nothing and deleted the non-dominated
+        # count from the report. Being excluded for lacking a detector is the
+        # same error as being scored zero for it, wearing the opposite sign.
+        #
+        # Peers are subjects answering the same key set. A subject is complete
+        # when it answered everything its own cohort answered, so a detector is
+        # judged against detectors and a plain transform against transforms.
+        cohorts: dict[frozenset[str], set[str]] = {}
+        for subj in merged:
+            answered = frozenset(i.key for i in group if subj in i.z)
+            cohorts.setdefault(answered, set()).add(subj)
+        member_keys = {s: {i.key for i in group if s in i.z} for s in merged}
         out.append(
             Item(
                 suite=suite,
                 key=f"parcel({len(group)} measurement{'' if len(group) == 1 else 's'})",
                 scores=merged,
-                member_keys={s: {i.key for i in group if s in i.z} for s in merged},
+                member_keys=member_keys,
                 all_keys={i.key for i in group},
+                peer_keys={s: set(k) for k, v in cohorts.items() for s in v},
             )
         )
     return out
@@ -687,18 +737,33 @@ def pareto(board: Leaderboard) -> Pareto | None:
     usable = {s: v for s, v in usable.items() if len(v) >= 2}
     if len(usable) < 2:
         return None
-    shared = set.intersection(*[{x.subject for x in v} for v in usable.values()])
-    tools = sorted(shared)
+    # Tools are those the battery can actually compare, not the intersection of
+    # every benchmark's field. Intersecting listwise let one narrow benchmark —
+    # `weaponizing-unicode`, whose only directed measurement needs a detector, so
+    # two subjects answer it — empty the frontier and silently delete the
+    # non-dominated count from the report. Dominance still needs a common basis,
+    # so it is taken pairwise below rather than abandoned.
+    tools = sorted({x.subject for v in usable.values() for x in v})
     if len(tools) < 2:
         return None
     axes = list(usable)
     scores = {
-        t: {s: next(x.z for x in v if x.subject == t) for s, v in usable.items()} for t in tools
+        t: {
+            s: next((x.z for x in v if x.subject == t), None)  # type: ignore[misc]
+            for s, v in usable.items()
+        }
+        for t in tools
     }
 
     def beats(a: str, b: str) -> bool:
-        return all(scores[a][s] >= scores[b][s] for s in axes) and any(
-            scores[a][s] > scores[b][s] for s in axes
+        # Compare on the axes BOTH answered. A pair sharing too few axes is not
+        # comparable, and saying so is better than declaring one non-dominated
+        # because the other never met it.
+        shared = [s for s in axes if scores[a][s] is not None and scores[b][s] is not None]
+        if len(shared) < max(2, len(axes) // 2):
+            return False
+        return all(scores[a][s] >= scores[b][s] for s in shared) and any(
+            scores[a][s] > scores[b][s] for s in shared
         )
 
     frontier = [t for t in tools if not any(beats(o, t) for o in tools if o != t)]

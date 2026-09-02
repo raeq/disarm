@@ -363,14 +363,32 @@ def _render_pareto(board: Leaderboard) -> list[str]:
         "| tool | " + " | ".join(f"`{a}`" for a in front.axes) + " | verdict |",
         "|---|" + "---|" * (len(front.axes) + 1),
     ]
+
+    def _cells(tool: str) -> str:
+        # An axis the tool never answered prints as an absence. Dominance is
+        # taken pairwise on shared axes, so a blank here is a real state and
+        # must not be rendered as a score of any kind.
+        return " | ".join(
+            "—" if front.scores[tool][a] is None else f"{front.scores[tool][a]:+.2f}"
+            for a in front.axes
+        )
+
     for tool in front.frontier:
-        cells = " | ".join(f"{front.scores[tool][a]:+.2f}" for a in front.axes)
-        lines.append(f"| `{tool}` | {cells} | **non-dominated** |")
+        lines.append(f"| `{tool}` | {_cells(tool)} | **non-dominated** |")
     for tool, by in sorted(front.dominated.items()):
-        cells = " | ".join(f"{front.scores[tool][a]:+.2f}" for a in front.axes)
         names = ", ".join(f"`{b.split('@')[0]}`" for b in by)
-        lines.append(f"| `{tool}` | {cells} | beaten by {names} |")
+        lines.append(f"| `{tool}` | {_cells(tool)} | beaten by {names} |")
     lines.append("")
+    if not front.separating:
+        total = len(front.frontier) + len(front.dominated)
+        lines += [
+            f"**{len(front.frontier)} of {total} subjects are non-dominated, so "
+            "dominance separates almost nothing here.** With "
+            f"{len(front.axes)} axes a subject need only lead on one to be safe, "
+            "and a frontier holding most of the field is a weak result in the "
+            "language of a strong one. Read the axes, not the verdict column.",
+            "",
+        ]
     return lines
 
 

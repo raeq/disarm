@@ -1774,3 +1774,99 @@ def test_standalone_entry_points_are_in_the_surface_census():
     subject = subjects.by_name("disarm")
     assert subject is not None
     assert "normalize_confusables" in subject.transforms()
+
+
+def test_a_subject_without_a_detector_is_not_marked_incomplete():
+    """Exclusion and zero-filling are the same error with opposite signs.
+
+    `disarm` answers four directed measurements on the TAG-block suite because
+    it has a detector; a transform-only subject answers two. Judging
+    completeness against the union of all keys marked all ten of those
+    incomplete and left one tool on three benchmarks — which emptied the Pareto
+    frontier and removed the non-dominated count from the report entirely.
+    """
+    detector = leaderboard.Item(
+        suite="s", key="detected", scores={"withdet": 1.0}, z={"withdet": 1.0}
+    )
+    shared = leaderboard.Item(
+        suite="s",
+        key="removed",
+        scores={"withdet": 1.0, "plain": 0.0},
+        z={"withdet": 1.0, "plain": 0.0},
+    )
+    (merged,) = leaderboard.parcel([detector, shared])
+    assert merged.complete("withdet")
+    assert merged.complete("plain"), (
+        "a subject that answered everything its peers answered is complete"
+    )
+
+
+def test_one_narrow_benchmark_does_not_empty_the_pareto_frontier():
+    """Dominance is taken pairwise, on the axes both subjects answered.
+
+    `weaponizing-unicode`'s only directed measurement needs a detector, so two
+    subjects answer it. Intersecting the field listwise across every benchmark
+    reduced the comparable set to fewer than two tools and returned no frontier
+    at all — silently, with no line in the report to say so.
+    """
+    # Two tools, three axes, plus one axis only the first can answer.
+    items = []
+    for i in range(3):
+        z = {"a": float(i), "b": float(i) - 1}
+        items.append(
+            leaderboard.Item(
+                suite=f"wide-{i}",
+                key="k",
+                scores=dict(z),
+                z=z,
+                member_keys={"a": {"k"}, "b": {"k"}},
+                all_keys={"k"},
+                peer_keys={"a": {"k"}, "b": {"k"}},
+            )
+        )
+    items.append(
+        leaderboard.Item(
+            suite="narrow",
+            key="k",
+            scores={"a": 1.0},
+            z={"a": 1.0},
+            member_keys={"a": {"k"}},
+            all_keys={"k"},
+            peer_keys={"a": {"k"}},
+        )
+    )
+    board = leaderboard.Leaderboard(items=items, subjects=["a", "b"])
+    par = leaderboard.pareto(board)
+    assert par is not None, "a 13-benchmark battery must yield a frontier"
+    assert len(par.frontier) + len(par.dominated) >= 2
+
+
+def test_the_overlap_blocker_says_what_it_actually_checked():
+    """ "No two subjects separate" and "no neighbours separate" are different claims.
+
+    `separated_pairs` counts adjacent pairs, which is the right test for whether
+    an ordering is noise. The message claimed the stronger "no two subjects",
+    which was false the moment any non-adjacent pair separated — `disarm`
+    [0.21, 0.92] against `stdlib` [-1.40, -0.11] — so the page contradicted its
+    own table.
+    """
+    standings = [
+        leaderboard.Standing(
+            subject=f"t{i}",
+            composite=0.0,
+            bt_strength=0.0,
+            rank=i + 1,
+            ci_low=lo,
+            ci_high=hi,
+            items=3,
+        )
+        for i, (lo, hi) in enumerate([(0.9, 1.1), (0.0, 1.0), (-0.5, 0.5)])
+    ]
+    board = leaderboard.Leaderboard(items=[], subjects=["t0", "t1", "t2"], standings=standings)
+    # t0 and t2 separate; neither neighbour pair does.
+    assert board.separated_pairs() == 0
+    assert board.separated_pairs_any() == (1, 3)
+    text = " ".join(board.blockers)
+    if "bootstrap" in text:
+        assert "no two subjects" not in text
+        assert "1 of 3" in text

@@ -12,6 +12,8 @@ handle, so a future block of the same shape is covered without an edit here.
 
 from __future__ import annotations
 
+import functools
+import re
 import sys
 import unicodedata
 from pathlib import Path
@@ -27,16 +29,28 @@ CORPUS = ROOT / "tests" / "fixtures" / "key_stability" / "corpus.txt"
 DUAL_PURPOSE = {"\U0001f170": "A", "\U0001f171": "B", "\U0001f17e": "O", "\U0001f17f": "P"}
 
 
-def _enclosed() -> dict[str, str]:
-    """Every code point the generator's rule selects, re-derived here independently."""
-    import re
+#: Compiled once. The sweep below runs over the whole code space, so re-compiling per
+#: call was measurable on its own.
+_NAME = re.compile(r".+\bLATIN (CAPITAL|SMALL) LETTER ([A-Z])")
 
+
+@functools.lru_cache(maxsize=1)
+def _enclosed() -> dict[str, str]:
+    """Every code point the generator's rule selects, re-derived here independently.
+
+    Cached: seven tests in this file call it, and each call walked 1.1M code points
+    (#920 review). Re-derived rather than imported from `scripts/gen_confusables.py` on
+    purpose — a test that reuses the generator's own function cannot catch the generator
+    selecting the wrong set.
+
+    The returned dict is shared, so callers must not mutate it. Nothing here does.
+    """
     out = {}
     for cp in range(sys.maxunicode + 1):
         if 0xD800 <= cp <= 0xDFFF:
             continue
         ch = chr(cp)
-        m = re.fullmatch(r".+\bLATIN (CAPITAL|SMALL) LETTER ([A-Z])", unicodedata.name(ch, ""))
+        m = _NAME.fullmatch(unicodedata.name(ch, ""))
         if not m or ch.isascii():
             continue
         if unicodedata.category(ch)[0] not in ("L", "S"):

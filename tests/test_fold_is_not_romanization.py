@@ -44,7 +44,8 @@ FOLDING = ("canonicalize", "canonicalize_strict", "strip_obfuscation", "normaliz
 #: The surfaces that transliterate first, and so produce a real romanization.
 ROMANIZING = ("search_key", "catalog_key", "sort_key", "slugify")
 
-#: The surfaces that leave the word alone.
+#: The surfaces that leave the *script* alone. Not identity functions — see
+#: `test_normalize_preserves_the_script_without_being_an_identity_function`.
 PRESERVING = ("normalize",)
 
 
@@ -61,6 +62,25 @@ def test_romanizing_surfaces_produce_the_transliteration(name: str) -> None:
 @pytest.mark.parametrize("name", PRESERVING)
 def test_preserving_surfaces_return_the_input(name: str) -> None:
     assert getattr(disarm, name)(MOSCOW) == MOSCOW
+
+
+def test_normalize_preserves_the_script_without_being_an_identity_function() -> None:
+    """#908 review — "keeps the text unchanged" was wrong, and this pins why.
+
+    `normalize` runs no fold and no transliteration, so a Cyrillic word survives as
+    Cyrillic. It is still Unicode normalization: under the default NFC it recomposes,
+    so a caller reaching for it to leave a string alone will be surprised. Both halves
+    matter — the script claim is what the docstring rests on, the non-identity claim is
+    what the review caught.
+    """
+    assert disarm.normalize(MOSCOW) == MOSCOW  # script survives
+    decomposed = "cafe\u0301"
+    assert disarm.normalize(decomposed) != decomposed  # …but not an identity
+    assert disarm.normalize(decomposed) == "caf\u00e9"
+
+    doc = disarm.canonicalize.__doc__ or ""
+    assert "keeps the text unchanged" not in doc
+    assert "not an identity function" in doc
 
 
 def test_the_three_groups_really_do_disagree() -> None:

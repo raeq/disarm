@@ -91,7 +91,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   Latin `Mockba` and a Cyrillic `Москва` are meant to meet, and the romanizing surfaces
   cannot make them: `find_key_collisions(["Москва", "Mockba"], key="search_key")` is
   empty. What was missing was the sentence telling a caller to pick by what they need,
-  and that `normalize` keeps the text unchanged.
+  and that `normalize` applies Unicode normalization and nothing else, so the script
+  survives it. That is not the same as leaving the string alone: NFC still recomposes.
 
 - **`target_script` folds toward a script; it does not protect one (#907).**
   `normalize_confusables` was the only surface exposing the parameter and the only one

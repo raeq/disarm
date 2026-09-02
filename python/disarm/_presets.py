@@ -128,8 +128,10 @@ def canonicalize(text: str, *, digit_policy: str = "numeric") -> str:
     point: an attacker's Latin ``Mockba`` and a Cyrillic ``Москва`` are meant to meet, and
     the romanizing surfaces cannot make them —
     ``find_key_collisions(["Москва", "Mockba"], key="search_key")`` is empty. Pick by what
-    you need. `normalize` keeps the text unchanged, the key builders give a romanization,
-    and this gives the collapse.
+    you need. `normalize` applies Unicode normalization and nothing else, so the script
+    survives — but it is not an identity function, and NFC still recomposes ``e`` followed
+    by U+0301 into ``é``. The key builders give a romanization, and this gives the
+    collapse.
 
     Warning:
         Canonicalizes Unicode for *comparison*; it is **not** an output

@@ -152,12 +152,17 @@ def test_614_precedence_is_unchanged() -> None:
 
 
 def test_the_two_suppression_sets_are_not_the_same_set() -> None:
-    """Six of #614's 50 rows are genuine emoji, so neither rule subsumes the other.
+    """Ten of #614's 54 rows are genuine emoji, so neither rule subsumes the other.
 
     49 until #801, which folded `\u222b` INTEGRAL to `s` — upstream maps it straight
     onto `\u0283` LATIN SMALL LETTER ESH, and closing the case asymmetry gave esh an
     ASCII representative. It is a CLDR-named non-emoji, so it lands in the intersection
-    and not in the six below.
+    and not in the ten below.
+
+    50 until #815, which gave the negative enclosed letters a fold. Four of them are
+    dual-purpose: `\U0001f170` is both NEGATIVE SQUARED LATIN CAPITAL LETTER A and the
+    blood-type A button. They are genuine emoji, so they join the six rather than the
+    CLDR-named non-emoji, and they are the reason this count moved.
     """
     confusable = {
         int(line.split("\t")[0], 16)
@@ -165,7 +170,7 @@ def test_the_two_suppression_sets_are_not_the_same_set() -> None:
         if line and not line.startswith("#")
     }
     tr39_claimed = {cp for cp in ROWS if cp in confusable}
-    assert len(tr39_claimed) == 50
+    assert len(tr39_claimed) == 54
     assert tr39_claimed - set(NON_EMOJI) == {
         0x203C,
         0x2049,
@@ -173,4 +178,9 @@ def test_the_two_suppression_sets_are_not_the_same_set() -> None:
         0x2795,
         0x2796,
         0x2797,
+        # The dual-purpose buttons (#815): a letter shape and an emoji at once.
+        0x1F170,
+        0x1F171,
+        0x1F17E,
+        0x1F17F,
     }

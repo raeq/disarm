@@ -51,6 +51,30 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   key builders are byte-identical, having no confusable step on this path. Greek prose
   containing a final sigma changes, though `canonicalize` already rewrote Greek before
   this — `κόσμος` was `koouoς` and is now `koouoc`.
+- **The 54 negative enclosed letters fold to their letter (#815).** `🅐` and `🅰` folded on
+  no surface. Their positive counterparts `ⓐ` and `🄰` do, because NFKC decomposes those
+  and leaves these alone — two neighbouring blocks, opposite outcomes, and a "fancy text"
+  generator offers both side by side, so one style was neutralised and the other passed
+  through untouched.
+
+  Derived from the UCD name and filtered to what NFKC does not already handle, so the set
+  is exactly the 54 that need it: NEGATIVE CIRCLED (26), NEGATIVE SQUARED (26), CROSSED
+  NEGATIVE SQUARED and one stray SQUARED. Two families that match the same name pattern
+  are excluded because both are already handled correctly: **Tags** are stripped as a
+  smuggling class (#413), and **combining letters** are category `Mn`, which is
+  `strip_accents`' business.
+
+  Four of them are dual-purpose. `🅰` is NEGATIVE SQUARED LATIN CAPITAL LETTER A *and* the
+  blood-type A button, so it now folds under `canonicalize`, following #614 — inside a
+  comparison preset the fold wins over the name, or a spoof and its target stop being
+  equal. `llm_guardrail` still names it, because demojize runs before the fold there;
+  that divergence is #918's subject. The `build.rs` gate on the emoji/confusable overlap
+  moves 50 → 54 and caught this, which is what it exists for.
+
+  **Upgrade note — `KEY_SCHEMA_VERSION` goes 4 → 5.** `catalog_key` moves for all 54.
+  `search_key` and `sort_key` do not. The key-stability corpus contained none of these,
+  which is the **third** time this cycle the fixture stayed green through a key change
+  because its corpus did not sample the class being fixed; 58 rows added with it.
 
 - **`scripts/watch_pr.py` — a PR watcher whose decision logic is tested.** Shepherding
   loops kept being written by hand, and four bugs kept coming back:

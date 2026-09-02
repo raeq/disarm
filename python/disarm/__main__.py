@@ -81,6 +81,11 @@ def cmd_pipeline(args: argparse.Namespace) -> None:
             "strip_zero_width",
             "demojize",
             "strip_bidi",  # #250 C6: was supported by TextPipeline but unreachable from the CLI
+            "strip_pua",  # #911: same, and the reason a composed pipeline kept the PUA
+            # Also unreachable until #911 went looking. `lang` stays out on purpose: it
+            # takes a value, so it needs its own flag rather than a --steps entry.
+            "strict_iso9",
+            "gost7034",
         ):
             kwargs[step] = True
         else:
@@ -181,7 +186,8 @@ def main() -> None:
             required=True,
             help="Comma-separated steps: normalize,transliterate,fold_case,"
             "collapse_whitespace,strip_accents,confusables,strip_control,"
-            "strip_zero_width,demojize,strip_bidi,strip_zalgo",
+            "strip_zero_width,demojize,strip_bidi,strip_zalgo,strip_pua,"
+            "strict_iso9,gost7034",
         )
         p.add_argument("--form", default=None, help="Normalization form for normalize step")
         p.add_argument(

@@ -36,6 +36,7 @@ impl _TextPipeline {
         demojize=false,
         strip_bidi=false,
         strip_zalgo=None,
+        strip_pua=false,
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -53,6 +54,7 @@ impl _TextPipeline {
         demojize: bool,
         strip_bidi: bool,
         strip_zalgo: Option<i64>,
+        strip_pua: bool,
     ) -> PyResult<Self> {
         // strip_zalgo's value is `max_marks`, which must be a non-negative value
         // that fits `usize`. This signed→unsigned narrowing is the one binding-
@@ -84,6 +86,7 @@ impl _TextPipeline {
             demojize,
             strip_bidi,
             zalgo_max_marks,
+            strip_pua,
         )?;
         Ok(Self { inner })
     }

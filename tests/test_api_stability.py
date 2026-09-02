@@ -571,6 +571,7 @@ CLASS_METHODS = {
             "demojize",
             "strip_bidi",
             "strip_zalgo",
+            "strip_pua",
         ],
         "__call__": ["text"],
         "explain": [],

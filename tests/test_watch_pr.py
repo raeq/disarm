@@ -95,9 +95,13 @@ def test_every_bad_conclusion_stops_the_loop(conclusion: str) -> None:
 
 
 def test_blocked_with_nothing_pending_stops_rather_than_sleeping() -> None:
-    """The bug: the loop slept through a required-review block until it ran out."""
+    """The bug: the loop slept through a required-review block until it ran out.
+
+    Reported after `STUCK_POLLS` consecutive sightings rather than the first, because the
+    first is also what a PR looks like seconds after a push — see the race tests below.
+    """
     snap = Snapshot("OPEN", "BLOCKED", threads=(DONE_THREAD,), checks=(GREEN, SKIPPED))
-    d = decide(snap)
+    d = decide(snap, stuck_polls=watch_pr.STUCK_POLLS - 1)
     assert d.action is Action.STOP_STUCK
     assert "BLOCKED" in d.detail
 
@@ -210,3 +214,42 @@ def test_repo_argument_is_validated_before_it_is_split(bad: str) -> None:
 @pytest.mark.parametrize("good", ["raeq/disarm", "o/r"])
 def test_valid_repo_arguments_pass(good: str) -> None:
     assert watch_pr._repo_arg(good) == good
+
+
+# --- the stuck race: a push looks structural for a few seconds ---------------
+
+
+def test_the_stuck_shape_is_not_reported_on_one_poll() -> None:
+    """A false "stuck" cost a real merge (#921).
+
+    For a few seconds after a push, GitHub reports BLOCKED with the previous run's checks
+    COMPLETED and the new ones not yet created. In one snapshot that is identical to a
+    required-review block, so the shape has to persist before it means anything.
+    """
+    snap = Snapshot("OPEN", "BLOCKED", threads=(DONE_THREAD,), checks=(GREEN, SKIPPED))
+    first = decide(snap, stuck_polls=0)
+    assert first.action is Action.WAIT
+    assert first.stuck is True
+
+
+def test_the_stuck_shape_is_reported_once_it_persists() -> None:
+    """The other half: it must still be reachable, or the stop condition is dead code."""
+    snap = Snapshot("OPEN", "BLOCKED", threads=(DONE_THREAD,), checks=(GREEN, SKIPPED))
+    final = decide(snap, stuck_polls=watch_pr.STUCK_POLLS - 1)
+    assert final.action is Action.STOP_STUCK
+    assert "consecutive" in final.detail
+
+
+def test_the_stuck_counter_resets_when_checks_appear() -> None:
+    """`watch` resets on any non-stuck decision, so a slow CI start cannot accumulate."""
+    running = Snapshot("OPEN", "BLOCKED", checks=(GREEN, RUNNING))
+    d = decide(running, stuck_polls=watch_pr.STUCK_POLLS - 1)
+    assert d.action is Action.WAIT
+    assert d.stuck is False
+
+
+def test_a_mergeable_pr_never_counts_as_stuck() -> None:
+    """Ordering guard: the merge branch is above the stuck branch and must stay there."""
+    snap = Snapshot("OPEN", "CLEAN", checks=(GREEN,))
+    d = decide(snap, stuck_polls=watch_pr.STUCK_POLLS)
+    assert d.action is Action.MERGE

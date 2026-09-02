@@ -712,7 +712,14 @@ python scripts/watch_pr.py 912 --no-merge   # report only
 It exits `0` merged, `1` closed without merging (or a merge it could not confirm),
 `2` when you are needed — an unresolved review thread, printed with its file, line and
 body; a failed check; a stale branch; a structural block; or a thread listing too long
-to read in one page — and `3` if it gave up. Two behaviours are worth knowing, because hand-written loops keep getting
+to read in one page — and `3` if it gave up.
+
+A structural block is reported only after it has held for three consecutive polls. For a
+few seconds after a push GitHub reports the PR as blocked with the previous run's checks
+complete and the new ones not yet created, which in a single snapshot is
+indistinguishable from a required review that will never arrive.
+
+Two behaviours are worth knowing, because hand-written loops keep getting
 them wrong: review threads are polled *before* checks, so a comment never waits out a
 CI run, and `UNSTABLE` counts as mergeable, so a still-running non-required job does
 not hold the merge. `tests/test_watch_pr.py` pins both.

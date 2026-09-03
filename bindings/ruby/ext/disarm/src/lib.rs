@@ -858,6 +858,11 @@ fn pipeline_process(rb_self: &Pipeline, text: Wtf8Text) -> Result<String, Error>
     rb_self.inner.process(&text).map_err(|e| map_err(&e))
 }
 
+/// `Disarm::Pipeline#purpose` — what the named profile is for, or `nil` (#860).
+fn pipeline_purpose(rb_self: &Pipeline) -> Option<String> {
+    rb_self.inner.purpose().map(str::to_owned)
+}
+
 /// `Disarm::Pipeline#_with_digit_policy(policy)` — a copy of this pipeline whose confusable
 /// passes fold under `policy` (#646). Fails when the profile has no confusables step and the
 /// policy is not the default: a setting that would never run is refused rather than kept.
@@ -1007,6 +1012,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     // instance method on the wrapped handle. Mirrors `Disarm::Lexicon` above.
     let pipeline = module.define_class("Pipeline", ruby.class_object())?;
     pipeline.define_method("process", method!(pipeline_process, 1))?;
+    pipeline.define_method("purpose", method!(pipeline_purpose, 0))?;
     pipeline.define_method("_with_digit_policy", method!(pipeline_with_digit_policy, 1))?;
     module.define_singleton_method("_get_pipeline", function!(get_pipeline, 1))?;
     Ok(())

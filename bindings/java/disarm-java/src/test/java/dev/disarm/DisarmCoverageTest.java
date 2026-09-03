@@ -137,6 +137,19 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void pipelinePurpose() {
+        try (Pipeline rag = Disarm.getPipeline("rag_ingest");
+                Pipeline guard = Disarm.getPipeline("llm_guardrail")) {
+            // The pair a reader confuses: one romanizes, the other folds, and the sentence
+            // is what says so without leaving the REPL (#860).
+            assertTrue(rag.purpose().contains("rather than folding"));
+            assertTrue(guard.purpose().contains("folding homoglyphs"));
+            assertEquals("raural", rag.process("\u0440\u0430\u0443\u0440\u0430l"));
+            assertEquals("paypal", guard.process("\u0440\u0430\u0443\u0440\u0430l"));
+        }
+    }
+
+    @Test
     void pipelineWithDigitPolicy() {
         String spoof = "g\u0A66ogle";
         try (Pipeline guard = Disarm.getPipeline("llm_guardrail");

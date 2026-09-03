@@ -126,6 +126,61 @@ assert pipe("Москва") == "moskva"
 | Reversibility | No (lossy) |
 | Script coverage | All 83 language profiles |
 
+### code_context
+
+**Use case:** Screening source code without rewriting it: the homoglyph class is reported rather than folded, because line structure, indentation and case are the contract.
+
+The only structure-preserving profile. Every other profile ends in `collapse_whitespace`,
+which folds a line break to a space by design — measured over 465 files of this repository,
+all thirteen other surfaces collapse every file to a single line. It also applies no
+confusable fold, and that is the design point: exactly three ASCII characters are TR39
+sources (`"`, `` ` ``, `|`), all three are load-bearing syntax, and folding them breaks 287
+of 287 Python files. So this profile neutralizes the invisible, bidi and control classes in
+the text and leaves the homoglyph class to `inspect_anomalies`, `is_confusable` and
+`is_mixed_script` to report.
+
+```python
+pipe = get_pipeline("code_context")
+assert pipe('x = "a" | b') == 'x = "a" | b'
+```
+
+---
+
+### llm_guardrail
+
+**Use case:** Screening untrusted text before it reaches a model prompt, folding homoglyphs onto the term they imitate.
+
+Folds a spoof onto the term it imitates, which is what a screen in front of a model wants:
+a Cyrillic look-alike of `paypal` becomes `paypal`. `demojize` is deliberately **off** —
+glossing an attacker-chosen emoji writes attacker-chosen English into the prompt, and over
+the emoji-presentation set that reaches 1,272 distinct words including `stop`, `end`, `new`,
+`key` and `no`.
+
+```python
+pipe = get_pipeline("llm_guardrail")
+assert pipe("раураl") == "paypal"  # Cyrillic р, а, у — folded onto the term it imitates
+```
+
+---
+
+### rag_ingest
+
+**Use case:** Normalizing retrieved documents for a RAG index, romanizing legitimate non-Latin text rather than folding homoglyphs onto Latin.
+
+**Not a homoglyph screen, and the difference is easy to miss.** This profile recovers by
+*transliteration*, so `Москва` becomes `Moskva` and stays retrievable, while a Cyrillic
+look-alike of `paypal` romanizes to `raural` rather than folding to `paypal`. Transliterate
+runs before the fold in the fixed step order, so adding a confusable step here would be a
+no-op. For homoglyph-spoof folding, use `llm_guardrail`.
+
+```python
+pipe = get_pipeline("rag_ingest")
+assert pipe("Москва") == "Moskva"  # retrievable, and the case is kept
+assert pipe("раураl") == "raural"  # romanized, not folded — llm_guardrail gives "paypal"
+```
+
+---
+
 ---
 
 ## Precompiled Pipelines vs Policy Profiles

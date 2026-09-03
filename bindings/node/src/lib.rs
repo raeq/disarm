@@ -952,6 +952,13 @@ impl Pipeline {
         self.inner.process(&text).map_err(|e| map_err(&e))
     }
 
+    /// What the named profile this was built from is for, in one sentence (#860).
+    /// `null` for a pipeline not built from a profile.
+    #[napi(getter)]
+    pub fn purpose(&self) -> Option<String> {
+        self.inner.purpose().map(str::to_owned)
+    }
+
     /// A copy of this pipeline whose confusable passes fold under `digitPolicy` (#646).
     /// Throws when the profile has no confusables step and the policy is not the default:
     /// a setting that would never run is refused rather than kept.

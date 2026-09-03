@@ -104,6 +104,11 @@ impl _TextPipeline {
         Ok(Self { inner })
     }
 
+    /// What the named profile this was built from is for, or `None` (#860).
+    fn purpose(&self) -> Option<&'static str> {
+        self.inner.purpose()
+    }
+
     /// Return the ordered list of active pipeline steps and their parameters.
     fn steps(&self) -> Vec<(String, Option<String>)> {
         self.inner.steps()

@@ -1318,11 +1318,18 @@ def list_profiles() -> list[str]:
     so treat it as documentation of what Rust runs rather than as the source of
     truth.
 
+    Each profile also says what it is *for*, in one sentence, so the list and the reasons
+    to pick between them are one line apart (#860)::
+
+        {p: get_pipeline(p).purpose for p in list_profiles()}
+
     Returns:
         Sorted list of profile name strings.
 
     Examples:
         >>> "scholarly_cyrillic_iso9" in list_profiles()
         True
+        >>> get_pipeline("search_index").purpose
+        'Full-text search index generation, cross-language search keys.'
     """
     return _list_profiles()

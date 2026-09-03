@@ -1374,6 +1374,19 @@ pub fn pipelineWithDigitPolicy<'l>(
     .resolve::<Policy>()
 }
 
+/// What the named profile a handle was built from is for, or null (#860).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn pipelinePurpose<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, handle: jlong) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let purpose = read_registry(&PIPELINES).get(&handle).and_then(api::Pipeline::purpose);
+        match purpose {
+            Some(p) => Ok(env.new_string(p)?.into()),
+            None => Ok(JObject::null()),
+        }
+    })
+    .resolve::<Policy>()
+}
+
 /// Run a pipeline handle over `text` (throws on a processing error or stale handle).
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn pipelineProcess<'l>(

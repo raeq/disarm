@@ -1,7 +1,8 @@
 """#728 — every preset and key builder maps non-empty input to `""`.
 
 A value that was entirely stripped is indistinguishable from a value that was never there.
-`sanitize_filename` is the only surface that guards it, with the `_` sentinel from #485.
+`sanitize_filename` was the only surface that guarded it, with the `_` sentinel from #485;
+since #728 the four key builders take `on_empty` for the same job.
 
     find_key_collisions(["admin", "", ZWSP, STACKED_MARKS, SHY, "bob"], key="search_key")
     -> one group, key "", holding absence and three stripped values
@@ -18,6 +19,7 @@ to `""` becomes a diff somebody reads rather than a silent widening.
 
 from __future__ import annotations
 
+import re
 import sys
 import unicodedata
 from collections.abc import Callable
@@ -33,7 +35,7 @@ KEY_BUILDERS = ["search_key", "catalog_key", "sort_key", "skeleton_key"]
 ZWSP = "\u200b"
 SHY = "\u00ad"
 STACKED_MARKS = "\u0301\u0302"
-#: A sentinel no builder can produce: it is stripped by all of them.
+#: A sentinel these tests have checked no builder produces: it is stripped by all of them.
 SENTINEL = "␀"  # SYMBOL FOR NULL
 
 
@@ -51,11 +53,11 @@ def _surface(name: str) -> Callable[[str], str]:
 
 
 @pytest.mark.parametrize("name", sorted(_EMPTY_KEY_CENSUS))
-def test_the_census_is_what_the_docstrings_claim(name: str, assigned: list[str]) -> None:
-    """Item 4. The numbers are in nine docstrings; this is what keeps them true.
+def test_the_census_matches_the_measurement(name: str, assigned: list[str]) -> None:
+    """Item 4, half one: the frozen table is what the library actually does.
 
-    A count is asserted rather than proof-read, because a docstring number nobody
-    re-measures is a number that stops being right the first time a strip class widens.
+    A count is asserted rather than proof-read, because a number nobody re-measures stops
+    being right the first time a strip class widens.
     """
     total_want, nonpua_want = _EMPTY_KEY_CENSUS[name]
     fn = _surface(name)
@@ -75,8 +77,37 @@ def test_the_census_is_what_the_docstrings_claim(name: str, assigned: list[str])
     )
 
 
-def test_sanitize_filename_is_still_the_one_surface_that_reserves_a_sentinel() -> None:
-    """The precedent the rest of #728 is measured against (#485)."""
+#: The two numbers as the docstrings state them — `**139,921** single` and
+#: `(2,453 excluding the Private Use`. Parsed from the surface's own `__doc__`, so the
+#: prose is gated against the table and the table against the measurement.
+_DOC_TOTAL = re.compile(r"\*\*([\d,]+)\*\* single")
+_DOC_NONPUA = re.compile(r"\(([\d,]+) excluding the Private Use")
+
+
+@pytest.mark.parametrize("name", sorted(set(_EMPTY_KEY_CENSUS) - {"sanitize_filename"}))
+def test_the_docstrings_state_the_census(name: str) -> None:
+    """Item 4, half two: the nine docstrings say what the table says.
+
+    Raised in review on #943 — the test above was named as if it read the docstrings and
+    read only the table, so prose and table could drift with the gate green. Both halves
+    together mean a docstring number is a measurement, not a claim.
+    """
+    doc = _surface(name).__doc__ or ""
+    total = _DOC_TOTAL.search(doc)
+    nonpua = _DOC_NONPUA.search(doc)
+    assert total and nonpua, f"{name}: the docstring no longer states its census"
+    stated = (int(total.group(1).replace(",", "")), int(nonpua.group(1).replace(",", "")))
+    assert stated == _EMPTY_KEY_CENSUS[name], (
+        f"{name}: docstring says {stated}, _EMPTY_KEY_CENSUS says {_EMPTY_KEY_CENSUS[name]}"
+    )
+
+
+def test_sanitize_filename_reserves_a_sentinel_by_default() -> None:
+    """The precedent the rest of #728 is measured against (#485).
+
+    It is the one surface that does this *without being asked*; the key builders now do
+    it on request, via `on_empty`.
+    """
     assert _EMPTY_KEY_CENSUS["sanitize_filename"] == (0, 0)
     assert disarm.sanitize_filename(ZWSP) == "_"
 

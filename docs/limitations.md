@@ -628,7 +628,7 @@ The four key builders take `on_empty` for it — the fix `sanitize_filename` alr
 with `_`. It applies only when the *input* was non-empty, so absence keeps its own key:
 
 ```python
-NUL = "\u2400"  # SYMBOL FOR NULL — outside the range any key builder produces
+NUL = "\u2400"  # SYMBOL FOR NULL — a value you have checked none of your inputs keys to
 
 assert search_key("", on_empty=NUL) == ""  # absence
 assert search_key("\u200b", on_empty=NUL) == NUL  # stripped to nothing
@@ -640,8 +640,8 @@ one of them.
 
 !!! warning "The sentinel is yours to choose, and disarm cannot check it"
     A value a real input also keys to reintroduces the collision one step over:
-    `search_key("\u200b", on_empty="admin")` equals `search_key("admin")`. Pick something
-    outside the range the builder can produce.
+    `search_key("\u200b", on_empty="admin")` equals `search_key("admin")`. Pick a value
+    you have verified none of your inputs keys to — disarm knows the table, not your data.
 
 
 ### `strip_accents` deletes Indic vowel signs

@@ -60,13 +60,13 @@ def _interleave(text: str, ch: str) -> str:
 #: against this, not the other way round.
 VECTORS: dict[tuple[str, str], str] = {
     ("Unicode control", "zero-width space"): BASE.replace(" ", "\u200b "),
-    ("Unicode control", "zero-width non-joiner"): _interleave(BASE[:8], "\u200c") + BASE[8:],
-    ("Unicode control", "zero-width joiner"): _interleave(BASE[:8], "\u200d") + BASE[8:],
+    ("Unicode control", "zero-width non-joiner"): _interleave(BASE, "\u200c"),
+    ("Unicode control", "zero-width joiner"): _interleave(BASE, "\u200d"),
     ("Unicode control", "directional override"): "\u202e" + BASE + "\u202c",
     ("Unicode control", "directional isolate"): "\u2066" + BASE + "\u2069",
     ("Unicode control", "tag block"): _tag(BASE),
-    ("Unicode control", "combining pile"): "".join(c + "\u0301" * 8 for c in BASE[:10]),
-    ("Unicode control", "invisible payload"): BASE[:6] + "\ufeff\u2060\u180e" + BASE[6:],
+    ("Unicode control", "combining pile"): "".join(c + "\u0301" * 8 for c in BASE),
+    ("Unicode control", "invisible payload"): _interleave(BASE, "\ufeff\u2060\u180e"),
     ("Homoglyph", "cyrillic substitution"): BASE.replace("o", "о")
     .replace("e", "е")
     .replace("a", "а"),
@@ -88,12 +88,12 @@ VECTORS: dict[tuple[str, str], str] = {
     ("Encoding", "base64"): base64.b64encode(BASE.encode()).decode(),
     ("Encoding", "hex"): BASE.encode().hex(),
     ("Encoding", "rot13"): codecs.encode(BASE, "rot13"),
-    ("Encoding", "binary"): " ".join(f"{ord(c):08b}" for c in BASE[:6]),
+    ("Encoding", "binary"): " ".join(f"{ord(c):08b}" for c in BASE),
     ("Encoding", "leetspeak"): BASE.translate(
         str.maketrans({"i": "1", "e": "3", "o": "0", "a": "4", "s": "5"})
     ),
-    ("Encoding", "url escape"): "".join(f"%{ord(c):02X}" for c in BASE[:8]),
-    ("Encoding", "unicode escape"): "".join(f"\\u{ord(c):04x}" for c in BASE[:6]),
+    ("Encoding", "url escape"): "".join(f"%{ord(c):02X}" for c in BASE),
+    ("Encoding", "unicode escape"): "".join(f"\\u{ord(c):04x}" for c in BASE),
 }
 
 #: Subtypes disarm does not act on, and why — asserted as negatives, the way
@@ -132,6 +132,56 @@ def test_every_vector_actually_perturbs_the_prompt(key: tuple[str, str]) -> None
     finding, or worse, as a pass. 28 of the paper's 591 rows are no-ops.
     """
     assert VECTORS[key] != BASE, f"{key} does not perturb the prompt"
+
+
+#: Every encoding subtype must round-trip, which is how "covers the whole prompt" is
+#: checkable for a family whose output shares no characters with the input.
+DECODERS = {
+    "base64": lambda s: base64.b64decode(s).decode(),
+    "hex": lambda s: bytes.fromhex(s).decode(),
+    "rot13": lambda s: codecs.decode(s, "rot13"),
+    "binary": lambda s: "".join(chr(int(b, 2)) for b in s.split()),
+    "url escape": lambda s: bytes.fromhex(s.replace("%", "")).decode(),
+    "unicode escape": lambda s: s.encode().decode("unicode_escape"),
+}
+
+
+@pytest.mark.parametrize("subtype", sorted(DECODERS))
+def test_every_encoding_vector_carries_the_whole_prompt(subtype: str) -> None:
+    """#931 review: four vectors were built from a slice of the prompt.
+
+    The page says every row perturbs the same prompt, and for the encoding family that
+    claim is only checkable by decoding — the output shares no characters with the input.
+    `leetspeak` is excluded because it is lossy by construction, not an encoding.
+    """
+    assert DECODERS[subtype](VECTORS[("Encoding", subtype)]) == BASE
+
+
+#: Subtypes where counting the prompt's letters after folding is the wrong measure.
+#:
+#: * `character deletion` — removing letters IS the attack.
+#: * `tag block` — a concealment vector, not a substitution one: the prompt is hidden in
+#:   Plane 14 beside innocuous cover text, and the correct outcome is that the payload is
+#:   *removed entirely*, leaving the cover. Folding it back to letters would mean the
+#:   concealed instruction survived.
+NOT_LETTER_PRESERVING = {("Structural", "character deletion"), ("Unicode control", "tag block")}
+
+
+@pytest.mark.parametrize(
+    "key",
+    sorted(k for k in VECTORS if k[0] != "Encoding" and k not in NOT_LETTER_PRESERVING),
+)
+def test_every_other_vector_keeps_the_prompt_s_letters(key: tuple[str, str]) -> None:
+    """The same claim for the families that substitute rather than conceal or delete.
+
+    Each must still carry all of the prompt's letters once folded, which a vector built
+    from a prefix cannot do — the defect #931's review found in four rows.
+    """
+    folded = disarm.canonicalize(VECTORS[key])
+    assert sum(c.isalpha() for c in folded) == sum(c.isalpha() for c in BASE), (
+        f"{key} carries {sum(c.isalpha() for c in folded)} letters, "
+        f"the prompt has {sum(c.isalpha() for c in BASE)}"
+    )
 
 
 @pytest.mark.parametrize("key", sorted(VECTORS))

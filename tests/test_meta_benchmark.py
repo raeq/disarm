@@ -2113,3 +2113,43 @@ def test_an_uninstalled_subject_has_no_capabilities_and_does_not_raise():
     suite = next(s for s in registry.all_suites() if s.MULTI_SUBJECT)
     supported, why = suite.supports(subject)
     assert not supported and why
+
+
+def test_bad_characters_is_scored_per_attack_class():
+    """One average over four classes hid a 100%-to-14% spread.
+
+    The release is keyed by the paper's own experiment names
+    (`perspective_deletions`, `maxtoxic_reorderings`, ...), and the loader
+    iterated `blob.values()` and dropped that key. So a suite whose summary said
+    "four imperceptible-perturbation classes" reported a single 51.4% XMR, while
+    the classes underneath run 100.0% (invisibles) to 14.2% (deletions).
+
+    #934 improved detection of the deletion class and moved no measurement in
+    the whole battery, which is what surfaced this.
+    """
+    suite = registry.by_name("bad-characters")
+    assert suite is not None
+    if not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+
+    out = suite.run(subject=subjects.by_name("disarm"))
+    assert out.status is Status.OK
+    for cls in ("deletions", "homoglyphs", "invisibles", "reorderings"):
+        assert out.measurement(f"{cls}_xmr") is not None, f"{cls} unscored"
+        assert out.measurement(f"{cls}_detected") is not None, f"{cls} undetected"
+
+    # The classes must partition the corpus, not resample it.
+    total = sum(out.measurement(f"{c}_rows").value for c in suite.CLASSES)
+    assert total == out.measurement("rows").value, "per-class rows must sum to the corpus"
+
+
+def test_the_class_taxonomy_comes_from_the_release_not_from_here():
+    """Assigning classes ourselves would make the split disarm's opinion."""
+    src = inspect.getsource(academic.BadCharacters._rows_by_class)
+    assert "blob.items()" in src, "the class must be read from the release's own key"
+    assert set(academic.BadCharacters.CLASSES) == {
+        "deletions",
+        "homoglyphs",
+        "invisibles",
+        "reorderings",
+    }

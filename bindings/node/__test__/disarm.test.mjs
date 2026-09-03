@@ -71,6 +71,9 @@ describe('editDistance and nearestMatch (#894)', () => {
     expect(disarm.nearestMatch('something-else', reserved)).toBeNull()
     expect(disarm.nearestMatch('paypa11', reserved, { maxDistance: 2 })).toEqual({ value: 'paypal', distance: 2 })
   })
+  test('a negative maxDistance is rejected, not read as exact-match-only', () => {
+    expect(() => disarm.nearestMatch('x', ['y'], { maxDistance: -1 })).toThrow(DisarmInvalidArgument)
+  })
 })
 
 describe('Pipeline.withDigitPolicy (#646)', () => {

@@ -79,6 +79,7 @@ RSpec.describe Disarm do
       expect(Disarm.nearest_match("admin", reserved)).to eq({ value: "admin", distance: 0 })
       expect(Disarm.nearest_match("something-else", reserved)).to be_nil
       expect(Disarm.nearest_match("paypa11", reserved, max_distance: 2)).to eq({ value: "paypal", distance: 2 })
+      expect { Disarm.nearest_match("x", ["y"], max_distance: -1) }.to raise_error(Disarm::InvalidArgument)
     end
   end
 

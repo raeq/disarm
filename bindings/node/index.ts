@@ -557,7 +557,7 @@ export function nearestMatch(
   candidates: string[],
   options: { maxDistance?: number } = {},
 ): NearestMatch | null {
-  return native.nearestMatch(value, candidates, options.maxDistance ?? 1) ?? null
+  return call(() => native.nearestMatch(value, candidates, options.maxDistance ?? 1)) ?? null
 }
 
 /** Options for {@link mlNormalize}. */

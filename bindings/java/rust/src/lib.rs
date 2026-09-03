@@ -910,7 +910,11 @@ pub fn nearestMatch<'l>(
     env.with_env(|env| -> JniResult<JObject> {
         let value = value.mutf8_chars(env)?.to_string();
         let candidates = read_string_array(env, &candidates)?;
-        let max = usize::try_from(max_distance).unwrap_or(0);
+        // A negative threshold is rejected, not coerced to "exact match only" (#952 review).
+        let max = match checked_size("maxDistance", max_distance) {
+            Ok(n) => n,
+            Err(msg) => return Err(throw_invalid(env, &msg)),
+        };
         let hit = api::nearest_match(&value, candidates.iter().map(String::as_str), max);
         let mut objs = Vec::with_capacity(1);
         if let Some(m) = &hit {

@@ -132,6 +132,8 @@ class DisarmCoverageTest {
         assertEquals(new NearestMatch("admin", 0L), Disarm.nearestMatch("admin", reserved));
         assertNull(Disarm.nearestMatch("something-else", reserved));
         assertEquals(new NearestMatch("paypal", 2L), Disarm.nearestMatch("paypa11", reserved, 2));
+        assertThrows(
+                DisarmInvalidArgumentException.class, () -> Disarm.nearestMatch("x", List.of("y"), -1));
     }
 
     @Test

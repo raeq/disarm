@@ -331,12 +331,17 @@ pub fn nearest_match(
     value: String,
     candidates: Vec<String>,
     max_distance: i64,
-) -> Option<NearestMatch> {
-    let max = usize::try_from(max_distance).unwrap_or(0);
-    api::nearest_match(&value, candidates.iter().map(String::as_str), max).map(|m| NearestMatch {
-        value: m.value,
-        distance: i64::try_from(m.distance).unwrap_or(i64::MAX),
-    })
+) -> Result<Option<NearestMatch>, NapiError> {
+    // A negative threshold is rejected, not coerced to "exact match only" (#952 review).
+    let max = checked_size("maxDistance", max_distance)?;
+    Ok(
+        api::nearest_match(&value, candidates.iter().map(String::as_str), max).map(|m| {
+            NearestMatch {
+                value: m.value,
+                distance: i64::try_from(m.distance).unwrap_or(i64::MAX),
+            }
+        }),
+    )
 }
 
 /// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks.

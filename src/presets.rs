@@ -1780,6 +1780,9 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
 ///
 /// Defined as `preset(text) == text`, but it avoids materialising the normalized copy
 /// whenever the pipeline's `Guard::Inert` classification hands back a borrow.
+///
+/// `preset` accepts the eight preset names, the three deprecated 0.11 aliases that
+/// `PRESETS` still documents, and any policy-profile name.
 pub(crate) fn is_canonical(text: &str, preset: &str) -> Result<bool, crate::ErrorRepr> {
     // A borrowed `Cow` proves no step touched the input. An owned one only proves a buffer
     // was allocated — several steps build one and write the input back unchanged — so it
@@ -1791,10 +1794,14 @@ pub(crate) fn is_canonical(text: &str, preset: &str) -> Result<bool, crate::Erro
         }
     }
     let out = match preset {
-        "canonicalize" => canonicalize(text)?,
-        "canonicalize_strict" => canonicalize_strict(text)?,
+        // The second name in each of the first three arms is a 0.11 rename that `PRESETS`
+        // still documents as a valid key, so the string dispatch has to accept it or the
+        // registry claim is false. No deprecation warning fires here: the deprecation is
+        // on the *function*, and this is a lookup key.
+        "canonicalize" | "security_clean" => canonicalize(text)?,
+        "canonicalize_strict" | "normalize_user_input" => canonicalize_strict(text)?,
+        "strip_format" | "display_clean" => strip_format(text),
         "strip_obfuscation" => strip_obfuscation(text)?,
-        "strip_format" => strip_format(text),
         "search_key" => search_key(text, None)?,
         "catalog_key" => catalog_key(text, None, false)?,
         "sort_key" => sort_key(text, None)?,
@@ -1890,6 +1897,27 @@ mod is_canonical_tests {
                 !is_canonical(fullwidth, preset).unwrap(),
                 "{preset} on fullwidth"
             );
+        }
+    }
+
+    /// `PRESETS` documents the 0.11 aliases as valid keys, so the string dispatch must
+    /// accept them. Before this test they fell through to the profile lookup and came
+    /// back as `UnknownProfile`, which made the registry claim in the docs false.
+    #[test]
+    fn the_deprecated_aliases_still_resolve() {
+        let fullwidth = "\u{FF21}\u{FF22}\u{FF23}";
+        for (alias, target) in [
+            ("security_clean", "canonicalize"),
+            ("display_clean", "strip_format"),
+            ("normalize_user_input", "canonicalize_strict"),
+        ] {
+            for text in ["abc", fullwidth, "caf\u{E9}"] {
+                assert_eq!(
+                    is_canonical(text, alias).unwrap(),
+                    is_canonical(text, target).unwrap(),
+                    "{alias} disagrees with {target} on {text:?}"
+                );
+            }
         }
     }
 

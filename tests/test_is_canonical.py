@@ -142,22 +142,44 @@ def test_the_gap_is_large_enough_to_be_worth_a_predicate() -> None:
     assert gap > 4000, f"only {gap} non-PUA code points separate the two questions"
 
 
-@pytest.mark.parametrize(
-    "preset",
-    [
-        "canonicalize",
-        "canonicalize_strict",
-        "strip_obfuscation",
-        "strip_format",
-        "search_key",
-        "sort_key",
-    ],
-)
+#: The 0.11 renames. `PRESETS` still documents them as valid keys, so `preset=` must
+#: take them — but calling the Python aliases emits `DeprecationWarning`, so the target
+#: is named here rather than resolved through `getattr`.
+DEPRECATED_ALIASES = {
+    "security_clean": "canonicalize",
+    "display_clean": "strip_format",
+    "normalize_user_input": "canonicalize_strict",
+}
+
+#: Everything in `PRESETS` that is not an alias.
+PRIMARY_PRESETS = sorted(set(disarm.PRESETS) - set(DEPRECATED_ALIASES))
+
+
+def test_the_primary_preset_list_here_matches_the_registry() -> None:
+    """Anchored on `PRESETS`, so a new preset joins the sweep below without an edit."""
+    assert set(PRIMARY_PRESETS) | set(DEPRECATED_ALIASES) == set(disarm.PRESETS)
+
+
+@pytest.mark.parametrize("preset", PRIMARY_PRESETS)
 def test_every_preset_is_addressable(preset: str) -> None:
     """#730 §1: the predicate answers for the preset registry, not just one function."""
     fn = getattr(disarm, preset)
     for text in ("abc", "ＡＢＣ", "Ⅻ", "hello world"):
         assert disarm.is_canonical(text, preset=preset) == (fn(text) == text), (preset, text)
+
+
+@pytest.mark.parametrize(("alias", "target"), DEPRECATED_ALIASES.items())
+def test_the_deprecated_aliases_are_still_accepted(alias: str, target: str) -> None:
+    """`PRESETS` documents them, so the string dispatch has to take them.
+
+    Before this test they fell through to the profile lookup and raised
+    `UnknownProfile`, which made the registry claim in the docstring false. The name is
+    a lookup key, not a call to the deprecated function, so no warning is expected.
+    """
+    for text in ("abc", "ＡＢＣ", "café", "Ⅻ"):
+        assert disarm.is_canonical(text, preset=alias) == disarm.is_canonical(
+            text, preset=target
+        ), (alias, text)
 
 
 def test_a_profile_is_addressable_too() -> None:

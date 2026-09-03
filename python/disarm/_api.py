@@ -2253,6 +2253,14 @@ def is_confusable(
 ) -> bool:
     """True if text contains characters confusable with target-script characters.
 
+    **Printable ASCII is never a detection (#957).** ``"``, the backtick and ``|`` are TR39
+    confusable sources and the fold rewrites all three — deliberately, and recorded under
+    *Five surfaces rewrite printable ASCII* in the limitations page. Counting them here
+    made this return ``True`` for every quoted sentence and every JSON document; 588 of
+    the 1,342 pure-ASCII lines of this repository's own prose fired. The rows stay in the
+    fold and stop being reported, so ``normalize_confusables('|')`` is still ``'l'`` while
+    ``is_confusable('|')`` is ``False``.
+
     Args:
         text: Input string.
         target_script: Script to check confusability against. Currently only

@@ -10,6 +10,29 @@
 //! public `Error` in the first fallible-module extraction sub-PR (#38).
 
 use crate::tables;
+/// Whether a *detection* should ignore `ch` because it is printable ASCII (#957).
+///
+/// `"` (U+0022), `` ` `` (U+0060) and `|` (U+007C) are TR39 confusable **sources**: the
+/// bundled table folds them to `''`, `'` and `l`. That is correct for the fold and
+/// deliberate — #725 records the three rows and which surfaces apply them — but it made
+/// `is_confusable` return `true` for any quoted sentence or JSON document. Measured over
+/// this repository's own prose: 588 of 1,342 pure-ASCII lines.
+///
+/// So the rows stay in the fold and stop counting as detections. The rule is the whole
+/// printable range rather than those three code points, so a row added to the table later
+/// cannot quietly turn ordinary punctuation into a detection; `printable_ascii_is_not_a_detection`
+/// in the tests below sweeps U+0021–U+007E to hold that.
+///
+/// **This is not the ASCII fast path #252 O6.1 rejected.** That one would have skipped
+/// ASCII in `normalize_confusables`, where it is wrong precisely because the fold does
+/// rewrite these three. The fold is untouched here.
+///
+/// Tested before the table probe rather than after, so ASCII text — the common case for a
+/// screen — pays a range check instead of a PHF lookup per character.
+#[inline]
+fn skipped_by_detection(ch: char) -> bool {
+    ch.is_ascii_graphic()
+}
 
 /// The three digit policies, as a type rather than a string (#646 §2).
 ///
@@ -398,6 +421,9 @@ pub(crate) fn find_confusables(
 
     let mut out = Vec::new();
     for (ch, offset) in crate::compose::composed(text) {
+        if skipped_by_detection(ch) {
+            continue;
+        }
         if let Some(target) = map.and_then(|m| m.get(&ch)) {
             if !allowed.is_empty() && is_allowed(ch, &allowed) {
                 continue;
@@ -459,6 +485,10 @@ pub(crate) fn is_confusable(text: &str, target_script: &str) -> Result<bool, cra
     // otherwise is not). See [`crate::compose`].
     let map = tables::resolve_confusable_map(target_script);
     for (ch, _) in crate::compose::composed(text) {
+        // #957: the range check comes first, so ASCII text skips the table probe entirely.
+        if skipped_by_detection(ch) {
+            continue;
+        }
         if map.is_some_and(|m| m.contains_key(&ch)) {
             return Ok(true);
         }
@@ -472,6 +502,48 @@ mod tests {
     /// `"latin"`/`"cyrillic"` after #792 added two more. The list is written twice — once
     /// as the `match` arms here, once as `TargetScript`'s variants — so hold them together
     /// rather than relying on both being edited.
+    /// #957: the rule, swept. Printable ASCII is never a detection, whatever the table
+    /// gains later — the three rows that exist today are `"`, `` ` `` and `|`.
+    #[test]
+    fn printable_ascii_is_not_a_detection() {
+        for cp in 0x21u32..0x7Fu32 {
+            let ch = char::from_u32(cp).expect("ASCII is always a scalar value");
+            let s = ch.to_string();
+            assert!(
+                !is_confusable(&s, "latin").unwrap(),
+                "U+{cp:04X} {ch:?} is reported as confusable"
+            );
+            assert!(
+                find_confusables(&s, "latin", &[]).unwrap().is_empty(),
+                "U+{cp:04X} {ch:?} is located as confusable"
+            );
+        }
+    }
+
+    /// Both halves. #725 keeps the three rows in the fold; #957 stops them being
+    /// detections. Asserting only the second would pass if the rows had been deleted,
+    /// which is the fix #957 explicitly did not ask for.
+    #[test]
+    fn the_fold_still_rewrites_what_the_detector_ignores() {
+        for (source, folded) in [('|', "l"), ('"', "''"), ('`', "'")] {
+            let s = source.to_string();
+            assert_eq!(
+                normalize_confusables(&s, "latin", "numeric").unwrap(),
+                folded
+            );
+            assert!(!is_confusable(&s, "latin").unwrap());
+        }
+    }
+
+    /// The skip must not become a way of turning the detector off.
+    #[test]
+    fn a_homoglyph_beside_ascii_punctuation_is_still_detected() {
+        assert!(is_confusable("say \"p\u{0430}ypal\"", "latin").unwrap());
+        let hits = find_confusables("say \"p\u{0430}ypal\"", "latin", &[]).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].0, '\u{0430}');
+    }
+
     #[test]
     fn every_target_script_variant_validates() {
         for variant in crate::api::TargetScript::ALL {

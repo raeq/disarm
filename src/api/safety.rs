@@ -256,6 +256,12 @@ pub fn normalize_confusables_with(
 /// core), so it cannot be evaded by decomposing the homoglyph (which would otherwise
 /// flip a composed `ç` from detected to not-detected). Infallible: a [`TargetScript`]
 /// is always a supported script.
+///
+/// **Printable ASCII is never a detection (#957).** `"`, `` ` `` and `|` are TR39
+/// confusable sources and the fold rewrites all three, which is deliberate and is
+/// recorded in `docs/limitations.md`. Counting them here made this return `true` for
+/// every quoted sentence and every JSON document — 588 of the 1,342 pure-ASCII lines of
+/// this repository's own prose. The rows stay in the fold; they stop being reported.
 #[must_use]
 pub fn is_confusable(text: &str, target: TargetScript) -> bool {
     crate::confusables::is_confusable(text, target.as_str())
@@ -382,6 +388,8 @@ pub fn find_confusables(text: &str, target: TargetScript) -> Vec<MappedConfusabl
 }
 
 /// [`find_confusables`], with the scripts the caller considers legitimate (#900).
+///
+/// Printable ASCII is never reported, for the reason [`is_confusable`] gives (#957).
 ///
 /// `find_confusables` asks *"could this character imitate a `target` letter"*, one
 /// character at a time, with no reference to the string around it. That is the right

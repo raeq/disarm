@@ -657,6 +657,22 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   second refuses a `0` cap in any composition. The committed baseline never held composed
   rows, so there was nothing to re-record.
 
+- **`is_confusable` and `find_confusables` no longer report printable ASCII (#957).** `"`,
+  `` ` `` and `|` are TR39 confusable *sources* — the table folds them to `''`, `'` and `l` —
+  so the detector returned `True` for any quoted sentence or JSON document: 588 of the 1,342
+  pure-ASCII lines of this repository's own prose, and every one of the 100 JailbreakBench
+  prompts the meta-benchmark runs. The rows stay in the fold, because #725's contract for the
+  transforming surfaces is deliberate and unchanged; they stop counting as detections. Both
+  halves are tested, so deleting the rows instead would fail. The rule is the whole
+  `U+0021`–`U+007E` range rather than those three code points, swept in Rust and Python, so a
+  row added later cannot quietly turn punctuation into a detection. `has_anomalies` was never
+  affected and does not move. **Faster, not slower:** the range check runs before the table
+  probe, so a pure-ASCII document costs 2.57 µs where it cost 5.62 µs — 54% off
+  `is_confusable` and 55% off `find_confusables` — and a homoglyph document is unchanged.
+  `benchmarks/meta`'s `jailbreakbench::flagged_by_a_detector` census moves 100 → 99: the one
+  prompt that changes is the only pure-ASCII one, and the other 99 carry CJK or accented Latin
+  that other kinds report.
+
 - **`digit_policy="preserve"` now holds on `canonicalize`, `canonicalize_strict` and
   `strip_obfuscation` (#949).** The pre-pass kept the numeral and the preset's own fold then
   folded it under the default, so the documented setting did nothing on six of the seven

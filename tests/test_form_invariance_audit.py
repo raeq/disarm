@@ -289,7 +289,13 @@ def test_transliterate_excluded_singleton_now_recovers() -> None:
 # character — Kelvin U+212A -> "K", Greek question mark U+037E -> ";" (raw=True,
 # normalized=False) — plus U+1FFD, whose NFKD compatibility split (-> space+acute) is not
 # a confusable. These cannot be "fixed" without un-detecting the raw spoof.
-IS_CONFUSABLE_DETECTION_TAIL = frozenset({0x037E, 0x212A, 0x1FFD})
+#
+# U+1FEF GREEK VARIA joined them with #957, and it is the same shape: it normalizes to
+# U+0060 GRAVE ACCENT under every form, and printable ASCII stopped being a detection. The
+# raw Greek character is a lookalike of the backtick and is reported; the backtick it
+# resolves to is ordinary punctuation and is not. Removing the flip means either
+# un-detecting the spoof or reporting every shell command again.
+IS_CONFUSABLE_DETECTION_TAIL = frozenset({0x037E, 0x212A, 0x1FEF, 0x1FFD})
 
 
 def test_is_confusable_detection_form_invariant() -> None:

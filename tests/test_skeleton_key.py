@@ -138,6 +138,24 @@ def test_it_is_idempotent(policy: str) -> None:
         assert disarm.skeleton_key(once, digit_policy=policy) == once, repr(probe)
 
 
+def test_the_documented_pipeline_names_the_second_confusable_pass() -> None:
+    """Raised in review on #938: the summary said `... -> fold_case -> ...`.
+
+    That reads as one confusable pass, which is the version that is not idempotent. The
+    prose and the behaviour it explains are asserted together, so neither can drift alone:
+    if the second pass is removed the second assertion fails, and if the summary stops
+    mentioning it the first does.
+    """
+    doc = disarm.skeleton_key.__doc__ or ""
+    assert "fixed-point(fold_case → confusables)" in doc, "the summary lost the second pass"
+
+    # The worked example the docstring gives, evaluated.
+    ohm = "\u2126"  # OHM SIGN — NFKC folds it to GREEK CAPITAL OMEGA
+    once = disarm.skeleton_key(ohm)
+    assert once == "w", f"expected the fold to reach w, got {once!r}"
+    assert disarm.skeleton_key(once) == once, "not a fixed point"
+
+
 def test_an_unknown_digit_policy_is_rejected() -> None:
     with pytest.raises(disarm.DisarmError) as excinfo:
         disarm.skeleton_key("x", digit_policy="nope")

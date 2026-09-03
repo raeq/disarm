@@ -451,7 +451,17 @@ def skeleton_key(text: str, *, digit_policy: str = "numeric") -> str:
     """A spoof key: the TR39 skeleton plus the prototype classes disarm keeps apart.
 
     Pipeline: NFKC → strip_bidi → strip invisibles → confusables → **prototype
-    fold** → fold_case → strip_control → strip_zero_width → collapse_whitespace
+    fold** → fixed-point(fold_case → confusables) → strip_control →
+    strip_zero_width → collapse_whitespace
+
+    The confusable fold runs **twice**, and the second pass is not redundant. The
+    table's entry for a homoglyph is often on the *lowercase* form, so a capital
+    the first pass cannot match becomes matchable the moment case is folded:
+    ``Ω`` (U+2126 OHM SIGN) reaches the fold as ``Ω``, folds to ``ω``, and only
+    then to ``w``. With a single pass ``skeleton_key("Ω")`` returned ``ω`` while
+    ``skeleton_key("ω")`` returned ``w`` — and a key that is not a fixed point is
+    not a key. A second pass rather than a reorder: the first has to see cased
+    text or the prototype fold has nothing to work with.
 
     TR39 puts ``I``, ``l`` and ``1`` in one equivalence class and ``O``/``0`` in
     another. disarm's table stops short of both — every member of the capital-I

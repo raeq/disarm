@@ -21,6 +21,7 @@ from disarm._boundary import (
     _ml_normalize,
     _normalize_confusables,
     _search_key,
+    _skeleton_key,
     _sort_key,
     _strip_bidi,
     _strip_format,
@@ -444,6 +445,60 @@ def search_key(
         the measurements and the trade (#885).
     """
     return _search_key(_apply_digit_policy(text, digit_policy), lang=lang)
+
+
+def skeleton_key(text: str, *, digit_policy: str = "numeric") -> str:
+    """A spoof key: the TR39 skeleton plus the prototype classes disarm keeps apart.
+
+    Pipeline: NFKC → strip_bidi → strip invisibles → confusables → **prototype
+    fold** → fold_case → strip_control → strip_zero_width → collapse_whitespace
+
+    TR39 puts ``I``, ``l`` and ``1`` in one equivalence class and ``O``/``0`` in
+    another. disarm's table stops short of both — every member of the capital-I
+    family folds to ``I`` and stops there — so ``paypaI`` survives every other
+    surface intact. This closes it.
+
+    **Why a separate builder.** The letter half costs six collision groups in the
+    235,976 entries of ``/usr/share/dict/words``, and ``Ione``/``lone`` is the only
+    ordinary-word merge among them. That price holds *only on cased text*: after a
+    case fold, ``I ≡ l`` is ``i ≡ l``, and the same class costs 264 groups of
+    ordinary vocabulary — ``boiling``/``bolling``, ``doit``/``dolt``, ``ail``/``all``.
+    A factor of 44. No existing key builder runs a confusable fold before folding
+    case, and `catalog_key` cannot be reordered to (#419).
+
+    **Not for display.** The output is a key, and it is more destructive than any
+    preset that forwards text — the same split `canonicalize` and
+    `canonicalize_strict` already make.
+
+    Args:
+        text: Input string.
+        digit_policy: ``"numeric"`` (default) applies the letter half only.
+            ``"tr39"`` adds ``1 ≡ l`` and ``0 ≡ O``, which is what an identifier
+            skeleton wants and what a deduplication key must not have — see below.
+
+    Returns:
+        The skeleton, lowercased and whitespace-collapsed.
+
+    Raises:
+        DisarmError: If *digit_policy* is not a supported value.
+
+    Examples:
+        >>> skeleton_key("paypaI")  # the class catalog_key cannot reach
+        'paypal'
+        >>> skeleton_key("paypal") == skeleton_key("paypaI")
+        True
+        >>> skeleton_key("SKU-1O0")  # digits kept apart by default
+        'sku-1o0'
+        >>> skeleton_key("SKU-1O0", digit_policy="tr39")  # ...and merged on request
+        'sku-loo'
+
+    The digit half is destructive by design. Under ``"tr39"`` every one of
+    ``SKU-100``, ``SKU-1O0``, ``SKU-IOO`` and ``SKU-l00`` is one key, as are
+    ``v1.0.1``, ``vI.O.I`` and ``vl.o.l``. For a spoof detector that is the point;
+    for a deduplication key over anything carrying a part number, a version or an
+    ISBN it destroys the field.
+    """
+    return _skeleton_key(text, digit_policy=digit_policy)
 
 
 def sort_key(

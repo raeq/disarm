@@ -19,6 +19,16 @@ pub fn _canonicalize(text: &str) -> PyResult<String> {
     Ok(crate::presets::canonicalize(text)?.into_owned())
 }
 
+/// `skeleton_key(text, *, digit_policy="numeric") -> str`
+///
+/// The TR39 identifier skeleton plus the `I ≡ l ≡ 1` / `O ≡ 0` prototype classes,
+/// applied on cased text (#650). A spoof key, not for display.
+#[pyfunction]
+#[pyo3(signature = (text, *, digit_policy="numeric"))]
+pub fn _skeleton_key(text: &str, digit_policy: &str) -> PyResult<String> {
+    Ok(crate::presets::skeleton_key(text, digit_policy)?.into_owned())
+}
+
 /// `is_canonical(text, *, preset="canonicalize") -> bool`
 ///
 /// The verification-path counterpart to the generation-path presets (#730). `preset`

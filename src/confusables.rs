@@ -46,11 +46,29 @@ const MAX_CONFUSABLE_PASSES: usize = 8;
 /// `𑣣` folds to the two characters `rn`. A skeleton feeding a label- or path-shaped key
 /// has to allow for that extra `.`.
 fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
-    match digit_policy {
-        "numeric" | "tr39" | "preserve" => Ok(()),
-        _ => Err(crate::ErrorRepr::InvalidDigitPolicy {
-            got: digit_policy.to_owned(),
-        }),
+    DigitPolicy::from_token(digit_policy).map(|_| ())
+}
+
+impl DigitPolicy {
+    /// The one place the wire token maps to the enum.
+    ///
+    /// The `&str` and enum forms of the fold grew up separately — `normalize_confusables_cow`
+    /// compares tokens, `normalize_confusables_into` matches variants — so the accepted set
+    /// was written twice. `validate_digit_policy` now delegates here, which makes a new
+    /// policy one edit rather than two that can disagree.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::ErrorRepr::InvalidDigitPolicy`] naming the offending token.
+    pub(crate) fn from_token(token: &str) -> Result<Self, crate::ErrorRepr> {
+        match token {
+            "numeric" => Ok(Self::Numeric),
+            "tr39" => Ok(Self::Tr39),
+            "preserve" => Ok(Self::Preserve),
+            _ => Err(crate::ErrorRepr::InvalidDigitPolicy {
+                got: token.to_owned(),
+            }),
+        }
     }
 }
 
@@ -744,5 +762,116 @@ mod tests {
                 let _ = result.len(); // forces evaluation
             }
         }
+    }
+}
+
+/// The TR39 prototype classes disarm's table deliberately keeps apart (#650).
+///
+/// `confusables_to_latin.tsv` maps every member of the capital-I family to `I` — fullwidth
+/// `Ｉ`, math `𝓘`, Cyrillic `І`, Greek `Ι`, Cherokee `Ꮥ` all arrive there. TR39 goes one
+/// step further and puts `I`, `l` and `1` in a single class, with `O` and `0` in another.
+/// disarm stops short on purpose: those last merges are between *ASCII* characters, so
+/// they cost nothing to spot and everything to apply — `paypaI` and `paypal` become one
+/// token, and so do `SKU-100` and `SKU-1O0`.
+///
+/// This applies that last step, for the one caller that wants it: a key whose only job is
+/// to make two confusable identifiers collide, and whose output is never displayed.
+///
+/// **It must run on cased text.** Applied before a case fold the letter half costs six
+/// collision groups in the 235,976 entries of `/usr/share/dict/words`; applied after, when
+/// `I ≡ l` has become `i ≡ l`, it costs 264 — `boiling`/`bolling`, `doit`/`dolt`,
+/// `ail`/`all`. A factor of 44, and the reason this is a separate builder rather than a
+/// flag on `catalog_key`, which folds case at step 3 and cannot be reordered (#419).
+///
+/// The digit half rides on [`DigitPolicy::Tr39`], which is the same reading it already
+/// selects elsewhere — non-Latin digits fold toward letters, "correct for an identifier
+/// skeleton, ruinous for a field carrying a number". Under `Numeric` and `Preserve` the
+/// digits stay digits and only the letter half applies.
+pub(crate) fn prototype_fold_into(input: &str, digits: DigitPolicy, out: &mut String) -> bool {
+    let fold_digits = matches!(digits, DigitPolicy::Tr39);
+    // Nothing here is multi-byte, so a scan for the sources is exact and cheap.
+    let hit = input
+        .bytes()
+        .any(|b| b == b'I' || (fold_digits && (b == b'1' || b == b'0')));
+    if !hit {
+        return false;
+    }
+    out.clear();
+    out.reserve(input.len());
+    for c in input.chars() {
+        out.push(match c {
+            // TR39's prototype for the I-family is `l`, not `I`.
+            'I' => 'l',
+            '1' if fold_digits => 'l',
+            '0' if fold_digits => 'O',
+            other => other,
+        });
+    }
+    true
+}
+
+#[cfg(test)]
+mod prototype_fold_tests {
+    use super::*;
+
+    fn fold(s: &str, d: DigitPolicy) -> String {
+        let mut out = String::new();
+        if prototype_fold_into(s, d, &mut out) {
+            out
+        } else {
+            s.to_owned()
+        }
+    }
+
+    /// The letter half is unconditional; the digit half is not.
+    #[test]
+    fn the_two_halves_are_separately_gated() {
+        for policy in [DigitPolicy::Numeric, DigitPolicy::Preserve] {
+            assert_eq!(
+                fold("paypaI", policy),
+                "paypal",
+                "letter half is unconditional"
+            );
+            assert_eq!(fold("SKU-1O0", policy), "SKU-1O0", "digits untouched");
+        }
+        assert_eq!(fold("paypaI", DigitPolicy::Tr39), "paypal");
+        assert_eq!(fold("SKU-1O0", DigitPolicy::Tr39), "SKU-lOO");
+    }
+
+    /// The borrow signal must be exact: `false` means the caller keeps its input.
+    #[test]
+    fn it_reports_whether_it_changed_anything() {
+        let mut out = String::new();
+        assert!(!prototype_fold_into("paypal", DigitPolicy::Tr39, &mut out));
+        assert!(!prototype_fold_into(
+            "no digits here",
+            DigitPolicy::Numeric,
+            &mut out
+        ));
+        assert!(!prototype_fold_into(
+            "SKU-100",
+            DigitPolicy::Numeric,
+            &mut out
+        ));
+        assert!(prototype_fold_into("SKU-100", DigitPolicy::Tr39, &mut out));
+        assert!(prototype_fold_into(
+            "paypaI",
+            DigitPolicy::Numeric,
+            &mut out
+        ));
+    }
+
+    /// Lowercase `o` is NOT in the O class here, because this runs before the case fold
+    /// that merges it with `O` anyway. Adding it would be the 264-collision version.
+    #[test]
+    fn lowercase_o_is_left_alone() {
+        assert_eq!(fold("book", DigitPolicy::Tr39), "book");
+        assert_eq!(fold("BOOK", DigitPolicy::Tr39), "BOOK");
+    }
+
+    /// Non-ASCII passes through untouched — the confusables fold ran before this.
+    #[test]
+    fn non_ascii_is_not_this_steps_business() {
+        assert_eq!(fold("Ω→café", DigitPolicy::Tr39), "Ω→café");
     }
 }

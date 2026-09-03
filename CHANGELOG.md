@@ -18,6 +18,32 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`skeleton_key(text, *, digit_policy="numeric")` — the prototype classes disarm's table
+  keeps apart (#650).** TR39 puts `I`, `l` and `1` in one equivalence class and `O`/`0` in
+  another; disarm's table folds the whole capital-I family to `I` and stops there, so
+  `paypaI` survives every shipped surface intact. This closes it, as a **spoof key**: the
+  output is never for display, and it is more destructive than any preset that forwards
+  text.
+
+  **A separate builder rather than a flag, for a measured reason.** The letter half costs
+  six collision groups in the 235,976 entries of `/usr/share/dict/words` — `Ione`/`lone`
+  is the only ordinary-word merge among them. That price holds *only on cased text*: after
+  a case fold, `I ≡ l` becomes `i ≡ l` and the same class costs 264 groups of ordinary
+  vocabulary (`boiling`/`bolling`, `doit`/`dolt`, `ail`/`all`). A factor of 44. No existing
+  key builder runs a confusable fold before folding case, and `catalog_key` cannot be
+  reordered to — fold-before-transliterate is required for idempotency (#419).
+
+  `digit_policy="tr39"` adds the digit half, `1 ≡ l` and `0 ≡ O`. That is what an
+  identifier skeleton wants and what a deduplication key must not have: `SKU-100`,
+  `SKU-1O0`, `SKU-IOO` and `SKU-l00` all become one key, as do `v1.0.1`, `vI.O.I` and
+  `vl.o.l`. Opt-in, never a default.
+
+  The digit policy rides on `PresetCtx` rather than on the step, which is a **third option**
+  beside the two #646 §2 weighed: it neither triples the step lists nor defeats the
+  #695/#868 monomorphisation, because the mask is still computed at compile time from a
+  single list. `scripts/perf_lint.sh` and the wasm coupling gate are unchanged. That
+  mechanism is what #896 needs to reach the other key builders from Rust.
+
 - **`deletion`: a lone carriage return that overwrites text (#739).** Boucher et al.,
   *Bad Characters* (IEEE S&P 2022) §IV-G names four classes of imperceptible
   perturbation; `tests/test_attack_corpus.py` cites that taxonomy as its source and

@@ -222,6 +222,9 @@ from disarm._core import (
     _set_transliterate_fallback as _set_transliterate_fallback,
 )
 from disarm._core import (
+    _skeleton_key as _skeleton_key,
+)
+from disarm._core import (
     _Slugifier as _Slugifier,
 )
 from disarm._core import (

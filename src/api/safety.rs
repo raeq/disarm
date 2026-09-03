@@ -1190,6 +1190,44 @@ pub use crate::anomalies::{
     has_anomalies, inspect_anomalies, lexicon, AnomalyKind, AnomalyReport, Finding,
 };
 
+/// Decode what a smuggled run *spells*, rather than reporting that one is present (#701).
+///
+/// disarm strips the three ASCII-smuggling carriers and, since #700, reports that
+/// invisible characters are there. Neither answer tells the caller that the run reads
+/// `tracked-by:acct-99213`.
+///
+/// Presence and decode are different strengths of evidence. An invisible character can
+/// arrive by accident — a copy-paste artefact, a BOM, an editor quirk. A run that decodes
+/// to readable text cannot: random damage does not spell words. A successful decode needs
+/// no threshold and no policy to interpret, which is what makes it worth reporting
+/// separately from the `invisible` kind.
+///
+/// ```
+/// use disarm::api::decode_smuggled;
+///
+/// // "hi" as Unicode Tags characters.
+/// let hidden: String = "hi".chars()
+///     .map(|c| char::from_u32(c as u32 + 0xE0000).unwrap())
+///     .collect();
+/// let found = decode_smuggled(&format!("hello{hidden}"));
+/// assert_eq!(found.len(), 1);
+/// assert_eq!(found[0].text.as_deref(), Some("hi"));
+/// assert_eq!(found[0].start, 5);
+///
+/// // Ordinary text decodes to nothing.
+/// assert!(decode_smuggled("hello world").is_empty());
+/// ```
+///
+/// [`Payload::text`] is `Some` only when the bytes are valid UTF-8 and wholly printable.
+/// A run of arbitrary selectors is reported as a payload of *n* bytes with no decoded
+/// string rather than as a bogus one — reporting a garbage decode would undo the reason a
+/// decode is trustworthy.
+///
+/// A well-formed emoji subdivision flag is not a payload: `U+1F3F4` + tag letters +
+/// `U+E007F` spelling one of the three RGI values is the Scotland flag, and the allowlist
+/// is the stripper's own rather than a second copy of it.
+pub use crate::smuggled::{decode_smuggled, Payload, PayloadScheme};
+
 // ── Edit distance (#883) ─────────────────────────────────────────────────────
 
 /// Levenshtein edit distance between `a` and `b`, in **characters**.

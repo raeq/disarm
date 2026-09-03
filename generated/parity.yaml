@@ -65,6 +65,15 @@ operations:
       java: confusablesVersion
       kotlin: confusablesVersion
       cabi: confusables_version
+  - id: decode_smuggled
+    names:
+      rust: decode_smuggled
+      python: decode_smuggled
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: decode_to_utf8
     names:
       rust: decode_to_utf8

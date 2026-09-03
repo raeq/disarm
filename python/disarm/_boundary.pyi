@@ -51,6 +51,9 @@ from disarm._core import (
     ResourceLimitError as ResourceLimitError,
 )
 from disarm._core import (
+    SmuggledPayload as SmuggledPayload,
+)
+from disarm._core import (
     UnsupportedError as UnsupportedError,
 )
 from disarm._core import (
@@ -67,6 +70,9 @@ from disarm._core import (
 )
 from disarm._core import (
     _collapse_whitespace as _collapse_whitespace,
+)
+from disarm._core import (
+    _decode_smuggled as _decode_smuggled,
 )
 from disarm._core import (
     _decode_to_utf8 as _decode_to_utf8,

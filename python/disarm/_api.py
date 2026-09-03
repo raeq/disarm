@@ -26,8 +26,10 @@ from disarm._boundary import (
     Lexicon,
     NearestMatch,
     ResourceLimitError,
+    SmuggledPayload,
     _clear_replacements,
     _collapse_whitespace,
+    _decode_smuggled,
     _decode_to_utf8,
     _demojize,
     # Encoding detection
@@ -2380,6 +2382,54 @@ def find_confusables(
     result: list[tuple[str, int, str]] = _find_confusables(
         text, target_script=_target_script(target_script), allowed_scripts=allowed
     )
+    return result
+
+
+def decode_smuggled(text: str) -> list[SmuggledPayload]:
+    """Decode what a smuggled run *spells*, rather than reporting one is present (#701).
+
+    disarm strips the three ASCII-smuggling carriers and `inspect_anomalies` reports
+    that invisible characters are there. Neither answer tells you the run reads
+    ``tracked-by:acct-99213``.
+
+    Presence and decode are different strengths of evidence. An invisible character
+    can arrive by accident — a copy-paste artefact, a BOM, an editor quirk. A run
+    that decodes to readable text cannot: random damage does not spell words. A
+    successful decode needs no threshold and no policy to interpret, which is why it
+    is worth reporting separately from the ``invisible`` kind.
+
+    Three schemes, all arithmetic on code point values with no table behind them:
+
+    | scheme | carrier | encoding |
+    |---|---|---|
+    | ``tag_ascii`` | ``U+E0020``–``U+E007E`` | subtract ``0xE0000``, one byte each |
+    | ``variation_bytes`` | ``U+FE00``–``U+FE0F``, ``U+E0100``–``U+E01EF`` | index 0–255 |
+    | ``zero_width_binary`` | ``U+200B`` = 0, ``U+200C`` = 1 | MSB first; ZWJ/WJ/BOM separate |
+
+    ``text`` is populated **only** when the bytes are valid UTF-8 and wholly
+    printable. A run of arbitrary selectors comes back as a payload of *n* bytes with
+    ``text=None`` rather than as a bogus decode — reporting garbage would undo the
+    reason a decode is trustworthy.
+
+    A well-formed emoji subdivision flag is not a payload: ``U+1F3F4`` + tag letters
+    + ``U+E007F`` spelling one of the three RGI values is the Scotland flag, and the
+    allowlist used here is the stripper's own rather than a second copy of it.
+
+    Args:
+        text: Input string.
+
+    Returns:
+        One `SmuggledPayload` per run, in order of appearance.
+
+    Examples:
+        >>> hidden = "".join(chr(ord(c) + 0xE0000) for c in "hi")
+        >>> found = decode_smuggled(f"hello{hidden}")
+        >>> found[0].text, found[0].scheme, found[0].start
+        ('hi', 'tag_ascii', 5)
+        >>> decode_smuggled("hello world")
+        []
+    """
+    result: list[SmuggledPayload] = _decode_smuggled(text)
     return result
 
 

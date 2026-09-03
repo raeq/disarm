@@ -18,6 +18,31 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`decode_smuggled(text)` and the `smuggled` anomaly kind — decode what a hidden run
+  *spells* (#701).** disarm strips the three ASCII-smuggling carriers and, since #700,
+  reports that invisible characters are present. Neither answer tells the caller that the
+  run reads `tracked-by:acct-99213`.
+
+  Presence and decode are different strengths of evidence. An invisible character can
+  arrive by accident — a copy-paste artefact, a BOM, an editor quirk. A run that decodes to
+  readable text cannot: random damage does not spell words. So a decode needs no threshold
+  and no policy to interpret, which is why it is a kind of its own rather than a longer
+  `invisible` detail.
+
+  Three schemes, all arithmetic on code point values with **no table**, which matters under
+  #695: `tag_ascii` (`U+E0020`–`U+E007E`), `variation_bytes` (`U+FE00`–`U+FE0F` and
+  `U+E0100`–`U+E01EF`) and `zero_width_binary` (`U+200B` = 0, `U+200C` = 1, MSB first).
+
+  Two rules keep the output honest. `Payload.text` is populated only when the bytes are
+  valid UTF-8 and wholly printable, so a run of arbitrary selectors is reported as *n*
+  bytes with no string rather than as a bogus decode. And a well-formed emoji subdivision
+  flag is not a payload — the allowlist is the stripper's own rather than a second copy of
+  it, which is the drift #700 was about.
+
+  In `inspect_anomalies` the decode **outranks every other kind for the same span**, as
+  #701 asks — implemented by ordering rather than suppression, so the run is still reported
+  as `invisible` too and a caller already matching on that kind keeps working.
+
 - **`skeleton_key(text, *, digit_policy="numeric")` — the prototype classes disarm's table
   keeps apart (#650).** TR39 puts `I`, `l` and `1` in one equivalence class and `O`/`0` in
   another; disarm's table folds the whole capital-I family to `I` and stops there, so

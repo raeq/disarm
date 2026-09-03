@@ -66,6 +66,8 @@ SKIP = frozenset(
         "KeyCollision",
         # Nearest-name report object (#883), return-only like the four above
         "NearestMatch",
+        # Smuggled-payload report object (#701), return-only like the five above
+        "SmuggledPayload",
     }
 )
 

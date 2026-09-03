@@ -348,6 +348,10 @@ class TestAnomalyKindDoesNotDriftFromTheBindings:
             # it splits the tokens either side of it and both halves are clean —
             # `control` cannot reach it, and neither can any other per-token rule.
             "deletion": "ZZZZZZ\rpaypal",
+            # #701: a run that DECODES. `invisible` reports that a carrier is
+            # present; this reports what it says, and only when the bytes are valid
+            # printable UTF-8 — which is why it needs no threshold.
+            "smuggled": "hello" + "".join(chr(ord(c) + 0xE0000) for c in "hi"),
         }
         assert set(samples) == self._rust_kinds(), "sample set is stale"
         # `leet` and `segmentation` are lexicon-gated by design, so they need one.

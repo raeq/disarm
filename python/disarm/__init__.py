@@ -19,6 +19,7 @@ from disarm._api import (
     casefold,
     clear_replacements,
     collapse_whitespace,
+    decode_smuggled,
     decode_to_utf8,
     dedup_batch,
     demojize,
@@ -90,6 +91,7 @@ from disarm._boundary import (
     Lexicon,
     NearestMatch,
     ResourceLimitError,
+    SmuggledPayload,
     UnsupportedError,
 )
 
@@ -351,6 +353,7 @@ __all__ = [
     "detect_encoding",
     "decode_to_utf8",
     # Predicates
+    "decode_smuggled",
     "detect_scripts",
     "inspect_auto_lang",
     "is_mixed_script",
@@ -363,6 +366,7 @@ __all__ = [
     "NearestMatch",
     "nearest_match",
     "KeyCollision",
+    "SmuggledPayload",
     "is_ascii",
     "is_case_fold_stable",
     "is_canonical",

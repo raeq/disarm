@@ -239,6 +239,76 @@ and a plain-language reason — and until #704 there was no way to point it at a
 `--no-gitignore`
 :   Scan everything under the paths, ignoring git's rules.
 
+`--sarif`
+:   Emit SARIF 2.1.0 instead of text, so findings land in GitHub's Security tab and as
+    annotations on the pull request that introduced them. Mutually exclusive with `--json`.
+    One rule per kind, one result per finding, and the disarm fingerprint in
+    `partialFingerprints["disarm/v1"]` so a consumer that baselines on its own keys on the
+    same identity this tool does.
+
+`--write-baseline FILE`
+:   Record every current finding's fingerprint to `FILE` and exit. This is what lets the
+    check go on at all: a repository with years of history is not clean on its first scan,
+    and requiring it to be clean first is the order that stops adoption.
+
+`--baseline FILE`
+:   Suppress findings whose fingerprint is in `FILE`. They are counted (`N baselined` in
+    the summary) and not shown. An entry that matches no current finding is reported on
+    stderr as **stale** rather than quietly kept, so the file shrinks as the tree is
+    cleaned; rewrite it with `--write-baseline` to drop them.
+
+```bash
+disarm scan --write-baseline .disarm-baseline.json .     # once, today
+disarm scan --fail --baseline .disarm-baseline.json .    # in CI, from now on
+```
+
+### Fingerprints survive an edit
+
+A fingerprint is **the file, what was found, and which occurrence of it this is** — never
+the line. The naive identity (file + line + column) breaks on the first commit that inserts
+a paragraph, because every finding below the insertion looks new. Keyed on the occurrence
+index, inserting text *above* a finding does not raise a second alert for it.
+
+The honest limit belongs beside the rule. Two occurrences of the same finding in one file
+are told apart only by their order, so inserting a *second* occurrence above a recorded
+first accepts the new one and reports the old. The count stays right and nothing is
+silently dropped, but which occurrence is named can swap. Fingerprints are computed on the
+path as scanned, so a baseline written from the repository root has to be applied from the
+repository root.
+
+### SARIF levels
+
+`smuggled` — a run that decodes to readable text — is the one `error`: it is the one
+finding that needs no threshold to interpret. Every other kind is `warning`, because each
+reports a technical fact and leaves the judgement to the caller, which is the library's
+stated stance. The map lives in the writer rather than on the library's `AnomalyKind`
+(#705 item 4: a severity on the enum is a public API addition and its own change), and a
+test asserts it covers every kind the library can produce.
+
+### In GitHub Actions
+
+```yaml
+- name: Scan for hidden characters
+  id: scan                           # the last step reads this step's outcome
+  run: pip install disarm && disarm scan --sarif --fail --baseline .disarm-baseline.json . > disarm.sarif
+  continue-on-error: true            # the upload below must run even when the scan fails
+
+- name: Upload to the Security tab
+  uses: github/codeql-action/upload-sarif@v3
+  if: always()                       # ...and this is what makes sure it does
+  with:
+    sarif_file: disarm.sarif
+
+- name: Fail on new findings
+  if: steps.scan.outcome == 'failure'
+  run: exit 1
+```
+
+The detail that matters: **the upload step has to run before any failing exit, or it never
+runs at all.** A scan that exits 1 and takes the job with it uploads nothing, so the
+findings that caused the failure are the ones nobody sees. `continue-on-error` on the scan
+and `if: always()` on the upload keep the order right; the last step restores the failure.
+
 **Exit codes** — something found is not something failed to read, and the codes keep them
 apart:
 
@@ -247,7 +317,7 @@ apart:
 | 0 | Scanned; nothing found, or found without `--fail` |
 | 1 | Findings, with `--fail` |
 | 2 | Invalid arguments (argparse) |
-| 3 | A path could not be read — reported on stderr, scan of the rest still printed |
+| 3 | A path could not be read — reported on stderr, scan of the rest still printed. Also a `--baseline` file that cannot be read or a `--write-baseline` file that cannot be written |
 
 ---
 

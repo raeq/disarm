@@ -118,16 +118,24 @@ def cmd_scan(args: argparse.Namespace) -> None:
     """
     from pathlib import Path
 
-    from disarm.scan import run
+    from disarm.scan import EXIT_READ_ERROR, run
 
-    sys.exit(
-        run(
+    try:
+        code = run(
             [Path(p) for p in args.paths],
             as_json=args.json,
+            as_sarif=args.sarif,
             fail=args.fail,
             use_gitignore=not args.no_gitignore,
+            baseline=Path(args.baseline) if args.baseline else None,
+            write_baseline_to=Path(args.write_baseline) if args.write_baseline else None,
         )
-    )
+    except OSError as exc:
+        # A baseline file that cannot be read or written is a read error, code 3 — not a
+        # traceback, and not the same number as "something was found".
+        print(f"error: {exc.filename or ''}: {exc.strerror or exc}", file=sys.stderr)
+        sys.exit(EXIT_READ_ERROR)
+    sys.exit(code)
 
 
 def _add_transliterate_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
@@ -240,7 +248,25 @@ def main() -> None:
     for name in ("scan", "sc"):
         p = sub.add_parser(name, help="Walk files and report anomalies")
         p.add_argument("paths", nargs="+", help="Files or directories to scan")
-        p.add_argument("--json", action="store_true", help="Emit findings as JSON")
+        fmt = p.add_mutually_exclusive_group()
+        fmt.add_argument("--json", action="store_true", help="Emit findings as JSON")
+        fmt.add_argument(
+            "--sarif",
+            action="store_true",
+            help="Emit SARIF 2.1.0, for GitHub's Security tab and PR annotations (#705)",
+        )
+        p.add_argument(
+            "--baseline",
+            metavar="FILE",
+            default=None,
+            help="Suppress findings recorded in FILE; report entries that no longer match",
+        )
+        p.add_argument(
+            "--write-baseline",
+            metavar="FILE",
+            default=None,
+            help="Record every current finding to FILE and exit, so only new ones fail later",
+        )
         p.add_argument(
             "--fail",
             action="store_true",

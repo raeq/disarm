@@ -156,6 +156,8 @@ class Decision:
     stuck: bool = False
     #: The sorted failing check names this poll saw, "" when none.
     broken_names: str = ""
+    #: How many consecutive polls have now shown `broken_names`, counting this one.
+    failure_seen: int = 0
 
 
 def decide(
@@ -198,14 +200,26 @@ def decide(
     #    consecutive polls. A single sighting can be the previous SHA's rollup.
     if snap.broken:
         names = ", ".join(sorted(c.name for c in snap.broken))
-        if names != last_broken or failure_polls + 1 < FAILURE_POLLS:
+        # Count THIS sighting. Deriving the running total here rather than in the caller
+        # is what fixes the off-by-one the #928 review found: the caller only incremented
+        # once the current names matched the previous ones, so a first sighting never
+        # counted itself and the loop needed FAILURE_POLLS + 1 reads.
+        seen = failure_polls + 1 if names == last_broken else 1
+        if seen < FAILURE_POLLS:
             return Decision(
                 Action.WAIT,
-                f"red: {names} ({failure_polls + 1}/{FAILURE_POLLS} before reporting)",
+                f"red: {names} ({seen}/{FAILURE_POLLS} before reporting)",
                 checks=snap.broken,
                 broken_names=names,
+                failure_seen=seen,
             )
-        return Decision(Action.STOP_FAILED, names, checks=snap.broken, broken_names=names)
+        return Decision(
+            Action.STOP_FAILED,
+            names,
+            checks=snap.broken,
+            broken_names=names,
+            failure_seen=seen,
+        )
 
     if snap.merge_state in NEEDS_REBASE:
         return Decision(Action.REBASE, snap.merge_state)
@@ -364,8 +378,8 @@ def watch(pr: int, repo: str, interval: int, max_polls: int, allow_merge: bool) 
             last_broken=last_broken,
         )
         stuck_polls = stuck_polls + 1 if decision.stuck else 0
-        # Only a run of the SAME names counts; a different set means the rollup moved.
-        failure_polls = failure_polls + 1 if decision.broken_names == last_broken else 0
+        # `decide` already counted this sighting, including the first one.
+        failure_polls = decision.failure_seen
         last_broken = decision.broken_names
 
         if decision.action is Action.STOP_MERGED:

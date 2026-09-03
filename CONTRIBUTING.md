@@ -714,10 +714,11 @@ It exits `0` merged, `1` closed without merging (or a merge it could not confirm
 body; a failed check; a stale branch; a structural block; or a thread listing too long
 to read in one page — and `3` if it gave up.
 
-A structural block is reported only after it has held for `STUCK_POLLS` consecutive polls
-(currently 3), and a failed check after `FAILURE_POLLS` sightings of the same check names
-(currently 2) — for a few seconds after a push the rollup still carries the previous run's
-conclusions, so a failure already fixed reads as a live one. For a few seconds after a push GitHub reports the PR as blocked with the
+Two stop conditions need confirming before they are reported, because for a few seconds
+after a push GitHub still describes the previous run. A structural block must hold for
+`STUCK_POLLS` polls (currently 3). A failed check must show the same check names for
+`FAILURE_POLLS` polls (currently 2), since the rollup can still carry conclusions from the
+SHA before the fix. For a few seconds after a push GitHub reports the PR as blocked with the
 previous run's checks complete and the new ones not yet created, which in a single
 snapshot is indistinguishable from a required review that will never arrive. A poll whose
 read failed does not count towards the streak.

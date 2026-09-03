@@ -282,14 +282,23 @@ def test_an_unbroken_streak_still_stops(monkeypatch: pytest.MonkeyPatch) -> None
     assert watch_pr.watch(1, "o/r", interval=0, max_polls=10, allow_merge=False) == 2
 
 
-def test_contributing_states_the_current_threshold() -> None:
-    """#922 review: the page hardcoded "three" beside a constant that can change."""
+def test_contributing_states_the_current_thresholds() -> None:
+    """#922 review: the page hardcoded "three" beside a constant that can change.
+
+    Both constants now, and keyed on the name plus the value rather than a phrase — the
+    phrase changed once already when #928's review asked for the paragraph to be split,
+    and a gate anchored to prose fails for the wrong reason when the prose improves.
+    """
     from pathlib import Path
 
     page = Path(__file__).resolve().parent.parent / "CONTRIBUTING.md"
     text = page.read_text(encoding="utf-8")
-    assert "`STUCK_POLLS` consecutive polls" in text
-    assert f"(currently {watch_pr.STUCK_POLLS})" in text
+    for name, value in (
+        ("STUCK_POLLS", watch_pr.STUCK_POLLS),
+        ("FAILURE_POLLS", watch_pr.FAILURE_POLLS),
+    ):
+        assert f"`{name}`" in text, f"CONTRIBUTING does not name {name}"
+        assert f"(currently {value})" in text, f"CONTRIBUTING does not state {name}={value}"
 
 
 # --- the stale-failure race: a push leaves the previous SHA's conclusions -----
@@ -333,3 +342,46 @@ def test_a_failure_never_merges_even_before_it_is_reported() -> None:
     """While waiting out the confirmation, the PR must not be squashed."""
     snap = Snapshot("OPEN", "CLEAN", checks=(RED, GREEN))
     assert decide(snap).action is not Action.MERGE
+
+
+def test_watch_stops_on_exactly_failure_polls_sightings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#928 review: the poll-to-poll counter, not just `decide()` in isolation.
+
+    The `decide()` tests pass a `failure_polls` the caller computed, so they cannot see a
+    caller that computes it wrongly. This drives the real loop and counts how many reads
+    it took — which is how the off-by-one surfaced: the counter only incremented once the
+    CURRENT names matched the PREVIOUS ones, so the first sighting never counted itself
+    and the loop needed `FAILURE_POLLS + 1` polls.
+    """
+    red = Snapshot("OPEN", "BLOCKED", checks=(RED, GREEN))
+    reads = 0
+
+    def counting_fetch(*_a: object, **_k: object) -> Snapshot:
+        nonlocal reads
+        reads += 1
+        return red
+
+    monkeypatch.setattr(watch_pr, "fetch", counting_fetch)
+    monkeypatch.setattr(watch_pr.time, "sleep", lambda _: None)
+    assert watch_pr.watch(1, "o/r", interval=0, max_polls=10, allow_merge=False) == 2
+    assert reads == watch_pr.FAILURE_POLLS, (
+        f"stopped after {reads} reads; FAILURE_POLLS is {watch_pr.FAILURE_POLLS}"
+    )
+
+
+def test_watch_stops_on_exactly_stuck_polls_sightings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same check for the stuck counter, which shares the shape."""
+    stuck = Snapshot("OPEN", "BLOCKED", threads=(DONE_THREAD,), checks=(GREEN,))
+    reads = 0
+
+    def counting_fetch(*_a: object, **_k: object) -> Snapshot:
+        nonlocal reads
+        reads += 1
+        return stuck
+
+    monkeypatch.setattr(watch_pr, "fetch", counting_fetch)
+    monkeypatch.setattr(watch_pr.time, "sleep", lambda _: None)
+    assert watch_pr.watch(1, "o/r", interval=0, max_polls=10, allow_merge=False) == 2
+    assert reads == watch_pr.STUCK_POLLS, (
+        f"stopped after {reads} reads; STUCK_POLLS is {watch_pr.STUCK_POLLS}"
+    )

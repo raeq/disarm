@@ -1795,6 +1795,16 @@ def percent_encode(text: str, *, component: Component) -> str:
     scheme injection or open redirects -- those are URL-*construction* concerns,
     out of scope. Apply at the output sink, exactly once.
 
+    **The result is opaque to the rest of the library (#727).** The output is
+    valid, NFC, all-ASCII Unicode -- it is simply not the Unicode that carries
+    the meaning -- and every detector reports it clean rather than unknown:
+    ``has_anomalies("ad\\u200bmin")`` is ``True`` and
+    ``has_anomalies(percent_encode("ad\\u200bmin", component=Component.QUERY))``
+    is ``False``. That is why *once* and *at the sink* matter: a value that
+    arrives already encoded has to be decoded before disarm can see it, which is
+    the same ordering rule as canonicalize-before-validate. `decode_smuggled`
+    reports what a ``%XX`` run *spells*, as evidence, for the inspection case.
+
     Args:
         text: The string to encode.
         component: Which URL component the value will be placed in.
@@ -2437,6 +2447,7 @@ def decode_smuggled(text: str) -> list[SmuggledPayload]:
     | ``tag_ascii`` | ``U+E0020``–``U+E007E`` | subtract ``0xE0000``, one byte each |
     | ``variation_bytes`` | ``U+FE00``–``U+FE0F``, ``U+E0100``–``U+E01EF`` | index 0–255 |
     | ``zero_width_binary`` | ``U+200B`` = 0, ``U+200C`` = 1 | MSB first; ZWJ/WJ/BOM separate |
+    | ``percent_escape`` | ``%XX``, two hex digits | one byte per triple, decoded once (#727) |
 
     ``text`` is populated **only** when the bytes are valid UTF-8 and wholly
     printable — meaning *a reader would see it*, not merely "no control character".
@@ -2453,6 +2464,14 @@ def decode_smuggled(text: str) -> list[SmuggledPayload]:
     A well-formed emoji subdivision flag is not a payload: ``U+1F3F4`` + tag letters
     + ``U+E007F`` spelling one of the three RGI values is the Scotland flag, and the
     allowlist used here is the stripper's own rather than a second copy of it.
+
+    ``percent_escape`` is the one scheme that is **not** fed to the anomaly
+    detector. A ``%XX`` run spelling readable text is ordinary in any URL, where the
+    three invisible carriers are never ordinary; `inspect_anomalies` would fire
+    ``smuggled`` on every escaped query string. This function reports it — as
+    evidence, decoded once — and the detector does not. ``%25%32%45`` spells
+    ``%2E``, and that ``text`` is the sign of double-encoding, not a prompt to
+    decode again.
 
     Args:
         text: Input string.

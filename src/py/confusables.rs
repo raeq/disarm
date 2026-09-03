@@ -89,7 +89,10 @@ pub fn _find_unmapped_confusables(
 #[pyo3(name = "SmuggledPayload")]
 #[derive(Clone)]
 pub struct SmuggledPayload {
-    /// `"tag_ascii"`, `"variation_bytes"` or `"zero_width_binary"`.
+    /// `"tag_ascii"`, `"variation_bytes"`, `"zero_width_binary"` or `"percent_escape"`.
+    ///
+    /// The fourth is reported here and deliberately not by `inspect_anomalies` (#727): a
+    /// percent run spelling readable text is ordinary in any URL.
     #[pyo3(get)]
     pub scheme: String,
     /// **Byte** offset of the first carrier character, matching `Finding.start`.

@@ -23,6 +23,9 @@ pub fn _escape_html<'py>(text: &Bound<'py, PyString>) -> PyResult<Bound<'py, PyS
 }
 
 /// `percent_encode(text, *, component) -> str`
+///
+/// The output is opaque to every detector in the library (#727); the Python wrapper's
+/// docstring — the one `help()` shows — says so and why, as does `api::percent_encode`.
 #[pyfunction]
 #[pyo3(signature = (text, *, component))]
 pub fn _percent_encode(text: &str, component: &str) -> PyResult<String> {

@@ -43,7 +43,17 @@ def variation(s: str) -> str:
     return "".join(chr(0xFE00 + b) if b < 16 else chr(0xE0100 + b - 16) for b in s.encode())
 
 
-ENCODERS = {"tag_ascii": tags, "zero_width_binary": zero_width, "variation_bytes": variation}
+def percent(s: str) -> str:
+    """`s` as `%XX` triples — the fourth scheme, and the only one that is ordinary in a URL."""
+    return "".join(f"%{b:02X}" for b in s.encode())
+
+
+ENCODERS = {
+    "tag_ascii": tags,
+    "zero_width_binary": zero_width,
+    "variation_bytes": variation,
+    "percent_escape": percent,
+}
 PAYLOAD = "tracked-by:acct-99213"
 
 
@@ -214,3 +224,70 @@ def test_the_repr_is_python_not_rust() -> None:
     text = repr(disarm.decode_smuggled(tags("hi"))[0])
     assert "Some(" not in text
     assert "text=None" in repr(disarm.decode_smuggled(VS_00_01)[0])
+
+
+class TestPercentEscape:
+    """#727 — the fourth scheme on #701's `Payload`, for the reason #727 gives: a
+    decode-for-inspection primitive returns what the escapes *spelled*, where a
+    `percent_decode` hands back a string some callers will re-emit, and repeated decoding
+    is its own vulnerability class."""
+
+    def test_the_error_contract_has_three_answers(self) -> None:
+        """#727 item 2, each pinned."""
+        # `%FF` is not UTF-8 — bytes, no text, never a bogus string.
+        [f] = disarm.decode_smuggled("%FF%FE")
+        assert f.data == b"\xff\xfe" and f.text is None
+        # `%` with fewer than two hex digits is malformed: not consumed, and ends a run.
+        [f] = disarm.decode_smuggled("%48%69%4")
+        assert f.text == "Hi" and f.units == 6
+        assert disarm.decode_smuggled("%4x%zz") == []
+        # Double encoding decodes ONCE. The result is the evidence, not a prompt.
+        [f] = disarm.decode_smuggled("%25%32%45")
+        assert f.text == "%2E"
+
+    def test_a_single_escape_is_not_a_payload(self) -> None:
+        """`%20` is a space and one byte cannot spell anything."""
+        assert disarm.decode_smuggled("a%20b") == []
+        assert disarm.decode_smuggled("/path%2Fseg") == []
+
+    def test_it_is_reported_by_decode_smuggled_but_not_by_the_detector(self) -> None:
+        """Both halves of the one deliberate difference from the other three schemes.
+
+        A percent run spelling readable text is ordinary in any URL, where the three
+        invisible carriers are never ordinary. Feeding it to `inspect_anomalies` would
+        fire `smuggled` on every escaped query string.
+        """
+        url = f"https://example.test/?q={percent('hello world')}"
+        [f] = disarm.decode_smuggled(url)
+        assert f.scheme == "percent_escape" and f.text == "hello world"
+        report = disarm.inspect_anomalies(url)
+        assert "smuggled" not in report.kinds, report.kinds
+        assert disarm.has_anomalies(url) is False
+        # ...while the same text in a tag run still is.
+        assert "smuggled" in disarm.inspect_anomalies(f"x{tags('hello world')}").kinds
+
+    def test_percent_encode_and_decode_smuggled_read_each_other(self) -> None:
+        """The encoder disarm ships and the decoder it now ships agree — and the
+        printable rule from #940 composes correctly with the fourth scheme.
+
+        #727's first table row: `percent_encode` escapes only the ZWSP, so the run is the
+        three bytes of a bare invisible. Every detector reports the encoded form clean —
+        the blindness the issue is about — and `decode_smuggled` reports the run. Its
+        `text` is `None`, and that is right: an invisible is spelled, but it is not
+        readable text, and reporting it as such was the bogus decode #940 closed.
+        """
+        from disarm import Component, percent_encode
+
+        hidden = percent_encode("ad" + ZWSP + "min", component=Component.QUERY)
+        assert hidden == "ad%E2%80%8Bmin"
+        assert disarm.has_anomalies(hidden) is False, "the blindness #727 reports"
+        [f] = disarm.decode_smuggled(hidden)
+        assert f.data == ZWSP.encode() and f.text is None, "spelled, but not text"
+        # A visible payload round-trips through `text` — but only where the encoder
+        # produces a RUN. `percent_encode` escapes reserved characters and leaves letters
+        # alone, so `tracked by` yields isolated `%20`s, each below the two-triple floor
+        # and none a payload. Consecutive non-ASCII is what makes a run.
+        visible = percent_encode("€€", component=Component.QUERY)
+        assert visible == "%E2%82%AC%E2%82%AC"
+        [f] = disarm.decode_smuggled(visible)
+        assert f.text == "€€"

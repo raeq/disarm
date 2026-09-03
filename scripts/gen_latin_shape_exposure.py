@@ -140,7 +140,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true", help="exit 1 if the fixture is stale")
     args = ap.parse_args()
-    text = render(census())
+    # Once. `census()` walks the codespace and calls six surfaces per selected code
+    # point, and this function used to call it twice — for `render` and again for the
+    # row count in the status line (#930 review).
+    rows = census()
+    text = render(rows)
     if args.check:
         current = FIXTURE.read_text(encoding="utf-8") if FIXTURE.exists() else ""
         # The header carries the disarm version, which moves on every release; compare
@@ -152,7 +156,7 @@ def main() -> int:
         return 0
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
     FIXTURE.write_text(text, encoding="utf-8")
-    print(f"wrote {FIXTURE.relative_to(ROOT)} ({len(census())} rows)", file=sys.stderr)
+    print(f"wrote {FIXTURE.relative_to(ROOT)} ({len(rows)} rows)", file=sys.stderr)
     return 0
 
 

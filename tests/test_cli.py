@@ -507,3 +507,41 @@ class TestScan:
     def test_help_names_the_contract(self):
         r = run_cli("scan", "--help")
         assert "--fail" in r.stdout and "--json" in r.stdout and "--no-gitignore" in r.stdout
+        assert "--sarif" in r.stdout and "--baseline" in r.stdout and "--write-baseline" in r.stdout
+
+    # ---- #705
+
+    def test_sarif_is_a_parseable_2_1_0_document(self, tmp_path):
+        import json
+
+        r = run_cli("scan", "--sarif", str(self._tree(tmp_path)))
+        assert r.returncode == 0, r.stderr
+        doc = json.loads(r.stdout)
+        assert doc["version"] == "2.1.0"
+        [result] = doc["runs"][0]["results"]
+        assert result["ruleId"] == "bidi" and result["partialFingerprints"]["disarm/v1"]
+
+    def test_sarif_and_json_are_mutually_exclusive(self, tmp_path):
+        assert run_cli("scan", "--sarif", "--json", str(tmp_path)).returncode == 2
+
+    def test_a_baseline_lets_the_check_go_on_before_the_tree_is_clean(self, tmp_path):
+        root = self._tree(tmp_path)
+        bl = tmp_path / ".disarm-baseline.json"
+        assert run_cli("scan", "--fail", str(root)).returncode == 1
+        w = run_cli("scan", "--write-baseline", str(bl), str(root))
+        assert w.returncode == 0 and "wrote 1 fingerprint" in w.stdout
+        assert run_cli("scan", "--fail", "--baseline", str(bl), str(root)).returncode == 0
+        # ...and something new still fails.
+        (root / "new.txt").write_text(self.PLANTED, encoding="utf-8")
+        r = run_cli("scan", "--fail", "--baseline", str(bl), str(root))
+        assert r.returncode == 1 and "new.txt" in r.stdout and "bad.txt" not in r.stdout
+
+    def test_a_missing_baseline_is_a_read_error_not_a_traceback(self, tmp_path):
+        r = run_cli("scan", "--baseline", str(tmp_path / "nope.json"), str(tmp_path))
+        assert r.returncode == 3 and "nope.json" in r.stderr and "Traceback" not in r.stderr
+
+    def test_a_baseline_of_the_wrong_version_is_refused(self, tmp_path):
+        bl = tmp_path / "bl.json"
+        bl.write_text('{"version": 99, "fingerprints": []}')
+        r = run_cli("scan", "--baseline", str(bl), str(tmp_path))
+        assert r.returncode == 1 and "baseline version" in r.stderr

@@ -13,6 +13,7 @@ against real repositories before anyone commits to releasing binaries per tag.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -73,6 +74,11 @@ class ScanFinding:
     kind: str
     reason: str
     token: str
+    #: The library's evidence string — `U+202E`, `U+200B ×16`, a scheme name. This is the
+    #: "character" half of the fingerprint: what was found, independent of where.
+    detail: str
+    #: Stable across edits that move the finding. See `fingerprint_for` for the rule.
+    fingerprint: str
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -82,10 +88,63 @@ class ScanFinding:
             "kind": self.kind,
             "reason": self.reason,
             "token": self.token,
+            "detail": self.detail,
+            "fingerprint": self.fingerprint,
         }
 
     def render(self) -> str:
         return f"{self.path}:{self.line}:{self.column}: {self.kind}: {self.reason}"
+
+
+def fingerprint_for(path: str, kind: str, detail: str, occurrence: int) -> str:
+    """The identity of a finding that survives an edit (#705).
+
+    **File, what was found, and which occurrence of it this is — never the line.** The
+    naive fingerprint is file + line + column, and it breaks on the first commit that
+    inserts a paragraph: every finding below the insertion looks new. Keying on the
+    occurrence index instead means inserting text *above* a finding does not raise a
+    second alert for it.
+
+    **The honest limit, which belongs beside the rule.** Two occurrences of the same
+    `(kind, detail)` in one file are told apart only by their order. Inserting a *second*
+    occurrence above a recorded first accepts the new one and reports the old: the count
+    stays right and nothing is silently dropped, but which occurrence is named can swap.
+    That is the trade for surviving ordinary edits, taken from `juriku/untrace`.
+
+    `path` is the path as scanned, so a baseline written from the repository root has to
+    be applied from the repository root.
+    """
+    ident = f"{path}\0{kind}\0{detail}\0{occurrence}".encode("utf-8", "surrogatepass")
+    return hashlib.sha256(ident).hexdigest()[:24]
+
+
+#: The on-disk shape. `version` is here so a later change to the rule can refuse an old
+#: file rather than silently matching nothing.
+BASELINE_VERSION = 1
+
+
+def load_baseline(path: Path) -> set[str]:
+    """The fingerprints a baseline file accepts. Refuses a version it does not know."""
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    if doc.get("version") != BASELINE_VERSION:
+        msg = f"{path}: baseline version {doc.get('version')!r}, expected {BASELINE_VERSION}"
+        raise ValueError(msg)
+    return set(doc.get("fingerprints", []))
+
+
+def write_baseline(path: Path, findings: Iterable[ScanFinding]) -> int:
+    """Record every current finding so only what arrives afterwards fails the check.
+
+    A repository with years of history will not be clean on its first scan, and requiring
+    it to be clean before the check can be turned on is the order that stops adoption.
+    Sorted, so the file diffs cleanly as it shrinks.
+    """
+    fps = sorted({f.fingerprint for f in findings})
+    path.write_text(
+        json.dumps({"version": BASELINE_VERSION, "fingerprints": fps}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return len(fps)
 
 
 @dataclass
@@ -232,8 +291,14 @@ def scan_paths(
             continue  # not UTF-8 text; `decode_to_utf8` is a different job
         scanned += 1
         report = inspect_anomalies(text)
+        # Occurrence index per (kind, detail) within THIS file, in report order — which is
+        # byte order, so "which occurrence" means "how many earlier in the file".
+        seen: dict[tuple[str, str], int] = {}
         for finding in report.findings:
             line, column = _line_and_column(text, finding.start)
+            key = (finding.kind, finding.detail)
+            occurrence = seen.get(key, 0)
+            seen[key] = occurrence + 1
             findings.append(
                 ScanFinding(
                     path=str(path),
@@ -242,9 +307,90 @@ def scan_paths(
                     kind=finding.kind,
                     reason=finding.reason,
                     token=finding.token,
+                    detail=finding.detail,
+                    fingerprint=fingerprint_for(
+                        str(path), finding.kind, finding.detail, occurrence
+                    ),
                 )
             )
     return ScanResult(findings=findings, scanned=scanned, unreadable=unreadable)
+
+
+#: SARIF `level` per anomaly kind (#705).
+#:
+#: A decoded payload is the one finding that needs no threshold to interpret, so it is the
+#: one `error`. The rest are `warning`: each reports a technical fact and leaves the
+#: judgement to the caller, which is the library's stated stance. Hard-coded HERE rather
+#: than on `AnomalyKind`: #705 item 4 says a severity on the enum is a public API addition
+#: and should be its own change, so this writer carries the map and a test asserts it
+#: covers every kind the library can produce — the map cannot fall behind the enum.
+SARIF_LEVELS: dict[str, str] = {
+    "smuggled": "error",
+    "invisible": "warning",
+    "bidi": "warning",
+    "bidi_mixed": "warning",
+    "control": "warning",
+    "deletion": "warning",
+    "mixed_script": "warning",
+    "confusable": "warning",
+    "compat_fold": "warning",
+    "zalgo": "warning",
+    "enclosing_mark": "warning",
+    "duplicate_mark": "warning",
+    "mixed_numbers": "warning",
+    "leet": "warning",
+    "segmentation": "warning",
+}
+
+
+def to_sarif(result: ScanResult, *, version: str) -> dict[str, object]:
+    """A SARIF 2.1.0 document, so findings land in a Security tab and as PR annotations.
+
+    One rule per kind seen, one result per finding, with `partialFingerprints` carrying
+    the disarm fingerprint so a consumer that does its own baselining keys on the same
+    identity this tool does.
+    """
+    kinds = sorted({f.kind for f in result.findings})
+    return {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "disarm",
+                        "version": version,
+                        "informationUri": "https://github.com/raeq/disarm",
+                        "rules": [
+                            {
+                                "id": k,
+                                "shortDescription": {"text": f"disarm anomaly kind `{k}`"},
+                                "defaultConfiguration": {"level": SARIF_LEVELS.get(k, "warning")},
+                            }
+                            for k in kinds
+                        ],
+                    }
+                },
+                "results": [
+                    {
+                        "ruleId": f.kind,
+                        "level": SARIF_LEVELS.get(f.kind, "warning"),
+                        "message": {"text": f.reason},
+                        "locations": [
+                            {
+                                "physicalLocation": {
+                                    "artifactLocation": {"uri": f.path},
+                                    "region": {"startLine": f.line, "startColumn": f.column},
+                                }
+                            }
+                        ],
+                        "partialFingerprints": {"disarm/v1": f.fingerprint},
+                    }
+                    for f in result.findings
+                ],
+            }
+        ],
+    }
 
 
 #: Exit codes, so CI can tell the outcomes apart (#704 item 4).
@@ -262,8 +408,11 @@ def run(
     roots: list[Path],
     *,
     as_json: bool = False,
+    as_sarif: bool = False,
     fail: bool = False,
     use_gitignore: bool = True,
+    baseline: Path | None = None,
+    write_baseline_to: Path | None = None,
     out: TextIO | None = None,
 ) -> int:
     """Run a scan and print it. Returns the process exit code.
@@ -275,7 +424,30 @@ def run(
     """
     stream = out if out is not None else sys.stdout
     result = scan_paths(roots, use_gitignore=use_gitignore)
-    if as_json:
+
+    if write_baseline_to is not None:
+        n = write_baseline(write_baseline_to, result.findings)
+        print(f"wrote {n} fingerprint(s) to {write_baseline_to}", file=stream)
+        return EXIT_READ_ERROR if result.unreadable else EXIT_OK
+
+    suppressed = 0
+    stale: list[str] = []
+    if baseline is not None:
+        accepted = load_baseline(baseline)
+        present = {f.fingerprint for f in result.findings}
+        # A baselined finding is counted and not shown. One that no longer exists is
+        # reported as stale rather than quietly kept, so the file shrinks as the tree is
+        # cleaned instead of accumulating acceptances for findings that are gone.
+        stale = sorted(accepted - present)
+        kept = [f for f in result.findings if f.fingerprint not in accepted]
+        suppressed = len(result.findings) - len(kept)
+        result = ScanResult(findings=kept, scanned=result.scanned, unreadable=result.unreadable)
+
+    from disarm import __version__
+
+    if as_sarif:
+        print(json.dumps(to_sarif(result, version=__version__), indent=2), file=stream)
+    elif as_json:
         print(
             json.dumps(
                 {
@@ -291,10 +463,12 @@ def run(
     else:
         for finding in result.findings:
             print(finding.render(), file=stream)
-        print(
-            f"scanned {result.scanned} file(s), {len(result.findings)} finding(s)",
-            file=stream,
-        )
+        summary = f"scanned {result.scanned} file(s), {len(result.findings)} finding(s)"
+        if suppressed:
+            summary += f", {suppressed} baselined"
+        print(summary, file=stream)
+    for fp in stale:
+        print(f"stale: baseline entry {fp} matches no current finding", file=sys.stderr)
     for path, error in result.unreadable:
         print(f"error: {path}: {error}", file=sys.stderr)
     if result.unreadable:

@@ -18,6 +18,38 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`disarm scan --sarif`, `--baseline` and `--write-baseline`, and a fingerprint that
+  survives an edit (#705).** SARIF is the small half: a 2.1.0 document so findings land in
+  GitHub's Security tab and as annotations on the pull request that introduced them, with
+  the disarm fingerprint in `partialFingerprints` so a consumer that baselines on its own
+  keys on the same identity.
+
+  The fingerprint rule is the part worth having even if SARIF never shipped: **the file,
+  what was found, and which occurrence of it this is — never the line.** The naive
+  identity breaks on the first commit that inserts a paragraph, because every finding
+  below it looks new; keyed on the occurrence index, inserting text above a finding raises
+  no second alert. The honest limit is documented beside it and asserted: inserting a
+  *second* occurrence above a recorded first accepts the new one and reports the old — the
+  count stays right, nothing is dropped, but which occurrence is named can swap.
+
+  A baseline is what lets the check go on at all. A repository with years of history is
+  not clean on its first scan, and requiring it to be clean first is the order that stops
+  adoption. `--write-baseline` records what exists today; `--baseline` suppresses it
+  (counted, not shown) and fails only on what arrives afterwards. A baselined finding that
+  no longer exists is reported as **stale** rather than quietly kept, so the file shrinks
+  as the tree is cleaned. The file is versioned, and a version the reader does not know is
+  refused rather than matched against nothing.
+
+  The SARIF level map lives in the writer, not on `AnomalyKind`: #705 item 4 says a
+  severity on the enum is a public API addition and its own change, so that is filed
+  separately, and a test reads the kinds from the Rust source and asserts the map covers
+  every one — it cannot fall behind the enum. `smuggled` is the one `error`, the one
+  finding that needs no threshold to interpret; the rest are `warning`.
+
+  `docs/cli.md` carries the GitHub Actions snippet, including the detail that decides
+  whether it works: the upload step has to run before any failing exit, or the findings
+  that caused the failure are the ones nobody sees.
+
 - **`disarm scan PATH...` — the one API built for scanning, pointed at files (#704).**
   `inspect_anomalies` has always returned everything a scanner needs — a kind, a span,
   evidence and a plain-language reason — and there was no way to run it over a file. Every

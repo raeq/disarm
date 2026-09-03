@@ -60,6 +60,36 @@ pub fn strip_zero_width_chars(text: &str) -> String {
     crate::whitespace::strip_zero_width_chars(text)
 }
 
+// ── Typographic punctuation (#703) ────────────────────────────────────────────
+
+/// Fold typographic punctuation to its ASCII spelling: the dash family and the minus
+/// sign to `-`, the curly and low-9 quotes and the primes to `'` / `"`, the ellipsis to
+/// `...`, and the non-standard spaces to a space (#703).
+///
+/// Nothing else in disarm does this as a stated purpose. [`canonicalize`] folds five
+/// dashes and skips `U+2014 EM DASH` and `U+2015 HORIZONTAL BAR`; [`transliterate`] folds
+/// those two and rejects the other four — so a key built from `canonicalize` treats `a—b`
+/// and `a-b` as distinct while treating `a–b` and `a-b` as the same, and both are the same
+/// autocorrect. A separate primitive rather than a change to either: `canonicalize` is a
+/// security fold and entitled to map `“` to `''`, a confusable skeleton for a double quote
+/// and a poor replacement for one.
+///
+/// **Not covered, on purpose:** `U+3002 IDEOGRAPHIC FULL STOP` and `U+060C ARABIC COMMA`
+/// are those scripts' own full stop and comma; the middle dot `U+00B7` is a letter in
+/// Catalan `l·l`; the bullet stays. Spaces fold rather than delete, so words do not glue.
+///
+/// Borrows when there is nothing to fold. Idempotent.
+///
+/// ```
+/// use disarm::api::fold_punctuation;
+/// assert_eq!(fold_punctuation("He said \u{201C}ok\u{201D} \u{2014} then\u{2026}"), "He said \"ok\" - then...");
+/// assert_eq!(fold_punctuation("l\u{00B7}l"), "l\u{00B7}l"); // Catalan: a letter, not punctuation
+/// ```
+#[must_use]
+pub fn fold_punctuation(text: &str) -> Cow<'_, str> {
+    crate::punctuation::fold_punctuation(text)
+}
+
 // ── Invisible / non-interchange code points (#413) ───────────────────────────
 
 /// Remove the Unicode **Tags** block (`U+E0000`–`U+E007F`) — the "ASCII

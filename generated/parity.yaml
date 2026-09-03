@@ -29,6 +29,24 @@ operations:
       java: canonicalizeStrict
       kotlin: canonicalizeStrict
       cabi: canonicalize_strict
+  - id: canonicalize_strict_with
+    names:
+      rust: canonicalize_strict_with
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
+  - id: canonicalize_with
+    names:
+      rust: canonicalize_with
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: catalog_key
     names:
       rust: catalog_key
@@ -38,6 +56,15 @@ operations:
       java: catalogKey
       kotlin: catalogKey
       cabi: catalog_key
+  - id: catalog_key_with
+    names:
+      rust: catalog_key_with
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: clear_replacements
     names:
       rust: clear_replacements
@@ -200,6 +227,15 @@ operations:
       java: foldCase
       kotlin: foldCase
       cabi: fold_case
+  - id: fold_punctuation
+    names:
+      rust: fold_punctuation
+      python: fold_punctuation
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: get_pipeline
     names:
       rust: get_pipeline
@@ -614,6 +650,15 @@ operations:
       java: searchKey
       kotlin: searchKey
       cabi: search_key
+  - id: search_key_with
+    names:
+      rust: search_key_with
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: security_clean
     names:
       rust: security_clean
@@ -659,6 +704,15 @@ operations:
       java: sortKey
       kotlin: sortKey
       cabi: sort_key
+  - id: sort_key_with
+    names:
+      rust: sort_key_with
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: stream_safe
     names:
       rust: stream_safe
@@ -731,6 +785,15 @@ operations:
       java: stripObfuscation
       kotlin: stripObfuscation
       cabi: strip_obfuscation
+  - id: strip_obfuscation_with
+    names:
+      rust: strip_obfuscation_with
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: strip_pua
     names:
       rust: strip_pua

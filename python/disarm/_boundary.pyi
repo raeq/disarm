@@ -108,6 +108,9 @@ from disarm._core import (
     _fold_case as _fold_case,
 )
 from disarm._core import (
+    _fold_punctuation as _fold_punctuation,
+)
+from disarm._core import (
     _get_pipeline as _get_pipeline,
 )
 from disarm._core import (

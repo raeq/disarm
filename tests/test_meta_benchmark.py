@@ -2175,27 +2175,61 @@ def test_recovery_is_scored_only_over_rows_that_were_perturbed():
         assert xmr.of == pert.value, f"{cls}: XMR must be scored over perturbed rows only"
 
 
-def test_reproducing_the_rendered_form_is_not_scored_as_recovery():
-    """A defused bidi attack must not emit the string the illusion was built of.
+def test_the_reordering_class_is_scored_on_carrier_removal_not_recovery():
+    """The reason matters, and this one was wrong twice.
 
-    `pay<RLO>kcab<PDF>pal` renders as `paybackpal`. A sanitizer that produced
-    that would be finishing the attack: the rendered form *is* the deception.
-    The logical string with the control removed is the correct output, so the
-    reordering class is scored on carrier removal and its XMR is a census.
+    First reading: recovery needs UAX #9, out of scope. Second: the rendered
+    form is the deception, so emitting it would finish the attack. The second is
+    measurably false for this corpus — in Boucher et al.'s reordering rows the
+    *rendering is the clean input* and the code points are scrambled (`crying`
+    stored as `cyring`), so only 14 of 4,800 perturbed rows have a logical order
+    matching the clean text.
+
+    The real reason is cost and legitimate use: bidi controls carry genuine RTL
+    text, resolving display order needs a paragraph direction and UAX #9, and
+    #740 declined to build it. `deletions` stays scored because BS/DEL have no
+    legitimate use and resolve with a cursor over cells, not a renderer (#937).
     """
     suite = registry.by_name("bad-characters")
-    assert "reorderings" in suite.RECOVERY_NOT_A_GOAL
-    assert "deletions" not in suite.RECOVERY_NOT_A_GOAL, (
-        "for deletions the rendered form is the benign text, so applying the "
-        "erase removes smuggled content rather than reproducing an illusion"
+    assert "reorderings" in suite.RECOVERY_OUT_OF_SCOPE
+    assert "deletions" not in suite.RECOVERY_OUT_OF_SCOPE
+
+    why = suite.RECOVERY_OUT_OF_SCOPE["reorderings"]
+    assert "UAX #9" in why and "#740" in why
+    assert "deception" not in why, (
+        "the rendered form is the clean input in this corpus, not the deception"
     )
+
     if not suite.available()[0]:
         pytest.skip("the bad-characters release is not cached")
-
     out = suite.run(subject=subjects.by_name("disarm"))
     assert out.measurement("reorderings_xmr").higher_is_better is None
     assert out.measurement("reorderings_carrier_removed").higher_is_better is True
     assert out.measurement("deletions_xmr").higher_is_better is True
+
+
+def test_the_reordering_corpus_hides_the_code_points_not_the_rendering():
+    """Pinning the direction, because getting it backwards produced a false claim.
+
+    The attack scrambles the code points and leaves the rendering benign, so a
+    consumer reading code points sees the damage and a human reading the screen
+    does not. Anchored to the corpus rather than to prose.
+    """
+    suite = registry.by_name("bad-characters")
+    if not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+    rows = suite._rows_by_class(suite.locate(), None)["reorderings"]
+    hot = [(a, c) for a, c in rows if suite._perturbed("reorderings", a, c)]
+    marks = suite.MARKERS["reorderings"]
+
+    def logical(text):
+        return "".join(ch for ch in text if ord(ch) not in marks)
+
+    same = sum(1 for adv, clean in hot if logical(adv) == clean)
+    assert same < len(hot) * 0.01, (
+        "if the logical order matched the clean input, the rendering would be "
+        "the attack — it is the other way round"
+    )
 
 
 def test_the_erase_classes_recovery_is_reachable_without_a_renderer():

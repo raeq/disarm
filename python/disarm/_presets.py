@@ -41,6 +41,70 @@ from disarm._boundary import (
 _NON_DEFAULT_DIGIT_POLICIES = ("tr39", "preserve")
 
 
+#: The Unicode version the census below was measured under — the OLDEST any interpreter
+#: in CI runs (CPython 3.12 ships 15.0.0; 3.13 ships 15.1.0; 3.14 ships 16.0.0). `tests/test_empty_key.py` compares exactly on that
+#: version and asserts a lower bound on any newer one.
+#:
+#: The version has to be stated, because "assigned code points" is not one set. The first
+#: version of this table was measured on a 16.0.0 host and was high by exactly the 16.0
+#: additions each surface takes to `""` — 51 on `search_key`, 63 on `ml_normalize` — and
+#: CI could not see them and failed the gate. The second pin, 15.1.0 from a 3.13 host,
+#: was refused by CI's 3.12 at 15.0.0: nine surfaces are identical across the two and
+#: `slugify` is 627 lower, which is every 15.1 addition it drops. Measured, not assumed. Surfaces that reach `""` only by
+#: stripping (`canonicalize`, `sort_key`, `skeleton_key`) are identical across the two;
+#: the ones that reach it through transliteration and the confusable fold are not.
+_EMPTY_KEY_CENSUS_UCD = "15.0.0"
+
+#: Single-character inputs whose key is `""`, as (all assigned, excluding the PUA), at
+#: `_EMPTY_KEY_CENSUS_UCD`. Frozen by `tests/test_empty_key.py`.
+_EMPTY_KEY_CENSUS = {
+    "canonicalize": (137_955, 487),
+    "canonicalize_strict": (137_955, 487),
+    "strip_obfuscation": (140_200, 2_732),
+    "ml_normalize": (4_047, 4_047),
+    "search_key": (139_870, 2_402),
+    "catalog_key": (139_867, 2_399),
+    "sort_key": (138_404, 936),
+    "skeleton_key": (137_955, 487),
+    "slugify": (243_399, 105_931),
+    "sanitize_filename": (0, 0),
+}
+
+
+def _on_empty(text: str, key: str, on_empty: str | None) -> str:
+    """Apply the caller's empty-key policy (#728).
+
+    Every preset and key builder maps some non-empty input to `""`, so a value that was
+    entirely stripped is indistinguishable from a value that was never there. Measured,
+    `search_key` alone takes 2,453 non-PUA code points there, and every string built from
+    them. A caller storing the key as a uniqueness constraint has all of them, plus
+    "no value", competing for one slot: first writer takes it, everyone after collides
+    with a record that is not a user.
+
+    `sanitize_filename` is the one surface that already reserved a sentinel — `_`, from
+    #485 — and arXiv:2608.06508v1 §7.5 is explicit that the remedy is to redefine the
+    mapping so the sentinel sits outside the value range, not to normalize harder.
+
+    A post-pass rather than a step inside the pipeline, and deliberately so: the answer is
+    a property of the *output*, not of any transform, and the pipeline has no more
+    information at the end than the caller does. It is here for discoverability and to pin
+    what it means, the way `_apply_digit_policy` is (#885).
+
+    **It applies only when the input was not empty**, which is the whole point. An empty
+    input has an empty key legitimately — nothing in, nothing out — and substituting a
+    sentinel there would put absence and a stripped value back in one slot, which is the
+    collision this exists to break. `search_key("")` is `""` with or without the
+    parameter; `search_key("\u200b")` is the sentinel.
+
+    **The sentinel is the caller's to choose, and disarm cannot check it.** A value that a
+    real input also keys to reintroduces the collision one step over; `on_empty` is only
+    safe when it is outside the range the builder can produce.
+    """
+    if key or on_empty is None or not text:
+        return key
+    return on_empty
+
+
 def _apply_digit_policy(text: str, digit_policy: str) -> str:
     """Fold digit variants under *digit_policy* before a key builder runs (#885).
 
@@ -177,6 +241,16 @@ def canonicalize(text: str, *, digit_policy: str = "numeric") -> str:
         gives output byte-identical to not passing it, so no stored key moves. Pass
         ``"tr39"`` when your inputs are Latin identifiers and the extra reach is worth it.
         Do not pass it to text that may carry Arabic, Persian, Indic or Thai numerals.
+
+    **The output can be the empty string (#728).**
+
+    Measured at Unicode 15.0.0, **137,955** single
+    characters reduce to ``""`` here (487 excluding the Private Use
+    Area), and so does every string built from them. A caller keying a table
+    on this has all of them, plus "no value", competing for one slot.
+
+    There is no ``on_empty`` here: this returns text rather than a key. The
+    four key builders take one.
     """
     return _canonicalize(_apply_digit_policy(text, digit_policy))
 
@@ -262,6 +336,16 @@ def ml_normalize(
         'muenchen'
         >>> ml_normalize("José Martínez", fold_case=False)
         'Jose Martinez'
+
+    **The output can be the empty string (#728).**
+
+    Measured at Unicode 15.0.0, **4,047** single
+    characters reduce to ``""`` here (4,047 excluding the Private Use
+    Area), and so does every string built from them. A caller keying a table
+    on this has all of them, plus "no value", competing for one slot.
+
+    There is no ``on_empty`` here: this returns text rather than a key. The
+    four key builders take one.
     """
     return _ml_normalize(text, lang=lang, emoji_style=emoji, fold_case=fold_case)
 
@@ -272,6 +356,7 @@ def catalog_key(
     lang: str | None = None,
     strict_iso9: bool = False,
     digit_policy: str = "numeric",
+    on_empty: str | None = None,
 ) -> str:
     """Library catalog key generation pipeline.
 
@@ -337,8 +422,23 @@ def catalog_key(
         the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
         numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
         the measurements and the trade (#885).
+
+    **The output can be the empty string (#728).**
+
+    Measured at Unicode 15.0.0, **139,867** single
+    characters reduce to ``""`` here (2,399 excluding the Private Use
+    Area), and so does every string built from them. A caller keying a table
+    on this has all of them, plus "no value", competing for one slot.
+
+    ``on_empty`` reserves a sentinel for that case — the fix
+    `sanitize_filename` already made with ``_`` (#485). It applies only when
+    the *input* was non-empty, so absence keeps its own key.
     """
-    return _catalog_key(_apply_digit_policy(text, digit_policy), lang=lang, strict_iso9=strict_iso9)
+    return _on_empty(
+        text,
+        _catalog_key(_apply_digit_policy(text, digit_policy), lang=lang, strict_iso9=strict_iso9),
+        on_empty,
+    )
 
 
 def strip_format(text: str) -> str:
@@ -394,6 +494,7 @@ def search_key(
     *,
     lang: str | None = None,
     digit_policy: str = "numeric",
+    on_empty: str | None = None,
 ) -> str:
     """Search index key generation pipeline.
 
@@ -443,11 +544,24 @@ def search_key(
         the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
         numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
         the measurements and the trade (#885).
+
+    **The output can be the empty string (#728).**
+
+    Measured at Unicode 15.0.0, **139,870** single
+    characters reduce to ``""`` here (2,402 excluding the Private Use
+    Area), and so does every string built from them. A caller keying a table
+    on this has all of them, plus "no value", competing for one slot.
+
+    ``on_empty`` reserves a sentinel for that case — the fix
+    `sanitize_filename` already made with ``_`` (#485). It applies only when
+    the *input* was non-empty, so absence keeps its own key.
     """
-    return _search_key(_apply_digit_policy(text, digit_policy), lang=lang)
+    return _on_empty(
+        text, _search_key(_apply_digit_policy(text, digit_policy), lang=lang), on_empty
+    )
 
 
-def skeleton_key(text: str, *, digit_policy: str = "numeric") -> str:
+def skeleton_key(text: str, *, digit_policy: str = "numeric", on_empty: str | None = None) -> str:
     """A spoof key: the TR39 skeleton plus the prototype classes disarm keeps apart.
 
     Pipeline: NFKC → strip_bidi → strip invisibles → confusables → **prototype
@@ -507,8 +621,19 @@ def skeleton_key(text: str, *, digit_policy: str = "numeric") -> str:
     ``v1.0.1``, ``vI.O.I`` and ``vl.o.l``. For a spoof detector that is the point;
     for a deduplication key over anything carrying a part number, a version or an
     ISBN it destroys the field.
+
+    **The output can be the empty string (#728).**
+
+    Measured at Unicode 15.0.0, **137,955** single
+    characters reduce to ``""`` here (487 excluding the Private Use
+    Area), and so does every string built from them. A caller keying a table
+    on this has all of them, plus "no value", competing for one slot.
+
+    ``on_empty`` reserves a sentinel for that case — the fix
+    `sanitize_filename` already made with ``_`` (#485). It applies only when
+    the *input* was non-empty, so absence keeps its own key.
     """
-    return _skeleton_key(text, digit_policy=digit_policy)
+    return _on_empty(text, _skeleton_key(text, digit_policy=digit_policy), on_empty)
 
 
 def sort_key(
@@ -516,6 +641,7 @@ def sort_key(
     *,
     lang: str | None = None,
     digit_policy: str = "numeric",
+    on_empty: str | None = None,
 ) -> str:
     """Sort key generation pipeline.
 
@@ -578,8 +704,19 @@ def sort_key(
         the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
         numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
         the measurements and the trade (#885).
+
+    **The output can be the empty string (#728).**
+
+    Measured at Unicode 15.0.0, **138,404** single
+    characters reduce to ``""`` here (936 excluding the Private Use
+    Area), and so does every string built from them. A caller keying a table
+    on this has all of them, plus "no value", competing for one slot.
+
+    ``on_empty`` reserves a sentinel for that case — the fix
+    `sanitize_filename` already made with ``_`` (#485). It applies only when
+    the *input* was non-empty, so absence keeps its own key.
     """
-    return _sort_key(_apply_digit_policy(text, digit_policy), lang=lang)
+    return _on_empty(text, _sort_key(_apply_digit_policy(text, digit_policy), lang=lang), on_empty)
 
 
 def strip_bidi(text: str) -> str:
@@ -735,6 +872,16 @@ def canonicalize_strict(text: str, *, digit_policy: str = "numeric") -> str:
         the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
         numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
         the measurements and the trade (#885).
+
+    **The output can be the empty string (#728).**
+
+    Measured at Unicode 15.0.0, **137,955** single
+    characters reduce to ``""`` here (487 excluding the Private Use
+    Area), and so does every string built from them. A caller keying a table
+    on this has all of them, plus "no value", competing for one slot.
+
+    There is no ``on_empty`` here: this returns text rather than a key. The
+    four key builders take one.
     """
     return _canonicalize_strict(_apply_digit_policy(text, digit_policy))
 
@@ -827,6 +974,16 @@ def strip_obfuscation(text: str, *, digit_policy: str = "numeric") -> str:
         the default and a genuine no-op; ``"tr39"`` reaches more spoofs but destroys the
         numeric reading of Arabic, Persian, Indic and Thai digits. See `canonicalize` for
         the measurements and the trade (#885).
+
+    **The output can be the empty string (#728).**
+
+    Measured at Unicode 15.0.0, **140,200** single
+    characters reduce to ``""`` here (2,732 excluding the Private Use
+    Area), and so does every string built from them. A caller keying a table
+    on this has all of them, plus "no value", competing for one slot.
+
+    There is no ``on_empty`` here: this returns text rather than a key. The
+    four key builders take one.
     """
     return _strip_obfuscation(_apply_digit_policy(text, digit_policy))
 

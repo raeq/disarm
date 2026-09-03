@@ -587,6 +587,65 @@ The key builders are excluded from all of this. `search_key`, `catalog_key` and
 two spellings collide (see [`find_key_collisions`](api/predicates.md#find_key_collisions)).
 They are documented as keys, not as cleaners.
 
+### A key can be the empty string, and absence is not a value
+
+Every preset and key builder maps some non-empty input to `""`. A value that was entirely
+stripped is then indistinguishable from a value that was never there.
+
+| surface | single characters → `""` | excluding PUA |
+|---|---|---|
+| `slugify` | 243,399 | 105,931 |
+| `strip_obfuscation` | 140,200 | 2,732 |
+| `search_key` | 139,870 | 2,402 |
+| `catalog_key` | 139,867 | 2,399 |
+| `sort_key` | 138,404 | 936 |
+| `canonicalize` / `canonicalize_strict` / `skeleton_key` | 137,955 | 487 |
+| `ml_normalize` | 4,047 | 4,047 |
+| **`sanitize_filename`** | **0** | **0** — returns `_` |
+
+Measured at **Unicode 15.0.0** — the oldest version CI runs — over every assigned code point, and
+frozen by `tests/test_empty_key.py` so a strip class that widens shows up as a diff. The
+version matters: a 16.0.0 host assigns more code points, and the surfaces that reach `""`
+through transliteration count them; `canonicalize`, `sort_key` and `skeleton_key` do not.
+
+This is **not** the homoglyph collision the key builders exist to produce. Those are
+deliberate — `аdmin` and `admin` *should* meet. This one collapses **absence** onto **a
+value**:
+
+```python
+from disarm import find_key_collisions, search_key
+
+groups = find_key_collisions(
+    ["admin", "", "\u200b", "\u0301\u0302", "\u00ad", "bob"], key="search_key"
+)
+empty = [g for g in groups if g.key == ""][0]
+assert set(empty.values) == {"", "\u200b", "\u0301\u0302", "\u00ad"}
+```
+
+A caller storing `search_key(username)` as a uniqueness key has 2,402 non-PUA code
+points, every string built from them, **and** "no username" competing for one slot. First
+writer takes it; everyone after collides with a record that is not a user.
+
+The four key builders take `on_empty` for it — the fix `sanitize_filename` already made
+with `_`. It applies only when the *input* was non-empty, so absence keeps its own key:
+
+```python
+NUL = "\u2400"  # SYMBOL FOR NULL — a value you have checked none of your inputs keys to
+
+assert search_key("", on_empty=NUL) == ""  # absence
+assert search_key("\u200b", on_empty=NUL) == NUL  # stripped to nothing
+```
+
+The three stripped values still share a key, which is right — they are all *input that
+reduced to nothing*, one fact rather than three. What changes is that absence is no longer
+one of them.
+
+!!! warning "The sentinel is yours to choose, and disarm cannot check it"
+    A value a real input also keys to reintroduces the collision one step over:
+    `search_key("\u200b", on_empty="admin")` equals `search_key("admin")`. Pick a value
+    you have verified none of your inputs keys to — disarm knows the table, not your data.
+
+
 ### `strip_accents` deletes Indic vowel signs
 
 A Latin acute and a Devanagari vowel sign are both general category `Mn`. In Latin an

@@ -72,6 +72,38 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
   Rust gets `api::is_mixed_script_per_word` and `api::has_bidi_conflict_per_word`; the
   existing functions are unchanged.
+- **`on_empty` on the four key builders, and the empty-key census in nine docstrings
+  (#728).** Every preset and key builder maps some non-empty input to `""`, so a value
+  that was entirely stripped is indistinguishable from one that was never there.
+  `sanitize_filename` was the only surface that guarded it, with the `_` sentinel from
+  #485.
+
+  Measured at Unicode 15.0.0, the oldest version CI runs: `search_key` takes **139,870**
+  single characters to `""` (2,402 excluding the PUA), `slugify` 243,399, `canonicalize`
+  137,955.
+  The version is stated because the census is not one number — a 16.0.0 host counts the
+  16.0 additions each surface takes to `""`, and the first version of the gate, measured
+  on one, failed CI by exactly those. The gate now compares exactly on the pinned version
+  and asserts a lower bound on any newer one, so neither branch is a skip.
+  A caller storing `search_key(username)` as a uniqueness key has all of them, every
+  string built from them, **and** "no username" competing for one slot.
+
+  This is not the homoglyph collision the key builders exist to produce — `аdmin` and
+  `admin` *should* meet. It collapses absence onto a value, which arXiv:2608.06508v1 §2.2
+  calls code-side semantic collapse and §7.5 says is fixed by moving the sentinel outside
+  the value range rather than by normalizing harder.
+
+  `on_empty` applies **only when the input was non-empty**, which is the whole point:
+  substituting for an empty input too would put absence and a stripped value back in one
+  slot. `search_key("")` is `""` with or without it; `search_key("\u200b")` is the
+  sentinel. The three stripped values still share a key, and that is correct — they are
+  all *input that reduced to nothing*.
+
+  The census is frozen by `tests/test_empty_key.py`, so a strip class that widens becomes
+  a diff somebody reads rather than a silent change to nine documented numbers.
+
+  Python-only for now, as `digit_policy` was in #885: it is a post-pass on the output, and
+  the Rust and binding half belongs with #896 rather than beside it.
 
 - **`decode_smuggled(text)` and the `smuggled` anomaly kind — decode what a hidden run
   *spells* (#701).** disarm strips the three ASCII-smuggling carriers and, since #700,

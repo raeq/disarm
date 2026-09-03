@@ -640,6 +640,16 @@ def slugify(
         'n-a'
         >>> slugify("🔥", default="N/A")  # default is sanitized, not returned raw
         'n-a'
+
+    **The output can be the empty string (#728).**
+
+    Measured at Unicode 15.0.0, **243,399** single
+    characters reduce to ``""`` here (105,931 excluding the Private Use
+    Area), and so does every string built from them. A caller keying a table
+    on this has all of them, plus "no value", competing for one slot.
+
+    There is no ``on_empty`` here: this returns text rather than a key. The
+    four key builders take one.
     """
     _sw = stopwords if isinstance(stopwords, (tuple, list)) else list(stopwords)
     _rp = replacements if isinstance(replacements, (tuple, list)) else list(replacements)

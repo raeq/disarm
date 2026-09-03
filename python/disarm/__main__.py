@@ -72,6 +72,11 @@ def cmd_pipeline(args: argparse.Namespace) -> None:
         elif step == "strip_zalgo":
             # #250 C6: strip_zalgo takes a value (max combining marks per base char).
             kwargs["strip_zalgo"] = args.zalgo_max_marks
+        elif step == "digit_policy":
+            # #646: a parameter of `confusables`, the way `strip_zalgo` takes a value.
+            # The library refuses it without a confusables step, and that error reaches
+            # the caller through `main()`'s DisarmError handler.
+            kwargs["digit_policy"] = args.digit_policy
         elif step in (
             "transliterate",
             "fold_case",
@@ -226,10 +231,17 @@ def main() -> None:
             help="Comma-separated steps: normalize,transliterate,fold_case,"
             "collapse_whitespace,strip_accents,confusables,strip_control,"
             "strip_zero_width,demojize,strip_bidi,strip_zalgo,strip_pua,strip_plane14,"
-            "resolve_deletions,resolve_cr,"
+            "resolve_deletions,resolve_cr,digit_policy,"
             "strict_iso9,gost7034",
         )
         p.add_argument("--form", default=None, help="Normalization form for normalize step")
+        p.add_argument(
+            "--digit-policy",
+            default="numeric",
+            choices=["numeric", "tr39", "preserve"],
+            help="Policy the confusables step folds digits under, for the digit_policy "
+            "step entry (default: numeric)",
+        )
         p.add_argument(
             "--zalgo-max-marks",
             type=int,

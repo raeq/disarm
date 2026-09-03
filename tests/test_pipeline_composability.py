@@ -162,8 +162,12 @@ def _cli_steps() -> set[str]:
     src = MAIN_PY.read_text(encoding="utf-8")
     body = re.search(r"elif step in \((.*?)\n\s*\):", src, re.DOTALL)
     assert body, "could not locate the --steps allowlist in __main__.py"
-    # `normalize` and `strip_zalgo` are handled by earlier branches, not the tuple.
-    return set(re.findall(r'"(\w+)"', body.group(1))) | {"normalize", "strip_zalgo"}
+    # Steps that take a value (`normalize`, `strip_zalgo`, `digit_policy`) are handled by
+    # their own `step == "..."` branches before the tuple; read those from the source
+    # too, so a fourth one cannot slip past this gate by being spelled the same way.
+    valued = set(re.findall(r'(?:if|elif) step == "(\w+)":', src))
+    assert valued >= {"normalize", "strip_zalgo"}, valued
+    return set(re.findall(r'"(\w+)"', body.group(1))) | valued
 
 
 def test_the_source_parses_found_something() -> None:

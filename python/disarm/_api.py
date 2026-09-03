@@ -2972,10 +2972,17 @@ class TextPipeline:
     profile (e.g. ``scholarly_cyrillic_iso9``), call `get_pipeline`
     instead — it returns a ready-to-use ``TextPipeline``.
 
+    ``digit_policy`` is the policy the ``confusables`` step folds digits under
+    (``"numeric"``, ``"tr39"`` or ``"preserve"``), fixed here at construction the way
+    `get_pipeline` fixes it for a profile (#646). It is rejected, not ignored, unless
+    ``confusables=True``: a setting that would never run is refused rather than kept.
+
     Examples:
         >>> pipe = TextPipeline(normalize="NFC", fold_case=True, collapse_whitespace=True)
         >>> pipe("  Héllo  WÖRLD  ")
         'héllo wörld'
+        >>> TextPipeline(confusables=True, digit_policy="tr39")("g੦ogle")
+        'google'
     """
 
     def __init__(
@@ -2999,6 +3006,7 @@ class TextPipeline:
         strip_plane14: bool = False,
         resolve_deletions: bool = False,
         resolve_cr: bool = False,
+        digit_policy: str = "numeric",
     ) -> None:
         # Validation (e.g. strip_zalgo >= 0) lives in the Rust core's
         # _TextPipeline constructor, the single source of truth for every
@@ -3022,6 +3030,7 @@ class TextPipeline:
             strip_plane14=strip_plane14,
             resolve_deletions=resolve_deletions,
             resolve_cr=resolve_cr,
+            digit_policy=digit_policy,
         )
 
     @classmethod

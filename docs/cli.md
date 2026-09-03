@@ -172,10 +172,20 @@ disarm p --steps "normalize,strip_accents,fold_case" "Café Résumé"
 `--steps STEPS`
 :   Comma-separated list of processing steps (required).
 
-Available steps: `normalize`, `transliterate`, `fold_case`, `collapse_whitespace`, `strip_accents`, `confusables`, `strip_control`, `strip_zero_width`, `demojize`.
+Available steps: `normalize`, `transliterate`, `fold_case`, `collapse_whitespace`, `strip_accents`, `confusables`, `strip_control`, `strip_zero_width`, `demojize`, `strip_bidi`, `strip_zalgo`, `strip_pua`, `strip_plane14`, `resolve_deletions`, `resolve_cr`, `digit_policy`, `strict_iso9`, `gost7034`.
 
 `--form FORM`
 :   Normalization form when using the `normalize` step.
+
+`--digit-policy {numeric,tr39,preserve}`
+:   The policy the `confusables` step folds digits under, applied by the `digit_policy` step entry (default: `numeric`). Refused, with exit 1, when the steps carry no `confusables` (#646).
+
+```bash
+disarm p --steps "confusables" "g੦ogle"                                   # GURMUKHI ZERO read as a digit
+# g0ogle
+disarm p --steps "confusables,digit_policy" --digit-policy tr39 "g੦ogle"  # ...as the letter it resembles
+# google
+```
 
 ---
 

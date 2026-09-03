@@ -40,6 +40,7 @@ impl _TextPipeline {
         strip_plane14=false,
         resolve_deletions=false,
         resolve_cr=false,
+        digit_policy="numeric",
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -61,6 +62,7 @@ impl _TextPipeline {
         strip_plane14: bool,
         resolve_deletions: bool,
         resolve_cr: bool,
+        digit_policy: &str,
     ) -> PyResult<Self> {
         // strip_zalgo's value is `max_marks`, which must be a non-negative value
         // that fits `usize`. This signed→unsigned narrowing is the one binding-
@@ -96,7 +98,9 @@ impl _TextPipeline {
             strip_plane14,
             resolve_deletions,
             resolve_cr,
-        )?;
+        )?
+        // #646: fixed at construction, and refused when no confusables step would run it.
+        .with_digit_policy(crate::confusables::DigitPolicy::from_token(digit_policy)?)?;
         Ok(Self { inner })
     }
 
@@ -124,10 +128,17 @@ impl _TextPipeline {
 }
 
 /// Build the `_TextPipeline` for a named policy profile (`get_pipeline`).
+///
+/// `digit_policy` is fixed here, at construction (#646): a profile is a resolved pipeline
+/// and `process` takes text and nothing else. A profile with no confusables step refuses
+/// a non-default policy rather than keeping a setting that would never run.
 #[pyfunction]
-pub fn _get_pipeline(profile: &str) -> PyResult<_TextPipeline> {
+#[pyo3(signature = (profile, *, digit_policy="numeric"))]
+pub fn _get_pipeline(profile: &str, digit_policy: &str) -> PyResult<_TextPipeline> {
     match crate::pipeline::get_pipeline(profile)? {
-        Some(inner) => Ok(_TextPipeline::from_inner(inner)),
+        Some(inner) => Ok(_TextPipeline::from_inner(inner.with_digit_policy(
+            crate::confusables::DigitPolicy::from_token(digit_policy)?,
+        )?)),
         None => Err(crate::InvalidArgumentError::new_err(format!(
             "Unknown profile {profile:?}; available: {}",
             crate::pipeline::profile_names().join(", ")

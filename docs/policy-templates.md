@@ -19,6 +19,23 @@ result = pipe("Москва")
 
 Each call to `get_pipeline()` returns a fresh `TextPipeline` instance.
 
+The three profiles that fold confusables — `llm_guardrail`, `normalize_web_input` and
+`library_catalog_key_eu` — take the fold's `digit_policy` at construction (#646). The
+default reads a confusable digit as the digit it means; `"tr39"` reads it as the letter
+it resembles, which is what a spoof screen wants:
+
+```python
+from disarm import get_pipeline
+
+# U+0A66 GURMUKHI ZERO standing in for "o"
+assert get_pipeline("llm_guardrail")("g੦ogle") == "g0ogle"
+assert get_pipeline("llm_guardrail", digit_policy="tr39")("g੦ogle") == "google"
+```
+
+A profile with no confusables step refuses a non-default policy rather than keeping a
+setting that would never run. `rag_ingest` is the one to know about: it recovers by
+transliteration, not by a fold.
+
 ---
 
 ## Available Profiles

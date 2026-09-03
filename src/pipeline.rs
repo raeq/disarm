@@ -190,6 +190,15 @@ pub(crate) struct Pipeline {
     /// parameterises `STRIP_ZALGO` — `STEP_ORDER` holds steps, and this is not one. It is
     /// reported through `steps()` as the step's parameter, so it stays visible.
     resolve_cr: bool,
+    /// The digit policy the two confusable passes fold under (#646).
+    ///
+    /// A parameter of `CONFUSABLES` / `CONFUSABLES_POST` rather than a step, the way
+    /// `resolve_cr` parameterises `RESOLVE_DELETIONS`. Fixed at construction, because a
+    /// profile is a resolved pipeline and `process` takes text and nothing else: the
+    /// policy is chosen before any text arrives, on the call that resolves the steps —
+    /// the position `digit_policy` holds on the key builders. Reported through `steps()`
+    /// only when it is not the default, so every profile's default reads unchanged.
+    digit_policy: confusables::DigitPolicy,
     lang: Option<String>,
     strict_iso9: bool,
     gost7034: bool,
@@ -342,6 +351,7 @@ impl Pipeline {
             // Only meaningful alongside the step it parameterises; recording it without
             // `resolve_deletions` would be a setting that never runs.
             resolve_cr: resolve_deletions && resolve_cr,
+            digit_policy: confusables::DigitPolicy::Numeric,
             normalize_form: normalize.map(std::borrow::ToOwned::to_owned),
             zalgo_max_marks,
             lang: lang.map(std::borrow::ToOwned::to_owned),
@@ -363,6 +373,29 @@ impl Pipeline {
     ///
     /// Iterates the shared [`STEP_ORDER`] source, so the reported order is by
     /// construction the same order `process()` executes (#174).
+    /// Fix the digit policy the confusable passes fold under (#646).
+    ///
+    /// Rejected, not ignored, when the pipeline has no confusables step and the policy is
+    /// not the default: a security-relevant setting that silently never runs is the
+    /// failure #646 was filed for — "no signal that a choice was made on their behalf".
+    /// The default is always accepted, so spelling out what would happen anyway is not
+    /// an error.
+    pub(crate) fn with_digit_policy(
+        mut self,
+        digit_policy: confusables::DigitPolicy,
+    ) -> Result<Self, ErrorRepr> {
+        if digit_policy != confusables::DigitPolicy::Numeric
+            && !self.steps.contains(PipelineSteps::CONFUSABLES)
+        {
+            return Err(ErrorRepr::DigitPolicyWithoutConfusables {
+                policy: digit_policy.as_token().to_owned(),
+                pipeline: self.repr(),
+            });
+        }
+        self.digit_policy = digit_policy;
+        Ok(self)
+    }
+
     pub(crate) fn steps(&self) -> Vec<(String, Option<String>)> {
         STEP_ORDER
             .iter()
@@ -502,12 +535,7 @@ impl Pipeline {
             // no composed form to converge on, and a bare `confusables` pipeline stays
             // the single pass a caller asked for.
             let Some(ref form) = self.normalize_form else {
-                confusables::normalize_confusables_into(
-                    input,
-                    "latin",
-                    confusables::DigitPolicy::Numeric,
-                    out,
-                )?;
+                confusables::normalize_confusables_into(input, "latin", self.digit_policy, out)?;
                 return Ok(true);
             };
             // Same shape as `presets::Step::ConfusablesNfcFixedPoint`, including the
@@ -521,7 +549,7 @@ impl Pipeline {
                 confusables::normalize_confusables_into(
                     &cur,
                     "latin",
-                    confusables::DigitPolicy::Numeric,
+                    self.digit_policy,
                     &mut conf,
                 )?;
                 if conf == cur && cur_is_normal {
@@ -597,7 +625,12 @@ impl Pipeline {
             // non-default is visible without the caller knowing to look for it (#937).
             self.resolve_cr.then(|| "cr".to_owned())
         } else if step == PipelineSteps::CONFUSABLES || step == PipelineSteps::CONFUSABLES_POST {
-            Some("latin".to_owned())
+            // The target script always; the digit policy only when it is not the default,
+            // for the reason `resolve_cr` is reported that way (#646).
+            Some(match self.digit_policy {
+                confusables::DigitPolicy::Numeric => "latin".to_owned(),
+                other => format!("latin,{}", other.as_token()),
+            })
         } else if step == PipelineSteps::TRANSLITERATE {
             self.lang.clone()
         } else {
@@ -880,11 +913,82 @@ mod tests {
             normalize_form: normalize_form.map(ToOwned::to_owned),
             zalgo_max_marks: None,
             resolve_cr: false,
+            digit_policy: confusables::DigitPolicy::Numeric,
             lang: None,
             strict_iso9: false,
             gost7034: false,
             emoji_name_policy: emoji::NamePolicy::PIPELINE_BASELINE,
         }
+    }
+
+    // ── digit_policy is a parameter of the confusables step (#646) ──
+
+    #[test]
+    fn the_policy_reaches_the_fold() {
+        // U+0A66 GURMUKHI ZERO for "o": `numeric` reads it as the digit it means, `tr39`
+        // as the letter it resembles.
+        let p = pipeline(PipelineSteps::CONFUSABLES, None);
+        assert_eq!(p.process("g੦ogle").unwrap(), "g0ogle");
+        let p = p.with_digit_policy(confusables::DigitPolicy::Tr39).unwrap();
+        assert_eq!(p.process("g੦ogle").unwrap(), "google");
+    }
+
+    #[test]
+    fn both_passes_report_the_policy_and_only_when_it_is_not_the_default() {
+        let p = pipeline(
+            PipelineSteps::CONFUSABLES | PipelineSteps::FOLD_CASE | PipelineSteps::CONFUSABLES_POST,
+            None,
+        );
+        let folds = |p: &Pipeline| {
+            p.steps()
+                .into_iter()
+                .filter(|(name, _)| name == "confusables")
+                .map(|(_, param)| param)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(folds(&p), vec![Some("latin".to_owned()); 2]);
+        let p = p.with_digit_policy(confusables::DigitPolicy::Tr39).unwrap();
+        assert_eq!(folds(&p), vec![Some("latin,tr39".to_owned()); 2]);
+        assert!(
+            p.repr().contains("confusables=\"latin,tr39\""),
+            "{}",
+            p.repr()
+        );
+    }
+
+    #[test]
+    fn a_policy_without_a_confusables_step_is_rejected_not_kept() {
+        let p = pipeline(PipelineSteps::FOLD_CASE, None);
+        let err = p
+            .clone()
+            .with_digit_policy(confusables::DigitPolicy::Tr39)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            ErrorRepr::DigitPolicyWithoutConfusables { .. }
+        ));
+        let msg = err.to_string();
+        assert!(msg.contains("tr39") && msg.contains("fold_case"), "{msg}");
+        // The default is always accepted: spelling out what would happen anyway is fine.
+        assert!(p
+            .with_digit_policy(confusables::DigitPolicy::Numeric)
+            .is_ok());
+    }
+
+    #[test]
+    fn a_profile_takes_the_policy_at_construction_or_refuses_it() {
+        let guard = get_pipeline("llm_guardrail").unwrap().unwrap();
+        assert_eq!(guard.process("g੦ogle").unwrap(), "g0ogle");
+        let guard = guard
+            .with_digit_policy(confusables::DigitPolicy::Tr39)
+            .unwrap();
+        assert_eq!(guard.process("g੦ogle").unwrap(), "google");
+        // rag_ingest has no confusables step — its recovery is transliteration (#258) —
+        // so a policy on it would never run, and it is refused rather than kept.
+        let rag = get_pipeline("rag_ingest").unwrap().unwrap();
+        assert!(rag
+            .with_digit_policy(confusables::DigitPolicy::Tr39)
+            .is_err());
     }
 
     // ── Ordering invariant: the single source of truth (#174) ───────

@@ -442,7 +442,7 @@ CORE_FUNCTION_PARAMS = {
     "is_normalized": ["text", "form"],
     "is_canonical": ["text", "preset"],
     # Pipeline management
-    "get_pipeline": ["profile"],
+    "get_pipeline": ["profile", "digit_policy"],
     "list_profiles": [],
     "list_langs": [],
     "list_scripts": [],
@@ -583,6 +583,7 @@ CLASS_METHODS = {
             "strip_plane14",
             "resolve_deletions",
             "resolve_cr",
+            "digit_policy",
         ],
         "__call__": ["text"],
         "explain": [],

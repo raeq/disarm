@@ -94,6 +94,28 @@ The policy is a property of the fold, so it belongs on the step type. Widening
 `Step::Confusables` to carry it lets every preset and profile express what today only one
 function can.
 
+**4. A profile takes its policy at construction, and refuses one it cannot run.**
+
+#646 left the profile half open. A profile is a resolved pipeline object and calling it
+takes text and nothing else, so the policy is either fixed when the profile is built —
+`get_pipeline("llm_guardrail", digit_policy="tr39")` — or offered on every call. It is
+fixed at construction, for the reason the builders settle it the same way: the policy is
+a property of the fold, chosen before any text arrives, on the call that resolves the
+steps. Per call would put a security setting on the hot path of every caller who never
+wanted it, and would move the call signature on every binding. The two answers agree on
+where the policy lives, which is what #646 asked for. In Rust it is
+`api::Pipeline::with_digit_policy`; a hand-built `TextPipeline` takes the same keyword.
+
+Three profiles carry a confusables step — `llm_guardrail`, `normalize_web_input` and
+`library_catalog_key_eu` — and on the other five a policy would never run. It is refused
+at construction rather than kept: a security-relevant setting that silently does nothing
+is the failure #646 was filed for. `rag_ingest` is the one a reader will reach for by
+mistake; its recovery is transliteration, which runs before the fold and consumes the
+characters a policy would have folded (#258).
+
+The default reproduces every profile byte for byte, and the setting is reported through
+`steps()` only when it is not the default, the way `resolve_cr` is (#937).
+
 ## What this does not decide
 
 - **The multi-character prototypes** (`m` → `rn`, `w` → `vv`, `æ` → `ae`) stay out.
@@ -110,7 +132,7 @@ function can.
 | issue | status after this page |
 |---|---|
 | #646 §1 — is the I-family in scope | answered: yes, in a new builder |
-| #646 §2 — give `digit_policy` reach | confirmed, via the step type |
+| #646 §2 — give `digit_policy` reach | confirmed, via the step type; the profiles take it at construction (§4) |
 | #648 — `digit_policy="preserve"` | shipped independently of this |
 | #650 — the builder | unblocked; this is its design note |
 | #731 — derived identifiers | reinforces §2: never key a code-like field on a spoof key |

@@ -194,6 +194,18 @@ pub(crate) enum ErrorRepr {
     #[error("strict_iso9 and gost7034 are mutually exclusive")]
     MutuallyExclusivePipeline,
 
+    /// A non-default `digit_policy` on a pipeline with no confusables step (#646).
+    ///
+    /// Rejected at construction rather than kept and never run: a security-relevant
+    /// setting that silently does nothing is the failure #646 was filed for.
+    #[error("digit_policy='{policy}' needs a confusables step, and {pipeline} has none")]
+    DigitPolicyWithoutConfusables {
+        /// The policy that was asked for.
+        policy: String,
+        /// The pipeline's `repr`, so the message shows the steps it does have.
+        pipeline: String,
+    },
+
     /// Batch size over [`crate::MAX_BATCH_SIZE`].
     #[error("batch too large ({len} items); maximum is {max} items")]
     BatchTooLarge {
@@ -495,6 +507,7 @@ impl ErrorRepr {
             ErrorRepr::MutuallyExclusiveBare | ErrorRepr::MutuallyExclusivePipeline => {
                 "mutually_exclusive"
             }
+            ErrorRepr::DigitPolicyWithoutConfusables { .. } => "digit_policy_without_confusables",
             ErrorRepr::BatchTooLarge { .. } => "batch_too_large",
             ErrorRepr::ReplacementOutputTooLarge { .. } => "replacement_output_too_large",
             ErrorRepr::NormalizeOutputTooLarge { .. } => "normalize_output_too_large",
@@ -596,6 +609,7 @@ impl From<ErrorRepr> for pyo3::PyErr {
             | ErrorRepr::UnknownLang { .. }
             | ErrorRepr::MutuallyExclusiveBare
             | ErrorRepr::MutuallyExclusivePipeline
+            | ErrorRepr::DigitPolicyWithoutConfusables { .. }
             | ErrorRepr::RegisterLangBadKeys { .. }
             | ErrorRepr::RegexCompile { .. }
             | ErrorRepr::UniqueSlugMaxLengthTooSmall { .. }
@@ -698,6 +712,7 @@ impl Error {
             | ErrorRepr::UnknownLang { .. }
             | ErrorRepr::MutuallyExclusiveBare
             | ErrorRepr::MutuallyExclusivePipeline
+            | ErrorRepr::DigitPolicyWithoutConfusables { .. }
             | ErrorRepr::RegisterLangBadKeys { .. }
             | ErrorRepr::RegexCompile { .. }
             | ErrorRepr::UniqueSlugMaxLengthTooSmall { .. }
@@ -884,6 +899,10 @@ mod tests {
             },
             ErrorRepr::MutuallyExclusiveBare,
             ErrorRepr::MutuallyExclusivePipeline,
+            ErrorRepr::DigitPolicyWithoutConfusables {
+                policy: "tr39".into(),
+                pipeline: "TextPipeline()".into(),
+            },
             ErrorRepr::BatchTooLarge { len: 2, max: 1 },
             ErrorRepr::ReplacementOutputTooLarge { size: 2, max: 1 },
             ErrorRepr::Sealed {
@@ -992,6 +1011,13 @@ mod tests {
             ),
             (ErrorRepr::MutuallyExclusiveBare, false),
             (ErrorRepr::MutuallyExclusivePipeline, false),
+            (
+                ErrorRepr::DigitPolicyWithoutConfusables {
+                    policy: "tr39".into(),
+                    pipeline: "TextPipeline()".into(),
+                },
+                false,
+            ),
             (ErrorRepr::BatchTooLarge { len: 2, max: 1 }, false),
             (
                 ErrorRepr::ReplacementOutputTooLarge { size: 2, max: 1 },

@@ -50,6 +50,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   whether it works: the upload step has to run before any failing exit, or the findings
   that caused the failure are the ones nobody sees.
 
+- **`get_pipeline(profile, digit_policy=...)` and `TextPipeline(digit_policy=...)`: a profile takes the fold's digit policy at construction (#646).** Eight profiles shipped and none could express `digit_policy`, so a caller following the CVE page to `llm_guardrail` got the `numeric` side of the trade with no way to ask for the other and no signal that a choice had been made: `get_pipeline("llm_guardrail")("g੦ogle")` is `g0ogle` while `normalize_confusables("g੦ogle", digit_policy="tr39")` is `google`. The policy is fixed when the profile is built, on the call that resolves the steps — the position it holds on the key builders — and reported through `steps()` only when it is not the default, so every profile's default output is byte-identical. A pipeline with no confusables step refuses a non-default policy at construction rather than keeping a setting that would never run; `rag_ingest` recovers by transliteration, not by a fold. Rust: `api::Pipeline::with_digit_policy`. `docs/architecture/prototype-policy.md` records the decision as §4. Refs #896 for the Rust API and binding reach of the key builders.
+
 - **`disarm scan PATH...` — the one API built for scanning, pointed at files (#704).**
   `inspect_anomalies` has always returned everything a scanner needs — a kind, a span,
   evidence and a plain-language reason — and there was no way to run it over a file. Every

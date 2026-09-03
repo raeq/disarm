@@ -274,6 +274,37 @@ impl Pipeline {
     pub fn process(&self, text: &str) -> Result<String, Error> {
         self.inner.process(text).map_err(Error::from)
     }
+
+    /// Fix the digit policy the profile's confusable passes fold under (#646).
+    ///
+    /// A profile is a resolved pipeline and [`Pipeline::process`] takes text and nothing
+    /// else, so the policy is chosen here, before any text arrives — the position
+    /// `digit_policy` holds on [`skeleton_key`]. The default reproduces the profile byte
+    /// for byte, and the setting is visible in the steps only when it is not the default.
+    ///
+    /// ```
+    /// use disarm::api::{get_pipeline, DigitPolicy};
+    /// // U+0A66 GURMUKHI ZERO standing in for "o": read as the digit it means by
+    /// // default, as the letter it resembles under TR39.
+    /// let guard = get_pipeline("llm_guardrail").unwrap();
+    /// assert_eq!(guard.process("g੦ogle").unwrap(), "g0ogle");
+    /// let guard = guard.with_digit_policy(DigitPolicy::Tr39).unwrap();
+    /// assert_eq!(guard.process("g੦ogle").unwrap(), "google");
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// [`ErrorKind::InvalidArgument`](crate::ErrorKind) if the profile has no confusables
+    /// step and `digit_policy` is not the default. `rag_ingest` recovers by
+    /// transliteration, not by a fold, so a policy on it would never run — it is refused
+    /// rather than accepted and ignored.
+    pub fn with_digit_policy(self, digit_policy: crate::api::DigitPolicy) -> Result<Self, Error> {
+        let policy = crate::confusables::DigitPolicy::from_token(digit_policy.as_str())
+            .map_err(Error::from)?;
+        Ok(Self {
+            inner: self.inner.with_digit_policy(policy).map_err(Error::from)?,
+        })
+    }
 }
 
 /// The TR39 identifier skeleton, plus the two prototype classes disarm's table keeps

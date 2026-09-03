@@ -1246,12 +1246,21 @@ PRESETS["normalize_user_input"] = PRESETS["canonicalize_strict"]
 # definition and the Python side cannot drift from what Rust executes (#229).
 
 
-def get_pipeline(profile: str) -> TextPipeline:
+def get_pipeline(profile: str, *, digit_policy: str = "numeric") -> TextPipeline:
     """Return a TextPipeline configured for a named policy profile.
 
     Policy profiles are pre-defined parameter sets for common institutional
     and application workflows.  Each call returns a fresh ``TextPipeline``
     instance.
+
+    ``digit_policy`` is fixed here, at construction (#646). A profile is a resolved
+    pipeline and calling it takes text and nothing else, so the policy is chosen before
+    any text arrives — the position it holds on the key builders. The default reproduces
+    every profile byte for byte, and the setting shows in ``steps`` only when it is not
+    the default. Three profiles carry a confusables step (``llm_guardrail``,
+    ``normalize_web_input``, ``library_catalog_key_eu``); on the others a policy would
+    never run, so a non-default one is refused rather than kept. ``rag_ingest`` recovers
+    by transliteration, not by a fold.
 
     Note:
         A *profile* name is not a `PRESETS` key, and the two sets are
@@ -1262,19 +1271,27 @@ def get_pipeline(profile: str) -> TextPipeline:
 
     Args:
         profile: Profile name (see `list_profiles`).
+        digit_policy: ``"numeric"`` (default), ``"tr39"`` or ``"preserve"`` — the policy
+            the profile's confusables step folds digits under.
 
     Returns:
         A configured ``TextPipeline``.
 
     Raises:
-        InvalidArgumentError: If *profile* is not a known profile name.
+        InvalidArgumentError: If *profile* is not a known profile name, if
+            *digit_policy* is not a supported value, or if it is not the default and
+            the profile has no confusables step to apply it.
 
     Examples:
         >>> pipe = get_pipeline("scholarly_cyrillic_iso9")
         >>> pipe("Москва")  # doctest: +SKIP
         'moskva'
+        >>> get_pipeline("llm_guardrail")("g੦ogle")  # GURMUKHI ZERO read as a digit
+        'g0ogle'
+        >>> get_pipeline("llm_guardrail", digit_policy="tr39")("g੦ogle")  # ...as "o"
+        'google'
     """
-    return TextPipeline._from_inner(_get_pipeline(profile))
+    return TextPipeline._from_inner(_get_pipeline(profile, digit_policy=digit_policy))
 
 
 def list_profiles() -> list[str]:

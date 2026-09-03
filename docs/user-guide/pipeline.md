@@ -205,6 +205,7 @@ for text in large_dataset:
 | `transliterate` | `bool` | `False` | Convert to ASCII via transliteration tables |
 | `lang` | `str \| None` | `None` | Language profile for transliteration. Use `"auto"` to detect from script. |
 | `confusables` | `bool` | `False` | Normalize confusable homoglyphs to Latin |
+| `digit_policy` | `str` | `"numeric"` | The policy `confusables` folds digits under: `"numeric"`, `"tr39"` or `"preserve"`. Fixed at construction, and rejected unless `confusables=True` — a setting that would never run is refused rather than kept (#646). |
 | `strip_accents` | `bool` | `False` | Remove diacritical marks |
 | `fold_case` | `bool` | `False` | Unicode case folding |
 | `collapse_whitespace` | `bool` | `False` | Normalize whitespace to single spaces |

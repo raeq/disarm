@@ -199,6 +199,25 @@ class TestPipeline:
         assert r.returncode == 0
         assert r.stdout.strip() == "hello"
 
+    def test_digit_policy_is_a_parameter_of_confusables(self):
+        # #646: U+0A66 GURMUKHI ZERO for "o" — a digit by default, the letter under tr39.
+        spoof = "g\u0a66ogle"
+        r = run_cli("p", "--steps", "confusables", spoof)
+        assert (r.returncode, r.stdout.strip()) == (0, "g0ogle")
+        r = run_cli("p", "--steps", "confusables,digit_policy", "--digit-policy", "tr39", spoof)
+        assert (r.returncode, r.stdout.strip()) == (0, "google")
+
+    def test_digit_policy_without_confusables_is_an_error_not_a_traceback(self):
+        r = run_cli("p", "--steps", "fold_case,digit_policy", "--digit-policy", "tr39", "x")
+        assert r.returncode == 1
+        assert "Traceback" not in r.stderr
+        assert "digit_policy" in r.stderr and "confusables" in r.stderr
+
+    def test_digit_policy_choices_are_the_library_s(self):
+        r = run_cli("p", "--steps", "confusables,digit_policy", "--digit-policy", "loose", "x")
+        assert r.returncode != 0
+        assert "invalid choice" in r.stderr
+
     def test_unknown_step_errors(self):
         r = run_cli("p", "--steps", "bogus_step", "text")
         assert r.returncode != 0

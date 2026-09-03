@@ -60,6 +60,15 @@ impl DigitPolicy {
     /// # Errors
     ///
     /// [`crate::ErrorRepr::InvalidDigitPolicy`] naming the offending token.
+    /// The token `from_token` accepts for this value; what `steps()` reports (#646).
+    pub(crate) fn as_token(self) -> &'static str {
+        match self {
+            Self::Numeric => "numeric",
+            Self::Tr39 => "tr39",
+            Self::Preserve => "preserve",
+        }
+    }
+
     pub(crate) fn from_token(token: &str) -> Result<Self, crate::ErrorRepr> {
         match token {
             "numeric" => Ok(Self::Numeric),

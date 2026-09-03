@@ -402,6 +402,15 @@ impl std::str::FromStr for UrlComponent {
 /// Percent-encode `text` for `component` (RFC 3986): the input is UTF-8 encoded,
 /// then every byte outside the component's safe set becomes `%XX`. Output is ASCII.
 ///
+/// **The result is opaque to the rest of the library (#727).** It is valid, NFC,
+/// all-ASCII Unicode — it is simply not the Unicode that carries the meaning — and every
+/// detector reports it clean rather than unknown: `has_anomalies` is `true` on
+/// `ad\u{200B}min` and `false` on its encoding `ad%E2%80%8Bmin`. Apply at the output
+/// sink, exactly once; a value that arrives already encoded has to be decoded before
+/// disarm can see it, which is the same ordering rule as canonicalize-before-validate.
+/// [`decode_smuggled`](crate::api::decode_smuggled) reports what a `%XX` run *spells*,
+/// as evidence, for the inspection case.
+///
 /// Infallible: a [`UrlComponent`] always names a known component.
 #[must_use]
 pub fn percent_encode(text: &str, component: UrlComponent) -> String {

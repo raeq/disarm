@@ -524,7 +524,11 @@ mod tests {
     }
 
     fn pct(s: &str) -> String {
-        s.bytes().map(|b| format!("%{b:02X}")).collect()
+        use std::fmt::Write as _;
+        s.bytes().fold(String::new(), |mut out, b| {
+            let _ = write!(out, "%{b:02X}");
+            out
+        })
     }
 
     #[test]

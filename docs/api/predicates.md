@@ -259,6 +259,28 @@ why it is a separate kind rather than a longer `invisible` detail.
 arbitrary selectors comes back as a payload of *n* bytes with `text=None` rather than as a
 bogus decode — reporting garbage would undo the reason a decode is trustworthy.
 
+### The fourth scheme is for URLs, and stays out of the detector
+
+`percent_escape` decodes `%XX` runs (#727). disarm ships `percent_encode` and shipped no
+decoder, so every detector reported clean on an encoded value — `has_anomalies` is `True`
+on `ad\u200bmin` and `False` on `ad%E2%80%8Bmin`. This is the inspection half of that:
+
+```python
+from disarm import Component, decode_smuggled, has_anomalies, percent_encode
+
+hidden = percent_encode("ad\u200bmin", component=Component.QUERY)  # 'ad%E2%80%8Bmin'
+has_anomalies(hidden)  # False — the blindness
+[payload] = decode_smuggled(hidden)
+payload.data  # b'\xe2\x80\x8b' — a bare ZWSP
+payload.text  # None — spelled, but not text
+```
+
+Decoded exactly once: `%25%32%45` spells `%2E`, and that `text` is the evidence of
+double-encoding rather than a prompt to decode again. A single `%20` is an escaped space,
+not a payload. And unlike the three invisible carriers, this scheme is **not** fed to
+`inspect_anomalies`: a percent run spelling readable text is ordinary in any URL, and
+reporting it as `smuggled` would fire on every escaped query string.
+
 !!! note "The offsets are bytes"
     `start` and `end` are byte offsets, matching `Finding.start`/`end`. Slice
     `text.encode()`, not the `str` — slicing the `str` works only while everything before

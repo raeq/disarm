@@ -2428,3 +2428,65 @@ def test_the_renderer_has_no_composite_table_left_in_it():
     src = inspect.getsource(report_module)
     assert '"### Composite"' not in src
     assert "st.composite" not in src
+
+
+def test_every_composable_step_is_declared_or_deliberately_declined():
+    """Three times a new step shipped and the compositions silently missed it.
+
+    `strip_pua` (#911/#912), `strip_plane14` (#914/#924) and `resolve_deletions`
+    (#937/#941) each arrived on `TextPipeline` with a False default, and each
+    time these pipelines kept the old behaviour while claiming to be current.
+    A default is not a decision. Every step the installed build accepts must
+    appear in `STEPS`, or in `DECLINED` with a reason.
+    """
+    import disarm
+
+    if not hasattr(disarm, "TextPipeline"):
+        pytest.skip("this build has no TextPipeline")
+
+    import inspect as _inspect
+
+    # What the build actually accepts, discovered rather than hardcoded: a list
+    # written here would drift exactly as the compositions did.
+    accepted = []
+    for name in (
+        "normalize",
+        "transliterate",
+        "lang",
+        "strict_iso9",
+        "gost7034",
+        "confusables",
+        "strip_accents",
+        "fold_case",
+        "collapse_whitespace",
+        "strip_control",
+        "strip_zero_width",
+        "demojize",
+        "strip_bidi",
+        "strip_zalgo",
+        "strip_pua",
+        "strip_plane14",
+        "resolve_deletions",
+    ):
+        try:
+            disarm.TextPipeline(**{name: "NFKC" if name == "normalize" else True})
+        except TypeError as exc:
+            if "unexpected keyword argument" in str(exc):
+                continue
+        accepted.append(name)
+
+    for cls in (
+        subjects.ComposedPromptHygiene,
+        subjects.ComposedRetrievalKey,
+        subjects.ComposedReviewDisplay,
+    ):
+        undeclared = [
+            step
+            for step in accepted
+            if step not in cls.STEPS and step not in getattr(cls, "DECLINED", {})
+        ]
+        assert not undeclared, (
+            f"{cls.__name__} neither declares nor declines: {undeclared}. "
+            "A False default is not a decision — say so in STEPS or DECLINED."
+        )
+        assert _inspect.getdoc(cls), f"{cls.__name__} needs a purpose"

@@ -475,6 +475,15 @@ class ComposedPromptHygiene(_ComposedBase):
     #: pipeline one emoji-naming policy, #926 stopped the guardrail glossing),
     #: so the pipeline now declares `strip_plane14` and gets both: the carrier
     #: removed and no attacker-chosen words written into the prompt.
+    #: Steps deliberately not taken, with the reason. A step absent from both
+    #: this and `STEPS` is an oversight, and the test says so.
+    DECLINED: ClassVar[dict[str, str]] = {
+        "transliterate": "romanizing untrusted text destroys it for the reader it is being screened for; the guardrail's job is to remove the disguise, not to rewrite the language",
+        "lang": "a per-language override, meaningful only under transliterate",
+        "strict_iso9": "an ISO 9 romanization variant, meaningful only under transliterate",
+        "gost7034": "a GOST romanization variant, meaningful only under transliterate",
+    }
+
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFKC",
         "strip_zalgo": 0,
@@ -487,6 +496,10 @@ class ComposedPromptHygiene(_ComposedBase):
         # it implicit is how a composed pipeline silently loses a capability
         # the profiles have.
         "strip_plane14": True,
+        # Reachable only since #937/#941. Third time this pattern has appeared —
+        # `strip_pua`, then `strip_plane14`, now this — so it is guarded by a
+        # test rather than by remembering.
+        "resolve_deletions": True,
         "confusables": True,
         "strip_accents": True,
         "fold_case": True,
@@ -502,6 +515,14 @@ class ComposedRetrievalKey(_ComposedBase):
     PURPOSE = "a comparison key, where readability is not a requirement"
     #: A key may be unreadable, so this folds as hard as the library allows —
     #: including romanization, which no screening pipeline should do.
+    #: Steps deliberately not taken, with the reason. A step absent from both
+    #: this and `STEPS` is an oversight, and the test says so.
+    DECLINED: ClassVar[dict[str, str]] = {
+        "lang": "a per-language override, meaningful only under transliterate",
+        "strict_iso9": "an ISO 9 romanization variant, meaningful only under transliterate",
+        "gost7034": "a GOST romanization variant, meaningful only under transliterate",
+    }
+
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFKC",
         "transliterate": True,
@@ -515,6 +536,10 @@ class ComposedRetrievalKey(_ComposedBase):
         # it implicit is how a composed pipeline silently loses a capability
         # the profiles have.
         "strip_plane14": True,
+        # Reachable only since #937/#941. Third time this pattern has appeared —
+        # `strip_pua`, then `strip_plane14`, now this — so it is guarded by a
+        # test rather than by remembering.
+        "resolve_deletions": True,
         "confusables": True,
         "strip_accents": True,
         "fold_case": True,
@@ -531,6 +556,15 @@ class ComposedReviewDisplay(_ComposedBase):
     #: Removes what a reviewer cannot see and would therefore not be reviewing;
     #: changes nothing they can. No case fold, no confusable fold, no whitespace
     #: collapse — all three alter text the reviewer is being asked to approve.
+    #: Steps deliberately not taken, with the reason. A step absent from both
+    #: this and `STEPS` is an oversight, and the test says so.
+    DECLINED: ClassVar[dict[str, str]] = {
+        "transliterate": "a reviewer must be shown their own text; romanizing it substitutes a different string for the one under review",
+        "lang": "a per-language override, meaningful only under transliterate",
+        "strict_iso9": "an ISO 9 romanization variant, meaningful only under transliterate",
+        "gost7034": "a GOST romanization variant, meaningful only under transliterate",
+    }
+
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFC",
         "strip_zalgo": 0,
@@ -543,6 +577,10 @@ class ComposedReviewDisplay(_ComposedBase):
         # it implicit is how a composed pipeline silently loses a capability
         # the profiles have.
         "strip_plane14": True,
+        # Reachable only since #937/#941. Third time this pattern has appeared —
+        # `strip_pua`, then `strip_plane14`, now this — so it is guarded by a
+        # test rather than by remembering.
+        "resolve_deletions": True,
         "confusables": False,
         "strip_accents": False,
         "fold_case": False,

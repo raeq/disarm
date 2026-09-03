@@ -78,8 +78,9 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `sanitize_filename` was the only surface that guarded it, with the `_` sentinel from
   #485.
 
-  Measured at Unicode 15.1.0, the version CI runs: `search_key` takes **139,870** single
-  characters to `""` (2,402 excluding the PUA), `slugify` 244,026, `canonicalize` 137,955.
+  Measured at Unicode 15.0.0, the oldest version CI runs: `search_key` takes **139,870**
+  single characters to `""` (2,402 excluding the PUA), `slugify` 243,399, `canonicalize`
+  137,955.
   The version is stated because the census is not one number — a 16.0.0 host counts the
   16.0 additions each surface takes to `""`, and the first version of the gate, measured
   on one, failed CI by exactly those. The gate now compares exactly on the pinned version

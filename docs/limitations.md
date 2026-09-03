@@ -594,7 +594,7 @@ stripped is then indistinguishable from a value that was never there.
 
 | surface | single characters → `""` | excluding PUA |
 |---|---|---|
-| `slugify` | 244,026 | 106,558 |
+| `slugify` | 243,399 | 105,931 |
 | `strip_obfuscation` | 140,200 | 2,732 |
 | `search_key` | 139,870 | 2,402 |
 | `catalog_key` | 139,867 | 2,399 |
@@ -603,7 +603,7 @@ stripped is then indistinguishable from a value that was never there.
 | `ml_normalize` | 4,047 | 4,047 |
 | **`sanitize_filename`** | **0** | **0** — returns `_` |
 
-Measured at **Unicode 15.1.0** — the version CI runs — over every assigned code point, and
+Measured at **Unicode 15.0.0** — the oldest version CI runs — over every assigned code point, and
 frozen by `tests/test_empty_key.py` so a strip class that widens shows up as a diff. The
 version matters: a 16.0.0 host assigns more code points, and the surfaces that reach `""`
 through transliteration count them; `canonicalize`, `sort_key` and `skeleton_key` do not.

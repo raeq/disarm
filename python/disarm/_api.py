@@ -643,8 +643,8 @@ def slugify(
 
     **The output can be the empty string (#728).**
 
-    Measured at Unicode 15.1.0, **244,026** single
-    characters reduce to ``""`` here (106,558 excluding the Private Use
+    Measured at Unicode 15.0.0, **243,399** single
+    characters reduce to ``""`` here (105,931 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
 

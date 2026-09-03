@@ -13,7 +13,7 @@ value**, which arXiv:2608.06508v1 §2.2 calls code-side semantic collapse and §
 fixed by redefining the mapping so the sentinel sits outside the value range — not by
 normalizing harder.
 
-The census is frozen here at Unicode 15.1.0 — the version CI measures — per #728 item 4: a future strip class taking more code points
+The census is frozen here at Unicode 15.0.0 — the oldest version CI measures — per #728 item 4: a future strip class taking more code points
 to `""` becomes a diff somebody reads rather than a silent widening.
 """
 

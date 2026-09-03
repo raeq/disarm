@@ -381,17 +381,61 @@ pub(crate) fn find_unmapped_confusables(
 pub(crate) fn find_confusables(
     text: &str,
     target_script: &str,
+    allowed_scripts: &[&str],
 ) -> Result<Vec<(char, usize, &'static str)>, crate::ErrorRepr> {
     validate_target_script(target_script)?;
+    let allowed = canonical_scripts(allowed_scripts)?;
     let map = tables::resolve_confusable_map(target_script);
 
     let mut out = Vec::new();
     for (ch, offset) in crate::compose::composed(text) {
         if let Some(target) = map.and_then(|m| m.get(&ch)) {
+            if !allowed.is_empty() && is_allowed(ch, &allowed) {
+                continue;
+            }
             out.push((ch, offset, *target));
         }
     }
     Ok(out)
+}
+
+/// Whether `ch` belongs to a script the caller declared legitimate (#900).
+///
+/// **`Common` and `Inherited` are never allowed, whatever the caller passes**, and that
+/// is what keeps this from costing recall. The characters that carry a spoof without
+/// belonging to any script — `ℐ` U+2110, `Ⅰ` U+2160, `𝐈` U+1D408, the mathematical
+/// alphanumerics — all resolve to `Common` here, so no declaration can suppress them.
+/// A caller who says "Cyrillic is legitimate" exempts Cyrillic letters and nothing else.
+fn is_allowed(ch: char, allowed: &[&'static str]) -> bool {
+    let script = crate::scripts::detect_char_script(ch);
+    if script == "Common" || script == "Inherited" {
+        return false;
+    }
+    allowed.contains(&script)
+}
+
+/// Resolve caller-supplied script names to their canonical spelling, case-insensitively.
+///
+/// `detect_scripts` returns `Cyrillic`; `target_script` on this same function takes
+/// `cyrillic`. Rather than make the caller remember which parameter wants which, both
+/// spellings are accepted here and resolved against [`crate::metadata::SCRIPTS`].
+///
+/// # Errors
+///
+/// [`crate::ErrorRepr::UnknownScript`] naming the first unrecognised entry.
+fn canonical_scripts(names: &[&str]) -> Result<Vec<&'static str>, crate::ErrorRepr> {
+    names
+        .iter()
+        .map(|name| {
+            crate::metadata::SCRIPTS
+                .iter()
+                .find(|known| known.eq_ignore_ascii_case(name))
+                .copied()
+                .ok_or_else(|| crate::ErrorRepr::UnknownScript {
+                    got: (*name).to_owned(),
+                })
+        })
+        .collect()
 }
 
 /// True if text contains any characters confusable with target-script characters.

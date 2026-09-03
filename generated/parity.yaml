@@ -146,6 +146,15 @@ operations:
       java: null
       kotlin: null
       cabi: null
+  - id: find_confusables_with
+    names:
+      rust: find_confusables_with
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: find_key_collisions
     names:
       rust: find_key_collisions

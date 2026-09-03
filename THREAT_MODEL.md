@@ -330,6 +330,27 @@ behavior, not a vulnerability:
   you bound length downstream.
 - **Linguistic correctness** of transliteration (context-free romanization is lossy for
   CJK/Indic/abjad — that is a quality property, not a security property).
+- **Resolving the deletion class — `BS`, `DEL`, a lone `CR` (#739).** Boucher et al.
+  §IV-G's fourth class hides text by *rendering*: `pX<BS>aX<BS>yX<BS>pX<BS>aX<BS>lX<BS>`
+  and `ZZZZZZ<CR>paypal` both draw as `paypal`, and neither spells it. disarm **detects
+  the whole class** — `BS`/`DEL` as kind `control`, a lone `CR` as kind `deletion` — and
+  **resolves none of it**, on every preset and profile. That is a decision, and
+  [`tests/test_attack_corpus.py`](https://github.com/raeq/disarm/blob/main/tests/test_attack_corpus.py)
+  pins it as an asserted negative so a change of policy has to be deliberate.
+
+  Resolving `BS`/`DEL` means reproducing one renderer's behaviour, and the paper says in
+  the same section that the class is renderer-dependent — "most systems do not copy
+  deleted text to the clipboard", and a browser drawing a control picture renders neither
+  form. Resolution would then *lose* text a reader can see, which is the worse failure for
+  a moderation filter. `CR` takes the opposite treatment for the same reason:
+  `collapse_whitespace` folds it to a space, which **surfaces** the overwritten prefix
+  instead of deleting it. The kind names the treatment path, which is why one class spans
+  two kinds.
+
+  The `CR` rule fires only where a `CR` can overwrite something — not before an `LF`, not
+  at end of text, not at the start of a line. Its known false positive is a classic Mac OS
+  file, which used a lone `CR` as its line ending until 2001; the two are indistinguishable
+  from the bytes, so the report is a technical fact and the judgement is the caller's.
 
 ## Vulnerability vs. known limitation
 
@@ -352,6 +373,18 @@ expanding the bundled mapping data is exactly how this layer improves.
 ## Background and evidence
 
 The scope above is grounded in the literature, not asserted:
+
+- **The taxonomy the CI-gating corpus is built on.** Boucher, Shumailov, Anderson &
+  Papernot, *Bad Characters: Imperceptible NLP Attacks* (43rd IEEE S&P, 2022,
+  [arXiv:2106.09898](https://arxiv.org/abs/2106.09898)) defines four classes of
+  imperceptible perturbation — invisible characters, homoglyphs, reorderings and
+  deletions — and the Exact Match Recovery measure (`P(attack(t)) == P(t)`) that
+  [`tests/test_attack_corpus.py`](https://github.com/raeq/disarm/blob/main/tests/test_attack_corpus.py)
+  asserts against every surface on every PR. All four classes are now generated there:
+  three as positive recovery claims, deletions as an asserted negative. The same authors'
+  *Trojan Source* (USENIX Security, 2023) is cited in
+  [`docs/limitations.md`](https://github.com/raeq/disarm/blob/main/docs/limitations.md)
+  for the reordering direction disarm does handle.
 
 - **The scope above is also tested against named CVEs.** [`tests/test_cve_vectors.py`](https://github.com/raeq/disarm/blob/main/tests/test_cve_vectors.py)
   reconstructs the vector described in each of 47 published CVEs and asserts what

@@ -230,8 +230,24 @@ class TestControlCharacters:
     def test_whitespace_controls_are_not_flagged(self):
         # These are separators. collapse_whitespace folds them; flagging them would
         # fire on every multi-line string.
-        for ch in ("\t", "\n", "\r", "\x0b", "\x0c", "\x1c", "\x1f", "\x85"):
+        #
+        # CR left this list in #739 and has its own tests below. It is still spared by
+        # the `control` branch — the whitespace exclusion is untouched — but a lone CR
+        # that overwrites text is now reported as kind `deletion`, which no rule here
+        # could see: CR splits the tokens either side of it.
+        for ch in ("\t", "\n", "\x0b", "\x0c", "\x1c", "\x1f", "\x85"):
             assert not has_anomalies(f"hello{ch}world"), repr(ch)
+        assert "control" not in inspect_anomalies("hello\rworld").kinds
+
+    def test_a_lone_cr_that_overwrites_is_flagged(self):
+        # Boucher et al. §IV-G: "there is also the carriage return (CR)". Renders as
+        # `paypal` on any terminal; the code points spell something else entirely.
+        assert "deletion" in inspect_anomalies("ZZZZZZ\rpaypal").kinds
+
+    def test_the_cr_rule_spares_its_three_ordinary_uses(self):
+        assert not has_anomalies("line one\r\nline two"), "CRLF line ending"
+        assert not has_anomalies("no newline at eof\r"), "nothing follows to overwrite"
+        assert not has_anomalies("\rleading"), "no prefix on the line to hide"
 
     def test_ordinary_text_is_not_flagged(self):
         for s in ("hello world", "  padded  ", "Café déjà vu", "line one\nline two"):
@@ -311,6 +327,10 @@ class TestAnomalyKindDoesNotDriftFromTheBindings:
             # base is below every threshold disarm has.
             "enclosing_mark": "I\u20ddg\u20ddn\u20dd",
             "duplicate_mark": "a\u0301\u0301",
+            # #739: Boucher et al. §IV-G's fourth class. A lone CR is whitespace, so
+            # it splits the tokens either side of it and both halves are clean —
+            # `control` cannot reach it, and neither can any other per-token rule.
+            "deletion": "ZZZZZZ\rpaypal",
         }
         assert set(samples) == self._rust_kinds(), "sample set is stale"
         # `leet` and `segmentation` are lexicon-gated by design, so they need one.

@@ -305,6 +305,30 @@ pub enum AnomalyKind {
     /// separators that [`crate::api::collapse_whitespace`] folds to a space,
     /// so flagging them would fire on ordinary multi-line text (#612).
     Control,
+    /// A lone `CR` that overwrites text a reader never saw — the *deletion* class of
+    /// Boucher et al., *Bad Characters* (IEEE S&P 2022, arXiv:2106.09898) §IV-G.
+    ///
+    /// `"ZZZZZZ\rpaypal"` renders as `paypal` on any terminal: the carriage return
+    /// returns the cursor to the start of the line and the six characters that follow
+    /// paint over the six before it. Nothing in the code points says so.
+    ///
+    /// This is a *separate kind from* [`Control`](Self::Control) because the two take
+    /// different paths through the library, and the kind names the path. `BS` and `DEL`
+    /// — the other two members of the paper's deletion class — are non-whitespace
+    /// controls that `strip_control_chars` removes and `Control` already reports. `CR` is
+    /// whitespace-class: [`crate::api::collapse_whitespace`] deliberately folds it to a
+    /// space rather than deleting it, which *surfaces* the overwritten prefix instead of
+    /// reproducing the rendering, and is the safer answer for a moderation filter. Only
+    /// the detector was silent, because the same `is_fold_whitespace` call that spares
+    /// TAB and LF spared this too (#739).
+    ///
+    /// A `CR` is reported only when it can actually overwrite something: it must be
+    /// followed by a character other than `LF` (so `CRLF` line endings and a trailing
+    /// `CR` never fire) and there must be text between it and the start of its line (so
+    /// a leading `CR` never fires). **Known false positive:** a classic Mac OS file, which
+    /// used a lone `CR` as its line ending until 2001. The report is a technical fact, as
+    /// with `is_case_fold_stable` and `groß` — the judgement is the caller's.
+    Deletion,
     /// A token spelled partly in a Unicode **compatibility** form and partly in ASCII —
     /// `ａdmin`, `ｅxample.com`, `＜script＞` — which NFKC folds to a different string.
     ///
@@ -393,6 +417,7 @@ impl AnomalyKind {
             AnomalyKind::Leet => "leet",
             AnomalyKind::Segmentation => "segmentation",
             AnomalyKind::Control => "control",
+            AnomalyKind::Deletion => "deletion",
             AnomalyKind::CompatFold => "compat_fold",
             AnomalyKind::Confusable => "confusable",
             AnomalyKind::EnclosingMark => "enclosing_mark",
@@ -449,9 +474,22 @@ impl Finding {
             AnomalyKind::Segmentation => {
                 format!("{:?} splits the word {:?}", self.token, self.detail)
             }
-            AnomalyKind::Control => {
-                format!("{:?} contains the control character {}", self.token, self.detail)
-            }
+            AnomalyKind::Control => match erased_by_deletion(&self.token) {
+                // The deletion class: BS and DEL erase the character before them, so the
+                // rendering and the code points disagree. Naming the erased character is
+                // what makes the finding locatable — `U+0008` alone does not say what
+                // vanished, or that the token has a deletion structure at all (#739).
+                Some(erased) => format!(
+                    "{:?} contains the control character {}, which erases the preceding {:?}",
+                    self.token, self.detail, erased
+                ),
+                None => format!("{:?} contains the control character {}", self.token, self.detail),
+            },
+            AnomalyKind::Deletion => format!(
+                "{:?} is overwritten by what follows the carriage return, so it renders as \
+                 text these code points do not spell",
+                self.token
+            ),
             AnomalyKind::CompatFold => format!(
                 "{:?} mixes a compatibility form with ASCII and folds to {}",
                 self.token, self.detail
@@ -534,6 +572,52 @@ fn leet_sub(c: char) -> Option<char> {
         '|' => Some('l'),
         _ => None,
     }
+}
+
+/// The character a `BS`/`DEL` erases, if the token has the deletion structure (#739).
+///
+/// Boucher et al. §VI-A build the class as one printable character followed by `BKSP`:
+/// `"pX\u{8}"` renders as `p`. A control with nothing before it erases nothing, so it is
+/// an ordinary stray control and this returns `None` — the caller then keeps the plain
+/// wording.
+fn erased_by_deletion(token: &str) -> Option<char> {
+    let mut prev = None;
+    for c in token.chars() {
+        if matches!(c, '\u{8}' | '\u{7F}') {
+            // A run of them erases backwards, but naming the first casualty is enough to
+            // locate the structure; the span already covers the whole token.
+            if let Some(p) = prev {
+                return Some(p);
+            }
+        }
+        prev = Some(c);
+    }
+    None
+}
+
+/// The first `CR` that overwrites text, as a `(byte offset, overwritten segment)` pair.
+///
+/// Shared by [`has_anomalies`] and [`inspect_anomalies`] so the two cannot disagree —
+/// `has_anomalies_matches_inspect` asserts they never do, and a rule stated twice is the
+/// way that assertion starts failing.
+///
+/// The three guards are all necessary, and each spares an ordinary use:
+/// * followed by `LF` — a `CRLF` line ending, which overwrites nothing;
+/// * at end of text — nothing follows to paint over the line;
+/// * nothing between it and the line start — a leading `CR` has no prefix to hide.
+fn overwriting_cr(text: &str) -> Option<(usize, &str)> {
+    let b = text.as_bytes();
+    b.iter().enumerate().find_map(|(i, &c)| {
+        if c != b'\r' || b.get(i + 1).is_none_or(|&n| n == b'\n') {
+            return None;
+        }
+        let line_start = b[..i]
+            .iter()
+            .rposition(|&n| n == b'\n')
+            .map_or(0, |p| p + 1);
+        let overwritten = &text[line_start..i];
+        (!overwritten.is_empty()).then_some((line_start, overwritten))
+    })
 }
 
 fn codepoint(c: char) -> String {
@@ -1466,9 +1550,13 @@ where
 /// [`lexicon`] so the lowercasing matches the detector's lowercased lookups.
 #[must_use]
 pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
-    split_tokens(text)
-        .into_iter()
-        .any(|(start, tok)| classify(tok, start, lexicon).is_some())
+    // The CR rule is text-level and cannot be a token rule: a lone CR is whitespace, so
+    // it *splits* the tokens either side of it and both halves are clean on their own
+    // (#739). `split_tokens` can never present it to `classify`.
+    overwriting_cr(text).is_some()
+        || split_tokens(text)
+            .into_iter()
+            .any(|(start, tok)| classify(tok, start, lexicon).is_some())
 }
 
 /// Full analysis: every finding with its span and a plain-language reason. Parallel to
@@ -1483,6 +1571,21 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
         if let Some(f) = classify(tok, start, lexicon) {
             findings.push(f);
         }
+    }
+    // Spliced in at its byte offset rather than pushed, so `findings` stays in
+    // first-appearance order and `reason` keeps naming whatever comes first in the text.
+    if let Some((start, overwritten)) = overwriting_cr(text) {
+        let at = findings.partition_point(|f: &Finding| f.start < start);
+        findings.insert(
+            at,
+            Finding {
+                kind: AnomalyKind::Deletion,
+                token: overwritten.to_owned(),
+                start,
+                end: start + overwritten.len(),
+                detail: codepoint('\r'),
+            },
+        );
     }
     let mut kinds: Vec<AnomalyKind> = Vec::new();
     for f in &findings {

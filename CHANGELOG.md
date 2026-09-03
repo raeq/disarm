@@ -18,6 +18,25 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`deletion`: a lone carriage return that overwrites text (#739).** Boucher et al.,
+  *Bad Characters* (IEEE S&P 2022) §IV-G names four classes of imperceptible
+  perturbation; `tests/test_attack_corpus.py` cites that taxonomy as its source and
+  generated three of them. The fourth is deletions — "the backspace (BS) and delete
+  (DEL) characters… there is also the carriage return (CR)". `ZZZZZZ\rpaypal` renders as
+  `paypal` on any terminal and **nothing reported it**: a lone `CR` is whitespace, so it
+  splits the tokens either side of it and both halves are clean on their own. No
+  per-token rule could ever see it, so the check is text-level and shared by
+  `has_anomalies` and `inspect_anomalies` rather than stated twice.
+
+  Its own kind rather than a `control` finding, because the kind names the treatment
+  path: `BS`/`DEL` are non-whitespace controls that `strip_control_chars` removes and
+  `control` already reported, while `CR` is whitespace-class and `collapse_whitespace`
+  deliberately folds it to a space — which *surfaces* the overwritten prefix instead of
+  reproducing the rendering. It fires only where a `CR` can overwrite something: not
+  before an `LF`, not at end of text, not at the start of a line. Its known false
+  positive is a classic Mac OS file, documented rather than fixed, since the two are
+  indistinguishable from the bytes.
+
 - **`is_canonical(text, *, preset="canonicalize")` — the verification-path predicate
   (#730).** Every other normalization surface here is generation path: text in,
   normalized text out. There was no counterpart for the question a caller has about
@@ -282,6 +301,12 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **A `control` finding for `BS`/`DEL` now names the character it erases (#739).**
+  `detail` was `U+0008` and the reason said only that the token contained a control, so
+  nothing said *what* vanished or that the token had a deletion structure at all. The
+  kind and `detail` are unchanged — this is the reason string, which is plain-language
+  prose by contract.
+
 - **The detector went silent exactly when the disguise was complete (#815).**
   `inspect_anomalies` reported a `confusable` only when a word also carried an ASCII
   letter — #633's gate, and the thing that keeps ordinary Cyrillic and Greek prose from
@@ -379,6 +404,17 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   single caller and the transitive wait.
 
 ### Documentation
+
+- **The deletion class is named in `THREAT_MODEL.md` (#739).** It appeared in neither
+  *In scope* nor *Out of scope*, so *Vulnerability vs. known limitation* could not answer
+  a report about it either way. The entry states what disarm does (detects the whole
+  class, resolves none of it), and why resolving `BS`/`DEL` is the wrong answer rather
+  than merely unimplemented: the paper says in the same section that the class is
+  renderer-dependent, so reproducing one renderer's behaviour would *lose* text another
+  reader can see.
+- **Boucher et al., *Bad Characters* is cited in *Background and evidence* (#739).** The
+  taxonomy the CI-gating corpus is built on, and the source of the Exact Match Recovery
+  measure that corpus asserts, was the one reference missing from the section.
 
 - **The generation path and the verification path are named and distinguished
   (#730).** `docs/api/predicates.md` gains the two-path table, the measured

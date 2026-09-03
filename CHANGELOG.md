@@ -31,6 +31,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   is the default's only, since its confusable-source set is generated for the default and a
   `tr39`-only row (`ā` → `ã`) was invisible to it. The Python pre-pass is gone.
 
+- **`fold_punctuation`: typographic punctuation folded to its ASCII spelling (#703).** The
+  dash family and the minus sign to `-`, the curly and low-9 quotes and the primes to `'` /
+  `"`, the ellipsis to `...`, the non-standard spaces to a space. Nothing else did this as a
+  stated purpose, and the two functions that came closest disagreed: `canonicalize` folds
+  five dashes and skips the em dash and the horizontal bar, `transliterate` folds those two
+  and rejects the other four, so a key built from `canonicalize` treated `a—b` and `a-b` as
+  distinct while treating `a–b` and `a-b` as the same. A separate primitive rather than a
+  change to either, because `canonicalize` is a security fold entitled to map `“` to `''`.
+  CJK and Arabic punctuation, the Catalan middle dot and the bullet are left alone on
+  purpose, and spaces fold rather than delete. Named for the operation, per the naming rule:
+  the issue proposed `ascii_punctuation`, which names the outcome. Rust and Python; the
+  other bindings follow with the next parity pass.
+
 - **`disarm scan --sarif`, `--baseline` and `--write-baseline`, and a fingerprint that
   survives an edit (#705).** SARIF is the small half: a 2.1.0 document so findings land in
   GitHub's Security tab and as annotations on the pull request that introduced them, with

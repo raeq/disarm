@@ -55,6 +55,10 @@ FORM_PRESERVING = {
     # boundary normalization as well.
     "strip_control_chars",
     "strip_zero_width_chars",
+    # #703: the same category — one character class folded to its ASCII spelling and
+    # nothing else touched, so `ї` stays decomposed if it arrived decomposed. Not a
+    # recovery entrypoint; compose it with a preset for boundary normalization.
+    "fold_punctuation",
     # UAX #15 Stream-Safe. It *inserts* U+034F rather than deleting a class, and is
     # explicitly not canonically equivalent — that is the property its own docs and tests
     # lead with. Form-invariance would be the wrong assertion here: it is an interop

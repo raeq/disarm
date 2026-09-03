@@ -136,6 +136,7 @@ pub(crate) mod log_injection;
 pub(crate) mod normalize;
 pub(crate) mod pipeline;
 pub(crate) mod presets;
+pub(crate) mod punctuation;
 pub(crate) mod reverse;
 pub(crate) mod scripts;
 pub(crate) mod slugify;
@@ -303,6 +304,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::presets::_sort_key, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_strip_bidi, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_strip_tags, m)?)?;
+    m.add_function(wrap_pyfunction!(py::presets::_fold_punctuation, m)?)?;
     m.add_function(wrap_pyfunction!(
         py::presets::_strip_variation_selectors,
         m

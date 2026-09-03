@@ -14,6 +14,7 @@ from disarm._boundary import (
     _canonicalize,
     _canonicalize_strict,
     _catalog_key,
+    _fold_punctuation,
     _get_pipeline,
     _is_zalgo,
     _list_profiles,
@@ -742,6 +743,37 @@ def strip_tags(text: str) -> str:
         'hi'
     """
     return _strip_tags(text)
+
+
+def fold_punctuation(text: str) -> str:
+    """Fold typographic punctuation to its ASCII spelling (#703).
+
+    The dash family and the minus sign become ``-``; the curly and low-9 quotes and the
+    primes become ``'`` / ``"``; the ellipsis becomes ``...``; the non-standard spaces
+    become a space. Nothing else in disarm does this as a stated purpose: `canonicalize`
+    folds five dashes and skips the em dash and the horizontal bar, `transliterate` folds
+    those two and rejects the other four, and a key built from either treats ``a—b`` and
+    ``a-b`` as distinct while treating ``a–b`` and ``a-b`` as the same. A separate
+    primitive rather than a change to either, because `canonicalize` is a security fold
+    entitled to map ``“`` to ``''`` — a confusable skeleton for a double quote and a poor
+    replacement for one.
+
+    **Not covered, on purpose.** ``U+3002 IDEOGRAPHIC FULL STOP`` and ``U+060C ARABIC
+    COMMA`` are those scripts' own full stop and comma; the middle dot ``U+00B7`` is a
+    letter in Catalan ``l·l``; the bullet stays. Spaces fold rather than delete, so words
+    do not glue together.
+
+    Idempotent, and the identity on ASCII. Form-preserving, like the targeted strips: it
+    folds one character class and composes nothing, so a decomposed letter leaves as it
+    arrived. Compose it with a preset when boundary normalization is wanted too.
+
+    Examples:
+        >>> fold_punctuation("He said \u201cok\u201d \u2014 then\u2026")
+        'He said "ok" - then...'
+        >>> fold_punctuation("l\u00b7l")  # Catalan: a letter, not punctuation
+        'l·l'
+    """
+    return _fold_punctuation(text)
 
 
 def strip_variation_selectors(text: str) -> str:

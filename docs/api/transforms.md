@@ -68,6 +68,12 @@ Functions that transform text. All are pure functions — they never mutate the 
 
 ---
 
+## fold_punctuation
+
+::: disarm.fold_punctuation
+
+---
+
 ## strip_tags
 
 ::: disarm.strip_tags

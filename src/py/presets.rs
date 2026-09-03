@@ -153,6 +153,13 @@ pub fn _strip_noncharacters(text: &str) -> String {
     crate::api::strip_noncharacters(text)
 }
 
+/// `fold_punctuation(text) -> str` (#703).
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _fold_punctuation(text: &str) -> String {
+    crate::api::fold_punctuation(text).into_owned()
+}
+
 /// `strip_pua(text) -> str` (#413).
 #[pyfunction]
 #[pyo3(signature = (text,))]

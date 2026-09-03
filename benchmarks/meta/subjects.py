@@ -118,13 +118,30 @@ class _Base:
     _cache: dict[str, object] = field(default_factory=dict, repr=False)
 
     def capabilities(self) -> set[str]:
+        """What this subject can be asked to do, here and now.
+
+        An uninstalled optional subject has *no* capabilities; it does not raise.
+        `all_subjects()` constructs every registered subject, and construction
+        succeeds for a library that is not installed — it is `available()` that
+        reports the absence. Asking such a subject for its surfaces used to raise
+        `ModuleNotFoundError` straight through `supports()`, so any caller that
+        reached capabilities without checking availability first died on a
+        missing optional dependency. CI has no `decancer_py`, and that is how a
+        green local suite failed there.
+        """
+        if not self.available()[0]:
+            return set()
         caps = set()
-        if self.transforms():
-            caps.add(Capability.TRANSFORM)
-        if self.detectors():
-            caps.add(Capability.DETECT)
-        if self.keys():
-            caps.add(Capability.KEY)
+        for probe, cap in (
+            (self.transforms, Capability.TRANSFORM),
+            (self.detectors, Capability.DETECT),
+            (self.keys, Capability.KEY),
+        ):
+            try:
+                if probe():
+                    caps.add(cap)
+            except Exception:  # noqa: BLE001 - an unimportable surface is absent
+                continue
         return caps
 
     #: The one surface per role this subject is scored on, by name. Declared

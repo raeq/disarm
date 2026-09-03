@@ -458,6 +458,8 @@ def test_the_degenerate_flag_fires_only_on_the_null_baseline():
     flagged = set()
     scored = 0
     for subject in subjects.all_subjects():
+        if not subject.available()[0]:
+            continue  # an optional subject nobody installed is absent, not zero
         out = registry.by_name("corruption-cost").run(subject=subject)
         measured = out.measurement("degenerate")
         if measured is None:
@@ -2074,3 +2076,40 @@ def test_zip_extraction_refuses_an_escaping_member(tmp_path):
     with zipfile.ZipFile(payload) as z:
         with pytest.raises(ValueError, match="escapes the destination"):
             fetch._safe_extract_zip(z, dest)
+
+
+def test_an_uninstalled_subject_has_no_capabilities_and_does_not_raise():
+    """CI has no `decancer_py`, and that is how a green local suite failed there.
+
+    `all_subjects()` constructs every registered subject, and construction
+    succeeds for a library that is not installed — `available()` is what reports
+    the absence. Asking such a subject for its capabilities used to call
+    `transforms()`, which imports, so `ModuleNotFoundError` came straight back
+    through `supports()` and killed any caller that had not checked availability
+    first.
+    """
+
+    class Absent(subjects._Base):
+        ROLES = {subjects.Role.SANITIZER: "nope"}
+
+        def __init__(self):
+            super().__init__()
+            self.info = subjects.SubjectInfo(
+                name="absent", version="0", origin="", url="", role="not installed"
+            )
+
+        def available(self):
+            return (False, "pip install nothing")
+
+        def transforms(self):
+            import a_module_that_does_not_exist  # noqa: F401
+
+            return {}
+
+    subject = Absent()
+    assert subject.capabilities() == set(), "an absent subject provides nothing"
+
+    # And the whole path a suite takes must survive it.
+    suite = next(s for s in registry.all_suites() if s.MULTI_SUBJECT)
+    supported, why = suite.supports(subject)
+    assert not supported and why

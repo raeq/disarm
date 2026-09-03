@@ -44,6 +44,15 @@ struct PresetCtx<'a> {
     lang: Option<&'a str>,
     strict_iso9: bool,
     emoji_cldr: bool,
+    /// The digit policy for the ctx-reading confusable steps (#650).
+    ///
+    /// `Step::Confusables` and friends carry their policy as const data, which is right
+    /// for the eight presets that pick one and keep it. `skeleton_key` takes it from the
+    /// caller, and threading a runtime value through a `static_steps!` const would mean
+    /// three copies of the list — the tripling #646 §2 warned about. Carrying it here
+    /// instead keeps one list per preset and leaves the monomorphisation of #695/#868
+    /// alone. Every other preset sets `Numeric`, which is what they did implicitly.
+    digit_policy: crate::confusables::DigitPolicy,
 }
 
 /// One preset stage. A preset is a `const &[Step]`; ordering, subsetting, and
@@ -82,6 +91,18 @@ enum Step {
     /// before the step could say anything else — so this widens what is expressible
     /// without changing any output.
     Confusables(&'static str, crate::confusables::DigitPolicy),
+    /// The confusable fold, taking its policy from [`PresetCtx`] rather than the step.
+    ///
+    /// One caller: `skeleton_key`, whose policy is the caller's to choose. See the
+    /// `digit_policy` field on `PresetCtx` for why it rides there and not here.
+    ConfusablesCtx(&'static str),
+    /// TR39's last two prototype classes — `I ≡ l` always, `1 ≡ l` and `0 ≡ O` under
+    /// `Tr39` — applied on cased text (#650).
+    ///
+    /// Must sit after a confusable fold, which is what brings the whole capital-I family
+    /// to `I`, and before any [`Step::FoldCase`]: the letter half costs 6 collisions in
+    /// 235,976 dictionary words at this position and 264 after a fold.
+    PrototypeFold,
     ConfusablesNfcFixedPoint(&'static str, crate::confusables::DigitPolicy),
     /// The confusables→NFC fixed point and the #615 cross-script mark strip,
     /// iterated *together* (#638). Neither is a fixed point in the presence of the
@@ -256,6 +277,15 @@ fn apply_into(
             confusables::normalize_confusables_into(input, target, digits, out)?;
             Ok(true)
         }
+        Step::ConfusablesCtx(target) => {
+            confusables::normalize_confusables_into(input, target, ctx.digit_policy, out)?;
+            Ok(true)
+        }
+        Step::PrototypeFold => Ok(confusables::prototype_fold_into(
+            input,
+            ctx.digit_policy,
+            out,
+        )),
         Step::ConfusablesNfcFixedPoint(target, digits) => {
             // #416/#434: confusables→NFC iterated to a fixed point. Reuse buffers
             // across iterations (PR #454 review) instead of allocating a fresh
@@ -396,6 +426,18 @@ struct Actionable {
     // default-ignorable formats)
     transliterate: bool, // Transliterate / TranslitPreservingLatin — maps *any* non-ASCII
     demojize: bool,      // Demojize (emoji → CLDR names)
+    /// `PrototypeFold` rewrites ASCII `I`, and `0`/`1` when the policy folds digits.
+    ///
+    /// It needs its own bit because nothing else covers it. `fold_case` catches the
+    /// uppercase `I`, which is why `paypaI` worked — but `b0ok` has no uppercase letter,
+    /// no control, and `0` is not a confusable *source*, so the guard called it inert and
+    /// skipped a pipeline that would have returned `book`.
+    ///
+    /// Deliberately conservative: the mask is computed at compile time and the digit
+    /// policy is a runtime value, so `0` and `1` count as actionable under every policy.
+    /// Under `Numeric` that costs a pass on text the fold would not change, which is a
+    /// wasted pass and never a wrong answer.
+    prototype: bool,
 }
 
 impl Actionable {
@@ -428,6 +470,7 @@ impl Actionable {
             invisible: false,
             transliterate: false,
             demojize: false,
+            prototype: false,
         };
         let mut idx = 0;
         while idx < steps.len() {
@@ -437,7 +480,9 @@ impl Actionable {
                 Step::StripControl => m.controls = true,
                 Step::CollapseWs => m.collapse_ws = true,
                 Step::FoldCase => m.fold_case = true,
+                Step::PrototypeFold => m.prototype = true,
                 Step::Confusables(target, _)
+                | Step::ConfusablesCtx(target)
                 | Step::ConfusablesNfcFixedPoint(target, _)
                 | Step::ConfusablesMarkFixedPoint(target, _) => {
                     // The guard's confusable-source check is Latin-specific (the
@@ -727,6 +772,11 @@ fn classify(
                 return Guard::Actionable;
             }
             if mask.confusables && crate::tables::is_ascii_confusable_latin(b) {
+                return Guard::Actionable;
+            }
+            // `I` is covered by `fold_case` wherever both are set; `0` and `1` are
+            // covered by nothing else. See the `prototype` field.
+            if mask.prototype && matches!(b, b'I' | b'0' | b'1') {
                 return Guard::Actionable;
             }
             // ── ASCII whitespace `collapse_whitespace` would fold ⇒ note, keep
@@ -1033,6 +1083,7 @@ pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr>
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         },
         apply,
     )
@@ -1133,6 +1184,7 @@ pub(crate) fn ml_normalize<'a>(
             lang,
             strict_iso9: false,
             emoji_cldr: emoji_style == "cldr",
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         },
     )
 }
@@ -1256,6 +1308,7 @@ pub(crate) fn catalog_key<'a>(
             lang,
             strict_iso9,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         },
         apply,
     )
@@ -1329,6 +1382,7 @@ pub(crate) fn search_key<'a>(
             lang,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         },
         apply,
     )
@@ -1509,6 +1563,7 @@ pub(crate) fn sort_key<'a>(
             lang,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         },
         apply,
     )
@@ -1548,6 +1603,7 @@ pub(crate) fn strip_format(text: &str) -> Cow<'_, str> {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         },
         apply,
     )
@@ -1676,6 +1732,7 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         },
         apply,
     )
@@ -1761,6 +1818,111 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
+        },
+        apply,
+    )
+}
+
+/// The TR39 identifier skeleton, plus the two prototype classes disarm's table keeps
+/// apart (#650). A spoof key: its only job is to make two confusable identifiers collide.
+///
+/// # Why this is a builder and not a flag
+///
+/// TR39 puts `I`, `l` and `1` in one equivalence class and `O`/`0` in another. disarm's
+/// table stops short of both, so `paypaI` survives every existing surface intact. Closing
+/// it costs six collision groups in the 235,976 entries of `/usr/share/dict/words` —
+/// `Ione`/`lone` is the only ordinary-word merge, the other five are proper nouns.
+///
+/// That price holds **only on cased text**. After a case fold, `I ≡ l` is `i ≡ l` and the
+/// same class costs 264 groups of ordinary vocabulary: `boiling`/`bolling`, `doit`/`dolt`,
+/// `ail`/`all`. A factor of 44.
+///
+/// No existing key builder offers that position. `catalog_key` folds case at step 3 and
+/// reaches its confusable step at step 6, and the order cannot be swapped: `presets.rs`
+/// records that fold-before-transliterate is required for idempotency (#419), because a
+/// cased letter whose folded form is in the transliteration table would otherwise convert
+/// only on the second pass. So the class needs its own entry point, which is this.
+///
+/// # The digit half is the caller's decision
+///
+/// `digit_policy` is `Numeric` by default, and then only the letter half applies. Under
+/// `Tr39` the digit half joins it — and it is not free. Every one of these collapses to a
+/// single key:
+///
+/// | kind | inputs |
+/// |---|---|
+/// | part number | `SKU-100`, `SKU-1O0`, `SKU-IOO`, `SKU-l00` |
+/// | plate | `B01`, `BOI`, `BOl`, `B0I` |
+/// | version | `v1.0.1`, `vI.O.I`, `vl.o.l` |
+///
+/// For a spoof detector that is the point. For a deduplication key over anything carrying
+/// a part number, a version or an ISBN it destroys the field, which is why `catalog_key`
+/// is the worst available home for it and not the best.
+///
+/// # Not for display
+///
+/// The output is a key. It is more destructive than any preset that forwards text, in the
+/// same way `canonicalize_strict` is more destructive than `canonicalize` — the more
+/// aggressive rule lives in the entry point whose contract says so.
+///
+/// # Errors
+///
+/// Propagates the confusable fold's error.
+pub(crate) fn skeleton_key<'a>(
+    text: &'a str,
+    digit_policy: &str,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
+    // `const` declared before the validate prologue to satisfy
+    // clippy::items_after_statements; it has no runtime effect.
+    static_steps! {
+        const STEPS;
+        fn apply;
+        [
+            // 1. NFKC, so a compatibility spelling reaches the fold as its base form.
+            Step::Nfkc,
+            // 2. The reordering and smuggling channels, before anything reads the text.
+            //    A key exists so two spellings of one identity compare equal, and every
+            //    class here is a way to vary the key invisibly (#805).
+            Step::StripBidi,
+            Step::StripInvisible(COMPARISON_STRIP),
+            // 3. The confusable fold, under the caller's policy. This is what brings the
+            //    capital-I family to `I` and every non-Latin homoglyph to its Latin
+            //    prototype.
+            Step::ConfusablesCtx("latin"),
+            // 4. TR39's last two classes, on CASED text — the whole reason this builder
+            //    exists. Six collisions here, 264 one step later.
+            Step::PrototypeFold,
+            // 5. Fold case, then fold confusables AGAIN, to a fixed point.
+            //
+            //    The second pass is not redundant. The table's entry for a homoglyph is
+            //    often on the *lowercase* form, so a capital that step 3 could not match
+            //    becomes matchable the moment case is folded: `Ω` (U+2126 OHM SIGN)
+            //    reaches step 5 as `Ω`, folds to `ω`, and only then folds to `w`. With a
+            //    single pass `skeleton_key("Ω")` returned `ω` while `skeleton_key("ω")`
+            //    returned `w` — not idempotent, and a key that is not a fixed point is
+            //    not a key.
+            //
+            //    A second pass rather than moving the first: step 3 has to see cased text
+            //    or step 4 has nothing to work with, and folding case first is what turns
+            //    six collisions into 264. So the fix is another pass, never a reorder
+            //    (#467's shape, and the reason `catalog_key` has a `FixedPoint` too).
+            Step::FixedPoint(&[Step::FoldCase, Step::ConfusablesCtx("latin")]),
+            // 6. Controls, zero-width, whitespace (#433).
+            Step::StripControl,
+            Step::StripZeroWidth,
+            Step::CollapseWs,
+        ]
+    }
+    let digit_policy = crate::confusables::DigitPolicy::from_token(digit_policy)?;
+    run_static(
+        MASK,
+        text,
+        &PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+            digit_policy,
         },
         apply,
     )
@@ -1966,6 +2128,7 @@ mod tests {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         };
         // Devanagari zero: `Numeric` reads it as a number, `Tr39` as an identifier
         // skeleton, `Preserve` leaves it in its own script.
@@ -2193,6 +2356,7 @@ mod tests {
             invisible: false,
             transliterate: false,
             demojize: false,
+            prototype: false,
         };
         // `日` (U+65E5): alphabetic but not foldable — the old `is_alphabetic` gate
         // over-marked it; the fold-table gate does not.
@@ -2548,6 +2712,7 @@ mod tests {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         };
         let got = run(steps, "  HE\u{202E}LLO  ", &ctx).unwrap();
         let want = whitespace::collapse_whitespace(&case_fold::fold_case_impl(&strip_bidi(
@@ -2562,6 +2727,7 @@ mod tests {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         };
         assert_eq!(run(&[], "café \u{202E}x", &ctx).unwrap(), "café \u{202E}x");
     }
@@ -2574,6 +2740,7 @@ mod tests {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         };
         let steps = &[
             Step::FoldCase,
@@ -2787,6 +2954,7 @@ mod tests {
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
         };
         let mut out = String::new();
         for input in [

@@ -113,6 +113,66 @@ assert search_key("ΩMEGA", lang="auto") == "omega"
 
 ---
 
+## skeleton_key
+
+::: disarm.skeleton_key
+
+### Pipeline steps
+
+`NFKC → strip_bidi → strip invisibles → confusables → **prototype fold** → fixed-point(fold_case → confusables) → strip_control → strip_zero_width → collapse_whitespace`
+
+### The class the other builders cannot reach
+
+TR39 puts `I`, `l` and `1` in one equivalence class and `O`/`0` in another. disarm's table
+stops short of both: every member of the capital-I family folds to `I` and stops there. So
+`paypaI` survives every other surface intact.
+
+```python
+from disarm import canonicalize, catalog_key, skeleton_key
+
+canonicalize("paypaI")  # 'paypaI' — unchanged
+catalog_key("paypaI") == catalog_key("paypal")  # False
+skeleton_key("paypaI") == skeleton_key("paypal")  # True
+```
+
+### Why a separate builder, and not a flag
+
+The letter half costs **six** collision groups in the 235,976 entries of
+`/usr/share/dict/words` — `i`/`l`, `ian`/`lan`, `io`/`lo`, `ione`/`lone`, `iowa`/`lowa`,
+`iowan`/`lowan`. Five are proper nouns; `Ione`/`lone` is the only ordinary-word merge.
+
+That price holds **only on cased text**. After a case fold, `I ≡ l` is `i ≡ l` and the same
+class costs **264** groups of ordinary vocabulary: `boiling`/`bolling`, `doit`/`dolt`,
+`silverer`/`sliverer`, `ail`/`all`. A factor of 44.
+
+No existing key builder runs a confusable fold before folding case. `catalog_key` folds
+case at step 3 and reaches its confusable step at step 6, and the two cannot be swapped —
+fold-before-transliterate is required for idempotency (#419). Hence a builder of its own.
+
+### `digit_policy` — the half you have to ask for
+
+`"numeric"` (default) applies the letter half only. `"tr39"` adds `1 ≡ l` and `0 ≡ O`,
+which is what an identifier skeleton wants and what a deduplication key must not have:
+
+| kind | inputs that become one key under `tr39` |
+|---|---|
+| part number | `SKU-100`, `SKU-1O0`, `SKU-IOO`, `SKU-l00` |
+| plate | `B01`, `BOI`, `BOl`, `B0I` |
+| version | `v1.0.1`, `vI.O.I`, `vl.o.l` |
+| address | `Flat 10`, `Flat IO`, `Flat lO` |
+
+For a spoof detector that is the point. For a deduplication key over anything carrying a
+part number, a version or an ISBN it destroys the field — which is why `catalog_key`, whose
+docstring says *"a canonical deduplication key for bibliographic titles"*, is the worst
+available home for it rather than the best.
+
+!!! warning "Not for display"
+    The output is a key. It is more destructive than any preset that forwards text, in the
+    same way `canonicalize_strict` is more destructive than `canonicalize`: the more
+    aggressive rule lives in the entry point whose contract says so.
+
+---
+
 ## sort_key
 
 ::: disarm.sort_key

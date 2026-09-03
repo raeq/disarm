@@ -276,6 +276,43 @@ impl Pipeline {
     }
 }
 
+/// The TR39 identifier skeleton, plus the two prototype classes disarm's table keeps
+/// apart (#650). A **spoof key**: its only job is to make two confusable identifiers
+/// collide, and its output is never for display.
+///
+/// TR39 puts `I`, `l` and `1` in one equivalence class and `O`/`0` in another. disarm's
+/// table stops short of both — every member of the capital-I family folds to `I` and stops
+/// there — so `paypaI` survives every other surface intact.
+///
+/// # Why it is a builder and not a flag
+///
+/// The letter half costs six collision groups in the 235,976 entries of
+/// `/usr/share/dict/words`, of which `Ione`/`lone` is the only ordinary-word merge. That
+/// price holds **only on cased text**: after a case fold, `I ≡ l` becomes `i ≡ l` and the
+/// same class costs 264 groups of ordinary vocabulary — `boiling`/`bolling`, `doit`/`dolt`,
+/// `ail`/`all`. A factor of 44.
+///
+/// No existing key builder offers that position. [`catalog_key`] folds case at step 3 and
+/// reaches its confusable step at step 6, and the two cannot be swapped: fold-before-
+/// transliterate is required for idempotency (#419).
+///
+/// # `digit_policy`
+///
+/// `"numeric"` (the default elsewhere in the library) applies the letter half only.
+/// `"tr39"` adds the digit half — `1 ≡ l` and `0 ≡ O` — which is what an identifier
+/// skeleton wants and what a deduplication key must not have: `SKU-100`, `SKU-1O0`,
+/// `SKU-IOO` and `SKU-l00` all become one key, as do `v1.0.1`, `vI.O.I` and `vl.o.l`.
+///
+/// # Errors
+///
+/// [`Error`] if `digit_policy` is not `"numeric"`, `"tr39"` or `"preserve"`.
+pub fn skeleton_key(
+    text: &str,
+    digit_policy: crate::api::DigitPolicy,
+) -> Result<Cow<'_, str>, Error> {
+    crate::presets::skeleton_key(text, digit_policy.as_str()).map_err(Error::from)
+}
+
 /// Whether `text` is already its own canonical form under `preset` (#730).
 ///
 /// disarm's surfaces are all *generation path*: text in, normalized text out. This is the

@@ -596,6 +596,15 @@ operations:
       java: null
       kotlin: null
       cabi: null
+  - id: skeleton_key
+    names:
+      rust: skeleton_key
+      python: skeleton_key
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: slugify
     names:
       rust: slugify

@@ -100,6 +100,21 @@ const MIN_PERCENT_RUN: usize = 2;
 /// The allowlist is the stripper's own, borrowed rather than
 /// restated — #700 is about exactly that kind of drift.
 pub fn decode_smuggled(text: &str) -> Vec<Payload> {
+    decode(text, true)
+}
+
+/// The three invisible carriers only — what the anomaly detector consumes (#727).
+///
+/// `decoded_payloads` in `anomalies.rs` used to call [`decode_smuggled`] and drop every
+/// `PercentEscape` afterwards, which meant `has_anomalies` scanned and UTF-8-checked every
+/// `%XX` run in a URL-bearing input for a result it discarded — on the hot path (raised in
+/// review on #945). This never runs the percent scanner. A test asserts it equals
+/// `decode_smuggled` minus `PercentEscape`, so the two cannot drift.
+pub(crate) fn decode_carriers(text: &str) -> Vec<Payload> {
+    decode(text, false)
+}
+
+fn decode(text: &str, with_percent: bool) -> Vec<Payload> {
     let chars: Vec<(usize, char)> = text.char_indices().collect();
     let just_chars: Vec<char> = chars.iter().map(|&(_, c)| c).collect();
     let mut out = Vec::new();
@@ -122,10 +137,12 @@ pub fn decode_smuggled(text: &str) -> Vec<Payload> {
             out.push(p);
             continue;
         }
-        if let Some(p) = scan_percent(&chars, i, offset) {
-            i += p.units;
-            out.push(p);
-            continue;
+        if with_percent {
+            if let Some(p) = scan_percent(&chars, i, offset) {
+                i += p.units;
+                out.push(p);
+                continue;
+            }
         }
         if let Some((p, consumed)) = scan_zero_width(&chars, i, offset) {
             i += consumed;
@@ -271,8 +288,13 @@ fn percent_byte(chars: &[(usize, char)], i: usize) -> Option<u8> {
     if chars.get(i)?.1 != '%' {
         return None;
     }
-    let hi = chars.get(i + 1)?.1.to_digit(16)?;
-    let lo = chars.get(i + 2)?.1.to_digit(16)?;
+    // `to_digit(16)` is already ASCII-only in Rust — measured, `'\u{661}'.to_digit(16)`
+    // is `None` — but RFC 3986 §2.1 says so in the grammar, and a reader should not have
+    // to look the stdlib up to know it (raised in review on #945). The guard makes it
+    // visible; the test pins it either way.
+    let hex = |c: char| c.is_ascii_hexdigit().then(|| c.to_digit(16)).flatten();
+    let hi = hex(chars.get(i + 1)?.1)?;
+    let lo = hex(chars.get(i + 2)?.1)?;
     u8::try_from(hi * 16 + lo).ok()
 }
 
@@ -558,6 +580,44 @@ mod tests {
         // Double encoding decodes ONCE; the result is the evidence, not a prompt.
         let found = decode_smuggled("%25%32%45");
         assert_eq!(found[0].text.as_deref(), Some("%2E"));
+    }
+
+    /// `decode_carriers` is `decode_smuggled` minus the percent scheme — asserted, so the
+    /// detector's path cannot drift from the public one (#945 review).
+    #[test]
+    fn the_detector_path_equals_the_public_one_minus_percent() {
+        let url = format!(
+            "https://x.test/?q={}&t={}&z={}%48%69",
+            tags("hi"),
+            "\u{FE00}\u{FE01}",
+            zw("ok")
+        );
+        for s in [url.as_str(), "plain", "%41%42", "a\u{200B}\u{200C}b"] {
+            let expect: Vec<Payload> = decode_smuggled(s)
+                .into_iter()
+                .filter(|p| p.scheme != PayloadScheme::PercentEscape)
+                .collect();
+            assert_eq!(decode_carriers(s), expect, "{s:?}");
+        }
+        // ...and it really does skip percent: a percent-only input yields nothing.
+        assert!(decode_carriers("%48%69%20%41").is_empty());
+        assert_eq!(decode_smuggled("%48%69%20%41").len(), 1);
+    }
+
+    /// Percent-encoding hex digits are ASCII-only (RFC 3986 §2.1). Raised in review on
+    /// #945: a non-ASCII digit must never parse as one. `%\u{661}\u{662}` is Arabic-Indic
+    /// `12` and is not an escape.
+    #[test]
+    fn hex_digits_are_ascii_only() {
+        assert_eq!(
+            '\u{661}'.to_digit(16),
+            None,
+            "stdlib to_digit is ASCII-only"
+        );
+        assert!(decode_smuggled("%\u{661}\u{662}%\u{663}\u{664}").is_empty());
+        // Fullwidth `Ａ` and superscript `²` are digits/letters to some tests and not here.
+        assert!(decode_smuggled("%\u{FF21}\u{FF21}%\u{B2}\u{B2}").is_empty());
+        assert_eq!(decode_smuggled("%41%42")[0].text.as_deref(), Some("AB"));
     }
 
     /// A lone `%20` is an escaped space, not a payload.

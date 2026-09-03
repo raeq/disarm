@@ -641,13 +641,14 @@ fn is_line_break(c: char) -> bool {
 /// a decode, and `invisible` already reports it — firing here as well would spend the one
 /// signal in this area that needs no threshold on runs that do need one.
 fn decoded_payloads(text: &str) -> impl Iterator<Item = crate::smuggled::Payload> {
-    crate::smuggled::decode_smuggled(text)
+    // `decode_carriers`, not `decode_smuggled`: the percent scheme is decoded for
+    // inspection and deliberately kept out of the detector (#727) — a percent run spelling
+    // readable text is ordinary in any URL. The first version decoded it here and threw it
+    // away, which is wasted work on the hot path for every URL-bearing input (#945 review);
+    // the carriers-only path never runs that scanner.
+    crate::smuggled::decode_carriers(text)
         .into_iter()
-        // `PercentEscape` is decoded for inspection and deliberately kept out of the
-        // detector (#727): a percent run spelling readable text is ordinary in any URL,
-        // where the three invisible carriers are never ordinary. Reporting it as
-        // `smuggled` would fire on every escaped query string.
-        .filter(|p| p.text.is_some() && p.scheme != crate::smuggled::PayloadScheme::PercentEscape)
+        .filter(|p| p.text.is_some())
 }
 
 /// The first `CR` that overwrites text, as a `(byte offset, overwritten segment)` pair.

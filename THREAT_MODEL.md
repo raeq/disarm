@@ -90,7 +90,7 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 | Mechanism | Definition |
 |---|---|
 | `normalize_confusables` / `is_confusable` | Map characters in the **bundled confusable table** to a chosen target script (Latin/Cyrillic). That table is TR39 plus two additive sets: cross-script pairs TR39 leaves unpaired (#336/#342), and 31 codepoints attested in real attacker text that TR39 does not list at all (#597), of which 23 are optical look-alikes, seven are *positional* substitutions and one is a reading convention. Coverage is exactly that table — see *Out of scope*. |
-| `strip_bidi` | Remove the UAX#9 bidi formatting/isolate/override code points enumerated in the implementation. |
+| `strip_bidi` | Remove the UAX#9 bidi formatting/isolate/override code points enumerated in the implementation. **Keeps the logical order** — a pure filter, so the output is the byte order, not the order a reader saw. Correct for a compiler, a filesystem or an identifier comparison; wrong for a search index or content moderation, which want the display order no surface here returns (#740, [limitations](https://github.com/raeq/disarm/blob/main/docs/limitations.md)). |
 | `strip_zalgo` / `is_zalgo` | Remove or detect runs of combining marks above a configurable threshold. |
 | zero-width / invisible stripping | Remove the enumerated zero-width and invisible code points. |
 | `strip_obfuscation` / `canonicalize` / `canonicalize_strict` | Compose the above in a fixed order. The output is "more canonical," not "safe." (`canonicalize` / `canonicalize_strict` were named `security_clean` / `normalize_user_input` before 0.11 — deprecated aliases, removed in 1.0.) |

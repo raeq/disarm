@@ -529,6 +529,50 @@ Beyond source code, bidi overrides can disguise malicious filenames. The sequenc
 
 Arabic, Hebrew, and other right-to-left scripts legitimately use bidi formatting characters for correct display of mixed-direction text. `strip_bidi()` is designed for security contexts (usernames, filenames, URL display) where bidi overrides are dangerous. It should not be applied to body text in languages that require bidi formatting.
 
+### Stripping preserves logical order, not display order
+
+`strip_bidi()` is a pure filter: it deletes the UAX #9 control code points and leaves the
+code-point order untouched. Every preset, profile and key builder inherits that, so the
+output for bidi-carrying input is always the **logical** order — the attacker's byte
+order, which is not the order a reader saw.
+
+For Trojan Source that is the correct answer, and it is the direction disarm is built
+around: a compiler and a filesystem read logical order, so `invoice<RLO>gpj.exe` →
+`invoicegpj.exe` is exactly what executes. It is the wrong answer for the direction
+Boucher et al. attack in *Bad Characters*, where the **rendering** is the clean string:
+
+```python
+import disarm
+
+attack = "\u202e" + "paypal"[::-1] + "\u202c"  # renders as "paypal"
+disarm.canonicalize(attack)  # 'lapyap'
+disarm.get_pipeline("search_index")(attack)  # 'lapyap'
+disarm.has_anomalies(attack)  # True — detected, kind 'bidi'
+```
+
+Detection is 10/10 on that construction and recovery is 0/10, so this is a **recovery
+gap, not a blindness**. An indexer running `search_key` files the document under
+`lapyap`; a reviewer reading the row sees `paypal`.
+
+Which order is the truth depends on the consumer, and disarm serves one of them:
+
+| the consumer reads | wants | disarm |
+|---|---|---|
+| a compiler, a filesystem, an identifier comparison, `sanitize_filename` | **logical** order | correct — the well-covered case, CVE-2021-42574 in [CVE Validation](security/cve-validation.md) |
+| an NLP model, a search index (the `search_index` profile), brand matching, content moderation | **display** order | returns a string the human never saw |
+
+There is no surface that returns display order. Producing one means applying the Bidi
+Algorithm to resolve the controls and coerce logical order to match the rendering — the
+defense §VII-E3 of *Bad Characters* recommends where there is no GUI to strip for. It is
+deliberately not built (#740): display order requires a paragraph direction disarm does
+not model, the UAX #9 implementation is a Unicode-data dependency the crate does not
+currently carry, and it must not become a step inside `canonicalize`, because reordering
+before a denylist check is its own hazard.
+
+If your consumer wants display order, resolve it yourself before calling disarm, and pass
+disarm the resolved string. That is the same ordering rule as decode-before-disarm, for
+the same reason.
+
 ## Non-Latin Text and the Destructive Presets
 
 ### The `strip_bidi` caveat applies to two more steps, and harder

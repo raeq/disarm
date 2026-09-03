@@ -301,6 +301,13 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The attack corpus was testing the recoverable half of the reordering class (#740).**
+  `bidi()` builds `RLO + t[:mid] + RLM + t[mid:] + PDF`, whose *logical* order is already
+  the clean word — the one direction in which strip and resolve give the same answer, so
+  XMR passed 10/10. Reversed so the *rendering* is the clean word, as the paper's
+  generator does, the same assertion is 0/10. Both constructions are now asserted, the
+  second as a negative, with an independent render model pinning the premise.
+
 - **A `control` finding for `BS`/`DEL` now names the character it erases (#739).**
   `detail` was `U+0008` and the reason said only that the token contained a control, so
   nothing said *what* vanished or that the token had a deletion structure at all. The
@@ -404,6 +411,27 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   single caller and the transitive wait.
 
 ### Documentation
+
+- **`strip_bidi` keeps the *logical* order, and now says so (#740).** It is a pure
+  filter: the UAX #9 controls are deleted and the code-point order is untouched, so every
+  preset, profile and key builder returns the byte order rather than the order a reader
+  saw. `"\u202e" + "paypal"[::-1] + "\u202c"` renders as `paypal` and canonicalizes to
+  `lapyap` on all 15 surfaces, `llm_guardrail` and `rag_ingest` included. Detection is
+  10/10 on kind `bidi`, so this is a recovery gap, not a blindness.
+
+  The distinction was written down nowhere — `grep -rin "logical order|visual order|
+  display order|reading order"` over `docs/`, `THREAT_MODEL.md` and `src/` returned
+  nothing. It is now named in three places a reader can meet it: the `strip_bidi` row in
+  `THREAT_MODEL.md`, the `strip_bidi` docstring, and a new section in
+  `docs/limitations.md` stating which consumer wants which order. A compiler, a
+  filesystem and an identifier comparison read logical order, and disarm is correct for
+  them — that is the Trojan Source direction, CVE-2021-42574. A search index, an NLP
+  model and content moderation want the display order, and no surface returns it.
+
+  A `resolve_bidi` is deliberately not built. Display order needs a paragraph direction
+  disarm does not model, the UAX #9 implementation is a Unicode-data dependency the crate
+  does not carry today, and it must not become a step inside `canonicalize`, since
+  reordering before a denylist check is its own hazard.
 
 - **The deletion class is named in `THREAT_MODEL.md` (#739).** It appeared in neither
   *In scope* nor *Out of scope*, so *Vulnerability vs. known limitation* could not answer

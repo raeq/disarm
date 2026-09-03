@@ -162,6 +162,15 @@ pub fn display_clean(text: &str) -> Cow<'_, str> {
 /// Strip bidirectional override and formatting characters (UAX #9 §3.3.2 plus the
 /// soft hyphen and deprecated/interlinear format controls). A composable primitive
 /// shared by the security/key presets. Infallible.
+///
+/// **Keeps the logical order.** A pure filter: the controls are deleted, the code-point
+/// order is untouched. The result is the order the bytes are in, not the order a reader
+/// saw — `RLO + "paypal".reverse() + PDF` renders as `paypal` and comes back as `lapyap`.
+///
+/// Correct for a compiler, a filesystem or an identifier comparison, which read logical
+/// order (the Trojan Source direction, CVE-2021-42574). Wrong for a search index, an NLP
+/// model or content moderation, which want what was displayed. No surface here returns
+/// display order; the reasoning is in `docs/limitations.md` (#740).
 #[must_use]
 pub fn strip_bidi(text: &str) -> String {
     crate::presets::strip_bidi(text)

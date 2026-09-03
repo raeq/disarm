@@ -22,6 +22,8 @@ def test_profiles_listed() -> None:
 def test_llm_guardrail_step_order() -> None:
     steps = [name for name, _ in disarm.get_pipeline("llm_guardrail").steps]
     assert steps == [
+        # #937: BS/DEL erase the preceding cell, and this runs first so NFKC cannot change what that cell is.
+        "resolve_deletions",
         "normalize",
         "strip_zalgo",
         "strip_bidi",
@@ -50,6 +52,8 @@ def test_llm_guardrail_step_order() -> None:
 def test_rag_ingest_step_order() -> None:
     steps = [name for name, _ in disarm.get_pipeline("rag_ingest").steps]
     assert steps == [
+        # #937: BS/DEL erase the preceding cell, and this runs first so NFKC cannot change what that cell is.
+        "resolve_deletions",
         "normalize",
         "strip_bidi",
         "strip_plane14",

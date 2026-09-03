@@ -42,6 +42,22 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   In `inspect_anomalies` the decode **outranks every other kind for the same span**, as
   #701 asks — implemented by ordering rather than suppression, so the run is still reported
   as `invisible` too and a caller already matching on that kind keeps working.
+- **`resolve_deletions` and `resolve_cr` on `TextPipeline`, the profiles and the CLI
+  (#937).** The step runs **first** in `STEP_ORDER`, before `normalize` rather than merely
+  before `strip_control`, because the renderer saw the code points as written and every
+  later step changes what the preceding cell is: `ﬁ` + `BS` erases to nothing and to `f`
+  once NFKC has split the ligature; `щ` + `BS` erases to nothing and to `sh` once
+  transliteration has produced `shc`.
+
+  A cursor over **cells**, not a stack over code points — the two branches a stack gets
+  wrong are `X` + `ZWSP` + `BS` and `e` + `U+0301` + `BS`, where a terminal erases the
+  whole cell and a pop leaves the base. The format half of that rule reuses disarm's own
+  predicates rather than a blanket `Cf` test, which is narrower and more correct: a `Cf`
+  that renders, like `U+0605`, does occupy a cell.
+
+  `resolve_cr` is a *parameter* of that step rather than a step of its own, the way
+  `zalgo_max_marks` parameterises `strip_zalgo`, and is reported through `steps()` as the
+  step's parameter so it stays visible.
 
 - **`skeleton_key(text, *, digit_policy="numeric")` — the prototype classes disarm's table
   keeps apart (#650).** TR39 puts `I`, `l` and `1` in one equivalence class and `O`/`0` in
@@ -334,6 +350,32 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 
 ### Changed (breaking)
+
+- **The deletion class is now resolved, not only reported — and `KEY_SCHEMA_VERSION` is
+  8 (#937).** `BS` and `DEL` erase the preceding *cell* before any other step runs, so
+  `canonicalize` on a run that renders as `paypal` returns `paypal` where it returned
+  `pXaXyXpXaXlX`. This **reverses the out-of-scope call #934 recorded**, on measurement:
+  0 of 51 surface/form pairs recovered any of the three forms, and the cell model recovers
+  all of them while changing none of the clean inputs it was checked against.
+
+  #934's reason was that the class is renderer-dependent, so resolution risked losing text
+  a reader can see. What an erase removes is the cell *before* the control, and in every
+  row of the paper's released corpus that cell is the attacker's insertion — dropping it
+  is the direction `strip_zero_width` already takes. The detector is untouched, so a
+  reader who saw a control picture is still told.
+
+  Affected: `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `search_key`,
+  `catalog_key`, `sort_key`, `skeleton_key`, `ml_normalize`, and the `llm_guardrail` and
+  `rag_ingest` profiles. **Unchanged by design:** `strip_format`, whose contract is
+  display-preserving, and `code_context`, where a literal `\b` in source is data.
+
+  **A lone `CR` is still resolved by nothing.** It is byte-identical to a classic Mac OS
+  line ending, so `TextPipeline(resolve_deletions=True, resolve_cr=True)` is the only way
+  to get it, and turning it on means `line1<CR>line2` becomes `line2`.
+
+  Stored keys move only for input containing `BS` or `DEL`. The fixture was green through
+  the change — the fourth time in this cycle that its corpus did not sample the class
+  being fixed — so 34 rows were added covering every shape the model has a rule for.
 
 - **`llm_guardrail` and `strip_obfuscation` no longer name emoji (#910).** Both converted
   an attacker-chosen emoji into attacker-chosen English *inside the text being screened*:

@@ -199,6 +199,8 @@ for text in large_dataset:
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
+| `resolve_deletions` | `bool` | `False` | Apply `BS`/`DEL` as a terminal does — each erases the preceding cell. Runs first (#937). |
+| `resolve_cr` | `bool` | `False` | Also resolve a lone overwriting `CR`. Inert without `resolve_deletions`; see the note below. |
 | `normalize` | `str \| None` | `None` | Normalization form: `"NFC"`, `"NFD"`, `"NFKC"`, `"NFKD"` |
 | `transliterate` | `bool` | `False` | Convert to ASCII via transliteration tables |
 | `lang` | `str \| None` | `None` | Language profile for transliteration. Use `"auto"` to detect from script. |
@@ -213,15 +215,28 @@ for text in large_dataset:
 
 Operations always execute in this order, regardless of how you specify them:
 
-1. **Normalize** — Unicode normalization
-2. **Confusables** — Replace homoglyphs
-3. **Demojize** — Expand emoji to text
-4. **Strip accents** — Remove combining marks
-5. **Transliterate** — Convert to ASCII
-6. **Fold case** — Case folding
-7. **Strip control** — Remove control characters
-8. **Strip zero-width** — Remove zero-width/invisible characters
-9. **Collapse whitespace** — Whitespace normalization
+1. **Resolve deletions** — apply `BS`/`DEL`, before anything else
+2. **Normalize** — Unicode normalization
+3. **Confusables** — Replace homoglyphs
+4. **Demojize** — Expand emoji to text
+5. **Strip accents** — Remove combining marks
+6. **Transliterate** — Convert to ASCII
+7. **Fold case** — Case folding
+8. **Strip control** — Remove control characters
+9. **Strip zero-width** — Remove zero-width/invisible characters
+10. **Collapse whitespace** — Whitespace normalization
+
+!!! note "Why `resolve_deletions` runs first, and why `resolve_cr` is separate"
+    The renderer saw the code points **as written**, so every later step changes what "the
+    preceding cell" is. `ﬁ` + `BS` erases to nothing; after NFKC it is `f` + `i` + `BS` and
+    erases to `f`. `щ` + `BS` erases to nothing; after transliteration it is `shc` + `BS`
+    and erases to `sh`.
+
+    `BS` and `DEL` have no legitimate use in text, so the presets and the `llm_guardrail`
+    and `rag_ingest` profiles resolve them. A lone `CR` is different: it is a rendering
+    overwrite in a terminal and a **classic Mac OS line ending** in a file from before
+    2001, and the two are byte-identical. Nothing resolves it for you — `resolve_cr=True`
+    does, and turning it on means `line1<CR>line2` becomes `line2`.
 
 ## When to use which
 

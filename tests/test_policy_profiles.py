@@ -88,6 +88,8 @@ class TestProfileStepsLock:
 
     def test_llm_guardrail_steps(self):
         assert get_pipeline("llm_guardrail").steps == [
+            # #937: BS/DEL erase the preceding cell, and this runs first so NFKC cannot change what that cell is.
+            ("resolve_deletions", None),
             ("normalize", "NFKC"),
             ("strip_zalgo", "0"),
             ("strip_bidi", None),
@@ -107,6 +109,8 @@ class TestProfileStepsLock:
 
     def test_rag_ingest_steps(self):
         assert get_pipeline("rag_ingest").steps == [
+            # #937: BS/DEL erase the preceding cell, and this runs first so NFKC cannot change what that cell is.
+            ("resolve_deletions", None),
             ("normalize", "NFKC"),
             ("strip_bidi", None),
             ("strip_plane14", None),

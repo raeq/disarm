@@ -581,6 +581,8 @@ CLASS_METHODS = {
             "strip_zalgo",
             "strip_pua",
             "strip_plane14",
+            "resolve_deletions",
+            "resolve_cr",
         ],
         "__call__": ["text"],
         "explain": [],

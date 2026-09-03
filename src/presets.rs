@@ -60,6 +60,17 @@ struct PresetCtx<'a> {
 /// extended with the four non-uniform preset stages.
 #[derive(Clone, Copy)]
 enum Step {
+    /// Resolve the deletion class — `BS`/`DEL` erase the preceding cell (#937).
+    ///
+    /// Must be the FIRST step of any list that carries it, and before `Nfkc` rather than
+    /// merely before `StripControl`. The renderer saw the code points as written, and
+    /// every earlier step changes what "the preceding cell" is: `ﬁ` + `BS` erases to
+    /// nothing, and to `f` once NFKC has split the ligature.
+    ///
+    /// `CR` is deliberately not resolved here. No preset makes that call: a lone `CR` is
+    /// a rendering overwrite in a terminal and a classic Mac OS line ending in a file
+    /// from before 2001, and the two are byte-identical.
+    ResolveDeletions,
     Nfkc,
     Nfc,
     NfcIfNonAscii,
@@ -273,6 +284,7 @@ fn apply_into(
             transliterate_preserving_latin_into(input, ctx.lang, out);
             Ok(true)
         }
+        Step::ResolveDeletions => Ok(crate::deletions::resolve_deletions_into(input, false, out)),
         Step::Confusables(target, digits) => {
             confusables::normalize_confusables_into(input, target, digits, out)?;
             Ok(true)
@@ -477,7 +489,10 @@ impl Actionable {
             let step = steps[idx];
             idx += 1;
             match step {
-                Step::StripControl => m.controls = true,
+                // `ResolveDeletions` shares the bit: it acts on `BS`/`DEL`, which are
+                // exactly the ASCII controls `is_removed_control` already recognises, so
+                // the guard cannot call a string inert that either step would change.
+                Step::StripControl | Step::ResolveDeletions => m.controls = true,
                 Step::CollapseWs => m.collapse_ws = true,
                 Step::FoldCase => m.fold_case = true,
                 Step::PrototypeFold => m.prototype = true,
@@ -1002,6 +1017,10 @@ pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr>
         const STEPS;
         fn apply;
         [
+            // FIRST, before `Nfkc` (#937). The renderer saw the code points as
+            // written; NFKC would split `\u{FB01}` and change what the preceding
+            // cell is, so the erase has to happen before anything else runs.
+            Step::ResolveDeletions,
             // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
             Step::Nfkc,
             // 2. Strip bidi overrides, isolates, marks, and soft hyphens
@@ -1115,7 +1134,11 @@ pub(crate) fn ml_normalize<'a>(
 ) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
-    const STEPS: &[Step; 9] = &[
+    const STEPS: &[Step; 10] = &[
+        // FIRST, before `Nfkc` (#937). A sanitizer that turns `fool` into `fovJol`
+        // has not recovered the input for a model — it has produced a third string
+        // the model has never seen, which is what the attack wanted.
+        Step::ResolveDeletions,
         // 1. NFKC normalization
         Step::Nfkc,
         // 2. Emoji → text (CLDR short names) when emoji_style == "cldr".
@@ -1167,7 +1190,7 @@ pub(crate) fn ml_normalize<'a>(
     // out a second time — the two lists cannot drift, and `without_fold_case` const-
     // asserts that exactly one `FoldCase` was removed, so reordering or dropping the
     // step above fails the build instead of silently changing what the flag does.
-    const STEPS_NO_FOLD: [Step; 8] = without_fold_case(STEPS);
+    const STEPS_NO_FOLD: [Step; 9] = without_fold_case(STEPS);
 
     crate::transliterate::validate_lang(lang)?;
     // Validate emoji_style — only two modes are supported.
@@ -1196,18 +1219,18 @@ pub(crate) fn ml_normalize<'a>(
 /// automatically reaches both, and the assertion below turns "someone removed or
 /// duplicated `FoldCase`" into a build failure rather than a behaviour change nobody
 /// notices. `Step::Nfkc` is only the array's initial filler; every slot is overwritten.
-const fn without_fold_case(steps: &[Step; 9]) -> [Step; 8] {
-    let mut out = [Step::Nfkc; 8];
+const fn without_fold_case(steps: &[Step; 10]) -> [Step; 9] {
+    let mut out = [Step::Nfkc; 9];
     let mut read = 0;
     let mut write = 0;
     while read < steps.len() {
         if !matches!(steps[read], Step::FoldCase) {
             // Check before the write, not after the loop: with zero `FoldCase` steps
-            // the 9th write would hit `out[8]` and abort const-eval with a generic
+            // the 10th write would hit `out[9]` and abort const-eval with a generic
             // out-of-bounds panic, hiding the reason. Assert here so the message the
             // maintainer sees names the actual invariant.
             assert!(
-                write < 8,
+                write < 9,
                 "ml_normalize's step list must contain exactly one Step::FoldCase"
             );
             out[write] = steps[read];
@@ -1216,7 +1239,7 @@ const fn without_fold_case(steps: &[Step; 9]) -> [Step; 8] {
         read += 1;
     }
     assert!(
-        write == 8,
+        write == 9,
         "ml_normalize's step list must contain exactly one Step::FoldCase"
     );
     out
@@ -1248,6 +1271,10 @@ pub(crate) fn catalog_key<'a>(
         const STEPS;
         fn apply;
         [
+            // FIRST, before `Nfkc` (#937). The renderer saw the code points as
+            // written; NFKC would split `\u{FB01}` and change what the preceding
+            // cell is, so the erase has to happen before anything else runs.
+            Step::ResolveDeletions,
             // 1. NFKC normalization
             Step::Nfkc,
             // 2. Strip bidi overrides + soft hyphen + format marks (#93)
@@ -1336,6 +1363,10 @@ pub(crate) fn search_key<'a>(
         const STEPS;
         fn apply;
         [
+            // FIRST, before `Nfkc` (#937). The renderer saw the code points as
+            // written; NFKC would split `\u{FB01}` and change what the preceding
+            // cell is, so the erase has to happen before anything else runs.
+            Step::ResolveDeletions,
             // 1. NFKC normalization
             Step::Nfkc,
             // 2. Strip bidi overrides + soft hyphen + format marks (#93)
@@ -1480,6 +1511,10 @@ pub(crate) fn sort_key<'a>(
         const STEPS;
         fn apply;
         [
+            // FIRST, before `Nfkc` (#937). The renderer saw the code points as
+            // written; NFKC would split `\u{FB01}` and change what the preceding
+            // cell is, so the erase has to happen before anything else runs.
+            Step::ResolveDeletions,
             // 1. NFKC normalization (canonical-composes accents: `é` stays one codepoint)
             Step::Nfkc,
             // 2. Strip bidi overrides + soft hyphen + format marks (#93)
@@ -1643,6 +1678,10 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
         const STEPS;
         fn apply;
         [
+            // FIRST, before `Nfkc` (#937). The renderer saw the code points as
+            // written; NFKC would split `\u{FB01}` and change what the preceding
+            // cell is, so the erase has to happen before anything else runs.
+            Step::ResolveDeletions,
             // 1. NFKC normalization
             Step::Nfkc,
             // 2. Strip invisibles FIRST (bidi/format + zero-width + non-whitespace
@@ -1768,6 +1807,10 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
         const STEPS;
         fn apply;
         [
+            // FIRST, before `Nfkc` (#937). The renderer saw the code points as
+            // written; NFKC would split `\u{FB01}` and change what the preceding
+            // cell is, so the erase has to happen before anything else runs.
+            Step::ResolveDeletions,
             // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
             Step::Nfkc,
             // 2. Strip ALL combining marks (max_marks=0) — removes zalgo AND accents early
@@ -1879,6 +1922,10 @@ pub(crate) fn skeleton_key<'a>(
         const STEPS;
         fn apply;
         [
+            // FIRST, before `Nfkc` (#937). The renderer saw the code points as
+            // written; NFKC would split `\u{FB01}` and change what the preceding
+            // cell is, so the erase has to happen before anything else runs.
+            Step::ResolveDeletions,
             // 1. NFKC, so a compatibility spelling reaches the fold as its base form.
             Step::Nfkc,
             // 2. The reordering and smuggling channels, before anything reads the text.
@@ -3454,7 +3501,8 @@ mod tests {
     /// reordering that happened to keep the length would still be caught.
     #[test]
     fn no_fold_step_list_is_the_folded_list_minus_fold_case() {
-        const FULL: &[Step; 9] = &[
+        const FULL: &[Step; 10] = &[
+            Step::ResolveDeletions,
             Step::Nfkc,
             Step::Demojize {
                 only_if_cldr: true,

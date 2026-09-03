@@ -93,6 +93,7 @@ Each is a *mechanism*, defined by its data and algorithm, not by an outcome prom
 | `strip_bidi` | Remove the UAX#9 bidi formatting/isolate/override code points enumerated in the implementation. **Keeps the logical order** — a pure filter, so the output is the byte order, not the order a reader saw. Correct for a compiler, a filesystem or an identifier comparison; wrong for a search index or content moderation, which want the display order no surface here returns (#740, [limitations](https://github.com/raeq/disarm/blob/main/docs/limitations.md)). |
 | `strip_zalgo` / `is_zalgo` | Remove or detect runs of combining marks above a configurable threshold. |
 | zero-width / invisible stripping | Remove the enumerated zero-width and invisible code points. |
+| `resolve_deletions` | Apply `BS`/`DEL` as a terminal does: each erases the preceding **cell** — a base character with its combining marks and any format characters attached to it. Runs before every other step, because the renderer saw the code points as written. A lone `CR` is resolved only under `resolve_cr`, which is off everywhere: it is byte-identical to a classic Mac OS line ending (#937). |
 | `strip_obfuscation` / `canonicalize` / `canonicalize_strict` | Compose the above in a fixed order. The output is "more canonical," not "safe." (`canonicalize` / `canonicalize_strict` were named `security_clean` / `normalize_user_input` before 0.11 — deprecated aliases, removed in 1.0.) |
 | `is_suspicious_hostname` | Flag **mixed-script** labels and labels containing bundled-table confusables. A not-suspicious result asserts no problem was *found*, not that the host is safe. |
 | `normalize` (NFC/NFD/NFKC/NFKD), `fold_case` | Standard Unicode normalization / full case folding for the bundled Unicode data version. |
@@ -330,34 +331,16 @@ behavior, not a vulnerability:
   you bound length downstream.
 - **Linguistic correctness** of transliteration (context-free romanization is lossy for
   CJK/Indic/abjad — that is a quality property, not a security property).
-- **Resolving the deletion class — `BS`, `DEL`, a lone `CR` (#739).** Boucher et al.
-  §IV-G's fourth class hides text by *rendering*: `pX<BS>aX<BS>yX<BS>pX<BS>aX<BS>lX<BS>`
-  and `ZZZZZZ<CR>paypal` both draw as `paypal`, and neither spells it. disarm **detects
-  the whole class** — `BS`/`DEL` as kind `control`, a lone `CR` as kind `deletion` — and
-  **resolves none of it**, on every preset and profile. That is a decision, and
-  [`tests/test_attack_corpus.py`](https://github.com/raeq/disarm/blob/main/tests/test_attack_corpus.py)
-  pins it as an asserted negative so a change of policy has to be deliberate.
-
-  Resolving `BS`/`DEL` means reproducing one renderer's behaviour, and the paper says in
-  the same section that the class is renderer-dependent — "most systems do not copy
-  deleted text to the clipboard", and a browser drawing a control picture renders neither
-  form. Resolution would then *lose* text a reader can see, which is the worse failure for
-  a moderation filter. `CR` takes the opposite treatment for the same reason:
-  `collapse_whitespace` folds it to a space, which **surfaces** the overwritten prefix
-  instead of deleting it. The kind names the treatment path, which is why one class spans
-  two kinds.
-
-  The `CR` rule fires only where a `CR` can overwrite something — not before an `LF`, not
-  at end of text, not at the start of a line (after any UAX #14 mandatory break, not
-  just `LF`). Its known false positive is a classic Mac OS
-  file, which used a lone `CR` as its line ending until 2001; the two are indistinguishable
-  from the bytes, so the report is a technical fact and the judgement is the caller's.
-
-## Vulnerability vs. known limitation
-
-**We will treat as a security vulnerability** a case where disarm fails to do what this
-document says it does — for example:
-
+- **Resolving a lone `CR` by default (#937).** `BS` and `DEL` are resolved — see *In
+  scope* — because they have no legitimate use in text. A `CR` that is not part of a
+  `CRLF` and not at end of text is a rendering overwrite in a terminal and a **classic Mac
+  OS line ending** in a file from before 2001, and the two are byte-identical. Resolving
+  `line1<CR>line2` to `line2` is right for one reading and destroys the other, so no
+  preset or profile makes that call: `TextPipeline(resolve_deletions=True,
+  resolve_cr=True)` does. The detector reports it either way, as kind `deletion`.
+- **Reproducing a renderer in general.** `resolve_deletions` implements the erase rules of
+  §IV-G and nothing else. Terminal emulation — cursor addressing, scroll regions, the rest
+  of the ANSI escape repertoire — is out, and `strip_control` removes the introducer.
 - `normalize_confusables(text, target)` emits a code point the **bundled** table maps to
   `target`;
 - a documented bidi/zero-width code point is not stripped by the relevant function;

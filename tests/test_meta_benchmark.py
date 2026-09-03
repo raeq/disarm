@@ -17,7 +17,7 @@ import os
 
 import pytest
 
-from benchmarks.meta import leaderboard, registry, subjects
+from benchmarks.meta import fetch, leaderboard, registry, subjects
 from benchmarks.meta.base import SuiteBase, surfaces, thin
 from benchmarks.meta.baseline import Drift, compare, snapshot
 from benchmarks.meta.protocol import Availability, Family, Outcome, Provenance, Status
@@ -2011,3 +2011,66 @@ def test_a_bootstrap_draw_with_no_weighted_axis_is_dropped_not_scored_zero():
 def test_the_run_reports_how_many_draws_it_discarded():
     """A silently dropped draw is as unauditable as a silently scored zero."""
     assert "null_draws" in {f.name for f in dataclasses.fields(leaderboard.Leaderboard)}
+
+
+def test_a_symlink_member_cannot_write_outside_the_destination(tmp_path):
+    """The name check alone passed this. CodeQL was right.
+
+    A member can sit inside the destination by name and still write outside it:
+    a symlink whose *linkname* points up and out, followed by a member written
+    through it. `member.name` is innocent for both, so the pre-extraction loop
+    that only resolved names let the pair through.
+    """
+    import tarfile
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "victim.txt").write_text("original", encoding="utf-8")
+
+    payload = tmp_path / "evil.tar.gz"
+    with tarfile.open(payload, "w:gz") as tar:
+        link = tarfile.TarInfo("link")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "../outside"
+        tar.addfile(link)
+
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    with tarfile.open(payload, "r:gz") as tar:
+        with pytest.raises(ValueError, match="links outside the destination"):
+            fetch._safe_extract(tar, dest)
+
+    assert (outside / "victim.txt").read_text(encoding="utf-8") == "original"
+
+
+def test_a_plain_member_still_extracts(tmp_path):
+    """The guard must refuse escapes without refusing ordinary archives."""
+    import tarfile
+
+    inner = tmp_path / "src"
+    inner.mkdir()
+    (inner / "data.txt").write_text("hello", encoding="utf-8")
+    payload = tmp_path / "ok.tar.gz"
+    with tarfile.open(payload, "w:gz") as tar:
+        tar.add(inner / "data.txt", arcname="data.txt")
+
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    with tarfile.open(payload, "r:gz") as tar:
+        fetch._safe_extract(tar, dest)
+    assert (dest / "data.txt").read_text(encoding="utf-8") == "hello"
+
+
+def test_zip_extraction_refuses_an_escaping_member(tmp_path):
+    """The zip branch had the identical defect, unflagged only for lack of a source."""
+    import zipfile
+
+    payload = tmp_path / "evil.zip"
+    with zipfile.ZipFile(payload, "w") as z:
+        z.writestr("../escaped.txt", "nope")
+
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    with zipfile.ZipFile(payload) as z:
+        with pytest.raises(ValueError, match="escapes the destination"):
+            fetch._safe_extract_zip(z, dest)

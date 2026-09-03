@@ -129,7 +129,7 @@ def _download(source: Source, cache: Path) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
     if source.kind == "zip":
         with zipfile.ZipFile(raw) as z:
-            z.extractall(dest)  # noqa: S202 - trusted, named upstream archives
+            _safe_extract_zip(z, dest)
     elif source.kind == "tar.gz":
         with tarfile.open(raw, "r:gz") as t:
             _safe_extract(t, dest)
@@ -139,14 +139,52 @@ def _download(source: Source, cache: Path) -> Path:
     return dest / source.member if source.member else dest
 
 
+def _safe_extract_zip(archive: zipfile.ZipFile, dest: Path) -> None:
+    """The same rule for zip archives.
+
+    CodeQL flagged only the tar path, because that is the only archive kind any
+    registered source uses today. The zip branch has the identical defect and is
+    fixed with it rather than left for the first zip source to reintroduce.
+    `ZipFile.extract` already refuses absolute paths and `..`, but it does so
+    silently by mangling the name; refusing outright is the behaviour that
+    matches the tar path.
+    """
+    root = dest.resolve()
+    for name in archive.namelist():
+        target = (root / name).resolve()
+        if not target.is_relative_to(root):
+            raise ValueError(f"archive member escapes the destination: {name}")
+    archive.extractall(dest)  # noqa: S202 - every member checked above
+
+
 def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
-    """Extract, refusing any member that would land outside ``dest``."""
+    """Extract, refusing any member that would write outside ``dest``.
+
+    The name check alone is not enough, which is what CodeQL flagged. A member
+    can sit inside ``dest`` by name and still write outside it: a symlink or
+    hardlink entry whose *linkname* points up and out, followed by a second
+    member that writes through it. `member.name` is innocent in both.
+
+    PEP 706's ``data`` filter is the check that covers the whole family — link
+    escape, absolute paths, device nodes, setuid bits — and it is applied by
+    the extraction itself rather than in a separate pass, so there is no window
+    between validating and writing. The explicit loop is kept in front of it
+    because it names the offending member in the error, which the filter's own
+    exception does not always do as clearly.
+    """
     root = dest.resolve()
     for member in tar.getmembers():
         target = (root / member.name).resolve()
         if not target.is_relative_to(root):
             raise ValueError(f"archive member escapes the destination: {member.name}")
-    tar.extractall(dest)  # noqa: S202 - every member checked above
+        if member.islnk() or member.issym():
+            link = (target.parent / member.linkname).resolve()
+            if not link.is_relative_to(root):
+                raise ValueError(
+                    f"archive member links outside the destination: "
+                    f"{member.name} -> {member.linkname}"
+                )
+    tar.extractall(dest, filter="data")
 
 
 def ensure(

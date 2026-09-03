@@ -367,6 +367,25 @@ class BadCharacters(AttackCorpusSuite):
             return any(ord(c) in marks for c in text)
         return clean is not None and text != clean
 
+    @staticmethod
+    def _ascii_swapped(text: str, clean: str | None) -> bool:
+        """Does this row substitute one ASCII character for another?
+
+        Out of a Unicode normalizer's reach by construction: `racist` perturbed
+        to `racisi` is a spelling change, not an encoding one, and no fold can
+        or should undo it. The homoglyph search finds whatever character fools
+        the model, and at higher perturbation budgets that includes ASCII.
+
+        26.5% of the perturbed homoglyph rows carry one, every one of them fails
+        XMR, and every row without one passes — so the class read 73.5% when the
+        reachable part of it is 100%. The other three classes carry none.
+        """
+        if clean is None or len(text) != len(clean):
+            return False
+        return any(
+            a != c and ord(a) < 0x80 and ord(c) < 0x80 for a, c in zip(text, clean, strict=True)
+        )
+
     def _rows_by_class(
         self, path: Path, limit: int | None
     ) -> dict[str, list[tuple[str, str | None]]]:
@@ -482,9 +501,27 @@ class BadCharacters(AttackCorpusSuite):
                     "a score for any subject (#937)",
                 )
 
+            # Rows whose perturbation is not an encoding question at all are
+            # named and held out of the recovery denominator, for the same
+            # reason the unperturbed rows are: a number is only a score for the
+            # thing its denominator describes.
+            out_of_reach = [r for r in hot if self._ascii_swapped(*r)]
+            if out_of_reach:
+                add(
+                    outcome,
+                    f"{cls}_ascii_swapped",
+                    len(out_of_reach),
+                    of=len(hot),
+                    higher_is_better=None,
+                    detail="rows that also substitute one ASCII character for "
+                    "another — a spelling change no fold can undo, held out of "
+                    "the recovery denominator below",
+                )
+            reachable = [r for r in hot if not self._ascii_swapped(*r)]
+
             hits = 0
             scored = 0
-            for text, clean in hot:
+            for text, clean in reachable:
                 if clean is None:
                     continue
                 scored += 1
@@ -505,7 +542,7 @@ class BadCharacters(AttackCorpusSuite):
                     detail=(
                         f"reported, not scored, for the {cls} class: {why}"
                         if why
-                        else f"exact-match recovery within the perturbed {cls} rows"
+                        else f"exact-match recovery within the perturbed {cls} rows a fold can reach"
                     ),
                 )
 

@@ -51,6 +51,21 @@ def test_only_the_introspective_family_is_non_external():
         assert suite.provenance.external is not is_introspective, suite.name
 
 
+@pytest.fixture(scope="session")
+def bad_characters_run():
+    """One `bad-characters` run shared by every test that reads it.
+
+    The suite scores 22,370 rows through a transform and a detector; six tests
+    were each paying for that separately, which took the file past two minutes.
+    Session-scoped because the run is a pure function of the cached corpus and
+    the installed build.
+    """
+    suite = registry.by_name("bad-characters")
+    if suite is None or not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+    return suite, suite.run(subject=subjects.by_name("disarm"))
+
+
 def test_every_suite_names_the_issues_it_identified():
     for suite in registry.all_suites():
         assert suite.provenance.issues, f"{suite.name} cites no issue"
@@ -2115,7 +2130,7 @@ def test_an_uninstalled_subject_has_no_capabilities_and_does_not_raise():
     assert not supported and why
 
 
-def test_bad_characters_is_scored_per_attack_class():
+def test_bad_characters_is_scored_per_attack_class(bad_characters_run):
     """One average over four classes hid a 100%-to-14% spread.
 
     The release is keyed by the paper's own experiment names
@@ -2127,13 +2142,8 @@ def test_bad_characters_is_scored_per_attack_class():
     #934 improved detection of the deletion class and moved no measurement in
     the whole battery, which is what surfaced this.
     """
-    suite = registry.by_name("bad-characters")
-    assert suite is not None
-    if not suite.available()[0]:
-        pytest.skip("the bad-characters release is not cached")
+    suite, out = bad_characters_run
 
-    out = suite.run(subject=subjects.by_name("disarm"))
-    assert out.status is Status.OK
     for cls in ("deletions", "homoglyphs", "invisibles", "reorderings"):
         assert out.measurement(f"{cls}_xmr") is not None, f"{cls} unscored"
         assert out.measurement(f"{cls}_detected") is not None, f"{cls} undetected"
@@ -2156,26 +2166,31 @@ def test_the_class_taxonomy_comes_from_the_release_not_from_here():
     }
 
 
-def test_recovery_is_scored_only_over_rows_that_were_perturbed():
+def test_recovery_is_scored_only_over_rows_that_were_perturbed(bad_characters_run):
     """~800 rows per class carry no perturbation, and they were counting as wins.
 
     14.3 of `reorderings`' 14.5% XMR came from rows nothing had been done to.
     Scoring over the perturbed subset moves it to 0.3%, which is the honest
     number and is why the class needed a different measurement entirely.
     """
-    suite = registry.by_name("bad-characters")
-    if not suite.available()[0]:
-        pytest.skip("the bad-characters release is not cached")
-    out = suite.run(subject=subjects.by_name("disarm"))
+    suite, out = bad_characters_run
     for cls in suite.CLASSES:
         rows = out.measurement(f"{cls}_rows")
         pert = out.measurement(f"{cls}_perturbed")
         xmr = out.measurement(f"{cls}_xmr")
+        held = out.measurement(f"{cls}_ascii_swapped")
         assert pert.value < rows.value, f"{cls}: every row cannot be perturbed"
-        assert xmr.of == pert.value, f"{cls}: XMR must be scored over perturbed rows only"
+        # The denominator is the perturbed rows a fold can reach: perturbed
+        # minus any that also swap one ASCII character for another, which is a
+        # spelling change rather than an encoding one.
+        expected = pert.value - (held.value if held else 0)
+        assert xmr.of == expected, (
+            f"{cls}: XMR denominator is {xmr.of}, expected {expected} "
+            f"(perturbed {pert.value} less {held.value if held else 0} held out)"
+        )
 
 
-def test_the_reordering_class_is_scored_on_carrier_removal_not_recovery():
+def test_the_reordering_class_is_scored_on_carrier_removal_not_recovery(bad_characters_run):
     """The reason matters, and this one was wrong twice.
 
     First reading: recovery needs UAX #9, out of scope. Second: the rendered
@@ -2190,7 +2205,7 @@ def test_the_reordering_class_is_scored_on_carrier_removal_not_recovery():
     #740 declined to build it. `deletions` stays scored because BS/DEL have no
     legitimate use and resolve with a cursor over cells, not a renderer (#937).
     """
-    suite = registry.by_name("bad-characters")
+    suite, out = bad_characters_run
     assert "reorderings" in suite.RECOVERY_OUT_OF_SCOPE
     assert "deletions" not in suite.RECOVERY_OUT_OF_SCOPE
 
@@ -2200,9 +2215,7 @@ def test_the_reordering_class_is_scored_on_carrier_removal_not_recovery():
         "the rendered form is the clean input in this corpus, not the deception"
     )
 
-    if not suite.available()[0]:
-        pytest.skip("the bad-characters release is not cached")
-    out = suite.run(subject=subjects.by_name("disarm"))
+    _, out = bad_characters_run
     assert out.measurement("reorderings_xmr").higher_is_better is None
     assert out.measurement("reorderings_carrier_removed").higher_is_better is True
     assert out.measurement("deletions_xmr").higher_is_better is True
@@ -2288,17 +2301,14 @@ def test_the_cursor_model_erases_cells_not_code_points():
     assert r("line1\rline2", cr=True) == "line2", "a classic Mac file"
 
 
-def test_the_deletion_ceiling_is_measured_not_assumed():
+def test_the_deletion_ceiling_is_measured_not_assumed(bad_characters_run):
     """0% reads differently beside a demonstrated 100% than beside nothing.
 
     `deletions_recoverable` is a census, never a score for a subject: it says
     what a renderer recovers, so the subject's XMR is read against a ceiling the
     harness can show rather than one it asserts.
     """
-    suite = registry.by_name("bad-characters")
-    if not suite.available()[0]:
-        pytest.skip("the bad-characters release is not cached")
-    out = suite.run(subject=subjects.by_name("disarm"))
+    suite, out = bad_characters_run
 
     ceiling = out.measurement("deletions_recoverable")
     actual = out.measurement("deletions_xmr")
@@ -2323,3 +2333,45 @@ def test_the_model_leaves_clean_text_alone():
     hot = [a for a, c in rows if suite._perturbed("deletions", a, c)]
     once = [damage.resolve_deletions(a) for a in hot]
     assert [damage.resolve_deletions(x) for x in once] == once
+
+
+def test_ascii_substitutions_are_held_out_of_the_recovery_denominator(bad_characters_run):
+    """`racist` perturbed to `racisi` is a spelling change, not an encoding one.
+
+    Boucher's homoglyph search finds whatever character fools the model, and at
+    higher perturbation budgets that includes ASCII. 26.5% of the perturbed
+    homoglyph rows carry such a swap, every one of them fails XMR, and every row
+    without one passes — so the class read 73.5% when the part a fold can reach
+    is 100%. Same fault as the ~800 unperturbed rows: the denominator held rows
+    the metric's name does not describe.
+    """
+    suite, out = bad_characters_run
+    assert suite._ascii_swapped("racisi", "racist")
+    assert not suite._ascii_swapped("rаcist", "racist"), "a Cyrillic а is in reach"
+    assert not suite._ascii_swapped("abc", None)
+    assert not suite._ascii_swapped("abcd", "abc"), "length change is not a swap"
+
+    _, out = bad_characters_run
+
+    held = out.measurement("homoglyphs_ascii_swapped")
+    xmr = out.measurement("homoglyphs_xmr")
+    pert = out.measurement("homoglyphs_perturbed")
+    assert held is not None and held.higher_is_better is None, "a census, not a score"
+    assert xmr.of == pert.value - held.value, (
+        "recovery must be scored over the rows a fold can reach"
+    )
+
+
+def test_only_the_homoglyph_class_carries_ascii_substitutions(bad_characters_run):
+    """The hold-out must not quietly shrink a class that has no such rows.
+
+    deletions, invisibles and reorderings carry none, so their denominators are
+    unchanged by it — which is what makes the homoglyph correction a correction
+    rather than a general discount.
+    """
+    suite, out = bad_characters_run
+    for cls in ("deletions", "invisibles", "reorderings"):
+        assert out.measurement(f"{cls}_ascii_swapped") is None, (
+            f"{cls} should carry no ASCII substitutions"
+        )
+        assert out.measurement(f"{cls}_xmr").of == out.measurement(f"{cls}_perturbed").value

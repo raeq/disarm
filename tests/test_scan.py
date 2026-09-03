@@ -136,6 +136,23 @@ class TestSymlinksAreNeverFollowed:
         _plant(root / "inside.txt")
         assert _scanned(root) == {"inside.txt"}
 
+    def test_a_root_that_is_itself_a_link_is_refused_and_reported(self, tmp_path: Path) -> None:
+        """`is_dir()` resolves links, so the first version followed a symlinked ROOT while
+        refusing symlinked entries — `disarm scan <link>` walked outside the tree
+        (caught in review on #944). Refused, and reported: silence looks like clean."""
+        outside = tmp_path / "outside"
+        _plant(outside / "leak.txt")
+        link = tmp_path / "link"
+        link.symlink_to(outside, target_is_directory=True)
+        result = scan_paths([link])
+        assert result.findings == [] and result.scanned == 0
+        assert any("symlink" in reason for _, reason in result.unreadable), result.unreadable
+        assert run([link], out=io.StringIO()) == EXIT_READ_ERROR
+        # ...and a link to a single file, the other half of the same hole.
+        file_link = tmp_path / "file_link.txt"
+        file_link.symlink_to(_plant(tmp_path / "real.txt"))
+        assert scan_paths([file_link]).findings == []
+
     def test_a_file_link(self, tmp_path: Path) -> None:
         """Would report a finding against a path whose content lives elsewhere."""
         target = _plant(tmp_path / "elsewhere.txt")
@@ -208,7 +225,14 @@ class TestTheExitCodeContract:
             run([tmp_path, tmp_path / "gone.txt"], fail=True, out=io.StringIO()) == EXIT_READ_ERROR
         )
 
-    @pytest.mark.skipif(os.geteuid() == 0, reason="root can read anything")
+    # `hasattr` first: `os.geteuid` does not exist on Windows, and a `skipif` expression
+    # runs at import — so the bare call raised before any test could be skipped (caught
+    # in review on #944). On Windows the test is skipped, which is right: `chmod 000`
+    # does not lock a directory there either.
+    @pytest.mark.skipif(
+        not hasattr(os, "geteuid") or os.geteuid() == 0,
+        reason="needs POSIX permissions, and root can read anything",
+    )
     def test_an_unlistable_subdirectory_is_three_not_silence(self, tmp_path: Path) -> None:
         """`os.walk` swallows a directory it cannot list unless told otherwise, so the
         first version scanned around it and reported clean. Silence looks like clean."""

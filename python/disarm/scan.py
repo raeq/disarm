@@ -153,6 +153,15 @@ def iter_files(
     content lives somewhere else.
     """
     for root in roots:
+        if root.is_symlink():
+            # `is_file()` and `is_dir()` resolve links, so without this a root that is
+            # itself a symlink was followed — `disarm scan <link>` walked whatever it
+            # pointed at, outside the tree the contract promises to stay in (caught in
+            # review on #944). Reported rather than skipped: a root the scanner refused
+            # must not look like a root that scanned clean.
+            if on_error is not None:
+                on_error(OSError(0, "is a symlink; not followed", str(root)))
+            continue
         if root.is_file():
             yield root
             continue

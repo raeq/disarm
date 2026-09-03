@@ -676,6 +676,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **`docs/security/derived-identifiers.md`: the map for derived deterministic identifiers (#731).** Idempotency keys, cache keys, dedup-on-insert and canonical-request signing all normalize, hash and keep the digest, and the caller never sees two values side by side — so under-normalizing (a retry runs twice) and over-normalizing (a real second request is suppressed) are both silent. No key builder is clean for it: `search_key` and `catalog_key` merge every distinct value in the matrix, `canonicalize` is closest and its three failures all change the value of a number, and `skeleton_key` is a spoof key by design. The page carries a variance-class × key matrix that `tests/test_derived_identifiers.py` renders from its registry and fails on when the page drifts, and a recipe: split the key by field, put code-like fields on `fold_case` or nothing and screen them with `has_anomalies`, and use `is_canonical` as the write-time check (#730). Measuring it found #949: `digit_policy="preserve"` is a no-op on six of the seven builders.
+
 - **`strip_bidi` keeps the *logical* order, and now says so (#740).** It is a pure
   filter: the UAX #9 controls are deleted and the code-point order is untouched, so every
   preset, profile and key builder returns the byte order rather than the order a reader

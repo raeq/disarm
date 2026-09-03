@@ -61,6 +61,7 @@ EXECUTED_RECIPES = [
     "migration/unidecode-recipes.md",
     "security/adversarial-defense.md",
     "security/cve-validation.md",
+    "security/derived-identifiers.md",
     "user-guide/abjad-transliteration.md",
     "user-guide/confusables.md",
     "user-guide/filenames.md",

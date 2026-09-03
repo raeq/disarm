@@ -102,7 +102,12 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
     for cell in line {
         out.push_str(&cell);
     }
-    true
+    // `true` means CHANGED, not "the scan ran". Under `cr` the pre-check fires on any
+    // `CR`, including the `CRLF` and end-of-text ones this deliberately passes through, so
+    // the answer is not known until the output exists (caught in review on #941).
+    // Comparing here rather than pre-testing which `CR`s overwrite keeps one copy of that
+    // rule — the loop's — instead of a second that can drift from it.
+    out != text
 }
 
 #[cfg(test)]
@@ -191,6 +196,34 @@ mod tests {
     fn erasing_past_the_start_of_a_line_stops_there() {
         assert_eq!(resolve("\u{8}\u{8}abc", false), "abc");
         assert_eq!(resolve("a\u{8}\u{8}\u{8}b", false), "b");
+    }
+
+    /// `true` means changed, and a `CR` this step passes through is not a change.
+    ///
+    /// Caught in review on #941: the pre-check fires on any `CR` under `cr`, so a
+    /// `CRLF`-only string entered the scan, was rebuilt byte-identically, and was reported
+    /// as changed — an allocation the caller did not need, and a contract the docstring
+    /// did not keep.
+    #[test]
+    fn a_cr_that_passes_through_is_not_a_change() {
+        let mut out = String::new();
+        for s in [
+            "line1\r\nline2",
+            "trailing\r",
+            "a\r\nb\r\nc",
+            "no cr at all",
+        ] {
+            assert!(
+                !resolve_deletions_into(s, true, &mut out),
+                "{s:?} under cr=true"
+            );
+            assert!(
+                !resolve_deletions_into(s, false, &mut out),
+                "{s:?} under cr=false"
+            );
+        }
+        // ...while a CR that really overwrites still reports true.
+        assert!(resolve_deletions_into("abc\rxy", true, &mut out));
     }
 
     /// The borrow signal must be exact.

@@ -1701,26 +1701,27 @@ def test_the_composed_pipelines_are_actually_different():
     assert subjects.ComposedReviewDisplay.STEPS.get("fold_case") is False
 
 
-def test_the_prompt_hygiene_composition_records_the_tag_block_gap():
-    """#914: `demojize` is the only composable step that strips Plane 14 tags.
+def test_the_prompt_hygiene_composition_strips_the_tag_block_without_glossing():
+    """#914 landed, so the trade-off this pipeline used to record is gone.
 
-    The prompt-hygiene pipeline leaves `demojize` off because #910 asks for it,
-    and thereby cannot remove the TAG block at all. Pinned so the trade-off is
-    not quietly reversed to improve a score — the gap is what the run is
-    reporting.
+    It previously declared `demojize=False` per #910 and thereby lost Plane 14
+    TAG stripping, because `demojize` was the only composable step that removed
+    it. #924 shipped `strip_plane14`, #921 unified the emoji-naming policy and
+    #926 stopped the guardrail glossing, so the pipeline now gets both. Pinned
+    in the new direction: a regression to either half must fail here.
     """
     import disarm
 
     steps = subjects.ComposedPromptHygiene.STEPS
     assert steps.get("demojize") is False
-    assert steps.get("transliterate") is not True
+    assert steps.get("strip_plane14") is True, "declare it, never inherit the default"
 
+    pipe = disarm.TextPipeline(**steps)
     tag = "".join(chr(0xE0000 + (ord(c) & 0x7F)) for c in "payload")
-    out = disarm.TextPipeline(**steps)(f"visible label{tag}")
-    assert any(0xE0000 <= ord(c) <= 0xE007F for c in out), (
-        "if this passes the TAG block is being stripped, so #914 is fixed — "
-        "revisit this pipeline and #910 together"
-    )
+    out = pipe(f"visible label{tag}")
+    assert not any(0xE0000 <= ord(c) <= 0xE007F for c in out), "TAG block must be gone"
+    assert "label" in out, "and the text a reviewer reads must survive"
+    assert "bomb" not in pipe("kill\U0001f4a3ing"), "no attacker-chosen words in the prompt"
 
 
 def test_every_multi_subject_benchmark_declares_the_job_it_represents():

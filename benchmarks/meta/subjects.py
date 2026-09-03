@@ -450,11 +450,14 @@ class ComposedPromptHygiene(_ComposedBase):
     #: transliteration. `demojize` is off — that is the change #910 proposes,
     #: because glossing hands an attacker words in the prompt.
     #:
-    #: Left off deliberately even though it costs this pipeline the whole of
-    #: `mcp-tag-block-concealment`. Per #914, `demojize` is the only composable
-    #: step that removes the Plane 14 TAG block, so #910's flip silently trades a
-    #: text-injection primitive for a concealment channel. Turning it back on
-    #: here would hide that from the report — which is the finding.
+    #: Off, and no longer at a cost. When this pipeline was written `demojize`
+    #: was the only composable step that removed the Plane 14 TAG block, so
+    #: turning it off traded a text-injection primitive for a concealment
+    #: channel and the composition scored 0 on `mcp-tag-block-concealment`.
+    #: #914 separated them (#924 shipped `strip_plane14`, #921 gave every
+    #: pipeline one emoji-naming policy, #926 stopped the guardrail glossing),
+    #: so the pipeline now declares `strip_plane14` and gets both: the carrier
+    #: removed and no attacker-chosen words written into the prompt.
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFKC",
         "strip_zalgo": 0,
@@ -462,6 +465,11 @@ class ComposedPromptHygiene(_ComposedBase):
         "strip_zero_width": True,
         "strip_control": True,
         "strip_pua": True,
+        # Reachable only since #914/#924. Declared rather than defaulted for
+        # the reason #911 taught: `strip_plane14` defaults False, and leaving
+        # it implicit is how a composed pipeline silently loses a capability
+        # the profiles have.
+        "strip_plane14": True,
         "confusables": True,
         "strip_accents": True,
         "fold_case": True,
@@ -485,6 +493,11 @@ class ComposedRetrievalKey(_ComposedBase):
         "strip_zero_width": True,
         "strip_control": True,
         "strip_pua": True,
+        # Reachable only since #914/#924. Declared rather than defaulted for
+        # the reason #911 taught: `strip_plane14` defaults False, and leaving
+        # it implicit is how a composed pipeline silently loses a capability
+        # the profiles have.
+        "strip_plane14": True,
         "confusables": True,
         "strip_accents": True,
         "fold_case": True,
@@ -508,6 +521,11 @@ class ComposedReviewDisplay(_ComposedBase):
         "strip_zero_width": True,
         "strip_control": True,
         "strip_pua": True,
+        # Reachable only since #914/#924. Declared rather than defaulted for
+        # the reason #911 taught: `strip_plane14` defaults False, and leaving
+        # it implicit is how a composed pipeline silently loses a capability
+        # the profiles have.
+        "strip_plane14": True,
         "confusables": False,
         "strip_accents": False,
         "fold_case": False,

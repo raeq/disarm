@@ -83,7 +83,7 @@ pub fn _strip_format(text: &str) -> String {
 ///
 /// **Keeps the logical order.** This is a pure filter: the controls are deleted and the
 /// code-point order is untouched, so the result is the order the bytes are in, not the
-/// order a reader saw. `"\u202epaypal"[::-1]` wrapped in RLO/PDF renders as `paypal` and
+/// order a reader saw. `"\u202e" + "paypal"[::-1] + "\u202c"` renders as `paypal` and
 /// comes back as `lapyap`.
 ///
 /// That is correct for a compiler, a filesystem or an identifier comparison, which all

@@ -427,6 +427,24 @@ def test_the_existing_bidi_generator_tests_the_other_direction() -> None:
         assert canonicalize(reordered(word)) != word, "display order is not recovered"
 
 
+def test_the_docstring_expression_is_true() -> None:
+    """The `strip_bidi` docstring states a worked example; evaluate it.
+
+    Raised in review on #936: the first version of that line reversed the RLO *into* the
+    string and then said it was wrapped in one, which is not reproducible. A prose claim
+    about what a function returns is a claim like any other, so it is asserted rather than
+    proof-read — this fails if the docstring drifts from the behaviour, in either
+    direction.
+    """
+    doc = disarm.strip_bidi.__doc__ or ""
+    expression = '"\\u202e" + "paypal"[::-1] + "\\u202c"'
+    assert expression in doc, "the docstring no longer states the example it is gated on"
+
+    attack = "\u202e" + "paypal"[::-1] + "\u202c"
+    assert render_rlo(attack) == "paypal", "the 'renders as paypal' half"
+    assert canonicalize(attack) == "lapyap", "the 'comes back as lapyap' half"
+
+
 def test_the_two_directions_disagree_which_is_the_whole_point() -> None:
     """`strip_bidi` keeps code-point order, so it serves exactly one consumer."""
     trojan_source = "invoice" + RLO + "gpj.exe"

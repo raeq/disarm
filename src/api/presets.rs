@@ -165,7 +165,7 @@ pub fn display_clean(text: &str) -> Cow<'_, str> {
 ///
 /// **Keeps the logical order.** A pure filter: the controls are deleted, the code-point
 /// order is untouched. The result is the order the bytes are in, not the order a reader
-/// saw — an `RLO`-wrapped reversal that renders as `paypal` comes back as `lapyap`.
+/// saw — `RLO + "paypal".reverse() + PDF` renders as `paypal` and comes back as `lapyap`.
 ///
 /// Correct for a compiler, a filesystem or an identifier comparison, which read logical
 /// order (the Trojan Source direction, CVE-2021-42574). Wrong for a search index, an NLP

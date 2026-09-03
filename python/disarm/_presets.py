@@ -524,6 +524,19 @@ def strip_bidi(text: str) -> str:
     LRM/RLM (U+200E/F), bidi embeddings/overrides (U+202A–U+202E),
     bidi isolates (U+2066–U+2069).
 
+    **Keeps the logical order.** This is a pure filter: the controls are deleted
+    and the code-point order is untouched, so the result is the order the bytes
+    are in, not the order a reader saw.
+    ``"\\u202e" + "paypal"[::-1] + "\\u202c"`` renders as ``paypal`` and comes
+    back as ``lapyap``.
+
+    That is correct for a compiler, a filesystem or an identifier comparison,
+    which all read logical order — the Trojan Source direction
+    (CVE-2021-42574). It is the wrong answer for a search index, an NLP model or
+    content moderation, which want what was displayed. disarm has no surface
+    that returns display order; see "Stripping preserves logical order, not
+    display order" in the limitations page (#740).
+
     Args:
         text: Input string.
 

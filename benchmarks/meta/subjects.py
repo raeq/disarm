@@ -477,7 +477,10 @@ class ComposedPromptHygiene(_ComposedBase):
     #: removed and no attacker-chosen words written into the prompt.
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFKC",
-        "strip_zalgo": 0,
+        # `None` is off. `0` is a cap of zero combining marks, which strips every
+        # diacritic (#958) — redundant beside `strip_accents` here, and wrong in
+        # the review pipeline below, so it is declared as off in all three.
+        "strip_zalgo": None,
         "strip_bidi": True,
         "strip_zero_width": True,
         "strip_control": True,
@@ -505,7 +508,10 @@ class ComposedRetrievalKey(_ComposedBase):
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFKC",
         "transliterate": True,
-        "strip_zalgo": 0,
+        # `None` is off. `0` is a cap of zero combining marks, which strips every
+        # diacritic (#958) — redundant beside `strip_accents` here, and wrong in
+        # the review pipeline below, so it is declared as off in all three.
+        "strip_zalgo": None,
         "strip_bidi": True,
         "strip_zero_width": True,
         "strip_control": True,
@@ -531,9 +537,12 @@ class ComposedReviewDisplay(_ComposedBase):
     #: Removes what a reviewer cannot see and would therefore not be reviewing;
     #: changes nothing they can. No case fold, no confusable fold, no whitespace
     #: collapse — all three alter text the reviewer is being asked to approve.
+    #: No combining-mark cap either: this passed `strip_zalgo=0` as if `0` were
+    #: off, and `0` caps the marks at zero, so `Čeština` reached the reviewer as
+    #: `Cestina` (#958). Off is `None`.
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFC",
-        "strip_zalgo": 0,
+        "strip_zalgo": None,
         "strip_bidi": True,
         "strip_zero_width": True,
         "strip_control": True,

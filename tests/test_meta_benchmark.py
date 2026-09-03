@@ -1708,6 +1708,51 @@ def test_the_composed_pipelines_are_actually_different():
     assert subjects.ComposedReviewDisplay.STEPS.get("fold_case") is False
 
 
+DIACRITICS = "Čeština, naïve café"
+
+
+def test_a_composition_loses_diacritics_only_where_it_declares_strip_accents():
+    """`strip_zalgo=0` is not off: it caps combining marks at zero (#958).
+
+    disarm documents the cap as `strip_zalgo("café", max_marks=0) == "cafe"`, and
+    off is `None`. All three compositions passed `0`, so the review pipeline —
+    declared to change nothing a reader can see — turned `Čeština` into `Cestina`
+    and altered 88 of 100 JailbreakBench prompts. Run each over a diacritic
+    string: accents may go only where `strip_accents` is declared.
+    """
+    for cls in (
+        subjects.ComposedPromptHygiene,
+        subjects.ComposedRetrievalKey,
+        subjects.ComposedReviewDisplay,
+    ):
+        composed = cls()
+        ready, why = composed.available()
+        assert ready, why
+        out = composed.role(subjects.Role.SANITIZER)["composed"](DIACRITICS)
+        if cls.STEPS.get("strip_accents"):
+            assert out == "cestina, naive cafe", (cls.__name__, out)
+        else:
+            assert out == DIACRITICS, (cls.__name__, out)
+
+
+def test_no_composition_passes_a_zero_cap_where_none_means_off():
+    """The structural half of the check above.
+
+    A `0` in a row of `False`s reads as off, and on `strip_zalgo` it is the
+    strongest setting there is. Declare the step off by its own off value.
+    """
+    for cls in (
+        subjects.ComposedPromptHygiene,
+        subjects.ComposedRetrievalKey,
+        subjects.ComposedReviewDisplay,
+    ):
+        assert "strip_zalgo" in cls.STEPS, f"{cls.__name__}: declare strip_zalgo, do not inherit it"
+        assert cls.STEPS["strip_zalgo"] is None, (
+            f"{cls.__name__}: strip_zalgo={cls.STEPS['strip_zalgo']!r} strips every "
+            "combining mark; off is None"
+        )
+
+
 def test_the_prompt_hygiene_composition_strips_the_tag_block_without_glossing():
     """#914 landed, so the trade-off this pipeline used to record is gone.
 

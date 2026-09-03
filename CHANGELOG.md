@@ -648,6 +648,15 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The meta-benchmark's three composed subjects no longer strip every diacritic (#958).**
+  Each passed `strip_zalgo=0` to `TextPipeline`, reading `0` as off; in disarm `0` is a cap
+  of zero combining marks and off is `None`. The `review-display` composition, declared to
+  change nothing a reader can see, turned `Čeština` into `Cestina` and altered 88 of 100
+  JailbreakBench prompts. All three now pass `None`; a test runs each over
+  `Čeština, naïve café` and lets accents go only where `strip_accents` is declared, and a
+  second refuses a `0` cap in any composition. The committed baseline never held composed
+  rows, so there was nothing to re-record.
+
 - **`digit_policy="preserve"` now holds on `canonicalize`, `canonicalize_strict` and
   `strip_obfuscation` (#949).** The pre-pass kept the numeral and the preset's own fold then
   folded it under the default, so the documented setting did nothing on six of the seven

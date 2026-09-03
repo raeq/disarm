@@ -19,7 +19,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, TextIO
 
 from disarm import inspect_anomalies
@@ -112,7 +112,9 @@ def fingerprint_for(path: str, kind: str, detail: str, occurrence: int) -> str:
     That is the trade for surviving ordinary edits, taken from `juriku/untrace`.
 
     `path` is the path as scanned, so a baseline written from the repository root has to
-    be applied from the repository root.
+    be applied from the repository root. It is POSIX-separated on every host — see
+    `_portable` — so a baseline written on Windows applies on Linux, and the SARIF `uri`
+    carries the same form.
     """
     ident = f"{path}\0{kind}\0{detail}\0{occurrence}".encode("utf-8", "surrogatepass")
     return hashlib.sha256(ident).hexdigest()[:24]
@@ -124,12 +126,26 @@ BASELINE_VERSION = 1
 
 
 def load_baseline(path: Path) -> set[str]:
-    """The fingerprints a baseline file accepts. Refuses a version it does not know."""
-    doc = json.loads(path.read_text(encoding="utf-8"))
+    """The fingerprints a baseline file accepts.
+
+    Refuses, by name, a version it does not know and a shape it does not expect. Every
+    refusal is a `ValueError`, which the CLI reports as an error and exit 1: a baseline
+    that cannot be used must not read as "nothing was found", and must not be a
+    traceback either.
+    """
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: not a baseline file: {exc}") from exc
+    if not isinstance(doc, dict):
+        raise ValueError(f"{path}: not a baseline file: expected an object")
     if doc.get("version") != BASELINE_VERSION:
         msg = f"{path}: baseline version {doc.get('version')!r}, expected {BASELINE_VERSION}"
         raise ValueError(msg)
-    return set(doc.get("fingerprints", []))
+    fps = doc.get("fingerprints", [])
+    if not isinstance(fps, list) or not all(isinstance(f, str) for f in fps):
+        raise ValueError(f"{path}: baseline fingerprints must be a list of strings")
+    return set(fps)
 
 
 def write_baseline(path: Path, findings: Iterable[ScanFinding]) -> int:
@@ -260,6 +276,16 @@ def _relative_to(path: Path, root: Path) -> Path:
         return path
 
 
+def _portable(path: PurePath) -> str:
+    """The path as a finding, a fingerprint and a SARIF `uri` carry it: POSIX-separated.
+
+    `str(path)` on Windows carries backslashes, which would make every fingerprint — and so
+    every baseline — platform-dependent. `as_posix` converts the separator on Windows and
+    is the identity on POSIX, where a backslash is an ordinary filename character.
+    """
+    return path.as_posix()
+
+
 def scan_paths(
     roots: Iterable[Path],
     *,
@@ -281,7 +307,7 @@ def scan_paths(
         try:
             raw = path.read_bytes()
         except OSError as exc:
-            unreadable.append((str(path), exc.strerror or str(exc)))
+            unreadable.append((_portable(path), exc.strerror or str(exc)))
             continue
         if len(raw) > max_bytes or b"\x00" in raw:
             continue  # too large to hold, or binary — neither is an error
@@ -301,7 +327,7 @@ def scan_paths(
             seen[key] = occurrence + 1
             findings.append(
                 ScanFinding(
-                    path=str(path),
+                    path=_portable(path),
                     line=line,
                     column=column,
                     kind=finding.kind,
@@ -309,7 +335,7 @@ def scan_paths(
                     token=finding.token,
                     detail=finding.detail,
                     fingerprint=fingerprint_for(
-                        str(path), finding.kind, finding.detail, occurrence
+                        _portable(path), finding.kind, finding.detail, occurrence
                     ),
                 )
             )

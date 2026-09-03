@@ -540,6 +540,16 @@ class TestScan:
         r = run_cli("scan", "--baseline", str(tmp_path / "nope.json"), str(tmp_path))
         assert r.returncode == 3 and "nope.json" in r.stderr and "Traceback" not in r.stderr
 
+    def test_a_malformed_baseline_is_refused_not_a_traceback(self, tmp_path):
+        # Copilot on #947: `fingerprints` that is not a list of strings raised TypeError
+        # through the CLI. It is refused by name, the way a wrong version is.
+        bl = tmp_path / "bl.json"
+        bl.write_text('{"version": 1, "fingerprints": "abc"}', encoding="utf-8")
+        r = run_cli("scan", "--baseline", str(bl), str(tmp_path))
+        assert r.returncode == 1
+        assert "Traceback" not in r.stderr
+        assert "list of strings" in r.stderr
+
     def test_a_baseline_of_the_wrong_version_is_refused(self, tmp_path):
         bl = tmp_path / "bl.json"
         bl.write_text('{"version": 99, "fingerprints": []}')

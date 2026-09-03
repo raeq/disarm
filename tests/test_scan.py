@@ -18,7 +18,7 @@ import json
 import os
 import re
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
@@ -30,6 +30,7 @@ from disarm.scan import (
     EXIT_READ_ERROR,
     MAX_FILE_BYTES,
     SARIF_LEVELS,
+    _portable,
     fingerprint_for,
     iter_files,
     load_baseline,
@@ -341,6 +342,25 @@ class TestFingerprints:
         fps = {x.fingerprint for x in scan_paths([tmp_path]).findings}
         assert len(fps) == 2
 
+    def test_the_path_is_posix_separated_on_every_host(self) -> None:
+        # Copilot on #947: `str(path)` on Windows carries backslashes, so the same tree
+        # scanned on two hosts produced two baselines. One form everywhere.
+        assert _portable(PureWindowsPath(r"src\auth.py")) == "src/auth.py"
+        assert _portable(PurePosixPath("src/auth.py")) == "src/auth.py"
+        # On POSIX a backslash is a filename character, and it stays one.
+        assert _portable(PurePosixPath("odd\\name.py")) == "odd\\name.py"
+
+    def test_a_windows_scan_and_a_posix_scan_share_a_fingerprint(self) -> None:
+        win = fingerprint_for(_portable(PureWindowsPath(r"src\auth.py")), "bidi", "U+202E", 0)
+        posix = fingerprint_for(_portable(PurePosixPath("src/auth.py")), "bidi", "U+202E", 0)
+        assert win == posix
+
+    def test_scanned_findings_carry_the_portable_form(self, tmp_path: Path) -> None:
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "a.txt").write_text("x\u202ey", encoding="utf-8")
+        result = scan_paths([tmp_path], use_gitignore=False)
+        assert [f.path for f in result.findings] == [(tmp_path / "sub" / "a.txt").as_posix()]
+
 
 class TestBaseline:
     def _tree(self, tmp_path: Path) -> Path:
@@ -409,6 +429,39 @@ class TestBaseline:
         bl = tmp_path / "bl.json"
         run([root], write_baseline_to=bl, out=io.StringIO())
         assert run([root, root / "gone"], baseline=bl, out=io.StringIO()) == EXIT_READ_ERROR
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            '{"version": 1, "fingerprints": "abc"}',
+            '{"version": 1, "fingerprints": [1, 2]}',
+            '{"version": 1, "fingerprints": {"a": 1}}',
+        ],
+    )
+    def test_a_malformed_fingerprint_list_is_refused_by_name(
+        self, tmp_path: Path, body: str
+    ) -> None:
+        # Copilot on #947: these raised TypeError — a traceback through the CLI — where
+        # a wrong version was refused cleanly. Same refusal, same type.
+        bl = tmp_path / "bl.json"
+        bl.write_text(body, encoding="utf-8")
+        with pytest.raises(ValueError, match="list of strings"):
+            load_baseline(bl)
+
+    @pytest.mark.parametrize("body", ["[]", "42", "{not json"])
+    def test_a_document_that_is_not_a_baseline_is_refused_by_name(
+        self, tmp_path: Path, body: str
+    ) -> None:
+        bl = tmp_path / "bl.json"
+        bl.write_text(body, encoding="utf-8")
+        with pytest.raises(ValueError, match="not a baseline file"):
+            load_baseline(bl)
+
+    def test_a_missing_fingerprint_list_is_an_empty_baseline(self, tmp_path: Path) -> None:
+        # Both halves: the check refuses the wrong shape and still accepts the absent one.
+        bl = tmp_path / "bl.json"
+        bl.write_text('{"version": 1}', encoding="utf-8")
+        assert load_baseline(bl) == set()
 
 
 class TestSarif:

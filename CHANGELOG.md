@@ -767,6 +767,21 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **`confusable-bench.v1` scored beside the adversarial corpus, and the identifier-validation
+  recipe it produces (#736).** 140 labelled identifier rows (120 malicious, 20 benign controls),
+  checked in verbatim and pinned by checksum, scored across nine policies with the table on
+  `docs/security/adversarial-corpora.md` parsed and re-derived by `tests/test_confusable_bench.py`.
+  Measured on this tree, not carried from the issue's 0.14.1 numbers: precision is 1.000 under
+  every policy, `nearest_match` at one edit reaches 0.942 recall on its own, and
+  `nearest_match` with `is_confusable` reaches every malicious row — the seven the edit distance
+  misses are two-substitution chains, which the fold catches. The two ASCII rows the issue pinned
+  as the residual misses (`paypaI`, `paypa-l`) stay no-ops for every Unicode transform, asserted
+  both ways, and are reported by the edit-distance surface at distance 1. The recipe is on the
+  CVE page beside *If you only make one call*, and names the non-obvious half: the protected
+  list is `inspect_anomalies`'s lexicon. The corpus's 31 NFKC/TR39-divergence rows are
+  cross-referenced from the prototype-policy decision they answer. Whether the composition
+  deserves an entry point of its own stays #736's open question.
+
 - **`docs/security/derived-identifiers.md`: the map for derived deterministic identifiers (#731).** Idempotency keys, cache keys, dedup-on-insert and canonical-request signing all normalize, hash and keep the digest, and the caller never sees two values side by side — so under-normalizing (a retry runs twice) and over-normalizing (a real second request is suppressed) are both silent. No key builder is clean for it: `search_key` and `catalog_key` merge every distinct value in the matrix, `canonicalize` is closest and its three failures all change the value of a number, and `skeleton_key` is a spoof key by design. The page carries a variance-class × key matrix that `tests/test_derived_identifiers.py` renders from its registry and fails on when the page drifts, and a recipe: split the key by field, put code-like fields on `fold_case` or nothing and screen them with `has_anomalies`, and use `is_canonical` as the write-time check (#730). Measuring it found #949: `digit_policy="preserve"` is a no-op on six of the seven builders.
 
 - **`strip_bidi` keeps the *logical* order, and now says so (#740).** It is a pure

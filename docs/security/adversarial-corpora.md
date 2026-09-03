@@ -97,10 +97,66 @@ The three that *are* neutralized — `fragmentation`, `spacing injection`,
 `whitespace steganography` — are neutralized because they inject whitespace or invisible
 characters, not because the structural manipulation was understood.
 
+## A second corpus: `confusable-bench.v1`
+
+The first corpus perturbs a *prompt*. This one measures a single **identifier** against
+the name it impersonates — the surface the first cannot reach — and its `protect` column
+asks the set-shaped question `find_key_collisions` and `nearest_match` are built for, so
+the predicate surfaces and the key builders are scored on the same rows (#736).
+
+Paul Wood FRSA (@paultendo), `namespace-guard`, `docs/data/confusable-bench.v1.json`, MIT,
+published with the *Unicode identifier threat model* post: 140 labelled identifier rows —
+120 malicious in three threat classes (54 evasion, 35 impersonation, 31 composability) and
+20 benign controls (14 ASCII, 4 precomposed, 2 legitimately combining). Checked in verbatim
+under `tests/fixtures/confusable_bench/`, pinned by checksum.
+
+**Measured on this tree, not carried from the issue.** The issue measured 0.14.1, where the
+best single call reached 0.550 recall and three surfaces composed reached 0.983 with two
+residual misses. Since then the detector grew, `skeleton_key` (#650) and `nearest_match`
+(#894) landed, and the picture is different: precision is 1.000 under every policy — no
+policy flags a control — and two calls reach every malicious row.
+
+| policy | true positives | false negatives | recall |
+|---|---|---|---|
+| `has_anomalies(text)` | 91 | 29 | 0.758 |
+| `inspect_anomalies(text, lexicon=protect)` | 101 | 19 | 0.842 |
+| `is_confusable(text)` | 66 | 54 | 0.550 |
+| `is_mixed_script(text)` | 15 | 105 | 0.125 |
+| `catalog_key` collision | 58 | 62 | 0.483 |
+| `canonicalize_strict` collision | 50 | 70 | 0.417 |
+| `skeleton_key` collision | 80 | 40 | 0.667 |
+| `skeleton_key(digit_policy="tr39")` collision | 98 | 22 | 0.817 |
+| `nearest_match(max_distance=1)` | 113 | 7 | 0.942 |
+| `nearest_match` **or** `is_confusable` | 120 | 0 | 1.000 |
+
+A *collision* row means the identifier and one of its protected names reduce to the same
+key. Measured by `tests/test_confusable_bench.py`, which is also what checks this table.
+
+**Two calls, and why it is two.** `nearest_match` at one edit reaches 113 of 120 on its
+own, and the seven it misses are all `confusable-chain` rows — two substitutions in one
+name (`þɑypal`, `ƍıthub`), two edits by construction — which `is_confusable` catches every
+one of. The two are complementary because they measure different things: an edit distance
+sees the ASCII-substitution class (`paypa1`, `adm1n`) that no confusable table should fold,
+and the fold sees the Unicode class that no edit distance should chase. The recipe is on
+[the CVE page](cve-validation.md#validating-a-submitted-identifier-against-protected-names).
+
+**The ASCII boundary, restated.** The issue pinned `paypaI` (capital I for l) and `paypa-l`
+(hyphen insertion) as the two rows nothing catches: pure ASCII, where every Unicode
+transform is a documented no-op. That half is still true and still asserted —
+`canonicalize` returns both unchanged and `is_confusable` says no. What changed is that an
+edit-distance surface, which is not a Unicode transform, now reports both at distance 1.
+THREAT_MODEL.md's boundary holds; the library simply has a second kind of instrument.
+
+**The 31 composability rows** are the NFKC/TR39 divergence set — `ſ` (TR39 `f`, NFKC `s`),
+`ℐ` (TR39 `l`, NFKC `i`) — and the corpus's direct answer to the question
+[prototype-policy](../architecture/prototype-policy.md) §1 left open: `is_confusable`
+catches all 31, and `has_anomalies` catches 28 through the `compat_fold` kind, which did not
+exist when the issue was measured.
+
 ## Reproducing
 
 ```bash
-pytest tests/test_adversarial_corpora.py
+pytest tests/test_adversarial_corpora.py tests/test_confusable_bench.py
 ```
 
 The vectors are in that file. The table above is parsed out of this page and compared

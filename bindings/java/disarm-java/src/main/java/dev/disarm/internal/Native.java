@@ -82,19 +82,27 @@ public final class Native {
     public static native boolean isZalgo(String text, long threshold);
 
     // ── Deobfuscation & security presets ───────────────────────────────────────
-    public static native String stripObfuscation(String text);
+    public static native String stripObfuscation(String text, String digitPolicy);
 
-    public static native String canonicalize(String text);
+    public static native String canonicalize(String text, String digitPolicy);
 
-    public static native String canonicalizeStrict(String text);
+    public static native String canonicalizeStrict(String text, String digitPolicy);
 
     public static native String stripFormat(String text);
 
-    public static native String searchKey(String text, String lang);
+    public static native String searchKey(String text, String lang, String digitPolicy);
 
-    public static native String sortKey(String text, String lang);
+    public static native String sortKey(String text, String lang, String digitPolicy);
 
-    public static native String catalogKey(String text, String lang, boolean strictIso9);
+    public static native String catalogKey(
+            String text, String lang, boolean strictIso9, String digitPolicy);
+
+    public static native String skeletonKey(String text, String digitPolicy);
+
+    public static native long editDistance(String a, String b);
+
+    public static native java.util.List<dev.disarm.NearestMatch> nearestMatch(
+            String value, String[] candidates, long maxDistance);
 
     public static native String sanitizeFilename(
             String text,
@@ -164,6 +172,8 @@ public final class Native {
 
     // ── Reusable handles (opaque jlong pointers) ───────────────────────────────
     public static native long pipelineNew(String profile);
+
+    public static native long pipelineWithDigitPolicy(long handle, String digitPolicy);
 
     public static native String pipelineProcess(long handle, String text);
 

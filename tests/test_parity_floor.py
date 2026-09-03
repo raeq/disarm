@@ -65,6 +65,11 @@ FLOOR = frozenset(
         "sanitize_filename",
         "script_info",
         "search_key",
+        # #894/#896: added complete on all seven in the same change, so they join the
+        # floor with it rather than waiting for a later one to notice they drifted.
+        "skeleton_key",
+        "edit_distance",
+        "nearest_match",
         "sort_key",
         "strip_accents",
         "strip_bidi",

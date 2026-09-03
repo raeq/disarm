@@ -199,7 +199,7 @@ Disarm.sort_key("café")                            # => "café"
 Disarm.sort_key("Éclair")                          # => "éclair"
 ```
 
-### `Disarm.catalog_key(text, lang: nil, strict_iso9: false)`
+### `Disarm.catalog_key(text, lang: nil, strict_iso9: false, digit_policy: :numeric)`
 
 Library-catalog deduplication key — `search_key` plus confusable folding.
 `strict_iso9:` selects the ISO 9:1995 Cyrillic scheme for transliteration.
@@ -209,9 +209,50 @@ Disarm.catalog_key("Толстой")                      # => "tolstoy"
 Disarm.catalog_key("Толстой", strict_iso9: true)   # => "tolstoj"
 ```
 
+### `digit_policy:` on the key builders
+
+`canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `search_key`, `sort_key` and
+`catalog_key` all take `digit_policy:` (#896): `:numeric` (the default, byte-identical to
+leaving it out), `:tr39` (a confusable digit is read as the letter it resembles, on the raw
+text before the key is built) or `:preserve` (a non-Latin numeral keeps its script — on the
+three builders that own a fold; the transliterating three romanize it anyway).
+
+```ruby
+Disarm.canonicalize("g\u0A66ogle")                        # => "g0ogle"  (GURMUKHI ZERO as a digit)
+Disarm.canonicalize("g\u0A66ogle", digit_policy: :tr39)   # => "google"
+Disarm.canonicalize("amount-\u0661", digit_policy: :preserve)  # => "amount-١"
+```
+
+### `Disarm.skeleton_key(text, digit_policy: :numeric)`
+
+The TR39 identifier skeleton plus the two prototype classes disarm's table keeps apart
+(#650). A **spoof key**: its only job is to make confusable identifiers collide, and its
+output is never for display. `:numeric` applies the letter half (`I ≡ l`); `:tr39` adds
+the digit half (`1 ≡ l`, `0 ≡ O`), which is what an identifier skeleton wants and what a
+deduplication key must not have.
+
+```ruby
+Disarm.skeleton_key("paypaI") == Disarm.skeleton_key("paypal")                          # => true
+Disarm.skeleton_key("SKU-1O0", digit_policy: :tr39) == Disarm.skeleton_key("SKU-100", digit_policy: :tr39)  # => true
+```
+
+### `Disarm.edit_distance(a, b)` · `Disarm.nearest_match(value, candidates, max_distance: 1)`
+
+The ASCII-substitution class the confusable tables deliberately do not model — `paypa1`,
+`adm1n` — measured in characters (#894). `nearest_match` reports the closest candidate as
+`{ value:, distance: }`, or `nil` beyond `max_distance:`; an exact match comes back with
+distance 0, and ties go to the first candidate at the lowest distance. It reports; you
+apply the policy.
+
+```ruby
+Disarm.edit_distance("paypa1", "paypal")                     # => 1
+Disarm.nearest_match("paypa1", %w[paypal stripe admin])      # => { value: "paypal", distance: 1 }
+Disarm.nearest_match("something-else", %w[paypal])           # => nil
+```
+
 ## Pipelines
 
-### `Disarm.get_pipeline(profile)`
+### `Disarm.get_pipeline(profile)` · `Disarm::Pipeline#with_digit_policy(policy)`
 
 Build a reusable `Disarm::Pipeline` for a named policy `profile` (e.g.
 `"search_index"`). The profile's steps are validated and assembled once at

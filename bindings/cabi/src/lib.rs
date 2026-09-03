@@ -154,6 +154,11 @@ fn build_normalize_confusables(text: &str, target: &str, digit_policy: &str) -> 
     ok(api::normalize_confusables_with(text, target, digit_policy).into_owned())
 }
 
+/// The `digit_policy` token the key builders' `_opts` entry points take (#896).
+fn parse_policy(digit_policy: &str) -> Result<api::DigitPolicy, disarm_core::Error> {
+    digit_policy.parse::<api::DigitPolicy>()
+}
+
 /// Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.
 #[ffi_export]
 fn disarm_normalize(text: char_p::Ref<'_>, form: char_p::Ref<'_>) -> DisarmResult {
@@ -327,6 +332,163 @@ fn disarm_catalog_key(
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
+}
+
+/// `disarm_canonicalize` under a `digit_policy` (#896): `"numeric"` — the default, and
+/// byte-identical to the one-argument form — `"tr39"` or `"preserve"`. An `_opts` symbol
+/// rather than a widened one, so the existing entry point keeps its ABI for callers already
+/// linked against it — the shape `disarm_normalize_confusables_opts` uses.
+#[ffi_export]
+fn disarm_canonicalize_opts(text: char_p::Ref<'_>, digit_policy: char_p::Ref<'_>) -> DisarmResult {
+    let policy = match parse_policy(digit_policy.to_str()) {
+        Ok(p) => p,
+        Err(e) => return err(&e),
+    };
+    match api::canonicalize_with(text.to_str(), policy) {
+        Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
+/// `disarm_canonicalize_strict` under a `digit_policy` (#896). See `disarm_canonicalize_opts`.
+#[ffi_export]
+fn disarm_canonicalize_strict_opts(
+    text: char_p::Ref<'_>,
+    digit_policy: char_p::Ref<'_>,
+) -> DisarmResult {
+    let policy = match parse_policy(digit_policy.to_str()) {
+        Ok(p) => p,
+        Err(e) => return err(&e),
+    };
+    match api::canonicalize_strict_with(text.to_str(), policy) {
+        Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
+/// `disarm_strip_obfuscation` under a `digit_policy` (#896). See `disarm_canonicalize_opts`.
+#[ffi_export]
+fn disarm_strip_obfuscation_opts(
+    text: char_p::Ref<'_>,
+    digit_policy: char_p::Ref<'_>,
+) -> DisarmResult {
+    let policy = match parse_policy(digit_policy.to_str()) {
+        Ok(p) => p,
+        Err(e) => return err(&e),
+    };
+    match api::strip_obfuscation_with(text.to_str(), policy) {
+        Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
+/// `disarm_search_key` under a `digit_policy` (#896); `lang` may be NULL. The fold runs on
+/// the raw text, before transliteration consumes the non-Latin digit the policy reads.
+#[ffi_export]
+fn disarm_search_key_opts(
+    text: char_p::Ref<'_>,
+    lang: Option<char_p::Ref<'_>>,
+    digit_policy: char_p::Ref<'_>,
+) -> DisarmResult {
+    let policy = match parse_policy(digit_policy.to_str()) {
+        Ok(p) => p,
+        Err(e) => return err(&e),
+    };
+    match api::search_key_with(text.to_str(), opt_str(lang), policy) {
+        Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
+/// `disarm_sort_key` under a `digit_policy` (#896); `lang` may be NULL.
+#[ffi_export]
+fn disarm_sort_key_opts(
+    text: char_p::Ref<'_>,
+    lang: Option<char_p::Ref<'_>>,
+    digit_policy: char_p::Ref<'_>,
+) -> DisarmResult {
+    let policy = match parse_policy(digit_policy.to_str()) {
+        Ok(p) => p,
+        Err(e) => return err(&e),
+    };
+    match api::sort_key_with(text.to_str(), opt_str(lang), policy) {
+        Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
+/// `disarm_catalog_key` under a `digit_policy` (#896); `lang` may be NULL.
+#[ffi_export]
+fn disarm_catalog_key_opts(
+    text: char_p::Ref<'_>,
+    lang: Option<char_p::Ref<'_>>,
+    strict_iso9: bool,
+    digit_policy: char_p::Ref<'_>,
+) -> DisarmResult {
+    let policy = match parse_policy(digit_policy.to_str()) {
+        Ok(p) => p,
+        Err(e) => return err(&e),
+    };
+    match api::catalog_key_with(text.to_str(), opt_str(lang), strict_iso9, policy) {
+        Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
+/// The TR39 identifier skeleton plus the two prototype classes disarm's table keeps apart
+/// (#650). A spoof key: its only job is to make confusable identifiers collide, and its
+/// output is never for display. `digit_policy` is `"numeric"` (the letter half only),
+/// `"tr39"` (adds `1 ≡ l` and `0 ≡ O`) or `"preserve"`.
+#[ffi_export]
+fn disarm_skeleton_key(text: char_p::Ref<'_>, digit_policy: char_p::Ref<'_>) -> DisarmResult {
+    let policy = match parse_policy(digit_policy.to_str()) {
+        Ok(p) => p,
+        Err(e) => return err(&e),
+    };
+    match api::skeleton_key(text.to_str(), policy) {
+        Ok(s) => ok(s.into_owned()),
+        Err(e) => err(&e),
+    }
+}
+
+/// Levenshtein edit distance between `a` and `b`, in characters (#894). The one class of
+/// registry spoofing the confusable tables deliberately do not model: `paypa1`, `adm1n`.
+#[ffi_export]
+fn disarm_edit_distance(a: char_p::Ref<'_>, b: char_p::Ref<'_>) -> usize {
+    api::edit_distance(a.to_str(), b.to_str())
+}
+
+/// The candidate closest to `value`, or `null` beyond `max_distance` (#894).
+///
+/// `candidates_json` is a JSON array of strings; the result is the JSON object
+/// `{"value": "...", "distance": n}` or the JSON literal `null` — the same transport the
+/// structured reports use. Malformed `candidates_json` is an error rather than `null`, so
+/// a caller cannot read a parse failure as "nothing close". An exact match is reported
+/// with distance 0; ties go to the first candidate at the lowest distance.
+#[ffi_export]
+fn disarm_nearest_match(
+    value: char_p::Ref<'_>,
+    candidates_json: char_p::Ref<'_>,
+    max_distance: usize,
+) -> DisarmResult {
+    let Ok(candidates) = serde_json::from_str::<Vec<String>>(candidates_json.to_str()) else {
+        return DisarmResult {
+            value: None,
+            error: Some(to_c(
+                "candidates_json must be a JSON array of strings".to_owned(),
+            )),
+        };
+    };
+    let hit = api::nearest_match(
+        value.to_str(),
+        candidates.iter().map(String::as_str),
+        max_distance,
+    );
+    let json = match hit {
+        Some(m) => serde_json::json!({ "value": m.value, "distance": m.distance }).to_string(),
+        None => "null".to_owned(),
+    };
+    ok(json)
 }
 
 // ── Predicates (infallible) ─────────────────────────────────────────────────────

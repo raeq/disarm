@@ -40,6 +40,24 @@ public final class Pipeline implements AutoCloseable {
         return Native.pipelineProcess(handle, text);
     }
 
+    /**
+     * A copy of this pipeline whose confusable passes fold under {@code digitPolicy} (#646).
+     * Throws {@link DisarmInvalidArgumentException} when the profile has no confusables step
+     * and the policy is not the default: a setting that would never run is refused rather
+     * than kept. The copy holds its own native handle — close it too.
+     */
+    public Pipeline withDigitPolicy(DigitPolicy digitPolicy) {
+        if (closed) {
+            throw new IllegalStateException("Pipeline has been closed");
+        }
+        Objects.requireNonNull(digitPolicy, "digitPolicy");
+        long fresh = Native.pipelineWithDigitPolicy(handle, digitPolicy.token());
+        if (fresh == 0) {
+            throw new IllegalStateException("Pipeline handle is not registered");
+        }
+        return new Pipeline(fresh);
+    }
+
     /** Free the native handle. Idempotent. */
     @Override
     public void close() {

@@ -76,6 +76,17 @@ disarm_canonicalize (
     char const * text);
 
 /** \brief
+ *  `disarm_canonicalize` under a `digit_policy` (#896): `"numeric"` — the default, and
+ *  byte-identical to the one-argument form — `"tr39"` or `"preserve"`. An `_opts` symbol
+ *  rather than a widened one, so the existing entry point keeps its ABI for callers already
+ *  linked against it — the shape `disarm_normalize_confusables_opts` uses.
+ */
+DisarmResult_t
+disarm_canonicalize_opts (
+    char const * text,
+    char const * digit_policy);
+
+/** \brief
  *  Canonicalize, but fail rather than silently normalize a structural difference away.
  *
  *  The half of the pair that lets a caller *reject* input instead of comparing a value
@@ -86,6 +97,14 @@ disarm_canonicalize_strict (
     char const * text);
 
 /** \brief
+ *  `disarm_canonicalize_strict` under a `digit_policy` (#896). See `disarm_canonicalize_opts`.
+ */
+DisarmResult_t
+disarm_canonicalize_strict_opts (
+    char const * text,
+    char const * digit_policy);
+
+/** \brief
  *  Library-catalog dedup key; `lang` may be NULL, `strict_iso9` selects ISO 9:1995.
  */
 DisarmResult_t
@@ -93,6 +112,16 @@ disarm_catalog_key (
     char const * text,
     char const * lang,
     bool strict_iso9);
+
+/** \brief
+ *  `disarm_catalog_key` under a `digit_policy` (#896); `lang` may be NULL.
+ */
+DisarmResult_t
+disarm_catalog_key_opts (
+    char const * text,
+    char const * lang,
+    bool strict_iso9,
+    char const * digit_policy);
 
 /** \brief
  *  Collapse runs of whitespace to single spaces and trim.
@@ -119,6 +148,19 @@ char *
 disarm_demojize (
     char const * text,
     bool strip_modifiers);
+
+
+#include <stddef.h>
+#include <stdint.h>
+
+/** \brief
+ *  Levenshtein edit distance between `a` and `b`, in characters (#894). The one class of
+ *  registry spoofing the confusable tables deliberately do not model: `paypa1`, `adm1n`.
+ */
+size_t
+disarm_edit_distance (
+    char const * a,
+    char const * b);
 
 /** \brief
  *  Which of `values_json` are the same name under `key` (#620), as a JSON array of
@@ -157,10 +199,6 @@ disarm_find_unmapped_confusables (
 char *
 disarm_fold_case (
     char const * text);
-
-
-#include <stddef.h>
-#include <stdint.h>
 
 /** \brief
  *  Number of grapheme clusters (user-perceived characters) in `text`.
@@ -267,6 +305,21 @@ disarm_ml_normalize (
     bool fold_case);
 
 /** \brief
+ *  The candidate closest to `value`, or `null` beyond `max_distance` (#894).
+ *
+ *  `candidates_json` is a JSON array of strings; the result is the JSON object
+ *  `{"value": "...", "distance": n}` or the JSON literal `null` — the same transport the
+ *  structured reports use. Malformed `candidates_json` is an error rather than `null`, so
+ *  a caller cannot read a parse failure as "nothing close". An exact match is reported
+ *  with distance 0; ties go to the first candidate at the lowest distance.
+ */
+DisarmResult_t
+disarm_nearest_match (
+    char const * value,
+    char const * candidates_json,
+    size_t max_distance);
+
+/** \brief
  *  Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.
  */
 DisarmResult_t
@@ -348,12 +401,42 @@ disarm_search_key (
     char const * lang);
 
 /** \brief
+ *  `disarm_search_key` under a `digit_policy` (#896); `lang` may be NULL. The fold runs on
+ *  the raw text, before transliteration consumes the non-Latin digit the policy reads.
+ */
+DisarmResult_t
+disarm_search_key_opts (
+    char const * text,
+    char const * lang,
+    char const * digit_policy);
+
+/** \brief
+ *  The TR39 identifier skeleton plus the two prototype classes disarm's table keeps apart
+ *  (#650). A spoof key: its only job is to make confusable identifiers collide, and its
+ *  output is never for display. `digit_policy` is `"numeric"` (the letter half only),
+ *  `"tr39"` (adds `1 ≡ l` and `0 ≡ O`) or `"preserve"`.
+ */
+DisarmResult_t
+disarm_skeleton_key (
+    char const * text,
+    char const * digit_policy);
+
+/** \brief
  *  Collation sort key (preserves base accented characters); `lang` may be NULL.
  */
 DisarmResult_t
 disarm_sort_key (
     char const * text,
     char const * lang);
+
+/** \brief
+ *  `disarm_sort_key` under a `digit_policy` (#896); `lang` may be NULL.
+ */
+DisarmResult_t
+disarm_sort_key_opts (
+    char const * text,
+    char const * lang,
+    char const * digit_policy);
 
 /** \brief
  *  Free a string previously returned by any `disarm_*` function. NULL-safe: the
@@ -418,6 +501,14 @@ disarm_strip_noncharacters (
 DisarmResult_t
 disarm_strip_obfuscation (
     char const * text);
+
+/** \brief
+ *  `disarm_strip_obfuscation` under a `digit_policy` (#896). See `disarm_canonicalize_opts`.
+ */
+DisarmResult_t
+disarm_strip_obfuscation_opts (
+    char const * text,
+    char const * digit_policy);
 
 /** \brief
  *  Strip every Private Use Area code point.

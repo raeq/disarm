@@ -34,6 +34,65 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "digit_policy on the key builders (#896)" do
+    # U+0A66 GURMUKHI ZERO standing in for "o": a digit by default, the letter under tr39.
+    let(:spoof) { "g\u0A66ogle" }
+
+    it "reaches every builder, and the default is the plain call" do
+      %i[canonicalize canonicalize_strict strip_obfuscation search_key sort_key catalog_key].each do |name|
+        expect(Disarm.public_send(name, spoof, digit_policy: :numeric)).to eq(Disarm.public_send(name, spoof))
+      end
+      expect(Disarm.canonicalize(spoof)).to eq("g0ogle")
+      expect(Disarm.canonicalize(spoof, digit_policy: :tr39)).to eq("google")
+      expect(Disarm.catalog_key(spoof, digit_policy: :tr39)).to eq("google")
+    end
+
+    it "keeps a numeral under :preserve where the builder owns a fold, and transliteration still romanizes it" do
+      numeral = "amount-\u0661"
+      expect(Disarm.canonicalize(numeral, digit_policy: :preserve)).to eq(numeral)
+      expect(Disarm.search_key(numeral, digit_policy: :preserve)).to eq("amount-1")
+    end
+
+    it "refuses a bad token by name" do
+      expect { Disarm.canonicalize("x", digit_policy: :loose) }.to raise_error(Disarm::InvalidArgument, /digit_policy/)
+    end
+  end
+
+  describe ".skeleton_key" do
+    it "is the spoof key: cased, with the digit half on request (#650)" do
+      expect(Disarm.skeleton_key("paypaI")).to eq(Disarm.skeleton_key("paypal"))
+      expect(Disarm.skeleton_key("SKU-1O0",
+                                 digit_policy: :tr39)).to eq(Disarm.skeleton_key("SKU-100", digit_policy: :tr39))
+      expect(Disarm.skeleton_key("SKU-1O0")).not_to eq(Disarm.skeleton_key("SKU-100"))
+    end
+  end
+
+  describe ".edit_distance and .nearest_match (#894)" do
+    it "measures in characters" do
+      expect(Disarm.edit_distance("paypa1", "paypal")).to eq(1)
+      expect(Disarm.edit_distance("stripe", "stripe")).to eq(0)
+    end
+
+    it "reports the closest candidate, an exact match at 0, and nil beyond the threshold" do
+      reserved = %w[paypal stripe admin]
+      expect(Disarm.nearest_match("paypa1", reserved)).to eq({ value: "paypal", distance: 1 })
+      expect(Disarm.nearest_match("admin", reserved)).to eq({ value: "admin", distance: 0 })
+      expect(Disarm.nearest_match("something-else", reserved)).to be_nil
+      expect(Disarm.nearest_match("paypa11", reserved, max_distance: 2)).to eq({ value: "paypal", distance: 2 })
+    end
+  end
+
+  describe "Disarm::Pipeline#with_digit_policy (#646)" do
+    it "folds under the policy, and refuses one the profile cannot run" do
+      spoof = "g\u0A66ogle"
+      expect(Disarm.get_pipeline("llm_guardrail").process(spoof)).to eq("g0ogle")
+      expect(Disarm.get_pipeline("llm_guardrail").with_digit_policy("tr39").process(spoof)).to eq("google")
+      expect do
+        Disarm.get_pipeline("rag_ingest").with_digit_policy("tr39")
+      end.to raise_error(Disarm::InvalidArgument, /confusables/)
+    end
+  end
+
   describe ".normalize_confusables" do
     it "folds cross-script confusables to the default (:latin) target" do
       expect(Disarm.normalize_confusables("раypal")).to eq("paypal")

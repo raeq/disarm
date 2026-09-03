@@ -119,8 +119,8 @@ module Disarm
     # Canonicalize, but raise rather than silently normalize a structural difference
     # away — the half of the pair that lets a caller reject input instead of comparing
     # a value the sender never wrote.
-    def canonicalize_strict(text)
-      translate_errors { _canonicalize_strict(text) }
+    def canonicalize_strict(text, digit_policy: :numeric)
+      translate_errors { _canonicalize_strict(text, digit_policy.to_s) }
     end
 
     # Strip the non-interchange and invisible classes while KEEPING the script.
@@ -136,8 +136,8 @@ module Disarm
 
     # Remove obfuscation (zero-width, bidi, combining-mark abuse) while keeping
     # legible content.
-    def strip_obfuscation(text)
-      translate_errors { _strip_obfuscation(text) }
+    def strip_obfuscation(text, digit_policy: :numeric)
+      translate_errors { _strip_obfuscation(text, digit_policy.to_s) }
     end
 
     # Canonicalize text for security-sensitive comparison: strip obfuscation,
@@ -151,8 +151,8 @@ module Disarm
     # delimiter can leave here carrying one. #inspect_anomalies reports it as :confusable
     # WHEN the word also carries an ASCII letter, which is the gate that keeps ordinary
     # non-Latin text from firing; a delimiter-only string is not reported.
-    def canonicalize(text)
-      translate_errors { _canonicalize(text) }
+    def canonicalize(text, digit_policy: :numeric)
+      translate_errors { _canonicalize(text, digit_policy.to_s) }
     end
 
     # @deprecated Renamed to {#canonicalize} in 0.11 (the +_clean+ name
@@ -165,22 +165,47 @@ module Disarm
     # Case/accent/script-insensitive search lookup key. `lang:` applies a
     # language profile for transliteration (e.g. "ru", "uk"); nil means none.
     # Raises Disarm::InvalidArgument on an unknown lang.
-    def search_key(text, lang: nil)
-      translate_errors { _search_key(text, lang&.to_s) }
+    def search_key(text, lang: nil, digit_policy: :numeric)
+      translate_errors { _search_key(text, lang&.to_s, digit_policy.to_s) }
     end
 
     # Collation sort key (like #search_key, but keeps base accented characters
     # for correct ordering). `lang:` applies a language profile; nil means none.
     # Raises Disarm::InvalidArgument on an unknown lang.
-    def sort_key(text, lang: nil)
-      translate_errors { _sort_key(text, lang&.to_s) }
+    def sort_key(text, lang: nil, digit_policy: :numeric)
+      translate_errors { _sort_key(text, lang&.to_s, digit_policy.to_s) }
     end
 
     # Library catalog deduplication key (search_key plus confusable folding).
     # `lang:` applies a language profile; `strict_iso9:` selects the ISO 9:1995
     # Cyrillic scheme. Raises Disarm::InvalidArgument on an unknown lang.
-    def catalog_key(text, lang: nil, strict_iso9: false)
-      translate_errors { _catalog_key(text, lang&.to_s, strict_iso9) }
+    def catalog_key(text, lang: nil, strict_iso9: false, digit_policy: :numeric)
+      translate_errors { _catalog_key(text, lang&.to_s, strict_iso9, digit_policy.to_s) }
+    end
+
+    # The TR39 identifier skeleton plus the two prototype classes disarm keeps apart
+    # (#650). A spoof key: its only job is to make confusable identifiers collide, and its
+    # output is never for display. `digit_policy:` is `:numeric` (the letter half only),
+    # `:tr39` (adds `1 ≡ l` and `0 ≡ O`) or `:preserve` (a non-Latin numeral keeps its
+    # script).
+    def skeleton_key(text, digit_policy: :numeric)
+      translate_errors { _skeleton_key(text, digit_policy.to_s) }
+    end
+
+    # Levenshtein edit distance between `a` and `b`, in characters (#894). The one class
+    # of registry spoofing the confusable tables deliberately do not model — `paypa1`,
+    # `adm1n`. Canonicalize both sides first when composed and decomposed spellings
+    # should compare equal.
+    def edit_distance(left, right)
+      translate_errors { _edit_distance(left, right) }
+    end
+
+    # The candidate closest to `value`, as `{ value:, distance: }`, or nil beyond
+    # `max_distance:` (#894). Reports; it does not decide. An exact match is reported with
+    # distance 0, and ties go to the first candidate at the lowest distance.
+    def nearest_match(value, candidates, max_distance: 1)
+      hit = translate_errors { _nearest_match(value, candidates.map(&:to_s), max_distance) }
+      hit && { value: hit[0], distance: hit[1] }
     end
 
     # Strip diacritics ("café" → "cafe").
@@ -574,7 +599,9 @@ module Disarm
     #   pipe.process("Café") # => "cafe"
     #   pipe.process("Köln") # reuse the same handle
     #
-    # Disarm::Pipeline#process is the Rust-defined instance method on the handle.
+    # Disarm::Pipeline#process is the Rust-defined instance method on the handle, and
+    # Disarm::Pipeline#with_digit_policy(policy) returns a copy whose confusable passes
+    # fold under `policy` (#646); a profile with no confusables step refuses one.
     def get_pipeline(profile)
       translate_errors { _get_pipeline(profile.to_s) }
     end
@@ -613,6 +640,19 @@ module Disarm
       raise InvalidArgument, e.message, e.backtrace
     rescue ::RuntimeError => e
       raise Error, e.message, e.backtrace
+    end
+  end
+
+  # The reusable handle `Disarm.get_pipeline` returns. `#process` is Rust-defined; this
+  # reopens the class for the one method that can fail, so its error arrives as
+  # `Disarm::InvalidArgument` the way every module-level call's does.
+  class Pipeline
+    # A copy of this pipeline whose confusable passes fold under `policy` (#646):
+    # `:numeric`, `:tr39` or `:preserve`. Raises Disarm::InvalidArgument when the profile
+    # has no confusables step and the policy is not the default — a setting that would
+    # never run is refused rather than kept.
+    def with_digit_policy(policy)
+      Disarm.send(:translate_errors) { _with_digit_policy(policy.to_s) }
     end
   end
 end

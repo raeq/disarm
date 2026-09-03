@@ -1,6 +1,7 @@
 package dev.disarm;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -101,6 +102,49 @@ class DisarmCoverageTest {
     void sortKeyOverloads() {
         assertFalse(Disarm.sortKey("Zürich").isBlank());
         assertFalse(Disarm.sortKey("Zürich", "de").isBlank());
+    }
+
+    @Test
+    void digitPolicyReachesTheKeyBuilders() {
+        // U+0A66 GURMUKHI ZERO standing in for "o": a digit by default, the letter under tr39.
+        String spoof = "g\u0A66ogle";
+        assertEquals("g0ogle", Disarm.canonicalize(spoof));
+        assertEquals(Disarm.canonicalize(spoof), Disarm.canonicalize(spoof, DigitPolicy.NUMERIC));
+        assertEquals("google", Disarm.canonicalize(spoof, DigitPolicy.TR39));
+        assertEquals("google", Disarm.catalogKey(spoof, null, false, DigitPolicy.TR39));
+        assertEquals("google", Disarm.searchKey(spoof, null, DigitPolicy.TR39));
+        // #949: preserve keeps a numeral where the builder owns a fold; transliteration romanizes it.
+        String numeral = "amount-\u0661";
+        assertEquals(numeral, Disarm.canonicalize(numeral, DigitPolicy.PRESERVE));
+        assertEquals("amount-1", Disarm.searchKey(numeral, null, DigitPolicy.PRESERVE));
+        assertThrows(NullPointerException.class, () -> Disarm.canonicalize("x", (DigitPolicy) null));
+    }
+
+    @Test
+    void skeletonKeyEditDistanceAndNearestMatch() {
+        assertEquals(Disarm.skeletonKey("paypal"), Disarm.skeletonKey("paypaI"));
+        assertEquals(
+                Disarm.skeletonKey("SKU-100", DigitPolicy.TR39),
+                Disarm.skeletonKey("SKU-1O0", DigitPolicy.TR39));
+        assertEquals(1L, Disarm.editDistance("paypa1", "paypal"));
+        List<String> reserved = List.of("paypal", "stripe", "admin");
+        assertEquals(new NearestMatch("paypal", 1L), Disarm.nearestMatch("paypa1", reserved));
+        assertEquals(new NearestMatch("admin", 0L), Disarm.nearestMatch("admin", reserved));
+        assertNull(Disarm.nearestMatch("something-else", reserved));
+        assertEquals(new NearestMatch("paypal", 2L), Disarm.nearestMatch("paypa11", reserved, 2));
+    }
+
+    @Test
+    void pipelineWithDigitPolicy() {
+        String spoof = "g\u0A66ogle";
+        try (Pipeline guard = Disarm.getPipeline("llm_guardrail");
+                Pipeline tr39 = guard.withDigitPolicy(DigitPolicy.TR39)) {
+            assertEquals("g0ogle", guard.process(spoof));
+            assertEquals("google", tr39.process(spoof));
+        }
+        try (Pipeline rag = Disarm.getPipeline("rag_ingest")) {
+            assertThrows(DisarmInvalidArgumentException.class, () -> rag.withDigitPolicy(DigitPolicy.TR39));
+        }
     }
 
     @Test

@@ -37,7 +37,7 @@ operations:
       node: null
       java: null
       kotlin: null
-      cabi: null
+      cabi: canonicalize_strict_opts
   - id: canonicalize_with
     names:
       rust: canonicalize_with
@@ -46,7 +46,7 @@ operations:
       node: null
       java: null
       kotlin: null
-      cabi: null
+      cabi: canonicalize_opts
   - id: catalog_key
     names:
       rust: catalog_key
@@ -64,7 +64,7 @@ operations:
       node: null
       java: null
       kotlin: null
-      cabi: null
+      cabi: catalog_key_opts
   - id: clear_replacements
     names:
       rust: clear_replacements
@@ -159,11 +159,11 @@ operations:
     names:
       rust: edit_distance
       python: edit_distance
-      ruby: null
-      node: null
-      java: null
-      kotlin: null
-      cabi: null
+      ruby: edit_distance
+      node: editDistance
+      java: editDistance
+      kotlin: editDistance
+      cabi: edit_distance
   - id: escape_html
     names:
       rust: escape_html
@@ -510,11 +510,11 @@ operations:
     names:
       rust: nearest_match
       python: nearest_match
-      ruby: null
-      node: null
-      java: null
-      kotlin: null
-      cabi: null
+      ruby: nearest_match
+      node: nearestMatch
+      java: nearestMatch
+      kotlin: nearestMatch
+      cabi: nearest_match
   - id: normalize
     names:
       rust: normalize
@@ -658,7 +658,7 @@ operations:
       node: null
       java: null
       kotlin: null
-      cabi: null
+      cabi: search_key_opts
   - id: security_clean
     names:
       rust: security_clean
@@ -681,11 +681,11 @@ operations:
     names:
       rust: skeleton_key
       python: skeleton_key
-      ruby: null
-      node: null
-      java: null
-      kotlin: null
-      cabi: null
+      ruby: skeleton_key
+      node: skeletonKey
+      java: skeletonKey
+      kotlin: skeletonKey
+      cabi: skeleton_key
   - id: slugify
     names:
       rust: slugify
@@ -712,7 +712,7 @@ operations:
       node: null
       java: null
       kotlin: null
-      cabi: null
+      cabi: sort_key_opts
   - id: stream_safe
     names:
       rust: stream_safe
@@ -793,7 +793,7 @@ operations:
       node: null
       java: null
       kotlin: null
-      cabi: null
+      cabi: strip_obfuscation_opts
   - id: strip_pua
     names:
       rust: strip_pua

@@ -7,6 +7,7 @@ import dev.disarm.AutoLangInspection
 import dev.disarm.DigitPolicy
 import dev.disarm.HostnameAnalysis
 import dev.disarm.KeyCollision
+import dev.disarm.NearestMatch
 import dev.disarm.LangMeta
 import dev.disarm.Lexicon
 import dev.disarm.MlNormalizeOptions
@@ -132,16 +133,22 @@ fun String.isZalgo(threshold: Int): Boolean = JDisarm.isZalgo(this, threshold)
 
 // ── Deobfuscation & key derivation ──────────────────────────────────────────────
 
-fun String.stripObfuscation(): String = JDisarm.stripObfuscation(this)
+@JvmOverloads
+fun String.stripObfuscation(digitPolicy: DigitPolicy = DigitPolicy.NUMERIC): String =
+    JDisarm.stripObfuscation(this, digitPolicy)
 
-fun String.canonicalize(): String = JDisarm.canonicalize(this)
+@JvmOverloads
+fun String.canonicalize(digitPolicy: DigitPolicy = DigitPolicy.NUMERIC): String =
+    JDisarm.canonicalize(this, digitPolicy)
 
 /**
  * Canonicalize, but throw rather than silently normalize a structural difference away —
  * the half of the pair that lets a caller reject input instead of comparing a value the
  * sender never wrote.
  */
-fun String.canonicalizeStrict(): String = JDisarm.canonicalizeStrict(this)
+@JvmOverloads
+fun String.canonicalizeStrict(digitPolicy: DigitPolicy = DigitPolicy.NUMERIC): String =
+    JDisarm.canonicalizeStrict(this, digitPolicy)
 
 /**
  * Strip the non-interchange and invisible classes while keeping the script. Folds no
@@ -152,14 +159,38 @@ fun String.canonicalizeStrict(): String = JDisarm.canonicalizeStrict(this)
 fun String.stripFormat(): String = JDisarm.stripFormat(this)
 
 @JvmOverloads
-fun String.searchKey(lang: String? = null): String = JDisarm.searchKey(this, lang)
+fun String.searchKey(lang: String? = null, digitPolicy: DigitPolicy = DigitPolicy.NUMERIC): String =
+    JDisarm.searchKey(this, lang, digitPolicy)
 
 @JvmOverloads
-fun String.sortKey(lang: String? = null): String = JDisarm.sortKey(this, lang)
+fun String.sortKey(lang: String? = null, digitPolicy: DigitPolicy = DigitPolicy.NUMERIC): String =
+    JDisarm.sortKey(this, lang, digitPolicy)
 
 @JvmOverloads
-fun String.catalogKey(lang: String? = null, strictIso9: Boolean = false): String =
-    JDisarm.catalogKey(this, lang, strictIso9)
+fun String.catalogKey(
+    lang: String? = null,
+    strictIso9: Boolean = false,
+    digitPolicy: DigitPolicy = DigitPolicy.NUMERIC,
+): String = JDisarm.catalogKey(this, lang, strictIso9, digitPolicy)
+
+/**
+ * The TR39 identifier skeleton plus the two prototype classes disarm keeps apart (#650). A
+ * spoof key: never for display. [DigitPolicy.TR39] adds `1 ≡ l` and `0 ≡ O`.
+ */
+@JvmOverloads
+fun String.skeletonKey(digitPolicy: DigitPolicy = DigitPolicy.NUMERIC): String =
+    JDisarm.skeletonKey(this, digitPolicy)
+
+/** Levenshtein edit distance to [other], in characters (#894). */
+fun String.editDistance(other: String): Long = JDisarm.editDistance(this, other)
+
+/**
+ * The candidate closest to this value with its distance, or `null` beyond [maxDistance]
+ * (#894). An exact match is reported with distance 0.
+ */
+@JvmOverloads
+fun String.nearestMatch(candidates: List<String>, maxDistance: Long = 1): NearestMatch? =
+    JDisarm.nearestMatch(this, candidates, maxDistance)
 
 // ── Slugs & filenames (option builders → default arguments) ─────────────────────
 

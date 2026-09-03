@@ -153,6 +153,11 @@ pub fn normalize_confusables(
     Ok(api::normalize_confusables_with(&text, target, digit_policy).into_owned())
 }
 
+/// The `digitPolicy` token every key builder takes (#896): parsed once, at the boundary.
+fn parse_policy(digit_policy: &str) -> Result<api::DigitPolicy, NapiError> {
+    digit_policy.parse().map_err(|e| map_err(&e))
+}
+
 /// Whether `text` contains a character confusable with `target`.
 #[napi]
 pub fn is_confusable(text: String, target: String) -> Result<bool, NapiError> {
@@ -292,6 +297,48 @@ pub fn find_key_collisions(
         .collect())
 }
 
+/// The TR39 identifier skeleton plus the two prototype classes disarm's table keeps apart
+/// (#650). A spoof key: its only job is to make confusable identifiers collide, and its
+/// output is never for display. `digit_policy` is `"numeric"` (the letter half only),
+/// `"tr39"` (adds `1 ≡ l` and `0 ≡ O`) or `"preserve"`.
+#[napi]
+pub fn skeleton_key(text: String, digit_policy: String) -> Result<String, NapiError> {
+    api::skeleton_key(&text, parse_policy(&digit_policy)?)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
+}
+
+/// Levenshtein edit distance between `a` and `b`, in characters (#894).
+#[napi]
+pub fn edit_distance(a: String, b: String) -> i64 {
+    i64::try_from(api::edit_distance(&a, &b)).unwrap_or(i64::MAX)
+}
+
+/// A candidate and how far `nearestMatch` found it from the value asked about (#894).
+#[napi(object)]
+pub struct NearestMatch {
+    /// The candidate, in the spelling the caller supplied.
+    pub value: String,
+    /// Its edit distance from the value asked about; `0` means the value *is* this candidate.
+    pub distance: i64,
+}
+
+/// The candidate closest to `value`, with its distance, or `null` beyond `max_distance`
+/// (#894). An exact match is reported with distance 0; ties go to the first candidate at
+/// the lowest distance.
+#[napi]
+pub fn nearest_match(
+    value: String,
+    candidates: Vec<String>,
+    max_distance: i64,
+) -> Option<NearestMatch> {
+    let max = usize::try_from(max_distance).unwrap_or(0);
+    api::nearest_match(&value, candidates.iter().map(String::as_str), max).map(|m| NearestMatch {
+        value: m.value,
+        distance: i64::try_from(m.distance).unwrap_or(i64::MAX),
+    })
+}
+
 /// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks.
 #[napi]
 pub fn demojize(text: String, strip_modifiers: bool) -> String {
@@ -388,8 +435,8 @@ pub fn is_zalgo(text: String, threshold: i64) -> Result<bool, NapiError> {
 /// — the point of the preset.
 /// Canonicalize, but fail rather than silently normalize a structural difference away.
 #[napi]
-pub fn canonicalize_strict(text: String) -> Result<String, NapiError> {
-    api::canonicalize_strict(&text)
+pub fn canonicalize_strict(text: String, digit_policy: String) -> Result<String, NapiError> {
+    api::canonicalize_strict_with(&text, parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
@@ -400,8 +447,8 @@ pub fn strip_format(text: String) -> String {
 }
 
 #[napi]
-pub fn strip_obfuscation(text: String) -> Result<String, NapiError> {
-    api::strip_obfuscation(&text)
+pub fn strip_obfuscation(text: String, digit_policy: String) -> Result<String, NapiError> {
+    api::strip_obfuscation_with(&text, parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
@@ -416,8 +463,8 @@ pub fn strip_obfuscation(text: String) -> Result<String, NapiError> {
 /// WHEN the word also carries an ASCII letter, which is the gate that keeps ordinary
 /// non-Latin text from firing; a delimiter-only string is not reported.
 #[napi]
-pub fn canonicalize(text: String) -> Result<String, NapiError> {
-    api::canonicalize(&text)
+pub fn canonicalize(text: String, digit_policy: String) -> Result<String, NapiError> {
+    api::canonicalize_with(&text, parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
@@ -457,8 +504,12 @@ pub fn sanitize_filename(
 /// Case/accent/script-insensitive search lookup key. `lang` selects the
 /// transliteration table (omit for none).
 #[napi]
-pub fn search_key(text: String, lang: Option<String>) -> Result<String, NapiError> {
-    api::search_key(&text, lang.as_deref())
+pub fn search_key(
+    text: String,
+    lang: Option<String>,
+    digit_policy: String,
+) -> Result<String, NapiError> {
+    api::search_key_with(&text, lang.as_deref(), parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
@@ -466,8 +517,12 @@ pub fn search_key(text: String, lang: Option<String>) -> Result<String, NapiErro
 /// Collation sort key (like `searchKey` but preserves base accented characters
 /// for correct ordering). `lang` selects the transliteration table.
 #[napi]
-pub fn sort_key(text: String, lang: Option<String>) -> Result<String, NapiError> {
-    api::sort_key(&text, lang.as_deref())
+pub fn sort_key(
+    text: String,
+    lang: Option<String>,
+    digit_policy: String,
+) -> Result<String, NapiError> {
+    api::sort_key_with(&text, lang.as_deref(), parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
@@ -480,8 +535,9 @@ pub fn catalog_key(
     text: String,
     lang: Option<String>,
     strict_iso9: bool,
+    digit_policy: String,
 ) -> Result<String, NapiError> {
-    api::catalog_key(&text, lang.as_deref(), strict_iso9)
+    api::catalog_key_with(&text, lang.as_deref(), strict_iso9, parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
@@ -889,6 +945,20 @@ impl Pipeline {
     #[napi]
     pub fn process(&self, text: String) -> Result<String, NapiError> {
         self.inner.process(&text).map_err(|e| map_err(&e))
+    }
+
+    /// A copy of this pipeline whose confusable passes fold under `digitPolicy` (#646).
+    /// Throws when the profile has no confusables step and the policy is not the default:
+    /// a setting that would never run is refused rather than kept.
+    #[napi]
+    pub fn with_digit_policy(&self, digit_policy: String) -> Result<Pipeline, NapiError> {
+        Ok(Pipeline {
+            inner: self
+                .inner
+                .clone()
+                .with_digit_policy(parse_policy(&digit_policy)?)
+                .map_err(|e| map_err(&e))?,
+        })
     }
 }
 

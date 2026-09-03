@@ -113,22 +113,6 @@ fn map_str<'l>(
     .resolve::<Policy>()
 }
 
-/// `String -> Result<String>`; on error throws the mapped exception.
-fn map_str_try<'l>(
-    mut env: EnvUnowned<'l>,
-    input: JString<'l>,
-    f: impl FnOnce(&str) -> Result<String, disarm_core::Error>,
-) -> JObject<'l> {
-    env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        match f(&text) {
-            Ok(s) => Ok(env.new_string(s)?.into()),
-            Err(e) => Err(throw_core(env, &e)),
-        }
-    })
-    .resolve::<Policy>()
-}
-
 /// `String -> bool`, infallible.
 fn map_bool<'l>(
     mut env: EnvUnowned<'l>,
@@ -324,6 +308,16 @@ fn build_transliterate(
 }
 
 /// Decode a nullable `JString` argument into `Option<String>`.
+/// The `digitPolicy` token every key builder takes (#896): parsed at the boundary, and a
+/// bad token throws the core's `InvalidArgument` like any other.
+fn read_policy(env: &mut Env, s: &JString) -> JniResult<api::DigitPolicy> {
+    let token = s.mutf8_chars(env)?.to_string();
+    match token.parse::<api::DigitPolicy>() {
+        Ok(p) => Ok(p),
+        Err(e) => Err(throw_core(env, &e)),
+    }
+}
+
 fn read_optional(env: &Env, s: &JString) -> JniResult<Option<String>> {
     if s.is_null() {
         Ok(None)
@@ -734,13 +728,20 @@ pub fn isZalgo<'l>(
 
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn stripObfuscation<'l>(
-    env: EnvUnowned<'l>,
+    mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
     input: JString<'l>,
+    digit_policy: JString<'l>,
 ) -> JObject<'l> {
-    map_str_try(env, input, |t| {
-        api::strip_obfuscation(t).map(std::borrow::Cow::into_owned)
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let policy = read_policy(env, &digit_policy)?;
+        match api::strip_obfuscation_with(&text, policy) {
+            Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
+            Err(e) => Err(throw_core(env, &e)),
+        }
     })
+    .resolve::<Policy>()
 }
 
 /// Strip the non-interchange and invisible classes while keeping the script (#698).
@@ -760,24 +761,38 @@ pub fn stripFormat<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'
 /// comparing a value the sender never wrote.
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn canonicalizeStrict<'l>(
-    env: EnvUnowned<'l>,
+    mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
     input: JString<'l>,
+    digit_policy: JString<'l>,
 ) -> JObject<'l> {
-    map_str_try(env, input, |t| {
-        api::canonicalize_strict(t).map(std::borrow::Cow::into_owned)
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let policy = read_policy(env, &digit_policy)?;
+        match api::canonicalize_strict_with(&text, policy) {
+            Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
+            Err(e) => Err(throw_core(env, &e)),
+        }
     })
+    .resolve::<Policy>()
 }
 
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn canonicalize<'l>(
-    env: EnvUnowned<'l>,
+    mut env: EnvUnowned<'l>,
     _class: JClass<'l>,
     input: JString<'l>,
+    digit_policy: JString<'l>,
 ) -> JObject<'l> {
-    map_str_try(env, input, |t| {
-        api::canonicalize(t).map(std::borrow::Cow::into_owned)
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let policy = read_policy(env, &digit_policy)?;
+        match api::canonicalize_with(&text, policy) {
+            Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
+            Err(e) => Err(throw_core(env, &e)),
+        }
     })
+    .resolve::<Policy>()
 }
 
 // ── Key-derivation presets (fallible; `lang` may be null) ───────────────────────
@@ -788,11 +803,13 @@ pub fn searchKey<'l>(
     _class: JClass<'l>,
     input: JString<'l>,
     lang: JString<'l>,
+    digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
         let text = input.mutf8_chars(env)?.to_string();
         let lang = read_optional(env, &lang)?;
-        match api::search_key(&text, lang.as_deref()) {
+        let policy = read_policy(env, &digit_policy)?;
+        match api::search_key_with(&text, lang.as_deref(), policy) {
             Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
             Err(e) => Err(throw_core(env, &e)),
         }
@@ -806,11 +823,13 @@ pub fn sortKey<'l>(
     _class: JClass<'l>,
     input: JString<'l>,
     lang: JString<'l>,
+    digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
         let text = input.mutf8_chars(env)?.to_string();
         let lang = read_optional(env, &lang)?;
-        match api::sort_key(&text, lang.as_deref()) {
+        let policy = read_policy(env, &digit_policy)?;
+        match api::sort_key_with(&text, lang.as_deref(), policy) {
             Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
             Err(e) => Err(throw_core(env, &e)),
         }
@@ -825,15 +844,80 @@ pub fn catalogKey<'l>(
     input: JString<'l>,
     lang: JString<'l>,
     strict_iso9: jboolean,
+    digit_policy: JString<'l>,
 ) -> JObject<'l> {
     let strict = strict_iso9;
     env.with_env(|env| -> JniResult<JObject> {
         let text = input.mutf8_chars(env)?.to_string();
         let lang = read_optional(env, &lang)?;
-        match api::catalog_key(&text, lang.as_deref(), strict) {
+        let policy = read_policy(env, &digit_policy)?;
+        match api::catalog_key_with(&text, lang.as_deref(), strict, policy) {
             Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
             Err(e) => Err(throw_core(env, &e)),
         }
+    })
+    .resolve::<Policy>()
+}
+
+/// The TR39 identifier skeleton plus the two prototype classes disarm's table keeps apart
+/// (#650). A spoof key: never for display. `digitPolicy` is `numeric` (the letter half
+/// only), `tr39` (adds `1 ≡ l` and `0 ≡ O`) or `preserve`.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn skeletonKey<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    digit_policy: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let policy = read_policy(env, &digit_policy)?;
+        match api::skeleton_key(&text, policy) {
+            Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
+/// Levenshtein edit distance between `a` and `b`, in characters (#894).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn editDistance<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    a: JString<'l>,
+    b: JString<'l>,
+) -> jlong {
+    env.with_env(|env| -> JniResult<jlong> {
+        let a = a.mutf8_chars(env)?.to_string();
+        let b = b.mutf8_chars(env)?.to_string();
+        Ok(jlong::try_from(api::edit_distance(&a, &b)).unwrap_or(jlong::MAX))
+    })
+    .resolve::<Policy>()
+}
+
+/// The candidate closest to `value` as a zero- or one-element list of
+/// `dev.disarm.NearestMatch` (#894): empty beyond `maxDistance`. A list rather than a
+/// nullable object so the boundary carries one shape; the facade unwraps it.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn nearestMatch<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    value: JString<'l>,
+    candidates: JObjectArray<'l, JString<'l>>,
+    max_distance: jlong,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let value = value.mutf8_chars(env)?.to_string();
+        let candidates = read_string_array(env, &candidates)?;
+        let max = usize::try_from(max_distance).unwrap_or(0);
+        let hit = api::nearest_match(&value, candidates.iter().map(String::as_str), max);
+        let mut objs = Vec::with_capacity(1);
+        if let Some(m) = &hit {
+            objs.push(new_nearest_match(env, m)?);
+        }
+        let array = new_object_array_of(env, "dev/disarm/NearestMatch", &objs)?;
+        list_of(env, &array)
     })
     .resolve::<Policy>()
 }
@@ -1259,6 +1343,33 @@ pub fn pipelineNew<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, profile: JSt
     .resolve::<Policy>()
 }
 
+/// A copy of `handle`'s pipeline whose confusable passes fold under `digitPolicy` (#646),
+/// as a fresh handle. Throws when the profile has no confusables step and the policy is not
+/// the default; `0` for a handle that is not registered (the facade guards `close()`).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn pipelineWithDigitPolicy<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    handle: jlong,
+    digit_policy: JString<'l>,
+) -> jlong {
+    env.with_env(|env| -> JniResult<jlong> {
+        let policy = read_policy(env, &digit_policy)?;
+        let Some(pipeline) = read_registry(&PIPELINES).get(&handle).cloned() else {
+            return Ok(0);
+        };
+        match pipeline.with_digit_policy(policy) {
+            Ok(p) => {
+                let id = next_handle();
+                write_registry(&PIPELINES).insert(id, p);
+                Ok(id)
+            }
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
 /// Run a pipeline handle over `text` (throws on a processing error or stale handle).
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn pipelineProcess<'l>(
@@ -1447,6 +1558,16 @@ fn new_long_list<'l>(env: &mut Env<'l>, items: &[usize]) -> JniResult<JObject<'l
 }
 
 /// Construct a `dev.disarm.KeyCollision` record.
+fn new_nearest_match<'l>(env: &mut Env<'l>, m: &api::NearestMatch) -> JniResult<JObject<'l>> {
+    let value = env.new_string(&m.value)?;
+    let distance = jlong::try_from(m.distance).unwrap_or(jlong::MAX);
+    env.new_object(
+        JNIString::from("dev/disarm/NearestMatch"),
+        jni_sig!("(Ljava/lang/String;J)V"),
+        &[JValue::Object(&value), JValue::Long(distance)],
+    )
+}
+
 fn new_key_collision<'l>(env: &mut Env<'l>, c: &api::KeyCollision) -> JniResult<JObject<'l>> {
     let key = env.new_string(&c.key)?;
     let values = new_string_list(env, &c.values)?;

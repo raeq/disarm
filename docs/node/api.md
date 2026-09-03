@@ -62,6 +62,46 @@ sortKey('café') // => 'café'
 catalogKey('Толстой', { lang: 'ru' }) // => 'tolstoy'
 ```
 
+### `options.digitPolicy` on the key builders
+
+`canonicalize`, `canonicalizeStrict`, `stripObfuscation`, `searchKey`, `sortKey` and
+`catalogKey` all take `options.digitPolicy` (#896): `'numeric'` (the default, byte-identical
+to leaving it out), `'tr39'` (a confusable digit is read as the letter it resembles, on the
+raw text before the key is built) or `'preserve'` (a non-Latin numeral keeps its script —
+on the three builders that own a fold; the transliterating three romanize it anyway).
+
+```ts
+canonicalize('g\u0A66ogle') // => 'g0ogle'  (GURMUKHI ZERO as a digit)
+canonicalize('g\u0A66ogle', { digitPolicy: 'tr39' }) // => 'google'
+canonicalize('amount-\u0661', { digitPolicy: 'preserve' }) // => 'amount-١'
+```
+
+### `skeletonKey(text, options?)`
+
+The TR39 identifier skeleton plus the two prototype classes disarm's table keeps apart
+(#650). A **spoof key**: its only job is to make confusable identifiers collide, and its
+output is never for display. `'numeric'` applies the letter half (`I ≡ l`);
+`options.digitPolicy: 'tr39'` adds the digit half (`1 ≡ l`, `0 ≡ O`).
+
+```ts
+skeletonKey('paypaI') === skeletonKey('paypal') // => true
+skeletonKey('SKU-1O0', { digitPolicy: 'tr39' }) === skeletonKey('SKU-100', { digitPolicy: 'tr39' }) // => true
+```
+
+### `editDistance(a, b)` · `nearestMatch(value, candidates, options?)`
+
+The ASCII-substitution class the confusable tables deliberately do not model — `paypa1`,
+`adm1n` — measured in characters (#894). `nearestMatch` returns the closest candidate as
+`{ value, distance }`, or `null` beyond `options.maxDistance` (default 1); an exact match
+comes back with distance 0, and ties go to the first candidate at the lowest distance. It
+reports; you apply the policy.
+
+```ts
+editDistance('paypa1', 'paypal') // => 1
+nearestMatch('paypa1', ['paypal', 'stripe', 'admin']) // => { value: 'paypal', distance: 1 }
+nearestMatch('something-else', ['paypal']) // => null
+```
+
 ## Confusable folding
 
 ### `normalizeConfusables(text, options?)`
@@ -540,6 +580,10 @@ try {
 ## Policy pipelines
 
 ### `getPipeline(profile)` · `Pipeline#process`
+
+`Pipeline.withDigitPolicy(policy)` returns a copy whose confusable passes fold under
+`policy` (#646); a profile with no confusables step throws rather than keeping a setting
+that would never run.
 
 Build a reusable, precompiled pipeline handle for a named policy profile, then
 apply it to any number of inputs — the profile's steps are resolved and compiled

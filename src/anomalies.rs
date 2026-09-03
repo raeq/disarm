@@ -199,10 +199,11 @@ const MIN_WHOLLY_CONFUSABLE: usize = 4;
 /// 3. the token's script is Latin, or it has none at all,
 /// 4. and it is not wholly drawn from a block where a whole token is ordinary text.
 ///
-/// `\u{041C}\u{043E}\u{0441}\u{043A}\u{0432}\u{0430}` passes the first three — every
-/// Cyrillic letter here folds to ASCII — and fails the fourth. The "no script" arm is for
-/// the negative enclosed letters, which are category `So` and belong to no script while
-/// still spelling a word.
+/// `\u{041C}\u{043E}\u{0441}\u{043A}\u{0432}\u{0430}` passes 1 and 2 — every Cyrillic
+/// letter here folds to ASCII — and fails 3, because its script is Cyrillic. That
+/// condition is the whole difference: without it the rule reports a Russian word. The "no
+/// script" arm of 3 is for the negative enclosed letters, which are category `So` and
+/// belong to no script while still spelling a word.
 ///
 /// Measured before shipping: 4 hits across the 23,135-row key-stability corpus, every one
 /// an attack string, and 0 across 235,976 entries of `/usr/share/dict/words`.

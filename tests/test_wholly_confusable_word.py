@@ -32,6 +32,7 @@ an attack string; 0 hits in 235,976 entries of `/usr/share/dict/words`.
 
 from __future__ import annotations
 
+import functools
 import sys
 import unicodedata
 
@@ -40,7 +41,13 @@ import pytest
 import disarm
 
 
-def _small_caps(word: str) -> str:
+@functools.lru_cache(maxsize=1)
+def _small_cap_map() -> dict[str, str]:
+    """Built once. The sweep is 1.1M `unicodedata.name()` calls and every test needs it.
+
+    Third time this has come up (#920, #923, here), so it is worth naming: a helper that
+    reads as cheap at the call site and walks the codespace inside is the shape to watch.
+    """
     m: dict[str, str] = {}
     prefix = "LATIN LETTER SMALL CAPITAL "
     for cp in range(sys.maxunicode + 1):
@@ -49,15 +56,27 @@ def _small_caps(word: str) -> str:
         name = unicodedata.name(chr(cp), "")
         if name.startswith(prefix) and len(name[len(prefix) :]) == 1:
             m.setdefault(name[len(prefix) :].lower(), chr(cp))
-    return "".join(m.get(c, c) for c in word)
+    return m
 
 
-def _negative_enclosed(word: str) -> str:
+@functools.lru_cache(maxsize=1)
+def _negative_enclosed_map() -> dict[str, str]:
+    """Two 26-code-point blocks, so cheap — cached for symmetry, not for speed."""
     m: dict[str, str] = {}
     for cp in list(range(0x1F150, 0x1F16A)) + list(range(0x1F170, 0x1F18A)):
         name = unicodedata.name(chr(cp), "")
         if "LATIN CAPITAL LETTER" in name:
             m.setdefault(name[-1].lower(), chr(cp))
+    return m
+
+
+def _small_caps(word: str) -> str:
+    m = _small_cap_map()
+    return "".join(m.get(c, c) for c in word)
+
+
+def _negative_enclosed(word: str) -> str:
+    m = _negative_enclosed_map()
     return "".join(m.get(c, c) for c in word)
 
 

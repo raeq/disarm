@@ -337,3 +337,102 @@ def test_the_known_false_positive_is_the_documented_one() -> None:
     guide, so a reader meeting the false positive finds it named.
     """
     assert has_anomalies("line one\rline two"), "indistinguishable from an overwrite"
+
+
+# --------------------------------------------------------------------------------------
+# The reordering class, in the direction the corpus was not testing (#740)
+#
+# `bidi()` above builds `RLO + t[:mid] + RLM + t[mid:] + PDF`. The *logical* order there
+# is already the clean word, so stripping the controls recovers it and XMR passes 10/10.
+# That is the one direction in which strip and resolve give the same answer.
+#
+# Reverse the construction so the *rendering* is the clean word — which is what the
+# paper's generator does — and the same assertion is 0/10 on every surface. The gate was
+# measuring the recoverable half of the class.
+#
+# Asserted as a negative for the same reason as the deletion class above. `strip_bidi` is
+# a pure filter by design: it keeps the logical order, which is what a compiler and a
+# filesystem read, and that is the Trojan Source direction disarm exists to serve. There
+# is no surface that returns display order, and building one is a separate decision — see
+# "Stripping preserves logical order, not display order" in docs/limitations.md.
+# --------------------------------------------------------------------------------------
+
+# Escapes, not literals: a literal bidi control reorders the source around it in an
+# editor and in a diff, so what a reviewer reads is not what the parser reads (#802).
+RLO, PDF = "\u202e", "\u202c"
+
+
+def reordered(t: str) -> str:
+    """An RLO run whose *display* order is the clean word."""
+    return RLO + t[::-1] + PDF
+
+
+def render_rlo(text: str) -> str:
+    """The display order of one `RLO … PDF` run, modelled without disarm.
+
+    Deliberately narrow: this is not the Unicode Bidi Algorithm, and it is correct only
+    for the construction `reordered` builds — a single run of strong-LTR characters with
+    no neutrals, no nesting and no digits, which UAX #9 resolves by reversing. A full UBA
+    would be a Unicode-data dependency this crate does not carry, which is the same
+    reason there is no `resolve_bidi` to test against.
+    """
+    if not (text.startswith(RLO) and text.endswith(PDF)):
+        return text
+    return text[len(RLO) : -len(PDF)][::-1]
+
+
+def test_the_rlo_render_model_is_not_circular() -> None:
+    assert render_rlo(RLO + "cba" + PDF) == "abc"
+    assert render_rlo("abc") == "abc", "no run, no reordering"
+
+
+def test_the_reordered_attack_renders_as_the_clean_word() -> None:
+    """The premise, checked independently of the code under test."""
+    for word in CORPUS:
+        assert render_rlo(reordered(word)) == word, word
+
+
+def test_the_reordered_attack_is_detected() -> None:
+    """A recovery gap, not a blindness — 10/10 on kind `bidi`."""
+    for word in CORPUS:
+        report = inspect_anomalies(reordered(word))
+        assert "bidi" in report.kinds, word
+
+
+def test_the_reordered_attack_is_not_recovered_on_any_surface() -> None:
+    """0/10 everywhere, deliberately: disarm returns the logical order.
+
+    `llm_guardrail` and `rag_ingest` — the two profiles docs/user-guide/llm-pipelines.md
+    points untrusted-input callers at — score the same as everything else. If a future
+    change starts recovering this, the policy in docs/limitations.md has to move in the
+    same commit.
+    """
+    recovered = [
+        (name, word)
+        for name, surface in ALL_SURFACES.items()
+        for word in CORPUS
+        if surface(reordered(word)) == surface(word)
+    ]
+    assert not recovered, f"now recovered by: {sorted({n for n, _ in recovered})}"
+
+
+def test_the_existing_bidi_generator_tests_the_other_direction() -> None:
+    """Both halves. The 10/10 above is real, and it is a different construction.
+
+    Kept explicit so nobody 'fixes' the passing generator into the failing one and
+    silently deletes the coverage it does have.
+    """
+    for word in CORPUS:
+        assert canonicalize(bidi(word)) == word, "logical order is already clean"
+        assert canonicalize(reordered(word)) != word, "display order is not recovered"
+
+
+def test_the_two_directions_disagree_which_is_the_whole_point() -> None:
+    """`strip_bidi` keeps code-point order, so it serves exactly one consumer."""
+    trojan_source = "invoice" + RLO + "gpj.exe"
+    assert disarm.canonicalize(trojan_source) == "invoicegpj.exe", (
+        "logical order — what a filesystem opens, and the direction disarm is built for"
+    )
+    assert disarm.canonicalize(reordered("paypal")) == "lapyap", (
+        "display order — what a reader saw, which no surface returns"
+    )

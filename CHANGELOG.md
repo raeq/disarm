@@ -769,7 +769,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 - **`confusable-bench.v1` scored beside the adversarial corpus, and the identifier-validation
   recipe it produces (#736).** 140 labelled identifier rows (120 malicious, 20 benign controls),
-  checked in verbatim and pinned by checksum, scored across nine policies with the table on
+  checked in verbatim and pinned by checksum, scored across ten policies — nine single calls
+  and the two-call composition — with the table on
   `docs/security/adversarial-corpora.md` parsed and re-derived by `tests/test_confusable_bench.py`.
   Measured on this tree, not carried from the issue's 0.14.1 numbers: precision is 1.000 under
   every policy, `nearest_match` at one edit reaches 0.942 recall on its own, and

@@ -157,3 +157,26 @@ def test_the_composability_rows_answer_prototype_policy_s_question() -> None:
     reported = [r for r in comp if disarm.has_anomalies(r["identifier"])]
     assert len(reported) == 28
     assert all("compat_fold" in disarm.inspect_anomalies(r["identifier"]).kinds for r in reported)
+
+
+def test_the_changelog_states_the_number_of_policies_the_registry_has() -> None:
+    """Copilot on #956: the release note said nine where the table and this file score ten.
+    Prose counts go stale; this pins the sentence to the registry."""
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    entry = changelog[changelog.index("`confusable-bench.v1` scored beside") :]
+    entry = entry[: entry.index("\n- ")] if "\n- " in entry else entry
+    words = {
+        1: "one",
+        2: "two",
+        3: "three",
+        4: "four",
+        5: "five",
+        6: "six",
+        7: "seven",
+        8: "eight",
+        9: "nine",
+        10: "ten",
+        11: "eleven",
+        12: "twelve",
+    }
+    assert f"scored across {words[len(POLICIES)]} policies" in entry, len(POLICIES)

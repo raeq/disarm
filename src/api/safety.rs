@@ -499,9 +499,44 @@ pub fn detect_scripts(text: &str) -> Vec<&'static str> {
 
 /// True if `text` mixes characters from more than one script (excluding Common /
 /// Inherited) — a homoglyph-spoofing signal.
+///
+/// # This is a string-level question, and callers compose it into a different one
+///
+/// Bilingual text triggers it by design: `hello мир` is two words in two scripts, and the
+/// answer is `true`. A reject rule written as
+/// `is_mixed_script(x) || has_bidi_conflict(x) || !find_confusables(x).is_empty()` turns
+/// away every bilingual user — measured, it rejects all four bilingual strings in #901's
+/// table alongside the two spoofs.
+///
+/// [`crate::api::has_anomalies`] is the composition that tells them apart, and the
+/// `per_word` variant below is that distinction on its own.
 #[must_use]
 pub fn is_mixed_script(text: &str) -> bool {
     crate::scripts::is_mixed_script(text)
+}
+
+/// [`is_mixed_script`] asked of each **word**, so bilingual text answers `false` (#901).
+///
+/// `hello мир` is a sentence and `hellо` is a spoof; this separates them, which the
+/// string-level form cannot. Use it to build a bilingual-safe reject rule from parts.
+///
+/// ```
+/// use disarm::api::{is_mixed_script, is_mixed_script_per_word};
+///
+/// // One word carrying a Cyrillic `о` — both agree.
+/// assert!(is_mixed_script("hell\u{043E}"));
+/// assert!(is_mixed_script_per_word("hell\u{043E}"));
+///
+/// // Two words in two scripts — only the string-level form fires.
+/// assert!(is_mixed_script("hello \u{043C}\u{0438}\u{0440}"));
+/// assert!(!is_mixed_script_per_word("hello \u{043C}\u{0438}\u{0440}"));
+/// ```
+///
+/// Splits on words, not whitespace tokens: `IT-специалист`, `email:почта` and
+/// `user@почта.рф` are ordinary, and a whitespace split reports all three.
+#[must_use]
+pub fn is_mixed_script_per_word(text: &str) -> bool {
+    crate::scripts::is_mixed_script_per_word(text)
 }
 
 /// True if `text` contains both strong left-to-right and strong right-to-left
@@ -540,9 +575,42 @@ pub fn is_mixed_script(text: &str) -> bool {
 /// [`inspect_anomalies`]: crate::api::inspect_anomalies
 /// [`strip_bidi`]: crate::api::strip_bidi
 /// [`has_bidi_control`]: crate::api::has_bidi_control
+///
+/// # This is a string-level question, and callers compose it into a different one
+///
+/// Bilingual text triggers it by design: `hello мир` is two words in two scripts, and the
+/// answer is `true`. A reject rule written as
+/// `is_mixed_script(x) || has_bidi_conflict(x) || !find_confusables(x).is_empty()` turns
+/// away every bilingual user — measured, it rejects all four bilingual strings in #901's
+/// table alongside the two spoofs.
+///
+/// [`crate::api::has_anomalies`] is the composition that tells them apart, and the
+/// `per_word` variant below is that distinction on its own. This is the sharpest case:
+/// `שלום world` is a Hebrew word followed by an English one, and the answer is `true` for
+/// it and for `varonis.com.ו.קום` alike.
 #[must_use]
 pub fn has_bidi_conflict(text: &str) -> bool {
     crate::scripts::has_bidi_conflict(text)
+}
+
+/// [`has_bidi_conflict`] asked of each **word**, so bilingual text answers `false` (#901).
+///
+/// ```
+/// use disarm::api::{has_bidi_conflict, has_bidi_conflict_per_word};
+///
+/// // A Hebrew word and an English word — a sentence, not a conflict.
+/// let sentence = "\u{05E9}\u{05DC}\u{05D5}\u{05DD} world";
+/// assert!(has_bidi_conflict(sentence));
+/// assert!(!has_bidi_conflict_per_word(sentence));
+///
+/// // Glued into one token — and "both agree" is a claim, so both are asserted.
+/// let glued = "\u{05E9}\u{05DC}\u{05D5}\u{05DD}world";
+/// assert!(has_bidi_conflict(glued));
+/// assert!(has_bidi_conflict_per_word(glued));
+/// ```
+#[must_use]
+pub fn has_bidi_conflict_per_word(text: &str) -> bool {
+    crate::scripts::has_bidi_conflict_per_word(text)
 }
 
 /// True when `text` carries any of the twelve UAX #9 explicit formatting characters

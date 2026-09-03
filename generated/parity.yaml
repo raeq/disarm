@@ -263,6 +263,15 @@ operations:
       java: hasBidiConflict
       kotlin: hasBidiConflict
       cabi: has_bidi_conflict
+  - id: has_bidi_conflict_per_word
+    names:
+      rust: has_bidi_conflict_per_word
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: has_bidi_control
     names:
       rust: has_bidi_control
@@ -335,6 +344,15 @@ operations:
       java: isMixedScript
       kotlin: isMixedScript
       cabi: is_mixed_script
+  - id: is_mixed_script_per_word
+    names:
+      rust: is_mixed_script_per_word
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: is_normalized
     names:
       rust: is_normalized

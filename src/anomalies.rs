@@ -1538,7 +1538,7 @@ fn is_token_boundary(c: char) -> bool {
 ///
 /// Deliberately NOT used by the `segmentation` branch, which needs the separators intact:
 /// `v.i.a.g.r.a` is a finding precisely because they are inside one token.
-fn word_parts(s: &str) -> impl Iterator<Item = &str> {
+pub(crate) fn word_parts(s: &str) -> impl Iterator<Item = &str> {
     s.split(|c: char| c.is_whitespace() || matches!(c, '-' | '_' | '/' | ':' | '@' | ','))
         .filter(|p| !p.is_empty())
 }

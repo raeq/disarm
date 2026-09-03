@@ -13,18 +13,29 @@ pub fn _detect_scripts(text: &str) -> Vec<&'static str> {
     crate::scripts::detect_scripts(text)
 }
 
-/// `is_mixed_script(text) -> bool`
+/// `is_mixed_script(text, *, per_word=False) -> bool`
+///
+/// `per_word` asks the question of each word rather than the whole string, so bilingual
+/// text answers `False` (#901).
 #[pyfunction]
-#[pyo3(signature = (text,))]
-pub fn _is_mixed_script(text: &str) -> bool {
-    crate::scripts::is_mixed_script(text)
+#[pyo3(signature = (text, *, per_word=false))]
+pub fn _is_mixed_script(text: &str, per_word: bool) -> bool {
+    if per_word {
+        crate::scripts::is_mixed_script_per_word(text)
+    } else {
+        crate::scripts::is_mixed_script(text)
+    }
 }
 
-/// `has_bidi_conflict(text) -> bool`
+/// `has_bidi_conflict(text, *, per_word=False) -> bool`
 #[pyfunction]
-#[pyo3(signature = (text,))]
-pub fn _has_bidi_conflict(text: &str) -> bool {
-    crate::scripts::has_bidi_conflict(text)
+#[pyo3(signature = (text, *, per_word=false))]
+pub fn _has_bidi_conflict(text: &str, per_word: bool) -> bool {
+    if per_word {
+        crate::scripts::has_bidi_conflict_per_word(text)
+    } else {
+        crate::scripts::has_bidi_conflict(text)
+    }
 }
 
 /// `has_bidi_control(text) -> bool` — all twelve UAX #9 controls, uncontexted (#778).

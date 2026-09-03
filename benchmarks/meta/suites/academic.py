@@ -311,6 +311,49 @@ class BadCharacters(AttackCorpusSuite):
     #: already keyed by it.
     CLASSES = ("deletions", "homoglyphs", "invisibles", "reorderings")
 
+    #: The code points each class injects, so a perturbed row can be told from a
+    #: control. Roughly 800 rows per class carry no perturbation at all, and
+    #: counting those as recoveries put 14.3 of `reorderings`' 14.5% XMR into
+    #: rows nothing had been done to.
+    MARKERS = {
+        "reorderings": frozenset(
+            {0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069}
+        ),
+        "deletions": frozenset({0x0008, 0x007F}),
+        "invisibles": frozenset({0x200B, 0x200C, 0x200D, 0xFEFF, 0x00AD, 0x2060}),
+    }
+
+    #: Classes where reproducing what a reader saw is not a goal, and why.
+    #:
+    #: This started as "recovery needs UAX #9, so it is out of scope". That was
+    #: the wrong reason and pointed the wrong way. For a reordering the rendered
+    #: form *is the deception* — `pay<RLO>kcab<PDF>pal` renders as `paybackpal`,
+    #: which is the string the attacker built the illusion of. A sanitizer that
+    #: emitted it would be finishing the attack, not defusing it. The logical
+    #: string with the control removed is the correct output and the honest one:
+    #: it is what the bytes actually say.
+    #:
+    #: `deletions` is deliberately absent. There the rendered form is the benign
+    #: text and the smuggled content is the erased character, so applying the
+    #: erase removes an attacker payload rather than reproducing an illusion.
+    #: That is defensive, needs no renderer, and recovers 4,820 of 4,820
+    #: perturbed rows — where disarm currently recovers none.
+    RECOVERY_NOT_A_GOAL = {
+        "reorderings": (
+            "the rendered form is the deception itself, so reproducing it would "
+            "emit the string the attacker built the illusion of. Removing the "
+            "control and keeping logical order is the defence, and it succeeds "
+            "on every perturbed row"
+        ),
+    }
+
+    def _perturbed(self, cls: str, text: str, clean: str | None) -> bool:
+        """Did the release actually perturb this row?"""
+        marks = self.MARKERS.get(cls)
+        if marks is not None:
+            return any(ord(c) in marks for c in text)
+        return clean is not None and text != clean
+
     def _rows_by_class(
         self, path: Path, limit: int | None
     ) -> dict[str, list[tuple[str, str | None]]]:
@@ -361,24 +404,53 @@ class BadCharacters(AttackCorpusSuite):
         for cls, rows in sorted(self._rows_by_class(path, limit).items()):
             if not rows:
                 continue
+            hot = [(t, c) for t, c in rows if self._perturbed(cls, t, c)]
             add(outcome, f"{cls}_rows", len(rows), unit="rows")
+            add(
+                outcome,
+                f"{cls}_perturbed",
+                len(hot),
+                of=len(rows),
+                higher_is_better=None,
+                detail="rows the release actually perturbed; the rest are controls "
+                "and must not be counted as recoveries",
+            )
+            if not hot:
+                continue
             if det:
-                seen = sum(1 for text, _ in rows if any(_fires(d, text) for d in det.values()))
+                seen = sum(1 for text, _ in hot if any(_fires(d, text) for d in det.values()))
                 add(
                     outcome,
                     f"{cls}_detected",
                     seen,
-                    of=len(rows),
+                    of=len(hot),
                     higher_is_better=True,
-                    detail=f"a detector fires on the {cls} class",
+                    detail=f"a detector fires on a perturbed {cls} row",
                 )
             if fn is None:
                 continue
+
+            # For a class with a carrier, removing it is the defence, and it is
+            # the measurement that should carry the direction.
+            marks = self.MARKERS.get(cls)
+            if marks is not None:
+                gone = sum(
+                    1 for text, _ in hot if not any(ord(c) in marks for c in _apply(fn, text))
+                )
+                add(
+                    outcome,
+                    f"{cls}_carrier_removed",
+                    gone,
+                    of=len(hot),
+                    higher_is_better=True,
+                    detail=f"the injected {cls} code points do not survive the surface",
+                )
+
             # Same XMR rule the aggregate uses: a recovery only counts if
-            # something survived on both sides.
+            # something survived on both sides. Scored over perturbed rows only.
             hits = 0
             scored = 0
-            for text, clean in rows:
+            for text, clean in hot:
                 if clean is None:
                     continue
                 scored += 1
@@ -386,13 +458,21 @@ class BadCharacters(AttackCorpusSuite):
                 if out and out == _apply(fn, clean):
                     hits += 1
             if scored:
+                why = self.RECOVERY_NOT_A_GOAL.get(cls)
                 add(
                     outcome,
                     f"{cls}_xmr",
                     hits,
                     of=scored,
-                    higher_is_better=True,
-                    detail=f"exact-match recovery within the {cls} class",
+                    # Undirected where matching the clean text would mean emitting
+                    # the rendered deception. Scoring it as failure reads a
+                    # complete carrier removal as a 0.3% result.
+                    higher_is_better=None if why else True,
+                    detail=(
+                        f"reported, not scored, for the {cls} class: {why}"
+                        if why
+                        else f"exact-match recovery within the perturbed {cls} rows"
+                    ),
                 )
 
     summary = "Boucher et al.'s four perturbation classes, scored per class for XMR and detection."

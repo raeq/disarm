@@ -2137,6 +2137,7 @@ def test_bad_characters_is_scored_per_attack_class():
     for cls in ("deletions", "homoglyphs", "invisibles", "reorderings"):
         assert out.measurement(f"{cls}_xmr") is not None, f"{cls} unscored"
         assert out.measurement(f"{cls}_detected") is not None, f"{cls} undetected"
+        assert out.measurement(f"{cls}_perturbed") is not None, f"{cls} unsplit"
 
     # The classes must partition the corpus, not resample it.
     total = sum(out.measurement(f"{c}_rows").value for c in suite.CLASSES)
@@ -2153,3 +2154,66 @@ def test_the_class_taxonomy_comes_from_the_release_not_from_here():
         "invisibles",
         "reorderings",
     }
+
+
+def test_recovery_is_scored_only_over_rows_that_were_perturbed():
+    """~800 rows per class carry no perturbation, and they were counting as wins.
+
+    14.3 of `reorderings`' 14.5% XMR came from rows nothing had been done to.
+    Scoring over the perturbed subset moves it to 0.3%, which is the honest
+    number and is why the class needed a different measurement entirely.
+    """
+    suite = registry.by_name("bad-characters")
+    if not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+    out = suite.run(subject=subjects.by_name("disarm"))
+    for cls in suite.CLASSES:
+        rows = out.measurement(f"{cls}_rows")
+        pert = out.measurement(f"{cls}_perturbed")
+        xmr = out.measurement(f"{cls}_xmr")
+        assert pert.value < rows.value, f"{cls}: every row cannot be perturbed"
+        assert xmr.of == pert.value, f"{cls}: XMR must be scored over perturbed rows only"
+
+
+def test_reproducing_the_rendered_form_is_not_scored_as_recovery():
+    """A defused bidi attack must not emit the string the illusion was built of.
+
+    `pay<RLO>kcab<PDF>pal` renders as `paybackpal`. A sanitizer that produced
+    that would be finishing the attack: the rendered form *is* the deception.
+    The logical string with the control removed is the correct output, so the
+    reordering class is scored on carrier removal and its XMR is a census.
+    """
+    suite = registry.by_name("bad-characters")
+    assert "reorderings" in suite.RECOVERY_NOT_A_GOAL
+    assert "deletions" not in suite.RECOVERY_NOT_A_GOAL, (
+        "for deletions the rendered form is the benign text, so applying the "
+        "erase removes smuggled content rather than reproducing an illusion"
+    )
+    if not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+
+    out = suite.run(subject=subjects.by_name("disarm"))
+    assert out.measurement("reorderings_xmr").higher_is_better is None
+    assert out.measurement("reorderings_carrier_removed").higher_is_better is True
+    assert out.measurement("deletions_xmr").higher_is_better is True
+
+
+def test_the_erase_classes_recovery_is_reachable_without_a_renderer():
+    """Applying backspace semantics is a loop, not a rendering engine.
+
+    It recovers every perturbed deletion row, which is why that class keeps a
+    scored XMR while `reorderings` does not.
+    """
+
+    def apply_erase(text):
+        out = []
+        for ch in text:
+            if ord(ch) in (0x08, 0x7F):
+                if out:
+                    out.pop()
+            else:
+                out.append(ch)
+        return "".join(out)
+
+    assert apply_erase("payX\bpal") == "paypal"
+    assert apply_erase("ab\x7fc") == "ac"

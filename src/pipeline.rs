@@ -369,10 +369,6 @@ impl Pipeline {
         Ok(pipeline)
     }
 
-    /// Return the ordered list of active pipeline steps and their parameters.
-    ///
-    /// Iterates the shared [`STEP_ORDER`] source, so the reported order is by
-    /// construction the same order `process()` executes (#174).
     /// Fix the digit policy the confusable passes fold under (#646).
     ///
     /// Rejected, not ignored, when the pipeline has no confusables step and the policy is
@@ -396,6 +392,10 @@ impl Pipeline {
         Ok(self)
     }
 
+    /// Return the ordered list of active pipeline steps and their parameters.
+    ///
+    /// Iterates the shared [`STEP_ORDER`] source, so the reported order is by
+    /// construction the same order `process()` executes (#174).
     pub(crate) fn steps(&self) -> Vec<(String, Option<String>)> {
         STEP_ORDER
             .iter()

@@ -8,6 +8,8 @@ and nothing else — and a pipeline with no confusables step refuses a non-defau
 rather than keeping one that would never run.
 """
 
+from pathlib import Path
+
 import pytest
 
 import disarm
@@ -103,3 +105,32 @@ class TestHandBuilt:
         # `preserve` (#648) leaves a non-Latin numeral in its own script.
         assert disarm.TextPipeline(confusables=True)("٢٠٢٤") == "٢0٢٤"
         assert disarm.TextPipeline(confusables=True, digit_policy="preserve")("٢٠٢٤") == "٢٠٢٤"
+
+
+class TestSourceDocs:
+    """Copilot on #948: inserting `with_digit_policy` by anchoring on the `fn steps(` line
+    landed it *between* `steps()`'s doc comment and `steps()`, so rustdoc showed the wrong
+    text on one and nothing on the other. `cargo doc` cannot see that. This can."""
+
+    SRC = Path(__file__).resolve().parent.parent / "src" / "pipeline.rs"
+
+    @staticmethod
+    def _doc_above(lines: list[str], needle: str) -> list[str]:
+        idx = next(n for n, line in enumerate(lines) if needle in line)
+        block: list[str] = []
+        for line in reversed(lines[:idx]):
+            if line.strip().startswith("///"):
+                block.insert(0, line.strip())
+            elif line.strip().startswith("#["):
+                continue
+            else:
+                break
+        return block
+
+    def test_each_fn_keeps_its_own_doc_comment(self) -> None:
+        lines = self.SRC.read_text(encoding="utf-8").splitlines()
+        steps = self._doc_above(lines, "pub(crate) fn steps(&self)")
+        policy = self._doc_above(lines, "pub(crate) fn with_digit_policy(")
+        assert steps and "ordered list" in steps[0], steps
+        assert policy and "digit policy" in policy[0], policy
+        assert not any("ordered list" in line for line in policy), policy

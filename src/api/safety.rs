@@ -603,8 +603,9 @@ pub fn has_bidi_conflict(text: &str) -> bool {
 /// assert!(has_bidi_conflict(sentence));
 /// assert!(!has_bidi_conflict_per_word(sentence));
 ///
-/// // Glued into one token, both agree.
+/// // Glued into one token — and "both agree" is a claim, so both are asserted.
 /// let glued = "\u{05E9}\u{05DC}\u{05D5}\u{05DD}world";
+/// assert!(has_bidi_conflict(glued));
 /// assert!(has_bidi_conflict_per_word(glued));
 /// ```
 #[must_use]

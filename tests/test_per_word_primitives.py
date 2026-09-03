@@ -97,7 +97,12 @@ def test_the_bilingual_safe_rule_built_from_parts() -> None:
 class TestWordsNotWhitespaceTokens:
     """#901 proposed splitting on whitespace. Measured, that re-creates the bug."""
 
-    JOINED = ["IT-специалист", "email:почта", "user@почта.рф", "Tokyo/东京", "ru_текст"]
+    #: The non-spoof rows that are a single whitespace token — which is exactly the
+    #: class this section is about. Derived from ROWS rather than re-typed beside it:
+    #: the hand-written copy drifted on its first outing, carrying simplified `东` where
+    #: ROWS carries traditional `東`, so the test covered a string the table never
+    #: measured (caught in review on #942).
+    JOINED = [t for t, is_spoof, _ in ROWS if not is_spoof and len(t.split()) == 1]
 
     @pytest.mark.parametrize("text", JOINED)
     def test_a_joined_compound_is_one_whitespace_token_and_several_words(self, text: str) -> None:
@@ -124,3 +129,20 @@ def test_the_bidi_swap_example_still_fires_per_word() -> None:
     """`has_bidi_conflict`'s own example is a Latin label inside an RTL domain, and it is
     one word — so the per-word form must not spare it."""
     assert disarm.has_bidi_conflict("varonis.com.ו.קום", per_word=True)
+
+
+def test_the_joined_vectors_come_from_the_table() -> None:
+    """A vector list beside its source is a list that drifts from it.
+
+    Asserts the derivation actually selects the joined compounds and nothing else, so a
+    row added to ROWS cannot silently fall out of the class it belongs to.
+    """
+    assert set(TestWordsNotWhitespaceTokens.JOINED) == {
+        "IT-специалист",
+        "email:почта",
+        "user@почта.рф",
+        "Tokyo/東京",
+        "ru_текст",
+    }
+    for text in TestWordsNotWhitespaceTokens.JOINED:
+        assert text in [t for t, _, _ in ROWS]

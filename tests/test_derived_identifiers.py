@@ -129,20 +129,17 @@ class TestWhatThePageSays:
     def test_skeleton_key_is_a_spoof_key(self) -> None:
         assert len(wrong(MUST_NOT_MERGE, False, "skeleton_key")) == 4
 
-    def test_preserve_is_a_no_op_on_six_builders_until_949(self) -> None:
-        # Both halves: the fold and the one threaded builder honour it, the six do not.
-        # When #896 threads the policy through the presets this flips, and so does #949.
+    def test_preserve_holds_where_a_builder_owns_a_fold(self) -> None:
+        # Both halves (#896, closing #949): the fold, the skeleton and the three builders
+        # with a fold of their own keep the numeral; the three that transliterate romanize
+        # it — by transliteration, not by the fold — and preserve neither can nor should
+        # stop a key that maps every script to Latin.
         x = "amount-١"
         assert disarm.normalize_confusables(x, digit_policy="preserve") == x
         assert disarm.skeleton_key(x, digit_policy="preserve") == x
-        for name in (
-            "canonicalize",
-            "canonicalize_strict",
-            "strip_obfuscation",
-            "search_key",
-            "catalog_key",
-            "sort_key",
-        ):
+        for name in ("canonicalize", "canonicalize_strict", "strip_obfuscation"):
+            assert getattr(disarm, name)(x, digit_policy="preserve") == x, name
+        for name in ("search_key", "catalog_key", "sort_key"):
             assert getattr(disarm, name)(x, digit_policy="preserve") == "amount-1", name
 
     def test_is_canonical_is_the_write_time_check(self) -> None:

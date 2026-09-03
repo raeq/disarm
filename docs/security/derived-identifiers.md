@@ -82,20 +82,23 @@ use has no builder, and a caller choosing one today is choosing by its name.
 `skeleton_key` is a spoof key. It exists to make confusable identifiers collide, so it
 merges four of the six distinct values by design, and its output is never for display.
 
-### `digit_policy` does not rescue a number
+### `digit_policy` rescues a numeral only where a fold is what changes it
 
-`canonicalize` and the other five builders that accept `digit_policy` cannot be told to
-leave `١` alone. `"preserve"` (#648) is the setting that should, and on six of the seven
-builders it is a no-op: the Python pre-pass leaves the digit, and the preset's own fold
-then folds it under the default. Only `skeleton_key`, which threads the policy into the
-step, honours it. That is #949, and it closes with #896.
+`"preserve"` (#648) is the setting that leaves `١` alone, and it holds on the three
+builders whose own fold is what would change the digit — `canonicalize`,
+`canonicalize_strict` and `strip_obfuscation` — since #896 threaded the policy through the
+core (until then the Python pre-pass kept the numeral and the preset's own fold folded it,
+which was #949). On `search_key`, `catalog_key` and `sort_key` the numeral is romanized by
+*transliteration*, not by the fold, and a key that maps every script to Latin cannot keep
+one; `preserve` neither can nor should stop that.
 
 ```python
-from disarm import canonicalize, normalize_confusables, skeleton_key
+from disarm import canonicalize, normalize_confusables, search_key, skeleton_key
 
 assert normalize_confusables("amount-١", digit_policy="preserve") == "amount-١"
 assert skeleton_key("amount-١", digit_policy="preserve") == "amount-١"
-assert canonicalize("amount-١", digit_policy="preserve") == "amount-1"  # #949
+assert canonicalize("amount-١", digit_policy="preserve") == "amount-١"
+assert search_key("amount-١", digit_policy="preserve") == "amount-1"  # transliterated
 ```
 
 And `½` and `①` are policy-blind either way: NFKC rewrites them before any fold runs.

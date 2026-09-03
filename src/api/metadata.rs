@@ -269,7 +269,7 @@ pub fn list_context_langs() -> Vec<&'static str> {
 /// Look up the metadata for a single language by its code.
 ///
 /// # Errors
-/// Returns an [`ErrorKind::InvalidArgument`](crate::ErrorKind) error naming the
+/// Returns an [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument) error naming the
 /// offending value if `code` is not a known language code.
 pub fn lang_info(code: &str) -> Result<LangMeta, Error> {
     match crate::metadata::lang(code) {
@@ -288,7 +288,7 @@ pub fn lang_info(code: &str) -> Result<LangMeta, Error> {
 /// Look up the metadata for a single script by its name.
 ///
 /// # Errors
-/// Returns an [`ErrorKind::InvalidArgument`](crate::ErrorKind) error naming the
+/// Returns an [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument) error naming the
 /// offending value if `name` is not a known script.
 pub fn script_info(name: &str) -> Result<ScriptMeta, Error> {
     match crate::metadata::script(name) {

@@ -202,7 +202,7 @@ pub fn unicode_version() -> &'static str {
 /// has a rule for — the paper's construction, overstrike bold, a format character and a
 /// combining mark before the control, a rendering `Cf` that does occupy a cell, erasing
 /// past the start of a line, `CRLF`, and the classic Mac row that is why `CR` is opt-in.
-pub const KEY_SCHEMA_VERSION: u32 = 8;
+pub const KEY_SCHEMA_VERSION: u32 = 9;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -237,7 +237,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 8;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "cac1595b74e77140ef070c3e8d6f3905b7f258db2cc8f38630e03e188f5a1637";
+    "a1f5c860d8cfb6abebdf63659f540a01a8974f518e94607d9fd051f22b738954";
 
 /// The key-schema counter, as a function (#645).
 ///

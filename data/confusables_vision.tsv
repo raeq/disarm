@@ -1,0 +1,54 @@
+# confusables_vision.tsv — measured-visual confusable mappings NOT in TR39, admitted by
+# multi-font agreement (#738).
+#
+# SOURCE. The two discovery sets published from paultendo/confusable-vision
+# (https://github.com/paultendo/confusable-vision, code MIT, datasets CC-BY-4.0,
+# © Paul Wood FRSA), both at their 2026-02-27 revision:
+#   data/output/candidate-discoveries.json     793 novel Latin-target pairs, 23,317
+#                                              identifier-safe non-CJK code points x 230 fonts
+#                                              sha256 99c9a83ff1c1cac291a2eb88095733d5f43ca62cfced52f79b107fb6b462f99a
+#   data/output/m2b-verification-report.json   the CJK/Hangul -> Latin scan, top 50 by SSIM
+#                                              sha256 8fbea98d7da9fcdad786769b818827ed461f96aa0ed58bfd16cff5ab71461cfd
+#
+# WHY A FOURTH FILE. confusables_supplement.tsv admits by the confusable-weights-v2 `danger`
+# weight (>= 0.97, the OQ3 decision on #336); that file has not moved since the pin, so the
+# stated threshold admits nothing new. These sets carry a mean SSIM per pair and a count of
+# fonts in which the pair rendered, not a danger weight — a different metric needs its own
+# admission rule and its own provenance story (#597's reasoning).
+#
+# ADMISSION RULE (scripts/measure_confusable_vision.py, which regenerates these rows):
+#   validFontCount >= 5 and meanSsim >= 0.85; the source is a letter (L*) or letter-number
+#   (Nl) and the target one ASCII letter; the source is not an accented form of its target
+#   (NFD(source) does not begin with the target); and `canonicalize` does not already fold
+#   it. Coverage is measured through `canonicalize`, because every preset runs NFKC before
+#   the fold and 96 of the 793 are covered by that alone.
+#
+# WHAT THE RULE LEAVES OUT, on purpose. The single-font hits at the top of the set — a
+# Nabataean zayin, a Duployan b, Cuneiform and hieroglyph signs at SSIM 0.98 in one fallback
+# font. The Indic fraction and currency symbols (No) that agree in up to nine fonts: a
+# numeral folded to a letter under the default policy is what `digit_policy` refuses. And
+# the accented Latin letters that agree in fifty to ninety fonts — `l` with dot below, with
+# line below, with acute, with cedilla — which are letters, not confusables; folding them is
+# the over-normalization #731 and #836 price.
+#
+# Not-covered candidates by meanSsim band x fonts >= n, as measured (2026-09-03):
+#   band      fonts>=1  fonts>=2  fonts>=3  fonts>=5 fonts>=10
+#   >=0.97          14         0         0         0         0
+#   >=0.95          21         1         1         0         0
+#   >=0.9           75         9         5         2         0
+#   >=0.85         137        20        12         6         0
+#   >=0.8           238        43        16         9         3
+#   >=0.75          423        85        41        30        20
+#   >=0.7           697       160        91        70        48
+#
+# The RaySpace superset (249,976 pairs, ray distance rather than SSIM) and its IDN-filtered
+# 102-pair subset are not published in the repository at this revision; their threshold is
+# #738's open decision, and they would take a fifth file for the same reason this is a
+# fourth.
+#
+# Columns (tab-separated): source (hex), latin target ("-" = none), cyrillic target ("-" =
+# none; nothing here is measured against Cyrillic), mean_ssim, fonts, note. The first three
+# columns are what scripts/gen_confusables.py reads, with priority over TR39, after the
+# supplement and before the attested rows.
+3021	l	-	0.928	6	HANGZHOU NUMERAL ONE -> l (m2b-verification-report, 6 fonts; Nl; the pair #738 leads with)
+4E28	l	-	0.879	10	CJK UNIFIED IDEOGRAPH-4E28 -> l (m2b-verification-report, 10 fonts; identifier-allowed, absent from TR39)

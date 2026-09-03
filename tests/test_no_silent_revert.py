@@ -30,6 +30,7 @@ BUNDLED_DATA = {
     "data/confusables_lgr.tsv": "scripts/gen_confusables.py",
     "data/confusables_supplement.tsv": "scripts/gen_confusables.py",
     "data/confusables_attested.tsv": "scripts/gen_confusables.py",
+    "data/confusables_vision.tsv": "scripts/gen_confusables.py",
     "src/tables/data/confusables_to_latin.tsv": "build.rs",
     "src/tables/data/assigned_ranges.tsv": "build.rs",
     "src/tables/data/bidi_strong_ranges.tsv": "build.rs",

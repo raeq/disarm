@@ -855,7 +855,7 @@ def normalize_confusables(
     Args:
         text: Input string potentially containing homoglyphs.
         target_script: Script to normalize toward. Supported values:
-            ``"latin"`` (default, 2,354 mappings), ``"cyrillic"`` (1,352 mappings),
+            ``"latin"`` (default, 2,356 mappings), ``"cyrillic"`` (1,352 mappings),
             ``"arabic"`` (373 mappings) and ``"hebrew"`` (261 mappings).
 
             The two RTL targets exist because generation drops an equivalence
@@ -2304,6 +2304,18 @@ def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[
     is non-Latin has no business in the to-Latin table. Cross-reference
     `CONFUSABLES_VERSION` and ``docs/provenance.md`` before reading any one
     codepoint as a defect.
+
+    **The population is TR39's, not the world's (#738).** This enumerates the 6,565
+    single-code-point sources in ``confusables_upstream_sources.tsv`` — what upstream
+    lists and disarm drops. A pair upstream never listed is outside the denominator as
+    well as outside the table: ``U+4E28`` and ``U+3021`` score higher against ``l`` than
+    most of TR39 in a measured font survey, and neither appears here. THREAT_MODEL.md's
+    *normalization is enumerate-the-known* is the honest reading; this is not a complete
+    gap report. It is also single-code-point by construction, so the multi-character
+    direction (``rn`` → ``m``, ``vv`` → ``w``, ``cl`` → ``d``) has no denominator at all —
+    disarm's answer there is three contraction rows, reachable only from
+    `is_suspicious_hostname` with ``contractions=True``, against a measured population of
+    571,753 bigram-to-character pairs, most of them not registrable.
 
     The set includes five ASCII characters — ``%``, ``0``, ``1``, ``I`` and ``m``. TR39
     is a *skeleton* transform (m→rn, I/1→l, 0→O), so those are upstream sources; disarm

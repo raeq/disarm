@@ -23167,3 +23167,5 @@ line1\x0d\x0aline2
 ZZZZZZ\x0dpaypal
 line1\x0dline2
 trailing\x0d
+丨
+〡

@@ -58,6 +58,11 @@ that defect.
 So the class needs a position no current builder offers, which makes it a separate
 builder rather than a setting on one that exists.
 
+The 31 `nfkc-tr39-divergence` rows of `confusable-bench.v1` are the corpus's direct answer
+to this question (#736): `ſ` folds to `f` under TR39 and to `s` under NFKC, `ℐ` to `l` and
+`i`. `is_confusable` catches all 31 and `has_anomalies` catches 28 through the `compat_fold`
+kind — the class is in scope, and a corpus built by someone else says so.
+
 **2. The letter half is a reasonable default there; the digit half is not.**
 
 They differ by orders of magnitude and should be decided separately.

@@ -132,6 +132,18 @@ are registered because dropping them would leave a hole in the 0.15.0 record, an
 because they catch silent regressions. They are excluded unless you pass
 `--include-introspective`, and they never enter an external total.
 
+## Findings are historical
+
+`Provenance.finding` records what a benchmark measured **during the 0.15.0 cycle**. It is
+not a description of the library today, and it is never edited to match a fresh run — the
+distance between it and the current table is the report's most useful column, and editing
+the finding destroys exactly that. When a suite gains a policy, a surface or a subject,
+the *run* moves and the finding stays where it is.
+
+`notes` is the opposite field: methodology, not results, so it has to stay true as the
+library changes. A number belongs in `notes` only when it describes the corpus or the
+method — the paper's own carrier count, a rival tool's score — never disarm's.
+
 ## Reproductions
 
 A suite normally *generalises* its issue: the published script probed seven

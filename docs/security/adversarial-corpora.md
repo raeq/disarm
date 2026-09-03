@@ -97,10 +97,66 @@ The three that *are* neutralized — `fragmentation`, `spacing injection`,
 `whitespace steganography` — are neutralized because they inject whitespace or invisible
 characters, not because the structural manipulation was understood.
 
+## A second corpus: `confusable-bench.v1`
+
+The first corpus perturbs a *prompt*. This one measures a single **identifier** against
+the name it impersonates — the surface the first cannot reach — and its `protect` column
+asks the set-shaped question `find_key_collisions` and `nearest_match` are built for, so
+the predicate surfaces and the key builders are scored on the same rows (#736).
+
+Paul Wood FRSA (@paultendo), `namespace-guard`, `docs/data/confusable-bench.v1.json`, MIT,
+published with the *Unicode identifier threat model* post: 140 labelled identifier rows —
+120 malicious in three threat classes (54 evasion, 35 impersonation, 31 composability) and
+20 benign controls (14 ASCII, 4 precomposed, 2 legitimately combining).
+
+**Scored by the meta-benchmark, not by a second copy of the corpus.**
+`benchmarks/meta` already registers this benchmark as the `confusable-bench-v1` suite —
+it fetches the published file, applies the corpus's own labels, and records the run against
+a baseline. This change adds the three surfaces the suite predated (`skeleton_key`,
+`skeleton_key` under `tr39`, and `nearest_match`) and the two-call composition, rather
+than re-deriving the scores here:
+
+```bash
+python -m benchmarks.meta --run --select confusable-bench-v1
+```
+
+**Re-measured after #650 and #894.** The issue measured 0.14.1, where the best single call
+reached 0.550 recall and the published headline was a three-surface composition at 0.983.
+Today `nearest_match` at one edit reaches **0.942 alone**, `skeleton_key` under `tr39`
+0.817, and `is_confusable` **or** `nearest_match` reaches **1.000** — two calls, not three.
+Precision is 1.000 on every policy: no policy flags a benign control, and the twenty
+controls are what make that a result rather than an assertion.
+
+**Two calls, and why it is two.** `nearest_match` at one edit reaches 113 of 120 on its
+own, and the seven it misses are all `confusable-chain` rows — two substitutions in one
+name (`þɑypal`, `ƍıthub`), two edits by construction — which `is_confusable` catches every
+one of. The two are complementary because they measure different things: an edit distance
+sees the ASCII-substitution class (`paypa1`, `adm1n`) that no confusable table should fold,
+and the fold sees the Unicode class that no edit distance should chase. The recipe is on
+[the CVE page](cve-validation.md#validating-a-submitted-identifier-against-protected-names).
+
+**The ASCII boundary, restated.** The issue pinned `paypaI` (capital I for l) and `paypa-l`
+(hyphen insertion) as the two rows nothing catches: pure ASCII, where every Unicode
+transform is a documented no-op. That half is still true and still asserted —
+`canonicalize` returns both unchanged and `is_confusable` says no. What changed is that an
+edit-distance surface, which is not a Unicode transform, now reports both at distance 1.
+THREAT_MODEL.md's boundary holds; the library simply has a second kind of instrument.
+
+**The 31 composability rows** are the NFKC/TR39 divergence set — `ſ` (TR39 `f`, NFKC `s`),
+`ℐ` (TR39 `l`, NFKC `i`) — and the corpus's direct answer to the question
+[prototype-policy](../architecture/prototype-policy.md) §1 left open: `is_confusable`
+catches all 31, and `has_anomalies` catches 28 through the `compat_fold` kind, which did not
+exist when the issue was measured.
+
+Whether the two-call composition deserves an entry point of its own — the shape
+`is_suspicious_hostname` gives the hostname case, with the corpus's benign-precomposed and
+benign-combining rows to keep a graded signal honest (#545) — is #736's open question.
+
 ## Reproducing
 
 ```bash
 pytest tests/test_adversarial_corpora.py
+python -m benchmarks.meta --run --select confusable-bench-v1   # the second corpus
 ```
 
 The vectors are in that file. The table above is parsed out of this page and compared

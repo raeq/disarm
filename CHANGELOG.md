@@ -767,6 +767,21 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **`confusable-bench.v1`: the three surfaces the meta-benchmark suite predated, and the
+  identifier-validation recipe it produces (#736).** The corpus was already registered as the
+  `confusable-bench-v1` suite under `benchmarks/meta`, so this scores the surfaces the suite
+  could not see rather than re-deriving it: `skeleton_key` (#650), `skeleton_key` under
+  `tr39`, `nearest_match` (#894), and the two-call composition. Re-measured, the issue's
+  picture has moved — `nearest_match` at one edit reaches 0.942 recall alone where the best
+  single call was 0.550, and `is_confusable` **or** `nearest_match` reaches 1.000, two calls
+  rather than three, at precision 1.000 on every policy. The suite's `finding` is left exactly
+  as it was: that field records what the 0.15.0 cycle measured, and the distance between it
+  and a fresh run is the report's most useful column. The docs gap the issue is actually about
+  is closed on the CVE page beside *If you only make one call*: the recipe, with the
+  non-obvious half named (the protected list is `inspect_anomalies`'s lexicon) and the two
+  ASCII rows the issue pinned as residual misses now reported at distance 1 while staying
+  no-ops for every Unicode transform. The corpus's 31 NFKC/TR39-divergence rows are
+  cross-referenced from the prototype-policy decision they answer.
 - **`docs/security/derived-identifiers.md`: the map for derived deterministic identifiers (#731).** Idempotency keys, cache keys, dedup-on-insert and canonical-request signing all normalize, hash and keep the digest, and the caller never sees two values side by side — so under-normalizing (a retry runs twice) and over-normalizing (a real second request is suppressed) are both silent. No key builder is clean for it: `search_key` and `catalog_key` merge every distinct value in the matrix, `canonicalize` is closest and its three failures all change the value of a number, and `skeleton_key` is a spoof key by design. The page carries a variance-class × key matrix that `tests/test_derived_identifiers.py` renders from its registry and fails on when the page drifts, and a recipe: split the key by field, put code-like fields on `fold_case` or nothing and screen them with `has_anomalies`, and use `is_canonical` as the write-time check (#730). Measuring it found #949: `digit_policy="preserve"` is a no-op on six of the seven builders.
 
 - **`strip_bidi` keeps the *logical* order, and now says so (#740).** It is a pure

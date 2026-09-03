@@ -66,8 +66,8 @@ pub fn strip_zero_width_chars(text: &str) -> String {
 /// sign to `-`, the curly and low-9 quotes and the primes to `'` / `"`, the ellipsis to
 /// `...`, and the non-standard spaces to a space (#703).
 ///
-/// Nothing else in disarm does this as a stated purpose. [`canonicalize`] folds five
-/// dashes and skips `U+2014 EM DASH` and `U+2015 HORIZONTAL BAR`; [`transliterate`] folds
+/// Nothing else in disarm does this as a stated purpose. [`canonicalize`](crate::api::canonicalize) folds five
+/// dashes and skips `U+2014 EM DASH` and `U+2015 HORIZONTAL BAR`; [`transliterate`](crate::api::transliterate) folds
 /// those two and rejects the other four — so a key built from `canonicalize` treats `a—b`
 /// and `a-b` as distinct while treating `a–b` and `a-b` as the same, and both are the same
 /// autocorrect. A separate primitive rather than a change to either: `canonicalize` is a
@@ -78,7 +78,9 @@ pub fn strip_zero_width_chars(text: &str) -> String {
 /// are those scripts' own full stop and comma; the middle dot `U+00B7` is a letter in
 /// Catalan `l·l`; the bullet stays. Spaces fold rather than delete, so words do not glue.
 ///
-/// Borrows when there is nothing to fold. Idempotent.
+/// Borrows when there is nothing to fold. Idempotent. Form-preserving, like the targeted
+/// strips: it folds one character class and composes nothing, so a decomposed letter
+/// leaves as it arrived; compose it with a preset for boundary normalization.
 ///
 /// ```
 /// use disarm::api::fold_punctuation;

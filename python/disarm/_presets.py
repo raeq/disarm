@@ -763,7 +763,9 @@ def fold_punctuation(text: str) -> str:
     letter in Catalan ``l·l``; the bullet stays. Spaces fold rather than delete, so words
     do not glue together.
 
-    Idempotent, and the identity on ASCII.
+    Idempotent, and the identity on ASCII. Form-preserving, like the targeted strips: it
+    folds one character class and composes nothing, so a decomposed letter leaves as it
+    arrived. Compose it with a preset when boundary normalization is wanted too.
 
     Examples:
         >>> fold_punctuation("He said \u201cok\u201d \u2014 then\u2026")

@@ -39,6 +39,14 @@ def test_idempotent_and_the_identity_on_ascii() -> None:
     assert disarm.fold_punctuation(once) == once
 
 
+def test_form_preserving_like_the_targeted_strips() -> None:
+    # Both halves: a decomposed letter leaves as it arrived, and the fold still applies
+    # beside it. Boundary normalization is a preset's job, not this primitive's (#477).
+    assert disarm.fold_punctuation("i\u0308") == "i\u0308"
+    assert disarm.fold_punctuation("\u00ef") == "\u00ef"
+    assert disarm.fold_punctuation("i\u0308\u2014x") == "i\u0308-x"
+
+
 def test_why_it_is_separate_the_neighbours_still_split_the_family() -> None:
     # Both halves of #703's finding, as the tree stands: canonicalize leaves the em dash
     # and horizontal bar, transliterate rejects the hyphen and minus. The primitive is

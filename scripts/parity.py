@@ -128,6 +128,14 @@ RUBY_PRED = {
 # divergence and #677 §2 is the place to settle it, not a canon rule here.
 HOSTNAME_ALIASES = {
     "analyze_hostname_opts": "analyze_hostname_with",
+    # #896: the six key builders take `digit_policy` through `_opts` symbols for the same
+    # ABI reason, and each reads as the Rust `_with` form it wraps.
+    "canonicalize_opts": "canonicalize_with",
+    "canonicalize_strict_opts": "canonicalize_strict_with",
+    "strip_obfuscation_opts": "strip_obfuscation_with",
+    "search_key_opts": "search_key_with",
+    "sort_key_opts": "sort_key_with",
+    "catalog_key_opts": "catalog_key_with",
 }
 
 

@@ -399,8 +399,8 @@ export function isZalgo(text: string, options: { threshold?: number } = {}): boo
  * the half of the pair that lets a caller reject input instead of comparing a value the
  * sender never wrote.
  */
-export function canonicalizeStrict(text: string): string {
-  return call(() => native.canonicalizeStrict(text))
+export function canonicalizeStrict(text: string, options: { digitPolicy?: DigitPolicy } = {}): string {
+  return call(() => native.canonicalizeStrict(text, options.digitPolicy ?? 'numeric'))
 }
 
 /**
@@ -417,8 +417,8 @@ export function stripFormat(text: string): string {
 }
 
 /** Remove obfuscation (zero-width, bidi, combining-mark abuse, homoglyphs) while keeping legible content. */
-export function stripObfuscation(text: string): string {
-  return call(() => native.stripObfuscation(text))
+export function stripObfuscation(text: string, options: { digitPolicy?: DigitPolicy } = {}): string {
+  return call(() => native.stripObfuscation(text, options.digitPolicy ?? 'numeric'))
 }
 
 /**
@@ -430,8 +430,8 @@ export function stripObfuscation(text: string): string {
  * The name describes the mechanism (Unicode canonicalization for matching), not
  * a safety guarantee — this is not an output sanitizer; encode at the sink.
  */
-export function canonicalize(text: string): string {
-  return call(() => native.canonicalize(text))
+export function canonicalize(text: string, options: { digitPolicy?: DigitPolicy } = {}): string {
+  return call(() => native.canonicalize(text, options.digitPolicy ?? 'numeric'))
 }
 
 /**
@@ -483,16 +483,22 @@ export function sanitizeFilename(text: string, options: SanitizeFilenameOptions 
  * Case/accent/script-insensitive search lookup key (like {@link catalogKey}
  * without confusable folding). `lang` selects the transliteration table.
  */
-export function searchKey(text: string, options: { lang?: string } = {}): string {
-  return call(() => native.searchKey(text, options.lang ?? undefined))
+export function searchKey(
+  text: string,
+  options: { lang?: string; digitPolicy?: DigitPolicy } = {},
+): string {
+  return call(() => native.searchKey(text, options.lang ?? undefined, options.digitPolicy ?? 'numeric'))
 }
 
 /**
  * Collation sort key — like {@link searchKey} but preserves base accented
  * characters for correct ordering. `lang` selects the transliteration table.
  */
-export function sortKey(text: string, options: { lang?: string } = {}): string {
-  return call(() => native.sortKey(text, options.lang ?? undefined))
+export function sortKey(
+  text: string,
+  options: { lang?: string; digitPolicy?: DigitPolicy } = {},
+): string {
+  return call(() => native.sortKey(text, options.lang ?? undefined, options.digitPolicy ?? 'numeric'))
 }
 
 /**
@@ -502,9 +508,56 @@ export function sortKey(text: string, options: { lang?: string } = {}): string {
  */
 export function catalogKey(
   text: string,
-  options: { lang?: string; strictIso9?: boolean } = {},
+  options: { lang?: string; strictIso9?: boolean; digitPolicy?: DigitPolicy } = {},
 ): string {
-  return call(() => native.catalogKey(text, options.lang ?? undefined, options.strictIso9 ?? false))
+  return call(() =>
+    native.catalogKey(
+      text,
+      options.lang ?? undefined,
+      options.strictIso9 ?? false,
+      options.digitPolicy ?? 'numeric',
+    ),
+  )
+}
+
+/**
+ * The TR39 identifier skeleton plus the two prototype classes disarm's table keeps
+ * apart (#650). A spoof key: its only job is to make confusable identifiers collide,
+ * and its output is never for display. `digitPolicy` `'numeric'` (default) applies the
+ * letter half only; `'tr39'` adds `1 ≡ l` and `0 ≡ O`; `'preserve'` keeps a non-Latin
+ * numeral in its script.
+ */
+export function skeletonKey(text: string, options: { digitPolicy?: DigitPolicy } = {}): string {
+  return call(() => native.skeletonKey(text, options.digitPolicy ?? 'numeric'))
+}
+
+/**
+ * Levenshtein edit distance between `a` and `b`, in characters (#894) — the one class of
+ * registry spoofing the confusable tables deliberately do not model (`paypa1`, `adm1n`).
+ * Canonicalize both sides first when composed and decomposed spellings should compare
+ * equal.
+ */
+export function editDistance(a: string, b: string): number {
+  return native.editDistance(a, b)
+}
+
+/** A candidate and how far {@link nearestMatch} found it from the value asked about. */
+export interface NearestMatch {
+  value: string
+  distance: number
+}
+
+/**
+ * The candidate closest to `value`, with its distance, or `null` beyond `maxDistance`
+ * (default 1). Reports; it does not decide. An exact match is reported with distance 0,
+ * and ties go to the first candidate at the lowest distance (#894).
+ */
+export function nearestMatch(
+  value: string,
+  candidates: string[],
+  options: { maxDistance?: number } = {},
+): NearestMatch | null {
+  return call(() => native.nearestMatch(value, candidates, options.maxDistance ?? 1)) ?? null
 }
 
 /** Options for {@link mlNormalize}. */

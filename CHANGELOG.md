@@ -45,6 +45,21 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   are byte-identical — they transliterate before the fold, and `丨` romanizes to `gun` on
   that path as it did before. The fixture corpus carries both characters.
 
+- **`digit_policy` on the six key builders, `skeleton_key`, `edit_distance` and
+  `nearest_match` reach Node, Ruby, Java, Kotlin and the C ABI, and a pipeline handle takes
+  `withDigitPolicy` (#894, #896).** The binding half of the two 0.15.0 deferrals, in one
+  change so the parity rows are touched once. Each binding takes the policy the way it
+  already took it on `normalize_confusables`: a trailing options object on Node, a keyword
+  on Ruby, an overload with the `DigitPolicy` enum on Java and a default argument on
+  Kotlin, and on the C ABI a separate `_opts` symbol per builder so the existing entry
+  points keep their ABI. `skeleton_key` (#650) was in no binding at all. `nearest_match`
+  follows each binding's result convention — an object on Node, a `{ value:, distance: }`
+  hash on Ruby, a `NearestMatch` record on Java, a JSON object or the JSON `null` on the C
+  ABI, where a malformed candidate list is an error rather than "nothing close". Node,
+  Ruby and Java pipeline handles gain the profile setter from #646; the C ABI has no handle
+  family to put it on. `skeleton_key`, `edit_distance` and `nearest_match` join the parity
+  floor, complete on all seven surfaces.
+
 - **`digit_policy` reaches the six key builders through the core, and the Rust API gains
   `canonicalize_with`, `canonicalize_strict_with`, `strip_obfuscation_with`,
   `search_key_with`, `sort_key_with` and `catalog_key_with` (#896).** #885 shipped the setting

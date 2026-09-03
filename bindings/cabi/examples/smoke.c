@@ -109,6 +109,53 @@ int main(void) {
     disarm_string_free(dt.value);
     disarm_string_free(dt.error);
 
+    /* #896: digit_policy reaches the key builders through the `_opts` symbols. U+0A66
+       GURMUKHI DIGIT ZERO (E0 A9 A6) standing in for "o" is a digit by default and the
+       letter under tr39. */
+    DisarmResult_t ck = disarm_canonicalize_opts("g\xe0\xa9\xa6ogle", "tr39");
+    check("canonicalize_opts tr39", ck.value, "google");
+    disarm_string_free(ck.value);
+    disarm_string_free(ck.error);
+
+    DisarmResult_t ckn = disarm_canonicalize_opts("g\xe0\xa9\xa6ogle", "numeric");
+    check("canonicalize_opts numeric is the plain call", ckn.value, "g0ogle");
+    disarm_string_free(ckn.value);
+    disarm_string_free(ckn.error);
+
+    /* #949: preserve keeps ARABIC-INDIC DIGIT ONE where the builder owns a fold. */
+    DisarmResult_t cp = disarm_canonicalize_opts("amount-\xd9\xa1", "preserve");
+    check("canonicalize_opts preserve", cp.value, "amount-\xd9\xa1");
+    disarm_string_free(cp.value);
+    disarm_string_free(cp.error);
+
+    DisarmResult_t sk = disarm_search_key_opts("g\xe0\xa9\xa6ogle", NULL, "tr39");
+    check("search_key_opts tr39", sk.value, "google");
+    disarm_string_free(sk.value);
+    disarm_string_free(sk.error);
+
+    /* #650: the skeleton key merges the capital-I family, and the digit half on request. */
+    DisarmResult_t sk1 = disarm_skeleton_key("SKU-1O0", "tr39");
+    DisarmResult_t sk2 = disarm_skeleton_key("SKU-100", "tr39");
+    check("skeleton_key tr39 merges SKU-1O0 and SKU-100", sk1.value, sk2.value);
+    disarm_string_free(sk1.value);
+    disarm_string_free(sk1.error);
+    disarm_string_free(sk2.value);
+    disarm_string_free(sk2.error);
+
+    /* #894: the ASCII-substitution class, measured in characters. */
+    if (disarm_edit_distance("paypa1", "paypal") != 1) {
+        fprintf(stderr, "edit_distance: expected 1\n");
+        return 1;
+    }
+    DisarmResult_t nm = disarm_nearest_match("paypa1", "[\"paypal\", \"stripe\", \"admin\"]", 1);
+    check("nearest_match hit", nm.value, "{\"distance\":1,\"value\":\"paypal\"}");
+    disarm_string_free(nm.value);
+    disarm_string_free(nm.error);
+    DisarmResult_t nn = disarm_nearest_match("something-else", "[\"paypal\"]", 1);
+    check("nearest_match none is the JSON null", nn.value, "null");
+    disarm_string_free(nn.value);
+    disarm_string_free(nn.error);
+
     /* #586: the fold iterates to a fixed point rather than stopping after one pass.
        A fold exposes a composition: U+00A5 + U+0300 folds to Y + U+0300, which
        composes to U+1EF2. A single pass returned the decomposed "Y\u0300". */

@@ -258,7 +258,19 @@ public final class Disarm {
     // ── Deobfuscation & security presets ───────────────────────────────────────
 
     public static String stripObfuscation(String text) {
-        return Native.stripObfuscation(req(text));
+        return stripObfuscation(text, DigitPolicy.NUMERIC);
+    }
+
+    /**
+     * {@link #stripObfuscation(String)} under a digit policy (#896). {@link DigitPolicy#NUMERIC} is
+     * byte-identical to the one-argument form; {@link DigitPolicy#TR39} reads a confusable
+     * digit as the letter it resembles; {@link DigitPolicy#PRESERVE} keeps a non-Latin
+     * numeral in its script.
+     */
+    public static String stripObfuscation(String text, DigitPolicy digitPolicy) {
+        req(text);
+        Objects.requireNonNull(digitPolicy, "digitPolicy");
+        return Native.stripObfuscation(text, digitPolicy.token());
     }
 
     /**
@@ -274,7 +286,19 @@ public final class Disarm {
      * non-Latin text from firing; a delimiter-only string is not reported.
      */
     public static String canonicalize(String text) {
-        return Native.canonicalize(req(text));
+        return canonicalize(text, DigitPolicy.NUMERIC);
+    }
+
+    /**
+     * {@link #canonicalize(String)} under a digit policy (#896). {@link DigitPolicy#NUMERIC} is
+     * byte-identical to the one-argument form; {@link DigitPolicy#TR39} reads a confusable
+     * digit as the letter it resembles; {@link DigitPolicy#PRESERVE} keeps a non-Latin
+     * numeral in its script.
+     */
+    public static String canonicalize(String text, DigitPolicy digitPolicy) {
+        req(text);
+        Objects.requireNonNull(digitPolicy, "digitPolicy");
+        return Native.canonicalize(text, digitPolicy.token());
     }
 
     /**
@@ -287,7 +311,19 @@ public final class Disarm {
      * @throws DisarmException if the text cannot be canonicalized unambiguously
      */
     public static String canonicalizeStrict(String text) {
-        return Native.canonicalizeStrict(req(text));
+        return canonicalizeStrict(text, DigitPolicy.NUMERIC);
+    }
+
+    /**
+     * {@link #canonicalizeStrict(String)} under a digit policy (#896). {@link DigitPolicy#NUMERIC} is
+     * byte-identical to the one-argument form; {@link DigitPolicy#TR39} reads a confusable
+     * digit as the letter it resembles; {@link DigitPolicy#PRESERVE} keeps a non-Latin
+     * numeral in its script.
+     */
+    public static String canonicalizeStrict(String text, DigitPolicy digitPolicy) {
+        req(text);
+        Objects.requireNonNull(digitPolicy, "digitPolicy");
+        return Native.canonicalizeStrict(text, digitPolicy.token());
     }
 
     /**
@@ -310,7 +346,19 @@ public final class Disarm {
 
     /** Search key with a transliteration language profile ({@code null} for none). */
     public static String searchKey(String text, String lang) {
-        return Native.searchKey(req(text), lang);
+        return searchKey(text, lang, DigitPolicy.NUMERIC);
+    }
+
+    /**
+     * {@link #searchKey(String, String)} under a digit policy (#896), applied on the raw text
+     * before transliteration consumes the non-Latin digit the policy reads. {@link
+     * DigitPolicy#PRESERVE} keeps a numeral through the fold, and transliteration then
+     * romanizes it anyway — a key that maps every script to Latin cannot keep one.
+     */
+    public static String searchKey(String text, String lang, DigitPolicy digitPolicy) {
+        req(text);
+        Objects.requireNonNull(digitPolicy, "digitPolicy");
+        return Native.searchKey(text, lang, digitPolicy.token());
     }
 
     /** Collation sort key (preserves base accented characters for correct ordering). */
@@ -319,7 +367,19 @@ public final class Disarm {
     }
 
     public static String sortKey(String text, String lang) {
-        return Native.sortKey(req(text), lang);
+        return sortKey(text, lang, DigitPolicy.NUMERIC);
+    }
+
+    /**
+     * {@link #sortKey(String, String)} under a digit policy (#896), applied on the raw text
+     * before transliteration consumes the non-Latin digit the policy reads. {@link
+     * DigitPolicy#PRESERVE} keeps a numeral through the fold, and transliteration then
+     * romanizes it anyway — a key that maps every script to Latin cannot keep one.
+     */
+    public static String sortKey(String text, String lang, DigitPolicy digitPolicy) {
+        req(text);
+        Objects.requireNonNull(digitPolicy, "digitPolicy");
+        return Native.sortKey(text, lang, digitPolicy.token());
     }
 
     /** Library-catalog deduplication key (search key plus confusable folding). */
@@ -332,7 +392,64 @@ public final class Disarm {
     }
 
     public static String catalogKey(String text, String lang, boolean strictIso9) {
-        return Native.catalogKey(req(text), lang, strictIso9);
+        return catalogKey(text, lang, strictIso9, DigitPolicy.NUMERIC);
+    }
+
+    /** {@link #catalogKey(String, String, boolean)} under a digit policy (#896). */
+    public static String catalogKey(
+            String text, String lang, boolean strictIso9, DigitPolicy digitPolicy) {
+        req(text);
+        Objects.requireNonNull(digitPolicy, "digitPolicy");
+        return Native.catalogKey(text, lang, strictIso9, digitPolicy.token());
+    }
+
+    /**
+     * The TR39 identifier skeleton plus the two prototype classes disarm's table keeps
+     * apart (#650). A <em>spoof key</em>: its only job is to make confusable identifiers
+     * collide, and its output is never for display. The letter half only; see {@link
+     * #skeletonKey(String, DigitPolicy)} for the digit half.
+     */
+    public static String skeletonKey(String text) {
+        return skeletonKey(text, DigitPolicy.NUMERIC);
+    }
+
+    /**
+     * {@link #skeletonKey(String)} under a digit policy: {@link DigitPolicy#TR39} adds
+     * {@code 1 ≡ l} and {@code 0 ≡ O}, which is what an identifier skeleton wants and what a
+     * deduplication key must not have.
+     */
+    public static String skeletonKey(String text, DigitPolicy digitPolicy) {
+        req(text);
+        Objects.requireNonNull(digitPolicy, "digitPolicy");
+        return Native.skeletonKey(text, digitPolicy.token());
+    }
+
+    /**
+     * Levenshtein edit distance between {@code a} and {@code b}, in characters (#894) — the
+     * one class of registry spoofing the confusable tables deliberately do not model
+     * ({@code paypa1}, {@code adm1n}). Canonicalize both sides first when composed and
+     * decomposed spellings should compare equal.
+     */
+    public static long editDistance(String a, String b) {
+        return Native.editDistance(req(a), req(b));
+    }
+
+    /** {@link #nearestMatch(String, List, long)} with a threshold of one edit. */
+    public static NearestMatch nearestMatch(String value, List<String> candidates) {
+        return nearestMatch(value, candidates, 1);
+    }
+
+    /**
+     * The candidate closest to {@code value}, with its distance, or {@code null} beyond
+     * {@code maxDistance} (#894). Reports; it does not decide. An exact match is reported
+     * with distance 0, and ties go to the first candidate at the lowest distance.
+     */
+    public static NearestMatch nearestMatch(String value, List<String> candidates, long maxDistance) {
+        req(value);
+        Objects.requireNonNull(candidates, "candidates");
+        List<NearestMatch> hits =
+                Native.nearestMatch(value, candidates.toArray(new String[0]), maxDistance);
+        return hits.isEmpty() ? null : hits.get(0);
     }
 
     // ── Grapheme clusters ──────────────────────────────────────────────────────

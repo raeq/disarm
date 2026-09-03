@@ -22,6 +22,69 @@ describe('transliterate', () => {
   })
 })
 
+describe('digitPolicy on the key builders (#896)', () => {
+  // U+0A66 GURMUKHI ZERO standing in for "o": a digit by default, the letter under tr39.
+  const spoof = 'g\u0A66ogle'
+  test('reaches every builder, and the default is the plain call', () => {
+    const builders = [
+      disarm.canonicalize,
+      disarm.canonicalizeStrict,
+      disarm.stripObfuscation,
+      disarm.searchKey,
+      disarm.sortKey,
+      disarm.catalogKey,
+    ]
+    for (const build of builders) {
+      expect(build(spoof, { digitPolicy: 'numeric' })).toBe(build(spoof))
+    }
+    expect(disarm.canonicalize(spoof)).toBe('g0ogle')
+    expect(disarm.canonicalize(spoof, { digitPolicy: 'tr39' })).toBe('google')
+    expect(disarm.catalogKey(spoof, { digitPolicy: 'tr39' })).toBe('google')
+  })
+  test('preserve keeps a numeral where the builder owns a fold; transliteration still romanizes it', () => {
+    const numeral = 'amount-\u0661'
+    expect(disarm.canonicalize(numeral, { digitPolicy: 'preserve' })).toBe(numeral)
+    expect(disarm.searchKey(numeral, { digitPolicy: 'preserve' })).toBe('amount-1')
+  })
+  test('a bad token is refused by name', () => {
+    expect(() => disarm.canonicalize('x', { digitPolicy: 'loose' })).toThrow(DisarmInvalidArgument)
+  })
+})
+
+describe('skeletonKey (#650)', () => {
+  test('merges the capital-I family, and the digit half on request', () => {
+    expect(disarm.skeletonKey('paypaI')).toBe(disarm.skeletonKey('paypal'))
+    expect(disarm.skeletonKey('SKU-1O0', { digitPolicy: 'tr39' })).toBe(disarm.skeletonKey('SKU-100', { digitPolicy: 'tr39' }))
+    expect(disarm.skeletonKey('SKU-1O0')).not.toBe(disarm.skeletonKey('SKU-100'))
+  })
+})
+
+describe('editDistance and nearestMatch (#894)', () => {
+  test('measures in characters', () => {
+    expect(disarm.editDistance('paypa1', 'paypal')).toBe(1)
+    expect(disarm.editDistance('stripe', 'stripe')).toBe(0)
+  })
+  test('reports the closest candidate, an exact match at 0, and null beyond the threshold', () => {
+    const reserved = ['paypal', 'stripe', 'admin']
+    expect(disarm.nearestMatch('paypa1', reserved)).toEqual({ value: 'paypal', distance: 1 })
+    expect(disarm.nearestMatch('admin', reserved)).toEqual({ value: 'admin', distance: 0 })
+    expect(disarm.nearestMatch('something-else', reserved)).toBeNull()
+    expect(disarm.nearestMatch('paypa11', reserved, { maxDistance: 2 })).toEqual({ value: 'paypal', distance: 2 })
+  })
+  test('a negative maxDistance is rejected, not read as exact-match-only', () => {
+    expect(() => disarm.nearestMatch('x', ['y'], { maxDistance: -1 })).toThrow(DisarmInvalidArgument)
+  })
+})
+
+describe('Pipeline.withDigitPolicy (#646)', () => {
+  test('folds under the policy, and refuses one the profile cannot run', () => {
+    const spoof = 'g\u0A66ogle'
+    expect(disarm.getPipeline('llm_guardrail').process(spoof)).toBe('g0ogle')
+    expect(disarm.getPipeline('llm_guardrail').withDigitPolicy('tr39').process(spoof)).toBe('google')
+    expect(() => disarm.getPipeline('rag_ingest').withDigitPolicy('tr39')).toThrow(/confusables/)
+  })
+})
+
 describe('confusables', () => {
   test('normalizeConfusables folds to latin by default', () => {
     expect(disarm.normalizeConfusables('раypal')).toBe('paypal')

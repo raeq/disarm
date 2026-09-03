@@ -215,6 +215,11 @@ fn normalize_confusables(
     Ok(api::normalize_confusables_with(&text, target, digit_policy).into_owned())
 }
 
+/// The `digit_policy` token every key builder takes (#896): parsed once, at the boundary.
+fn parse_policy(digit_policy: &str) -> Result<api::DigitPolicy, Error> {
+    digit_policy.parse().map_err(|e| map_err(&e))
+}
+
 /// `Disarm._confusable?(text, "latin" | "cyrillic" | "arabic" | "hebrew")`.
 fn is_confusable(text: Wtf8Text, target: String) -> Result<bool, Error> {
     let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
@@ -340,8 +345,8 @@ fn demojize(text: Wtf8Text, strip_modifiers: bool) -> String {
 ///
 /// Unlike `canonicalize` it does NOT fold confusables, so non-Latin text keeps its script
 /// — the point of the preset.
-fn canonicalize_strict(text: Wtf8Text) -> Result<String, Error> {
-    api::canonicalize_strict(&text)
+fn canonicalize_strict(text: Wtf8Text, digit_policy: String) -> Result<String, Error> {
+    api::canonicalize_strict_with(&text, parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
@@ -350,40 +355,70 @@ fn strip_format(text: Wtf8Text) -> String {
     api::strip_format(&text).into_owned()
 }
 
-fn strip_obfuscation(text: Wtf8Text) -> Result<String, Error> {
-    api::strip_obfuscation(&text)
+fn strip_obfuscation(text: Wtf8Text, digit_policy: String) -> Result<String, Error> {
+    api::strip_obfuscation_with(&text, parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
 
-fn canonicalize(text: Wtf8Text) -> Result<String, Error> {
-    api::canonicalize(&text)
+fn canonicalize(text: Wtf8Text, digit_policy: String) -> Result<String, Error> {
+    api::canonicalize_with(&text, parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
 
 /// `Disarm._search_key(text, lang)` — case/accent/script-insensitive lookup key.
 /// `lang` is `nil` (no profile) or a code like `"ru"`. Fails on an unknown `lang`.
-fn search_key(text: Wtf8Text, lang: Option<String>) -> Result<String, Error> {
-    api::search_key(&text, lang.as_deref())
+fn search_key(text: Wtf8Text, lang: Option<String>, digit_policy: String) -> Result<String, Error> {
+    api::search_key_with(&text, lang.as_deref(), parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
 
 /// `Disarm._sort_key(text, lang)` — collation sort key (preserves base accented
 /// characters for correct ordering). Fails on an unknown `lang`.
-fn sort_key(text: Wtf8Text, lang: Option<String>) -> Result<String, Error> {
-    api::sort_key(&text, lang.as_deref())
+fn sort_key(text: Wtf8Text, lang: Option<String>, digit_policy: String) -> Result<String, Error> {
+    api::sort_key_with(&text, lang.as_deref(), parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
 }
 
 /// `Disarm._catalog_key(text, lang, strict_iso9)` — catalog deduplication key.
 /// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails on an unknown `lang`.
-fn catalog_key(text: Wtf8Text, lang: Option<String>, strict_iso9: bool) -> Result<String, Error> {
-    api::catalog_key(&text, lang.as_deref(), strict_iso9)
+fn catalog_key(
+    text: Wtf8Text,
+    lang: Option<String>,
+    strict_iso9: bool,
+    digit_policy: String,
+) -> Result<String, Error> {
+    api::catalog_key_with(&text, lang.as_deref(), strict_iso9, parse_policy(&digit_policy)?)
         .map(std::borrow::Cow::into_owned)
         .map_err(|e| map_err(&e))
+}
+
+/// `Disarm._skeleton_key(text, digit_policy)` — the TR39 identifier skeleton plus the two
+/// prototype classes disarm's table keeps apart (#650). A spoof key: never for display.
+fn skeleton_key(text: Wtf8Text, digit_policy: String) -> Result<String, Error> {
+    api::skeleton_key(&text, parse_policy(&digit_policy)?)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
+}
+
+/// `Disarm._edit_distance(a, b)` — Levenshtein distance in characters (#894).
+fn edit_distance(a: Wtf8Text, b: Wtf8Text) -> usize {
+    api::edit_distance(&a, &b)
+}
+
+/// `Disarm._nearest_match(value, candidates, max_distance)` — the closest candidate and
+/// its distance as a `(value, distance)` tuple, or `nil` beyond `max_distance` (#894).
+/// The Ruby layer maps the tuple to a `{ value:, distance: }` hash.
+fn nearest_match(
+    value: Wtf8Text,
+    candidates: Vec<String>,
+    max_distance: usize,
+) -> Option<(String, usize)> {
+    api::nearest_match(&value, candidates.iter().map(String::as_str), max_distance)
+        .map(|m| (m.value, m.distance))
 }
 
 /// `Disarm._suspicious_hostname?(host)` — flags mixed-script / confusable IDN
@@ -823,6 +858,21 @@ fn pipeline_process(rb_self: &Pipeline, text: Wtf8Text) -> Result<String, Error>
     rb_self.inner.process(&text).map_err(|e| map_err(&e))
 }
 
+/// `Disarm::Pipeline#_with_digit_policy(policy)` — a copy of this pipeline whose confusable
+/// passes fold under `policy` (#646). Fails when the profile has no confusables step and the
+/// policy is not the default: a setting that would never run is refused rather than kept.
+/// The Ruby layer wraps it as `#with_digit_policy` so the error arrives as
+/// `Disarm::InvalidArgument`, the way every module-level call does.
+fn pipeline_with_digit_policy(rb_self: &Pipeline, digit_policy: String) -> Result<Pipeline, Error> {
+    Ok(Pipeline {
+        inner: rb_self
+            .inner
+            .clone()
+            .with_digit_policy(parse_policy(&digit_policy)?)
+            .map_err(|e| map_err(&e))?,
+    })
+}
+
 /// `Disarm._get_pipeline(profile)` — build a reusable `Disarm::Pipeline` for a
 /// named policy profile. Fails (Disarm::InvalidArgument) on an unknown profile.
 fn get_pipeline(profile: String) -> Result<Pipeline, Error> {
@@ -847,15 +897,18 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_confusable?", function!(is_confusable, 2))?;
     module.define_singleton_method("_slugify", function!(slugify, 13))?;
     module.define_singleton_method("_demojize", function!(demojize, 2))?;
-    module.define_singleton_method("_canonicalize_strict", function!(canonicalize_strict, 1))?;
+    module.define_singleton_method("_canonicalize_strict", function!(canonicalize_strict, 2))?;
     module.define_singleton_method("_strip_format", function!(strip_format, 1))?;
-    module.define_singleton_method("_strip_obfuscation", function!(strip_obfuscation, 1))?;
-    module.define_singleton_method("_canonicalize", function!(canonicalize, 1))?;
+    module.define_singleton_method("_strip_obfuscation", function!(strip_obfuscation, 2))?;
+    module.define_singleton_method("_canonicalize", function!(canonicalize, 2))?;
 
     // Key-derivation presets (#404 Group A parity backfill).
-    module.define_singleton_method("_search_key", function!(search_key, 2))?;
-    module.define_singleton_method("_sort_key", function!(sort_key, 2))?;
-    module.define_singleton_method("_catalog_key", function!(catalog_key, 3))?;
+    module.define_singleton_method("_search_key", function!(search_key, 3))?;
+    module.define_singleton_method("_sort_key", function!(sort_key, 3))?;
+    module.define_singleton_method("_catalog_key", function!(catalog_key, 4))?;
+    module.define_singleton_method("_skeleton_key", function!(skeleton_key, 2))?;
+    module.define_singleton_method("_edit_distance", function!(edit_distance, 2))?;
+    module.define_singleton_method("_nearest_match", function!(nearest_match, 3))?;
 
     // No options / no symbols, but still wrapped by the Ruby layer so a wrong-type
     // argument surfaces as Disarm::InvalidArgument rather than a raw TypeError —
@@ -954,6 +1007,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     // instance method on the wrapped handle. Mirrors `Disarm::Lexicon` above.
     let pipeline = module.define_class("Pipeline", ruby.class_object())?;
     pipeline.define_method("process", method!(pipeline_process, 1))?;
+    pipeline.define_method("_with_digit_policy", method!(pipeline_with_digit_policy, 1))?;
     module.define_singleton_method("_get_pipeline", function!(get_pipeline, 1))?;
     Ok(())
 }

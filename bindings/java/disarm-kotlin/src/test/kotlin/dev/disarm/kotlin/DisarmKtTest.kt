@@ -6,6 +6,7 @@ import dev.disarm.Lexicon
 import dev.disarm.NormalizationForm
 import dev.disarm.Platform
 import dev.disarm.TargetScript
+import dev.disarm.NearestMatch
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -272,5 +273,17 @@ class DisarmKtTest {
     fun errorsPropagate() {
         assertFailsWith<DisarmInvalidArgumentException> { langInfo("zz_nope") }
         assertFailsWith<DisarmInvalidArgumentException> { "x".stripZalgo(-1) }
+    }
+
+    @Test
+    fun digitPolicyReachesTheKeyBuildersAndTheNewEntryPoints() {
+        val spoof = "g\u0A66ogle" // GURMUKHI ZERO standing in for "o"
+        assertEquals("g0ogle", spoof.canonicalize())
+        assertEquals("google", spoof.canonicalize(DigitPolicy.TR39))
+        assertEquals("google", spoof.catalogKey(digitPolicy = DigitPolicy.TR39))
+        assertEquals("paypal".skeletonKey(), "paypaI".skeletonKey())
+        assertEquals(1L, "paypa1".editDistance("paypal"))
+        assertEquals(NearestMatch("paypal", 1L), "paypa1".nearestMatch(listOf("paypal", "stripe")))
+        assertEquals(null, "something-else".nearestMatch(listOf("paypal")))
     }
 }

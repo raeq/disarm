@@ -135,3 +135,16 @@ and callers who have not recompiled meet a `NoSuchMethodError` at run time.
 `JvmSignatureTest` pins the arities in CI. See
 [BINDINGS.md](../BINDINGS.md#jvm-signature-stability-588) for why this is a
 guarantee rather than a style.
+
+### `Disarm.skeletonKey(text[, digitPolicy])` · `Disarm.editDistance(a, b)` · `Disarm.nearestMatch(value, candidates[, maxDistance])`
+
+`skeletonKey` is the TR39 identifier skeleton plus the two prototype classes disarm's table
+keeps apart (#650) — a spoof key, never for display; `DigitPolicy.TR39` adds the digit half.
+`editDistance` is the Levenshtein distance in characters, and `nearestMatch` returns the
+closest candidate as a `NearestMatch(value, distance)` record or `null` beyond
+`maxDistance` (default 1) (#894). The six key builders — `canonicalize`,
+`canonicalizeStrict`, `stripObfuscation`, `searchKey`, `sortKey`, `catalogKey` — take a
+trailing `DigitPolicy` overload (#896), and `Pipeline.withDigitPolicy(policy)` returns a
+copy folding under it (#646). Kotlin exposes the same as extension functions with default
+arguments.
+

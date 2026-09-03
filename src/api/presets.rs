@@ -267,6 +267,40 @@ impl Pipeline {
     }
 }
 
+/// Whether `text` is already its own canonical form under `preset` (#730).
+///
+/// disarm's surfaces are all *generation path*: text in, normalized text out. This is the
+/// *verification path* counterpart — the question a caller asks about bytes that arrive
+/// already bound, where silently recomputing the canonical form lets the second
+/// representation keep circulating and defends only the comparison, not the stored value.
+///
+/// **[`crate::api::has_anomalies`] is not this predicate**, and the difference is not
+/// small. Measured over every assigned code point, 142,760 of them (5,292 excluding the
+/// Private Use Area) are reported clean by the detector and are *not* their own canonical
+/// form — CJK compatibility ideographs, Arabic presentation forms, Kangxi radicals,
+/// fullwidth and halfwidth forms. Zero go the other way. A caller who writes "reject if `has_anomalies`,
+/// otherwise take the bytes" admits every one of them.
+///
+/// Making the detector fire on those is the wrong fix and would undo #633: `ＮＨＫ` is how
+/// a Japanese broadcaster is written, and a detector that reports it is one a caller
+/// switches off. Two questions, two answers.
+///
+/// Equivalent to `preset(text) == text` and defined by that, but it does not build the
+/// normalized copy to answer a boolean: the pipeline's `Guard::Inert` classification
+/// returns a borrowed `Cow` without running any step, which is the common case on the hot
+/// path, and nothing crosses an FFI boundary either way.
+///
+/// `preset` accepts any name in the preset registry or any profile from
+/// [`crate::api::list_profiles`].
+///
+/// # Errors
+///
+/// [`Error`] if `preset` names neither a preset nor a profile, or if the underlying
+/// preset itself errors.
+pub fn is_canonical(text: &str, preset: &str) -> Result<bool, Error> {
+    crate::presets::is_canonical(text, preset).map_err(Error::from)
+}
+
 /// Build the reusable [`Pipeline`] handle for a named policy profile (#404).
 ///
 /// `profile` is one of the names returned by [`list_profiles`]. Fails

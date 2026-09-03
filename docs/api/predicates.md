@@ -173,6 +173,59 @@ caller's to choose: reserve both forms, reject the name, or key the table on
 
 ---
 
+## is_canonical
+
+::: disarm.is_canonical
+
+```python
+from disarm import canonicalize, has_anomalies, is_canonical
+
+is_canonical("paypal.com")  # True
+is_canonical("ｐａｙｐａｌ.ｃｏｍ")  # False — fullwidth, canonicalizes to paypal.com
+is_canonical("abc", preset="search_key")  # True
+```
+
+### Generation path and verification path
+
+The two are different questions and the answers do not substitute for one another.
+
+| | ask | function |
+|---|---|---|
+| **Generation path** | *what should I store?* | [`canonicalize`](pipelines.md#canonicalize) and the other presets |
+| **Verification path** | *may I accept what I was handed?* | `is_canonical` |
+
+Normalize on the way in and the verification path never comes up, because the stored
+value is canonical by construction. It comes up wherever bytes arrive already bound to a
+decision — a signed payload whose signature covers the original bytes, a primary key that
+already has rows pointing at it, an identifier a third party will re-derive. Silently
+recomputing the canonical form there defends the comparison you are about to make and
+leaves the non-canonical representation in circulation, still able to reach a system that
+compares differently.
+
+### `has_anomalies` does not answer this
+
+The obvious accept gate — reject if [`has_anomalies`](../user-guide/anomaly-detection.md), otherwise take the
+bytes as given — is not a canonicity check. Over every assigned code point (UCD 16.0.0,
+excluding unassigned and surrogates):
+
+| | count |
+|---|---|
+| clean to the detector **and** not canonical | 142,760 (5,292 excluding the Private Use Area) |
+| flagged by the detector **and** already canonical | 0 |
+
+The relationship is one-way: the detector never fires on text the canonicalizer would
+leave alone, but it stays silent on 5,292 non-PUA code points that are not their own
+canonical form, including CJK compatibility ideographs, Arabic presentation forms,
+Kangxi radicals and all of fullwidth Latin.
+
+Widening the detector is the wrong fix. `ＮＨＫ` is how a Japanese broadcaster writes its
+own name and `㎏` is an ordinary unit, so a detector that flagged them is one callers
+switch off — that is what [#633](https://github.com/raeq/disarm/issues/633) and
+[#907](https://github.com/raeq/disarm/issues/907) were about. `has_anomalies` answers
+*does this look disguised*; `is_canonical` answers *is this already the form I store*.
+
+---
+
 ## is_normalized
 
 ::: disarm.is_normalized

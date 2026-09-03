@@ -52,6 +52,7 @@ All core transforms are available as methods:
 | Method | Returns | Description |
 |---|---|---|
 | `.is_ascii()` | `bool` | All characters are ASCII |
+| `.is_canonical(preset=)` | `bool` | Already its own canonical form (#730) |
 | `.is_normalized(form=)` | `bool` | Already in normalization form |
 | `.is_confusable()` | `bool` | Contains confusable homoglyphs |
 | `.is_mixed_script()` | `bool` | Multiple Unicode scripts |

@@ -119,6 +119,15 @@ operations:
       java: null
       kotlin: null
       cabi: null
+  - id: edit_distance
+    names:
+      rust: edit_distance
+      python: edit_distance
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: escape_html
     names:
       rust: escape_html
@@ -272,6 +281,15 @@ operations:
       java: null
       kotlin: null
       cabi: null
+  - id: is_canonical
+    names:
+      rust: is_canonical
+      python: is_canonical
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: is_case_fold_stable
     names:
       rust: is_case_fold_stable
@@ -416,6 +434,15 @@ operations:
       java: mlNormalize
       kotlin: mlNormalize
       cabi: ml_normalize
+  - id: nearest_match
+    names:
+      rust: nearest_match
+      python: nearest_match
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: normalize
     names:
       rust: normalize

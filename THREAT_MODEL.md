@@ -348,7 +348,8 @@ behavior, not a vulnerability:
   two kinds.
 
   The `CR` rule fires only where a `CR` can overwrite something — not before an `LF`, not
-  at end of text, not at the start of a line. Its known false positive is a classic Mac OS
+  at end of text, not at the start of a line (after any UAX #14 mandatory break, not
+  just `LF`). Its known false positive is a classic Mac OS
   file, which used a lone `CR` as its line ending until 2001; the two are indistinguishable
   from the bytes, so the report is a technical fact and the judgement is the caller's.
 

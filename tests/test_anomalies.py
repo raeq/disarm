@@ -7,6 +7,8 @@ these tests verify the binding wiring, the lexicon contract, and the report shap
 import re
 from pathlib import Path
 
+import pytest
+
 import disarm
 from disarm import AnomalyReport, Finding, Lexicon, has_anomalies, inspect_anomalies
 
@@ -248,6 +250,21 @@ class TestControlCharacters:
         assert not has_anomalies("line one\r\nline two"), "CRLF line ending"
         assert not has_anomalies("no newline at eof\r"), "nothing follows to overwrite"
         assert not has_anomalies("\rleading"), "no prefix on the line to hide"
+
+    # UAX #14's mandatory breaks. The first rule searched only for LF, so a CR sitting
+    # immediately after any of the other five was reported as an overwrite even though it
+    # was at the start of its line (caught in review on #934). TAB is not here: it shares
+    # `is_fold_whitespace` with these but moves along a line rather than starting one.
+    LINE_BREAKS = ["\n", "\x0b", "\x0c", "\x85", "\u2028", "\u2029"]
+
+    @pytest.mark.parametrize("brk", LINE_BREAKS)
+    def test_a_cr_at_the_start_of_any_line_is_spared(self, brk):
+        assert not has_anomalies(f"a{brk}\rb"), repr(brk)
+
+    @pytest.mark.parametrize("brk", LINE_BREAKS)
+    def test_a_cr_with_a_prefix_still_fires_after_any_line_break(self, brk):
+        """The other half — the fix must not have bought silence with blindness."""
+        assert "deletion" in inspect_anomalies(f"a{brk}ZZZ\rb").kinds, repr(brk)
 
     def test_ordinary_text_is_not_flagged(self):
         for s in ("hello world", "  padded  ", "Café déjà vu", "line one\nline two"):

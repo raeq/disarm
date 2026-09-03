@@ -324,8 +324,9 @@ pub enum AnomalyKind {
     ///
     /// A `CR` is reported only when it can actually overwrite something: it must be
     /// followed by a character other than `LF` (so `CRLF` line endings and a trailing
-    /// `CR` never fire) and there must be text between it and the start of its line (so
-    /// a leading `CR` never fires). **Known false positive:** a classic Mac OS file, which
+    /// `CR` never fire) and there must be text between it and the start of its line — for
+    /// every UAX #14 mandatory break, not just `LF`, so a `CR` after `NEL`, `LS`, `PS`,
+    /// `VT` or `FF` never fires either. **Known false positive:** a classic Mac OS file, which
     /// used a lone `CR` as its line ending until 2001. The report is a technical fact, as
     /// with `is_case_fold_stable` and `groß` — the judgement is the caller's.
     Deletion,
@@ -595,6 +596,20 @@ fn erased_by_deletion(token: &str) -> Option<char> {
     None
 }
 
+/// The mandatory line breaks of UAX #14 — every character that starts a new line.
+///
+/// `LF` alone is not the set. A `CR` sitting immediately after `VT`, `FF`, `NEL`, `LS` or
+/// `PS` is at the start of its line and overwrites nothing, and a rule that searched only
+/// for `LF` reported all five as `deletion` (caught in review on #934). `TAB` is
+/// deliberately absent: it is in `is_fold_whitespace` with these, but it moves the cursor
+/// along a line rather than starting one.
+fn is_line_break(c: char) -> bool {
+    matches!(
+        c,
+        '\n' | '\u{B}' | '\u{C}' | '\r' | '\u{85}' | '\u{2028}' | '\u{2029}'
+    )
+}
+
 /// The first `CR` that overwrites text, as a `(byte offset, overwritten segment)` pair.
 ///
 /// Shared by [`has_anomalies`] and [`inspect_anomalies`] so the two cannot disagree —
@@ -604,20 +619,23 @@ fn erased_by_deletion(token: &str) -> Option<char> {
 /// The three guards are all necessary, and each spares an ordinary use:
 /// * followed by `LF` — a `CRLF` line ending, which overwrites nothing;
 /// * at end of text — nothing follows to paint over the line;
-/// * nothing between it and the line start — a leading `CR` has no prefix to hide.
+/// * nothing between it and the line start — a leading `CR` has no prefix to hide, for
+///   every line break in [`is_line_break`] and not just `LF`.
 fn overwriting_cr(text: &str) -> Option<(usize, &str)> {
-    let b = text.as_bytes();
-    b.iter().enumerate().find_map(|(i, &c)| {
-        if c != b'\r' || b.get(i + 1).is_none_or(|&n| n == b'\n') {
-            return None;
+    let mut line_start = 0;
+    for (i, c) in text.char_indices() {
+        if c == '\r' {
+            let overwrites = text[i + 1..].chars().next().is_some_and(|n| n != '\n');
+            if overwrites && i > line_start {
+                return Some((line_start, &text[line_start..i]));
+            }
         }
-        let line_start = b[..i]
-            .iter()
-            .rposition(|&n| n == b'\n')
-            .map_or(0, |p| p + 1);
-        let overwritten = &text[line_start..i];
-        (!overwritten.is_empty()).then_some((line_start, overwritten))
-    })
+        if is_line_break(c) {
+            // A `CR` starts a line too, so a run of them collapses to one line start.
+            line_start = i + c.len_utf8();
+        }
+    }
+    None
 }
 
 fn codepoint(c: char) -> String {

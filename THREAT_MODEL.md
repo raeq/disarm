@@ -48,6 +48,18 @@ encoding. A validator that runs *after* disarm sees the canonical form; a valida
 *before* it can be defeated by a payload disarm later reconstitutes (see *Payload reconstitution
 via invisible-character stripping* under *Out of scope*).
 
+**A transport-encoded value has to be decoded before disarm can see it, and disarm's
+detectors report it clean rather than unknown (#727).** `ad%E2%80%8Bmin` is valid, NFC,
+all-ASCII Unicode — it is simply not the Unicode that carries the meaning — and every
+detector returns `False` on it. The parenthetical above does not cover this: percent-encoding
+sits *above* Unicode, where charset detection (`decode_to_utf8`) sits below it. A caller whose
+value arrives already encoded is being told to start at a point disarm gives them no way to
+reach. [`decode_smuggled`](https://github.com/raeq/disarm/blob/main/docs/api/predicates.md#decode_smuggled) reports what a percent run
+*spells*, once, as evidence — a decode-for-inspection primitive rather than a substituting
+`percent_decode`, because a decoded string some callers will re-emit is its own vulnerability
+class. It does not feed the anomaly detector: a percent run spelling readable text is ordinary
+in any URL.
+
 **A "disarmed" string carries no safety property — do not launder trust through it.** The
 output of `canonicalize` / `canonicalize_strict` / `strip_obfuscation` is *more canonical*,
 not *safe*: after unmasking and coalescence it is, if anything, **more** actionable than the

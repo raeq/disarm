@@ -52,6 +52,35 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   diverge. Binary, non-UTF-8 and oversize files are skipped without error. Inline
   suppression is deliberately not here (#704 item 5): there is nothing to suppress until
   there is a scanner.
+- **`percent_escape`, the fourth scheme on `decode_smuggled` (#727).** disarm ships
+  `percent_encode` and shipped no decoder, so every detector reported clean on a
+  percent-encoded value: `has_anomalies("ad\u200bmin")` is `True` and
+  `has_anomalies("ad%E2%80%8Bmin")` is `False`, for every detector and every row of #727's
+  table. A caller whose value arrives encoded — a query parameter, a stored key, a
+  `Content-Disposition` filename — could not reach the starting point the ordering
+  invariant in `THREAT_MODEL.md` requires.
+
+  A fourth scheme on #701's `Payload` rather than a `percent_decode`, which is the shape
+  #727 itself preferred and the decision #902's R14 recorded: a decode-for-inspection
+  primitive returns what the escapes *spelled*, as evidence, where a substituting decoder
+  hands back a string some callers will re-emit — and repeated decoding is its own
+  vulnerability class. Decoded exactly once: `%25%32%45` spells `%2E`, and that `text` is
+  the evidence of double-encoding, not a prompt to decode again.
+
+  The error contract, each answer pinned: `%FF` is not UTF-8 and comes back as bytes with
+  no `text`, through the same printable rule as the other three schemes; `%` with fewer
+  than two hex digits is malformed, is not consumed, and ends a run; a single `%20` is an
+  escaped space, not a payload — the same two-unit floor as variation selectors, for the
+  same reason.
+
+  **Deliberately not fed to the anomaly detector.** Unlike the three invisible carriers, a
+  percent run spelling readable text is ordinary in any URL; reporting it as `smuggled`
+  would fire on every escaped query string. `decode_smuggled` reports it and
+  `inspect_anomalies` does not, and a test asserts both halves.
+
+  `THREAT_MODEL.md` now states the blindness beside the ordering invariant, and
+  `percent_encode`'s docstring says a value that arrives encoded is opaque to the rest of
+  the library until it is decoded.
 
 - **`per_word=True` on `is_mixed_script` and `has_bidi_conflict` (#901).** Both answer a
   question about the whole string, and both docstrings were accurate about that. The

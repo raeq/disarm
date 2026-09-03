@@ -643,7 +643,11 @@ fn is_line_break(c: char) -> bool {
 fn decoded_payloads(text: &str) -> impl Iterator<Item = crate::smuggled::Payload> {
     crate::smuggled::decode_smuggled(text)
         .into_iter()
-        .filter(|p| p.text.is_some())
+        // `PercentEscape` is decoded for inspection and deliberately kept out of the
+        // detector (#727): a percent run spelling readable text is ordinary in any URL,
+        // where the three invisible carriers are never ordinary. Reporting it as
+        // `smuggled` would fire on every escaped query string.
+        .filter(|p| p.text.is_some() && p.scheme != crate::smuggled::PayloadScheme::PercentEscape)
 }
 
 /// The first `CR` that overwrites text, as a `(byte offset, overwritten segment)` pair.

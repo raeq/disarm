@@ -24,6 +24,19 @@ pub enum PayloadScheme {
     VariationBytes,
     /// `U+200B` = 0, `U+200C` = 1, MSB first. `U+200D`, `U+2060` and `U+FEFF` separate.
     ZeroWidthBinary,
+    /// `%XX` triples, two hex digits each, one byte per triple (#727).
+    ///
+    /// The fourth scheme on this type rather than a `percent_decode` of its own, for the
+    /// reason #727 gives: a decode-for-inspection primitive returns what the escapes
+    /// *spelled*, and a substituting decoder hands back a string some callers will
+    /// re-emit — repeated decoding is its own vulnerability class. Decoded exactly once:
+    /// `%25%32%45` spells `%2E`, and that `text` is the evidence of double-encoding, not
+    /// a prompt to decode again.
+    ///
+    /// **Not fed to the detector.** Unlike the three carriers above, a percent run that
+    /// spells readable text is ordinary in any URL. `decode_smuggled` reports it;
+    /// `inspect_anomalies` does not.
+    PercentEscape,
 }
 
 impl PayloadScheme {
@@ -34,6 +47,7 @@ impl PayloadScheme {
             Self::TagAscii => "tag_ascii",
             Self::VariationBytes => "variation_bytes",
             Self::ZeroWidthBinary => "zero_width_binary",
+            Self::PercentEscape => "percent_escape",
         }
     }
 }
@@ -72,6 +86,13 @@ pub struct Payload {
 /// `☂\u{FE0F}` in ordinary text is a "payload".
 const MIN_VARIATION_RUN: usize = 2;
 
+/// A percent run shorter than this is not reported.
+///
+/// One `%20` is a URL-escaped space and one byte cannot spell anything; without the floor
+/// every escaped path segment is a "payload". Two is the same floor as
+/// [`MIN_VARIATION_RUN`], for the same reason.
+const MIN_PERCENT_RUN: usize = 2;
+
 /// Decode every smuggled run in `text`, in order of appearance.
 ///
 /// A well-formed emoji subdivision flag is not a payload: `U+1F3F4` + tag letters +
@@ -97,6 +118,11 @@ pub fn decode_smuggled(text: &str) -> Vec<Payload> {
             continue;
         }
         if let Some(p) = scan_variation(&chars, i, offset) {
+            i += p.units;
+            out.push(p);
+            continue;
+        }
+        if let Some(p) = scan_percent(&chars, i, offset) {
             i += p.units;
             out.push(p);
             continue;
@@ -230,6 +256,44 @@ fn scan_variation(chars: &[(usize, char)], i: usize, offset: usize) -> Option<Pa
         .map_or_else(|| offset + tail_len(chars, i, j), |&(o, _)| o);
     Some(finish(
         PayloadScheme::VariationBytes,
+        offset,
+        end,
+        j - i,
+        bytes,
+    ))
+}
+
+/// The byte a `%XX` triple at `chars[i]` encodes, if it is well formed.
+///
+/// `%` followed by fewer than two hex digits is malformed and is not part of any run
+/// (#727 item 2): it is left where it is, and a run in progress ends before it.
+fn percent_byte(chars: &[(usize, char)], i: usize) -> Option<u8> {
+    if chars.get(i)?.1 != '%' {
+        return None;
+    }
+    let hi = chars.get(i + 1)?.1.to_digit(16)?;
+    let lo = chars.get(i + 2)?.1.to_digit(16)?;
+    u8::try_from(hi * 16 + lo).ok()
+}
+
+fn scan_percent(chars: &[(usize, char)], i: usize, offset: usize) -> Option<Payload> {
+    percent_byte(chars, i)?;
+    let mut bytes = Vec::new();
+    let mut j = i;
+    while let Some(b) = percent_byte(chars, j) {
+        bytes.push(b);
+        j += 3;
+    }
+    if bytes.len() < MIN_PERCENT_RUN {
+        return None;
+    }
+    let end = chars
+        .get(j)
+        .map_or_else(|| offset + tail_len(chars, i, j), |&(o, _)| o);
+    // `printable` gives item 2's first answer for free: `%FF` is not valid UTF-8, so the
+    // run is reported as bytes with no `text`, never as a bogus string.
+    Some(finish(
+        PayloadScheme::PercentEscape,
         offset,
         end,
         j - i,
@@ -459,9 +523,68 @@ mod tests {
         assert_eq!(&s[found[0].end..], "y");
     }
 
+    fn pct(s: &str) -> String {
+        s.bytes().map(|b| format!("%{b:02X}")).collect()
+    }
+
+    #[test]
+    fn a_percent_run_decodes_to_what_it_spells() {
+        let found = decode_smuggled(&format!("q={}", pct("tracked-by:acct-99213")));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].scheme, PayloadScheme::PercentEscape);
+        assert_eq!(found[0].text.as_deref(), Some("tracked-by:acct-99213"));
+        assert_eq!(found[0].units, 21 * 3, "three characters per byte");
+        assert_eq!(found[0].start, 2);
+    }
+
+    /// #727 item 2, all three answers.
+    #[test]
+    fn the_error_contract() {
+        // `%FF` is not UTF-8: bytes, no text — the existing printable rule.
+        let found = decode_smuggled("%FF%FE");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].bytes, vec![0xFF, 0xFE]);
+        assert_eq!(found[0].text, None);
+        // `%` with fewer than two hex digits is malformed and ends the run before it.
+        let found = decode_smuggled("%48%69%4");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].text.as_deref(), Some("Hi"));
+        assert_eq!(found[0].units, 6, "the malformed `%4` is not consumed");
+        assert!(decode_smuggled("%4x%zz").is_empty());
+        // Double encoding decodes ONCE; the result is the evidence, not a prompt.
+        let found = decode_smuggled("%25%32%45");
+        assert_eq!(found[0].text.as_deref(), Some("%2E"));
+    }
+
+    /// A lone `%20` is an escaped space, not a payload.
+    #[test]
+    fn a_single_escape_is_not_a_payload() {
+        assert!(decode_smuggled("a%20b").is_empty());
+        assert!(decode_smuggled("/path%2Fseg").is_empty());
+    }
+
+    #[test]
+    fn hex_digits_are_case_insensitive_and_offsets_are_bytes() {
+        let s = "caf\u{e9}=%68%69";
+        let found = decode_smuggled(s);
+        assert_eq!(found[0].text.as_deref(), Some("hi"));
+        assert_eq!(&s[found[0].start..found[0].end], "%68%69");
+        // `0x6a` and `0x6B` are both lowercase letters; the hex digits' case is not the
+        // letters' case, which the first draft of this line got wrong.
+        assert_eq!(decode_smuggled("%6a%6B")[0].text.as_deref(), Some("jk"));
+    }
+
     #[test]
     fn ordinary_text_decodes_to_nothing() {
-        for s in ["hello world", "", "café", "\u{1F600}", "Москва"] {
+        for s in [
+            "hello world",
+            "",
+            "café",
+            "\u{1F600}",
+            "Москва",
+            "100%",
+            "50% off",
+        ] {
             assert!(decode_smuggled(s).is_empty(), "{s:?}");
         }
     }

@@ -191,7 +191,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - uses: actions/setup-java@v5  # pin to a SHA on review (dependabot-managed)
+      - uses: actions/setup-java@v6  # pin to a SHA on review (dependabot-managed)
         with:
           distribution: temurin
           java-version: "21"

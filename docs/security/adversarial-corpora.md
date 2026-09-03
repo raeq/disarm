@@ -107,30 +107,25 @@ the predicate surfaces and the key builders are scored on the same rows (#736).
 Paul Wood FRSA (@paultendo), `namespace-guard`, `docs/data/confusable-bench.v1.json`, MIT,
 published with the *Unicode identifier threat model* post: 140 labelled identifier rows —
 120 malicious in three threat classes (54 evasion, 35 impersonation, 31 composability) and
-20 benign controls (14 ASCII, 4 precomposed, 2 legitimately combining). Checked in verbatim
-under `tests/fixtures/confusable_bench/`, pinned by checksum.
+20 benign controls (14 ASCII, 4 precomposed, 2 legitimately combining).
 
-**Measured on this tree, not carried from the issue.** The issue measured 0.14.1, where the
-best single call reached 0.550 recall and three surfaces composed reached 0.983 with two
-residual misses. Since then the detector grew, `skeleton_key` (#650) and `nearest_match`
-(#894) landed, and the picture is different: precision is 1.000 under every policy — no
-policy flags a control — and two calls reach every malicious row.
+**Scored by the meta-benchmark, not by a second copy of the corpus.**
+`benchmarks/meta` already registers this benchmark as the `confusable-bench-v1` suite —
+it fetches the published file, applies the corpus's own labels, and records the run against
+a baseline. This change adds the three surfaces the suite predated (`skeleton_key`,
+`skeleton_key` under `tr39`, and `nearest_match`) and the two-call composition, rather
+than re-deriving the scores here:
 
-| policy | true positives | false negatives | recall |
-|---|---|---|---|
-| `has_anomalies(text)` | 91 | 29 | 0.758 |
-| `inspect_anomalies(text, lexicon=protect)` | 101 | 19 | 0.842 |
-| `is_confusable(text)` | 66 | 54 | 0.550 |
-| `is_mixed_script(text)` | 15 | 105 | 0.125 |
-| `catalog_key` collision | 58 | 62 | 0.483 |
-| `canonicalize_strict` collision | 50 | 70 | 0.417 |
-| `skeleton_key` collision | 80 | 40 | 0.667 |
-| `skeleton_key(digit_policy="tr39")` collision | 98 | 22 | 0.817 |
-| `nearest_match(max_distance=1)` | 113 | 7 | 0.942 |
-| `nearest_match` **or** `is_confusable` | 120 | 0 | 1.000 |
+```bash
+python -m benchmarks.meta --run --select confusable-bench-v1
+```
 
-A *collision* row means the identifier and one of its protected names reduce to the same
-key. Measured by `tests/test_confusable_bench.py`, which is also what checks this table.
+**Re-measured after #650 and #894.** The issue measured 0.14.1, where the best single call
+reached 0.550 recall and the published headline was a three-surface composition at 0.983.
+Today `nearest_match` at one edit reaches **0.942 alone**, `skeleton_key` under `tr39`
+0.817, and `is_confusable` **or** `nearest_match` reaches **1.000** — two calls, not three.
+Precision is 1.000 on every policy: no policy flags a benign control, and the twenty
+controls are what make that a result rather than an assertion.
 
 **Two calls, and why it is two.** `nearest_match` at one edit reaches 113 of 120 on its
 own, and the seven it misses are all `confusable-chain` rows — two substitutions in one
@@ -153,10 +148,15 @@ THREAT_MODEL.md's boundary holds; the library simply has a second kind of instru
 catches all 31, and `has_anomalies` catches 28 through the `compat_fold` kind, which did not
 exist when the issue was measured.
 
+Whether the two-call composition deserves an entry point of its own — the shape
+`is_suspicious_hostname` gives the hostname case, with the corpus's benign-precomposed and
+benign-combining rows to keep a graded signal honest (#545) — is #736's open question.
+
 ## Reproducing
 
 ```bash
-pytest tests/test_adversarial_corpora.py tests/test_confusable_bench.py
+pytest tests/test_adversarial_corpora.py
+python -m benchmarks.meta --run --select confusable-bench-v1   # the second corpus
 ```
 
 The vectors are in that file. The table above is parsed out of this page and compared

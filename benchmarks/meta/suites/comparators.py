@@ -41,10 +41,17 @@ class ConfusableBenchV1(SuiteBase):
         licence="MIT",
         issues=(736, 737, 732),
         finding=(
-            "#736: no single surface exceeds R=0.550. The result disarm actually "
-            "reaches — P=1.000 R=0.983 — is a three-surface composition "
-            "(lexicon OR is_confusable OR key collision) that no documentation page "
-            "names, so a caller cannot arrive at it from the docs."
+            "#736, as filed at 0.14.1: no single surface exceeded R=0.550, and the "
+            "P=1.000 R=0.983 headline was a three-surface composition no page named. "
+            "Re-measured after #650 and #894 added surfaces this suite could not see: "
+            "`nearest_match` at one edit reaches R=0.942 alone, `skeleton_key` under "
+            "`tr39` R=0.817, and `is_confusable OR nearest_match` reaches P=1.000 "
+            "R=1.000 — two calls, not three. Precision stays 1.000 on every policy: "
+            "no policy flags a benign control. The seven rows the edit distance misses "
+            "are two-substitution chains, two edits by construction, which the fold "
+            "catches; the two the fold misses are ASCII edits no confusable table "
+            "should fold. The docs gap the issue names is what remains, and "
+            "`docs/security/cve-validation.md` now carries the recipe."
         ),
         notes=(
             "The only labelled benchmark in the registry, and the only one where a "
@@ -94,15 +101,17 @@ class ConfusableBenchV1(SuiteBase):
 
         is_malicious = self._is_malicious
 
-        def collides(builder: Callable[[str], str], row: dict[str, object]) -> bool:
-            ident = str(row.get("identifier", ""))
+        def _protect(row: dict[str, object]) -> list[str]:
             raw = row.get("protect") or []
             if isinstance(raw, str):
-                protect = [raw]
-            elif isinstance(raw, (list, tuple, set, frozenset)):
-                protect = [str(x) for x in raw]
-            else:
-                protect = []
+                return [raw]
+            if isinstance(raw, (list, tuple, set, frozenset)):
+                return [str(x) for x in raw]
+            return []
+
+        def collides(builder: Callable[[str], str], row: dict[str, object]) -> bool:
+            ident = str(row.get("identifier", ""))
+            protect = _protect(row)
             key = builder(ident)
             return any(builder(p) == key and p != ident for p in protect)
 
@@ -112,6 +121,19 @@ class ConfusableBenchV1(SuiteBase):
             "is_mixed_script": lambda r: disarm.is_mixed_script(str(r.get("identifier", ""))),
             "catalog_key_collision": lambda r: collides(disarm.catalog_key, r),
             "canonicalize_strict_collision": lambda r: collides(disarm.canonicalize_strict, r),
+            # Both landed after this suite was written, and both are surfaces a
+            # registry would actually reach for (#650, #894). `skeleton_key` under
+            # `tr39` is the spoof key; `nearest_match` measures the ASCII-edit class
+            # no confusable table should fold, which is where the corpus's residual
+            # rows live.
+            "skeleton_key_collision": lambda r: collides(disarm.skeleton_key, r),
+            "skeleton_key_tr39_collision": lambda r: collides(
+                lambda s: disarm.skeleton_key(s, digit_policy="tr39"), r
+            ),
+            "nearest_match_1": lambda r: (
+                disarm.nearest_match(str(r.get("identifier", "")), _protect(r), max_distance=1)
+                is not None
+            ),
         }
         # The composition #736 measures: the union is the only policy that reaches
         # the published headline, and it is a union no page names.
@@ -119,6 +141,13 @@ class ConfusableBenchV1(SuiteBase):
             bool(disarm.is_confusable(str(r.get("identifier", ""))))
             or collides(disarm.catalog_key, r)
             or collides(disarm.canonicalize_strict, r)
+        )
+        # The two-call composition, scored beside it: the fold sees the Unicode class
+        # and the edit distance sees the ASCII class, and neither sees the other's.
+        policies["union_confusable_or_nearest_match"] = lambda r: (
+            bool(disarm.is_confusable(str(r.get("identifier", ""))))
+            or disarm.nearest_match(str(r.get("identifier", "")), _protect(r), max_distance=1)
+            is not None
         )
 
         malicious = sum(1 for r in rows if is_malicious(r))

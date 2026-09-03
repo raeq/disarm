@@ -2050,7 +2050,7 @@ def inspect_auto_lang(text: str) -> dict[str, str | list[str] | None]:
     return result
 
 
-def is_mixed_script(text: str) -> bool:
+def is_mixed_script(text: str, *, per_word: bool = False) -> bool:
     """True if text contains characters from more than one Unicode **writing system**.
 
     Resolves the UTS #39 §5.1 augmented script sets (#776), so a script pair that one
@@ -2087,11 +2087,22 @@ def is_mixed_script(text: str) -> bool:
         False
         >>> is_mixed_script("ひら한")  # Japanese + Korean, no set in common
         True
+
+    **This is a string-level question, and callers compose it into a different
+    one (#901).** Bilingual text triggers it by design. A reject rule written as
+    ``is_mixed_script(x) or has_bidi_conflict(x) or find_confusables(x)`` turns
+    away every bilingual user — measured, it rejects all four bilingual strings
+    in #901's table alongside the two spoofs. `has_anomalies` is the composition
+    that tells them apart; ``per_word=True`` is that distinction on its own.
+
+    ``per_word`` splits on **words**, not whitespace tokens: `IT-специалист`,
+    `email:почта` and `user@почта.рф` are ordinary text, and a whitespace split
+    reports all three. It uses the detector's own splitter, so the two agree.
     """
-    return _is_mixed_script(text)
+    return _is_mixed_script(text, per_word=per_word)
 
 
-def has_bidi_conflict(text: str) -> bool:
+def has_bidi_conflict(text: str, *, per_word: bool = False) -> bool:
     """True if text mixes strong left-to-right and strong right-to-left characters.
 
     This is the precondition for Unicode Bidi display-reordering (UAX #9) — the
@@ -2158,8 +2169,19 @@ def has_bidi_conflict(text: str) -> bool:
         False
         >>> inspect_anomalies("invoice\\u202Egpj.exe").kinds  # this is the check
         ['bidi']
+
+    **This is a string-level question, and callers compose it into a different
+    one (#901).** Bilingual text triggers it by design. A reject rule written as
+    ``is_mixed_script(x) or has_bidi_conflict(x) or find_confusables(x)`` turns
+    away every bilingual user — measured, it rejects all four bilingual strings
+    in #901's table alongside the two spoofs. `has_anomalies` is the composition
+    that tells them apart; ``per_word=True`` is that distinction on its own.
+
+    ``per_word`` splits on **words**, not whitespace tokens: `IT-специалист`,
+    `email:почта` and `user@почта.рф` are ordinary text, and a whitespace split
+    reports all three. It uses the detector's own splitter, so the two agree.
     """
-    return _has_bidi_conflict(text)
+    return _has_bidi_conflict(text, per_word=per_word)
 
 
 def has_bidi_control(text: str) -> bool:

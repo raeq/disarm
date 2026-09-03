@@ -29,6 +29,62 @@ See [Language Detection](../user-guide/language-detection.md#inspecting-detectio
 
 ---
 
+## Bilingual text is not a spoof
+
+`is_mixed_script`, `has_bidi_conflict` and `find_confusables` each answer a question about
+the **whole string**, and each is accurate about it. The trouble is what a caller does
+with them: they look like standalone detectors, so callers compose them —
+
+```python
+from disarm import find_confusables, has_bidi_conflict, is_mixed_script
+
+
+def rejected(x: str) -> bool:
+    return bool(is_mixed_script(x) or has_bidi_conflict(x) or find_confusables(x))
+
+
+sentence = "\u05e9\u05dc\u05d5\u05dd world"  # a Hebrew word, then an English one
+assert rejected(sentence)  # ...turned away
+assert rejected("hello \u043c\u0438\u0440")  # and so is "hello мир"
+```
+
+| text | string-level | per word | is it a spoof? |
+|---|---|---|---|
+| `hellо` (Cyrillic `о`) | fires | fires | **yes** — one word, two scripts |
+| `שלוםworld` | fires | fires | **yes** — glued into one token |
+| `hello мир` | fires | silent | no — two words, two scripts |
+| `שלום world` | fires | silent | no — a sentence in Tel Aviv |
+| `مرحبا hello` | fires | silent | no |
+| `IT-специалист` | fires | silent | no — a hyphenated compound |
+
+`has_anomalies` gets every row right, and has since it was written. `per_word=True` is
+that distinction exposed on its own, so the rule can be built from parts:
+
+```python
+ALLOWED = ["Latin", "Cyrillic", "Hebrew", "Arabic", "Han"]
+
+
+def rejected(x: str) -> bool:
+    return bool(
+        is_mixed_script(x, per_word=True)
+        or has_bidi_conflict(x, per_word=True)
+        or find_confusables(x, allowed_scripts=ALLOWED)  # allowed_scripts is #900
+    )
+
+
+assert not rejected(sentence)  # the sentence goes through
+assert not rejected("IT-\u0441\u043f\u0435\u0446\u0438\u0430\u043b\u0438\u0441\u0442")
+assert rejected("hell\u043e")  # ...and the spoof still does not
+```
+
+!!! note "Words, not whitespace tokens"
+    `per_word` splits on whitespace **and** the joining punctuation `- _ / : @ ,`, which
+    is the detector's own splitter. Splitting on whitespace alone would report
+    `IT-специалист`, `email:почта`, `user@почта.рф`, `Tokyo/東京` and `ru_текст` — five
+    ordinary shapes, and every one of them a case `has_anomalies` calls clean.
+
+---
+
 ## is_mixed_script
 
 ::: disarm.is_mixed_script

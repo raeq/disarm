@@ -18,6 +18,26 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`per_word=True` on `is_mixed_script` and `has_bidi_conflict` (#901).** Both answer a
+  question about the whole string, and both docstrings were accurate about that. The
+  trouble is what a caller does with them: they look like standalone detectors, so callers
+  compose them, and `is_mixed_script(x) or has_bidi_conflict(x) or find_confusables(x)`
+  rejects every bilingual user. Measured, that rule turned away **all six** rows of #901's
+  table — the two spoofs and the four ordinary bilingual strings alike.
+
+  `has_anomalies` has told them apart since it was written. `per_word=True` is that
+  distinction on its own, so the rule can be built from parts: with it, and with #900's
+  `allowed_scripts` for the third primitive, only `hellо` and `שלוםworld` are rejected.
+
+  **Words, not whitespace tokens.** #901 proposed splitting on whitespace; measured, that
+  fires on `IT-специалист`, `email:почта`, `user@почта.рф`, `Tokyo/東京` and `ru_текст` —
+  five ordinary shapes, every one of which `has_anomalies` calls clean. The parameter uses
+  the detector's own word splitter instead, borrowed rather than restated, and a test
+  asserts the two agree on every row of the table.
+
+  Rust gets `api::is_mixed_script_per_word` and `api::has_bidi_conflict_per_word`; the
+  existing functions are unchanged.
+
 - **`decode_smuggled(text)` and the `smuggled` anomaly kind — decode what a hidden run
   *spells* (#701).** disarm strips the three ASCII-smuggling carriers and, since #700,
   reports that invisible characters are present. Neither answer tells the caller that the

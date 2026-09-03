@@ -135,6 +135,24 @@ pub(crate) fn is_mixed_script(text: &str) -> bool {
     !text.chars().all(|ch| state.accept(detect_char_script(ch)))
 }
 
+/// [`is_mixed_script`] asked of each **word** rather than of the whole string (#901).
+///
+/// The string-level answer is the right one for its own question and the wrong one for
+/// the question callers actually compose it into. `hello мир` is two words in two
+/// scripts — a sentence — and `hellо` is one word carrying a Cyrillic `о`. Both are
+/// "mixed script"; only the second is a spoof, and a reject rule built from the primitive
+/// turns away every bilingual user.
+///
+/// **Words, not whitespace tokens.** #901 proposed splitting on whitespace; measured, that
+/// fires on five ordinary shapes — `IT-специалист`, `email:почта`, `user@почта.рф`,
+/// `Tokyo/東京`, `ru_текст` — and disagrees with [`crate::api::has_anomalies`] on every one
+/// of them, which would re-create the false positive the parameter exists to remove.
+/// [`crate::anomalies::word_parts`] is the detector's own splitter, borrowed rather than
+/// restated so the two cannot drift.
+pub(crate) fn is_mixed_script_per_word(text: &str) -> bool {
+    crate::anomalies::word_parts(text).any(is_mixed_script)
+}
+
 include!(concat!(env!("OUT_DIR"), "/assigned_ranges.rs"));
 include!(concat!(env!("OUT_DIR"), "/bidi_strong_ranges.rs"));
 
@@ -520,6 +538,19 @@ pub(crate) fn strong_dir(ch: char) -> Option<StrongDir> {
 /// [`has_bidi_control`]: crate::scripts::has_bidi_control
 pub(crate) fn has_bidi_conflict(text: &str) -> bool {
     bidi_conflict(text, false)
+}
+
+/// [`has_bidi_conflict`] asked of each **word** rather than of the whole string (#901).
+///
+/// The sharpest case of the same problem: `שלום world` is a Hebrew word followed by an
+/// English one, which is what a sentence in Tel Aviv looks like, and the string-level
+/// answer is `true` for it and for `varonis.com.ו.קום` alike. Per word, only the token
+/// that actually mixes directions answers `true`.
+///
+/// Splits with [`crate::anomalies::word_parts`], for the reason
+/// [`is_mixed_script_per_word`] gives.
+pub(crate) fn has_bidi_conflict_per_word(text: &str) -> bool {
+    crate::anomalies::word_parts(text).any(has_bidi_conflict)
 }
 
 /// [`has_bidi_conflict`] restricted to strong-directional **letters** (#773).

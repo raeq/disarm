@@ -18,6 +18,28 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **The Latin-shape exposure set is published and gated (#815).**
+  `tests/fixtures/latin_shape_exposure.tsv` lists the **299** non-ASCII code points that
+  read as a Latin letter and reach ASCII on no surface, with a per-block gate so a table
+  refresh cannot widen it quietly. An exposure set, not a bug list: Latin Extended-D's
+  medievalist letters have no sensible ASCII fold.
+
+  The number was 401 in the issue, and wrong in both directions. Its selector matched
+  names *starting with* `LATIN `, `MODIFIER LETTER ` or `TURNED `, or containing
+  `SMALL CAPITAL` — so `NEGATIVE CIRCLED LATIN CAPITAL LETTER A` and 51 siblings were
+  outside the count entirely. Widening it by hand then went wrong three more ways, each
+  found by reading the output rather than by reasoning: 53 **combining marks**, which are
+  `strip_accents`' business; 52 **TAG characters**, which are *stripped* rather than folded
+  (#413) and so read as unhandled to a naive test; and names that merely *contain* LATIN,
+  where `LATIN CROSS` is a symbol and `LATINATE MYSLITE` is Glagolitic.
+
+  The selector is now a word-bounded `LATIN [CAPITAL|SMALL] LETTER` plus a category of
+  letter or symbol, which excludes marks and format characters by construction.
+
+  One caveat the census cannot express, recorded on the page beside it: it counts
+  *unfolded* code points, so one that folds to the **wrong** letter is invisible to it.
+  That is #916.
+
 - **`strip_plane14` — the TAG block is a composable step, not a side effect (#914).**
   Removing U+E0000–U+E007F was reachable only by enabling `demojize` or `transliterate`.
   Neither belongs in a screening pipeline, so a composed `TextPipeline` could not remove

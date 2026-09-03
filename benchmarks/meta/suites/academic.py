@@ -461,6 +461,27 @@ class BadCharacters(AttackCorpusSuite):
 
             # Same XMR rule the aggregate uses: a recovery only counts if
             # something survived on both sides. Scored over perturbed rows only.
+            # What a renderer would recover, so the subject's score is read
+            # against a demonstrated ceiling rather than an assumed one. Only
+            # meaningful for the class whose controls have a defined effect on
+            # the text itself; for the others the oracle is the identity.
+            if cls == "deletions":
+                reachable = sum(
+                    1
+                    for text, clean in hot
+                    if clean is not None and damage.resolve_deletions(text) == clean
+                )
+                add(
+                    outcome,
+                    "deletions_recoverable",
+                    reachable,
+                    of=len(hot),
+                    higher_is_better=None,
+                    detail="rows a cell-aware cursor over the erasing controls "
+                    "recovers — the ceiling any subject is measured against, not "
+                    "a score for any subject (#937)",
+                )
+
             hits = 0
             scored = 0
             for text, clean in hot:

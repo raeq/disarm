@@ -17,7 +17,7 @@ import os
 
 import pytest
 
-from benchmarks.meta import fetch, leaderboard, registry, subjects
+from benchmarks.meta import damage, fetch, leaderboard, registry, subjects
 from benchmarks.meta.base import SuiteBase, surfaces, thin
 from benchmarks.meta.baseline import Drift, compare, snapshot
 from benchmarks.meta.protocol import Availability, Family, Outcome, Provenance, Status
@@ -2251,3 +2251,75 @@ def test_the_erase_classes_recovery_is_reachable_without_a_renderer():
 
     assert apply_erase("payX\bpal") == "paypal"
     assert apply_erase("ab\x7fc") == "ac"
+
+
+def test_the_cursor_model_erases_cells_not_code_points():
+    """A stack over code points gets two branches wrong, and the corpus hides both.
+
+    Its 4,820 deletion rows carry BS only — no DEL, no CR — so a per-code-point
+    pop scores 100% there while leaving the `X` in `X<ZWSP><BS>` and the `e` in
+    `e<U+0301><BS>`, and turning `line1\\r\\nline2` into `\\nline2`. These are the
+    reference assertions from #937.
+    """
+    r = damage.resolve_deletions
+
+    # The paper's §VI-A construction.
+    assert r("".join(ch + "X\x08" for ch in "paypal")) == "paypal"
+
+    # A cell is a base character with its marks and attached format characters.
+    assert r("X​\x08") == "", "a zero-width joins the cell"
+    # NFD, deliberately: a precomposed U+00E9 is one code point and never
+    # reaches the mark branch, so it passes on a naive stack too and asserts
+    # nothing. The cell is e + COMBINING ACUTE, and BS must erase both.
+    assert r("e\u0301\x08") == "", "a combining mark joins the cell"
+    assert r("e\u0301\u0302\x08") == "", "and so does a second mark"
+    assert r("\x08\x08a") == "a", "erasing past column 0 is not an error"
+
+    # man-page overstrike: the one non-attack use, and it resolves to what is shown.
+    assert r("c\x08c") == "c", "overstrike bold"
+    assert r("_\x08c") == "c", "overstrike underline"
+
+    # CR is a line ending unless it overwrites, and is off by default either way.
+    assert r("line1\r\nline2\r\nline3") == "line1\r\nline2\r\nline3"
+    assert r("line1\r\nline2", cr=True) == "line1\r\nline2"
+    assert r("ZZZZZZ\rpaypal") == "ZZZZZZ\rpaypal", "CR off: untouched"
+    assert r("ZZZZZZ\rpaypal", cr=True) == "paypal"
+    assert r("abc\rxy", cr=True) == "xyc", "overwrite, not clear"
+    assert r("line1\rline2", cr=True) == "line2", "a classic Mac file"
+
+
+def test_the_deletion_ceiling_is_measured_not_assumed():
+    """0% reads differently beside a demonstrated 100% than beside nothing.
+
+    `deletions_recoverable` is a census, never a score for a subject: it says
+    what a renderer recovers, so the subject's XMR is read against a ceiling the
+    harness can show rather than one it asserts.
+    """
+    suite = registry.by_name("bad-characters")
+    if not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+    out = suite.run(subject=subjects.by_name("disarm"))
+
+    ceiling = out.measurement("deletions_recoverable")
+    actual = out.measurement("deletions_xmr")
+    assert ceiling is not None and actual is not None
+    assert ceiling.higher_is_better is None, "a ceiling is not a score"
+    assert actual.higher_is_better is True, "recovery here is achievable, so it is scored"
+    assert ceiling.value >= actual.value
+    assert ceiling.of == actual.of, "both must be over the perturbed rows"
+
+
+def test_the_model_leaves_clean_text_alone():
+    """A resolver that changes unperturbed input would be a cost, not a fix."""
+    suite = registry.by_name("bad-characters")
+    if not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+    rows = suite._rows_by_class(suite.locate(), None)["deletions"]
+    cleans = [c for _, c in rows if c is not None]
+    changed = [c for c in cleans if damage.resolve_deletions(c) != c]
+    assert not changed, f"{len(changed)} clean inputs were altered"
+
+    # And it is idempotent on the attacked side.
+    hot = [a for a, c in rows if suite._perturbed("deletions", a, c)]
+    once = [damage.resolve_deletions(a) for a in hot]
+    assert [damage.resolve_deletions(x) for x in once] == once

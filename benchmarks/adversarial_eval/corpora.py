@@ -10,7 +10,7 @@ import csv
 import io
 import os
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -184,7 +184,7 @@ class MeAJORPhishingAdapter:
                     return
 
 
-def _guess_text_column(fieldnames: list[str]) -> str:
+def _guess_text_column(fieldnames: Sequence[str]) -> str:
     for candidate in ("text", "body", "content", "email", "message"):
         for name in fieldnames:
             if name.lower() == candidate:

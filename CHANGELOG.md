@@ -691,6 +691,60 @@ from 12 to 13, which is source- and binary-breaking for anyone constructing one 
   positioned rather than stacked, so a doubled Devanagari matra is an orthography
   question rather than this one.
 
+- **A meta-benchmark that runs `n` of `m` externally produced benchmarks
+  (`benchmarks/meta`).** The 0.15.0 cycle found and verified defects against roughly
+  thirty outside artifacts — corpora released with papers, public spam and phishing
+  datasets, normative Unicode/IETF/ICANN tables, published CVEs, released tokenizers and
+  a third-party labelled benchmark — and each measurement lived in its own script. This
+  consolidates the selection, the provenance record, the scoring protocol and the report
+  into one harness. It is not collected by `pytest` and runs on demand:
+
+  ```bash
+  python -m benchmarks.meta --list                    # show m, and what is runnable
+  python -m benchmarks.meta --run --only-available    # run what the machine has
+  python -m benchmarks.meta --run --select 'uts39-*' --report out.md
+  ```
+
+  The harness supplies the runner and supplies no vectors. `Provenance.external` marks
+  the bias boundary, the report renders external and introspective results separately,
+  and a test asserts that no external suite is scored against a file disarm generated —
+  `data/confusables_lgr.tsv` is the trap, since the shipped fold was built from it.
+
+  A suite whose artifact is absent reports `SKIPPED` with the variable to set, never a
+  pass. Results are compared against a committed baseline keyed by subject, suite *and*
+  population; a moved number is reported and never fails a run.
+
+  **Other tools are scored on the same benchmarks.** `--subject` runs the suites against
+  the pinned comparator environment in `requirements/bench.txt` — ftfy, unidecode,
+  text-unidecode, anyascii, decancer — plus CPython's own normalization as the floor. A
+  suite that measures a disarm-specific surface skips the other subjects rather than
+  scoring them zero.
+
+  **Two subjects are controls, not candidates.** `null-baseline` deletes all input and
+  `identity` returns it unchanged. The first scored 100% on every coverage metric in the
+  registry until collisions were made to require a *non-empty* shared form — deleting
+  both sides of a comparison is not resolving it. They stay in the roster because a
+  control that is meant to fail is the only thing that proves a metric can fail.
+
+  **Coverage is never reported without its cost.** The new `corruption-cost` suite
+  measures what a tool does to text that needed nothing: code points destroyed,
+  characters retained, injectivity, and alteration of pure ASCII. Labelled corpora get
+  the same axis from their own `clean` column. Both ends are always reported with the
+  names of the surfaces at each end, and key builders are scored separately — `sort_key`
+  and `catalog_key` are many-to-one by contract, and counting that as damage would rank
+  a tool with no key builder as the safer one.
+
+  **Every run records its method**: subject and version, domain and size, the predicates
+  invoked, every parameter that moves a result, the sha256 of the artifact read, and the
+  Unicode/UCD versions in force.
+
+  **Each suite reproduces the published script its finding came from**, pinned to the
+  value that script printed at v0.14.1. The suites generalise their issues — the gist
+  probed seven cases, the suite sweeps the domain — so the two numbers answer different
+  questions, and only a matching reproduction licenses reading them as a before/after.
+  Pins come from executing the script on a reference build rather than from its own
+  docstring: the segmentation census header says `total=36` and running it says `37`.
+
 - **Asking `disarm` for an outcome name now teaches the naming rule (#654).** `clean`,
   `sanitize`, `safe`, `secure`, `escape`, `is_safe` and `make_safe` will never exist —
   CONTRIBUTING.md's rule is that a public name describes the operation and never the

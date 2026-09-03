@@ -2332,10 +2332,30 @@ def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[
     as coverage it does not have.
 
     Args:
-        target_script: Which bundled table to report against — ``"latin"`` (default),
-            ``"cyrillic"``, ``"arabic"`` or ``"hebrew"``. They have genuinely
-            different coverage, and the residue is largest for the RTL targets
-            because most of TR39 has no Arabic or Hebrew member at all.
+        target_script: Which bundled table to report against — a `Script` member, or
+            the lowercase token ``"latin"`` (default), ``"cyrillic"``, ``"arabic"`` or
+            ``"hebrew"``. They have genuinely different coverage, and the residue is
+            largest for the RTL targets because most of TR39 has no Arabic or Hebrew
+            member at all.
+
+            **Two spellings, and the member bridges them (#767).** `list_scripts` returns
+            ``"Arabic"`` and this parameter's raw-string form takes ``"arabic"``; a raw
+            string stays strict on purpose, so a caller who hard-coded the wrong one finds
+            out. Pass the member and the question does not arise —
+            ``Script("Arabic")`` converts a name from `list_scripts`::
+
+                from disarm import Script, list_scripts, unmapped_confusables
+
+                {s: unmapped_confusables(target_script=Script(s)) for s in list_scripts()
+                 if s in ("Latin", "Cyrillic", "Arabic", "Hebrew")}
+
+            **Four tables, 61 known scripts.** `list_scripts` answers "which scripts can
+            disarm identify"; this parameter answers "which scripts can disarm fold
+            *toward*", and those are different questions. A script with no bundled table
+            is refused rather than answered with a count, because a number determined
+            entirely by a table's absence reads as coverage and is not. The fair per-script
+            figure — of the pairs that resolve *to* script X, how many the X table reaches
+            — is measured by ``benchmarks/meta``'s ``uts39-target-scripts`` suite.
 
     Returns:
         A frozenset of single-character strings.

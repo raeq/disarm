@@ -821,6 +821,18 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   a canonical or sitemap entry still ending in `.html` fails the build, and `sitemap.xml.gz`
   is regenerated so a stale copy cannot serve the old entries. The three transforms were
   measured against the live site before the hook was written.
+- **The two spellings of a script, and the member that bridges them (#884).** `list_scripts()`
+  returns `"Arabic"`, the confusable surfaces take `"arabic"` and `script_info` takes
+  `"Arabic"`, so the obvious loop over `list_scripts()` raises on every script — which #884
+  reads as a defect. It is half a defect: #767 decided the bridge deliberately, and an enum
+  **member** is already translated at every surface, so `unmapped_confusables(target_script=
+  Script.ARABIC)` works and `Script("Arabic")` converts a name from `list_scripts()`. A raw
+  string stays strict at each surface on purpose, so a caller who hard-coded the wrong one
+  still finds out; making the strings interchangeable would have overturned that in passing.
+  The `unmapped_confusables` docstring now shows the loop written correctly, and states the
+  distinction the issue is really about: four target tables against 61 identifiable scripts
+  are different questions. The fair per-script denominator is #963.
+
 - **`confusable-bench.v1`: the three surfaces the meta-benchmark suite predated, and the
   identifier-validation recipe it produces (#736).** The corpus was already registered as the
   `confusable-bench-v1` suite under `benchmarks/meta`, so this scores the surfaces the suite

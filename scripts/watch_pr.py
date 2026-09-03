@@ -65,6 +65,13 @@ NEEDS_REBASE = frozenset({"DIRTY", "BEHIND"})
 #: thread read as an absent one.
 THREAD_PAGE_SIZE = 100
 
+#: How many consecutive polls must show the SAME failing checks before they are reported.
+#: One is not enough: for a few seconds after a push the rollup still carries the previous
+#: run's conclusions, so a failure that has already been fixed reads as a live one. Seen
+#: on #926, where the watcher stopped on a `Lint & format` failure belonging to the SHA
+#: before the fix.
+FAILURE_POLLS = 2
+
 #: How many consecutive polls must show the stuck shape before it is reported. One is
 #: not enough: for a few seconds after a push GitHub reports BLOCKED with the previous
 #: run's checks COMPLETED and the new ones not yet created, which is indistinguishable
@@ -147,9 +154,20 @@ class Decision:
     checks: tuple[Check, ...] = field(default_factory=tuple)
     #: True when this poll saw the stuck shape but has not seen it enough times yet.
     stuck: bool = False
+    #: The sorted failing check names this poll saw, "" when none.
+    broken_names: str = ""
+    #: How many consecutive polls have now shown `broken_names`, counting this one.
+    failure_seen: int = 0
 
 
-def decide(snap: Snapshot, *, allow_merge: bool = True, stuck_polls: int = 0) -> Decision:
+def decide(
+    snap: Snapshot,
+    *,
+    allow_merge: bool = True,
+    stuck_polls: int = 0,
+    failure_polls: int = 0,
+    last_broken: str = "",
+) -> Decision:
     """What to do about `snap`, in priority order.
 
     The order is the whole point. Threads outrank checks because a human is waiting;
@@ -178,12 +196,29 @@ def decide(snap: Snapshot, *, allow_merge: bool = True, stuck_polls: int = 0) ->
             "there are no unresolved threads",
         )
 
-    # 2. Something is red and will not fix itself.
+    # 2. Something is red and will not fix itself — once the same names have been red on
+    #    consecutive polls. A single sighting can be the previous SHA's rollup.
     if snap.broken:
+        names = ", ".join(sorted(c.name for c in snap.broken))
+        # Count THIS sighting. Deriving the running total here rather than in the caller
+        # is what fixes the off-by-one the #928 review found: the caller only incremented
+        # once the current names matched the previous ones, so a first sighting never
+        # counted itself and the loop needed FAILURE_POLLS + 1 reads.
+        seen = failure_polls + 1 if names == last_broken else 1
+        if seen < FAILURE_POLLS:
+            return Decision(
+                Action.WAIT,
+                f"red: {names} ({seen}/{FAILURE_POLLS} before reporting)",
+                checks=snap.broken,
+                broken_names=names,
+                failure_seen=seen,
+            )
         return Decision(
             Action.STOP_FAILED,
-            ", ".join(c.name for c in snap.broken),
+            names,
             checks=snap.broken,
+            broken_names=names,
+            failure_seen=seen,
         )
 
     if snap.merge_state in NEEDS_REBASE:
@@ -321,6 +356,8 @@ def _report(decision: Decision, pr: int) -> None:
 
 def watch(pr: int, repo: str, interval: int, max_polls: int, allow_merge: bool) -> int:
     stuck_polls = 0
+    failure_polls = 0
+    last_broken = ""
     for poll in range(1, max_polls + 1):
         snap = fetch(pr, repo)
         if snap is None:
@@ -328,11 +365,22 @@ def watch(pr: int, repo: str, interval: int, max_polls: int, allow_merge: bool) 
             # observations separated by a network blip count as consecutive, which is the
             # guarantee the threshold exists to provide (#922 review).
             stuck_polls = 0
+            failure_polls = 0
+            last_broken = ""
             time.sleep(interval)
             continue
 
-        decision = decide(snap, allow_merge=allow_merge, stuck_polls=stuck_polls)
+        decision = decide(
+            snap,
+            allow_merge=allow_merge,
+            stuck_polls=stuck_polls,
+            failure_polls=failure_polls,
+            last_broken=last_broken,
+        )
         stuck_polls = stuck_polls + 1 if decision.stuck else 0
+        # `decide` already counted this sighting, including the first one.
+        failure_polls = decision.failure_seen
+        last_broken = decision.broken_names
 
         if decision.action is Action.STOP_MERGED:
             ok = verify_merged(pr, repo)

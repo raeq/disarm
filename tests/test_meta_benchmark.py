@@ -18,6 +18,7 @@ import os
 import pytest
 
 from benchmarks.meta import damage, fetch, leaderboard, registry, subjects
+from benchmarks.meta import report as report_module
 from benchmarks.meta.base import SuiteBase, surfaces, thin
 from benchmarks.meta.baseline import Drift, compare, snapshot
 from benchmarks.meta.protocol import Availability, Family, Outcome, Provenance, Status
@@ -723,6 +724,13 @@ def test_a_thin_or_incoherent_battery_refuses_to_rank():
 
 
 def test_the_refusal_is_stated_in_the_report():
+    """Both halves of the refusal, and they are now separate statements.
+
+    The report used to say the composite "must not be quoted as one" and then
+    print it. It no longer prints one at all, so the refusal is two claims: this
+    battery does not support a ranking, and no composite is published either
+    way — the second holding even for a battery whose blockers all clear.
+    """
     outs = [
         _board_outcome(subj, f"s{i}", "m", value)
         for i in range(3)
@@ -732,7 +740,8 @@ def test_the_refusal_is_stated_in_the_report():
     report = RunReport(outcomes=outs, selected=1, registered=1, subjects=["a", "b"])
     md = render_markdown(report, leaderboard=board)
     assert "does not support a ranking" in md
-    assert "must not be quoted" in md
+    assert "No composite is published" in md
+    assert "### Composite" not in md
 
 
 def test_controls_do_not_set_the_scale():
@@ -2375,3 +2384,47 @@ def test_only_the_homoglyph_class_carries_ascii_substitutions(bad_characters_run
             f"{cls} should carry no ASCII substitutions"
         )
         assert out.measurement(f"{cls}_xmr").of == out.measurement(f"{cls}_perturbed").value
+
+
+def test_no_composite_is_published():
+    """A number under a caveat is still the number a reader quotes.
+
+    The composite ranked `null-baseline` — which deletes all input — above real
+    libraries, and averaged the axes that agree while giving zero weight to the
+    ones that oppose them, including both poles of the trade-off the battery
+    exists to measure. It was printed anyway, beneath its own blockers, on the
+    reasoning that recording it kept the shortfall auditable. Printing a figure
+    beside the reason it is wrong does not make it auditable; it makes it
+    quotable.
+
+    Asserted on a board with no blockers at all, because the composite is
+    unsound for a battery of this *shape* rather than only when a blocker fires.
+    """
+    items = [
+        leaderboard.Item(
+            suite=f"s{i}",
+            key="k",
+            scores={"a": float(i), "b": float(i) + 1.0},
+            z={"a": float(i), "b": float(i) + 1.0},
+            member_keys={"a": {"k"}, "b": {"k"}},
+            all_keys={"k"},
+            peer_keys={"a": {"k"}, "b": {"k"}},
+        )
+        for i in range(3)
+    ]
+    board = leaderboard.Leaderboard(items=items, subjects=["a", "b"])
+    assert board.usable
+
+    markdown = "\n".join(report_module._render_leaderboard(board))
+    assert "### Composite" not in markdown
+    assert "| # | subject | composite" not in markdown
+    assert "No composite is published" in markdown
+    # The diagnosis stays: the weights are why there is no composite.
+    assert "### Axis weights" in markdown
+
+
+def test_the_renderer_has_no_composite_table_left_in_it():
+    """Belt and braces: the table must be gone from the source, not just unreached."""
+    src = inspect.getsource(report_module)
+    assert '"### Composite"' not in src
+    assert "st.composite" not in src

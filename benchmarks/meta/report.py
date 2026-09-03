@@ -175,40 +175,50 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
             "",
         ]
         lines += [f"- {why}" for why in board.blockers]
-        lines += [
-            "",
-            "The composites below are recorded so the shortfall is auditable. They "
-            "are not a result and must not be quoted as one.",
-            "",
-        ]
+        lines.append("")
+
+    # Unconditional. The composite is unsound for a battery of this *shape*,
+    # not merely when a blocker happens to fire: the weighting is a corrected
+    # item-total correlation, which goes negative for an axis that opposes the
+    # rest, and the clamp at zero then deletes it. On any battery built from
+    # axes that trade against each other, the opposed pole is exactly what the
+    # weighting removes — so a run whose blockers all cleared would still be
+    # averaging one side of a trade-off and calling it the whole.
+    lines += [
+        "**No composite is published.** One was, with the blockers printed above "
+        "it, on the reasoning that recording it kept the shortfall auditable. "
+        "That was wrong twice over. A number carried under a caveat is still the "
+        "number a reader quotes, and this one was not merely uncertain — it "
+        "ranked `null-baseline`, which deletes all input, above real libraries, "
+        "and it averaged the axes that happen to agree while giving zero weight "
+        "to the ones that oppose them, including both poles of the trade-off the "
+        "battery exists to measure. A figure that cannot survive its own "
+        "controls is not evidence of anything, and printing it beside the reason "
+        "it is wrong does not make it auditable — it makes it quotable. The "
+        "per-benchmark tables below carry everything it was derived from.",
+        "",
+    ]
 
     lines += _render_pareto(board)
     lines += [
-        "### Composite",
+        "### Axis weights",
         "",
-        "| # | subject | composite | 95% CI | Bradley-Terry | benchmarks |",
-        "|---|---|---|---|---|---|",
+        "What the composite *would* have weighted, kept because it is the "
+        "diagnosis rather than the result: an axis's weight is its corrected "
+        "item-total correlation with the rest of the battery, and on axes that "
+        "oppose each other by design that correlation is negative for the "
+        "opposed pole. The clamp at zero then removes it.",
+        "",
+        "| benchmark | weight | share | measurements |",
+        "|---|---|---|---|",
     ]
-    total = len(board.items)
-    for st in board.standings:
-        name = f"`{st.subject}`"
-        if st.control:
-            name += " *(control — reference only, never ranked)*"
-        if st.partial:
-            name += " *(partial coverage — not ranked)*"
-        composite = "off-scale" if st.control and abs(st.composite) > 10 else f"{st.composite:.3f}"
-        # A subject answering one benchmark has no place in an ordering built
-        # from four: it was asked fewer questions, not judged better.
-        position = "—" if (st.partial or st.control) else str(st.rank)
-        lines.append(
-            f"| {position} | {name} | {composite} | "
-            f"[{st.ci_low:.2f}, {st.ci_high:.2f}] | {st.bt_strength:.3f} | "
-            f"{st.items}/{total} |"
-        )
+    weight_total = sum(i.discrimination for i in board.items)
+    for item in sorted(board.items, key=lambda i: -i.discrimination):
+        share = item.discrimination / weight_total if weight_total else 0.0
+        cell = "**0.0% — deleted**" if item.discrimination == 0.0 else f"{share:.1%}"
+        lines.append(f"| `{item.suite}` | {item.discrimination:.3f} | {cell} | {item.key} |")
     lines += [
         "",
-        "| benchmark | discrimination | measurements |",
-        "|---|---|---|",
     ]
     for item in sorted(board.items, key=lambda i: -i.discrimination):
         lines.append(f"| `{item.suite}` | {item.discrimination:.3f} | {item.key} |")

@@ -792,6 +792,18 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **Canonical links and sitemap entries name the URL that serves them (#694).**
+  `use_directory_urls: false` makes MkDocs write `.html` into every `rel=canonical` and every
+  sitemap `<loc>`, and Cloudflare Pages answers the extensionless form with 200 while 308ing
+  the `.html` form to it — so both of the signals telling a search engine where the content
+  lives pointed at redirects, 78 of each. A build hook now rewrites the two signals, and
+  **nothing moves**: the `.html` files are still built, still deployed and still reachable, so
+  every existing link keeps working and no indexed URL changes. That is what separates this
+  from `use_directory_urls: true`, which would relocate all 78 and needs a preview deploy to
+  confirm Pages does not redirect the directory form in turn. The hook checks its own work:
+  a canonical or sitemap entry still ending in `.html` fails the build, and `sitemap.xml.gz`
+  is regenerated so a stale copy cannot serve the old entries. The three transforms were
+  measured against the live site before the hook was written.
 - **`confusable-bench.v1`: the three surfaces the meta-benchmark suite predated, and the
   identifier-validation recipe it produces (#736).** The corpus was already registered as the
   `confusable-bench-v1` suite under `benchmarks/meta`, so this scores the surfaces the suite

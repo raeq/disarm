@@ -49,6 +49,9 @@ plugins:
 # and nothing on the page used to say those were different.
 hooks:
   - scripts/mkdocs_build_banner.py
+  # #694: canonicals and sitemap entries name the URL Cloudflare answers with 200,
+  # rather than the `.html` form it 308s away from. Nothing moves; only the signals.
+  - scripts/mkdocs_canonical_urls.py
 
 markdown_extensions:
   - admonition

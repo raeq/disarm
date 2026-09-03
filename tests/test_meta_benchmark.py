@@ -393,7 +393,12 @@ def test_no_external_suite_is_anchored_to_a_disarm_owned_table():
     from them. Anchoring an external suite to either would report success by
     construction — the drift-gate mistake, one layer up.
     """
-    forbidden = ("confusables_lgr.tsv", "confusables_supplement.tsv", "confusables_attested.tsv")
+    forbidden = (
+        "confusables_lgr.tsv",
+        "confusables_supplement.tsv",
+        "confusables_attested.tsv",
+        "confusables_vision.tsv",
+    )
     for suite in registry.all_suites():
         if not suite.provenance.external:
             continue

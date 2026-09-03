@@ -97,6 +97,16 @@ every name as a description of its pipeline steps and nothing more.
 
 ## In scope — what these mechanisms do
 
+**Confusable detection is script-agnostic; the confusable fold is Latin- and
+Cyrillic-targeted, by design (#738).** `is_mixed_script` and `detect_scripts` flag a
+cross-script substitution whatever the pair — Thai `๐` beside Devanagari `०`, Hangul `ᅵ`
+beside Han `丨` — which none of ICU, Chromium's IDN policy, Rust's `mixed_script_confusables`
+lint, `confusable_homoglyphs`, dnstwist or libu8ident does. The *fold* has two targets, and
+the Cyrillic one — restoring a Greek-into-Cyrillic spoof to Cyrillic — is also offered by
+none of those. A third target for the 248 measured non-Latin↔non-Latin pairs is not
+planned: folding Thai onto Devanagari has no consumer, and detection already covers the
+pair. That is a stated limit of the fold, not of the detector.
+
 Each is a *mechanism*, defined by its data and algorithm, not by an outcome promise:
 
 | Mechanism | Definition |

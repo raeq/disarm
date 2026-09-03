@@ -18,6 +18,33 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`data/confusables_vision.tsv`: measured-visual confusable rows admitted by multi-font
+  agreement, and the rule that admits them (#738).** The supplement pins one confusable-vision
+  tranche by its `danger` weight, and that file has not moved since the pin, so the stated
+  threshold admits nothing new; the four further sets that shipped carry a mean SSIM per pair
+  and a font count, not a weight, so they take a fourth file with an admission rule of their
+  own: at least five fonts, mean SSIM at least 0.85, a letter or letter-number source, one
+  ASCII letter as target, not an accented form of it, and not already covered. Coverage is
+  measured through `canonicalize`, because every preset runs NFKC before the fold and 96 of the
+  793 novel pairs are covered by that alone — the bare fold would call them gaps. Under the
+  rule the two published sets admit two rows, `U+4E28 CJK UNIFIED IDEOGRAPH-4E28` (ten fonts)
+  and `U+3021 HANGZHOU NUMERAL ONE` (six), both absent from TR39 and so outside the
+  `unmapped_confusables()` denominator, which now says which population it enumerates. The
+  rule leaves out, on purpose, the single-font hits at the top of the set, the Indic fraction
+  symbols that agree in nine fonts (a numeral folded to a letter is what `digit_policy`
+  refuses), and the accented `l`s that agree in fifty to ninety (letters, not confusables).
+  `scripts/measure_confusable_vision.py` regenerates the rows and the band table the file's
+  header quotes; the RaySpace superset and the IDN-filtered subset are not published at this
+  revision and remain #738's open threshold decision. THREAT_MODEL.md now claims what was an
+  unclaimed strength: detection is script-agnostic, and the fold is Latin- and
+  Cyrillic-targeted by design.
+
+  **Upgrade note — `KEY_SCHEMA_VERSION` goes 8 → 9.** `canonicalize`, `canonicalize_strict`,
+  `strip_obfuscation` and `normalize_confusables` move for text containing either code point:
+  `canonicalize("丨")` was `丨` and is now `l`. `search_key`, `catalog_key` and `sort_key`
+  are byte-identical — they transliterate before the fold, and `丨` romanizes to `gun` on
+  that path as it did before. The fixture corpus carries both characters.
+
 - **`digit_policy` reaches the six key builders through the core, and the Rust API gains
   `canonicalize_with`, `canonicalize_strict_with`, `strip_obfuscation_with`,
   `search_key_with`, `sort_key_with` and `catalog_key_with` (#896).** #885 shipped the setting

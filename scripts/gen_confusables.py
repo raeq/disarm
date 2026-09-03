@@ -52,6 +52,8 @@ DATA_UNICODE_VERSION = "17.0.0"
 MIN_UNICODE_VERSION = "15.1.0"
 # Measured cross-script supplement folded with priority over TR39 (#342/#343).
 BUNDLED_SUPPLEMENT = Path(__file__).resolve().parent.parent / "data" / "confusables_supplement.tsv"
+# Measured-visual pairs admitted by multi-font SSIM agreement (#738); same row shape.
+BUNDLED_VISION = Path(__file__).resolve().parent.parent / "data" / "confusables_vision.tsv"
 BUNDLED_ATTESTED = Path(__file__).resolve().parent.parent / "data" / "confusables_attested.tsv"
 BUNDLED_LGR = Path(__file__).resolve().parent.parent / "data" / "confusables_lgr.tsv"
 
@@ -1367,6 +1369,12 @@ def main() -> None:
     _check_unicode_version(sorted(referenced))
 
     supplement = load_supplement(BUNDLED_SUPPLEMENT)
+    # #738: the SSIM-admitted rows share the supplement's shape and its position — measured
+    # visual evidence, applied before the attested rows so real-attacker evidence wins on an
+    # overlap. There is none today; the ordering is stated rather than left to insertion.
+    vision = load_supplement(BUNDLED_VISION)
+    for script_key in ("latin", "cyrillic"):
+        supplement[script_key].update(vision[script_key])
     attested = load_attested(BUNDLED_ATTESTED)
     # #597: merged into one override map. Both are applied with priority over the
     # TR39-derived mappings; the files are separate because their admission criteria and
@@ -1380,7 +1388,8 @@ def main() -> None:
     print(
         f"Loaded overrides: {len(supplement['latin'])} latin + "
         f"{len(supplement['cyrillic'])} cyrillic "
-        f"(#342/#343 supplement + {len(attested['latin'])} attested rows, #597 + "
+        f"(#342/#343 supplement + {len(vision['latin'])} vision rows, #738 + "
+        f"{len(attested['latin'])} attested rows, #597 + "
         f"{len(lgr)} ICANN LGR rows, #831)",
         file=sys.stderr,
     )

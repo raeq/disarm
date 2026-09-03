@@ -323,27 +323,40 @@ class BadCharacters(AttackCorpusSuite):
         "invisibles": frozenset({0x200B, 0x200C, 0x200D, 0xFEFF, 0x00AD, 0x2060}),
     }
 
-    #: Classes where reproducing what a reader saw is not a goal, and why.
+    #: Classes whose recovery this battery reports without scoring, and why.
     #:
-    #: This started as "recovery needs UAX #9, so it is out of scope". That was
-    #: the wrong reason and pointed the wrong way. For a reordering the rendered
-    #: form *is the deception* — `pay<RLO>kcab<PDF>pal` renders as `paybackpal`,
-    #: which is the string the attacker built the illusion of. A sanitizer that
-    #: emitted it would be finishing the attack, not defusing it. The logical
-    #: string with the control removed is the correct output and the honest one:
-    #: it is what the bytes actually say.
+    #: **Corrected twice, and the second correction reversed the first.** This
+    #: began as "recovery needs UAX #9, so it is out of scope", then became "the
+    #: rendered form is the deception, so reproducing it would finish the
+    #: attack". The second reading is measurably wrong for this corpus, and the
+    #: first was right for the wrong reason.
     #:
-    #: `deletions` is deliberately absent. There the rendered form is the benign
-    #: text and the smuggled content is the erased character, so applying the
-    #: erase removes an attacker payload rather than reproducing an illusion.
-    #: That is defensive, needs no renderer, and recovers 4,820 of 4,820
-    #: perturbed rows — where disarm currently recovers none.
-    RECOVERY_NOT_A_GOAL = {
+    #: In Boucher et al.'s reordering rows the *rendering is the clean input*
+    #: and the code points are the attack: `crying` is stored as `cyring` inside
+    #: bidi controls, so the human reads the original and the model reads
+    #: scrambled text. Only 14 of 4,800 perturbed rows have a logical order
+    #: equal to the clean input. Emitting the rendered form would therefore
+    #: *recover* the text, not finish an attack.
+    #:
+    #: So both classes hide code points behind a rendering, and which form a
+    #: consumer wants depends on the consumer (#936). The real difference is
+    #: cost and legitimate use:
+    #:
+    #: * Bidi controls carry genuine right-to-left text. Resolving display order
+    #:   needs a paragraph direction and the full UAX #9 algorithm, and #740
+    #:   declined to build that, with reasons. Scoring disarm as failing at
+    #:   something it has deliberately not implemented measures the harness's
+    #:   expectation rather than the library.
+    #: * `BS` and `DEL` have no legitimate use in text, and resolving them is a
+    #:   cursor over cells rather than a rendering engine — which is why
+    #:   `deletions` stays scored here, and is filed as #937.
+    RECOVERY_OUT_OF_SCOPE = {
         "reorderings": (
-            "the rendered form is the deception itself, so reproducing it would "
-            "emit the string the attacker built the illusion of. Removing the "
-            "control and keeping logical order is the defence, and it succeeds "
-            "on every perturbed row"
+            "resolving display order needs a paragraph direction and UAX #9, "
+            "which #740 declined to implement — so this reports what the "
+            "logical form recovers without scoring the library against a "
+            "capability it has deliberately not built. Carrier removal is the "
+            "measurement that carries the direction, and it is complete"
         ),
     }
 
@@ -458,7 +471,7 @@ class BadCharacters(AttackCorpusSuite):
                 if out and out == _apply(fn, clean):
                     hits += 1
             if scored:
-                why = self.RECOVERY_NOT_A_GOAL.get(cls)
+                why = self.RECOVERY_OUT_OF_SCOPE.get(cls)
                 add(
                     outcome,
                     f"{cls}_xmr",

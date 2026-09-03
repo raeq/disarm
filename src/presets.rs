@@ -93,19 +93,13 @@ enum Step {
         only_if_lang: bool,
     },
     TranslitPreservingLatin,
-    /// The confusable fold, with the digit policy it runs under (#646 §2).
-    ///
-    /// The policy rides on the step rather than on one function's signature, which is
-    /// what `docs/architecture/prototype-policy.md` §3 decided: it is a property of the
-    /// fold, and a preset could not express it while it lived on `normalize_confusables`
-    /// alone. Every shipped preset passes `Numeric`, which is what they did implicitly
-    /// before the step could say anything else — so this widens what is expressible
-    /// without changing any output.
-    Confusables(&'static str, crate::confusables::DigitPolicy),
     /// The confusable fold, taking its policy from [`PresetCtx`] rather than the step.
     ///
-    /// One caller: `skeleton_key`, whose policy is the caller's to choose. See the
-    /// `digit_policy` field on `PresetCtx` for why it rides there and not here.
+    /// `skeleton_key` took it this way first (#650), and since #896 every key builder
+    /// does; the profiles' pipeline carries the same field (#646). A const-policy twin
+    /// existed until #951 and was constructed by nothing once the lists moved here. See
+    /// the `digit_policy` field on `PresetCtx` for why the policy rides there and not
+    /// on the step.
     ConfusablesCtx(&'static str),
     /// The Python pre-pass of #885, as a step (#896): under any policy but the default,
     /// fold confusables on the raw text before the preset's own steps run; under
@@ -302,10 +296,6 @@ fn apply_into(
             Ok(true)
         }
         Step::ResolveDeletions => Ok(crate::deletions::resolve_deletions_into(input, false, out)),
-        Step::Confusables(target, digits) => {
-            confusables::normalize_confusables_into(input, target, digits, out)?;
-            Ok(true)
-        }
         Step::ConfusablesCtx(target) => {
             confusables::normalize_confusables_into(input, target, ctx.digit_policy, out)?;
             Ok(true)
@@ -548,9 +538,11 @@ impl Actionable {
                 Step::CollapseWs => m.collapse_ws = true,
                 Step::FoldCase => m.fold_case = true,
                 Step::PrototypeFold => m.prototype = true,
-                Step::Confusables(target, _)
-                | Step::ConfusablesCtx(target)
-                | Step::PolicyPreFold(target)
+                // The pre-fold is inert under the default policy, and under any other the
+                // guard is bypassed entirely (`run_static`), so it contributes nothing to
+                // the mask: `search_key` and `sort_key` keep the fast path they had (#951).
+                Step::PolicyPreFold(_) => {}
+                Step::ConfusablesCtx(target)
                 | Step::ConfusablesNfcFixedPoint(target, _)
                 | Step::ConfusablesNfcFixedPointCtx(target)
                 | Step::ConfusablesMarkFixedPoint(target, _)
@@ -2323,7 +2315,13 @@ mod tests {
             (DigitPolicy::Tr39, "o"),
             (DigitPolicy::Preserve, "\u{0966}"),
         ] {
-            apply_into(Step::Confusables("latin", policy), input, &ctx, &mut out)
+            let ctx = PresetCtx {
+                lang: ctx.lang,
+                strict_iso9: ctx.strict_iso9,
+                emoji_cldr: ctx.emoji_cldr,
+                digit_policy: policy,
+            };
+            apply_into(Step::ConfusablesCtx("latin"), input, &ctx, &mut out)
                 .expect("the latin target is valid");
             assert_eq!(out, expected, "{policy:?} on U+0966");
         }
@@ -2443,10 +2441,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "only Latin confusable targets")]
     fn fast_path_rejects_non_latin_confusable_target() {
-        let _ = Actionable::for_steps(&[Step::Confusables(
-            "cyrillic",
-            crate::confusables::DigitPolicy::Numeric,
-        )]);
+        let _ = Actionable::for_steps(&[Step::ConfusablesCtx("cyrillic")]);
     }
 
     /// L-2: the confusables fold composes base+mark clusters at lookup (#475), so it acts
@@ -2456,12 +2451,8 @@ mod tests {
     #[test]
     fn confusables_step_marks_clusters_actionable() {
         assert!(
-            Actionable::for_steps(&[Step::Confusables(
-                "latin",
-                crate::confusables::DigitPolicy::Numeric
-            )])
-            .marks,
-            "Confusables step must set marks (decomposed-homoglyph bypass)"
+            Actionable::for_steps(&[Step::ConfusablesCtx("latin")]).marks,
+            "ConfusablesCtx step must set marks (decomposed-homoglyph bypass)"
         );
         assert!(
             Actionable::for_steps(&[Step::ConfusablesNfcFixedPoint(
@@ -3591,6 +3582,26 @@ mod tests {
         )
         .unwrap());
         assert_eq!(out, "google");
+    }
+
+    // ── the pre-fold and the guard (#951) ────────────────────────────
+
+    #[test]
+    fn the_pre_fold_contributes_nothing_to_the_guard_mask() {
+        // Inert under the default and bypassed otherwise, so `search_key` / `sort_key`
+        // must not start paying the guard's confusable-source scan on every call.
+        let mask = Actionable::for_steps(&[Step::PolicyPreFold("latin")]);
+        assert!(!mask.confusables && !mask.marks);
+    }
+
+    #[test]
+    fn a_builder_without_a_fold_keeps_its_fast_path() {
+        // `|` is an ASCII confusable source; every other step of `sort_key` leaves it
+        // alone, so the default still hands the input back borrowed.
+        assert!(matches!(
+            sort_key("plain|text", None).unwrap(),
+            Cow::Borrowed(_)
+        ));
     }
 
     /// `step_arrays` names the right function, since the ordering gate's failure message

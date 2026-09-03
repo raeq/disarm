@@ -264,9 +264,9 @@ pub fn transliterate(text: &str) -> Cow<'_, str> {
 /// Register or override a transliteration mapping for a language `code`.
 ///
 /// `mappings` is single-character keys → ASCII (best-effort) replacements. Fails
-/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) if a key is not exactly one
-/// character, ([`ErrorKind::ResourceLimit`](crate::ErrorKind)) past the
-/// registered-language cap, or ([`ErrorKind::Unsupported`](crate::ErrorKind)) once
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument)) if a key is not exactly one
+/// character, ([`ErrorKind::ResourceLimit`](crate::ErrorKind::ResourceLimit)) past the
+/// registered-language cap, or ([`ErrorKind::Unsupported`](crate::ErrorKind::Unsupported)) once
 /// [`seal_registrations`] has been called.
 pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<(), Error> {
     crate::transliterate::register_lang(code, mappings).map_err(Error::from)
@@ -274,19 +274,19 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
 
 /// Register global pre-transliteration replacements (applied before the tables).
 ///
-/// Fails ([`ErrorKind::ResourceLimit`](crate::ErrorKind)) past the replacement cap
-/// or ([`ErrorKind::Unsupported`](crate::ErrorKind)) once sealed.
+/// Fails ([`ErrorKind::ResourceLimit`](crate::ErrorKind::ResourceLimit)) past the replacement cap
+/// or ([`ErrorKind::Unsupported`](crate::ErrorKind::Unsupported)) once sealed.
 pub fn register_replacements(replacements: HashMap<String, String>) -> Result<(), Error> {
     crate::transliterate::register_replacements(replacements).map_err(Error::from)
 }
 
 /// Remove a single global replacement by `key`. Returns whether it was present.
-/// Fails ([`ErrorKind::Unsupported`](crate::ErrorKind)) once sealed.
+/// Fails ([`ErrorKind::Unsupported`](crate::ErrorKind::Unsupported)) once sealed.
 pub fn remove_replacement(key: &str) -> Result<bool, Error> {
     crate::transliterate::remove_replacement(key).map_err(Error::from)
 }
 
-/// Clear all global replacements. Fails ([`ErrorKind::Unsupported`](crate::ErrorKind))
+/// Clear all global replacements. Fails ([`ErrorKind::Unsupported`](crate::ErrorKind::Unsupported))
 /// once sealed.
 pub fn clear_replacements() -> Result<(), Error> {
     crate::transliterate::clear_replacements().map_err(Error::from)

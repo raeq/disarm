@@ -59,7 +59,7 @@ pub fn security_clean(text: &str) -> Result<Cow<'_, str>, Error> {
 ///
 /// `lang` selects the transliteration table (`None` skips transliteration).
 /// `emoji_style` is `"cldr"` (expand emoji to CLDR short names) or `"none"`
-/// (leave emoji as-is). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
+/// (leave emoji as-is). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument))
 /// on an unknown `lang` or an unsupported `emoji_style`.
 ///
 /// # Case
@@ -95,7 +95,7 @@ pub fn ml_normalize<'a>(
 /// transliterate → confusables → strip accents → case fold → collapse whitespace.
 ///
 /// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails
-/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) on an unknown `lang`.
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument)) on an unknown `lang`.
 ///
 /// # Stability
 /// A patch release never changes this function's output; a minor release may,
@@ -112,7 +112,7 @@ pub fn catalog_key<'a>(
 }
 
 /// Case/accent/script-insensitive search lookup key (like [`catalog_key`] without
-/// confusable folding). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
+/// confusable folding). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument))
 /// on an unknown `lang`.
 ///
 /// # Stability
@@ -126,7 +126,7 @@ pub fn search_key<'a>(text: &'a str, lang: Option<&str>) -> Result<Cow<'a, str>,
 }
 
 /// Collation sort key (like [`search_key`] but preserves base accented characters
-/// for correct ordering). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind))
+/// for correct ordering). Fails ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument))
 /// on an unknown `lang`.
 ///
 /// # Stability
@@ -294,30 +294,22 @@ impl Pipeline {
     ///
     /// # Errors
     ///
-    /// [`ErrorKind::InvalidArgument`](crate::ErrorKind) if the profile has no confusables
+    /// [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument) if the profile has no confusables
     /// step and `digit_policy` is not the default. `rag_ingest` recovers by
     /// transliteration, not by a fold, so a policy on it would never run — it is refused
     /// rather than accepted and ignored.
     pub fn with_digit_policy(self, digit_policy: crate::api::DigitPolicy) -> Result<Self, Error> {
-        let policy = crate::confusables::DigitPolicy::from_token(digit_policy.as_str())
-            .map_err(Error::from)?;
+        let policy = crate::confusables::DigitPolicy::from(digit_policy);
         Ok(Self {
             inner: self.inner.with_digit_policy(policy).map_err(Error::from)?,
         })
     }
 }
 
-/// `digit_policy` on a key builder, at the boundary (#896).
-fn core_policy(
-    digit_policy: crate::api::DigitPolicy,
-) -> Result<crate::confusables::DigitPolicy, Error> {
-    crate::confusables::DigitPolicy::from_token(digit_policy.as_str()).map_err(Error::from)
-}
-
 /// [`canonicalize`] under `digit_policy` (#896).
 ///
 /// The six key builders take the policy the way [`skeleton_key`] does: fixed at the call,
-/// before any text is read. Under [`DigitPolicy::Numeric`](crate::api::DigitPolicy) the
+/// before any text is read. Under [`DigitPolicy::Numeric`](crate::api::DigitPolicy::Numeric) the
 /// output is byte-identical to [`canonicalize`]; under `Tr39` a confusable digit is read
 /// as the letter it resembles, on the raw text and again in the builder's own fold; under
 /// `Preserve` a non-Latin numeral keeps its script.
@@ -329,7 +321,7 @@ pub fn canonicalize_with(
     text: &str,
     digit_policy: crate::api::DigitPolicy,
 ) -> Result<Cow<'_, str>, Error> {
-    crate::presets::canonicalize_with(text, core_policy(digit_policy)?).map_err(Error::from)
+    crate::presets::canonicalize_with(text, digit_policy.into()).map_err(Error::from)
 }
 
 /// [`canonicalize_strict`] under `digit_policy` (#896). See [`canonicalize_with`].
@@ -341,7 +333,7 @@ pub fn canonicalize_strict_with(
     text: &str,
     digit_policy: crate::api::DigitPolicy,
 ) -> Result<Cow<'_, str>, Error> {
-    crate::presets::canonicalize_strict_with(text, core_policy(digit_policy)?).map_err(Error::from)
+    crate::presets::canonicalize_strict_with(text, digit_policy.into()).map_err(Error::from)
 }
 
 /// [`strip_obfuscation`] under `digit_policy` (#896). See [`canonicalize_with`].
@@ -353,7 +345,7 @@ pub fn strip_obfuscation_with(
     text: &str,
     digit_policy: crate::api::DigitPolicy,
 ) -> Result<Cow<'_, str>, Error> {
-    crate::presets::strip_obfuscation_with(text, core_policy(digit_policy)?).map_err(Error::from)
+    crate::presets::strip_obfuscation_with(text, digit_policy.into()).map_err(Error::from)
 }
 
 /// [`search_key`] under `digit_policy` (#896). See [`canonicalize_with`]. This builder
@@ -367,7 +359,7 @@ pub fn search_key_with<'a>(
     lang: Option<&str>,
     digit_policy: crate::api::DigitPolicy,
 ) -> Result<Cow<'a, str>, Error> {
-    crate::presets::search_key_with(text, lang, core_policy(digit_policy)?).map_err(Error::from)
+    crate::presets::search_key_with(text, lang, digit_policy.into()).map_err(Error::from)
 }
 
 /// [`sort_key`] under `digit_policy` (#896). See [`search_key_with`].
@@ -380,7 +372,7 @@ pub fn sort_key_with<'a>(
     lang: Option<&str>,
     digit_policy: crate::api::DigitPolicy,
 ) -> Result<Cow<'a, str>, Error> {
-    crate::presets::sort_key_with(text, lang, core_policy(digit_policy)?).map_err(Error::from)
+    crate::presets::sort_key_with(text, lang, digit_policy.into()).map_err(Error::from)
 }
 
 /// [`catalog_key`] under `digit_policy` (#896). See [`canonicalize_with`]. The fold on
@@ -395,7 +387,7 @@ pub fn catalog_key_with<'a>(
     strict_iso9: bool,
     digit_policy: crate::api::DigitPolicy,
 ) -> Result<Cow<'a, str>, Error> {
-    crate::presets::catalog_key_with(text, lang, strict_iso9, core_policy(digit_policy)?)
+    crate::presets::catalog_key_with(text, lang, strict_iso9, digit_policy.into())
         .map_err(Error::from)
 }
 
@@ -473,11 +465,11 @@ pub fn is_canonical(text: &str, preset: &str) -> Result<bool, Error> {
 /// Build the reusable [`Pipeline`] handle for a named policy profile (#404).
 ///
 /// `profile` is one of the names returned by [`list_profiles`]. Fails
-/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) on an unknown profile,
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument)) on an unknown profile,
 /// naming the offending value and the available profiles.
 ///
 /// # Errors
-/// Returns an [`ErrorKind::InvalidArgument`](crate::ErrorKind) error if
+/// Returns an [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument) error if
 /// `profile` is not a known profile name.
 pub fn get_pipeline(profile: &str) -> Result<Pipeline, Error> {
     match crate::pipeline::get_pipeline(profile).map_err(Error::from)? {

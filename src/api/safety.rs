@@ -173,6 +173,17 @@ impl DigitPolicy {
     }
 }
 
+/// The core's policy for an API value: a direct mapping, not a token round-trip (#951).
+impl From<DigitPolicy> for crate::confusables::DigitPolicy {
+    fn from(policy: DigitPolicy) -> Self {
+        match policy {
+            DigitPolicy::Numeric => Self::Numeric,
+            DigitPolicy::Tr39 => Self::Tr39,
+            DigitPolicy::Preserve => Self::Preserve,
+        }
+    }
+}
+
 impl std::str::FromStr for DigitPolicy {
     type Err = Error;
 
@@ -925,7 +936,7 @@ impl std::str::FromStr for Platform {
 ///
 /// `lang` selects the transliteration language (`None` = auto-detect). This is
 /// the one fallible argument: an unknown language code is a runtime error
-/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)); `Platform` and the
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument)); `Platform` and the
 /// `usize` length make every other input infallible by construction.
 ///
 ///
@@ -1044,7 +1055,7 @@ pub fn decode_to_utf8(
 ///
 /// Not an HTML/SQL sanitizer and not a defense against logging-framework
 /// interpolation — encode at the *viewer's* sink for those. Fails
-/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind)) if `replacement` itself
+/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument)) if `replacement` itself
 /// contains a character this call neutralizes (which would break the
 /// no-raw-CR/LF and idempotency guarantees).
 pub fn strip_log_injection<'a>(

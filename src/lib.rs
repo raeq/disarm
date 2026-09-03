@@ -290,6 +290,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Precompiled pipelines
     m.add_function(wrap_pyfunction!(py::presets::_canonicalize, m)?)?;
+    m.add_function(wrap_pyfunction!(py::presets::_is_canonical, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_ml_normalize, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_catalog_key, m)?)?;
     m.add_function(wrap_pyfunction!(py::presets::_strip_format, m)?)?;

@@ -120,6 +120,7 @@ EXPECTED_ALL = {
     "KeyCollision",
     "is_ascii",
     "is_case_fold_stable",
+    "is_canonical",
     "is_normalized",
     # UAX #15 Stream-Safe, added as an interop primitive.
     "is_normalized_stream_safe",
@@ -434,6 +435,7 @@ CORE_FUNCTION_PARAMS = {
     "find_unmapped_confusables": ["text", "target_script"],
     "is_ascii": ["text"],
     "is_normalized": ["text", "form"],
+    "is_canonical": ["text", "preset"],
     # Pipeline management
     "get_pipeline": ["profile"],
     "list_profiles": [],
@@ -547,6 +549,7 @@ CLASS_METHODS = {
         "catalog_key": ["lang", "strict_iso9"],
         "is_ascii": [],
         "is_normalized": ["form"],
+        "is_canonical": ["preset"],
         "is_confusable": ["target_script"],
         "is_mixed_script": [],
         "has_bidi_conflict": [],

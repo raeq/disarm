@@ -141,6 +141,9 @@ from disarm._core import (
     _is_ascii as _is_ascii,
 )
 from disarm._core import (
+    _is_canonical as _is_canonical,
+)
+from disarm._core import (
     _is_case_fold_stable as _is_case_fold_stable,
 )
 from disarm._core import (

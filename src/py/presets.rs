@@ -19,6 +19,17 @@ pub fn _canonicalize(text: &str) -> PyResult<String> {
     Ok(crate::presets::canonicalize(text)?.into_owned())
 }
 
+/// `is_canonical(text, *, preset="canonicalize") -> bool`
+///
+/// The verification-path counterpart to the generation-path presets (#730). `preset`
+/// names either a preset or a policy profile. Returns without building the normalized
+/// string, so nothing crosses this boundary but the boolean.
+#[pyfunction]
+#[pyo3(signature = (text, *, preset="canonicalize"))]
+pub fn _is_canonical(text: &str, preset: &str) -> PyResult<bool> {
+    Ok(crate::presets::is_canonical(text, preset)?)
+}
+
 /// ML/NLP text normalization pipeline.
 ///
 /// Pipeline: NFKC → emoji→text → transliterate → strip_accents → [fold_case] →

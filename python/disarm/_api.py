@@ -56,6 +56,7 @@ from disarm._boundary import (
     _inspect_anomalies_lex,
     _inspect_auto_lang,
     _is_ascii,
+    _is_canonical,
     _is_case_fold_stable,
     _is_confusable,
     _is_mixed_script,
@@ -1634,6 +1635,16 @@ def has_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> 
     result still is not a claim about *unmapped* confusables — see
     `find_unmapped_confusables` for that exposure set.
 
+    **A clean result is not a claim of canonicity (#730).** 142,760 assigned code
+    points (5,292 excluding the Private Use Area) are reported clean here and are
+    still not their own canonical form — CJK compatibility ideographs, Arabic
+    presentation forms, Kangxi radicals, fullwidth and halfwidth forms. That is
+    deliberate: ``ＮＨＫ`` is ordinary Japanese text, and a detector that flagged it
+    would be one callers switch off (#633, #907). If the
+    question is "may I store these bytes as they arrived", ask `is_canonical`,
+    which is the verification-path predicate; this one answers "does this look
+    disguised".
+
     ``lexicon`` is a set of common words for the language being protected; it is
     used only by the leet and segmentation branches.  The invisible, bidi, zalgo,
     and mixed-script branches are script-agnostic and **need no lexicon** — calling
@@ -1690,6 +1701,16 @@ def inspect_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None)
     The ``lexicon`` is optional (see `has_anomalies`).  When omitted, the
     invisible, bidi, zalgo, and mixed-script branches still run; only leet and
     segmentation detection requires a lexicon.
+
+    **A clean result is not a claim of canonicity (#730).** 142,760 assigned code
+    points (5,292 excluding the Private Use Area) are reported clean here and are
+    still not their own canonical form — CJK compatibility ideographs, Arabic
+    presentation forms, Kangxi radicals, fullwidth and halfwidth forms. That is
+    deliberate: ``ＮＨＫ`` is ordinary Japanese text, and a detector that flagged it
+    would be one callers switch off (#633, #907). If the
+    question is "may I store these bytes as they arrived", ask `is_canonical`,
+    which is the verification-path predicate; this one answers "does this look
+    disguised".
 
     **Reusing a large lexicon (HAI-SDLC 6.1).** As with `has_anomalies`,
     pass a prebuilt `Lexicon` to avoid rebuilding the internal set on every
@@ -2522,6 +2543,56 @@ def is_normalized(
         False
     """
     return _is_normalized(text, form=_norm_form(form))
+
+
+def is_canonical(text: str, *, preset: str = "canonicalize") -> bool:
+    """True if ``text`` is already its own canonical form under ``preset``.
+
+    Every other normalization surface in disarm is *generation path*: text in,
+    normalized text out. This is the *verification path* counterpart — the question
+    to ask about bytes that arrive already bound to a decision, where quietly
+    re-normalizing defends the comparison you are about to make and leaves the
+    second representation free to keep circulating.
+
+    `has_anomalies` is not this predicate, and the gap is not small. Over
+    every assigned code point, 142,760 of them (5,292 excluding the Private Use
+    Area) are reported clean by the detector and are *not* their own canonical
+    form — CJK compatibility ideographs, Arabic presentation forms, Kangxi
+    radicals, fullwidth and halfwidth forms. None go the other way. An accept
+    gate written as "reject if ``has_anomalies``, otherwise take the bytes as
+    given" admits every one of them.
+
+    That is not a detector bug to be fixed by widening it: ``ＮＨＫ`` is how a
+    Japanese broadcaster writes its own name, and a detector that flags it is one
+    callers turn off (#633, #907). Two questions, two answers — ask this one when
+    you need canonicity, and ``has_anomalies`` when you need suspicion.
+
+    Equivalent to ``globals()[preset](text) == text`` and defined by it, but it
+    does not build the normalized copy to answer a boolean, and nothing crosses
+    the extension boundary but the result.
+
+    Args:
+        text: Input string.
+        preset: A preset name (`PRESETS`) or a policy profile name
+            (`list_profiles`). Defaults to ``"canonicalize"``.
+
+    Returns:
+        True if ``preset`` would leave ``text`` unchanged.
+
+    Raises:
+        DisarmError: If ``preset`` names neither a preset nor a profile.
+
+    Examples:
+        >>> is_canonical("paypal.com")
+        True
+        >>> is_canonical("ＡＢＣ")  # fullwidth — clean to the detector
+        False
+        >>> has_anomalies("ＡＢＣ")  # ...and this is the point
+        False
+        >>> is_canonical("abc", preset="search_key")
+        True
+    """
+    return _is_canonical(text, preset=preset)
 
 
 def stream_safe(text: str) -> str:

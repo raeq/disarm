@@ -18,6 +18,22 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`is_canonical(text, *, preset="canonicalize")` — the verification-path predicate
+  (#730).** Every other normalization surface here is generation path: text in,
+  normalized text out. There was no counterpart for the question a caller has about
+  bytes that arrive already bound to a decision — a signed payload, a primary key with
+  rows pointing at it — where quietly re-normalizing defends the comparison and leaves
+  the second representation in circulation. `has_anomalies` looks like that predicate
+  and is a strict under-approximation of it: over every assigned code point, 142,760
+  (5,292 excluding the Private Use Area) are reported clean and are not their own
+  canonical form, while **zero** go the other way. So the obvious accept gate — reject
+  if `has_anomalies`, else take the bytes — admits CJK compatibility ideographs, Arabic
+  presentation forms, Kangxi radicals and all of fullwidth Latin. Widening the detector
+  is not the fix (`ＮＨＫ` is ordinary Japanese text; that was #633 and #907), so this is
+  a second question with its own answer. Defined as `preset(text) == text`, but it does
+  not build the normalized copy to return a boolean and takes the `Guard::Inert` fast
+  path when the input is untouched. `preset` accepts any preset or policy-profile name.
+
 - **The Latin-shape exposure set is published and gated (#815).**
   `tests/fixtures/latin_shape_exposure.tsv` lists the **299** non-ASCII code points that
   read as a Latin letter and reach ASCII on no surface, with a per-block gate so a table
@@ -363,6 +379,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   single caller and the transitive wait.
 
 ### Documentation
+
+- **The generation path and the verification path are named and distinguished
+  (#730).** `docs/api/predicates.md` gains the two-path table, the measured
+  clean-but-not-canonical census, and why the answer is a new predicate rather than a
+  wider detector. `has_anomalies` and `inspect_anomalies` now say in their own
+  docstrings that a clean result is not a claim of canonicity.
+- **`THREAT_MODEL.md` lists reversal beside ROT-n (#917).** The textual-encoding
+  obfuscation exclusion enumerated base64, hex, ROT-n, binary, Morse and
+  percent-encoding but not writing the payload backwards, which is the same class and
+  equally untouched.
 
 - **`docs/security/adversarial-corpora.md` — the CVE page's counterpart for published
   adversarial corpora (#732).** `cve-validation.md` answers "which published CVEs does

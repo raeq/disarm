@@ -384,6 +384,14 @@ class Text:
         thing (``groß.txt`` / ``gross.txt``) — a fact, not an accusation."""
         return self._t().is_case_fold_stable(self._value)
 
+    def is_canonical(self, *, preset: str = "canonicalize") -> bool:
+        """True if the value is already its own canonical form under ``preset``.
+
+        The verification-path counterpart to the presets (#730). Not the same
+        question as `has_anomalies`, which stays silent on 5,292 non-PUA
+        code points that are not their own canonical form."""
+        return self._t().is_canonical(self._value, preset=preset)
+
     def is_normalized(self, *, form: NormalizationForm | NF = "NFC") -> bool:
         """True if already in the specified normalization form."""
         return self._t().is_normalized(self._value, form=form)

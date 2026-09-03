@@ -41,6 +41,7 @@ from disarm._api import (
     inspect_anomalies,
     inspect_auto_lang,
     is_ascii,
+    is_canonical,
     is_case_fold_stable,
     is_confusable,
     is_mixed_script,
@@ -362,6 +363,7 @@ __all__ = [
     "KeyCollision",
     "is_ascii",
     "is_case_fold_stable",
+    "is_canonical",
     "is_normalized",
     "is_normalized_stream_safe",
     # Preset metadata

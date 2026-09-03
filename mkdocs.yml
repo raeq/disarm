@@ -80,6 +80,7 @@ nav:
       - Which function do I want?: concepts/which-function.md
       - Adversarial-Text Defense: security/adversarial-defense.md
       - CVE Validation: security/cve-validation.md
+      - Adversarial corpora: security/adversarial-corpora.md
       - AI Watermarks: security/watermarks.md
       - Threat Model: THREAT_MODEL.md
   - Guide:

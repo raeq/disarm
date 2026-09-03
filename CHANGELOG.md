@@ -342,6 +342,40 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **`docs/security/adversarial-corpora.md` — the CVE page's counterpart for published
+  adversarial corpora (#732).** `cve-validation.md` answers "which published CVEs does
+  disarm handle?" with every row asserted; there was no equivalent for the corpora, and
+  the CVE set cannot reach them — a CVE is a defect in one implementation, a paper
+  releases a generator that emits a whole family.
+
+  27 vectors over four families, all perturbing one prompt so the family is the only
+  variable:
+
+  | family | neutralized | detected |
+  |---|---|---|
+  | Unicode control | 8/8 | 8/8 |
+  | Homoglyph | 5/5 | 4/5 |
+  | Structural | 3/7 | 1/7 |
+  | Encoding | 0/7 | 0/7 |
+
+  **Reconstructed in-repo, not cloned.** CI does not depend on a third-party repository
+  staying put, and the released generator has three defects that would score as *passes*
+  if its output were trusted: `script_mixing/mathematical` emits nothing (a duplicated
+  dict key means the paper's headline U+1D400 subtype is never exercised by the shipped
+  code), `invisible_payload/steganographic` returns its input, and
+  `targeted_word/target_system` substitutes `"system"` for `"system"`. 28 of 591 rows are
+  no-ops. Every vector here is asserted to differ from the base prompt first.
+
+  **The table is parsed and checked**, which is #732 item 5: every other doc gate in this
+  repo reads fenced code blocks and none read a markdown table, which is how a
+  `grapheme_len` cell stayed wrong through #708. Mutation-checked — flipping one cell and
+  deleting one row each fail.
+
+  The two columns stay apart, as on the CVE page. `fullwidth` is neutralized and
+  undetected, deliberately: #633 spared the block because `ＮＨＫ` is ordinary text, so a
+  caller who screens without rewriting gets nothing for that row. Out-of-scope rows are
+  asserted as negatives so a limitation cannot drift into a claim.
+
 - **The confusable fold has an orientation assumption, and rotated text inverts it
   (#916).** TR39 pairs a glyph with the letter it resembles *upright*. An "upside-down
   text" generator substitutes each letter for the glyph that looks like it rotated 180°

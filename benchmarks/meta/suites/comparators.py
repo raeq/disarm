@@ -41,17 +41,10 @@ class ConfusableBenchV1(SuiteBase):
         licence="MIT",
         issues=(736, 737, 732),
         finding=(
-            "#736, as filed at 0.14.1: no single surface exceeded R=0.550, and the "
-            "P=1.000 R=0.983 headline was a three-surface composition no page named. "
-            "Re-measured after #650 and #894 added surfaces this suite could not see: "
-            "`nearest_match` at one edit reaches R=0.942 alone, `skeleton_key` under "
-            "`tr39` R=0.817, and `is_confusable OR nearest_match` reaches P=1.000 "
-            "R=1.000 — two calls, not three. Precision stays 1.000 on every policy: "
-            "no policy flags a benign control. The seven rows the edit distance misses "
-            "are two-substitution chains, two edits by construction, which the fold "
-            "catches; the two the fold misses are ASCII edits no confusable table "
-            "should fold. The docs gap the issue names is what remains, and "
-            "`docs/security/cve-validation.md` now carries the recipe."
+            "#736: no single surface exceeds R=0.550. The result disarm actually "
+            "reaches — P=1.000 R=0.983 — is a three-surface composition "
+            "(lexicon OR is_confusable OR key collision) that no documentation page "
+            "names, so a caller cannot arrive at it from the docs."
         ),
         notes=(
             "The only labelled benchmark in the registry, and the only one where a "
@@ -125,7 +118,9 @@ class ConfusableBenchV1(SuiteBase):
             # registry would actually reach for (#650, #894). `skeleton_key` under
             # `tr39` is the spoof key; `nearest_match` measures the ASCII-edit class
             # no confusable table should fold, which is where the corpus's residual
-            # rows live.
+            # rows live. Scoring them moves the *run*, never the `finding` above:
+            # that field records what the 0.15.0 cycle measured, and the distance
+            # between it and today is the report's most useful column.
             "skeleton_key_collision": lambda r: collides(disarm.skeleton_key, r),
             "skeleton_key_tr39_collision": lambda r: collides(
                 lambda s: disarm.skeleton_key(s, digit_policy="tr39"), r

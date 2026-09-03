@@ -774,8 +774,9 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `tr39`, `nearest_match` (#894), and the two-call composition. Re-measured, the issue's
   picture has moved — `nearest_match` at one edit reaches 0.942 recall alone where the best
   single call was 0.550, and `is_confusable` **or** `nearest_match` reaches 1.000, two calls
-  rather than three, at precision 1.000 on every policy. The suite's recorded finding is
-  updated from the 0.14.1 numbers it still carried. The docs gap the issue is actually about
+  rather than three, at precision 1.000 on every policy. The suite's `finding` is left exactly
+  as it was: that field records what the 0.15.0 cycle measured, and the distance between it
+  and a fresh run is the report's most useful column. The docs gap the issue is actually about
   is closed on the CVE page beside *If you only make one call*: the recipe, with the
   non-obvious half named (the protected list is `inspect_anomalies`'s lexicon) and the two
   ASCII rows the issue pinned as residual misses now reported at distance 1 while staying

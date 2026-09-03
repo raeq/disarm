@@ -15,7 +15,7 @@ use crate::{ErrorMode, ErrorRepr};
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub(crate) struct PipelineSteps: u16 {
+    pub(crate) struct PipelineSteps: u32 {
         const NORMALIZE        = 0b0000_0001;
         const TRANSLITERATE    = 0b0000_0010;
         const CONFUSABLES      = 0b0000_0100;
@@ -85,6 +85,23 @@ bitflags! {
         /// `invisibles::strip_tags` already draws that line for `canonicalize` (#413) and
         /// this reuses it rather than inventing a second rule that could disagree.
         const STRIP_PLANE14 = 0b100_0000_0000_0000;
+
+        /// Resolve `BS`/`DEL` — the deletion class, applied rather than only reported
+        /// (#937).
+        ///
+        /// #934 taught the detector to see this class and recorded resolving it as out of
+        /// scope, on the grounds that the class is renderer-dependent. What an erase
+        /// removes is the cell *before* the control, and in every row of the paper's
+        /// released corpus that cell is the attacker's inserted character; the detector is
+        /// untouched, so a reader who saw a control picture is still told.
+        ///
+        /// Runs FIRST in [`STEP_ORDER`], before `normalize`, not merely before
+        /// `strip_control`. The renderer saw the code points as written, and every earlier
+        /// step changes what "the preceding cell" is: `ﬁ` + `BS` erases to nothing, but
+        /// after NFKC it is `f` + `i` + `BS` and erases to `f`; `щ` + `BS` erases to
+        /// nothing, but after transliteration it is `shc` + `BS` and erases to `sh`.
+        const RESOLVE_DELETIONS = 0b1000_0000_0000_0000;
+
     }
 }
 
@@ -102,6 +119,12 @@ bitflags! {
 /// Cyrillic/Greek text creates mixed-script gibberish because only some
 /// characters have Latin confusables.
 const STEP_ORDER: &[(PipelineSteps, &str)] = &[
+    // FIRST, and before `normalize` rather than merely before `strip_control` (#937).
+    // The renderer saw the code points as written, so every earlier step changes what the
+    // preceding cell is: `ﬁ` + BS erases to nothing, and to `f` once NFKC has split it.
+    // It must also precede `strip_control`, which deletes BS and DEL outright, and
+    // `collapse_whitespace`, which folds the CR this step may need to read.
+    (PipelineSteps::RESOLVE_DELETIONS, "resolve_deletions"),
     (PipelineSteps::NORMALIZE, "normalize"),
     (PipelineSteps::STRIP_ZALGO, "strip_zalgo"),
     (PipelineSteps::STRIP_BIDI, "strip_bidi"),
@@ -161,6 +184,12 @@ pub(crate) struct Pipeline {
     steps: PipelineSteps,
     normalize_form: Option<String>,
     zalgo_max_marks: Option<usize>,
+    /// Whether `RESOLVE_DELETIONS` also resolves a lone overwriting `CR` (#937).
+    ///
+    /// A parameter of that step rather than a step of its own, the way `zalgo_max_marks`
+    /// parameterises `STRIP_ZALGO` — `STEP_ORDER` holds steps, and this is not one. It is
+    /// reported through `steps()` as the step's parameter, so it stays visible.
+    resolve_cr: bool,
     lang: Option<String>,
     strict_iso9: bool,
     gost7034: bool,
@@ -223,8 +252,16 @@ impl Pipeline {
         // #914, the same shape and for the same reason: reachable only as a side effect
         // of `demojize` or `transliterate` before this.
         strip_plane14: bool,
+        // #937: resolve the deletion class rather than only reporting it. `resolve_cr`
+        // widens the same step; it does nothing on its own.
+        resolve_deletions: bool,
+        resolve_cr: bool,
     ) -> Result<Self, ErrorRepr> {
         let mut steps = PipelineSteps::empty();
+
+        if resolve_deletions {
+            steps |= PipelineSteps::RESOLVE_DELETIONS;
+        }
 
         if let Some(form) = normalize {
             // Validate the form
@@ -302,6 +339,9 @@ impl Pipeline {
             // when no profile fits.
             emoji_name_policy: emoji::NamePolicy::PIPELINE_BASELINE,
             steps,
+            // Only meaningful alongside the step it parameterises; recording it without
+            // `resolve_deletions` would be a setting that never runs.
+            resolve_cr: resolve_deletions && resolve_cr,
             normalize_form: normalize.map(std::borrow::ToOwned::to_owned),
             zalgo_max_marks,
             lang: lang.map(std::borrow::ToOwned::to_owned),
@@ -503,6 +543,12 @@ impl Pipeline {
         } else if step == PipelineSteps::FOLD_CASE || step == PipelineSteps::FOLD_CASE_POST {
             case_fold::fold_case_into(input, out);
             Ok(true)
+        } else if step == PipelineSteps::RESOLVE_DELETIONS {
+            Ok(crate::deletions::resolve_deletions_into(
+                input,
+                self.resolve_cr,
+                out,
+            ))
         } else if step == PipelineSteps::STRIP_CONTROL {
             whitespace::strip_control_chars_into(input, out);
             Ok(true)
@@ -546,6 +592,10 @@ impl Pipeline {
             self.normalize_form.clone()
         } else if step == PipelineSteps::STRIP_ZALGO {
             self.zalgo_max_marks.map(|m| m.to_string())
+        } else if step == PipelineSteps::RESOLVE_DELETIONS {
+            // Reported only when on, so the default reads as a bare step name and the
+            // non-default is visible without the caller knowing to look for it (#937).
+            self.resolve_cr.then(|| "cr".to_owned())
         } else if step == PipelineSteps::CONFUSABLES || step == PipelineSteps::CONFUSABLES_POST {
             Some("latin".to_owned())
         } else if step == PipelineSteps::TRANSLITERATE {
@@ -567,6 +617,19 @@ impl Pipeline {
 /// mirror [`Pipeline::new`].
 #[derive(Default)]
 struct ProfileSpec {
+    /// Resolve `BS`/`DEL` before anything else runs (#937).
+    ///
+    /// `true` for the profiles that screen untrusted text, where a run rendering as
+    /// `paypal` and reducing to `pXaXyXpXaXlX` defeats every comparison built on the
+    /// output. `false` for `code_context`, where a literal `\b` in source is data —
+    /// the same carve-out `strip_pua` and `strip_plane14` make for it.
+    resolve_deletions: bool,
+    /// Also resolve a lone overwriting `CR` (#937). `false` everywhere.
+    ///
+    /// A `CR` that is not part of a `CRLF` is a rendering overwrite in a terminal and a
+    /// classic Mac OS line ending in a file from before 2001, and the two are
+    /// byte-identical. No profile makes that call for the caller.
+    resolve_cr: bool,
     normalize: Option<&'static str>,
     transliterate: bool,
     strict_iso9: bool,
@@ -616,6 +679,8 @@ impl ProfileSpec {
             self.strip_zalgo,
             self.strip_pua,
             self.strip_plane14,
+            self.resolve_deletions,
+            self.resolve_cr,
         )?;
         // Redundant since #918 — `Pipeline::new` sets the same policy — and kept as the
         // explicit statement that a profile takes it. Assigning here is what let the two
@@ -642,6 +707,8 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
     Some(match name {
         "scholarly_cyrillic_iso9" => ProfileSpec {
             normalize: Some("NFKC"),
+            resolve_deletions: false,
+            resolve_cr: false,
             transliterate: true,
             strict_iso9: true,
             fold_case: true,
@@ -652,6 +719,8 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         },
         "library_catalog_key_eu" => ProfileSpec {
             normalize: Some("NFKC"),
+            resolve_deletions: false,
+            resolve_cr: false,
             transliterate: true,
             confusables: true,
             strip_accents: true,
@@ -663,6 +732,8 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         },
         "normalize_web_input" => ProfileSpec {
             normalize: Some("NFKC"),
+            resolve_deletions: false,
+            resolve_cr: false,
             confusables: true,
             collapse_whitespace: true,
             strip_pua: true,
@@ -670,6 +741,8 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         },
         "ml_corpus_normalize" => ProfileSpec {
             normalize: Some("NFKC"),
+            resolve_deletions: false,
+            resolve_cr: false,
             demojize: true,
             strip_accents: true,
             fold_case: true,
@@ -680,6 +753,8 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         },
         "search_index" => ProfileSpec {
             normalize: Some("NFKC"),
+            resolve_deletions: false,
+            resolve_cr: false,
             transliterate: true,
             strip_accents: true,
             fold_case: true,
@@ -736,6 +811,8 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         // Naming stays reachable through `demojize()` and `TextPipeline(demojize=True)`.
         "llm_guardrail" => ProfileSpec {
             normalize: Some("NFKC"),
+            resolve_deletions: true,
+            resolve_cr: false,
             strip_zalgo: Some(0),
             strip_bidi: true,
             strip_zero_width: Some(true),
@@ -760,6 +837,8 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         // (fold the spoof onto the term it imitates) use `llm_guardrail`.
         "rag_ingest" => ProfileSpec {
             normalize: Some("NFKC"),
+            resolve_deletions: true,
+            resolve_cr: false,
             strip_bidi: true,
             strip_control: Some(true),
             strip_zero_width: Some(true),
@@ -800,6 +879,7 @@ mod tests {
             steps,
             normalize_form: normalize_form.map(ToOwned::to_owned),
             zalgo_max_marks: None,
+            resolve_cr: false,
             lang: None,
             strict_iso9: false,
             gost7034: false,
@@ -868,6 +948,9 @@ mod tests {
                 (None, "a\u{200b}b")
             } else if *flag == PipelineSteps::STRIP_PLANE14 {
                 (None, "a\u{e0041}b")
+            } else if *flag == PipelineSteps::RESOLVE_DELETIONS {
+                // BS erases the `X`, so the step changes this and the gate can see it.
+                (None, "aX\u{8}b")
             } else if *flag == PipelineSteps::STRIP_PUA {
                 (None, "a\u{e000}b")
             } else if *flag == PipelineSteps::COLLAPSE_WS {
@@ -1199,6 +1282,9 @@ mod tests {
         assert_eq!(
             step_names,
             vec![
+                // First, and before `normalize`: the renderer saw the code points as
+                // written, so NFKC would change what the preceding cell is (#937).
+                "resolve_deletions",
                 "normalize",
                 "strip_zalgo",
                 "strip_bidi",
@@ -1256,6 +1342,8 @@ mod tests {
             None,  // strip_zalgo
             false, // strip_pua (#911)
             false, // strip_plane14 (#914)
+            false, // resolve_deletions (#937)
+            false, // resolve_cr (#937)
         )
         .unwrap();
         assert!(p.steps.contains(PipelineSteps::COLLAPSE_WS));
@@ -1283,6 +1371,8 @@ mod tests {
             None,        // strip_zalgo
             false,       // strip_pua (#911)
             false,       // strip_plane14 (#914)
+            false,       // resolve_deletions (#937)
+            false,       // resolve_cr (#937)
         )
         .unwrap();
         assert!(p.steps.contains(PipelineSteps::COLLAPSE_WS));
@@ -1310,6 +1400,8 @@ mod tests {
             None,       // strip_zalgo
             false,      // strip_pua (#911)
             false,      // strip_plane14 (#914)
+            false,      // resolve_deletions (#937)
+            false,      // resolve_cr (#937)
         )
         .unwrap();
         assert!(!p.steps.contains(PipelineSteps::COLLAPSE_WS));
@@ -1324,6 +1416,8 @@ mod tests {
             None, false, None, false, false, false, false, false, false, None, None, false, false,
             None, false, // strip_pua (#911)
             false, // strip_plane14 (#914)
+            false, // resolve_deletions (#937)
+            false, // resolve_cr (#937)
         )
         .unwrap();
         assert!(p.steps.is_empty());
@@ -1349,6 +1443,8 @@ mod tests {
             None,
             false, // strip_pua (#911)
             false, // strip_plane14 (#914)
+            false, // resolve_deletions (#937)
+            false, // resolve_cr (#937)
         );
         assert!(matches!(
             res,
@@ -1375,6 +1471,8 @@ mod tests {
             None,
             false, // strip_pua (#911)
             false, // strip_plane14 (#914)
+            false, // resolve_deletions (#937)
+            false, // resolve_cr (#937)
         );
         assert!(matches!(res, Err(ErrorRepr::MutuallyExclusivePipeline)));
     }

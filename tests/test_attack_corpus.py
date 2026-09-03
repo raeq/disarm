@@ -75,6 +75,11 @@ ALL_SURFACES = {
         "sort_key",
         "catalog_key",
         "ml_normalize",
+        # Both added with #937, which is the first thing to assert against them:
+        # `skeleton_key` resolves the deletion class and `strip_format` deliberately
+        # does not.
+        "skeleton_key",
+        "strip_format",
     )
 }
 ALL_SURFACES.update(
@@ -298,22 +303,74 @@ def test_the_deletion_finding_names_what_was_erased() -> None:
     assert "overwritten by what follows the carriage return" in finding.reason
 
 
-@pytest.mark.parametrize("attack_name", sorted(DELETIONS))
-def test_deletion_class_is_not_resolved_on_any_surface(attack_name: str) -> None:
-    """Half two, and the negative pin: XMR is 0 everywhere, deliberately.
+#: Surfaces that resolve BS/DEL since #937. `strip_format` is deliberately absent — its
+#: contract is display-preserving — and so is `code_context`, where a literal `\b` in
+#: source is data.
+DELETION_RESOLVING_SURFACES = [
+    "canonicalize",
+    "canonicalize_strict",
+    "strip_obfuscation",
+    "search_key",
+    "catalog_key",
+    "sort_key",
+    "skeleton_key",
+    "ml_normalize",
+    "profile:llm_guardrail",
+    "profile:rag_ingest",
+]
 
-    If a future change starts recovering this class, this test fails and the policy in
-    THREAT_MODEL.md has to be revisited in the same commit — which is the point. It is
-    not asserting that recovery would be wrong; it is asserting that it is a decision.
+
+@pytest.mark.parametrize("surface_name", DELETION_RESOLVING_SURFACES)
+@pytest.mark.parametrize("attack_name", ["deletion_bs", "deletion_del"])
+def test_bs_and_del_are_now_resolved(surface_name: str, attack_name: str) -> None:
+    """#937 reversed #934's out-of-scope call for BS/DEL, and this is the reversal.
+
+    These two were asserted as negatives when #934 landed: the class was detected and
+    resolved by nothing, on the grounds that reproducing a renderer risked losing text a
+    reader can see. What an erase removes is the cell *before* the control, which is the
+    attacker's insertion, so #937 measured that and the decision changed. The detector is
+    untouched, so a reader who saw a control picture is still told.
     """
+    surface = ALL_SURFACES[surface_name]
     attack = DELETIONS[attack_name]
+    misses = [w for w in CORPUS if surface(attack(w)) != surface(w)]
+    assert not misses, f"{surface_name} did not recover {attack_name} for: {misses}"
+
+
+def test_cr_is_still_not_resolved_anywhere() -> None:
+    """The half that stays a negative, and for a stated reason.
+
+    A lone CR is a rendering overwrite in a terminal and a **classic Mac OS line ending**
+    in a file from before 2001, and the two are byte-identical. No preset or profile makes
+    that call for the caller; `resolve_cr=True` on a composed `TextPipeline` does.
+    """
     recovered = [
-        (name, word)
+        name
         for name, surface in ALL_SURFACES.items()
-        for word in CORPUS
-        if surface(attack(word)) == surface(word)
+        if all(surface(deletion_cr(w)) == surface(w) for w in CORPUS)
     ]
-    assert not recovered, f"{attack_name} is now recovered by: {sorted({n for n, _ in recovered})}"
+    assert not recovered, f"CR is now resolved by: {sorted(recovered)}"
+
+    opted_in = disarm.TextPipeline(resolve_deletions=True, resolve_cr=True)
+    assert opted_in(deletion_cr("paypal")) == "paypal", "the opt-in must work"
+
+
+@pytest.mark.parametrize("surface_name", ["strip_format", "profile:code_context"])
+@pytest.mark.parametrize("attack_name", sorted(DELETIONS))
+def test_the_two_surfaces_that_deliberately_do_not_resolve(
+    surface_name: str, attack_name: str
+) -> None:
+    """Both carve-outs, asserted rather than left to the reader.
+
+    `strip_format`'s contract is display-preserving, and `code_context` exists to preserve
+    its input — a literal `\b` in source is data. That is the same carve-out `strip_pua`
+    and `strip_plane14` already make for `code_context`.
+    """
+    surface = ALL_SURFACES[surface_name]
+    attack = DELETIONS[attack_name]
+    assert any(surface(attack(w)) != surface(w) for w in CORPUS), (
+        f"{surface_name} now resolves {attack_name}, which its contract says it must not"
+    )
 
 
 def test_ordinary_uses_of_cr_are_spared() -> None:

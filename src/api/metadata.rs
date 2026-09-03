@@ -182,7 +182,27 @@ pub fn unicode_version() -> &'static str {
 ///
 /// This one the fixture DID catch: its corpus carries 54 emoji, unlike the three classes
 /// earlier in this cycle that it could not see.
-pub const KEY_SCHEMA_VERSION: u32 = 7;
+/// Bumped to 8 by #937: the deletion class is resolved rather than only reported. `BS`
+/// and `DEL` now erase the preceding *cell*, before any other step runs, so every builder
+/// carrying the step moves for input containing one — `search_key`, `catalog_key`,
+/// `sort_key`, `skeleton_key` and `ml_normalize`, along with `canonicalize`,
+/// `canonicalize_strict` and `strip_obfuscation`.
+///
+/// #934 recorded resolving this class as out of scope, on the grounds that it is
+/// renderer-dependent and resolution could lose text a reader can see. #937 measured what
+/// an erase actually removes — the cell *before* the control, which in every row of the
+/// paper's released corpus is the attacker's inserted character — and the decision
+/// changed. `strip_format` and the `code_context` profile deliberately keep the old
+/// behaviour, and a lone `CR` stays unresolved everywhere: it is byte-identical to a
+/// classic Mac OS line ending, so only an explicit `resolve_cr=True` takes it.
+///
+/// The fixture was green through the change, for the **fourth** time in this cycle and
+/// for the same reason as the three before it: its corpus held not one `BS`, `DEL` or
+/// lone `CR` across 23,135 rows. 34 were added with this, covering every shape the model
+/// has a rule for — the paper's construction, overstrike bold, a format character and a
+/// combining mark before the control, a rendering `Cf` that does occupy a cell, erasing
+/// past the start of a line, `CRLF`, and the classic Mac row that is why `CR` is opt-in.
+pub const KEY_SCHEMA_VERSION: u32 = 8;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -217,7 +237,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 7;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "1cf3ef3dbc1d960fe02ac77db64679b23ffd402e378b1f697415e30e0642f871";
+    "cac1595b74e77140ef070c3e8d6f3905b7f258db2cc8f38630e03e188f5a1637";
 
 /// The key-schema counter, as a function (#645).
 ///

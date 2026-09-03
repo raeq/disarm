@@ -1100,8 +1100,12 @@ fn carrier_run(chars: &[char]) -> Option<(char, usize)> {
             i += 1;
         }
         let len = i - start;
-        // An explicit match rather than `is_none_or` (Rust 1.82; the crate's MSRV is
-        // 1.81) or `map_or(true, ..)`, which clippy rewrites back into `is_none_or`.
+        // An explicit match rather than `map_or(true, ..)`, which clippy rewrites into
+        // `is_none_or`. This comment used to give the MSRV as the reason — `is_none_or`
+        // is Rust 1.82 and the crate was on 1.81 — and that stopped being true when the
+        // MSRV moved to 1.88. It read as a standing convention long enough to be cited
+        // against correct code in review on #941, so the reason is now the honest one:
+        // the match is kept because it is clear, not because the feature is unavailable.
         let longer = match best {
             None => true,
             Some((_, best_len)) => len > best_len,

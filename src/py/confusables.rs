@@ -48,15 +48,20 @@ pub fn _unmapped_confusables(target_script: &str) -> PyResult<Vec<String>> {
 /// fold?" — exposure — and this one answers "what did the fold change, and to what?" —
 /// evidence. Returns `(char, byte_offset, target)` in order of appearance.
 #[pyfunction]
-#[pyo3(signature = (text, *, target_script="latin"))]
+#[pyo3(signature = (text, *, target_script="latin", allowed_scripts=None))]
 pub fn _find_confusables(
     text: &str,
     target_script: &str,
+    allowed_scripts: Option<Vec<String>>,
 ) -> PyResult<Vec<(String, usize, String)>> {
-    Ok(crate::confusables::find_confusables(text, target_script)?
-        .into_iter()
-        .map(|(ch, offset, target)| (ch.to_string(), offset, target.to_string()))
-        .collect())
+    let allowed = allowed_scripts.unwrap_or_default();
+    let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
+    Ok(
+        crate::confusables::find_confusables(text, target_script, &allowed)?
+            .into_iter()
+            .map(|(ch, offset, target)| (ch.to_string(), offset, target.to_string()))
+            .collect(),
+    )
 }
 
 /// Scan `text` for upstream confusable sources the bundled table does not fold (#563).

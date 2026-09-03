@@ -433,7 +433,7 @@ CORE_FUNCTION_PARAMS = {
     "has_bidi_control": ["text"],
     "is_confusable": ["text", "target_script", "greedy", "preferred_aliases"],
     "unmapped_confusables": ["target_script"],
-    "find_confusables": ["text", "target_script"],
+    "find_confusables": ["text", "target_script", "allowed_scripts"],
     "find_unmapped_confusables": ["text", "target_script"],
     "is_ascii": ["text"],
     "is_normalized": ["text", "form"],

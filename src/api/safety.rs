@@ -367,11 +367,59 @@ pub struct MappedConfusable {
 /// ```
 #[must_use]
 pub fn find_confusables(text: &str, target: TargetScript) -> Vec<MappedConfusable> {
-    crate::confusables::find_confusables(text, target.as_str())
-        .expect("TargetScript always maps to a supported target script")
-        .into_iter()
-        .map(|(ch, offset, target)| MappedConfusable { ch, offset, target })
-        .collect()
+    find_confusables_with(text, target, &[]).expect("an empty allowed-script list is valid")
+}
+
+/// [`find_confusables`], with the scripts the caller considers legitimate (#900).
+///
+/// `find_confusables` asks *"could this character imitate a `target` letter"*, one
+/// character at a time, with no reference to the string around it. That is the right
+/// question for a registry of English brands and the wrong one for a service whose users
+/// write Russian: `Москва` comes back as six findings out of six letters, and a caller
+/// who gates registration on the result has built a registry that rejects its own users'
+/// language.
+///
+/// `allowed_scripts` is how the caller says what legitimate input looks like. A character
+/// belonging to one of those scripts is not reported; everything else still is.
+///
+/// ```
+/// use disarm::api::{find_confusables, find_confusables_with, TargetScript};
+///
+/// // Moscow, in Russian — six findings by default.
+/// assert_eq!(find_confusables("Москва", TargetScript::Latin).len(), 6);
+/// // ...and none once Cyrillic is declared legitimate.
+/// let found = find_confusables_with("Москва", TargetScript::Latin, &["Cyrillic"]).unwrap();
+/// assert!(found.is_empty());
+///
+/// // Not a blanket exemption: a Cyrillic `о` inside a Latin word is still a finding,
+/// // because the caller declared Latin, not Cyrillic.
+/// let mixed = find_confusables_with("hell\u{043E}", TargetScript::Latin, &["Latin"]).unwrap();
+/// assert_eq!(mixed.len(), 1);
+/// ```
+///
+/// **It cannot suppress a scriptless spoof, by construction.** `Common` and `Inherited`
+/// are never allowed whatever the caller passes, and the characters that carry a spoof
+/// without belonging to any script — `ℐ`, `Ⅰ`, `𝐈`, the mathematical alphanumerics —
+/// resolve to `Common`. Declaring a script narrows the false positives without reopening
+/// the whole-script substitutions this function exists to catch.
+///
+/// Script names are the ones [`crate::api::detect_scripts`] returns (`"Cyrillic"`), matched
+/// case-insensitively so the lowercase spelling `target` uses also works.
+///
+/// # Errors
+///
+/// [`Error`] naming the first entry of `allowed_scripts` that is not a known script.
+pub fn find_confusables_with(
+    text: &str,
+    target: TargetScript,
+    allowed_scripts: &[&str],
+) -> Result<Vec<MappedConfusable>, Error> {
+    Ok(
+        crate::confusables::find_confusables(text, target.as_str(), allowed_scripts)?
+            .into_iter()
+            .map(|(ch, offset, target)| MappedConfusable { ch, offset, target })
+            .collect(),
+    )
 }
 
 // ── Reverse transliteration (romanized Latin → native script) ────────────────

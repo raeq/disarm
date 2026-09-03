@@ -60,6 +60,44 @@ assert rejected("stripe") is None
 The reducer answers *"is this the same as something I protect?"* and the detector answers
 *"is this pretending to be something?"*. A registry needs both questions asked.
 
+### That gate rejects its own users' language, unless you say otherwise
+
+The `find_confusables(identifier)` line above asks *"could any character here imitate a
+Latin letter"*, one character at a time, with no reference to the string around it. For a
+registry of English brands that is the right question. For a service whose users write
+Russian, Greek, Hebrew or Arabic it flags every native-script name:
+
+```python
+from disarm import find_confusables
+
+len(find_confusables("Москва"))  # 6 — every letter
+find_confusables("Ελλάδα")  # [('Ε', 0, 'E'), ...]
+find_confusables("שלום")  # [('ו', 4, 'l')]
+```
+
+Moscow is not an attack. `allowed_scripts` is how you say what legitimate input looks
+like — a character from a declared script is not reported, everything else still is:
+
+```python
+find_confusables("Москва", allowed_scripts=["Cyrillic"])  # []
+find_confusables("hellо", allowed_scripts=["Latin"])  # [('о', 4, 'o')] — still caught
+```
+
+The declaration is not a blanket exemption, and it cannot be turned into one. Two
+properties hold by construction:
+
+- **A whole-script substitution survives it.** `аррӏе` is five Cyrillic letters and an
+  attack on a Latin registry. Declaring `Latin` does not exempt Cyrillic, so all five are
+  still reported. This is why "the string has no Latin in it, so there is nothing to
+  imitate" is *not* the fix — 28 of `confusable-bench.v1`'s 120 malicious rows contain no
+  Latin letter at all.
+- **A scriptless spoof cannot be declared away.** `Common` and `Inherited` are never
+  allowed, whatever you pass. `ℐ`, `Ⅰ`, `𝐈` and the mathematical alphanumerics belong to
+  no script, so `allowed_scripts=[every script disarm knows]` still reports them.
+
+If you serve one language, declare its script. If you serve several, declare several —
+what remains ambiguous after that is [#901](https://github.com/raeq/disarm/issues/901).
+
 ### Why the split falls where it does
 
 `find_confusables` sees a character that has a fold target, whether or not folding it

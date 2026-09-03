@@ -2290,7 +2290,10 @@ def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[
 
 
 def find_confusables(
-    text: str, *, target_script: str | Script = "latin"
+    text: str,
+    *,
+    target_script: str | Script = "latin",
+    allowed_scripts: Iterable[str | Script] | None = None,
 ) -> list[tuple[str, int, str]]:
     """Find the confusables in *text* that disarm's table **does** fold (#737).
 
@@ -2321,27 +2324,61 @@ def find_confusables(
     anchored in *text* rather than in the composed intermediate — the same contract the
     sibling gives.
 
+    **This asks what could imitate a `target_script` letter, not what is
+    suspicious (#900).** It runs one character at a time with no reference to the
+    string around it, so a word written entirely in another script comes back as a
+    list of findings — ``find_confusables("Москва")`` is six findings out of six
+    letters, and Moscow is not an attack. A caller who gates registration on
+    ``bool(find_confusables(name))`` has built a registry that rejects its own
+    users' language.
+
+    ``allowed_scripts`` is how you say what legitimate input looks like. A
+    character belonging to one of those scripts is not reported; everything else
+    still is.
+
+    It cannot suppress a scriptless spoof, by construction: ``Common`` and
+    ``Inherited`` are never allowed whatever you pass, and the characters that
+    carry a spoof without belonging to any script — ``ℐ``, ``Ⅰ``, ``𝐈``, the
+    mathematical alphanumerics — are ``Common``. So declaring a script narrows the
+    false positives without reopening the whole-script substitutions this function
+    exists to catch.
+
     Args:
         text: Input Unicode string.
         target_script: Which bundled table to report against (default ``"latin"``).
+        allowed_scripts: Scripts whose characters are legitimate here, named as
+            `detect_scripts` names them (``"Cyrillic"``) and matched
+            case-insensitively. ``None`` (default) reports every folded confusable.
 
     Returns:
         List of ``(char, byte_offset, target)`` for each folded confusable.
 
     Raises:
         TypeError: If *text* is not a ``str``.
-        InvalidArgumentError: If *target_script* is not a supported script.
+        InvalidArgumentError: If *target_script* or any *allowed_scripts* entry is
+            not a supported script.
 
     Examples:
         >>> find_confusables("p\u0251ypal")
         [('\u0251', 1, 'a')]
         >>> find_confusables("paypal")
         []
+        >>> len(find_confusables("Москва"))  # every letter, and none of it an attack
+        6
+        >>> find_confusables("Москва", allowed_scripts=["Cyrillic"])
+        []
+        >>> find_confusables("hell\u043e", allowed_scripts=["Latin"])  # still caught
+        [('\u043e', 4, 'o')]
     """
     if not isinstance(text, str):
         raise TypeError(f"find_confusables() expects str, got {type(text).__name__}")
+    allowed = (
+        None
+        if allowed_scripts is None
+        else [s.value if isinstance(s, Script) else str(s) for s in allowed_scripts]
+    )
     result: list[tuple[str, int, str]] = _find_confusables(
-        text, target_script=_target_script(target_script)
+        text, target_script=_target_script(target_script), allowed_scripts=allowed
     )
     return result
 

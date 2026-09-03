@@ -43,6 +43,29 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   #695/#868 monomorphisation, because the mask is still computed at compile time from a
   single list. `scripts/perf_lint.sh` and the wasm coupling gate are unchanged. That
   mechanism is what #896 needs to reach the other key builders from Rust.
+- **`find_confusables(..., allowed_scripts=[...])` — say what legitimate input looks like
+  (#900).** With the default `target_script="latin"` the function asks *"could this
+  character imitate a Latin letter"*, one character at a time, with no reference to the
+  string around it. The docstring was accurate; the trouble is that this is the function
+  callers reach for as a spoof detector, and used that way it reports every Russian word.
+  `find_confusables("Москва")` is six findings out of six letters, so a registry gating on
+  `bool(find_confusables(name))` rejects its own users' language. `confusable-bench.v1`
+  cannot see it: all 140 rows target English brands and all 20 benign rows are Latin.
+
+  A character belonging to a declared script is no longer reported; everything else still
+  is. Two properties hold **by construction**, which is what keeps this from costing
+  recall the way "no Latin in the string, so nothing to imitate" would:
+
+  - A whole-script substitution survives it. Declaring `Latin` does not exempt Cyrillic,
+    so `аррӏе` is still five findings.
+  - `Common` and `Inherited` are never allowed, whatever the caller passes. `ℐ`, `Ⅰ`, `𝐈`
+    and the mathematical alphanumerics belong to no script, so declaring every script
+    disarm knows still reports them.
+
+  Rust gets `api::find_confusables_with`, following the `normalize_confusables_with`
+  precedent — the existing `find_confusables` is unchanged and still infallible. Names are
+  the ones `detect_scripts` returns and are matched case-insensitively, so the lowercase
+  spelling `target_script` uses also works.
 
 - **`deletion`: a lone carriage return that overwrites text (#739).** Boucher et al.,
   *Bad Characters* (IEEE S&P 2022) §IV-G names four classes of imperceptible

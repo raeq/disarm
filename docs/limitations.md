@@ -344,6 +344,28 @@ The foundational problem is established in the [Unicode Technical Report #39](ht
 
 **The fold has a direction.** TR39 names one member of each equivalence class the *prototype* and points the others at it, so a block upstream only ever points *at* is a destination and never a source. disarm inherits that direction. `ASCII_FOLD` (#341) resolves a prototype that is itself non-ASCII, but only where a row already exists — so a glyph nothing points at has no row to resolve. #815 censuses the result: 401 code points whose Unicode name identifies them as Latin letter shapes reach ASCII on no surface. The single-letter Latin small capitals were the sharpest case and now fold as sources (#815); the digraph and barred forms (`ᴁ`, `ᴃ`, `ᴆ`) do not, because folding them is a visual judgment rather than a letter-for-letter identity.
 
+**A wholly disguised word is reported (#815).** `inspect_anomalies` reports a
+`confusable` when a word carries an ASCII letter beside a non-ASCII one, because the mixed
+spelling is the signal and that gate is what keeps ordinary Cyrillic or Greek prose from
+firing. On its own that inverted: converting one letter of `instructions` to its small
+capital tripped the detector and converting all twelve silenced it, because the last ASCII
+letter left with the last substitution.
+
+A token is now also reported when every one of its characters folds to an ASCII letter,
+there are at least four of them, and its script is Latin or none. The script condition is
+what separates the two cases: every letter of `Москва` folds to ASCII too, and it is a
+Russian word rather than Latin letters in disguise.
+
+Three blocks stay exempt, because a whole token written in them is ordinary text and
+nothing else spells it: Halfwidth and Fullwidth Forms, CJK Compatibility, and Letterlike
+Symbols. `ＮＨＫ` does not fire, and neither does `ｐａｙｐａｌ` — that trade is #633's and is
+unchanged. Phonetic Extensions and Enclosed Alphanumeric Supplement are not exempt here,
+because those are the blocks that spell `ᴘᴀꜱꜱᴡᴏʀᴅ`.
+
+The false positive this risks is IPA, and the four-character floor answers it: a
+transcription short enough to be wholly non-ASCII is shorter than that. Measured at 0 hits
+across 235,976 entries of `/usr/share/dict/words`.
+
 **The direction is an orientation assumption, and rotated text inverts it (#916).** TR39
 pairs a glyph with the letter it resembles *upright*. An "upside-down text" generator
 substitutes each letter for the glyph that looks like it rotated 180°, then reverses the

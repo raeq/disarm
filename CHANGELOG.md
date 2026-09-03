@@ -244,6 +244,35 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The detector went silent exactly when the disguise was complete (#815).**
+  `inspect_anomalies` reported a `confusable` only when a word also carried an ASCII
+  letter — #633's gate, and the thing that keeps ordinary Cyrillic and Greek prose from
+  firing. It inverted:
+
+  ```
+  1/12 converted   has_anomalies True
+  7/12 converted   has_anomalies True
+  12/12 converted  has_anomalies False   <- the finished attack
+  ```
+
+  A token is now also reported when every character folds to an ASCII letter, there are at
+  least four, and its script is Latin or none. The script condition is the whole
+  separation: every letter of `Москва` folds to ASCII too, and it is a Russian word rather
+  than Latin letters in disguise.
+
+  Three of #722's seven spared blocks stay spared, because a whole token written in them
+  is ordinary text that nothing else spells — Halfwidth and Fullwidth Forms, CJK
+  Compatibility, Letterlike Symbols. `ＮＨＫ` does not fire and neither does `ｐａｙｐａｌ`;
+  that trade is #633's and is unchanged. Phonetic Extensions and Enclosed Alphanumeric
+  Supplement are **not** spared here, because those are the blocks that spell `ᴘᴀꜱꜱᴡᴏʀᴅ`
+  and `🅟🅐🅨🅟🅐🅛` — sparing a block because it *can* hold ordinary text is what let the
+  finished attack through.
+
+  The false positive this risks is IPA, answered by the four-character floor: a
+  transcription short enough to be wholly non-ASCII is shorter than that. Measured at
+  **0 hits across 235,976 dictionary words** and 4 across the 23,135-row key-stability
+  corpus, every one an attack string.
+
 - **A `TextPipeline` built from a profile's own `ProfileSpec` behaved differently (#918).**
   `ProfileSpec::build` set `emoji_name_policy` and `Pipeline::new` left it at
   `NAME_EVERYTHING`, so the two profiles that set `demojize` without `transliterate`

@@ -172,6 +172,88 @@ const ENCLOSING_MARKS: &[char] = &[
     '\u{0488}', '\u{0489}', '\u{1ABE}', '\u{20DD}', '\u{20DE}', '\u{20DF}', '\u{20E0}', '\u{20E2}',
     '\u{20E3}', '\u{20E4}', '\u{A670}', '\u{A671}', '\u{A672}',
 ];
+/// Fewest folding characters before a wholly non-ASCII token is called a disguise (#815).
+///
+/// Below this sit IPA fragments and linguistic notation — `\u{026a}\u{0274}` is two
+/// characters and a real transcription. A disguised identifier is not.
+const MIN_WHOLLY_CONFUSABLE: usize = 4;
+
+/// A token with NO ASCII letter whose every character imitates one (#815).
+///
+/// #633's gate reports a `confusable` only when the word also carries an ASCII letter,
+/// which is what keeps `\u{041F}\u{0440}\u{0438}\u{0432}\u{0435}\u{0442}` clean and is a
+/// gate worth having — #907 records what happens when a surface treats legitimate
+/// non-Latin text as something to rewrite.
+///
+/// It inverts, though. Substituting one letter of `instructions` for its small capital
+/// trips the detector and substituting all twelve silences it, because the last ASCII
+/// letter leaves with the last substitution. A word where *every* character imitates a
+/// Latin letter is more suspicious than a half-converted one, not less.
+///
+/// Four conditions, and the fourth is the whole difference between "a word in another
+/// script" and "Latin letters wearing a disguise":
+///
+/// 1. every non-space character folds to an ASCII **letter**, which also rules out any
+///    ASCII letter, since none of the table's three ASCII sources (#725) is one,
+/// 2. at least [`MIN_WHOLLY_CONFUSABLE`] of them,
+/// 3. the token's script is Latin, or it has none at all,
+/// 4. and it is not wholly drawn from a block where a whole token is ordinary text.
+///
+/// `\u{041C}\u{043E}\u{0441}\u{043A}\u{0432}\u{0430}` passes the first three — every
+/// Cyrillic letter here folds to ASCII — and fails the fourth. The "no script" arm is for
+/// the negative enclosed letters, which are category `So` and belong to no script while
+/// still spelling a word.
+///
+/// Measured before shipping: 4 hits across the 23,135-row key-stability corpus, every one
+/// an attack string, and 0 across 235,976 entries of `/usr/share/dict/words`.
+fn is_wholly_confusable_word(part: &str) -> bool {
+    let core: Vec<char> = part.chars().filter(|c| !c.is_whitespace()).collect();
+    if core.len() < MIN_WHOLLY_CONFUSABLE {
+        return false;
+    }
+    // No explicit "contains no ASCII letter" check: the table has three ASCII sources
+    // (#725) and none is a letter, so an ASCII letter fails the fold test below and the
+    // check would be redundant. Mutation testing is what showed that — deleting it left
+    // every test passing, which is the only honest reason to know.
+    let folds_to_letter = |c: char| {
+        crate::tables::lookup_confusable(c, "latin")
+            .is_some_and(|t| t.len() == 1 && t.chars().all(|f| f.is_ascii_alphabetic()))
+    };
+    if !core.iter().copied().all(folds_to_letter) {
+        return false;
+    }
+    // #722 section 2 spared seven blocks under #633's NHK argument: a detector that fires
+    // on ordinary text written wholly in one of them is a detector a caller switches off.
+    // That argument is real for three of them and contested for the rest, so this rule
+    // takes the three rather than the list.
+    //
+    // A Japanese broadcaster IS written in fullwidth forms, an SI unit IS one CJK
+    // Compatibility glyph, a numero sign IS Letterlike. Nothing else spells those. But
+    // Phonetic Extensions and Enclosed Alphanumeric Supplement are where the disguised
+    // English words live, and sparing a block because it CAN hold ordinary text is what
+    // let the finished attack through in the first place.
+    //
+    // IPA is the false positive this risks, and the length floor answers it: a
+    // transcription short enough to be wholly non-ASCII is shorter than
+    // MIN_WHOLLY_CONFUSABLE. Measured at 0 hits across 235,976 dictionary words and 0
+    // across the key-stability corpus's natural word forms.
+    if core.iter().copied().all(ordinary_as_a_whole_token) {
+        return false;
+    }
+    let scripts = detect_scripts(part);
+    scripts.is_empty() || scripts == ["Latin"]
+}
+
+/// The three blocks of [`whole_token_compat_is_ordinary`] where a whole token really is
+/// ordinary text and nothing else spells it (#815).
+fn ordinary_as_a_whole_token(ch: char) -> bool {
+    matches!(ch,
+        '\u{FF00}'..='\u{FFEF}'      // Halfwidth and Fullwidth Forms
+        | '\u{3300}'..='\u{33FF}'    // CJK Compatibility
+        | '\u{2100}'..='\u{214F}'    // Letterlike Symbols
+    )
+}
+
 /// Wrapping punctuation trimmed from token edges (NOT the leet symbols @ $ |).
 const WRAP: &[char] = &[
     '"', '.', ',', ';', ':', '?', '!', '(', ')', '[', ']', '{', '}', '<', '>', '\u{AB}', '\u{BB}',
@@ -1248,7 +1330,10 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
     // `confusable` is still the right answer and still fires.
     if !tok.is_ascii() {
         for part in word_parts(tok) {
-            if !part.chars().any(|c| c.is_ascii_alphabetic()) {
+            // #815: no ASCII letter is not automatically clean. A token where EVERY
+            // character imitates a Latin letter is the finished form of the attack this
+            // branch exists to catch, and #633's gate went quiet on exactly that.
+            if !part.chars().any(|c| c.is_ascii_alphabetic()) && !is_wholly_confusable_word(part) {
                 continue;
             }
             // The same `UNITS` exemption the mixed-script branch takes. `µF` folds to
@@ -1426,6 +1511,37 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `is_wholly_confusable_word` must hold on its own terms, not only where it is called.
+    ///
+    /// Its one caller already checks "no ASCII letter", so nothing observable through
+    /// `inspect_anomalies` covers the helper's own behaviour. A private helper that is
+    /// only correct because of its caller is one refactor away from being wrong.
+    ///
+    /// The ASCII case is asserted here too, and holds for a reason worth stating: an
+    /// ASCII letter has no confusable row, so the fold test rejects it without a separate
+    /// check.
+    #[test]
+    fn wholly_confusable_word_holds_on_its_own_terms() {
+        // An ASCII letter disqualifies it — via the fold test, not a separate guard.
+        assert!(!is_wholly_confusable_word(
+            "\u{1D18}\u{1D00}ss\u{1D21}\u{1D0F}\u{0280}\u{1D05}"
+        ));
+        // Every character must fold to an ASCII letter.
+        assert!(!is_wholly_confusable_word(
+            "\u{1D18}\u{1D00}\u{4E2D}\u{1D05}"
+        ));
+        // The length floor.
+        assert!(!is_wholly_confusable_word("\u{1D00}\u{1D05}\u{1D0D}"));
+        // A word in another script is not a disguise, however well it folds.
+        assert!(!is_wholly_confusable_word(
+            "\u{041C}\u{043E}\u{0441}\u{043A}\u{0432}\u{0430}"
+        ));
+        // …and the thing it is for.
+        assert!(is_wholly_confusable_word(
+            "\u{1D18}\u{1D00}\u{A731}\u{A731}\u{1D21}\u{1D0F}\u{0280}\u{1D05}"
+        ));
+    }
 
     // ── Compatibility fold (#633) ───────────────────────────────────
 

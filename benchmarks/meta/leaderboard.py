@@ -250,16 +250,29 @@ class Leaderboard:
         # of interval overlap makes that publishable.
         controls = [st for st in self.standings if st.control]
         tools_ranked = [st for st in self.standings if not st.control and not st.partial]
-        for ctl in controls:
-            beaten = [t.subject for t in tools_ranked if t.composite < ctl.composite]
-            if beaten:
+        # Applied to *every* aggregate the report could publish, not only the
+        # composite. Bradley-Terry does not weight the axes at all — it uses
+        # only the order of each pairwise result — so it escapes the clamp that
+        # deletes the composite's opposed axes, and it was worth checking
+        # separately rather than assuming it inherited the same verdict. It does
+        # not: `null-baseline` outranks three real libraries there too, because
+        # most axes on this battery reward removal and a delete-everything
+        # baseline genuinely beats a pure normalizer on them.
+        for label, score in (
+            ("composite", lambda st: st.composite),
+            ("Bradley-Terry", lambda st: st.bt_strength),
+        ):
+            for ctl in controls:
+                beaten = [t.subject for t in tools_ranked if score(t) < score(ctl)]
+                if not beaten:
+                    continue
                 why.append(
-                    f"the control `{ctl.subject}` scores {ctl.composite:+.3f}, above "
-                    f"{len(beaten)} real "
+                    f"the control `{ctl.subject}` scores {score(ctl):+.4f} on the "
+                    f"{label}, above {len(beaten)} real "
                     f"{'library' if len(beaten) == 1 else 'libraries'} "
                     f"({', '.join('`' + b.split('@')[0] + '`' for b in sorted(beaten))}) "
                     "— a subject that refuses the job is outscoring subjects that "
-                    "attempt it, so the aggregate is measuring something other "
+                    "attempt it, so that aggregate is measuring something other "
                     "than doing the job well"
                 )
         zeroed = [i.suite for i in self.items if i.discrimination == 0.0]

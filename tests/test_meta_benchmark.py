@@ -2490,3 +2490,46 @@ def test_every_composable_step_is_declared_or_deliberately_declined():
             "A False default is not a decision — say so in STEPS or DECLINED."
         )
         assert _inspect.getdoc(cls), f"{cls.__name__} needs a purpose"
+
+
+def test_the_control_check_covers_every_aggregate_not_only_the_composite():
+    """Bradley-Terry escapes the clamp and fails the controls anyway.
+
+    It uses only the order of each pairwise result, so the zero-weight clamp
+    that deletes the composite's opposed axes cannot touch it — which made it
+    the one aggregate that might have survived. Measured, it does not:
+    `null-baseline` outranks ftfy, pyunormalize and stdlib there too, because
+    most axes on this battery reward removal and a delete-everything baseline
+    genuinely beats a pure normalizer on them. Checked rather than assumed, and
+    now checked by the harness rather than by hand.
+    """
+    standings = [
+        leaderboard.Standing(
+            subject="null-baseline@1",
+            composite=-9.0,
+            bt_strength=0.5,
+            rank=3,
+            ci_low=-9.0,
+            ci_high=-9.0,
+            items=3,
+            control=True,
+        ),
+        leaderboard.Standing(
+            subject="real@1",
+            composite=1.0,
+            bt_strength=0.1,
+            rank=1,
+            ci_low=1.0,
+            ci_high=1.0,
+            items=3,
+        ),
+    ]
+    board = leaderboard.Leaderboard(
+        items=[], subjects=["null-baseline@1", "real@1"], standings=standings
+    )
+    text = " ".join(board.blockers)
+    # The composite is fine here and Bradley-Terry is not, so a check that only
+    # looked at the composite would pass this board.
+    assert "Bradley-Terry" in text
+    assert "refuses the job" in text
+    assert not board.supported

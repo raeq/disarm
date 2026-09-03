@@ -122,13 +122,16 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
             "",
         ]
     lines += [
-        "Composite of discrimination-weighted z-scores. Each benchmark's weight is "
-        "its corrected item-total correlation (classical test theory); measurements "
-        "are averaged within a benchmark first so a suite reporting seven related "
-        "numbers does not get seven votes; the scale is fitted on the tools and the "
-        "controls are placed on it; intervals are bootstrapped over the benchmark "
-        "set. Bradley-Terry strengths are fitted by Hunter's MM algorithm and use "
-        "only the order of each pairwise result.",
+        "What follows is a partial order and a set of per-benchmark tables, not a "
+        "ranking. The machinery a ranking would need is still computed, because "
+        "it is what establishes that the ranking cannot be published: each "
+        "benchmark's weight is its corrected item-total correlation (classical "
+        "test theory); measurements are averaged within a benchmark first so a "
+        "suite reporting seven related numbers does not get seven votes; the "
+        "scale is fitted on one subject per library, so a library entering three "
+        "configurations does not set the units; and intervals are bootstrapped "
+        "over the benchmark set. Those figures appear below as the diagnosis. "
+        "The composite they would have produced does not.",
         "",
         f"Battery: **{len(board.items)}** benchmarks, **{len(board.subjects)}** "
         f"subjects. {board.excluded_census_measurements} census measurements "

@@ -41,18 +41,30 @@ from disarm._boundary import (
 _NON_DEFAULT_DIGIT_POLICIES = ("tr39", "preserve")
 
 
-#: Measured over the 292,531 assigned code points (excluding `Cn`/`Cs`) at 0.16.0 —
-#: single-character inputs whose key is `""`. Frozen by `tests/test_empty_key.py`.
+#: The Unicode version the census below was measured under — the one CI runs (CPython
+#: 3.12 and 3.13 both ship 15.1.0). `tests/test_empty_key.py` compares exactly on that
+#: version and asserts a lower bound on any newer one.
+#:
+#: The version has to be stated, because "assigned code points" is not one set. The first
+#: version of this table was measured on a 16.0.0 host and was high by exactly the 16.0
+#: additions each surface takes to `""` — 51 on `search_key`, 63 on `ml_normalize` — and
+#: CI, on 15.1.0, could not see them and failed the gate. Surfaces that reach `""` only by
+#: stripping (`canonicalize`, `sort_key`, `skeleton_key`) are identical across the two;
+#: the ones that reach it through transliteration and the confusable fold are not.
+_EMPTY_KEY_CENSUS_UCD = "15.1.0"
+
+#: Single-character inputs whose key is `""`, as (all assigned, excluding the PUA), at
+#: `_EMPTY_KEY_CENSUS_UCD`. Frozen by `tests/test_empty_key.py`.
 _EMPTY_KEY_CENSUS = {
     "canonicalize": (137_955, 487),
     "canonicalize_strict": (137_955, 487),
-    "strip_obfuscation": (140_251, 2_783),
-    "ml_normalize": (4_110, 4_110),
-    "search_key": (139_921, 2_453),
-    "catalog_key": (139_918, 2_450),
+    "strip_obfuscation": (140_200, 2_732),
+    "ml_normalize": (4_047, 4_047),
+    "search_key": (139_870, 2_402),
+    "catalog_key": (139_867, 2_399),
     "sort_key": (138_404, 936),
     "skeleton_key": (137_955, 487),
-    "slugify": (249_175, 111_707),
+    "slugify": (244_026, 106_558),
     "sanitize_filename": (0, 0),
 }
 
@@ -230,7 +242,7 @@ def canonicalize(text: str, *, digit_policy: str = "numeric") -> str:
 
     **The output can be the empty string (#728).**
 
-    Measured over the 292,531 assigned code points, **137,955** single
+    Measured at Unicode 15.1.0, **137,955** single
     characters reduce to ``""`` here (487 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
@@ -325,8 +337,8 @@ def ml_normalize(
 
     **The output can be the empty string (#728).**
 
-    Measured over the 292,531 assigned code points, **4,110** single
-    characters reduce to ``""`` here (4,110 excluding the Private Use
+    Measured at Unicode 15.1.0, **4,047** single
+    characters reduce to ``""`` here (4,047 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
 
@@ -411,8 +423,8 @@ def catalog_key(
 
     **The output can be the empty string (#728).**
 
-    Measured over the 292,531 assigned code points, **139,918** single
-    characters reduce to ``""`` here (2,450 excluding the Private Use
+    Measured at Unicode 15.1.0, **139,867** single
+    characters reduce to ``""`` here (2,399 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
 
@@ -533,8 +545,8 @@ def search_key(
 
     **The output can be the empty string (#728).**
 
-    Measured over the 292,531 assigned code points, **139,921** single
-    characters reduce to ``""`` here (2,453 excluding the Private Use
+    Measured at Unicode 15.1.0, **139,870** single
+    characters reduce to ``""`` here (2,402 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
 
@@ -610,7 +622,7 @@ def skeleton_key(text: str, *, digit_policy: str = "numeric", on_empty: str | No
 
     **The output can be the empty string (#728).**
 
-    Measured over the 292,531 assigned code points, **137,955** single
+    Measured at Unicode 15.1.0, **137,955** single
     characters reduce to ``""`` here (487 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
@@ -693,7 +705,7 @@ def sort_key(
 
     **The output can be the empty string (#728).**
 
-    Measured over the 292,531 assigned code points, **138,404** single
+    Measured at Unicode 15.1.0, **138,404** single
     characters reduce to ``""`` here (936 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
@@ -861,7 +873,7 @@ def canonicalize_strict(text: str, *, digit_policy: str = "numeric") -> str:
 
     **The output can be the empty string (#728).**
 
-    Measured over the 292,531 assigned code points, **137,955** single
+    Measured at Unicode 15.1.0, **137,955** single
     characters reduce to ``""`` here (487 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
@@ -963,8 +975,8 @@ def strip_obfuscation(text: str, *, digit_policy: str = "numeric") -> str:
 
     **The output can be the empty string (#728).**
 
-    Measured over the 292,531 assigned code points, **140,251** single
-    characters reduce to ``""`` here (2,783 excluding the Private Use
+    Measured at Unicode 15.1.0, **140,200** single
+    characters reduce to ``""`` here (2,732 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
 

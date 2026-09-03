@@ -78,8 +78,12 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `sanitize_filename` was the only surface that guarded it, with the `_` sentinel from
   #485.
 
-  Measured over the 292,531 assigned code points: `search_key` takes **139,921** single
-  characters to `""` (2,453 excluding the PUA), `slugify` 249,175, `canonicalize` 137,955.
+  Measured at Unicode 15.1.0, the version CI runs: `search_key` takes **139,870** single
+  characters to `""` (2,402 excluding the PUA), `slugify` 244,026, `canonicalize` 137,955.
+  The version is stated because the census is not one number — a 16.0.0 host counts the
+  16.0 additions each surface takes to `""`, and the first version of the gate, measured
+  on one, failed CI by exactly those. The gate now compares exactly on the pinned version
+  and asserts a lower bound on any newer one, so neither branch is a skip.
   A caller storing `search_key(username)` as a uniqueness key has all of them, every
   string built from them, **and** "no username" competing for one slot.
 

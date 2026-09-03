@@ -13,7 +13,7 @@ value**, which arXiv:2608.06508v1 §2.2 calls code-side semantic collapse and §
 fixed by redefining the mapping so the sentinel sits outside the value range — not by
 normalizing harder.
 
-The census is frozen here, per #728 item 4: a future strip class taking more code points
+The census is frozen here at Unicode 15.1.0 — the version CI measures — per #728 item 4: a future strip class taking more code points
 to `""` becomes a diff somebody reads rather than a silent widening.
 """
 
@@ -27,7 +27,7 @@ from collections.abc import Callable
 import pytest
 
 import disarm
-from disarm._presets import _EMPTY_KEY_CENSUS
+from disarm._presets import _EMPTY_KEY_CENSUS, _EMPTY_KEY_CENSUS_UCD
 
 KEY_BUILDERS = ["search_key", "catalog_key", "sort_key", "skeleton_key"]
 
@@ -70,11 +70,38 @@ def test_the_census_matches_the_measurement(name: str, assigned: list[str]) -> N
                     nonpua += 1
         except disarm.DisarmError:
             pass  # a surface that refuses is not an empty key
-    assert (total, nonpua) == (total_want, nonpua_want), (
-        f"{name}: measured {total:,}/{nonpua:,}, docstring and census say "
-        f"{total_want:,}/{nonpua_want:,}. If this is a deliberate change, update "
-        "_EMPTY_KEY_CENSUS and the docstring in the same commit."
+    host = unicodedata.unidata_version
+    if host == _EMPTY_KEY_CENSUS_UCD:
+        assert (total, nonpua) == (total_want, nonpua_want), (
+            f"{name}: measured {total:,}/{nonpua:,}, docstring and census say "
+            f"{total_want:,}/{nonpua_want:,} at Unicode {host}. If this is a deliberate "
+            "change, update _EMPTY_KEY_CENSUS and the docstring in the same commit."
+        )
+        return
+    # A different host UCD assigns a different set, so the exact count is not comparable.
+    # The first version compared it anyway and failed CI (15.1.0) from a 16.0.0 host. A
+    # newer UCD only ever ADDS code points, so the measurement can only grow: a count that
+    # shrank means a surface stopped taking something to "" — which this half still
+    # catches. Neither branch is a skip.
+    assert _newer(host, _EMPTY_KEY_CENSUS_UCD), (
+        f"host Unicode {host} is older than the pin {_EMPTY_KEY_CENSUS_UCD}; re-measure "
+        "on the pinned version rather than loosening this"
     )
+    assert (total, nonpua) >= (total_want, nonpua_want), (
+        f"{name}: measured {total:,}/{nonpua:,} on Unicode {host}, below the "
+        f"{total_want:,}/{nonpua_want:,} frozen at {_EMPTY_KEY_CENSUS_UCD} — a newer UCD "
+        'cannot assign fewer, so a surface stopped taking something to ""'
+    )
+
+
+def _newer(host: str, pin: str) -> bool:
+    return tuple(int(x) for x in host.split(".")) > tuple(int(x) for x in pin.split("."))
+
+
+def test_the_bound_branch_can_actually_fail() -> None:
+    """A gate with a skip-shaped branch passes forever unless that branch asserts too."""
+    assert _newer("16.0.0", "15.1.0") and not _newer("15.1.0", "15.1.0")
+    assert not _newer("15.0.0", "15.1.0")
 
 
 #: The two numbers as the docstrings state them — `**139,921** single` and

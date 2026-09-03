@@ -47,7 +47,12 @@ pub struct Payload {
     pub start: usize,
     /// Byte offset one past the last carrier character.
     pub end: usize,
-    /// Carrier characters consumed — not bytes decoded, which differ for every scheme.
+    /// Characters the run consumed — **not** bytes decoded, which differ per scheme, and
+    /// not strictly carriers either.
+    ///
+    /// The zero-width scheme counts its `ZWJ`/`WJ`/`BOM` separators, which carry no bit,
+    /// and the tag scheme counts a trailing `CANCEL TAG`. `units` is therefore the span's
+    /// length in characters: `end - start` measures the same run in bytes.
     pub units: usize,
     /// The decoded bytes, whether or not they form printable text.
     pub bytes: Vec<u8>,
@@ -129,17 +134,40 @@ fn finish(
 
 /// `Some` only for bytes that are valid UTF-8 **and** wholly printable.
 ///
-/// "Printable" excludes every control character, which is what makes a decode evidence
-/// rather than a guess: a run of selectors that happens to be valid UTF-8 is usually
-/// control characters, and reporting that as recovered text would be the bogus decode the
-/// `None` case exists to avoid.
+/// This is what makes a decode evidence rather than a guess, so "printable" has to mean
+/// *a reader would see it*, not merely "not a C0 control". Rejecting controls alone was
+/// not enough (caught in review on #940): a payload of `U+202E` + `U+200B` is valid UTF-8
+/// with no control character in it, and was reported as recovered text that renders as
+/// nothing at all — exactly the bogus decode the `None` case exists to avoid.
+///
+/// The invisible classes are disarm's own predicates rather than a second list, for the
+/// reason #700 gives: two copies of a rule are two rules.
 fn printable(bytes: &[u8]) -> Option<String> {
     if bytes.is_empty() {
         return None;
     }
     let s = std::str::from_utf8(bytes).ok()?;
-    s.chars().all(|c| !c.is_control()).then(|| s.to_owned())
+    s.chars().all(is_visible).then(|| s.to_owned())
 }
+
+/// Whether `c` puts something on the screen.
+///
+/// The Private Use Area is deliberately **not** excluded: a PUA code point renders as
+/// whatever an icon font says, which is a rendering question rather than an invisibility
+/// one, and #413 already carves `strip_format` out for exactly that case.
+fn is_visible(c: char) -> bool {
+    !(c.is_control()
+        || crate::invisibles::is_zero_width(c)
+        || crate::invisibles::is_variation_selector(c)
+        || crate::invisibles::is_default_ignorable_format(c)
+        || crate::invisibles::is_tag(c)
+        || crate::invisibles::is_noncharacter(c)
+        || crate::invisibles::is_invisible_filler(c)
+        || crate::scripts::is_bidi_control(c))
+}
+
+/// `U+E007F CANCEL TAG` — the terminator, which carries no byte of its own.
+const CANCEL_TAG: char = '\u{E007F}';
 
 fn is_tag_byte(ch: char) -> bool {
     matches!(ch, '\u{E0020}'..='\u{E007E}')
@@ -156,7 +184,13 @@ fn scan_tag_ascii(chars: &[(usize, char)], i: usize, offset: usize) -> Option<Pa
         bytes.push((chars[j].1 as u32 - 0xE0000) as u8);
         j += 1;
     }
-    // A trailing CANCEL TAG belongs to the run; it terminates the channel as well as a flag.
+    // A trailing CANCEL TAG terminates the channel as well as a flag, so it belongs to the
+    // run — and the code has to agree with that, or one Tags run is reported as two
+    // adjacent spans with the terminator between them (caught in review on #940). It
+    // carries no byte, so only the span and `units` grow.
+    if chars.get(j).is_some_and(|&(_, c)| c == CANCEL_TAG) {
+        j += 1;
+    }
     let end = chars
         .get(j)
         .map_or_else(|| offset + tail_len(chars, i, j), |&(o, _)| o);
@@ -365,6 +399,64 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].bytes, b"A".to_vec());
         assert_eq!(found[0].units, 10, "the stray bits are still consumed");
+    }
+
+    /// "Wholly printable" has to mean a reader sees it, not merely "no C0 control".
+    ///
+    /// Caught in review on #940: `U+202E` + `U+200B` is valid UTF-8 with no control
+    /// character in it, and was reported as recovered text that renders as nothing.
+    #[test]
+    fn an_invisible_payload_is_not_recovered_text() {
+        for payload in [
+            "\u{202E}\u{200B}", // bidi override + zero width
+            "\u{200B}\u{200C}", // zero width only
+            "\u{FE00}",         // a variation selector
+            "\u{3164}",         // HANGUL FILLER — Lo, and renders as nothing
+            "\u{FFFE}",         // a noncharacter
+        ] {
+            let carriers: String = payload
+                .as_bytes()
+                .iter()
+                .flat_map(|b| {
+                    (0..8).map(move |i| {
+                        if (b >> (7 - i)) & 1 == 1 {
+                            '\u{200C}'
+                        } else {
+                            '\u{200B}'
+                        }
+                    })
+                })
+                .collect();
+            let found = decode_smuggled(&carriers);
+            assert_eq!(found.len(), 1, "{payload:?}");
+            assert_eq!(
+                found[0].text, None,
+                "{payload:?} was reported as readable text"
+            );
+        }
+        // ...and ordinary words still are.
+        assert_eq!(
+            decode_smuggled(&zw("hi there"))
+                .first()
+                .and_then(|p| p.text.as_deref()),
+            Some("hi there")
+        );
+    }
+
+    /// One Tags run is one span, terminator included.
+    ///
+    /// Caught in review on #940: the scan stopped before `CANCEL TAG`, so a terminated run
+    /// was reported as two adjacent spans with the terminator between them.
+    #[test]
+    fn a_terminated_tag_run_is_one_span() {
+        let s = format!("x{}{CANCEL_TAG}y", tags("hi"));
+        let found = decode_smuggled(&s);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].text.as_deref(), Some("hi"));
+        assert_eq!(found[0].units, 3, "two letters and the terminator");
+        assert_eq!(found[0].bytes.len(), 2, "the terminator carries no byte");
+        // The span covers the terminator, so nothing is left between two runs.
+        assert_eq!(&s[found[0].end..], "y");
     }
 
     #[test]

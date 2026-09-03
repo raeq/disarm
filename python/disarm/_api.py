@@ -2407,9 +2407,16 @@ def decode_smuggled(text: str) -> list[SmuggledPayload]:
     | ``zero_width_binary`` | ``U+200B`` = 0, ``U+200C`` = 1 | MSB first; ZWJ/WJ/BOM separate |
 
     ``text`` is populated **only** when the bytes are valid UTF-8 and wholly
-    printable. A run of arbitrary selectors comes back as a payload of *n* bytes with
-    ``text=None`` rather than as a bogus decode — reporting garbage would undo the
-    reason a decode is trustworthy.
+    printable — meaning *a reader would see it*, not merely "no control character".
+    A payload of ``U+202E`` + ``U+200B`` is valid UTF-8 with no control in it and
+    renders as nothing, so it comes back as bytes with ``text=None``, as does a run
+    of arbitrary selectors. Reporting garbage would undo the reason a decode is
+    trustworthy.
+
+    ``units`` counts the characters the run **consumed**, which is not the same as
+    the carriers that carried a byte: the zero-width scheme counts its
+    ``ZWJ``/``WJ``/``BOM`` separators and the tag scheme counts a trailing
+    ``CANCEL TAG``.
 
     A well-formed emoji subdivision flag is not a payload: ``U+1F3F4`` + tag letters
     + ``U+E007F`` spelling one of the three RGI values is the Scotland flag, and the

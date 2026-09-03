@@ -101,7 +101,10 @@ pub struct SmuggledPayload {
     /// **Byte** offset one past the last carrier character.
     #[pyo3(get)]
     pub end: usize,
-    /// Carrier characters consumed — not bytes decoded, which differ per scheme.
+    /// Characters the run consumed — **not** bytes decoded, which differ per scheme, and
+    /// not strictly carriers either: the zero-width scheme counts its `ZWJ`/`WJ`/`BOM`
+    /// separators and the tag scheme counts a trailing `CANCEL TAG`, neither of which
+    /// carries a byte. It is the span's length in characters.
     #[pyo3(get)]
     pub units: usize,
     /// The decoded bytes.

@@ -162,6 +162,38 @@ class TestTheDetectorIntegration:
         assert disarm.has_anomalies(f"{FLAG_BASE}{tags('gbsct')}{CANCEL_TAG}") is False
 
 
+def test_an_invisible_payload_is_not_recovered_text() -> None:
+    """Raised in review on #940: "printable" meant "no C0 control", which is not enough.
+
+    `U+202E` + `U+200B` is valid UTF-8 with no control character in it, and was reported
+    as recovered text that renders as nothing at all.
+    """
+    for payload in ["\u202e\u200b", "\u200b\u200c", "\ufe00", "\u3164", "\ufffe"]:
+        found = disarm.decode_smuggled(zero_width(payload))
+        assert len(found) == 1, payload
+        assert found[0].text is None, f"{payload!r} reported as readable text"
+    assert disarm.decode_smuggled(zero_width("hi there"))[0].text == "hi there"
+
+
+def test_a_terminated_tag_run_is_one_span() -> None:
+    """Raised in review on #940: the scan stopped before CANCEL TAG, splitting one run."""
+    text = f"x{tags('hi')}{CANCEL_TAG}y"
+    found = disarm.decode_smuggled(text)
+    assert len(found) == 1, found
+    assert found[0].text == "hi"
+    assert found[0].units == 3, "two letters and the terminator"
+    assert len(found[0].data) == 2, "the terminator carries no byte"
+    assert text.encode()[found[0].end :].decode() == "y", "nothing left between two runs"
+
+
+def test_units_counts_what_the_run_consumed_not_what_carried_a_byte() -> None:
+    """The two differ, which is why both `units` and `data` are reported (#940)."""
+    zw = disarm.decode_smuggled(zero_width("hi"))[0]
+    assert (zw.units, len(zw.data)) == (16, 2)
+    terminated = disarm.decode_smuggled(f"{tags('hi')}{CANCEL_TAG}")[0]
+    assert (terminated.units, len(terminated.data)) == (3, 2)
+
+
 def test_several_runs_are_reported_in_order() -> None:
     text = f"a{tags('one')}b{zero_width('hi')}c"
     found = disarm.decode_smuggled(text)

@@ -103,6 +103,7 @@ EXPECTED_ALL = {
     "detect_encoding",
     "decode_to_utf8",
     # Predicates
+    "decode_smuggled",
     "detect_scripts",
     "inspect_auto_lang",
     "is_mixed_script",
@@ -119,6 +120,7 @@ EXPECTED_ALL = {
     "NearestMatch",
     "nearest_match",
     "KeyCollision",
+    "SmuggledPayload",
     "is_ascii",
     "is_case_fold_stable",
     "is_canonical",
@@ -427,6 +429,7 @@ CORE_FUNCTION_PARAMS = {
     "decode_to_utf8": ["data", "encoding", "min_confidence", "strict"],
     # Predicates
     "detect_scripts": ["text"],
+    "decode_smuggled": ["text"],
     "inspect_auto_lang": ["text"],
     "is_mixed_script": ["text"],
     "has_bidi_conflict": ["text"],

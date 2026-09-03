@@ -734,8 +734,18 @@ class TestAsciiSmuggling:
         """
         assert has_anomalies(SMUGGLED) is True
         report = inspect_anomalies(SMUGGLED)
-        assert report.kinds == ["invisible"]
-        assert report.findings[0].detail.endswith(f"\u00d7{len(INJECTION)}")
+        # `invisible` stays whatever else fires. Since #701 a run that decodes to
+        # readable text also reports `smuggled`, and leads the list when it does —
+        # by ordering, not by suppression, which is what this assertion guards.
+        assert "invisible" in report.kinds
+        if "smuggled" in report.kinds:
+            assert report.kinds[0] == "smuggled", "a decode outranks"
+        # By kind, not by position: since #701 a decoding run leads the findings.
+        invisible = next(f for f in report.findings if f.kind == "invisible")
+        assert invisible.detail.endswith(f"\u00d7{len(INJECTION)}")
+        # ...and the decode says what 61 tag characters actually spell.
+        smuggled = next(f for f in report.findings if f.kind == "smuggled")
+        assert smuggled.token == INJECTION
 
 
 # ---------------------------------------------------------------------------

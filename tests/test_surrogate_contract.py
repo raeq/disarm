@@ -272,6 +272,7 @@ _SURROGATE_EXEMPT_CLASSES = {
     "HostnameAnalysis",  # result object
     "KeyCollision",  # result object (#620)
     "NearestMatch",  # result object (#883)
+    "SmuggledPayload",  # result object (#701)
     "LangMeta",
     "ScriptMeta",
     "Component",

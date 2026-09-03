@@ -81,3 +81,77 @@ pub fn _find_unmapped_confusables(
             .collect(),
     )
 }
+
+/// One decoded smuggled run (#701).
+///
+/// A return-only result object, the shape [`crate::py::collisions::KeyCollision`] uses.
+#[pyclass(skip_from_py_object)]
+#[pyo3(name = "SmuggledPayload")]
+#[derive(Clone)]
+pub struct SmuggledPayload {
+    /// `"tag_ascii"`, `"variation_bytes"` or `"zero_width_binary"`.
+    #[pyo3(get)]
+    pub scheme: String,
+    /// **Byte** offset of the first carrier character, matching `Finding.start`.
+    ///
+    /// Bytes, not characters, so a Python caller slices `text.encode()` rather than the
+    /// `str`. Slicing the `str` works only while everything before the run is ASCII.
+    #[pyo3(get)]
+    pub start: usize,
+    /// **Byte** offset one past the last carrier character.
+    #[pyo3(get)]
+    pub end: usize,
+    /// Characters the run consumed — **not** bytes decoded, which differ per scheme, and
+    /// not strictly carriers either: the zero-width scheme counts its `ZWJ`/`WJ`/`BOM`
+    /// separators and the tag scheme counts a trailing `CANCEL TAG`, neither of which
+    /// carries a byte. It is the span's length in characters.
+    #[pyo3(get)]
+    pub units: usize,
+    /// The decoded bytes.
+    #[pyo3(get)]
+    pub data: Vec<u8>,
+    /// The decoded string, and only when the bytes are valid UTF-8 and wholly printable.
+    #[pyo3(get)]
+    pub text: Option<String>,
+}
+
+#[pymethods]
+impl SmuggledPayload {
+    fn __repr__(&self) -> String {
+        // `{:?}` on an `Option` renders Rust's `Some("x")`/`None`, which is not what a
+        // Python repr should show.
+        let text = match &self.text {
+            Some(s) => format!("{s:?}"),
+            None => "None".to_owned(),
+        };
+        format!(
+            "SmuggledPayload(scheme={:?}, start={}, end={}, units={}, text={text})",
+            self.scheme, self.start, self.end, self.units
+        )
+    }
+}
+
+impl From<crate::smuggled::Payload> for SmuggledPayload {
+    fn from(p: crate::smuggled::Payload) -> Self {
+        SmuggledPayload {
+            scheme: p.scheme.as_str().to_owned(),
+            start: p.start,
+            end: p.end,
+            units: p.units,
+            data: p.bytes,
+            text: p.text,
+        }
+    }
+}
+
+/// `decode_smuggled(text) -> list[SmuggledPayload]`
+///
+/// Decode what a smuggled run spells, rather than reporting that one is present (#701).
+#[pyfunction]
+#[pyo3(signature = (text,))]
+pub fn _decode_smuggled(text: &str) -> Vec<SmuggledPayload> {
+    crate::smuggled::decode_smuggled(text)
+        .into_iter()
+        .map(Into::into)
+        .collect()
+}

@@ -330,6 +330,22 @@ pub enum AnomalyKind {
     /// used a lone `CR` as its line ending until 2001. The report is a technical fact, as
     /// with `is_case_fold_stable` and `groß` — the judgement is the caller's.
     Deletion,
+    /// A run of smuggling carriers that **decodes to readable text** (#701).
+    ///
+    /// [`Invisible`](Self::Invisible) reports that a carrier is present. This reports what
+    /// it says. The two are different strengths of evidence: an invisible character can
+    /// arrive by accident — a copy-paste artefact, a BOM, an editor quirk — but a run that
+    /// decodes to printable text cannot, because random damage does not spell words.
+    ///
+    /// Fires only when [`crate::api::Payload::text`] is `Some`, so it needs no threshold
+    /// and no policy to interpret. A run of arbitrary selectors that decodes to
+    /// non-printable bytes is left to `invisible`, which is the right verdict for it.
+    ///
+    /// **Additive, not a replacement.** A decoding run is still reported as `invisible`
+    /// too; this finding is placed first for the span so it is the one
+    /// [`AnomalyReport::reason`] names, which is the "outranks every other kind" of #701
+    /// without removing a kind a caller may already match on.
+    Smuggled,
     /// A token spelled partly in a Unicode **compatibility** form and partly in ASCII —
     /// `ａdmin`, `ｅxample.com`, `＜script＞` — which NFKC folds to a different string.
     ///
@@ -419,6 +435,7 @@ impl AnomalyKind {
             AnomalyKind::Segmentation => "segmentation",
             AnomalyKind::Control => "control",
             AnomalyKind::Deletion => "deletion",
+            AnomalyKind::Smuggled => "smuggled",
             AnomalyKind::CompatFold => "compat_fold",
             AnomalyKind::Confusable => "confusable",
             AnomalyKind::EnclosingMark => "enclosing_mark",
@@ -486,6 +503,10 @@ impl Finding {
                 ),
                 None => format!("{:?} contains the control character {}", self.token, self.detail),
             },
+            AnomalyKind::Smuggled => format!(
+                "a hidden {} run decodes to {:?}",
+                self.detail, self.token
+            ),
             AnomalyKind::Deletion => format!(
                 "{:?} is overwritten by what follows the carriage return, so it renders as \
                  text these code points do not spell",
@@ -608,6 +629,21 @@ fn is_line_break(c: char) -> bool {
         c,
         '\n' | '\u{B}' | '\u{C}' | '\r' | '\u{85}' | '\u{2028}' | '\u{2029}'
     )
+}
+
+/// The smuggled runs that actually decode to readable text (#701).
+///
+/// Shared by [`has_anomalies`] and [`inspect_anomalies`], for the reason
+/// [`overwriting_cr`] is: `has_anomalies_matches_inspect` asserts the two agree, and a
+/// rule stated twice is how that starts failing.
+///
+/// Filters on `text.is_some()`. A carrier run whose bytes are not printable UTF-8 is not
+/// a decode, and `invisible` already reports it — firing here as well would spend the one
+/// signal in this area that needs no threshold on runs that do need one.
+fn decoded_payloads(text: &str) -> impl Iterator<Item = crate::smuggled::Payload> {
+    crate::smuggled::decode_smuggled(text)
+        .into_iter()
+        .filter(|p| p.text.is_some())
 }
 
 /// The first `CR` that overwrites text, as a `(byte offset, overwritten segment)` pair.
@@ -1572,6 +1608,7 @@ pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
     // it *splits* the tokens either side of it and both halves are clean on their own
     // (#739). `split_tokens` can never present it to `classify`.
     overwriting_cr(text).is_some()
+        || decoded_payloads(text).next().is_some()
         || split_tokens(text)
             .into_iter()
             .any(|(start, tok)| classify(tok, start, lexicon).is_some())
@@ -1590,6 +1627,25 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
             findings.push(f);
         }
     }
+    // Ahead of the token findings, so `reason` names the decode. #701 asks for the
+    // decode to "outrank every other kind for the same span": once a run decodes, whether
+    // an invisible character is legitimate no longer arises. Done by ordering rather than
+    // by suppression — the run is still reported as `invisible` too, so a caller already
+    // matching on that kind keeps working.
+    let smuggled: Vec<Finding> = decoded_payloads(text)
+        .map(|p| Finding {
+            kind: AnomalyKind::Smuggled,
+            // The decoded text is the token: it is what the reader needs to see.
+            token: p.text.clone().unwrap_or_default(),
+            start: p.start,
+            end: p.end,
+            detail: p.scheme.as_str().to_owned(),
+        })
+        .collect();
+    for f in smuggled.into_iter().rev() {
+        findings.insert(0, f);
+    }
+
     // Spliced in at its byte offset rather than pushed, so `findings` stays in
     // first-appearance order and `reason` keeps naming whatever comes first in the text.
     if let Some((start, overwritten)) = overwriting_cr(text) {

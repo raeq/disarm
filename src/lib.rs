@@ -138,6 +138,7 @@ pub(crate) mod presets;
 pub(crate) mod reverse;
 pub(crate) mod scripts;
 pub(crate) mod slugify;
+pub(crate) mod smuggled;
 pub(crate) mod unicode_ranges;
 pub(crate) mod whitespace;
 pub(crate) mod width;
@@ -244,6 +245,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::confusables::_is_confusable, m)?)?;
     m.add_function(wrap_pyfunction!(py::confusables::_unmapped_confusables, m)?)?;
     m.add_function(wrap_pyfunction!(py::confusables::_find_confusables, m)?)?;
+    m.add_function(wrap_pyfunction!(py::confusables::_decode_smuggled, m)?)?;
+    m.add_class::<py::confusables::SmuggledPayload>()?;
     m.add_function(wrap_pyfunction!(
         py::confusables::_find_unmapped_confusables,
         m

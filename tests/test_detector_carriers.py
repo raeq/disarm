@@ -49,7 +49,13 @@ SMUGGLING = [
 def test_a_smuggling_carrier_is_reported(label: str, text: str) -> None:
     report = inspect_anomalies(text)
     assert report.anomalous, label
-    assert report.kinds == ["invisible"], label
+    # `invisible` stays, whatever else fires. #701 added `smuggled` for runs that decode
+    # to readable text, and it leads the list when it does — but by ORDER, not by
+    # suppression, so this assertion is the one that guards the caller who already
+    # matches on `invisible`.
+    assert "invisible" in report.kinds, label
+    if "smuggled" in report.kinds:
+        assert report.kinds[0] == "smuggled", f"{label}: a decode must outrank"
 
 
 # ── #643: the fillers ────────────────────────────────────────────────────────
@@ -117,7 +123,10 @@ def test_a_mixed_carrier_run_reports_the_longest_same_class_stretch() -> None:
     consecutive ZWSP, which is not what the input was.
     """
     report = inspect_anomalies("Hello " + ZW_BITS + " world")
-    assert report.findings[0].detail == f"U+{ord(ZW_BITS[0]):04X} \u00d7{len(ZW_BITS)}"
+    # By kind, not by position: `ZW_BITS` spells "hi", so since #701 a `smuggled` finding
+    # leads the list. This assertion is about what the `invisible` finding says.
+    invisible = next(f for f in report.findings if f.kind == "invisible")
+    assert invisible.detail == f"U+{ord(ZW_BITS[0]):04X} \u00d7{len(ZW_BITS)}"
     assert len(set(ZW_BITS)) == 2, "the point of this case is that the run is not uniform"
 
 

@@ -173,6 +173,43 @@ caller's to choose: reserve both forms, reject the name, or key the table on
 
 ---
 
+## decode_smuggled
+
+::: disarm.decode_smuggled
+
+### Presence and decode are different evidence
+
+`inspect_anomalies` reports that invisible characters are present. It does not say the run
+reads `tracked-by:acct-99213`.
+
+```python
+from disarm import decode_smuggled, inspect_anomalies
+
+hidden = "".join(chr(ord(c) + 0xE0000) for c in "tracked-by:acct-99213")
+payload = decode_smuggled(f"Invoice #4471{hidden}")[0]
+payload.text  # 'tracked-by:acct-99213'
+payload.scheme  # 'tag_ascii'
+payload.units  # 21 carrier characters
+
+inspect_anomalies(f"Invoice #4471{hidden}").kinds  # ['smuggled', 'invisible']
+```
+
+An invisible character can arrive by accident — a copy-paste artefact, a BOM, an editor
+quirk. A run that decodes to readable text cannot: random damage does not spell words. So
+a decode is the one signal in this area that needs no threshold and no policy, which is
+why it is a separate kind rather than a longer `invisible` detail.
+
+`text` is populated **only** when the bytes are valid UTF-8 and wholly printable. A run of
+arbitrary selectors comes back as a payload of *n* bytes with `text=None` rather than as a
+bogus decode — reporting garbage would undo the reason a decode is trustworthy.
+
+!!! note "The offsets are bytes"
+    `start` and `end` are byte offsets, matching `Finding.start`/`end`. Slice
+    `text.encode()`, not the `str` — slicing the `str` works only while everything before
+    the run is ASCII.
+
+---
+
 ## is_canonical
 
 ::: disarm.is_canonical

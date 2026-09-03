@@ -305,7 +305,97 @@ class BadCharacters(AttackCorpusSuite):
             return list(self._rows_from_nested(path, limit))
         return list(_rows(path, limit))
 
-    summary = "Boucher et al.'s four imperceptible-perturbation classes, scored for XMR."
+    #: The paper's four perturbation classes. Read from the release's own
+    #: experiment keys (`perspective_deletions`, `maxtoxic_reorderings`, ...),
+    #: not assigned here — the taxonomy is Boucher et al.'s and the file is
+    #: already keyed by it.
+    CLASSES = ("deletions", "homoglyphs", "invisibles", "reorderings")
+
+    def _rows_by_class(
+        self, path: Path, limit: int | None
+    ) -> dict[str, list[tuple[str, str | None]]]:
+        """The same rows, kept under the class the release filed them under.
+
+        `_rows_from_nested` iterates `blob.values()` and drops the experiment
+        key, which is where the class lives — so a suite whose own summary says
+        "four imperceptible-perturbation classes" was reporting one average over
+        all four. #934 improved detection of the deletion class specifically and
+        moved no measurement here at all, which is what surfaced this.
+        """
+        import json as _json
+        import re as _re
+
+        blob = _json.loads(path.read_text(encoding="utf-8"))
+        out: dict[str, list[tuple[str, str | None]]] = {c: [] for c in self.CLASSES}
+        for name, experiment in blob.items():
+            match = _re.search("|".join(self.CLASSES), name)
+            if match is None or not isinstance(experiment, dict):
+                continue
+            bucket = out[match.group(0)]
+            for budget in experiment.values():
+                if not isinstance(budget, dict):
+                    continue
+                for row in budget.values():
+                    if not isinstance(row, dict):
+                        continue
+                    text, clean = row.get("adv_example"), row.get("input")
+                    if not isinstance(text, str) or not text.strip():
+                        continue
+                    bucket.append((text, clean if isinstance(clean, str) else None))
+        if limit is not None:
+            for cls in out:
+                out[cls] = out[cls][: max(1, limit // len(self.CLASSES))]
+        return out
+
+    def measure(self, outcome: Outcome, limit: int | None) -> None:
+        super().measure(outcome, limit)
+        path = self.locate()
+        if path is None or path.name != "bad-characters.json":
+            return
+        surfaces = self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject else {}
+        det = self.detect()
+        if not surfaces and not det:
+            return
+        fn = next(iter(surfaces.values()), None)
+
+        for cls, rows in sorted(self._rows_by_class(path, limit).items()):
+            if not rows:
+                continue
+            add(outcome, f"{cls}_rows", len(rows), unit="rows")
+            if det:
+                seen = sum(1 for text, _ in rows if any(_fires(d, text) for d in det.values()))
+                add(
+                    outcome,
+                    f"{cls}_detected",
+                    seen,
+                    of=len(rows),
+                    higher_is_better=True,
+                    detail=f"a detector fires on the {cls} class",
+                )
+            if fn is None:
+                continue
+            # Same XMR rule the aggregate uses: a recovery only counts if
+            # something survived on both sides.
+            hits = 0
+            scored = 0
+            for text, clean in rows:
+                if clean is None:
+                    continue
+                scored += 1
+                out = _apply(fn, text)
+                if out and out == _apply(fn, clean):
+                    hits += 1
+            if scored:
+                add(
+                    outcome,
+                    f"{cls}_xmr",
+                    hits,
+                    of=scored,
+                    higher_is_better=True,
+                    detail=f"exact-match recovery within the {cls} class",
+                )
+
+    summary = "Boucher et al.'s four perturbation classes, scored per class for XMR and detection."
     provenance = Provenance(
         origin="Boucher, Shumailov, Anderson & Papernot",
         citation="arXiv:2106.09898v2 — Bad Characters: Imperceptible NLP Attacks",

@@ -147,7 +147,7 @@ def main() -> int:
     args = ap.parse_args()
     # Once. `census()` walks the codespace and calls six surfaces per selected code
     # point, and this function used to call it twice — for `render` and again for the
-    # row count in the status line (#930 review).
+    # row count in the status line.
     rows = census()
     text = render(rows)
     if args.check:

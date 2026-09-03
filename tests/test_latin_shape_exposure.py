@@ -50,14 +50,14 @@ def _fixture_rows() -> list[tuple[int, str, str]]:
 
 @pytest.fixture(scope="module")
 def live_census() -> list[tuple[int, str, str]]:
-    """One sweep for the whole module (#930 review).
+    """One sweep for the whole module.
 
     `gen.census()` walks the codespace and calls six disarm surfaces per selected code
     point. It was run once for the fixture comparison and again for every parametrized
     block — nine full sweeps for one file.
 
-    Fourth time this shape has come up in this cycle (#920, #923, #929, here): a helper
-    that reads as cheap at the call site and walks the codespace inside.
+    The shape to watch, because it has come up repeatedly: a helper that reads as cheap
+    at the call site and walks the codespace inside.
     """
     return gen.census()
 
@@ -69,7 +69,7 @@ def _nameable(rows: list[tuple[int, str, str]]) -> list[tuple[int, str, str]]:
     disarm's own tables are 17.0.0, this checkout's host is one thing and CI's Python 3.12
     is 15.1.0. A code point assigned in 16.0 is simply invisible to an older host, so
     comparing raw totals fails on CI for a reason that has nothing to do with coverage —
-    which is what it did (#930).
+    which is exactly what a total comparison did on a Python 3.12 runner.
 
     Comparing on what the host can see makes the gate deterministic anywhere while still
     catching the thing it is for: a code point that the host CAN name changing status.

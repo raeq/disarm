@@ -47,9 +47,23 @@ def _fixture_rows() -> list[tuple[int, str, str]]:
     return rows
 
 
-def test_the_fixture_matches_the_library() -> None:
+@pytest.fixture(scope="module")
+def live_census() -> list[tuple[int, str, str]]:
+    """One sweep for the whole module (#930 review).
+
+    `gen.census()` walks the codespace and calls six disarm surfaces per selected code
+    point. It was run once for the fixture comparison and again for every parametrized
+    block — nine full sweeps for one file.
+
+    Fourth time this shape has come up in this cycle (#920, #923, #929, here): a helper
+    that reads as cheap at the call site and walks the codespace inside.
+    """
+    return gen.census()
+
+
+def test_the_fixture_matches_the_library(live_census: list[tuple[int, str, str]]) -> None:
     """The gate #815 item 5 asks for. Regenerate with the script, never by hand."""
-    assert _fixture_rows() == gen.census(), (
+    assert _fixture_rows() == live_census, (
         "latin_shape_exposure.tsv is stale — run scripts/gen_latin_shape_exposure.py. "
         "A code point LEAVING the file is a fix; one JOINING it needs a reason."
     )
@@ -59,9 +73,11 @@ def test_the_fixture_matches_the_library() -> None:
     ("block", "count"),
     sorted(collections.Counter(b for _, b, _ in _fixture_rows()).items()),
 )
-def test_each_block_holds_its_count(block: str, count: int) -> None:
+def test_each_block_holds_its_count(
+    block: str, count: int, live_census: list[tuple[int, str, str]]
+) -> None:
     """Per block, so a refresh cannot trade rows between blocks and stay green."""
-    live = collections.Counter(b for _, b, _ in gen.census())
+    live = collections.Counter(b for _, b, _ in live_census)
     assert live[block] == count, f"{block}: {live[block]} now, {count} in the fixture"
 
 

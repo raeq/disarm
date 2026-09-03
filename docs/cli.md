@@ -190,6 +190,67 @@ disarm d "Hello 😀 World 🌍"
 
 ---
 
+### scan (sc)
+
+Walk files and directories and report every anomaly `inspect_anomalies` finds, located by
+line and column.
+
+```bash
+disarm scan src/
+# src/auth.py:41:17: bidi: "user\u202egpj.exe" contains the bidi override U+202E
+# src/i18n.py:3:1: invisible: "ad\u200bmin" contains U+200B ZERO WIDTH SPACE
+# scanned 212 file(s), 2 finding(s)
+
+disarm scan . --fail            # exit 1 if anything is found — for CI
+disarm scan src/ --json         # machine-readable, with line and column
+```
+
+`inspect_anomalies` has always returned everything a scanner needs — a kind, a span, evidence
+and a plain-language reason — and until #704 there was no way to point it at a file.
+
+**What the walk does, and does not do:**
+
+- **Respects git's ignore rules, all three sources.** git reads `.gitignore` in the scanned
+  directory *and every parent up to the repository root*, `.git/info/exclude`, and the
+  global `core.excludesFile`. A scanner that reads only the nearest file gives different
+  answers for `disarm scan src/` and `disarm scan .` on one tree. disarm asks
+  `git check-ignore` rather than reimplementing the rule, so the two cannot disagree.
+  `--no-gitignore` turns it off; outside a repository there is nothing to ask and the scan
+  simply has no ignore rules.
+- **Skips directories that hold no hand-written source** — `node_modules`, `__pycache__`,
+  `.venv`, `.terraform` and the like. `build`, `dist`, `out`, `target`, `bin` and `vendor`
+  are **not skipped**: they are generated in some projects and hand-written in others, and
+  a scanner that skips them by name reports clean on a tree it never read.
+- **Never follows symlinks**, so a scan stays inside the tree it was pointed at.
+- **Skips binary and non-UTF-8 files** silently. They are not errors; they are not text.
+
+**Options:**
+
+`--json`
+:   Emit `{"findings": [...], "scanned": N, "unreadable": [...]}`. Each finding carries
+    `path`, `line`, `column`, `kind`, `reason` and `token`. `line` and `column` are
+    1-based, and `column` counts characters — what an editor's gutter shows — not the byte
+    offsets the library reports.
+
+`--fail`
+:   Exit `1` when anything is found. Without it a scan with findings still exits `0`, so
+    the command can be used to *look* without gating.
+
+`--no-gitignore`
+:   Scan everything under the paths, ignoring git's rules.
+
+**Exit codes** — something found is not something failed to read, and the codes keep them
+apart:
+
+| Code | Meaning |
+|---|---|
+| 0 | Scanned; nothing found, or found without `--fail` |
+| 1 | Findings, with `--fail` |
+| 2 | Invalid arguments (argparse) |
+| 3 | A path could not be read — reported on stderr, scan of the rest still printed |
+
+---
+
 ## Piping and stdin
 
 All commands accept input from stdin when no positional argument is given. This makes disarm composable with other tools:
@@ -221,3 +282,4 @@ cat entries.txt | disarm t | sort -u
 | 0 | Success |
 | 1 | No input provided (no argument and no stdin) |
 | 2 | Invalid arguments (unknown command, bad option) |
+| 3 | `scan` only: a path could not be read (see [scan](#scan-sc)) |

@@ -8,6 +8,7 @@ Usage:
     disarm n --form NFKC "ﬁ"                     # normalize
     disarm p --steps "normalize,fold_case" "input" # pipeline
     disarm d "Hello 😀"                           # demojize
+    disarm scan src/ --json                       # find anomalies in a tree
     echo "piped input" | disarm t                 # pipe via stdin
 """
 
@@ -107,6 +108,28 @@ def cmd_demojize(args: argparse.Namespace) -> None:
     print(result)
 
 
+def cmd_scan(args: argparse.Namespace) -> None:
+    """Walk paths and report anomalies (#704).
+
+    Returns through `sys.exit` with the scanner's own code rather than falling off the
+    end, because the contract is the point: 0 clean, 1 findings under `--fail`, 3 a path
+    could not be read. `main()`'s `DisarmError` handler exits 1 for API errors, and a
+    scan that found something must not be confused with one that failed.
+    """
+    from pathlib import Path
+
+    from disarm.scan import run
+
+    sys.exit(
+        run(
+            [Path(p) for p in args.paths],
+            as_json=args.json,
+            fail=args.fail,
+            use_gitignore=not args.no_gitignore,
+        )
+    )
+
+
 def _add_transliterate_parser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     """Register transliterate subcommand with both long and short names."""
     for name in ("transliterate", "t"):
@@ -147,13 +170,15 @@ def main() -> None:
             "  normalize (n)      Unicode normalization (NFC/NFD/NFKC/NFKD)\n"
             "  pipeline (p)       Run a multi-step TextPipeline\n"
             "  demojize (d)       Expand emoji to text descriptions\n"
+            "  scan (sc)          Walk files and report anomalies\n"
             "\n"
             "examples:\n"
             '  disarm t "café résumé"             transliterate\n'
             '  disarm t --lang de "Ärger"         German rules\n'
             '  disarm t --target ru "Moskva"      reverse to Cyrillic\n'
             '  disarm s "Hello World"              slugify\n'
-            '  echo "input" | disarm t             pipe via stdin'
+            '  echo "input" | disarm t             pipe via stdin\n'
+            "  disarm scan src/ --fail             gate CI on hidden characters"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -210,6 +235,23 @@ def main() -> None:
         p = sub.add_parser(name, help="Expand emoji to text descriptions")
         p.add_argument("text", nargs="*", help="Input text (or pipe via stdin)")
         p.set_defaults(func=cmd_demojize)
+
+    # scan (+ short form "sc") — #704: the one API built for scanning, pointed at files
+    for name in ("scan", "sc"):
+        p = sub.add_parser(name, help="Walk files and report anomalies")
+        p.add_argument("paths", nargs="+", help="Files or directories to scan")
+        p.add_argument("--json", action="store_true", help="Emit findings as JSON")
+        p.add_argument(
+            "--fail",
+            action="store_true",
+            help="Exit 1 if anything is found (for CI); 3 if a path could not be read",
+        )
+        p.add_argument(
+            "--no-gitignore",
+            action="store_true",
+            help="Do not ask git which paths it ignores",
+        )
+        p.set_defaults(func=cmd_scan)
 
     args = parser.parse_args()
 

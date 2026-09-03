@@ -18,6 +18,41 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`disarm scan PATH...` — the one API built for scanning, pointed at files (#704).**
+  `inspect_anomalies` has always returned everything a scanner needs — a kind, a span,
+  evidence and a plain-language reason — and there was no way to run it over a file. Every
+  CLI subcommand took text from an argument or stdin; none took a path. That single absence
+  is most of why third-party tools in this space exist as separate projects: the detection
+  is the hard part and disarm has it, while the file plumbing is the easy part and disarm
+  had none of it.
+
+  Python rather than a Rust binary, which is #704's own recommendation: plumbing over an
+  API that already exists ships now and can be measured against real repositories before
+  anyone commits to a binary per tag.
+
+  The four rules #704 takes from `juriku/untrace`, each asserted:
+
+  - **git's ignore rules, all three sources.** `.gitignore` in the scanned directory *and
+    every parent*, `.git/info/exclude`, and `core.excludesFile`. A scanner reading only
+    the nearest file makes `scan src/` and `scan .` disagree on one tree, which users
+    report as flakiness. Delegated to `git check-ignore` rather than reimplemented, so the
+    two cannot disagree; `--no-gitignore` turns it off.
+  - **A defensible skip list.** `node_modules`, `__pycache__`, `.venv`, `.terraform` and
+    the like are skipped. `build`, `dist`, `out`, `target`, `bin` and `vendor` are **not**:
+    hand-written in some projects, and a scanner that skips them by name reports clean on
+    a tree it never read.
+  - **Symlinks are never followed**, directory or file, so a scan stays inside the tree.
+  - **An exit-code contract.** `0` clean or found-without-`--fail`, `1` found with
+    `--fail`, `3` a path could not be read. `2` stays argparse's. A missing path and an
+    unlistable subdirectory both surface as `3` — the first version swallowed both and
+    reported clean, because `os.walk` yields nothing and raises nothing for either.
+
+  `--json` converts the library's byte spans to 1-based line and **character** column,
+  which is what an editor's gutter shows; pinned with a non-ASCII prefix where the two
+  diverge. Binary, non-UTF-8 and oversize files are skipped without error. Inline
+  suppression is deliberately not here (#704 item 5): there is nothing to suppress until
+  there is a scanner.
+
 - **`per_word=True` on `is_mixed_script` and `has_bidi_conflict` (#901).** Both answer a
   question about the whole string, and both docstrings were accurate about that. The
   trouble is what a caller does with them: they look like standalone detectors, so callers

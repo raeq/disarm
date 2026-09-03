@@ -453,3 +453,57 @@ class TestProcessEntryPoint:
         r = run_cli_subprocess("s", "--lang", "zzz", "hello")
         assert r.returncode == 1
         assert r.stderr.startswith("Error:")
+
+
+# ---------------------------------------------------------------------------
+# scan (#704)
+# ---------------------------------------------------------------------------
+
+
+class TestScan:
+    """`disarm scan`, driven through argv the way a user or CI would."""
+
+    PLANTED = "user\u202egpj.exe\n"  # escapes, never literals (#802)
+
+    def _tree(self, tmp_path):
+        (tmp_path / "bad.txt").write_text(self.PLANTED, encoding="utf-8")
+        (tmp_path / "ok.txt").write_text("nothing here\n", encoding="utf-8")
+        return tmp_path
+
+    def test_prints_a_located_finding_and_a_summary(self, tmp_path):
+        r = run_cli("scan", str(self._tree(tmp_path)))
+        assert r.returncode == 0, r.stderr
+        assert "bad.txt:1:1: bidi:" in r.stdout
+        assert "scanned 2 file(s), 1 finding(s)" in r.stdout
+
+    def test_short_form(self, tmp_path):
+        assert run_cli("sc", str(self._tree(tmp_path))).returncode == 0
+
+    def test_fail_exits_one_only_when_something_is_found(self, tmp_path):
+        assert run_cli("scan", "--fail", str(self._tree(tmp_path))).returncode == 1
+        clean = tmp_path / "clean"
+        clean.mkdir()
+        (clean / "a.txt").write_text("fine\n")
+        assert run_cli("scan", "--fail", str(clean)).returncode == 0
+
+    def test_json_is_parseable_and_located(self, tmp_path):
+        import json
+
+        r = run_cli("scan", "--json", str(self._tree(tmp_path)))
+        doc = json.loads(r.stdout)
+        [f] = doc["findings"]
+        assert f["kind"] == "bidi" and (f["line"], f["column"]) == (1, 1)
+        assert doc["scanned"] == 2
+
+    def test_a_missing_path_is_three_and_says_so(self, tmp_path):
+        """Something failed to read is not something found, and not a usage error."""
+        r = run_cli("scan", str(tmp_path / "nope"))
+        assert r.returncode == 3
+        assert "nope" in r.stderr
+
+    def test_a_usage_error_is_still_argparses_two(self):
+        assert run_cli("scan").returncode == 2  # paths is required
+
+    def test_help_names_the_contract(self):
+        r = run_cli("scan", "--help")
+        assert "--fail" in r.stdout and "--json" in r.stdout and "--no-gitignore" in r.stdout

@@ -18,6 +18,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`digit_policy` reaches the six key builders through the core, and the Rust API gains
+  `canonicalize_with`, `canonicalize_strict_with`, `strip_obfuscation_with`,
+  `search_key_with`, `sort_key_with` and `catalog_key_with` (#896).** #885 shipped the setting
+  as a Python pre-pass, so the Rust API and every other binding could not express it. It is
+  now a step at the head of each builder's list — a no-op under the default, so every default
+  key is byte-identical (the fixture gate proves it) — and the builder's own fold runs under
+  the same policy. The port was measured before it was written: over 290,889 probes, `tr39`
+  output is identical to the pre-pass on all six builders. Two things that sweep found are
+  pinned: the pre-fold is the *fixed-point* fold, which composes between passes, so a
+  decomposed base + mark reaches the row keyed on its composed form; and the inert fast path
+  is the default's only, since its confusable-source set is generated for the default and a
+  `tr39`-only row (`ā` → `ã`) was invisible to it. The Python pre-pass is gone.
+
 - **`disarm scan --sarif`, `--baseline` and `--write-baseline`, and a fingerprint that
   survives an edit (#705).** SARIF is the small half: a 2.1.0 document so findings land in
   GitHub's Security tab and as annotations on the pull request that introduced them, with
@@ -579,6 +592,14 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   three classes earlier in this cycle that it could not see.
 
 ### Fixed
+
+- **`digit_policy="preserve"` now holds on `canonicalize`, `canonicalize_strict` and
+  `strip_obfuscation` (#949).** The pre-pass kept the numeral and the preset's own fold then
+  folded it under the default, so the documented setting did nothing on six of the seven
+  builders. With the policy threaded through the core (#896) the three builders that own a
+  fold keep `amount-١` as written. On `search_key`, `catalog_key` and `sort_key` the numeral
+  is romanized by transliteration, not by the fold — a key that maps every script to Latin
+  cannot keep one — and that is now stated on each, both halves asserted.
 
 - **The attack corpus was testing the recoverable half of the reordering class (#740).**
   `bidi()` builds `RLO + t[:mid] + RLM + t[mid:] + PDF`, whose *logical* order is already

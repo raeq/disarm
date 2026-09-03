@@ -307,6 +307,98 @@ impl Pipeline {
     }
 }
 
+/// `digit_policy` on a key builder, at the boundary (#896).
+fn core_policy(
+    digit_policy: crate::api::DigitPolicy,
+) -> Result<crate::confusables::DigitPolicy, Error> {
+    crate::confusables::DigitPolicy::from_token(digit_policy.as_str()).map_err(Error::from)
+}
+
+/// [`canonicalize`] under `digit_policy` (#896).
+///
+/// The six key builders take the policy the way [`skeleton_key`] does: fixed at the call,
+/// before any text is read. Under [`DigitPolicy::Numeric`](crate::api::DigitPolicy) the
+/// output is byte-identical to [`canonicalize`]; under `Tr39` a confusable digit is read
+/// as the letter it resembles, on the raw text and again in the builder's own fold; under
+/// `Preserve` a non-Latin numeral keeps its script.
+///
+/// # Errors
+///
+/// Propagates the builder's error.
+pub fn canonicalize_with(
+    text: &str,
+    digit_policy: crate::api::DigitPolicy,
+) -> Result<Cow<'_, str>, Error> {
+    crate::presets::canonicalize_with(text, core_policy(digit_policy)?).map_err(Error::from)
+}
+
+/// [`canonicalize_strict`] under `digit_policy` (#896). See [`canonicalize_with`].
+///
+/// # Errors
+///
+/// Propagates the builder's error.
+pub fn canonicalize_strict_with(
+    text: &str,
+    digit_policy: crate::api::DigitPolicy,
+) -> Result<Cow<'_, str>, Error> {
+    crate::presets::canonicalize_strict_with(text, core_policy(digit_policy)?).map_err(Error::from)
+}
+
+/// [`strip_obfuscation`] under `digit_policy` (#896). See [`canonicalize_with`].
+///
+/// # Errors
+///
+/// Propagates the builder's error.
+pub fn strip_obfuscation_with(
+    text: &str,
+    digit_policy: crate::api::DigitPolicy,
+) -> Result<Cow<'_, str>, Error> {
+    crate::presets::strip_obfuscation_with(text, core_policy(digit_policy)?).map_err(Error::from)
+}
+
+/// [`search_key`] under `digit_policy` (#896). See [`canonicalize_with`]. This builder
+/// has no fold of its own, so the policy's whole reach is the fold on the raw text.
+///
+/// # Errors
+///
+/// Propagates the builder's error.
+pub fn search_key_with<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    digit_policy: crate::api::DigitPolicy,
+) -> Result<Cow<'a, str>, Error> {
+    crate::presets::search_key_with(text, lang, core_policy(digit_policy)?).map_err(Error::from)
+}
+
+/// [`sort_key`] under `digit_policy` (#896). See [`search_key_with`].
+///
+/// # Errors
+///
+/// Propagates the builder's error.
+pub fn sort_key_with<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    digit_policy: crate::api::DigitPolicy,
+) -> Result<Cow<'a, str>, Error> {
+    crate::presets::sort_key_with(text, lang, core_policy(digit_policy)?).map_err(Error::from)
+}
+
+/// [`catalog_key`] under `digit_policy` (#896). See [`canonicalize_with`]. The fold on
+/// the raw text runs before transliteration consumes the non-Latin digit it exists to read.
+///
+/// # Errors
+///
+/// Propagates the builder's error.
+pub fn catalog_key_with<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+    digit_policy: crate::api::DigitPolicy,
+) -> Result<Cow<'a, str>, Error> {
+    crate::presets::catalog_key_with(text, lang, strict_iso9, core_policy(digit_policy)?)
+        .map_err(Error::from)
+}
+
 /// The TR39 identifier skeleton, plus the two prototype classes disarm's table keeps
 /// apart (#650). A **spoof key**: its only job is to make two confusable identifiers
 /// collide, and its output is never for display.

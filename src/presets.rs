@@ -107,6 +107,23 @@ enum Step {
     /// One caller: `skeleton_key`, whose policy is the caller's to choose. See the
     /// `digit_policy` field on `PresetCtx` for why it rides there and not here.
     ConfusablesCtx(&'static str),
+    /// The Python pre-pass of #885, as a step (#896): under any policy but the default,
+    /// fold confusables on the raw text before the preset's own steps run; under
+    /// `Numeric` do nothing at all. Rides at the head of every key builder's list.
+    ///
+    /// A step rather than a call in the binding layer so that all seven surfaces get the
+    /// one implementation, and a no-op under the default so that every default key is
+    /// byte-identical to what it was — the fixture gate proves that. Positioned on raw
+    /// text because that is where the pre-pass measured its reach: `catalog_key`
+    /// transliterates before its own fold, and a policy applied after transliteration
+    /// never sees the non-Latin digit it exists to read.
+    PolicyPreFold(&'static str),
+    /// [`Step::ConfusablesNfcFixedPoint`] with the policy taken from [`PresetCtx`] (#896),
+    /// so `canonicalize` folds under the caller's policy rather than a const `Numeric`.
+    /// That is what makes `preserve` hold (#949).
+    ConfusablesNfcFixedPointCtx(&'static str),
+    /// [`Step::ConfusablesMarkFixedPoint`] with the policy taken from [`PresetCtx`] (#896).
+    ConfusablesMarkFixedPointCtx(&'static str),
     /// TR39's last two prototype classes — `I ≡ l` always, `1 ≡ l` and `0 ≡ O` under
     /// `Tr39` — applied on cased text (#650).
     ///
@@ -293,6 +310,41 @@ fn apply_into(
             confusables::normalize_confusables_into(input, target, ctx.digit_policy, out)?;
             Ok(true)
         }
+        Step::PolicyPreFold(target) => {
+            if ctx.digit_policy == crate::confusables::DigitPolicy::Numeric {
+                return Ok(false);
+            }
+            // The pre-pass was the *public* fold — the fixed-point form (#586), which
+            // composes between passes — so a decomposed base + mark reaches the row keyed
+            // on its composed form. The single-pass `_into` here left `a\u{304}` unfolded
+            // where the pre-pass folded `ā` → `ã`, the one delta a 290k-probe sweep found.
+            match confusables::normalize_confusables_fixed_cow(
+                input,
+                target,
+                ctx.digit_policy.as_token(),
+            )? {
+                Cow::Borrowed(_) => Ok(false),
+                Cow::Owned(folded) => {
+                    *out = folded;
+                    Ok(true)
+                }
+            }
+        }
+        // The two fixed-point twins resolve the policy and hand off to the const arm, so
+        // the loops live once. The variant is const at every call site, so the outer
+        // match still folds to one arm (#695).
+        Step::ConfusablesNfcFixedPointCtx(target) => apply_into(
+            Step::ConfusablesNfcFixedPoint(target, ctx.digit_policy),
+            input,
+            ctx,
+            out,
+        ),
+        Step::ConfusablesMarkFixedPointCtx(target) => apply_into(
+            Step::ConfusablesMarkFixedPoint(target, ctx.digit_policy),
+            input,
+            ctx,
+            out,
+        ),
         Step::PrototypeFold => Ok(confusables::prototype_fold_into(
             input,
             ctx.digit_policy,
@@ -498,8 +550,11 @@ impl Actionable {
                 Step::PrototypeFold => m.prototype = true,
                 Step::Confusables(target, _)
                 | Step::ConfusablesCtx(target)
+                | Step::PolicyPreFold(target)
                 | Step::ConfusablesNfcFixedPoint(target, _)
-                | Step::ConfusablesMarkFixedPoint(target, _) => {
+                | Step::ConfusablesNfcFixedPointCtx(target)
+                | Step::ConfusablesMarkFixedPoint(target, _)
+                | Step::ConfusablesMarkFixedPointCtx(target) => {
                     // The guard's confusable-source check is Latin-specific (the
                     // ASCII set is generated from confusables_to_latin.tsv and the
                     // non-ASCII check uses `resolve_confusable_map("latin")`). Other
@@ -893,7 +948,10 @@ fn run_static<'a>(
     let guard_on = !FASTPATH_DISABLED.with(std::cell::Cell::get);
     #[cfg(not(test))]
     let guard_on = true;
-    if guard_on {
+    // The guard's confusable-source set is generated for the default policy, so under any
+    // other policy the pre-fold can act on a row the guard cannot see (`ā` → `ã` is a
+    // tr39-only row). The fast path is the default's; a policy always runs the steps (#896).
+    if guard_on && ctx.digit_policy == crate::confusables::DigitPolicy::Numeric {
         let conf_map = if mask.confusables {
             crate::tables::resolve_confusable_map("latin")
         } else {
@@ -1012,7 +1070,17 @@ fn is_bidi_or_format(ch: char) -> bool {
 /// normalizes. Confusable folding is sandwiched between two NFC passes (#416) —
 /// TR39 skeletoning is not normalization-stable — so the pipeline is idempotent
 /// (`f(f(x)) == f(x)`).
+/// `canonicalize` under the default policy. See [`canonicalize_with`].
 pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
+    canonicalize_with(text, crate::confusables::DigitPolicy::Numeric)
+}
+
+/// `canonicalize`, folding under `digit_policy` (#896): a pre-fold on the raw text under
+/// any policy but the default, and the preset's own fold under the same policy.
+pub(crate) fn canonicalize_with(
+    text: &str,
+    digit_policy: crate::confusables::DigitPolicy,
+) -> Result<Cow<'_, str>, crate::ErrorRepr> {
     static_steps! {
         const STEPS;
         fn apply;
@@ -1021,6 +1089,8 @@ pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr>
             // written; NFKC would split `\u{FB01}` and change what the preceding
             // cell is, so the erase has to happen before anything else runs.
             Step::ResolveDeletions,
+            // The #885 pre-pass, as a step: a no-op under the default (#896).
+            Step::PolicyPreFold("latin"),
             // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
             Step::Nfkc,
             // 2. Strip bidi overrides, isolates, marks, and soft hyphens
@@ -1068,7 +1138,7 @@ pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr>
             //    reattaches the *spare* mark, re-creating a foldable composed char the
             //    next call would consume (`c`+◌̧+◌̧ → `ç` then `c`). Looping until stable
             //    makes the preset a true fixed point (`f(f(x)) == f(x)`).
-            Step::ConfusablesNfcFixedPoint("latin", crate::confusables::DigitPolicy::Numeric),
+            Step::ConfusablesNfcFixedPointCtx("latin"),
             // AGAIN, after the fold. The fold does not merely reveal a repeated mark, it
             // can MANUFACTURE one: `U+1EF3` (y with grave) folds to `U+00FD` (y with
             // acute), whose NFD is `y` + acute — so `U+1EF3` followed by a combining
@@ -1102,7 +1172,7 @@ pub(crate) fn canonicalize(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr>
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
-            digit_policy: crate::confusables::DigitPolicy::Numeric,
+            digit_policy,
         },
         apply,
     )
@@ -1260,10 +1330,27 @@ const fn without_fold_case(steps: &[Step; 10]) -> [Step; 9] {
 ///
 /// Produces a canonical deduplication key for bibliographic titles.
 /// Optional ISO 9:1995 transliteration for Cyrillic catalog records.
+/// `catalog_key` under the default policy. See [`catalog_key_with`].
 pub(crate) fn catalog_key<'a>(
     text: &'a str,
     lang: Option<&str>,
     strict_iso9: bool,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
+    catalog_key_with(
+        text,
+        lang,
+        strict_iso9,
+        crate::confusables::DigitPolicy::Numeric,
+    )
+}
+
+/// `catalog_key`, folding under `digit_policy` (#896). The pre-fold runs on the raw
+/// text, before transliteration consumes the non-Latin digit the policy exists to read.
+pub(crate) fn catalog_key_with<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+    digit_policy: crate::confusables::DigitPolicy,
 ) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the validate prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
@@ -1275,6 +1362,8 @@ pub(crate) fn catalog_key<'a>(
             // written; NFKC would split `\u{FB01}` and change what the preceding
             // cell is, so the erase has to happen before anything else runs.
             Step::ResolveDeletions,
+            // The #885 pre-pass, as a step: a no-op under the default (#896).
+            Step::PolicyPreFold("latin"),
             // 1. NFKC normalization
             Step::Nfkc,
             // 2. Strip bidi overrides + soft hyphen + format marks (#93)
@@ -1315,7 +1404,7 @@ pub(crate) fn catalog_key<'a>(
                     mode: crate::ErrorMode::Preserve,
                     only_if_lang: false,
                 },
-                Step::Confusables("latin", crate::confusables::DigitPolicy::Numeric),
+                Step::ConfusablesCtx("latin"),
                 Step::StripAccents,
             ]),
             // 6b. Case-fold AGAIN (#419): full transliteration can *emit* uppercase ASCII
@@ -1335,7 +1424,7 @@ pub(crate) fn catalog_key<'a>(
             lang,
             strict_iso9,
             emoji_cldr: false,
-            digit_policy: crate::confusables::DigitPolicy::Numeric,
+            digit_policy,
         },
         apply,
     )
@@ -1353,9 +1442,20 @@ pub(crate) fn catalog_key<'a>(
 /// `strip_bidi` runs early (#93) so an invisible char (bidi override, soft
 /// hyphen) embedded in a stored value still produces the same key as the clean
 /// query — otherwise lookups silently miss.
+/// `search_key` under the default policy. See [`search_key_with`].
 pub(crate) fn search_key<'a>(
     text: &'a str,
     lang: Option<&str>,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
+    search_key_with(text, lang, crate::confusables::DigitPolicy::Numeric)
+}
+
+/// `search_key`, folding under `digit_policy` (#896). This builder has no fold of its
+/// own; the pre-fold on the raw text is the whole reach, as it was for the pre-pass.
+pub(crate) fn search_key_with<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    digit_policy: crate::confusables::DigitPolicy,
 ) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the validate prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
@@ -1367,6 +1467,8 @@ pub(crate) fn search_key<'a>(
             // written; NFKC would split `\u{FB01}` and change what the preceding
             // cell is, so the erase has to happen before anything else runs.
             Step::ResolveDeletions,
+            // The #885 pre-pass, as a step: a no-op under the default (#896).
+            Step::PolicyPreFold("latin"),
             // 1. NFKC normalization
             Step::Nfkc,
             // 2. Strip bidi overrides + soft hyphen + format marks (#93)
@@ -1413,7 +1515,7 @@ pub(crate) fn search_key<'a>(
             lang,
             strict_iso9: false,
             emoji_cldr: false,
-            digit_policy: crate::confusables::DigitPolicy::Numeric,
+            digit_policy,
         },
         apply,
     )
@@ -1501,9 +1603,20 @@ fn transliterate_preserving_latin_into(text: &str, lang: Option<&str>, out: &mut
 ///
 /// `strip_bidi` runs early (#93) so invisible bidi/format chars cannot perturb
 /// the ordering of otherwise-identical strings.
+/// `sort_key` under the default policy. See [`sort_key_with`].
 pub(crate) fn sort_key<'a>(
     text: &'a str,
     lang: Option<&str>,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
+    sort_key_with(text, lang, crate::confusables::DigitPolicy::Numeric)
+}
+
+/// `sort_key`, folding under `digit_policy` (#896). No fold of its own; the pre-fold on
+/// the raw text is the whole reach, as it was for the pre-pass.
+pub(crate) fn sort_key_with<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    digit_policy: crate::confusables::DigitPolicy,
 ) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the validate prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
@@ -1515,6 +1628,8 @@ pub(crate) fn sort_key<'a>(
             // written; NFKC would split `\u{FB01}` and change what the preceding
             // cell is, so the erase has to happen before anything else runs.
             Step::ResolveDeletions,
+            // The #885 pre-pass, as a step: a no-op under the default (#896).
+            Step::PolicyPreFold("latin"),
             // 1. NFKC normalization (canonical-composes accents: `é` stays one codepoint)
             Step::Nfkc,
             // 2. Strip bidi overrides + soft hyphen + format marks (#93)
@@ -1598,7 +1713,7 @@ pub(crate) fn sort_key<'a>(
             lang,
             strict_iso9: false,
             emoji_cldr: false,
-            digit_policy: crate::confusables::DigitPolicy::Numeric,
+            digit_policy,
         },
         apply,
     )
@@ -1673,7 +1788,16 @@ pub(crate) fn strip_format(text: &str) -> Cow<'_, str> {
 /// Unlike `canonicalize`, this pipeline strips zalgo text.  Unlike
 /// `catalog_key`/`search_key`, it does *not* transliterate — the original
 /// script is preserved.
+/// `canonicalize_strict` under the default policy. See [`canonicalize_strict_with`].
 pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
+    canonicalize_strict_with(text, crate::confusables::DigitPolicy::Numeric)
+}
+
+/// `canonicalize_strict`, folding under `digit_policy` (#896).
+pub(crate) fn canonicalize_strict_with(
+    text: &str,
+    digit_policy: crate::confusables::DigitPolicy,
+) -> Result<Cow<'_, str>, crate::ErrorRepr> {
     static_steps! {
         const STEPS;
         fn apply;
@@ -1682,6 +1806,8 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
             // written; NFKC would split `\u{FB01}` and change what the preceding
             // cell is, so the erase has to happen before anything else runs.
             Step::ResolveDeletions,
+            // The #885 pre-pass, as a step: a no-op under the default (#896).
+            Step::PolicyPreFold("latin"),
             // 1. NFKC normalization
             Step::Nfkc,
             // 2. Strip invisibles FIRST (bidi/format + zero-width + non-whitespace
@@ -1728,7 +1854,7 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
             //     #615, CVE-2017-7833): the zalgo cap above is a COUNT, and by count one
             //     Arabic shadda is indistinguishable from one acute accent, so no
             //     threshold removes the spoof and keeps `café`.
-            Step::ConfusablesMarkFixedPoint("latin", crate::confusables::DigitPolicy::Numeric),
+            Step::ConfusablesMarkFixedPointCtx("latin"),
             // 4c. Cap combining marks (#862). Runs AFTER the fold above, not before it,
             //     because `ConfusablesMarkFixedPoint` carries the #615 cross-script mark
             //     strip — and that strip DELETES marks. A cross-script mark sitting between
@@ -1771,7 +1897,7 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
-            digit_policy: crate::confusables::DigitPolicy::Numeric,
+            digit_policy,
         },
         apply,
     )
@@ -1802,7 +1928,16 @@ pub(crate) fn canonicalize_strict(text: &str) -> Result<Cow<'_, str>, crate::Err
 ///
 /// Use cases: content moderation, anti-phishing, spam detection, hate speech
 /// detection, social media NLP preprocessing.
+/// `strip_obfuscation` under the default policy. See [`strip_obfuscation_with`].
 pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::ErrorRepr> {
+    strip_obfuscation_with(text, crate::confusables::DigitPolicy::Numeric)
+}
+
+/// `strip_obfuscation`, folding under `digit_policy` (#896).
+pub(crate) fn strip_obfuscation_with(
+    text: &str,
+    digit_policy: crate::confusables::DigitPolicy,
+) -> Result<Cow<'_, str>, crate::ErrorRepr> {
     static_steps! {
         const STEPS;
         fn apply;
@@ -1811,6 +1946,8 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
             // written; NFKC would split `\u{FB01}` and change what the preceding
             // cell is, so the erase has to happen before anything else runs.
             Step::ResolveDeletions,
+            // The #885 pre-pass, as a step: a no-op under the default (#896).
+            Step::PolicyPreFold("latin"),
             // 1. NFKC normalization (collapses fullwidth, ligatures, superscripts)
             Step::Nfkc,
             // 2. Strip ALL combining marks (max_marks=0) — removes zalgo AND accents early
@@ -1844,7 +1981,7 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
             //    `\u{2019}` in "woman\u{2019}s hat" is folded, or a second pass would fold
             //    it and break idempotence — no longer applies: there are no emoji names to
             //    carry typographic punctuation into the string.
-            Step::Confusables("latin", crate::confusables::DigitPolicy::Numeric),
+            Step::ConfusablesCtx("latin"),
             // 7. Strip accents (NFD decompose + strip combining marks)
             Step::StripAccents,
             // 8. Strip non-whitespace controls, then fold whitespace (#433: split out of
@@ -1861,7 +1998,7 @@ pub(crate) fn strip_obfuscation(text: &str) -> Result<Cow<'_, str>, crate::Error
             lang: None,
             strict_iso9: false,
             emoji_cldr: false,
-            digit_policy: crate::confusables::DigitPolicy::Numeric,
+            digit_policy,
         },
         apply,
     )
@@ -3323,7 +3460,10 @@ mod tests {
                         line.strip_prefix("pub fn ")
                             .or_else(|| line.strip_prefix("fn "))
                     })?;
-                    Some(&sig[..sig.find(['<', '(']).unwrap_or(sig.len())])
+                    let name = &sig[..sig.find(['<', '(']).unwrap_or(sig.len())];
+                    // `canonicalize_with` owns `canonicalize`'s list (#896); the gate
+                    // reports by the builder's name.
+                    Some(name.strip_suffix("_with").unwrap_or(name))
                 })
                 .unwrap_or("<unknown fn>");
             let body = &rest[i..];
@@ -3336,6 +3476,121 @@ mod tests {
             rest = &body[end..];
         }
         out
+    }
+
+    // ── digit_policy reaches the six key builders (#896), and preserve holds (#949) ──
+
+    #[test]
+    fn a_policy_reaches_every_builder_and_the_default_is_the_plain_call() {
+        use crate::confusables::DigitPolicy::{Numeric, Tr39};
+        // U+0A66 GURMUKHI ZERO for "o": a digit under the default, the letter under tr39.
+        assert_eq!(canonicalize_with("g\u{0A66}ogle", Tr39).unwrap(), "google");
+        assert_eq!(canonicalize("g\u{0A66}ogle").unwrap(), "g0ogle");
+        assert_eq!(
+            catalog_key_with("g\u{0A66}ogle", None, false, Tr39).unwrap(),
+            "google"
+        );
+        for text in [
+            "g\u{0A66}ogle",
+            "amount-\u{0661}",
+            "Caf\u{00E9} R\u{00E9}sum\u{00E9}",
+            "SKU-1O0",
+            "",
+        ] {
+            assert_eq!(
+                canonicalize_with(text, Numeric).unwrap(),
+                canonicalize(text).unwrap()
+            );
+            assert_eq!(
+                canonicalize_strict_with(text, Numeric).unwrap(),
+                canonicalize_strict(text).unwrap()
+            );
+            assert_eq!(
+                strip_obfuscation_with(text, Numeric).unwrap(),
+                strip_obfuscation(text).unwrap()
+            );
+            assert_eq!(
+                search_key_with(text, None, Numeric).unwrap(),
+                search_key(text, None).unwrap()
+            );
+            assert_eq!(
+                sort_key_with(text, None, Numeric).unwrap(),
+                sort_key(text, None).unwrap()
+            );
+            assert_eq!(
+                catalog_key_with(text, None, false, Numeric).unwrap(),
+                catalog_key(text, None, false).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn preserve_holds_where_a_builder_owns_a_fold_and_transliteration_still_romanizes() {
+        use crate::confusables::DigitPolicy::Preserve;
+        let x = "amount-\u{0661}"; // ARABIC-INDIC DIGIT ONE
+                                   // #949: the pre-pass kept the numeral and the preset's own fold then folded it.
+        assert_eq!(canonicalize_with(x, Preserve).unwrap(), x);
+        assert_eq!(canonicalize_strict_with(x, Preserve).unwrap(), x);
+        assert_eq!(strip_obfuscation_with(x, Preserve).unwrap(), x);
+        // Both halves: a key that maps every script to Latin romanizes the digit — by
+        // transliteration, not by the fold — and `preserve` cannot and should not stop it.
+        assert_eq!(search_key_with(x, None, Preserve).unwrap(), "amount-1");
+        assert_eq!(sort_key_with(x, None, Preserve).unwrap(), "amount-1");
+        assert_eq!(
+            catalog_key_with(x, None, false, Preserve).unwrap(),
+            "amount-1"
+        );
+    }
+
+    #[test]
+    fn the_pre_fold_is_the_public_fold_and_the_guard_does_not_skip_it() {
+        use crate::confusables::DigitPolicy::Tr39;
+        // `ā` → `ã` is a tr39-only row. Decomposed, the single-pass fold missed it; the
+        // fixed-point form composes first, as the pre-pass did. And on `sort_key`, whose
+        // other steps leave `āb` alone, the inert guard used to hand the input back without
+        // running the pre-fold at all — the two deltas a 290k-probe sweep found.
+        for text in ["\u{0101}b", "a\u{0304}b"] {
+            let pre = confusables::normalize_confusables(text, "latin", "tr39").unwrap();
+            let via_public = sort_key(&pre, None).unwrap().into_owned();
+            assert_eq!(
+                sort_key_with(text, None, Tr39).unwrap(),
+                via_public,
+                "{text:?}"
+            );
+            assert_eq!(via_public, "\u{00E3}b");
+        }
+        // The fast path still borrows on the default.
+        assert!(matches!(sort_key("plain", None).unwrap(), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn the_pre_fold_step_is_a_no_op_under_the_default() {
+        let ctx = PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+            digit_policy: crate::confusables::DigitPolicy::Numeric,
+        };
+        let mut out = String::new();
+        assert!(!apply_into(
+            Step::PolicyPreFold("latin"),
+            "g\u{0A66}ogle",
+            &ctx,
+            &mut out
+        )
+        .unwrap());
+        let ctx = PresetCtx {
+            digit_policy: crate::confusables::DigitPolicy::Tr39,
+            ..ctx
+        };
+        assert!(apply_into(
+            Step::PolicyPreFold("latin"),
+            "g\u{0A66}ogle",
+            &ctx,
+            &mut out
+        )
+        .unwrap());
+        assert_eq!(out, "google");
     }
 
     /// `step_arrays` names the right function, since the ordering gate's failure message

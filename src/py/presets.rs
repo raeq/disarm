@@ -14,9 +14,13 @@ use pyo3::prelude::*;
 /// (anti-zalgo, #429) → NFC → confusables → NFC (confusables sandwiched between
 /// NFC passes for idempotency, #416).
 #[pyfunction]
-#[pyo3(signature = (text,))]
-pub fn _canonicalize(text: &str) -> PyResult<String> {
-    Ok(crate::presets::canonicalize(text)?.into_owned())
+#[pyo3(signature = (text, *, digit_policy="numeric"))]
+pub fn _canonicalize(text: &str, digit_policy: &str) -> PyResult<String> {
+    Ok(crate::presets::canonicalize_with(
+        text,
+        crate::confusables::DigitPolicy::from_token(digit_policy)?,
+    )?
+    .into_owned())
 }
 
 /// `skeleton_key(text, *, digit_policy="numeric") -> str`
@@ -57,23 +61,44 @@ pub fn _ml_normalize(
 
 /// Library catalog key generation pipeline.
 #[pyfunction]
-#[pyo3(signature = (text, *, lang=None, strict_iso9=false))]
-pub fn _catalog_key(text: &str, lang: Option<&str>, strict_iso9: bool) -> PyResult<String> {
-    Ok(crate::presets::catalog_key(text, lang, strict_iso9)?.into_owned())
+#[pyo3(signature = (text, *, lang=None, strict_iso9=false, digit_policy="numeric"))]
+pub fn _catalog_key(
+    text: &str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+    digit_policy: &str,
+) -> PyResult<String> {
+    Ok(crate::presets::catalog_key_with(
+        text,
+        lang,
+        strict_iso9,
+        crate::confusables::DigitPolicy::from_token(digit_policy)?,
+    )?
+    .into_owned())
 }
 
 /// Search index key generation pipeline.
 #[pyfunction]
-#[pyo3(signature = (text, *, lang=None))]
-pub fn _search_key(text: &str, lang: Option<&str>) -> PyResult<String> {
-    Ok(crate::presets::search_key(text, lang)?.into_owned())
+#[pyo3(signature = (text, *, lang=None, digit_policy="numeric"))]
+pub fn _search_key(text: &str, lang: Option<&str>, digit_policy: &str) -> PyResult<String> {
+    Ok(crate::presets::search_key_with(
+        text,
+        lang,
+        crate::confusables::DigitPolicy::from_token(digit_policy)?,
+    )?
+    .into_owned())
 }
 
 /// Sort key generation pipeline.
 #[pyfunction]
-#[pyo3(signature = (text, *, lang=None))]
-pub fn _sort_key(text: &str, lang: Option<&str>) -> PyResult<String> {
-    Ok(crate::presets::sort_key(text, lang)?.into_owned())
+#[pyo3(signature = (text, *, lang=None, digit_policy="numeric"))]
+pub fn _sort_key(text: &str, lang: Option<&str>, digit_policy: &str) -> PyResult<String> {
+    Ok(crate::presets::sort_key_with(
+        text,
+        lang,
+        crate::confusables::DigitPolicy::from_token(digit_policy)?,
+    )?
+    .into_owned())
 }
 
 /// Strip bidi/format and invisible-injection vectors from rendered content.
@@ -137,14 +162,22 @@ pub fn _strip_pua(text: &str) -> String {
 
 /// Strict canonicalization of user input — Unicode hygiene, **not** a sanitizer.
 #[pyfunction]
-#[pyo3(signature = (text,))]
-pub fn _canonicalize_strict(text: &str) -> PyResult<String> {
-    Ok(crate::presets::canonicalize_strict(text)?.into_owned())
+#[pyo3(signature = (text, *, digit_policy="numeric"))]
+pub fn _canonicalize_strict(text: &str, digit_policy: &str) -> PyResult<String> {
+    Ok(crate::presets::canonicalize_strict_with(
+        text,
+        crate::confusables::DigitPolicy::from_token(digit_policy)?,
+    )?
+    .into_owned())
 }
 
 /// Maximum-strength text deobfuscation pipeline.
 #[pyfunction]
-#[pyo3(signature = (text,))]
-pub fn _strip_obfuscation(text: &str) -> PyResult<String> {
-    Ok(crate::presets::strip_obfuscation(text)?.into_owned())
+#[pyo3(signature = (text, *, digit_policy="numeric"))]
+pub fn _strip_obfuscation(text: &str, digit_policy: &str) -> PyResult<String> {
+    Ok(crate::presets::strip_obfuscation_with(
+        text,
+        crate::confusables::DigitPolicy::from_token(digit_policy)?,
+    )?
+    .into_owned())
 }

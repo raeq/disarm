@@ -524,10 +524,19 @@ def parcel(items: list[Item]) -> list[Item]:
             # Both halves are labelled when a suite splits, never just the
             # smaller one: a bare suite name that silently meant "the transform
             # half" would be the same omission in the report as in the score.
-            label = f"{suite} [{'+'.join(keys)}]" if split else suite
+            # An unsplit suite carries no label at all, so `axis_label == ""`
+            # still distinguishes the two cases and `Item.axis` supplies the
+            # suite name.
+            label = f"{suite} [{'+'.join(keys)}]" if split else ""
             # Average the *standardised* member scores, so measurements on
             # wildly different scales contribute equally inside the parcel.
-            standardize(members, subjects, fit_on=subjects)
+            # Fitted on the tools alone, like every other scale here: passing
+            # the full subject list as the basis overrode `standardize`'s own
+            # control exclusion, so `null-baseline` — which deletes all input,
+            # and so sits several SDs out — set the units each member was
+            # placed on before they were averaged. Controls are placed on a
+            # parcel's scale, never fitted to it.
+            standardize(members, subjects)
             merged = {s: _mean([i.z[s] for i in members]) for s in sorted(cohort)}
             member_keys = {s: set(keys) for s in merged}
             out.append(

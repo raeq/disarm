@@ -2349,3 +2349,29 @@ def test_the_plain_ascii_control_is_scored_as_a_false_positive():
     )
     assert t1.value == 1.0, "the number still means 'a detector fired', as the key says"
     assert got["detected_t7_concealed"].higher_is_better is True
+
+
+def test_a_control_never_sets_the_scale_inside_a_parcel():
+    """ "Controls are placed, not fitted" holds within a parcel too.
+
+    `parcel` passed the full subject list as the standardisation basis, which
+    overrode `standardize`'s own control exclusion. `null-baseline` deletes all
+    input and so sits several standard deviations out; letting it set the units
+    compresses every real tool into a narrow band near the mean, and that
+    compression is applied *before* the members are averaged, so it reweights
+    the parcel. Caught in review on #970.
+    """
+    outs = [
+        _keyed("a", "s", "m", 1.0),
+        _keyed("b", "s", "m", 0.0),
+        _keyed("null-baseline", "s", "m", -100.0),
+    ]
+    (item,) = leaderboard.parcel(leaderboard.collect(outs))
+    # Two tools fitted on themselves are one sample standard deviation apart:
+    # z = ±0.707. Fitted with the control in the basis they land 0.017 apart.
+    gap = item.scores["a@1"] - item.scores["b@1"]
+    assert gap == pytest.approx(2 / math.sqrt(2), abs=0.01), (
+        f"the tools set the units, so they separate by 1.414; got {gap:.3f}"
+    )
+    # The control is still placed on that scale, just not fitted to it.
+    assert item.scores["null-baseline@1"] < -100

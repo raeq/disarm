@@ -709,6 +709,17 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   arriving one step later in the pipeline. `Standing.suites` records what the fraction is taken
   over.
 
+  **A control no longer sets the scale inside a parcel.** Longstanding, and found while
+  reviewing the above: `parcel` passed the full subject list as the standardisation basis,
+  which overrode `standardize`'s own control exclusion. `null-baseline` deletes all input and
+  so sits several standard deviations out, and fitting on it compressed every real tool into a
+  narrow band — *before* the members were averaged, so it reweighted the parcel. Two tools that
+  should separate by 1.414 landed 0.017 apart. Controls are placed on a parcel's scale now,
+  never fitted to it, which is what the module has said about every other scale here since it
+  was written. It moves recorded composites: on the committed baseline `anyascii` and `disarm`
+  exchange first and second place, which is the honest consequence of no longer measuring
+  distance from a strawman.
+
   **`per_benchmark()` is keyed by axis.** Keyed by suite, a second axis from the same suite
   overwrote the first — a dict assignment, so the detection ranking would simply never have
   appeared in the report. Both halves of a split suite are named, never just the smaller one:

@@ -627,7 +627,8 @@ class WeaponizingUnicode(SuiteBase):
             )
             if det:
                 hit = [cp for cp in prototypes if any(_safe(fn, chr(cp)) for fn in det.values())]
-                missed = [cp for cp in prototypes if cp not in set(hit)]
+                hit_set = set(hit)
+                missed = [cp for cp in prototypes if cp not in hit_set]
                 names = ", ".join(
                     f"U+{cp:04X} {unicodedata.name(chr(cp), '?')} → U+{rows[cp][0]:04X}"
                     for cp in missed[:40]

@@ -262,9 +262,22 @@ class DisarmSubject(_Base):
         Role.DETECTOR: "is_confusable",
     }
 
-    #: What a well-versed user reaches for, per job. Every entry is a surface the
-    #: library ships and documents for exactly that purpose — none is composed
-    #: here, and none is chosen by looking at a score.
+    #: What a well-versed user reaches for, per job. Every entry but one is a
+    #: surface the library ships and documents for exactly that purpose, and
+    #: none is chosen by looking at a score.
+    #:
+    #: The exception is `PROMPT_HYGIENE`, bound to the composed prompt-hygiene
+    #: pipeline rather than the `llm_guardrail` preset (Richard, 2026-09-04, on
+    #: #972). The preset keeps a visible emoji in place by #910's measured
+    #: decision, so the parameter #973 added is not reachable from it, and the
+    #: Emoji Attack split (arXiv:2411.01077) the job's own benchmark measures
+    #: stays open. The composition is `ComposedPromptHygiene.STEPS`, declared
+    #: once and scored on the whole battery as its own subject too, so this is
+    #: not a pipeline built for a benchmark: it is the same declared pipeline,
+    #: named here as what disarm answers the job with. On a build whose
+    #: `demojize` is bool-only the composition cannot be built, and the job
+    #: falls back to `profile:llm_guardrail` — recorded in the predicates, so
+    #: the report says which surface answered.
     #:
     #: Two of these were checked against the alternative and kept anyway, which
     #: is the discipline the mapping needs to be worth anything:
@@ -282,7 +295,7 @@ class DisarmSubject(_Base):
     #:   of the table is resolved by NFKC rather than by the confusable map.
     JOBS: ClassVar[dict[str, str]] = {
         Job.CONFUSABLE_FOLD: "canonicalize",
-        Job.PROMPT_HYGIENE: "profile:llm_guardrail",
+        Job.PROMPT_HYGIENE: "composed:prompt-hygiene",
         Job.RETRIEVAL_KEY: "profile:rag_ingest",
         Job.REVIEW_DISPLAY: "strip_format",
         Job.SOURCE_CONTEXT: "profile:code_context",
@@ -317,6 +330,31 @@ class DisarmSubject(_Base):
             fn = getattr(disarm, extra, None)
             if callable(fn):
                 out[extra] = fn
+        # The prompt-hygiene job's surface: the declared composition, built from
+        # the same STEPS the composed subject is scored on. Absent when the
+        # build rejects a declared step (a bool-only `demojize` raises
+        # TypeError on ""), and `role()` then falls back to the preset.
+        try:
+            out["composed:prompt-hygiene"] = disarm.TextPipeline(
+                **ComposedPromptHygiene.STEPS  # type: ignore[arg-type]
+            )
+        except (TypeError, AttributeError):
+            pass
+        return out
+
+    def role(self, which: str, job: str | None = None) -> dict[str, Callable[[str], str]]:
+        """As `_Base.role`, with one fallback.
+
+        When the prompt-hygiene job names the composition and this build cannot
+        build it, the job answers with `profile:llm_guardrail` under that name,
+        so a 0.14.1 build still has a prompt-hygiene surface and the report
+        shows a different predicate rather than a missing one.
+        """
+        out = super().role(which, job)
+        if not out and job == Job.PROMPT_HYGIENE and which != Role.KEY:
+            fallback = self.transforms().get("profile:llm_guardrail")
+            if fallback is not None:
+                return {"profile:llm_guardrail": fallback}
         return out
 
     def detectors(self) -> dict[str, Callable[[str], bool]]:

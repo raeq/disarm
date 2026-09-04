@@ -676,6 +676,19 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   silently reinterpret all of them. No metric changed.
 
 
+### Changed
+
+- **The meta-benchmark scores disarm's prompt-hygiene job through the composed pipeline,
+  not the `llm_guardrail` preset (#972).** The preset keeps a visible emoji in place by #910's
+  measured decision and takes no `demojize` override, so the parameter #973 added could not
+  reach the bare `disarm` subject and the Emoji Attack split stayed open on the job's own
+  benchmark. The job now answers with `ComposedPromptHygiene.STEPS`, the same declaration
+  scored as `disarm-composed:prompt-hygiene`, so there is one pipeline named twice rather
+  than one built for a benchmark. On `emoji-delimiter-segmentation` the bare subject rejoins
+  1,192 of 1,219 `Emoji_Presentation` code points where it rejoined 0. A build that rejects
+  the declaration falls back to the preset under its own predicate name, so a 0.14.1 build
+  still has a prompt-hygiene surface and the report says which one answered.
+
 ### Changed (breaking)
 
 - **The deletion class is now resolved, not only reported — and `KEY_SCHEMA_VERSION` is

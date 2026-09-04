@@ -3003,6 +3003,16 @@ class TextPipeline:
     removes bidirectional override/format characters. Both run right after
     ``normalize`` and before ``demojize``.
 
+    ``strip_zalgo`` is the one flag here whose off switch is not ``False``, and
+    ``0`` is not it (#958). The value is a **cap** on combining marks per base
+    character, so ``strip_zalgo=0`` permits none and removes every diacritic in the
+    text — ``café`` leaves as ``cafe``. Off is ``None``, the default, which omits
+    the step from the compiled pipeline entirely. A threshold that leaves ordinary
+    accented text alone and still cuts a zalgo stack is a small positive number,
+    which is what the bare `strip_zalgo` function defaults to. The same literal
+    reads the other way in `PRESETS`: ``("strip_zalgo", None)`` there names a step
+    that **runs**, at that default cap.
+
     This constructor takes individual step flags only; there is **no**
     ``preset=`` argument. To obtain a pre-configured pipeline for a named policy
     profile (e.g. ``scholarly_cyrillic_iso9``), call `get_pipeline`

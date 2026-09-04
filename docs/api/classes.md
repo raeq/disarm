@@ -151,6 +151,33 @@ pipe = TextPipeline(
 assert pipe("  Héllo Wörld  ") == "hello world"
 ```
 
+### `strip_zalgo` is a cap, and `0` is not "off"
+
+Every other step here is switched with a boolean. `strip_zalgo` takes the maximum
+number of combining marks to allow per base character, so `0` allows none and removes
+every diacritic in the text — including from words that were never obfuscated. Off is
+`None`, which leaves the step out of the compiled pipeline altogether (#958):
+
+```python
+from disarm import TextPipeline
+
+text = "Čeština, naïve café"
+
+# None — the default. The step is not compiled in at all.
+off = TextPipeline(strip_zalgo=None)
+assert off.steps == []
+assert off(text) == text
+
+# 0 — a cap of zero marks. Every diacritic goes.
+assert TextPipeline(strip_zalgo=0)(text) == "Cestina, naive cafe"
+
+# A small positive cap runs the step and still leaves ordinary accents alone.
+assert TextPipeline(strip_zalgo=3)(text) == text
+```
+
+The same literal reads the other way in [`PRESETS`](pipelines.md#presets), where
+`("strip_zalgo", None)` names a step that **does** run, at its default cap.
+
 ### Execution order
 
 Operations execute in this fixed order regardless of construction order:

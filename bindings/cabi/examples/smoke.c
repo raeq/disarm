@@ -191,6 +191,20 @@ int main(void) {
     disarm_string_free(cov_bad.value);
     disarm_string_free(cov_bad.error);
 
+    /* #972: removing an emoji closes the split an attacker put inside a word, and a
+       character CLDR merely annotates is not an emoji and stays. */
+    char *re = disarm_replace_emoji("aa\xf0\x9f\x94\xa5" "bb", "");
+    printf("%-28s %-6s\n", "replace_emoji intra-word",
+           re && strcmp(re, "aabb") == 0 ? "OK" : "FAIL");
+    if (!re || strcmp(re, "aabb") != 0) failures++;
+    disarm_string_free(re);
+
+    char *rk = disarm_replace_emoji("x\xc2\xa9y", "");
+    printf("%-28s %-6s\n", "replace_emoji keeps (c)",
+           rk && strcmp(rk, "x\xc2\xa9y") == 0 ? "OK" : "FAIL");
+    if (!rk || strcmp(rk, "x\xc2\xa9y") != 0) failures++;
+    disarm_string_free(rk);
+
     /* #586: the fold iterates to a fixed point rather than stopping after one pass.
        A fold exposes a composition: U+00A5 + U+0300 folds to Y + U+0300, which
        composes to U+1EF2. A single pass returned the decomposed "Y\u0300". */

@@ -348,6 +348,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Emoji
     m.add_function(wrap_pyfunction!(py::emoji::_demojize, m)?)?;
+    m.add_function(wrap_pyfunction!(py::emoji::_replace_emoji, m)?)?;
     m.add_function(wrap_pyfunction!(py::emoji::_set_emoji_provider, m)?)?;
 
     // Custom exception hierarchy (#183): DisarmError base + categorised

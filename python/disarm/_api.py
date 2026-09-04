@@ -78,6 +78,7 @@ from disarm._boundary import (
     _register_replacements,
     _registrations_sealed,
     _remove_replacement,
+    _replace_emoji,
     # Reverse transliteration
     _reverse_langs,
     _reverse_transliterate,
@@ -1260,6 +1261,7 @@ def strip_zero_width_chars(text: str) -> str:
 def demojize(
     text: str,
     *,
+    replacement: str | None = None,
     strip_modifiers: bool = False,
     errors: ErrorMode = "replace",
     replace_with: str = "[?]",
@@ -1267,12 +1269,30 @@ def demojize(
     # emoji library compatibility
     delimiters: tuple[str, str] | None = None,
 ) -> str:
-    """Expand emoji sequences to their CLDR short-name text descriptions.
+    """Name every emoji, or replace every emoji with one string.
 
-    Output is always the bare CLDR short name as plain text.
+    Two modes, and they read different tables because they answer different questions.
+
+    **Naming** (the default) asks *what does CLDR call this?*, so its domain is the CLDR
+    name table — which is wider than the emoji: ``demojize("x™y")`` is ``"x trade mark y"``
+    because CLDR annotates ``U+2122``.
+
+    **Replacing** (``replacement=...``) asks *is this an emoji by the UCD's properties?*,
+    so its domain is the emoji-presentation set: ``Emoji_Presentation=Yes``, an
+    ``Emoji=Yes`` base carrying ``U+FE0F``, and the ZWJ, modifier, keycap and flag
+    sequences built on those. Nothing else moves — ``©`` and ``™`` stay, where naming
+    would have written a word over them (#972).
 
     Args:
         text: Input string potentially containing emoji.
+        replacement: ``None`` names each emoji. A string writes that string in place of
+            each emoji, verbatim: no padding and no whitespace collapse. The two useful
+            values want opposite things and neither can be a default — ``""`` closes an
+            intra-word split (``aa🔥bb`` → ``aabb``, the Emoji Attack construction) and
+            ``" "`` keeps two words apart (``stop🛑now`` → ``stop now``). Under a
+            replacement the naming options do not apply and are ignored: *strip_modifiers*,
+            *errors*, *replace_with* and *provider* all describe what to **call** an
+            emoji, and this caller has said not to call it anything.
         strip_modifiers: If True, collapse skin tone and hair style variants
             to their base form (e.g. "woman raising hand" instead of
             "woman raising hand: medium-dark skin tone").
@@ -1303,6 +1323,12 @@ def demojize(
     Examples:
         >>> demojize("I ❤️ Python 🐍")
         'I red heart Python snake'
+        >>> demojize("aa🔥bb", replacement="")
+        'aabb'
+        >>> demojize("stop🛑now", replacement=" ")
+        'stop now'
+        >>> demojize("x©y", replacement="")
+        'x©y'
     """
     if not isinstance(text, str):
         raise TypeError(f"demojize() expects str, got {type(text).__name__}")
@@ -1314,13 +1340,65 @@ def demojize(
             DeprecationWarning,
             stacklevel=2,
         )
+    if replacement is not None and not isinstance(replacement, str):
+        raise TypeError(
+            f"demojize() replacement must be str or None, got {type(replacement).__name__}"
+        )
     return _demojize(
         text,
+        replacement=replacement,
         strip_modifiers=strip_modifiers,
         errors=errors,
         replace_with=replace_with,
         provider=provider,
     )
+
+
+def replace_emoji(text: str, replacement: str = "") -> str:
+    """Replace every emoji with *replacement*, verbatim (#972).
+
+    The counterpart to `demojize`, and a different question of a different table.
+    `demojize` asks *what does CLDR call this?*, so its domain is the CLDR name table,
+    which is wider than the emoji: ``demojize("x™y")`` is ``"x trade mark y"``. This asks
+    *is this an emoji by the UCD's properties?*, so its domain is the emoji-presentation
+    set — ``Emoji_Presentation=Yes``, an ``Emoji=Yes`` base carrying ``U+FE0F``, and the
+    ZWJ, modifier, keycap and flag sequences built on those. Nothing else moves.
+
+    Identical to ``demojize(text, replacement=...)``; this is the spelling every other
+    binding carries, and the one to reach for when the operation is the point rather than
+    a mode of naming.
+
+    Args:
+        text: Input string potentially containing emoji.
+        replacement: Written in place of each emoji, exactly as given — no padding and no
+            whitespace collapse. The two useful values want opposite things and neither
+            can be a default: ``""`` closes an intra-word split (the Emoji Attack
+            construction, arXiv:2411.01077) and ``" "`` keeps two words apart.
+
+    Returns:
+        Text with every emoji replaced.
+
+    Note:
+        No shipped preset or profile does this. `llm_guardrail` keeps a visible emoji on
+        a measured decision (#910): naming writes attacker-chosen English into screened
+        text, and removing fuses the words an emoji separates. Which is right depends on
+        whether the caller's emoji sit inside a word or between two.
+
+    Examples:
+        >>> replace_emoji("aa🔥bb")
+        'aabb'
+        >>> replace_emoji("stop🛑now", " ")
+        'stop now'
+        >>> replace_emoji("x©y")
+        'x©y'
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"replace_emoji() expects str, got {type(text).__name__}")
+    if not isinstance(replacement, str):
+        raise TypeError(
+            f"replace_emoji() replacement must be str, got {type(replacement).__name__}"
+        )
+    return _replace_emoji(text, replacement)
 
 
 def set_emoji_provider(provider: EmojiProvider | None = None) -> None:
@@ -3098,7 +3176,7 @@ class TextPipeline:
         collapse_whitespace: bool = False,
         strip_control: bool | None = None,
         strip_zero_width: bool | None = None,
-        demojize: bool = False,
+        demojize: bool | str = False,
         strip_bidi: bool = False,
         strip_zalgo: int | None = None,
         strip_pua: bool = False,
@@ -3107,6 +3185,20 @@ class TextPipeline:
         resolve_cr: bool = False,
         digit_policy: str = "numeric",
     ) -> None:
+        # #972: `demojize` is the one flag with three settings, so the union is split
+        # here rather than at the FFI boundary. `True` names, a string replaces, `False`
+        # omits the step. `True` is checked with `is` because a string is truthy: a bare
+        # `if demojize` would read `demojize=""` as off and silently drop the step the
+        # caller asked for.
+        demojize_replacement: str | None = None
+        if isinstance(demojize, str):
+            demojize_replacement = demojize
+            demojize = False
+        elif not isinstance(demojize, bool):
+            raise TypeError(
+                f"TextPipeline() demojize must be bool or str, got {type(demojize).__name__}"
+            )
+
         # Validation (e.g. strip_zalgo >= 0) lives in the Rust core's
         # _TextPipeline constructor, the single source of truth for every
         # caller — no Python-side duplicate to drift from it.
@@ -3123,6 +3215,7 @@ class TextPipeline:
             strip_control=strip_control,
             strip_zero_width=strip_zero_width,
             demojize=demojize,
+            demojize_replacement=demojize_replacement,
             strip_bidi=strip_bidi,
             strip_zalgo=strip_zalgo,
             strip_pua=strip_pua,

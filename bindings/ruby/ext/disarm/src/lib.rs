@@ -331,6 +331,11 @@ fn slugify(
     api::slugify(&text, &config)
 }
 
+/// `Disarm._replace_emoji(text, replacement)` — every emoji replaced, verbatim (#972).
+fn replace_emoji(text: Wtf8Text, replacement: String) -> String {
+    api::replace_emoji(&text, &replacement)
+}
+
 /// `Disarm._demojize(text, strip_modifiers)`.
 fn demojize(text: Wtf8Text, strip_modifiers: bool) -> String {
     api::demojize(&text, strip_modifiers)
@@ -923,6 +928,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_confusable?", function!(is_confusable, 2))?;
     module.define_singleton_method("_slugify", function!(slugify, 13))?;
     module.define_singleton_method("_demojize", function!(demojize, 2))?;
+    module.define_singleton_method("_replace_emoji", function!(replace_emoji, 2))?;
     module.define_singleton_method("_canonicalize_strict", function!(canonicalize_strict, 2))?;
     module.define_singleton_method("_strip_format", function!(strip_format, 1))?;
     module.define_singleton_method("_strip_obfuscation", function!(strip_obfuscation, 2))?;

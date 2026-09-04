@@ -136,6 +136,7 @@ class _TextPipeline:
         strip_control: bool | None = None,
         strip_zero_width: bool | None = None,
         demojize: bool = False,
+        demojize_replacement: str | None = None,
         strip_bidi: bool = False,
         strip_zalgo: int | None = None,
         strip_pua: bool = False,
@@ -249,11 +250,13 @@ def _strip_zero_width_chars(text: str) -> str: ...
 def _demojize(
     text: str,
     *,
+    replacement: str | None = None,
     strip_modifiers: bool = False,
     errors: ErrorMode = ...,
     replace_with: str = ...,
     provider: object | None = None,
 ) -> str: ...
+def _replace_emoji(text: str, replacement: str) -> str: ...
 def _canonicalize(text: str, *, digit_policy: str = "numeric") -> str: ...
 def _ml_normalize(
     text: str,

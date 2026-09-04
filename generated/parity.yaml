@@ -605,6 +605,15 @@ operations:
       java: null
       kotlin: null
       cabi: null
+  - id: replace_emoji
+    names:
+      rust: replace_emoji
+      python: replace_emoji
+      ruby: replace_emoji
+      node: replaceEmoji
+      java: replaceEmoji
+      kotlin: replaceEmoji
+      cabi: replace_emoji
   - id: reverse_langs
     names:
       rust: reverse_langs

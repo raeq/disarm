@@ -56,6 +56,8 @@ public final class Native {
 
     public static native String demojize(String text, boolean stripModifiers);
 
+    public static native String replaceEmoji(String text, String replacement);
+
     // ── Normalization ──────────────────────────────────────────────────────────
     public static native String normalize(String text, String form);
 

@@ -162,6 +162,10 @@ class DisarmKtTest {
         assertFalse(langInfo("ru").name().isBlank())
         val name = listScripts().first()
         assertEquals(name, scriptInfo(name).name())
+        // #972: replacing reads the UCD's emoji properties, naming reads CLDR's wider table.
+        assertEquals("aabb", "aa\uD83D\uDD25bb".replaceEmoji())
+        assertEquals("stop now", "stop\uD83D\uDED1now".replaceEmoji(" "))
+        assertEquals("x\u00A9y", "x\u00A9y".replaceEmoji())
         // #963: the per-script confusable denominator, not the 6,565-source population.
         assertEquals(159, confusableCoverage("Greek").sources())
         assertEquals(0, confusableCoverage("Thaana").sources())

@@ -71,5 +71,22 @@ class EmojiProvider(Protocol):
         Returns:
             The text name to substitute, or None if this provider
             does not recognize the sequence.
+
+        Warning:
+            **A match consumes the window it was shown** (#972). Returning a string —
+            including ``""`` — tells the scanner that every code point in *sequence* was
+            the emoji, and all of them are replaced by that string. A provider that
+            answers for a window it did not match therefore deletes the characters
+            around the emoji as well as the emoji::
+
+                class Empty:
+                    def lookup(self, sequence): return ""
+
+                demojize("aa🔥bb", provider=Empty())   # -> "" , not "aabb"
+
+            The protocol has no way to say *I matched three of these*, so return ``None``
+            for any window whose leading code points you do not recognize. To remove
+            emoji rather than name them, use `replace_emoji`, which decides what is an
+            emoji from the UCD's properties instead of asking a provider.
         """
         ...

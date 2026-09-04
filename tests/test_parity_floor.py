@@ -42,6 +42,8 @@ FLOOR = frozenset(
         "catalog_key",
         "collapse_whitespace",
         "confusables_version",
+        # #972: shipped complete on all seven with the change that adds it.
+        "replace_emoji",
         # #963: shipped complete on all seven, so it joins the floor with the
         # change that added it rather than waiting for a drift to be noticed.
         "confusable_coverage",

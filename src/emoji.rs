@@ -16,6 +16,8 @@ pub(crate) const ZWJ: char = '\u{200D}';
 pub(crate) const VS16: char = '\u{FE0F}';
 /// Variation Selector 15 — request text presentation.
 pub(crate) const VS15: char = '\u{FE0E}';
+/// Combining Enclosing Keycap — the third code point of `1\u{FE0F}\u{20E3}`.
+pub(crate) const KEYCAP: char = '\u{20E3}';
 
 // #112: key_buf and sep_positions were stack-allocated to avoid two heap
 // allocations per emoji-multi-starter character in the former hex-key matcher.
@@ -98,6 +100,17 @@ pub(crate) fn match_emoji_at(window: &[char]) -> Option<(&'static str, usize)> {
     if tables::is_emoji_multi_starter(ch) {
         if let Some(hit) = tables::match_emoji_sequence(window) {
             return Some(hit);
+        }
+    }
+
+    // #972: the RGI keycap is `base + U+FE0F + U+20E3`, and CLDR keys it without the
+    // selector (`0031_20E3`). The trie walk above therefore missed the form people
+    // actually type: `demojize("x1\u{FE0F}\u{20E3}y")` returned `x1\u{20E3}y`, dropping
+    // the selector and leaving the combining keycap on the digit. Retry without the
+    // selector and report all three code points consumed.
+    if window.len() >= 3 && window[1] == VS16 && window[2] == KEYCAP {
+        if let Some((name, _)) = tables::match_emoji_sequence(&[ch, KEYCAP]) {
+            return Some((name, 3));
         }
     }
 
@@ -312,6 +325,147 @@ pub(crate) fn pad_emoji_replacement(result: &mut String, text: &str) {
     result.push_str(text);
 }
 
+// ─── Replacement mode (#972) ────────────────────────────────────────────────────
+//
+// Naming and replacing ask different questions of different tables, and they are
+// separate code paths on purpose.
+//
+// Naming asks "what does CLDR call this?", so its domain is the name table — which is
+// wider than the emoji: `demojize("x\u{2122}y")` is "x trade mark y" because CLDR
+// annotates `U+2122`. Replacing with `""` over that domain would delete `\u{2122}` and
+// `\u{00A9}` from ordinary prose, which is not what a caller removing emoji asked for.
+//
+// So replacement asks "is this an emoji by the UCD's own properties?" and its domain is
+// the emoji-presentation set: `Emoji_Presentation=Yes`, an `Emoji=Yes` base carrying
+// `U+FE0F`, and the sequences built on those. That question needs two range tables and
+// no names, which is the second reason the paths are separate: a build that only
+// replaces links neither the CLDR name trie nor the 182 KB behind it (#695).
+
+/// Skin-tone modifiers, `U+1F3FB`..`U+1F3FF`.
+#[inline]
+fn is_skin_tone(ch: char) -> bool {
+    matches!(ch, '\u{1F3FB}'..='\u{1F3FF}')
+}
+
+/// Tag characters, used by the subdivision flag sequences.
+#[inline]
+fn is_tag(ch: char) -> bool {
+    matches!(ch, '\u{E0020}'..='\u{E007F}')
+}
+
+/// Regional indicators, which pair into a flag.
+#[inline]
+fn is_regional_indicator(ch: char) -> bool {
+    matches!(ch, '\u{1F1E6}'..='\u{1F1FF}')
+}
+
+/// Whether `ch` can open an emoji-presentation sequence on its own.
+///
+/// `Emoji=Yes` alone is not enough: `\u{00A9}` and `\u{2122}` carry it and render as
+/// text, which is why the `U+FE0F` case is handled by the caller rather than here.
+#[inline]
+fn opens_emoji_presentation(ch: char) -> bool {
+    tables::is_emoji_presentation(ch) || is_regional_indicator(ch)
+}
+
+/// How many chars of an emoji-presentation sequence start at `window[0]`, if any.
+///
+/// Returns `None` for anything the UCD does not call an emoji in this position —
+/// including a keycap base with no keycap after it, an `Emoji=Yes` base with no
+/// `U+FE0F`, and a lone regional indicator.
+fn presentation_len_at(window: &[char]) -> Option<usize> {
+    let first = *window.first()?;
+
+    // A pair of regional indicators is one flag, and one emoji: `replacement=" "` must
+    // put a single space where the flag was, not two. A lone regional indicator is still
+    // `Emoji_Presentation=Yes` and still an emoji — it renders as a letter in a box —
+    // so it goes too, just on its own.
+    if is_regional_indicator(first) {
+        return Some(
+            if window.get(1).copied().is_some_and(is_regional_indicator) {
+                2
+            } else {
+                1
+            },
+        );
+    }
+
+    // Keycap: `base + U+FE0F? + U+20E3`. The base is a digit, `#` or `*` — ordinary
+    // characters, so the keycap itself is what makes the sequence an emoji.
+    if matches!(first, '0'..='9' | '#' | '*') {
+        let after_selector = usize::from(window.get(1) == Some(&VS16));
+        return if window.get(1 + after_selector) == Some(&KEYCAP) {
+            Some(2 + after_selector)
+        } else {
+            None
+        };
+    }
+
+    // Two ways to open: the code point renders as emoji on its own, or it *can* and the
+    // next code point says to.
+    let vs16_next = window.get(1) == Some(&VS16);
+    let opens = opens_emoji_presentation(first) || (vs16_next && tables::is_emoji_property(first));
+    if !opens {
+        return None;
+    }
+
+    // Extend over the modifiers and joined bases that belong to this emoji. A trailing
+    // ZWJ with nothing joinable after it is left alone: it is not part of a sequence,
+    // and consuming it would delete a character the caller did not ask about.
+    let mut len = 1;
+    loop {
+        match window.get(len) {
+            Some(&c) if c == VS16 || c == VS15 || is_skin_tone(c) || is_tag(c) => len += 1,
+            Some(&c) if c == KEYCAP => len += 1,
+            Some(&c) if c == ZWJ => match presentation_len_at(&window[len + 1..]) {
+                Some(joined) => len += 1 + joined,
+                None => break,
+            },
+            _ => break,
+        }
+    }
+    Some(len)
+}
+
+/// Replace every emoji-presentation sequence in `text` with `replacement` (#972).
+///
+/// The counterpart to [`demojize_rust_into`], which names emoji instead. Everything
+/// outside the emoji-presentation set is emitted verbatim, including stray variation
+/// selectors and the CLDR-annotated punctuation naming would have replaced with a word.
+/// `replacement` is inserted exactly as given — no padding and no whitespace collapse —
+/// because the two useful values want opposite things: `""` closes an intra-word split
+/// (`aa\u{1F525}bb` -> `aabb`) and `" "` keeps two words apart
+/// (`stop\u{1F6D1}now` -> `stop now`), and a rule that served one would break the other.
+pub fn demojize_rust_replace_into(text: &str, replacement: &str, result: &mut String) {
+    result.clear();
+    // Emoji are all non-ASCII, so ASCII text cannot contain one — including the keycap
+    // bases, which need a non-ASCII keycap after them to become an emoji.
+    if text.is_ascii() {
+        result.push_str(text);
+        return;
+    }
+
+    result.reserve(text.len());
+    let mut win = CharWindow::new(text.chars());
+    while let Some(ch) = win.current() {
+        if let Some(consumed) = presentation_len_at(win.as_slice()) {
+            result.push_str(replacement);
+            win.advance(consumed);
+            continue;
+        }
+        result.push(ch);
+        win.advance(1);
+    }
+}
+
+/// Owned form of [`demojize_rust_replace_into`].
+#[must_use]
+pub fn demojize_rust_replace(text: &str, replacement: &str) -> String {
+    let mut out = String::new();
+    demojize_rust_replace_into(text, replacement, &mut out);
+    out
+}
+
 /// Pure Rust demojize for use by TextPipeline (no Python provider support).
 ///
 /// # #113
@@ -472,6 +626,73 @@ pub fn demojize_rust_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The keycap CLDR keys without a selector, written the way people type it (#972).
+    #[test]
+    fn the_rgi_keycap_names_the_same_as_the_bare_one() {
+        assert_eq!(demojize_rust("x1\u{FE0F}\u{20E3}y", false), "x keycap: 1 y");
+        assert_eq!(demojize_rust("x1\u{20E3}y", false), "x keycap: 1 y");
+        assert_eq!(demojize_rust("x#\u{FE0F}\u{20E3}y", false), "x keycap: # y");
+        // The base alone is a digit and stays one.
+        assert_eq!(demojize_rust("x1y", false), "x1y");
+    }
+
+    /// One sequence is one emoji, which only a non-empty replacement can see.
+    #[test]
+    fn a_sequence_takes_one_replacement() {
+        for text in [
+            "x\u{1F1EC}\u{1F1E7}y",                          // flag
+            "x\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}y", // ZWJ family
+            "x\u{1F44D}\u{1F3FD}y",                          // skin tone
+            "x1\u{FE0F}\u{20E3}y",                           // keycap
+        ] {
+            assert_eq!(demojize_rust_replace(text, " "), "x y", "{text:?}");
+        }
+    }
+
+    /// Replacing reads the UCD; naming reads CLDR, which annotates more than the emoji.
+    #[test]
+    fn replacing_leaves_what_only_cldr_claims() {
+        assert_eq!(demojize_rust_replace("x\u{2122}y", ""), "x\u{2122}y");
+        assert_eq!(demojize_rust("x\u{2122}y", false), "x trade mark y");
+        assert_eq!(demojize_rust_replace("x\u{00A9}y", ""), "x\u{00A9}y");
+        // The same base with and without the selector, which is the whole distinction.
+        assert_eq!(demojize_rust_replace("x\u{263A}y", ""), "x\u{263A}y");
+        assert_eq!(demojize_rust_replace("x\u{263A}\u{FE0F}y", ""), "xy");
+    }
+
+    /// Verbatim: the two useful replacements want opposite things.
+    #[test]
+    fn the_replacement_is_inserted_without_padding() {
+        assert_eq!(demojize_rust_replace("aa \u{1F525} bb", ""), "aa  bb");
+        assert_eq!(demojize_rust_replace("stop\u{1F6D1}now", ""), "stopnow");
+        assert_eq!(demojize_rust_replace("stop\u{1F6D1}now", " "), "stop now");
+        assert_eq!(
+            demojize_rust_replace("aa\u{1F525}bb", "[emoji]"),
+            "aa[emoji]bb"
+        );
+    }
+
+    /// A trailing joiner is not a sequence, and consuming it would eat a character the
+    /// caller did not ask about.
+    #[test]
+    fn a_dangling_joiner_is_left_alone() {
+        assert_eq!(demojize_rust_replace("\u{1F525}\u{200D}", ""), "\u{200D}");
+        assert_eq!(demojize_rust_replace("a\u{200D}b", ""), "a\u{200D}b");
+    }
+
+    /// Removing emoji twice is removing them once.
+    #[test]
+    fn replacement_reaches_a_fixed_point() {
+        for cp in (0x1F300u32..=0x1FAFF).chain(0x2600..=0x27BF) {
+            let Some(c) = char::from_u32(cp) else {
+                continue;
+            };
+            let s = format!("aa{c}bb");
+            let once = demojize_rust_replace(&s, "");
+            assert_eq!(demojize_rust_replace(&once, ""), once, "U+{cp:04X}");
+        }
+    }
 
     #[test]
     fn test_encode_key_single() {

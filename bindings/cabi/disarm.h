@@ -383,6 +383,21 @@ disarm_normalize_confusables_opts (
     char const * digit_policy);
 
 /** \brief
+ *  Replace every emoji with `replacement`, verbatim (#972). Free the result with
+ *  [`disarm_string_free`].
+ *
+ *  The counterpart to [`disarm_demojize`], and a different question of a different
+ *  table: naming reads CLDR, which annotates more than the emoji, and this reads the
+ *  UCD's emoji properties, so `\u{00A9}` and `\u{2122}` stay put. `replacement` is
+ *  inserted exactly as given — `""` closes an intra-word split and `" "` keeps two
+ *  words apart, and no rule serves both.
+ */
+char *
+disarm_replace_emoji (
+    char const * text,
+    char const * replacement);
+
+/** \brief
  *  Reverse-transliterate Latin → native script. `lang` is `"el"` | `"ru"` | `"uk"`.
  */
 DisarmResult_t

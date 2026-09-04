@@ -213,6 +213,9 @@ from disarm._core import (
     _remove_replacement as _remove_replacement,
 )
 from disarm._core import (
+    _replace_emoji as _replace_emoji,
+)
+from disarm._core import (
     _reverse_langs as _reverse_langs,
 )
 from disarm._core import (

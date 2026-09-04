@@ -104,6 +104,17 @@ fun List<String>.findKeyCollisions(key: String, lang: String? = null): List<KeyC
 @JvmOverloads
 fun String.demojize(stripModifiers: Boolean = false): String = JDisarm.demojize(this, stripModifiers)
 
+/**
+ * Replace every emoji with [replacement], verbatim (#972).
+ *
+ * The counterpart to [demojize]: that names a character from the CLDR table, which is
+ * wider than the emoji, and this replaces what the UCD calls an emoji and nothing else.
+ * [replacement] is inserted exactly as given — `""` closes an intra-word split and `" "`
+ * keeps two words apart, and no rule serves both.
+ */
+@JvmOverloads
+fun String.replaceEmoji(replacement: String = ""): String = JDisarm.replaceEmoji(this, replacement)
+
 // ── Normalization ───────────────────────────────────────────────────────────────
 
 fun String.normalize(form: NormalizationForm): String = JDisarm.normalize(this, form)

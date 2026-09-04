@@ -116,6 +116,21 @@ module Disarm
       translate_errors { _demojize(text, strip_modifiers) }
     end
 
+    # Replace every emoji with +replacement+, verbatim.
+    #
+    # The counterpart to +demojize+, and a different question of a different table.
+    # +demojize+ asks what CLDR calls a character, so its domain is the name table, which
+    # is wider than the emoji: <tt>demojize("x\u2122y")</tt> is "x trade mark y". This
+    # asks whether the UCD calls it an emoji — Emoji_Presentation=Yes, an Emoji=Yes base
+    # carrying U+FE0F, and the ZWJ, modifier, keycap and flag sequences on those. Nothing
+    # else moves.
+    #
+    # +replacement+ is inserted exactly as given: "" closes an intra-word split and " "
+    # keeps two words apart, and no rule serves both.
+    def replace_emoji(text, replacement = "")
+      translate_errors { _replace_emoji(text, replacement) }
+    end
+
     # Canonicalize, but raise rather than silently normalize a structural difference
     # away — the half of the pair that lets a caller reject input instead of comparing
     # a value the sender never wrote.

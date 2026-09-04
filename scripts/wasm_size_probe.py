@@ -33,6 +33,10 @@ SURFACES = {
     "strip_obfuscation": "disarm::api::strip_obfuscation(t).map(|c| c.len()).unwrap_or(0)",
     "strip_bidi": "disarm::api::strip_bidi(t).len()",
     "collapse_whitespace": "disarm::api::collapse_whitespace(t).len()",
+    # #972: removing emoji reads two UCD range tables and no names, so a build that only
+    # replaces must not carry the CLDR name trie. This is the surface where that claim
+    # can be checked — `TextPipeline` resolves its steps at runtime and links both arms.
+    "demojize_replace": 'disarm::emoji::demojize_rust_replace(t, "").len()',
 }
 
 #: Byte needles. `zhuang` is a pinyin syllable; `grinning` is a CLDR emoji name.

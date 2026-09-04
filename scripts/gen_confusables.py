@@ -764,7 +764,10 @@ def filter_direct(
 
     result = []
     for source_cp, target_cps in entries:
-        # Skip same-script → same-script
+        # Skip same-script → same-script. DELIBERATE, not an oversight: the fold is
+        # cross-script by construction, and a same-script pair like Persian keheh against
+        # Arabic kaf is a language question the fold has no language to answer (#848).
+        # See "The fold is cross-script by construction" in docs/limitations.md.
         if is_target(source_cp):
             continue
         # Skip digits as sources
@@ -844,7 +847,9 @@ def filter_via_classes(
         target_members_lower.sort()
         target_members_other.sort()
 
-        # For each non-target member, map to the appropriate target member
+        # For each non-target member, map to the appropriate target member. A class whose
+        # members are ALL in the target script therefore contributes nothing — the other
+        # half of the same deliberate rule (#848); see docs/limitations.md.
         for m in members:
             if is_target(m):
                 continue  # Don't map target→target

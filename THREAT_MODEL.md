@@ -295,6 +295,20 @@ behavior, not a vulnerability:
   job of context-appropriate output encoding at the sink, not of input normalization;
   disarm is not, and cannot be, a substitute. A preset named `canonicalize_strict` performs
   Unicode hygiene only — treat its output as normalized, **not** as injection-safe.
+
+- **The chat-template sink — `<|im_end|>`, `<|start_header_id|>`, `[INST]`, `<end_of_turn>`.**
+  A different sink from the templating engines above, and out of scope for the same reason:
+  its metacharacters are a *model vocabulary*, versioned per model, and disarm bundles
+  Unicode data. A delimiter set that ships in a release and goes stale between releases
+  gives assurance the library cannot keep, which is worse than none. Encode at prompt
+  assembly, with the vocabulary that owns the template.
+
+  **The fold's effect here is an artefact, not a control.** `canonicalize` leaves 11 of 26
+  delimiters across six families intact, and the split is not a policy: TR39 row `U+007C`
+  folds `|` to `l`, so `<|im_end|>` becomes `<lim_endl>` and the four families that use a
+  pipe are mangled, while `<start_of_turn>` and `[INST]` pass through whole. Do not build on
+  it. `collapse_whitespace` is a second, quieter rewrite of template syntax: Llama 3's
+  `<|start_header_id|>system<|end_header_id|>\n\n` loses a structural newline (#742).
 - **Metacharacter unmasking via NFKC (important).** NFKC normalization — step 1 of
   `canonicalize` and `canonicalize_strict` — maps fullwidth and compatibility lookalikes
   to their ASCII originals **by design** (that is how fullwidth-bypass evasion is collapsed):

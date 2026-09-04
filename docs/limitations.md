@@ -724,6 +724,80 @@ Under a presence-of-Latin gate, registering one spelling and impersonating the o
 go unnoticed. So the damage to non-Latin body text is the cost of having a pivot at all,
 which is why this page documents the scope instead of the behaviour changing.
 
+### The fold is cross-script by construction, so two same-script letters never collide
+
+`scripts/gen_confusables.py` drops a TR39 equivalence class whose members are all in one
+script — `filter_direct` skips a source when it is already in the target script, and
+`filter_via_classes` maps *non-target* members onto the target-script member, so a class
+with no non-target member has nothing to map from. That is deliberate, and it is written
+here because two lines of a generator are not where a reader looks for a scope decision.
+
+The canonical case is Persian and Arabic. TR39 puts keheh and kaf in one class with kaf as
+the prototype, and disarm keeps them apart:
+
+```python
+from disarm import canonicalize
+
+assert canonicalize("ک") != canonicalize("ك")  # U+06A9 keheh, U+0643 kaf
+```
+
+Measured against the bundled `confusables.txt` (17.0.0), the class is 2,772 Arabic
+same-script pairs and 38 Hebrew ones. Roughly three quarters of the Arabic figure is
+`FBxx`–`FExx` presentation forms that NFKC removes before the fold runs, leaving **678**
+letter pairs; the largest single class is the alef-maksura family at 17 members.
+
+**Why it stays that way (#848).** The question is a language question and the fold has no
+language. `ک` and `ك` are one letter to a Persian reader and two to an Arabic one, and
+`normalize_confusables` takes a target *script*, not a language — so no parameter can be
+right for both. Nor is there an outside judgement to lean on: the same-script Latin pairs
+disarm does fold came with ICANN's published verdict attached (#831), and TR39's Arabic
+classes come with none. Folding 678 pairs on a table's say-so is a much larger claim than
+19 on a registry's.
+
+`is_suspicious_hostname` stays Latin-targeted regardless: `src/hostname.rs` fixes the
+whole-script set to `["Latin"]` and calls the fold with the Latin target, so no table
+change would reach it.
+
+### The fold keys on single code points, so a base plus a mark cannot be a source
+
+`confusables_to_latin.tsv` maps one code point to a string, so a source spelled as a base
+plus a combining mark cannot be expressed in it at all. The one file that *can* express a
+multi-code-point source, `confusables_contractions.tsv`, is reachable only from
+`is_suspicious_hostname(contractions=True)` and never from the fold.
+
+The class this leaves is small and sharp: six Latin bases where a tilde and a macron
+disagree about whether a precomposed form exists.
+
+| base | tilde | macron |
+|---|---|---|
+| `G` / `g` | `G̃` `g̃` (2 code points) | `Ḡ` `ḡ` (1) |
+| `N` / `n` | `Ñ` `ñ` (1) | `N̄` `n̄` (2) |
+| `V` / `v` | `Ṽ` `ṽ` (1) | `V̄` `v̄` (2) |
+
+Neither spelling precomposes under NFC, so both survive the pipeline as written and
+`canonicalize` collides none of the six. Two of them — `n̄`/`ñ` and `g̃`/`ḡ` — are blocked
+variants in ICANN's *Reference LGR for the Second Level, Latin script* with the comment
+"Glyphs either homoglyph or nearly identical", so `mañana.com` and `man̄ana.com` both screen
+clean here while that registry blocks the pair.
+
+**The key builders already merge all six**, by stripping accents — which is the right
+answer for a search index and says nothing about a spoof screen:
+
+```python
+from disarm import canonicalize, catalog_key
+
+assert catalog_key("mañana") == catalog_key("man̄ana")  # accents stripped
+assert canonicalize("mañana") != canonicalize("man̄ana")  # the fold sees neither
+```
+
+**Why the fold does not gain a sequence table (#836).** Both sides of these pairs are
+living orthography: `ñ` is Spanish and Guaraní, `g̃` is a Guaraní letter, `n̄` appears in
+Marshallese romanization, and `ḡ` and `ṽ` carry Americanist and Indic transliteration. A
+fold here merges two letters of two languages, which is the cost #831 had to justify with a
+registry's judgement — and four of the six carry none. Six pairs do not buy a table shape
+the fold has never had, with its own idempotence precondition and a key-schema bump behind
+it.
+
 ### Format-character removal takes the ZWNJ that Persian requires
 
 `U+200C` ZERO WIDTH NON-JOINER is not decoration in Persian — it separates the parts of a

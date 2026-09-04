@@ -832,6 +832,22 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   The `unmapped_confusables` docstring now shows the loop written correctly, and states the
   distinction the issue is really about: four target tables against 61 identifiable scripts
   are different questions. The fair per-script denominator is #963.
+- **Three limits weighed and kept, written down (#848, #836, #742).** Each was decided
+  against changing the library, and each reads as an oversight until it is stated.
+  **The fold is cross-script by construction:** `gen_confusables.py` drops a TR39 class whose
+  members are all one script, so Persian keheh and Arabic kaf stay apart. 2,772 Arabic pairs,
+  678 outside the presentation forms NFKC already removes — declined because which of them is
+  the same letter is a language question and the fold takes a target script, not a language,
+  with no registry judgement attached where #831's Latin pairs had ICANN's. **The fold keys on
+  single code points:** a base plus a combining mark cannot be a source, leaving six Latin
+  pairs where a tilde and a macron disagree about precomposition; the key builders merge all
+  six by stripping accents and `canonicalize` merges none, and both halves are now asserted.
+  **The chat-template sink is out of scope,** recorded beside the injection item in
+  `THREAT_MODEL.md` — its metacharacters are a model vocabulary and disarm bundles Unicode
+  data — with the artefact disowned: 11 of 26 delimiters survive `canonicalize`, and the split
+  is TR39 row `U+007C` folding `|` to `l`, not a control. Both drop sites in the generator now
+  say the rule is deliberate, and `tests/test_declined_fold_limits.py` pins the behaviour so
+  the pages cannot describe a library that changed underneath them.
 
 - **`confusable-bench.v1`: the three surfaces the meta-benchmark suite predated, and the
   identifier-validation recipe it produces (#736).** The corpus was already registered as the

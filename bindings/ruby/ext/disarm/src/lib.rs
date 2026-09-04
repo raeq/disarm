@@ -220,6 +220,11 @@ fn parse_policy(digit_policy: &str) -> Result<api::DigitPolicy, Error> {
     digit_policy.parse().map_err(|e| map_err(&e))
 }
 
+/// `Disarm._canonical?(text, preset)` — already its own canonical form (#730).
+fn is_canonical(text: Wtf8Text, preset: String) -> Result<bool, Error> {
+    api::is_canonical(&text, &preset).map_err(|e| map_err(&e))
+}
+
 /// `Disarm._confusable?(text, "latin" | "cyrillic" | "arabic" | "hebrew")`.
 fn is_confusable(text: Wtf8Text, target: String) -> Result<bool, Error> {
     let target: api::TargetScript = target.parse().map_err(|e| map_err(&e))?;
@@ -906,6 +911,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_strip_format", function!(strip_format, 1))?;
     module.define_singleton_method("_strip_obfuscation", function!(strip_obfuscation, 2))?;
     module.define_singleton_method("_canonicalize", function!(canonicalize, 2))?;
+    module.define_singleton_method("_is_canonical?", function!(is_canonical, 2))?;
 
     // Key-derivation presets (#404 Group A parity backfill).
     module.define_singleton_method("_search_key", function!(search_key, 3))?;

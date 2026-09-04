@@ -86,6 +86,8 @@ public final class Native {
 
     public static native String canonicalize(String text, String digitPolicy);
 
+    public static native boolean isCanonical(String text, String preset);
+
     public static native String canonicalizeStrict(String text, String digitPolicy);
 
     public static native String stripFormat(String text);

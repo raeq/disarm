@@ -156,6 +156,23 @@ int main(void) {
     disarm_string_free(nn.value);
     disarm_string_free(nn.error);
 
+    /* #730: the verification path. 1 canonical, 0 not, -1 unknown preset — a tri-state
+       because every other predicate here is infallible and this one takes a name. */
+    if (disarm_is_canonical("paypal", "canonicalize") != 1) {
+        fprintf(stderr, "is_canonical: expected 1 for clean ASCII\n");
+        return 1;
+    }
+    /* Split literal: a C hex escape is greedy, so "\x90a" would parse as one escape. */
+    if (disarm_is_canonical("\xef\xbd\x90" "aypal", "canonicalize") != 0) {
+        fprintf(stderr, "is_canonical: expected 0 for a fullwidth p\n");
+        return 1;
+    }
+    if (disarm_is_canonical("paypal", "no_such_preset") != -1) {
+        fprintf(stderr, "is_canonical: expected -1 for an unknown preset\n");
+        return 1;
+    }
+    printf("is_canonical tri-state            OK\n");
+
     /* #586: the fold iterates to a fixed point rather than stopping after one pass.
        A fold exposes a composition: U+00A5 + U+0300 folds to Y + U+0300, which
        composes to U+1EF2. A single pass returned the decomposed "Y\u0300". */

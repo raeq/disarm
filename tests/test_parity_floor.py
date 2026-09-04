@@ -54,6 +54,8 @@ FLOOR = frozenset(
         "has_bidi_conflict",
         "inspect_anomalies",
         "inspect_auto_lang",
+        # #730 §5: the verification-path predicate, added complete on all seven.
+        "is_canonical",
         "is_case_fold_stable",
         "is_mixed_script",
         "is_suspicious_hostname",

@@ -142,6 +142,15 @@ fun String.canonicalize(digitPolicy: DigitPolicy = DigitPolicy.NUMERIC): String 
     JDisarm.canonicalize(this, digitPolicy)
 
 /**
+ * Whether this value is already its own canonical form under [preset] (#730) — the
+ * verification path, where the presets are the generation path. `hasAnomalies` is not this
+ * predicate.
+ */
+@JvmOverloads
+fun String.isCanonical(preset: String = "canonicalize"): Boolean =
+    JDisarm.isCanonical(this, preset)
+
+/**
  * Canonicalize, but throw rather than silently normalize a structural difference away —
  * the half of the pair that lets a caller reject input instead of comparing a value the
  * sender never wrote.

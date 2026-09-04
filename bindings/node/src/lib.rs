@@ -158,6 +158,12 @@ fn parse_policy(digit_policy: &str) -> Result<api::DigitPolicy, NapiError> {
     digit_policy.parse().map_err(|e| map_err(&e))
 }
 
+/// Whether `text` is already its own canonical form under `preset` (#730).
+#[napi]
+pub fn is_canonical(text: String, preset: String) -> Result<bool, NapiError> {
+    api::is_canonical(&text, &preset).map_err(|e| map_err(&e))
+}
+
 /// Whether `text` contains a character confusable with `target`.
 #[napi]
 pub fn is_confusable(text: String, target: String) -> Result<bool, NapiError> {

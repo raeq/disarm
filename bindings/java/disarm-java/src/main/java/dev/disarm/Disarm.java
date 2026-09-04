@@ -273,6 +273,28 @@ public final class Disarm {
         return Native.stripObfuscation(text, digitPolicy.token());
     }
 
+    /** Whether {@code text} is already its own canonical form under {@code canonicalize}. */
+    public static boolean isCanonical(String text) {
+        return isCanonical(text, "canonicalize");
+    }
+
+    /**
+     * Whether {@code text} is already its own canonical form under {@code preset} (#730).
+     *
+     * <p>The verification-path counterpart to the presets: text in, normalized text out is
+     * the generation path, and this is the question a caller asks about bytes that arrive
+     * already bound. {@link #hasAnomalies} is not this predicate — 142,760 assigned code
+     * points are reported clean by the detector and are not their own canonical form.
+     *
+     * @throws DisarmInvalidArgumentException if {@code preset} names neither a preset nor a
+     *     profile
+     */
+    public static boolean isCanonical(String text, String preset) {
+        req(text);
+        Objects.requireNonNull(preset, "preset");
+        return Native.isCanonical(text, preset);
+    }
+
     /**
      * Canonicalize text for security-sensitive comparison. Not an output sanitizer —
      * encode at the sink.

@@ -348,11 +348,11 @@ operations:
     names:
       rust: is_canonical
       python: is_canonical
-      ruby: null
-      node: null
-      java: null
-      kotlin: null
-      cabi: null
+      ruby: canonical?
+      node: isCanonical
+      java: isCanonical
+      kotlin: isCanonical
+      cabi: is_canonical
   - id: is_case_fold_stable
     names:
       rust: is_case_fold_stable

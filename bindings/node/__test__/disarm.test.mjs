@@ -113,6 +113,19 @@ describe('Pipeline.withDigitPolicy (#646)', () => {
   })
 })
 
+describe('isCanonical (#730)', () => {
+  test('the verification path, and hasAnomalies is not it', () => {
+    expect(disarm.isCanonical('paypal')).toBe(true)
+    expect(disarm.isCanonical('\uFF50aypal')).toBe(false)      // fullwidth p
+    // A compatibility ideograph the detector calls clean and canonicalize rewrites.
+    expect(disarm.hasAnomalies('\uFA10')).toBe(false)
+    expect(disarm.isCanonical('\uFA10')).toBe(false)
+  })
+  test('an unknown preset throws', () => {
+    expect(() => disarm.isCanonical('x', { preset: 'nope' })).toThrow(DisarmInvalidArgument)
+  })
+})
+
 describe('confusables', () => {
   test('normalizeConfusables folds to latin by default', () => {
     expect(disarm.normalizeConfusables('раypal')).toBe('paypal')

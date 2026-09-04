@@ -188,6 +188,21 @@ export function normalizeConfusables(
   )
 }
 
+/**
+ * Whether `text` is already its own canonical form under `preset` (#730).
+ *
+ * The verification-path counterpart to the presets: text in, normalized text out is the
+ * generation path, and this is the question a caller asks about bytes that arrive already
+ * bound. `hasAnomalies` is not this predicate — 142,760 assigned code points are reported
+ * clean by the detector and are not their own canonical form.
+ *
+ * `preset` is any name in the preset registry or any profile, defaulting to
+ * `'canonicalize'`. An unknown one throws {@link DisarmInvalidArgument}.
+ */
+export function isCanonical(text: string, options: { preset?: string } = {}): boolean {
+  return call(() => native.isCanonical(text, options.preset ?? 'canonicalize'))
+}
+
 /** Whether `text` contains a character confusable with `target` (default `'latin'`). */
 export function isConfusable(text: string, options: { target?: TargetScript } = {}): boolean {
   return call(() => native.isConfusable(text, options.target ?? 'latin'))

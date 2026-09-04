@@ -104,6 +104,7 @@ def camel_to_snake(s):
 
 
 RUBY_PRED = {
+    "canonical": "is_canonical",
     "case_fold_stable": "is_case_fold_stable",
     "normalized": "is_normalized",
     "mixed_script": "is_mixed_script",

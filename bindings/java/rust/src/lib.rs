@@ -777,6 +777,25 @@ pub fn canonicalizeStrict<'l>(
     .resolve::<Policy>()
 }
 
+/// Whether `text` is already its own canonical form under `preset` (#730).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn isCanonical<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    preset: JString<'l>,
+) -> jboolean {
+    env.with_env(|env| -> JniResult<jboolean> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let preset = preset.mutf8_chars(env)?.to_string();
+        match api::is_canonical(&text, &preset) {
+            Ok(v) => Ok(jboolean::from(v)),
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn canonicalize<'l>(
     mut env: EnvUnowned<'l>,

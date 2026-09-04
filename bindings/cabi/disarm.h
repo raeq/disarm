@@ -249,6 +249,19 @@ disarm_inspect_auto_lang (
     char const * text);
 
 /** \brief
+ *  Whether `text` is already its own canonical form under `preset` (#730).
+ *
+ *  Returns `1` for canonical, `0` for not, and `-1` when `preset` names neither a preset
+ *  nor a profile. A tri-state rather than a `bool`, because every other predicate here is
+ *  infallible and this one takes a name that can be wrong — answering `0` for an unknown
+ *  preset would report "not canonical" for a question that was never asked.
+ */
+int8_t
+disarm_is_canonical (
+    char const * text,
+    char const * preset);
+
+/** \brief
  *  Whether case folding and simple lowercasing agree, so `text` is a stable
  *  identity key ("groß.txt" is not; "gross.txt" is).
  */

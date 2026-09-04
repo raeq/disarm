@@ -493,6 +493,21 @@ fn disarm_nearest_match(
 
 // ── Predicates (infallible) ─────────────────────────────────────────────────────
 
+/// Whether `text` is already its own canonical form under `preset` (#730).
+///
+/// Returns `1` for canonical, `0` for not, and `-1` when `preset` names neither a preset
+/// nor a profile. A tri-state rather than a `bool`, because every other predicate here is
+/// infallible and this one takes a name that can be wrong — answering `0` for an unknown
+/// preset would report "not canonical" for a question that was never asked.
+#[ffi_export]
+fn disarm_is_canonical(text: char_p::Ref<'_>, preset: char_p::Ref<'_>) -> i8 {
+    match api::is_canonical(text.to_str(), preset.to_str()) {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(_) => -1,
+    }
+}
+
 /// Whether the hostname looks like a mixed-script / confusable / bidi IDN spoof.
 #[ffi_export]
 fn disarm_is_suspicious_hostname(host: char_p::Ref<'_>) -> bool {

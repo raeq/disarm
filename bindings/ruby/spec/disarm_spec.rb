@@ -105,6 +105,19 @@ RSpec.describe Disarm do
     end
   end
 
+  describe ".canonical? (#730)" do
+    it "answers the verification path, where anomalies? does not" do
+      expect(Disarm.canonical?("paypal")).to be(true)
+      expect(Disarm.canonical?("\uFF50aypal")).to be(false)
+      expect(Disarm.has_anomalies?("\uFA10")).to be(false)
+      expect(Disarm.canonical?("\uFA10")).to be(false)
+    end
+
+    it "raises on an unknown preset" do
+      expect { Disarm.canonical?("x", preset: "nope") }.to raise_error(Disarm::InvalidArgument)
+    end
+  end
+
   describe ".normalize_confusables" do
     it "folds cross-script confusables to the default (:latin) target" do
       expect(Disarm.normalize_confusables("раypal")).to eq("paypal")

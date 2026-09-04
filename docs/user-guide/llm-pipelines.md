@@ -496,6 +496,14 @@ Do **not** reach for disarm when:
   NFC/NFKC-normalise, and the model handles native script better than any
   romanisation. Transliterating the prompt throws away signal.
 - **You only need encoding repair.** That is `ftfy`'s job, not disarm's.
+- **The perturbation has no table to look it up in.** A table-driven fold is
+  enumerate-the-known: Braille, turned letters, small capitals and the other stylized
+  variants that carry no confusable row pass through unchanged. Cooper et al., *The Lies
+  Characters Tell* (ACL Findings 2025, `10.18653/v1/2025.findings-acl.969`), normalize
+  exactly those with an LLM instead — the honest alternative for that class, at a
+  per-call cost disarm does not have. Reach for it when the input is adversarial *and*
+  stylized; reach for disarm when you need a deterministic, versionable transform you can
+  assert on both sides of a pipeline.
 - **You need lossless round-tripping.** Compatibility-tier romanisation (CJK,
   Indic) is lossy; see [Limitations](../limitations.md).
 

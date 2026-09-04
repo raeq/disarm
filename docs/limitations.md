@@ -519,6 +519,25 @@ into a detection.
 The two halves are independent and both are tested: the fold still rewrites all three, and
 the detectors stay silent.
 
+### Rewriting is not reporting, and the gap has a name
+
+That split is not confined to those three characters. Measured over the 37 reconstructed
+sets of Daniel &amp; Pal (arXiv:2405.14490), registered as `benchmarks/meta`'s
+`nonstandard-unicode-sets` suite: **30 of 37 are recovered by at least one surface,
+and 7 of 37 are flagged by `has_anomalies`.** Five are neither. So a pipeline that screens
+first and cleans only what it flagged handles a fraction of what a pipeline that cleans
+unconditionally handles — and the difference is invisible from the detector's output,
+because the detector's silence and the fold's success look the same from outside.
+
+Wang et al., *The Asymmetric Vulnerability: Bypassing LLM Defenses via Guardrail-Model
+Mismatch* (The Web Conference 2026, `10.1145/3774904.3792438`), describe this from the
+attacker's side without reference to any library: input-side guardrails are fragile to
+character perturbations while the model stays semantically resilient, which opens a
+**"success interval" where a perturbation bypasses guardrail detection yet remains
+interpretable to the target model**. disarm's detect-versus-transform gap is one instance
+of that interval, which is why *clean unconditionally* is the recommendation on the
+guardrail path (#601) rather than *detect, then clean*.
+
 | | `\|` | `"` | `` ` `` |
 |---|---|---|---|
 | `normalize_confusables` rewrites | yes | yes | yes |

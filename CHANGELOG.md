@@ -895,6 +895,25 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Documentation
 
+- **The lineage of arXiv:2405.14490, written down where each branch lands (#816).** The
+  paper's corpus is already the `nonstandard-unicode-sets` suite; this is the part of the
+  issue the suite could not carry. Three additions, each to the page a reader would be on
+  when the question arises. `THREAT_MODEL.md` gains malicious font injection (Xiong et
+  al., arXiv:2505.16957) as an out-of-scope row: it reads as a homoglyph attack from the
+  reader's side, and it is not one — every code point is innocent and the substitution
+  happens in the glyph table, below the character layer, so no character-level tool can
+  see it. `docs/user-guide/llm-pipelines.md` gains a *when NOT to use disarm* row for the
+  classes a table-driven fold cannot reach — Braille, turned letters, small capitals —
+  where an LLM-based normalizer (Cooper et al., ACL Findings 2025) is the honest
+  alternative at a per-call cost disarm does not have. And `docs/limitations.md` now names
+  the detect-versus-transform gap as a published result rather than a repo-internal
+  observation: Wang et al. (The Web Conference 2026) describe a **"success interval"**
+  where a perturbation bypasses guardrail detection yet stays interpretable to the model,
+  which is exactly the suite's 30-of-37-recovered against 7-of-37-flagged split, and the
+  argument for *clean unconditionally* over *detect, then clean*. A new test holds the
+  quoted fractions to the suite's recorded finding, since that suite is `MANUAL` and no
+  test can re-measure it.
+
 - **Canonical links and sitemap entries name the URL that serves them (#694).**
   `use_directory_urls: false` makes MkDocs write `.html` into every `rel=canonical` and every
   sitemap `<loc>`, and Cloudflare Pages answers the extensionless form with 200 while 308ing

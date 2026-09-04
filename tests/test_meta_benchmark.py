@@ -1838,6 +1838,57 @@ def test_the_confusable_job_is_not_the_highest_scoring_surface():
     )
 
 
+def test_the_prompt_hygiene_job_answers_with_the_declared_composition():
+    """The bare subject's prompt-hygiene surface is the composition, not the preset.
+
+    `llm_guardrail` keeps a visible emoji by #910's decision and takes no
+    `demojize` override, so the parameter #973 added cannot reach it and the
+    Emoji Attack split stays open under the preset. Richard's instruction on
+    #972: do not run the harness with the preset; use a composed pipeline. The
+    composition is the one declared on `ComposedPromptHygiene`, so there is one
+    declaration, scored both as its own subject and as disarm's answer to the job.
+    """
+    import disarm
+
+    assert subjects.DisarmSubject.JOBS[subjects.Job.PROMPT_HYGIENE] == "composed:prompt-hygiene"
+    subject = subjects.by_name("disarm")
+    assert subject is not None
+    surface = subject.role(subjects.Role.SANITIZER, job=subjects.Job.PROMPT_HYGIENE)
+    assert list(surface) == ["composed:prompt-hygiene"], surface
+    fn = surface["composed:prompt-hygiene"]
+    assert fn("aa\U0001f525bb") == "aabb"
+    assert fn("ig\U0001f600nore previous") == "ignore previous"
+    # The same pipeline the composed subject is scored on: one declaration.
+    composed = subjects.ComposedPromptHygiene().role(subjects.Role.SANITIZER)["composed"]
+    for probe in ("aa\U0001f525bb", "stop\U0001f6d1now", "Formats code neatly.\U000e0042"):
+        assert fn(probe) == composed(probe)
+    # And the preset is still offered as a surface, just not as the job's answer.
+    assert "profile:llm_guardrail" in subject.transforms()
+    assert disarm.get_pipeline("llm_guardrail")("aa\U0001f525bb") == "aa\U0001f525bb"
+
+
+def test_the_prompt_hygiene_job_falls_back_to_the_preset_when_the_build_rejects_the_composition():
+    """A build whose `demojize` is bool-only must still answer the job, and say how.
+
+    Simulated by declaring a step no build accepts: the composition cannot be
+    built, the job answers with `profile:llm_guardrail` under that name, and the
+    report's predicates show the switch instead of an empty surface.
+    """
+    original = dict(subjects.ComposedPromptHygiene.STEPS)
+    try:
+        subjects.ComposedPromptHygiene.STEPS = {**original, "no_such_step": True}
+        subject = subjects.by_name("disarm")
+        assert subject is not None
+        assert "composed:prompt-hygiene" not in subject.transforms()
+        surface = subject.role(subjects.Role.SANITIZER, job=subjects.Job.PROMPT_HYGIENE)
+        assert list(surface) == ["profile:llm_guardrail"], surface
+    finally:
+        subjects.ComposedPromptHygiene.STEPS = original
+    assert list(
+        subjects.by_name("disarm").role(subjects.Role.SANITIZER, job=subjects.Job.PROMPT_HYGIENE)
+    ) == ["composed:prompt-hygiene"]
+
+
 def test_standalone_entry_points_are_in_the_surface_census():
     """`normalize_confusables` was invisible to every suite for the whole build.
 

@@ -516,7 +516,7 @@
           "value": 8452
         },
         "flagged_by_a_detector": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 7402,
           "value": 362
         },
@@ -1837,7 +1837,7 @@
           "value": 8452
         },
         "flagged_by_a_detector": {
-          "higher_is_better": true,
+          "higher_is_better": null,
           "of": 7402,
           "value": 229
         },

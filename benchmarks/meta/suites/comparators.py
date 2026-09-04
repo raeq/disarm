@@ -9,7 +9,7 @@ place where a *false positive* is defined by someone other than disarm.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from ..base import CACHE, DATA, SuiteBase, add, artifact, record
@@ -439,6 +439,45 @@ def _safe(fn: Callable[[str], object], text: str) -> bool:
         return False
 
 
+def uts39_rows(path: Path) -> dict[int, tuple[int, ...]]:
+    """`confusables.txt` as source -> prototype sequence, from the normative file."""
+    rows: dict[int, tuple[int, ...]] = {}
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("#") or ";" not in line:
+            continue
+        src, tgt = line.split(";")[:2]
+        try:
+            rows[int(src.strip(), 16)] = tuple(int(x, 16) for x in tgt.split())
+        except ValueError:
+            continue
+    return rows
+
+
+def _script_of(cp: int) -> str:
+    import unicodedata
+
+    return unicodedata.name(chr(cp), "?").split(" ")[0]
+
+
+def uts39_prototype_sources(
+    codepoints: Sequence[int], rows: Mapping[int, tuple[int, ...]]
+) -> list[int]:
+    """The code points whose UTS #39 prototype is one code point in another script.
+
+    2,103 rows of `confusables.txt` map a source to a *sequence* — `ᄄ → ᄃᄃ`,
+    `ᐎ → ·Δ` — and most of those stay inside one script. They are typesetting
+    decompositions, and a detector that fires on a lone Hangul jamo because of
+    one is reporting a false positive as coverage (#957, on the other side).
+    The security-relevant overlap is the single-code-point, cross-script rows,
+    so that is the denominator the directed measurement uses.
+    """
+    return [
+        cp
+        for cp in codepoints
+        if cp in rows and len(rows[cp]) == 1 and _script_of(rows[cp][0]) != _script_of(cp)
+    ]
+
+
 class WeaponizingUnicode(SuiteBase):
     name = "weaponizing-unicode"
     JOB = Job.CONFUSABLE_FOLD
@@ -472,7 +511,19 @@ class WeaponizingUnicode(SuiteBase):
             "excluded from the scored denominator: a tool that strips PUA handles "
             "those for a reason that has nothing to do with confusability, and "
             "crediting it would repeat the mistake retention made with format "
-            "characters."
+            "characters.\n\n"
+            "What is directed, and what is not (#977). `flagged_by_a_detector` "
+            "over the whole set is a census: 7,277 of the 7,402 candidates are "
+            "not UTS #39 sources at all — Hangul syllables that resemble other "
+            "Hangul syllables, box-drawing, dominoes — and of the 586 that are, "
+            "547 have a multi-code-point prototype in their own script. A key "
+            "that rewarded flagging those crowned a detector for reporting a "
+            "lone Hangul jamo. The one directed measurement is "
+            "`uts39_prototype_detected`: the candidates whose UTS #39 prototype "
+            "is a single code point in another script, read from the normative "
+            "`confusables.txt` and never from a disarm table, and how many of "
+            "them the subject's detectors flag. Its detail names the misses, "
+            "which is the disagreement this suite was registered to surface."
         ),
     )
 
@@ -544,6 +595,10 @@ class WeaponizingUnicode(SuiteBase):
             detail="stripping these is unrelated to confusability, so they are not "
             "scored — the artefact of a font-rendering method",
         )
+        table = artifact(DATA / "confusables.txt", env="DISARM_META_CONFUSABLES")
+        rows = uts39_rows(table) if table is not None else {}
+        sources = [cp for cp in scored if cp in rows]
+        prototypes = uts39_prototype_sources(scored, rows)
         if det:
             flagged = sum(1 for cp in scored if any(_safe(fn, chr(cp)) for fn in det.values()))
             add(
@@ -551,9 +606,45 @@ class WeaponizingUnicode(SuiteBase):
                 "flagged_by_a_detector",
                 flagged,
                 of=len(scored),
-                higher_is_better=True,
-                detail="the subject considers this candidate suspicious",
+                detail="a census: the subject considers this candidate suspicious, and "
+                "a weak label cannot say whether it should (#977)",
             )
+        if rows:
+            add(
+                outcome,
+                "uts39_sources",
+                len(sources),
+                of=len(scored),
+                detail="candidates that are UTS #39 confusable sources, any row",
+            )
+            add(
+                outcome,
+                "uts39_prototype_sources",
+                len(prototypes),
+                of=len(sources),
+                detail="sources whose prototype is one code point in another script — "
+                "the security-relevant overlap",
+            )
+            if det:
+                hit = [cp for cp in prototypes if any(_safe(fn, chr(cp)) for fn in det.values())]
+                missed = [cp for cp in prototypes if cp not in set(hit)]
+                names = ", ".join(
+                    f"U+{cp:04X} {unicodedata.name(chr(cp), '?')} → U+{rows[cp][0]:04X}"
+                    for cp in missed[:40]
+                )
+                add(
+                    outcome,
+                    "uts39_prototype_detected",
+                    len(hit),
+                    of=len(prototypes),
+                    higher_is_better=True,
+                    detail=("misses: " + names) if missed else "every prototype source is flagged",
+                )
+        else:
+            outcome.extra = {
+                **dict(outcome.extra),
+                "uts39": "confusables.txt not found; set $DISARM_META_CONFUSABLES",
+            }
         if surfaces:
             fn = next(iter(surfaces.values()))
             changed = sum(1 for cp in scored if _changed_by(fn, chr(cp)))

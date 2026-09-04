@@ -1838,6 +1838,84 @@ def test_the_confusable_job_is_not_the_highest_scoring_surface():
     )
 
 
+def test_uts39_prototype_rule_keeps_single_cross_script_rows_only():
+    """A source counts only when its UTS #39 prototype is one code point in another script (#977).
+
+    `ᄄ → ᄃᄃ` is a same-script decomposition, `Ø → O̸` a two-code-point one, and
+    `б → в` a same-script single; none of them is a spoof a detector should be
+    scored on. `ਠ → ठ` and `а → a` are.
+    """
+    from benchmarks.meta.suites.comparators import uts39_prototype_sources
+
+    rows = {
+        0x1104: (0x1103, 0x1103),  # HANGUL CHOSEONG SSANGTIKEUT -> two jamo
+        0x0A20: (0x0920,),  # GURMUKHI TTHA -> DEVANAGARI TTHA
+        0x00D8: (0x004F, 0x0338),  # O WITH STROKE -> O + combining solidus
+        0x0430: (0x0061,),  # CYRILLIC a -> LATIN a
+        0x0431: (0x0432,),  # CYRILLIC be -> CYRILLIC ve (same script)
+    }
+    assert uts39_prototype_sources([0x1104, 0x0A20, 0x00D8, 0x0430, 0x0431, 0x0041], rows) == [
+        0x0A20,
+        0x0430,
+    ]
+
+
+def test_weaponizing_unicode_scores_the_uts39_overlap_and_names_the_misses():
+    """Flagging a lone Hangul jamo is not coverage; missing a Gurmukhi→Devanagari row is (#977).
+
+    `flagged_by_a_detector` is a census now. The directed key is the single
+    cross-script prototypes read from the normative `confusables.txt`, with the
+    misses in its detail, so the disagreement the suite exists to surface is in
+    the report rather than behind a number that rewarded saying yes.
+    """
+    from benchmarks.meta.base import DATA, artifact
+    from benchmarks.meta.suites.comparators import (
+        WeaponizingUnicode,
+        uts39_prototype_sources,
+        uts39_rows,
+    )
+
+    suite = WeaponizingUnicode()
+    ready, why = suite.available()
+    if not ready:
+        pytest.skip(why)
+    table = artifact(DATA / "confusables.txt", env="DISARM_META_CONFUSABLES")
+    if table is None:
+        pytest.skip("confusables.txt not present")
+    report = run([suite], registered=1, subjects=[subjects.by_name("disarm")])
+    (out,) = report.outcomes
+    assert out.status is Status.OK, out.error
+    m = {x.key: x for x in out.measurements}
+    assert m["flagged_by_a_detector"].higher_is_better is None, "a weak label cannot direct a score"
+    assert m["rewritten_by_the_sanitizer"].higher_is_better is None
+    directed = [k for k, x in m.items() if x.higher_is_better is not None]
+    assert directed == ["uts39_prototype_detected"], directed
+    rows = uts39_rows(table)
+    scored = [
+        cp
+        for cp in (
+            int(line.split(",", 1)[0].strip()[2:], 16)
+            for line in suite.locate().read_text(encoding="utf-8", errors="replace").splitlines()
+            if line.strip().upper().startswith("U+")
+        )
+    ]
+    import unicodedata
+
+    scored = sorted(
+        {cp for cp in scored if unicodedata.category(chr(cp)) not in ("Co", "Cn", "Cs")}
+    )
+    expected = len(uts39_prototype_sources(scored, rows))
+    assert m["uts39_prototype_detected"].of == expected, (
+        "the denominator is derived from the file, not typed in"
+    )
+    assert m["uts39_sources"].of == len(scored)
+    assert m["uts39_prototype_sources"].of == m["uts39_sources"].value
+    # Coverage may only go up from here; the misses are named so a reader can see which rows.
+    assert m["uts39_prototype_detected"].value >= 17
+    if m["uts39_prototype_detected"].value < m["uts39_prototype_detected"].of:
+        assert m["uts39_prototype_detected"].detail.startswith("misses: U+")
+
+
 def test_the_prompt_hygiene_job_answers_with_the_declared_composition():
     """The bare subject's prompt-hygiene surface is the composition, not the preset.
 

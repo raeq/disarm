@@ -757,6 +757,18 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The meta-benchmark's `weaponizing-unicode` suite no longer rewards saying yes (#977).** Its
+  one directed key, `flagged_by_a_detector`, scored a detector for flagging any of 7,402
+  model-predicted lookalikes fed one code point at a time — 7,277 of which are not UTS #39
+  sources, and 547 of the rest have a multi-code-point prototype in their own script, so a
+  lone Hangul jamo counted as coverage. That key is now a census. Two censuses read from the
+  normative `confusables.txt` give the context (`uts39_sources` 586 of 7,402,
+  `uts39_prototype_sources` 35 of 586), and the one directed measurement,
+  `uts39_prototype_detected`, scores the 35 candidates whose prototype is a single code point
+  in another script and names the misses: disarm 17 of 35, with Gurmukhi→Devanagari,
+  Kannada→Telugu, Malayalam→Tamil, Myanmar→Malayalam, Georgian→Malayalam, Coptic→Greek and
+  four combining marks unflagged, the disagreement the suite was registered to surface.
+
 - **The leaderboard no longer scores a tool for having been asked more questions, and a
   detector's silence on plain ASCII is no longer a failure (#970).** Two independent faults,
   both in the harness rather than in any subject, and together they put `disarm` fifth of nine

@@ -193,5 +193,10 @@ class ScriptMeta(TypedDict):
     example: str
     context_aware: bool
 
+class ConfusableCoverage(TypedDict):
+    script: str
+    sources: int
+    folded: int
+
 LANG_META: dict[str, LangMeta]
 SCRIPT_META: dict[str, ScriptMeta]

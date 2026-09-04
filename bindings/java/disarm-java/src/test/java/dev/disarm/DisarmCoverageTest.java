@@ -137,6 +137,15 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void aClosedPipelineDoesNotReportANullPurpose() {
+        // `null` is a real answer — a hand-built pipeline has no purpose — so a stale
+        // handle has to be told apart from one, as `process` does (#962 review).
+        Pipeline closed = Disarm.getPipeline("llm_guardrail");
+        closed.close();
+        assertThrows(IllegalStateException.class, closed::purpose);
+    }
+
+    @Test
     void pipelinePurpose() {
         try (Pipeline rag = Disarm.getPipeline("rag_ingest");
                 Pipeline guard = Disarm.getPipeline("llm_guardrail")) {

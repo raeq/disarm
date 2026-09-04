@@ -133,3 +133,44 @@ def test_an_intervening_declaration_is_not_adjacency() -> None:
     """Two documented members in a row is the normal case and must stay silent."""
     ok = "const x = 1\n/** a. */\nexport function a(): void {}\n/** b. */\nexport function b(): void {}\n"
     assert _blocks_are_adjacent(ok) == []
+
+
+def test_ruby_doc_comments_name_the_method_they_export() -> None:
+    """A Ruby glue doc comment must name the singleton it is actually registered as.
+
+    Every function in `bindings/ruby/ext/disarm/src/lib.rs` is documented in the form
+    ``/// `Disarm._name(args)` — …`` and registered separately, at the bottom of the
+    file, with ``define_singleton_method("_name", function!(fn_name, arity))``. The two
+    are hundreds of lines apart, so a rename or a copy-paste can move one and not the
+    other, and nothing fails: the binding works, the comment is wrong, and a maintainer
+    grepping for the entry point finds a name that does not exist.
+
+    Caught by review on #966 — `is_canonical` was documented as `Disarm._canonical?` and
+    exported as `_is_canonical?`. One mismatch in 64 exported functions, which is exactly
+    the density that survives a reading.
+    """
+    import re
+
+    src = (ROOT / "bindings/ruby/ext/disarm/src/lib.rs").read_text(encoding="utf-8")
+
+    exported: dict[str, str] = {}
+    for pattern in (
+        r'define_singleton_method\(\s*"([^"]+)"\s*,\s*function!\(\s*(\w+)\s*,',
+        r'define_singleton_method\(\s*\n\s*"([^"]+)",\s*\n\s*function!\(\s*(\w+),',
+    ):
+        for match in re.finditer(pattern, src):
+            exported[match.group(2)] = match.group(1)
+    assert len(exported) > 50, f"parsed only {len(exported)} registrations; the parser is stale"
+
+    offenders = []
+    for match in re.finditer(
+        r"///\s*`Disarm\.(_[A-Za-z0-9_?]+)[`(][^\n]*\n(?:///[^\n]*\n)*?fn (\w+)", src
+    ):
+        documented, fn = match.group(1), match.group(2)
+        actual = exported.get(fn)
+        if actual is not None and actual != documented:
+            offenders.append(f"fn {fn}: documented as `{documented}`, exported as `{actual}`")
+
+    assert not offenders, (
+        "a Ruby doc comment names a method the file does not export:\n  " + "\n  ".join(offenders)
+    )

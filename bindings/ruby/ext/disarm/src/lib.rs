@@ -220,7 +220,7 @@ fn parse_policy(digit_policy: &str) -> Result<api::DigitPolicy, Error> {
     digit_policy.parse().map_err(|e| map_err(&e))
 }
 
-/// `Disarm._canonical?(text, preset)` — already its own canonical form (#730).
+/// `Disarm._is_canonical?(text, preset)` — already its own canonical form (#730).
 fn is_canonical(text: Wtf8Text, preset: String) -> Result<bool, Error> {
     api::is_canonical(&text, &preset).map_err(|e| map_err(&e))
 }

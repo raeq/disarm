@@ -757,6 +757,32 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **Every preset linked every table again, and had since #951 (#974).** `presets::apply_into`
+  is an `#[inline(always)]` match over a `const` `Step`, and the inlining is the whole
+  tree-shaking mechanism: it lets each call site fold the match to its one arm, so a
+  preset links only the tables its own steps reach (#695). #951 added two arms that
+  re-entered `apply_into` to resolve the digit policy — reasonably, since it kept one copy
+  of each fixed-point loop — and that made the function self-recursive. LLVM will not
+  `alwaysinline` a recursive function, so the attribute was dropped, the match stopped
+  folding, and the Hanzi pinyin and CLDR emoji tables came back into presets that reach
+  neither. **`strip_format` measured 662,087 bytes against 27,490**, and `canonicalize`,
+  `canonicalize_strict` and `strip_obfuscation` were red with it.
+
+  Nothing failed. Output was byte-identical, no key moved, and every test stayed green —
+  because the gate that measures this is `slow`-marked, `addopts` deselects `slow`, and no
+  workflow runs it. It caught #926 only because someone ran it by hand.
+
+  The two loops are free functions now, called by both the step arm and nothing else, so
+  the loop still lives once and no arm re-enters the dispatch. With the recursion gone the
+  two policy-carrying `Step` variants had no constructor left and are removed, taking the
+  match from 24 arms to 22. All six gated surfaces are green, and `strip_format` is back
+  to 27,490 bytes.
+
+  `tests/test_preset_step_dispatch.py` is the half that can run on every PR: it reads the
+  source for the one mechanism known to break the inlining, in milliseconds, and fails on
+  the exact shape #951 introduced. The wasm gate stays for the causes nobody has thought
+  of yet.
+
 - **The meta-benchmark's `weaponizing-unicode` suite no longer rewards saying yes (#977).** Its
   one directed key, `flagged_by_a_detector`, scored a detector for flagging any of 7,402
   model-predicted lookalikes fed one code point at a time — 7,277 of which are not UTS #39

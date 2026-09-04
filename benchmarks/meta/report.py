@@ -130,9 +130,12 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
         "set. Bradley-Terry strengths are fitted by Hunter's MM algorithm and use "
         "only the order of each pairwise result.",
         "",
-        f"Battery: **{len(board.items)}** benchmarks, **{len(board.subjects)}** "
-        f"subjects. {board.excluded_census_measurements} census measurements "
-        "excluded for having no direction.",
+        f"Battery: **{len(board.items)}** axes over "
+        f"**{len({i.suite for i in board.items})}** benchmarks, "
+        f"**{len(board.subjects)}** subjects — a benchmark that asks one cohort "
+        "of subjects more than the rest contributes one axis per cohort. "
+        f"{board.excluded_census_measurements} census measurements excluded for "
+        "having no direction.",
         "",
     ]
     if board.null_draws:
@@ -189,7 +192,11 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
         "| # | subject | composite | 95% CI | Bradley-Terry | benchmarks |",
         "|---|---|---|---|---|---|",
     ]
-    total = len(board.items)
+    # Benchmarks, not axes: one suite can contribute a transform axis and a
+    # detection axis (see `leaderboard.parcel`), and a tool without a detector
+    # answering "10 of 14" would read as a gap in its coverage rather than as a
+    # question it was never asked. Coverage is judged on the same count.
+    total = len({i.suite for i in board.items})
     for st in board.standings:
         name = f"`{st.subject}`"
         if st.control:
@@ -203,7 +210,7 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
         lines.append(
             f"| {position} | {name} | {composite} | "
             f"[{st.ci_low:.2f}, {st.ci_high:.2f}] | {st.bt_strength:.3f} | "
-            f"{st.items}/{total} |"
+            f"{st.suites}/{total} |"
         )
     lines += [
         "",
@@ -211,24 +218,28 @@ def _render_leaderboard(board: Leaderboard) -> list[str]:
         "|---|---|---|",
     ]
     for item in sorted(board.items, key=lambda i: -i.discrimination):
-        lines.append(f"| `{item.suite}` | {item.discrimination:.3f} | {item.key} |")
+        lines.append(f"| `{item.axis}` | {item.discrimination:.3f} | {item.key} |")
     lines += ["", "### Per benchmark", ""]
     lines += [
         "Each benchmark ranked on its own. These stand whether or not the "
         "composite does: averaging benchmarks needs them to measure one thing "
         "first, but ranking within one benchmark assumes nothing beyond that "
         "benchmark. Equal scores share a rank. A subject absent from a table was "
-        "not asked that question.",
+        "not asked that question. Where a suite asked one cohort of subjects "
+        "more than the rest — a detection score only the tools with a detector "
+        "can earn — it appears once per cohort, named for the measurements in "
+        "it, so a detector is ranked against detectors and a transform against "
+        "transforms rather than averaged across the two.",
         "",
     ]
     per = board.per_benchmark()
     for item in sorted(board.items, key=lambda i: -i.discrimination):
-        standings = per.get(item.suite, [])
+        standings = per.get(item.axis, [])
         if not standings:
             continue
         ranked = [st for st in standings if not (st.partial or st.control)]
         header = (
-            f"**`{item.suite}`** — discrimination {item.discrimination:.3f}, "
+            f"**`{item.axis}`** — discrimination {item.discrimination:.3f}, "
             f"{len(ranked)} ranked of {len(standings)} measured"
         )
         lines += [header, ""]

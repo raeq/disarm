@@ -674,6 +674,48 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **The leaderboard no longer scores a tool for having been asked more questions, and a
+  detector's silence on plain ASCII is no longer a failure (#970).** Two independent faults,
+  both in the harness rather than in any subject, and together they put `disarm` fifth of nine
+  on `mcp-tag-block-concealment` while it gave the best answer in the field to every question
+  that suite asks.
+
+  **A plain-text control is a false-positive check.** T1 there is the concealed instruction
+  written out in printable ASCII — the paper quotes it beside T7 precisely because the two
+  differ only in encoding. `detected_t1_plain` was directed higher-is-better, so a detector
+  that correctly stayed silent scored zero, and `confusable-homoglyphs` earned the point with
+  `is_confusable(T1) == True` on pure ASCII: a false positive counted as coverage, the shape
+  #957 had just removed from disarm's own detector. The key is now directed lower-is-better.
+  The recorded number still means "a detector fired", as the key name says; only the direction
+  moves, which is the orientation `controls_false_positive` already used on the
+  invisible-carrier comparator. A sweep of the other `detected_*` keys found no second case —
+  `flagged_by_a_detector` on the benign-prompt corpus is already an undirected census.
+
+  **Parcels are formed per cohort of subjects, not per suite.** Thirteen subjects answer that
+  suite's transform key; the two with a detector answer detection keys as well. Averaging both
+  into one parcel put a detector's *mean over its answers* against a transliterator's *single
+  answer*, and the mean cannot win: a key answered by two subjects is standardised on a sample
+  of two, where the sample standard deviation caps |z| at 0.707 — below what a thirteen-subject
+  key reaches. The completeness check already judged a subject against its peer cohort; the
+  score did not. Measurements are now grouped by which subjects answered them, and each group
+  is its own axis, so a detector is ranked against detectors and a transform against
+  transforms, and a tool answering both appears on both. Re-scoring the committed baseline:
+  `disarm` moves from 5th of 9 on that suite (z +0.185) to joint 1st of 8 on the transform
+  axis (+0.808) and 1st of 2 on the detection axis (+0.707).
+
+  **Coverage is counted in benchmarks, not axes.** Splitting a parcel adds an axis a
+  transform-only tool has no surface to answer, and counting axes would have marked every such
+  tool "partial coverage" — the exclusion error the peer-cohort rule exists to prevent,
+  arriving one step later in the pipeline. `Standing.suites` records what the fraction is taken
+  over.
+
+  **`per_benchmark()` is keyed by axis.** Keyed by suite, a second axis from the same suite
+  overwrote the first — a dict assignment, so the detection ranking would simply never have
+  appeared in the report. Both halves of a split suite are named, never just the smaller one:
+  a bare suite name silently meaning "the transform half" would be the same omission in the
+  report as in the score. The recorded baseline is unchanged either way — it stores
+  measurements, not parcels, and no measured value moves.
+
 - **The meta-benchmark's three composed subjects no longer strip every diacritic (#958).**
   Each passed `strip_zalgo=0` to `TextPipeline`, reading `0` as off; in disarm `0` is a cap
   of zero combining marks and off is `None`. The `review-display` composition, declared to

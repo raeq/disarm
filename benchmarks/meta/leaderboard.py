@@ -45,7 +45,11 @@ seven of the top ten discriminating items at r≈0.945 apiece, and it also infla
 Cronbach's alpha to 0.92 while Kendall's W sat at 0.29. That combination is the
 classic signature of redundant items, not of a coherent battery. Item parcelling
 is the standard remedy (Little, Cunningham, Shahar & Widaman, *To parcel or not
-to parcel*, Structural Equation Modeling 9(2), 2002).
+to parcel*, Structural Equation Modeling 9(2), 2002). Parcels are formed per
+*cohort* of subjects rather than per suite, because a suite does not ask every
+subject the same questions and averaging a detector's four answers against a
+transliterator's one scores the detector for having been asked more — see
+:func:`parcel`.
 
 **Controls are placed, not fitted.** The scale is computed from the tools alone
 and the controls are then projected onto it. A subject that deletes everything
@@ -148,12 +152,22 @@ class Item:
     scores: dict[str, float]  # subject -> oriented raw score
     discrimination: float = 0.0  # corrected item-total correlation
     z: dict[str, float] = field(default_factory=dict)
+    #: The benchmark identity this item is ranked under. A suite that asks one
+    #: cohort of subjects more questions than another yields several axes, and
+    #: they must not collide on the suite name — see :func:`parcel`. Empty means
+    #: the suite name, which is the case for every unsplit suite.
+    axis_label: str = ""
     #: subject -> the measurement keys it actually contributed to this parcel.
     member_keys: dict[str, set[str]] = field(default_factory=dict)
     #: Every key any subject contributed to this parcel.
     all_keys: set[str] = field(default_factory=set)
     #: subject -> the keys its own cohort answered. See :func:`parcel`.
     peer_keys: dict[str, set[str]] = field(default_factory=dict)
+
+    @property
+    def axis(self) -> str:
+        """What this item is ranked as, for keying and for the report."""
+        return self.axis_label or self.suite
 
     def complete(self, subject: str) -> bool:
         """Did ``subject`` answer every measurement its peers answered?
@@ -178,6 +192,9 @@ class Standing:
     ci_low: float
     ci_high: float
     items: int
+    #: How many *benchmarks* (suites) scored this subject. Coverage is judged on
+    #: this, not on `items`; see :func:`build`.
+    suites: int = 0
     control: bool = False
     #: Scored on too little of the battery to sit in the same ordering.
     partial: bool = False
@@ -262,7 +279,7 @@ class Leaderboard:
                     "attempt it, so the aggregate is measuring something other "
                     "than doing the job well"
                 )
-        zeroed = [i.suite for i in self.items if i.discrimination == 0.0]
+        zeroed = [i.axis for i in self.items if i.discrimination == 0.0]
         if zeroed:
             why.append(
                 f"the discrimination weighting has given zero weight to "
@@ -289,7 +306,12 @@ class Leaderboard:
         return self.usable and not self.blockers
 
     def per_benchmark(self) -> dict[str, list[BenchmarkStanding]]:
-        """A ranking for each benchmark on its own.
+        """A ranking for each benchmark on its own, keyed by axis.
+
+        The key is :attr:`Item.axis`, not the suite: a suite that asks a
+        detector-capable cohort more questions than the rest of the field
+        contributes one axis per cohort (see :func:`parcel`), and keying those
+        on the suite name would drop all but the last of them.
 
         Always publishable, even when the composite is not. The composite needs
         the benchmarks to measure one construct before averaging them; a single
@@ -349,7 +371,7 @@ class Leaderboard:
                         control=True,
                     )
                 )
-            out[item.suite] = standings
+            out[item.axis] = standings
         return out
 
     def separated_pairs(self) -> int:
@@ -431,6 +453,44 @@ def parcel(items: list[Item]) -> list[Item]:
     Seven correlated numbers from one suite are seven votes for one benchmark.
     Parcelling makes the unit of analysis the benchmark, which is what the
     leaderboard claims to aggregate over.
+
+    **One parcel per cohort, not per suite.** A suite does not ask every subject
+    the same questions: `mcp-tag-block-concealment` asks thirteen subjects
+    whether the payload was removed and two of them — the ones with a detector —
+    two further questions besides. Averaging those together put a detector-
+    capable tool's *mean over four answers* against a transliterator's *single
+    answer*, and the mean cannot win: a key answered by two subjects is
+    standardised on a sample of two, where the sample standard deviation caps
+    |z| at 0.707, below the +0.760 reachable on a thirteen-subject key. `disarm`
+    answered every question on that suite better than anyone and ranked 8 of 12.
+    Being asked more questions is not a handicap to be scored, so measurements
+    are grouped by *which subjects answered them* and each group becomes its own
+    axis. The detector-capable tools appear on both: ranked against the whole
+    field on the transform axis, and against the other detectors on the
+    detection axis. `Item.complete` is then trivially satisfied within a parcel,
+    and stays as the invariant it now asserts rather than the filter it was.
+
+    Two earlier attempts at this are worth keeping in view, because the cohort
+    split is what finally makes both unnecessary. Averaging a parcel over
+    whichever subset a subject answered scored a *different question* per
+    subject: `unidecode` outranked `disarm` on the word-joiner benchmark while
+    recovering 24.3% to its 43.2%, because disarm's average also carried a
+    detection score `unidecode` has no surface to earn. Judging completeness
+    against the union of every key any subject answered then marked all ten
+    transform-only subjects incomplete and left one tool on three benchmarks,
+    which collapsed the Pareto frontier to nothing and deleted the non-dominated
+    count from the report — being excluded for lacking a detector is the same
+    error as being scored zero for it, wearing the opposite sign. Splitting the
+    parcel removes the mixed average that caused the first and the ragged key
+    sets that caused the second.
+
+    Splitting is by exact answering-subject set, so it is deterministic and
+    needs no threshold. The cost is that one suite can contribute more than one
+    axis and thus more than one vote; that is accepted because the axes it
+    contributes are the ones its own subjects distinguish, which is the opposite
+    of the near-duplicate items parcelling exists to collapse. An axis only one
+    *library* answers self-neutralises: :func:`fit_basis` leaves it a single
+    fitted subject, so every z on it is zero and it weighs nothing.
     """
     grouped: dict[str, list[Item]] = {}
     for item in items:
@@ -448,46 +508,39 @@ def parcel(items: list[Item]) -> list[Item]:
             if _sd([i.scores[s] for s in subjects if s in i.scores and not is_control(s)]) > 0
         ]
         group = discriminating or group
-        # Average the *standardised* member scores, so measurements on wildly
-        # different scales contribute equally inside the parcel.
-        standardize(group, subjects, fit_on=subjects)
-        merged = {
-            s: _mean([i.z[s] for i in group if s in i.z])
-            for s in subjects
-            if any(s in i.z for i in group)
-        }
-        # Which measurements each subject actually answered. A parcel averaged
-        # over a subset scores a different question: `unidecode` outranked
-        # `disarm` on the word-joiner benchmark while recovering 24.3% to its
-        # 43.2%, because disarm's average also carried a detection score that
-        # `unidecode` has no surface to earn.
-        # Completeness is judged against a subject's PEERS, not against every
-        # subject that answered anything. `disarm` answers four directed
-        # measurements on the TAG-block suite because it has a detector; every
-        # transform-only subject answers two. Taking the union as the bar marked
-        # all ten of them incomplete and left one tool on three benchmarks, which
-        # collapsed the Pareto frontier to nothing and deleted the non-dominated
-        # count from the report. Being excluded for lacking a detector is the
-        # same error as being scored zero for it, wearing the opposite sign.
-        #
-        # Peers are subjects answering the same key set. A subject is complete
-        # when it answered everything its own cohort answered, so a detector is
-        # judged against detectors and a plain transform against transforms.
-        cohorts: dict[frozenset[str], set[str]] = {}
-        for subj in merged:
-            answered = frozenset(i.key for i in group if subj in i.z)
-            cohorts.setdefault(answered, set()).add(subj)
-        member_keys = {s: {i.key for i in group if s in i.z} for s in merged}
-        out.append(
-            Item(
-                suite=suite,
-                key=f"parcel({len(group)} measurement{'' if len(group) == 1 else 's'})",
-                scores=merged,
-                member_keys=member_keys,
-                all_keys={i.key for i in group},
-                peer_keys={s: set(k) for k, v in cohorts.items() for s in v},
+        # Peers are the subjects answering a measurement. Measurements sharing a
+        # peer set are one question asked of one cohort, and become one axis.
+        cohorts: dict[frozenset[str], list[Item]] = {}
+        for i in group:
+            cohorts.setdefault(frozenset(i.scores), []).append(i)
+        # A cohort of controls alone is not a benchmark: there is no tool in it
+        # to rank, and it would still take a vote in the battery.
+        cohorts = {c: m for c, m in cohorts.items() if any(not is_control(s) for s in c)}
+        split = len(cohorts) > 1
+        for cohort, members in sorted(
+            cohorts.items(), key=lambda kv: (-len(kv[0]), sorted(i.key for i in kv[1]))
+        ):
+            keys = sorted(i.key for i in members)
+            # Both halves are labelled when a suite splits, never just the
+            # smaller one: a bare suite name that silently meant "the transform
+            # half" would be the same omission in the report as in the score.
+            label = f"{suite} [{'+'.join(keys)}]" if split else suite
+            # Average the *standardised* member scores, so measurements on
+            # wildly different scales contribute equally inside the parcel.
+            standardize(members, subjects, fit_on=subjects)
+            merged = {s: _mean([i.z[s] for i in members]) for s in sorted(cohort)}
+            member_keys = {s: set(keys) for s in merged}
+            out.append(
+                Item(
+                    suite=suite,
+                    axis_label=label,
+                    key=f"parcel({len(members)} measurement{'' if len(members) == 1 else 's'})",
+                    scores=merged,
+                    member_keys=member_keys,
+                    all_keys=set(keys),
+                    peer_keys={s: set(keys) for s in merged},
+                )
             )
-        )
     return out
 
 
@@ -624,7 +677,7 @@ def axis_correlations(items: list[Item], subjects: Sequence[str]) -> dict[tuple[
             shared = [s for s in tools if s in a.z and s in b.z]
             if len(shared) < 3:
                 continue
-            out[(a.suite, b.suite)] = _pearson([a.z[s] for s in shared], [b.z[s] for s in shared])
+            out[(a.axis, b.axis)] = _pearson([a.z[s] for s in shared], [b.z[s] for s in shared])
     return out
 
 
@@ -940,9 +993,19 @@ def build(
         )
     # Fully-covered subjects rank; partially-covered ones are listed after, out
     # of the ordering, because their composite answers a smaller set of questions.
-    total_items = len(items)
+    #
+    # Coverage counts BENCHMARKS, not axes. A suite that splits into a transform
+    # axis and a detection axis (see `parcel`) adds an axis a transform-only tool
+    # has no surface to answer, and counting axes would push that tool towards
+    # `partial` for lacking a detector — the exclusion error that splitting the
+    # parcel exists to undo, arriving one step later. What coverage is for is a
+    # tool measured on one benchmark being placed above one measured on four,
+    # and suites answer that question directly.
+    total_suites = len({i.suite for i in items})
+    answered = {s: {i.suite for i in items if s in i.z} for s in subjects}
     for st in scored:
-        st.partial = total_items > 0 and (st.items / total_items) < MIN_COVERAGE
+        st.suites = len(answered.get(st.subject, set()))
+        st.partial = total_suites > 0 and (st.suites / total_suites) < MIN_COVERAGE
     # Ranked tools first, then partial coverage, then controls. Neither a
     # control nor a partially-measured subject may occupy a rank, because a rank
     # asserts it beat the things below it.

@@ -252,7 +252,28 @@ a single benchmark requires nothing beyond that benchmark. When the composite is
 blocked — which it currently is — the per-benchmark tables are the result. A
 subject scored on materially less of the battery than the others is listed but
 kept out of the composite ordering: one benchmark answered is not a better result
-than four answered.
+than four answered — and *materially less* is counted in benchmarks, never in
+axes, so a tool cannot become "partial" for lacking a detector.
+
+**A suite that asks one cohort more questions yields more than one axis.**
+`mcp-tag-block-concealment` asks thirteen subjects whether the concealed payload
+was removed, and the two with a detector two further questions besides. Averaged
+into one parcel, the detector's mean over its answers was set against a
+transliterator's single answer and could not win: a key answered by two subjects
+is standardised on a sample of two, where the sample standard deviation caps |z|
+at 0.707, below what a thirteen-subject key reaches. `disarm` gave the best
+answer in the field to every question that suite asks and ranked fifth on it.
+Measurements are therefore grouped by *which subjects answered them* and each
+group becomes its own axis, named for its measurements — so a detector is ranked
+against detectors and a transform against transforms, and a tool that answers
+both appears on both.
+
+**A detector scored on a plain-text control is scored for silence.** T1 in that
+suite is the concealed instruction written out in printable ASCII; nothing is
+hidden in it. A Unicode detector that fires there is reporting the words, so the
+key is directed lower-is-better, the same orientation the invisible-carrier
+comparator uses for its own `controls_false_positive`. Scored the other way it
+made correct silence a failure and counted a false positive as coverage.
 
 **The composite is not the only leaderboard, and it is the weakest one.** It
 assumes the benchmarks measure a single construct, which this battery is not

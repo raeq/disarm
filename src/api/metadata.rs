@@ -368,9 +368,12 @@ pub fn confusable_coverage(script: &str) -> Result<ConfusableCoverage, Error> {
     // The name echoed back is the identifier, not `ScriptRow::name`, which is a display
     // string — `CanadianAboriginal` has the display name "Canadian Aboriginal
     // Syllabics", and returning that would hand the caller a value no surface accepts.
+    // `SCRIPTS` is strictly sorted (asserted in `metadata::tests`), so this is a
+    // binary search rather than a scan of all 61.
     match crate::metadata::SCRIPTS
-        .iter()
-        .find(|name| **name == script)
+        .binary_search(&script)
+        .ok()
+        .map(|idx| crate::metadata::SCRIPTS[idx])
     {
         Some(name) => Ok(ConfusableCoverage {
             script: name,

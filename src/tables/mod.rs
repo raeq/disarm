@@ -830,7 +830,7 @@ pub(crate) fn prototype_census(script: &str) -> Option<(&'static str, u32, u32)>
     CONFUSABLE_PROTOTYPE_CENSUS
         .binary_search_by(|&(name, _, _)| name.cmp(script))
         .ok()
-        .map(|idx| CONFUSABLE_PROTOTYPE_CENSUS[idx])
+        .and_then(|idx| CONFUSABLE_PROTOTYPE_CENSUS.get(idx).copied())
 }
 
 /// Whether `ch` joins parts of one word — `Pd`, `Pc`, or `U+002E FULL STOP` (#750).

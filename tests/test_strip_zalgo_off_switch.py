@@ -2,10 +2,10 @@
 
 Every other `TextPipeline` step is switched with a boolean. `strip_zalgo` takes a cap
 on combining marks per base character, so the falsy-looking `0` permits none and
-removes every diacritic in the text. `benchmarks/meta` built three composed subjects
-with `strip_zalgo=0` reading it as off, and stripped the accents from 88 of 100
-JailbreakBench prompts and from a subject whose declared intent was to change nothing
-a reader can see (#959 fixed the harness; this pins the semantics it misread).
+removes every diacritic in the text. A caller in this repository read `0` as off and
+built three pipelines with it, one of them declared to change nothing a reader can see;
+every accented word in everything they touched came out unaccented (#959 fixed that
+caller, and this pins the semantics it misread).
 
 The same literal reads the other way in `PRESETS`, where the second position is the
 step's parameter rather than a switch: `("strip_zalgo", None)` there is a live step at

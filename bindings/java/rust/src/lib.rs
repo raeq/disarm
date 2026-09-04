@@ -1374,6 +1374,25 @@ pub fn pipelineWithDigitPolicy<'l>(
     .resolve::<Policy>()
 }
 
+/// What the named profile a handle was built from is for, or null (#860).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn pipelinePurpose<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, handle: jlong) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        // A stale handle must not read as "this pipeline has no purpose". `null` is a
+        // real answer here — a hand-built pipeline has none — so the two have to be told
+        // apart, the way `pipelineProcess` does (#962 review).
+        let registry = read_registry(&PIPELINES);
+        let Some(pipeline) = registry.get(&handle) else {
+            return Err(throw_invalid(env, "invalid or closed Pipeline handle"));
+        };
+        match pipeline.purpose() {
+            Some(p) => Ok(env.new_string(p)?.into()),
+            None => Ok(JObject::null()),
+        }
+    })
+    .resolve::<Policy>()
+}
+
 /// Run a pipeline handle over `text` (throws on a processing error or stale handle).
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn pipelineProcess<'l>(

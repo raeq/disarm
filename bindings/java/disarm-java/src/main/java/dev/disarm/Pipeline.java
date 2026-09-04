@@ -58,6 +58,22 @@ public final class Pipeline implements AutoCloseable {
         return new Pipeline(fresh);
     }
 
+    /**
+     * What the named profile this was built from is for, in one sentence, or {@code null}
+     * for a pipeline not built from a profile (#860).
+     *
+     * <p>{@link Disarm#listProfiles} returns names and the step list says what a pipeline
+     * <em>does</em>; neither says what it is <em>for</em>. It matters most where two
+     * profiles look alike and are not: {@code rag_ingest} recovers by transliteration and
+     * {@code llm_guardrail} by folding homoglyphs.
+     */
+    public String purpose() {
+        if (closed) {
+            throw new IllegalStateException("Pipeline has been closed");
+        }
+        return Native.pipelinePurpose(handle);
+    }
+
     /** Free the native handle. Idempotent. */
     @Override
     public void close() {

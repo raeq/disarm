@@ -659,6 +659,11 @@ class TestClassAPIs:
             "Text.value must be a property"
         )
 
+    def test_text_pipeline_has_purpose_property(self):
+        assert isinstance(inspect.getattr_static(disarm.TextPipeline, "purpose"), property), (
+            "TextPipeline.purpose must be a property"
+        )
+
     def test_text_pipeline_has_steps_property(self):
         assert isinstance(inspect.getattr_static(disarm.TextPipeline, "steps"), property), (
             "TextPipeline.steps must be a property"

@@ -170,6 +170,12 @@ def _cli_steps() -> set[str]:
     return set(re.findall(r'"(\w+)"', body.group(1))) | valued
 
 
+def test_the_not_a_step_exemptions_are_real_fields() -> None:
+    """Guard the exemption list: a typo here would silently widen the gate."""
+    fields = set(_profilespec_fields())
+    assert NOT_A_STEP <= fields, NOT_A_STEP - fields
+
+
 def test_the_source_parses_found_something() -> None:
     """A regex that matched nothing would make every test below vacuously pass."""
     fields = _profilespec_fields()
@@ -178,10 +184,22 @@ def test_the_source_parses_found_something() -> None:
     assert len(_cli_steps()) >= 12
 
 
+#: ProfileSpec fields that are metadata about the profile rather than something the
+#: pipeline *does*, so a composed `TextPipeline` has nothing to set. Kept explicit: a
+#: field is in scope unless it is listed here on purpose, which is what makes the gate
+#: below catch the next `strip_pua`.
+NOT_A_STEP = {
+    # #860: what the profile is for, in one sentence. A hand-built pipeline has no
+    # purpose to state — the caller composed it and knows why — so `TextPipeline` takes
+    # no such argument and `purpose` returns None there.
+    "purpose",
+}
+
+
 def test_every_profilespec_field_is_reachable_from_textpipeline() -> None:
     """#911's ask 3. The gate that would have caught `strip_pua` when it was added."""
     constructor = set(inspect.signature(disarm.TextPipeline.__init__).parameters) - {"self"}
-    missing = [f for f in _profilespec_fields() if f not in constructor]
+    missing = [f for f in _profilespec_fields() if f not in constructor and f not in NOT_A_STEP]
     assert not missing, (
         f"ProfileSpec fields with no TextPipeline argument: {missing}. "
         "A profile can ask for something a composed pipeline cannot."

@@ -3065,6 +3065,34 @@ class TextPipeline:
         return self._inner.process(text)
 
     @property
+    def purpose(self) -> str | None:
+        """What this profile is *for*, in one sentence — or ``None`` if hand-built (#860).
+
+        `list_profiles` returns names and `steps` says what a pipeline *does*; neither says
+        what it is for, which made the profiles the one part of the public surface a reader
+        could not evaluate without leaving the REPL. It matters most where two profiles look
+        alike and are not: ``rag_ingest`` has no confusables step — its recovery is
+        transliteration — so a Cyrillic look-alike of ``paypal`` romanizes to ``raural``,
+        where ``llm_guardrail`` folds it to ``paypal``. Choosing wrong there fails silently
+        and in the unsafe direction.
+
+        A ``TextPipeline`` assembled from flags returns ``None``: the caller composed it and
+        knows why.
+
+        Examples:
+            >>> get_pipeline("rag_ingest").purpose
+            'Normalizing retrieved documents for a RAG index, romanizing legitimate non-Latin text rather than folding homoglyphs onto Latin.'
+            >>> TextPipeline(fold_case=True).purpose is None
+            True
+
+            The list-with-purposes case is one line:
+
+            >>> {p: get_pipeline(p).purpose for p in list_profiles()}  # doctest: +ELLIPSIS
+            {'code_context': ...}
+        """
+        return self._inner.purpose()
+
+    @property
     def steps(self) -> list[tuple[str, str | None]]:
         """Return the ordered list of active pipeline steps.
 

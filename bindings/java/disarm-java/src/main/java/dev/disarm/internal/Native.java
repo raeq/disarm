@@ -175,6 +175,8 @@ public final class Native {
 
     public static native long pipelineWithDigitPolicy(long handle, String digitPolicy);
 
+    public static native String pipelinePurpose(long handle);
+
     public static native String pipelineProcess(long handle, String text);
 
     public static native void pipelineFree(long handle);

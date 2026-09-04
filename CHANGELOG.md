@@ -18,6 +18,22 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`TextPipeline.purpose`: every profile says what it is *for*, in one sentence (#860).**
+  `list_profiles()` returned names and the step list said what a pipeline *does*; neither said
+  what it is for, which made the profiles the one part of the public surface a reader could not
+  evaluate without leaving the REPL. It matters most where two profiles look alike and are not:
+  `rag_ingest` has no confusables step — its recovery is transliteration, so `раураl` romanizes
+  to `raural` — where `llm_guardrail` folds the same input to `paypal`. Choosing wrong there
+  fails silently and in the unsafe direction. Additive, so nothing breaks and `list_profiles()`
+  keeps returning strings; the list-with-purposes case is one line,
+  `{p: get_pipeline(p).purpose for p in list_profiles()}`, and is in that function's docstring.
+  Rust `api::Pipeline::purpose`, Python, Node, Ruby and Java — every surface with a pipeline
+  handle; the C ABI has none, so it is not owed one. A hand-built `TextPipeline` returns `None`:
+  the caller composed it and knows why. **The sentence is gated**, because two copies of one
+  sentence in this repository have parted company before: every purpose must appear verbatim on
+  `docs/policy-templates.md`, which also gained sections for `code_context`, `llm_guardrail`
+  and `rag_ingest` — three of the eight profiles were undocumented.
+
 - **`data/confusables_vision.tsv`: measured-visual confusable rows admitted by multi-font
   agreement, and the rule that admits them (#738).** The supplement pins one confusable-vision
   tranche by its `danger` weight, and that file has not moved since the pin, so the stated

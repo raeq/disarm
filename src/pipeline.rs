@@ -199,6 +199,10 @@ pub(crate) struct Pipeline {
     /// the position `digit_policy` holds on the key builders. Reported through `steps()`
     /// only when it is not the default, so every profile's default reads unchanged.
     digit_policy: confusables::DigitPolicy,
+    /// What the named profile this was built from is for, or empty for a hand-built
+    /// pipeline (#860). A `TextPipeline` assembled from flags has no purpose to state:
+    /// the caller composed it and knows why.
+    purpose: &'static str,
     lang: Option<String>,
     strict_iso9: bool,
     gost7034: bool,
@@ -352,6 +356,7 @@ impl Pipeline {
             // `resolve_deletions` would be a setting that never runs.
             resolve_cr: resolve_deletions && resolve_cr,
             digit_policy: confusables::DigitPolicy::Numeric,
+            purpose: "",
             normalize_form: normalize.map(std::borrow::ToOwned::to_owned),
             zalgo_max_marks,
             lang: lang.map(std::borrow::ToOwned::to_owned),
@@ -390,6 +395,11 @@ impl Pipeline {
         }
         self.digit_policy = digit_policy;
         Ok(self)
+    }
+
+    /// What the named profile this was built from is for, or `None` (#860).
+    pub(crate) fn purpose(&self) -> Option<&'static str> {
+        Some(self.purpose).filter(|p| !p.is_empty())
     }
 
     /// Return the ordered list of active pipeline steps and their parameters.
@@ -650,6 +660,19 @@ impl Pipeline {
 /// mirror [`Pipeline::new`].
 #[derive(Default)]
 struct ProfileSpec {
+    /// What the profile is *for*, in one sentence (#860).
+    ///
+    /// `list_profiles()` returns names and `explain()` returns a step list; neither says
+    /// what a profile is for, which made the profiles the one part of the public surface a
+    /// reader could not evaluate without leaving the REPL. That matters most where two
+    /// profiles look alike and are not: `rag_ingest` has no confusables step — its recovery
+    /// is transliteration — so a Cyrillic look-alike of `paypal` romanizes to `raural`
+    /// rather than folding to `paypal`, which `llm_guardrail` does. Choosing wrong there
+    /// fails silently and in the unsafe direction.
+    ///
+    /// Held to `docs/policy-templates.md` by `tests/test_profile_purpose.py`: every
+    /// sentence here appears on that page verbatim, so the two cannot drift.
+    purpose: &'static str,
     /// Resolve `BS`/`DEL` before anything else runs (#937).
     ///
     /// `true` for the profiles that screen untrusted text, where a run rendering as
@@ -720,6 +743,7 @@ impl ProfileSpec {
         // drift in the first place, so the value is now a shared constant rather than a
         // literal spelled out twice.
         pipeline.emoji_name_policy = emoji::NamePolicy::PIPELINE_BASELINE;
+        pipeline.purpose = self.purpose;
         Ok(pipeline)
     }
 }
@@ -739,6 +763,7 @@ const PROFILE_NAMES: &[&str] = &[
 fn profile_spec(name: &str) -> Option<ProfileSpec> {
     Some(match name {
         "scholarly_cyrillic_iso9" => ProfileSpec {
+            purpose: "Academic publishing, linguistic research, library cataloging of Cyrillic texts.",
             normalize: Some("NFKC"),
             resolve_deletions: false,
             resolve_cr: false,
@@ -751,6 +776,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             ..ProfileSpec::default()
         },
         "library_catalog_key_eu" => ProfileSpec {
+            purpose: "European public library catalog deduplication, bibliographic key generation.",
             normalize: Some("NFKC"),
             resolve_deletions: false,
             resolve_cr: false,
@@ -764,6 +790,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             ..ProfileSpec::default()
         },
         "normalize_web_input" => ProfileSpec {
+            purpose: "Lightweight Unicode normalization of web form input (NFKC + confusable-folding).",
             normalize: Some("NFKC"),
             resolve_deletions: false,
             resolve_cr: false,
@@ -773,6 +800,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             ..ProfileSpec::default()
         },
         "ml_corpus_normalize" => ProfileSpec {
+            purpose: "NLP/ML text preprocessing, corpus normalization, embedding preparation.",
             normalize: Some("NFKC"),
             resolve_deletions: false,
             resolve_cr: false,
@@ -785,6 +813,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
             ..ProfileSpec::default()
         },
         "search_index" => ProfileSpec {
+            purpose: "Full-text search index generation, cross-language search keys.",
             normalize: Some("NFKC"),
             resolve_deletions: false,
             resolve_cr: false,
@@ -816,6 +845,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         // No NFKC either: it rewrites fullwidth forms and ligatures, which changes source
         // text, and the compatibility class is reported by the `compat_fold` kind.
         "code_context" => ProfileSpec {
+            purpose: "Screening source code without rewriting it: the homoglyph class is reported rather than folded, because line structure, indentation and case are the contract.",
             strip_bidi: true,
             strip_zero_width: Some(true),
             strip_control: Some(true),
@@ -843,6 +873,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         //
         // Naming stays reachable through `demojize()` and `TextPipeline(demojize=True)`.
         "llm_guardrail" => ProfileSpec {
+            purpose: "Screening untrusted text before it reaches a model prompt, folding homoglyphs onto the term they imitate.",
             normalize: Some("NFKC"),
             resolve_deletions: true,
             resolve_cr: false,
@@ -869,6 +900,7 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         // mangling it into mixed-script gibberish. For homoglyph-spoof folding
         // (fold the spoof onto the term it imitates) use `llm_guardrail`.
         "rag_ingest" => ProfileSpec {
+            purpose: "Normalizing retrieved documents for a RAG index, romanizing legitimate non-Latin text rather than folding homoglyphs onto Latin.",
             normalize: Some("NFKC"),
             resolve_deletions: true,
             resolve_cr: false,
@@ -914,6 +946,7 @@ mod tests {
             zalgo_max_marks: None,
             resolve_cr: false,
             digit_policy: confusables::DigitPolicy::Numeric,
+            purpose: "",
             lang: None,
             strict_iso9: false,
             gost7034: false,

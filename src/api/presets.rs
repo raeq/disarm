@@ -275,6 +275,26 @@ impl Pipeline {
         self.inner.process(text).map_err(Error::from)
     }
 
+    /// What this profile is for, in one sentence — or `None` for a pipeline that was not
+    /// built from a named profile (#860).
+    ///
+    /// [`list_profiles`] returns names and the step list says what a profile *does*;
+    /// neither says what it is *for*, which made the profiles the one part of the surface
+    /// a reader could not evaluate without leaving the REPL. It matters most where two
+    /// profiles look alike and are not — `rag_ingest` recovers by transliteration and
+    /// `llm_guardrail` by folding homoglyphs, so choosing wrong fails silently and in the
+    /// unsafe direction.
+    ///
+    /// ```
+    /// use disarm::api::get_pipeline;
+    /// let guard = get_pipeline("llm_guardrail").unwrap();
+    /// assert!(guard.purpose().unwrap().contains("before it reaches a model prompt"));
+    /// ```
+    #[must_use]
+    pub fn purpose(&self) -> Option<&'static str> {
+        self.inner.purpose()
+    }
+
     /// Fix the digit policy the profile's confusable passes fold under (#646).
     ///
     /// A profile is a resolved pipeline and [`Pipeline::process`] takes text and nothing

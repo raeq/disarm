@@ -76,6 +76,34 @@ describe('editDistance and nearestMatch (#894)', () => {
   })
 })
 
+describe('Pipeline.purpose (#860)', () => {
+  test('says what a profile is for, and null when hand-built', () => {
+    // The pair a reader confuses: one romanizes, the other folds.
+    expect(disarm.getPipeline('rag_ingest').purpose).toMatch(/rather than folding/)
+    expect(disarm.getPipeline('llm_guardrail').purpose).toMatch(/folding homoglyphs/)
+    expect(disarm.getPipeline('rag_ingest').process('\u0440\u0430\u0443\u0440\u0430l')).toBe('raural')
+    expect(disarm.getPipeline('llm_guardrail').process('\u0440\u0430\u0443\u0440\u0430l')).toBe('paypal')
+  })
+  test('every profile Node can name states one', () => {
+    // `listProfiles` is deliberately not on the Node surface (a scope decision in
+    // scripts/parity.py), so the names are spelled out here rather than iterated — an
+    // empty loop would have asserted nothing at all.
+    expect(disarm.listProfiles).toBeUndefined()
+    for (const name of [
+      'code_context',
+      'library_catalog_key_eu',
+      'llm_guardrail',
+      'ml_corpus_normalize',
+      'normalize_web_input',
+      'rag_ingest',
+      'scholarly_cyrillic_iso9',
+      'search_index',
+    ]) {
+      expect(disarm.getPipeline(name).purpose).toBeTruthy()
+    }
+  })
+})
+
 describe('Pipeline.withDigitPolicy (#646)', () => {
   test('folds under the policy, and refuses one the profile cannot run', () => {
     const spoof = 'g\u0A66ogle'

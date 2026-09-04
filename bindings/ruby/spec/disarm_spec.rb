@@ -83,6 +83,17 @@ RSpec.describe Disarm do
     end
   end
 
+  describe "Disarm::Pipeline#purpose (#860)" do
+    it "says what a profile is for, and the confusable pair says how it differs" do
+      rag = Disarm.get_pipeline("rag_ingest")
+      guard = Disarm.get_pipeline("llm_guardrail")
+      expect(rag.purpose).to match(/rather than folding/)
+      expect(guard.purpose).to match(/folding homoglyphs/)
+      expect(rag.process("\u0440\u0430\u0443\u0440\u0430l")).to eq("raural")
+      expect(guard.process("\u0440\u0430\u0443\u0440\u0430l")).to eq("paypal")
+    end
+  end
+
   describe "Disarm::Pipeline#with_digit_policy (#646)" do
     it "folds under the policy, and refuses one the profile cannot run" do
       spoof = "g\u0A66ogle"

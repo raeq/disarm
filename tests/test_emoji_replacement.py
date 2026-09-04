@@ -77,6 +77,16 @@ class TestTheReplacementIsVerbatim:
     def test_any_string_goes_in(self) -> None:
         assert replace_emoji("aa🔥bb", "[emoji]") == "aa[emoji]bb"
 
+    def test_a_keycap_belongs_only_to_a_keycap_base(self) -> None:
+        """UTS #51 defines the sequence for `0`-`9`, `#` and `*`, and nothing else.
+
+        A combining keycap after any other emoji is a stray mark, not part of a sequence,
+        so it is left where it is rather than absorbed into the emoji beside it.
+        """
+        assert replace_emoji("x1️⃣y") == "xy"
+        assert replace_emoji("x☺️⃣y") == "x⃣y"
+        assert replace_emoji("x🔥⃣y") == "x⃣y"
+
     def test_a_lone_regional_indicator_is_an_emoji_and_a_pair_is_one_emoji(self) -> None:
         """Each indicator is `Emoji_Presentation=Yes`, so one goes on its own.
 

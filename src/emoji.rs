@@ -419,7 +419,11 @@ fn presentation_len_at(window: &[char]) -> Option<usize> {
     loop {
         match window.get(len) {
             Some(&c) if c == VS16 || c == VS15 || is_skin_tone(c) || is_tag(c) => len += 1,
-            Some(&c) if c == KEYCAP => len += 1,
+            // No `KEYCAP` arm. UTS #51 defines the keycap sequence only for the ten
+            // digits, `#` and `*`, which the branch above already answered. Consuming
+            // one here would make `\u{263A}\u{FE0F}\u{20E3}` — an emoji followed by a
+            // stray combining mark — one emoji, and remove a character that is not part
+            // of any sequence the standard defines.
             Some(&c) if c == ZWJ => match presentation_len_at(&window[len + 1..]) {
                 Some(joined) => len += 1 + joined,
                 None => break,

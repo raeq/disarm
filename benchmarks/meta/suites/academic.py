@@ -587,7 +587,10 @@ class TagBlockConcealment(SuiteBase):
             "footing as the fullwidth chat-template spellings. The visible label "
             "'Formats code neatly.' is the paper's own. T1 (the same instruction "
             "in plain ASCII) is scored beside T7, because the paper's point is "
-            "that they differ only in encoding."
+            "that they differ only in encoding — and it is scored as a "
+            "false-positive control, since it carries no non-ASCII code point "
+            "and a detector firing on it is reporting the words, not an "
+            "encoding."
         ),
         reproduces="Listing 1 (tag_encode / conceal) from the arXiv source bundle",
     )
@@ -632,17 +635,34 @@ class TagBlockConcealment(SuiteBase):
             return any(self.TAG_BASE <= ord(c) <= self.TAG_BASE + 0x7F for c in text)
 
         if det:
-            for label, probe in (("t7_concealed", concealed), ("t1_plain", plain)):
-                fired = any(_fires(fn, probe) for fn in det.values())
-                add(
-                    outcome,
-                    f"detected_{label}",
-                    1.0 if fired else 0.0,
-                    of=1.0,
-                    higher_is_better=True,
-                    detail="a detector reports the vector"
-                    + (" — the invisible one" if label == "t7_concealed" else ""),
-                )
+            add(
+                outcome,
+                "detected_t7_concealed",
+                1.0 if any(_fires(fn, concealed) for fn in det.values()) else 0.0,
+                of=1.0,
+                higher_is_better=True,
+                detail="a detector reports the vector — the invisible one",
+            )
+            # T1 is the same instruction with nothing hidden in it: printable
+            # ASCII, no non-Latin script, no invisible carrier. A Unicode
+            # detector that fires here is reporting the words, which is not what
+            # any of these detectors claim to do. Scored higher-is-better it
+            # made silence a failure and rewarded `confusable-homoglyphs` for
+            # `is_confusable(T1) == True` on pure ASCII — a false positive
+            # counted as coverage, the shape #957 removed from disarm's own
+            # detector. The number recorded still means "a detector fired", as
+            # the key says; the direction says firing here is the error. Same
+            # orientation as `controls_false_positive` on the invisible-carrier
+            # comparator, which is the corpus author's convention.
+            add(
+                outcome,
+                "detected_t1_plain",
+                1.0 if any(_fires(fn, plain) for fn in det.values()) else 0.0,
+                of=1.0,
+                higher_is_better=False,
+                detail="a detector fires on the plain-ASCII control — a false "
+                "positive: T1 hides nothing, so silence is the right answer",
+            )
         if surfaces:
             fn = next(iter(surfaces.values()))
             cleaned = _apply(fn, concealed)

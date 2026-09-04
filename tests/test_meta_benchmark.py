@@ -2163,3 +2163,215 @@ def test_an_uninstalled_subject_has_no_capabilities_and_does_not_raise():
     suite = next(s for s in registry.all_suites() if s.MULTI_SUBJECT)
     supported, why = suite.supports(subject)
     assert not supported and why
+
+
+# --- cohort parcelling and the plain-ASCII control (#970) -------------------
+
+
+def _keyed(subject: str, suite: str, key: str, value: float, higher: bool = True) -> Outcome:
+    from benchmarks.meta.protocol import Measurement, Method
+
+    return Outcome(
+        suite=suite,
+        family=Family.NORMATIVE,
+        provenance=Provenance(
+            origin="o", citation="c", url="http://x", version="1", licence="l", issues=(1,)
+        ),
+        method=Method(subject=subject, subject_version="1"),
+        population=10,
+        measurements=[Measurement(key=key, value=value, of=1.0, higher_is_better=higher)],
+    )
+
+
+def _tag_shaped_outcomes() -> list[Outcome]:
+    """The `mcp-tag-block-concealment` shape from #970, in miniature.
+
+    Thirteen subjects answer the transform key; two of them — the ones with a
+    detector — answer a detection key as well. `withdet` gives the best answer
+    to every question asked: it removes the payload outright, and it stays
+    silent on the plain-ASCII control that hides nothing.
+    """
+    outs = [
+        _keyed("withdet", "tag", "payload_removed", 1.0),
+        _keyed("otherdet", "tag", "payload_removed", 0.6),
+    ]
+    outs += [_keyed(f"plain{i}", "tag", "payload_removed", 1.0 - 0.05 * i) for i in range(11)]
+    # Directed lower-is-better: firing on plain ASCII is a false positive.
+    outs += [
+        _keyed("withdet", "tag", "detected_plain", 0.0, higher=False),
+        _keyed("otherdet", "tag", "detected_plain", 1.0, higher=False),
+    ]
+    return outs
+
+
+def test_a_detection_key_and_a_transform_key_are_separate_axes():
+    """Being asked more questions is not a handicap to be scored.
+
+    Averaged into one parcel, a detector's mean over two answers could not reach
+    a transliterator's single answer: a two-subject key standardised on a sample
+    of two caps |z| at 0.707, below the +0.76 a thirteen-subject key reaches. So
+    `disarm` answered every question on the TAG-block suite better than anyone
+    and ranked 8 of 12.
+    """
+    items = leaderboard.parcel(leaderboard.collect(_tag_shaped_outcomes()))
+    assert len(items) == 2, "one axis per cohort of subjects, not one per suite"
+    by_axis = {i.axis: i for i in items}
+    transform = by_axis["tag [payload_removed]"]
+    detection = by_axis["tag [detected_plain]"]
+    assert len(transform.scores) == 13
+    assert set(detection.scores) == {"withdet@1", "otherdet@1"}
+    assert all(i.suite == "tag" for i in items), "the suite is still recorded"
+    # Every subject in a cohort answered everything the cohort answered, so the
+    # completeness check is now an invariant rather than a filter.
+    for item in items:
+        assert all(item.complete(s) for s in item.scores)
+
+
+def test_answering_the_detection_key_too_never_costs_the_transform_rank():
+    """Scope (a) of #970: more answers, never a lower place."""
+    board = leaderboard.build(_tag_shaped_outcomes(), bootstrap=20)
+    per = board.per_benchmark()
+    transform = per["tag [payload_removed]"]
+    best = min(st.rank for st in transform if not st.partial and not st.control)
+    withdet = next(st for st in transform if st.subject == "withdet@1")
+    assert withdet.rank == best, (
+        "a subject that answers the transform key perfectly and the detection "
+        "key correctly must rank no lower than one that answers the transform "
+        "key alone"
+    )
+
+
+def test_a_detector_firing_on_the_plain_control_does_not_outrank_silence():
+    """Scope (b) of #970: a false positive is not coverage."""
+    board = leaderboard.build(_tag_shaped_outcomes(), bootstrap=20)
+    detection = board.per_benchmark()["tag [detected_plain]"]
+    order = [st.subject for st in detection if not st.control]
+    assert order[0] == "withdet@1", (
+        "silence on a vector that hides nothing is the right answer; firing on "
+        "it is reporting the words, not an encoding"
+    )
+    assert order[1] == "otherdet@1"
+
+
+def test_two_axes_from_one_suite_do_not_collide_on_the_suite_name():
+    """`per_benchmark` is keyed by axis; keying it by suite dropped one.
+
+    Silently: a dict assignment, so the detection axis simply never appeared in
+    the report and its ranking went unpublished.
+    """
+    board = leaderboard.build(_tag_shaped_outcomes(), bootstrap=20)
+    assert len(board.per_benchmark()) == len(board.items) == 2
+    labels = set(board.per_benchmark())
+    assert labels == {"tag [payload_removed]", "tag [detected_plain]"}, (
+        "both halves are named, never just the smaller one"
+    )
+    # And the pairwise correlation table cannot key two axes to (suite, suite).
+    for pair in board.correlations:
+        assert pair[0] != pair[1]
+
+
+def test_an_unsplit_suite_keeps_its_bare_name():
+    outs = [_keyed(s, "s", "m", v) for s, v in (("a", 0.9), ("b", 0.5), ("c", 0.1))]
+    (item,) = leaderboard.parcel(leaderboard.collect(outs))
+    assert item.axis == "s", "a suite that asks everyone the same questions is one axis"
+
+
+def test_coverage_counts_benchmarks_so_a_split_axis_is_not_a_penalty():
+    """Splitting a parcel must not re-exclude the subject it was split for.
+
+    Coverage over *axes* would mark every transform-only tool partial for
+    lacking a detector — the same exclusion the peer-cohort completeness check
+    exists to prevent, arriving one step later in the pipeline.
+    """
+    outs = _tag_shaped_outcomes()
+    # Four more suites so the battery clears MIN_PARCELS, all asking everyone
+    # the same question.
+    for i in range(4):
+        for name in ["withdet", "otherdet", *[f"plain{j}" for j in range(11)]]:
+            outs.append(_keyed(name, f"wide{i}", "m", 0.5))
+    board = leaderboard.build(outs, bootstrap=20)
+    partial = [st.subject for st in board.standings if st.partial]
+    assert partial == [], f"no subject is partial here; got {partial}"
+    plain0 = next(st for st in board.standings if st.subject == "plain0@1")
+    assert plain0.suites == 5, "scored on all five benchmarks"
+    assert plain0.items == 5, "and on five of the six axes, having no detector"
+    # And the report says five of five, not five of six: a question it was never
+    # asked is not a gap in what it answered.
+    md = render_markdown(
+        RunReport(
+            outcomes=outs,
+            selected=len(outs),
+            registered=len(outs),
+            subjects=sorted({o.method.subject_key for o in outs}),
+        ),
+        leaderboard=board,
+    )
+    assert "| 5/5 |" in md and "| 5/6 |" not in md
+    assert "**6** axes over **5** benchmarks" in md
+
+
+def test_the_plain_ascii_control_is_scored_as_a_false_positive():
+    """`detected_t1_plain` is directed lower-is-better in the suite itself.
+
+    T1 is the concealed instruction written out in printable ASCII. A Unicode
+    detector that fires on it is reporting the words, and scored the other way
+    round that reads as coverage — the shape #957 removed from disarm's own
+    detector, rewarded here.
+    """
+    from benchmarks.meta.subjects import Role
+
+    class OverEager(subjects._Base):
+        ROLES = {Role.SANITIZER: "strip"}
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.info = subjects.SubjectInfo(
+                name="over-eager", version="0", origin="", url="", role="fires on everything"
+            )
+
+        def available(self):
+            return (True, "")
+
+        def detectors(self):
+            return {"anything": lambda text: True}
+
+        def transforms(self):
+            return {"strip": lambda text: text}
+
+        def role(self, which, job=None):
+            return self.transforms() if which == Role.SANITIZER else {}
+
+    outcome = academic.TagBlockConcealment().run(subject=OverEager())
+    got = {m.key: m for m in outcome.measurements}
+    t1 = got["detected_t1_plain"]
+    assert t1.higher_is_better is False, (
+        "firing on the plain-ASCII control is a false positive, not coverage"
+    )
+    assert t1.value == 1.0, "the number still means 'a detector fired', as the key says"
+    assert got["detected_t7_concealed"].higher_is_better is True
+
+
+def test_a_control_never_sets_the_scale_inside_a_parcel():
+    """ "Controls are placed, not fitted" holds within a parcel too.
+
+    `parcel` passed the full subject list as the standardisation basis, which
+    overrode `standardize`'s own control exclusion. `null-baseline` deletes all
+    input and so sits several standard deviations out; letting it set the units
+    compresses every real tool into a narrow band near the mean, and that
+    compression is applied *before* the members are averaged, so it reweights
+    the parcel. Caught in review on #970.
+    """
+    outs = [
+        _keyed("a", "s", "m", 1.0),
+        _keyed("b", "s", "m", 0.0),
+        _keyed("null-baseline", "s", "m", -100.0),
+    ]
+    (item,) = leaderboard.parcel(leaderboard.collect(outs))
+    # Two tools fitted on themselves are one sample standard deviation apart:
+    # z = ±0.707. Fitted with the control in the basis they land 0.017 apart.
+    gap = item.scores["a@1"] - item.scores["b@1"]
+    assert gap == pytest.approx(2 / math.sqrt(2), abs=0.01), (
+        f"the tools set the units, so they separate by 1.414; got {gap:.3f}"
+    )
+    # The control is still placed on that scale, just not fitted to it.
+    assert item.scores["null-baseline@1"] < -100

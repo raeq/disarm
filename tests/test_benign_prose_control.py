@@ -99,11 +99,25 @@ def test_the_fold_still_rewrites_what_the_detector_now_ignores(char: str) -> Non
     assert disarm.find_confusables(char) == []
 
 
-def test_every_printable_ascii_character_is_clean() -> None:
-    """The rule, swept: U+0021-U+007E is never a detection, whatever the table gains."""
-    firing = [chr(c) for c in range(0x21, 0x7F) if disarm.is_confusable(chr(c))]
+#: The four target scripts disarm ships a fold table for.
+TARGETS = ["latin", "cyrillic", "arabic", "hebrew"]
+
+
+@pytest.mark.parametrize("target", TARGETS)
+def test_every_printable_ascii_character_is_clean(target: str) -> None:
+    """The rule, swept over every target: U+0021-U+007E is never a detection.
+
+    Target-agnostic on purpose — the skip is a property of the character, not of the table
+    it was going to be looked up in, so a table gained for another script cannot start
+    reporting quoted prose (#960 review).
+    """
+    firing = [
+        chr(c) for c in range(0x21, 0x7F) if disarm.is_confusable(chr(c), target_script=target)
+    ]
     assert firing == []
-    located = [chr(c) for c in range(0x21, 0x7F) if disarm.find_confusables(chr(c))]
+    located = [
+        chr(c) for c in range(0x21, 0x7F) if disarm.find_confusables(chr(c), target_script=target)
+    ]
     assert located == []
 
 

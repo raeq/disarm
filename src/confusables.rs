@@ -506,17 +506,24 @@ mod tests {
     /// gains later — the three rows that exist today are `"`, `` ` `` and `|`.
     #[test]
     fn printable_ascii_is_not_a_detection() {
-        for cp in 0x21u32..0x7Fu32 {
-            let ch = char::from_u32(cp).expect("ASCII is always a scalar value");
-            let s = ch.to_string();
-            assert!(
-                !is_confusable(&s, "latin").unwrap(),
-                "U+{cp:04X} {ch:?} is reported as confusable"
-            );
-            assert!(
-                find_confusables(&s, "latin", &[]).unwrap().is_empty(),
-                "U+{cp:04X} {ch:?} is located as confusable"
-            );
+        // Every supported target, not just Latin: `skipped_by_detection` is target-agnostic
+        // and the contract is stated that way, so a table gained for another script must
+        // not start reporting quoted prose either (#960 review).
+        for target in crate::api::TargetScript::ALL {
+            for cp in 0x21u32..0x7Fu32 {
+                let ch = char::from_u32(cp).expect("ASCII is always a scalar value");
+                let s = ch.to_string();
+                assert!(
+                    !is_confusable(&s, target.as_str()).unwrap(),
+                    "U+{cp:04X} {ch:?} is reported as confusable for {target:?}"
+                );
+                assert!(
+                    find_confusables(&s, target.as_str(), &[])
+                        .unwrap()
+                        .is_empty(),
+                    "U+{cp:04X} {ch:?} is located as confusable for {target:?}"
+                );
+            }
         }
     }
 

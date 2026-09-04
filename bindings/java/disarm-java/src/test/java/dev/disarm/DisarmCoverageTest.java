@@ -172,6 +172,17 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void isCanonicalIsTheVerificationPath() {
+        assertTrue(Disarm.isCanonical("paypal"));
+        assertFalse(Disarm.isCanonical("\uFF50aypal")); // fullwidth p
+        // A compatibility ideograph the detector calls clean and canonicalize rewrites.
+        assertFalse(Disarm.hasAnomalies("\uFA10", java.util.List.of()));
+        assertFalse(Disarm.isCanonical("\uFA10"));
+        assertThrows(DisarmInvalidArgumentException.class, () -> Disarm.isCanonical("x", "nope"));
+        assertThrows(NullPointerException.class, () -> Disarm.isCanonical("x", null));
+    }
+
+    @Test
     void catalogKeyOverloads() {
         assertFalse(Disarm.catalogKey("Dostoevsky").isBlank());
         assertFalse(Disarm.catalogKey("Достоевский", "ru").isBlank()); // Достоевский

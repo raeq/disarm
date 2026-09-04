@@ -208,6 +208,19 @@ module Disarm
       hit && { value: hit[0], distance: hit[1] }
     end
 
+    # Whether `text` is already its own canonical form under `preset:` (#730).
+    #
+    # The verification-path counterpart to the presets: text in, normalized text out is
+    # the generation path, and this is the question a caller asks about bytes that arrive
+    # already bound. `has_anomalies?` is not this predicate — 142,760 assigned code points are
+    # reported clean by the detector and are not their own canonical form.
+    #
+    # `preset:` is any name in the preset registry or any profile. Raises
+    # Disarm::InvalidArgument on an unknown one.
+    def canonical?(text, preset: "canonicalize")
+      translate_errors { _is_canonical?(text, preset.to_s) }
+    end
+
     # Strip diacritics ("café" → "cafe").
     def strip_accents(text)
       translate_errors { _strip_accents(text) }

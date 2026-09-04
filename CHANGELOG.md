@@ -33,6 +33,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   sentence in this repository have parted company before: every purpose must appear verbatim on
   `docs/policy-templates.md`, which also gained sections for `code_context`, `llm_guardrail`
   and `rag_ingest` — three of the eight profiles were undocumented.
+- **`is_canonical` reaches every binding (#730 §5).** The verification-path predicate
+  shipped in Rust and Python and stopped there, so five surfaces could ask disarm to
+  normalize text and not to check whether it already was. Ruby `canonical?`, Node
+  `isCanonical`, Java and Kotlin `isCanonical`, and on the C ABI `disarm_is_canonical`
+  returning a **tri-state** — `1` canonical, `0` not, `-1` unknown preset — because every
+  other predicate there is infallible and this one takes a name that can be wrong, where
+  answering `0` would report "not canonical" for a question that was never asked. It joins
+  the parity floor complete on all seven. Each binding's test pins the asymmetry the
+  predicate exists for: `U+FA10` is reported clean by the detector and is not its own
+  canonical form.
 
 - **`data/confusables_vision.tsv`: measured-visual confusable rows admitted by multi-font
   agreement, and the rule that admits them (#738).** The supplement pins one confusable-vision

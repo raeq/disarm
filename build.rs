@@ -823,6 +823,18 @@ fn generate_prototype_census(tsv_path: &Path, out_path: &Path) {
         tsv_path.display()
     );
     rows.sort_unstable();
+    // The lookup binary-searches this table, which is only meaningful if each script
+    // appears once. A duplicated row would make the answer depend on where the search
+    // landed, and the total assert above cannot see a row that was split in two.
+    for pair in rows.windows(2) {
+        assert_ne!(
+            pair[0].0,
+            pair[1].0,
+            "{}: script {:?} has more than one row",
+            tsv_path.display(),
+            pair[0].0
+        );
+    }
     let mut code =
         String::from("pub(crate) static CONFUSABLE_PROTOTYPE_CENSUS: &[(&str, u32, u32)] = &[\n");
     for (script, sources, folded) in &rows {

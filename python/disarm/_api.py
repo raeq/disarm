@@ -2351,9 +2351,10 @@ def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[
             disarm identify"; this parameter answers "which scripts can disarm fold
             *toward*", and those are different questions. A script with no bundled table
             is refused rather than answered with a count, because a number determined
-            entirely by a table's absence reads as coverage and is not. The fair per-script
-            figure — of the pairs that resolve *to* script X, how many the X table reaches
-            — is measured by ``benchmarks/meta``'s ``uts39-target-scripts`` suite.
+            entirely by a table's absence reads as coverage and is not. For the fair
+            per-script figure — of the sources whose prototype is in script X, how many
+            disarm reaches — call `confusable_coverage`, which answers for every script
+            including the ones with no bundled table (#963).
 
     Returns:
         A frozenset of single-character strings.

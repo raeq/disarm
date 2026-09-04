@@ -280,6 +280,16 @@ behavior, not a vulnerability:
   collapse whitespace, which merges records that were separated by newlines, and they fold
   or delete the delimiters the serialization depends on. Treat a state record as data to be
   parsed and validated structurally, not as text to be normalized.
+- **Malicious font injection — the rendering lies, the code points do not (#816).**
+  Xiong et al., *Invisible Prompts, Visible Threats: Malicious Font Injection in External
+  Resources for Large Language Models* (arXiv:2505.16957), manipulates the code-to-glyph
+  mapping in a font an LLM's external resource pulls in, so the text a human reads is not
+  the text the model receives. It is worth naming because it is Unicode-adjacent and
+  reaches the same targets disarm defends: it *looks* like a homoglyph attack from the
+  reader's side. It is not one. Every code point in the document is innocent and stays
+  innocent under every transform here, because the substitution happens below the
+  character layer, in the glyph table. No character-level tool can see it, disarm included.
+  Defend the resource, not the string.
 - **Optimized jailbreak suffixes (#743).** A GCG-style adversarial suffix is ASCII, carries
   no confusable, no invisible and no bidi control, and is out of scope for the same reason
   as the entry above it: there is nothing character-level in it. It is named because

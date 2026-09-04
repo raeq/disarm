@@ -183,3 +183,33 @@ def test_the_shipped_census_is_what_its_inputs_produce() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_the_census_only_scripts_are_the_number_the_docs_state() -> None:
+    """`confusable_coverage`'s docstring says 19 scripts, 72 sources between them.
+
+    Both numbers are quoted to a reader deciding whether the census covers their script,
+    and both move on a UCD refresh. Pinning them here means the refresh updates the prose
+    rather than silently outdating it.
+    """
+    known = set(disarm.list_scripts())
+    census_only = [n for n in _census_scripts() if n not in known]
+    assert len(census_only) == 19
+    assert sum(disarm.confusable_coverage(n)["sources"] for n in census_only) == 72
+
+
+def test_the_script_namespaces_agree() -> None:
+    """One spelling of a script name across the enum, `list_scripts` and the census.
+
+    The census keys came from the UCD once, which put `Canadian_Aboriginal` beside
+    disarm's `CanadianAboriginal` and made the library's own name unusable. This asserts
+    the three namespaces stay one.
+    """
+    from disarm import Script
+
+    assert {member.value for member in Script} == set(disarm.list_scripts())
+    known = set(disarm.list_scripts())
+    for name in _census_scripts():
+        assert "_" not in name and " " not in name, name
+        if name in known:
+            assert disarm.confusable_coverage(name)["script"] == name

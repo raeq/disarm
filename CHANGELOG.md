@@ -858,6 +858,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   is TR39 row `U+007C` folding `|` to `l`, not a control. Both drop sites in the generator now
   say the rule is deliberate, and `tests/test_declined_fold_limits.py` pins the behaviour so
   the pages cannot describe a library that changed underneath them.
+- **`strip_zalgo`'s off switch is `None`, and `0` is the opposite of off (#958 §4).**
+  Every other `TextPipeline` step is switched with a boolean; this one takes a cap on
+  combining marks per base character, so the falsy-looking `0` permits none and removes
+  every diacritic in the text. A caller in this repository read `0` as off and built three
+  pipelines with it, one of them declared to change nothing a reader can see, and every
+  accented word they touched came out unaccented (#959 fixed that caller). The
+  `TextPipeline` docstring and
+  `docs/api/classes.md` now state the three settings with worked output, and
+  `docs/api/pipelines.md` notes that the same literal reads the other way in `PRESETS`,
+  where `("strip_zalgo", None)` is a live step at its default cap.
 
 - **`confusable-bench.v1`: the three surfaces the meta-benchmark suite predated, and the
   identifier-validation recipe it produces (#736).** The corpus was already registered as the

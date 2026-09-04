@@ -282,6 +282,16 @@ assert PRESETS["canonicalize_strict"] == [
 
 Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.
 
+!!! warning "`None` here is a parameter, not an off switch"
+
+    A `None` in the second position means the step takes no parameter, or runs at its
+    own default — the step is in the list, so it runs. This is the opposite of what
+    `None` means as a `TextPipeline` keyword, where it omits the step (#958). The
+    difference bites on `strip_zalgo`: `("strip_zalgo", None)` above is a live step at
+    the default cap, while `TextPipeline(strip_zalgo=None)` compiles no step, and
+    `TextPipeline(strip_zalgo=0)` compiles a step that strips every diacritic. See
+    [`TextPipeline`](classes.md#strip_zalgo-is-a-cap-and-0-is-not-off).
+
 ---
 
 ## Policy Profiles

@@ -508,6 +508,22 @@ changes, and the surfaces split cleanly:
 `search_key` and `sort_key` escape it because `strip_accents` and the transliteration step
 consume the characters before the fold runs, not because they were exempted deliberately.
 
+**The detectors do not report them (#957).** `is_confusable` and `find_confusables` skip
+printable ASCII entirely, so a quoted sentence or a JSON document is not a detection. Until
+that landed, `is_confusable` returned `True` for 588 of the 1,342 pure-ASCII lines of this
+repository's own prose, and a caller screening input with it got a positive on anything
+containing a quote. The rule is the whole `U+0021`–`U+007E` range rather than those three
+code points, so a row added to the table later cannot quietly turn ordinary punctuation
+into a detection.
+
+The two halves are independent and both are tested: the fold still rewrites all three, and
+the detectors stay silent.
+
+| | `\|` | `"` | `` ` `` |
+|---|---|---|---|
+| `normalize_confusables` rewrites | yes | yes | yes |
+| `is_confusable` / `find_confusables` report | **no** | **no** | **no** |
+
 **This matters wherever those three characters are syntax rather than text.** `|` is a
 delimiter in chat templates and a pipe in shell; `"` and `` ` `` are quoting in every
 language that has them. It is the reason `code_context` reports the homoglyph class rather

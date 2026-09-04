@@ -14,6 +14,7 @@ use disarm::api::collapse_whitespace;
 use disarm::api::fold_case;
 use disarm::api::Transliterate;
 use disarm::api::{detect_scripts, is_mixed_script};
+use disarm::api::{find_confusables, is_confusable};
 use disarm::api::{grapheme_len, grapheme_split};
 use disarm::api::{normalize_confusables, TargetScript};
 use disarm::api::{slugify, SlugConfig};
@@ -266,6 +267,51 @@ fn bench_confusables(c: &mut Criterion) {
 // Criterion groups
 // ---------------------------------------------------------------------------
 
+fn bench_confusable_detection(c: &mut Criterion) {
+    let mut group = c.benchmark_group("confusable_detection");
+
+    // The detector, not the fold. `normalize_confusables` above must keep probing every
+    // ASCII character, because the table really does map `"`, `` ` `` and `|` and the
+    // fold really does rewrite them (#252 O6.1, and #725's contract). The *detector*
+    // skips printable ASCII since #957, so this path pays a range check where it used to
+    // pay a table probe.
+    let ascii = "The quick brown fox jumps over the lazy dog. ".repeat(8);
+    group.throughput(text_throughput(&ascii));
+    group.bench_function("is_confusable/ascii_doc", |b| {
+        b.iter(|| is_confusable(black_box(&ascii), black_box(TargetScript::Latin)));
+    });
+
+    // Quoted prose and JSON: the inputs #957 was filed for. Reading a baseline saved
+    // before that fix, this row looks like a 66x regression and is not one — at 35 ns it
+    // was returning `true` on the first `"`, at character 1. It now scans the string and
+    // returns the right answer, which costs what a full scan costs.
+    let quoted = r#"{"user": "alice", "role": "admin"} | say "hi" "#.repeat(8);
+    group.throughput(text_throughput(&quoted));
+    group.bench_function("is_confusable/quoted_json", |b| {
+        b.iter(|| is_confusable(black_box(&quoted), black_box(TargetScript::Latin)));
+    });
+
+    // A homoglyph in otherwise-ASCII text: what the detector exists for, and the case
+    // that must not get slower.
+    let homoglyph = "Москва раураl Ελλάδα gооgle ".repeat(8);
+    group.throughput(text_throughput(&homoglyph));
+    group.bench_function("is_confusable/homoglyph_doc", |b| {
+        b.iter(|| is_confusable(black_box(&homoglyph), black_box(TargetScript::Latin)));
+    });
+
+    group.throughput(text_throughput(&ascii));
+    group.bench_function("find_confusables/ascii_doc", |b| {
+        b.iter(|| find_confusables(black_box(&ascii), black_box(TargetScript::Latin)));
+    });
+
+    group.throughput(text_throughput(&homoglyph));
+    group.bench_function("find_confusables/homoglyph_doc", |b| {
+        b.iter(|| find_confusables(black_box(&homoglyph), black_box(TargetScript::Latin)));
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_transliterate,
@@ -276,5 +322,6 @@ criterion_group!(
     bench_scripts,
     bench_grapheme,
     bench_confusables,
+    bench_confusable_detection,
 );
 criterion_main!(benches);

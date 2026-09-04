@@ -1362,7 +1362,7 @@
         "flagged_by_a_detector": {
           "higher_is_better": null,
           "of": 100,
-          "value": 100
+          "value": 99
         },
         "non_ascii_share": {
           "higher_is_better": null,

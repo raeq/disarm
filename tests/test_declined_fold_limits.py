@@ -43,12 +43,39 @@ def test_a_same_script_pair_is_not_folded_together(a: str, b: str, why: str) -> 
     assert disarm.normalize_confusables(a) != disarm.normalize_confusables(b), why
 
 
-def test_the_same_script_pair_is_a_real_upstream_class() -> None:
-    """Non-vacuity: if TR39 stopped listing these together, the limit above would be moot
-    and the test would be asserting nothing of interest."""
-    for a, b, _ in SAME_SCRIPT:
-        assert a != b
-        assert not a.isascii() and not b.isascii()
+def _tr39_prototype(ch: str) -> str:
+    """The prototype `confusables.txt` maps `ch` to, or `ch` itself if it is one.
+
+    Read from the vendored upstream file rather than from disarm's generated tables: the
+    claim being checked is about TR39's grouping, and checking it against a table disarm
+    derived would make the assertion circular.
+    """
+    import re
+    from pathlib import Path
+
+    row = re.compile(r"^([0-9A-F ]+)\s*;\s*([0-9A-F ]+)\s*;")
+    upstream = Path(__file__).resolve().parent.parent / "data" / "confusables.txt"
+    for line in upstream.read_text(encoding="utf-8").splitlines():
+        if line.startswith("#"):
+            continue
+        match = row.match(line)
+        if match and "".join(chr(int(c, 16)) for c in match.group(1).split()) == ch:
+            return "".join(chr(int(c, 16)) for c in match.group(2).split())
+    return ch
+
+
+@pytest.mark.parametrize(("a", "b", "why"), SAME_SCRIPT, ids=[c[2] for c in SAME_SCRIPT])
+def test_the_same_script_pair_is_a_real_upstream_class(a: str, b: str, why: str) -> None:
+    """Non-vacuity: if TR39 stopped grouping these, the limit above would be moot.
+
+    Asserted against `data/confusables.txt` itself. The pair must resolve to one
+    prototype — keheh maps directly to kaf, which is its own prototype; yeh and farsi
+    yeh both map to alef maksura. Comparing the two strings for inequality, as this
+    test first did, would pass for any two distinct non-ASCII characters and so could
+    not notice the upstream data moving out from under the documented limitation.
+    """
+    assert a != b
+    assert _tr39_prototype(a) == _tr39_prototype(b), why
 
 
 @pytest.mark.parametrize(

@@ -521,22 +521,25 @@ the detectors stay silent.
 
 ### Rewriting is not reporting, and the gap has a name
 
-That split is not confined to those three characters. Measured over the 37 reconstructed
-sets of Daniel &amp; Pal (arXiv:2405.14490), registered as `benchmarks/meta`'s
-`nonstandard-unicode-sets` suite: **30 of 37 are recovered by at least one surface,
-and 7 of 37 are flagged by `has_anomalies`.** Five are neither. So a pipeline that screens
-first and cleans only what it flagged handles a fraction of what a pipeline that cleans
-unconditionally handles — and the difference is invisible from the detector's output,
-because the detector's silence and the fold's success look the same from outside.
+The split is not confined to those three characters. The transforms and the detectors are
+built from different questions — what has a fold target, and what looks anomalous — so
+they do not cover the same set, and the transforms cover more of it. Non-standard
+character sets are the clearest case: a stylized variant with a fold target is quietly
+repaired, and a caller screening the same text first is told nothing.
+
+The consequence is that a pipeline which screens and cleans only what it flagged handles
+strictly less than one that cleans unconditionally, and the difference is invisible from
+the outside: the detector staying silent and the fold having nothing to do produce the
+same output.
 
 Wang et al., *The Asymmetric Vulnerability: Bypassing LLM Defenses via Guardrail-Model
-Mismatch* (The Web Conference 2026, `10.1145/3774904.3792438`), describe this from the
-attacker's side without reference to any library: input-side guardrails are fragile to
-character perturbations while the model stays semantically resilient, which opens a
-**"success interval" where a perturbation bypasses guardrail detection yet remains
-interpretable to the target model**. disarm's detect-versus-transform gap is one instance
-of that interval, which is why *clean unconditionally* is the recommendation on the
-guardrail path (#601) rather than *detect, then clean*.
+Mismatch* (The Web Conference 2026, `10.1145/3774904.3792438`), describe the shape of
+this from the attacker's side and without reference to any library: input-side guardrails
+are fragile to character perturbations while the model stays semantically resilient, which
+opens a **"success interval" where a perturbation bypasses guardrail detection yet remains
+interpretable to the target model**. A detect-then-clean pipeline built on disarm sits in
+that interval, which is why *clean unconditionally* is the recommendation on the guardrail
+path (#601).
 
 | | `\|` | `"` | `` ` `` |
 |---|---|---|---|

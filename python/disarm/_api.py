@@ -2341,13 +2341,9 @@ def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[
             **Two spellings, and the member bridges them (#767).** `list_scripts` returns
             ``"Arabic"`` and this parameter's raw-string form takes ``"arabic"``; a raw
             string stays strict on purpose, so a caller who hard-coded the wrong one finds
-            out. Pass the member and the question does not arise —
-            ``Script("Arabic")`` converts a name from `list_scripts`::
-
-                from disarm import Script, list_scripts, unmapped_confusables
-
-                {s: unmapped_confusables(target_script=Script(s)) for s in list_scripts()
-                 if s in ("Latin", "Cyrillic", "Arabic", "Hebrew")}
+            out. Pass the member and the question does not arise, since
+            ``Script("Arabic")`` converts a name from `list_scripts`:
+            ``unmapped_confusables(target_script=Script(name))``.
 
             **Four tables, 61 known scripts.** `list_scripts` answers "which scripts can
             disarm identify"; this parameter answers "which scripts can disarm fold

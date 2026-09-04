@@ -26,9 +26,15 @@ SUPPORTED = ["Latin", "Cyrillic", "Arabic", "Hebrew"]
 
 
 def _accepts(value: object) -> bool:
+    """Whether the census takes this target script.
+
+    Only `InvalidArgumentError` counts as a rejection: that is the documented contract for
+    an unsupported `target_script`, and catching more would let an unrelated failure read
+    as a normal refusal.
+    """
     try:
         disarm.unmapped_confusables(target_script=value)
-    except (disarm.InvalidArgumentError, KeyError, ValueError):
+    except disarm.InvalidArgumentError:
         return False
     return True
 

@@ -71,6 +71,38 @@ def test_the_census_sums_to_the_whole_source_population() -> None:
     assert sum(disarm.confusable_coverage(n)["sources"] for n in _census_scripts()) == (POPULATION)
 
 
+def test_every_script_name_the_library_hands_out_is_accepted() -> None:
+    """The names `list_scripts()` returns must reach their own census row.
+
+    The census groups by the UCD's script property, and the UCD spells a multi-word
+    script `Canadian_Aboriginal` where disarm spells it `CanadianAboriginal`. Keyed in
+    the UCD's namespace, the name the library hands a caller missed the census entirely
+    and fell through to the `0 of 0` branch — `CanadianAboriginal` reported no sources
+    when it has 143. A count that reads as coverage and is determined by a lookup miss is
+    the exact failure this function exists to remove, so it is asserted over every name
+    rather than the few that happen to be one word.
+    """
+    for name in disarm.list_scripts():
+        row = disarm.confusable_coverage(name)
+        assert row["script"] == name, f"{name} echoed back as {row['script']!r}"
+
+
+def test_a_multi_word_script_reports_its_sources() -> None:
+    """The single case above, pinned by value so a table refresh cannot zero it."""
+    assert disarm.confusable_coverage("CanadianAboriginal")["sources"] == 143
+
+
+def test_the_ucd_spelling_is_not_a_second_namespace() -> None:
+    """One spelling per script, or the census becomes a place to guess names."""
+    with pytest.raises(disarm.InvalidArgumentError):
+        disarm.confusable_coverage("Canadian_Aboriginal")
+
+
+def test_no_census_key_carries_an_underscore() -> None:
+    for name in _census_scripts():
+        assert "_" not in name, f"{name} is in the UCD's namespace, not disarm's"
+
+
 def test_scripts_the_enum_does_not_name_are_still_addressable() -> None:
     """The grouping is the UCD's, so it names scripts disarm's own enum does not.
 
@@ -82,6 +114,8 @@ def test_scripts_the_enum_does_not_name_are_still_addressable() -> None:
     assert "Yi" not in disarm.list_scripts()
     with pytest.raises(KeyError):
         disarm.script_info("Yi")
+    # And a multi-word one, spelled disarm's way rather than the UCD's.
+    assert disarm.confusable_coverage("PauCinHau")["sources"] == 13
 
 
 def test_common_and_inherited_are_answerable_here() -> None:

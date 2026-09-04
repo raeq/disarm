@@ -25,7 +25,9 @@ coverage gap into a bucket labelled "punctuation". Reading the property from the
 also keeps the census from being scored against disarm's own table twice.
 
 Output: ``src/tables/data/confusable_prototype_census.tsv``, one row per prototype
-script, ``script<TAB>sources<TAB>folded``.
+script, ``script<TAB>sources<TAB>folded``, keyed in disarm's own script namespace
+(the UCD's name with underscores removed, which is the spelling ``list_scripts()``
+returns for every script the two tables share).
 
 Usage:
     python scripts/gen_confusable_census.py
@@ -79,7 +81,13 @@ def load_script_ranges() -> list[tuple[int, int, str]]:
             continue
         start = int(match.group(1), 16)
         end = int(match.group(2), 16) if match.group(2) else start
-        ranges.append((start, end, match.group(3)))
+        # The UCD spells a multi-word script `Canadian_Aboriginal`; disarm spells it
+        # `CanadianAboriginal`, which is what `list_scripts()` returns and what every
+        # script-taking surface accepts. Strip the underscores here so the census is
+        # keyed in disarm's namespace: for all 43 scripts the two tables share this rule
+        # reproduces disarm's spelling exactly, and the scripts only the UCD names come
+        # out in the same shape rather than in a second one.
+        ranges.append((start, end, match.group(3).replace("_", "")))
     ranges.sort()
     if len(ranges) < 1000:
         raise SystemExit(f"Scripts.txt: parsed only {len(ranges)} ranges")
@@ -156,6 +164,14 @@ def build() -> tuple[str, dict[str, tuple[int, int]]]:
         raise SystemExit(f"confusables.txt: parsed only {rows} single-source rows")
 
     census = {name: (n, reached[name]) for name, n in sorted(sources.items())}
+    # Stripping underscores must not merge two scripts into one row, and every key must
+    # be in disarm's namespace. A future UCD that added `Foo_Bar` beside `FooBar` would
+    # be caught here rather than by a coverage figure that had quietly doubled.
+    leftover = [n for n in census if "_" in n]
+    if leftover:
+        raise SystemExit(f"script names still carry underscores: {leftover}")
+    if len(census) != len({n for n in census}):
+        raise SystemExit("two UCD scripts collapsed to one key")
     confusables_version = _version(CONFUSABLES, r"# Version: ([0-9.]+)")
     scripts_version = _version(SCRIPTS, r"# Scripts-([0-9.]+)\.txt")
     header = (

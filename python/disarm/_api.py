@@ -2402,10 +2402,12 @@ def confusable_coverage(script: str | Script) -> ConfusableCoverage:
         table folds. The question a caller has is whether disarm neutralizes the source
         at all, not which prototype TR39 picked for it.
 
-        The grouping uses the UCD's script property, so 19 scripts appear that disarm's
-        own enum does not name — ``"Yi"``, ``"Siddham"``, ``"PauCinHau"`` and 16 others,
-        72 sources between them, addressable by the UCD name with underscores removed. A
-        script disarm knows that TR39 never uses as a prototype returns ``0`` of ``0``.
+        The grouping uses the UCD's script property, but the census is keyed in disarm's
+        namespace — the UCD name with underscores removed, which is the spelling
+        `list_scripts` returns for every script the two tables share. So 19 scripts appear
+        that disarm's own enum does not name (``"Yi"``, ``"Siddham"``, ``"PauCinHau"`` and
+        16 others, 72 sources between them), spelled the same way as the rest. A script
+        disarm knows that TR39 never uses as a prototype returns ``0`` of ``0``.
 
     Examples:
         >>> confusable_coverage("Greek")["sources"]

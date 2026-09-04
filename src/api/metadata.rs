@@ -342,11 +342,13 @@ pub fn script_info(name: &str) -> Result<ScriptMeta, Error> {
 /// Latin table folds — the question a caller has is whether disarm neutralizes the
 /// source at all, not which prototype TR39 picked for it.
 ///
-/// The script property behind the grouping is the UCD's, from `Scripts.txt`, so 19
+/// The script property behind the grouping is the UCD's, from `Scripts.txt`, but the
+/// census is keyed in disarm's namespace: the UCD's name with underscores removed, which
+/// is the spelling [`list_scripts`] returns for every script the two tables share. So 19
 /// scripts appear here that disarm's own enum does not name — `Yi`, `Siddham`,
-/// `PauCinHau` and 16 others, 72 sources between them. They are addressable by the
-/// UCD's name with underscores removed. A script disarm knows but TR39 never uses as a
-/// prototype returns `0` of `0`, which is the truth about it.
+/// `PauCinHau` and 16 others, 72 sources between them — spelled the same way as the rest.
+/// A script disarm knows but TR39 never uses as a prototype returns `0` of `0`, which is
+/// the truth about it.
 ///
 /// # Errors
 /// Returns an [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument) error
@@ -362,9 +364,16 @@ pub fn confusable_coverage(script: &str) -> Result<ConfusableCoverage, Error> {
     }
     // A script disarm knows that TR39 never uses as a prototype: `0 of 0` is the
     // answer, and it is a different statement from "no such script".
-    match crate::metadata::script(script) {
-        Some(row) => Ok(ConfusableCoverage {
-            script: row.name,
+    //
+    // The name echoed back is the identifier, not `ScriptRow::name`, which is a display
+    // string — `CanadianAboriginal` has the display name "Canadian Aboriginal
+    // Syllabics", and returning that would hand the caller a value no surface accepts.
+    match crate::metadata::SCRIPTS
+        .iter()
+        .find(|name| **name == script)
+    {
+        Some(name) => Ok(ConfusableCoverage {
+            script: name,
             sources: 0,
             folded: 0,
         }),
@@ -479,6 +488,26 @@ mod tests {
                 row.sources
             );
         }
+    }
+
+    /// Every name the library hands out reaches its own row, and comes back unchanged.
+    ///
+    /// The UCD spells a multi-word script `Canadian_Aboriginal` and disarm spells it
+    /// `CanadianAboriginal`. With the census keyed the UCD's way, the name `list_scripts`
+    /// returns missed it and fell through to the `0 of 0` branch — 143 sources reported
+    /// as none, which is the failure this function exists to remove.
+    #[test]
+    fn confusable_coverage_accepts_every_name_the_library_hands_out() {
+        for name in list_scripts() {
+            let row = confusable_coverage(name).unwrap();
+            assert_eq!(row.script, name, "{name} echoed back as {}", row.script);
+        }
+        assert_eq!(
+            confusable_coverage("CanadianAboriginal").unwrap().sources,
+            143
+        );
+        // One spelling per script: the UCD's form is not a second way in.
+        assert!(confusable_coverage("Canadian_Aboriginal").is_err());
     }
 
     #[test]

@@ -72,6 +72,9 @@ from disarm._core import (
     _collapse_whitespace as _collapse_whitespace,
 )
 from disarm._core import (
+    _confusable_coverage as _confusable_coverage,
+)
+from disarm._core import (
     _decode_smuggled as _decode_smuggled,
 )
 from disarm._core import (
@@ -99,7 +102,6 @@ from disarm._core import (
     _find_key_collisions as _find_key_collisions,
 )
 from disarm._core import (
-    _confusable_coverage as _confusable_coverage,
     _find_unmapped_confusables as _find_unmapped_confusables,
 )
 from disarm._core import (

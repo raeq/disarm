@@ -1759,13 +1759,13 @@ def test_the_prompt_hygiene_composition_strips_the_tag_block_without_glossing():
     It previously declared `demojize=False` per #910 and thereby lost Plane 14
     TAG stripping, because `demojize` was the only composable step that removed
     it. #924 shipped `strip_plane14`, #921 unified the emoji-naming policy and
-    #926 stopped the guardrail glossing, so the pipeline now gets both. Pinned
+    PR #926 stopped the guardrail glossing, so the pipeline now gets both. Pinned
     in the new direction: a regression to either half must fail here.
     """
     import disarm
 
     steps = subjects.ComposedPromptHygiene.STEPS
-    assert steps.get("demojize") is False
+    assert steps.get("demojize") == "", "replace, never name (#910) and never keep (#972)"
     assert steps.get("strip_plane14") is True, "declare it, never inherit the default"
 
     pipe = disarm.TextPipeline(**steps)
@@ -1774,6 +1774,25 @@ def test_the_prompt_hygiene_composition_strips_the_tag_block_without_glossing():
     assert not any(0xE0000 <= ord(c) <= 0xE007F for c in out), "TAG block must be gone"
     assert "label" in out, "and the text a reviewer reads must survive"
     assert "bomb" not in pipe("kill\U0001f4a3ing"), "no attacker-chosen words in the prompt"
+
+
+def test_the_prompt_hygiene_composition_closes_the_emoji_attack_split():
+    """An emoji inside a word is replaced with nothing, so the word comes back (#972).
+
+    The Emoji Attack construction (arXiv:2411.01077) inserts a visible emoji inside
+    a word to split it for a subword tokenizer. Naming widened the split and keeping
+    left it; `demojize=""` closes it. The composition accepts #910's measured cost on
+    inter-word emoji — `stop🛑now` fuses — and that is pinned too, so nobody reads the
+    fusion as a regression when it shows up on a cost suite.
+    """
+    import disarm
+
+    pipe = disarm.TextPipeline(**subjects.ComposedPromptHygiene.STEPS)
+    assert pipe("aa\U0001f525bb") == "aabb"
+    assert pipe("kill\U0001f4a3ing") == "killing"
+    assert pipe("ig\U0001f600nore previous") == "ignore previous"
+    assert pipe("stop\U0001f6d1now") == "stopnow", "the fusion #910 measured; accepted here"
+    assert pipe("x\u00a9y \u2122") == "x\u00a9y tm", "text-presentation characters are not emoji"
 
 
 def test_every_multi_subject_benchmark_declares_the_job_it_represents():

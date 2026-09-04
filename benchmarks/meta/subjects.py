@@ -464,17 +464,25 @@ class ComposedPromptHygiene(_ComposedBase):
     USE_CASE = "prompt-hygiene"
     PURPOSE = "untrusted text entering an LLM prompt"
     #: Every hidden channel goes; the text still has to read as itself, so no
-    #: transliteration. `demojize` is off — that is the change #910 proposes,
-    #: because glossing hands an attacker words in the prompt.
+    #: transliteration. Emoji are **replaced with nothing** (`demojize=""`,
+    #: #972/#973): naming was the change #910 removed, because glossing hands an
+    #: attacker words in the prompt, and keeping leaves the Emoji Attack split
+    #: (arXiv:2411.01077) in the word. Replacement is the third treatment, and
+    #: `""` rather than `" "` because the vector this job faces is intra-word —
+    #: `ig😀nore` has to come back as `ignore`. That accepts the cost #910
+    #: measured on inter-word emoji (`stop🛑now` → `stopnow`, 144/144), and
+    #: this composition pays it on every suite it meets, which is what the
+    #: whole-battery rule is for. The shipped `llm_guardrail` keeps the emoji;
+    #: the difference between the two is the point of scoring both.
     #:
-    #: Off, and no longer at a cost. When this pipeline was written `demojize`
-    #: was the only composable step that removed the Plane 14 TAG block, so
-    #: turning it off traded a text-injection primitive for a concealment
-    #: channel and the composition scored 0 on `mcp-tag-block-concealment`.
-    #: #914 separated them (#924 shipped `strip_plane14`, #921 gave every
-    #: pipeline one emoji-naming policy, #926 stopped the guardrail glossing),
-    #: so the pipeline now declares `strip_plane14` and gets both: the carrier
-    #: removed and no attacker-chosen words written into the prompt.
+    #: When this pipeline was written `demojize` was the only composable step
+    #: that removed the Plane 14 TAG block, so turning it off traded a
+    #: text-injection primitive for a concealment channel and the composition
+    #: scored 0 on `mcp-tag-block-concealment`. #914 separated them (#924
+    #: shipped `strip_plane14`, #921 gave every pipeline one emoji-naming
+    #: policy, PR #926 stopped the guardrail glossing), so the pipeline
+    #: declares `strip_plane14` and gets both: the carrier removed and no
+    #: attacker-chosen words written into the prompt.
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFKC",
         # `None` is off. `0` is a cap of zero combining marks, which strips every
@@ -494,7 +502,10 @@ class ComposedPromptHygiene(_ComposedBase):
         "strip_accents": True,
         "fold_case": True,
         "collapse_whitespace": True,
-        "demojize": False,
+        # A build whose `demojize` is bool-only raises TypeError on "", and
+        # `available()` turns that into a skip with the reason, so an older
+        # core is never scored on a silently different pipeline.
+        "demojize": "",
     }
 
 

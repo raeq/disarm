@@ -18,6 +18,16 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **The meta-benchmark's prompt-hygiene composition replaces emoji with nothing (#972).**
+  `disarm-composed:prompt-hygiene` declared `demojize=False` because naming hands an attacker
+  words (#910) and nothing else was composable. With `TextPipeline(demojize="")` it now
+  closes the Emoji Attack split: `aa🔥bb` comes back as `aabb` where it stayed split before,
+  and the composition rejoins 1,192 of the 1,219 `Emoji_Presentation` code points on
+  `emoji-delimiter-segmentation` instead of 0. The shipped `llm_guardrail` still keeps the
+  emoji by #910's measured decision, so the bare `disarm` subject does not move; the two are
+  scored side by side, which is what the composed subjects are for. A build whose `demojize`
+  is bool-only rejects the declaration and the subject skips with the reason.
+
 - **`replace_emoji` — removing an emoji, on all seven surfaces (#972).** An emoji
   inserted inside a word splits it for a subword tokenizer (Emoji Attack,
   arXiv:2411.01077). disarm could **name** an emoji or keep it, and removal was reachable

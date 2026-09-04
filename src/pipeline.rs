@@ -231,6 +231,17 @@ pub(crate) struct Pipeline {
     /// Standalone `demojize()` still names every row. That is where "the caller asked by
     /// name" genuinely holds: one function, no other steps, nothing downstream to fold.
     emoji_name_policy: emoji::NamePolicy,
+    /// What the `demojize` step writes in place of each emoji, or `None` to name it (#972).
+    ///
+    /// Fixed at construction like `digit_policy`, for the same reason: a pipeline is a
+    /// resolved policy and `process` takes text and nothing else.
+    ///
+    /// The two modes are exclusive because they answer different questions of different
+    /// tables — naming reads CLDR, replacing reads the UCD's emoji properties — and no
+    /// caller wants both. No shipped profile sets this; #910 measured what a default
+    /// would cost either way, and this is the parameter that lets a caller decide for
+    /// their own text.
+    demojize_replacement: Option<String>,
 }
 
 impl Pipeline {
@@ -254,6 +265,11 @@ impl Pipeline {
         strip_control: Option<bool>,
         strip_zero_width: Option<bool>,
         demojize: bool,
+        // #972: what the `demojize` step writes in place of each emoji, or `None` to
+        // name it. Separate from the `demojize` flag rather than folded into an enum
+        // because every construction site already passes the flag, and the two answer
+        // different questions: whether the step runs, and what it does when it does.
+        demojize_replacement: Option<String>,
         strip_bidi: bool,
         zalgo_max_marks: Option<usize>,
         // Taken here rather than set on the built `Pipeline` afterwards (#911). It was a
@@ -312,6 +328,11 @@ impl Pipeline {
         }
         if demojize {
             steps |= PipelineSteps::DEMOJIZE;
+        } else if demojize_replacement.is_some() {
+            // A replacement is a request for the step, so it turns the step on by
+            // itself: `TextPipeline(demojize="")` says what to do with emoji, and
+            // requiring a second flag beside it would only be a way to get it wrong.
+            steps |= PipelineSteps::DEMOJIZE;
         }
         if strip_pua {
             steps |= PipelineSteps::STRIP_PUA;
@@ -351,6 +372,7 @@ impl Pipeline {
             // produces — #614's failure mode, on the surface the docs point callers at
             // when no profile fits.
             emoji_name_policy: emoji::NamePolicy::PIPELINE_BASELINE,
+            demojize_replacement,
             steps,
             // Only meaningful alongside the step it parameterises; recording it without
             // `resolve_deletions` would be a setting that never runs.
@@ -501,7 +523,20 @@ impl Pipeline {
             // it skips the 326 rows carrying neither `Emoji` nor `Extended_Pictographic`;
             // naming those is what turned `film\u{2019}s` into `film right apostrophe s`
             // (#757). `Pipeline::new` sets the default and `ProfileSpec::build` overrides.
-            emoji::demojize_rust_into(input, false, self.emoji_name_policy, out);
+            // #972: replacing and naming are separate functions rather than a flag
+            // inside one, because they read different tables and the replacement path
+            // must be reachable without the CLDR name trie.
+            //
+            // This branch does not deliver that on its own: `Pipeline` resolves its
+            // steps at runtime, so a build that links this step links both arms — the
+            // same property #695 needed `static_steps!` to escape for the presets. What
+            // the separation buys is that `demojize_rust_replace` is callable without
+            // the names at all, which `wasm_size_probe`'s `demojize_replace` surface
+            // asserts.
+            match self.demojize_replacement.as_deref() {
+                Some(replacement) => emoji::demojize_rust_replace_into(input, replacement, out),
+                None => emoji::demojize_rust_into(input, false, self.emoji_name_policy, out),
+            }
             Ok(true)
         } else if step == PipelineSteps::STRIP_ACCENTS {
             transliterate::strip_accents_into(input, out);
@@ -696,6 +731,16 @@ struct ProfileSpec {
     strip_control: Option<bool>,
     strip_zero_width: Option<bool>,
     demojize: bool,
+    /// What this profile's `demojize` step writes in place of each emoji (#972).
+    ///
+    /// `None` on every shipped profile, and deliberately: #910 measured both defaults
+    /// and neither survives contact with the other's text. Naming writes attacker-chosen
+    /// English into screened input — 1,272 distinct words over `Emoji_Presentation`.
+    /// Removing fuses the words an emoji separates: `stop<emoji>now` became `stopnow`
+    /// 144 of 144 times. The field exists so a caller whose text is the intra-word case
+    /// can say so; changing a shipped default is a separate decision that has to answer
+    /// that measurement.
+    demojize_replacement: Option<&'static str>,
     strip_bidi: bool,
     strip_zalgo: Option<usize>,
     /// Strip the Private Use Area (#814).
@@ -731,6 +776,7 @@ impl ProfileSpec {
             self.strip_control,
             self.strip_zero_width,
             self.demojize,
+            self.demojize_replacement.map(str::to_owned),
             self.strip_bidi,
             self.strip_zalgo,
             self.strip_pua,
@@ -951,6 +997,7 @@ mod tests {
             strict_iso9: false,
             gost7034: false,
             emoji_name_policy: emoji::NamePolicy::PIPELINE_BASELINE,
+            demojize_replacement: None,
         }
     }
 
@@ -1475,6 +1522,7 @@ mod tests {
             None,  // strip_control (defaults to collapse_whitespace=true)
             None,  // strip_zero_width (defaults to collapse_whitespace=true)
             false, // demojize
+            None,  // demojize_replacement (#972)
             false, // strip_bidi
             None,  // strip_zalgo
             false, // strip_pua (#911)
@@ -1504,6 +1552,7 @@ mod tests {
             Some(false), // strip_control=False
             Some(false), // strip_zero_width=False
             false,       // demojize
+            None,        // demojize_replacement (#972)
             false,       // strip_bidi
             None,        // strip_zalgo
             false,       // strip_pua (#911)
@@ -1533,6 +1582,7 @@ mod tests {
             Some(true), // strip_control
             None,       // strip_zero_width (defaults to collapse_whitespace=false)
             false,      // demojize
+            None,       // demojize_replacement (#972)
             false,      // strip_bidi
             None,       // strip_zalgo
             false,      // strip_pua (#911)
@@ -1550,8 +1600,9 @@ mod tests {
     fn test_constructor_empty() {
         // Default constructor — no steps
         let p = Pipeline::new(
-            None, false, None, false, false, false, false, false, false, None, None, false, false,
-            None, false, // strip_pua (#911)
+            None, false, None, false, false, false, false, false, false, None, None, false,
+            None, // demojize_replacement (#972)
+            false, None, false, // strip_pua (#911)
             false, // strip_plane14 (#914)
             false, // resolve_deletions (#937)
             false, // resolve_cr (#937)
@@ -1576,6 +1627,7 @@ mod tests {
             None,
             None,
             false,
+            None, // demojize_replacement (#972)
             false,
             None,
             false, // strip_pua (#911)
@@ -1604,6 +1656,7 @@ mod tests {
             None,
             None,
             false,
+            None, // demojize_replacement (#972)
             false,
             None,
             false, // strip_pua (#911)

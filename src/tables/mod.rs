@@ -847,6 +847,45 @@ pub fn is_word_joiner(ch: char) -> bool {
     WORD_JOINERS.contains(&ch)
 }
 
+include!(concat!(env!("OUT_DIR"), "/emoji_presentation_ranges.rs"));
+include!(concat!(env!("OUT_DIR"), "/emoji_property_ranges.rs"));
+
+/// Binary search a sorted, non-overlapping `(start, end)` range table.
+#[inline]
+fn in_range_set(set: &[(u32, u32)], cp: u32) -> bool {
+    set.binary_search_by(|&(start, end)| {
+        if cp < start {
+            core::cmp::Ordering::Greater
+        } else if cp > end {
+            core::cmp::Ordering::Less
+        } else {
+            core::cmp::Ordering::Equal
+        }
+    })
+    .is_ok()
+}
+
+/// UCD `Emoji_Presentation=Yes`: renders as emoji with no variation selector.
+///
+/// Lives here rather than in `width`, which held the only copy until #972, because two
+/// modules now ask the same question and a second copy of a generated table is how the
+/// two answers come apart.
+#[inline]
+pub(crate) fn is_emoji_presentation(ch: char) -> bool {
+    in_range_set(EMOJI_PRESENTATION_RANGES, ch as u32)
+}
+
+/// UCD `Emoji=Yes`: *can* render as emoji, which `U+FE0F` turns on.
+///
+/// The complement that matters for #972: `U+00A9` and `U+2122` are `Emoji=Yes` and
+/// `Emoji_Presentation=No`, so `©` in ordinary text is a copyright sign and the same
+/// character followed by `U+FE0F` is an emoji. A replacement that ignored the
+/// distinction would delete the sign.
+#[inline]
+pub(crate) fn is_emoji_property(ch: char) -> bool {
+    in_range_set(EMOJI_PROPERTY_RANGES, ch as u32)
+}
+
 /// Whether this CLDR name row carries no Unicode emoji property at all (#757).
 ///
 /// CLDR `annotationsDerived` names 326 code points that are not emoji by either the

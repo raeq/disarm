@@ -204,15 +204,28 @@ fn demojize_impl(
 /// provider or the built-in default (latest English CLDR).
 #[pyfunction]
 #[pyo3(name = "_demojize")]
-#[pyo3(signature = (text, *, strip_modifiers=false, errors="replace", replace_with="[?]", provider=None))]
+#[pyo3(signature = (text, *, replacement=None, strip_modifiers=false, errors="replace", replace_with="[?]", provider=None))]
 pub fn _demojize(
     py: Python<'_>,
     text: &str,
+    replacement: Option<&str>,
     strip_modifiers: bool,
     errors: &str,
     replace_with: &str,
     provider: Option<Py<PyAny>>,
 ) -> PyResult<String> {
+    // #972: a replacement is not a name, so it takes none of the naming machinery — not
+    // the provider, not the error mode, not `strip_modifiers`. Those describe what to
+    // *call* an emoji, and this caller has said they do not want it called anything.
+    //
+    // Ignored rather than rejected, unlike `digit_policy` on `TextPipeline`, because the
+    // provider can be registered globally: refusing `demojize(text, replacement="")` in
+    // a process that once called `set_emoji_provider` would fail on a setting the caller
+    // never passed.
+    if let Some(replacement) = replacement {
+        return Ok(crate::emoji::demojize_rust_replace(text, replacement));
+    }
+
     let error_mode = ErrorMode::parse(errors)?;
 
     // Determine which provider to use:
@@ -234,6 +247,13 @@ pub fn _demojize(
         replace_with,
         effective_provider.as_ref(),
     ))
+}
+
+/// Replace every emoji with one string, verbatim (#972).
+#[pyfunction]
+#[pyo3(name = "_replace_emoji")]
+pub fn _replace_emoji(text: &str, replacement: &str) -> String {
+    crate::emoji::demojize_rust_replace(text, replacement)
 }
 
 /// Set or reset the global emoji provider for all demojize calls.

@@ -18,6 +18,42 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Added
 
+- **`replace_emoji` — removing an emoji, on all seven surfaces (#972).** An emoji
+  inserted inside a word splits it for a subword tokenizer (Emoji Attack,
+  arXiv:2411.01077). disarm could **name** an emoji or keep it, and removal was reachable
+  only as a side effect of `transliterate` — so no composable step closed the split.
+  `replace_emoji(text, replacement)` does, and `TextPipeline(demojize=...)` now takes
+  `bool | str`: `True` names as before, a string replaces, `False` omits the step.
+  `demojize(text, replacement=...)` is the same operation under the function that owns
+  the emoji scanner.
+
+  **Naming and replacing are separate functions because they read different tables.**
+  Naming asks what CLDR calls a character, over a table wider than the emoji — CLDR
+  annotates `U+2122`, so `demojize("x™y")` is `x trade mark y`. Replacing asks whether
+  the UCD calls it an emoji, over the emoji-presentation set: `Emoji_Presentation=Yes`,
+  an `Emoji=Yes` base carrying `U+FE0F`, and the ZWJ, modifier, keycap and flag sequences
+  on those. So `™` and `©` stay where naming would have written a word over them, and a
+  build that only replaces links neither the CLDR name trie nor the 182 KB behind it —
+  **19 KB of wasm against 643 KB**, asserted by a new `demojize_replace` surface in the
+  #695 coupling gate.
+
+  The replacement is inserted verbatim, with no padding and no whitespace collapse,
+  because the two useful values want opposite things and neither can be a default: `""`
+  closes an intra-word split (`aa🔥bb` → `aabb`) and `" "` keeps two words apart
+  (`stop🛑now` → `stop now`). One sequence takes one replacement however many code points
+  it is written with, so a flag, a ZWJ family and a keycap each become a single space.
+
+  **No shipped default moves.** `llm_guardrail` keeps a visible emoji on #910's
+  measurement — naming writes attacker-chosen English into screened text, and removal
+  fused `stop<emoji>now` into `stopnow` 144 times out of 144 — and `canonicalize` and
+  `strip_obfuscation` are unchanged, so no stored key moves. The parameter is how a
+  caller whose emoji sit *inside* words says so.
+
+- **The keycap sequence people actually type is now one emoji (#972).** CLDR keys the
+  keycap without its variation selector (`0031_20E3`), so `demojize("x1️⃣y")` returned
+  `x1⃣y`: the selector dropped and the combining keycap left on the digit. Both spellings
+  now name as `keycap: 1`, and both are removed as one emoji under a replacement.
+
 - **`TextPipeline.purpose`: every profile says what it is *for*, in one sentence (#860).**
   `list_profiles()` returned names and the step list said what a pipeline *does*; neither said
   what it is for, which made the profiles the one part of the public surface a reader could not

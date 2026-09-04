@@ -39,6 +39,20 @@ class StructuredReportsTest {
     }
 
     @Test
+    void replaceEmojiRemovesEmojiAndKeepsWhatCldrMerelyAnnotates() {
+        // The Emoji Attack construction: an emoji inside a word splits it for a tokenizer.
+        assertEquals("aabb", Disarm.replaceEmoji("aa\uD83D\uDD25bb"));
+        // The caller chooses separation; no rule serves both cases.
+        assertEquals("stop now", Disarm.replaceEmoji("stop\uD83D\uDED1now", " "));
+        // demojize names these because CLDR annotates them; they are not emoji.
+        assertEquals("x\u00A9y", Disarm.replaceEmoji("x\u00A9y"));
+        assertEquals("x trade mark y", Disarm.demojize("x\u2122y"));
+        assertEquals("x\u2122y", Disarm.replaceEmoji("x\u2122y"));
+        // One emoji, however many code points it is written with.
+        assertEquals("xy", Disarm.replaceEmoji("x1\uFE0F\u20E3y"));
+    }
+
+    @Test
     void confusableCoverageReportsThePerScriptDenominator() {
         // Greek is the row the method exists for: no to-Greek table ships, so
         // unmappedConfusables would report almost the whole 6,565-source population.

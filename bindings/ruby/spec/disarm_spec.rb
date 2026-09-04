@@ -537,6 +537,19 @@ RSpec.describe Disarm do
       expect(Disarm.script_info("Coptic")[:default_lang]).to eq("cop")
     end
 
+    it "replaces an emoji and leaves what CLDR merely annotates" do
+      # The Emoji Attack construction: an emoji inside a word splits it for a tokenizer.
+      expect(Disarm.replace_emoji("aa\u{1F525}bb")).to eq("aabb")
+      # The caller chooses separation; no rule serves both cases.
+      expect(Disarm.replace_emoji("stop\u{1F6D1}now", " ")).to eq("stop now")
+      # +demojize+ names these because CLDR annotates them; they are not emoji.
+      expect(Disarm.replace_emoji("x\u00A9y")).to eq("x\u00A9y")
+      expect(Disarm.demojize("x\u2122y")).to eq("x trade mark y")
+      expect(Disarm.replace_emoji("x\u2122y")).to eq("x\u2122y")
+      # One emoji, however many code points it is written with.
+      expect(Disarm.replace_emoji("x1\u{FE0F}\u{20E3}y")).to eq("xy")
+    end
+
     it "reports the per-script confusable denominator, not the population" do
       # Greek is the row the method exists for: no to-Greek table ships, so
       # unmapped_confusables would report almost the whole 6,565-source population.

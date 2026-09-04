@@ -45,6 +45,11 @@ EXPECTED = {
     "strip_obfuscation": (False, False, 400_000),
     "strip_bidi": (False, False, 40_000),
     "collapse_whitespace": (False, False, 40_000),
+    # #972: `demojize_rust_replace` decides what is an emoji from two UCD range tables,
+    # not from CLDR names. A build that only replaces must therefore link no name trie —
+    # which is the whole reason replacing is a separate function from naming rather than
+    # a flag inside one.
+    "demojize_replace": (False, False, 60_000),
 }
 
 

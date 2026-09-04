@@ -486,3 +486,36 @@ pub fn slugify(text: &str, config: &SlugConfig) -> String {
 pub fn demojize(text: &str, strip_modifiers: bool) -> String {
     crate::emoji::demojize_rust(text, strip_modifiers)
 }
+
+/// Replace every emoji in `text` with `replacement`, verbatim (#972).
+///
+/// The counterpart to [`demojize`], and a different question of a different table.
+/// `demojize` asks *what does CLDR call this?*, so its domain is the CLDR name table,
+/// which is wider than the emoji: `demojize("x™y")` is `"x trade mark y"`. This asks
+/// *is this an emoji by the UCD's properties?*, so its domain is the emoji-presentation
+/// set — `Emoji_Presentation=Yes`, an `Emoji=Yes` base carrying `U+FE0F`, and the ZWJ,
+/// modifier, keycap and flag sequences built on those. Nothing else moves.
+///
+/// `replacement` is inserted exactly as given, with no padding and no whitespace
+/// collapse, because the two useful values want opposite things and neither can be a
+/// default:
+///
+/// ```
+/// use disarm::api::replace_emoji;
+///
+/// // Closing an intra-word split, the Emoji Attack construction (arXiv:2411.01077).
+/// assert_eq!(replace_emoji("aa\u{1F525}bb", ""), "aabb");
+/// // Keeping two words apart, which the same rule would have fused.
+/// assert_eq!(replace_emoji("stop\u{1F6D1}now", " "), "stop now");
+/// // Not an emoji without a selector, so not this function's business.
+/// assert_eq!(replace_emoji("x\u{00A9}y", ""), "x\u{00A9}y");
+/// ```
+///
+/// No shipped preset or profile does this. `llm_guardrail` keeps a visible emoji on a
+/// measured decision (#910): naming writes attacker-chosen English into screened text,
+/// and removing fuses the words an emoji separates. Which is right depends on whether
+/// the caller's emoji sit inside a word or between two, which the library cannot know.
+#[must_use]
+pub fn replace_emoji(text: &str, replacement: &str) -> String {
+    crate::emoji::demojize_rust_replace(text, replacement)
+}

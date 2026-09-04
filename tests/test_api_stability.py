@@ -54,6 +54,7 @@ EXPECTED_ALL = {
     "fold_case",
     "collapse_whitespace",
     "demojize",
+    "replace_emoji",
     "set_emoji_provider",
     # Precompiled pipelines
     "canonicalize",
@@ -379,6 +380,9 @@ CORE_FUNCTION_PARAMS = {
     "strip_zero_width_chars": ["text"],
     "demojize": [
         "text",
+        # #972: replacing is a mode of this function, not a second function — it owns
+        # the emoji scanner and already had a replacement channel for unknown emoji.
+        "replacement",
         "strip_modifiers",
         "errors",
         "replace_with",

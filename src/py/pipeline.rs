@@ -34,6 +34,7 @@ impl _TextPipeline {
         strip_control=None,
         strip_zero_width=None,
         demojize=false,
+        demojize_replacement=None,
         strip_bidi=false,
         strip_zalgo=None,
         strip_pua=false,
@@ -56,6 +57,10 @@ impl _TextPipeline {
         strip_control: Option<bool>,
         strip_zero_width: Option<bool>,
         demojize: bool,
+        // #972: `None` names, `Some(s)` writes `s` in place of each emoji. Split from the
+        // flag at this boundary rather than passed as `bool | str`, so the FFI signature
+        // stays typed and the Python wrapper owns the union it presents.
+        demojize_replacement: Option<String>,
         strip_bidi: bool,
         strip_zalgo: Option<i64>,
         strip_pua: bool,
@@ -92,6 +97,7 @@ impl _TextPipeline {
             strip_control,
             strip_zero_width,
             demojize,
+            demojize_replacement,
             strip_bidi,
             zalgo_max_marks,
             strip_pua,

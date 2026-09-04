@@ -584,6 +584,22 @@ pub fn demojize<'l>(
     map_str(env, input, |t| api::demojize(t, strip))
 }
 
+/// Replace every emoji with `replacement`, verbatim (#972).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn replaceEmoji<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    input: JString<'l>,
+    replacement: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let text = input.mutf8_chars(env)?.to_string();
+        let replacement = replacement.mutf8_chars(env)?.to_string();
+        Ok(env.new_string(api::replace_emoji(&text, &replacement))?.into())
+    })
+    .resolve::<Policy>()
+}
+
 // ── Normalization ───────────────────────────────────────────────────────────────
 
 /// Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.

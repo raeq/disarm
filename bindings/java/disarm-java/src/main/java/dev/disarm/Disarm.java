@@ -140,6 +140,30 @@ public final class Disarm {
         return Native.demojize(req(text), stripModifiers);
     }
 
+    /** {@link #replaceEmoji(String, String)} with an empty replacement, which removes them. */
+    public static String replaceEmoji(String text) {
+        return replaceEmoji(text, "");
+    }
+
+    /**
+     * Replace every emoji with {@code replacement}, verbatim (#972).
+     *
+     * <p>The counterpart to {@link #demojize(String)}, and a different question of a
+     * different table. {@code demojize} asks what CLDR calls a character, so its domain
+     * is the name table, which is wider than the emoji. This asks whether the UCD calls
+     * it an emoji — {@code Emoji_Presentation=Yes}, an {@code Emoji=Yes} base carrying
+     * {@code U+FE0F}, and the ZWJ, modifier, keycap and flag sequences on those. Nothing
+     * else moves.
+     *
+     * <p>{@code replacement} is inserted exactly as given, with no padding: {@code ""}
+     * closes an intra-word split and {@code " "} keeps two words apart, and no rule
+     * serves both.
+     */
+    public static String replaceEmoji(String text, String replacement) {
+        Objects.requireNonNull(replacement, "replacement");
+        return Native.replaceEmoji(req(text), replacement);
+    }
+
     // ── Normalization ──────────────────────────────────────────────────────────
 
     public static String normalize(String text, NormalizationForm form) {

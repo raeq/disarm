@@ -462,6 +462,19 @@ describe('metadata introspection (#404)', () => {
   test('langInfo returns static facts about a language', () => {
     expect(disarm.langInfo('de').name).toBe('German')
   })
+  test('replaceEmoji removes an emoji and leaves what CLDR merely annotates', () => {
+    // The Emoji Attack construction: an emoji inside a word splits it for a tokenizer.
+    expect(disarm.replaceEmoji('aa🔥bb')).toBe('aabb')
+    // The caller chooses separation; no rule serves both cases.
+    expect(disarm.replaceEmoji('stop🛑now', ' ')).toBe('stop now')
+    // `demojize` names these because CLDR annotates them; they are not emoji.
+    expect(disarm.replaceEmoji('x©y')).toBe('x©y')
+    expect(disarm.demojize('x™y')).toBe('x trade mark y')
+    expect(disarm.replaceEmoji('x™y')).toBe('x™y')
+    // One emoji, however many code points it is written with.
+    expect(disarm.replaceEmoji('x👨‍👩‍👧y')).toBe('xy')
+    expect(disarm.replaceEmoji('x1️⃣y')).toBe('xy')
+  })
   test('scriptInfo returns static facts about a script', () => {
     expect(disarm.scriptInfo('Coptic').defaultLang).toBe('cop')
   })

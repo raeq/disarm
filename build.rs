@@ -675,6 +675,16 @@ fn main() {
         &out_dir.join("emoji_presentation_ranges.rs"),
         "EMOJI_PRESENTATION_RANGES",
     );
+    // #972: `Emoji=Yes`. The presentation table above answers "renders as emoji by
+    // default"; this one answers "can render as emoji at all", which is the half a
+    // `U+FE0F` turns on. `demojize`'s replacement mode needs both, and neither of them
+    // needs the CLDR name table — that separation is what keeps a replace-only build
+    // from linking 182 KB of names it will not read.
+    generate_range_set(
+        &data_dir.join("emoji_property.tsv"),
+        &out_dir.join("emoji_property_ranges.rs"),
+        "EMOJI_PROPERTY_RANGES",
+    );
     // #774: the assigned-ness gate in front of the block-range script table.
     generate_range_set(
         &data_dir.join("assigned_ranges.tsv"),

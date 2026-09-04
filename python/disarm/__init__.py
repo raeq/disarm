@@ -64,6 +64,7 @@ from disarm._api import (
     registrations_sealed,
     remove_accents,
     remove_replacement,
+    replace_emoji,
     reverse_langs,
     sanitize_filename,
     script_info,
@@ -307,6 +308,7 @@ __all__ = [
     "fold_case",
     "collapse_whitespace",
     "demojize",
+    "replace_emoji",
     "set_emoji_provider",
     # Precompiled pipelines
     "canonicalize",

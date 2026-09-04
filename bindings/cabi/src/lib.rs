@@ -195,6 +195,22 @@ fn disarm_demojize(text: char_p::Ref<'_>, strip_modifiers: bool) -> char_p::Box 
     to_c(api::demojize(text.to_str(), strip_modifiers))
 }
 
+/// Replace every emoji with `replacement`, verbatim (#972). Free the result with
+/// [`disarm_string_free`].
+///
+/// The counterpart to [`disarm_demojize`], and a different question of a different
+/// table: naming reads CLDR, which annotates more than the emoji, and this reads the
+/// UCD's emoji properties, so `\u{00A9}` and `\u{2122}` stay put. `replacement` is
+/// inserted exactly as given — `""` closes an intra-word split and `" "` keeps two
+/// words apart, and no rule serves both.
+#[ffi_export]
+fn disarm_replace_emoji(
+    text: char_p::Ref<'_>,
+    replacement: char_p::Ref<'_>,
+) -> char_p::Box {
+    to_c(api::replace_emoji(text.to_str(), replacement.to_str()))
+}
+
 // ── Text cleaning (infallible) ──────────────────────────────────────────────────
 
 /// Collapse runs of whitespace to single spaces and trim.

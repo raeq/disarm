@@ -67,6 +67,10 @@ FORM_PRESERVING = {
     "escape_html",
     "strip_log_injection",
     "demojize",
+    # #972: the same targeted transform as `demojize` on the same scanner — it
+    # replaces emoji instead of naming them, and leaves every other code point,
+    # composed or decomposed, exactly as it found it.
+    "replace_emoji",
     "strip_format",
     "display_clean",
 }

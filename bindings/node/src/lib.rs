@@ -356,6 +356,14 @@ pub fn demojize(text: String, strip_modifiers: bool) -> String {
     api::demojize(&text, strip_modifiers)
 }
 
+/// Replace every emoji with `replacement`, verbatim (#972). The counterpart to
+/// `demojize`: that names an emoji from the CLDR table, which is wider than the emoji
+/// set, and this replaces what the UCD calls an emoji and nothing else.
+#[napi]
+pub fn replace_emoji(text: String, replacement: String) -> String {
+    api::replace_emoji(&text, &replacement)
+}
+
 // ── Normalization ─────────────────────────────────────────────────────────────
 
 /// Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.

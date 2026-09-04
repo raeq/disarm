@@ -196,10 +196,28 @@ NOT_A_STEP = {
 }
 
 
+#: ProfileSpec fields a `TextPipeline` reaches under a different argument name, because
+#: the argument carries a union rather than one setting. Listed rather than exempted: the
+#: field is still in scope, and the test below proves the argument actually sets it.
+REACHED_THROUGH = {
+    # #972: `demojize` takes `bool | str` — `True` names each emoji, a string replaces
+    # it. A second argument beside it would let a caller ask for both.
+    "demojize_replacement": "demojize",
+}
+
+
+def test_a_field_reached_through_another_argument_is_actually_set() -> None:
+    """The alias above has to be a real path, or it is an exemption wearing a name."""
+    assert disarm.TextPipeline(demojize=True)("aa🔥bb") == "aa fire bb"
+    assert disarm.TextPipeline(demojize="")("aa🔥bb") == "aabb"
+    assert disarm.TextPipeline(demojize="[x]")("aa🔥bb") == "aa[x]bb"
+
+
 def test_every_profilespec_field_is_reachable_from_textpipeline() -> None:
     """#911's ask 3. The gate that would have caught `strip_pua` when it was added."""
     constructor = set(inspect.signature(disarm.TextPipeline.__init__).parameters) - {"self"}
-    missing = [f for f in _profilespec_fields() if f not in constructor and f not in NOT_A_STEP]
+    reachable = constructor | {f for f, arg in REACHED_THROUGH.items() if arg in constructor}
+    missing = [f for f in _profilespec_fields() if f not in reachable and f not in NOT_A_STEP]
     assert not missing, (
         f"ProfileSpec fields with no TextPipeline argument: {missing}. "
         "A profile can ask for something a composed pipeline cannot."

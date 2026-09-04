@@ -77,6 +77,16 @@ class TestTheReplacementIsVerbatim:
     def test_any_string_goes_in(self) -> None:
         assert replace_emoji("aa🔥bb", "[emoji]") == "aa[emoji]bb"
 
+    def test_a_lone_regional_indicator_is_an_emoji_and_a_pair_is_one_emoji(self) -> None:
+        """Each indicator is `Emoji_Presentation=Yes`, so one goes on its own.
+
+        The pairing is about *counting*, not about membership: a flag must take one
+        replacement, not two, which only a non-empty replacement can see.
+        """
+        assert replace_emoji("x🇬y") == "xy"
+        assert replace_emoji("x🇬y", " ") == "x y"
+        assert replace_emoji("x🇬🇧y", " ") == "x y"
+
     def test_a_sequence_gets_one_replacement_not_one_per_code_point(self) -> None:
         """Invisible under `""`, and the whole point under `" "`."""
         assert replace_emoji("x🇬🇧y", " ") == "x y"

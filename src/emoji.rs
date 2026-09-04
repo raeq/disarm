@@ -370,9 +370,12 @@ fn opens_emoji_presentation(ch: char) -> bool {
 
 /// How many chars of an emoji-presentation sequence start at `window[0]`, if any.
 ///
-/// Returns `None` for anything the UCD does not call an emoji in this position —
-/// including a keycap base with no keycap after it, an `Emoji=Yes` base with no
-/// `U+FE0F`, and a lone regional indicator.
+/// Returns `None` for anything the UCD does not call an emoji in this position: a keycap
+/// base with no keycap after it (`1`, `#`), and an `Emoji=Yes` base with no `U+FE0F`
+/// (`\u{00A9}`, `\u{263A}`).
+///
+/// A regional indicator is `Emoji_Presentation=Yes` on its own, so it returns `Some(1)`;
+/// a pair returns `Some(2)`, because a flag is one emoji and must take one replacement.
 fn presentation_len_at(window: &[char]) -> Option<usize> {
     let first = *window.first()?;
 

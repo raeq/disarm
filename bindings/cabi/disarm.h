@@ -131,6 +131,20 @@ disarm_collapse_whitespace (
     char const * text);
 
 /** \brief
+ *  Per-script confusable coverage as JSON (`script`, `sources`, `folded`), or an error
+ *  in the [`DisarmResult`] for an unknown script (#963).
+ *
+ *  The denominator [`disarm_unmapped_confusables`] does not have: that measures one
+ *  bundled table against the whole 6,565-source population, so a script disarm ships no
+ *  table for reports a number determined by that absence rather than by its coverage.
+ *  `folded` counts sources any bundled table reaches, not sources folded *toward* this
+ *  script.
+ */
+DisarmResult_t
+disarm_confusable_coverage (
+    char const * script);
+
+/** \brief
  *  The Unicode `confusables.txt` release the bundled confusable tables were folded
  *  from, e.g. `"17.0.0"` (#560). Free the result with [`disarm_string_free`].
  *

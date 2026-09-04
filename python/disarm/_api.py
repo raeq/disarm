@@ -29,10 +29,11 @@ from disarm._boundary import (
     SmuggledPayload,
     _clear_replacements,
     _collapse_whitespace,
+    # Encoding detection
+    _confusable_coverage,
     _decode_smuggled,
     _decode_to_utf8,
     _demojize,
-    # Encoding detection
     _detect_encoding,
     # Predicates
     _detect_scripts,
@@ -117,6 +118,7 @@ from disarm._enums import (
     LANG_META,
     SCRIPT_META,
     Component,
+    ConfusableCoverage,
     LangMeta,
     Script,
     ScriptMeta,
@@ -2367,6 +2369,54 @@ def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[
         True
     """
     return frozenset(_unmapped_confusables(target_script=_target_script(target_script)))
+
+
+def confusable_coverage(script: str | Script) -> ConfusableCoverage:
+    """TR39 sources whose prototype is in *script*, and how many disarm folds (#963).
+
+    The denominator `unmapped_confusables` does not have. That function measures one
+    bundled table against the whole 6,565-source population, which is the right question
+    for a target disarm ships and a misleading one for a script it does not: Greek
+    reports almost the entire population unmapped, and the number means only *"there is
+    no Greek table"*. A count determined by a table's absence is a blind spot with a
+    number in front of it, which is worse than the exception it replaced, because it
+    looks like data.
+
+    This is the fair figure — of the sources whose prototype is in this script, how many
+    does disarm reach:
+
+    Args:
+        script: Script name in disarm's spelling (``"Greek"``) or a `Script` member.
+
+    Returns:
+        A `ConfusableCoverage` dict with ``script``, ``sources`` and ``folded`` keys.
+
+    Raises:
+        InvalidArgumentError: If *script* is neither a script disarm knows nor one the
+            census has a row for.
+
+    Note:
+        ``folded`` counts sources any bundled table reaches, not sources folded *toward*
+        this script. Greek is not zero: 71 of its 159 sources are Greek letters the Latin
+        table folds. The question a caller has is whether disarm neutralizes the source
+        at all, not which prototype TR39 picked for it.
+
+        The grouping uses the UCD's script property, so 19 scripts appear that disarm's
+        own enum does not name — ``"Yi"``, ``"Siddham"``, ``"PauCinHau"`` and 16 others,
+        72 sources between them, addressable by the UCD name with underscores removed. A
+        script disarm knows that TR39 never uses as a prototype returns ``0`` of ``0``.
+
+    Examples:
+        >>> confusable_coverage("Greek")["sources"]
+        159
+        >>> confusable_coverage("Han")["folded"]  # 1,393 sources, no CJK fold table
+        0
+        >>> confusable_coverage(Script.THAANA)  # a script TR39 never targets
+        {'script': 'Thaana', 'sources': 0, 'folded': 0}
+    """
+    key = script.value if isinstance(script, Script) else script
+    name, sources, folded = _confusable_coverage(key)
+    return {"script": name, "sources": sources, "folded": folded}
 
 
 def find_confusables(

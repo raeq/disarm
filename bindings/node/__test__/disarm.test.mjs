@@ -465,6 +465,27 @@ describe('metadata introspection (#404)', () => {
   test('scriptInfo returns static facts about a script', () => {
     expect(disarm.scriptInfo('Coptic').defaultLang).toBe('cop')
   })
+  test('confusableCoverage reports the per-script denominator, not the population', () => {
+    // Greek is the row the function exists for: no to-Greek table ships, so
+    // unmappedConfusables would report almost the whole 6,565-source population.
+    const greek = disarm.confusableCoverage('Greek')
+    expect(greek).toEqual({ script: 'Greek', sources: 159, folded: 71 })
+    // Not zero: the Latin table folds Greek letters that look Latin.
+    expect(greek.folded).toBeGreaterThan(0)
+    expect(greek.folded).toBeLessThan(greek.sources)
+  })
+  test('confusableCoverage answers 0 of 0 for a script TR39 never targets', () => {
+    expect(disarm.confusableCoverage('Thaana')).toEqual({
+      script: 'Thaana',
+      sources: 0,
+      folded: 0,
+    })
+  })
+  test('confusableCoverage reaches scripts the enum does not name', () => {
+    // The grouping is the UCD's, so Yi is addressable here and nowhere else.
+    expect(disarm.confusableCoverage('Yi').sources).toBe(12)
+    expect(() => disarm.scriptInfo('Yi')).toThrow(DisarmInvalidArgument)
+  })
   test('confusablesVersion reports a dotted numeric data version', () => {
     const v = disarm.confusablesVersion()
     expect(typeof v).toBe('string')
@@ -537,6 +558,7 @@ describe('metadata introspection (#404)', () => {
   test('an unknown code/script throws DisarmInvalidArgument', () => {
     expect(() => disarm.langInfo('zz')).toThrow(DisarmInvalidArgument)
     expect(() => disarm.scriptInfo('Nope')).toThrow(DisarmInvalidArgument)
+    expect(() => disarm.confusableCoverage('Nope')).toThrow(DisarmInvalidArgument)
   })
 })
 

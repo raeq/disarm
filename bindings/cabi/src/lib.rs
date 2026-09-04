@@ -739,6 +739,27 @@ fn disarm_script_info(name: char_p::Ref<'_>) -> DisarmResult {
     }
 }
 
+/// Per-script confusable coverage as JSON (`script`, `sources`, `folded`), or an error
+/// in the [`DisarmResult`] for an unknown script (#963).
+///
+/// The denominator [`disarm_unmapped_confusables`] does not have: that measures one
+/// bundled table against the whole 6,565-source population, so a script disarm ships no
+/// table for reports a number determined by that absence rather than by its coverage.
+/// `folded` counts sources any bundled table reaches, not sources folded *toward* this
+/// script.
+#[ffi_export]
+fn disarm_confusable_coverage(script: char_p::Ref<'_>) -> DisarmResult {
+    match api::confusable_coverage(script.to_str()) {
+        Ok(row) => ok(serde_json::json!({
+            "script": row.script,
+            "sources": row.sources,
+            "folded": row.folded,
+        })
+        .to_string()),
+        Err(e) => err(&e),
+    }
+}
+
 // ── Bundled data versions ───────────────────────────────────────────────────────
 
 /// The Unicode `confusables.txt` release the bundled confusable tables were folded

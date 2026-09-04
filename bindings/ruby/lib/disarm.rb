@@ -524,6 +524,22 @@ module Disarm
       translate_errors { _script_info(name.to_s) }
     end
 
+    # TR39 confusable sources whose prototype is in +script+, and how many of those
+    # disarm's bundled tables fold. Returns a Hash with +:script+, +:sources+ and
+    # +:folded+ keys.
+    #
+    # The denominator +unmapped_confusables+ does not have: that measures one bundled
+    # table against the whole 6,565-source population, so a script disarm ships no table
+    # for reports a number determined by that absence rather than by its coverage.
+    #
+    # +:folded+ counts sources any bundled table reaches, not sources folded *toward*
+    # this script — Greek is 71 of 159, because the Latin table folds Greek letters that
+    # look Latin. A script disarm knows that TR39 never uses as a prototype returns 0 of
+    # 0. Raises Disarm::InvalidArgument on an unknown script.
+    def confusable_coverage(script)
+      translate_errors { _confusable_coverage(script.to_s) }
+    end
+
     # The Unicode `confusables.txt` release the bundled confusable tables were folded
     # from, e.g. "17.0.0". Not a Unicode version for the library as a whole — the
     # case-folding and width tables track different releases (see docs/provenance.md).

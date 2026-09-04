@@ -21,6 +21,18 @@ pub struct LangMeta {
     pub context: &'static str,
 }
 
+/// Per-script confusable coverage — returned by [`confusable_coverage`] (#963).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ConfusableCoverage {
+    /// The script the figures are about, in disarm's own spelling.
+    pub script: &'static str,
+    /// TR39 single-code-point sources whose prototype is in this script.
+    pub sources: u32,
+    /// How many of those `sources` some bundled fold table reaches.
+    pub folded: u32,
+}
+
 /// Metadata for one script — returned by [`script_info`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -304,6 +316,64 @@ pub fn script_info(name: &str) -> Result<ScriptMeta, Error> {
     }
 }
 
+/// TR39 confusable sources whose prototype is in `script`, and how many of those the
+/// bundled tables fold (#963, #884).
+///
+/// The denominator [`unmapped_confusables`](crate::api::unmapped_confusables) does not
+/// have. That function measures one bundled table against the whole 6,565-source
+/// population, which is the right question for a target disarm ships and a misleading
+/// one for a script it does not: Greek would report almost the entire population
+/// unmapped, and the number would mean only "there is no Greek table". A count
+/// determined by a table's absence is a blind spot with a number in front of it.
+///
+/// This reports the fair figure instead — of the sources whose prototype is in this
+/// script, how many does disarm reach:
+///
+/// ```
+/// use disarm::api::confusable_coverage;
+///
+/// let greek = confusable_coverage("Greek").unwrap();
+/// assert_eq!(greek.sources, 159);
+/// assert!(greek.folded > 0 && greek.folded < greek.sources);
+/// ```
+///
+/// `folded` counts sources any bundled table reaches, not sources folded *toward* this
+/// script. Greek is not zero because 71 of its 159 sources are Greek letters that the
+/// Latin table folds — the question a caller has is whether disarm neutralizes the
+/// source at all, not which prototype TR39 picked for it.
+///
+/// The script property behind the grouping is the UCD's, from `Scripts.txt`, so 19
+/// scripts appear here that disarm's own enum does not name — `Yi`, `Siddham`,
+/// `PauCinHau` and 16 others, 72 sources between them. They are addressable by the
+/// UCD's name with underscores removed. A script disarm knows but TR39 never uses as a
+/// prototype returns `0` of `0`, which is the truth about it.
+///
+/// # Errors
+/// Returns an [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument) error
+/// naming the offending value if `script` is neither a script disarm knows nor one the
+/// census has a row for.
+pub fn confusable_coverage(script: &str) -> Result<ConfusableCoverage, Error> {
+    if let Some((name, sources, folded)) = crate::tables::prototype_census(script) {
+        return Ok(ConfusableCoverage {
+            script: name,
+            sources,
+            folded,
+        });
+    }
+    // A script disarm knows that TR39 never uses as a prototype: `0 of 0` is the
+    // answer, and it is a different statement from "no such script".
+    match crate::metadata::script(script) {
+        Some(row) => Ok(ConfusableCoverage {
+            script: row.name,
+            sources: 0,
+            folded: 0,
+        }),
+        None => Err(Error::from(crate::ErrorRepr::UnknownScript {
+            got: script.to_owned(),
+        })),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,6 +432,53 @@ mod tests {
         let de = lang_info("de").unwrap();
         assert_eq!(de.name, "German");
         assert_eq!(de.script, "Latin");
+    }
+
+    /// Greek is the row the fair denominator exists for: no to-Greek table ships, so
+    /// `unmapped_confusables` reports almost the whole 6,565-source population for it.
+    #[test]
+    fn confusable_coverage_reports_the_script_denominator() {
+        let greek = confusable_coverage("Greek").unwrap();
+        assert_eq!(greek.script, "Greek");
+        assert_eq!(greek.sources, 159);
+        // Not zero: 71 of the 159 are Greek letters the Latin table folds. A test that
+        // only asserted `> 0` would pass on a census that had lost the grouping.
+        assert_eq!(greek.folded, 71);
+    }
+
+    /// `0 of 0` and "no such script" are different answers, and both are answers.
+    #[test]
+    fn confusable_coverage_separates_zero_from_unknown() {
+        let thaana = confusable_coverage("Thaana").unwrap();
+        assert_eq!((thaana.sources, thaana.folded), (0, 0));
+        let err = confusable_coverage("Nonexistent").unwrap_err();
+        assert_eq!(err.kind(), crate::ErrorKind::InvalidArgument);
+    }
+
+    /// The census groups by the UCD's script property, which names scripts disarm's own
+    /// enum does not. Dropping them would lose 72 sources without any total moving.
+    #[test]
+    fn confusable_coverage_reaches_scripts_the_metadata_table_lacks() {
+        assert_eq!(confusable_coverage("Yi").unwrap().sources, 12);
+        assert!(script_info("Yi").is_err());
+        // And the two buckets `script_info` refuses outright, 1,036 sources between them.
+        assert_eq!(confusable_coverage("Common").unwrap().sources, 893);
+        assert_eq!(confusable_coverage("Inherited").unwrap().sources, 143);
+    }
+
+    /// Every row is internally consistent, over the whole shipped table rather than the
+    /// three rows the tests above name.
+    #[test]
+    fn confusable_coverage_folds_no_more_than_it_counts() {
+        for name in list_scripts() {
+            let row = confusable_coverage(name).unwrap();
+            assert!(
+                row.folded <= row.sources,
+                "{name}: folded {} of {}",
+                row.folded,
+                row.sources
+            );
+        }
     }
 
     #[test]

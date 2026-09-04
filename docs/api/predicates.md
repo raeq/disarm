@@ -115,6 +115,50 @@ assert rejected("hell\u043e")  # ...and the spoof still does not
 
 ---
 
+## confusable_coverage
+
+::: disarm.confusable_coverage
+
+### The denominator, and why it is a separate question
+
+`unmapped_confusables("latin")` measures one bundled table against all 6,565 TR39
+sources. That is the right question for a target disarm ships. Asked about a script it
+does not ship a table for, the same shape of answer is dominated by the absence:
+
+```python
+from disarm import confusable_coverage, unmapped_confusables
+
+# One table against the whole population: 4,330 sources it does not fold.
+assert len(unmapped_confusables(target_script="latin")) == 4330
+
+# The same question per script, against that script's own prototypes.
+assert confusable_coverage("Greek") == {"script": "Greek", "sources": 159, "folded": 71}
+assert confusable_coverage("Han") == {"script": "Han", "sources": 1393, "folded": 0}
+```
+
+Greek is 71 of 159 rather than 0 because `folded` counts sources any bundled table
+reaches: those 71 are Greek letters the Latin table folds. Han is 0 of 1,393 because no
+CJK fold table ships — a real gap, and now one with a denominator attached to it.
+
+The census sums to the whole population, so no script's row is a share of a bucket:
+
+```python
+from pathlib import Path
+
+import disarm
+
+rows = [
+    line.split("\t")[0]
+    for line in Path("src/tables/data/confusable_prototype_census.tsv")
+    .read_text(encoding="utf-8")
+    .splitlines()
+    if line and not line.startswith("#")
+]
+assert sum(disarm.confusable_coverage(name)["sources"] for name in rows) == 6565
+```
+
+---
+
 ## is_ascii
 
 ::: disarm.is_ascii

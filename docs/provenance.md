@@ -24,6 +24,7 @@ against for byte-stable behavior.
 | UCD script spans — `tests/fixtures/ucd_script_ranges.tsv` | UCD `Scripts.txt`, restricted to the scripts `src/scripts.rs` curates (#819) | **17.0.0** |
 | Decimal numbering systems — `decimal_digit_zeros.tsv` | UCD `Numeric_Type=Decimal`, one row per system zero (#777) | **17.0.0** |
 | Bidi direction — `bidi_strong_ranges.tsv` | UCD `Bidi_Class` (UAX&nbsp;#9 `L`, and `R`/`AL`) | **17.0.0** |
+| Confusable prototype census — `confusable_prototype_census.tsv` | `confusables.txt` grouped by the UCD `Script` of each prototype, from the vendored `data/Scripts.txt` (#963) | **17.0.0** (both inputs) |
 | Within-word joiners — `word_joiners.tsv` | UCD `General_Category` (`Pd`, `Pc`, plus `U+002E` by hand) | **17.0.0** |
 | Normalization — `normalize()`, and every NFC/NFKC step inside the presets | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **17.0.0** |
 | Grapheme segmentation — `grapheme_len`, `terminal_width`, the cluster boundaries `slugify` cuts on, and the mark runs `is_zalgo` / `strip_zalgo` count | UAX&nbsp;#29, via the [`unicode-segmentation`](https://crates.io/crates/unicode-segmentation) crate (not a bundled table) | **17.0.0** |

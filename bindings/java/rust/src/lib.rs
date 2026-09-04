@@ -1281,6 +1281,38 @@ fn new_script_meta<'l>(env: &mut Env<'l>, m: &api::ScriptMeta) -> JniResult<JObj
     )
 }
 
+/// TR39 sources whose prototype is in `script` and how many the bundled tables fold
+/// (#963); throws on an unknown script.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn confusableCoverage<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    script: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let script = script.mutf8_chars(env)?.to_string();
+        match api::confusable_coverage(&script) {
+            Ok(row) => {
+                let name = env.new_string(row.script)?;
+                env.new_object(
+                    JNIString::from("dev/disarm/ConfusableCoverage"),
+                    jni_sig!("(Ljava/lang/String;II)V"),
+                    &[
+                        JValue::Object(&name),
+                        // `sources` and `folded` are census counts: they fit an `i32`
+                        // by construction (the population is 6,565), and a widening
+                        // cast here would only hide a table that had stopped being one.
+                        JValue::Int(i32::try_from(row.sources).unwrap_or(i32::MAX)),
+                        JValue::Int(i32::try_from(row.folded).unwrap_or(i32::MAX)),
+                    ],
+                )
+            }
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
 /// Explain how `lang: "auto"` detection resolves `text` (infallible).
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn inspectAutoLang<'l>(

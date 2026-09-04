@@ -173,6 +173,24 @@ int main(void) {
     }
     printf("is_canonical tri-state            OK\n");
 
+    /* #963: the per-script confusable denominator, as JSON. Greek is the row the
+       fair figure exists for: a script disarm ships no fold table for still reports
+       coverage of its own prototypes rather than a number set by that absence. */
+    DisarmResult_t cov = disarm_confusable_coverage("Greek");
+    printf("%-28s %-6s\n", "confusable_coverage Greek",
+           cov.value && strstr(cov.value, "\"sources\":159") ? "OK" : "FAIL");
+    if (!cov.value || !strstr(cov.value, "\"sources\":159")) failures++;
+    if (cov.error) { printf("unexpected error: %s\n", cov.error); failures++; }
+    disarm_string_free(cov.value);
+    disarm_string_free(cov.error);
+
+    DisarmResult_t cov_bad = disarm_confusable_coverage("Nonexistent");
+    printf("%-28s %-6s\n", "confusable_coverage unknown",
+           (!cov_bad.value && cov_bad.error) ? "OK" : "FAIL");
+    if (cov_bad.value || !cov_bad.error) failures++;
+    disarm_string_free(cov_bad.value);
+    disarm_string_free(cov_bad.error);
+
     /* #586: the fold iterates to a fixed point rather than stopping after one pass.
        A fold exposes a composition: U+00A5 + U+0300 folds to Y + U+0300, which
        composes to U+1EF2. A single pass returned the decomposed "Y\u0300". */

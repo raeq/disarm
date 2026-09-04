@@ -681,6 +681,12 @@ fn main() {
         &out_dir.join("assigned_ranges.rs"),
         "ASSIGNED_RANGES",
     );
+    // #963: the per-script confusable denominator, so a script with no bundled table
+    // reports `0 of N` rather than a number determined by that table's absence.
+    generate_prototype_census(
+        &data_dir.join("confusable_prototype_census.tsv"),
+        &out_dir.join("confusable_prototype_census.rs"),
+    );
     // #777: UTS #39 §5.3 Mixed Numbers — the zero of each decimal numbering system.
     generate_decimal_digit_zeros(
         &data_dir.join("decimal_digit_zeros.tsv"),
@@ -770,6 +776,61 @@ fn generate_width_ranges(tsv_path: &Path, out_path: &Path) {
     }
     code.push_str("];\n");
     fs::write(out_path, code).unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));
+}
+
+/// Emit the per-script confusable prototype census (#963) as a sorted static.
+///
+/// Sorted by script name so the lookup can binary-search, and totals asserted here
+/// rather than at runtime: a census whose rows no longer sum to the source population
+/// is describing a different table than the one that ships beside it.
+fn generate_prototype_census(tsv_path: &Path, out_path: &Path) {
+    let content = fs::read_to_string(tsv_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", tsv_path.display()));
+    let mut rows: Vec<(String, u32, u32)> = Vec::new();
+    for line in content.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let mut it = t.split('\t');
+        let script = it.next().unwrap_or("").to_string();
+        let sources: u32 = it
+            .next()
+            .and_then(|f| f.parse().ok())
+            .unwrap_or_else(|| panic!("Bad `sources` field in {}: {t}", tsv_path.display()));
+        let folded: u32 = it
+            .next()
+            .and_then(|f| f.parse().ok())
+            .unwrap_or_else(|| panic!("Bad `folded` field in {}: {t}", tsv_path.display()));
+        assert!(
+            folded <= sources,
+            "{}: {script} folds {folded} of {sources} sources",
+            tsv_path.display()
+        );
+        assert!(
+            !script.is_empty() && script.is_ascii(),
+            "{}: script name must be non-empty ASCII, got {script:?}",
+            tsv_path.display()
+        );
+        rows.push((script, sources, folded));
+    }
+    let total: u32 = rows.iter().map(|(_, s, _)| s).sum();
+    assert_eq!(
+        total,
+        6565,
+        "{}: rows sum to {total} sources, not the 6,565 single-code-point sources in \
+         confusables.txt — regenerate with scripts/gen_confusable_census.py",
+        tsv_path.display()
+    );
+    rows.sort_unstable();
+    let mut code =
+        String::from("pub(crate) static CONFUSABLE_PROTOTYPE_CENSUS: &[(&str, u32, u32)] = &[\n");
+    for (script, sources, folded) in &rows {
+        writeln!(code, "    (\"{script}\", {sources}, {folded}),").unwrap();
+    }
+    code.push_str("];\n");
+    fs::write(out_path, code)
+        .unwrap_or_else(|e| panic!("Failed to write {}: {e}", out_path.display()));
 }
 
 /// Generate `NAME: &[(u32, u32)]` (sorted inclusive ranges) from a 2-column TSV.

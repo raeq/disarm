@@ -42,6 +42,16 @@ pub fn _unmapped_confusables(target_script: &str) -> PyResult<Vec<String>> {
         .collect())
 }
 
+/// TR39 sources whose prototype is in `script`, and how many the bundled tables fold (#963).
+///
+/// Returns `(script, sources, folded)`; the Python wrapper shapes it into a dict the way
+/// `script_info` returns one.
+#[pyfunction]
+pub fn _confusable_coverage(script: &str) -> PyResult<(String, u32, u32)> {
+    let row = crate::api::confusable_coverage(script)?;
+    Ok((row.script.to_owned(), row.sources, row.folded))
+}
+
 /// Scan `text` for the confusables the bundled table DOES fold, with their targets (#737).
 ///
 /// The mirror of `_find_unmapped_confusables`: that one answers "what would survive the

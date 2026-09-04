@@ -537,6 +537,27 @@ RSpec.describe Disarm do
       expect(Disarm.script_info("Coptic")[:default_lang]).to eq("cop")
     end
 
+    it "reports the per-script confusable denominator, not the population" do
+      # Greek is the row the method exists for: no to-Greek table ships, so
+      # unmapped_confusables would report almost the whole 6,565-source population.
+      greek = Disarm.confusable_coverage("Greek")
+      expect(greek).to eq({ script: "Greek", sources: 159, folded: 71 })
+      # Not zero: the Latin table folds Greek letters that look Latin.
+      expect(greek[:folded]).to be_between(1, greek[:sources] - 1)
+    end
+
+    it "answers 0 of 0 for a script TR39 never targets" do
+      expect(Disarm.confusable_coverage("Thaana")).to eq(
+        { script: "Thaana", sources: 0, folded: 0 }
+      )
+    end
+
+    it "reaches scripts disarm's own enum does not name" do
+      # The grouping is the UCD's, so Yi is addressable here and nowhere else.
+      expect(Disarm.confusable_coverage("Yi")[:sources]).to eq(12)
+      expect { Disarm.script_info("Yi") }.to raise_error(Disarm::InvalidArgument)
+    end
+
     it "reports the bundled confusables.txt version" do
       version = Disarm.confusables_version
       expect(version).to be_a(String)
@@ -625,6 +646,7 @@ RSpec.describe Disarm do
 
     it "raises Disarm::InvalidArgument on an unknown script" do
       expect { Disarm.script_info("Nope") }.to raise_error(Disarm::InvalidArgument)
+      expect { Disarm.confusable_coverage("Nope") }.to raise_error(Disarm::InvalidArgument)
     end
   end
 

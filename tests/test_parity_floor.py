@@ -42,6 +42,9 @@ FLOOR = frozenset(
         "catalog_key",
         "collapse_whitespace",
         "confusables_version",
+        # #963: shipped complete on all seven, so it joins the floor with the
+        # change that added it rather than waiting for a drift to be noticed.
+        "confusable_coverage",
         # #645: added complete on all seven, so they join the floor in the same
         # change rather than waiting for a later one to notice they drifted.
         "unicode_version",

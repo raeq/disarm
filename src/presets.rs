@@ -196,12 +196,13 @@ macro_rules! static_steps {
 
 /// One confusables→NFC fixed point, the body of [`Step::ConfusablesNfcFixedPointCtx`].
 ///
-/// A free function rather than an arm the `Ctx` twin re-enters (#974). `apply_into`
-/// calling itself makes it self-recursive, and LLVM will not `alwaysinline` a recursive
-/// function: the attribute is dropped, the match stops folding to one arm at each call
-/// site, and every preset links every table again — 662,087 bytes for `strip_format`
-/// against 27,490. Both arms call this instead, so the loop still lives once and nothing
-/// recurses.
+/// A free function rather than an arm, so the step arm can call it without `apply_into`
+/// calling itself (#974). Self-recursion is what LLVM will not `alwaysinline`: the
+/// attribute is dropped, the match stops folding to one arm at each call site, and every
+/// preset links every table again — 662,087 bytes for `strip_format` against 27,490.
+///
+/// The loop lives here once, which was the point of the arm that used to re-enter the
+/// dispatch to resolve the policy. It reaches the same place without the recursion.
 fn confusables_nfc_fixed_point_into(
     input: &str,
     target: &'static str,
@@ -423,9 +424,11 @@ fn apply_into(
                 }
             }
         }
-        // The two fixed-point twins resolve the policy and hand off to the const arm, so
-        // the loops live once. The variant is const at every call site, so the outer
-        // match still folds to one arm (#695).
+        // Both take their policy from the ctx and hand off to a free function (#974).
+        // Re-entering `apply_into` with a policy-carrying variant would read as the same
+        // thing and is not: it makes the dispatch recursive, which costs the inlining
+        // that #695 rests on. The variant is const at every call site, so the match still
+        // folds to one arm.
         Step::ConfusablesNfcFixedPointCtx(target) => {
             confusables_nfc_fixed_point_into(input, target, ctx.digit_policy, out)
         }

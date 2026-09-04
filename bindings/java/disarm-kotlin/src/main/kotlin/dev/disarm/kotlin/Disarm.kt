@@ -4,6 +4,7 @@ package dev.disarm.kotlin
 
 import dev.disarm.AnomalyReport
 import dev.disarm.AutoLangInspection
+import dev.disarm.ConfusableCoverage
 import dev.disarm.DigitPolicy
 import dev.disarm.HostnameAnalysis
 import dev.disarm.KeyCollision
@@ -313,6 +314,17 @@ fun getPipeline(profile: String): Pipeline = JDisarm.getPipeline(profile)
 fun langInfo(code: String): LangMeta = JDisarm.langInfo(code)
 
 fun scriptInfo(name: String): ScriptMeta = JDisarm.scriptInfo(name)
+
+/**
+ * TR39 sources whose prototype is in [script], and how many of those disarm folds (#963).
+ *
+ * The denominator [unmappedConfusables] does not have: that measures one bundled table
+ * against the whole 6,565-source population, so a script disarm ships no table for
+ * reports a number determined by that absence. `folded` counts sources any bundled table
+ * reaches, not sources folded *toward* this script — Greek is 71 of 159, because the
+ * Latin table folds Greek letters that look Latin.
+ */
+fun confusableCoverage(script: String): ConfusableCoverage = JDisarm.confusableCoverage(script)
 
 /**
  * The Unicode `confusables.txt` release the bundled confusable tables were folded from.

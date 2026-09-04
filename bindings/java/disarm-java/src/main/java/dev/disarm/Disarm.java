@@ -670,6 +670,21 @@ public final class Disarm {
         return Native.scriptInfo(name);
     }
 
+    /**
+     * TR39 sources whose prototype is in {@code script}, and how many disarm folds (#963).
+     *
+     * <p>The denominator {@link #unmappedConfusables} does not have: that measures one
+     * bundled table against the whole 6,565-source population, so a script disarm ships
+     * no table for reports a number determined by that absence rather than by its
+     * coverage. A script disarm knows that TR39 never uses as a prototype returns 0 of 0.
+     *
+     * @throws DisarmInvalidArgumentException if {@code script} is not a known script
+     */
+    public static ConfusableCoverage confusableCoverage(String script) {
+        Objects.requireNonNull(script, "script");
+        return Native.confusableCoverage(script);
+    }
+
     /** Explain how {@code lang: "auto"} detection resolves {@code text}. */
     public static AutoLangInspection inspectAutoLang(String text) {
         return Native.inspectAutoLang(req(text));

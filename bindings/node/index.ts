@@ -16,6 +16,7 @@ import type {
   KeyCollision,
   LangMeta,
   ScriptMeta,
+  ConfusableCoverage,
   Finding as NativeFinding,
   AnomalyReport as NativeAnomalyReport,
   HostnameAnalysis as NativeHostnameAnalysis,
@@ -28,6 +29,7 @@ export type {
   KeyCollision,
   LangMeta,
   ScriptMeta,
+  ConfusableCoverage,
 }
 
 /** Findings from {@link analyzeHostname}. `suspicious` is a maximally
@@ -710,6 +712,24 @@ export function langInfo(code: string): LangMeta {
  */
 export function scriptInfo(name: string): ScriptMeta {
   return call(() => native.scriptInfo(name))
+}
+
+/** TR39 sources whose prototype is in `script`, and how many of those disarm's bundled
+ * tables fold (#963).
+ *
+ * The denominator {@link unmappedConfusables} does not have. That function measures one
+ * bundled table against the whole 6,565-source population, which is the right question
+ * for a target disarm ships and a misleading one for a script it does not: Greek reports
+ * almost the entire population unmapped, and the number means only "there is no Greek
+ * table".
+ *
+ * `folded` counts sources any bundled table reaches, not sources folded *toward* this
+ * script — Greek is 71 of 159 because the Latin table folds Greek letters that look
+ * Latin. The grouping uses the UCD's script property, so `"Yi"` and 18 other scripts
+ * disarm's own enum does not name are addressable here. A script disarm knows that TR39
+ * never uses as a prototype returns 0 of 0. */
+export function confusableCoverage(script: string): ConfusableCoverage {
+  return call(() => native.confusableCoverage(script))
 }
 
 /**

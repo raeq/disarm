@@ -2,6 +2,7 @@ package dev.disarm.internal;
 
 import dev.disarm.AnomalyReport;
 import dev.disarm.AutoLangInspection;
+import dev.disarm.ConfusableCoverage;
 import dev.disarm.HostnameAnalysis;
 import dev.disarm.LangMeta;
 import dev.disarm.ScriptMeta;
@@ -195,6 +196,8 @@ public final class Native {
     public static native LangMeta langInfo(String code);
 
     public static native ScriptMeta scriptInfo(String name);
+
+    public static native ConfusableCoverage confusableCoverage(String script);
 
     public static native AutoLangInspection inspectAutoLang(String text);
 

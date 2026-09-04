@@ -39,6 +39,39 @@ class StructuredReportsTest {
     }
 
     @Test
+    void confusableCoverageReportsThePerScriptDenominator() {
+        // Greek is the row the method exists for: no to-Greek table ships, so
+        // unmappedConfusables would report almost the whole 6,565-source population.
+        ConfusableCoverage greek = Disarm.confusableCoverage("Greek");
+        assertEquals("Greek", greek.script());
+        assertEquals(159, greek.sources());
+        // Not zero, and not everything: the Latin table folds Greek letters that
+        // look Latin, so 71 of the 159 are already reached.
+        assertEquals(71, greek.folded());
+    }
+
+    @Test
+    void confusableCoverageAnswersZeroOfZeroForAnUntargetedScript() {
+        ConfusableCoverage thaana = Disarm.confusableCoverage("Thaana");
+        assertEquals(0, thaana.sources());
+        assertEquals(0, thaana.folded());
+    }
+
+    @Test
+    void confusableCoverageReachesScriptsTheEnumDoesNotName() {
+        // The grouping is the UCD's, so Yi is addressable here and nowhere else.
+        assertEquals(12, Disarm.confusableCoverage("Yi").sources());
+        assertThrows(DisarmInvalidArgumentException.class, () -> Disarm.scriptInfo("Yi"));
+    }
+
+    @Test
+    void confusableCoverageUnknownScriptThrows() {
+        assertThrows(
+                DisarmInvalidArgumentException.class,
+                () -> Disarm.confusableCoverage("NoSuchScript"));
+    }
+
+    @Test
     void inspectAutoLangExplainsChoice() {
         AutoLangInspection r = Disarm.inspectAutoLang("Москва"); // Москва
         assertNotNull(r.discriminatorsHit());

@@ -83,6 +83,15 @@ operations:
       java: collapseWhitespace
       kotlin: collapseWhitespace
       cabi: collapse_whitespace
+  - id: confusable_coverage
+    names:
+      rust: confusable_coverage
+      python: confusable_coverage
+      ruby: confusable_coverage
+      node: confusableCoverage
+      java: confusableCoverage
+      kotlin: confusableCoverage
+      cabi: confusable_coverage
   - id: confusables_version
     names:
       rust: confusables_version

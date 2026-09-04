@@ -815,6 +815,24 @@ pub fn is_tr39_claimed_emoji_row(ch: char) -> bool {
 
 include!(concat!(env!("OUT_DIR"), "/word_joiners_phf.rs"));
 
+include!(concat!(env!("OUT_DIR"), "/confusable_prototype_census.rs"));
+
+/// TR39 sources whose prototype is in `script`, and how many of those a bundled table
+/// folds (#963).
+///
+/// `None` for a script the census has no row for — which is a script with no confusable
+/// prototypes at all, not a script disarm declines to answer for. The distinction
+/// matters at the call site: the caller wants `0 of 0`, and a lookup that returned
+/// `(0, 0)` for a typo'd name would report full coverage of nothing.
+///
+/// The rows are sorted by script name at build time, so this is a binary search.
+pub(crate) fn prototype_census(script: &str) -> Option<(&'static str, u32, u32)> {
+    CONFUSABLE_PROTOTYPE_CENSUS
+        .binary_search_by(|&(name, _, _)| name.cmp(script))
+        .ok()
+        .and_then(|idx| CONFUSABLE_PROTOTYPE_CENSUS.get(idx).copied())
+}
+
 /// Whether `ch` joins parts of one word — `Pd`, `Pc`, or `U+002E FULL STOP` (#750).
 ///
 /// The separator set for `seg_word`'s single-letter segmentation check, which recognised

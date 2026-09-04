@@ -275,6 +275,7 @@ _SURROGATE_EXEMPT_CLASSES = {
     "SmuggledPayload",  # result object (#701)
     "LangMeta",
     "ScriptMeta",
+    "ConfusableCoverage",  # census row (#963)
     "Component",
     "Script",
     "NF",  # enums / enum metaclasses

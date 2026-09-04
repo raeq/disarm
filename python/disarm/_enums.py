@@ -254,6 +254,14 @@ class ScriptMeta(TypedDict):
     context_aware: bool  # Whether context=True improves transliteration for this script
 
 
+class ConfusableCoverage(TypedDict):
+    """Per-script confusable coverage — the fair denominator (#963)."""
+
+    script: str  # The script the figures are about, in disarm's spelling
+    sources: int  # TR39 sources whose prototype is in this script
+    folded: int  # How many of those `sources` a bundled fold table reaches
+
+
 # Every BUILTIN_LANGS code MUST have an entry. Drift = import-time assertion.
 LANG_META: dict[str, LangMeta] = {
     # European

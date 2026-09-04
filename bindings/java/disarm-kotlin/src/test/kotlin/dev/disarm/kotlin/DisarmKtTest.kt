@@ -162,6 +162,9 @@ class DisarmKtTest {
         assertFalse(langInfo("ru").name().isBlank())
         val name = listScripts().first()
         assertEquals(name, scriptInfo(name).name())
+        // #963: the per-script confusable denominator, not the 6,565-source population.
+        assertEquals(159, confusableCoverage("Greek").sources())
+        assertEquals(0, confusableCoverage("Thaana").sources())
         assertFalse(listContextLangs().isEmpty())
     }
 

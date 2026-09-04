@@ -1281,6 +1281,55 @@ fn new_script_meta<'l>(env: &mut Env<'l>, m: &api::ScriptMeta) -> JniResult<JObj
     )
 }
 
+/// Narrow a census count to the `jint` the record takes.
+///
+/// Cannot fail for a table `build.rs` accepted: the whole population is 6,565 sources,
+/// so every row is far inside `i32`. The `debug_assert` is what turns a table that
+/// stopped being one into a test failure rather than a plausible-looking number.
+fn census_count(value: u32) -> i32 {
+    debug_assert!(
+        i32::try_from(value).is_ok(),
+        "census count {value} does not fit an i32; the table is bounded at 6,565 sources"
+    );
+    i32::try_from(value).unwrap_or(i32::MAX)
+}
+
+/// TR39 sources whose prototype is in `script` and how many the bundled tables fold
+/// (#963); throws on an unknown script.
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn confusableCoverage<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    script: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let script = script.mutf8_chars(env)?.to_string();
+        match api::confusable_coverage(&script) {
+            Ok(row) => {
+                let name = env.new_string(row.script)?;
+                env.new_object(
+                    JNIString::from("dev/disarm/ConfusableCoverage"),
+                    jni_sig!("(Ljava/lang/String;II)V"),
+                    &[
+                        JValue::Object(&name),
+                        // Census counts, bounded by the source population. The invariant
+                        // is enforced where it can fail — `build.rs` refuses a table
+                        // whose rows do not sum to 6,565 — so this conversion is
+                        // defensive only. It saturates rather than panicking because the
+                        // crate denies `expect_used` and unwinding across the JNI
+                        // boundary is worse than a wrong number; the assertion makes a
+                        // violation loud in every debug build instead.
+                        JValue::Int(census_count(row.sources)),
+                        JValue::Int(census_count(row.folded)),
+                    ],
+                )
+            }
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
 /// Explain how `lang: "auto"` detection resolves `text` (infallible).
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn inspectAutoLang<'l>(

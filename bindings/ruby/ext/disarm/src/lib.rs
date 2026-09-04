@@ -710,6 +710,22 @@ fn lang_info(code: String) -> Result<RHash, Error> {
     Ok(hash)
 }
 
+/// `Disarm._confusable_coverage(script)` — TR39 sources whose prototype is in `script`
+/// and how many the bundled tables fold (#963), as a Ruby Hash with symbol keys
+/// (`{ script:, sources:, folded: }`). The denominator `unmapped_confusables` does not
+/// have. Fails (ArgumentError → Disarm::InvalidArgument) on an unknown script.
+fn confusable_coverage(script: String) -> Result<RHash, Error> {
+    let row = api::confusable_coverage(&script).map_err(|e| map_err(&e))?;
+    // GVL invariant: a Ruby method callback always holds the GVL. Justified.
+    #[allow(clippy::expect_used)]
+    let ruby = Ruby::get().expect("a Ruby method callback always holds the GVL");
+    let hash = ruby.hash_new();
+    hash.aset(ruby.to_symbol("script"), row.script)?;
+    hash.aset(ruby.to_symbol("sources"), row.sources)?;
+    hash.aset(ruby.to_symbol("folded"), row.folded)?;
+    Ok(hash)
+}
+
 /// `Disarm._script_info(name)` — curated metadata for one script as a Ruby Hash
 /// with symbol keys (`{ name:, default_lang:, example:, context_aware: }`);
 /// `default_lang` is `nil` when the core has none. Fails (ArgumentError →
@@ -986,6 +1002,10 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     // Metadata introspection (#404 phase 3 parity backfill).
     module.define_singleton_method("_lang_info", function!(lang_info, 1))?;
     module.define_singleton_method("_script_info", function!(script_info, 1))?;
+    module.define_singleton_method(
+        "_confusable_coverage",
+        function!(confusable_coverage, 1),
+    )?;
     module.define_singleton_method(
         "_confusables_version",
         function!(confusables_version, 0),

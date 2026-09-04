@@ -759,6 +759,17 @@ pub struct LangMeta {
     pub context: String,
 }
 
+/// Per-script confusable coverage — the fair denominator (#963).
+#[napi(object)]
+pub struct ConfusableCoverage {
+    /// The script the figures are about, in disarm's spelling.
+    pub script: String,
+    /// TR39 sources whose prototype is in this script.
+    pub sources: u32,
+    /// How many of those `sources` a bundled fold table reaches.
+    pub folded: u32,
+}
+
 /// Static facts about a Unicode script known to the transliteration tables.
 #[napi(object)]
 pub struct ScriptMeta {
@@ -782,6 +793,21 @@ pub fn lang_info(code: String) -> Result<LangMeta, NapiError> {
         script: m.script.to_string(),
         region: m.region.to_string(),
         context: m.context.to_string(),
+    })
+}
+
+/// TR39 sources whose prototype is in `script`, and how many the bundled tables fold
+/// (#963). The denominator `unmappedConfusables` does not have: it measures one table
+/// against the whole source population, so a script disarm ships no table for reports a
+/// number determined by that absence. An unknown name raises a
+/// `DisarmInvalidArgument`-tagged error.
+#[napi]
+pub fn confusable_coverage(script: String) -> Result<ConfusableCoverage, NapiError> {
+    let row = api::confusable_coverage(&script).map_err(|e| map_err(&e))?;
+    Ok(ConfusableCoverage {
+        script: row.script.to_string(),
+        sources: row.sources,
+        folded: row.folded,
     })
 }
 

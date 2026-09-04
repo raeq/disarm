@@ -10,8 +10,9 @@ its own clean-URL behaviour: it answers the extensionless form with 200 and 308s
     /                                200
     /index.html                      308 -> /
 
-So both of the things that tell a search engine where the content lives pointed at
-redirects — 78 canonicals and 78 sitemap entries. A canonical naming a redirect is a
+So every signal telling a search engine where the content lives pointed at redirects: 78
+canonicals, 78 sitemap entries, and the 78 `og:url` tags `overrides/main.html` emits from
+the same `page.canonical_url`. A canonical naming a redirect is a
 documented anti-pattern: the signal is weakened and sometimes discarded, which is the
 opposite of what a canonical is for.
 
@@ -34,6 +35,10 @@ from typing import Any
 
 #: `<link rel="canonical" href="…" />`, however the theme spaces it.
 CANONICAL = re.compile(r'(<link\s+rel="canonical"\s+href=")([^"]+)(")')
+#: The Open Graph and Twitter URL signals. `overrides/main.html` emits `og:url` from
+#: `page.canonical_url`, so it carried the same `.html` form the canonical did — one
+#: signal fixed and one left pointing at a 308 is not a fix (#694 review).
+META_URL = re.compile(r'(<meta\s+(?:property|name)="(?:og:url|twitter:url)"\s+content=")([^"]+)(")')
 #: `<loc>…</loc>`, one per sitemap entry.
 LOC = re.compile(r"(<loc>)([^<]+)(</loc>)")
 
@@ -57,8 +62,8 @@ def _rewrite(pattern: re.Pattern[str], text: str) -> str:
 
 
 def on_post_page(output: str, page: Any, config: Any) -> str:  # noqa: ANN401, ARG001
-    """Point each page's canonical at the URL that serves it."""
-    return _rewrite(CANONICAL, output)
+    """Point every URL signal on the page at the URL that serves it."""
+    return _rewrite(META_URL, _rewrite(CANONICAL, output))
 
 
 def on_post_build(config: Any) -> None:  # noqa: ANN401
@@ -95,7 +100,11 @@ def _stale_signals(site: Path) -> list[str]:
             if m.group(2).endswith(".html")
         ]
     for html in site.rglob("*.html"):
-        for m in CANONICAL.finditer(html.read_text(encoding="utf-8", errors="replace")):
-            if m.group(2).endswith(".html"):
-                out.append(f"{html.relative_to(site)}: {m.group(2)}")
+        text = html.read_text(encoding="utf-8", errors="replace")
+        for pattern in (CANONICAL, META_URL):
+            out += [
+                f"{html.relative_to(site)}: {m.group(2)}"
+                for m in pattern.finditer(text)
+                if m.group(2).endswith(".html")
+            ]
     return out

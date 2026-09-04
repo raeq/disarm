@@ -796,7 +796,8 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   `use_directory_urls: false` makes MkDocs write `.html` into every `rel=canonical` and every
   sitemap `<loc>`, and Cloudflare Pages answers the extensionless form with 200 while 308ing
   the `.html` form to it — so both of the signals telling a search engine where the content
-  lives pointed at redirects, 78 of each. A build hook now rewrites the two signals, and
+  lives pointed at redirects: 78 canonicals, 78 sitemap entries and the 78 `og:url` tags the
+  theme override emits from the same `page.canonical_url`. A build hook now rewrites them, and
   **nothing moves**: the `.html` files are still built, still deployed and still reachable, so
   every existing link keeps working and no indexed URL changes. That is what separates this
   from `use_directory_urls: true`, which would relocate all 78 and needs a preview deploy to

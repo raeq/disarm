@@ -23,8 +23,8 @@ HOOK = ROOT / "scripts" / "mkdocs_canonical_urls.py"
 
 def _hook():
     spec = importlib.util.spec_from_file_location("mkdocs_canonical_urls", HOOK)
+    assert spec is not None and spec.loader is not None, f"cannot load {HOOK}"
     module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
 
@@ -59,6 +59,19 @@ def test_a_url_without_the_extension_is_left_alone() -> None:
         assert _hook().served_url(url) == url
 
 
+def test_og_url_is_rewritten_too() -> None:
+    """`overrides/main.html` emits `og:url` from the same `page.canonical_url`, so fixing
+    the canonical alone left 78 tags pointing at a 308 (#694 review)."""
+    hook = _hook()
+    page = (
+        f'<link rel="canonical" href="{SITE}/user-guide/slugification.html" />\n'
+        f'<meta property="og:url" content="{SITE}/user-guide/slugification.html" />'
+    )
+    out = hook.on_post_page(page, None, None)
+    assert ".html" not in out, out
+    assert out.count(f"{SITE}/user-guide/slugification") == 2
+
+
 def test_the_hook_runs_on_every_build() -> None:
     """A hook nothing registers is a hook that never runs."""
     assert "scripts/mkdocs_canonical_urls.py" in (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
@@ -71,10 +84,12 @@ def test_the_self_check_would_catch_a_missed_signal(tmp_path: Path) -> None:
         f"<urlset><url><loc>{SITE}/CHANGELOG.html</loc></url></urlset>", encoding="utf-8"
     )
     (tmp_path / "page.html").write_text(
-        f'<link rel="canonical" href="{SITE}/page.html" />', encoding="utf-8"
+        f'<link rel="canonical" href="{SITE}/page.html" />\n'
+        f'<meta property="og:url" content="{SITE}/page.html" />',
+        encoding="utf-8",
     )
     stale = hook._stale_signals(tmp_path)
-    assert len(stale) == 2, stale
+    assert len(stale) == 3, stale
     with pytest.raises(RuntimeError, match="308"):
         hook.on_post_build(
             {"site_dir": str(tmp_path.with_name("missing"))} | {"site_dir": str(tmp_path)}

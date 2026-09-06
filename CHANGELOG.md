@@ -16,6 +16,17 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Java binding's javadoc linked a method the binding does not have, and only a
+  release could find out.** The comment on `Pipeline#purpose` (#860) referred to
+  `Disarm#listProfiles`, which exists in Python and not in Java. `javadoc` rejects a broken
+  `{@link}`, and the task ran nowhere except inside `publishAllPublicationsToStagingRepository`,
+  so the v0.16.0 Java publisher failed at the Central Portal step with nothing uploaded while
+  the core, Node and Ruby artifacts shipped. The link now names `Disarm#getPipeline(String)`,
+  and CI's Java job runs `:disarm-java:javadoc` beside `check`, so a broken reference fails
+  the pull request that introduces it rather than the release that follows.
+
 ## [0.16.0] — 2026-09-06
 
 ### Upgrade notes

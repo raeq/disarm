@@ -62,7 +62,7 @@ public final class Pipeline implements AutoCloseable {
      * What the named profile this was built from is for, in one sentence, or {@code null}
      * for a pipeline not built from a profile (#860).
      *
-     * <p>{@link Disarm#listProfiles} returns names and the step list says what a pipeline
+     * <p>{@link Disarm#getPipeline(String)} takes a name and the step list says what a pipeline
      * <em>does</em>; neither says what it is <em>for</em>. It matters most where two
      * profiles look alike and are not: {@code rag_ingest} recovers by transliteration and
      * {@code llm_guardrail} by folding homoglyphs.

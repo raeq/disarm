@@ -527,7 +527,10 @@ jobs:
         # `check` runs both modules — disarm-java (JUnit) and disarm-kotlin (kotlin
         # .test) — plus their JaCoCo ≥90% line-coverage gates; the committed Gradle
         # wrapper builds the JNI cdylib (cargoBuild) against the local core.
-        run: ./gradlew --no-daemon check
+        # `javadoc` too: it is not part of `check`, and the Maven publish is the only
+        # other place it runs. v0.16.0's Java publisher failed there on a `{@link}` to a
+        # method the binding does not have, after every PR gate had passed (#980).
+        run: ./gradlew --no-daemon check :disarm-java:javadoc
 
 
   cabi:

@@ -106,6 +106,7 @@ That is the contract, and it is what a consumer can plan against:
 | --- | --- |
 | `0.14.0` → `0.14.3` | Nothing to do. A key you stored still compares equal. |
 | `0.14.x` → `0.15.0` | Read the changelog's **Upgrade notes** first. Treat it as a possible reindex until they say otherwise. |
+| `0.15.x` → `0.16.0` | Read the changelog's **Upgrade notes** first: `KEY_SCHEMA_VERSION` goes 3 → 9 in six steps, and the table there names what moved at each one. |
 
 The same rule holds in every binding, because they all wrap one core.
 

@@ -16,6 +16,28 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-09-06
+
+### Upgrade notes
+
+**`KEY_SCHEMA_VERSION` goes 3 → 9 in this release.** Six changes each moved a stored
+output. Each carries its own note under *Added* or *Changed (breaking)*, and this is the one
+place they are listed together. If you persist any output named in the third column,
+recompute it once against 0.16.0; `disarm.KEY_SCHEMA_VERSION` reads `9`.
+
+| step | change | what moves, and what does not |
+|---|---|---|
+| 3 → 4 | single-letter Latin small capitals fold to their letter (#815) | `catalog_key` for seven code points; `search_key` and `sort_key` unchanged |
+| 4 → 5 | six confusable rows become reachable from every preset (#833) | `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`, including Greek prose with a final sigma; the three key builders unchanged |
+| 5 → 6 | the 54 negative enclosed letters fold to their letter (#815) | `catalog_key` for all 54; `search_key` and `sort_key` unchanged |
+| 6 → 7 | `llm_guardrail` and `strip_obfuscation` stop naming emoji (#910) | `strip_obfuscation` for any input containing emoji; `llm_guardrail` output also changes, and is not a stored key |
+| 7 → 8 | the deletion class is resolved, not only reported (#937) | `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `search_key`, `catalog_key`, `sort_key`, `skeleton_key`, `ml_normalize`, `llm_guardrail` and `rag_ingest`, for input containing `BS` or `DEL`; `strip_format` and `code_context` unchanged |
+| 8 → 9 | two measured-visual confusable rows admitted by multi-font agreement (#738) | `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables` for text containing either code point; `search_key`, `catalog_key` and `sort_key` unchanged |
+
+**Two surfaces change behaviour without moving a key.** `llm_guardrail` and
+`strip_obfuscation` now leave a visible emoji in place where they used to replace it with
+its English name (#910). Removing one is a separate, opt-in step: `replace_emoji` (#972).
+
 ### Added
 
 - **The meta-benchmark's prompt-hygiene composition replaces emoji with nothing (#972).**
@@ -579,7 +601,7 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   that divergence is #918's subject. The `build.rs` gate on the emoji/confusable overlap
   moves 50 → 54 and caught this, which is what it exists for.
 
-  **Upgrade note — `KEY_SCHEMA_VERSION` goes 4 → 5.** `catalog_key` moves for all 54.
+  **Upgrade note — `KEY_SCHEMA_VERSION` goes 5 → 6.** `catalog_key` moves for all 54.
   `search_key` and `sort_key` do not. The key-stability corpus contained none of these,
   which is the **third** time this cycle the fixture stayed green through a key change
   because its corpus did not sample the class being fixed; 58 rows added with it.

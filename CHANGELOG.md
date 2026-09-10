@@ -18,6 +18,15 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **Every ruff bump from Dependabot went red, because CI kept a second copy of the pin.**
+  `pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each pinned ruff, and
+  `tests/test_toolchain_pins.py` failed whenever they differed. Dependabot bumps the first
+  and cannot see a version inside a workflow's `run:` line, so its bump to 0.16.6 (#985)
+  failed that check and would have stayed red until someone copied the number across. The
+  *Lint & format* job now reads the pin from the `dev` extra, and the test runs that job's
+  install step against a stand-in `pip`: it must install exactly the pinned ruff, and must
+  stop, rather than install an unpinned one, when the pin is missing.
+
 - **The Java binding's javadoc linked a method the binding does not have, and only a
   release could find out.** The comment on `Pipeline#purpose` (#860) referred to
   `Disarm#listProfiles`, which exists in Python and not in Java. `javadoc` rejects a broken

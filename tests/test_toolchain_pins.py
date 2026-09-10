@@ -1,38 +1,56 @@
-"""The ruff version is written in two files, and nothing checked they agree.
+"""The ruff version is written once, in `pyproject.toml`, and CI reads it from there.
 
-`pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each pin ruff, and the
-`.pre-commit-config.yaml` hooks run `language: system` — whatever `ruff` is on PATH. So a
-developer's ruff can be older than CI's while every local gate passes, and the divergence
-only shows up as a red *Lint & format* job on a pull request.
+`pyproject.toml`'s `dev` extra pins ruff. The *Lint & format* job used to pin it a second
+time in `.github/workflows/ci.yml`, and the two copies went wrong in both directions:
 
-That happened: a branch passed `ruff format --check .` locally on 0.15.17 and failed CI on
-0.16.4, because 0.16 formats Python inside Markdown fenced code blocks and 0.15 does not.
-Nothing about the failure pointed at a version difference.
+* A developer's ruff drifted from CI's. The `.pre-commit-config.yaml` hooks run
+  `language: system` — whatever `ruff` is on PATH — so a branch passed
+  `ruff format --check .` locally on 0.15.17 and failed CI on 0.16.4, because 0.16 formats
+  Python inside Markdown fenced code blocks and 0.15 does not. Nothing about the failure
+  pointed at a version difference.
+* Dependabot bumped one copy. It updates `pyproject.toml` and cannot see a version inside
+  a workflow's `run:` line, so its ruff bump (#985) failed the check that compared the two,
+  and would have stayed red until someone copied the number across by hand.
 
-Three assertions, in the order they help:
+So the lint job reads the pin out of the `dev` extra. Five assertions:
 
-* the two pins agree — a pure file comparison, so it runs anywhere;
+* `ci.yml` writes no ruff version of its own;
+* the lint job's install step installs exactly the pinned ruff — its own script, run
+  against a stand-in `pip`, so a broken read fails here rather than on a pull request;
+* that step stops when there is no pin, rather than installing whatever ruff is newest;
 * the pin is at least 0.16 — below that the Markdown blocks stop being formatted and
   nothing fails, which is the silent direction;
-* the ruff you are actually running matches them — skipped when ruff is absent, since a
+* the ruff you are actually running matches it — skipped when ruff is absent, since a
   test runner without the `dev` extra is a legitimate configuration.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 
-#: `ruff==X.Y.Z`, in either file. An exact pin is deliberate — see the `dev` extra.
+#: The ci.yml step that installs ruff for the *Lint & format* job.
+LINT_STEP = "Install Python lint tools"
+
+#: `ruff==X.Y.Z`. An exact pin is deliberate — see the `dev` extra.
 PIN = re.compile(r"ruff==(\d+\.\d+\.\d+)")
+
+runs_the_lint_step = pytest.mark.skipif(
+    sys.platform == "win32" or sys.version_info < (3, 11),
+    reason="the step is a bash script that reads pyproject.toml with tomllib (3.11+); "
+    "CI runs it on ubuntu with Python 3.12",
+)
 
 
 def pinned_in(path: Path) -> list[str]:
@@ -43,9 +61,9 @@ def sole_pin(path: Path) -> str:
     """The one version `path` pins, or a failure that says what is wrong.
 
     Indexing `pinned_in(...)[0]` raises `IndexError` when the pin is removed or the regex
-    stops matching, and pytest does not guarantee that `test_the_two_ruff_pins_agree`
-    runs first — so the clear message is not reliably the one a reader sees. This makes
-    every test in the file fail the same legible way.
+    stops matching, and pytest does not guarantee which test runs first — so the clear
+    message is not reliably the one a reader sees. This makes every test in the file fail
+    the same legible way.
     """
     found = pinned_in(path)
     assert found, (
@@ -56,17 +74,66 @@ def sole_pin(path: Path) -> str:
     return found[0]
 
 
-def test_the_two_ruff_pins_agree() -> None:
-    """One version, written twice. They have to say the same thing."""
-    in_pyproject = pinned_in(PYPROJECT)
-    in_ci = pinned_in(CI)
-    assert in_pyproject, "pyproject.toml no longer pins ruff exactly"
-    assert in_ci, ".github/workflows/ci.yml no longer pins ruff exactly"
-    assert len(set(in_pyproject + in_ci)) == 1, (
-        f"ruff is pinned to different versions: pyproject.toml {in_pyproject}, "
-        f"ci.yml {in_ci}. A local gate then passes on one version and CI fails on the "
-        "other, and nothing about the failure says so."
+def lint_install_script() -> str:
+    workflow = yaml.safe_load(CI.read_text(encoding="utf-8"))
+    found = [
+        step["run"]
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if step.get("name") == LINT_STEP
+    ]
+    assert len(found) == 1, f"ci.yml has {len(found)} steps named {LINT_STEP!r}, not one"
+    return found[0]
+
+
+def run_lint_step(cwd: Path, stubs: Path) -> subprocess.CompletedProcess[str]:
+    """Run the step as Actions does, with a `pip` that prints its arguments instead."""
+    for name, body in (
+        ("pip", 'printf "%s\\n" "$@"'),
+        ("python", f'exec "{sys.executable}" "$@"'),
+    ):
+        stub = stubs / name
+        stub.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
+        stub.chmod(0o755)
+    return subprocess.run(  # noqa: S603 — fixed argv; the script is ci.yml's own
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", lint_install_script()],
+        cwd=cwd,
+        env={**os.environ, "PATH": f"{stubs}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
     )
+
+
+def test_ci_writes_no_ruff_version_of_its_own() -> None:
+    """A second copy is the one Dependabot cannot see."""
+    assert not pinned_in(CI), (
+        f"ci.yml pins ruff itself ({pinned_in(CI)}). Dependabot bumps pyproject.toml and "
+        "cannot see a version inside a workflow, so every ruff bump then goes red until "
+        "someone copies the number across. Read it from the `dev` extra instead."
+    )
+
+
+@runs_the_lint_step
+def test_the_lint_step_installs_the_pinned_ruff(tmp_path: Path) -> None:
+    result = run_lint_step(ROOT, tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == ["install", f"ruff=={sole_pin(PYPROJECT)}", "mypy"]
+
+
+@runs_the_lint_step
+def test_the_lint_step_stops_when_there_is_no_pin(tmp_path: Path) -> None:
+    """Without the pin, `pip install "" mypy` or a bare `ruff` would be the quiet outcome."""
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        '[project]\nname = "x"\n\n[project.optional-dependencies]\ndev = ["maturin"]\n',
+        encoding="utf-8",
+    )
+    result = run_lint_step(project, tmp_path)
+    assert result.returncode != 0, result.stdout
+    assert result.stdout == "", "pip ran although the dev extra pins no ruff"
 
 
 def test_ruff_is_pinned_at_least_to_the_version_that_formats_markdown() -> None:

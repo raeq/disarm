@@ -346,8 +346,10 @@ import re,pathlib
 print(re.search(r'ruff==([0-9.]+)', pathlib.Path('pyproject.toml').read_text()).group(1))")"
 ```
 
-`tests/test_toolchain_pins.py` asserts the two pins agree and that the ruff you are
-running matches them, so this is caught by `pytest` rather than by a pull request.
+The pin is written once, in the `dev` extra; CI's *Lint & format* job reads it from
+there. `tests/test_toolchain_pins.py` asserts that CI keeps no copy of its own and that
+the ruff you are running matches the pin, so this is caught by `pytest` rather than by a
+pull request.
 
 ### Three gates CI runs that the block above does not
 

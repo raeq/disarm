@@ -184,8 +184,21 @@ jobs:
         with:
           python-version: "3.12"
 
+      # ruff's version is written once, in the `dev` extra in pyproject.toml, and read from
+      # there. Dependabot bumps that file and cannot see this one, so a second pin here
+      # turned every ruff bump red until someone copied the number across (#985).
+      # tests/test_toolchain_pins.py runs this step against a stand-in pip.
       - name: Install Python lint tools
-        run: pip install ruff==0.16.5 mypy
+        run: |
+          ruff="$(python - <<'EOF'
+          import tomllib
+          with open("pyproject.toml", "rb") as f:
+              dev = tomllib.load(f)["project"]["optional-dependencies"]["dev"]
+          (ruff,) = [req for req in dev if req.startswith("ruff==")]
+          print(ruff)
+          EOF
+          )"
+          pip install "$ruff" mypy
 
       - name: Ruff lint
         run: ruff check .

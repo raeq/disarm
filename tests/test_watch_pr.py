@@ -385,3 +385,138 @@ def test_watch_stops_on_exactly_stuck_polls_sightings(monkeypatch: pytest.Monkey
     assert reads == watch_pr.STUCK_POLLS, (
         f"stopped after {reads} reads; STUCK_POLLS is {watch_pr.STUCK_POLLS}"
     )
+
+
+# --- #987: a repo without required conversation resolution ------------------
+
+
+def test_a_requested_review_holds_a_mergeable_pr() -> None:
+    """raeq/ibook2epub#11: CI went green three minutes before Copilot's review arrived.
+
+    That repo does not require conversation resolution, so nothing but the watcher stood
+    between a green PR and a merge the reviewer never got to comment on.
+    """
+    snap = Snapshot("OPEN", "CLEAN", checks=(GREEN,), author="raeq", requested=("Copilot",))
+    d = decide(snap, await_review=True)
+    assert d.action is Action.WAIT
+    assert "Copilot" in d.detail
+
+
+def test_no_review_yet_holds_a_mergeable_pr() -> None:
+    """The request lands a second after the PR opens, so its absence is not a review."""
+    snap = Snapshot("OPEN", "CLEAN", checks=(GREEN,), author="raeq")
+    assert decide(snap, await_review=True).action is Action.WAIT
+
+
+def test_the_authors_own_reply_is_not_a_review() -> None:
+    """Replying to a thread records a review by the PR's author, which must not count."""
+    snap = Snapshot("OPEN", "CLEAN", checks=(GREEN,), author="raeq", reviewed_by=("raeq",))
+    assert decide(snap, await_review=True).action is Action.WAIT
+
+
+def test_a_review_with_every_thread_resolved_merges() -> None:
+    """The other half: the gate must open, or the flag never merges anything."""
+    snap = Snapshot(
+        "OPEN",
+        "CLEAN",
+        threads=(DONE_THREAD,),
+        checks=(GREEN,),
+        author="raeq",
+        reviewed_by=("copilot-pull-request-reviewer", "raeq"),
+    )
+    assert decide(snap, await_review=True).action is Action.MERGE
+
+
+def test_without_the_flag_a_review_is_not_awaited() -> None:
+    """The default is unchanged: this repo's branch protection does the job itself."""
+    snap = Snapshot("OPEN", "CLEAN", checks=(GREEN,), author="raeq", requested=("Copilot",))
+    assert decide(snap).action is Action.MERGE
+
+
+def test_an_unresolved_thread_still_outranks_an_awaited_review() -> None:
+    """A comment already written is actionable now; one still coming is not."""
+    snap = Snapshot(
+        "OPEN", "CLEAN", threads=(OPEN_THREAD,), checks=(GREEN,), author="raeq", requested=("C",)
+    )
+    assert decide(snap, await_review=True).action is Action.STOP_THREADS
+
+
+def test_a_failure_still_stops_while_a_review_is_awaited() -> None:
+    """A red check is worth hearing about without waiting for the reviewer."""
+    snap = Snapshot("OPEN", "CLEAN", checks=(RED,), author="raeq", requested=("Copilot",))
+    d = decide(
+        snap,
+        await_review=True,
+        failure_polls=watch_pr.FAILURE_POLLS - 1,
+        last_broken="Doc tests",
+    )
+    assert d.action is Action.STOP_FAILED
+
+
+def test_an_awaited_review_is_not_a_structural_block() -> None:
+    """BLOCKED with nothing pending reads as stuck; a review on its way is not that."""
+    snap = Snapshot("OPEN", "BLOCKED", checks=(GREEN,), author="raeq", requested=("Copilot",))
+    d = decide(snap, await_review=True, stuck_polls=watch_pr.STUCK_POLLS)
+    assert d.action is Action.WAIT
+    assert d.stuck is False
+
+
+def test_no_merge_mode_still_waits_for_the_review() -> None:
+    """Reporting the PR as mergeable is premature while the reviewer has not spoken."""
+    snap = Snapshot("OPEN", "CLEAN", checks=(GREEN,), author="raeq", requested=("Copilot",))
+    assert decide(snap, allow_merge=False, await_review=True).action is Action.WAIT
+
+
+def test_reviews_are_read_from_the_gh_json() -> None:
+    """A reviewer with no login still counts as pending: an unnamed wait is still a wait."""
+    data = {
+        "author": {"login": "raeq"},
+        "reviewRequests": [
+            {"__typename": "Bot", "login": "Copilot"},
+            {"__typename": "Team", "name": "Core", "slug": "core"},
+            {"__typename": "Bot"},
+        ],
+        "reviews": [
+            {"author": {"login": "copilot-pull-request-reviewer"}, "state": "COMMENTED"},
+            {"author": {"login": "raeq"}, "state": "COMMENTED"},
+        ],
+    }
+    assert watch_pr._reviews(data) == (
+        "raeq",
+        ("Copilot", "core", "?"),
+        ("copilot-pull-request-reviewer", "raeq"),
+    )
+
+
+def test_absent_review_fields_read_as_empty() -> None:
+    assert watch_pr._reviews({}) == ("", (), ())
+
+
+def test_the_loop_passes_the_gate_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`decide()` in isolation cannot see a `watch()` that forgets to pass the flag."""
+    waiting = Snapshot("OPEN", "CLEAN", checks=(GREEN,), author="raeq", requested=("Copilot",))
+    calls: list[list[str]] = []
+
+    def recording_gh(args: list[str]) -> str:
+        calls.append(args)
+        return ""
+
+    monkeypatch.setattr(watch_pr, "fetch", lambda *a, **k: waiting)
+    monkeypatch.setattr(watch_pr, "_gh", recording_gh)
+    monkeypatch.setattr(watch_pr.time, "sleep", lambda _: None)
+    result = watch_pr.watch(1, "o/r", interval=0, max_polls=3, allow_merge=True, await_review=True)
+    assert result == 3
+    assert not any("merge" in args for args in calls)
+
+
+def test_the_flag_reaches_the_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def recording_watch(*_a: object, **kwargs: object) -> int:
+        seen.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(watch_pr, "watch", recording_watch)
+    monkeypatch.setattr(sys, "argv", ["watch_pr.py", "7", "--await-review"])
+    assert watch_pr.main() == 0
+    assert seen["await_review"] is True

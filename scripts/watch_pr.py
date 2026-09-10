@@ -23,6 +23,12 @@ bugs below, and each cost a real wait or a wrong report:
    mergeable; a non-required check still running is not a reason to hold. Merge on any
    mergeable state and let the required set gate it.
 
+On a repo whose branch protection does not require conversation resolution, a green PR
+is mergeable before its reviewer has said anything, and a thread that has not been
+written yet cannot be unresolved. `--await-review` emulates the rule (#987): no merge
+while a review request is pending, nor before someone other than the author has
+reviewed. This repo requires resolution, so the default leaves it to GitHub.
+
 The decision is a pure function of a `Snapshot`, so it is unit-tested in
 `tests/test_watch_pr.py` without touching the network. The I/O layer around it is thin
 on purpose.
@@ -32,12 +38,13 @@ Exit codes:
     1  closed without merging, or reported merged but not confirmed
     2  a human is needed: an unresolved review thread, a failed check, a structural
        block, a stale branch, or a thread listing too long to read in one page
-    3  gave up after --max-polls
+    3  gave up after --max-polls, including while awaiting a review that never came
 
 Usage:
     python scripts/watch_pr.py 912
     python scripts/watch_pr.py 912 --repo raeq/disarm --interval 20 --max-polls 200
     python scripts/watch_pr.py 912 --no-merge      # report only, never merge
+    python scripts/watch_pr.py 12 --repo raeq/ibook2epub --await-review
 """
 
 from __future__ import annotations
@@ -49,6 +56,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 DEFAULT_REPO = "raeq/disarm"
 
@@ -132,6 +140,12 @@ class Snapshot:
     checks: tuple[Check, ...] = ()
     #: True when the thread listing hit the page size, so `threads` is incomplete.
     threads_truncated: bool = False
+    #: The PR's author, whose own reviews — a reply to a thread is one — do not count.
+    author: str = ""
+    #: Reviewers asked and not yet answered.
+    requested: tuple[str, ...] = ()
+    #: Who has submitted a review, the author included.
+    reviewed_by: tuple[str, ...] = ()
 
     @property
     def unresolved(self) -> tuple[Thread, ...]:
@@ -144,6 +158,19 @@ class Snapshot:
     @property
     def broken(self) -> tuple[Check, ...]:
         return tuple(c for c in self.checks if c.broken)
+
+    @property
+    def awaited(self) -> str:
+        """Why a review is still outstanding, or "" when it is not.
+
+        A pending request is the reviewer asked and not yet answered. No review at all
+        covers the second after a PR opens, before the request exists.
+        """
+        if self.requested:
+            return f"awaiting review from {', '.join(self.requested)}"
+        if not any(login != self.author for login in self.reviewed_by):
+            return "awaiting a first review from someone other than the author"
+        return ""
 
 
 @dataclass
@@ -164,6 +191,7 @@ def decide(
     snap: Snapshot,
     *,
     allow_merge: bool = True,
+    await_review: bool = False,
     stuck_polls: int = 0,
     failure_polls: int = 0,
     last_broken: str = "",
@@ -224,6 +252,11 @@ def decide(
     if snap.merge_state in NEEDS_REBASE:
         return Decision(Action.REBASE, snap.merge_state)
 
+    # A review still to come (#987). Below everything actionable now, above merging and
+    # above the stuck report: a review on its way is neither mergeable nor structural.
+    if await_review and snap.awaited:
+        return Decision(Action.WAIT, snap.awaited)
+
     if snap.merge_state in MERGEABLE:
         if not allow_merge:
             return Decision(Action.STOP_STUCK, f"mergeable ({snap.merge_state}), --no-merge set")
@@ -260,6 +293,26 @@ def _gh(args: list[str]) -> str:
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=False).stdout.strip()
 
 
+def _reviews(data: dict[str, Any]) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    """The author, the pending requests and the reviewers, from `gh pr view --json`.
+
+    A requested reviewer carries a `login` (a user or a bot) or a `slug` (a team). One
+    carrying neither still counts, as "?": an unnamed wait is still a wait.
+    """
+    author = (data.get("author") or {}).get("login") or ""
+    requested = tuple(
+        r.get("login") or r.get("slug") or r.get("name") or "?"
+        for r in data.get("reviewRequests") or []
+        if isinstance(r, dict)
+    )
+    reviewed_by = tuple(
+        (r.get("author") or {}).get("login") or "?"
+        for r in data.get("reviews") or []
+        if isinstance(r, dict)
+    )
+    return author, requested, reviewed_by
+
+
 def fetch(pr: int, repo: str) -> Snapshot | None:
     """One snapshot, or None if the PR could not be read this cycle."""
     raw = _gh(
@@ -270,7 +323,7 @@ def fetch(pr: int, repo: str) -> Snapshot | None:
             "--repo",
             repo,
             "--json",
-            "state,mergeStateStatus,statusCheckRollup",
+            "state,mergeStateStatus,statusCheckRollup,author,reviewRequests,reviews",
         ]
     )
     if not raw:
@@ -289,6 +342,7 @@ def fetch(pr: int, repo: str) -> Snapshot | None:
         for c in data.get("statusCheckRollup") or []
         if isinstance(c, dict)
     )
+    author, requested, reviewed_by = _reviews(data)
 
     owner, name = repo.split("/", 1)
     # 100 is GitHub's max page size. `pageInfo` comes back too: a PR with more threads
@@ -327,6 +381,9 @@ def fetch(pr: int, repo: str) -> Snapshot | None:
         threads=threads,
         checks=checks,
         threads_truncated=truncated,
+        author=author,
+        requested=requested,
+        reviewed_by=reviewed_by,
     )
 
 
@@ -354,7 +411,14 @@ def _report(decision: Decision, pr: int) -> None:
         print(f"\n=== PR #{pr}: {decision.detail}")
 
 
-def watch(pr: int, repo: str, interval: int, max_polls: int, allow_merge: bool) -> int:
+def watch(
+    pr: int,
+    repo: str,
+    interval: int,
+    max_polls: int,
+    allow_merge: bool,
+    await_review: bool = False,
+) -> int:
     stuck_polls = 0
     failure_polls = 0
     last_broken = ""
@@ -373,6 +437,7 @@ def watch(pr: int, repo: str, interval: int, max_polls: int, allow_merge: bool) 
         decision = decide(
             snap,
             allow_merge=allow_merge,
+            await_review=await_review,
             stuck_polls=stuck_polls,
             failure_polls=failure_polls,
             last_broken=last_broken,
@@ -424,8 +489,21 @@ def main() -> int:
     ap.add_argument("--interval", type=int, default=20, help="seconds between polls")
     ap.add_argument("--max-polls", type=int, default=200)
     ap.add_argument("--no-merge", action="store_true", help="report only, never merge")
+    ap.add_argument(
+        "--await-review",
+        action="store_true",
+        help="hold the merge until requested reviews are in, for a repo that does not "
+        "require conversation resolution",
+    )
     args = ap.parse_args()
-    return watch(args.pr, args.repo, args.interval, args.max_polls, not args.no_merge)
+    return watch(
+        args.pr,
+        args.repo,
+        args.interval,
+        args.max_polls,
+        not args.no_merge,
+        await_review=args.await_review,
+    )
 
 
 if __name__ == "__main__":

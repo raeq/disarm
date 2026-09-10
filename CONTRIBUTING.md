@@ -716,6 +716,14 @@ It exits `0` merged, `1` closed without merging (or a merge it could not confirm
 body; a failed check; a stale branch; a structural block; or a thread listing too long
 to read in one page — and `3` if it gave up.
 
+On a repo whose branch protection does not require conversation resolution, pass
+`--await-review` (#987). A green PR is mergeable there before its reviewer has said
+anything, and a thread not yet written cannot be unresolved, so the flag holds the merge
+while a review request is pending and until someone other than the author has reviewed.
+Unresolved threads, failed checks and a needed rebase still come first, and a review that
+never arrives waits out `--max-polls` and exits `3`. This repo requires resolution, so it
+does not need the flag.
+
 Two stop conditions need confirming before they are reported, because for a few seconds
 after a push GitHub still describes the previous run. A structural block must hold for
 `STUCK_POLLS` polls (currently 3). A failed check must show the same check names for

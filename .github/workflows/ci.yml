@@ -210,6 +210,63 @@ jobs:
         run: mypy python/disarm --ignore-missing-imports
 
 
+  # ── Changelog fragment (#993) ───────────────────────────────────
+  changelog:
+    name: Changelog fragment
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      # towncrier check diffs the branch against its base, so it needs the base
+      # ref present — a shallow clone has neither the commits nor the merge base.
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # Same single-source rule as ruff above (#985): the pin lives in the `dev`
+      # extra, where Dependabot can see it, and is read from there.
+      - name: Install towncrier
+        run: |
+          tc="$(python - <<'EOF'
+          import tomllib
+          with open("pyproject.toml", "rb") as f:
+              dev = tomllib.load(f)["project"]["optional-dependencies"]["dev"]
+          (tc,) = [req for req in dev if req.startswith("towncrier==")]
+          print(tc)
+          EOF
+          )"
+          pip install "$tc"
+
+      # Dependabot's PRs must stay hands-off green (dependabot-auto-merge.yml arms
+      # auto-merge on every one); a lockfile bump has nothing to say in a changelog.
+      # For everything else the escape hatch is a `no changelog` label, applied
+      # deliberately and visible on the PR.
+      - name: A code change carries a changelog fragment
+        if: >-
+          github.event.pull_request.user.login != 'dependabot[bot]'
+          && !contains(github.event.pull_request.labels.*.name, 'no changelog')
+        run: |
+          if ! towncrier check --compare-with "origin/${{ github.base_ref }}"; then
+            echo "::error title=changelog::This PR changes code but adds no changelog.d/ fragment."
+            echo "Add changelog.d/${{ github.event.pull_request.number }}.<type>.md — see changelog.d/README.md."
+            exit 1
+          fi
+
+      # There is no `## [Unreleased]` section on main any more, so this is where a
+      # reviewer reads what the release will say, without checking the branch out.
+      - name: Render the unreleased section
+        run: |
+          {
+            echo "## Unreleased, as it will ship"
+            echo
+            towncrier build --draft --version NEXT
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
   # ── Test (Linux only, code changes only) ────────────────────────
   test:
     name: Test (ubuntu-latest, Python 3.12)
@@ -672,7 +729,7 @@ jobs:
   all-ok:
     name: All checks passed
     if: always()
-    needs: [changes, lint, test, doc-tests, cargo-audit, cargo-deny, ruby, node, java, cabi]
+    needs: [changes, lint, test, doc-tests, changelog, cargo-audit, cargo-deny, ruby, node, java, cabi]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate every language gate
@@ -684,6 +741,7 @@ jobs:
           DOCTESTS="${{ needs['doc-tests'].result }}"
           AUDIT="${{ needs['cargo-audit'].result }}"
           DENY="${{ needs['cargo-deny'].result }}"
+          CHANGELOG="${{ needs.changelog.result }}"
 
           failed=0
           fail() { echo "::error title=$1::$2"; failed=1; }
@@ -701,6 +759,9 @@ jobs:
           if [[ "$CODE" == "true" ]]; then
             [[ "$LINT" == "success" ]] || fail "lint" "lint/format failed ($LINT)"
             [[ "$TEST" == "success" ]] || fail "test" "tests failed ($TEST)"
+            # #993: a code change carries a changelog.d/ fragment, or a deliberate
+            # `no changelog` label. The job itself skips Dependabot's PRs.
+            [[ "$CHANGELOG" == "success" ]] || fail "changelog" "no changelog.d/ fragment ($CHANGELOG)"
           else
             echo "No code changes — lint/test not required"
           fi

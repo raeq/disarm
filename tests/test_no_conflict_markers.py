@@ -7,8 +7,11 @@ easy: `git merge` reports "Automatic merge failed", the next command is
 test reads that file as Markdown. Ruff formats the Python blocks inside it and the
 changelog test checks heading order; neither cares about a line of angle brackets.
 
-The disarm branches conflict constantly (every one of them edits `CHANGELOG.md`'s
-`[Unreleased]` block and most regenerate the key fixture), so this is not a rare shape.
+The disarm branches conflicted constantly — every one of them edited `CHANGELOG.md`'s
+`[Unreleased]` block, and most regenerate the key fixture — so this is not a rare shape.
+#993 removed the changelog half of that (entries are separate files in `changelog.d/`
+now), which makes the remaining conflicts rarer and this check *more* useful, not less:
+a shape you meet weekly you handle by reflex; one you meet twice a year you don't.
 """
 
 from __future__ import annotations

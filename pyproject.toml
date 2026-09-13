@@ -74,6 +74,11 @@ test = [
 dev = [
     "disarm[test]",
     "ruff==0.16.6",
+    # Assembles changelog.d/ into CHANGELOG.md at release time (#993). Pinned here
+    # and read from here by CI, for the reason #985 recorded: a second copy of a pin
+    # inside a workflow's `run:` line is invisible to Dependabot and turns every bump
+    # red until someone copies the number across.
+    "towncrier==26.9.0",
     "maturin>=1.14.0,<2",
     "pre-commit>=4.6.0",
 ]
@@ -199,3 +204,77 @@ pythonPlatform = "All"
 typeCheckingMode = "strict"
 include = ["python"]
 reportMissingModuleSource = false
+
+# --- Changelog fragments (#993) ---------------------------------------------
+# Entries live one-per-change in `changelog.d/` and are assembled into
+# CHANGELOG.md at release. Editing CHANGELOG.md directly is what made every pair
+# of concurrent PRs conflict: entries were prepended to the same anchor line, so
+# the collision was a function of concurrency rather than of content.
+[tool.towncrier]
+directory = "changelog.d"
+template = "changelog.d/_template.md"
+filename = "CHANGELOG.md"
+# Matches the existing headers, em dash included: `## [0.16.0] — 2026-09-06`.
+title_format = "## [{version}] — {project_date}"
+start_string = "<!-- towncrier release notes start -->\n"
+underlines = ["", "", ""]
+# Entries already carry their issue and PR numbers inline in the bold lead
+# (`**Thing (#990).**`), so towncrier must not append a second reference.
+issue_format = ""
+# Entries here are essays with code blocks, tables and measured numbers. Re-wrapping
+# them would destroy that, and the bullet is already part of the fragment: they are
+# written exactly as they will appear, so `towncrier build` concatenates rather than
+# reformats.
+wrap = false
+all_bullets = false
+# A fragment with no PR number yet — the first push of a branch — is `+slug.type.md`.
+orphan_prefix = "+"
+# A fragment is named for the PULL REQUEST, not the issue. Several PRs per issue
+# is the norm here — #972 alone produced #973, #975, #976 and #989 — so keying on
+# the issue would put four fragments at one filename and rebuild the conflict this
+# is removing.
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "breaking"
+name = "Changed (breaking)"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "security"
+name = "Security"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "performance"
+name = "Performance"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "docs"
+name = "Documentation"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "internal"
+name = "Internal"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "upgrade"
+name = "Upgrade notes"
+showcontent = true

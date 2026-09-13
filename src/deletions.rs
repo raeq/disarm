@@ -78,8 +78,17 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch == BS || ch == DEL {
-            col = col.saturating_sub(1);
-            line.truncate(col);
+            // Remove the cell *before* the cursor and close the gap. `truncate(col)` is
+            // the same thing only while `col == line.len()`, which holds for every input
+            // without a `CR` — so the two agreed until #937 added the `cr` flag that can
+            // move the cursor back. After a `CR` the truncate discarded the whole rest of
+            // the line, and at column 0 it discarded the line: `"abc\rX\u{8}"` gave `""`
+            // where a terminal and a typed backspace both give `"bc"`. Losing text the
+            // reader can see is the risk #934 declined to take.
+            if col > 0 {
+                col -= 1;
+                line.remove(col);
+            }
         } else if ch == LF || (ch == CR && (!cr || chars.peek().is_none_or(|&n| n == LF))) {
             for cell in line.drain(..) {
                 out.push_str(&cell);
@@ -130,6 +139,30 @@ mod tests {
         assert_eq!(resolve(&attack, false), "paypal");
         let with_del: String = "paypal".chars().flat_map(|c| [c, 'X', DEL]).collect();
         assert_eq!(resolve(&with_del, false), "paypal");
+    }
+
+    /// An erase removes the cell before the cursor, not everything after it (#995).
+    ///
+    /// `truncate(col)` is `pop` only while the cursor sits at the end of the line, which
+    /// is every input without a `CR`. Once `cr` has returned the cursor to column 0 the
+    /// two part company, and the truncate discards the whole rest of the line — the text
+    /// a reader can see, which is the loss #934 refused to risk.
+    #[test]
+    fn an_erase_after_a_carriage_return_removes_one_cell() {
+        assert_eq!(resolve("abc\rX\u{8}", true), "bc");
+        assert_eq!(resolve("abc\rXY\u{8}", true), "Xc");
+        // Nothing sits before column 0, so there is nothing to erase.
+        assert_eq!(resolve("abc\r\u{8}", true), "abc");
+        assert_eq!(resolve("abc\r\u{7F}", true), "abc");
+    }
+
+    /// The no-`CR` behaviour the truncate happened to get right must not move.
+    #[test]
+    fn an_erase_at_the_end_of_a_line_still_pops_one_cell() {
+        assert_eq!(resolve("abc\u{8}", false), "ab");
+        assert_eq!(resolve("abc\u{8}\u{8}", false), "a");
+        assert_eq!(resolve("\u{8}abc", false), "abc");
+        assert_eq!(resolve("ab\nc\u{8}", false), "ab\n");
     }
 
     /// The two branches a stack over code points gets wrong (#937's own first draft).

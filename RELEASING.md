@@ -107,6 +107,33 @@ independently without anyone having to guess which core a binding wraps.
 > discipline within `0.x`, but our **major**-version semantics are defined above
 > (support status), not by API compatibility.
 
+### Assemble the changelog first
+
+`CHANGELOG.md` is not edited by hand. Each change contributes one file to `changelog.d/`
+(#993; `changelog.d/README.md` in the repository says why — no link, because this page is
+also served from the docs site); the release pull request turns that directory into the
+release's section:
+
+```sh
+towncrier build --draft --version 0.17.0   # read it first
+towncrier build --version 0.17.0 --yes     # write it
+```
+
+The write is an **append above `<!-- towncrier release notes start -->`**: nothing below
+that marker moves, and `git diff --stat CHANGELOG.md` should show insertions only. It also
+deletes the fragments it consumed, which is the change that closes the cycle — leave them
+in and the next release repeats them.
+
+Do this **before** the version bump below, in the same pull request. Two reasons: the
+assembled section is what the version number is chosen against (a fragment under *Added*
+or *Changed (breaking)* means this cannot be a patch, per *Patch / point release* above),
+and CI's changelog gate skips a pull request that edits `CHANGELOG.md`, so the release
+pull request needs no fragment of its own.
+
+Read the assembled *Upgrade notes* before tagging. A `KEY_SCHEMA_VERSION` bump is written
+as an `upgrade` fragment alongside the change's own, and the release section is where the
+several of them first appear together — `0.16.0`'s table of six is what that looks like.
+
 ### Where the version lives — bump all nine
 
 A version bump touches **nine** files and ten `version` fields, across the eight items

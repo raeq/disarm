@@ -105,8 +105,10 @@ stays fast; nothing deprecated or beneficial is silently lost.
 6. Verify to the depth in the next section.
 7. Check transitive impact: `Cargo.lock`, the abi3 / Python-version floor, MSRV, no new
    transitive `unsafe`.
-8. Update `CHANGELOG.md`, and **flag any output-affecting change explicitly** (the 0.6.2
-   precedent).
+8. Add a changelog fragment — `changelog.d/<pull-request>.<type>.md`, never an edit to
+   `CHANGELOG.md` itself (#993) — and **flag any output-affecting change explicitly**
+   (the 0.6.2 precedent). An output-affecting upgrade takes a second `upgrade` fragment
+   beside the first, which is where it meets the reader at release time.
 
 ## Verification depth — scaled to blast radius
 

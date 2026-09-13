@@ -694,13 +694,54 @@ protection.
 3. Run Tier 1 locally (tests + linters) and confirm it's green.
 4. **Sign off** your commits (`git commit -s`) — see [Sign your work](#sign-your-work-developer-certificate-of-origin) above.
 5. Open a pull request describing **what** changed and **why**. Link any related issue.
-6. Wait for the required status checks — **"All checks passed"**, **"DCO sign-off"**
+6. **Add a changelog fragment** named for that pull request — see
+   [Changelog fragments](#changelog-fragments-993) below. CI gates it.
+7. Wait for the required status checks — **"All checks passed"**, **"DCO sign-off"**
    and **"iai estimated-cycles gate"** — to go green. The first is a single roll-up:
    #583 collapsed the former per-language contexts into it, so one green tick now
    stands for the whole Rust, Python, binding and doc matrix.
 
 A PR that arrives with a passing CI run and a focused test is the easiest kind to
 review and merge. Thank you for contributing.
+
+### Changelog fragments (#993)
+
+**Do not edit `CHANGELOG.md`.** It is assembled at release time from one file per change
+in `changelog.d/`, and there is no `## [Unreleased]` section to add to. The rules below
+are the short version; `changelog.d/README.md` in the repository is the full one.
+
+This is not a style preference. Every entry used to be prepended to the same anchor, so
+two pull requests open at once conflicted on that file *every time*, whatever they said —
+and entries here are essays, averaging 23 lines, so resolving one was never a two-line
+merge. Two fragments are two different files, and git only conflicts on the same region
+of the same file.
+
+```bash
+# Named for the PULL REQUEST, not the issue: several PRs per issue is normal here,
+# and an issue-numbered fragment would rebuild the conflict on day one.
+cat > changelog.d/991.fixed.md <<'EOF'
+- **`demojize` destroyed 777 non-emoji characters (#990).** `demojize("rated 3 ★ of 5")`
+  returned `rated 3 [?] of 5` — the star is `U+2605`, which the UCD gives no emoji
+  presentation. Both scanners now ask the UCD rather than a block range.
+EOF
+```
+
+Write the fragment **exactly as it should appear** in the changelog: leading `- `, bold
+lead-in naming the defect or capability with its numbers inline, two-space continuation
+indent. Assembly concatenates and never re-wraps, so what a reviewer reads in your pull
+request is what ships. The type suffix picks the heading (`fixed`, `added`, `changed`,
+`breaking`, `docs`, `internal`, `performance`, `security`, `upgrade`).
+
+```bash
+towncrier build --draft --version NEXT       # the unreleased section, rendered
+towncrier check --compare-with origin/main   # exactly what CI's gate runs
+```
+
+CI's *Changelog fragment* job requires one on any pull request that changes code, and
+renders the draft into its job summary so reviewers see the assembled section without
+checking the branch out. Dependabot's pull requests are exempt — a lockfile bump has
+nothing to say in a changelog, and its auto-merge lane has to stay hands-off green. For
+anything else, the escape hatch is a deliberate, visible `no changelog` label.
 
 ### Watching a PR to merge
 

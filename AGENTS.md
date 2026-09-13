@@ -168,9 +168,35 @@ mkdocs build --strict                       # broken internal links, missing nav
 ```
 
 `mkdocs build --strict` resolves links **relative to the docs site**, so a
-`docs/`-prefixed link that works on GitHub fails here and vice versa. The
-CHANGELOG convention is to name a doc path as inline code with no link, which
-reads correctly in both places.
+`docs/`-prefixed link that works on GitHub fails here and vice versa. Naming a doc
+path as inline code with no link reads correctly in both places — see the changelog
+convention below, which is where that rule mainly bites.
+
+### Changelog: write a fragment, never edit `CHANGELOG.md` (#993)
+
+`CHANGELOG.md` is assembled at release time from one file per change in `changelog.d/`.
+Editing it directly conflicts with every other open pull request, which is the reason
+the directory exists. There is no `## [Unreleased]` section to add to.
+
+```bash
+# One file per change, named for the PULL REQUEST, not the issue.
+$EDITOR changelog.d/991.fixed.md
+
+towncrier build --draft --version NEXT   # read the unreleased section
+towncrier check --compare-with origin/main   # what CI gates
+```
+
+Three things to get right; `changelog.d/README.md` has the rest:
+
+* **The number is the pull request.** Several pull requests per issue is the norm here
+  — #972 alone produced #973, #975, #976 and #989 — so an issue-numbered fragment
+  rebuilds the conflict it removes.
+* **The fragment is the entry, byte for byte.** Leading `- `, bold lead-in, two-space
+  continuation indent. Assembly concatenates and never reformats, so write it as it
+  should ship.
+* **Name a doc path as inline code with no link**, per `mkdocs build --strict` above:
+  `CHANGELOG.md` is read both from the repository root and, through a symlink, as a
+  page on the docs site.
 
 ### Binding gates
 

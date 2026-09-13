@@ -122,12 +122,14 @@ def test_glue_pin_tracks_the_minor(relative: str) -> None:
 def test_the_changelog_has_an_entry_for_this_version() -> None:
     """A released version with no changelog section is a release nobody can read.
 
-    Only checked once the version is stamped: on a development commit between
-    releases the top section is `[Unreleased]`, and that is correct.
+    Only checked once the version is stamped. Between releases there is no section for
+    the next version at all — unreleased entries are files in `changelog.d/` (#993),
+    and `towncrier build` turns them into one. That is correct, and this passes because
+    the version it looks for is still the last released one.
     """
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     version = canonical_version()
     assert f"## [{version}]" in text, (
-        f"CHANGELOG.md has no `## [{version}]` section. Stamp it before tagging: "
-        "the release PR renames `[Unreleased]`."
+        f"CHANGELOG.md has no `## [{version}]` section. Assemble it before tagging: "
+        f"`towncrier build --version {version} --yes`. See RELEASING.md."
     )

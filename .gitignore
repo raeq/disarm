@@ -142,6 +142,8 @@ site/
 
 # ── Maturin / PyO3 ───────────────────────────────────
 *.d
+# ...but the changelog fragment directory is source, not a depfile.
+!changelog.d/
 
 # ── macOS debug symbols (dSYM bundles) ───────────────
 *.dSYM/

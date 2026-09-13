@@ -2523,3 +2523,63 @@ def test_a_control_never_sets_the_scale_inside_a_parcel():
     )
     # The control is still placed on that scale, just not fitted to it.
     assert item.scores["null-baseline@1"] < -100
+
+
+def test_the_substituted_note_names_the_code_points_it_counts():
+    """The `letter_substituted` note enumerates a span; the span had a hole in it.
+
+    Written as `U+1F232..U+1F23A` the parenthetical named 14 code points beside a
+    count of 13. U+1F237 sits inside that span and is Emoji=Yes,
+    Emoji_Presentation=No, so it never enters the suite's domain — the emoji set
+    is the normative Emoji_Presentation one.
+
+    The note is checked against the set the suite would actually score, derived by
+    running its own `_runs` predicate over the bundled property table, rather than
+    against a second copy of the answer. Equality both ways is the point: a count
+    beside a list catches a code point too many, and only the derived set catches
+    one too few when a UCD bump adds a squared CJK emoji that folds the same way.
+    """
+    import re
+    import unicodedata
+    from pathlib import Path
+
+    data = Path(__file__).resolve().parents[1] / "src" / "tables" / "data"
+
+    def _code_points(name: str) -> set[int]:
+        out: set[int] = set()
+        for line in (data / name).read_text(encoding="utf-8").splitlines():
+            if not line.strip() or line.startswith("#"):
+                continue
+            lo, hi = line.split("\t")[:2]
+            out.update(range(int(lo, 16), int(hi, 16) + 1))
+        return out
+
+    # `provenance` is a class attribute and `_runs` a staticmethod; no instance needed.
+    suite = academic.EmojiDelimiterSegmentation
+    stated = re.search(
+        r"same (\d+) code points — the Squared and Circled CJK emoji \(([^)]*)\)",
+        suite.provenance.notes,
+    )
+    assert stated, "the note no longer states the set beside its count"
+    listed = {
+        cp
+        for lo, hi in re.findall(r"U\+([0-9A-F]{4,6})(?:\.\.U\+([0-9A-F]{4,6}))?", stated.group(2))
+        for cp in range(int(lo, 16), int(hi or lo, 16) + 1)
+    }
+    # What the suite would score, by its own ladder: NFKC closes the carrier back
+    # into a single alphanumeric run.
+    derived = {
+        cp
+        for cp in _code_points("emoji_presentation.tsv")
+        if suite._runs(unicodedata.normalize("NFKC", suite.LEFT + chr(cp) + suite.RIGHT)) == 1
+    }
+    assert listed == derived, (
+        "the note names a different set than the suite scores; "
+        f"only in the note: {sorted(f'U+{c:04X}' for c in listed - derived)}, "
+        f"only in the run: {sorted(f'U+{c:04X}' for c in derived - listed)}"
+    )
+    assert len(derived) == int(stated.group(1)), (
+        f"the note enumerates {len(derived)} code points for a count of {stated.group(1)}"
+    )
+    # The note's stated reason for the gap between the two sub-ranges.
+    assert 0x1F237 in _code_points("emoji_property.tsv")

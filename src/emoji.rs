@@ -474,7 +474,7 @@ fn opens_emoji_presentation(ch: char) -> bool {
     tables::is_emoji_presentation(ch) || is_regional_indicator(ch)
 }
 
-/// How many chars of an emoji-presentation sequence start at `window[0]`, if any.
+/// One emoji-presentation **head**: a base and the modifiers bound to it, no ZWJ chain.
 ///
 /// Returns `None` for anything the UCD does not call an emoji in this position: a keycap
 /// base with no keycap after it (`1`, `#`), and an `Emoji=Yes` base with no `U+FE0F`
@@ -482,14 +482,13 @@ fn opens_emoji_presentation(ch: char) -> bool {
 ///
 /// A regional indicator is `Emoji_Presentation=Yes` on its own, so it returns `Some(1)`;
 /// a pair returns `Some(2)`, because a flag is one emoji and must take one replacement.
-/// One emoji-presentation *head*: a base and the modifiers bound to it, no ZWJ.
 ///
-/// Split out of [`presentation_len_at`] so following a chain can be a loop instead of a
-/// recursion (#995). The recursion descended once per link, which the nine-code-point
-/// match window bounded by accident; once the window follows a sequence past its edge the
-/// depth is whatever the input says, and a long enough chain overflowed the stack — an
-/// abort no caller can catch, on input from outside. Chaining lives in the caller's loop,
-/// so nothing here calls anything that calls this.
+/// Split out of [`presentation_len_at`] so that following a chain can be a loop instead
+/// of a recursion (#995). The recursion descended once per link, which the
+/// nine-code-point match window bounded by accident; once the window follows a sequence
+/// past its edge the depth is whatever the input says, and a long enough chain overflowed
+/// the stack — an abort no caller can catch, on input from outside. Chaining lives in the
+/// caller's loop, so nothing here calls anything that calls this.
 fn head_len_at(window: &[char]) -> Option<usize> {
     let first = *window.first()?;
 
@@ -537,6 +536,18 @@ fn head_len_at(window: &[char]) -> Option<usize> {
     Some(len)
 }
 
+/// How many chars of an emoji-presentation sequence start at `window[0]`, if any.
+///
+/// One head ([`head_len_at`]) followed by the ZWJ chain hanging off it, so this is the
+/// length of the whole emoji — the thing that must take exactly one replacement.
+///
+/// The answer is a function of the slice it is given, which is the caller's problem and
+/// not a small one: UTS #51 puts no limit on a ZWJ chain, so there is no window size that
+/// is always enough, and a slice that stops mid-sequence returns a short answer rather
+/// than saying so. [`CharWindow::presentation_len`] is what deals with that; a caller
+/// passing a bare fixed slice will split long sequences (#995).
+///
+/// A flag and a keycap take no continuation, so neither chains.
 pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
     let first = *window.first()?;
     let mut len = head_len_at(window)?;

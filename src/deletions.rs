@@ -78,7 +78,9 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch == BS || ch == DEL {
-            // Remove the cell *before* the cursor and close the gap. `truncate(col)` is
+            // Erase the cell *before* the cursor, leaving the cells right of it where
+            // they are — in a terminal a backspace moves the cursor and the screen does
+            // not shift; shifting is what a line editor does. `truncate(col)` is
             // the same thing only while `col == line.len()`, which holds for every input
             // without a `CR` — so the two agreed until #937 added the `cr` flag that can
             // move the cursor back. After a `CR` the truncate discarded the whole rest of
@@ -87,12 +89,12 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
             // reader can see is the risk #934 declined to take.
             if col > 0 {
                 col -= 1;
-                // Blank the cell rather than `remove` it. The two print the same — a
-                // cell contributes its own text and nothing else — but `remove` shifts
-                // every cell to its right, which is O(1) only at the end of the line and
-                // made `"a"*n + "\r" + "X\u{8}"*n` quadratic: 4x per doubling, measured.
-                // An empty cell also keeps `col` addressing the same position it did
-                // before, so a later overwrite lands where the terminal would put it.
+                // Blanking, not `remove`: the cell stops contributing text and every
+                // other cell keeps its column. `remove` would shift, which is both the
+                // wrong model (above) and O(1) only at the end of a line — it made
+                // `"a"*n + "\r" + "X\u{8}"*n` quadratic, 4x per doubling, measured.
+                // Keeping the column is what lets a later overwrite land where the
+                // terminal would put it.
                 line[col].clear();
             }
         } else if ch == LF || (ch == CR && (!cr || chars.peek().is_none_or(|&n| n == LF))) {
@@ -169,6 +171,21 @@ mod tests {
         assert_eq!(resolve("abc\u{8}\u{8}", false), "a");
         assert_eq!(resolve("\u{8}abc", false), "abc");
         assert_eq!(resolve("ab\nc\u{8}", false), "ab\n");
+    }
+
+    /// An erase blanks a cell; it does not shift the ones to its right (#995).
+    ///
+    /// The distinction is invisible without a `CR` — there is nothing right of the cursor
+    /// to shift — and this is the shortest input where the two models part company. A
+    /// terminal moves the cursor and leaves the screen alone: `"aa"`, return, overwrite
+    /// column 0, erase it, overwrite it again, and both columns are still there. Shifting
+    /// answers `"a"`, having eaten a character the reader can still see. `remove` was the
+    /// first draft of the fix above and this is why it is not the last.
+    #[test]
+    fn an_erase_does_not_shift_the_rest_of_the_line() {
+        assert_eq!(resolve("aa\ra\u{8}a", true), "aa");
+        // Same shape, distinguishable cells.
+        assert_eq!(resolve("ab\rX\u{8}Y", true), "Yb");
     }
 
     /// An erase takes one cell, never the rest of the line (#995).

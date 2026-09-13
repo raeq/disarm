@@ -29,6 +29,7 @@ Five assertions:
 
 from __future__ import annotations
 
+import ast
 import re
 import shutil
 import subprocess
@@ -36,7 +37,6 @@ import sys
 from pathlib import Path
 
 import pytest
-import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 FRAGMENTS = ROOT / "changelog.d"
@@ -57,14 +57,40 @@ needs_towncrier = pytest.mark.skipif(
 )
 
 
-def config() -> dict:
-    with (ROOT / "pyproject.toml").open("rb") as f:
-        return tomllib.load(f)["tool"]["towncrier"]
+#: The header opening one `[[tool.towncrier.type]]` entry in `pyproject.toml`.
+TYPE_HEADER = "[[tool.towncrier.type]]"
+
+#: The two keys of one, as written: `directory = "fixed"` / `name = "Fixed"`.
+TYPE_KEY = re.compile(r'^(directory|name)\s*=\s*"([^"]+)"')
 
 
 def declared_types() -> dict[str, str]:
-    """directory -> display name, e.g. `{"fixed": "Fixed"}`."""
-    return {t["directory"]: t["name"] for t in config()["type"]}
+    """directory -> display name, e.g. `{"fixed": "Fixed"}`, scanned not parsed.
+
+    `tomllib` is 3.11+ and `requires-python` is `>=3.10`, so importing it would make
+    this whole module uncollectable on the floor — not one skipped test. It is the
+    same trap `scripts/mkdocs_build_banner.py` documents, and the same answer: two
+    keys from one known array of tables do not need a parser, and walking to the
+    header is what stops a `name` in some other table being picked up.
+    """
+    types: dict[str, str] = {}
+    entry: dict[str, str] = {}
+    inside = False
+
+    def flush() -> None:
+        if inside and {"directory", "name"} <= entry.keys():
+            types[entry["directory"]] = entry["name"]
+
+    for line in (ROOT / "pyproject.toml").read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            flush()
+            inside = stripped == TYPE_HEADER
+            entry = {}
+        elif inside and (match := TYPE_KEY.match(stripped)):
+            entry[match.group(1)] = match.group(2)
+    flush()
+    return types
 
 
 def fragments() -> list[Path]:
@@ -158,6 +184,27 @@ def test_the_configured_types_cover_the_latest_release_headings() -> None:
         f"heading(s) {sorted(used - names)} appear in the latest release with no "
         f"[[tool.towncrier.type]] that produces them; declared: {sorted(names)}"
     )
+
+
+def test_this_module_does_not_need_tomllib() -> None:
+    """`tomllib` is 3.11+; `requires-python` is `>=3.10`.
+
+    An unconditional import here fails at *collection* on the floor, taking every
+    test in the module with it. `scripts/mkdocs_build_banner.py` carries the same
+    rule for the same reason, pinned by `test_docs_release_drift.py`; this is that
+    test for this module. Caught by Copilot on #994 — the first version of this file
+    imported `tomllib` to read the type table, and ruff sorted it as third-party,
+    which is the tell.
+    """
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported |= {a.name.split(".")[0] for a in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+    assert "tomllib" not in imported, "3.10 cannot import this module"
+    assert "tomli" not in imported, "not a dependency; scan pyproject.toml instead"
 
 
 if __name__ == "__main__":  # pragma: no cover

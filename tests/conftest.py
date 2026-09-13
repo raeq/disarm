@@ -22,6 +22,17 @@ unicode_text = st.text(alphabet=st.characters(codec="utf-8"))
 #: The four Unicode normalization forms as strings.
 nf_forms = st.sampled_from(["NFC", "NFD", "NFKC", "NFKD"])
 
+#: An emoji the CLDR name table does not name — the shape `demojize`'s `errors` mode
+#: exists for. A lone regional indicator is `Emoji_Presentation=Yes` and CLDR names no
+#: single one of them, because a flag needs the pair. Shared so the two modules that
+#: depend on it move together, and so the guard in
+#: `test_demojize.TestUnknownEmojiSpacingParity.test_precondition_codepoint_is_unmapped`
+#: covers every use rather than only its own (#990).
+#:
+#: Do not double it: two regional indicators are one flag, which the scanner consumes as
+#: a single emoji, so `UNNAMED_EMOJI * 2` does not mean "two unnamed emoji".
+UNNAMED_EMOJI = "\U0001f1e6"
+
 
 # ---------------------------------------------------------------------------
 # Canonical script samples — one per Script enum member (excluding meta)

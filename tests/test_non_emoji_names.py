@@ -18,8 +18,9 @@ import re
 from pathlib import Path
 
 import pytest
+from conftest import UNNAMED_EMOJI
 
-from disarm import demojize, ml_normalize, strip_obfuscation
+from disarm import TextPipeline, demojize, get_pipeline, ml_normalize, strip_obfuscation
 
 DATA = Path(__file__).resolve().parent.parent / "src" / "tables" / "data"
 
@@ -195,11 +196,7 @@ def test_the_two_suppression_sets_are_not_the_same_set() -> None:
 EMOJI_BLOCK_RANGES = ((0x2600, 0x27BF), (0x2B50, 0x2B55), (0x1F000, 0x1FAFF))
 
 
-def _in_blocks(cp: int) -> bool:
-    return any(lo <= cp <= hi for lo, hi in EMOJI_BLOCK_RANGES)
-
-
-def test_a_block_range_neighbour_with_no_emoji_property_is_left_alone():
+def test_a_block_range_neighbour_with_no_emoji_property_is_left_alone() -> None:
     """`demojize` replaced `☆` with `[?]`, and the pipeline deleted it (#990).
 
     Derived from the shipped tables rather than a fixed list, like the rest of this
@@ -210,9 +207,9 @@ def test_a_block_range_neighbour_with_no_emoji_property_is_left_alone():
     ranges = _property_ranges()
     casualties = [
         cp
-        for cp in range(0x2600, 0x1FB00)
-        if _in_blocks(cp)
-        and not _has_emoji_property(cp, ranges)
+        for lo, hi in EMOJI_BLOCK_RANGES
+        for cp in range(lo, hi + 1)
+        if not _has_emoji_property(cp, ranges)
         and cp not in ROWS
         and demojize(f"a{chr(cp)}b") != f"a{chr(cp)}b"
     ]
@@ -230,20 +227,18 @@ def test_a_block_range_neighbour_with_no_emoji_property_is_left_alone():
         ("★", "BLACK STAR — Extended_Pictographic, but text presentation"),
     ],
 )
-def test_no_route_rewrites_a_text_presentation_symbol(ch: str, what: str):
+def test_no_route_rewrites_a_text_presentation_symbol(ch: str, what: str) -> None:
     """Standalone marked it `[?]`; the pipeline deleted it outright.
 
     Silent deletion is the worse of the two and it is the one a shipped profile
     reached, through `ml_corpus_normalize`.
     """
-    from disarm import TextPipeline, get_pipeline
-
     assert demojize(f"rated 3 {ch} of 5") == f"rated 3 {ch} of 5", what
     assert TextPipeline(demojize=True)(f"a{ch}b") == f"a{ch}b", what
     assert get_pipeline("ml_corpus_normalize")(f"a{ch}b") == f"a{ch}b", what
 
 
-def test_the_branch_still_fires_for_an_emoji_cldr_does_not_name():
+def test_the_branch_still_fires_for_an_emoji_cldr_does_not_name() -> None:
     """Narrowed, not disabled.
 
     A lone regional indicator is `Emoji_Presentation=Yes` and CLDR names no single
@@ -251,10 +246,10 @@ def test_the_branch_still_fires_for_an_emoji_cldr_does_not_name():
     """
     from disarm import TextPipeline
 
-    lone = "x\U0001f1e6y"
+    lone = f"x{UNNAMED_EMOJI}y"
     assert demojize(lone, errors="replace", replace_with="[?]") == "x[?] y"
     assert demojize(lone, errors="ignore") == "xy"
     assert demojize(lone, errors="preserve") == "x\U0001f1e6 y"
-    # The pipeline has no `errors` knob, so it keeps what it cannot name rather than
-    # dropping a character the caller never asked about.
-    assert TextPipeline(demojize=True)(lone) == "x\U0001f1e6 y"
+    # The pipeline has no `errors` knob and drops what it cannot name, as it always
+    # has. #990 narrowed what reaches this branch, not what happens in it.
+    assert TextPipeline(demojize=True)(lone) == "xy"

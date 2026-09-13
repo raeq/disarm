@@ -14,8 +14,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyList;
 
 use crate::emoji::{
-    is_emoji_modifier, match_emoji_at, pad_emoji_replacement, presentation_len_at,
-    strip_modifier_suffix, CharWindow, VS15, VS16, ZWJ,
+    is_emoji_modifier, match_emoji_at, pad_emoji_replacement, strip_modifier_suffix,
+    unnamed_emoji_len_at, CharWindow, VS15, VS16, ZWJ,
 };
 use crate::tables;
 use crate::ErrorMode;
@@ -152,29 +152,25 @@ fn demojize_impl(
             continue;
         }
 
-        // An emoji by the UCD's properties that neither the provider nor CLDR names.
-        // This is the only branch `errors` governs, and until #990 it asked a block
-        // range instead: `U+2600..27BF` is Miscellaneous Symbols and Dingbats, so
-        // `\u{2606}` WHITE STAR and 776 other characters carrying no emoji property at
-        // all arrived here and became `[?]`. `presentation_len_at` is the same question
-        // `replace_emoji` asks, and it measures the whole sequence, so the modifiers
-        // travel with their base rather than being consumed by a second hand-rolled loop.
-        if let Some(consumed) = presentation_len_at(win.as_slice()) {
+        // An emoji that neither the provider nor CLDR names, or a lone Plane 14 tag.
+        // This is the only branch `errors` governs, and until #990 the test was a block
+        // range: `U+2600..27BF` is Miscellaneous Symbols and Dingbats, so `\u{2606}`
+        // WHITE STAR and 776 other characters carrying no emoji property at all arrived
+        // here and became `[?]`. `unnamed_emoji_len_at` measures the whole sequence, so
+        // the modifiers travel with their base rather than being consumed by a second
+        // hand-rolled loop — and it is shared with the pure-Rust scanner, so the two
+        // cannot drift apart on what they rewrite.
+        if let Some(consumed) = unnamed_emoji_len_at(win.as_slice()) {
             match error_mode {
                 ErrorMode::Replace => result.push_str(replace_with),
                 ErrorMode::Ignore => {}
+                // `take` rather than a slice: the crate denies `indexing_slicing`, and
+                // the run is already measured, so no bound needs asserting here.
                 ErrorMode::Preserve => {
-                    for _ in 0..consumed {
-                        if let Some(c) = win.current() {
-                            result.push(c);
-                        }
-                        win.advance(1);
-                    }
+                    result.extend(win.as_slice().iter().take(consumed).copied());
                 }
             }
-            if !matches!(error_mode, ErrorMode::Preserve) {
-                win.advance(consumed);
-            }
+            win.advance(consumed);
             // Parity with the recognized-emoji path (#200): flag the position so
             // a following alphanumeric is separated by a space — but only when a
             // *visible* token was actually emitted, otherwise we inject a

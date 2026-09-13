@@ -13,6 +13,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
+from conftest import UNNAMED_EMOJI
 
 from disarm import (
     Text,
@@ -190,13 +191,7 @@ class TestUnknownEmojiSpacingParity:
     # An emoji with no CLDR name. A lone regional indicator is `Emoji_Presentation=Yes`
     # and CLDR names no single one of them — a flag needs the pair — so it is the shape
     # `errors` exists for. Guarded below so the test fails loudly if it gains a name.
-    #
-    # Was `U+1FC00` until #990, which is *unassigned*: it reached this branch only
-    # because the old gate matched the block `U+1FC00..1FFFF` rather than the UCD's
-    # emoji properties, and rewriting an unassigned code point as an emoji the library
-    # lacks data for is the over-reach that issue removed. Every assertion below is
-    # unchanged; only the character they run on is now actually an emoji.
-    UNKNOWN = "\U0001f1e6"
+    UNKNOWN = UNNAMED_EMOJI
 
     def test_precondition_codepoint_is_unmapped(self) -> None:
         assert demojize(self.UNKNOWN) == "[?]", "codepoint gained a CLDR name; pick another"

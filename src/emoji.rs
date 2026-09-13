@@ -273,12 +273,8 @@ impl<'a> CharWindow<'a> {
 /// is its only caller: a fast-path guard where over-marking costs a skipped optimisation
 /// and under-marking would be unsound, so a loose range answer is the right shape there.
 ///
-/// It used to decide the unknown-emoji branch of both `demojize` scanners, which is what
-/// #990 was: `U+2600..27BF` is Miscellaneous Symbols and Dingbats, so `\u{2606}` WHITE
-/// STAR and 776 other characters that are not emoji by any UCD property were treated as
-/// emoji the library lacked data for — replaced with `[?]` standalone and deleted
-/// outright in the pipeline. Both scanners now ask `presentation_len_at`, which is the
-/// same question `replace_emoji` asks and the one the UCD actually answers.
+/// The scanners ask `unnamed_emoji_len_at` instead (#990): a block range is not a
+/// definition of emoji, and `U+2600..27BF` is Miscellaneous Symbols and Dingbats.
 pub(crate) fn is_emoji_codepoint(ch: char) -> bool {
     let cp = ch as u32;
     // Emoticons, Dingbats, Symbols, Transport, Supplemental Symbols, etc.
@@ -443,6 +439,27 @@ pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
         }
     }
     Some(len)
+}
+
+/// How many chars of a run `demojize` treats as an emoji it has no name for (#990).
+///
+/// `presentation_len_at` answers the emoji half. The Plane 14 TAG block is the other:
+/// a lone tag character is *not* an emoji — it is the concealment carrier
+/// `strip_plane14` exists for — but removing it here is the only coverage of that block
+/// `ml_normalize` has, and #914 is explicit that demojize's Plane 14 removal must not
+/// move until something else carries it. No preset declares `Step::StripPlane14`, so
+/// nothing does yet. It keeps a named arm rather than riding a block range, and giving
+/// `ml_normalize` the real step is a change with a `KEY_SCHEMA_VERSION` cost of its own.
+///
+/// Both scanners call this, so the two cannot drift apart on what they rewrite.
+pub(crate) fn unnamed_emoji_len_at(window: &[char]) -> Option<usize> {
+    presentation_len_at(window).or_else(|| {
+        window
+            .first()
+            .copied()
+            .filter(|&c| is_tag(c))
+            .map(|_| 1usize)
+    })
 }
 
 /// Replace every emoji-presentation sequence in `text` with `replacement` (#972).
@@ -622,20 +639,13 @@ pub fn demojize_rust_into(
             continue;
         }
 
-        // An emoji by the UCD's properties that CLDR does not name. Emitted verbatim:
-        // a step inside a pipeline that silently removed an assigned character the
-        // caller never asked about is the failure mode the explicit `strip_*` steps
-        // exist to avoid, and this branch used to do exactly that to `\u{2606}` and 776
-        // other non-emoji (#990). `presentation_len_at` measures the whole sequence, so
-        // the modifiers travel with their base instead of being consumed by hand.
-        if let Some(consumed) = presentation_len_at(win.as_slice()) {
-            for _ in 0..consumed {
-                if let Some(c) = win.current() {
-                    result.push(c);
-                }
-                win.advance(1);
-            }
-            last_was_emoji = true;
+        // An emoji this scanner cannot name, or a lone Plane 14 tag — dropped, as it
+        // always has been. What changed in #990 is only *what reaches here*: the test
+        // was a block range, so `\u{2606}` WHITE STAR and 776 other characters carrying
+        // no emoji property were dropped as emoji the library lacked data for.
+        if let Some(consumed) = unnamed_emoji_len_at(win.as_slice()) {
+            win.advance(consumed);
+            last_was_emoji = false;
             continue;
         }
 
@@ -791,9 +801,8 @@ mod tests {
     #[test]
     fn unknown_emoji_branch_ignores_non_emoji_in_emoji_blocks() {
         for ch in ['\u{2606}', '\u{2613}', '\u{2605}', '\u{2295}'] {
-            let window: Vec<char> = vec![ch];
             assert_eq!(
-                presentation_len_at(&window),
+                unnamed_emoji_len_at(&[ch]),
                 None,
                 "U+{:04X} carries no emoji presentation and must not reach the \
                  unknown-emoji branch",
@@ -804,13 +813,17 @@ mod tests {
         assert!(is_emoji_codepoint('\u{2606}'));
     }
 
-    /// A step inside a pipeline must not silently delete an assigned character.
+    /// #990 narrowed what reaches the unknown branch; it did not change what happens
+    /// there. An emoji this scanner cannot name is still dropped, and so is a lone
+    /// Plane 14 tag — the only coverage of that block `ml_normalize` has (#914).
     #[test]
-    fn the_pure_rust_scanner_preserves_an_emoji_it_cannot_name() {
+    fn the_pure_rust_scanner_drops_only_what_is_an_emoji_or_a_tag() {
         // A lone regional indicator is `Emoji_Presentation=Yes` and CLDR names no
         // single one of them, so it is the shape the branch exists for.
-        assert_eq!(demojize_rust("x\u{1F1E6}y", false), "x\u{1F1E6} y");
-        // And a character that is not an emoji at all travels through untouched.
+        assert_eq!(demojize_rust("x\u{1F1E6}y", false), "xy");
+        // A lone TAG character, which `ml_normalize` relies on this branch to remove.
+        assert_eq!(demojize_rust("x\u{E0061}y", false), "xy");
+        // And a character that is not an emoji at all now travels through untouched.
         assert_eq!(demojize_rust("a\u{2606}b", false), "a\u{2606}b");
     }
 

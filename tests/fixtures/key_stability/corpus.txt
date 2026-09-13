@@ -23169,3 +23169,16 @@ line1\x0dline2
 trailing\x0d
 丨
 〡
+☆
+★
+☓
+⚆
+⚇
+☊
+⚒
+⚹
+a☆b
+rated 3 ★ of 5
+x☓y
+⊕
+a⊕b

@@ -55,6 +55,25 @@ compatibility (see [RELEASING.md](RELEASING.md)).
   No emoji changes: `demojize("aa🔥bb")` is still `aa fire bb`, keycaps and ZWJ sequences
   still name, and `replace_emoji` is untouched.
 
+  **Upgrade note — `KEY_SCHEMA_VERSION` goes 9 → 10.** `ml_normalize` is the one key
+  surface that still demojizes, and it stops emptying **1,312 assigned code points**
+  (4,047 → 2,735 at UCD 15.0.0; 3,996 → 2,693 at 14.0.0, the two deltas agreeing to the
+  15.0 additions). A stored key built from one of those characters moves from `""` to the
+  character itself. Reindex if you persist it. The `_EMPTY_KEY_CENSUS` table, the
+  `ml_normalize` docstring and the table in `docs/limitations.md` all move with it.
+
+  The key fixture was green through the change, for the **fifth** time in this cycle and
+  for the reason the four before it were: of the moved class its corpus held exactly one
+  code point, `U+2764`, which CLDR names and which therefore never reached the branch.
+  Thirteen rows covering the class were added with this — bare and in-word, spanning
+  no-emoji-property (`☆`, `☓`), Extended_Pictographic-but-text-presentation (`★`), and
+  the `⊕` case #757 suppresses inside presets.
+
+  This one is also a note about local gates: the census is pinned at UCD 15.0.0 and
+  `test_empty_key` refuses to measure on an older host, so on a 14.0.0 interpreter it
+  fails before it compares. A census-moving change is invisible to it there, and CI is
+  the only place the number is checked.
+
 - **Every ruff bump from Dependabot went red, because CI kept a second copy of the pin.**
   `pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each pinned ruff, and
   `tests/test_toolchain_pins.py` failed whenever they differed. Dependabot bumps the first

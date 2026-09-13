@@ -214,7 +214,25 @@ pub fn unicode_version() -> &'static str {
 /// has a rule for — the paper's construction, overstrike bold, a format character and a
 /// combining mark before the control, a rendering `Cf` that does occupy a cell, erasing
 /// past the start of a line, `CRLF`, and the classic Mac row that is why `CR` is opt-in.
-pub const KEY_SCHEMA_VERSION: u32 = 9;
+/// Bumped to 10 by #990: `demojize` no longer rewrites characters that are not emoji.
+/// It decided "is this an emoji I have no name for" from block ranges, and `U+2600..27BF`
+/// is Miscellaneous Symbols and Dingbats — so `\u{2606}` WHITE STAR, `\u{2613}` SALTIRE and
+/// 775 other code points carrying no emoji property at all were dropped as unknown emoji.
+/// `ml_normalize` is the one key surface that still demojizes, and it stops emptying
+/// **1,312 assigned code points** (4,047 to 2,735 at UCD 15.0.0; 3,996 to 2,693 at 14.0.0,
+/// the two deltas agreeing to the 15.0 additions). Every one of them now round-trips
+/// instead of becoming `""`, so a stored key built from a single such character moves from
+/// empty to the character itself.
+///
+/// The branch itself is unchanged — what reaches it narrowed. An emoji CLDR cannot name is
+/// still dropped, and so is a lone Plane 14 tag, which is the only coverage of that block
+/// `ml_normalize` has (#914).
+///
+/// The fixture was green through the change, for the **fifth** time in this cycle and for
+/// the same reason as the four before it: of the moved class its corpus held exactly one
+/// code point, `U+2764`, which CLDR names and which therefore never reached the branch.
+/// Rows covering the class were added with this.
+pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -249,7 +267,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 9;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "a1f5c860d8cfb6abebdf63659f540a01a8974f518e94607d9fd051f22b738954";
+    "f2ac3223954c7eb77e9421456cf8dd8354b3ba6cd382c7cd27a06bbe787f780d";
 
 /// The key-schema counter, as a function (#645).
 ///

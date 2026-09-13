@@ -78,8 +78,25 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch == BS || ch == DEL {
-            col = col.saturating_sub(1);
-            line.truncate(col);
+            // Erase the cell *before* the cursor, leaving the cells right of it where
+            // they are — in a terminal a backspace moves the cursor and the screen does
+            // not shift; shifting is what a line editor does. `truncate(col)` is
+            // the same thing only while `col == line.len()`, which holds for every input
+            // without a `CR` — so the two agreed until #937 added the `cr` flag that can
+            // move the cursor back. After a `CR` the truncate discarded the whole rest of
+            // the line, and at column 0 it discarded the line: `"abc\rX\u{8}"` gave `""`
+            // where a terminal and a typed backspace both give `"bc"`. Losing text the
+            // reader can see is the risk #934 declined to take.
+            if col > 0 {
+                col -= 1;
+                // Blanking, not `remove`: the cell stops contributing text and every
+                // other cell keeps its column. `remove` would shift, which is both the
+                // wrong model (above) and O(1) only at the end of a line — it made
+                // `"a"*n + "\r" + "X\u{8}"*n` quadratic, 4x per doubling, measured.
+                // Keeping the column is what lets a later overwrite land where the
+                // terminal would put it.
+                line[col].clear();
+            }
         } else if ch == LF || (ch == CR && (!cr || chars.peek().is_none_or(|&n| n == LF))) {
             for cell in line.drain(..) {
                 out.push_str(&cell);
@@ -130,6 +147,134 @@ mod tests {
         assert_eq!(resolve(&attack, false), "paypal");
         let with_del: String = "paypal".chars().flat_map(|c| [c, 'X', DEL]).collect();
         assert_eq!(resolve(&with_del, false), "paypal");
+    }
+
+    /// An erase removes the cell before the cursor, not everything after it (#995).
+    ///
+    /// `truncate(col)` is `pop` only while the cursor sits at the end of the line, which
+    /// is every input without a `CR`. Once `cr` has returned the cursor to column 0 the
+    /// two part company, and the truncate discards the whole rest of the line — the text
+    /// a reader can see, which is the loss #934 refused to risk.
+    #[test]
+    fn an_erase_after_a_carriage_return_removes_one_cell() {
+        assert_eq!(resolve("abc\rX\u{8}", true), "bc");
+        assert_eq!(resolve("abc\rXY\u{8}", true), "Xc");
+        // Nothing sits before column 0, so there is nothing to erase.
+        assert_eq!(resolve("abc\r\u{8}", true), "abc");
+        assert_eq!(resolve("abc\r\u{7F}", true), "abc");
+    }
+
+    /// The no-`CR` behaviour the truncate happened to get right must not move.
+    #[test]
+    fn an_erase_at_the_end_of_a_line_still_pops_one_cell() {
+        assert_eq!(resolve("abc\u{8}", false), "ab");
+        assert_eq!(resolve("abc\u{8}\u{8}", false), "a");
+        assert_eq!(resolve("\u{8}abc", false), "abc");
+        assert_eq!(resolve("ab\nc\u{8}", false), "ab\n");
+    }
+
+    /// An erase blanks a cell; it does not shift the ones to its right (#995).
+    ///
+    /// The distinction is invisible without a `CR` — there is nothing right of the cursor
+    /// to shift — and this is the shortest input where the two models part company. A
+    /// terminal moves the cursor and leaves the screen alone: `"aa"`, return, overwrite
+    /// column 0, erase it, overwrite it again, and both columns are still there. Shifting
+    /// answers `"a"`, having eaten a character the reader can still see. `remove` was the
+    /// first draft of the fix above and this is why it is not the last.
+    #[test]
+    fn an_erase_does_not_shift_the_rest_of_the_line() {
+        assert_eq!(resolve("aa\ra\u{8}a", true), "aa");
+        // Same shape, distinguishable cells.
+        assert_eq!(resolve("ab\rX\u{8}Y", true), "Yb");
+    }
+
+    /// An erase takes one cell, never the rest of the line (#995).
+    ///
+    /// This is the invariant `truncate` broke, stated so that breaking it again fails
+    /// here rather than in somebody's text. A backspace erases the cell before the
+    /// cursor; the cells to its right are untouched, because in a terminal the cursor
+    /// moves and the screen does not shift. So the output cannot be shorter than the
+    /// cells that went in, less one per erase — `truncate` lost a whole line per
+    /// backspace and this counts that.
+    ///
+    /// Fuzzed over an alphabet of everything the cursor model treats differently, with
+    /// idempotence and the no-control-survives rule checked on the same corpus.
+    #[test]
+    fn an_erase_costs_at_most_one_cell() {
+        let alphabet = ['a', 'b', 'X', BS, DEL, CR, LF, '\u{301}', '\u{200B}'];
+        let mut state = 0x2545_F491_4F6C_DD1Du64;
+        for _ in 0..200_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let len = 1 + (state % 12) as usize;
+            let mut probe = String::new();
+            let mut bits = state;
+            for _ in 0..len {
+                bits = bits.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+                probe.push(alphabet[(bits >> 33) as usize % alphabet.len()]);
+            }
+            // `occupies_cell` is about rendering width, so it answers `true` for the
+            // controls too; the cursor model consumes those rather than drawing them.
+            let text_cell = |c: char| occupies_cell(c) && !matches!(c, BS | DEL | CR | LF);
+            for cr in [false, true] {
+                let out = resolve(&probe, cr);
+                // One backspace costs at most one cell. Stated as a difference rather
+                // than a total because an overwriting `CR` is *meant* to lose cells, and
+                // it loses the same ones either side of this comparison — which is what
+                // makes the property bite in the `cr` case, where the defect lived.
+                // `truncate` failed it outright: "abc\rX" is three cells and
+                // "abc\rX\u{8}" was none.
+                for erase in [BS, DEL] {
+                    let erased = resolve(&format!("{probe}{erase}"), cr);
+                    let before = out.chars().filter(|&c| text_cell(c)).count();
+                    let after = erased.chars().filter(|&c| text_cell(c)).count();
+                    assert!(
+                        after + 1 >= before,
+                        "{probe:?} cr={cr}: one {erase:?} took {} cells, \
+                         {out:?} -> {erased:?}",
+                        before - after
+                    );
+                }
+                assert!(
+                    !out.contains(BS) && !out.contains(DEL),
+                    "{probe:?} cr={cr} left a control in {out:?}"
+                );
+                assert_eq!(
+                    resolve(&out, cr),
+                    out,
+                    "{probe:?} cr={cr} is not idempotent"
+                );
+            }
+        }
+    }
+
+    /// Erasing stays linear in the length of the line (#995).
+    ///
+    /// Removing the cell instead of blanking it shifts every cell to its right, which is
+    /// free only at the end of a line: an intermediate draft of the fix above did that
+    /// and measured 4x per doubling. The budget is loose by three orders of magnitude
+    /// against the linear answer and an order of magnitude under the quadratic one, so it
+    /// catches the regression without being a stopwatch.
+    #[test]
+    fn erasing_a_long_line_is_not_quadratic() {
+        let n = 40_000;
+        let probe = format!("{}\r{}", "a".repeat(n), "X\u{8}".repeat(n));
+        let started = std::time::Instant::now();
+        let out = resolve(&probe, true);
+        let elapsed = started.elapsed();
+        // Each `X` overwrites cell 0 and each backspace blanks it again, so what is left
+        // is the original line with its first cell gone.
+        assert_eq!(
+            out.chars().count(),
+            n - 1,
+            "{:?}",
+            &out[..out.len().min(40)]
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "{n} erases took {elapsed:?} — the shift is back"
+        );
     }
 
     /// The two branches a stack over code points gets wrong (#937's own first draft).

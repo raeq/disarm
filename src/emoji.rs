@@ -195,6 +195,12 @@ pub(crate) struct CharWindow<'a> {
     buf: [char; MAX_WINDOW],
     /// Number of valid chars currently in `buf` (always <= MAX_WINDOW).
     len: usize,
+    /// Chars pulled past the window while following a sequence longer than it, and not
+    /// consumed by the match that pulled them. Refills take from here before `rest`, so
+    /// the pull is a peek rather than a read. Empty for every input whose emoji fit the
+    /// window, which is every input the CLDR name table can name — see
+    /// [`CharWindow::presentation_len`].
+    pushback: std::collections::VecDeque<char>,
     rest: std::str::Chars<'a>,
 }
 
@@ -224,8 +230,15 @@ impl<'a> CharWindow<'a> {
         CharWindow {
             buf,
             len,
+            pushback: std::collections::VecDeque::new(),
             rest: chars,
         }
+    }
+
+    /// The next char of the input, taking anything a previous peek pushed back first.
+    #[inline]
+    fn next_char(&mut self) -> Option<char> {
+        self.pushback.pop_front().or_else(|| self.rest.next())
     }
 
     /// The current character (first in the window), or `None` if exhausted.
@@ -244,26 +257,114 @@ impl<'a> CharWindow<'a> {
         &self.buf[..self.len]
     }
 
-    /// Advance the window by `n` chars (1 <= n <= self.len).
+    /// Advance the window by `n` chars.
     ///
-    /// Shifts `buf[n..]` to the front, then refills from the iterator.
-    pub(crate) fn advance(&mut self, n: usize) {
-        debug_assert!(n > 0 && n <= self.len);
-        // Shift remaining buffered chars to the front.
+    /// Shifts `buf[n..]` to the front, then refills. `n` may exceed the buffer: a match
+    /// found by [`CharWindow::presentation_len`] can be longer than the window, and the
+    /// chars past it are then dropped a bufferful at a time rather than shifted.
+    pub(crate) fn advance(&mut self, mut n: usize) {
+        debug_assert!(n > 0);
+        while n >= self.len && self.len > 0 {
+            n -= self.len;
+            self.len = 0;
+            self.refill();
+            if n == 0 {
+                return;
+            }
+        }
+        if self.len == 0 {
+            return;
+        }
+        // Shift remaining buffered chars to the front, then top the buffer back up.
         self.buf.copy_within(n..self.len, 0);
-        let remaining = self.len - n;
-        // Refill from the iterator.
-        let mut fill = remaining;
-        while fill < MAX_WINDOW {
-            match self.rest.next() {
+        self.len -= n;
+        self.refill();
+    }
+
+    /// Fill `buf` from `self.len` up to `MAX_WINDOW`.
+    fn refill(&mut self) {
+        while self.len < MAX_WINDOW {
+            match self.next_char() {
                 Some(c) => {
-                    self.buf[fill] = c;
-                    fill += 1;
+                    self.buf[self.len] = c;
+                    self.len += 1;
                 }
                 None => break,
             }
         }
-        self.len = fill;
+    }
+
+    /// The emoji-presentation sequence at the cursor, followed past the window's edge.
+    ///
+    /// [`presentation_len_at`] recurses over a ZWJ chain, which UTS #51 does not bound,
+    /// so the length it can return is not bounded either. `MAX_WINDOW` is
+    /// `max_emoji_seq_len()` — the longest run the CLDR **name** table holds — which
+    /// bounds naming correctly and replacing not at all: a family of four with skin
+    /// tones is eleven code points and RGI. Asking on the bare window cut such a
+    /// sequence at nine, which emitted two replacements where one was right and, worse,
+    /// passed the joiner at the seam through as ordinary text (#995).
+    ///
+    /// A match that ends before the window's edge is complete, and that is every input
+    /// here bar the long ones — they return without touching `pushback` or the heap.
+    /// Only a match that reaches the edge pulls more, and it pulls a doubling chunk at a
+    /// time so that following a chain of *n* code points costs O(n) rather than the
+    /// O(n²) a one-at-a-time rescan would: this is a sanitiser, and its worst case is
+    /// somebody's input.
+    pub(crate) fn presentation_len(&mut self) -> Option<usize> {
+        let len = presentation_len_at(self.as_slice())?;
+        if self.len < MAX_WINDOW {
+            // The buffer is short because the input ended, so the slice is the whole
+            // remainder and the answer is already final.
+            return Some(len);
+        }
+        // A full buffer does not by itself mean the match is unfinished — and keying on
+        // fullness alone sent every emoji in any input longer than the window through the
+        // heap scan below. More input can only extend a match that ran to the edge, or
+        // one the chain loop abandoned at a joiner it could not yet judge. A match that
+        // stopped anywhere else is done, and no amount of lookahead changes that.
+        //
+        // "Could not yet judge" is the narrow part: the chain loop abandoned that joiner
+        // because `head_len_at` answered `None` for what came after it, and that answer
+        // is final as soon as it had `HEAD_LOOKAHEAD` chars to look at. Treating every
+        // joiner as unjudged instead cost a windowful of read-ahead per emoji on input
+        // shaped like `emoji + ZWJ + text` — 20.5 ms against 7.9 ms for 100k of them.
+        if len < self.len && (self.buf[len] != ZWJ || self.len - (len + 1) >= HEAD_LOOKAHEAD) {
+            return Some(len);
+        }
+        // A full buffer cannot tell a finished sequence from one it merely ran out of
+        // room for. The two look identical from inside: the recursion breaks on a `ZWJ`
+        // with nothing joinable after it, and "nothing after it" is what the edge looks
+        // like. So grow until growing stops changing the answer, rather than trying to
+        // read completeness off a length — an eleven-code-point family with skin tones
+        // reports 8 of 9 here, one short of the edge and still unfinished.
+        let mut scan: Vec<char> = self.as_slice().to_vec();
+        let mut len = len;
+        loop {
+            let before = scan.len();
+            for _ in 0..before {
+                match self.next_char() {
+                    Some(c) => scan.push(c),
+                    None => break,
+                }
+            }
+            if scan.len() == before {
+                break; // input exhausted
+            }
+            let grown = presentation_len_at(&scan).unwrap_or(len);
+            if grown == len {
+                break; // more input did not extend the match
+            }
+            len = grown;
+        }
+        // Hand back **everything** the peek pulled, in order — not just the part the
+        // match declined. The peek has to leave the stream exactly as it found it,
+        // because the length it returns is what `advance` is called with, and `advance`
+        // counts from the window: chars consumed here as well as skipped there would be
+        // skipped twice, silently dropping the text after a long sequence.
+        for &c in scan[self.len..].iter().rev() {
+            self.pushback.push_front(c);
+        }
+        Some(len)
     }
 }
 
@@ -378,7 +479,16 @@ fn opens_emoji_presentation(ch: char) -> bool {
     tables::is_emoji_presentation(ch) || is_regional_indicator(ch)
 }
 
-/// How many chars of an emoji-presentation sequence start at `window[0]`, if any.
+/// How many chars [`head_len_at`] may need to see before it can answer `None`.
+///
+/// Its deepest read is the keycap arm's `window[2]` — base, `U+FE0F`, keycap. So a `None`
+/// from a slice at least this long is final, and one from a shorter slice might have been
+/// a `Some` with more input behind it. [`CharWindow::presentation_len`] needs that
+/// distinction to tell a joiner it has disproved from one it merely ran out of room to
+/// judge. `head_lookahead_is_enough` below holds it to the number.
+const HEAD_LOOKAHEAD: usize = 3;
+
+/// One emoji-presentation **head**: a base and the modifiers bound to it, no ZWJ chain.
 ///
 /// Returns `None` for anything the UCD does not call an emoji in this position: a keycap
 /// base with no keycap after it (`1`, `#`), and an `Emoji=Yes` base with no `U+FE0F`
@@ -386,7 +496,14 @@ fn opens_emoji_presentation(ch: char) -> bool {
 ///
 /// A regional indicator is `Emoji_Presentation=Yes` on its own, so it returns `Some(1)`;
 /// a pair returns `Some(2)`, because a flag is one emoji and must take one replacement.
-pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
+///
+/// Split out of [`presentation_len_at`] so that following a chain can be a loop instead
+/// of a recursion (#995). The recursion descended once per link, which the
+/// nine-code-point match window bounded by accident; once the window follows a sequence
+/// past its edge the depth is whatever the input says, and a long enough chain overflowed
+/// the stack — an abort no caller can catch, on input from outside. Chaining lives in the
+/// caller's loop, so nothing here calls anything that calls this.
+fn head_len_at(window: &[char]) -> Option<usize> {
     let first = *window.first()?;
 
     // A pair of regional indicators is one flag, and one emoji: `replacement=" "` must
@@ -422,19 +539,51 @@ pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
         return None;
     }
 
-    // Extend over the modifiers and joined bases that belong to this emoji. A trailing
+    let mut len = 1;
+    while let Some(&c) = window.get(len) {
+        if c == VS16 || c == VS15 || is_skin_tone(c) || is_tag(c) {
+            len += 1;
+        } else {
+            break;
+        }
+    }
+    Some(len)
+}
+
+/// How many chars of an emoji-presentation sequence start at `window[0]`, if any.
+///
+/// One head ([`head_len_at`]) followed by the ZWJ chain hanging off it, so this is the
+/// length of the whole emoji — the thing that must take exactly one replacement.
+///
+/// The answer is a function of the slice it is given, which is the caller's problem and
+/// not a small one: UTS #51 puts no limit on a ZWJ chain, so there is no window size that
+/// is always enough, and a slice that stops mid-sequence returns a short answer rather
+/// than saying so. [`CharWindow::presentation_len`] is what deals with that; a caller
+/// passing a bare fixed slice will split long sequences (#995).
+///
+/// A flag and a keycap take no continuation, so neither chains.
+pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
+    let first = *window.first()?;
+    let mut len = head_len_at(window)?;
+
+    // A flag and a keycap take no continuation: UTS #51 defines neither as joinable, and
+    // chaining one would swallow a following emoji into it.
+    if is_regional_indicator(first) || matches!(first, '0'..='9' | '#' | '*') {
+        return Some(len);
+    }
+
+    // Extend over the modifiers and joined heads that belong to this emoji. A trailing
     // ZWJ with nothing joinable after it is left alone: it is not part of a sequence,
     // and consuming it would delete a character the caller did not ask about.
-    let mut len = 1;
     loop {
         match window.get(len) {
             Some(&c) if c == VS16 || c == VS15 || is_skin_tone(c) || is_tag(c) => len += 1,
             // No `KEYCAP` arm. UTS #51 defines the keycap sequence only for the ten
-            // digits, `#` and `*`, which the branch above already answered. Consuming
-            // one here would make `\u{263A}\u{FE0F}\u{20E3}` — an emoji followed by a
+            // digits, `#` and `*`, which `head_len_at` already answered. Consuming one
+            // here would make `\u{263A}\u{FE0F}\u{20E3}` — an emoji followed by a
             // stray combining mark — one emoji, and remove a character that is not part
             // of any sequence the standard defines.
-            Some(&c) if c == ZWJ => match presentation_len_at(&window[len + 1..]) {
+            Some(&c) if c == ZWJ => match head_len_at(&window[len + 1..]) {
                 Some(joined) => len += 1 + joined,
                 None => break,
             },
@@ -486,7 +635,7 @@ pub fn demojize_rust_replace_into(text: &str, replacement: &str, result: &mut St
     result.reserve(text.len());
     let mut win = CharWindow::new(text.chars());
     while let Some(ch) = win.current() {
-        if let Some(consumed) = presentation_len_at(win.as_slice()) {
+        if let Some(consumed) = win.presentation_len() {
             result.push_str(replacement);
             win.advance(consumed);
             continue;
@@ -717,6 +866,245 @@ mod tests {
     fn a_dangling_joiner_is_left_alone() {
         assert_eq!(demojize_rust_replace("\u{1F525}\u{200D}", ""), "\u{200D}");
         assert_eq!(demojize_rust_replace("a\u{200D}b", ""), "a\u{200D}b");
+    }
+
+    /// `HEAD_LOOKAHEAD` is the number `head_len_at` actually needs (#995).
+    ///
+    /// The fast path in `CharWindow::presentation_len` rests on this: a `None` from a
+    /// slice at least this long cannot become a `Some` when more input arrives, so a
+    /// joiner that far from the edge has been disproved rather than merely unjudged.
+    /// Asserted by exhaustion over everything the head arms branch on, rather than by
+    /// reading the function and counting — the reading is how the constant rots.
+    #[test]
+    fn head_lookahead_is_enough() {
+        let alphabet = [
+            '\u{1F525}', // emoji presentation
+            '\u{00A9}',  // Emoji=Yes, presentation No — needs a following VS16
+            VS16,
+            VS15,
+            '\u{1F3FB}', // skin tone
+            ZWJ,
+            '1', // keycap base
+            KEYCAP,
+            '\u{1F1EC}', // regional indicator
+            '\u{E0061}', // tag
+            'a',
+        ];
+        let mut window = Vec::new();
+        let probe = |window: &[char]| {
+            if window.len() < HEAD_LOOKAHEAD || head_len_at(window).is_some() {
+                return;
+            }
+            // A `None` this far from the end must survive anything appended to it.
+            for &extra in &alphabet {
+                for &more in &alphabet {
+                    let mut longer = window.to_vec();
+                    longer.push(extra);
+                    longer.push(more);
+                    assert_eq!(
+                        head_len_at(&longer),
+                        None,
+                        "{window:?} answered None with {} chars, then Some once \
+                         {extra:?}{more:?} followed — HEAD_LOOKAHEAD is too small",
+                        window.len()
+                    );
+                }
+            }
+        };
+        for &a in &alphabet {
+            window.push(a);
+            probe(&window);
+            for &b in &alphabet {
+                window.push(b);
+                probe(&window);
+                for &c in &alphabet {
+                    window.push(c);
+                    probe(&window);
+                    window.pop();
+                }
+                window.pop();
+            }
+            window.pop();
+        }
+    }
+
+    /// The window agrees with a scanner that can see the whole input (#995).
+    ///
+    /// `CharWindow` exists so the scanner never materialises its input, and everything
+    /// subtle here comes from that: what the window can prove, what it must read ahead
+    /// for, and what it has to hand back afterwards. The predicate deciding it has been
+    /// wrong twice — once too narrow, splitting real sequences, once too broad, reading
+    /// ahead for matches already finished — so it is gated against the thing it is an
+    /// optimisation of: the same match with the whole input in hand.
+    #[test]
+    fn the_window_agrees_with_an_unbounded_scanner() {
+        fn oracle(text: &str, replacement: &str) -> String {
+            let chars: Vec<char> = text.chars().collect();
+            let mut out = String::new();
+            let mut i = 0;
+            while i < chars.len() {
+                if let Some(n) = presentation_len_at(&chars[i..]) {
+                    out.push_str(replacement);
+                    i += n;
+                } else {
+                    out.push(chars[i]);
+                    i += 1;
+                }
+            }
+            out
+        }
+
+        // Everything the window branches on, joiners over-weighted so chains get long.
+        let alphabet = [
+            '\u{1F525}',
+            '\u{1F468}',
+            '\u{00A9}',
+            VS16,
+            VS15,
+            '\u{1F3FB}',
+            ZWJ,
+            ZWJ,
+            ZWJ,
+            '1',
+            KEYCAP,
+            '\u{1F1EC}',
+            '\u{1F1E7}',
+            '\u{E0061}',
+            'a',
+            ' ',
+        ];
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        for _ in 0..120_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let len = 1 + (state % 40) as usize;
+            let mut probe = String::new();
+            let mut bits = state;
+            for _ in 0..len {
+                bits = bits.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+                probe.push(alphabet[(bits >> 33) as usize % alphabet.len()]);
+            }
+            for replacement in ["", " ", "[x]"] {
+                assert_eq!(
+                    demojize_rust_replace(&probe, replacement),
+                    oracle(&probe, replacement),
+                    "{probe:?} replacement={replacement:?}"
+                );
+            }
+        }
+    }
+
+    /// Following a chain must not recurse: input decides the depth (#995).
+    ///
+    /// `presentation_len_at` recursed once per link. While the slice was capped at
+    /// `MAX_WINDOW` that bounded the depth at nine by accident; once the window follows a
+    /// sequence past its edge, the depth is whatever the input says, and a long enough
+    /// chain overflows the stack — a hard abort, not a catchable error, on attacker
+    /// input. A sanitiser cannot have that.
+    #[test]
+    fn a_long_chain_does_not_recurse() {
+        let chain: String = std::iter::repeat_n("\u{1F468}", 100_000)
+            .collect::<Vec<_>>()
+            .join("\u{200D}");
+        assert_eq!(demojize_rust_replace(&chain, ""), "");
+        assert_eq!(demojize_rust_replace(&chain, "x"), "x");
+    }
+
+    /// Ordinary emoji must not take the growable path (#995).
+    ///
+    /// The match can only continue past the window when it reached the edge or stopped
+    /// at a joiner. Anything else is finished, whatever the buffer's fill. Keying the
+    /// decision on fullness instead sent every emoji in any input longer than the window
+    /// through a heap scan. `pushback` is the tell: the growable path always peeks past
+    /// the buffer, the fast path never does.
+    #[test]
+    fn an_ordinary_emoji_never_peeks_past_the_window() {
+        for text in [
+            "\u{1F525}aaaaaaaaaaaaaaaaaaaaaaaa",
+            "aaaa\u{1F525}aaaaaaaaaaaaaaaaaaaa",
+            "\u{1F44D}\u{1F3FD}aaaaaaaaaaaaaaaaaaaa",
+            "\u{1F1EC}\u{1F1E7}aaaaaaaaaaaaaaaaaaaa",
+            "1\u{FE0F}\u{20E3}aaaaaaaaaaaaaaaaaaaa",
+            // A joiner the chain loop has already disproved: the char after it is in
+            // the window, so no more input can make it part of the sequence.
+            "\u{1F525}\u{200D}aaaaaaaaaaaaaaaaaaaa",
+            "\u{1F525}\u{200D}\u{200D}aaaaaaaaaaaaaaaaaa",
+        ] {
+            let mut win = CharWindow::new(text.chars());
+            while win.current().is_some() {
+                let n = win.presentation_len();
+                assert!(
+                    win.pushback.is_empty(),
+                    "{text:?} took the growable path for a finished match"
+                );
+                win.advance(n.unwrap_or(1));
+            }
+        }
+    }
+
+    /// A sequence longer than the window is still one sequence (#995).
+    ///
+    /// `MAX_WINDOW` is `max_emoji_seq_len()` — the longest run the CLDR *name* table
+    /// holds. Naming cannot need more than that; replacing can, because
+    /// `presentation_len_at` follows a ZWJ chain the UCD allows to be any length. A
+    /// family of four with skin tones is eleven code points and RGI.
+    #[test]
+    fn a_sequence_longer_than_the_window_is_still_one_sequence() {
+        // U+1F468 U+1F3FB ZWJ U+1F469 U+1F3FB ZWJ U+1F467 U+1F3FB ZWJ U+1F466 U+1F3FB
+        let family = "\u{1F468}\u{1F3FB}\u{200D}\u{1F469}\u{1F3FB}\u{200D}\
+                      \u{1F467}\u{1F3FB}\u{200D}\u{1F466}\u{1F3FB}";
+        assert_eq!(family.chars().count(), 11);
+        assert_eq!(demojize_rust_replace(family, " "), " ");
+        assert_eq!(demojize_rust_replace(family, ""), "");
+
+        // The kiss sequence: ten code points, also RGI.
+        let kiss = "\u{1F468}\u{1F3FB}\u{200D}\u{2764}\u{FE0F}\u{200D}\
+                    \u{1F48B}\u{200D}\u{1F468}\u{1F3FB}";
+        assert_eq!(kiss.chars().count(), 10);
+        assert_eq!(demojize_rust_replace(kiss, " "), " ");
+    }
+
+    /// Whatever the peek pulled and did not use must come back (#995).
+    ///
+    /// Following a sequence past the window reads ahead. Those chars have already left
+    /// the iterator, so counting them again when the window advances drops them — the
+    /// trailing `b` here vanished on the first draft of the fix, and no test above saw
+    /// it because none put text after a long sequence.
+    #[test]
+    fn text_after_a_sequence_longer_than_the_window_survives() {
+        let family = "\u{1F468}\u{1F3FB}\u{200D}\u{1F469}\u{1F3FB}\u{200D}\
+                      \u{1F467}\u{1F3FB}\u{200D}\u{1F466}\u{1F3FB}";
+        assert_eq!(demojize_rust_replace(&format!("a{family}b"), " "), "a b");
+        assert_eq!(demojize_rust_replace(&format!("{family}tail"), ""), "tail");
+        assert_eq!(
+            demojize_rust_replace(&format!("x{family}y{family}z"), ""),
+            "xyz"
+        );
+        // A dangling joiner after a long sequence is still not part of it.
+        let dangling = format!("{family}\u{200D}");
+        assert_eq!(demojize_rust_replace(&dangling, ""), "\u{200D}");
+    }
+
+    /// The window edge must not leave an invisible character behind (#995).
+    ///
+    /// This is the half that matters: splitting a sequence emitted two replacements,
+    /// which is wrong but visible, *and* passed the joiner at the seam through as
+    /// ordinary text — a `U+200D` surviving the step whose job is removing emoji, in a
+    /// library whose whole subject is invisible characters.
+    #[test]
+    fn no_joiner_survives_a_sequence_of_any_length() {
+        for links in 1..=12usize {
+            let chain: String = std::iter::repeat_n("\u{1F468}", links)
+                .collect::<Vec<_>>()
+                .join("\u{200D}");
+            let out = demojize_rust_replace(&chain, "");
+            assert!(
+                !out.contains('\u{200D}'),
+                "{links} links left a joiner: {out:?}"
+            );
+            assert_eq!(out, "", "{links} links");
+        }
     }
 
     /// Removing emoji twice is removing them once.

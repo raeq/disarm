@@ -267,7 +267,14 @@ impl<'a> CharWindow<'a> {
     }
 }
 
-/// Check if a codepoint is in an emoji range but not in our data.
+/// A conservative block-range superset of "some emoji step might touch this" (#990).
+///
+/// **Not a definition of emoji**, and no longer used as one. `presets::is_demojizable`
+/// is its only caller: a fast-path guard where over-marking costs a skipped optimisation
+/// and under-marking would be unsound, so a loose range answer is the right shape there.
+///
+/// The scanners ask `unnamed_emoji_len_at` instead (#990): a block range is not a
+/// definition of emoji, and `U+2600..27BF` is Miscellaneous Symbols and Dingbats.
 pub(crate) fn is_emoji_codepoint(ch: char) -> bool {
     let cp = ch as u32;
     // Emoticons, Dingbats, Symbols, Transport, Supplemental Symbols, etc.
@@ -278,8 +285,11 @@ pub(crate) fn is_emoji_codepoint(ch: char) -> bool {
         0x1F000..=0x1FAFF |   // Supplementary emoji blocks
         // GAP — U+1FB00..=U+1FBFF (Symbols for Legacy Computing) is intentionally
         // excluded: it is box-drawing / teletext / segmented-display graphics, not
-        // emoji, and carries no RGI emoji property. Skipping it keeps demojize from
-        // expanding legacy terminal art into emoji names.
+        // emoji, and carries no RGI emoji property. It kept `demojize` from expanding
+        // legacy terminal art into emoji names until #990 moved that decision to
+        // `unnamed_emoji_len_at`; what the exclusion buys now is a fast path that does
+        // not mark a page of box-drawing as actionable for a step that would not
+        // touch it.
         0x1FC00..=0x1FFFF |   // Future emoji blocks
         0xE0020..=0xE007F     // Tags (used in flag sequences)
     )
@@ -376,7 +386,7 @@ fn opens_emoji_presentation(ch: char) -> bool {
 ///
 /// A regional indicator is `Emoji_Presentation=Yes` on its own, so it returns `Some(1)`;
 /// a pair returns `Some(2)`, because a flag is one emoji and must take one replacement.
-fn presentation_len_at(window: &[char]) -> Option<usize> {
+pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
     let first = *window.first()?;
 
     // A pair of regional indicators is one flag, and one emoji: `replacement=" "` must
@@ -432,6 +442,27 @@ fn presentation_len_at(window: &[char]) -> Option<usize> {
         }
     }
     Some(len)
+}
+
+/// How many chars of a run `demojize` treats as an emoji it has no name for (#990).
+///
+/// `presentation_len_at` answers the emoji half. The Plane 14 TAG block is the other:
+/// a lone tag character is *not* an emoji — it is the concealment carrier
+/// `strip_plane14` exists for — but removing it here is the only coverage of that block
+/// `ml_normalize` has, and #914 is explicit that demojize's Plane 14 removal must not
+/// move until something else carries it. No preset declares `Step::StripPlane14`, so
+/// nothing does yet. It keeps a named arm rather than riding a block range, and giving
+/// `ml_normalize` the real step is a change with a `KEY_SCHEMA_VERSION` cost of its own.
+///
+/// Both scanners call this, so the two cannot drift apart on what they rewrite.
+pub(crate) fn unnamed_emoji_len_at(window: &[char]) -> Option<usize> {
+    presentation_len_at(window).or_else(|| {
+        window
+            .first()
+            .copied()
+            .filter(|&c| is_tag(c))
+            .map(|_| 1usize)
+    })
 }
 
 /// Replace every emoji-presentation sequence in `text` with `replacement` (#972).
@@ -611,12 +642,12 @@ pub fn demojize_rust_into(
             continue;
         }
 
-        // Unknown emoji — drop it (Ignore mode)
-        if is_emoji_codepoint(ch) {
-            win.advance(1);
-            while win.current().is_some_and(is_emoji_modifier) {
-                win.advance(1);
-            }
+        // An emoji this scanner cannot name, or a lone Plane 14 tag — dropped, as it
+        // always has been. What changed in #990 is only *what reaches here*: the test
+        // was a block range, so `\u{2606}` WHITE STAR and 776 other characters carrying
+        // no emoji property were dropped as emoji the library lacked data for.
+        if let Some(consumed) = unnamed_emoji_len_at(win.as_slice()) {
+            win.advance(consumed);
             last_was_emoji = false;
             continue;
         }
@@ -763,6 +794,40 @@ mod tests {
                 "trie/reference disagree on chained key {key}"
             );
         }
+    }
+
+    /// #990: the unknown-emoji branch asks the UCD, not a block range.
+    ///
+    /// `is_emoji_codepoint` still answers for `\u{2606}` — it is a deliberately loose
+    /// fast-path superset and keeps its block shape. What must not is the branch that
+    /// decides whether `demojize` rewrites a character, which is `presentation_len_at`.
+    #[test]
+    fn unknown_emoji_branch_ignores_non_emoji_in_emoji_blocks() {
+        for ch in ['\u{2606}', '\u{2613}', '\u{2605}', '\u{2295}'] {
+            assert_eq!(
+                unnamed_emoji_len_at(&[ch]),
+                None,
+                "U+{:04X} carries no emoji presentation and must not reach the \
+                 unknown-emoji branch",
+                ch as u32
+            );
+        }
+        // And the block predicate still claims them, which is why asking it was wrong.
+        assert!(is_emoji_codepoint('\u{2606}'));
+    }
+
+    /// #990 narrowed what reaches the unknown branch; it did not change what happens
+    /// there. An emoji this scanner cannot name is still dropped, and so is a lone
+    /// Plane 14 tag — the only coverage of that block `ml_normalize` has (#914).
+    #[test]
+    fn the_pure_rust_scanner_drops_only_what_is_an_emoji_or_a_tag() {
+        // A lone regional indicator is `Emoji_Presentation=Yes` and CLDR names no
+        // single one of them, so it is the shape the branch exists for.
+        assert_eq!(demojize_rust("x\u{1F1E6}y", false), "xy");
+        // A lone TAG character, which `ml_normalize` relies on this branch to remove.
+        assert_eq!(demojize_rust("x\u{E0061}y", false), "xy");
+        // And a character that is not an emoji at all now travels through untouched.
+        assert_eq!(demojize_rust("a\u{2606}b", false), "a\u{2606}b");
     }
 
     #[test]

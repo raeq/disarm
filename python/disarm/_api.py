@@ -1296,14 +1296,28 @@ def demojize(
         strip_modifiers: If True, collapse skin tone and hair style variants
             to their base form (e.g. "woman raising hand" instead of
             "woman raising hand: medium-dark skin tone").
-        errors: How to handle emoji not in the provider's data.
+        errors: How to handle an emoji that neither the provider nor the built-in CLDR
+                table names — 26 code points as bundled, all of them lone regional
+                indicators, plus any sequence a future UCD adds ahead of CLDR.
                 "replace" — substitute with replace_with.
                 "ignore" — silently drop.
                 "preserve" — keep the original emoji.
+
+                It governs emoji only. Until #990 it also caught anything in a handful
+                of block ranges, so ``☆`` and 776 other characters carrying no emoji
+                property became ``[?]``; the branch now asks the UCD's properties, the
+                same question *replacement* asks.
+
+                A provider's ``None`` does **not** reach here: it means "I don't name
+                this", and the built-in table answers next. To suppress a name, return
+                the text you want; to remove emoji, use *replacement* or `replace_emoji`.
         replace_with: Replacement string when errors="replace".
         provider: An object implementing the `EmojiProvider` protocol.
             Overrides the global provider for this call.
             None uses the global provider or the built-in default.
+            Returning ``None`` from ``lookup`` falls through to the built-in CLDR
+            table rather than to *errors*, so a provider can add and override names
+            but cannot withhold one.
         delimiters: ``emoji`` library compatibility — ignored, with a
             ``DeprecationWarning`` *when explicitly passed*. disarm always outputs
             bare CLDR short names without delimiters; wrap the result yourself if

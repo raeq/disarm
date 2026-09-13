@@ -638,7 +638,7 @@ stripped is then indistinguishable from a value that was never there.
 | `catalog_key` | 139,867 | 2,399 |
 | `sort_key` | 138,404 | 936 |
 | `canonicalize` / `canonicalize_strict` / `skeleton_key` | 137,955 | 487 |
-| `ml_normalize` | 4,047 | 4,047 |
+| `ml_normalize` | 2,735 | 2,735 |
 | **`sanitize_filename`** | **0** | **0** — returns `_` |
 
 Measured at **Unicode 15.0.0** — the oldest version CI runs — over every assigned code point, and

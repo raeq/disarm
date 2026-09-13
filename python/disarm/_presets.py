@@ -55,7 +55,7 @@ _EMPTY_KEY_CENSUS = {
     "canonicalize": (137_955, 487),
     "canonicalize_strict": (137_955, 487),
     "strip_obfuscation": (140_200, 2_732),
-    "ml_normalize": (4_047, 4_047),
+    "ml_normalize": (2_735, 2_735),
     "search_key": (139_870, 2_402),
     "catalog_key": (139_867, 2_399),
     "sort_key": (138_404, 936),
@@ -307,8 +307,8 @@ def ml_normalize(
 
     **The output can be the empty string (#728).**
 
-    Measured at Unicode 15.0.0, **4,047** single
-    characters reduce to ``""`` here (4,047 excluding the Private Use
+    Measured at Unicode 15.0.0, **2,735** single
+    characters reduce to ``""`` here (2,735 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
 

@@ -14,8 +14,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyList;
 
 use crate::emoji::{
-    is_emoji_codepoint, is_emoji_modifier, match_emoji_at, pad_emoji_replacement,
-    strip_modifier_suffix, CharWindow, VS15, VS16, ZWJ,
+    is_emoji_modifier, match_emoji_at, pad_emoji_replacement, strip_modifier_suffix,
+    unnamed_emoji_len_at, CharWindow, VS15, VS16, ZWJ,
 };
 use crate::tables;
 use crate::ErrorMode;
@@ -152,23 +152,25 @@ fn demojize_impl(
             continue;
         }
 
-        // Check if this is an emoji-like codepoint that we don't have data for
-        if is_emoji_codepoint(ch) {
+        // An emoji that neither the provider nor CLDR names, or a lone Plane 14 tag.
+        // This is the only branch `errors` governs, and until #990 the test was a block
+        // range: `U+2600..27BF` is Miscellaneous Symbols and Dingbats, so `\u{2606}`
+        // WHITE STAR and 776 other characters carrying no emoji property at all arrived
+        // here and became `[?]`. `unnamed_emoji_len_at` measures the whole sequence, so
+        // the modifiers travel with their base rather than being consumed by a second
+        // hand-rolled loop — and it is shared with the pure-Rust scanner, so the two
+        // cannot drift apart on what they rewrite.
+        if let Some(consumed) = unnamed_emoji_len_at(win.as_slice()) {
             match error_mode {
                 ErrorMode::Replace => result.push_str(replace_with),
                 ErrorMode::Ignore => {}
-                ErrorMode::Preserve => result.push(ch),
-            }
-            win.advance(1);
-            while let Some(mc) = win.current() {
-                if !is_emoji_modifier(mc) {
-                    break;
+                // `take` rather than a slice: the crate denies `indexing_slicing`, and
+                // the run is already measured, so no bound needs asserting here.
+                ErrorMode::Preserve => {
+                    result.extend(win.as_slice().iter().take(consumed).copied());
                 }
-                if let ErrorMode::Preserve = error_mode {
-                    result.push(mc);
-                }
-                win.advance(1);
             }
+            win.advance(consumed);
             // Parity with the recognized-emoji path (#200): flag the position so
             // a following alphanumeric is separated by a space — but only when a
             // *visible* token was actually emitted, otherwise we inject a

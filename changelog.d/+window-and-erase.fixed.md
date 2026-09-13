@@ -26,3 +26,15 @@
   and a backspace at column 0 discarded the whole line. It now removes the one cell
   before the cursor and closes the gap, and does nothing at column 0. Losing text the
   reader can see is the risk #934 declined to take.
+
+  Both fixes were then reviewed again, which is how the three regressions they
+  introduced were caught rather than shipped. Following a chain past the window made
+  `presentation_len_at`'s per-link recursion unbounded — the nine-code-point slice had
+  been holding the depth down by accident — and a long enough chain overflowed the
+  stack, an abort no caller can catch, on input from outside; the chain walk is now a
+  loop. Erasing by removing the cell shifted every cell to its right, which measured
+  4x per doubling; blanking the cell prints the same and is O(1). And deciding to grow
+  the window on whether the buffer was *full* rather than whether the match could
+  *continue* sent every emoji in any input past nine characters through a heap scan.
+  Both hot paths are back at the speed they were: 4.91 ms against 4.71 ms for 200,000
+  emoji, and 2.39 ms against 2.53 ms for 40,000 erases.

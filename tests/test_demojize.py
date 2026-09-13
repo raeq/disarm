@@ -187,12 +187,24 @@ class TestUnknownEmojiSpacingParity:
     space, exactly like a recognized emoji's name. Ignore emits nothing and must
     not introduce a spurious space."""
 
-    # A codepoint in the emoji range with no CLDR name. Guarded below so the test
-    # fails loudly (not silently) if it is ever assigned one.
-    UNKNOWN = "\U0001fc00"
+    # An emoji with no CLDR name. A lone regional indicator is `Emoji_Presentation=Yes`
+    # and CLDR names no single one of them — a flag needs the pair — so it is the shape
+    # `errors` exists for. Guarded below so the test fails loudly if it gains a name.
+    #
+    # Was `U+1FC00` until #990, which is *unassigned*: it reached this branch only
+    # because the old gate matched the block `U+1FC00..1FFFF` rather than the UCD's
+    # emoji properties, and rewriting an unassigned code point as an emoji the library
+    # lacks data for is the over-reach that issue removed. Every assertion below is
+    # unchanged; only the character they run on is now actually an emoji.
+    UNKNOWN = "\U0001f1e6"
 
     def test_precondition_codepoint_is_unmapped(self) -> None:
         assert demojize(self.UNKNOWN) == "[?]", "codepoint gained a CLDR name; pick another"
+
+    def test_an_unassigned_codepoint_is_not_an_unknown_emoji(self) -> None:
+        """#990: the branch is for emoji, not for everything in an emoji block."""
+        assert demojize("\U0001fc00abc") == "\U0001fc00abc"
+        assert demojize("\U0001fc00abc", errors="replace", replace_with="[?]") == "\U0001fc00abc"
 
     def test_replace_separates_from_following_alnum(self) -> None:
         assert demojize(self.UNKNOWN + "abc") == "[?] abc"

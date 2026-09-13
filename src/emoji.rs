@@ -267,7 +267,18 @@ impl<'a> CharWindow<'a> {
     }
 }
 
-/// Check if a codepoint is in an emoji range but not in our data.
+/// A conservative block-range superset of "some emoji step might touch this" (#990).
+///
+/// **Not a definition of emoji**, and no longer used as one. `presets::is_demojizable`
+/// is its only caller: a fast-path guard where over-marking costs a skipped optimisation
+/// and under-marking would be unsound, so a loose range answer is the right shape there.
+///
+/// It used to decide the unknown-emoji branch of both `demojize` scanners, which is what
+/// #990 was: `U+2600..27BF` is Miscellaneous Symbols and Dingbats, so `\u{2606}` WHITE
+/// STAR and 776 other characters that are not emoji by any UCD property were treated as
+/// emoji the library lacked data for — replaced with `[?]` standalone and deleted
+/// outright in the pipeline. Both scanners now ask `presentation_len_at`, which is the
+/// same question `replace_emoji` asks and the one the UCD actually answers.
 pub(crate) fn is_emoji_codepoint(ch: char) -> bool {
     let cp = ch as u32;
     // Emoticons, Dingbats, Symbols, Transport, Supplemental Symbols, etc.
@@ -376,7 +387,7 @@ fn opens_emoji_presentation(ch: char) -> bool {
 ///
 /// A regional indicator is `Emoji_Presentation=Yes` on its own, so it returns `Some(1)`;
 /// a pair returns `Some(2)`, because a flag is one emoji and must take one replacement.
-fn presentation_len_at(window: &[char]) -> Option<usize> {
+pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
     let first = *window.first()?;
 
     // A pair of regional indicators is one flag, and one emoji: `replacement=" "` must
@@ -611,13 +622,20 @@ pub fn demojize_rust_into(
             continue;
         }
 
-        // Unknown emoji — drop it (Ignore mode)
-        if is_emoji_codepoint(ch) {
-            win.advance(1);
-            while win.current().is_some_and(is_emoji_modifier) {
+        // An emoji by the UCD's properties that CLDR does not name. Emitted verbatim:
+        // a step inside a pipeline that silently removed an assigned character the
+        // caller never asked about is the failure mode the explicit `strip_*` steps
+        // exist to avoid, and this branch used to do exactly that to `\u{2606}` and 776
+        // other non-emoji (#990). `presentation_len_at` measures the whole sequence, so
+        // the modifiers travel with their base instead of being consumed by hand.
+        if let Some(consumed) = presentation_len_at(win.as_slice()) {
+            for _ in 0..consumed {
+                if let Some(c) = win.current() {
+                    result.push(c);
+                }
                 win.advance(1);
             }
-            last_was_emoji = false;
+            last_was_emoji = true;
             continue;
         }
 
@@ -763,6 +781,37 @@ mod tests {
                 "trie/reference disagree on chained key {key}"
             );
         }
+    }
+
+    /// #990: the unknown-emoji branch asks the UCD, not a block range.
+    ///
+    /// `is_emoji_codepoint` still answers for `\u{2606}` — it is a deliberately loose
+    /// fast-path superset and keeps its block shape. What must not is the branch that
+    /// decides whether `demojize` rewrites a character, which is `presentation_len_at`.
+    #[test]
+    fn unknown_emoji_branch_ignores_non_emoji_in_emoji_blocks() {
+        for ch in ['\u{2606}', '\u{2613}', '\u{2605}', '\u{2295}'] {
+            let window: Vec<char> = vec![ch];
+            assert_eq!(
+                presentation_len_at(&window),
+                None,
+                "U+{:04X} carries no emoji presentation and must not reach the \
+                 unknown-emoji branch",
+                ch as u32
+            );
+        }
+        // And the block predicate still claims them, which is why asking it was wrong.
+        assert!(is_emoji_codepoint('\u{2606}'));
+    }
+
+    /// A step inside a pipeline must not silently delete an assigned character.
+    #[test]
+    fn the_pure_rust_scanner_preserves_an_emoji_it_cannot_name() {
+        // A lone regional indicator is `Emoji_Presentation=Yes` and CLDR names no
+        // single one of them, so it is the shape the branch exists for.
+        assert_eq!(demojize_rust("x\u{1F1E6}y", false), "x\u{1F1E6} y");
+        // And a character that is not an emoji at all travels through untouched.
+        assert_eq!(demojize_rust("a\u{2606}b", false), "a\u{2606}b");
     }
 
     #[test]

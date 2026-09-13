@@ -72,6 +72,12 @@ class EmojiProvider(Protocol):
             The text name to substitute, or None if this provider
             does not recognize the sequence.
 
+            ``None`` means "I do not name this", and the built-in CLDR table answers
+            next — it does **not** fall through to `demojize`'s *errors* mode. A
+            provider can therefore add names and override them, but cannot withhold
+            one: returning ``None`` for a known emoji still yields the CLDR name. To
+            remove emoji instead of naming them, use `replace_emoji` (#990).
+
         Warning:
             **A match consumes the window it was shown** (#972). Returning a string —
             including ``""`` — tells the scanner that every code point in *sequence* was

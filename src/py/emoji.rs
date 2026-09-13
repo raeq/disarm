@@ -14,7 +14,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyList;
 
 use crate::emoji::{
-    is_emoji_codepoint, is_emoji_modifier, match_emoji_at, pad_emoji_replacement,
+    is_emoji_modifier, match_emoji_at, pad_emoji_replacement, presentation_len_at,
     strip_modifier_suffix, CharWindow, VS15, VS16, ZWJ,
 };
 use crate::tables;
@@ -152,22 +152,28 @@ fn demojize_impl(
             continue;
         }
 
-        // Check if this is an emoji-like codepoint that we don't have data for
-        if is_emoji_codepoint(ch) {
+        // An emoji by the UCD's properties that neither the provider nor CLDR names.
+        // This is the only branch `errors` governs, and until #990 it asked a block
+        // range instead: `U+2600..27BF` is Miscellaneous Symbols and Dingbats, so
+        // `\u{2606}` WHITE STAR and 776 other characters carrying no emoji property at
+        // all arrived here and became `[?]`. `presentation_len_at` is the same question
+        // `replace_emoji` asks, and it measures the whole sequence, so the modifiers
+        // travel with their base rather than being consumed by a second hand-rolled loop.
+        if let Some(consumed) = presentation_len_at(win.as_slice()) {
             match error_mode {
                 ErrorMode::Replace => result.push_str(replace_with),
                 ErrorMode::Ignore => {}
-                ErrorMode::Preserve => result.push(ch),
+                ErrorMode::Preserve => {
+                    for _ in 0..consumed {
+                        if let Some(c) = win.current() {
+                            result.push(c);
+                        }
+                        win.advance(1);
+                    }
+                }
             }
-            win.advance(1);
-            while let Some(mc) = win.current() {
-                if !is_emoji_modifier(mc) {
-                    break;
-                }
-                if let ErrorMode::Preserve = error_mode {
-                    result.push(mc);
-                }
-                win.advance(1);
+            if !matches!(error_mode, ErrorMode::Preserve) {
+                win.advance(consumed);
             }
             // Parity with the recognized-emoji path (#200): flag the position so
             // a following alphanumeric is separated by a space — but only when a

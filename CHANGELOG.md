@@ -18,6 +18,43 @@ compatibility (see [RELEASING.md](RELEASING.md)).
 
 ### Fixed
 
+- **`demojize` destroyed 777 non-emoji characters, and the pipeline step deleted them
+  silently (#990).** `demojize("rated 3 ★ of 5")` returned `rated 3 [?] of 5`, and
+  `TextPipeline(demojize=True)` on the same input returned `rated 3  of 5` — the star
+  gone, leaving a double space. `ml_corpus_normalize` reached the second of those.
+
+  The cause was that `demojize` decided "is this an emoji?" from block ranges rather than
+  from the UCD. `U+2600..27BF` is Miscellaneous Symbols and Dingbats, so `☆ WHITE STAR`,
+  `☓ SALTIRE` and 775 other characters carrying **no emoji property at all** arrived at
+  the unknown-emoji branch, along with 1,493 unassigned code points. The repo had already
+  recognised this class and fixed it for one block — the `U+1FB00..1FBFF` GAP comment
+  excludes Symbols for Legacy Computing as "box-drawing / teletext / segmented-display
+  graphics, not emoji" — and the same reasoning was owed to the other three ranges.
+
+  Both scanners now ask `presentation_len_at`, which is the predicate `replace_emoji`
+  already used: `Emoji_Presentation=Yes`, an `Emoji=Yes` base carrying `U+FE0F`, and the
+  ZWJ, modifier, keycap and flag sequences built on those. One definition of emoji across
+  naming and replacing, so the two cannot drift apart again, and the hand-rolled
+  modifier-consuming loop in each scanner goes with it — the predicate measures the whole
+  sequence. `is_emoji_codepoint` keeps its block shape and its sole remaining caller,
+  `presets::is_demojizable`, where a loose superset is correct: over-marking costs a
+  skipped optimisation there and under-marking would be unsound.
+
+  **The two scanners no longer disagree about deletion.** The pure-Rust pipeline path had
+  no `ErrorMode` and dropped what it could not name; it now emits it verbatim. A step
+  inside a pipeline that silently removes an assigned character the caller never asked
+  about is the failure mode the explicit `strip_*` steps exist to avoid.
+
+  **`errors` and `replace_with` now govern what they say.** They were documented as
+  handling "emoji not in the provider's data" while actually governing 777 non-emoji; the
+  set is now 26 code points as bundled — every one a lone regional indicator, which CLDR
+  names only in pairs — plus any sequence a future UCD adds ahead of CLDR. Also written
+  down: a provider returning `None` falls through to the built-in table and **not** to
+  `errors`, so a provider can add and override names but cannot withhold one.
+
+  No emoji changes: `demojize("aa🔥bb")` is still `aa fire bb`, keycaps and ZWJ sequences
+  still name, and `replace_emoji` is untouched.
+
 - **Every ruff bump from Dependabot went red, because CI kept a second copy of the pin.**
   `pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each pinned ruff, and
   `tests/test_toolchain_pins.py` failed whenever they differed. Dependabot bumps the first

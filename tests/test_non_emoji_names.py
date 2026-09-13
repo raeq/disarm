@@ -189,11 +189,23 @@ def test_the_two_suppression_sets_are_not_the_same_set() -> None:
 
 # --- #990: the unknown-emoji branch asks the UCD, not a block range ----------
 
-#: The block ranges `emoji::is_emoji_codepoint` matches. Until #990 they decided the
-#: unknown-emoji branch of both `demojize` scanners, so anything in them that CLDR did
-#: not name was treated as an emoji the library lacked data for. `U+2600..27BF` is
-#: Miscellaneous Symbols and Dingbats, most of which has never been emoji.
-EMOJI_BLOCK_RANGES = ((0x2600, 0x27BF), (0x2B50, 0x2B55), (0x1F000, 0x1FAFF))
+#: The candidate half of the block ranges `emoji::is_emoji_codepoint` matches. Until #990
+#: those ranges decided the unknown-emoji branch of both `demojize` scanners, so anything
+#: in them CLDR did not name was rewritten as an emoji the library lacked data for.
+#: `U+2600..27BF` is Miscellaneous Symbols and Dingbats and `U+1FC00..1FFFF` is entirely
+#: unassigned — neither has ever been emoji.
+#:
+#: Two of the predicate's six ranges are deliberately absent, because a character in them
+#: is not a candidate for this question: `U+FE00..FE0F` are the variation selectors, which
+#: `demojize` strips by design before this branch is reached, and `U+E0020..E007F` is the
+#: Plane 14 TAG block, which it removes by design and which `ml_normalize` relies on it to
+#: remove (#914). Sweeping either would assert the opposite of what those two want.
+EMOJI_BLOCK_RANGES = (
+    (0x2600, 0x27BF),
+    (0x2B50, 0x2B55),
+    (0x1F000, 0x1FAFF),
+    (0x1FC00, 0x1FFFF),
+)
 
 
 def test_a_block_range_neighbour_with_no_emoji_property_is_left_alone() -> None:

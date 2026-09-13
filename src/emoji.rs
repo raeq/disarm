@@ -320,10 +320,15 @@ impl<'a> CharWindow<'a> {
         // A full buffer does not by itself mean the match is unfinished — and keying on
         // fullness alone sent every emoji in any input longer than the window through the
         // heap scan below. More input can only extend a match that ran to the edge, or
-        // one the chain loop abandoned at a joiner because what followed it was not yet
-        // in the window. A match that stopped on any other character is done, and no
-        // amount of lookahead changes that.
-        if len < self.len && self.buf[len] != ZWJ {
+        // one the chain loop abandoned at a joiner it could not yet judge. A match that
+        // stopped anywhere else is done, and no amount of lookahead changes that.
+        //
+        // "Could not yet judge" is the narrow part: the chain loop abandoned that joiner
+        // because `head_len_at` answered `None` for what came after it, and that answer
+        // is final as soon as it had `HEAD_LOOKAHEAD` chars to look at. Treating every
+        // joiner as unjudged instead cost a windowful of read-ahead per emoji on input
+        // shaped like `emoji + ZWJ + text` — 20.5 ms against 7.9 ms for 100k of them.
+        if len < self.len && (self.buf[len] != ZWJ || self.len - (len + 1) >= HEAD_LOOKAHEAD) {
             return Some(len);
         }
         // A full buffer cannot tell a finished sequence from one it merely ran out of
@@ -473,6 +478,15 @@ fn is_regional_indicator(ch: char) -> bool {
 fn opens_emoji_presentation(ch: char) -> bool {
     tables::is_emoji_presentation(ch) || is_regional_indicator(ch)
 }
+
+/// How many chars [`head_len_at`] may need to see before it can answer `None`.
+///
+/// Its deepest read is the keycap arm's `window[2]` — base, `U+FE0F`, keycap. So a `None`
+/// from a slice at least this long is final, and one from a shorter slice might have been
+/// a `Some` with more input behind it. [`CharWindow::presentation_len`] needs that
+/// distinction to tell a joiner it has disproved from one it merely ran out of room to
+/// judge. `head_lookahead_is_enough` below holds it to the number.
+const HEAD_LOOKAHEAD: usize = 3;
 
 /// One emoji-presentation **head**: a base and the modifiers bound to it, no ZWJ chain.
 ///
@@ -854,6 +868,133 @@ mod tests {
         assert_eq!(demojize_rust_replace("a\u{200D}b", ""), "a\u{200D}b");
     }
 
+    /// `HEAD_LOOKAHEAD` is the number `head_len_at` actually needs (#995).
+    ///
+    /// The fast path in `CharWindow::presentation_len` rests on this: a `None` from a
+    /// slice at least this long cannot become a `Some` when more input arrives, so a
+    /// joiner that far from the edge has been disproved rather than merely unjudged.
+    /// Asserted by exhaustion over everything the head arms branch on, rather than by
+    /// reading the function and counting — the reading is how the constant rots.
+    #[test]
+    fn head_lookahead_is_enough() {
+        let alphabet = [
+            '\u{1F525}', // emoji presentation
+            '\u{00A9}',  // Emoji=Yes, presentation No — needs a following VS16
+            VS16,
+            VS15,
+            '\u{1F3FB}', // skin tone
+            ZWJ,
+            '1', // keycap base
+            KEYCAP,
+            '\u{1F1EC}', // regional indicator
+            '\u{E0061}', // tag
+            'a',
+        ];
+        let mut window = Vec::new();
+        let probe = |window: &[char]| {
+            if window.len() < HEAD_LOOKAHEAD || head_len_at(window).is_some() {
+                return;
+            }
+            // A `None` this far from the end must survive anything appended to it.
+            for &extra in &alphabet {
+                for &more in &alphabet {
+                    let mut longer = window.to_vec();
+                    longer.push(extra);
+                    longer.push(more);
+                    assert_eq!(
+                        head_len_at(&longer),
+                        None,
+                        "{window:?} answered None with {} chars, then Some once \
+                         {extra:?}{more:?} followed — HEAD_LOOKAHEAD is too small",
+                        window.len()
+                    );
+                }
+            }
+        };
+        for &a in &alphabet {
+            window.push(a);
+            probe(&window);
+            for &b in &alphabet {
+                window.push(b);
+                probe(&window);
+                for &c in &alphabet {
+                    window.push(c);
+                    probe(&window);
+                    window.pop();
+                }
+                window.pop();
+            }
+            window.pop();
+        }
+    }
+
+    /// The window agrees with a scanner that can see the whole input (#995).
+    ///
+    /// `CharWindow` exists so the scanner never materialises its input, and everything
+    /// subtle here comes from that: what the window can prove, what it must read ahead
+    /// for, and what it has to hand back afterwards. The predicate deciding it has been
+    /// wrong twice — once too narrow, splitting real sequences, once too broad, reading
+    /// ahead for matches already finished — so it is gated against the thing it is an
+    /// optimisation of: the same match with the whole input in hand.
+    #[test]
+    fn the_window_agrees_with_an_unbounded_scanner() {
+        fn oracle(text: &str, replacement: &str) -> String {
+            let chars: Vec<char> = text.chars().collect();
+            let mut out = String::new();
+            let mut i = 0;
+            while i < chars.len() {
+                if let Some(n) = presentation_len_at(&chars[i..]) {
+                    out.push_str(replacement);
+                    i += n;
+                } else {
+                    out.push(chars[i]);
+                    i += 1;
+                }
+            }
+            out
+        }
+
+        // Everything the window branches on, joiners over-weighted so chains get long.
+        let alphabet = [
+            '\u{1F525}',
+            '\u{1F468}',
+            '\u{00A9}',
+            VS16,
+            VS15,
+            '\u{1F3FB}',
+            ZWJ,
+            ZWJ,
+            ZWJ,
+            '1',
+            KEYCAP,
+            '\u{1F1EC}',
+            '\u{1F1E7}',
+            '\u{E0061}',
+            'a',
+            ' ',
+        ];
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        for _ in 0..120_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let len = 1 + (state % 40) as usize;
+            let mut probe = String::new();
+            let mut bits = state;
+            for _ in 0..len {
+                bits = bits.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+                probe.push(alphabet[(bits >> 33) as usize % alphabet.len()]);
+            }
+            for replacement in ["", " ", "[x]"] {
+                assert_eq!(
+                    demojize_rust_replace(&probe, replacement),
+                    oracle(&probe, replacement),
+                    "{probe:?} replacement={replacement:?}"
+                );
+            }
+        }
+    }
+
     /// Following a chain must not recurse: input decides the depth (#995).
     ///
     /// `presentation_len_at` recursed once per link. While the slice was capped at
@@ -885,6 +1026,10 @@ mod tests {
             "\u{1F44D}\u{1F3FD}aaaaaaaaaaaaaaaaaaaa",
             "\u{1F1EC}\u{1F1E7}aaaaaaaaaaaaaaaaaaaa",
             "1\u{FE0F}\u{20E3}aaaaaaaaaaaaaaaaaaaa",
+            // A joiner the chain loop has already disproved: the char after it is in
+            // the window, so no more input can make it part of the sequence.
+            "\u{1F525}\u{200D}aaaaaaaaaaaaaaaaaaaa",
+            "\u{1F525}\u{200D}\u{200D}aaaaaaaaaaaaaaaaaa",
         ] {
             let mut win = CharWindow::new(text.chars());
             while win.current().is_some() {

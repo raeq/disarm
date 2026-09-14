@@ -14,8 +14,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyList;
 
 use crate::emoji::{
-    is_emoji_modifier, match_emoji_at, pad_emoji_replacement, strip_modifier_suffix,
-    unnamed_emoji_len_at, CharWindow, VS15, VS16, ZWJ,
+    advance_past_trailing_modifiers, match_emoji_at, needs_separator_after_a_name,
+    pad_emoji_replacement, strip_modifier_suffix, unnamed_emoji_len_at, CharWindow, VS15, VS16,
+    ZWJ,
 };
 use crate::tables;
 use crate::ErrorMode;
@@ -131,10 +132,7 @@ fn demojize_impl(
             {
                 pad_emoji_replacement(&mut result, &name);
                 win.advance(consumed);
-                // Skip trailing modifier codepoints
-                while win.current().is_some_and(is_emoji_modifier) {
-                    win.advance(1);
-                }
+                advance_past_trailing_modifiers(&mut win);
                 last_was_emoji = true;
                 continue;
             }
@@ -145,9 +143,7 @@ fn demojize_impl(
             let replacement = strip_modifier_suffix(name, strip_modifiers);
             pad_emoji_replacement(&mut result, replacement);
             win.advance(consumed);
-            while win.current().is_some_and(is_emoji_modifier) {
-                win.advance(1);
-            }
+            advance_past_trailing_modifiers(&mut win);
             last_was_emoji = true;
             continue;
         }
@@ -185,10 +181,12 @@ fn demojize_impl(
             continue;
         }
 
-        // Not an emoji — pass through unchanged.
-        // Add space after emoji replacement if the text runs into
-        // alphanumeric content (not punctuation or whitespace).
-        if last_was_emoji && ch.is_alphanumeric() {
+        // Not an emoji — pass through unchanged, with a separator when the character
+        // would otherwise join the name in front of it. `needs_separator_after_a_name`
+        // is shared with the pure-Rust scanner: this site asked a narrower question than
+        // that one for as long as both existed, which is how a combining mark could land
+        // on a name here and not there (#992).
+        if last_was_emoji && needs_separator_after_a_name(ch) {
             result.push(' ');
         }
         result.push(ch);

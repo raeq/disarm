@@ -34,8 +34,11 @@ line the README guard draws for homoglyphs: this test takes the half a machine c
 
 from __future__ import annotations
 
+import functools
 import unicodedata
 from pathlib import Path
+
+from conftest import excluded_dirs
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -55,9 +58,7 @@ SUFFIXES = frozenset(".py .rs .md .rb .mjs .ts .java .kt .toml .yml .yaml .sh .c
 #: Directories that are not ours to police.
 #: Not ours to police. `tmp` is where `rake compile` stages a copy of the gem, so a
 #: converted file there is a build artifact that reappears on the next compile.
-SKIP = frozenset(
-    {".git", "target", "node_modules", ".venv", "vendor", "build", ".gradle", "tmp", "pkg"}
-)
+SKIP = excluded_dirs({".git", "target", "node_modules", "vendor", "build", ".gradle", "tmp", "pkg"})
 
 #: UAX #9 explicit formatting characters, plus the two marks. Every one reorders text.
 BIDI = frozenset("\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
@@ -220,20 +221,35 @@ def test_the_corpus_is_not_empty() -> None:
     assert len(SOURCES) > 200, len(SOURCES)
 
 
-def _offenders(kinds: set[str]) -> list[str]:
-    found = []
+@functools.cache
+def _scan_the_tree() -> tuple[tuple[str, str], ...]:
+    """Every literal in the corpus, as `(kind, description)`, scanned once.
+
+    The three gates below differ only in which kinds they refuse, and each used to
+    walk and re-read the whole corpus to answer that. Reading it once and filtering
+    is the same assertion for a third of the I/O; the three together were the third
+    largest file in the suite, and two of the three passes bought nothing.
+    """
+    found: list[tuple[str, str]] = []
     for path in SOURCES:
         try:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
         for line_no, col, char, kind in literal_invisibles(text):
-            if kind in kinds:
-                found.append(
+            found.append(
+                (
+                    kind,
                     f"{path.relative_to(ROOT)}:{line_no}:{col}: "
-                    f"U+{ord(char):04X} {unicodedata.name(char, 'unnamed')} ({kind})"
+                    f"U+{ord(char):04X} {unicodedata.name(char, 'unnamed')} ({kind})",
                 )
-    return found
+            )
+    return tuple(found)
+
+
+def _offenders(kinds: set[str]) -> list[str]:
+    """The subset of the one scan that these kinds care about."""
+    return [text for kind, text in _scan_the_tree() if kind in kinds]
 
 
 def test_no_literal_bidi_controls_anywhere() -> None:

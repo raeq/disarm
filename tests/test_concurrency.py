@@ -250,9 +250,25 @@ class TestBatchGilReleaseParity:
         assert slugify(data) == [slugify(x) for x in data]
 
 
+def _cores_available_here() -> float:
+    """Cores this process can actually use, not cores the machine has.
+
+    Under `pytest-xdist` the workers are competing for the same CPUs, so a box with
+    four of them and four workers gives each worker one — and a test that proves the
+    GIL is released by finishing two batches faster than one thread could cannot be
+    measured on one core. It measured 0.96x under `-n 4` and failed, which is the
+    machine being full and not the GIL being held.
+
+    Counting machine cores here was right while the suite only ever ran serially.
+    """
+    cores = os.cpu_count() or 1
+    workers = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "1") or 1)
+    return cores / max(workers, 1)
+
+
 @pytest.mark.skipif(
-    (os.cpu_count() or 1) < 2,
-    reason="parallel speedup needs at least 2 cores",
+    _cores_available_here() < 2,
+    reason="parallel speedup needs at least 2 cores free of other test workers",
 )
 class TestBatchReleasesGil:
     """Two threads must finish a pair of batches faster than serial (#70).

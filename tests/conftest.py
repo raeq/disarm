@@ -7,10 +7,46 @@ rediscovering or redeclaring them per file.
 
 from __future__ import annotations
 
+import functools
+from pathlib import Path
+
 import pytest
 from hypothesis import strategies as st
 
 from disarm._enums import Script
+
+# ---------------------------------------------------------------------------
+# Repository corpora
+# ---------------------------------------------------------------------------
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+@functools.cache
+def venv_dir_names() -> frozenset[str]:
+    """Directory names under the repo root that are Python virtual environments.
+
+    Three test modules walk the whole tree and skip build output by NAME, and the name
+    they knew was `.venv`. A contributor whose environment is `venv/`, `.venv312/`,
+    `env/` or `.tox/` therefore swept all of site-packages into the corpus: 1,516 of
+    2,123 files in one of them, which is slow and — for the gates that refuse literal
+    bidi controls and invisibles — a false positive waiting for whichever dependency
+    ships one in a fixture.
+
+    `pyvenv.cfg` is what makes a directory a virtual environment, so that is what this
+    looks for, rather than a longer list of names to be wrong about later. Only the top
+    two levels are searched: deeper is not where anyone puts one, and the search should
+    not cost more than the walk it saves.
+    """
+    found = {cfg.parent.name for cfg in ROOT.glob("*/pyvenv.cfg")}
+    found |= {cfg.parent.name for cfg in ROOT.glob("*/*/pyvenv.cfg")}
+    return frozenset(found)
+
+
+def excluded_dirs(extra: set[str] | frozenset[str] = frozenset()) -> frozenset[str]:
+    """`extra` plus every virtual environment present, for a tree walk's skip set."""
+    return frozenset(extra) | venv_dir_names()
+
 
 # ---------------------------------------------------------------------------
 # Hypothesis strategies

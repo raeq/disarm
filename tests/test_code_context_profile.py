@@ -17,6 +17,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from conftest import excluded_dirs
 
 from disarm import canonicalize, get_pipeline, inspect_anomalies, is_confusable, list_profiles
 
@@ -44,14 +45,17 @@ def test_the_profile_is_registered() -> None:
 # ── the contract: line count, indentation, case ──────────────────────────────
 
 
+#: Build output and third-party trees. Virtual environments are detected rather
+#: than named: see `conftest.venv_dir_names`.
+_SKIP = excluded_dirs({".git", "target", "node_modules"})
+
+
 def _sources() -> list[Path]:
     """Every Python and Rust file in the repository — the corpus #746 measured."""
     out: list[Path] = []
     for suffix in (".py", ".rs"):
         out.extend(
-            p
-            for p in ROOT.rglob(f"*{suffix}")
-            if not any(part in {".git", "target", "node_modules", ".venv"} for part in p.parts)
+            p for p in ROOT.rglob(f"*{suffix}") if not any(part in _SKIP for part in p.parts)
         )
     return sorted(out)
 

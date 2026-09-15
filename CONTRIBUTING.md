@@ -249,22 +249,46 @@ gated elsewhere:
   `bench` extra and skip without them. They also fail against a debug
   `maturin develop` build, which is a false alarm rather than a regression.
 
-### Running the suite in parallel
+### The suite runs in parallel by default
 
-`pytest-xdist` is in the `test` extra:
-
-```bash
-pytest -n 2 --dist loadfile
-```
+`-n auto --dist loadfile` is in `addopts`, so bare `pytest` already uses every core.
+Pass `-n 0` to turn it off when you want a debugger, or a stable test order.
 
 **`--dist loadfile` is not optional.** `register_lang` mutates process-global state
 that cannot be undone, so tests must stay grouped by file; per-file distribution
-preserves that and nothing failed under it.
+preserves that.
 
-Measured after the #658 fixes, on a 10-core machine: serial 6.1s, `-n 2` 4.9s,
-`-n 4` 5.0s, `-n auto` 5.4s. `auto` is *worse* than `-n 2` — once the suite is
-short enough, worker startup dominates. CI keeps the serial command for the same
-reason: the ~1s saved does not pay for installing the plugin.
+Measured on four cores, without coverage:
+
+| | serial | `-n 2` | `-n auto` |
+|---|---:|---:|---:|
+| whole suite | 93.4s | 65.2s | **35.1s** |
+
+An earlier version of this section reported serial 6.1s and concluded `auto`
+over-provisions and CI should stay serial. That was true of a six-second suite and
+stopped being true as it grew — the advice outlived its measurement by enough to cost
+about a minute a run. If you change the suite's shape, re-measure this table rather
+than trusting it.
+
+`--dist loadgroup`, pinning only the modules that touch process-global state so the rest
+distribute per test, looks like it should beat `loadfile` and does not: 45.0s, and it
+fails `test_docs_index_drift`, whose tests depend on sharing a worker.
+
+**Coverage, not the test count, is most of CI's wall clock.** `COVERAGE_CORE=sysmon`
+puts coverage.py on CPython 3.12's `sys.monitoring` rather than its `settrace` hook —
+120.4s against 34.6s here, with the measurement identical to the statement. CI sets it
+on the test job; it needs 3.12, so it is not set in `pyproject.toml`, where a
+contributor on 3.10 would meet a fallback warning.
+
+### Don't let a stray virtualenv into the corpus
+
+Two modules walk the whole tree — `test_code_context_profile` and
+`test_tree_invisible_characters` — and their skip sets come from
+`conftest.excluded_dirs`, which finds virtual environments by `pyvenv.cfg` rather than
+by the name `.venv`. (`test_scan` also mentions `.venv`, but it exercises the shipped
+scanner's own skip list inside a `tmp_path` and never touches the repository.) An environment called `venv/`, `env/`, `.tox/` or `.venv312/` would
+otherwise put site-packages in the corpus: slower, and a false positive waiting for the
+first dependency that ships a literal bidi control in a fixture.
 
 ### Tier 3 — Formal / pre-release (gated, opt-in)
 

@@ -23,10 +23,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 @functools.cache
-def venv_dir_names() -> frozenset[str]:
-    """Directory names under the repo root that are Python virtual environments.
+def venv_dir_names(root: Path = ROOT) -> frozenset[str]:
+    """Directory names under `root` that are Python virtual environments.
 
-    Three test modules walk the whole tree and skip build output by NAME, and the name
+    Two test modules walk the whole tree and skip build output by NAME, and the name
     they knew was `.venv`. A contributor whose environment is `venv/`, `.venv312/`,
     `env/` or `.tox/` therefore swept all of site-packages into the corpus: 1,516 of
     2,123 files in one of them, which is slow and — for the gates that refuse literal
@@ -37,9 +37,13 @@ def venv_dir_names() -> frozenset[str]:
     looks for, rather than a longer list of names to be wrong about later. Only the top
     two levels are searched: deeper is not where anyone puts one, and the search should
     not cost more than the walk it saves.
+
+    `root` is a parameter so the behaviour can be tested against a synthetic tree rather
+    than against whatever happens to be checked out — a test that can only ask about this
+    repository can only restate the answer back to itself.
     """
-    found = {cfg.parent.name for cfg in ROOT.glob("*/pyvenv.cfg")}
-    found |= {cfg.parent.name for cfg in ROOT.glob("*/*/pyvenv.cfg")}
+    found = {cfg.parent.name for cfg in root.glob("*/pyvenv.cfg")}
+    found |= {cfg.parent.name for cfg in root.glob("*/*/pyvenv.cfg")}
     return frozenset(found)
 
 

@@ -408,6 +408,33 @@ pub(crate) fn is_emoji_modifier(ch: char) -> bool {
     )
 }
 
+/// Advance `win` past the modifiers that belong to the match just consumed (#992).
+///
+/// A *named* match consumes whatever the CLDR table held; anything bound to it that the
+/// table did not spell out is swept here. The set is `is_emoji_modifier`'s **minus
+/// `U+20E3`**, and that difference is the point: the keycap makes a sequence only after a
+/// digit, `#` or `*`, which `match_emoji_at` has already matched whole when it applies.
+/// After anything else the keycap is a combining mark of its own, and sweeping it made
+/// `demojize("\u{1F600}\u{20E3}")` drop an assigned character — the very thing
+/// [`head_len_at`] refuses to do, ten lines from where it says so. The two halves of the
+/// scanner now agree.
+///
+/// `ZWJ` stays swept, though [`head_len_at`] does not take it either. Between two
+/// separately named emoji the joiner is structural — `demojize` of a chain the CLDR
+/// cannot name as a whole names each link, and leaving the joiners would put invisible
+/// characters into prose, which is the failure this scanner exists to prevent.
+///
+/// One function for all three call sites — the pure-Rust scanner and both of the pyo3
+/// one's — because three copies of a predicate is how the two scanners came apart.
+pub(crate) fn advance_past_trailing_modifiers(win: &mut CharWindow<'_>) {
+    while win
+        .current()
+        .is_some_and(|c| is_emoji_modifier(c) && c != KEYCAP)
+    {
+        win.advance(1);
+    }
+}
+
 /// Strip modifier suffixes (": light skin tone", etc.) from a CLDR short name
 /// when `strip_modifiers` is true.
 #[inline]
@@ -418,6 +445,28 @@ pub(crate) fn strip_modifier_suffix(name: &str, strip_modifiers: bool) -> &str {
         }
     }
     name
+}
+
+/// Whether `ch`, emitted straight after an emoji name, needs a space in front of it.
+///
+/// The question is what the character will DO to the name, not what it is. Three ways it
+/// can join one, and one function so the scanner's two emit sites cannot answer them
+/// differently — they did, which is how the third went unnoticed (#992):
+///
+/// * **Alphanumeric.** `"grinning face"` + `"x"` is one word at the seam.
+/// * **Folds to alphanumeric.** `\u{20AC}` is not alphanumeric, but TR39 folds it to `e`,
+///   so `"woman's hat"` + `\u{20AC}` became `"woman's hate"` once `confusables` ran — a
+///   word in neither the input nor any name. `\u{2211}` -> `s` and `\u{2200}` -> `a` too.
+/// * **A combining mark**, which attaches to whatever precedes it, and after a name that
+///   is the name's last letter: `demojize("\u{1F600}\u{301}")` read `"grinning facé"`.
+///   The accent was on the emoji in the input and ended up on a word that was not.
+///
+/// Punctuation that stays punctuation (`\u{2010}` -> `-`) still takes no separator.
+pub(crate) fn needs_separator_after_a_name(ch: char) -> bool {
+    ch.is_alphanumeric()
+        || unicode_normalization::char::is_combining_mark(ch)
+        || crate::tables::lookup_confusable(ch, "latin")
+            .is_some_and(|t| t.starts_with(char::is_alphanumeric))
 }
 
 /// Insert emoji replacement text with leading space padding.
@@ -762,16 +811,7 @@ pub fn demojize_rust_into(
         // #614/#757: hand this code point to the rest of the pipeline instead of naming
         // it. Emitted verbatim, so a later `confusables` step still sees it.
         if policy.skips(ch) {
-            // The separator decision has to look at what this character will BECOME,
-            // not what it is. `\u{20AC}` is not alphanumeric, but TR39 folds it to `e`,
-            // so emitting it bare after an emoji name produced `"woman's hat"` + `"e"`
-            // -> `"woman's hate"` once the fold ran: a word that was in neither the
-            // input nor any name. `\u{2211}` -> `s` and `\u{2200}` -> `a` do the same.
-            // Punctuation targets (`\u{2010}` -> `-`) still take no separator, matching
-            // how every other non-alphanumeric is emitted here.
-            let becomes_alphanumeric = crate::tables::lookup_confusable(ch, "latin")
-                .is_some_and(|t| t.starts_with(char::is_alphanumeric));
-            if last_was_emoji && (ch.is_alphanumeric() || becomes_alphanumeric) {
+            if last_was_emoji && needs_separator_after_a_name(ch) {
                 result.push(' ');
             }
             result.push(ch);
@@ -784,9 +824,7 @@ pub fn demojize_rust_into(
             let replacement = strip_modifier_suffix(name, strip_modifiers);
             pad_emoji_replacement(result, replacement);
             win.advance(consumed);
-            while win.current().is_some_and(is_emoji_modifier) {
-                win.advance(1);
-            }
+            advance_past_trailing_modifiers(&mut win);
             last_was_emoji = true;
             continue;
         }
@@ -801,7 +839,7 @@ pub fn demojize_rust_into(
             continue;
         }
 
-        if last_was_emoji && ch.is_alphanumeric() {
+        if last_was_emoji && needs_separator_after_a_name(ch) {
             result.push(' ');
         }
         result.push(ch);
@@ -866,6 +904,81 @@ mod tests {
     fn a_dangling_joiner_is_left_alone() {
         assert_eq!(demojize_rust_replace("\u{1F525}\u{200D}", ""), "\u{200D}");
         assert_eq!(demojize_rust_replace("a\u{200D}b", ""), "a\u{200D}b");
+    }
+
+    /// A stray keycap is not part of the emoji before it (#992).
+    ///
+    /// `U+20E3 COMBINING ENCLOSING KEYCAP` makes a keycap sequence only after a digit,
+    /// `#` or `*`, which is why [`head_len_at`] has no keycap arm and says so. The sweep
+    /// after a *named* match used `is_emoji_modifier`, which does include it, so the
+    /// named half of the scanner did exactly what the unnamed half refuses to: swallowed
+    /// an assigned character that belongs to no sequence the standard defines. The two
+    /// scanners disagreeing about what an emoji is is the defect #990 was about.
+    #[test]
+    fn a_stray_keycap_survives_a_named_emoji() {
+        assert_eq!(
+            demojize_rust("\u{1F600}\u{20E3}", false),
+            "grinning face \u{20E3}"
+        );
+        assert_eq!(
+            demojize_rust("\u{263A}\u{FE0F}\u{20E3}", false),
+            "smiling face \u{20E3}"
+        );
+        // The replacing half already got this right; the two now agree.
+        assert_eq!(demojize_rust_replace("\u{1F600}\u{20E3}", ""), "\u{20E3}");
+    }
+
+    /// A combining mark after an emoji must not land on the name (#992).
+    ///
+    /// The separator rule already exists for exactly this reason, one class narrower:
+    /// emitting `\u{20AC}` bare after a name produced `"woman's hat"` + `"e"` ->
+    /// `"woman's hate"`, a word in neither the input nor any name. A combining mark does
+    /// the same thing more directly — it attaches to whatever precedes it, and after a
+    /// name that is the name's last letter. In the input it was on the emoji.
+    #[test]
+    fn a_combining_mark_does_not_attach_to_the_name() {
+        assert_eq!(
+            demojize_rust("\u{1F600}\u{301}", false),
+            "grinning face \u{301}"
+        );
+        assert_eq!(
+            demojize_rust("\u{1F600}\u{20E3}", false),
+            "grinning face \u{20E3}"
+        );
+        // Not a mark, not alphanumeric: the existing rule stands, no separator.
+        assert_eq!(demojize_rust("\u{1F600}.", false), "grinning face.");
+    }
+
+    /// A real keycap sequence is still one emoji (#992).
+    #[test]
+    fn a_keycap_on_its_proper_base_is_still_one_emoji() {
+        assert_eq!(demojize_rust("x1\u{FE0F}\u{20E3}y", false), "x keycap: 1 y");
+        assert_eq!(demojize_rust("x1\u{20E3}y", false), "x keycap: 1 y");
+        assert_eq!(demojize_rust_replace("x1\u{FE0F}\u{20E3}y", ""), "xy");
+        assert_eq!(demojize_rust("x#\u{FE0F}\u{20E3}y", false), "x keycap: # y");
+    }
+
+    /// The joiner sweep is load-bearing and stays (#992).
+    ///
+    /// #992 proposed narrowing the sweep to what `head_len_at` consumes, which would drop
+    /// `ZWJ` along with the keycap. It cannot: between two separately-named emoji the
+    /// joiner is structural, and leaving it turns `demojize` output into prose with an
+    /// invisible character sitting in it — the failure this scanner exists to prevent.
+    #[test]
+    fn a_joiner_between_named_emoji_is_still_consumed() {
+        assert_eq!(
+            demojize_rust("\u{1F468}\u{200D}\u{1F468}", false),
+            "man man"
+        );
+        assert_eq!(
+            demojize_rust("\u{1F468}\u{200D}\u{1F468}\u{200D}\u{1F468}", false),
+            "man man man"
+        );
+        // A named sequence is matched whole, so the sweep never sees its joiners.
+        assert_eq!(
+            demojize_rust("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", false),
+            "family: man, woman, girl"
+        );
     }
 
     /// `HEAD_LOOKAHEAD` is the number `head_len_at` actually needs (#995).

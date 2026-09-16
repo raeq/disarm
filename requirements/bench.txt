@@ -72,9 +72,9 @@ pyperf==2.10.0 \
     --hash=sha256:79196bc4a11e3c926dd4c6b14c80136c6b37f884fe913cbc57037f37636e9841 \
     --hash=sha256:dd93ccfda79214725293e95f1fa6e00cb4a64adcf1326039486d4e1f91caaa62
     # via disarm (pyproject.toml)
-python-slugify==8.0.4 \
-    --hash=sha256:276540b79961052b66b7d116620b36518847f52d5fd9e3a70164fc8c50faa6b8 \
-    --hash=sha256:59202371d1d05b54a9e7720c5e038f928f45daaffe41dd10822f3907b937c856
+python-slugify==9.0.0 \
+    --hash=sha256:1cd20fe7ebf941b11964a92aba9e5319edfe18606276c6e2481b92e737cde44a \
+    --hash=sha256:b1180fb0fd6b3590e7fbd8328b08d56cde9dcac736527a070c0a811480621316
     # via disarm (pyproject.toml)
 regex==2026.9.3 \
     --hash=sha256:01bdce6a372efd5ae3d8560cedbc691be259a50206564bbaf04008b2937721ab \

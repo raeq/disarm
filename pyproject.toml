@@ -100,7 +100,7 @@ bench = [
     # ── adversarial-defense axis comparator (visual mapping, like disarm) ──
     "decancer-py==0.4.1",       # the only comparator that also maps visually
     # ── slugify / filename axis comparators ──
-    "python-slugify==8.0.4",
+    "python-slugify==9.0.0",
     "pathvalidate==3.3.1",
 ]
 docs = [

@@ -77,7 +77,7 @@ test = [
 ]
 dev = [
     "disarm[test]",
-    "ruff==0.16.6",
+    "ruff==0.16.7",
     # Assembles changelog.d/ into CHANGELOG.md at release time (#993). Pinned here
     # and read from here by CI, for the reason #985 recorded: a second copy of a pin
     # inside a workflow's `run:` line is invisible to Dependabot and turns every bump
@@ -104,7 +104,7 @@ bench = [
     # ── adversarial-defense axis comparator (visual mapping, like disarm) ──
     "decancer-py==0.4.1",       # the only comparator that also maps visually
     # ── slugify / filename axis comparators ──
-    "python-slugify==8.0.4",
+    "python-slugify==9.0.0",
     "pathvalidate==3.3.1",
 ]
 docs = [

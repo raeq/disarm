@@ -585,3 +585,54 @@ def test_fetch_treats_a_missing_page_info_as_complete(monkeypatch: pytest.Monkey
     snap = watch_pr.fetch(1, "o/r")
     assert snap is not None
     assert snap.threads_truncated is False
+
+
+# ── only a submitted review satisfies the gate ──────────────────────────────
+
+
+@pytest.mark.parametrize("state", ["APPROVED", "CHANGES_REQUESTED", "COMMENTED"])
+def test_a_submitted_review_counts(state: str) -> None:
+    data = {"author": {"login": "raeq"}, "reviews": [{"author": {"login": "bob"}, "state": state}]}
+    assert watch_pr._reviews(data)[2] == ("bob",)
+
+
+@pytest.mark.parametrize("state", ["PENDING", "DISMISSED", "", "SOMETHING_NEW"])
+def test_a_review_that_is_not_submitted_does_not_count(state: str) -> None:
+    """`--await-review` waits for a review to ARRIVE, so only a submitted one satisfies it.
+
+    Every entry in `reviews` used to count, whatever its state (caught in review on #1000):
+
+    * `PENDING` is a review begun and not submitted. GitHub shows one only to its author,
+      so it leaks exactly when the watcher's `gh` identity is not the PR author's — your
+      own half-written review would release the merge you are waiting on.
+    * `DISMISSED` was submitted and then withdrawn, so it is not a review that stands.
+
+    An allow-list, not a block-list: a state this code has never heard of must keep the
+    gate closed. For a merge gate the safe mistake is to wait, and `--max-polls` bounds
+    the wait.
+    """
+    data = {"author": {"login": "raeq"}, "reviews": [{"author": {"login": "bob"}, "state": state}]}
+    assert watch_pr._reviews(data)[2] == ()
+
+
+def test_a_pending_review_alone_still_holds_the_merge() -> None:
+    """End to end through `decide()`: the gate must not open on an unsubmitted review.
+
+    Asserts the action it SHOULD take, not the one it should not. The first draft of this
+    test compared `.action != "merge"` — an `Action` enum against a string, which is true
+    whatever the code does, so it passed against the very bug it was written for.
+    """
+    data = {
+        "author": {"login": "raeq"},
+        "reviews": [{"author": {"login": "bob"}, "state": "PENDING"}],
+    }
+    author, requested, reviewed_by = watch_pr._reviews(data)
+    snap = Snapshot(
+        "OPEN",
+        "CLEAN",
+        checks=(GREEN,),
+        author=author,
+        requested=requested,
+        reviewed_by=reviewed_by,
+    )
+    assert decide(snap, await_review=True).action is Action.WAIT

@@ -293,6 +293,17 @@ def _gh(args: list[str]) -> str:
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=False).stdout.strip()
 
 
+#: The review states that mean a review has arrived and still stands (#1000).
+#:
+#: `--await-review` waits for a review to ARRIVE, so a review that has not been submitted
+#: must not satisfy it. `PENDING` is one begun and not sent — GitHub shows it only to its
+#: author, so it leaks when the watcher's `gh` identity is not the PR author's, and your
+#: own half-written review would release the merge you are waiting on. `DISMISSED` was
+#: submitted and withdrawn. An allow-list rather than a block-list, so a state this code
+#: has never seen keeps the gate closed: for a merge gate, the safe mistake is to wait.
+SUBMITTED_REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "COMMENTED"})
+
+
 def _reviews(data: dict[str, Any]) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
     """The author, the pending requests and the reviewers, from `gh pr view --json`.
 
@@ -308,7 +319,7 @@ def _reviews(data: dict[str, Any]) -> tuple[str, tuple[str, ...], tuple[str, ...
     reviewed_by = tuple(
         (r.get("author") or {}).get("login") or "?"
         for r in data.get("reviews") or []
-        if isinstance(r, dict)
+        if isinstance(r, dict) and r.get("state") in SUBMITTED_REVIEW_STATES
     )
     return author, requested, reviewed_by
 

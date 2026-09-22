@@ -423,10 +423,12 @@ pub(crate) fn is_emoji_modifier(ch: char) -> bool {
 /// [`head_len_at`] refuses to do, ten lines from where it says so. The two halves of the
 /// scanner now agree.
 ///
-/// `ZWJ` stays swept, though [`head_len_at`] does not take it either. Between two
-/// separately named emoji the joiner is structural — `demojize` of a chain the CLDR
-/// cannot name as a whole names each link, and leaving the joiners would put invisible
-/// characters into prose, which is the failure this scanner exists to prevent.
+/// `ZWJ` stays swept, though [`head_len_at`] does not take it either — but not to keep
+/// joiners out of prose. Both scanners drop every `VS15`, `VS16` and `ZWJ` at the top
+/// of their loop wherever it stands, so a joiner between two named emoji never reaches
+/// the output either way. What sweeping it buys is carrying on *past* it to a modifier
+/// the match did not take: `\u{1F468}\u{200D}\u{1F3FB}` names as `man`, where stopping
+/// at the joiner names the skin tone on its own (#996 review).
 ///
 /// One function for all three call sites — the pure-Rust scanner and both of the pyo3
 /// one's — because three copies of a predicate is how the two scanners came apart.
@@ -721,7 +723,7 @@ pub fn demojize_rust_replace_into(text: &str, replacement: &str, result: &mut St
 /// a keycap, and a second pass removed it along with the caller's digit. Only a mark
 /// that would **form** an emoji with the last character written goes; one that joins
 /// nothing is still text, so `replace_emoji("1\u{1F600}\u{20E3}", " ")` keeps it.
-fn drop_marks_the_seam_would_bind(win: &mut CharWindow<'_>, result: &str) {
+pub(crate) fn drop_marks_the_seam_would_bind(win: &mut CharWindow<'_>, result: &str) {
     let Some(before) = result.chars().next_back() else {
         return;
     };
@@ -883,6 +885,9 @@ pub fn demojize_rust_into(
         if let Some(consumed) = unnamed_emoji_len_at(win.as_slice()) {
             win.advance(consumed);
             last_was_emoji = false;
+            // Dropped, so what follows meets what came before: the seam
+            // `replace_emoji` closes (#995 follow-up) is open here too.
+            drop_marks_the_seam_would_bind(&mut win, result);
             continue;
         }
 
@@ -1005,14 +1010,15 @@ mod tests {
         assert_eq!(demojize_rust("x#\u{FE0F}\u{20E3}y", false), "x keycap: # y");
     }
 
-    /// The joiner sweep is load-bearing and stays (#992).
+    /// The joiner arm of the sweep, and what it is actually for (#992, #996 review).
     ///
-    /// #992 proposed narrowing the sweep to what `head_len_at` consumes, which would drop
-    /// `ZWJ` along with the keycap. It cannot: between two separately-named emoji the
-    /// joiner is structural, and leaving it turns `demojize` output into prose with an
-    /// invisible character sitting in it — the failure this scanner exists to prevent.
+    /// It carries the sweep past a joiner to a modifier the match did not take. The
+    /// joiners between separately named emoji are gone either way — the loop drops every
+    /// `ZWJ` it meets — so those assertions guard the output, not the arm; the first one
+    /// is what fails with `ZWJ` taken out of the sweep.
     #[test]
     fn a_joiner_between_named_emoji_is_still_consumed() {
+        assert_eq!(demojize_rust("\u{1F468}\u{200D}\u{1F3FB}", false), "man");
         assert_eq!(
             demojize_rust("\u{1F468}\u{200D}\u{1F468}", false),
             "man man"
@@ -1244,6 +1250,10 @@ mod tests {
         );
         assert_eq!(demojize_rust_replace("a\u{1F600}\u{20E3}", ""), "a\u{20E3}");
         assert_eq!(demojize_rust_replace("a\u{1F600}\u{20E3}", "#"), "a#");
+        // The pure-Rust demojize drops what it cannot name, which opens the same seam.
+        let once = demojize_rust("x9\u{E0041}\u{20E3}", false);
+        assert_eq!(once, "x9");
+        assert_eq!(demojize_rust(&once, false), once);
     }
 
     #[test]

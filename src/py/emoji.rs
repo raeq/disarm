@@ -14,9 +14,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyList;
 
 use crate::emoji::{
-    advance_past_trailing_modifiers, match_emoji_at, needs_separator_after_a_name,
-    pad_emoji_replacement, strip_modifier_suffix, unnamed_emoji_len_at, CharWindow, VS15, VS16,
-    ZWJ,
+    advance_past_trailing_modifiers, drop_marks_the_seam_would_bind, match_emoji_at,
+    needs_separator_after_a_name, pad_emoji_replacement, presentation_len_at,
+    strip_modifier_suffix, unnamed_emoji_len_at, CharWindow, VS15, VS16, ZWJ,
 };
 use crate::tables;
 use crate::ErrorMode;
@@ -108,6 +108,11 @@ fn demojize_impl(
     let mut win = CharWindow::new(text.chars());
     let mut result = String::with_capacity(text.len());
     let mut last_was_emoji = false;
+    // Set with `last_was_emoji` when what was written is the emoji itself (`Preserve`)
+    // rather than a word. A mark after it was on the emoji in the input and stays on it;
+    // only an alphanumeric is separated, as #200 asks. `needs_separator_after_a_name` is
+    // about a *name*, and asking it here split `🇦́` into `🇦 ́` (#996 review).
+    let mut last_was_raw = false;
 
     while let Some(ch) = win.current() {
         // Skip orphaned variation selectors and ZWJ characters
@@ -130,10 +135,21 @@ fn demojize_impl(
             if let Some((name, consumed)) =
                 try_python_provider(py, prov, win.as_slice(), tables::max_emoji_seq_len())
             {
+                // A provider is asked before `match_emoji_at`, so it can claim a keycap's
+                // base alone; the sweep below no longer takes `U+20E3` (#996), so the
+                // keycap was left behind as an orphan mark (#996 review). A keycap base
+                // claimed on its own takes the rest of its keycap with it.
+                let consumed = match win.as_slice() {
+                    ['0'..='9' | '#' | '*', ..] if consumed == 1 => {
+                        presentation_len_at(win.as_slice()).unwrap_or(1)
+                    }
+                    _ => consumed,
+                };
                 pad_emoji_replacement(&mut result, &name);
                 win.advance(consumed);
                 advance_past_trailing_modifiers(&mut win);
                 last_was_emoji = true;
+                last_was_raw = false;
                 continue;
             }
         }
@@ -145,6 +161,7 @@ fn demojize_impl(
             win.advance(consumed);
             advance_past_trailing_modifiers(&mut win);
             last_was_emoji = true;
+            last_was_raw = false;
             continue;
         }
 
@@ -178,6 +195,13 @@ fn demojize_impl(
                 ErrorMode::Replace => !replace_with.is_empty(),
                 ErrorMode::Ignore => false,
             };
+            last_was_raw = matches!(error_mode, ErrorMode::Preserve);
+            // Nothing visible written: what follows now meets what came before, and a
+            // keycap or selector that binds to it would be an emoji the input never had
+            // (the seam `replace_emoji` closes, #995 follow-up).
+            if !last_was_emoji {
+                drop_marks_the_seam_would_bind(&mut win, &result);
+            }
             continue;
         }
 
@@ -186,11 +210,17 @@ fn demojize_impl(
         // is shared with the pure-Rust scanner: this site asked a narrower question than
         // that one for as long as both existed, which is how a combining mark could land
         // on a name here and not there (#992).
-        if last_was_emoji && needs_separator_after_a_name(ch) {
+        let separate = if last_was_raw {
+            ch.is_alphanumeric()
+        } else {
+            needs_separator_after_a_name(ch)
+        };
+        if last_was_emoji && separate {
             result.push(' ');
         }
         result.push(ch);
         last_was_emoji = false;
+        last_was_raw = false;
         win.advance(1);
     }
 

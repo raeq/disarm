@@ -263,6 +263,80 @@ def carried(codepoints: Sequence[int]) -> list[str]:
     return [f"{CARRIERS[i % len(CARRIERS)]}{chr(cp)}end" for i, cp in enumerate(codepoints)]
 
 
+#: The erasing controls Boucher et al. §IV-G names for the deletion class.
+_BS, _DEL, _CR, _LF = "\x08", "\x7f", "\r", "\n"
+
+
+def occupies_cell(ch: str) -> bool:
+    """A combining mark joins the cell before it; a format character occupies none."""
+    cat = unicodedata.category(ch)
+    return not (cat.startswith("M") or cat == "Cf")
+
+
+def resolve_deletions(text: str, *, cr: bool = False) -> str:
+    """The paper's renderer as a cursor over cells, not a stack over code points.
+
+    The oracle for the deletion class: what a terminal shows for text carrying
+    ``BS``, ``DEL`` or ``CR``. It exists here so the harness can report what is
+    *recoverable* beside what a subject recovers, rather than scoring a 0%
+    against an assumed ceiling.
+
+    ``BS`` and ``DEL`` erase the previous **cell** — a base character with its
+    marks and any format characters attached to it. A stack over code points
+    gets that wrong: it leaves the ``X`` in ``X<ZWSP><BS>`` and the ``e`` in
+    ``e<U+0301><BS>``, where a terminal erases the whole cell. The released
+    corpus exercises neither branch (its 4,820 deletion rows carry ``BS`` only),
+    so the difference shows up in the assertions rather than in the score.
+
+    A ``CR`` followed by ``LF``, or at end of text, is a line ending and passes
+    through — the same guard ``overwriting_cr`` applies in ``src/anomalies.rs``,
+    so the detector and this oracle share one rule. A ``CR`` followed by
+    anything else returns the cursor to column 0 so later text overwrites
+    earlier text, and only under ``cr=True``: a classic Mac OS line ending is
+    byte-identical to that overwrite, which makes it a separate decision rather
+    than a default.
+
+    Kept behaviourally identical to `src/deletions.rs`, so the harness and the
+    core cannot drift apart — which it had, after a CR: this still erased with
+    `del line[col:]`, the defect #995 fixed in the core, and let a character
+    that takes no cell take cell 0 and move the cursor. An erase now blanks the
+    one cell before the cursor, and such a character is kept ahead of the line.
+    """
+    out: list[str] = []
+    line: list[str] = []
+    lead = ""  # no-cell characters met at column 0 with the line to their right
+    col = 0
+    n = len(text)
+    for i, ch in enumerate(text):
+        if ch in (_BS, _DEL):
+            if col > 0:
+                col -= 1
+                line[col] = ""
+        elif ch == _LF or (ch == _CR and (i + 1 == n or text[i + 1] == _LF or not cr)):
+            out.append(lead)
+            out.extend(line)
+            out.append(ch)
+            line, lead, col = [], "", 0
+        elif ch == _CR:
+            col = 0
+        elif not occupies_cell(ch) and col > 0:
+            line[col - 1] += ch
+        elif not occupies_cell(ch) and any(line):
+            # Visible text to the right, not merely cells: an erase blanks, so a
+            # backspace can reach column 0 over blank cells with no CR at all, and
+            # those are not a line to keep (the core's rule, #1005).
+            lead += ch
+        elif col < len(line):
+            line[col] = ch
+            col += 1
+        else:
+            line.append(ch)
+            col += 1
+    out.append(lead)
+    out.extend(line)
+    return "".join(out)
+
+
 def clean_ascii_corpus(size: int = 2000) -> list[str]:
     """Text that provably needs no Unicode repair: printable ASCII.
 

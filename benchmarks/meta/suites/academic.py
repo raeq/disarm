@@ -305,7 +305,251 @@ class BadCharacters(AttackCorpusSuite):
             return list(self._rows_from_nested(path, limit))
         return list(_rows(path, limit))
 
-    summary = "Boucher et al.'s four imperceptible-perturbation classes, scored for XMR."
+    #: The paper's four perturbation classes. Read from the release's own
+    #: experiment keys (`perspective_deletions`, `maxtoxic_reorderings`, ...),
+    #: not assigned here — the taxonomy is Boucher et al.'s and the file is
+    #: already keyed by it.
+    CLASSES = ("deletions", "homoglyphs", "invisibles", "reorderings")
+
+    #: The code points each class injects, so a perturbed row can be told from a
+    #: control. Roughly 800 rows per class carry no perturbation at all, and
+    #: counting those as recoveries put 14.3 of `reorderings`' 14.5% XMR into
+    #: rows nothing had been done to.
+    MARKERS = {
+        "reorderings": frozenset(
+            {0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069}
+        ),
+        "deletions": frozenset({0x0008, 0x007F}),
+        "invisibles": frozenset({0x200B, 0x200C, 0x200D, 0xFEFF, 0x00AD, 0x2060}),
+    }
+
+    #: Classes whose recovery this battery reports without scoring, and why.
+    #:
+    #: **Corrected twice, and the second correction reversed the first.** This
+    #: began as "recovery needs UAX #9, so it is out of scope", then became "the
+    #: rendered form is the deception, so reproducing it would finish the
+    #: attack". The second reading is measurably wrong for this corpus, and the
+    #: first was right for the wrong reason.
+    #:
+    #: In Boucher et al.'s reordering rows the *rendering is the clean input*
+    #: and the code points are the attack: `crying` is stored as `cyring` inside
+    #: bidi controls, so the human reads the original and the model reads
+    #: scrambled text. Only 14 of 4,800 perturbed rows have a logical order
+    #: equal to the clean input. Emitting the rendered form would therefore
+    #: *recover* the text, not finish an attack.
+    #:
+    #: So both classes hide code points behind a rendering, and which form a
+    #: consumer wants depends on the consumer (#936). The real difference is
+    #: cost and legitimate use:
+    #:
+    #: * Bidi controls carry genuine right-to-left text. Resolving display order
+    #:   needs a paragraph direction and the full UAX #9 algorithm, and #740
+    #:   declined to build that, with reasons. Scoring disarm as failing at
+    #:   something it has deliberately not implemented measures the harness's
+    #:   expectation rather than the library.
+    #: * `BS` and `DEL` have no legitimate use in text, and resolving them is a
+    #:   cursor over cells rather than a rendering engine — which is why
+    #:   `deletions` stays scored here, and is filed as #937.
+    RECOVERY_OUT_OF_SCOPE = {
+        "reorderings": (
+            "resolving display order needs a paragraph direction and UAX #9, "
+            "which #740 declined to implement — so this reports what the "
+            "logical form recovers without scoring the library against a "
+            "capability it has deliberately not built. Carrier removal is the "
+            "measurement that carries the direction, and it is complete"
+        ),
+    }
+
+    def _perturbed(self, cls: str, text: str, clean: str | None) -> bool:
+        """Did the release actually perturb this row?"""
+        marks = self.MARKERS.get(cls)
+        if marks is not None:
+            return any(ord(c) in marks for c in text)
+        return clean is not None and text != clean
+
+    @staticmethod
+    def _ascii_swapped(text: str, clean: str | None) -> bool:
+        """Does this row substitute one ASCII character for another?
+
+        Out of a Unicode normalizer's reach by construction: `racist` perturbed
+        to `racisi` is a spelling change, not an encoding one, and no fold can
+        or should undo it. The homoglyph search finds whatever character fools
+        the model, and at higher perturbation budgets that includes ASCII.
+
+        26.5% of the perturbed homoglyph rows carry one, every one of them fails
+        XMR, and every row without one passes — so the class read 73.5% when the
+        reachable part of it is 100%. The other three classes carry none.
+        """
+        if clean is None or len(text) != len(clean):
+            return False
+        return any(
+            a != c and ord(a) < 0x80 and ord(c) < 0x80 for a, c in zip(text, clean, strict=True)
+        )
+
+    def _rows_by_class(
+        self, path: Path, limit: int | None
+    ) -> dict[str, list[tuple[str, str | None]]]:
+        """The same rows, kept under the class the release filed them under.
+
+        `_rows_from_nested` iterates `blob.values()` and drops the experiment
+        key, which is where the class lives — so a suite whose own summary says
+        "four imperceptible-perturbation classes" was reporting one average over
+        all four. #934 improved detection of the deletion class specifically and
+        moved no measurement here at all, which is what surfaced this.
+        """
+        import json as _json
+        import re as _re
+
+        blob = _json.loads(path.read_text(encoding="utf-8"))
+        out: dict[str, list[tuple[str, str | None]]] = {c: [] for c in self.CLASSES}
+        for name, experiment in blob.items():
+            match = _re.search("|".join(self.CLASSES), name)
+            if match is None or not isinstance(experiment, dict):
+                continue
+            bucket = out[match.group(0)]
+            for budget in experiment.values():
+                if not isinstance(budget, dict):
+                    continue
+                for row in budget.values():
+                    if not isinstance(row, dict):
+                        continue
+                    text, clean = row.get("adv_example"), row.get("input")
+                    if not isinstance(text, str) or not text.strip():
+                        continue
+                    bucket.append((text, clean if isinstance(clean, str) else None))
+        if limit is not None:
+            # An exact split, remainder to the first classes: `--limit` caps the suite.
+            # `max(1, limit // 4)` gave every class a row, so `--limit 3` scored four.
+            share, extra = divmod(limit, len(self.CLASSES))
+            for i, cls in enumerate(self.CLASSES):
+                out[cls] = out[cls][: share + (1 if i < extra else 0)]
+        return out
+
+    def measure(self, outcome: Outcome, limit: int | None) -> None:
+        super().measure(outcome, limit)
+        path = self.locate()
+        if path is None or path.name != "bad-characters.json":
+            return
+        surfaces = self.subject.role(Role.SANITIZER, job=self.JOB) if self.subject else {}
+        det = self.detect()
+        if not surfaces and not det:
+            return
+        fn = next(iter(surfaces.values()), None)
+
+        for cls, rows in sorted(self._rows_by_class(path, limit).items()):
+            if not rows:
+                continue
+            hot = [(t, c) for t, c in rows if self._perturbed(cls, t, c)]
+            add(outcome, f"{cls}_rows", len(rows), unit="rows")
+            add(
+                outcome,
+                f"{cls}_perturbed",
+                len(hot),
+                of=len(rows),
+                higher_is_better=None,
+                detail="rows the release actually perturbed; the rest are controls "
+                "and must not be counted as recoveries",
+            )
+            if not hot:
+                continue
+            if det:
+                seen = sum(1 for text, _ in hot if any(_fires(d, text) for d in det.values()))
+                add(
+                    outcome,
+                    f"{cls}_detected",
+                    seen,
+                    of=len(hot),
+                    higher_is_better=True,
+                    detail=f"a detector fires on a perturbed {cls} row",
+                )
+            if fn is None:
+                continue
+
+            # For a class with a carrier, removing it is the defence, and it is
+            # the measurement that should carry the direction.
+            marks = self.MARKERS.get(cls)
+            if marks is not None:
+                gone = sum(
+                    1 for text, _ in hot if not any(ord(c) in marks for c in _apply(fn, text))
+                )
+                add(
+                    outcome,
+                    f"{cls}_carrier_removed",
+                    gone,
+                    of=len(hot),
+                    higher_is_better=True,
+                    detail=f"the injected {cls} code points do not survive the surface",
+                )
+
+            # Same XMR rule the aggregate uses: a recovery only counts if
+            # something survived on both sides. Scored over perturbed rows only.
+            # What a renderer would recover, so the subject's score is read
+            # against a demonstrated ceiling rather than an assumed one. Only
+            # meaningful for the class whose controls have a defined effect on
+            # the text itself; for the others the oracle is the identity.
+            if cls == "deletions":
+                reachable = sum(
+                    1
+                    for text, clean in hot
+                    if clean is not None and damage.resolve_deletions(text) == clean
+                )
+                add(
+                    outcome,
+                    "deletions_recoverable",
+                    reachable,
+                    of=len(hot),
+                    higher_is_better=None,
+                    detail="rows a cell-aware cursor over the erasing controls "
+                    "recovers — the ceiling any subject is measured against, not "
+                    "a score for any subject (#937)",
+                )
+
+            # Rows whose perturbation is not an encoding question at all are
+            # named and held out of the recovery denominator, for the same
+            # reason the unperturbed rows are: a number is only a score for the
+            # thing its denominator describes.
+            out_of_reach = [r for r in hot if self._ascii_swapped(*r)]
+            if out_of_reach:
+                add(
+                    outcome,
+                    f"{cls}_ascii_swapped",
+                    len(out_of_reach),
+                    of=len(hot),
+                    higher_is_better=None,
+                    detail="rows that also substitute one ASCII character for "
+                    "another — a spelling change no fold can undo, held out of "
+                    "the recovery denominator below",
+                )
+            reachable = [r for r in hot if not self._ascii_swapped(*r)]
+
+            hits = 0
+            scored = 0
+            for text, clean in reachable:
+                if clean is None:
+                    continue
+                scored += 1
+                out = _apply(fn, text)
+                if out and out == _apply(fn, clean):
+                    hits += 1
+            if scored:
+                why = self.RECOVERY_OUT_OF_SCOPE.get(cls)
+                add(
+                    outcome,
+                    f"{cls}_xmr",
+                    hits,
+                    of=scored,
+                    # Undirected where matching the clean text would mean emitting
+                    # the rendered deception. Scoring it as failure reads a
+                    # complete carrier removal as a 0.3% result.
+                    higher_is_better=None if why else True,
+                    detail=(
+                        f"reported, not scored, for the {cls} class: {why}"
+                        if why
+                        else f"exact-match recovery within the perturbed {cls} rows a fold can reach"
+                    ),
+                )
+
+    summary = "Boucher et al.'s four perturbation classes, scored per class for XMR and detection."
     provenance = Provenance(
         origin="Boucher, Shumailov, Anderson & Papernot",
         citation="arXiv:2106.09898v2 — Bad Characters: Imperceptible NLP Attacks",

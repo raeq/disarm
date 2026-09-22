@@ -119,16 +119,20 @@ towncrier build --draft --version 0.17.0   # read it first
 towncrier build --version 0.17.0 --yes     # write it
 ```
 
-The write is an **append above `<!-- towncrier release notes start -->`**: nothing below
-that marker moves, and `git diff --stat CHANGELOG.md` should show insertions only. It also
-deletes the fragments it consumed, which is the change that closes the cycle — leave them
-in and the next release repeats them.
+The write is an **insertion directly below `<!-- towncrier release notes start -->`**,
+above the previous release: nothing already in the file changes, and
+`git diff --stat CHANGELOG.md` should show insertions only. It also deletes the fragments
+it consumed, which is the change that closes the cycle — leave them in and the next
+release repeats them.
 
 Do this **before** the version bump below, in the same pull request. Two reasons: the
 assembled section is what the version number is chosen against (a fragment under *Added*
 or *Changed (breaking)* means this cannot be a patch, per *Patch / point release* above),
-and CI's changelog gate skips a pull request that edits `CHANGELOG.md`, so the release
-pull request needs no fragment of its own.
+and it is what CI's changelog gate recognises as a release. `towncrier check` counts the
+`CHANGELOG.md` edit as the pull request's news, so the release pull request needs no
+fragment of its own; and the gate's hand-edit check accepts that edit only because the
+same pull request deletes consumed fragments. Commit the deletions with the section — a
+`CHANGELOG.md` edit on its own fails CI as a hand edit.
 
 Read the assembled *Upgrade notes* before tagging. A `KEY_SCHEMA_VERSION` bump is written
 as an `upgrade` fragment alongside the change's own, and the release section is where the

@@ -17,6 +17,11 @@ away from both wrong ones, and copying the wrong one was easier.
 The rule is narrow on purpose. Reading `base_ref` is correct in a workflow that only runs
 on `pull_request`, and correct inside an `if` that has already established the event. What
 is never correct is reading it unguarded in a workflow that also runs on `push`.
+
+`schedule` is the same case and the gate did not cover it. `ci.yml` runs weekly for the
+RustSec scan, and the changelog job #994 added ran `towncrier check --compare-with
+"origin/${{ github.base_ref }}"` on that run too — `origin/`, again (#994 review). A guard
+on the whole job, in its `if:`, counts: it establishes the event for every line inside.
 """
 
 from __future__ import annotations
@@ -76,12 +81,25 @@ def _runs_on_push(text: str) -> bool:
     return False
 
 
-@pytest.mark.parametrize("path", _workflows(), ids=lambda p: p.name)
-def test_no_unguarded_base_ref_in_a_push_workflow(path: Path) -> None:
-    text = path.read_text(encoding="utf-8")
-    if not _runs_on_push(text):
-        return  # `base_ref` is always populated when only pull_request triggers.
+#: A job's header line under `jobs:` — two spaces, the id, a colon, nothing else.
+JOB_HEADER = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 
+
+def _job_if(document: dict, lines: list[str], number: int) -> str:
+    """The `if:` of the job that line `number` (1-based) sits in, or `""`."""
+    for line in reversed(lines[: number - 1]):
+        if match := JOB_HEADER.match(line):
+            job = (document.get("jobs") or {}).get(match.group(1))
+            return str(job.get("if", "")) if isinstance(job, dict) else ""
+    return ""
+
+
+def _unguarded_base_refs(text: str, name: str) -> list[str]:
+    """Lines reading `github.base_ref` in a workflow that also runs without one."""
+    if not (_runs_on_push(text) or _runs_on_schedule(text)):
+        return []  # `base_ref` is always populated when only pull_request triggers.
+
+    document = yaml.safe_load(text) or {}
     offenders = []
     lines = text.split("\n")
     for number, line in enumerate(lines, 1):
@@ -95,14 +113,33 @@ def test_no_unguarded_base_ref_in_a_push_workflow(path: Path) -> None:
         window = "\n".join(lines[max(0, number - 6) : number])
         if GUARD.search(window) or GUARD.search(line):
             continue
-        offenders.append(f"{path.name}:{number}: {line.strip()}")
+        # Or if the whole job only runs once the event is established.
+        if GUARD.search(_job_if(document, lines, number)):
+            continue
+        offenders.append(f"{name}:{number}: {line.strip()}")
+    return offenders
 
+
+@pytest.mark.parametrize("path", _workflows(), ids=lambda p: p.name)
+def test_no_unguarded_base_ref_in_a_push_workflow(path: Path) -> None:
+    offenders = _unguarded_base_refs(path.read_text(encoding="utf-8"), path.name)
     assert not offenders, (
-        f"{path.name} runs on `push`, where `github.base_ref` is empty. These lines read "
-        "it without first establishing the event, which is how two of perf-gate.yml's "
-        "three jobs came to run `git merge-base origin/ HEAD` on every push to main:\n  "
-        + "\n  ".join(offenders)
+        f"{path.name} runs on `push` or `schedule`, where `github.base_ref` is empty. "
+        "These lines read it without first establishing the event, which is how two of "
+        "perf-gate.yml's three jobs came to run `git merge-base origin/ HEAD` on every "
+        "push to main:\n  " + "\n  ".join(offenders)
     )
+
+
+def test_a_scheduled_workflow_is_checked_and_a_job_guard_counts() -> None:
+    """`schedule` has no `base_ref` either; a job-level `if:` establishes the event."""
+    head = 'on:\n  pull_request:\n  schedule:\n    - cron: "0 5 * * 1"\njobs:\n  x:\n'
+    step = (
+        '    steps:\n      - run: towncrier check --compare-with "origin/${{ github.base_ref }}"\n'
+    )
+    assert len(_unguarded_base_refs(head + step, "ci.yml")) == 1
+    guarded = head + "    if: github.event_name == 'pull_request'\n" + step
+    assert _unguarded_base_refs(guarded, "ci.yml") == []
 
 
 @pytest.mark.parametrize(

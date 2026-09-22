@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  # Default activity types (opened, synchronize, reopened) on purpose: no `labeled`.
+  # The changelog job's `no changelog` label is read at run time instead — see there.
   pull_request:
     branches: [main]
   schedule:
@@ -26,6 +28,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       docs: ${{ steps.filter.outputs.docs }}
+      shipped: ${{ steps.filter.outputs.shipped }}
       ruby: ${{ steps.filter.outputs.ruby }}
       node: ${{ steps.filter.outputs.node }}
       java: ${{ steps.filter.outputs.java }}
@@ -47,6 +50,17 @@ jobs:
               - 'mkdocs.yml'
               - '**.md'
               - '.github/workflows/**'
+            # What owes a changelog.d/ fragment (#993): `code` plus every binding's own
+            # sources. `code` alone let a Java, Kotlin, Ruby, TypeScript or C change
+            # through with no fragment (#994 review). Not the `ruby`/`node` outputs
+            # below: they include `docs/**`, and a docs-only change owes no fragment.
+            shipped:
+              - '**.py'
+              - '**.rs'
+              - '**.toml'
+              - '**.tsv'
+              - '.github/workflows/**'
+              - 'bindings/**'
             # The Ruby binding must rebuild when ITS OWN code changes AND when the
             # CORE it wraps changes (#374): a core API change (e.g. the 0.10
             # tuple→struct return) can break the gem, and that break must surface
@@ -211,11 +225,25 @@ jobs:
 
 
   # ── Changelog fragment (#993) ───────────────────────────────────
+  # Pull requests only. `towncrier check` diffs against the pull request's base, and the
+  # weekly `schedule` run has none — `github.base_ref` is empty there, so the check would
+  # compare against `origin/` and fail (#994 review). all-ok requires this job only on
+  # `pull_request` for the same reason.
+  #
+  # Runs for docs as well as shipped changes: a docs-only pull request owes no fragment,
+  # but a fragment is itself a `.md` file, so this is what renders one into the summary.
   changelog:
     name: Changelog fragment
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: >-
+      github.event_name == 'pull_request'
+      && (needs.changes.outputs.shipped == 'true' || needs.changes.outputs.docs == 'true')
     runs-on: ubuntu-latest
+    # `pull-requests: read` is for the label lookup below. Naming any permission drops
+    # the rest, so `contents: read` is restated (the same shape as cargo-audit's).
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       # towncrier check diffs the branch against its base, so it needs the base
       # ref present — a shallow clone has neither the commits nor the merge base.
@@ -227,34 +255,93 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Same single-source rule as ruff above (#985): the pin lives in the `dev`
-      # extra, where Dependabot can see it, and is read from there.
+      # Same single-source rule as ruff above (#985): the pin lives in the `test` extra,
+      # where Dependabot can see it — and where CI's test job installs it, so the
+      # assembly tests run — and is read from there. tests/test_changelog_fragments.py
+      # runs this step against a stand-in pip.
       - name: Install towncrier
         run: |
           tc="$(python - <<'EOF'
           import tomllib
           with open("pyproject.toml", "rb") as f:
-              dev = tomllib.load(f)["project"]["optional-dependencies"]["dev"]
-          (tc,) = [req for req in dev if req.startswith("towncrier==")]
+              test = tomllib.load(f)["project"]["optional-dependencies"]["test"]
+          (tc,) = [req for req in test if req.startswith("towncrier==")]
           print(tc)
           EOF
           )"
           pip install "$tc"
 
-      # Dependabot's PRs must stay hands-off green (dependabot-auto-merge.yml arms
-      # auto-merge on every one); a lockfile bump has nothing to say in a changelog.
-      # For everything else the escape hatch is a `no changelog` label, applied
-      # deliberately and visible on the PR.
-      - name: A code change carries a changelog fragment
-        if: >-
-          github.event.pull_request.user.login != 'dependabot[bot]'
-          && !contains(github.event.pull_request.labels.*.name, 'no changelog')
+      # The `no changelog` escape hatch, read from the API now rather than from the event
+      # payload. A label change starts no run — `on: pull_request` keeps its default
+      # types, because adding `labeled`/`unlabeled` would restart this whole matrix on
+      # every label anyone or any bot applies, cancelling the run in flight (the
+      # concurrency group above). So the documented route is: add the label, then
+      # re-run the failed job. A re-run replays the ORIGINAL payload, whose label list
+      # predates the label, which is why this asks the API instead (#994 review).
+      - name: Read the `no changelog` label
+        id: labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
-          if ! towncrier check --compare-with "origin/${{ github.base_ref }}"; then
-            echo "::error title=changelog::This PR changes code but adds no changelog.d/ fragment."
-            echo "Add changelog.d/${{ github.event.pull_request.number }}.<type>.md — see changelog.d/README.md."
+          if ! labels="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq '.labels[].name')"; then
+            echo "::error title=changelog::Could not read this pull request's labels; re-run the job."
             exit 1
           fi
+          if grep -qxF 'no changelog' <<<"$labels"; then
+            echo "Labelled \`no changelog\`: no fragment required."
+            echo "waived=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "waived=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Dependabot's PRs must stay hands-off green (dependabot-auto-merge.yml arms
+      # auto-merge on every one); a lockfile bump has nothing to say in a changelog.
+      # Anything that ships — core, Python or a binding — owes a fragment (`shipped`, in
+      # the `changes` job); a docs-only change does not.
+      - name: A shipped change carries a changelog fragment
+        if: >-
+          needs.changes.outputs.shipped == 'true'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && steps.labels.outputs.waived != 'true'
+        env:
+          BASE: ${{ github.base_ref }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if ! towncrier check --compare-with "origin/${BASE}"; then
+            echo "::error title=changelog::This PR changes code or a binding but adds no changelog.d/ fragment."
+            echo "Add changelog.d/${PR}.<type>.md — see changelog.d/README.md."
+            exit 1
+          fi
+
+      # `towncrier check` passes on ANY edit to CHANGELOG.md ("news file changes
+      # detected"), so a hand-written entry — the one thing #993 exists to stop — got
+      # through the step above, and a docs-only one was never checked at all (#994
+      # review). The one legitimate edit is the release pull request, where
+      # `towncrier build` writes the section AND deletes the fragments it consumed
+      # (RELEASING.md, "Assemble the changelog first"). That deletion is what tells the
+      # two apart.
+      - name: CHANGELOG.md is written only by a release
+        if: steps.labels.outputs.waived != 'true'
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          range="origin/${BASE}...HEAD"
+          if git diff --quiet "$range" -- CHANGELOG.md; then
+            echo "CHANGELOG.md is untouched."
+            exit 0
+          fi
+          # -M: a fragment renamed (say, `+slug` to its number) shows as R, not D, so a
+          # rename alongside a hand edit does not pass for a consumed fragment.
+          consumed="$(git diff -M --name-only --diff-filter=D "$range" -- changelog.d \
+            ':(exclude)changelog.d/README.md' ':(exclude)changelog.d/_template.md')"
+          if [[ -n "$consumed" ]]; then
+            echo "CHANGELOG.md changed and these fragments were consumed — a release assembly:"
+            echo "$consumed"
+            exit 0
+          fi
+          echo "::error title=changelog::CHANGELOG.md is edited by hand. Put the entry in a changelog.d/ fragment instead — see changelog.d/README.md."
+          exit 1
 
       # There is no `## [Unreleased]` section on main any more, so this is where a
       # reviewer reads what the release will say, without checking the branch out.
@@ -743,8 +830,10 @@ jobs:
     steps:
       - name: Evaluate every language gate
         run: |
+          EVENT="${{ github.event_name }}"
           CODE="${{ needs.changes.outputs.code }}"
           DOCS="${{ needs.changes.outputs.docs }}"
+          SHIPPED="${{ needs.changes.outputs.shipped }}"
           LINT="${{ needs.lint.result }}"
           TEST="${{ needs.test.result }}"
           DOCTESTS="${{ needs['doc-tests'].result }}"
@@ -768,11 +857,20 @@ jobs:
           if [[ "$CODE" == "true" ]]; then
             [[ "$LINT" == "success" ]] || fail "lint" "lint/format failed ($LINT)"
             [[ "$TEST" == "success" ]] || fail "test" "tests failed ($TEST)"
-            # #993: a code change carries a changelog.d/ fragment, or a deliberate
-            # `no changelog` label. The job itself skips Dependabot's PRs.
-            [[ "$CHANGELOG" == "success" ]] || fail "changelog" "no changelog.d/ fragment ($CHANGELOG)"
           else
             echo "No code changes — lint/test not required"
+          fi
+
+          # ── Changelog (#993) ───────────────────────────────────────────────
+          # Required exactly when the job's own `if:` runs it: on a pull request that
+          # touches shipped code, a binding or the docs. It is skipped on `schedule`,
+          # where there is no base to diff against, and must not fail the gate there.
+          # The job itself waives the fragment for Dependabot, the `no changelog`
+          # label and docs-only changes.
+          if [[ "$EVENT" == "pull_request" ]] && [[ "$SHIPPED" == "true" || "$DOCS" == "true" ]]; then
+            [[ "$CHANGELOG" == "success" ]] || fail "changelog" "changelog gate failed ($CHANGELOG)"
+          else
+            echo "changelog: not a pull request, or nothing it covers changed — not required"
           fi
 
           # ── Bindings ───────────────────────────────────────────────────────

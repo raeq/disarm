@@ -761,11 +761,14 @@ towncrier build --draft --version NEXT       # the unreleased section, rendered
 towncrier check --compare-with origin/main   # exactly what CI's gate runs
 ```
 
-CI's *Changelog fragment* job requires one on any pull request that changes code, and
-renders the draft into its job summary so reviewers see the assembled section without
-checking the branch out. Dependabot's pull requests are exempt — a lockfile bump has
-nothing to say in a changelog, and its auto-merge lane has to stay hands-off green. For
-anything else, the escape hatch is a deliberate, visible `no changelog` label.
+CI's *Changelog fragment* job requires one on any pull request that changes code or a
+binding (anything under `bindings/`), fails one that edits `CHANGELOG.md` by hand, and
+renders the draft into its job summary — docs-only pull requests included — so reviewers
+see the assembled section without checking the branch out. Dependabot's pull requests are
+exempt — a lockfile bump has nothing to say in a changelog, and its auto-merge lane has
+to stay hands-off green. For anything else, the escape hatch is a deliberate, visible
+`no changelog` label. Adding a label does not start a CI run: add it, then re-run the
+failed *Changelog fragment* job, which reads the labels as they are when it runs.
 
 ### Watching a PR to merge
 

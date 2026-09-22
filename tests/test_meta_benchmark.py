@@ -2805,6 +2805,8 @@ def test_the_cursor_model_matches_the_core_after_a_return():
     assert r("aa\ra\x08a", cr=True) == "aa", "the cell is blanked, not removed"
     assert r("abc\r\u200bY", cr=True) == "\u200bYbc", "a zero-width takes no cell"
     assert r("abc\r\u0301Y", cr=True) == "\u0301Ybc", "nor does a mark"
+    # Blank cells to the right are not a line to keep: no CR, no change.
+    assert r("ab\x08\x08\u200b\x08") == r("\u200b\x08") == ""
 
 
 def test_the_row_limit_is_a_cap_across_the_classes():

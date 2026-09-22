@@ -321,7 +321,10 @@ def resolve_deletions(text: str, *, cr: bool = False) -> str:
             col = 0
         elif not occupies_cell(ch) and col > 0:
             line[col - 1] += ch
-        elif not occupies_cell(ch) and col < len(line):
+        elif not occupies_cell(ch) and any(line):
+            # Visible text to the right, not merely cells: an erase blanks, so a
+            # backspace can reach column 0 over blank cells with no CR at all, and
+            # those are not a line to keep (the core's rule, #1005).
             lead += ch
         elif col < len(line):
             line[col] = ch

@@ -496,8 +496,8 @@ pub(crate) fn pad_emoji_replacement(result: &mut String, text: &str) {
 // `\u{00A9}` from ordinary prose, which is not what a caller removing emoji asked for.
 //
 // So replacement asks "is this an emoji by the UCD's own properties?" and its domain is
-// the emoji-presentation set: `Emoji_Presentation=Yes`, an `Emoji=Yes` base carrying
-// `U+FE0F`, and the sequences built on those. That question needs two range tables and
+// the emoji-presentation set: `Emoji_Presentation=Yes`, an `Emoji` or
+// `Extended_Pictographic` base carrying `U+FE0F`, and the sequences built on those. That question needs two range tables and
 // no names, which is the second reason the paths are separate: a build that only
 // replaces links neither the CLDR name trie nor the 182 KB behind it (#695).
 
@@ -652,15 +652,28 @@ pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
 /// nothing does yet. It keeps a named arm rather than riding a block range, and giving
 /// `ml_normalize` the real step is a change with a `KEY_SCHEMA_VERSION` cost of its own.
 ///
+/// Only a sequence whose head renders as emoji **without being asked** counts. A
+/// text-default base that `U+FE0F` opens — `\u{00A9}`, `\u{00AE}`, `\u{2605}` — is
+/// an emoji presentation sequence to [`presentation_len_at`], and `replace_emoji` is
+/// right to replace it. Here it is not an emoji *with no name*: it is a symbol with no
+/// name that was asked to render as emoji, and dropping it deletes an assigned character
+/// on the strength of a selector. Excluded, the scanners keep the base and drop the
+/// selector, as they did before #990. Without this the branch took 2,141 such symbols —
+/// `emoji_property.tsv` is `Emoji` OR `Extended_Pictographic`, which reaches unassigned
+/// code points too — and a ZWJ chain opened by one, `\u{00A9}\u{FE0F}\u{200D}🔥`,
+/// took the named `🔥` down with it. The keycap bases open no sequence without a keycap
+/// after them, and every keycap has a CLDR name, so they need no exception.
+///
 /// Both scanners call this, so the two cannot drift apart on what they rewrite.
 pub(crate) fn unnamed_emoji_len_at(window: &[char]) -> Option<usize> {
-    presentation_len_at(window).or_else(|| {
-        window
-            .first()
-            .copied()
-            .filter(|&c| is_tag(c))
-            .map(|_| 1usize)
-    })
+    let first = *window.first()?;
+    if opens_emoji_presentation(first) {
+        presentation_len_at(window)
+    } else if is_tag(first) {
+        Some(1)
+    } else {
+        None
+    }
 }
 
 /// Replace every emoji-presentation sequence in `text` with `replacement` (#972).
@@ -1329,6 +1342,31 @@ mod tests {
         assert_eq!(demojize_rust("x\u{E0061}y", false), "xy");
         // And a character that is not an emoji at all now travels through untouched.
         assert_eq!(demojize_rust("a\u{2606}b", false), "a\u{2606}b");
+    }
+
+    /// A selector asks for emoji presentation; it does not make an unnamed symbol an
+    /// unnamed *emoji*. Before this, `\u{00A9}\u{FE0F}` reached the drop branch and the
+    /// copyright sign went with it, as did a named emoji joined after it.
+    #[test]
+    fn a_selector_does_not_send_an_unnamed_symbol_to_the_drop_branch() {
+        for base in ['\u{00A9}', '\u{00AE}', '\u{2388}', '\u{2605}', '\u{1FC00}'] {
+            assert_eq!(
+                unnamed_emoji_len_at(&[base, VS16]),
+                None,
+                "U+{:04X} + FE0F",
+                base as u32
+            );
+            let input = format!("a{base}\u{FE0F}b");
+            assert_eq!(demojize_rust(&input, false), format!("a{base}b"));
+        }
+        // `replace_emoji` still counts it as the emoji presentation sequence it is.
+        assert_eq!(presentation_len_at(&['\u{00A9}', VS16]), Some(2));
+        // The named emoji at the end of a chain opened by one keeps its name.
+        let out = demojize_rust("a\u{00A9}\u{FE0F}\u{200D}\u{1F525}b", false);
+        assert!(out.contains('\u{00A9}') && out.contains("fire"), "{out:?}");
+        // What the branch is for still reaches it.
+        assert_eq!(unnamed_emoji_len_at(&['\u{1F1E6}']), Some(1));
+        assert_eq!(unnamed_emoji_len_at(&['\u{E0061}']), Some(1));
     }
 
     #[test]

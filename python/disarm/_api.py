@@ -1297,8 +1297,12 @@ def demojize(
             to their base form (e.g. "woman raising hand" instead of
             "woman raising hand: medium-dark skin tone").
         errors: How to handle an emoji that neither the provider nor the built-in CLDR
-                table names — 26 code points as bundled, all of them lone regional
-                indicators, plus any sequence a future UCD adds ahead of CLDR.
+                table names. As bundled that is 122 single code points: the 26 regional
+                indicators, which CLDR names only in pairs, and the 96 Plane 14 tag
+                characters when they stand alone, which are removed here because it is
+                the only coverage of that block `ml_normalize` has (#914). Add any
+                sequence a future UCD adds ahead of CLDR. A text-default symbol followed
+                by ``U+FE0F`` does not count: ``©\ufe0f`` keeps the ``©``.
                 "replace" — substitute with replace_with.
                 "ignore" — silently drop.
                 "preserve" — keep the original emoji.

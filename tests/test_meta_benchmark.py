@@ -17,7 +17,8 @@ import os
 
 import pytest
 
-from benchmarks.meta import fetch, leaderboard, registry, subjects
+from benchmarks.meta import damage, fetch, leaderboard, registry, subjects
+from benchmarks.meta import report as report_module
 from benchmarks.meta.base import SuiteBase, surfaces, thin
 from benchmarks.meta.baseline import Drift, compare, snapshot
 from benchmarks.meta.protocol import Availability, Family, Outcome, Provenance, Status
@@ -49,6 +50,21 @@ def test_only_the_introspective_family_is_non_external():
     for suite in registry.all_suites():
         is_introspective = suite.family is Family.INTROSPECTIVE
         assert suite.provenance.external is not is_introspective, suite.name
+
+
+@pytest.fixture(scope="session")
+def bad_characters_run():
+    """One `bad-characters` run shared by every test that reads it.
+
+    The suite scores 22,370 rows through a transform and a detector; six tests
+    were each paying for that separately, which took the file past two minutes.
+    Session-scoped because the run is a pure function of the cached corpus and
+    the installed build.
+    """
+    suite = registry.by_name("bad-characters")
+    if suite is None or not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+    return suite, suite.run(subject=subjects.by_name("disarm"))
 
 
 def test_every_suite_names_the_issues_it_identified():
@@ -713,6 +729,13 @@ def test_a_thin_or_incoherent_battery_refuses_to_rank():
 
 
 def test_the_refusal_is_stated_in_the_report():
+    """Both halves of the refusal, and they are now separate statements.
+
+    The report used to say the composite "must not be quoted as one" and then
+    print it. It no longer prints one at all, so the refusal is two claims: this
+    battery does not support a ranking, and no composite is published either
+    way — the second holding even for a battery whose blockers all clear.
+    """
     outs = [
         _board_outcome(subj, f"s{i}", "m", value)
         for i in range(3)
@@ -722,7 +745,8 @@ def test_the_refusal_is_stated_in_the_report():
     report = RunReport(outcomes=outs, selected=1, registered=1, subjects=["a", "b"])
     md = render_markdown(report, leaderboard=board)
     assert "does not support a ranking" in md
-    assert "must not be quoted" in md
+    assert "No composite is published" in md
+    assert "### Composite" not in md
 
 
 def test_controls_do_not_set_the_scale():
@@ -2443,8 +2467,10 @@ def test_coverage_counts_benchmarks_so_a_split_axis_is_not_a_penalty():
     plain0 = next(st for st in board.standings if st.subject == "plain0@1")
     assert plain0.suites == 5, "scored on all five benchmarks"
     assert plain0.items == 5, "and on five of the six axes, having no detector"
-    # And the report says five of five, not five of six: a question it was never
-    # asked is not a gap in what it answered.
+    # And the report never marks it as having answered part of anything: a
+    # question it was never asked is not a gap in what it answered. (The
+    # "5/5" coverage column this once checked lived in the composite table,
+    # which is no longer published.)
     md = render_markdown(
         RunReport(
             outcomes=outs,
@@ -2454,7 +2480,7 @@ def test_coverage_counts_benchmarks_so_a_split_axis_is_not_a_penalty():
         ),
         leaderboard=board,
     )
-    assert "| 5/5 |" in md and "| 5/6 |" not in md
+    assert "`plain0@1` *(answered part of this benchmark" not in md
     assert "**6** axes over **5** benchmarks" in md
 
 
@@ -2590,3 +2616,434 @@ def test_the_substituted_note_names_the_code_points_it_counts():
     # Extended_Pictographic, and Extended_Pictographic covers this whole block,
     # unassigned code points included, so membership there proves nothing.
     assert 0x1F237 not in _code_points("emoji_presentation.tsv")
+
+
+def test_bad_characters_is_scored_per_attack_class(bad_characters_run):
+    """One average over four classes hid a 100%-to-14% spread.
+
+    The release is keyed by the paper's own experiment names
+    (`perspective_deletions`, `maxtoxic_reorderings`, ...), and the loader
+    iterated `blob.values()` and dropped that key. So a suite whose summary said
+    "four imperceptible-perturbation classes" reported a single 51.4% XMR, while
+    the classes underneath run 100.0% (invisibles) to 14.2% (deletions).
+
+    #934 improved detection of the deletion class and moved no measurement in
+    the whole battery, which is what surfaced this.
+    """
+    suite, out = bad_characters_run
+
+    for cls in ("deletions", "homoglyphs", "invisibles", "reorderings"):
+        assert out.measurement(f"{cls}_xmr") is not None, f"{cls} unscored"
+        assert out.measurement(f"{cls}_detected") is not None, f"{cls} undetected"
+        assert out.measurement(f"{cls}_perturbed") is not None, f"{cls} unsplit"
+
+    # The classes must partition the corpus, not resample it.
+    total = sum(out.measurement(f"{c}_rows").value for c in suite.CLASSES)
+    assert total == out.measurement("rows").value, "per-class rows must sum to the corpus"
+
+
+def test_the_class_taxonomy_comes_from_the_release_not_from_here():
+    """Assigning classes ourselves would make the split disarm's opinion."""
+    src = inspect.getsource(academic.BadCharacters._rows_by_class)
+    assert "blob.items()" in src, "the class must be read from the release's own key"
+    assert set(academic.BadCharacters.CLASSES) == {
+        "deletions",
+        "homoglyphs",
+        "invisibles",
+        "reorderings",
+    }
+
+
+def test_recovery_is_scored_only_over_rows_that_were_perturbed(bad_characters_run):
+    """~800 rows per class carry no perturbation, and they were counting as wins.
+
+    14.3 of `reorderings`' 14.5% XMR came from rows nothing had been done to.
+    Scoring over the perturbed subset moves it to 0.3%, which is the honest
+    number and is why the class needed a different measurement entirely.
+    """
+    suite, out = bad_characters_run
+    for cls in suite.CLASSES:
+        rows = out.measurement(f"{cls}_rows")
+        pert = out.measurement(f"{cls}_perturbed")
+        xmr = out.measurement(f"{cls}_xmr")
+        held = out.measurement(f"{cls}_ascii_swapped")
+        assert pert.value < rows.value, f"{cls}: every row cannot be perturbed"
+        # The denominator is the perturbed rows a fold can reach: perturbed
+        # minus any that also swap one ASCII character for another, which is a
+        # spelling change rather than an encoding one.
+        expected = pert.value - (held.value if held else 0)
+        assert xmr.of == expected, (
+            f"{cls}: XMR denominator is {xmr.of}, expected {expected} "
+            f"(perturbed {pert.value} less {held.value if held else 0} held out)"
+        )
+
+
+def test_the_reordering_class_is_scored_on_carrier_removal_not_recovery(bad_characters_run):
+    """The reason matters, and this one was wrong twice.
+
+    First reading: recovery needs UAX #9, out of scope. Second: the rendered
+    form is the deception, so emitting it would finish the attack. The second is
+    measurably false for this corpus — in Boucher et al.'s reordering rows the
+    *rendering is the clean input* and the code points are scrambled (`crying`
+    stored as `cyring`), so only 14 of 4,800 perturbed rows have a logical order
+    matching the clean text.
+
+    The real reason is cost and legitimate use: bidi controls carry genuine RTL
+    text, resolving display order needs a paragraph direction and UAX #9, and
+    #740 declined to build it. `deletions` stays scored because BS/DEL have no
+    legitimate use and resolve with a cursor over cells, not a renderer (#937).
+    """
+    suite, out = bad_characters_run
+    assert "reorderings" in suite.RECOVERY_OUT_OF_SCOPE
+    assert "deletions" not in suite.RECOVERY_OUT_OF_SCOPE
+
+    why = suite.RECOVERY_OUT_OF_SCOPE["reorderings"]
+    assert "UAX #9" in why and "#740" in why
+    assert "deception" not in why, (
+        "the rendered form is the clean input in this corpus, not the deception"
+    )
+
+    _, out = bad_characters_run
+    assert out.measurement("reorderings_xmr").higher_is_better is None
+    assert out.measurement("reorderings_carrier_removed").higher_is_better is True
+    assert out.measurement("deletions_xmr").higher_is_better is True
+
+
+def test_the_reordering_corpus_hides_the_code_points_not_the_rendering():
+    """Pinning the direction, because getting it backwards produced a false claim.
+
+    The attack scrambles the code points and leaves the rendering benign, so a
+    consumer reading code points sees the damage and a human reading the screen
+    does not. Anchored to the corpus rather than to prose.
+    """
+    suite = registry.by_name("bad-characters")
+    if not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+    rows = suite._rows_by_class(suite.locate(), None)["reorderings"]
+    hot = [(a, c) for a, c in rows if suite._perturbed("reorderings", a, c)]
+    marks = suite.MARKERS["reorderings"]
+
+    def logical(text):
+        return "".join(ch for ch in text if ord(ch) not in marks)
+
+    same = sum(1 for adv, clean in hot if logical(adv) == clean)
+    assert same < len(hot) * 0.01, (
+        "if the logical order matched the clean input, the rendering would be "
+        "the attack — it is the other way round"
+    )
+
+
+def test_the_erase_classes_recovery_is_reachable_without_a_renderer():
+    """Applying backspace semantics is a loop, not a rendering engine.
+
+    It recovers every perturbed deletion row, which is why that class keeps a
+    scored XMR while `reorderings` does not.
+    """
+
+    def apply_erase(text):
+        out = []
+        for ch in text:
+            if ord(ch) in (0x08, 0x7F):
+                if out:
+                    out.pop()
+            else:
+                out.append(ch)
+        return "".join(out)
+
+    assert apply_erase("payX\bpal") == "paypal"
+    assert apply_erase("ab\x7fc") == "ac"
+
+
+def test_the_cursor_model_erases_cells_not_code_points():
+    """A stack over code points gets two branches wrong, and the corpus hides both.
+
+    Its 4,820 deletion rows carry BS only — no DEL, no CR — so a per-code-point
+    pop scores 100% there while leaving the `X` in `X<ZWSP><BS>` and the `e` in
+    `e<U+0301><BS>`, and turning `line1\\r\\nline2` into `\\nline2`. These are the
+    reference assertions from #937.
+    """
+    r = damage.resolve_deletions
+
+    # The paper's §VI-A construction.
+    assert r("".join(ch + "X\x08" for ch in "paypal")) == "paypal"
+
+    # A cell is a base character with its marks and attached format characters.
+    assert r("X\u200b\x08") == "", "a zero-width joins the cell"
+    # NFD, deliberately: a precomposed U+00E9 is one code point and never
+    # reaches the mark branch, so it passes on a naive stack too and asserts
+    # nothing. The cell is e + COMBINING ACUTE, and BS must erase both.
+    assert r("e\u0301\x08") == "", "a combining mark joins the cell"
+    assert r("e\u0301\u0302\x08") == "", "and so does a second mark"
+    assert r("\x08\x08a") == "a", "erasing past column 0 is not an error"
+
+    # man-page overstrike: the one non-attack use, and it resolves to what is shown.
+    assert r("c\x08c") == "c", "overstrike bold"
+    assert r("_\x08c") == "c", "overstrike underline"
+
+    # CR is a line ending unless it overwrites, and is off by default either way.
+    assert r("line1\r\nline2\r\nline3") == "line1\r\nline2\r\nline3"
+    assert r("line1\r\nline2", cr=True) == "line1\r\nline2"
+    assert r("ZZZZZZ\rpaypal") == "ZZZZZZ\rpaypal", "CR off: untouched"
+    assert r("ZZZZZZ\rpaypal", cr=True) == "paypal"
+    assert r("abc\rxy", cr=True) == "xyc", "overwrite, not clear"
+    assert r("line1\rline2", cr=True) == "line2", "a classic Mac file"
+
+
+def test_the_cursor_model_matches_the_core_after_a_return():
+    """The oracle is kept identical to `src/deletions.rs`, and after a CR it was not.
+
+    It still erased with `del line[col:]`, which #995 fixed in the core: a
+    backspace after a CR discarded the rest of the line, or at column 0 the line.
+    And a character that takes no cell, met at column 0 after a CR, took cell 0
+    and moved the cursor, contradicting `occupies_cell`'s own docstring (Copilot
+    on #1001). The corpus has no CR, so neither moved a score.
+    """
+    r = damage.resolve_deletions
+    assert r("abc\rX\x08", cr=True) == "bc", "erase one cell, not the rest"
+    assert r("abc\rXY\x08", cr=True) == "Xc"
+    assert r("abc\r\x08", cr=True) == "abc", "at column 0 there is nothing to erase"
+    assert r("aa\ra\x08a", cr=True) == "aa", "the cell is blanked, not removed"
+    assert r("abc\r\u200bY", cr=True) == "\u200bYbc", "a zero-width takes no cell"
+    assert r("abc\r\u0301Y", cr=True) == "\u0301Ybc", "nor does a mark"
+    # Blank cells to the right are not a line to keep: no CR, no change.
+    assert r("ab\x08\x08\u200b\x08") == r("\u200b\x08") == ""
+
+
+def test_the_row_limit_is_a_cap_across_the_classes():
+    """`--limit` caps rows per suite; per-class slicing could exceed it.
+
+    `max(1, limit // 4)` gives every class a row, so `--limit 3` scored four
+    (Copilot on #1001). The split is now exact.
+    """
+    suite = registry.by_name("bad-characters")
+    path = suite.locate() if suite is not None else None
+    if path is None or path.name != "bad-characters.json":
+        pytest.skip("the bad-characters release is not cached")
+    for limit in range(1, 10):
+        rows = suite._rows_by_class(path, limit)
+        assert sum(len(v) for v in rows.values()) == limit, limit
+
+
+def test_the_deletion_ceiling_is_measured_not_assumed(bad_characters_run):
+    """0% reads differently beside a demonstrated 100% than beside nothing.
+
+    `deletions_recoverable` is a census, never a score for a subject: it says
+    what a renderer recovers, so the subject's XMR is read against a ceiling the
+    harness can show rather than one it asserts.
+    """
+    suite, out = bad_characters_run
+
+    ceiling = out.measurement("deletions_recoverable")
+    actual = out.measurement("deletions_xmr")
+    assert ceiling is not None and actual is not None
+    assert ceiling.higher_is_better is None, "a ceiling is not a score"
+    assert actual.higher_is_better is True, "recovery here is achievable, so it is scored"
+    assert ceiling.value >= actual.value
+    assert ceiling.of == actual.of, "both must be over the perturbed rows"
+
+
+def test_the_model_leaves_clean_text_alone():
+    """A resolver that changes unperturbed input would be a cost, not a fix."""
+    suite = registry.by_name("bad-characters")
+    if not suite.available()[0]:
+        pytest.skip("the bad-characters release is not cached")
+    rows = suite._rows_by_class(suite.locate(), None)["deletions"]
+    cleans = [c for _, c in rows if c is not None]
+    changed = [c for c in cleans if damage.resolve_deletions(c) != c]
+    assert not changed, f"{len(changed)} clean inputs were altered"
+
+    # And it is idempotent on the attacked side.
+    hot = [a for a, c in rows if suite._perturbed("deletions", a, c)]
+    once = [damage.resolve_deletions(a) for a in hot]
+    assert [damage.resolve_deletions(x) for x in once] == once
+
+
+def test_ascii_substitutions_are_held_out_of_the_recovery_denominator(bad_characters_run):
+    """`racist` perturbed to `racisi` is a spelling change, not an encoding one.
+
+    Boucher's homoglyph search finds whatever character fools the model, and at
+    higher perturbation budgets that includes ASCII. 26.5% of the perturbed
+    homoglyph rows carry such a swap, every one of them fails XMR, and every row
+    without one passes — so the class read 73.5% when the part a fold can reach
+    is 100%. Same fault as the ~800 unperturbed rows: the denominator held rows
+    the metric's name does not describe.
+    """
+    suite, out = bad_characters_run
+    assert suite._ascii_swapped("racisi", "racist")
+    assert not suite._ascii_swapped("rаcist", "racist"), "a Cyrillic а is in reach"
+    assert not suite._ascii_swapped("abc", None)
+    assert not suite._ascii_swapped("abcd", "abc"), "length change is not a swap"
+
+    _, out = bad_characters_run
+
+    held = out.measurement("homoglyphs_ascii_swapped")
+    xmr = out.measurement("homoglyphs_xmr")
+    pert = out.measurement("homoglyphs_perturbed")
+    assert held is not None and held.higher_is_better is None, "a census, not a score"
+    assert xmr.of == pert.value - held.value, (
+        "recovery must be scored over the rows a fold can reach"
+    )
+
+
+def test_only_the_homoglyph_class_carries_ascii_substitutions(bad_characters_run):
+    """The hold-out must not quietly shrink a class that has no such rows.
+
+    deletions, invisibles and reorderings carry none, so their denominators are
+    unchanged by it — which is what makes the homoglyph correction a correction
+    rather than a general discount.
+    """
+    suite, out = bad_characters_run
+    for cls in ("deletions", "invisibles", "reorderings"):
+        assert out.measurement(f"{cls}_ascii_swapped") is None, (
+            f"{cls} should carry no ASCII substitutions"
+        )
+        assert out.measurement(f"{cls}_xmr").of == out.measurement(f"{cls}_perturbed").value
+
+
+def test_no_composite_is_published():
+    """A number under a caveat is still the number a reader quotes.
+
+    The composite ranked `null-baseline` — which deletes all input — above real
+    libraries, and averaged the axes that agree while giving zero weight to the
+    ones that oppose them, including both poles of the trade-off the battery
+    exists to measure. It was printed anyway, beneath its own blockers, on the
+    reasoning that recording it kept the shortfall auditable. Printing a figure
+    beside the reason it is wrong does not make it auditable; it makes it
+    quotable.
+
+    Asserted on a board with no blockers at all, because the composite is
+    unsound for a battery of this *shape* rather than only when a blocker fires.
+    """
+    items = [
+        leaderboard.Item(
+            suite=f"s{i}",
+            key="k",
+            scores={"a": float(i), "b": float(i) + 1.0},
+            z={"a": float(i), "b": float(i) + 1.0},
+            member_keys={"a": {"k"}, "b": {"k"}},
+            all_keys={"k"},
+            peer_keys={"a": {"k"}, "b": {"k"}},
+        )
+        for i in range(3)
+    ]
+    board = leaderboard.Leaderboard(items=items, subjects=["a", "b"])
+    assert board.usable
+
+    markdown = "\n".join(report_module._render_leaderboard(board))
+    assert "### Composite" not in markdown
+    assert "| # | subject | composite" not in markdown
+    assert "No composite is published" in markdown
+    # The diagnosis stays: the weights are why there is no composite.
+    assert "### Axis weights" in markdown
+
+
+def test_the_renderer_has_no_composite_table_left_in_it():
+    """Belt and braces: the table must be gone from the source, not just unreached."""
+    src = inspect.getsource(report_module)
+    assert '"### Composite"' not in src
+    assert "st.composite" not in src
+
+
+def test_every_composable_step_is_declared_or_deliberately_declined():
+    """Three times a new step shipped and the compositions silently missed it.
+
+    `strip_pua` (#911/#912), `strip_plane14` (#914/#924) and `resolve_deletions`
+    (#937/#941) each arrived on `TextPipeline` with a False default, and each
+    time these pipelines kept the old behaviour while claiming to be current.
+    A default is not a decision. Every step the installed build accepts must
+    appear in `STEPS`, or in `DECLINED` with a reason.
+    """
+    import disarm
+
+    if not hasattr(disarm, "TextPipeline"):
+        pytest.skip("this build has no TextPipeline")
+
+    import inspect as _inspect
+
+    # What the build actually accepts, discovered rather than hardcoded: a list
+    # written here would drift exactly as the compositions did.
+    accepted = []
+    for name in (
+        "normalize",
+        "transliterate",
+        "lang",
+        "strict_iso9",
+        "gost7034",
+        "confusables",
+        "strip_accents",
+        "fold_case",
+        "collapse_whitespace",
+        "strip_control",
+        "strip_zero_width",
+        "demojize",
+        "strip_bidi",
+        "strip_zalgo",
+        "strip_pua",
+        "strip_plane14",
+        "resolve_deletions",
+    ):
+        try:
+            disarm.TextPipeline(**{name: "NFKC" if name == "normalize" else True})
+        except TypeError as exc:
+            if "unexpected keyword argument" in str(exc):
+                continue
+        accepted.append(name)
+
+    for cls in (
+        subjects.ComposedPromptHygiene,
+        subjects.ComposedRetrievalKey,
+        subjects.ComposedReviewDisplay,
+    ):
+        undeclared = [
+            step
+            for step in accepted
+            if step not in cls.STEPS and step not in getattr(cls, "DECLINED", {})
+        ]
+        assert not undeclared, (
+            f"{cls.__name__} neither declares nor declines: {undeclared}. "
+            "A False default is not a decision — say so in STEPS or DECLINED."
+        )
+        assert _inspect.getdoc(cls), f"{cls.__name__} needs a purpose"
+
+
+def test_the_control_check_covers_every_aggregate_not_only_the_composite():
+    """Bradley-Terry escapes the clamp and fails the controls anyway.
+
+    It uses only the order of each pairwise result, so the zero-weight clamp
+    that deletes the composite's opposed axes cannot touch it — which made it
+    the one aggregate that might have survived. Measured, it does not:
+    `null-baseline` outranks ftfy, pyunormalize and stdlib there too, because
+    most axes on this battery reward removal and a delete-everything baseline
+    genuinely beats a pure normalizer on them. Checked rather than assumed, and
+    now checked by the harness rather than by hand.
+    """
+    standings = [
+        leaderboard.Standing(
+            subject="null-baseline@1",
+            composite=-9.0,
+            bt_strength=0.5,
+            rank=3,
+            ci_low=-9.0,
+            ci_high=-9.0,
+            items=3,
+            control=True,
+        ),
+        leaderboard.Standing(
+            subject="real@1",
+            composite=1.0,
+            bt_strength=0.1,
+            rank=1,
+            ci_low=1.0,
+            ci_high=1.0,
+            items=3,
+        ),
+    ]
+    board = leaderboard.Leaderboard(
+        items=[], subjects=["null-baseline@1", "real@1"], standings=standings
+    )
+    text = " ".join(board.blockers)
+    # The composite is fine here and Bradley-Terry is not, so a check that only
+    # looked at the composite would pass this board.
+    assert "Bradley-Terry" in text
+    assert "refuses the job" in text
+    assert not board.supported

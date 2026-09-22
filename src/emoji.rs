@@ -540,7 +540,7 @@ const HEAD_LOOKAHEAD: usize = 3;
 /// One emoji-presentation **head**: a base and the modifiers bound to it, no ZWJ chain.
 ///
 /// Returns `None` for anything the UCD does not call an emoji in this position: a keycap
-/// base with no keycap after it (`1`, `#`), and an `Emoji=Yes` base with no `U+FE0F`
+/// base with no keycap after it (`1`, `#`), and a text-default base with no `U+FE0F`
 /// (`\u{00A9}`, `\u{263A}`).
 ///
 /// A regional indicator is `Emoji_Presentation=Yes` on its own, so it returns `Some(1)`;

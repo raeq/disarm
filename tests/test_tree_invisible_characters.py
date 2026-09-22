@@ -38,7 +38,7 @@ import functools
 import unicodedata
 from pathlib import Path
 
-from conftest import excluded_dirs
+from conftest import in_skipped_dir
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -55,10 +55,11 @@ ALLOWED = frozenset("\n\t")
 #: The suffixes the README guard's argument applies to — anything a reviewer reads.
 SUFFIXES = frozenset(".py .rs .md .rb .mjs .ts .java .kt .toml .yml .yaml .sh .c .h".split())
 
-#: Directories that are not ours to police.
-#: Not ours to police. `tmp` is where `rake compile` stages a copy of the gem, so a
-#: converted file there is a build artifact that reappears on the next compile.
-SKIP = excluded_dirs({".git", "target", "node_modules", "vendor", "build", ".gradle", "tmp", "pkg"})
+#: Directories that are not ours to police. `tmp` is where `rake compile` stages a copy
+#: of the gem, so a converted file there is a build artifact that reappears on the next
+#: compile. Virtual environments are detected rather than named, and `.venv` is always
+#: skipped: see `conftest.in_skipped_dir`.
+SKIP = frozenset({".git", "target", "node_modules", "vendor", "build", ".gradle", "tmp", "pkg"})
 
 #: UAX #9 explicit formatting characters, plus the two marks. Every one reorders text.
 BIDI = frozenset("\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
@@ -200,14 +201,14 @@ def literal_invisibles(text: str) -> list[tuple[int, int, str, str]]:
     return offenders
 
 
-def _sources() -> list[Path]:
+def _sources(root: Path = ROOT) -> list[Path]:
     out = []
-    for path in ROOT.rglob("*"):
+    for path in root.rglob("*"):
         if not path.is_file() or path.suffix not in SUFFIXES:
             continue
-        if any(part in SKIP for part in path.parts):
+        if in_skipped_dir(path, root, SKIP):
             continue
-        if str(path.relative_to(ROOT)) in EXEMPT_FILES:
+        if str(path.relative_to(root)) in EXEMPT_FILES:
             continue
         out.append(path)
     return sorted(out)

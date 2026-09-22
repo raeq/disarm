@@ -159,7 +159,7 @@ testpaths = ["tests"]
 # is not otherwise importable.
 pythonpath = ["."]
 # Bare `pytest` runs CI's selection minus the opt-in `slow` tier (#658). CI uses
-# `-m "not formal and not hypothesis"`, so the two expressions differ by
+# `-m "not formal and not hypothesis and not serial"`, so the two expressions differ by
 # `not slow` — but nothing in that tier executes under CI conditions anyway:
 # `test_cabi_header_drift` skips when $CI is set, and the ratio floors need the
 # `bench` extra, which CI does not install. Measured with CI=1 and no bench
@@ -168,13 +168,20 @@ pythonpath = ["."]
 #
 # The Hypothesis tier was in the local default and in no CI job at all, so a
 # contributor paid ~67s on every run for a tier `nightly-hypothesis.yml` already
-# runs at 03:17 UTC with a random seed and a 10x oracle budget — a better
+# runs at 03:17 UTC with a freshly generated seed and a 10x oracle budget — a better
 # exercise of it than one more fixed-seed pass. `pytest -m hypothesis` on demand.
 # `-n auto --dist loadfile` is the default because the suite is no longer short enough
-# for worker startup to matter: 93s serial against 35s on four cores, and a single file
-# is if anything slightly faster (1.8s -> 1.4s), so there is no inner-loop cost to trade
-# against. `-n 0` turns it off for a debugger. `--dist loadfile` is not optional — see
+# for worker startup to matter: 93s serial against 35s on four cores. Startup is not
+# free, though: re-measured on four cores, one small file costs ~0.6s more under
+# `-n auto` than under `-n 0` (test_slugify.py 1.1s against 0.5s), so pass `-n 0` for a
+# single-file inner loop, and for a debugger. `--dist loadfile` is not optional — see
 # the `test` extra.
+#
+# `not serial` (#997 review): tests that measure wall-clock parallelism cannot be
+# measured with a worker already on every core, so the parallel run deselects them and
+# CI runs them in a step of their own with `pytest -m serial -n 0`. CI's `-m` replaces
+# this one, so its expression has to say `not serial` too; tests/test_serial_tier.py
+# holds the three together.
 addopts = [
     "-v",
     "--tb=short",
@@ -183,7 +190,7 @@ addopts = [
     "--dist",
     "loadfile",
     "-m",
-    "not formal and not hypothesis and not slow",
+    "not formal and not hypothesis and not slow and not serial",
 ]
 markers = [
     # Opt-in since #658: the marker described itself as deselectable and nothing
@@ -195,6 +202,7 @@ markers = [
     "slow: expensive, opt-in - run with 'pytest -m slow' (see #658)",
     "formal: exhaustive formal invariant tests — run before release with 'pytest -m formal'",
     "hypothesis: property-based / fuzz tests using Hypothesis — expensive, run locally not in CI",
+    "serial: measures wall-clock parallelism, so cannot share the box with xdist workers — deselected by default; CI runs it with 'pytest -m serial -n 0'",
 ]
 
 [tool.mypy]

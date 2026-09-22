@@ -69,8 +69,24 @@ def _run_one(rel: str, argv: list[str]) -> tuple[str, int, str]:
     path = DOCS / rel
     if not path.exists():
         return rel, 1, f"MISSING: {rel}\n"
+    # `-n 0`: this loop is already the parallelism. Without it every page inherits
+    # `-n auto` from `addopts` and starts a full set of xdist workers for a handful of
+    # examples — 34.8s against 5.8s for the whole run on four cores (#997 review).
+    # Not `-p no:xdist`, which would leave `addopts`' `-n auto` unrecognised. It goes
+    # before `argv`, so a caller's own `-n` still wins.
     result = subprocess.run(  # noqa: S603 — fixed argv, no shell
-        [sys.executable, "-m", "pytest", str(path), "-q", "-p", "no:cacheprovider", *argv],
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            str(path),
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-n",
+            "0",
+            *argv,
+        ],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -91,7 +107,12 @@ def _jobs(count: int) -> int:
             return max(1, int(override))
         except ValueError:
             print(f"ignoring DISARM_DOC_TEST_JOBS={override!r}: not an integer", file=sys.stderr)
-    return max(1, min(8, (os.cpu_count() or 1), count))
+    if hasattr(os, "sched_getaffinity"):
+        # The cores this process may use (taskset, a container's cpuset), not the host's.
+        cores = len(os.sched_getaffinity(0))
+    else:
+        cores = os.cpu_count() or 1
+    return max(1, min(8, cores, count))
 
 
 def main(argv: list[str]) -> int:

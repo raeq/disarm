@@ -11,6 +11,7 @@ import functools
 from pathlib import Path
 
 import pytest
+from hypothesis import HealthCheck, settings
 from hypothesis import strategies as st
 
 from disarm._enums import Script
@@ -22,11 +23,17 @@ from disarm._enums import Script
 ROOT = Path(__file__).resolve().parent.parent
 
 
-@functools.cache
-def venv_dir_names(root: Path = ROOT) -> frozenset[str]:
-    """Directory names under `root` that are Python virtual environments.
+#: Skipped by name at any depth, whatever the marker search finds. `.venv` is the
+#: name every tool defaults to, and the environments that carry no `pyvenv.cfg` —
+#: conda's, or one nested deeper than the search below goes — are still found by it.
+ALWAYS_SKIPPED = frozenset({".git", ".venv"})
 
-    Two test modules walk the whole tree and skip build output by NAME, and the name
+
+@functools.cache
+def venv_dirs(root: Path = ROOT) -> frozenset[Path]:
+    """Python virtual environments under `root`, as paths relative to it.
+
+    Two test modules walk the whole tree and skipped build output by NAME, and the name
     they knew was `.venv`. A contributor whose environment is `venv/`, `.venv312/`,
     `env/` or `.tox/` therefore swept all of site-packages into the corpus: 1,516 of
     2,123 files in one of them, which is slow and — for the gates that refuse literal
@@ -38,19 +45,54 @@ def venv_dir_names(root: Path = ROOT) -> frozenset[str]:
     two levels are searched: deeper is not where anyone puts one, and the search should
     not cost more than the walk it saves.
 
+    Paths, not names (#997 review). The first version returned `cfg.parent.name` and the
+    walkers matched it against every component of every path, so tox's `.tox/docs`
+    environment excluded this repository's own `docs/` tree along with it.
+
     `root` is a parameter so the behaviour can be tested against a synthetic tree rather
     than against whatever happens to be checked out — a test that can only ask about this
     repository can only restate the answer back to itself.
     """
-    found = {cfg.parent.name for cfg in root.glob("*/pyvenv.cfg")}
-    found |= {cfg.parent.name for cfg in root.glob("*/*/pyvenv.cfg")}
-    return frozenset(found)
+    markers = [*root.glob("*/pyvenv.cfg"), *root.glob("*/*/pyvenv.cfg")]
+    return frozenset(cfg.parent.relative_to(root) for cfg in markers)
 
 
-def excluded_dirs(extra: set[str] | frozenset[str] = frozenset()) -> frozenset[str]:
-    """`extra` plus every virtual environment present, for a tree walk's skip set."""
-    return frozenset(extra) | venv_dir_names()
+def in_skipped_dir(path: Path, root: Path, skip: frozenset[str]) -> bool:
+    """Whether `path`, a file under `root`, is not ours to police.
 
+    True when a directory between `root` and the file is named in `skip` or
+    `ALWAYS_SKIPPED`, or is one of `venv_dirs(root)`. Only the part of the path inside
+    `root` is looked at: matching the absolute path, as this used to, emptied the corpus
+    of any checkout that lives under a directory called `build` or `tmp` — which includes
+    every pytest `tmp_path` (#997 review).
+    """
+    rel = path.relative_to(root)
+    if any(part in skip or part in ALWAYS_SKIPPED for part in rel.parts[:-1]):
+        return True
+    venvs = venv_dirs(root)
+    return any(parent in venvs for parent in rel.parents)
+
+
+# ---------------------------------------------------------------------------
+# Hypothesis profiles
+# ---------------------------------------------------------------------------
+
+#: What `nightly-hypothesis.yml` runs under, with a seed it generates and logs. It is
+#: Hypothesis's own `ci` profile — spelled out rather than inherited, so it does not
+#: depend on that profile existing — minus `derandomize`. Hypothesis loads `ci` by
+#: itself whenever `CI` is set, and a derandomized test seeds itself from its own
+#: source and ignores `--hypothesis-seed`, so every night replayed the same examples
+#: whatever seed was passed (#997 review). `tests/test_nightly_hypothesis_seed.py`
+#: holds the workflow and this together. Reproduce a nightly failure locally with
+#: `pytest -m hypothesis --hypothesis-profile=nightly --hypothesis-seed=<logged seed>`.
+settings.register_profile(
+    "nightly",
+    derandomize=False,
+    deadline=None,
+    database=None,
+    print_blob=True,
+    suppress_health_check=[HealthCheck.too_slow],
+)
 
 # ---------------------------------------------------------------------------
 # Hypothesis strategies

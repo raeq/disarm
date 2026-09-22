@@ -427,9 +427,23 @@ jobs:
         # not the test count, was most of this job's wall clock. Safe to pin here
         # because this job's Python is pinned to 3.12; coverage warns and falls back
         # on older ones, which is why it is set on the job and not in `pyproject.toml`.
+        #
+        # `not serial`: this `-m` replaces the one in `addopts`, so it has to deselect
+        # the serial tier itself. The next step runs it.
         env:
           COVERAGE_CORE: sysmon
-        run: pytest tests/ --ignore=tests/test_typing.py -m "not formal and not hypothesis" -q --tb=short --cov=disarm --cov-report=xml --cov-report=term-missing
+        run: pytest tests/ --ignore=tests/test_typing.py -m "not formal and not hypothesis and not serial" -q --tb=short --cov=disarm --cov-report=xml --cov-report=term-missing
+
+      - name: Run serial tests (wall-clock parallelism)
+        # #70's GIL-release guard proves the GIL is released by finishing two batches on
+        # two threads faster than one thread can. Under the `-n auto` above every core
+        # already has a worker on it, so it skipped itself — on every run, which meant
+        # it ran nowhere (#997 review). Here it gets the whole runner, with `-n 0`.
+        #
+        # No `--cov`: two timing tests add nothing to the report the step above wrote,
+        # and a tracer in the timed region is noise in the ratio they assert. Nothing
+        # here touches `coverage.xml`, so the upload below still gets that step's.
+        run: pytest tests/ --ignore=tests/test_typing.py -m serial -n 0 -q --tb=short -rs
 
       - name: Run doctests
         run: |

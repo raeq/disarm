@@ -8,10 +8,15 @@
 
   The stock markdown template cannot do that. It prefixes every entry with
   "- " whatever `all_bullets` says, which doubles the bullet our entries
-  already carry; it appends its own "(#123)" suffix, which our entries also
-  already carry, in the place the prose wants it; and it derives the heading
-  depth from `header_prefix`, landing these at "####" where every release
-  below them uses "###".
+  already carry, and it leaves an extra blank line before the previous
+  release. It would also append a "(#123)" suffix after the numbers our
+  entries already carry; `issue_format = ""` in pyproject.toml empties that,
+  and this template never renders issue references at all. Re-wrapping at 79
+  columns is a separate switch, `wrap`, which is false by default and stated
+  as false in pyproject.toml. (The stock headings are not the problem: they
+  follow `title_format`, and land at "###" as these do.)
+  tests/test_changelog_fragments.py compares the assembled file whole, so
+  removing the `template =` line, or setting `wrap = true`, fails it.
 
   disarm files no fragment under a towncrier *section*, so the section loop
   runs exactly once, over the unnamed section, and only the category heading

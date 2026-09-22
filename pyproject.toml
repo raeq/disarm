@@ -74,15 +74,18 @@ test = [
     # inline read as "not a push workflow" and was silently exempted. Parsing needs
     # a YAML reader, and `on` being a YAML 1.1 boolean is not a thing to hand-roll.
     "pyyaml>=6",
+    # Assembles changelog.d/ into CHANGELOG.md at release time (#993). In `test`, not
+    # `dev`: CI's test job installs `.[test]`, and with towncrier only in `dev` the
+    # assembly tests in tests/test_changelog_fragments.py skipped on every pull request
+    # (#994 review). `dev` still gets it through `disarm[test]`. Pinned here and read
+    # from here by CI's changelog job, for the reason #985 recorded: a second copy of a
+    # pin inside a workflow's `run:` line is invisible to Dependabot and turns every
+    # bump red until someone copies the number across.
+    "towncrier==26.9.0",
 ]
 dev = [
     "disarm[test]",
     "ruff==0.16.7",
-    # Assembles changelog.d/ into CHANGELOG.md at release time (#993). Pinned here
-    # and read from here by CI, for the reason #985 recorded: a second copy of a pin
-    # inside a workflow's `run:` line is invisible to Dependabot and turns every bump
-    # red until someone copies the number across.
-    "towncrier==26.9.0",
     "maturin>=1.14.0,<2",
     "pre-commit>=4.6.0",
 ]
@@ -252,6 +255,15 @@ orphan_prefix = "+"
 # the issue would put four fragments at one filename and rebuild the conflict this
 # is removing.
 
+# The order below is the order the headings are written in, and it is the order the
+# releases already use: 0.16.0, 0.15.0 and 0.14.0 all open on *Upgrade notes*, the
+# part a reader has to act on. tests/test_changelog_fragments.py pins it to the
+# latest release's order.
+[[tool.towncrier.type]]
+directory = "upgrade"
+name = "Upgrade notes"
+showcontent = true
+
 [[tool.towncrier.type]]
 directory = "added"
 name = "Added"
@@ -290,9 +302,4 @@ showcontent = true
 [[tool.towncrier.type]]
 directory = "internal"
 name = "Internal"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "upgrade"
-name = "Upgrade notes"
 showcontent = true

@@ -39,6 +39,7 @@ Before the pull request exists there is no number, so use the orphan form —
 
 | directory | heading |
 |---|---|
+| `upgrade` | Upgrade notes |
 | `added` | Added |
 | `changed` | Changed |
 | `breaking` | Changed (breaking) |
@@ -47,7 +48,9 @@ Before the pull request exists there is no number, so use the orphan form —
 | `performance` | Performance |
 | `docs` | Documentation |
 | `internal` | Internal |
-| `upgrade` | Upgrade notes |
+
+The table is in the order the headings are written, and *Upgrade notes* comes first,
+as it does in `0.16.0`, `0.15.0` and `0.14.0`.
 
 `upgrade` is where a key-moving change explains itself. `KEY_SCHEMA_VERSION` bumps go
 there, alongside the *Added* or *Changed (breaking)* fragment for the change itself —
@@ -80,8 +83,25 @@ files here. To read it as it will ship:
 towncrier build --draft --version NEXT
 ```
 
-CI renders the same thing into the job summary of every pull request that adds a
-fragment, so a reviewer sees the assembled section without running anything.
+CI renders the same thing into the job summary of every pull request that touches code,
+a binding or the docs — a fragment is a docs change — so a reviewer sees the assembled
+section without running anything.
+
+## What CI enforces
+
+The *Changelog fragment* job, on pull requests only:
+
+- **A shipped change carries a fragment.** Code, Python, the workflows, or anything
+  under `bindings/` — a Java, Ruby, TypeScript or C change owes one as much as a Rust
+  change does. A docs-only pull request does not. Dependabot's are exempt.
+- **`CHANGELOG.md` is not edited by hand.** `towncrier check` counts any edit to it as
+  the news, so on its own it would pass a hand-written entry. The job fails a pull
+  request that changes `CHANGELOG.md` without deleting a fragment; the release pull
+  request deletes the fragments it consumed, and that is how it is told apart.
+- **The escape hatch is a `no changelog` label.** A label change does not start a run,
+  so add the label and then re-run the failed job. The job reads the labels from the
+  API when it runs, because a re-run replays the original event, and that event's label
+  list predates yours.
 
 ## Assembling a release
 
@@ -91,5 +111,6 @@ See [RELEASING.md](../RELEASING.md). One command, in the release pull request:
 towncrier build --version 0.17.0 --yes
 ```
 
-It writes above `<!-- towncrier release notes start -->` and deletes the fragments it
-consumed. Nothing below that marker moves.
+It inserts the release directly below `<!-- towncrier release notes start -->`, above
+the previous release, and deletes the fragments it consumed. Nothing already in the file
+changes.

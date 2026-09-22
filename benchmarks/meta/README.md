@@ -233,11 +233,11 @@ A present artifact that yields nothing is an error, not a score of zero. The
 ICANN suite reported `blocked_pairs: 0` for a while, which reads as perfect
 agreement rather than as a broken parser.
 
-## A leaderboard, when the battery can carry one
+## A leaderboard, and why it has no composite
 
-`--leaderboard` ranks the subjects, weighting each benchmark by how well it
-separates them. Every step is a named method: corrected item-total correlation
-for the weights (classical test theory), item parcelling within a suite so seven
+`--leaderboard` orders the subjects without averaging the benchmarks into one
+number. Every step is a named method: corrected item-total correlation for the
+axis weights it reports as a diagnosis (classical test theory), item parcelling within a suite so seven
 related numbers are not seven votes, Bradley-Terry by Hunter's MM algorithm for a
 rank that uses only pairwise order, Cronbach's alpha and Kendall's W for whether
 the battery is coherent, and bootstrap intervals over the benchmark set.
@@ -248,12 +248,11 @@ one would look more rigorous while being less so.
 
 **Each benchmark is also ranked on its own**, and those rankings always stand.
 Averaging benchmarks requires them to measure one construct first; ranking within
-a single benchmark requires nothing beyond that benchmark. When the composite is
-blocked — which it currently is — the per-benchmark tables are the result. A
-subject scored on materially less of the battery than the others is listed but
-kept out of the composite ordering: one benchmark answered is not a better result
-than four answered — and *materially less* is counted in benchmarks, never in
-axes, so a tool cannot become "partial" for lacking a detector.
+a single benchmark requires nothing beyond that benchmark, so the per-benchmark
+tables are the result. A subject that answered only part of a benchmark is listed
+in that benchmark's table but not ranked in it. Coverage across the battery is
+counted in benchmarks, never in axes, so a tool cannot become "partial" for
+lacking a detector.
 
 **A suite that asks one cohort more questions yields more than one axis.**
 `mcp-tag-block-concealment` asks thirteen subjects whether the concealed payload
@@ -275,16 +274,27 @@ key is directed lower-is-better, the same orientation the invisible-carrier
 comparator uses for its own `controls_false_positive`. Scored the other way it
 made correct silence a failure and counted a false positive as coverage.
 
-**The composite is not the only leaderboard, and it is the weakest one.** It
-assumes the benchmarks measure a single construct, which this battery is not
-built to do: coverage and cost are deliberately opposed, so a tool that folds
-more will alter more. Cronbach's alpha correctly refuses it, and Friedman's test
-on the rankings refuses a rank aggregation for the same underlying reason — the
-benchmarks disagree about who is good.
+**No composite is published, whatever the run.** A composite assumes the
+benchmarks measure a single construct, which this battery is not built to do:
+coverage and cost are deliberately opposed, so a tool that folds more will alter
+more. The weighting makes that fatal rather than merely uncertain. An axis's
+weight is its corrected item-total correlation, which goes negative for an axis
+that opposes the rest, and the clamp at zero deletes it — so on a battery built
+from axes that trade against each other, the opposed pole is exactly what the
+weighting removes. The composite ranked `null-baseline`, which deletes all input,
+above real libraries. It used to be printed beneath its own blockers; a number
+carried under a caveat is still the number a reader quotes, so the report now
+prints the *Axis weights* table instead — what the composite would have weighted,
+and which axes it deleted. Bradley-Terry, which uses only pairwise order and so
+escapes the clamp, fails the same control for a different reason: most axes here
+reward removal, so a delete-everything baseline genuinely beats a pure normalizer
+on them. The control check covers every aggregate, not the composite alone.
+Cronbach's alpha and Friedman's test on the rankings refuse an aggregation for
+the same underlying reason — the benchmarks disagree about who is good.
 
 What survives is **Pareto dominance**: a tool is on the frontier when no other
 tool beats it on every axis at once. That needs no weighting and no common
-construct, so it is publishable whenever the composite is not. It yields a
+construct, so it stands where an aggregate cannot. It yields a
 partial order rather than a league table, which is the honest shape of a result
 where two axes pull against each other.
 
@@ -293,7 +303,7 @@ the observed agreement would need to reach significance. More *tools* do not
 help — they raise the degrees of freedom and so raise the bar. More *benchmarks*
 do.
 
-The interlock matters more than the composite. When the battery has too few
+The interlock still runs, and it governs what is left. When the battery has too few
 directed benchmarks, or alpha falls below the conventional 0.70, or no two
 subjects have non-overlapping intervals, no ranking is published and the reason
 is printed. On the current battery all three fire. A leaderboard that cannot fail

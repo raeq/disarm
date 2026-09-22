@@ -1,0 +1,21 @@
+- **The meta-benchmark publishes no composite, and `bad-characters` is scored per
+  attack class.** The composite ranked `null-baseline`, which deletes all input, above
+  real libraries. Its weighting is the cause, not the run: an axis's weight is its
+  corrected item-total correlation, which goes negative for an axis that opposes the
+  rest, and the clamp at zero deletes it — so on a battery built from axes that trade
+  against each other, the opposed pole is what the weighting removes. It used to be
+  printed beneath its own blockers; the report now prints an *Axis weights* table in
+  its place, showing what the composite would have weighted and which axes it deleted.
+  Bradley-Terry fails the same control for a different reason, so the control check
+  now covers every aggregate. The Pareto frontier and the per-benchmark tables are
+  unchanged.
+
+  The rest of the harness work lands with it. `bad-characters` reports each of
+  Boucher's four classes — deletions, homoglyphs, invisibles, reorderings — taken from
+  the release's own experiment key, where one average had hidden a 100%-to-14% spread.
+  The deletion ceiling is measured with a cell-aware cursor rather than assumed; a
+  defused bidi attack must not emit the string the illusion was built of; the
+  reordering corpus scrambles code points rather than the rendering; an ASCII-for-ASCII
+  swap is no longer scored as an encoding question. The composed pipelines must now
+  name every `TextPipeline` step as taken or `DECLINED` with a reason, which is how
+  `resolve_deletions` stopped being missed the way `strip_pua` and `strip_plane14` were.

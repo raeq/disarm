@@ -2467,8 +2467,10 @@ def test_coverage_counts_benchmarks_so_a_split_axis_is_not_a_penalty():
     plain0 = next(st for st in board.standings if st.subject == "plain0@1")
     assert plain0.suites == 5, "scored on all five benchmarks"
     assert plain0.items == 5, "and on five of the six axes, having no detector"
-    # And the report says five of five, not five of six: a question it was never
-    # asked is not a gap in what it answered.
+    # And the report never marks it as having answered part of anything: a
+    # question it was never asked is not a gap in what it answered. (The
+    # "5/5" coverage column this once checked lived in the composite table,
+    # which is no longer published.)
     md = render_markdown(
         RunReport(
             outcomes=outs,
@@ -2478,7 +2480,7 @@ def test_coverage_counts_benchmarks_so_a_split_axis_is_not_a_penalty():
         ),
         leaderboard=board,
     )
-    assert "| 5/5 |" in md and "| 5/6 |" not in md
+    assert "`plain0@1` *(answered part of this benchmark" not in md
     assert "**6** axes over **5** benchmarks" in md
 
 

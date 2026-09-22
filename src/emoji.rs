@@ -187,19 +187,22 @@ fn match_emoji_at_reference(window: &[char]) -> Option<(&'static str, usize)> {
 /// # #113
 /// Replaces the `Vec<char>` full-input materialisation in `demojize_impl` and
 /// `demojize_rust`.  The buffer holds up to `MAX_EMOJI_SEQ_LEN` chars of
-/// lookahead — the maximum the matching engine ever needs.  Characters are
+/// lookahead — the maximum the *name* matcher ever needs.  Characters are
 /// consumed from the inner iterator one-by-one; advancing the window shifts
-/// buffered chars left and refills from the iterator, requiring no heap
-/// allocation regardless of input length.
+/// buffered chars left and refills from the iterator. That path allocates
+/// nothing. Following a ZWJ chain past the window's edge (#995) does: it
+/// collects the chain into a `Vec` and parks what it pulled but did not use in
+/// `pushback`, so allocation is bounded by the longest chain in the input.
 pub(crate) struct CharWindow<'a> {
     buf: [char; MAX_WINDOW],
     /// Number of valid chars currently in `buf` (always <= MAX_WINDOW).
     len: usize,
     /// Chars pulled past the window while following a sequence longer than it, and not
     /// consumed by the match that pulled them. Refills take from here before `rest`, so
-    /// the pull is a peek rather than a read. Empty for every input whose emoji fit the
-    /// window, which is every input the CLDR name table can name — see
-    /// [`CharWindow::presentation_len`].
+    /// the pull is a peek rather than a read. It fills whenever the window cannot rule
+    /// out a longer chain — a joiner within `HEAD_LOOKAHEAD` of its end — which can
+    /// happen after an emoji that fits: `👨‍👨‍👨‍👨` followed by a joiner and text does.
+    /// See [`CharWindow::presentation_len`].
     pushback: std::collections::VecDeque<char>,
     rest: std::str::Chars<'a>,
 }
@@ -299,8 +302,9 @@ impl<'a> CharWindow<'a> {
     /// [`presentation_len_at`] recurses over a ZWJ chain, which UTS #51 does not bound,
     /// so the length it can return is not bounded either. `MAX_WINDOW` is
     /// `max_emoji_seq_len()` — the longest run the CLDR **name** table holds — which
-    /// bounds naming correctly and replacing not at all: a family of four with skin
-    /// tones is eleven code points and RGI. Asking on the bare window cut such a
+    /// bounds naming correctly and replacing not at all: the RGI kiss with skin tones
+    /// is ten code points, and a family of four with skin tones — a valid ZWJ sequence,
+    /// though not RGI — is eleven. Asking on the bare window cut such a
     /// sequence at nine, which emitted two replacements where one was right and, worse,
     /// passed the joiner at the seam through as ordinary text (#995).
     ///
@@ -700,9 +704,38 @@ pub fn demojize_rust_replace_into(text: &str, replacement: &str, result: &mut St
         if let Some(consumed) = win.presentation_len() {
             result.push_str(replacement);
             win.advance(consumed);
+            drop_marks_the_seam_would_bind(&mut win, result);
             continue;
         }
         result.push(ch);
+        win.advance(1);
+    }
+}
+
+/// After a removal, drop a selector or keycap that would bind to what precedes it.
+///
+/// A keycap or a presentation selector after an emoji is not part of that emoji (#996),
+/// so removing the emoji leaves it behind — and if the character now before it can take
+/// it, the two are an emoji the input never had: `1\u{1F600}\u{20E3}` gave `1\u{20E3}`,
+/// a keycap, and a second pass removed it along with the caller's digit. Only a mark
+/// that would **form** an emoji with the last character written goes; one that joins
+/// nothing is still text, so `replace_emoji("1\u{1F600}\u{20E3}", " ")` keeps it.
+fn drop_marks_the_seam_would_bind(win: &mut CharWindow<'_>, result: &str) {
+    let Some(before) = result.chars().next_back() else {
+        return;
+    };
+    while let Some(mark) = win.current() {
+        if !matches!(mark, VS15 | VS16 | KEYCAP) {
+            return;
+        }
+        // The deepest head is base, selector, keycap: three chars, `HEAD_LOOKAHEAD`.
+        let mut seam = [before; HEAD_LOOKAHEAD];
+        let ahead = win.as_slice();
+        let n = ahead.len().min(HEAD_LOOKAHEAD - 1);
+        seam[1..=n].copy_from_slice(&ahead[..n]);
+        if head_len_at(&seam[..=n]).is_none_or(|len| len < 2) {
+            return;
+        }
         win.advance(1);
     }
 }
@@ -1072,6 +1105,19 @@ mod tests {
                 if let Some(n) = presentation_len_at(&chars[i..]) {
                     out.push_str(replacement);
                     i += n;
+                    // The seam rule, stated over the whole input rather than the window.
+                    while let (Some(before), Some(&mark)) = (out.chars().last(), chars.get(i)) {
+                        let binds = matches!(mark, VS15 | VS16 | KEYCAP) && {
+                            let seam: Vec<char> = std::iter::once(before)
+                                .chain(chars[i..].iter().copied().take(2))
+                                .collect();
+                            head_len_at(&seam).is_some_and(|len| len >= 2)
+                        };
+                        if !binds {
+                            break;
+                        }
+                        i += 1;
+                    }
                 } else {
                     out.push(chars[i]);
                     i += 1;
@@ -1174,7 +1220,31 @@ mod tests {
     /// `MAX_WINDOW` is `max_emoji_seq_len()` — the longest run the CLDR *name* table
     /// holds. Naming cannot need more than that; replacing can, because
     /// `presentation_len_at` follows a ZWJ chain the UCD allows to be any length. A
-    /// family of four with skin tones is eleven code points and RGI.
+    /// family of four with skin tones is a valid eleven-code-point ZWJ sequence, though
+    /// not an RGI one; the kiss below is RGI at ten.
+    /// A removal must not leave a mark that binds to what precedes it: that is an emoji
+    /// the input never had, and a second pass would take the caller's digit with it.
+    #[test]
+    fn a_removal_manufactures_no_emoji_at_the_seam() {
+        for (text, want) in [
+            ("1\u{1F600}\u{20E3}", "1"),
+            ("\u{263A}1\u{20E3}\u{FE0F}", "\u{263A}"),
+            ("\u{00A9}\u{1F1EC}\u{1F1E7}\u{FE0F}", "\u{00A9}"),
+            ("1\u{1F1EC}\u{1F1E7}\u{FE0F}\u{20E3}", "1"),
+        ] {
+            let once = demojize_rust_replace(text, "");
+            assert_eq!(once, want, "{text:?}");
+            assert_eq!(demojize_rust_replace(&once, ""), once, "not a fixed point");
+        }
+        // A mark that joins nothing is still text (#996).
+        assert_eq!(
+            demojize_rust_replace("1\u{1F600}\u{20E3}", " "),
+            "1 \u{20E3}"
+        );
+        assert_eq!(demojize_rust_replace("a\u{1F600}\u{20E3}", ""), "a\u{20E3}");
+        assert_eq!(demojize_rust_replace("a\u{1F600}\u{20E3}", "#"), "a#");
+    }
+
     #[test]
     fn a_sequence_longer_than_the_window_is_still_one_sequence() {
         // U+1F468 U+1F3FB ZWJ U+1F469 U+1F3FB ZWJ U+1F467 U+1F3FB ZWJ U+1F466 U+1F3FB
@@ -1184,7 +1254,7 @@ mod tests {
         assert_eq!(demojize_rust_replace(family, " "), " ");
         assert_eq!(demojize_rust_replace(family, ""), "");
 
-        // The kiss sequence: ten code points, also RGI.
+        // The kiss sequence: ten code points, and RGI.
         let kiss = "\u{1F468}\u{1F3FB}\u{200D}\u{2764}\u{FE0F}\u{200D}\
                     \u{1F48B}\u{200D}\u{1F468}\u{1F3FB}";
         assert_eq!(kiss.chars().count(), 10);

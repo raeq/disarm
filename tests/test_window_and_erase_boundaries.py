@@ -10,8 +10,9 @@ holds for every input anybody had tried.
 
 * `replace_emoji` matched inside a fixed nine-code-point window sized from
   `max_emoji_seq_len()`, the longest run the CLDR **name** table holds. Naming cannot
-  need more; replacing can, because a ZWJ chain has no length limit. A family of four
-  with skin tones is eleven code points and RGI.
+  need more; replacing can, because a ZWJ chain has no length limit. The RGI kiss with
+  skin tones is ten code points; a family of four with skin tones is eleven, a valid ZWJ
+  sequence though not an RGI one.
 
 The second one is the one that matters: splitting a sequence emitted two replacements,
 which is wrong but visible, *and* let the joiner at the seam through as ordinary text —
@@ -27,7 +28,8 @@ from disarm import TextPipeline, replace_emoji
 
 ZWJ = "\u200d"
 
-#: 👨🏻‍👩🏻‍👧🏻‍👦🏻 — family of four with skin tones. Eleven code points, RGI, two past the window.
+#: Family of four with skin tones. Eleven code points, two past the window; a valid ZWJ
+#: sequence, though not RGI — CLDR has no skin-toned family.
 FAMILY = (
     "\U0001f468\U0001f3fb"
     + ZWJ
@@ -81,6 +83,38 @@ class TestLongEmojiSequences:
         assert replace_emoji(f"x{FAMILY}y{KISS}z", "") == "xyz"
 
 
+class TestARemovalManufacturesNoEmoji:
+    """What is left either side of a removed emoji must not join into a new one.
+
+    A keycap or a presentation selector after an emoji is not part of it (#996), so a
+    removal leaves it behind; if the character before the emoji can take it, the two are
+    now an emoji the input never had, and a second pass removes it — with the character
+    the caller wrote. The output of a step whose job is removing emoji contained one.
+    """
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("1\U0001f600\u20e3", "1"),  # the digit would take the keycap
+            ("\u263a1\u20e3\ufe0f", "\u263a"),  # ☺ would take the selector
+            ("\u00a9\U0001f1ec\U0001f1e7\ufe0f", "\u00a9"),  # © would take it
+            ("1\U0001f1ec\U0001f1e7\ufe0f\u20e3", "1"),  # both, in the keycap order
+        ],
+    )
+    def test_the_seam_is_left_as_text(self, text: str, expected: str) -> None:
+        once = replace_emoji(text, "")
+        assert once == expected, once
+        assert replace_emoji(once, "") == once
+
+    def test_a_replacement_that_can_take_the_mark_is_checked_too(self) -> None:
+        assert replace_emoji("a\U0001f600\u20e3", "#") == "a#"
+
+    def test_a_mark_that_joins_nothing_is_still_kept(self) -> None:
+        """#996's rule stands: a stray keycap is not the emoji's to take."""
+        assert replace_emoji("1\U0001f600\u20e3", " ") == "1 \u20e3"
+        assert replace_emoji("a\U0001f600\u20e3", "") == "a\u20e3"
+
+
 class TestEraseAfterCarriageReturn:
     """An erase removes the cell before the cursor, not everything after it."""
 
@@ -95,6 +129,27 @@ class TestEraseAfterCarriageReturn:
     def test_a_backspace_at_column_zero_removes_nothing(self, pipe: TextPipeline) -> None:
         assert pipe("abc\r\b") == "abc"
         assert pipe("abc\r\x7f") == "abc"
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("abc\r\u200bY", "\u200bYbc"),
+            ("abc\r\u0301Y", "\u0301Ybc"),
+            ("abc\rX\b\u200bY", "\u200bYbc"),
+        ],
+    )
+    def test_a_zero_width_at_column_zero_takes_no_cell(
+        self, pipe: TextPipeline, text: str, expected: str
+    ) -> None:
+        """A character that occupies no cell does not move the cursor either.
+
+        At column 0 after a `CR` there is no cell to its left to join, and it fell
+        through to the overwrite branch: it took cell 0 and advanced the cursor, so the
+        next letter overwrote `b`, which the reader can still see. A terminal shows
+        `Ybc`. It is kept, ahead of the line, rather than dropped: it is text the caller
+        passed, and deciding what to do with it is `strip_zero_width`'s job.
+        """
+        assert pipe(text) == expected
 
     def test_the_behaviour_without_a_return_is_unchanged(self) -> None:
         pipe = TextPipeline(resolve_deletions=True)

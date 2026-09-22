@@ -75,6 +75,10 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
     // `CR` has moved it back.
     let mut line: Vec<String> = Vec::new();
     let mut col = 0usize;
+    // Characters that occupy no cell, met at column 0 while cells lie to the right — only
+    // possible after a `CR` returned the cursor. They have no cell to their left to join,
+    // and must not take one: see the branch that fills this.
+    let mut lead = String::new();
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch == BS || ch == DEL {
@@ -84,9 +88,12 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
             // the same thing only while `col == line.len()`, which holds for every input
             // without a `CR` — so the two agreed until #937 added the `cr` flag that can
             // move the cursor back. After a `CR` the truncate discarded the whole rest of
-            // the line, and at column 0 it discarded the line: `"abc\rX\u{8}"` gave `""`
-            // where a terminal and a typed backspace both give `"bc"`. Losing text the
-            // reader can see is the risk #934 declined to take.
+            // the line, and at column 0 it discarded the line: `"abc\rX\u{8}"` gave `""`,
+            // losing the `bc` a terminal still shows. The model here is #937's — erase the
+            // cell before the cursor, which in the paper's corpus is the attacker's
+            // inserted character — so it gives `"bc"`; a terminal, whose backspace moves
+            // the cursor and erases nothing, shows `Xbc`. Losing text the reader can see
+            // is the risk #934 declined to take.
             if col > 0 {
                 col -= 1;
                 // Blanking, not `remove`: the cell stops contributing text and every
@@ -98,6 +105,8 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
                 line[col].clear();
             }
         } else if ch == LF || (ch == CR && (!cr || chars.peek().is_none_or(|&n| n == LF))) {
+            out.push_str(&lead);
+            lead.clear();
             for cell in line.drain(..) {
                 out.push_str(&cell);
             }
@@ -108,6 +117,14 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
             col = 0;
         } else if !occupies_cell(ch) && col > 0 {
             line[col - 1].push(ch);
+        } else if !occupies_cell(ch) && col < line.len() {
+            // Column 0 after a `CR`, with the line still to the right. Falling through to
+            // the overwrite below took cell 0 *and advanced the cursor*, so the next
+            // character overwrote cell 1: `"abc\r\u{200B}Y"` gave `"\u{200B}Yc"`, losing
+            // the `b` a terminal still shows as `Ybc` (#995 review). A character that takes
+            // no cell does not move the cursor either. It is kept, ahead of the line — it
+            // is text the caller passed, and removing it is `strip_zero_width`'s job.
+            lead.push(ch);
         } else if col < line.len() {
             line[col] = ch.to_string();
             col += 1;
@@ -116,6 +133,7 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
             col += 1;
         }
     }
+    out.push_str(&lead);
     for cell in line {
         out.push_str(&cell);
     }
@@ -138,6 +156,18 @@ mod tests {
         } else {
             s.to_owned()
         }
+    }
+
+    /// A character that takes no cell does not move the cursor, at column 0 included.
+    /// After a `CR` it fell through to the overwrite branch and advanced, so the next
+    /// letter overwrote a cell the reader can still see (#995 review).
+    #[test]
+    fn a_zero_width_at_column_zero_does_not_move_the_cursor() {
+        assert_eq!(resolve("abc\r\u{200B}Y", true), "\u{200B}Ybc");
+        assert_eq!(resolve("abc\r\u{0301}Y", true), "\u{0301}Ybc");
+        assert_eq!(resolve("abc\rX\u{8}\u{200B}Y", true), "\u{200B}Ybc");
+        // Without a `CR` column 0 means an empty line, and nothing changes.
+        assert_eq!(resolve("\u{200B}\u{8}a", false), "a");
     }
 
     /// The paper's §VI-A construction: one printable character, then BKSP.

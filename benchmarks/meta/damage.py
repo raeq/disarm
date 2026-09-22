@@ -296,31 +296,40 @@ def resolve_deletions(text: str, *, cr: bool = False) -> str:
     byte-identical to that overwrite, which makes it a separate decision rather
     than a default.
 
-    Reference implementation from #937, kept behaviourally identical so the
-    harness and the issue cannot drift apart.
+    Kept behaviourally identical to `src/deletions.rs`, so the harness and the
+    core cannot drift apart — which it had, after a CR: this still erased with
+    `del line[col:]`, the defect #995 fixed in the core, and let a character
+    that takes no cell take cell 0 and move the cursor. An erase now blanks the
+    one cell before the cursor, and such a character is kept ahead of the line.
     """
     out: list[str] = []
     line: list[str] = []
+    lead = ""  # no-cell characters met at column 0 with the line to their right
     col = 0
     n = len(text)
     for i, ch in enumerate(text):
         if ch in (_BS, _DEL):
-            col = max(0, col - 1)
-            del line[col:]
+            if col > 0:
+                col -= 1
+                line[col] = ""
         elif ch == _LF or (ch == _CR and (i + 1 == n or text[i + 1] == _LF or not cr)):
+            out.append(lead)
             out.extend(line)
             out.append(ch)
-            line, col = [], 0
+            line, lead, col = [], "", 0
         elif ch == _CR:
             col = 0
         elif not occupies_cell(ch) and col > 0:
             line[col - 1] += ch
+        elif not occupies_cell(ch) and col < len(line):
+            lead += ch
         elif col < len(line):
             line[col] = ch
             col += 1
         else:
             line.append(ch)
             col += 1
+    out.append(lead)
     out.extend(line)
     return "".join(out)
 

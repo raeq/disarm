@@ -418,8 +418,11 @@ class BadCharacters(AttackCorpusSuite):
                         continue
                     bucket.append((text, clean if isinstance(clean, str) else None))
         if limit is not None:
-            for cls in out:
-                out[cls] = out[cls][: max(1, limit // len(self.CLASSES))]
+            # An exact split, remainder to the first classes: `--limit` caps the suite.
+            # `max(1, limit // 4)` gave every class a row, so `--limit 3` scored four.
+            share, extra = divmod(limit, len(self.CLASSES))
+            for i, cls in enumerate(self.CLASSES):
+                out[cls] = out[cls][: share + (1 if i < extra else 0)]
         return out
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:

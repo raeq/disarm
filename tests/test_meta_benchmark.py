@@ -2789,6 +2789,39 @@ def test_the_cursor_model_erases_cells_not_code_points():
     assert r("line1\rline2", cr=True) == "line2", "a classic Mac file"
 
 
+def test_the_cursor_model_matches_the_core_after_a_return():
+    """The oracle is kept identical to `src/deletions.rs`, and after a CR it was not.
+
+    It still erased with `del line[col:]`, which #995 fixed in the core: a
+    backspace after a CR discarded the rest of the line, or at column 0 the line.
+    And a character that takes no cell, met at column 0 after a CR, took cell 0
+    and moved the cursor, contradicting `occupies_cell`'s own docstring (Copilot
+    on #1001). The corpus has no CR, so neither moved a score.
+    """
+    r = damage.resolve_deletions
+    assert r("abc\rX\x08", cr=True) == "bc", "erase one cell, not the rest"
+    assert r("abc\rXY\x08", cr=True) == "Xc"
+    assert r("abc\r\x08", cr=True) == "abc", "at column 0 there is nothing to erase"
+    assert r("aa\ra\x08a", cr=True) == "aa", "the cell is blanked, not removed"
+    assert r("abc\r\u200bY", cr=True) == "\u200bYbc", "a zero-width takes no cell"
+    assert r("abc\r\u0301Y", cr=True) == "\u0301Ybc", "nor does a mark"
+
+
+def test_the_row_limit_is_a_cap_across_the_classes():
+    """`--limit` caps rows per suite; per-class slicing could exceed it.
+
+    `max(1, limit // 4)` gives every class a row, so `--limit 3` scored four
+    (Copilot on #1001). The split is now exact.
+    """
+    suite = registry.by_name("bad-characters")
+    path = suite.locate() if suite is not None else None
+    if path is None or path.name != "bad-characters.json":
+        pytest.skip("the bad-characters release is not cached")
+    for limit in range(1, 10):
+        rows = suite._rows_by_class(path, limit)
+        assert sum(len(v) for v in rows.values()) == limit, limit
+
+
 def test_the_deletion_ceiling_is_measured_not_assumed(bad_characters_run):
     """0% reads differently beside a demonstrated 100% than beside nothing.
 

@@ -250,25 +250,34 @@ class TestBatchGilReleaseParity:
         assert slugify(data) == [slugify(x) for x in data]
 
 
-def _cores_available_here() -> float:
-    """Cores this process can actually use, not cores the machine has.
+def _cores_available_here() -> int:
+    """Cores this test can actually use: not the host's, and not other workers'.
 
-    Under `pytest-xdist` the workers are competing for the same CPUs, so a box with
-    four of them and four workers gives each worker one — and a test that proves the
-    GIL is released by finishing two batches faster than one thread could cannot be
-    measured on one core. It measured 0.96x under `-n 4` and failed, which is the
-    machine being full and not the GIL being held.
+    Usable means the affinity mask — `taskset`, a container's cpuset — rather than
+    `os.cpu_count()`, which reports the host. Pinned to one core of four, the host
+    count ran the guard anyway and it failed at ~1.0x, which is the pinning and not
+    the GIL.
 
-    Counting machine cores here was right while the suite only ever ran serially.
+    And under `pytest-xdist` each other worker occupies a core of its own, so under
+    `-n auto` there is exactly one left and a two-thread speedup cannot be measured:
+    it measured 0.96x and failed, which is the box being full. That is why the guard
+    is `serial`, deselected from the parallel run and run by CI with `-n 0`; this
+    subtraction only keeps an explicit `pytest -m serial` without `-n 0` from
+    reporting a full box as a held GIL.
     """
-    cores = os.cpu_count() or 1
-    workers = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "1") or 1)
-    return cores / max(workers, 1)
+    if hasattr(os, "sched_getaffinity"):
+        usable = len(os.sched_getaffinity(0))
+    else:  # macOS, Windows: no affinity API; the host count is the best there is.
+        usable = os.cpu_count() or 1
+    workers = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT", "") or 1)
+    return usable - (max(workers, 1) - 1)
 
 
+@pytest.mark.serial
 @pytest.mark.skipif(
     _cores_available_here() < 2,
-    reason="parallel speedup needs at least 2 cores free of other test workers",
+    reason="parallel speedup needs 2 usable cores free of other test workers; "
+    "run it with `pytest -m serial -n 0`",
 )
 class TestBatchReleasesGil:
     """Two threads must finish a pair of batches faster than serial (#70).
@@ -293,3 +302,40 @@ class TestBatchReleasesGil:
 
     def test_slugify_releases_gil(self) -> None:
         self._assert_parallel(lambda: slugify(_BIG))
+
+
+class TestTheGilGuardCountsUsableCores:
+    """The guard's skip condition, pinned against a fake machine rather than this one.
+
+    Both ways it has been wrong counted cores the test cannot use. Dividing by the
+    xdist worker count meant it always skipped under the default `-n auto`, CI
+    included, so #70's guard ran nowhere; counting the host rather than the affinity
+    mask meant `taskset -c 0` ran it on one core and failed at ~1.0x instead of
+    skipping.
+    """
+
+    @staticmethod
+    def _machine(monkeypatch: pytest.MonkeyPatch, *, host: int, usable: int) -> None:
+        monkeypatch.setattr(os, "cpu_count", lambda: host)
+        monkeypatch.setattr(os, "sched_getaffinity", lambda _pid: set(range(usable)), raising=False)
+        monkeypatch.delenv("PYTEST_XDIST_WORKER_COUNT", raising=False)
+
+    def test_the_affinity_mask_is_counted_not_the_host(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._machine(monkeypatch, host=64, usable=1)
+        assert _cores_available_here() < 2
+
+    def test_serially_on_two_usable_cores_it_runs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._machine(monkeypatch, host=64, usable=2)
+        assert _cores_available_here() >= 2
+
+    def test_under_n_auto_it_does_not(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._machine(monkeypatch, host=4, usable=4)
+        monkeypatch.setenv("PYTEST_XDIST_WORKER_COUNT", "4")
+        assert _cores_available_here() < 2
+
+    def test_the_guard_is_in_the_serial_tier(self) -> None:
+        """Deselected from the parallel run; CI's `-m serial -n 0` step is what runs it."""
+        marks = {mark.name for mark in getattr(TestBatchReleasesGil, "pytestmark", [])}
+        assert "serial" in marks, marks

@@ -75,10 +75,24 @@ jobs:
           # coverage from the random seed below rather than a bigger budget.
           ORACLE_MAXEX: ${{ github.event.inputs.oracle_maxex || '20000' }}
         run: |
-          # --hypothesis-seed=random is what makes consecutive nights explore different
-          # input space instead of replaying one deterministic sweep. The seed of a
-          # failing run is printed in the output and reproduces it exactly.
-          pytest -m hypothesis --hypothesis-seed=random --tb=short -q 2>&1 | tee hypothesis.log
+          # A fresh seed each night is what makes consecutive nights explore different
+          # input space instead of replaying one deterministic sweep. It takes two
+          # things, and until the #997 review this had neither:
+          #
+          # * A number. `--hypothesis-seed=random` is not a request for a random seed:
+          #   the plugin tries int(), fails, and seeds with the STRING "random" — the
+          #   same seed every night.
+          # * `--hypothesis-profile=nightly` (tests/conftest.py). On Actions, Hypothesis
+          #   loads its own `ci` profile, whose `derandomize=True` makes every test seed
+          #   itself from its own source and ignore --hypothesis-seed altogether.
+          #
+          # The seed is logged first, and is a step output the failure issue quotes.
+          # `pytest -m hypothesis --hypothesis-profile=nightly --hypothesis-seed=<seed>`
+          # reproduces the run.
+          SEED=$(python -c 'import secrets; print(secrets.randbelow(2**32))')
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+          echo "Hypothesis seed: $SEED" | tee hypothesis.log
+          pytest -m hypothesis --hypothesis-profile=nightly --hypothesis-seed="$SEED" --tb=short -q 2>&1 | tee -a hypothesis.log
           exit "${PIPESTATUS[0]}"
 
       - name: Upload the log
@@ -92,6 +106,8 @@ jobs:
       - name: Open an issue on failure
         if: failure()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          SEED: ${{ steps.hypothesis.outputs.seed }}
         with:
           script: |
             const fs = require('fs');
@@ -111,7 +127,7 @@ jobs:
               'the bug report. Reproduce it locally before changing anything:',
               '',
               '```bash',
-              'pytest -m hypothesis -k <test_name>',
+              `pytest -m hypothesis --hypothesis-profile=nightly --hypothesis-seed=${process.env.SEED || '<seed from the log>'} -k <test_name>`,
               '```',
               '',
               `[Full run](${url}) · the complete log is attached to that run as an artifact.`,

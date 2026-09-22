@@ -68,7 +68,9 @@ Three tiers (full detail in **CONTRIBUTING.md → "Test architecture"**):
 ### Tier 1: CI (fast, deterministic)
 - **Rust unit + integration**: ~630 tests — `cargo test --no-default-features`
 - **Python pytest**: ~2,200 deterministic tests —
-  `pytest -m "not formal and not hypothesis"`
+  `pytest -m "not formal and not hypothesis and not serial"` (bare `pytest` runs it,
+  in parallel), then the `serial` tier, which cannot share the box with xdist
+  workers — `pytest -m serial -n 0`
 - **build.rs compile-time assertions**: always-on, zero runtime cost — generated
   table values must be ASCII, including the `tr39` digit-policy overrides (#587)
 - **Drift gates**: four checks compare a generated or published artifact against its

@@ -176,11 +176,15 @@ PYO3_PYTHON=$(which python3) cargo test --no-default-features
 
 # Python deterministic tests (~4,490). Since #658 this is what bare `pytest` runs.
 pytest
+
+# The serial tier: wall-clock parallelism tests that cannot share the box (#997 review).
+pytest -m serial -n 0
 ```
 
 CI's own command is `pytest tests/ --ignore=tests/test_typing.py -m "not formal and
-not hypothesis"`, so the two marker expressions are **not** identical — the local
-default also carries `not slow`. Nothing in that tier executes under CI conditions
+not hypothesis and not serial"`, followed by the serial tier in a step of its own, so
+the two marker expressions are **not** identical — the local default also carries
+`not slow`. Nothing in that tier executes under CI conditions
 regardless: measured with `CI=1` and no `bench` extra, all five slow tests skip. The
 executed set matches; the expression does not, and a green local run means what a
 green CI run means for that reason rather than by definition.
@@ -227,9 +231,22 @@ pytest -m hypothesis
 
 Bare `pytest` used to include these, which meant a contributor paid the tier on
 every local run while no CI job ran it. `nightly-hypothesis.yml` runs it at 03:17
-UTC with `--hypothesis-seed=random` and a 10× oracle budget, which explores more
+UTC with a freshly generated seed and a 10× oracle budget, which explores more
 input space than one more fixed-seed pass ever did. Run it locally when you touch
 the input-handling boundary; the nightly is the safety net.
+
+Until the #997 review the nightly was a fixed-seed pass, twice over.
+`--hypothesis-seed=random` is not a request for a random seed: Hypothesis tries
+`int()` on it and, failing, seeds with the string `"random"` — the same every night.
+And on GitHub Actions no seed would have helped: Hypothesis loads its own `ci` profile
+whenever `CI` is set, and that profile's `derandomize=True` makes every test ignore
+`--hypothesis-seed`. The workflow now generates a seed, logs it (and quotes it in the
+failure issue), and runs under a `nightly` profile registered in `tests/conftest.py` —
+the `ci` settings minus `derandomize`. To reproduce a nightly failure:
+
+```bash
+pytest -m hypothesis --hypothesis-profile=nightly --hypothesis-seed=<seed from the log>
+```
 
 ### Tier 2b — Expensive, opt-in (`slow`)
 
@@ -252,7 +269,12 @@ gated elsewhere:
 ### The suite runs in parallel by default
 
 `-n auto --dist loadfile` is in `addopts`, so bare `pytest` already uses every core.
-Pass `-n 0` to turn it off when you want a debugger, or a stable test order.
+Pass `-n 0` to turn it off when you want a debugger, or a stable test order — or when
+you are running one small file. Worker startup is about 0.6s on four cores, which a
+whole suite repays many times over and a single file does not: `tests/test_slugify.py`
+is 1.1s under `-n auto` and 0.5s under `-n 0`. (An earlier version of this section
+said a single file was, if anything, faster in parallel; it was measured on a file
+heavy enough to hide the startup.)
 
 **`--dist loadfile` is not optional.** `register_lang` mutates process-global state
 that cannot be undone, so tests must stay grouped by file; per-file distribution
@@ -280,15 +302,52 @@ puts coverage.py on CPython 3.12's `sys.monitoring` rather than its `settrace` h
 on the test job; it needs 3.12, so it is not set in `pyproject.toml`, where a
 contributor on 3.10 would meet a fallback warning.
 
+**Anything that spawns pytest per file must pass `-n 0`.** `scripts/run_doc_tests.py`
+runs one pytest process per doc page, several at once; each inherited `-n auto` and
+started a full set of workers to run a handful of examples — 34.8s for the whole run,
+against 5.8s with `-n 0`. Use `-n 0`, not `-p no:xdist`: unloading the plugin leaves
+the `-n auto` in `addopts` as an unrecognised option.
+
+#### The `serial` tier
+
+A test that measures wall-clock parallelism cannot run beside xdist workers. #70's
+GIL-release guard asserts that two threads finish two batches faster than one thread
+can, which needs an idle core, and under `-n auto` every core has a worker on it. It
+used to skip itself in that case — correct, and it meant CI, which runs `-n auto`, never
+ran it at all.
+
+Those tests are marked `@pytest.mark.serial`. `addopts` deselects them, CI's parallel
+step deselects them in its own `-m`, and a separate CI step runs `pytest -m serial -n 0`
+with the runner to itself. `tests/test_serial_tier.py` fails if any of the three goes
+missing. Locally, run `pytest -m serial -n 0`. The guard counts the cores in the
+process's affinity mask (`taskset`, a container's cpuset), not the host's, and still
+skips below two.
+
 ### Don't let a stray virtualenv into the corpus
 
 Two modules walk the whole tree — `test_code_context_profile` and
-`test_tree_invisible_characters` — and their skip sets come from
-`conftest.excluded_dirs`, which finds virtual environments by `pyvenv.cfg` rather than
-by the name `.venv`. (`test_scan` also mentions `.venv`, but it exercises the shipped
-scanner's own skip list inside a `tmp_path` and never touches the repository.) An environment called `venv/`, `env/`, `.tox/` or `.venv312/` would
-otherwise put site-packages in the corpus: slower, and a false positive waiting for the
-first dependency that ships a literal bidi control in a fixture.
+`test_tree_invisible_characters` — and both filter it through `conftest.in_skipped_dir`,
+which finds virtual environments by `pyvenv.cfg` rather than by the name `.venv`.
+(`test_scan` also mentions `.venv`, but it exercises the shipped scanner's own skip list
+inside a `tmp_path` and never touches the repository.) An environment called `venv/`,
+`env/`, `.tox/` or `.venv312/` would otherwise put site-packages in the corpus: slower,
+and a false positive waiting for the first dependency that ships a literal bidi control
+in a fixture.
+
+Three details, each of which was once wrong:
+
+- An environment is a **path**, not a name. A file is skipped when one of the detected
+  directories contains it, so tox's `.tox/docs` does not take this repository's `docs/`
+  with it.
+- Skip names are matched against the path **inside the repository**, never the absolute
+  one. Matching the absolute path emptied the corpus of any checkout under a directory
+  called `build`, `tmp` or `pkg`.
+- `.venv` is still skipped **by name** at any depth, alongside the marker: a conda
+  environment has no `pyvenv.cfg`, and the marker search only goes two levels down.
+
+`tests/test_corpus_excludes_virtualenvs.py` runs each module's own collector over
+synthetic trees for all of this, so it checks the property on every run — including CI,
+where there is no virtual environment in the checkout to catch.
 
 ### Tier 3 — Formal / pre-release (gated, opt-in)
 

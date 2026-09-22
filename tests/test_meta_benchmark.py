@@ -2533,11 +2533,14 @@ def test_the_substituted_note_names_the_code_points_it_counts():
     Emoji_Presentation=No, so it never enters the suite's domain — the emoji set
     is the normative Emoji_Presentation one.
 
-    The note is checked against the set the suite would actually score, derived by
-    running its own `_runs` predicate over the bundled property table, rather than
-    against a second copy of the answer. Equality both ways is the point: a count
-    beside a list catches a code point too many, and only the derived set catches
-    one too few when a UCD bump adds a squared CJK emoji that folds the same way.
+    The note is checked against the set the suite would score over the bundled
+    UCD 15.1 `emoji_presentation.tsv`, derived by running its own `_runs` predicate,
+    rather than against a second copy of the answer. Equality both ways is the
+    point: a count beside a list catches a code point too many, and only the derived
+    set catches one too few — when the bundled table is regenerated from a UCD that
+    adds a squared CJK emoji folding the same way. The suite itself reads the
+    downloaded `UCD/latest` emoji-data.txt, so an upstream bump reaches the suite
+    before it reaches this gate.
     """
     import re
     import unicodedata
@@ -2581,5 +2584,9 @@ def test_the_substituted_note_names_the_code_points_it_counts():
     assert len(derived) == int(stated.group(1)), (
         f"the note enumerates {len(derived)} code points for a count of {stated.group(1)}"
     )
-    # The note's stated reason for the gap between the two sub-ranges.
-    assert 0x1F237 in _code_points("emoji_property.tsv")
+    # The note's stated reason for the gap between the two sub-ranges, in the half
+    # the bundled data can answer: U+1F237 is not Emoji_Presentation. The other
+    # half, Emoji=Yes, cannot be gated here — `emoji_property.tsv` holds Emoji OR
+    # Extended_Pictographic, and Extended_Pictographic covers this whole block,
+    # unassigned code points included, so membership there proves nothing.
+    assert 0x1F237 not in _code_points("emoji_presentation.tsv")

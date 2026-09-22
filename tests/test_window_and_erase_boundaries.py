@@ -151,6 +151,19 @@ class TestEraseAfterCarriageReturn:
         """
         assert pipe(text) == expected
 
+    def test_blank_cells_to_the_right_are_not_a_line_to_keep(self) -> None:
+        """Only visible text to the right sends a no-cell character ahead of the line.
+
+        Erases blank cells rather than removing them, so a backspace can also bring
+        the cursor to column 0 with cells to its right — blank ones. Treating that
+        like the post-`CR` case changed output with no `CR` in it at all:
+        `"ab\\b\\b\u200b\\b"` gave `"\u200b"` where `"\u200b\\b"` gives `""`
+        (Copilot on #1005).
+        """
+        pipe = TextPipeline(resolve_deletions=True)
+        assert pipe("ab\b\b\u200b\b") == pipe("\u200b\b") == ""
+        assert pipe("ab\b\b\u200bY") == "\u200bY"
+
     def test_the_behaviour_without_a_return_is_unchanged(self) -> None:
         pipe = TextPipeline(resolve_deletions=True)
         assert pipe("abc\b") == "ab"

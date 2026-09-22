@@ -712,10 +712,11 @@ pub fn demojize_rust_replace_into(text: &str, replacement: &str, result: &mut St
     }
 }
 
-/// After a removal, drop a selector or keycap that would bind to what precedes it.
+/// After a match is replaced, drop a selector or keycap that would bind to what now
+/// precedes it — the replacement's last character, or with `""` the text before the emoji.
 ///
 /// A keycap or a presentation selector after an emoji is not part of that emoji (#996),
-/// so removing the emoji leaves it behind — and if the character now before it can take
+/// so replacing the emoji leaves it behind — and if the character now before it can take
 /// it, the two are an emoji the input never had: `1\u{1F600}\u{20E3}` gave `1\u{20E3}`,
 /// a keycap, and a second pass removed it along with the caller's digit. Only a mark
 /// that would **form** an emoji with the last character written goes; one that joins

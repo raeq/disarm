@@ -250,6 +250,75 @@ def test_no_route_rewrites_a_text_presentation_symbol(ch: str, what: str) -> Non
     assert get_pipeline("ml_corpus_normalize")(f"a{ch}b") == f"a{ch}b", what
 
 
+def _presentation_ranges() -> list[tuple[int, int]]:
+    out: list[tuple[int, int]] = []
+    for line in (DATA / "emoji_presentation.tsv").read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        lo, hi = line.split("\t")[:2]
+        out.append((int(lo, 16), int(hi, 16)))
+    return out
+
+
+@pytest.mark.parametrize(
+    ("ch", "what"),
+    [
+        ("\u00a9", "COPYRIGHT SIGN — Emoji=Yes, text by default"),
+        ("\u00ae", "REGISTERED SIGN — Emoji=Yes, text by default"),
+        ("\u2388", "HELM SYMBOL — Extended_Pictographic, text by default"),
+        ("\u2605", "BLACK STAR — Extended_Pictographic, no emoji presentation"),
+        ("\U0001fc00", "unassigned, Extended_Pictographic by reservation"),
+    ],
+)
+def test_a_presentation_selector_does_not_make_an_unnamed_symbol_an_emoji(
+    ch: str, what: str
+) -> None:
+    """`U+FE0F` after a text-default symbol CLDR cannot name kept #990 alive.
+
+    #990 stopped `★` alone reaching the unknown-emoji branch, and `★\ufe0f` still
+    did: the branch accepted any base in `emoji_property.tsv` carrying the selector,
+    and that table is `Emoji` OR `Extended_Pictographic`. So `a©\ufe0fb` became
+    `a[?] b` standalone and `ab` in the pipeline, and `ml_normalize("Acme®\ufe0f")`
+    lost the sign — both of which kept it before #990. The selector asks for emoji
+    presentation; it does not supply a name, and an unnamed symbol is kept with the
+    selector dropped, as it was.
+    """
+    assert demojize(f"a{ch}\ufe0fb") == f"a{ch}b", what
+    assert TextPipeline(demojize=True)(f"a{ch}\ufe0fb") == f"a{ch}b", what
+    assert get_pipeline("ml_corpus_normalize")(f"a{ch}\ufe0fb") == f"a{ch}b", what
+    assert ml_normalize(f"Acme{ch}\ufe0f") == f"acme{ch}", what
+
+
+def test_a_named_emoji_joined_to_an_unnamed_head_keeps_its_name() -> None:
+    """The unnamed head took the whole ZWJ chain, `🔥` included."""
+    out = demojize("a\u00a9\ufe0f\u200d\U0001f525b")
+    assert "\u00a9" in out and "fire" in out and "[?]" not in out, out
+
+
+def test_no_text_default_symbol_is_lost_to_its_selector() -> None:
+    """Every base the old predicate let in, derived from the tables.
+
+    Every code point in `emoji_property.tsv` that is not `Emoji_Presentation` and
+    that CLDR does not name, followed by `U+FE0F`, must come back as itself. On the
+    #990 build 2,141 did not; keycap bases are excluded because `1\ufe0f` never
+    opened a sequence.
+    """
+    presentation = _presentation_ranges()
+    casualties = [
+        cp
+        for lo, hi in RANGES
+        for cp in range(lo, hi + 1)
+        if not _has_emoji_property(cp, presentation)
+        and cp not in ROWS
+        and chr(cp) not in "0123456789#*"
+        and demojize(f"a{chr(cp)}\ufe0fb") != f"a{chr(cp)}b"
+    ]
+    assert casualties == [], (
+        f"{len(casualties)} text-default symbols are lost to U+FE0F, "
+        f"first five: {[f'U+{c:04X}' for c in casualties[:5]]}"
+    )
+
+
 def test_the_branch_still_fires_for_an_emoji_cldr_does_not_name() -> None:
     """Narrowed, not disabled.
 

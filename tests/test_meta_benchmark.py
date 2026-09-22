@@ -2761,7 +2761,7 @@ def test_the_cursor_model_erases_cells_not_code_points():
     assert r("".join(ch + "X\x08" for ch in "paypal")) == "paypal"
 
     # A cell is a base character with its marks and attached format characters.
-    assert r("X​\x08") == "", "a zero-width joins the cell"
+    assert r("X\u200b\x08") == "", "a zero-width joins the cell"
     # NFD, deliberately: a precomposed U+00E9 is one code point and never
     # reaches the mark branch, so it passes on a naive stack too and asserts
     # nothing. The cell is e + COMBINING ACUTE, and BS must erase both.

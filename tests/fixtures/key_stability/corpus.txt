@@ -23182,3 +23182,8 @@ rated 3 ★ of 5
 x☓y
 ⊕
 a⊕b
+©️
+®️
+Acme®️
+rated 3 ★️ of 5
+a©️‍🔥b

@@ -2576,17 +2576,15 @@ mod tests {
         }
     }
 
-    /// Option D exhaustive audit (tier 3): every BMP + key-astral code point, in
-    /// three positions, through every preset — the guarded output must equal the
     /// `is_demojizable` must still cover everything `demojize` rewrites (#990).
     ///
     /// It is a conservative superset guarding a fast path: over-marking costs a skipped
     /// optimisation, under-marking silently skips text a step would have changed. That
     /// used to hold by construction, because `demojize`'s unknown-emoji branch *was*
     /// `is_emoji_codepoint`. It now asks `unnamed_emoji_len_at`, and containment holds
-    /// only because the twelve `Emoji_Presentation` code points below `U+2600` —
-    /// `U+231A`, `U+23E9`, `U+25FD`, `U+2B1B` and their neighbours — happen to be in the
-    /// CLDR name table. That is a contingency, so it is asserted rather than assumed:
+    /// only because the twelve `Emoji_Presentation` code points outside
+    /// `is_emoji_codepoint`'s ranges — `U+231A`, `U+23E9`, `U+25FD`, `U+2B1B` and their
+    /// neighbours — happen to be in the CLDR name table. That is a contingency, so it is asserted rather than assumed:
     /// the exhaustive sweep below is `#[ignore]`d for pre-release, and this is cheap
     /// enough to run every time.
     #[test]
@@ -2606,6 +2604,8 @@ mod tests {
         }
     }
 
+    /// Option D exhaustive audit (tier 3): every BMP + key-astral code point, in
+    /// three positions, through every preset — the guarded output must equal the
     /// un-guarded full pipeline. Catches any non-ASCII class the conservative
     /// `acts_on_nonascii` predicate under-marks. ~0.6M comparisons; run pre-release.
     #[test]

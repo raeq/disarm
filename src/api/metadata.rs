@@ -226,7 +226,12 @@ pub fn unicode_version() -> &'static str {
 ///
 /// The branch itself is unchanged — what reaches it narrowed. An emoji CLDR cannot name is
 /// still dropped, and so is a lone Plane 14 tag, which is the only coverage of that block
-/// `ml_normalize` has (#914).
+/// `ml_normalize` has (#914). As first merged it also *widened* for one class: a
+/// text-default symbol CLDR cannot name, followed by `U+FE0F` — `\u{00A9}\u{FE0F}`,
+/// `\u{00AE}\u{FE0F}`, `\u{2605}\u{FE0F}`, 2,141 in all — which 0.16.0 kept with the
+/// selector dropped and which the branch then deleted, so `ml_normalize("Acme®\u{FE0F}")`
+/// became `"acme"`. A follow-up restored 0.16.0's output before any release carried the
+/// change, so version 10 does not move those keys.
 ///
 /// The fixture was green through the change, for the **fifth** time in this cycle and for
 /// the same reason as the four before it: of the moved class its corpus held exactly one
@@ -267,7 +272,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 10;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "f2ac3223954c7eb77e9421456cf8dd8354b3ba6cd382c7cd27a06bbe787f780d";
+    "9cbf80ada9434ab2210a602f127f3327e178695acb147f766f5afd9410cc4841";
 
 /// The key-schema counter, as a function (#645).
 ///

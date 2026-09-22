@@ -875,7 +875,14 @@ pub(crate) fn is_emoji_presentation(ch: char) -> bool {
     in_range_set(EMOJI_PRESENTATION_RANGES, ch as u32)
 }
 
-/// UCD `Emoji=Yes`: *can* render as emoji, which `U+FE0F` turns on.
+/// UCD `Emoji=Yes` **or** `Extended_Pictographic=Yes`: *can* render as emoji, which
+/// `U+FE0F` turns on.
+///
+/// The name is narrower than the table. `scripts/gen_width_data.py` builds
+/// `emoji_property.tsv` from both properties, and `Extended_Pictographic` reserves whole
+/// blocks, unassigned code points included — so membership here says a code point is
+/// pictographic, not that it is `Emoji=Yes`. `U+2605` BLACK STAR is in it and is not an
+/// emoji.
 ///
 /// The complement that matters for #972: `U+00A9` and `U+2122` are `Emoji=Yes` and
 /// `Emoji_Presentation=No`, so `©` in ordinary text is a copyright sign and the same

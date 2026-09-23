@@ -215,12 +215,13 @@ def _excluded_singletons(hi: int = 0x110000) -> tuple[str, ...]:
     )
 
 
-# The accepted transliterate tail: two Greek accent-PUNCTUATION code points, not letters
-# or homoglyphs. U+1FEE GREEK DIALYTIKA AND OXIA has an irreducible NFC-vs-NFKD
+# The accepted transliterate tail: one Greek accent-PUNCTUATION code point, not a letter
+# or homoglyph. U+1FEE GREEK DIALYTIKA AND OXIA has an irreducible NFC-vs-NFKD
 # *compatibility* split (its target U+0385 itself NFKD-decomposes to space+marks). U+1FFD
-# GREEK OXIA carries a curated "x" placeholder row in translit_default.tsv that we honor
-# rather than override; it is recoverable by correcting that one row.
-TRANSLIT_TAIL = frozenset({0x1FEE, 0x1FFD})
+# GREEK OXIA was here too, for a curated "x" row in translit_default.tsv; that row now
+# reads as its canonical equivalent U+00B4 does, and so did U+1FEE's, which left only the
+# compatibility split (tests/test_translit_canonical_equivalence.py).
+TRANSLIT_TAIL = frozenset({0x1FEE})
 
 
 # The ASCII-output romanizers: these collapse a singleton and its canonical target to
@@ -234,7 +235,7 @@ ASCII_ROMANIZERS = ["transliterate", "unidecode", "slugify", "slugify_url"]
 @pytest.mark.parametrize("name", ASCII_ROMANIZERS)
 def test_transliterate_family_raw_vs_normalized_closed(name: str) -> None:
     """Raw-inclusive closure: f(raw) == f(NFC) == f(NFD) == f(NFKD) for every excluded
-    singleton, except the two documented Greek-punctuation tail code points. A regression
+    singleton, except the documented Greek-punctuation tail code point. A regression
     that reopens the gap (or degrades a new code point) fails here."""
     fn = getattr(disarm, name)
     with warnings.catch_warnings():

@@ -8,6 +8,7 @@ rediscovering or redeclaring them per file.
 from __future__ import annotations
 
 import functools
+import re
 from pathlib import Path
 
 import pytest
@@ -251,7 +252,35 @@ _BARE_STEPS: dict[str, tuple[str, str | None]] = {
 
 
 def _strip_line_comments(src: str) -> str:
-    return "\n".join(line.split("//", 1)[0] for line in src.split("\n"))
+    """Drop `//` comments, leaving string and char literals intact.
+
+    A `//` inside a literal (`"https://..."`) is text, not a comment. Raw strings are
+    not handled: `src/presets.rs` has none, and a test would fail loudly if one were
+    added to a step list.
+    """
+    out: list[str] = []
+    i, n = 0, len(src)
+    while i < n:
+        ch = src[i]
+        if ch == '"':
+            j = i + 1
+            while j < n and src[j] != '"':
+                j += 2 if src[j] == "\\" else 1
+            out.append(src[i : j + 1])
+            i = j + 1
+        elif ch == "'" and (m := _CHAR_LITERAL.match(src, i)):
+            out.append(m.group())
+            i = m.end()
+        elif src.startswith("//", i):
+            nl = src.find("\n", i)
+            i = n if nl < 0 else nl
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
+_CHAR_LITERAL = re.compile(r"'(?:\\(?:u\{[0-9A-Fa-f]+\}|x[0-9A-Fa-f]{2}|.)|[^\\'])'")
 
 
 def _balanced(src: str, i: int) -> int:

@@ -1,5 +1,5 @@
 # RuboCop baseline for the disarm Ruby binding.
-# Target: Ruby 3.1 (oldest supported, matches CI matrix and magnus 0.8).
+# Target: Ruby 3.3 (oldest supported upstream, the gemspec floor and the CI matrix floor).
 # Scope: lib/ and spec/ only — ext/ is Rust.
 
 plugins:
@@ -7,7 +7,7 @@ plugins:
 
 AllCops:
   NewCops: enable
-  TargetRubyVersion: 3.1
+  TargetRubyVersion: 3.3
   SuggestExtensions: false
   Include:
     - "lib/**/*.rb"

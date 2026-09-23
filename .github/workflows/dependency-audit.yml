@@ -42,7 +42,7 @@ jobs:
       # the cargo/crates.io audit still reports if a binding install hiccups.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
+          node-version: "22"
       - name: Install Node binding deps
         continue-on-error: true
         working-directory: bindings/node

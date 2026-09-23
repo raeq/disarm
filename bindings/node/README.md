@@ -10,7 +10,7 @@ prebuilt native addons install with no Rust toolchain.
 npm install disarm
 ```
 
-Ships TypeScript types (`.d.ts`) — no `@types/disarm` needed. Requires Node 14+.
+Ships TypeScript types (`.d.ts`) — no `@types/disarm` needed. Requires Node 22+.
 
 ## Quick start
 

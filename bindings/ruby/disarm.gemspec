@@ -18,11 +18,14 @@ Gem::Specification.new do |spec|
   DESC
   spec.homepage = "https://github.com/raeq/disarm"
   spec.license = "MIT"
-  # 3.1 is the oldest non-EOL Ruby and matches the CI test matrix + cross-gem
-  # targets; magnus 0.8 supports it. RubyGems >= 3.3.22 is required for rb-sys
-  # precompiled platform-gem resolution (older RubyGems can't match the platform
-  # gems) — Ruby 3.1 ships a new-enough RubyGems.
-  spec.required_ruby_version = ">= 3.1.0"
+  # 3.3 is the oldest Ruby upstream still maintains (3.1 reached end of life on
+  # 2025-03-26 and 3.2 on 2026-04-01, per ruby-lang.org's branches.yml), and it is
+  # the first entry of the CI test matrix and the cross-gem ABI list; magnus 0.8
+  # and rb-sys support it. `tests/test_toolchain_pins.py` holds all of them to this
+  # number. RubyGems >= 3.3.22 is required for rb-sys precompiled platform-gem
+  # resolution (older RubyGems can't match the platform gems); Ruby 3.3 ships a
+  # new-enough RubyGems.
+  spec.required_ruby_version = ">= 3.3.0"
   spec.required_rubygems_version = ">= 3.3.22"
 
   spec.files = Dir[

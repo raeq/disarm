@@ -2,7 +2,8 @@
 //! inspection. No pyo3. Shims in `src/py/scripts.rs`; crates.io surface is
 //! `crate::api::{detect_scripts, is_mixed_script, inspect_auto_lang}`.
 
-/// Detect Unicode scripts present in text, in order of first appearance.
+/// Detect Unicode scripts present in text, in order of first appearance, by
+/// [`detect_char_script`] (the UCD `Script` property; Common and Inherited are skipped).
 ///
 /// Returns `&'static str` script names, avoiding per-character String
 /// allocation. Real text mixes only a handful of scripts, so the output `Vec`
@@ -129,6 +130,12 @@ pub(crate) fn is_single_augmented_script(scripts: &[&str]) -> bool {
 /// because it runs over prose. It does **not** share this resolver, and that is the
 /// design rather than an oversight; see `CJK_SCRIPTS` in `crate::anomalies`.
 ///
+/// Each character's script is [`detect_char_script`], the UCD `Script` property, so the
+/// byte order mark and the dandas are Common rather than Arabic and Devanagari. UTS #39
+/// section 5.1 resolves through `Script_Extensions` instead, which is not bundled: this
+/// is section 5.1 over `Script`, a known limitation spelled out on [`detect_char_script`]
+/// and in `docs/limitations.md`.
+///
 /// Short-circuits as soon as the answer is settled.
 pub(crate) fn is_mixed_script(text: &str) -> bool {
     let mut state = AugmentedState::new();
@@ -155,6 +162,7 @@ pub(crate) fn is_mixed_script_per_word(text: &str) -> bool {
 
 include!(concat!(env!("OUT_DIR"), "/assigned_ranges.rs"));
 include!(concat!(env!("OUT_DIR"), "/bidi_strong_ranges.rs"));
+include!(concat!(env!("OUT_DIR"), "/script_common_carveouts.rs"));
 
 /// True if `cp` is an assigned code point in the bundled Unicode snapshot (#774).
 ///
@@ -169,11 +177,7 @@ include!(concat!(env!("OUT_DIR"), "/bidi_strong_ranges.rs"));
 /// encodes a curated script scope; this only stops it answering for code points that are
 /// not there.
 fn is_assigned(cp: u32) -> bool {
-    match ASSIGNED_RANGES.binary_search_by(|&(start, _)| start.cmp(&cp)) {
-        Ok(_) => true,
-        Err(0) => false,
-        Err(idx) => cp <= ASSIGNED_RANGES[idx - 1].1,
-    }
+    in_ranges(ASSIGNED_RANGES, cp)
 }
 
 /// Sorted table of (range_start, range_end_inclusive, script_name) for binary search.
@@ -184,6 +188,10 @@ static SCRIPT_RANGES: &[(u32, u32, &str)] = &[
     (0x0061, 0x007A, "Latin"),
     (0x00C0, 0x024F, "Latin"),
     (0x0250, 0x02AF, "Latin"), // IPA Extensions
+    // Bopomofo tone marks in Spacing Modifier Letters: MODIFIER LETTER YIN DEPARTING and
+    // YANG DEPARTING TONE MARK. The UCD gives these two `Script=Bopomofo`; the rest of the
+    // block is Common.
+    (0x02EA, 0x02EB, "Bopomofo"),
     // Inherited — Combining Diacritical Marks
     (0x0300, 0x036F, "Inherited"),
     // Greek
@@ -337,8 +345,14 @@ static SCRIPT_RANGES: &[(u32, u32, &str)] = &[
     (0x3040, 0x309F, "Hiragana"),
     // Katakana
     (0x30A0, 0x30FF, "Katakana"),
+    // Bopomofo. It had no range, so no code point resolved to it and the `HANB` augmented
+    // set could never be reached: `a` + `U+3105` read as single-script (Finding 5 of the
+    // Lean detection model).
+    (0x3100, 0x312F, "Bopomofo"),
     // Hangul Compatibility Jamo
     (0x3130, 0x318F, "Hangul"),
+    // Bopomofo Extended
+    (0x31A0, 0x31BF, "Bopomofo"),
     // Katakana Phonetic Extensions
     (0x31F0, 0x31FF, "Katakana"),
     // CJK Unified Ext A
@@ -422,12 +436,63 @@ static SCRIPT_RANGES: &[(u32, u32, &str)] = &[
     (0x30000, 0x3134F, "Han"),
 ];
 
-/// Detect the Unicode script for a single character.
+/// Detect the Unicode script (UAX #24 `Script`) of a single character.
 ///
-/// Uses binary search over sorted, non-overlapping Unicode Script ranges
-/// (UAX #24).  O(log n) where n = number of ranges (~100), vs the previous
-/// linear chain which was O(n) worst-case.
+/// [`block_script`], less the code points the UCD gives `Script=Common` although the
+/// block they sit in belongs to a script: the Arabic comma, the Devanagari dandas every
+/// Indic script writes with, `U+00D7` MULTIPLICATION SIGN in Latin-1, the katakana middle
+/// dot and prolonged sound mark, `U+FEFF` in Arabic Presentation Forms-B. The block table
+/// gave each its block's script, so a byte order mark made English "mixed script" and a
+/// Bengali sentence ending in a danda read as Bengali plus Devanagari (Finding 5 of the
+/// Lean detection model). The carve-outs are `SCRIPT_COMMON_CARVEOUTS`, generated from the
+/// vendored `data/Scripts.txt` by `scripts/gen_script_common_carveouts.py`.
+///
+/// `Script=Inherited` marks inside a script's block keep that script, deliberately: see
+/// `CONTEXT_DEPENDENT` in `tests/test_script_table_agrees_with_ucd.py`, and
+/// `crate::zalgo::strip_cross_script_marks_into`, which relies on an Arabic shadda
+/// resolving to Arabic.
+///
+/// **`Script`, not `Script_Extensions`.** UTS #39 section 5.1 resolves through
+/// `Script_Extensions`, which the crate does not bundle. A character whose `Script` is
+/// Common is therefore compatible with every script here, including the ones its
+/// extensions exclude (the Arabic comma beside Latin), and a character whose extensions
+/// name several scripts resolves to its one `Script` (the Arabic-Indic digits beside
+/// Thaana).
 pub(crate) fn detect_char_script(ch: char) -> &'static str {
+    let script = block_script(ch);
+    // ASCII is never carved out, and skipping the search keeps the ASCII path as it was.
+    if !ch.is_ascii()
+        && script != "Common"
+        && script != "Inherited"
+        && in_ranges(SCRIPT_COMMON_CARVEOUTS, ch as u32)
+    {
+        return "Common";
+    }
+    script
+}
+
+/// True if `cp` falls in one of the sorted, non-overlapping inclusive `ranges`.
+fn in_ranges(ranges: &[(u32, u32)], cp: u32) -> bool {
+    match ranges.binary_search_by(|&(start, _)| start.cmp(&cp)) {
+        Ok(_) => true,
+        Err(0) => false,
+        Err(idx) => cp <= ranges[idx - 1].1,
+    }
+}
+
+/// The script of the **block** `ch` sits in, per [`SCRIPT_RANGES`], without the
+/// `Script=Common` carve-outs [`detect_char_script`] applies.
+///
+/// This answers a different question from `Script`: which script's transliteration owns a
+/// code point. `transliterate_preserving_latin_into` groups characters into runs by it,
+/// and there the katakana prolonged sound mark `U+30FC` has to stay inside the katakana run
+/// it lengthens (`U+30B3 U+30FC` is `ko-`), even though the UCD calls it Common because
+/// Hiragana writes it too. Everything that asks "which writing system is this" asks
+/// [`detect_char_script`].
+///
+/// Uses binary search over sorted, non-overlapping ranges. O(log n) where n = number of
+/// ranges (~100), vs the previous linear chain which was O(n) worst-case.
+pub(crate) fn block_script(ch: char) -> &'static str {
     let cp = ch as u32;
 
     // Fast path for ASCII (very common).
@@ -1239,9 +1304,99 @@ mod tests {
         assert_eq!(detect_char_script('\u{08FF}'), "Arabic");
         // Arabic Presentation Forms-A
         assert_eq!(detect_char_script('\u{FB50}'), "Arabic");
-        // Arabic Presentation Forms-B
+        // Arabic Presentation Forms-B. Its last letter is U+FEFC; U+FEFF, the byte order
+        // mark, sits in the block and is Common (Finding 5 of the Lean detection model).
+        // This used to assert Arabic, which is what made a BOM-prefixed file mixed-script.
         assert_eq!(detect_char_script('\u{FE70}'), "Arabic");
-        assert_eq!(detect_char_script('\u{FEFF}'), "Arabic");
+        assert_eq!(detect_char_script('\u{FEFC}'), "Arabic");
+        assert_eq!(detect_char_script('\u{FEFF}'), "Common");
+        assert_eq!(block_script('\u{FEFF}'), "Arabic");
+    }
+
+    /// Finding 5 of the Lean detection model: the block table gave a script to code
+    /// points the UCD calls Common. One per block the carve-out table touches, by name.
+    #[test]
+    fn ucd_common_code_points_in_a_script_block_are_common() {
+        for (ch, block) in [
+            ('\u{00D7}', "Latin"),      // MULTIPLICATION SIGN
+            ('\u{00F7}', "Latin"),      // DIVISION SIGN
+            ('\u{0387}', "Greek"),      // GREEK ANO TELEIA
+            ('\u{060C}', "Arabic"),     // ARABIC COMMA
+            ('\u{061F}', "Arabic"),     // ARABIC QUESTION MARK
+            ('\u{0640}', "Arabic"),     // ARABIC TATWEEL
+            ('\u{0964}', "Devanagari"), // DEVANAGARI DANDA
+            ('\u{0965}', "Devanagari"), // DEVANAGARI DOUBLE DANDA
+            ('\u{0E3F}', "Thai"),       // THAI CURRENCY SYMBOL BAHT
+            ('\u{30FB}', "Katakana"),   // KATAKANA MIDDLE DOT
+            ('\u{30FC}', "Katakana"),   // KATAKANA-HIRAGANA PROLONGED SOUND MARK
+            ('\u{FEFF}', "Arabic"),     // ZERO WIDTH NO-BREAK SPACE (BOM)
+        ] {
+            let cp = ch as u32;
+            assert_eq!(detect_char_script(ch), "Common", "U+{cp:04X}");
+            assert_eq!(block_script(ch), block, "U+{cp:04X} block script");
+        }
+    }
+
+    /// The consequence that made it a defect: text with one of these was mixed-script.
+    #[test]
+    fn a_common_code_point_in_a_script_block_does_not_mix_scripts() {
+        assert!(
+            !is_mixed_script("\u{FEFF}hello"),
+            "a BOM-prefixed English file"
+        );
+        // Bengali word + DEVANAGARI DANDA: Bengali writes the danda too.
+        assert!(!is_mixed_script(
+            "\u{09AC}\u{09BE}\u{0982}\u{09B2}\u{09BE}\u{0964}"
+        ));
+        // Thaana word + ARABIC COMMA.
+        assert!(!is_mixed_script("\u{078B}\u{07A8}\u{0788}\u{07AC}\u{060C}"));
+        // Greek + MULTIPLICATION SIGN.
+        assert!(!is_mixed_script("\u{03B1}\u{00D7}\u{03B2}"));
+        assert_eq!(detect_scripts("\u{FEFF}hello"), vec!["Latin"]);
+        // ...and a real mix still is one.
+        assert!(is_mixed_script("hell\u{043E}"));
+    }
+
+    /// `Script=Inherited` marks keep their block's script: the exemption the strip of
+    /// cross-script marks relies on (CVE-2017-7833, an Arabic shadda on a Latin base).
+    #[test]
+    fn inherited_marks_keep_the_script_of_their_block() {
+        assert_eq!(detect_char_script('\u{0651}'), "Arabic");
+        assert!(is_mixed_script("exa\u{0651}mple"));
+        assert!(!is_mixed_script("\u{0645}\u{064E}"));
+    }
+
+    /// Finding 5: no code point resolved to Bopomofo, so the `HANB` set was unreachable.
+    #[test]
+    fn bopomofo_is_detected_and_reaches_its_augmented_set() {
+        for ch in ['\u{02EA}', '\u{3105}', '\u{312F}', '\u{31A0}', '\u{31BF}'] {
+            assert_eq!(detect_char_script(ch), "Bopomofo", "U+{:04X}", ch as u32);
+        }
+        // Unassigned code points inside the block still resolve to nothing (#774).
+        assert_eq!(detect_char_script('\u{3100}'), "Common");
+        assert!(is_mixed_script("a\u{3105}"), "Latin + Bopomofo");
+        assert!(
+            !is_mixed_script("\u{6F22}\u{3105}"),
+            "Han + Bopomofo: Chinese"
+        );
+        assert!(is_mixed_script("\u{3072}\u{3105}"), "Hiragana + Bopomofo");
+        assert!(is_mixed_script("\u{D55C}\u{3105}"), "Hangul + Bopomofo");
+    }
+
+    /// The carve-out table is sorted, and every span lies inside a range the block
+    /// table gives a script to: otherwise it carves nothing and is stale.
+    #[test]
+    fn the_common_carveouts_sit_inside_script_ranges() {
+        assert!(!SCRIPT_COMMON_CARVEOUTS.is_empty());
+        for w in SCRIPT_COMMON_CARVEOUTS.windows(2) {
+            assert!(w[0].1 < w[1].0, "carve-outs overlap or are unsorted: {w:?}");
+        }
+        for &(start, end) in SCRIPT_COMMON_CARVEOUTS {
+            let inside = SCRIPT_RANGES.iter().any(|&(s, e, script)| {
+                s <= start && end <= e && script != "Common" && script != "Inherited"
+            });
+            assert!(inside, "U+{start:04X}..U+{end:04X} is in no script's range");
+        }
     }
 
     #[test]

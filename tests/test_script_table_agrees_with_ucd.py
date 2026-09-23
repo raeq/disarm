@@ -19,6 +19,7 @@ which is the failure [[drift-gate-must-not-reference-drifting-thing]] describes.
 from __future__ import annotations
 
 import functools
+import importlib.util
 import unicodedata
 from pathlib import Path
 
@@ -28,6 +29,8 @@ import disarm
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tests" / "fixtures" / "ucd_script_ranges.tsv"
+SCRIPTS_TXT = ROOT / "data" / "Scripts.txt"
+CARVEOUT_GENERATOR = ROOT / "scripts" / "gen_script_common_carveouts.py"
 
 #: The count of declines at the time #819 was closed. A floor, not an equality: closing
 #: more of them is progress and must not fail this file. A sharp *rise* would mean the
@@ -229,3 +232,76 @@ def test_the_fixture_is_independent_of_the_table() -> None:
         "the fixture no longer records Coptic on both sides of the Greek block, which is "
         "the case that distinguishes UCD script data from block data"
     )
+
+
+def ucd_common_code_points() -> list[int]:
+    """Every scalar value the vendored `Scripts.txt` gives `Script=Common`."""
+    out: list[int] = []
+    for raw in SCRIPTS_TXT.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        span, script = (part.strip() for part in line.split(";"))
+        if script != "Common":
+            continue
+        start, _, end = span.partition("..")
+        out.extend(
+            cp
+            for cp in range(int(start, 16), int(end or start, 16) + 1)
+            if not 0xD800 <= cp <= 0xDFFF
+        )
+    return out
+
+
+def test_a_ucd_common_code_point_resolves_to_no_script() -> None:
+    """Finding 5 of the Lean detection model (`formal/lean/Detection`).
+
+    The fixture above holds only the curated scripts, so it could not see the other way a
+    block table contradicts the standard: by giving a script to a code point the UCD calls
+    `Common`. Fifty did, among them the byte order mark (Arabic), the dandas
+    (Devanagari), the Arabic comma and `U+00D7` MULTIPLICATION SIGN (Latin). Read against
+    `data/Scripts.txt` directly, so the check does not depend on the generated table.
+    """
+    wrong = [
+        f"U+{cp:04X} {unicodedata.name(chr(cp), '?')}: {found}"
+        for cp in ucd_common_code_points()
+        if (found := [s.value for s in disarm.detect_scripts(chr(cp))])
+    ]
+    assert not wrong, (
+        f"{len(wrong)} code points the UCD calls Common resolve to a script; regenerate "
+        "src/tables/data/script_common_carveouts.tsv with "
+        "scripts/gen_script_common_carveouts.py:\n  " + "\n  ".join(wrong[:12])
+    )
+
+
+def test_the_common_carveout_table_is_generated_from_scripts_txt() -> None:
+    """The committed table is what the generator writes today.
+
+    A new range in `SCRIPT_RANGES` that covers a Common code point changes the output, so
+    this fails until the table is regenerated rather than drifting silently.
+    """
+    spec = importlib.util.spec_from_file_location("gen_carveouts", CARVEOUT_GENERATOR)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.OUT.read_text(encoding="utf-8") == module.render(), (
+        "src/tables/data/script_common_carveouts.tsv is stale; run "
+        "scripts/gen_script_common_carveouts.py"
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "why"),
+    [
+        ("\ufeffhello", "a byte order mark before English"),
+        ("\u09ac\u09be\u0982\u09b2\u09be\u0964", "Bengali with a DEVANAGARI DANDA"),
+        ("\u0939\u093f\u0928\u094d\u0926\u0940\u0964", "Hindi with a danda"),
+        ("\u078b\u07a8\u0788\u07ac\u060c", "Thaana with an ARABIC COMMA"),
+        ("\u03b1\u00d7\u03b2", "Greek with a MULTIPLICATION SIGN"),
+        ("\u0e44\u0e17\u0e22\u0e3f", "Thai with THAI CURRENCY SYMBOL BAHT"),
+    ],
+)
+def test_a_common_code_point_does_not_make_text_mixed(text: str, why: str) -> None:
+    """The consequence that made the table a defect, one surface after another."""
+    assert not disarm.is_mixed_script(text), why
+    assert "mixed_script" not in disarm.inspect_anomalies(text).kinds, why

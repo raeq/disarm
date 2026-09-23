@@ -337,9 +337,16 @@ pub enum AnomalyKind {
     /// arrive by accident — a copy-paste artefact, a BOM, an editor quirk — but a run that
     /// decodes to printable text cannot, because random damage does not spell words.
     ///
-    /// Fires only when [`crate::api::Payload::text`] is `Some`, so it needs no threshold
-    /// and no policy to interpret. A run of arbitrary selectors that decodes to
-    /// non-printable bytes is left to `invisible`, which is the right verdict for it.
+    /// Fires only when the run decodes to printable text, so it needs no threshold and no
+    /// policy to interpret. A run of arbitrary selectors that decodes to non-printable
+    /// bytes is left to `invisible`, which is the right verdict for it.
+    ///
+    /// That is [`crate::api::Payload::text`] being `Some`, with one addition. A zero-width
+    /// run whose bit count is not a multiple of 8 has two byte frames, and when both are
+    /// printable and differ, `decode_smuggled` reports `text: None` rather than pick one.
+    /// This still fires on it, with both readings as the token, head-aligned first and
+    /// joined by `" | "`: one stray `U+200B` before an encoded `hi` gives `"44 | hi"`.
+    /// Otherwise that stray bit would switch the finding off.
     ///
     /// **Additive, not a replacement.** A decoding run is still reported as `invisible`
     /// too; this finding is placed first for the span so it is the one
@@ -637,10 +644,14 @@ pub(crate) fn is_line_break(c: char) -> bool {
 /// [`overwriting_cr`] is: `has_anomalies_matches_inspect` asserts the two agree, and a
 /// rule stated twice is how that starts failing.
 ///
-/// Filters on `text.is_some()`. A carrier run whose bytes are not printable UTF-8 is not
-/// a decode, and `invisible` already reports it — firing here as well would spend the one
-/// signal in this area that needs no threshold on runs that do need one.
-fn decoded_payloads(text: &str) -> impl Iterator<Item = crate::smuggled::Payload> {
+/// Filters on some frame of the run reading as printable text, which is `text.is_some()`
+/// plus the ambiguous zero-width frame whose two readings are both printable (see
+/// [`crate::smuggled::Carried`]). `decode_smuggled` gives that one `text: None`, and
+/// filtering on `text` alone let one stray `U+200B` switch the finding off. A carrier run
+/// whose bytes are not printable UTF-8 either way is not a decode, and `invisible` already
+/// reports it — firing here as well would spend the one signal in this area that needs no
+/// threshold on runs that do need one.
+fn decoded_payloads(text: &str) -> impl Iterator<Item = crate::smuggled::Carried> {
     // `decode_carriers`, not `decode_smuggled`: the percent scheme is decoded for
     // inspection and deliberately kept out of the detector (#727) — a percent run spelling
     // readable text is ordinary in any URL. The first version decoded it here and threw it
@@ -648,7 +659,7 @@ fn decoded_payloads(text: &str) -> impl Iterator<Item = crate::smuggled::Payload
     // the carriers-only path never runs that scanner.
     crate::smuggled::decode_carriers(text)
         .into_iter()
-        .filter(|p| p.text.is_some())
+        .filter(|c| c.reading.is_some())
 }
 
 /// The first `CR` that overwrites text, as a `(byte offset, overwritten segment)` pair.
@@ -1642,13 +1653,14 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
     // by suppression — the run is still reported as `invisible` too, so a caller already
     // matching on that kind keeps working.
     let smuggled: Vec<Finding> = decoded_payloads(text)
-        .map(|p| Finding {
+        .map(|c| Finding {
             kind: AnomalyKind::Smuggled,
-            // The decoded text is the token: it is what the reader needs to see.
-            token: p.text.clone().unwrap_or_default(),
-            start: p.start,
-            end: p.end,
-            detail: p.scheme.as_str().to_owned(),
+            // The decoded text is the token: it is what the reader needs to see. For an
+            // ambiguous zero-width frame it is both readings, `"44 | hi"`.
+            token: c.reading.unwrap_or_default(),
+            start: c.payload.start,
+            end: c.payload.end,
+            detail: c.payload.scheme.as_str().to_owned(),
         })
         .collect();
     for f in smuggled.into_iter().rev() {
@@ -2111,8 +2123,39 @@ mod tests {
             "v.i.a.g.r.a",
             "perfectly clean text",
             "user\u{202E}txt",
+            AMBIGUOUS_ZW_HI,
         ] {
             assert_eq!(has_anomalies(s, &l), inspect_anomalies(s, &l).anomalous);
         }
+    }
+
+    /// `a`, one stray `U+200B`, then `hi` as MSB-first zero-width binary. The head-aligned
+    /// frame reads `44` and the tail-aligned frame `hi`: both printable, so the public
+    /// decode reports no text.
+    const AMBIGUOUS_ZW_HI: &str = "a\u{200B}\
+        \u{200B}\u{200C}\u{200C}\u{200B}\u{200C}\u{200B}\u{200B}\u{200B}\
+        \u{200B}\u{200C}\u{200C}\u{200B}\u{200C}\u{200B}\u{200B}\u{200C}";
+
+    /// A stray bit must not switch `smuggled` off. `decode_smuggled` declines to pick one
+    /// of two printable frames, but readable text either way is still the evidence the
+    /// kind reports, so the detector fires with both readings as the token.
+    #[test]
+    fn an_ambiguous_zero_width_frame_still_reports_smuggled() {
+        let l = lex(&[]);
+        assert_eq!(
+            crate::smuggled::decode_smuggled(AMBIGUOUS_ZW_HI)[0].text,
+            None,
+            "the public decode stays undecided"
+        );
+        assert!(has_anomalies(AMBIGUOUS_ZW_HI, &l));
+        let r = inspect_anomalies(AMBIGUOUS_ZW_HI, &l);
+        assert_eq!(
+            r.kinds.first(),
+            Some(&AnomalyKind::Smuggled),
+            "{:?}",
+            r.kinds
+        );
+        assert_eq!(r.findings[0].token, "44 | hi");
+        assert!(r.kinds.contains(&AnomalyKind::Invisible));
     }
 }

@@ -43,6 +43,9 @@ class Script(enum.Enum):
     HIRAGANA = "Hiragana"
     KATAKANA = "Katakana"
     HANGUL = "Hangul"
+    # Resolved by the core since Finding 5 of the Lean detection model: before it no code
+    # point mapped to Bopomofo, so the Han + Bopomofo augmented set could not be reached.
+    BOPOMOFO = "Bopomofo"
     LISU = "Lisu"
 
     # Southeast Asian scripts
@@ -659,6 +662,13 @@ SCRIPT_META: dict[str, ScriptMeta] = {
         "name": "Batak",
         "default_lang": None,
         "example": "ᯀᯁᯂ",
+        "context_aware": False,
+    },
+    # No profile romanizes Bopomofo, so none is named: the rule #775 set for Batak & co.
+    "Bopomofo": {
+        "name": "Bopomofo",
+        "default_lang": None,
+        "example": "\u3105\u3106\u3107",
         "context_aware": False,
     },
 }

@@ -39,6 +39,10 @@ STILL_MIXED = [
     ("例えa", "Japanese + Latin — no set contains both"),
     ("аpple", "Cyrillic + Latin — the case the rule exists for"),
     ("Ρаypal", "Greek + Cyrillic + Latin"),
+    # Finding 5 of the Lean detection model: no code point resolved to Bopomofo, so these
+    # two read as single-script and the Han + Bopomofo row above passed vacuously.
+    ("a\u3105", "Latin + Bopomofo"),
+    ("\u3072\u3105", "Hiragana + Bopomofo share no augmented set"),
 ]
 
 
@@ -100,3 +104,13 @@ def test_japanese_hostnames_are_no_longer_suspicious_for_being_japanese() -> Non
     for host in ("例え.jp", "日本語.jp", "ひらがな.example"):
         _, details = disarm.is_suspicious_hostname(host)
         assert not details.mixed_script, host
+
+
+def test_the_han_plus_bopomofo_row_exercises_bopomofo() -> None:
+    """The `ONE_SYSTEM` row for Chinese is only a test if Bopomofo resolves.
+
+    Before Finding 5 was fixed `U+3105` resolved to no script, so the row was Han alone
+    and the `HANB` augmented set was never consulted by any input.
+    """
+    assert disarm.detect_scripts("\u6f22\u3105") == [disarm.Script.HAN, disarm.Script.BOPOMOFO]
+    assert disarm.detect_scripts("\u02ea\u31a0") == [disarm.Script.BOPOMOFO]

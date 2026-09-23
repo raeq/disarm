@@ -41,6 +41,7 @@ Enum of Unicode script identifiers returned by `detect_scripts()`.
 | `Script.HIRAGANA` | `"Hiragana"` |
 | `Script.KATAKANA` | `"Katakana"` |
 | `Script.HANGUL` | `"Hangul"` |
+| `Script.BOPOMOFO` | `"Bopomofo"` |
 
 ### Southeast Asian scripts
 
@@ -342,6 +343,7 @@ assert list_scripts() == [
     "Bamum",
     "Batak",
     "Bengali",
+    "Bopomofo",
     "Buginese",
     "Buhid",
     "CanadianAboriginal",

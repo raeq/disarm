@@ -303,6 +303,29 @@ why it is a separate kind rather than a longer `invisible` detail.
 arbitrary selectors comes back as a payload of *n* bytes with `text=None` rather than as a
 bogus decode — reporting garbage would undo the reason a decode is trustworthy.
 
+A carrier of the same scheme beside a payload is not read into it. The `VS16` that ends a
+fully qualified emoji (`U+2764 U+FE0F`) belongs to the emoji, so a variation run starting
+with a presentation selector attached to the character before it is decoded without that
+selector whenever the rest reads as text. A zero-width run whose bit count is not a
+multiple of 8 has two candidate frames, stray bits dropped from the end or from the start,
+and `text` is set only when exactly one of them is printable: one stray `U+200B` before an
+encoded `hi` makes the head-aligned frame read `44`, and a decode that could be either is
+reported as bytes with `text=None`. `inspect_anomalies` still reports that run as
+`smuggled`, since it reads as text either way: the finding's token is both readings,
+head-aligned first, joined by ` | ` (`44 | hi`).
+
+```python
+from disarm import decode_smuggled
+
+hidden = "".join(chr(0xE0100 + b - 16) for b in b"hi")
+[payload] = decode_smuggled(f"\u2764\ufe0f{hidden}")
+assert (payload.data, payload.text) == (b"hi", "hi")
+
+stray = "\u200b" + "".join("\u200c" if b == "1" else "\u200b" for b in "0110100001101001")
+[payload] = decode_smuggled(f"a{stray}")
+assert (payload.data, payload.text) == (b"44", None)  # '44' one way, 'hi' the other
+```
+
 ### The fourth scheme is for URLs, and stays out of the detector
 
 `percent_escape` decodes `%XX` runs (#727). disarm ships `percent_encode` and shipped no

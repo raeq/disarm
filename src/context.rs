@@ -494,8 +494,13 @@ pub fn transliterate_context(
 
     for token in &tokens {
         if !token.is_word {
-            // Non-word (whitespace, punctuation) — pass through.
-            result.push_str(&token.text);
+            // Everything that is not an Arabic or Hebrew word: whitespace and
+            // punctuation, but also Latin, CJK, a Persian ZWNJ, a bidi mark. It goes
+            // through the same function as a word — appended raw, it reached the
+            // output untransliterated and outside `errors=`, so `context=True`
+            // returned `é` and `北京` where the context-free path returns ASCII. For
+            // whitespace and ASCII punctuation the function is the identity.
+            result.push_str(&transliterate_fn(&token.text, lang));
             // #101: a plain inter-word space must NOT clear bigram context, or
             // the bigram disambiguation tier is unreachable in normal
             // (space-separated) prose. Only a hard boundary — a newline or
@@ -814,6 +819,34 @@ mod tests {
 
         // Unknown word
         assert_eq!(dict.resolve(None, "xyz"), None);
+    }
+
+    /// A span that is not an Arabic or Hebrew word goes through the same function as
+    /// a word. It was appended raw, so `context=True` returned `é`, `北京`, a Persian
+    /// ZWNJ or a Hebrew RLM untouched where the context-free path transliterates them
+    /// — non-ASCII output from a function documented to return ASCII, and `errors=`
+    /// never applied to it (found by the Lean audit of I2, `formal/`).
+    #[test]
+    fn a_non_word_span_is_transliterated_too() {
+        let bytes = build_dict_bytes(&[("كتب", &[("كَتَبَ", 1)])], &[]);
+        let dict = ContextDict::from_bytes(&bytes).expect("valid dict should parse");
+        let ascii_or_q = |s: &str, _: Option<&str>| -> String {
+            s.chars()
+                .map(|c| if c.is_ascii() { c } else { '?' })
+                .collect()
+        };
+        let out = transliterate_context(
+            "كتب \u{e9} \u{5317}\u{4eac}\u{200c}",
+            None,
+            &dict,
+            ascii_or_q,
+        );
+        assert!(out.is_ascii(), "{out:?}");
+        assert_eq!(out, "?????? ? ???");
+        // Whitespace and ASCII punctuation still arrive unchanged, and a hard
+        // boundary in a non-word span still resets bigram context (#101).
+        let out = transliterate_context("a, b.\nc", None, &dict, ascii_or_q);
+        assert_eq!(out, "a, b.\nc");
     }
 
     #[test]

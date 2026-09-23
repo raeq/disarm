@@ -1,7 +1,7 @@
 """Every whitespace character transliterates to whitespace.
 
 `translit_default.tsv` mapped LINE SEPARATOR and PARAGRAPH SEPARATOR to nothing, so they
-joined the words either side: `transliterate("pay pal")` was `paypal`, and so were
+joined the words either side: `transliterate("pay\u2028pal")` was `paypal`, and so were
 `search_key`, `catalog_key` and `slugify`, where the `LF` form gives `pay pal`. NEXT LINE
 had no row at all and came out as `[?]`. Every other whitespace character already gave a
 space, as TR39's rows for these code points and `collapse_whitespace` do. Noticed while
@@ -21,7 +21,7 @@ WHITESPACE = [chr(cp) for cp in range(0x80, sys.maxunicode + 1) if chr(cp).isspa
 
 
 def test_the_sweep_is_not_empty() -> None:
-    assert {"\x85", " ", " ", "　"} <= set(WHITESPACE)
+    assert {"\x85", "\u2028", "\u2029", "\u3000"} <= set(WHITESPACE)
 
 
 @pytest.mark.parametrize("ws", WHITESPACE, ids=lambda c: f"U+{ord(c):04X}")

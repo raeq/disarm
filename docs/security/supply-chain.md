@@ -81,7 +81,11 @@ anything its writer put there. The crates.io, SBOM and npm release jobs restore 
 cache. The Ruby gem builds still do; see the last section.
 
 **Every action is pinned to a full commit SHA**, with the version in a comment, and
-Dependabot's `github-actions` ecosystem proposes the updates.
+Dependabot's `github-actions` ecosystem proposes the updates. The comment is two spaces,
+`# `, and the most specific tag that points at that SHA (`# v7.0.1`, never `# v7`), so
+it names one commit rather than a ref that moves; a SHA no tag points at names the
+branch it came from. One SHA carries one comment everywhere, the snippets in these docs
+included. `tests/test_workflow_baselines.py` enforces all of it.
 
 **Least-privilege tokens.** Every workflow defaults to `contents: read`, and a write
 permission is granted to the one job that needs it. Where a job used to build or run

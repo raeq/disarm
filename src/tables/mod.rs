@@ -938,6 +938,17 @@ pub fn lookup_emoji_multi(key: &str) -> Option<&'static str> {
     emoji_data::EMOJI_MULTI.get(key).copied()
 }
 
+/// Whether a fully qualified emoji sequence can have `U+FE0F` straight after `prev`.
+///
+/// It follows a pictograph. It never follows a joiner, another selector, a regional
+/// indicator, a skin-tone modifier, a tag character or the keycap mark.
+fn selector_may_follow(prev: char) -> bool {
+    !matches!(
+        prev as u32,
+        0x200D | 0xFE0E | 0xFE0F | 0x20E3 | 0x1F1E6..=0x1F1FF | 0x1F3FB..=0x1F3FF | 0xE0020..=0xE007F
+    )
+}
+
 /// Walk the multi-codepoint emoji trie (#242 item 4) for the longest sequence
 /// starting at `window[0]`, returning `(name, codepoints_consumed)`. Iterates
 /// `window` rather than indexing it, so an empty slice simply yields `None`
@@ -945,8 +956,8 @@ pub fn lookup_emoji_multi(key: &str) -> Option<&'static str> {
 ///
 /// Byte-identical to the former per-length hex-key PHF probe on every table key;
 /// `emoji_trie_matches_phf` verifies the two agree against `lookup_emoji_multi`. Unlike
-/// the probe it also accepts the fully qualified form of a key — a U+FE0F after any
-/// component — which the table stores unqualified. A sequence is a
+/// the probe it also accepts the fully qualified form of a key — a U+FE0F after a
+/// pictograph component — which the table stores unqualified. A sequence is a
 /// match only at a terminal node of length ≥ 2 whose **last** code point is not
 /// ZWJ/VS-15/VS-16 — replicating the original "skip incomplete sequences" rule
 /// (a trailing variation selector or ZWJ is a presentation/joiner mark handled
@@ -975,7 +986,13 @@ pub fn match_emoji_sequence(window: &[char]) -> Option<(&'static str, usize)> {
             // fully qualified sequences (Lean model, `formal/lean/Emoji`). A selector
             // with no edge of its own is consumed and the walk goes on from the same
             // node; the terminal check below never accepts a match ending on one.
-            Err(_) if cp == VS16 && i >= 1 => continue,
+            //
+            // Only where the fully qualified form puts one: straight after a pictograph.
+            // Skipped anywhere, it named `🇧\u{FE0F}🇦` as a flag that `replace_emoji`
+            // counts as two emoji and `🇧\u{FE0E}🇦` does not form, and `❤\u{200D}
+            // \u{FE0F}🔥` as `heart on fire` (the model's differential test, run
+            // against the fix).
+            Err(_) if cp == VS16 && i >= 1 && selector_may_follow(window[i - 1]) => continue,
             Err(_) => break,
         }
         // len = i + 1 (≥ 2 for any real sequence); skip a terminal whose last

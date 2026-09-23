@@ -416,12 +416,12 @@ export function stripPua(text: string): string {
   return native.stripPua(text)
 }
 
-/** Cap combining marks per base character at `maxMarks` (default `2`). */
+/** Cap the marks of each combining class on one base character at `maxMarks` (default `2`). */
 export function stripZalgo(text: string, options: { maxMarks?: number } = {}): string {
   return call(() => native.stripZalgo(text, options.maxMarks ?? 2))
 }
 
-/** Whether any base character carries more than `threshold` (default `3`) combining marks. */
+/** Whether any base character carries more than `threshold` (default `3`) marks of one combining class. */
 export function isZalgo(text: string, options: { threshold?: number } = {}): boolean {
   return call(() => native.isZalgo(text, options.threshold ?? 3))
 }

@@ -7,8 +7,12 @@
 //!
 //! This module provides:
 //! - `is_zalgo()` — detect whether text contains excessive combining marks
-//! - `strip_zalgo()` — cap combining marks per base character, preserving
-//!   legitimate diacritics while removing the stacked abuse
+//! - `strip_zalgo()` — cap the marks of each combining class on one base character,
+//!   preserving legitimate diacritics while removing the stacked abuse
+//!
+//! Both count per base *and per combining class* (#842), over everything up to the next
+//! non-mark: a class-0 mark neither counts nor splits the count (Z1 in
+//! `formal/lean/Text`). The two read one table, [`MarkTally`], so they agree.
 //!
 //! Layer 1 (pure-Rust core): no pyo3. Shim in `src/py/zalgo.rs`; crates.io
 //! surface is `crate::api::{is_zalgo, strip_zalgo}`.
@@ -16,13 +20,13 @@
 use unicode_normalization::char::{canonical_combining_class, is_combining_mark};
 use unicode_normalization::UnicodeNormalization;
 
-/// Default threshold: a base character with more than this many combining marks
-/// is considered zalgo.  Vietnamese `ệ` has 2 combining marks in NFD, so 3
+/// Default threshold: a base character with more than this many combining marks of
+/// one combining class is considered zalgo.  Vietnamese `ệ` has 2 combining marks in NFD, so 3
 /// is a safe default that catches abuse while preserving all real-world text.
 pub(crate) const DEFAULT_THRESHOLD: usize = 3;
 
-/// Default cap for `strip_zalgo`: keep at most this many combining marks per
-/// base character.
+/// Default cap for `strip_zalgo`: keep at most this many combining marks of one
+/// combining class per base character.
 ///
 /// **Equal to [`DEFAULT_THRESHOLD`] on purpose (#788).** It was 2 while the threshold
 /// was 3, so the library stripped from text it had just declined to call suspicious:
@@ -44,67 +48,168 @@ pub(crate) const DEFAULT_THRESHOLD: usize = 3;
 /// all recomposition.
 pub(crate) const DEFAULT_MAX_MARKS: usize = DEFAULT_THRESHOLD;
 
-/// Streaming check: does any base character carry **more than** `threshold`
-/// consecutive combining marks in NFD form?
+/// How many distinct combining classes one base can be tallied for.
 ///
-/// Returns the instant the first run exceeds `threshold`, so a short zalgo burst
+/// Unicode assigns 56 canonical combining classes, 0 included (the test
+/// `every_combining_class_fits_the_tally` holds that against the normalization tables), so
+/// every class a base can carry has a slot. Were a future Unicode to exceed this, a mark of
+/// a class that finds no free slot counts as over any cap: a base carrying marks of more
+/// than 63 distinct classes is stacking by any reading.
+const TALLY_SLOTS: usize = 64;
+
+/// The marks of each combining class on the current base: the one table the predicate and
+/// the cap both read, so they cannot disagree about what a position carries.
+///
+/// **Per base, not per run (Z1, `formal/lean/Text`).** #842 counted per combining class
+/// because canonical ordering sorts a base's marks by class, so interleaving classes cannot
+/// split a run. But canonical ordering only sorts *between starters*, and a class-0 mark is
+/// a starter: `a` + three acutes + `U+034F` + three acutes is six acutes on one base in two
+/// runs of three, and resetting the count at the class-0 mark let a base carry any number
+/// of stacked marks. 1,493 of the 1,496 class-0 marks did it, among them the invisible
+/// `U+034F`, `U+180B`-`U+180F` and `U+17B4`/`U+17B5`, which `canonicalize` keeps. So the
+/// table is cleared only at a non-mark, and a class-0 mark neither counts nor resets it.
+///
+/// **The first negation overlay on a symbol is not counted (Z2).** The cap keeps one
+/// `U+0338`/`U+20D2` on a relation beyond `max_marks` (#749): it is part of the symbol,
+/// not a diacritic. The predicate counted it, so `strip_zalgo`'s own output was still
+/// zalgo at the same threshold. Both now skip it here.
+struct MarkTally {
+    classes: [u8; TALLY_SLOTS],
+    counts: [usize; TALLY_SLOTS],
+    len: usize,
+    base: Option<char>,
+    negation_kept: bool,
+}
+
+impl MarkTally {
+    fn new() -> Self {
+        Self {
+            classes: [0; TALLY_SLOTS],
+            counts: [0; TALLY_SLOTS],
+            len: 0,
+            base: None,
+            negation_kept: false,
+        }
+    }
+
+    /// Feed the next scalar of an NFD stream. Returns `false` when it is a mark beyond
+    /// `cap` at its position, which the cap drops and the predicate reports.
+    #[inline]
+    fn admit(&mut self, ch: char, cap: usize) -> bool {
+        if !self.negation_kept && crate::transliterate::is_negation_of(ch, self.base) {
+            // #749: not a diacritic. On a symbol, `U+0338` and `U+20D2` are the stroke
+            // through a relation, so dropping one leaves the *positive* operator: `\u{2260}`
+            // became `=`. Exactly one per base: a relation carries a single stroke, and a
+            // *run* of them is stacking whatever the base is, so overlays after the first
+            // are counted like any other mark. On a *letter* the same code point is
+            // strikethrough obfuscation, which is why `is_negation_of` asks about the base.
+            self.negation_kept = true;
+            return true;
+        }
+        if !is_combining_mark(ch) {
+            self.len = 0;
+            self.base = Some(ch);
+            self.negation_kept = false;
+            return true;
+        }
+        let class = canonical_combining_class(ch);
+        // Marks with combining class 0 are POSITIONED by the renderer rather than stacked
+        // at one spot: Burmese vowel signs and medials, Indic matras, Thai vowels. Counting
+        // them as stacking is what made `is_zalgo` call 142 ordinary Burmese place names
+        // zalgo (#842): `\u{1019}\u{103C}\u{102D}\u{102F}\u{1037}` is one syllable carrying
+        // a base, a medial, two vowel signs and a tone. They neither count nor, since Z1,
+        // reset the count of the marks around them.
+        //
+        // A cap of 0 is not a stacking judgement at all: it means no mark is acceptable,
+        // so the exemption does not apply there. `strip_zalgo` documents `max_marks=0` as
+        // stripping every combining mark (the negation overlay above aside, #749), and
+        // `strip_obfuscation` depends on it (#846 review).
+        if class == 0 && cap > 0 {
+            return true;
+        }
+        self.bump(class) <= cap
+    }
+
+    /// Count one more mark of `class` on the current base; returns the new count.
+    #[inline]
+    fn bump(&mut self, class: u8) -> usize {
+        let len = self.len;
+        if let Some(i) = self.classes[..len].iter().position(|&c| c == class) {
+            self.counts[i] += 1;
+            return self.counts[i];
+        }
+        if len == TALLY_SLOTS {
+            return usize::MAX;
+        }
+        self.classes[len] = class;
+        self.counts[len] = 1;
+        self.len = len + 1;
+        1
+    }
+}
+
+/// Streaming check: does any base carry **more than** `threshold` marks of one combining
+/// class, counted in NFD up to the next non-mark? [`MarkTally`] says what counts.
+///
+/// Returns the instant the first position exceeds `threshold`, so a short zalgo burst
 /// at the front of a long benign tail settles in `O(burst)`, not `O(len)` — no
 /// full NFD walk once the verdict is decided (review H-P2/H-P3).
 fn exceeds_combining_run(text: &str, threshold: usize) -> bool {
-    let mut run: usize = 0;
-    let mut previous: u8 = 0;
-    for ch in text.nfd() {
-        if is_combining_mark(ch) {
-            let class = canonical_combining_class(ch);
-            // Marks with combining class 0 are POSITIONED by the renderer rather than
-            // stacked at one spot — Burmese vowel signs and medials, Indic matras, Thai
-            // vowels. Counting them as stacking is what made `is_zalgo` call 142 ordinary
-            // Burmese place names zalgo (#842): `မြို့` is one syllable carrying a base,
-            // a medial, two vowel signs and a tone, and no count of marks can tell that
-            // from `U+0301` repeated forty times.
-            //
-            // What zalgo actually is, is many marks at ONE position, and that means many
-            // marks of one non-zero class. Runs are per class, so a legitimate cluster of
-            // distinct marks never accumulates.
-            //
-            // A threshold of 0 is not a stacking judgement at all — it means no mark is
-            // acceptable — so the exemption does not apply there. `strip_zalgo` documents
-            // `max_marks=0` as "strip all combining marks (equivalent to `strip_accents`)"
-            // and `strip_obfuscation` depends on it; exempting class 0 unconditionally
-            // would have let a Thai vowel or an Indic matra through both (#846 review).
-            if class == 0 && threshold > 0 {
-                run = 0;
-                previous = 0;
-                continue;
-            }
-            run = if class == previous { run + 1 } else { 1 };
-            previous = class;
-            if run > threshold {
-                return true;
-            }
-        } else {
-            run = 0;
-            previous = 0;
-        }
-    }
-    false
+    let mut tally = MarkTally::new();
+    text.nfd().any(|ch| !tally.admit(ch, threshold))
 }
 
 /// Detect whether text contains zalgo-style combining mark abuse.
 ///
-/// Returns `True` if any base character has more than `threshold` consecutive
-/// combining marks in NFD decomposition.
+/// Returns `True` if any base character carries more than `threshold` marks of one
+/// combining class in NFD decomposition (Z3: the cap is per combining class on one base,
+/// not per base, since #842). Class-0 marks, which a renderer positions rather than
+/// stacks, are not counted unless `threshold` is 0, and neither is the first negation
+/// overlay on a symbol (#749).
 ///
 /// # Parameters
-/// - `threshold`: Maximum allowed combining marks per base character (default: 3).
-///   Vietnamese `ệ` has 2 marks in NFD — the default of 3 is safe for all
-///   legitimate scripts.
+/// - `threshold`: Maximum allowed marks of one combining class on one base (default: 3).
+///   Vietnamese `e` + circumflex + dot below has 2 marks in NFD — the default of 3 is
+///   safe for all legitimate scripts.
 pub(crate) fn is_zalgo(text: &str, threshold: usize) -> bool {
     // Fast path: pure ASCII has no combining marks.
     if text.is_ascii() {
         return false;
     }
     exceeds_combining_run(text, threshold)
+}
+
+/// Remembers the last stacking mark on the current base, to spot one repeated (#835).
+///
+/// A class-0 mark is transparent: it neither counts as the previous mark nor clears it
+/// (Z1, `formal/lean/Text`). Canonical ordering sorts a base's marks by class only between
+/// starters, and a class-0 mark is one, so clearing on it let `a` + acute + `U+180B` +
+/// acute carry the repeat past every surface: the key builders' repeat-dropper, and the
+/// `duplicate_mark` detector, which calls [`first_repeated_mark`]. Only a non-mark ends
+/// the base.
+#[derive(Default)]
+struct RepeatTracker {
+    previous: Option<char>,
+}
+
+impl RepeatTracker {
+    /// Feed the next scalar of an NFD stream; `true` when it repeats the stacking mark
+    /// immediately before it on the same base.
+    #[inline]
+    fn repeats(&mut self, ch: char) -> bool {
+        if !is_combining_mark(ch) {
+            self.previous = None;
+            return false;
+        }
+        if canonical_combining_class(ch) == 0 {
+            return false;
+        }
+        if self.previous == Some(ch) {
+            return true;
+        }
+        self.previous = Some(ch);
+        false
+    }
 }
 
 /// Drop a nonspacing mark that repeats immediately on the same base (#835).
@@ -123,7 +228,8 @@ pub(crate) fn is_zalgo(text: &str, threshold: usize) -> bool {
 ///
 /// Nonzero combining class only, matching the cap's own discriminator (#842): a class-0
 /// mark is positioned rather than stacked, so a doubled Indic matra is an orthography
-/// question rather than this one.
+/// question rather than this one. A class-0 mark between two copies of one stacking mark
+/// does not separate them ([`RepeatTracker`]).
 /// Returns `false` when there was no repeat, leaving `out` untouched — the caller keeps
 /// its input, which is the `apply_into` no-op contract.
 ///
@@ -135,55 +241,38 @@ pub(crate) fn is_zalgo(text: &str, threshold: usize) -> bool {
 /// review).
 pub(crate) fn drop_repeated_marks_into(text: &str, out: &mut String) -> bool {
     // The check is much cheaper than the rewrite, and most text has no repeat at all.
-    if !has_repeated_mark(text) {
+    if first_repeated_mark(text).is_none() {
         return false;
     }
     out.clear();
     let mut filtered = String::with_capacity(text.len());
-    let mut previous: Option<char> = None;
-    for ch in text.nfd() {
-        if is_combining_mark(ch) && canonical_combining_class(ch) != 0 {
-            if previous == Some(ch) {
-                continue;
-            }
-            previous = Some(ch);
-        } else {
-            previous = None;
-        }
-        filtered.push(ch);
-    }
+    let mut tracker = RepeatTracker::default();
+    filtered.extend(text.nfd().filter(|&ch| !tracker.repeats(ch)));
     out.extend(filtered.nfc());
     true
 }
 
-/// Whether any base carries the same stacking mark twice in a row (#835).
+/// The first stacking mark that some base carries twice in a row (#835), or `None`.
 ///
 /// Cheap and streaming like [`exceeds_combining_run`], and needed for the same reason:
-/// the rewrite above cannot run if this decides there is nothing to do.
-fn has_repeated_mark(text: &str) -> bool {
-    let mut previous: Option<char> = None;
-    for ch in text.nfd() {
-        if is_combining_mark(ch) && canonical_combining_class(ch) != 0 {
-            if previous == Some(ch) {
-                return true;
-            }
-            previous = Some(ch);
-        } else {
-            previous = None;
-        }
-    }
-    false
+/// the rewrite above cannot run if this decides there is nothing to do. The anomaly
+/// detector's `duplicate_mark` finding reads the same answer, so the finding and the
+/// key builders' repeat-dropper cannot disagree about what a repeat is.
+pub(crate) fn first_repeated_mark(text: &str) -> Option<char> {
+    let mut tracker = RepeatTracker::default();
+    text.nfd().find(|&ch| tracker.repeats(ch))
 }
 
-/// Strip excessive combining marks, keeping at most `max_marks` per base
-/// character.  Operates in NFD (decomposed) space and recomposes to NFC.
+/// Strip excessive combining marks, keeping at most `max_marks` of each combining class
+/// per base character.  Operates in NFD (decomposed) space and recomposes to NFC.
 ///
 /// This preserves legitimate diacritics (é, ñ, ệ) while removing zalgo
 /// stacking abuse.
 ///
 /// # Parameters
-/// - `max_marks`: Maximum combining marks to keep per base character (default: 2).
-///   Set to 0 to strip all combining marks (equivalent to `strip_accents`).
+/// - `max_marks`: Maximum marks of one combining class to keep on one base (default: 3).
+///   Set to 0 to strip every combining mark except the first negation overlay on a
+///   symbol (#749), which is what `strip_accents` removes too.
 pub(crate) fn strip_zalgo(text: &str, max_marks: usize) -> String {
     let mut out = String::new();
     strip_zalgo_into(text, max_marks, &mut out);
@@ -210,10 +299,6 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
         return;
     }
 
-    let mut filtered = String::with_capacity(text.len());
-    let mut mark_count: usize = 0;
-    let mut mark_class: u8 = 0;
-
     // The cap is counted over the *NFD (decomposed)* sequence, so it bounds the
     // number of combining marks per base in decomposed space — a precomposed
     // accented letter (e.g. `é` = one mark in NFD) costs one toward the cap, and a
@@ -221,58 +306,13 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
     // recompose may then re-attach kept marks into precomposed forms; the count is
     // deliberately taken *before* that recompose so stacking is measured uniformly
     // regardless of the input's composition.
-    let mut base: Option<char> = None;
-    let mut negation_kept = false;
-    for ch in text.nfd() {
-        if crate::transliterate::is_negation_of(ch, base) && !negation_kept {
-            // #749: not a diacritic. On a symbol, `U+0338` and `U+20D2` are the stroke
-            // through a relation, so dropping one leaves the *positive* operator — `≠`
-            // became `=`. The first one does not count toward the cap: a negated symbol
-            // is one mark by construction and can never be the stacking this bounds.
-            //
-            // Exactly one per base. A relation carries a single stroke; a *run* of them
-            // is stacking whatever the base is, and exempting the whole run let
-            // `"=" + "\u{0338}" * 1000` through `Zalgo(0)` intact. Overlays after the
-            // first fall to the branch below and are counted like any other mark.
-            //
-            // On a *letter* the same code point is strikethrough obfuscation, which this
-            // preset exists to remove, so `is_negation_of` asks about the base.
-            negation_kept = true;
-            filtered.push(ch);
-        } else if is_combining_mark(ch) {
-            // Counted per combining class, matching the predicate (#842). A class-0 mark
-            // is positioned rather than stacked, so it never counts toward the cap and
-            // never gets dropped: capping those truncated ordinary Burmese, Bengali and
-            // Thai, deleting a tone mark from `မြို့`.
-            //
-            // `max_marks == 0` is the exception: it means no mark is acceptable, not
-            // "no *stacked* mark", and three doc comments promise it is equivalent to
-            // `strip_accents`. See `exceeds_combining_run` above.
-            let class = canonical_combining_class(ch);
-            if class == 0 && max_marks > 0 {
-                mark_count = 0;
-                mark_class = 0;
-                filtered.push(ch);
-            } else {
-                mark_count = if class == mark_class {
-                    mark_count + 1
-                } else {
-                    1
-                };
-                mark_class = class;
-                if mark_count <= max_marks {
-                    filtered.push(ch);
-                }
-                // else: drop the excess mark at this position
-            }
-        } else {
-            mark_count = 0;
-            mark_class = 0;
-            negation_kept = false;
-            base = Some(ch);
-            filtered.push(ch);
-        }
-    }
+    //
+    // The same `MarkTally` as the predicate above, so the cap drops exactly the marks
+    // the predicate counts as excess: `strip_zalgo` removes nothing from text `is_zalgo`
+    // calls ordinary (#788), and its output is never zalgo at the same threshold (Z2).
+    let mut filtered = String::with_capacity(text.len());
+    let mut tally = MarkTally::new();
+    filtered.extend(text.nfd().filter(|&ch| tally.admit(ch, max_marks)));
 
     // Recompose to NFC for consistency with the rest of the library.
     out.extend(filtered.nfc());
@@ -507,6 +547,95 @@ mod tests {
         assert!(!exceeds_combining_run(&text, 5)); // 5 marks, threshold 5
     }
 
+    /// NFD marks of `mark` in `text`.
+    fn count(text: &str, mark: char) -> usize {
+        text.nfd().filter(|&c| c == mark).count()
+    }
+
+    /// Z1 (`formal/lean/Text`): a class-0 mark between two runs of one mark reset the
+    /// count, so a base could carry any number of stacked marks.
+    #[test]
+    fn class_zero_mark_does_not_reset_the_count() {
+        // CGJ, a Mongolian free variation selector, a Khmer inherent vowel (all three
+        // render as nothing), and a visible Thai vowel sign.
+        for sep in ['\u{034F}', '\u{180B}', '\u{17B4}', '\u{0E31}'] {
+            assert!(is_combining_mark(sep) && canonical_combining_class(sep) == 0);
+            let split = format!("a\u{0301}\u{0301}\u{0301}{sep}\u{0301}\u{0301}\u{0301}");
+            assert!(is_zalgo(&split, 3), "U+{:04X}", sep as u32);
+            let stripped = strip_zalgo(&split, 3);
+            assert_eq!(count(&stripped, '\u{0301}'), 3, "U+{:04X}", sep as u32);
+            assert!(stripped.contains(sep), "the class-0 mark itself is kept");
+
+            let alternating = format!("a{}", format!("\u{0301}{sep}").repeat(20));
+            assert!(is_zalgo(&alternating, 3));
+            assert_eq!(count(&strip_zalgo(&alternating, 3), '\u{0301}'), 3);
+        }
+        // The kernel's minimal counterexample (`z1_minimal`), at max_marks = 1.
+        assert!(is_zalgo("a\u{0301}\u{0E31}\u{0301}", 1));
+        assert_eq!(
+            strip_zalgo("a\u{0301}\u{0E31}\u{0301}", 1),
+            "\u{00E1}\u{0E31}"
+        );
+        // A non-mark still starts a new base.
+        assert!(!is_zalgo(
+            "a\u{0301}\u{0301}\u{0301}b\u{0301}\u{0301}\u{0301}",
+            3
+        ));
+    }
+
+    /// Z1 for the repeat-dropper: a class-0 mark does not separate two copies of a mark.
+    #[test]
+    fn class_zero_mark_does_not_hide_a_repeat() {
+        assert_eq!(
+            first_repeated_mark("a\u{0301}\u{180B}\u{0301}"),
+            Some('\u{0301}')
+        );
+        assert_eq!(first_repeated_mark("a\u{0301}b\u{0301}"), None);
+        assert_eq!(first_repeated_mark("a\u{0301}\u{0300}\u{0301}"), None);
+        let mut out = String::new();
+        assert!(drop_repeated_marks_into(
+            "a\u{0301}\u{180B}\u{0301}\u{180B}",
+            &mut out
+        ));
+        assert_eq!(out, "\u{00E1}\u{180B}\u{180B}");
+    }
+
+    /// Z2 (`formal/lean/Text`): the negation overlay the cap keeps beyond `max_marks`
+    /// (#749) is not counted by the predicate either, so the cap's output is never zalgo
+    /// at the same threshold.
+    #[test]
+    fn strip_zalgo_output_is_not_zalgo() {
+        let stacked = format!("={}", "\u{0338}".repeat(4));
+        let out = strip_zalgo(&stacked, 3);
+        assert_eq!(count(&out, '\u{0338}'), 4, "one stroke plus three");
+        assert!(!is_zalgo(&out, 3));
+        assert!(!is_zalgo("\u{2260}", 0));
+        assert_eq!(strip_zalgo("\u{2260}", 0), "\u{2260}");
+        // A second overlay is counted, and on a letter none is exempt.
+        assert!(is_zalgo("=\u{0338}\u{0338}", 0));
+        assert!(is_zalgo("a\u{0338}", 0));
+        for text in [
+            stacked.as_str(),
+            "a\u{0301}\u{0301}\u{0301}\u{034F}\u{0301}\u{0301}",
+            "\u{2260}\u{20D2}\u{20D2}\u{20D2}\u{20D2}\u{20D2}",
+        ] {
+            for k in 0..4 {
+                assert!(!is_zalgo(&strip_zalgo(text, k), k), "{text:?} at {k}");
+            }
+        }
+    }
+
+    /// Every canonical combining class has a slot in [`MarkTally`].
+    #[test]
+    fn every_combining_class_fits_the_tally() {
+        let mut seen = [false; 256];
+        for c in '\0'..=char::MAX {
+            seen[usize::from(canonical_combining_class(c))] = true;
+        }
+        let classes = seen.iter().filter(|&&s| s).count();
+        assert!(classes < TALLY_SLOTS, "{classes} classes");
+    }
+
     proptest::proptest! {
         /// H-P3: `strip_zalgo` always returns NFC — the fast path that skips the
         /// filter must still normalize.
@@ -525,6 +654,17 @@ mod tests {
             let out = strip_zalgo(&s, 1000);
             let nfc: String = s.nfc().collect();
             proptest::prop_assert_eq!(out, nfc);
+        }
+
+        /// Z1/Z2: the cap's output is never zalgo at the same threshold, over an alphabet
+        /// built from the shapes that broke it: stacked marks, class-0 separators and
+        /// negation overlays on a symbol and on a letter.
+        #[test]
+        fn strip_zalgo_output_is_never_zalgo(
+            s in "[a=\u{0301}\u{0316}\u{0334}\u{0338}\u{20D2}\u{034F}\u{0E31}\u{180B}]{0,24}",
+            k in 0usize..4,
+        ) {
+            proptest::prop_assert!(!is_zalgo(&strip_zalgo(&s, k), k));
         }
     }
 }

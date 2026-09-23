@@ -56,7 +56,7 @@ class Text:
         """Remove control characters that are not whitespace (#433)."""
         ...
     def strip_zero_width_chars(self) -> Text:
-        """Remove zero-width characters (ZWSP, ZWNJ, ZWJ, word joiner, BOM)."""
+        """Remove zero-width characters (ZWSP, ZWNJ, ZWJ, word joiner, BOM, ...)."""
         ...
     def slugify(
         self,
@@ -138,7 +138,7 @@ class Text:
         """True if all characters are U+0000–U+007F."""
         ...
     def is_case_fold_stable(self) -> bool:
-        """True if case folding and str.lower() agree, so the value is a stable key."""
+        """True if case folding and disarm's compiled-in lowercase agree (a stable key)."""
         ...
     def is_canonical(self, *, preset: str = "canonicalize") -> bool: ...
     def is_normalized(self, *, form: NormalizationForm = "NFC") -> bool:

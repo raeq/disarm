@@ -216,12 +216,12 @@ public final class Disarm {
         return Native.stripPua(req(text));
     }
 
-    /** Collapse runs of combining marks to at most {@code maxMarks} per base ("de-zalgo"). */
+    /** Cap the marks of each combining class on one base at {@code maxMarks} ("de-zalgo"). */
     public static String stripZalgo(String text, int maxMarks) {
         return Native.stripZalgo(req(text), maxMarks);
     }
 
-    /** Whether {@code text} carries more than {@code threshold} combining marks on any base. */
+    /** Whether any base in {@code text} carries more than {@code threshold} marks of one combining class. */
     public static boolean isZalgo(String text, int threshold) {
         return Native.isZalgo(req(text), threshold);
     }

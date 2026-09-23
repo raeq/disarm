@@ -27,8 +27,8 @@ against for byte-stable behavior.
 | Bidi direction — `bidi_strong_ranges.tsv` | UCD `Bidi_Class` (UAX&nbsp;#9 `L`, and `R`/`AL`) | **17.0.0** |
 | Confusable prototype census — `confusable_prototype_census.tsv` | `confusables.txt` grouped by the UCD `Script` of each prototype, from the vendored `data/Scripts.txt` (#963) | **17.0.0** (both inputs) |
 | Within-word joiners — `word_joiners.tsv` | UCD `General_Category` (`Pd`, `Pc`, plus `U+002E` by hand) | **17.0.0** |
-| Normalization — `normalize()`, and every NFC/NFKC step inside the presets | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **17.0.0** |
-| Grapheme segmentation — `grapheme_len`, `terminal_width`, the cluster boundaries `slugify` cuts on, and the mark runs `is_zalgo` / `strip_zalgo` count | UAX&nbsp;#29, via the [`unicode-segmentation`](https://crates.io/crates/unicode-segmentation) crate (not a bundled table) | **17.0.0** |
+| Normalization — `normalize()`, every NFC/NFKC step inside the presets, and the NFD and combining classes `is_zalgo` / `strip_zalgo` count marks over | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **17.0.0** |
+| Grapheme segmentation — `grapheme_len`, `terminal_width`, the cluster boundaries `slugify` cuts on, and the zero-width `Prepend` characters `terminal_width` looks past for a cluster's base (checked against it by `zero_width_prepend_matches_the_segmenter`) | UAX&nbsp;#29, via the [`unicode-segmentation`](https://crates.io/crates/unicode-segmentation) crate (not a bundled table) | **17.0.0** |
 | UTS&nbsp;#46 mapping and validation — every `xn--` label `is_suspicious_hostname` and `analyze_hostname` decode | ICU4X, via [`idna`](https://crates.io/crates/idna) → `idna_adapter` → `icu_normalizer` / `icu_properties` (not a bundled table) | `idna` **1.1.0**, `icu_properties_data` **2.3.0** — see below |
 | Simple lowercasing — the `to_lowercase` side of `is_case_fold_stable` | UCD, via the **compiling toolchain's** standard library (not a bundled table, and not a dependency) | whatever the build's rustc carries — ≥ Unicode 16.0 in practice, since the crate's MSRV is 1.88 |
 | Transliteration / romanization | per-block standards (the rest of this document) | mixed; conventional where no single published standard exists |
@@ -50,11 +50,17 @@ analysis ever sees.
 
 The std lowercasing row is the only one disarm does not control at all, and it is the
 reason two builds of the same disarm version can disagree on `is_case_fold_stable` (#718).
-The divergence is latent rather than live today: the crate's MSRV is 1.88 — set by the
-ICU4X crates `idna` depends on, not by anything disarm wrote — and every rustc from 1.88
-carries Unicode 16 or newer. Measured over Garay (`U+10D50..=U+10D65`), the bicameral block
-added in Unicode 16, 0 of 22 code points read unstable on 1.88, and `cargo +1.81`, `+1.85`
-and `+1.87` cannot build a consumer of this crate at all.
+The divergence is live. The case-folding table is pinned at Unicode 16.0, and a toolchain
+on a newer Unicode lowercases letters the table does not fold: on a Unicode 17 toolchain
+the 28 cased letters Unicode 17 added (`U+A7CE`, `U+A7D2`, `U+A7D4`,
+`U+16EA0`-`U+16EB8`) read unstable, and on rustc 1.88, which is Unicode 16, they read
+stable. A wheel's answer for those letters therefore depends on the toolchain that built
+it. The other direction, a toolchain *older* than the table, cannot happen: the crate's
+MSRV is 1.88 — set by the ICU4X crates `idna` depends on, not by anything disarm wrote —
+and every rustc from 1.88 carries Unicode 16 or newer. Measured over Garay
+(`U+10D50..=U+10D65`), the bicameral block added in Unicode 16, 0 of 22 code points read
+unstable on 1.88, and `cargo +1.81`, `+1.85` and `+1.87` cannot build a consumer of this
+crate at all.
 
 The normalization row is the one with an external consequence. Because it tracks a
 newer UCD than most shipped CPythons, `disarm.normalize` and `unicodedata.normalize`

@@ -380,13 +380,13 @@ module Disarm
     end
 
     # Strip "zalgo" combining-mark stacking, keeping at most `max_marks:` (2)
-    # combining marks per base character.
+    # marks of each combining class on one base character.
     def strip_zalgo(text, max_marks: 2)
       translate_errors { _strip_zalgo(text, max_marks) }
     end
 
     # Whether `text` looks like zalgo: any base character carries more than
-    # `threshold:` (3) combining marks.
+    # `threshold:` (3) marks of one combining class.
     def zalgo?(text, threshold: 3)
       translate_errors { _zalgo?(text, threshold) }
     end

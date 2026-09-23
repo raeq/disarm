@@ -371,8 +371,9 @@ Disarm.strip_pua("a\u{E000}b")                      # => "ab"
 
 ### `Disarm.strip_zalgo(text, max_marks: 2)` · `Disarm.zalgo?(text, threshold: 3)`
 
-`zalgo?` flags "zalgo" — combining marks stacked past `threshold:` on a base
-character; `strip_zalgo` caps each base character at `max_marks:` combining marks.
+`zalgo?` flags "zalgo" — more than `threshold:` marks of one combining class
+stacked on a base character; `strip_zalgo` caps each class on each base character
+at `max_marks:` marks.
 
 ```ruby
 Disarm.zalgo?("Z\u0301\u0301\u0301\u0301")                       # => true

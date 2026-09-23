@@ -176,6 +176,7 @@ nav:
           - Conventions: contributing/conventions.md
           - AI-assisted contributions: contributing/ai-assistance.md
           - Pull requests: contributing/pull-requests.md
+          - Packaging decisions: contributing/packaging.md
       - Binding guide: BINDINGS.md
       - Releasing: RELEASING.md
       - Dependency upgrades: DEPENDENCY_UPGRADES.md

@@ -24,6 +24,7 @@ Everything longer than this page lives under `docs/contributing/`, also the
 | [Conventions][conventions] | naming a public function, logging, cleaning up nearby |
 | [AI-assisted contributions][ai-assistance] | an AI agent helped with the change |
 | [Pull requests][pull-requests] | why fragments exist; `scripts/watch_pr.py` |
+| [Packaging decisions][packaging] | a `pyproject.toml` setting looks wrong |
 
 Also at the top level: [BINDINGS.md](BINDINGS.md) before starting a new language
 binding, [RELEASING.md](RELEASING.md) for cutting a release, and
@@ -77,9 +78,8 @@ mypy python/disarm --ignore-missing-imports
 ```
 
 That is not all of CI: `cargo doc`, a current clippy, the ruff version CI pins and
-every binding's suite are in [Linting and formatting][linting]. If you touched
-`docs/`, also run the [doc-tests][doc-tests] and
-`mkdocs build --strict`.
+every binding's suite are in [Linting and formatting][linting]. If you touched `docs/`,
+also run the [doc-tests][doc-tests] and `mkdocs build --strict`.
 
 ## Sign your work — Developer Certificate of Origin
 
@@ -176,3 +176,4 @@ exactly what CI checks, are in [Pull requests][pull-requests].
 [pull-requests]: https://github.com/raeq/disarm/blob/main/docs/contributing/pull-requests.md
 [doc-tests]: https://github.com/raeq/disarm/blob/main/docs/contributing/documentation.md#doc-test-recipes
 [attribution]: https://github.com/raeq/disarm/blob/main/docs/contributing/ai-assistance.md#attribute-the-assistant
+[packaging]: https://github.com/raeq/disarm/blob/main/docs/contributing/packaging.md

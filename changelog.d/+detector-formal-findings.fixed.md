@@ -19,8 +19,10 @@
   the unreported one; the model's sweep found 2,328,179 split verdicts. The detector now
   classifies each token composed and reads a letter through its canonical decomposition,
   so both spellings get one report, lexicon included; `tests/exhaustive_anomalies.rs`
-  checks it over every Unicode scalar. One consequence: a canonical singleton reads as
-  its target, so `\u212aey` (KELVIN SIGN) reports what `Key` does, which is nothing. And
+  checks it over every Unicode scalar. A character NFC replaces with a different one
+  rather than composing, such as a canonical singleton (KELVIN SIGN, GREEK QUESTION
+  MARK), is still judged as spelled and keeps reporting, so `\u212aey` is not read as
+  `Key`. And
   `confusable` no longer fires on a letter whose fold only drops its accent
   (`Fran\u00e7ais`, `gar\u00e7on`, `ch\u1ec9`), which the guide already said was spared. The
   letters the fold changes in shape (`\u00f8`, `\u0142`, `\u0111`) still report, and

@@ -388,7 +388,7 @@ class Text:
         """True if the value is already its own canonical form under ``preset``.
 
         The verification-path counterpart to the presets (#730). Not the same
-        question as `has_anomalies`, which stays silent on 5,294 non-PUA
+        question as `has_anomalies`, which stays silent on 5,292 non-PUA
         code points that are not their own canonical form."""
         return self._t().is_canonical(self._value, preset=preset)
 

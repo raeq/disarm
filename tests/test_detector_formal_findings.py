@@ -159,11 +159,35 @@ class TestFinding3CanonicalEquivalence:
         assert disarm.inspect_anomalies(nfc).kinds == kinds
         assert disarm.inspect_anomalies(nfd).kinds == kinds
 
-    def test_a_canonical_singleton_is_its_target(self) -> None:
-        """``U+212A KELVIN SIGN`` is canonically ``K``: no normal form keeps it, and it
-        is not a disguise of the letter it is equivalent to."""
-        assert unicodedata.normalize("NFD", "\u212aey") == "Key"
-        assert disarm.inspect_anomalies("\u212aey").kinds == []
+    @pytest.mark.parametrize(
+        ("ch", "alone", "in_word"),
+        [
+            ("\u212a", [], ["compat_fold"]),  # KELVIN SIGN -> K
+            ("\u2126", [], []),  # OHM SIGN -> Greek omega
+            ("\u212b", [], []),  # ANGSTROM SIGN -> A with ring
+            ("\u037e", ["compat_fold"], ["mixed_script"]),  # GREEK QUESTION MARK -> ;
+            ("\u0387", [], ["mixed_script"]),  # GREEK ANO TELEIA -> middle dot
+            ("\u1fef", ["compat_fold"], ["mixed_script"]),  # GREEK VARIA -> `
+            ("\u0374", [], ["mixed_script"]),  # GREEK NUMERAL SIGN
+            ("\u1ffd", [], ["mixed_script"]),  # GREEK OXIA -> acute
+        ],
+        ids=lambda v: _cp(v) if isinstance(v, str) and len(v) == 1 else None,
+    )
+    def test_a_character_nfc_replaces_keeps_its_report(
+        self, ch: str, alone: list[str], in_word: list[str]
+    ) -> None:
+        """A canonical singleton is a different character, not a composition, so it is
+        judged as spelled: the kinds are the ones ``origin/main`` gave. Composing it would
+        read ``\u212aey`` as ``Key`` and pass text ``canonicalize`` rewrites."""
+        assert len(unicodedata.normalize("NFC", ch)) == 1
+        assert unicodedata.normalize("NFC", ch) != ch
+        assert disarm.inspect_anomalies(ch).kinds == alone
+        for word in (f"pay{ch}pal", f"ab{ch}cd"):
+            assert disarm.inspect_anomalies(word).kinds == in_word
+
+    def test_kelvin_and_the_greek_question_mark_still_report(self) -> None:
+        assert disarm.has_anomalies("\u212aey")
+        assert disarm.has_anomalies("a\u037eb")
 
     def test_a_lexicon_matches_either_spelling(self) -> None:
         words = {"caf\u00e9"}
@@ -174,7 +198,10 @@ class TestFinding3CanonicalEquivalence:
         """The binding path of the Rust sweep in ``tests/exhaustive_anomalies.rs``.
 
         Every scalar with a canonical decomposition or a nonzero combining class, alone
-        and in the seven contexts of the model's ``scripts/sweep_nf.py``.
+        and in the seven contexts of the model's ``scripts/sweep_nf.py``. The property is
+        over spellings with no scalar NFC replaces by a different single one (a canonical
+        singleton such as KELVIN SIGN, judged as spelled); NFC and NFD never contain one,
+        so comparing them stays inside it.
         """
         contexts = [
             ("", ""),

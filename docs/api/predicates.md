@@ -392,11 +392,11 @@ excluding unassigned and surrogates):
 
 | | count |
 |---|---|
-| clean to the detector **and** not canonical | 142,762 (5,294 excluding the Private Use Area) |
+| clean to the detector **and** not canonical | 142,760 (5,292 excluding the Private Use Area) |
 | flagged by the detector **and** already canonical | 0 |
 
 For single code points the relationship is one-way: the detector never fires on a code
-point the canonicalizer would leave alone, but it stays silent on 5,294 non-PUA code
+point the canonicalizer would leave alone, but it stays silent on 5,292 non-PUA code
 points that are not their own canonical form, including CJK compatibility ideographs,
 Arabic presentation forms, Kangxi radicals and all of fullwidth Latin.
 

@@ -10,6 +10,15 @@
 //! Compared on `kinds`, not only the boolean, so a change that kept the verdict but moved
 //! which kind fired would still be caught.
 //!
+//! **The domain.** The property is one verdict for canonically equivalent spellings that
+//! contain no scalar NFC replaces with a different single scalar: the canonical singletons
+//! (`\u{212A}` KELVIN SIGN, `\u{37E}` GREEK QUESTION MARK, the CJK compatibility
+//! ideographs) and the duplicate encodings (`\u{1FEE}`, `\u{1F71}`). Those are different
+//! characters, not a composition of the letters they stand for, so the detector reports
+//! them as spelled: `\u{212A}ey` is not `Key`. Neither NFC nor NFD can contain one, so
+//! comparing the two forms, as this file does, stays inside the domain for every input;
+//! [`assert_one_verdict`] checks that rather than assuming it.
+//!
 //! Two tiers. The whole range is `#[ignore]`d, because it is 17.8 million calls and takes
 //! minutes in a debug build; run it before a release (`tier3.yml` does):
 //!
@@ -40,6 +49,12 @@ const CONTEXTS: &[(&str, &str)] = &[
     ("\u{e0}\u{e9}", "\u{200f}1"),
 ];
 
+/// Whether NFC replaces `c` on its own with one different scalar: outside the domain.
+fn nfc_replaces(c: char) -> bool {
+    let mut nfc = c.nfc();
+    nfc.next().is_some_and(|f| f != c) && nfc.next().is_none()
+}
+
 /// Every split verdict among `scalars`, in every context.
 fn splits(scalars: &[char], lexicon: &HashSet<String>) -> Vec<String> {
     let mut out = Vec::new();
@@ -48,6 +63,10 @@ fn splits(scalars: &[char], lexicon: &HashSet<String>) -> Vec<String> {
             let s = format!("{pre}{c}{post}");
             let nfc: String = s.nfc().collect();
             let nfd: String = s.nfd().collect();
+            assert!(
+                !nfc.chars().chain(nfd.chars()).any(nfc_replaces),
+                "a normal form of {s:?} left the domain"
+            );
             let a = api::inspect_anomalies(&nfc, lexicon).kinds;
             let b = api::inspect_anomalies(&nfd, lexicon).kinds;
             if a != b {

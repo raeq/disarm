@@ -758,27 +758,70 @@ fn leet_demangle(s: &str) -> Option<String> {
 /// Per character rather than over the NFD string, so a Hangul syllable stays one letter
 /// instead of becoming its two or three jamo: the classifier counts letters, and a
 /// decomposition that multiplies them would move `is_majority_latin` on Korean.
+///
+/// A [`nfc_replaces`] scalar is excluded: `\u{212A}` KELVIN SIGN decomposes to `K`, but it
+/// is not `K` plus an accent, it is a different character that looks like one.
 fn is_ascii_letter_base(c: char) -> bool {
     c.is_ascii_alphabetic()
-        || (!c.is_ascii() && c.nfd().next().is_some_and(|b| b.is_ascii_alphabetic()))
+        || (!c.is_ascii()
+            && !nfc_replaces(c)
+            && c.nfd().next().is_some_and(|b| b.is_ascii_alphabetic()))
 }
 
-/// The token in NFC, borrowed when it already is.
+/// Whether NFC replaces `c` on its own with one **different** scalar.
 ///
-/// [`classify`] reads this rather than the token as spelled, so every test it runs is a
-/// function of the canonical-equivalence class and `has_anomalies` gives NFC and NFD
-/// spellings of one text the same verdict by construction rather than branch by branch.
-/// Composed rather than decomposed because the tables it consults are keyed on composed
-/// characters, as the confusable fold is (`fold_and_detect_are_form_invariant`, #475), and
-/// because a caller's lexicon is almost always NFC. The letter tests still see through a
-/// precomposed character, via [`is_ascii_letter_base`].
+/// That is every canonical singleton (`\u{212A}` KELVIN SIGN to `K`, `\u{2126}` OHM SIGN
+/// to Greek omega, `\u{37E}` GREEK QUESTION MARK to `;`, the CJK compatibility
+/// ideographs), and the duplicate encodings that recompose to another code point
+/// (`\u{1FEE}` to `\u{385}`, `\u{1F71}` to `\u{3AC}`). None of them is a composition of the
+/// letters it stands for: NFC substitutes a different character, which is exactly what a
+/// homoglyph is, and `canonicalize` rewrites it. So [`composed`] keeps them as spelled
+/// and the detector reports them as it always did. A scalar whose NFC is a sequence
+/// (`\u{958}`, `\u{344}`) is a precomposed spelling of that sequence and is composed like
+/// any other.
+///
+/// Computed from the normalization tables the crate already carries, rather than a list:
+/// the set is a property of the data, and a list would drift with it.
+fn nfc_replaces(c: char) -> bool {
+    let mut nfc = c.nfc();
+    let first = nfc.next();
+    first.is_some_and(|f| f != c) && nfc.next().is_none()
+}
+
+/// The token in NFC, borrowed when it already is, with [`nfc_replaces`] scalars kept.
+///
+/// [`classify`] reads this rather than the token as spelled, so the tests it runs give
+/// canonically equivalent spellings of the same letters one verdict: `\u{e9}t\u{e9}` and
+/// `e\u{301}te\u{301}` are one word to a reader and now one word to the detector (Finding 3
+/// of the Lean model in `formal/lean/Detection`). Composed rather than decomposed because
+/// the tables it consults are keyed on composed characters, as the confusable fold is
+/// (`fold_and_detect_are_form_invariant`, #475), and because a caller's lexicon is almost
+/// always NFC. The letter tests still see through a precomposed character, via
+/// [`is_ascii_letter_base`].
+///
+/// The property is therefore stated over spellings that contain no [`nfc_replaces`]
+/// scalar. That costs nothing for NFC and NFD, since neither form can contain one, so
+/// every text's NFC and NFD still get one verdict. What it keeps is the report on a raw
+/// `\u{212A}ey` or `a\u{37E}b`, which composing would have read as `Key` and `a;b` and
+/// passed as clean text that `canonicalize` changes, the silence Finding 1 is about.
 fn composed(tok: &str) -> std::borrow::Cow<'_, str> {
     use unicode_normalization::{is_nfc_quick, IsNormalized};
     if tok.is_ascii() || is_nfc_quick(tok.chars()) == IsNormalized::Yes {
-        std::borrow::Cow::Borrowed(tok)
-    } else {
-        std::borrow::Cow::Owned(tok.nfc().collect())
+        return std::borrow::Cow::Borrowed(tok);
     }
+    let mut out = String::with_capacity(tok.len());
+    let mut run = String::new();
+    for c in tok.chars() {
+        if nfc_replaces(c) {
+            out.extend(run.nfc());
+            run.clear();
+            out.push(c);
+        } else {
+            run.push(c);
+        }
+    }
+    out.extend(run.nfc());
+    std::borrow::Cow::Owned(out)
 }
 
 fn is_majority_latin(tok: &str) -> bool {
@@ -973,8 +1016,11 @@ fn folded_confusable(tok: &str) -> Option<(char, &'static str)> {
             // `\u{111}` have no decomposition, and `\u{1fe}` decomposes to `\u{d8}` +
             // acute, so it reports exactly when `\u{d8}` does. Those folds are deliberate
             // (`tests/integration_unmapped_confusables.rs`).
+            //
+            // A scalar NFC replaces outright is excluded: `\u{212A}` KELVIN SIGN decomposes to
+            // exactly its target `K`, and it is a different character, not `K` + an accent.
             let mut nfd = c.nfd();
-            let accent_only = target.chars().all(|t| nfd.next() == Some(t));
+            let accent_only = !nfc_replaces(c) && target.chars().all(|t| nfd.next() == Some(t));
             return (!accent_only).then_some((c, target));
         }
         // The composed case, which #719 calls the subtle one: `U+00BD` NFKC-decomposes to
@@ -2377,9 +2423,6 @@ mod tests {
             assert_eq!(inspect_anomalies(nfc, &l).kinds, kinds, "{nfc:?}");
             assert_eq!(inspect_anomalies(nfd, &l).kinds, kinds, "{nfd:?}");
         }
-        // The Kelvin sign is canonically `K` (a singleton decomposition, so neither NFC
-        // nor NFD keeps it), and it cannot be a disguise of the letter it is equivalent to.
-        assert!(!has_anomalies("\u{212A}ey", &l));
         // With a lexicon too: the leet decode reads the composed word, so a lexicon
         // written in NFC matches either spelling.
         let words = lex(&["caf\u{e9}"]);
@@ -2433,5 +2476,52 @@ mod tests {
             assert_eq!(r.kinds, vec![AnomalyKind::Confusable], "{word:?}");
             assert!(r.findings[0].detail.starts_with(source), "{word:?}");
         }
+    }
+
+    /// A scalar NFC replaces with a different one is still reported as spelled. Composing
+    /// the token read `\u{212A}ey` as `Key` and `a\u{37E}b` as `a;b` and called both clean,
+    /// while `canonicalize` rewrites them: a detector silent on text its cleaner changes.
+    /// The kinds are the ones `origin/main` gave before the canonical-equivalence fix.
+    #[test]
+    fn a_character_nfc_replaces_keeps_its_report() {
+        use AnomalyKind::{CompatFold, MixedScript};
+        let l = lex(&[]);
+        for (c, alone, in_word) in [
+            ('\u{212A}', vec![], vec![CompatFold]), // KELVIN SIGN -> K
+            ('\u{2126}', vec![], vec![]),           // OHM SIGN -> Greek omega
+            ('\u{212B}', vec![], vec![]),           // ANGSTROM SIGN -> A with ring
+            ('\u{37E}', vec![CompatFold], vec![MixedScript]), // GREEK QUESTION MARK -> ;
+            ('\u{387}', vec![], vec![MixedScript]), // GREEK ANO TELEIA -> middle dot
+            ('\u{1FEF}', vec![CompatFold], vec![MixedScript]), // GREEK VARIA -> `
+            ('\u{374}', vec![], vec![MixedScript]), // GREEK NUMERAL SIGN
+            ('\u{1FFD}', vec![], vec![MixedScript]), // GREEK OXIA -> acute
+        ] {
+            assert!(nfc_replaces(c), "U+{:04X}", c as u32);
+            assert_eq!(
+                inspect_anomalies(&c.to_string(), &l).kinds,
+                alone,
+                "U+{:04X}",
+                c as u32
+            );
+            for word in [format!("pay{c}pal"), format!("ab{c}cd")] {
+                assert_eq!(inspect_anomalies(&word, &l).kinds, in_word, "{word:?}");
+            }
+        }
+        assert!(has_anomalies("\u{212A}ey", &l));
+        assert!(has_anomalies("a\u{37E}b", &l));
+        // The letter test and the Finding 4 skip do not see through one either: KELVIN
+        // SIGN is not `K` plus an accent, so a word led by it names it as the disguise.
+        assert!(!is_ascii_letter_base('\u{212A}'));
+        let r = inspect_anomalies("\u{212A}\u{1D00}\u{1D05}\u{1D0D}", &l);
+        assert_eq!(r.kinds, vec![AnomalyKind::Confusable]);
+        assert!(
+            r.findings[0].detail.starts_with('\u{212A}'),
+            "{:?}",
+            r.findings[0].detail
+        );
+        // A composition is not a replacement: it is the letters it spells.
+        assert!(!nfc_replaces('\u{e9}'));
+        assert!(!nfc_replaces('\u{958}')); // NFC is the two-scalar sequence
+        assert!(!nfc_replaces('a'));
     }
 }

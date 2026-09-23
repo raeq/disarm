@@ -2134,8 +2134,8 @@ pub(crate) fn skeleton_key<'a>(
 /// the question a caller has about bytes that arrived already bound, where recomputing the
 /// canonical form silently defends the comparison and leaves the stored value alone.
 ///
-/// It is not [`crate::anomalies::has_anomalies`]. Over every assigned code point, 142,762
-/// of them (5,294 outside the Private Use Area) are clean to the detector and are not
+/// It is not [`crate::anomalies::has_anomalies`]. Over every assigned code point, 142,760
+/// of them (5,292 outside the Private Use Area) are clean to the detector and are not
 /// their own canonical form; none go the other way. CJK compatibility ideographs, Arabic
 /// presentation forms and fullwidth Latin are in that set, and they belong there — `ＮＨＫ`
 /// is ordinary Japanese text, so teaching the detector to fire on it would undo #633.

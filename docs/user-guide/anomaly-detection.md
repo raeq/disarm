@@ -83,9 +83,14 @@ nearly all text arrives in, was the unreported one (found by the Lean model in
 `formal/lean/Detection`, Finding 3). `tests/exhaustive_anomalies.rs` checks the property
 over every Unicode scalar.
 
-That includes the canonical singletons, which no normal form keeps: `U+212A KELVIN SIGN`
-is canonically `K`, so `\u212Aey` reports what `Key` reports, which is nothing. A caller
-who must refuse bytes that are not already normalized wants `is_normalized` or
+The exception is a character NFC **replaces** with a different one rather than
+composing: the canonical singletons, such as `U+212A KELVIN SIGN` (to `K`) and
+`U+037E GREEK QUESTION MARK` (to `;`), and duplicate encodings such as `U+1FEE`. Those are
+not a spelling of the letters they stand for, they are different characters that look
+like them, so the detector judges them as spelled: `\u212Aey` reports `compat_fold`
+where `Key` reports nothing, and `canonicalize` rewrites it. Neither NFC nor NFD
+contains such a character, so any text's two normal forms still get one verdict. A
+caller who must refuse bytes that are not already normalized wants `is_normalized` or
 `is_canonical`, not this detector.
 
 !!! note "`canonicalize` preserves enclosing marks; `strip_obfuscation` removes them"

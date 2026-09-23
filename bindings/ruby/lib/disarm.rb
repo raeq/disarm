@@ -228,7 +228,7 @@ module Disarm
     #
     # The verification-path counterpart to the presets: text in, normalized text out is
     # the generation path, and this is the question a caller asks about bytes that arrive
-    # already bound. `has_anomalies?` is not this predicate — 142,762 assigned code points are
+    # already bound. `has_anomalies?` is not this predicate — 142,760 assigned code points are
     # reported clean by the detector and are not their own canonical form.
     #
     # `preset:` is any name in the preset registry or any profile. Raises

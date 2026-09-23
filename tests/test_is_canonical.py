@@ -8,11 +8,11 @@ Measured over every assigned code point (excluding `Cn`/`Cs`), UCD 16.0.0:
 
 | | count |
 |---|---|
-| `has_anomalies(x) is False` **and** `canonicalize(x) != x` | **142,762** (5,294 excluding PUA) |
+| `has_anomalies(x) is False` **and** `canonicalize(x) != x` | **142,760** (5,292 excluding PUA) |
 | `has_anomalies(x) is True` **and** `canonicalize(x) == x` | **0** |
 
 One-way. A caller writing the obvious accept gate — reject if `has_anomalies`, else take
-the bytes as given — admits 5,294 non-PUA code points that are not their own canonical
+the bytes as given — admits 5,292 non-PUA code points that are not their own canonical
 form, `ｐａｙｐａｌ` and `ｅｘａｍｐｌｅ.ｃｏｍ` among them.
 
 `is_canonical` is the predicate for that gate. It is **not** a change to the detector:

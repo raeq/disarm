@@ -9,6 +9,6 @@
   `LF` form gives `pay pal`. They now end a line, as `LF` does. And #1005's rule that a
   character taking no cell moves nothing held only with visible text to its right: on an
   empty line a U+200B took cell 0, so every overwrite after a later carriage return landed
-  a column off, and `"​ZZZZZZ\rpaypal"` resolved to `paypalZ`. It now never takes a
+  a column off, and `"\u200bZZZZZZ\rpaypal"` resolved to `paypalZ`. It now never takes a
   cell; the consequence, as in a terminal, is that a backspace at column 0 has nothing to
   erase and the zero-width character is kept for `strip_zero_width` to decide on.

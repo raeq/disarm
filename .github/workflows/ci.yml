@@ -34,7 +34,7 @@ jobs:
       java: ${{ steps.filter.outputs.java }}
       cabi: ${{ steps.filter.outputs.cabi }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
@@ -117,7 +117,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
         with:
@@ -194,7 +194,7 @@ jobs:
           cargo install cargo-semver-checks --locked || true
           cargo semver-checks check-release --default-features
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
@@ -247,11 +247,11 @@ jobs:
     steps:
       # towncrier check diffs the branch against its base, so it needs the base
       # ref present — a shallow clone has neither the commits nor the merge base.
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
@@ -361,9 +361,9 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
@@ -451,7 +451,7 @@ jobs:
           pytest --doctest-modules "$DISARM_DIR/__init__.py" "$DISARM_DIR/_compat.py" -q
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: coverage-report
           path: coverage.xml
@@ -467,9 +467,9 @@ jobs:
     if: needs.changes.outputs.code == 'true' || needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
@@ -677,7 +677,7 @@ jobs:
       run:
         working-directory: bindings/java
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Build the JNI shim against the in-repo core (#374 drift gate)
         # Never committed (a relative-path patch would break release/packaging and
@@ -698,7 +698,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: BINDING=bindings/java/rust bash scripts/perf_lint.sh
 
-      - uses: actions/setup-java@v6  # pin to a SHA on review (dependabot-managed)
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6  # v6.0.1
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
@@ -722,7 +722,7 @@ jobs:
       run:
         working-directory: bindings/cabi
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Build against the in-repo core (#374 drift gate)
         run: printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml

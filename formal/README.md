@@ -11,7 +11,7 @@ in the ordinary suites: the fix is kept fixed by those tests, not by the model.
 |---|---|---|---|
 | [`lean/Transliterate`](lean/Transliterate/README.md) | Lean 4 | the argument for invariants I1–I3 and I7 | `context=True` passed non-word spans through raw (#1008); canonical equivalents that disagreed (#1013); the claims `docs/formal-verification.md` corrected |
 | [`lean/Deletions`](lean/Deletions/README.md) | Lean 4 | `resolve_deletions` | line breaks the detector knew and the resolver did not; a zero-width character taking a cell (#1010) |
-| [`lean/Emoji`](lean/Emoji/README.md) | Lean 4 | `replace_emoji`, `demojize` and the pipeline step | fully qualified ZWJ sequences named piece by piece; a dropped emoji gluing two words together; removals that left a new keycap behind (#1011) |
+| [`lean/Emoji`](lean/Emoji/README.md) | Lean 4 | `replace_emoji`, `demojize` and the pipeline step | fully qualified ZWJ sequences named piece by piece; a dropped emoji gluing two words together; removals that left a new keycap behind (#1011); a selector continuing a sequence where none belongs, which the model caught in #1011 itself (#1015) |
 | [`tla/Concurrency`](tla/Concurrency/README.md) | TLA+ | locks and the GIL in the Python binding; registration in the Rust API | two deadlocks through `__del__` (#1009); a stale cached transliterator (#1012); a registration landing after the seal and past the cap, and a `UniqueSlugifier` that could not be shared (#1014) |
 
 The READMEs describe the code at the commit each model was written against

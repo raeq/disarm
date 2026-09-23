@@ -187,7 +187,7 @@ they change.
 |---|---|---|---|
 | `formal/lean/Transliterate` | Lean 4 | I1–I3 for every string from the emitter argument; that the per-character lift needs a premise the code does not meet | #1008 (`context=True` passed non-word spans through raw), #1013 (canonical equivalents that disagreed), and the corrections on this page |
 | `formal/lean/Deletions` | Lean 4 | `resolve_deletions` never panics, never invents text and is idempotent; bounded-exhaustive checks up to length 7 | #1010 (line breaks the detector knew and the resolver did not; a zero-width character taking a cell) |
-| `formal/lean/Emoji` | Lean 4 | properties of `replace_emoji`, `demojize` and the pipeline step, in general by induction and exhaustively up to a length bound | #1011 (fully qualified ZWJ sequences named piece by piece, a dropped emoji gluing two words together, removals that left a new keycap behind) |
+| `formal/lean/Emoji` | Lean 4 | properties of `replace_emoji`, `demojize` and the pipeline step, in general by induction and exhaustively up to a length bound | #1011 (fully qualified ZWJ sequences named piece by piece, a dropped emoji gluing two words together, removals that left a new keycap behind), and #1015, a defect in #1011 that the model caught when run against it |
 | `formal/tla/Concurrency` | TLA+ / TLC | lock and GIL interleavings of the Python binding, and the registration paths of the Rust API | #1009 (two deadlocks through `__del__`), #1012 (a stale cached transliterator), #1014 (a registration landing after the seal and past the cap) |
 
 The Lean results use the kernel alone where they are proved by induction. The

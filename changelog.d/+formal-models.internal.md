@@ -1,7 +1,7 @@
 - **The formal models are in the repository, with CI (#TBD).** Three Lean 4 models
   (`formal/lean/Transliterate`, `Deletions`, `Emoji`) and a TLA+ model of the
   bindings' locking (`formal/tla/Concurrency`), each validated against the library
-  by differential testing, found the defects fixed in #1008 to #1014.
+  by differential testing, found the defects fixed in #1008 to #1015.
   `formal/README.md` indexes them. `.github/workflows/formal.yml` re-checks every
   Lean proof and every TLC configuration when `formal/` changes, with both
   toolchains pinned; `run_tlc.sh` compares each verdict with `expected.tsv`, and

@@ -9,7 +9,14 @@ Every failed property was minimised and reproduced on the real library.
 > `tests/test_emoji_formal_findings.py`. Still open: F4, a design question (a combining
 > mark on a removed emoji lands on the preceding letter), and F6 (standalone `demojize` is
 > not idempotent on the 38 CLDR names that contain curly quotes). This README describes
-> the code as it was at `bec93cf`; `Fixes.lean` is the fixes as proposed.
+> the code as it was at `bec93cf`; `Fixes.lean` is the fixes as proposed (F1-F3; F5 was
+> fixed in the code only). Run in `--fixed` mode against the library after #1011, the
+> differential test found one more defect, fixed in #1015: the F5 fix let a U+FE0F
+> continue a sequence anywhere, so `demojize` named a regional indicator, U+FE0F and a
+> second regional indicator as a flag. After #1015, `replace_emoji` agrees with the fixed
+> model on all 219,724 inputs, and every `demojize` difference falls in one of four
+> deliberate classes, listed in #1015. #1015 also asserts `MAX_WINDOW >= 4` (the latent
+> item below) and corrects the `src/pipeline.rs` comment (the doc drift below).
 
 The three entry points modelled:
 

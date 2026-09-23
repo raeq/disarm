@@ -397,6 +397,24 @@ class TestInvisibleSetDoesNotDriftFromItsDocs:
     )
     #: Unicode Tags block (#610). A range, because it is one.
     TAG_BLOCK = range(0xE0000, 0xE0080)
+    #: The rest of `Default_Ignorable_Code_Point` (Lean model, formal/lean/Detection,
+    #: finding 8): UTS #46 deletes them all, so the screen reports them all, bidi
+    #: controls aside. `tests/test_hostname_default_ignorable.py` holds the full list.
+    DEFAULT_IGNORABLE = (
+        *range(0x00AD, 0x00AE),
+        *range(0x034F, 0x0350),
+        *range(0x115F, 0x1161),
+        *range(0x17B4, 0x17B6),
+        *range(0x180B, 0x1810),
+        *range(0x2060, 0x2070),
+        *range(0x3164, 0x3165),
+        *range(0xFFA0, 0xFFA1),
+        *range(0xFFF0, 0xFFF9),
+        *range(0x1BCA0, 0x1BCA4),
+        *range(0x1D173, 0x1D17B),
+        *range(0xE0000, 0xE1000),
+    )
+    BIDI = frozenset({0x061C, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A)})
 
     @classmethod
     def documented(cls) -> frozenset:
@@ -411,7 +429,9 @@ class TestInvisibleSetDoesNotDriftFromItsDocs:
         member — stated here rather than left as an unexplained gap.
         """
         return frozenset(cls.ZERO_WIDTH) | {
-            cp for cp in cls.TAG_BLOCK if unicodedata.category(chr(cp)) in ("Cf", "Zs")
+            cp
+            for cp in (*cls.TAG_BLOCK, *cls.DEFAULT_IGNORABLE)
+            if unicodedata.category(chr(cp)) in ("Cf", "Zs") and cp not in cls.BIDI
         }
 
     ROOT = Path(__file__).resolve().parent.parent
@@ -476,6 +496,28 @@ class TestInvisibleSetDoesNotDriftFromItsDocs:
             0xFDEF,  # noncharacters
             0xE000,
             0xF8FF,  # private use (BMP; the plane ranges are named in prose)
+            # The rest of Default_Ignorable_Code_Point: every singleton and range endpoint
+            # the prose names (#1019 review).
+            0x00AD,
+            0x034F,
+            0x115F,
+            0x1160,
+            0x17B4,
+            0x17B5,
+            0x180B,
+            0x180F,
+            0x206A,
+            0x206F,
+            0x3164,
+            0xFFA0,
+            0xFFF0,
+            0xFFF8,
+            0x1BCA0,
+            0x1BCA3,
+            0x1D173,
+            0x1D17A,
+            0xE0080,
+            0xE0FFF,
         }
         missing = sorted(f"U+{c:04X}" for c in required - named)
         assert not missing, f"{path.name} omits {missing}"

@@ -325,6 +325,20 @@ int main(void) {
     printf("%-28s %-6s (%u)\n", "key_schema_version", schema >= 1 ? "OK" : "FAIL", schema);
     if (schema < 1) failures++;
 
+    /* Bytes that are not UTF-8 are decoded at the boundary, each malformed sequence
+     * as U+FFFD, as every other binding does (#469). They used to reach the core as
+     * text that was not UTF-8, which is undefined behaviour: strip_bidi crashed on
+     * Latin-1 input and fold_case aborted (formal/bindings, C1). */
+    char *sb = disarm_strip_bidi("caf\xE9");
+    check("strip_bidi(Latin-1)", sb, "caf\xEF\xBF\xBD");
+    disarm_string_free(sb);
+    char *fc = disarm_fold_case("\xC0\xAF" "etc");
+    check("fold_case(overlong)", fc, "\xEF\xBF\xBD\xEF\xBF\xBD" "etc");
+    disarm_string_free(fc);
+    char *tl = disarm_transliterate("caf\xE9");
+    check("transliterate(Latin-1)", tl, "caf[?]");
+    disarm_string_free(tl);
+
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");
         return 0;

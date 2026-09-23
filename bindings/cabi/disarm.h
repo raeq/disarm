@@ -484,6 +484,17 @@ disarm_sort_key_opts (
  *  Free a string previously returned by any `disarm_*` function. NULL-safe: the
  *  argument is a nullable owned box, so passing NULL (e.g. the unused half of a
  *  [`DisarmResult`]) is a no-op; a non-NULL box is dropped, freeing it.
+ *
+ *  The contract for every `disarm_*` function (found by `formal/bindings`, C1-C3):
+ *
+ *  - **Arguments.** Every `char const *` argument must be non-NULL and NUL-terminated,
+ *  except those documented as nullable (such as `lang`). Bytes that are not UTF-8
+ *  are accepted: each malformed sequence is read as U+FFFD, as every other binding
+ *  does, so Latin-1 or truncated input never reaches the core as invalid text.
+ *  - **Results.** A returned string is owned by the caller until passed here, and is
+ *  **read-only**: do not write through it, not even to shorten it. An empty result
+ *  can be a shared static, and a string shortened in place is freed with the wrong
+ *  size.
  */
 void
 disarm_string_free (

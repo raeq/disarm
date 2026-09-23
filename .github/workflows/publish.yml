@@ -250,4 +250,6 @@ jobs:
       - name: Attach SBOM to the GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.event.release.tag_name }}" sbom/*.cdx.json --clobber
+          # Through the environment, not spliced into the script, so a tag is data.
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" sbom/*.cdx.json --clobber

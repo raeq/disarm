@@ -73,14 +73,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: f
+        # Event data reaches the script through the environment, not by splicing
+        # `${{ }}` into its text, so a branch name is only ever a value.
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref || '' }}
+          BEFORE: ${{ github.event.before }}
         run: |
           # On a pull_request, diff against the merge base with the target branch.
           # On a push to main there is no `base_ref` — compare against the commit
           # before the push, falling back to HEAD~1 for the first push of a branch.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+            base="$(git merge-base "origin/${BASE_REF}" HEAD)"
           else
-            base="${{ github.event.before }}"
+            base="${BEFORE}"
             if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
               base="$(git rev-parse HEAD~1)"
             fi

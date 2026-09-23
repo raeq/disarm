@@ -231,11 +231,13 @@ jobs:
         env:
           CENTRAL_USER: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
           CENTRAL_PASS: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+        # The bundle name reads the runner's GITHUB_REF_NAME rather than splicing
+        # `${{ github.ref_name }}` into the script text, where a ref is code.
         run: |
           ( cd build/staging-deploy && zip -q -r ../central-bundle.zip dev )
           AUTH=$(printf '%s:%s' "$CENTRAL_USER" "$CENTRAL_PASS" | base64)
           HTTP=$(curl -sS -o response.txt -w '%{http_code}' \
-            -X POST "https://central.sonatype.com/api/v1/publisher/upload?name=disarm-${{ github.ref_name }}&publishingType=AUTOMATIC" \
+            -X POST "https://central.sonatype.com/api/v1/publisher/upload?name=disarm-${GITHUB_REF_NAME}&publishingType=AUTOMATIC" \
             -H "Authorization: Bearer $AUTH" \
             -F "bundle=@build/central-bundle.zip")
           echo "Central Portal responded HTTP $HTTP"

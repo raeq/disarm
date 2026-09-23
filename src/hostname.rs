@@ -20,12 +20,47 @@ use crate::{confusables, invisibles, scripts};
 /// Deliberately excludes the UAX #9 bidi controls: those are
 /// [`scripts::is_bidi_control`] and are reported through `bidi_control` (#603), so the
 /// two predicates partition the space rather than overlap.
+///
+/// It is also the whole `Default_Ignorable_Code_Point` property, bidi controls aside.
+/// UTS #46 maps every one of those to nothing, so a label carrying one resolves to the
+/// label without it, and the screen has to see it before the mapping does. The #605/#610
+/// list alone missed 28 of them — the soft hyphen, U+034F, the Hangul fillers, the
+/// Mongolian free variation selectors, U+17B4-U+17B5, U+206A-U+206F, the shorthand format
+/// controls and the musical-symbol formats — so `ev\u{AD}il.com` screened clean and
+/// resolved to `evil.com` (Lean model, `formal/lean/Detection`, finding 8).
 fn is_invisible_in_hostname(ch: char) -> bool {
     invisibles::is_zero_width(ch)
         || invisibles::is_tag(ch)
         || invisibles::is_variation_selector(ch)
         || invisibles::is_noncharacter(ch)
         || invisibles::is_pua(ch)
+        || (is_default_ignorable(ch) && !scripts::is_bidi_control(ch))
+}
+
+/// `Default_Ignorable_Code_Point=Yes`, from `DerivedCoreProperties.txt`: 4,174 code points
+/// in these ranges, unchanged from Unicode 15.1 through 17.0. The unassigned ones are
+/// included on purpose, as the property does: a future assignment there is still ignored.
+fn is_default_ignorable(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        0x00AD
+            | 0x034F
+            | 0x061C
+            | 0x115F..=0x1160
+            | 0x17B4..=0x17B5
+            | 0x180B..=0x180F
+            | 0x200B..=0x200F
+            | 0x202A..=0x202E
+            | 0x2060..=0x206F
+            | 0x3164
+            | 0xFE00..=0xFE0F
+            | 0xFEFF
+            | 0xFFA0
+            | 0xFFF0..=0xFFF8
+            | 0x1BCA0..=0x1BCA3
+            | 0x1D173..=0x1D17A
+            | 0xE0000..=0xE0FFF
+    )
 }
 
 /// Check if a bracketed string is a valid IPv6 literal per RFC 3986 §3.2.2.

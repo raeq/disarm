@@ -7,9 +7,12 @@ bugs below, and each cost a real wait or a wrong report:
 1. **A reviewer comment waited on CI.** A loop that acts on checks before it looks at
    review threads will sit through a whole CI run before noticing the PR is blocked on
    a comment. Here every cycle fetches threads and checks into one `Snapshot`, and
-   `decide()` ranks unresolved threads above check state and above merging. The order
-   of the two network calls in `fetch()` is irrelevant; the priority is in `decide()`,
-   which is where it can be tested.
+   `decide()` ranks unresolved threads above check state and above merging. The
+   priority is in `decide()`, which is where it can be tested. The order of the two
+   network calls in `fetch()` matters too, though this used to say it did not: the PR
+   view is read before the threads, so a review that arrives between the two reads
+   brings its threads with it. Read the other way round, `--await-review` can see the
+   review and miss its thread (WatchPR model, `formal/tla/WatchPR`).
 
 2. **`conclusion` is `""` for a running check, not `null`.** A loop that waits for
    `conclusion == null` to clear exits while checks are still in flight and then reports
@@ -27,7 +30,19 @@ On a repo whose branch protection does not require conversation resolution, a gr
 is mergeable before its reviewer has said anything, and a thread that has not been
 written yet cannot be unresolved. `--await-review` emulates the rule (#987): no merge
 while a review request is pending, nor before someone other than the author has
-reviewed. This repo requires resolution, so the default leaves it to GitHub.
+reviewed, and never while a reviewer's latest review requests changes. This repo
+requires resolution, so the default leaves it to GitHub.
+
+What no client can close, and the model shows: a review request, thread or
+change request that arrives between the last read and the merge still gets through
+`--await-review`; only requiring conversation resolution on the server closes that.
+A review of an earlier head still counts after a push; to require one per head, turn on
+"dismiss stale pull request approvals". And a check that is not *required* does not hold
+the merge while it runs, by design (point 4), so the checks that matter must be required.
+
+The merge names the head it evaluated (`--match-head-commit`), so a push after the read
+is refused rather than merged unseen, and a refused merge is reported and stops the
+watcher instead of being retried blind.
 
 The decision is a pure function of a `Snapshot`, so it is unit-tested in
 `tests/test_watch_pr.py` without touching the network. The I/O layer around it is thin
@@ -37,7 +52,9 @@ Exit codes:
     0  merged (re-read from GitHub to confirm, not trusted from the loop)
     1  closed without merging, or reported merged but not confirmed
     2  a human is needed: an unresolved review thread, a failed check, a structural
-       block, a stale branch, or a thread listing too long to read in one page
+       block, a stale branch, a thread listing too long to read in one page, a merge
+       GitHub refused twice (its reason is printed), or, with --await-review, a
+       reviewer whose latest review requests changes
     3  gave up after --max-polls, including while awaiting a review that never came
 
 Usage:
@@ -85,6 +102,9 @@ FAILURE_POLLS = 2
 #: run's checks COMPLETED and the new ones not yet created, which is indistinguishable
 #: from a structural block in a single snapshot.
 STUCK_POLLS = 3
+
+#: Consecutive refused merges before the refusal is the stop reason (WatchPR model, F3).
+MERGE_REJECTIONS = 2
 
 #: Conclusions that mean a check will not go green on its own. `CANCELLED` belongs
 #: here — a cancelled required check blocks exactly like a failed one.
@@ -146,6 +166,10 @@ class Snapshot:
     requested: tuple[str, ...] = ()
     #: Who has submitted a review, the author included.
     reviewed_by: tuple[str, ...] = ()
+    #: The head commit the rollup describes (`headRefOid`), "" when unknown.
+    head: str = ""
+    #: Non-authors whose latest submitted review requests changes.
+    changes_requested: tuple[str, ...] = ()
 
     @property
     def unresolved(self) -> tuple[Thread, ...]:
@@ -254,6 +278,10 @@ def decide(
 
     # A review still to come (#987). Below everything actionable now, above merging and
     # above the stuck report: a review on its way is neither mergeable nor structural.
+    if await_review and snap.changes_requested:
+        return Decision(
+            Action.STOP_STUCK, f"changes requested by {', '.join(snap.changes_requested)}"
+        )
     if await_review and snap.awaited:
         return Decision(Action.WAIT, snap.awaited)
 
@@ -304,6 +332,22 @@ def _gh(args: list[str]) -> str:
 SUBMITTED_REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "COMMENTED"})
 
 
+def _changes_requested(data: dict[str, Any]) -> tuple[str, ...]:
+    """Non-authors whose latest submitted review requests changes.
+
+    `--await-review` released on any review by someone other than the author, so a
+    CHANGES_REQUESTED review with no inline thread opened the gate and the PR merged
+    (WatchPR model, F5). The latest review per reviewer decides, so a later approval
+    clears an earlier request, as it does on GitHub.
+    """
+    author = (data.get("author") or {}).get("login") or ""
+    latest: dict[str, str] = {}
+    for r in data.get("reviews") or []:
+        if isinstance(r, dict) and r.get("state") in SUBMITTED_REVIEW_STATES:
+            latest[(r.get("author") or {}).get("login") or "?"] = r["state"]
+    return tuple(who for who, s in latest.items() if s == "CHANGES_REQUESTED" and who != author)
+
+
 def _reviews(data: dict[str, Any]) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
     """The author, the pending requests and the reviewers, from `gh pr view --json`.
 
@@ -334,7 +378,7 @@ def fetch(pr: int, repo: str) -> Snapshot | None:
             "--repo",
             repo,
             "--json",
-            "state,mergeStateStatus,statusCheckRollup,author,reviewRequests,reviews",
+            "state,mergeStateStatus,statusCheckRollup,author,reviewRequests,reviews,headRefOid",
         ]
     )
     if not raw:
@@ -344,14 +388,22 @@ def fetch(pr: int, repo: str) -> Snapshot | None:
     except json.JSONDecodeError:
         return None
 
+    # The latest run of each check, which is what branch protection evaluates. A run
+    # superseded on the same head can stay in the rollup as CANCELLED, and read as a
+    # failure on a PR GitHub calls CLEAN (WatchPR model, F4). Keyed by workflow as well
+    # as name: two workflows may both have a job called `build`, and a newer one must
+    # not hide the other's failure.
+    latest: dict[tuple[str, str], dict[str, Any]] = {}
+    rollup = [c for c in data.get("statusCheckRollup") or [] if isinstance(c, dict)]
+    for c in sorted(rollup, key=lambda c: c.get("startedAt") or ""):
+        latest[(c.get("workflowName") or "", c.get("name") or c.get("context") or "?")] = c
     checks = tuple(
         Check(
-            name=c.get("name") or c.get("context") or "?",
+            name=name,
             status=c.get("status") or "",
             conclusion=c.get("conclusion") or "",
         )
-        for c in data.get("statusCheckRollup") or []
-        if isinstance(c, dict)
+        for (_, name), c in latest.items()
     )
     author, requested, reviewed_by = _reviews(data)
 
@@ -366,31 +418,35 @@ def fetch(pr: int, repo: str) -> Snapshot | None:
         "id isResolved comments(first:1){nodes{body path line}}}}}}}"
     )
     raw_threads = _gh(["api", "graphql", "-f", f"query={query}"])
-    threads: tuple[Thread, ...] = ()
-    truncated = False
-    if raw_threads:
-        try:
-            review_threads = json.loads(raw_threads)["data"]["repository"]["pullRequest"][
-                "reviewThreads"
-            ]
-            nodes = review_threads["nodes"]
-            # The query has always asked for this and nothing read it, so `truncated`
-            # stayed False and the guard in `decide()` could not fire on real data.
-            # `last:` pages from the end, so older threads are what `hasPreviousPage`
-            # reports as unseen.
-            truncated = bool((review_threads.get("pageInfo") or {}).get("hasPreviousPage"))
-        except (json.JSONDecodeError, KeyError, TypeError):
-            nodes = []
-        threads = tuple(
-            Thread(
-                id=n["id"],
-                resolved=n["isResolved"],
-                path=(n["comments"]["nodes"] or [{}])[0].get("path") or "",
-                line=(n["comments"]["nodes"] or [{}])[0].get("line"),
-                body=(n["comments"]["nodes"] or [{}])[0].get("body") or "",
-            )
-            for n in nodes
+    # A thread listing that could not be read is a failed read, never "no threads".
+    # `_gh` ignores the exit status, so an error reached here as empty output or a body
+    # without `data`, and both read as a PR with no threads: a merge could go through
+    # with a thread open (WatchPR model, `formal/tla/WatchPR`, F1). The poll now counts
+    # as failed, which also keeps it out of the stuck streak.
+    if not raw_threads:
+        return None
+    try:
+        review_threads = json.loads(raw_threads)["data"]["repository"]["pullRequest"][
+            "reviewThreads"
+        ]
+        nodes = review_threads["nodes"]
+        # The query has always asked for this and nothing read it, so `truncated`
+        # stayed False and the guard in `decide()` could not fire on real data.
+        # `last:` pages from the end, so older threads are what `hasPreviousPage`
+        # reports as unseen.
+        truncated = bool((review_threads.get("pageInfo") or {}).get("hasPreviousPage"))
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+    threads = tuple(
+        Thread(
+            id=n["id"],
+            resolved=n["isResolved"],
+            path=(n["comments"]["nodes"] or [{}])[0].get("path") or "",
+            line=(n["comments"]["nodes"] or [{}])[0].get("line"),
+            body=(n["comments"]["nodes"] or [{}])[0].get("body") or "",
         )
+        for n in nodes
+    )
 
     return Snapshot(
         state=data.get("state") or "",
@@ -401,6 +457,8 @@ def fetch(pr: int, repo: str) -> Snapshot | None:
         author=author,
         requested=requested,
         reviewed_by=reviewed_by,
+        head=data.get("headRefOid") or "",
+        changes_requested=_changes_requested(data),
     )
 
 
@@ -439,6 +497,7 @@ def watch(
     stuck_polls = 0
     failure_polls = 0
     last_broken = ""
+    rejected = 0
     for poll in range(1, max_polls + 1):
         snap = fetch(pr, repo)
         if snap is None:
@@ -479,9 +538,26 @@ def watch(
             return 2
         if decision.action is Action.MERGE:
             print(f"PR #{pr} mergeable ({decision.detail}) — squashing")
-            _gh(["pr", "merge", str(pr), "--repo", repo, "--squash"])
+            # Pin the head that was evaluated: a push after the read would otherwise be
+            # merged unseen (WatchPR model, F2). And read the answer: a refused merge was
+            # retried blind every poll until --max-polls gave up with no reason (F3).
+            pin = ["--match-head-commit", snap.head] if snap.head else []
+            res = subprocess.run(
+                ["gh", "pr", "merge", str(pr), "--repo", repo, "--squash", *pin],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if res.returncode != 0:
+                rejected += 1
+                print(f"PR #{pr} merge refused: {res.stderr.strip()}")
+                if rejected >= MERGE_REJECTIONS:
+                    return 2
+            else:
+                rejected = 0
             time.sleep(min(interval, 10))
             continue
+        rejected = 0
 
         time.sleep(interval)
 

@@ -13,6 +13,7 @@ in the ordinary suites: the fix is kept fixed by those tests, not by the model.
 | [`lean/Deletions`](lean/Deletions/README.md) | Lean 4 | `resolve_deletions` | line breaks the detector knew and the resolver did not; a zero-width character taking a cell (#1010) |
 | [`lean/Emoji`](lean/Emoji/README.md) | Lean 4 | `replace_emoji`, `demojize` and the pipeline step | fully qualified ZWJ sequences named piece by piece; a dropped emoji gluing two words together; removals that left a new keycap behind (#1011); a selector continuing a sequence where none belongs, which the model caught in #1011 itself (#1015) |
 | [`tla/Concurrency`](tla/Concurrency/README.md) | TLA+ | locks and the GIL in the Python binding; registration in the Rust API | two deadlocks through `__del__` (#1009); a stale cached transliterator (#1012); a registration landing after the seal and past the cap, and a `UniqueSlugifier` that could not be shared (#1014) |
+| [`tla/WatchPR`](tla/WatchPR/README.md) | TLA+ | the merge protocol of `scripts/watch_pr.py` against a pull request that changes while it is read | a failed thread read taken for "no threads", a merge of a head never evaluated, a refused merge retried blind, a superseded cancelled run stopping a green PR, and `--await-review` merging over a change request (this model's pull request) |
 
 The READMEs describe the code at the commit each model was written against
 (`bec93cf`), and name its line numbers. Where a model has a *fixed* variant (`Fixes.lean`,
@@ -36,7 +37,9 @@ TLA2TOOLS=/path/to/tla2tools.jar bash formal/tla/Concurrency/run_tlc.sh
 ```
 
 `run_tlc.sh` compares every configuration's verdict with `expected.tsv` and exits
-non-zero on a difference. The configurations that model the code *as it was* are
+non-zero on a difference. WatchPR runs from `formal/tla/WatchPR/run_tlc.py` instead: its
+largest configurations explore tens of millions of states, so it is run by hand, and its
+counterexamples live on as `tests/test_watch_pr_protocol.py` in the ordinary suite. The configurations that model the code *as it was* are
 expected to fail, and stay in: a model change that made one pass would have lost its
 bug.
 
@@ -45,8 +48,8 @@ importable `disarm` and are run by hand; each README says how.
 
 ## In CI
 
-`.github/workflows/formal.yml` runs every `lake build` and every TLC configuration
-when anything under `formal/` changes. It is path-filtered and outside the "All checks
+`.github/workflows/formal.yml` runs every `lake build` and every `run_tlc.sh` when
+anything under `formal/` changes. It is path-filtered and outside the "All checks
 passed" roll-up, since nothing outside `formal/` can change a model's verdict.
 
 ## Trust

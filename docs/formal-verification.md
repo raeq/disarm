@@ -176,7 +176,7 @@ inverted. Do not read "exhaustively verified" as "reversible."
 
 ## Machine-checked models (`formal/`)
 
-Four models, each written against the code and **validated against the built library
+Five models, each written against the code and **validated against the built library
 by differential testing before any proof or counterexample was trusted**. Every
 property that failed was cut down to a minimal input and reproduced on the library,
 and each of those became a fix with a regression test in the ordinary suites, which
@@ -189,6 +189,7 @@ they change.
 | `formal/lean/Deletions` | Lean 4 | `resolve_deletions` never panics, never invents text and is idempotent; bounded-exhaustive checks up to length 7 | #1010 (line breaks the detector knew and the resolver did not; a zero-width character taking a cell) |
 | `formal/lean/Emoji` | Lean 4 | properties of `replace_emoji`, `demojize` and the pipeline step, in general by induction and exhaustively up to a length bound | #1011 (fully qualified ZWJ sequences named piece by piece, a dropped emoji gluing two words together, removals that left a new keycap behind), and #1015, a defect in #1011 that the model caught when run against it |
 | `formal/tla/Concurrency` | TLA+ / TLC | lock and GIL interleavings of the Python binding, and the registration paths of the Rust API | #1009 (two deadlocks through `__del__`), #1012 (a stale cached transliterator), #1014 (a registration landing after the seal and past the cap) |
+| `formal/tla/WatchPR` | TLA+ / TLC | the merge protocol of the repository's own `scripts/watch_pr.py`, against a pull request that GitHub changes between reads | a failed review-thread read taken for "no threads", a merge of a head never evaluated, a refused merge retried blind, and `--await-review` merging over a change request |
 
 The Lean results use the kernel alone where they are proved by induction. The
 bounded-exhaustive ones use `native_decide`, which also trusts Lean's compiler; each

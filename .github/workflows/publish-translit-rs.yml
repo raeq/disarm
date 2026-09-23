@@ -20,13 +20,13 @@ permissions:
   contents: read
 
 jobs:
-  publish:
-    name: Build and publish translit-rs 0.8.2
+  # Build and publish are separate jobs so that `pip install build`, setuptools and
+  # the build backend never run in a job that can mint a PyPI credential. The same
+  # split publish.yml uses: build jobs upload artifacts, and the job holding
+  # `id-token: write` only downloads and uploads them.
+  build:
+    name: Build translit-rs 0.8.2
     runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      contents: read   # job-level perms replace workflow-level; checkout needs this
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -40,6 +40,24 @@ jobs:
           python -m build packaging/translit-rs-deprecation --outdir dist
       - name: List artifacts
         run: ls -lh dist/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: translit-rs-dist
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish translit-rs 0.8.2
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: translit-rs-dist
+          path: dist/
       - name: Publish to PyPI (translit-rs)
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # release/v1
         with:

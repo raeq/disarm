@@ -657,7 +657,9 @@ jobs:
           cache: npm
           cache-dependency-path: bindings/node/package-lock.json
 
-      - run: npm ci
+      # No dependency install hook runs (the lockfile's one, fsevents, is macOS-only).
+      # `npm run` below still runs this package's own scripts.
+      - run: npm ci --ignore-scripts
 
       - name: Lint (Biome)
         run: npm run lint

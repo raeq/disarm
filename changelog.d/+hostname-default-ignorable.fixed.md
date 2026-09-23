@@ -1,0 +1,11 @@
+- **The hostname screen missed 28 invisibles that UTS #46 deletes.** Found by the Lean model
+  of the detectors (`formal/lean/Detection`). `is_suspicious_hostname` reports an
+  invisible character in a label because UTS #46 maps it to nothing, so the label
+  resolves to one without it, but the screen checked a hand-written list:
+  `is_suspicious_hostname("ev\u00adil.com")` said clean while its canonical form was
+  `evil.com`, which is the blocklist bypass the screen exists to close. The soft hyphen,
+  U+034F, the Hangul fillers, the Mongolian free variation selectors, U+17B4-U+17B5,
+  U+206A-U+206F, the shorthand format controls, the musical-symbol formats and the
+  unassigned default-ignorables of the tag plane were all missed. `has_invisible` now
+  covers the whole `Default_Ignorable_Code_Point` property, bidi controls aside, which
+  `bidi_control` already reports.

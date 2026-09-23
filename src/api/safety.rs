@@ -748,6 +748,11 @@ pub struct HostnameAnalysis {
     /// - **variation selector** — `U+FE00`–`U+FE0F`, `U+E0100`–`U+E01EF`
     /// - **noncharacter** — `U+FDD0`–`U+FDEF` and the last two of every plane
     /// - **private use** — `U+E000`–`U+F8FF`, plane 15 and plane 16
+    /// - **any other default-ignorable** — the rest of `Default_Ignorable_Code_Point`,
+    ///   which UTS #46 deletes as it maps: `U+00AD`, `U+034F`, `U+115F`–`U+1160`,
+    ///   `U+17B4`–`U+17B5`, `U+180B`–`U+180F`, `U+206A`–`U+206F`, `U+3164`, `U+FFA0`,
+    ///   `U+1BCA0`–`U+1BCA3`, `U+1D173`–`U+1D17A`, `U+E0080`–`U+E0FFF` and the
+    ///   unassigned ones, bidi controls excepted
     ///
     /// Disjoint from [`bidi_control`](Self::bidi_control): these carry no direction at
     /// all, so neither that field nor [`bidi_conflict`](Self::bidi_conflict) can see

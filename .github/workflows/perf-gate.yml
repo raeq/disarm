@@ -68,18 +68,26 @@ jobs:
       # copying the broken line, which is how both of them got it.
       base: ${{ steps.f.outputs.base }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - id: f
+        # Event data reaches the script through the environment, not by splicing
+        # `${{ }}` into its text, so a branch name is only ever a value.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HAS_PERF_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'perf') }}
+          BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref || '' }}
+          BEFORE: ${{ github.event.before }}
         run: |
           # On a pull_request, diff against the merge base with the target branch.
           # On a push to main there is no `base_ref` — compare against the commit
           # before the push, falling back to HEAD~1 for the first push of a branch.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$(git merge-base "origin/${BASE_REF}" HEAD)"
           else
-            base="${{ github.event.before }}"
+            base="${BEFORE}"
             if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
               base="$(git rev-parse HEAD~1)"
             fi
@@ -122,10 +130,10 @@ jobs:
           if [ "$touched" != "true" ]; then
             reason="no perf-relevant files changed — nothing to measure"
             run=false
-          elif [ "${{ github.event_name }}" != "pull_request" ]; then
+          elif [ "$EVENT_NAME" != "pull_request" ]; then
             reason="push to main — always measured"
             run=true
-          elif [ "${{ contains(github.event.pull_request.labels.*.name, 'perf') }}" = "true" ]; then
+          elif [ "$HAS_PERF_LABEL" = "true" ]; then
             reason="'perf' label present"
             run=true
           elif git diff --name-only "$base" HEAD \
@@ -164,15 +172,16 @@ jobs:
             echo "::notice::No perf-relevant changes — gate trivially satisfied (required-check shim)."
           fi
 
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         if: needs.changes.outputs.perf == 'true'
         with:
           fetch-depth: 0 # need the merge-base and both code versions (V12)
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         if: needs.changes.outputs.perf == 'true'
       - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
         if: needs.changes.outputs.perf == 'true'
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         if: needs.changes.outputs.perf == 'true'
         with:
           python-version: "3.12" # pinned interpreter (V9)
@@ -228,16 +237,21 @@ jobs:
     if: needs.changes.outputs.perf == 'true'
     runs-on: ubuntu-24.04
     continue-on-error: true # flag, do not fail the PR (V13/V14)
-    permissions:
-      contents: write # append to the perf-results branch (V19)
+    # Read-only. This job builds and runs the pull request's code and installs
+    # unpinned build tools (maturin), so it is the last place a write token should
+    # be. The append to perf-results (V19) is `perf-record`'s, below, which runs
+    # nothing but git and receives this job's output as an artifact.
+    outputs:
+      record: ${{ steps.measured.outputs.record }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
@@ -300,7 +314,7 @@ jobs:
           cat target/perf-stat/summary.txt 2>/dev/null || true
 
       - name: Upload signals as artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: perf-signals
           path: |
@@ -313,19 +327,52 @@ jobs:
             target/perf-stat/summary.txt
           if-no-files-found: ignore
 
+      # Reached only when every step above succeeded, which is exactly when the
+      # append used to run. An unset output skips `perf-record`.
+      - name: Mark the measurement complete
+        id: measured
+        run: echo "record=true" >> "$GITHUB_OUTPUT"
+
+  # ── Append the measurement to perf-results (V19, best-effort) ────────────
+  # The only job in this workflow with a write token, split out of perf-signals so
+  # that none of the code perf-signals builds, installs or runs ever shares a job
+  # with it. It checks out perf-results itself, never the pull request's tree, and
+  # runs git and a one-line python3 over the uploaded JSON, nothing else.
+  perf-record:
+    name: perf record (append to perf-results)
+    needs: perf-signals
+    if: needs.perf-signals.outputs.record == 'true'
+    runs-on: ubuntu-24.04
+    continue-on-error: true # best-effort, as the step it replaces was
+    permissions:
+      contents: write # push to the perf-results branch
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: perf-results
+          # This job pushes, so it keeps the credential checkout persists. It uploads
+          # no artifact, which is the leak zizmor's artipacked audit is about.
+          persist-credentials: true # zizmor: ignore[artipacked]
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: perf-signals
+          path: ${{ runner.temp }}/signals
+
       - name: Append measurement to perf-results (V19, best-effort)
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -e
           # One record = fingerprint + the bucketed comparator ratios (V14), so a
           # perf-results line is self-contained and comparable within its bucket.
-          python -c "import json; fp=json.load(open('fingerprint.json')); fp['comparator_ratios']=json.load(open('ratios.json')); print(json.dumps(fp, sort_keys=True))" > record.json
-          git fetch origin perf-results
-          git worktree add /tmp/pr perf-results
-          cat record.json >> /tmp/pr/measurements.jsonl
-          echo "" >> /tmp/pr/measurements.jsonl
-          cd /tmp/pr
+          cd "$RUNNER_TEMP/signals"
+          python3 -c "import json; fp=json.load(open('fingerprint.json')); fp['comparator_ratios']=json.load(open('ratios.json')); print(json.dumps(fp, sort_keys=True))" > "$RUNNER_TEMP/record.json"
+          cd "$GITHUB_WORKSPACE"
+          cat "$RUNNER_TEMP/record.json" >> measurements.jsonl
+          echo "" >> measurements.jsonl
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add measurements.jsonl
-          git commit -s -m "perf-results: append measurement (PR #${{ github.event.pull_request.number }}, ${GITHUB_SHA})"
-          git push origin perf-results
+          git commit -s -m "perf-results: append measurement (PR #${PR_NUMBER}, ${GITHUB_SHA})"
+          git push origin HEAD:perf-results

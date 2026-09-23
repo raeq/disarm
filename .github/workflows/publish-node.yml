@@ -41,6 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - name: Poll the crates.io sparse index for the target core version
         # `working-directory: bindings/node` comes from the workflow-level defaults,
         # so `Cargo.toml` is the node binding's manifest.
@@ -119,6 +121,8 @@ jobs:
             target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build against the in-repo core on non-publish events (#374 drift gate)
         # On a push to main, the PUBLISHED core can lag the binding: a pre-release
@@ -137,11 +141,13 @@ jobs:
         shell: bash
         run: printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml
 
+      # No npm cache on the release path: the prebuilds made here are what ships.
+      # `package-manager-cache: false` also rules out setup-node's automatic cache,
+      # which switches on if package.json ever names npm as its packageManager.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: bindings/node/package-lock.json
+          package-manager-cache: false
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
         with:
@@ -158,7 +164,10 @@ jobs:
           mkdir -p ~/.cargo
           printf '[target.aarch64-unknown-linux-gnu]\nlinker = "aarch64-linux-gnu-gcc"\n' >> ~/.cargo/config.toml
 
-      - run: npm ci
+      # --ignore-scripts: no dependency's install hook runs. The lockfile has one,
+      # fsevents (macOS file watching for vitest), and nothing here needs it; the
+      # napi, tsc and biome CLIs ship as plain JS or prebuilt binaries.
+      - run: npm ci --ignore-scripts
 
       - name: Build the native addon
         # Against the PUBLISHED core on release/dispatch (the shipped prebuild);
@@ -194,21 +203,32 @@ jobs:
     needs: build
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # An Environment, like the PyPI, crates.io and RubyGems publishers, so the npm
+    # publish can carry protection rules (required reviewers, tag-only deployment).
+    # A Trusted Publisher configured on npmjs.com with no environment accepts any.
+    environment: npm
     permissions:
       contents: read
       # OIDC for npm provenance / trusted publishing — no long-lived token.
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
+      # No npm cache, automatic or explicit: this job can mint an npm credential.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
-          cache: npm
-          cache-dependency-path: bindings/node/package-lock.json
+          package-manager-cache: false
 
-      - run: npm ci
+      # --ignore-scripts matters most here. With `id-token: write`, every step can
+      # request the OIDC token npm exchanges for a publish credential, so a
+      # dependency's install hook in this job could publish as us. The 2026 sckit
+      # worm ships templates for planting itself in npm and PyPI packages, which is
+      # the route by which it would arrive here (docs/security/supply-chain.md).
+      - run: npm ci --ignore-scripts
 
       - name: Collect the per-platform prebuilds
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
@@ -227,7 +247,7 @@ jobs:
       - name: Update npm for OIDC trusted publishing
         # Trusted Publishing needs npm CLI >= 11.5 (Node 20 bundles 10.x). Pinned
         # for a reproducible release; bump deliberately.
-        run: npm install -g npm@11.5.1
+        run: npm install -g --ignore-scripts npm@11.5.1
 
       - name: npm publish (OIDC trusted publishing + provenance)
         # No long-lived NPM_TOKEN: a Trusted Publisher configured on npmjs.org for

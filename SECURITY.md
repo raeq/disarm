@@ -114,3 +114,7 @@ What is attested for consumers of the published artifacts, and how to verify it:
   ```
 
   (PyPI also surfaces the attestation/provenance on each file's page.)
+
+- **The pipeline that produces these artifacts.** Which job can publish to which
+  registry, what runs beside each credential, and the registry and repository settings
+  the maintainers configure are in `docs/security/supply-chain.md`.

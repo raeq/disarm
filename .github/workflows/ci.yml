@@ -34,7 +34,9 @@ jobs:
       java: ${{ steps.filter.outputs.java }}
       cabi: ${{ steps.filter.outputs.cabi }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
@@ -117,7 +119,9 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
         with:
@@ -194,7 +198,7 @@ jobs:
           cargo install cargo-semver-checks --locked || true
           cargo semver-checks check-release --default-features
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
@@ -247,11 +251,12 @@ jobs:
     steps:
       # towncrier check diffs the branch against its base, so it needs the base
       # ref present — a shallow clone has neither the commits nor the merge base.
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
@@ -361,9 +366,11 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
@@ -451,7 +458,7 @@ jobs:
           pytest --doctest-modules "$DISARM_DIR/__init__.py" "$DISARM_DIR/_compat.py" -q
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: coverage-report
           path: coverage.xml
@@ -467,9 +474,11 @@ jobs:
     if: needs.changes.outputs.code == 'true' || needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
@@ -545,6 +554,8 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build the binding against the in-repo core (#374 drift gate)
         # The ext pins the core as a REGISTRY dep (version = "0.10") so the
@@ -615,6 +626,8 @@ jobs:
         working-directory: bindings/node
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build the binding against the in-repo core (#374 drift gate)
         # Never committed: a relative-path patch would break the napi prebuild
@@ -644,7 +657,9 @@ jobs:
           cache: npm
           cache-dependency-path: bindings/node/package-lock.json
 
-      - run: npm ci
+      # No dependency install hook runs (the lockfile's one, fsevents, is macOS-only).
+      # `npm run` below still runs this package's own scripts.
+      - run: npm ci --ignore-scripts
 
       - name: Lint (Biome)
         run: npm run lint
@@ -677,7 +692,9 @@ jobs:
       run:
         working-directory: bindings/java
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build the JNI shim against the in-repo core (#374 drift gate)
         # Never committed (a relative-path patch would break release/packaging and
@@ -698,7 +715,13 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: BINDING=bindings/java/rust bash scripts/perf_lint.sh
 
-      - uses: actions/setup-java@v6  # pin to a SHA on review (dependabot-managed)
+      # `./gradlew` executes the committed gradle-wrapper.jar, so check it is a jar
+      # Gradle published before running it: a swapped wrapper would run with every
+      # credential this job has. Checked against Gradle's published checksums.
+      - name: Validate the Gradle wrapper
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb  # v6.3.0
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6  # v6.0.1
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
@@ -722,7 +745,9 @@ jobs:
       run:
         working-directory: bindings/cabi
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build against the in-repo core (#374 drift gate)
         run: printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml
@@ -785,6 +810,8 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
 
@@ -806,6 +833,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
 
@@ -818,6 +847,55 @@ jobs:
           # licenses / bans / sources only — RustSec advisories are owned by the
           # dedicated `cargo audit` job above (#260).
           command: check licenses bans sources
+
+
+  # -- Workflow lint: actionlint + zizmor (docs/security/supply-chain.md) --
+  # Static analysis of every workflow. actionlint checks syntax, expressions and
+  # types, and runs shellcheck over each `run:` script. zizmor checks what the 2026
+  # release-pipeline compromises exploited: unpinned actions, `${{ }}` template
+  # injection, credentials persisted by checkout, caches restored into release
+  # jobs, and write permissions wider than a job needs.
+  #
+  # Always on, like cargo-audit, and cheap. It cannot go red on its own: actionlint
+  # is a checksum-verified release, zizmor and shellcheck are hash-locked in
+  # requirements/workflow-lint.txt, and zizmor runs `--offline`, so a new finding
+  # can only come from a change to a workflow. A deliberate exception is an inline
+  # `# zizmor: ignore[<audit>]` comment with its reason beside it.
+  workflow-lint:
+    name: Workflow lint (actionlint + zizmor)
+    runs-on: ubuntu-latest
+    env:
+      ACTIONLINT_VERSION: "1.7.12"
+      ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install zizmor and shellcheck (hash-locked)
+        run: pip install --require-hashes -r requirements/workflow-lint.txt
+
+      - name: Install actionlint (pinned release, checksum-verified)
+        run: |
+          tarball="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -sSfL -o "$tarball" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  $tarball" | sha256sum -c -
+          tar -xzf "$tarball" -C "$RUNNER_TEMP" actionlint
+
+      - name: actionlint
+        # The pinned shellcheck from the step above, not whichever one the runner
+        # image carries.
+        run: '"$RUNNER_TEMP/actionlint" -color -shellcheck "$(command -v shellcheck)"'
+
+      - name: zizmor
+        # Medium and above fail the job. Below that zizmor reports style (`help`) and
+        # expansions of values that are not attacker-controlled (`info`).
+        run: zizmor --offline --min-severity=medium --format=github .
 
 
   # ── Status gate (always runs, for branch protection) ────────────
@@ -835,11 +913,13 @@ jobs:
   # per-language `*_CHANGED` guards below preserve that exactly as before. The
   # RustSec audit and the supply-chain policy are the two exceptions that block
   # merge on EVERY PR (#195/#260): an advisory or a license change can land on a
-  # dependency without any code change here.
+  # dependency without any code change here. Workflow lint is the third, for a
+  # different reason: it takes seconds, so it is cheaper to run it than to
+  # path-filter it.
   all-ok:
     name: All checks passed
     if: always()
-    needs: [changes, lint, test, doc-tests, changelog, cargo-audit, cargo-deny, ruby, node, java, cabi]
+    needs: [changes, lint, test, doc-tests, changelog, cargo-audit, cargo-deny, workflow-lint, ruby, node, java, cabi]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate every language gate
@@ -853,6 +933,7 @@ jobs:
           DOCTESTS="${{ needs['doc-tests'].result }}"
           AUDIT="${{ needs['cargo-audit'].result }}"
           DENY="${{ needs['cargo-deny'].result }}"
+          WFLINT="${{ needs['workflow-lint'].result }}"
           CHANGELOG="${{ needs.changelog.result }}"
 
           failed=0
@@ -860,9 +941,11 @@ jobs:
 
           # ── Always-on gates ────────────────────────────────────────────────
           # An advisory or a supply-chain policy violation can appear without any
-          # code change in this PR, so these block merge unconditionally.
+          # code change in this PR, so these block merge unconditionally. So does
+          # workflow lint, which is deterministic and too cheap to filter.
           [[ "$AUDIT" == "success" ]] || fail "cargo audit" "RustSec advisory outstanding ($AUDIT)"
           [[ "$DENY"  == "success" ]] || fail "cargo deny"  "supply-chain policy violation ($DENY)"
+          [[ "$WFLINT" == "success" ]] || fail "workflow lint" "actionlint or zizmor reported a finding ($WFLINT)"
 
           # ── Rust + Python ──────────────────────────────────────────────────
           if [[ "$CODE" == "true" || "$DOCS" == "true" ]]; then

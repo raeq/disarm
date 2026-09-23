@@ -31,7 +31,9 @@ jobs:
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - name: Poll the crates.io sparse index for the target core version
         shell: bash
         run: |
@@ -116,7 +118,9 @@ jobs:
             osarch: windows-x86_64
             lib: disarm_jni.dll
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build against the in-repo core on non-publish events (#374 drift gate)
         # On push-to-main the published core can lag the binding, so validation builds
@@ -189,9 +193,17 @@ jobs:
       run:
         working-directory: bindings/java
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6  # pin to a SHA on review (dependabot-managed)
+      # `./gradlew` executes the committed gradle-wrapper.jar, so check it is a jar
+      # Gradle published before running it: a swapped wrapper would run with every
+      # credential this job has. Checked against Gradle's published checksums.
+      - name: Validate the Gradle wrapper
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb  # v6.3.0
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6  # v6.0.1
         with:
           distribution: temurin
           java-version: "21"
@@ -225,11 +237,13 @@ jobs:
         env:
           CENTRAL_USER: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
           CENTRAL_PASS: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+        # The bundle name reads the runner's GITHUB_REF_NAME rather than splicing
+        # `${{ github.ref_name }}` into the script text, where a ref is code.
         run: |
           ( cd build/staging-deploy && zip -q -r ../central-bundle.zip dev )
           AUTH=$(printf '%s:%s' "$CENTRAL_USER" "$CENTRAL_PASS" | base64)
           HTTP=$(curl -sS -o response.txt -w '%{http_code}' \
-            -X POST "https://central.sonatype.com/api/v1/publisher/upload?name=disarm-${{ github.ref_name }}&publishingType=AUTOMATIC" \
+            -X POST "https://central.sonatype.com/api/v1/publisher/upload?name=disarm-${GITHUB_REF_NAME}&publishingType=AUTOMATIC" \
             -H "Authorization: Bearer $AUTH" \
             -F "bundle=@build/central-bundle.zip")
           echo "Central Portal responded HTTP $HTTP"

@@ -155,3 +155,4 @@ nav:
       - Releasing: RELEASING.md
       - Dependency upgrades: DEPENDENCY_UPGRADES.md
       - Security: SECURITY.md
+      - Supply-chain security: security/supply-chain.md

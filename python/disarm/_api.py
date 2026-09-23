@@ -944,6 +944,11 @@ def sanitize_filename(
         text: Input string (title, user input, etc.).
         separator: Replacement for spaces and stripped characters.
             Also accepted as ``replacement_text`` (pathvalidate compatibility).
+            It reaches the output without passing the filter, so it must be
+            printable, non-space ASCII, contain no character illegal on
+            *platform* and no path separator (``/`` or ``\\``); anything else
+            raises `InvalidArgumentError`. ``""`` is allowed and drops
+            stripped characters outright.
         max_length: Maximum filename length measured in **bytes** (UTF-8
             encoded), not characters. Default 255 matches the ext4/APFS/NTFS
             filesystem limit. Truncation always lands on a character boundary
@@ -960,10 +965,16 @@ def sanitize_filename(
             without special treatment of the extension.
 
     Returns:
-        Safe filename string.
+        Safe filename string. It is a fixed point — sanitizing it again with
+        the same arguments returns it unchanged — and on the ``"universal"``
+        and ``"windows"`` platforms it is never a device name (``CON``,
+        ``NUL``, …) as Windows reads one: the part before the first dot,
+        trailing spaces ignored.
 
     Raises:
-        DisarmError: If an internal Rust error occurs.
+        InvalidArgumentError: If *separator* contains a character a filename
+            must not carry (see above), *platform* or *lang* is unknown, or
+            *max_length* is negative.
 
     Examples:
         >>> sanitize_filename("My Report (final).pdf")
@@ -984,8 +995,10 @@ def sanitize_filename(
         What the sanitizer will not do is manufacture one. Compatibility folding
         maps five code points to ``%`` (``؉`` U+0609, ``؊`` U+060A, ``٪`` U+066A,
         ``﹪`` U+FE6A, ``％`` U+FF05), which used to assemble ``%2E%2E%2F`` out of
-        input containing no ``%`` at all. The rule is now exact: **``%`` never
-        appears in the output unless it appeared in the input** (#721).
+        input containing no ``%`` at all (#721). The rule is exact and per
+        character: **every ``%`` in the output is one the input contained** (or
+        part of a separator the caller chose). Typing one ``%`` does not let a
+        folded one through.
 
         >>> sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt")
         '_2E_2E_2Fetc.txt'
@@ -2006,8 +2019,9 @@ def detect_encoding(data: bytes) -> tuple[str, float]:
 
     - **A BOM.** ``FF FE``, ``FE FF`` and ``EF BB BF`` yield ``UTF-16LE``,
       ``UTF-16BE`` and ``UTF-8`` directly. A BOM is not a probabilistic signal.
-      This is the same WHATWG sniff `decode_to_utf8` performs internally, so the
-      two agree by construction — they used to disagree silently, with
+      This is the same WHATWG sniff `decode_to_utf8` performs when it
+      auto-detects, so the two agree by construction — they used to disagree
+      silently, with
       ``detect_encoding`` reporting ``KOI8-U`` at confidence 0.95 for the bytes
       `decode_to_utf8` read correctly as UTF-16LE.
     - **BOM-less UTF-16 over ASCII-range text**, where every second byte is
@@ -2058,6 +2072,14 @@ def decode_to_utf8(
     If encoding is None, auto-detects using the chardetng algorithm. Note that
     ``min_confidence`` is effectively a binary accept/reject knob (see #194 and
     the argument docs below), not a quality grade.
+
+    **Byte-order marks.** Auto-detection reads a BOM first. An *explicit*
+    ``encoding`` is never overridden by one: only that encoding's own BOM is
+    removed, and any other is decoded as data, so ``b"\\xfe\\xff\\x00A"`` given
+    as ``"utf-8"`` is malformed UTF-8 (an error with ``strict=True``), not
+    UTF-16BE ``"A"``. A UTF-16 label that names no byte order (``"utf-16"``,
+    ``"unicode"``, ``"ucs-2"``) still takes its byte order from a UTF-16 BOM;
+    ``"utf-16le"`` and ``"utf-16be"`` do not.
 
     Supports all WHATWG encodings (UTF-8, windows-1252, ISO-8859-1,
     Shift_JIS, EUC-JP, EUC-KR, Big5, GB18030, etc.).

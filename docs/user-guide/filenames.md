@@ -87,6 +87,25 @@ Character used to replace illegal characters (default: `"_"`):
     sanitizeFilename('hello:world', { separator: '-' }) // => 'hello-world'
     ```
 
+The separator is inserted *after* the illegal characters are removed, so it is held to
+the same rules: printable, non-space ASCII, no character illegal on the platform, and no
+path separator (`/` or `\`, on every platform). Anything else raises
+`InvalidArgumentError` rather than putting a `/`, a NUL or a bidi control back into the
+name. The empty separator is allowed and simply drops what it would have replaced.
+
+```python
+from disarm import InvalidArgumentError
+
+assert sanitize_filename("hello:world", separator="") == "helloworld"
+for bad in ["/", "\\", " ", "\x00", "\u202e"]:
+    try:
+        sanitize_filename("../etc/passwd", separator=bad)
+    except InvalidArgumentError:
+        pass
+    else:
+        raise AssertionError(f"separator {bad!r} was accepted")
+```
+
 ### max_length
 
 Maximum filename length in bytes (default: `255`):
@@ -217,10 +236,34 @@ assert sanitize_filename("long_name.pdf", max_length=12, preserve_extension=Fals
 
 The sanitization pipeline executes in this order:
 
-1. Transliterate non-ASCII characters (using `lang` if set)
+1. Transliterate non-ASCII characters (using `lang` if set), collapsing `..` runs before
+   and after
 2. Strip OS-illegal characters (per `platform`)
-3. Replace stripped characters with `separator`
+3. Replace stripped characters with `separator` (never at the start of the name)
 4. Collapse consecutive separators
-5. Handle reserved names (prefix with `_`)
-6. Truncate to `max_length` (respecting `preserve_extension`)
-7. Strip leading/trailing separators and dots
+5. Strip trailing separators, and leading and trailing dots and spaces
+6. Handle reserved names (prefix with `_`)
+7. Truncate to `max_length` (respecting `preserve_extension`)
+8. Strip leading and trailing dots and spaces from the whole name, then check it for a
+   reserved name once more, as Windows reads it: the part before the first dot
+
+Steps 2–8 then run again on their own output until it stops changing, so the result is a
+fixed point: sanitizing a sanitized name returns it unchanged. One pass is not always
+enough — truncation can end a stem on a separator, and an extension that cleans to
+nothing moves the split to an earlier dot — and a name that changes on the second call
+defeats deduplication between systems that sanitize a different number of times.
+
+```python
+for text, kwargs in [
+    ("_.x.*", {}),
+    ("ab_cd", {"max_length": 3, "preserve_extension": False}),
+    ("a.bcd.txt", {"max_length": 6}),
+    ("*.con", {}),
+]:
+    once = sanitize_filename(text, **kwargs)
+    assert sanitize_filename(once, **kwargs) == once
+
+assert (
+    sanitize_filename("*.con") == "_con"
+)  # the stem sanitizes away; the name is still not a device
+```

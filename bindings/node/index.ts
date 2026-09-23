@@ -497,7 +497,13 @@ export interface SanitizeFilenameOptions {
   preserveExtension?: boolean
 }
 
-/** Turn arbitrary text into a filesystem-safe filename. */
+/**
+ * Turn arbitrary text into a filesystem-safe filename.
+ *
+ * `separator` must be printable, non-space ASCII with no character illegal on
+ * `platform` and no path separator (`/`, `\`); anything else throws
+ * {@link DisarmInvalidArgument}. `''` is allowed.
+ */
 export function sanitizeFilename(text: string, options: SanitizeFilenameOptions = {}): string {
   return call(() =>
     native.sanitizeFilename(

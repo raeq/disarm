@@ -2,7 +2,7 @@
 //!
 //! Validates the non-negative `max_length` contract at the boundary (#231);
 //! Layer 1 / Layer 2 take an already-checked `usize`. The native
-//! [`crate::ErrorRepr`] (unknown `lang`, bad `platform`) converts to a Python
+//! [`crate::ErrorRepr`] (unknown `lang`, bad `platform` or `separator`) converts to a Python
 //! exception via `?` (`From<ErrorRepr> for PyErr`).
 
 use pyo3::prelude::*;

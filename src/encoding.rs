@@ -134,6 +134,48 @@ const COMMON_ENCODING_LABELS: &[&str] = &[
     "macintosh",
 ];
 
+/// Decode `bytes` as the encoding the caller named, `label` resolving to `enc`.
+///
+/// `Encoding::decode` performs the WHATWG BOM sniff, in which a byte-order mark
+/// overrides the encoding it was given. That is right for auto-detection and wrong
+/// here: `decode_to_utf8(b"\xfe\xff\x00A", "utf-8", strict=True)` returned `("A",
+/// False)` — bytes that are not UTF-8 decoded as UTF-16BE, and `strict` had nothing to
+/// catch. A caller validating "this upload is UTF-8" accepted UTF-16, and one decoding
+/// with a declared single-byte charset got a different string from every other decoder
+/// given the same declaration (Finding 14 of the Lean model).
+///
+/// So an explicit encoding is the encoding used, and only **its own** BOM is removed
+/// (`decode_with_bom_removal`): `EF BB BF` for UTF-8, `FF FE` for UTF-16LE, `FE FF` for
+/// UTF-16BE, nothing for any other encoding. Any other BOM is decoded as the data it is,
+/// which for UTF-8 means malformed bytes that `strict` rejects.
+///
+/// The one exception is a UTF-16 label that names **no byte order** (`"utf-16"`,
+/// `"unicode"`, `"ucs-2"`, …). WHATWG resolves those to UTF-16LE, but what they declare
+/// is "UTF-16, byte order given by the BOM" — Python's `utf-16` codec and the Unicode
+/// standard read them that way — so a UTF-16 BOM of either order still decides. `"utf-16le"`
+/// and `"utf-16be"` name an order and get exactly that one.
+fn decode_explicit<'a>(
+    bytes: &'a [u8],
+    enc: &'static encoding_rs::Encoding,
+    label: &str,
+) -> (
+    std::borrow::Cow<'a, str>,
+    &'static encoding_rs::Encoding,
+    bool,
+) {
+    let label = label
+        .trim_matches(|c: char| c.is_ascii_whitespace())
+        .to_ascii_lowercase();
+    let names_no_byte_order =
+        enc == encoding_rs::UTF_16LE && label != "utf-16le" && label != "unicodefeff";
+    let enc = match encoding_rs::Encoding::for_bom(bytes) {
+        Some((bom_enc, _)) if names_no_byte_order && bom_enc == encoding_rs::UTF_16BE => bom_enc,
+        _ => enc,
+    };
+    let (decoded, had_errors) = enc.decode_with_bom_removal(bytes);
+    (decoded, enc, had_errors)
+}
+
 /// Pure Rust byte-to-UTF-8 decoding — no Python dependency.
 ///
 /// Returns `Ok((decoded_text, had_errors))` or a [`crate::ErrorRepr`].
@@ -148,9 +190,10 @@ const COMMON_ENCODING_LABELS: &[&str] = &[
 /// compare the re-encoded output against the original bytes rather than
 /// relying solely on this flag.
 ///
-/// When `encoding` is `None` the encoding is auto-detected. If the
+/// When `encoding` is `None` the encoding is auto-detected, and a BOM decides it. If the
 /// detection confidence is below `min_confidence` an error is returned
-/// so the caller can require a minimum quality threshold.
+/// so the caller can require a minimum quality threshold. An explicit `encoding` is
+/// never overridden by a BOM; see [`decode_explicit`].
 ///
 /// In `strict` mode (#189) a lossy decode — malformed bytes replaced with U+FFFD
 /// — is a hard error rather than a silent `had_errors = true` the caller might
@@ -199,7 +242,12 @@ pub(crate) fn decode_to_utf8_impl(
             .ok_or(crate::ErrorRepr::UnsupportedAutoEncoding { got: name })?
     };
 
-    let (decoded, actual_encoding, had_errors) = enc.decode(bytes);
+    let (decoded, actual_encoding, had_errors) = match encoding {
+        Some(label) => decode_explicit(bytes, enc, label),
+        // Auto-detection: `detect_encoding_impl` already chose from the BOM when there is
+        // one, so the WHATWG sniff inside `decode` agrees with it (#710).
+        None => enc.decode(bytes),
+    };
     // #189: in strict mode a lossy decode (malformed sequences replaced with
     // U+FFFD) is a hard error, not a silent success the caller might ignore.
     if strict && had_errors {
@@ -317,6 +365,70 @@ mod tests {
         let (decoded, had_errors) =
             decode_to_utf8_impl(&[0x63, 0x61, 0x66, 0xE9], Some("ISO-8859-1"), 0.0, false).unwrap();
         assert_eq!(decoded, "café");
+        assert!(!had_errors);
+    }
+
+    /// Finding 14 of the Lean model: `Encoding::decode` let a BOM override the encoding
+    /// the caller named, so `FE FF 00 41` "as UTF-8" came back as UTF-16BE `"A"` with no
+    /// error, even under `strict`.
+    #[test]
+    fn explicit_encoding_is_not_overridden_by_a_bom() {
+        assert!(matches!(
+            decode_to_utf8_impl(b"\xfe\xff\x00A", Some("utf-8"), 0.0, true),
+            Err(crate::ErrorRepr::LossyDecode { .. })
+        ));
+        let (text, had_errors) =
+            decode_to_utf8_impl(b"\xfe\xff\x00A", Some("utf-8"), 0.0, false).unwrap();
+        assert_eq!(text, "\u{FFFD}\u{FFFD}\0A");
+        assert!(had_errors);
+        // A single-byte charset reads the BOM bytes as the characters they are.
+        let (text, had_errors) =
+            decode_to_utf8_impl(b"\xff\xfeA\x00B\x00", Some("iso-8859-1"), 0.0, false).unwrap();
+        assert_eq!(text, "\u{FF}\u{FE}A\0B\0");
+        assert!(!had_errors);
+    }
+
+    /// The encoding's own BOM is still removed, and only that one.
+    #[test]
+    fn explicit_encoding_strips_only_its_own_bom() {
+        let decode = |bytes: &[u8], label: &str| {
+            decode_to_utf8_impl(bytes, Some(label), 0.0, false)
+                .unwrap()
+                .0
+        };
+        assert_eq!(decode(b"\xef\xbb\xbfA", "utf-8"), "A");
+        assert_eq!(decode(b"\xff\xfeA\x00", "utf-16le"), "A");
+        assert_eq!(decode(b"\xfe\xff\x00A", "utf-16be"), "A");
+        // A byte order the label names is the one used, BOM or not.
+        assert_eq!(decode(b"\xfe\xff\x00A", "utf-16le"), "\u{FFFE}\u{4100}");
+        assert_eq!(
+            decode(b"\xef\xbb\xbfA", "windows-1252"),
+            "\u{EF}\u{BB}\u{BF}A"
+        );
+    }
+
+    /// `"utf-16"` names no byte order, so a UTF-16 BOM still chooses one — WHATWG maps
+    /// the label to UTF-16LE, and without this a big-endian file declared as `"utf-16"`
+    /// would decode as silent mojibake.
+    #[test]
+    fn a_utf16_label_without_byte_order_follows_the_bom() {
+        let decode = |bytes: &[u8], label: &str| {
+            decode_to_utf8_impl(bytes, Some(label), 0.0, true)
+                .unwrap()
+                .0
+        };
+        for label in ["utf-16", " UTF-16 ", "unicode", "ucs-2"] {
+            assert_eq!(decode(b"\xfe\xff\x00A", label), "A", "{label:?}");
+            assert_eq!(decode(b"\xff\xfeA\x00", label), "A", "{label:?}");
+            assert_eq!(decode(b"A\x00", label), "A", "{label:?}");
+        }
+    }
+
+    /// Auto-detection keeps the WHATWG sniff: there, the BOM is the evidence (#710).
+    #[test]
+    fn auto_detection_still_follows_the_bom() {
+        let (text, had_errors) = decode_to_utf8_impl(b"\xfe\xff\x00A", None, 0.0, true).unwrap();
+        assert_eq!(text, "A");
         assert!(!had_errors);
     }
 

@@ -389,6 +389,30 @@ class DisarmCoverageTest {
     }
 
     @Test
+    void sanitizeFilenameRejectsASeparatorAFilenameCannotCarry() {
+        for (String separator : new String[] {"/", "\\", " ", "\u0000", "\u202e", ":"}) {
+            assertThrows(
+                    DisarmInvalidArgumentException.class,
+                    () -> Disarm.sanitizeFilename(
+                            "../etc/passwd",
+                            SanitizeFilenameOptions.builder().separator(separator).build()),
+                    separator);
+        }
+        SanitizeFilenameOptions empty = SanitizeFilenameOptions.builder().separator("").build();
+        assertEquals("ab", Disarm.sanitizeFilename("a:b", empty));
+    }
+
+    @Test
+    void sanitizeFilenameNeverLeavesADeviceNameOrANonFixedPoint() {
+        assertEquals("_con", Disarm.sanitizeFilename("*.con"));
+        SanitizeFilenameOptions tight =
+                SanitizeFilenameOptions.builder().maxLength(3).preserveExtension(false).build();
+        String once = Disarm.sanitizeFilename("ab_cd", tight);
+        assertEquals("ab", once);
+        assertEquals(once, Disarm.sanitizeFilename(once, tight));
+    }
+
+    @Test
     void slugAndFilenameNullArgsThrow() {
         assertThrows(NullPointerException.class, () -> Disarm.slugify(null));
         assertThrows(NullPointerException.class, () -> Disarm.slugify("x", null));

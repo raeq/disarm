@@ -22,8 +22,9 @@ chardetng never produces a UTF-16 label, so disarm decides UTF-16 before handing
 to it. Two cases are deterministic and both are handled:
 
 - **A BOM.** `FF FE`, `FE FF` and `EF BB BF` yield `UTF-16LE`, `UTF-16BE` and `UTF-8`
-  directly. This is the same WHATWG sniff `decode_to_utf8` performs internally, so the two
-  functions agree by construction.
+  directly. This is the same WHATWG sniff `decode_to_utf8` performs when it auto-detects,
+  so the two functions agree by construction. Given an explicit encoding, `decode_to_utf8`
+  does not sniff: only that encoding's own BOM is removed.
 - **BOM-less UTF-16 over ASCII-range text.** Every ASCII character is one NUL byte plus
   the ASCII byte, and which position holds the NUL is the endianness. Text in a single-byte
   encoding contains no NUL at all, so the pattern is near-decisive; disarm requires one
@@ -915,6 +916,11 @@ The honest precondition for additivity is that the separator genuinely splits th
 - Windows reserved names (CON, PRN, NUL, COM1–COM9, LPT1–LPT9) are prefixed with `_` on all platforms, even POSIX systems where they are valid
 - The maximum filename length defaults to 255 bytes, which is the common limit across ext4, NTFS, and APFS
 - NFC normalization is always applied, even on Linux where the filesystem is encoding-agnostic
+- The `separator` is held to the same rules as the name, because it is inserted after the
+  filter runs: it must be printable, non-space ASCII with no character illegal on the
+  platform and no path separator (`/`, `\`), or the call raises `InvalidArgumentError`.
+  `\` is refused on POSIX too, where it is legal in a name, because it is not legal on
+  Windows
 
 ### A safe filename is not a safe URL path segment
 
@@ -949,7 +955,15 @@ assert (
 assert "%" not in sanitize_filename("％２Ｅ％２Ｅ％２Ｆetc.txt")
 ```
 
-The rule is exact: **`%` never appears in the output unless it appeared in the input.**
+The rule is exact and per character: **every `%` in the output is one the input
+contained** (or part of a separator you chose). Typing one `%` does not let a folded one
+through — before the Lean model of the sanitizers found it, one typed `%` switched the
+check off for the whole string:
+
+```python
+fullwidth = "\uff05\uff12\uff25\uff05\uff12\uff25\uff05\uff12\uff26"
+assert sanitize_filename("%" + fullwidth + "etc.txt") == "%_2E_2E_2Fetc.txt"
+```
 
 So a consumer that percent-decodes the result — `Content-Disposition`, an object-storage
 key, a static-file route, a download link — must validate *after* decoding.

@@ -423,13 +423,15 @@ module Disarm
     # Turn arbitrary text into a safe filename. `platform:` is :universal
     # (default), :windows, or :posix; `preserve_extension:` keeps the final
     # extension when truncating to `max_length:`. Raises Disarm::InvalidArgument
-    # on an unknown platform.
+    # on an unknown platform, or on a `separator:` that is not printable, non-space
+    # ASCII, contains a character illegal on the platform, or contains a path
+    # separator ("/" or "\\"). An empty separator is allowed.
     #
     # A safe *filename*, not a safe URL path segment. "%" is legal in a filename, so one
     # the caller typed is kept — sanitize_filename("..%2Fetc") returns "%2Fetc" — and a
     # consumer that percent-decodes the result must validate AFTER decoding. What this
-    # will not do is manufacture one: "%" never appears in the output unless it appeared
-    # in the input (#721).
+    # will not do is manufacture one: every "%" in the output is one the input
+    # contained, or part of the separator (#721).
     def sanitize_filename(text, separator: "_", max_length: 255, platform: :universal,
                           lang: nil, preserve_extension: true)
       translate_errors do

@@ -517,12 +517,12 @@ impl Pipeline {
             crate::presets::strip_bidi_into(input, out);
             Ok(true)
         } else if step == PipelineSteps::DEMOJIZE {
-            // Which rows are named depends on how the pipeline was built (#853). A
-            // hand-composed `TextPipeline` names every row — the caller asked for the step
-            // by name. A **named profile** is a curated recommendation like a preset, so
-            // it skips the 326 rows carrying neither `Emoji` nor `Extended_Pictographic`;
-            // naming those is what turned `film\u{2019}s` into `film right apostrophe s`
-            // (#757). `Pipeline::new` sets the default and `ProfileSpec::build` overrides.
+            // Every pipeline, hand-composed or a named profile, skips the 326 CLDR rows
+            // carrying neither `Emoji` nor `Extended_Pictographic`; naming those is what
+            // turned `film\u{2019}s` into `film right apostrophe s` (#757). Since #918
+            // there is one policy, `PIPELINE_BASELINE`, set in `Pipeline::new`; the field
+            // doc on `emoji_name_policy` has the history. Standalone `demojize()` still
+            // names every row.
             // #972: replacing and naming are separate functions rather than a flag
             // inside one, because they read different tables and the replacement path
             // must be reachable without the CLDR name trie.

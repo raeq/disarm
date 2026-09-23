@@ -55,6 +55,30 @@ class TestAFullyQualifiedSequenceIsNamedWhole:
         assert demojize(kiss) == demojize(kiss.replace(VS16, ""))
 
 
+class TestASelectorIsSkippedOnlyWhereTheQualifiedFormPutsOne:
+    """The skip above, run where no fully qualified sequence has a selector.
+
+    Found by running the model's differential test against the fix: skipping a U+FE0F
+    anywhere named `🇧\ufe0f🇦` as a flag, which `replace_emoji` counts as two emoji and
+    which `🇧\ufe0e🇦` never formed, and `❤\u200d\ufe0f🔥` as `heart on fire`. A
+    selector now continues the walk only straight after a pictograph.
+    """
+
+    FLAG_B, FLAG_A, HEART, FIRE = "\U0001f1e7", "\U0001f1e6", "\u2764", "\U0001f525"
+
+    @pytest.mark.parametrize("scan", [demojize, TextPipeline(demojize=True)])
+    def test_a_selector_between_regional_indicators_forms_no_flag(self, scan: object) -> None:
+        with_vs16 = self.FLAG_B + VS16 + self.FLAG_A
+        assert scan(with_vs16) == scan(self.FLAG_B + VS15 + self.FLAG_A)  # type: ignore[operator]
+        assert "flag" not in scan(with_vs16)  # type: ignore[operator]
+        assert replace_emoji(with_vs16, "X") == "X" + VS16 + "X"
+
+    def test_a_selector_after_a_joiner_continues_nothing(self) -> None:
+        misplaced = self.HEART + ZWJ + VS16 + self.FIRE
+        assert demojize(misplaced) != "heart on fire"
+        assert demojize(self.HEART + VS16 + ZWJ + self.FIRE) == "heart on fire"
+
+
 class TestADroppedEmojiDoesNotGlueTheNextWordToTheLastName:
     """Dropping an emoji that writes nothing reset the separator flag (#200, #996)."""
 

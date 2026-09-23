@@ -61,6 +61,8 @@ jobs:
         working-directory: bindings/ruby
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build against the in-repo core on non-publish events (#374 drift gate)
         # On a PR or a push to main, the PUBLISHED core can lag the binding: a
@@ -109,6 +111,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - name: Poll the crates.io sparse index for the target core version
         # This job has no working-directory default, so the manifest is referenced
         # by full path — the extension crate's, not the gem-root workspace.
@@ -186,6 +190,8 @@ jobs:
           - x64-mingw-ucrt
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           ruby-version: "3.3"
@@ -221,6 +227,8 @@ jobs:
       BUNDLE_GEMFILE: ${{ github.workspace }}/bindings/ruby/Gemfile
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771 # v1
         with:
           ruby-version: "3.3"

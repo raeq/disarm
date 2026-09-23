@@ -32,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - name: Poll the crates.io sparse index for the target core version
         shell: bash
         run: |
@@ -117,6 +119,8 @@ jobs:
             lib: disarm_jni.dll
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build against the in-repo core on non-publish events (#374 drift gate)
         # On push-to-main the published core can lag the binding, so validation builds
@@ -190,6 +194,8 @@ jobs:
         working-directory: bindings/java
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6  # v6.0.1
         with:

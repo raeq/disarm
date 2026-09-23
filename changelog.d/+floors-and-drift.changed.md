@@ -20,3 +20,14 @@
   fails when a binding's manifest, the lowest version CI installs and the READMEs and
   getting-started pages disagree, or when a floor is a version already known to be
   retired.
+
+  **Action pin comments name one commit each.** #1027 pinned every action to a SHA, but
+  the comments beside the pins disagreed: one SHA read `# v7` in one file and `# v7.0.0`
+  in another, the spacing varied, and `# v1`, `# v2` and `# release/v1` named refs that
+  move. Every pin is now followed by two spaces and `# <exact tag>`, the most specific
+  tag pointing at that SHA; no SHA changed. `Swatinem/rust-cache`'s comment said `# v2`,
+  but its SHA is an untagged `master` commit and now says so. The SARIF upload snippet
+  in `docs/cli.md` used `github/codeql-action/upload-sarif@v3`; it is pinned to the
+  v4.38.1 commit the workflows use. `tests/test_workflow_baselines.py` fails on an
+  unpinned `uses:`, a pin without the comment, a moving ref in one, or a SHA with two
+  comments.

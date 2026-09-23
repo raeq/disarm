@@ -19,7 +19,7 @@ jobs:
     name: Audit every manifest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
@@ -31,7 +31,7 @@ jobs:
       # compares resolved versions, and without them it would fall back to the
       # (broad) version reqs and over-report. The binding crates resolve the
       # `disarm` dependency from the registry, so no path patch is needed here.
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
       - name: Generate Cargo lockfiles
         run: |
           cargo generate-lockfile
@@ -40,7 +40,7 @@ jobs:
 
       # Node + Ruby so `npm outdated` / `bundle outdated` can run; best-effort so
       # the cargo/crates.io audit still reports if a binding install hiccups.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: "22"
       - name: Install Node binding deps
@@ -48,7 +48,7 @@ jobs:
         working-directory: bindings/node
         run: npm ci --ignore-scripts
 
-      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b  # v1.321.0
         with:
           ruby-version: "3.3"
       - name: Install Ruby binding deps

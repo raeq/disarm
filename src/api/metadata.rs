@@ -255,8 +255,10 @@ pub fn unicode_version() -> &'static str {
 /// And `search_key` and `catalog_key` move for LINE SEPARATOR and PARAGRAPH SEPARATOR.
 /// `transliterate` mapped both to nothing, so they joined the words either side:
 /// `search_key("pay\u{2028}pal")` was `"paypal"` where the `LF` form gives `"pay pal"`,
-/// and it is now `"pay pal"` too. `sort_key` transliterates only non-Latin text and
-/// never reached them. The fixture had no row with either; two were added.
+/// and it is now `"pay pal"` too. `sort_key` does not move: its transliteration step
+/// runs only on non-Latin text, so these characters reach its `collapse_whitespace`
+/// step intact and become a space there. The fixture had no row with either; two were
+/// added.
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).

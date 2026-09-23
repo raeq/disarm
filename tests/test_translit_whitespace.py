@@ -17,7 +17,7 @@ import pytest
 
 from disarm import catalog_key, search_key, slugify, transliterate
 
-WHITESPACE = [chr(cp) for cp in range(0x80, sys.maxunicode + 1) if chr(cp).isspace()]
+WHITESPACE = [ch for cp in range(0x80, sys.maxunicode + 1) if (ch := chr(cp)).isspace()]
 
 
 def test_the_sweep_is_not_empty() -> None:

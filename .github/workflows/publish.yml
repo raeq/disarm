@@ -157,13 +157,15 @@ jobs:
           # (e.g. cp38-cp38, cp39-cp39) means the abi3 build was bypassed (#26).
           # The check is floor-agnostic (cp3[0-9]+-abi3) so a future floor bump
           # does not silently re-introduce this stale-guard failure.
-          bad=$(ls dist/ | grep -E 'cp3[0-9]+-cp3[0-9]+.*(manylinux|linux)' || true)
+          # find -printf rather than `ls | grep` (shellcheck SC2010): same names,
+          # one per line, without parsing ls output.
+          bad=$(find dist -maxdepth 1 -type f -printf '%f\n' | grep -E 'cp3[0-9]+-cp3[0-9]+.*(manylinux|linux)' || true)
           if [ -n "$bad" ]; then
             echo "::error::Found version-specific (non-abi3) CPython Linux wheel(s):"
             echo "$bad"
             exit 1
           fi
-          if ! ls dist/ | grep -qE 'cp3[0-9]+-abi3-manylinux.*x86_64'; then
+          if ! find dist -maxdepth 1 -type f -printf '%f\n' | grep -qE 'cp3[0-9]+-abi3-manylinux.*x86_64'; then
             echo "::error::Missing expected cp3XX-abi3 manylinux x86_64 wheel."
             exit 1
           fi

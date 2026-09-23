@@ -90,7 +90,7 @@ jobs:
         # own shadowing check on its location rather than on the cwd, so this is
         # belt and braces rather than the whole guard.
         working-directory: ${{ runner.temp }}
-        run: "$RUNNER_TEMP/venv/bin/python $GITHUB_WORKSPACE/scripts/smoke_installed.py"
+        run: '"$RUNNER_TEMP/venv/bin/python" "$GITHUB_WORKSPACE/scripts/smoke_installed.py"'
 
   artifacts:
     name: ${{ matrix.artifact }} installs and imports
@@ -144,4 +144,4 @@ jobs:
 
       - name: Import and exercise it, from outside the checkout
         working-directory: ${{ runner.temp }}
-        run: "$RUNNER_TEMP/venv/bin/python $GITHUB_WORKSPACE/scripts/smoke_installed.py"
+        run: '"$RUNNER_TEMP/venv/bin/python" "$GITHUB_WORKSPACE/scripts/smoke_installed.py"'

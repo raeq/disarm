@@ -849,6 +849,55 @@ jobs:
           command: check licenses bans sources
 
 
+  # -- Workflow lint: actionlint + zizmor (docs/security/supply-chain.md) --
+  # Static analysis of every workflow. actionlint checks syntax, expressions and
+  # types, and runs shellcheck over each `run:` script. zizmor checks what the 2026
+  # release-pipeline compromises exploited: unpinned actions, `${{ }}` template
+  # injection, credentials persisted by checkout, caches restored into release
+  # jobs, and write permissions wider than a job needs.
+  #
+  # Always on, like cargo-audit, and cheap. It cannot go red on its own: actionlint
+  # is a checksum-verified release, zizmor and shellcheck are hash-locked in
+  # requirements/workflow-lint.txt, and zizmor runs `--offline`, so a new finding
+  # can only come from a change to a workflow. A deliberate exception is an inline
+  # `# zizmor: ignore[<audit>]` comment with its reason beside it.
+  workflow-lint:
+    name: Workflow lint (actionlint + zizmor)
+    runs-on: ubuntu-latest
+    env:
+      ACTIONLINT_VERSION: "1.7.12"
+      ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install zizmor and shellcheck (hash-locked)
+        run: pip install --require-hashes -r requirements/workflow-lint.txt
+
+      - name: Install actionlint (pinned release, checksum-verified)
+        run: |
+          tarball="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -sSfL -o "$tarball" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  $tarball" | sha256sum -c -
+          tar -xzf "$tarball" -C "$RUNNER_TEMP" actionlint
+
+      - name: actionlint
+        # The pinned shellcheck from the step above, not whichever one the runner
+        # image carries.
+        run: '"$RUNNER_TEMP/actionlint" -color -shellcheck "$(command -v shellcheck)"'
+
+      - name: zizmor
+        # Medium and above fail the job. Below that zizmor reports style (`help`) and
+        # expansions of values that are not attacker-controlled (`info`).
+        run: zizmor --offline --min-severity=medium --format=github .
+
+
   # ── Status gate (always runs, for branch protection) ────────────
   # ONE job, not one per language. GitHub bills every job rounded UP to the
   # nearest minute, so six aggregators that each finish in ~3 seconds were billed
@@ -864,11 +913,13 @@ jobs:
   # per-language `*_CHANGED` guards below preserve that exactly as before. The
   # RustSec audit and the supply-chain policy are the two exceptions that block
   # merge on EVERY PR (#195/#260): an advisory or a license change can land on a
-  # dependency without any code change here.
+  # dependency without any code change here. Workflow lint is the third, for a
+  # different reason: it takes seconds, so it is cheaper to run it than to
+  # path-filter it.
   all-ok:
     name: All checks passed
     if: always()
-    needs: [changes, lint, test, doc-tests, changelog, cargo-audit, cargo-deny, ruby, node, java, cabi]
+    needs: [changes, lint, test, doc-tests, changelog, cargo-audit, cargo-deny, workflow-lint, ruby, node, java, cabi]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate every language gate
@@ -882,6 +933,7 @@ jobs:
           DOCTESTS="${{ needs['doc-tests'].result }}"
           AUDIT="${{ needs['cargo-audit'].result }}"
           DENY="${{ needs['cargo-deny'].result }}"
+          WFLINT="${{ needs['workflow-lint'].result }}"
           CHANGELOG="${{ needs.changelog.result }}"
 
           failed=0
@@ -889,9 +941,11 @@ jobs:
 
           # ── Always-on gates ────────────────────────────────────────────────
           # An advisory or a supply-chain policy violation can appear without any
-          # code change in this PR, so these block merge unconditionally.
+          # code change in this PR, so these block merge unconditionally. So does
+          # workflow lint, which is deterministic and too cheap to filter.
           [[ "$AUDIT" == "success" ]] || fail "cargo audit" "RustSec advisory outstanding ($AUDIT)"
           [[ "$DENY"  == "success" ]] || fail "cargo deny"  "supply-chain policy violation ($DENY)"
+          [[ "$WFLINT" == "success" ]] || fail "workflow lint" "actionlint or zizmor reported a finding ($WFLINT)"
 
           # ── Rust + Python ──────────────────────────────────────────────────
           if [[ "$CODE" == "true" || "$DOCS" == "true" ]]; then

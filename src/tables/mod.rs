@@ -17,7 +17,7 @@ mod transliteration;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::RwLock;
+use std::sync::{Mutex, MutexGuard, RwLock};
 
 use std::sync::LazyLock;
 
@@ -155,16 +155,43 @@ static HAS_REGISTERED_LANGS: AtomicBool = AtomicBool::new(false);
 /// process-global canonicalization that every caller shares (#64). One-way latch.
 ///
 /// Enforcement note: this flag is the *state*; rejection of register/remove/
-/// clear is currently performed by the PyO3 entry points (`check_not_sealed` in
-/// `transliterate.rs`), which are the only callers of the mutators below. The
-/// `tables::` mutators themselves do **not** consult this flag, so a future
-/// direct-Rust API (the core split, #38) must add the seal check at that new
-/// boundary — do not assume sealing is enforced at this layer.
+/// clear is performed one layer up, by `unsealed_gate` in `transliterate.rs`, which
+/// the Rust API and the PyO3 entry points both go through and which holds
+/// [`REGISTRATION_GATE`] for the whole mutation. The `tables::` mutators themselves
+/// do **not** consult this flag — do not assume sealing is enforced at this layer.
 static REGISTRATIONS_SEALED: AtomicBool = AtomicBool::new(false);
+
+/// Serialises every registration mutation with [`seal_registrations`].
+///
+/// The seal check, the language-cap check and the write each took and released their
+/// own lock or atomic, so a registration that had passed the seal check could land
+/// after `seal_registrations()` returned, and two registrations racing for the last
+/// language slot could both take it. A TLA+ model found both
+/// (`formal/tla/Concurrency`, `Registration_rust.cfg`); the Python binding never saw
+/// them because it holds the GIL across the whole call, which the Rust API does not.
+/// Every mutator now holds this gate from its seal check to the end of its write (see
+/// `transliterate::unsealed_gate`), and sealing takes it too, so a seal either
+/// precedes a mutation, which then fails, or follows it completely.
+///
+/// It guards no data, so a poisoned gate is simply taken: there is nothing it could
+/// have left half-written. No Python code runs under it: the emoji setter drops the
+/// provider it replaced only after releasing the gate.
+static REGISTRATION_GATE: Mutex<()> = Mutex::new(());
+
+/// Take [`REGISTRATION_GATE`].
+pub(crate) fn registration_gate() -> MutexGuard<'static, ()> {
+    REGISTRATION_GATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 /// Seal the global registration tables: subsequent register/remove/clear calls
 /// fail. Idempotent and irreversible (by design — sealing is a security latch).
+///
+/// Takes [`REGISTRATION_GATE`], so a mutation in progress finishes first and none
+/// starts after this returns.
 pub(crate) fn seal_registrations() {
+    let _gate = registration_gate();
     REGISTRATIONS_SEALED.store(true, Ordering::Release);
     tl_info!("registrations sealed");
 }
@@ -541,10 +568,9 @@ pub fn list_langs() -> Vec<String> {
 /// # Seal
 ///
 /// This mutator does **not** consult `REGISTRATIONS_SEALED`.  Seal
-/// enforcement is the **caller's responsibility** — the PyO3 entry points in
-/// `transliterate.rs` call `check_not_sealed` before invoking this function.
-/// Any future direct-Rust API (e.g. the core split planned in #38) must add
-/// the same guard at its own boundary. (#123)
+/// enforcement is the **caller's responsibility**: the entry points in
+/// `transliterate.rs` hold `unsealed_gate` across the call to this function, so
+/// the seal cannot overtake it between the check and the write. (#123)
 ///
 /// # Concurrency — poison recovery (#117/#251)
 ///
@@ -610,10 +636,9 @@ pub(crate) fn register_lang(
 /// # Seal
 ///
 /// This mutator does **not** consult `REGISTRATIONS_SEALED`.  Seal
-/// enforcement is the **caller's responsibility** — the PyO3 entry points in
-/// `transliterate.rs` call `check_not_sealed` before invoking this function.
-/// Any future direct-Rust API (e.g. the core split planned in #38) must add
-/// the same guard at its own boundary. (#123)
+/// enforcement is the **caller's responsibility**: the entry points in
+/// `transliterate.rs` hold `unsealed_gate` across the call to this function, so
+/// the seal cannot overtake it between the check and the write. (#123)
 ///
 /// # Concurrency — poison recovery (#117/#251)
 ///
@@ -661,10 +686,9 @@ pub(crate) fn register_replacements(replacements: HashMap<String, String>) -> Re
 /// # Seal
 ///
 /// This mutator does **not** consult `REGISTRATIONS_SEALED`.  Seal
-/// enforcement is the **caller's responsibility** — the PyO3 entry points in
-/// `transliterate.rs` call `check_not_sealed` before invoking this function.
-/// Any future direct-Rust API (e.g. the core split planned in #38) must add
-/// the same guard at its own boundary. (#123)
+/// enforcement is the **caller's responsibility**: the entry points in
+/// `transliterate.rs` hold `unsealed_gate` across the call to this function, so
+/// the seal cannot overtake it between the check and the write. (#123)
 pub(crate) fn remove_replacement(key: &str) -> bool {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     let removed = table.remove(key).is_some();
@@ -678,10 +702,9 @@ pub(crate) fn remove_replacement(key: &str) -> bool {
 /// # Seal
 ///
 /// This mutator does **not** consult `REGISTRATIONS_SEALED`.  Seal
-/// enforcement is the **caller's responsibility** — the PyO3 entry points in
-/// `transliterate.rs` call `check_not_sealed` before invoking this function.
-/// Any future direct-Rust API (e.g. the core split planned in #38) must add
-/// the same guard at its own boundary. (#123)
+/// enforcement is the **caller's responsibility**: the entry points in
+/// `transliterate.rs` hold `unsealed_gate` across the call to this function, so
+/// the seal cannot overtake it between the check and the write. (#123)
 pub(crate) fn clear_replacements() {
     let mut table = crate::recover_lock(GLOBAL_REPLACEMENTS.write(), "GLOBAL_REPLACEMENTS");
     table.clear();

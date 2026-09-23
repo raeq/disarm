@@ -24,21 +24,19 @@ use crate::ErrorMode;
 /// Sentinel for "no custom provider registered".
 static GLOBAL_PROVIDER: LazyLock<RwLock<Option<Py<PyAny>>>> = LazyLock::new(|| RwLock::new(None));
 
-/// Register a global Python emoji provider (or None to reset to default).
+/// Install a global Python emoji provider (or None to reset to default) and hand back
+/// the one it replaced.
 ///
-/// The old provider is dropped after the lock is released, never under it. Dropping
+/// The caller drops the old provider after the lock is released, never under it. Dropping
 /// a `Py<PyAny>` while attached runs its `__del__` there and then, and that is
 /// arbitrary Python: it can call `set_emoji_provider` or `demojize` (re-entering this
 /// lock on its own thread), or give up the GIL (closing a file does) while another
 /// thread's `demojize` takes the GIL and blocks on the read lock holding it. Both
 /// hung the interpreter; the TLA+ model in `formal/tla/Concurrency` found them and
 /// `tests/test_no_python_under_rust_locks.py` reproduces them.
-pub fn set_provider(provider: Option<Py<PyAny>>) {
-    let old = {
-        let mut guard = crate::recover_lock(GLOBAL_PROVIDER.write(), "GLOBAL_PROVIDER");
-        std::mem::replace(&mut *guard, provider)
-    };
-    drop(old);
+fn swap_provider(provider: Option<Py<PyAny>>) -> Option<Py<PyAny>> {
+    let mut guard = crate::recover_lock(GLOBAL_PROVIDER.write(), "GLOBAL_PROVIDER");
+    std::mem::replace(&mut *guard, provider)
 }
 
 /// Try a Python provider's lookup method.
@@ -330,7 +328,10 @@ pub fn _replace_emoji(text: &str, replacement: &str) -> String {
 #[pyo3(name = "_set_emoji_provider")]
 #[pyo3(signature = (provider=None))]
 pub fn _set_emoji_provider(provider: Option<Py<PyAny>>) -> PyResult<()> {
-    crate::transliterate::check_not_sealed("set_emoji_provider")?;
-    set_provider(provider);
+    let old = {
+        let _gate = crate::transliterate::unsealed_gate("set_emoji_provider")?;
+        swap_provider(provider)
+    };
+    drop(old);
     Ok(())
 }

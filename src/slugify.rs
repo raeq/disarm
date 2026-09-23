@@ -110,13 +110,46 @@ const MAX_SLUG_COMBINING_MARKS: usize = 2;
 /// renders as `fileexe.png`. The default ASCII path screened all of it.
 ///
 /// `L* | N* | M*` plus the two joiners, which is what the docstrings already promise.
-/// `char::is_alphanumeric` is `Alphabetic | N*`; marks are needed or Devanagari and Arabic
-/// break. Everything else goes: `Cf` (bidi controls, ZWSP, ZWNBSP, soft hyphen, the tag
-/// block), `Co` (private use), `Cn` (noncharacters), `Cs`, `Zs`, `P*` and `S*`.
+/// Marks are needed or Devanagari and Arabic break. Everything else goes: `Cf` (bidi
+/// controls, ZWSP, ZWNBSP, soft hyphen, the tag block), `Co` (private use), `Cn`
+/// (noncharacters), `Cs`, `Zs`, `P*` and `S*`.
+///
+/// The letter-and-digit test is [`is_slug_alphanumeric`], not `char::is_alphanumeric`:
+/// the latter is `Alphabetic | N*`, and `Alphabetic` takes in 130 symbols through
+/// `Other_Alphabetic`, so `'\u{24B6}dmin'` kept its circled letter.
 fn is_unicode_slug_char(ch: char) -> bool {
-    ch.is_alphanumeric()
+    is_slug_alphanumeric(ch)
         || unicode_normalization::char::is_combining_mark(ch)
         || SLUG_JOINERS.contains(&ch)
+}
+
+/// `L* | N*`, as far as a slug is concerned: `char::is_alphanumeric` without the symbols
+/// it admits through `Other_Alphabetic`.
+///
+/// `char::is_alphanumeric` is the derived `Alphabetic` property plus `N*`, and
+/// `Alphabetic` is `L* | Nl | Other_Alphabetic`. `Other_Alphabetic` is mostly combining
+/// marks, which the `allow_unicode` path keeps anyway, and four blocks of `So` symbols:
+/// the circled Latin letters and the squared, negative circled and negative squared Latin
+/// capitals. Kept, they read as letters in a slug, and a slug is an identifier:
+/// `slugify('\u{24B6}dmin', allow_unicode = true)` returned `'\u{24D0}dmin'`, which is not
+/// `admin` but reads as it (Finding 4 of `formal/lean/Sanitizers`). They are symbols, and
+/// symbols become the separator. The ranges are every `Other_Alphabetic` code point
+/// outside `M*`; a test sweeps the scalar values against the general category.
+fn is_slug_alphanumeric(ch: char) -> bool {
+    ch.is_alphanumeric() && !is_alphabetic_symbol(ch)
+}
+
+/// The `So` code points `char::is_alphabetic` accepts (`Other_Alphabetic`): U+24B6-U+24E9
+/// (circled Latin letters) and U+1F130-U+1F149, U+1F150-U+1F169, U+1F170-U+1F189
+/// (squared, negative circled and negative squared Latin capitals). 130 in all.
+fn is_alphabetic_symbol(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{24B6}'..='\u{24E9}'
+            | '\u{1F130}'..='\u{1F149}'
+            | '\u{1F150}'..='\u{1F169}'
+            | '\u{1F170}'..='\u{1F189}'
+    )
 }
 
 /// The number of combining marks in `ch`'s own NFD (#712 §4).
@@ -284,13 +317,18 @@ pub struct SlugConfig {
     /// dropped whole. A budget too small for the first cluster therefore yields an empty
     /// slug — the same outcome an all-stopword input already produces, and callers needing
     /// a non-empty result should check `is_empty()` or supply a default.
+    ///
+    /// A cut never leaves a trailing separator, whole or partial, or a trailing ZWJ or ZWNJ.
     pub max_length: usize,
-    /// When truncating, cut only at a word boundary rather than mid-word.
+    /// When truncating, cut at a word boundary rather than mid-word: the slug keeps the
+    /// whole words that fit in `max_length`, up to the first that does not. When not even
+    /// the first word fits, it is cut as if `word_boundary` were off.
     pub word_boundary: bool,
     /// Preserve relative word order when removing stopwords (see the type-level
     /// docs); `false` (default) removes all matching tokens.
     pub save_order: bool,
-    /// Words removed from the slug (case-insensitive).
+    /// Words removed from the slug, compared case-insensitively whether or not `lowercase`
+    /// is set. With an empty `separator` the slug has no words, and nothing is removed.
     pub stopwords: Vec<String>,
     /// Custom regex of characters to treat as separators; `None` uses the
     /// built-in non-word pattern.
@@ -303,13 +341,18 @@ pub struct SlugConfig {
     ///
     /// Everything else becomes a separator, as it does on the ASCII path: format
     /// characters (bidi controls, ZWSP, ZWNBSP, soft hyphen, the tag block), private use,
-    /// noncharacters, surrogates, punctuation, symbols and emoji. This matches
+    /// noncharacters, surrogates, punctuation, symbols and emoji. That includes the
+    /// letter-like symbols `char::is_alphabetic` accepts, such as the circled Latin letters
+    /// (U+24B6), which are `So`. This matches
     /// `django.utils.text.slugify(allow_unicode=True)`, which keeps `\w`, with two
     /// deliberate additions Django does not make:
     ///
     /// - **Combining marks** (`M*`), capped at two per base. Django drops them, which
     ///   breaks Devanagari and Arabic; two is the cap the `Step::Zalgo(2)` presets use and
-    ///   what Vietnamese `ệ` needs.
+    ///   what Vietnamese `ệ` needs. The cap counts the base's own marks, over its
+    ///   decomposition, as `strip_zalgo` does: `à` takes one more. A precomposed base that
+    ///   already carries more than two, such as polytonic Greek U+1F82 with three, is kept
+    ///   whole and takes none.
     /// - **ZWJ and ZWNJ**, between two other kept characters. Both are orthographically
     ///   required — ZWNJ separates a Persian `می` prefix from its verb, ZWJ forms a
     ///   Devanagari conjunct — so dropping them changes the word. Never emitted at the
@@ -443,7 +486,7 @@ impl SlugConfig {
         self
     }
 
-    /// Words to remove from the slug (case-insensitive).
+    /// Words to remove from the slug, compared case-insensitively; see the field docs.
     #[must_use]
     pub fn with_stopwords<I, S>(mut self, stopwords: I) -> Self
     where
@@ -459,13 +502,18 @@ impl SlugConfig {
     ///
     /// Everything else becomes a separator, as it does on the ASCII path: format
     /// characters (bidi controls, ZWSP, ZWNBSP, soft hyphen, the tag block), private use,
-    /// noncharacters, surrogates, punctuation, symbols and emoji. This matches
+    /// noncharacters, surrogates, punctuation, symbols and emoji. That includes the
+    /// letter-like symbols `char::is_alphabetic` accepts, such as the circled Latin letters
+    /// (U+24B6), which are `So`. This matches
     /// `django.utils.text.slugify(allow_unicode=True)`, which keeps `\w`, with two
     /// deliberate additions Django does not make:
     ///
     /// - **Combining marks** (`M*`), capped at two per base. Django drops them, which
     ///   breaks Devanagari and Arabic; two is the cap the `Step::Zalgo(2)` presets use and
-    ///   what Vietnamese `ệ` needs.
+    ///   what Vietnamese `ệ` needs. The cap counts the base's own marks, over its
+    ///   decomposition, as `strip_zalgo` does: `à` takes one more. A precomposed base that
+    ///   already carries more than two, such as polytonic Greek U+1F82 with three, is kept
+    ///   whole and takes none.
     /// - **ZWJ and ZWNJ**, between two other kept characters. Both are orthographically
     ///   required — ZWNJ separates a Persian `می` prefix from its verb, ZWJ forms a
     ///   Devanagari conjunct — so dropping them changes the word. Never emitted at the
@@ -608,26 +656,13 @@ pub(crate) fn slugify_impl_with_stopset(
         }
     }
 
-    // Step 3: Transliterate, or — on the Unicode-preserving path — compose.
+    // Step 3: Transliterate (the ASCII path). The Unicode-preserving path composes instead,
+    // after Step 4: see there.
     // #236 item 3: only reallocate when the step changed the text. ASCII input
     // returns Cow::Borrowed, so the former unconditional into_owned() allocated on
     // every plain-ASCII slug. Extract owned-ness first so the borrow of `value` ends
     // before we reassign it (#114).
-    if config.allow_unicode {
-        // #477: the Unicode-preserving path skips transliterate, so compose here —
-        // a decomposed homoglyph (`і` + combining diaeresis) must yield the same slug
-        // as its precomposed form (`ї`). `compose_str` borrows when the input has no
-        // combining mark, so the common ASCII/precomposed slug keeps its zero-alloc
-        // path; it never decomposes a composition-excluded singleton. See
-        // [`crate::compose`].
-        let owned = match crate::compose::compose_str(&value) {
-            Cow::Borrowed(_) => None,
-            Cow::Owned(s) => Some(s),
-        };
-        if let Some(s) = owned {
-            value = Cow::Owned(s);
-        }
-    } else {
+    if !config.allow_unicode {
         let owned = match transliterate::transliterate_impl(
             &value,
             config.lang.as_deref(),
@@ -662,6 +697,29 @@ pub(crate) fn slugify_impl_with_stopset(
             }
         } else {
             value = Cow::Owned(value.to_lowercase());
+        }
+    }
+
+    // Step 4b: compose, on the Unicode-preserving path only.
+    if config.allow_unicode {
+        // #477: the Unicode-preserving path skips transliterate, so compose here —
+        // a decomposed homoglyph (`і` + combining diaeresis) must yield the same slug
+        // as its precomposed form (`ї`). `compose_str` borrows when the input has no
+        // combining mark, so the common ASCII/precomposed slug keeps its zero-alloc
+        // path; it never decomposes a composition-excluded singleton. See
+        // [`crate::compose`].
+        //
+        // AFTER lowercasing, not before (Finding 10 of `formal/lean/Sanitizers`).
+        // Lowercasing can create a pair that composes: `T` + U+0308 has no precomposed
+        // form, `t` + U+0308 does (U+1E97). Composing first returned `t\u{308}` for
+        // `T\u{308}`, while `\u{1E97}` gave `\u{1E97}`: two slugs for one rendering, and
+        // an output that changed when slugified again.
+        let owned = match crate::compose::compose_str(&value) {
+            Cow::Borrowed(_) => None,
+            Cow::Owned(s) => Some(s),
+        };
+        if let Some(s) = owned {
+            value = Cow::Owned(s);
         }
     }
 
@@ -705,10 +763,15 @@ pub(crate) fn slugify_impl_with_stopset(
     let mut in_token = false;
 
     for ch in value.chars() {
-        if ch.is_alphanumeric()
-            || (config.allow_unicode && !ch.is_ascii() && is_unicode_slug_char(ch))
-            || (has_safe_chars && safe_set.contains(&ch))
-        {
+        // Under `allow_unicode` a non-ASCII character is judged by `is_unicode_slug_char`
+        // alone, which excludes the symbols `is_alphanumeric` admits (Finding 4). The
+        // ASCII path keeps `is_alphanumeric`, byte for byte as before.
+        let word_char = if config.allow_unicode && !ch.is_ascii() {
+            is_unicode_slug_char(ch)
+        } else {
+            ch.is_alphanumeric()
+        };
+        if word_char || (has_safe_chars && safe_set.contains(&ch)) {
             if config.allow_unicode {
                 if SLUG_JOINERS.contains(&ch) {
                     // Nothing to join to yet: a token cannot start with one.
@@ -767,17 +830,28 @@ pub(crate) fn slugify_impl_with_stopset(
     // Note: if *all* words match the stopword list the result will be an empty
     // string.  This is intentional — callers that need a non-empty fallback
     // should check `slug.is_empty()` and supply one (e.g. a hash of the input).
-    if !config.stopwords.is_empty() {
+    //
+    // With an empty separator there are no words: the tokens were joined with nothing
+    // between them, and `split("")` yields single characters, so `stopwords=["b"]` turned
+    // `abc` into `ac` (Finding 8 of `formal/lean/Sanitizers`). The filter is skipped.
+    if !config.stopwords.is_empty() && !separator.is_empty() {
         // Use the caller-supplied set when available (e.g. _Slugifier caches it
-        // at construction), otherwise build a temporary zero-copy set from config.
+        // at construction), otherwise build a temporary set from config. Either way
+        // it is built by `build_stopset`, which lowercases.
         let tmp_stopset;
         let stopset: &HashSet<String> = if let Some(s) = prebuilt_stopset {
             s
         } else {
-            tmp_stopset = config.stopwords.iter().cloned().collect();
+            tmp_stopset = build_stopset(&config.stopwords);
             &tmp_stopset
         };
-        slug = filter_stopwords(&slug, separator, stopset, config.save_order);
+        slug = filter_stopwords(
+            &slug,
+            separator,
+            stopset,
+            config.save_order,
+            !config.lowercase,
+        );
     }
 
     // Step 8: Truncate to max_length (byte-length, cluster-boundary safe for
@@ -788,20 +862,140 @@ pub(crate) fn slugify_impl_with_stopset(
             // Truncate at word boundary
             slug = truncate_at_boundary(&slug, config.max_length, separator, config.allow_unicode);
         } else {
-            let boundary = if config.allow_unicode {
-                floor_grapheme_boundary(&slug, config.max_length)
-            } else {
-                floor_char_boundary(&slug, config.max_length)
-            };
+            let boundary = floor_slug_boundary(&slug, config.max_length, config.allow_unicode);
             slug.truncate(boundary);
-            // Strip trailing separator after truncation
-            if slug.ends_with(separator) && !separator.is_empty() {
-                slug.truncate(slug.len() - separator.len());
-            }
+            // Strip what the cut left at the end: a joiner the cluster kept (Finding 13),
+            // then a partial separator as well as a whole one (Finding 5), as
+            // `truncate_at_boundary` does.
+            let end = trim_cut_tail(&slug, separator, config.allow_unicode).len();
+            slug.truncate(end);
         }
     }
 
     slug
+}
+
+/// Build the stopword set `slugify` compares against: every stopword lowercased.
+///
+/// Stopwords are documented as case-insensitive, and were compared verbatim with a slug
+/// that had already been lowercased, so `stopwords=["The"]` could never match
+/// (Finding 7 of `formal/lean/Sanitizers`). Lowercasing the set once here, and each word
+/// only when the slug itself was not lowercased (`filter_stopwords`), makes the match
+/// case-insensitive on both settings of `lowercase`. The binding-layer slugifiers that
+/// cache a set build it with this function too, so every entry point agrees.
+pub(crate) fn build_stopset(stopwords: &[String]) -> HashSet<String> {
+    stopwords.iter().map(|w| w.to_lowercase()).collect()
+}
+
+/// Whether `word` is in `stopset` (already lowercased by [`build_stopset`]).
+///
+/// `fold` is `true` when the slug was not lowercased, so the word may carry upper case;
+/// a lowercased slug is compared as it is, with no allocation.
+fn is_stopword(word: &str, stopset: &HashSet<String>, fold: bool) -> bool {
+    if !fold {
+        return stopset.contains(word);
+    }
+    if word.is_ascii() {
+        if word.bytes().any(|b| b.is_ascii_uppercase()) {
+            stopset.contains(&word.to_ascii_lowercase())
+        } else {
+            stopset.contains(word)
+        }
+    } else {
+        stopset.contains(&word.to_lowercase())
+    }
+}
+
+/// Trim what a truncation can leave at the end of a slug.
+///
+/// First the joiners (`allow_unicode` only). Grapheme rule GB9 attaches ZWJ and ZWNJ to
+/// the character before them, so a cluster-boundary cut keeps `a\u{200D}` of
+/// `a\u{200D}b` whole, and the slug ended in a bare joiner, which #711 exists to prevent
+/// (Finding 13 of `formal/lean/Sanitizers`). Then a trailing separator, whole or partial:
+/// a cut inside a multi-character separator left its first half (Finding 5).
+///
+/// The order is safe: a joiner is only ever emitted between two kept characters, and a
+/// separator only after one, so neither trim can expose the other.
+fn trim_cut_tail<'a>(s: &'a str, separator: &str, allow_unicode: bool) -> &'a str {
+    let s = if allow_unicode {
+        s.trim_end_matches(SLUG_JOINERS)
+    } else {
+        s
+    };
+    strip_trailing_separator_prefix(s, separator)
+}
+
+/// The byte length a cut to `max` keeps of `s`: a cluster boundary under `allow_unicode`
+/// (#711), a code-point boundary otherwise.
+fn floor_slug_boundary(s: &str, max: usize, allow_unicode: bool) -> usize {
+    if allow_unicode {
+        floor_grapheme_boundary(s, max)
+    } else {
+        floor_char_boundary(s, max)
+    }
+}
+
+/// Why [`unique_slug_candidate`] has no candidate for a counter.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct UniqueSlugTooShort {
+    /// The smallest `max_length` that would have held this candidate: the base's first
+    /// character (first cluster under `allow_unicode`), the separator and every digit.
+    pub(crate) min_unique_len: usize,
+}
+
+/// The `counter`-th candidate `UniqueSlugifier` tries for `base` (#102, #242 item 3).
+///
+/// Counter 0 is `base` itself; counter `k >= 1` is `base{separator}k`. When that exceeds
+/// `max_length`, the **base** is cut to make room, never the suffix, and the cut is the
+/// slug's own: a cluster boundary under `allow_unicode`, then the tail cleaned by
+/// [`trim_cut_tail`], so the head is a slug in its own right (Finding 9 of
+/// `formal/lean/Sanitizers`). The former cut was a bare code-point cut: `ab-cd` at
+/// `max_length = 5` gave `ab--1`, a doubled separator, and with `allow_unicode` it split a
+/// cluster and left a ZWJ before the suffix.
+///
+/// A candidate keeps at least one character of the base. When the suffix leaves no room
+/// for one there is no candidate (`Err`): returning the suffix alone gave `-1`, a slug
+/// with a leading separator that every base shared, and cutting into the digits aliased
+/// distinct counters. The digits are never cut, so distinct counters give distinct
+/// candidates.
+///
+/// An empty `base` has no suffixed candidate either (`Err`): the caller returns the empty
+/// slug as it is, `slugify`'s own documented result, rather than `-1`, `-2`, ... .
+pub(crate) fn unique_slug_candidate(
+    base: &str,
+    counter: u64,
+    config: &SlugConfig,
+) -> Result<String, UniqueSlugTooShort> {
+    if counter == 0 {
+        return Ok(base.to_owned());
+    }
+    let sep = config.separator.as_str();
+    let suffix = format!("{sep}{counter}");
+    if base.is_empty() {
+        return Err(UniqueSlugTooShort {
+            min_unique_len: suffix.len() + 1,
+        });
+    }
+    let max = config.max_length;
+    if max == 0 || base.len() + suffix.len() <= max {
+        return Ok(format!("{base}{suffix}"));
+    }
+    let head_end =
+        floor_slug_boundary(base, max.saturating_sub(suffix.len()), config.allow_unicode);
+    // `floor_*_boundary` returns a boundary `<= base.len()`, so the slice cannot panic.
+    let head = trim_cut_tail(&base[..head_end], sep, config.allow_unicode);
+    if head.is_empty() {
+        // The shortest head is the first character (first cluster under `allow_unicode`).
+        let first = if config.allow_unicode {
+            crate::grapheme::clusters(base).next().map_or(1, str::len)
+        } else {
+            base.chars().next().map_or(1, char::len_utf8)
+        };
+        return Err(UniqueSlugTooShort {
+            min_unique_len: first + suffix.len(),
+        });
+    }
+    Ok(format!("{head}{suffix}"))
 }
 
 /// Remove stopwords from a slug, splitting and rejoining on the separator.
@@ -810,23 +1004,25 @@ pub(crate) fn slugify_impl_with_stopset(
 /// removed — interior stopwords are kept so the relative order of
 /// non-stopword tokens is preserved exactly as in the input (matching the
 /// python-slugify semantics for `save_order=True`). (#118)
+///
+/// `stopset` is lowercased ([`build_stopset`]); `fold` lowercases each word before the
+/// lookup, for a slug that was not lowercased (Finding 7).
 fn filter_stopwords(
     slug: &str,
     separator: &str,
     stopset: &HashSet<String>,
     save_order: bool,
+    fold: bool,
 ) -> String {
+    let is_stop = |w: &str| is_stopword(w, stopset, fold);
     if save_order {
         // Strip only leading and trailing stopword tokens; preserve interior ones.
         let words: Vec<&str> = slug.split(separator).collect();
         let start = words
             .iter()
-            .position(|w| !stopset.contains(*w))
+            .position(|w| !is_stop(w))
             .unwrap_or(words.len());
-        let end = words
-            .iter()
-            .rposition(|w| !stopset.contains(*w))
-            .map_or(0, |i| i + 1);
+        let end = words.iter().rposition(|w| !is_stop(w)).map_or(0, |i| i + 1);
         let kept = if start < end { &words[start..end] } else { &[] };
         kept.iter()
             .enumerate()
@@ -839,7 +1035,7 @@ fn filter_stopwords(
             })
     } else {
         slug.split(separator)
-            .filter(|w| !stopset.contains(*w))
+            .filter(|w| !is_stop(w))
             .enumerate()
             .fold(String::with_capacity(slug.len()), |mut acc, (i, w)| {
                 if i > 0 {
@@ -865,20 +1061,26 @@ fn truncate_at_boundary(
     if slug.len() <= max_length {
         return slug.to_owned();
     }
-    let boundary = if allow_unicode {
-        floor_grapheme_boundary(slug, max_length)
-    } else {
-        floor_char_boundary(slug, max_length)
-    };
+    let boundary = floor_slug_boundary(slug, max_length, allow_unicode);
     let truncated = &slug[..boundary];
+    // The cut landed exactly at the end of a word: keep that word (Finding 6 of
+    // `formal/lean/Sanitizers`). The search below looks for a separator *inside* the cut,
+    // so `very-long-title-here` at 9 bytes dropped `long`, although `very-long` is 9 bytes
+    // and ends on a word. python-slugify's `smart_truncate` keeps it.
+    if !separator.is_empty() && slug[boundary..].starts_with(separator) {
+        return truncated.to_owned();
+    }
     match truncated.rfind(separator) {
         // Everything before the last full separator: ends on a token boundary.
-        Some(pos) => truncated[..pos].to_owned(),
+        // (`rfind("")` is the end of the cut: with no separator there are no words, and
+        // the cut is cleaned like a plain one, below.)
+        Some(pos) if !separator.is_empty() => truncated[..pos].to_owned(),
         // No full separator survived the cut, but `floor_char_boundary` can land
         // *inside* a multi-char separator, leaving a trailing partial separator
         // (e.g. separator "--", slug "ab--cd", max 3 → "ab-"). Strip it so the
-        // slug never ends in a (partial or whole) separator (review M-C1).
-        None => strip_trailing_separator_prefix(truncated, separator).to_owned(),
+        // slug never ends in a (partial or whole) separator (review M-C1), and strip a
+        // joiner the cluster cut kept (Finding 13).
+        _ => trim_cut_tail(truncated, separator, allow_unicode).to_owned(),
     }
 }
 
@@ -1510,6 +1712,116 @@ mod tests {
                 assert!(
                     c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-',
                     "slug of U+{cp:04X} has out-of-charset {c:?}: {result:?}"
+                );
+            }
+        }
+    }
+
+    /// Finding 9 of `formal/lean/Sanitizers`: the `UniqueSlugifier` candidates. The loop
+    /// that consumes them is binding-layer (`src/py/slugify.rs`); the candidates are here.
+    mod unique_candidate {
+        use super::*;
+
+        fn cfg(separator: &str, max_length: usize, allow_unicode: bool) -> SlugConfig {
+            SlugConfig::new()
+                .with_separator(separator)
+                .with_max_length(max_length)
+                .with_allow_unicode(allow_unicode)
+        }
+
+        fn cand(base: &str, counter: u64, config: &SlugConfig) -> Result<String, usize> {
+            unique_slug_candidate(base, counter, config).map_err(|e| e.min_unique_len)
+        }
+
+        #[test]
+        fn counter_zero_is_the_base() {
+            assert_eq!(
+                cand("ab-cd", 0, &cfg("-", 5, false)),
+                Ok("ab-cd".to_owned())
+            );
+            assert_eq!(cand("", 0, &cfg("-", 0, false)), Ok(String::new()));
+        }
+
+        #[test]
+        fn a_suffix_that_fits_is_appended() {
+            assert_eq!(
+                cand("my-post", 1, &cfg("-", 0, false)),
+                Ok("my-post-1".to_owned())
+            );
+            assert_eq!(cand("ab", 12, &cfg("_", 5, false)), Ok("ab_12".to_owned()));
+        }
+
+        #[test]
+        fn the_head_is_cut_like_a_slug_not_mid_separator() {
+            // `ab-cd` at 5: the head `ab-` is cleaned to `ab` before `-1`, not `ab--1`.
+            let c = cfg("-", 5, false);
+            assert_eq!(cand("ab-cd", 1, &c), Ok("ab-1".to_owned()));
+            assert_eq!(cand("ab-cd", 2, &c), Ok("ab-2".to_owned()));
+            // A multi-character separator cut in half.
+            let c = cfg("--", 7, false);
+            assert_eq!(cand("ab--cd", 1, &c), Ok("ab--1".to_owned()));
+            let c = cfg("--", 6, false);
+            assert_eq!(cand("ab--cd", 1, &c), Ok("ab--1".to_owned()));
+            let c = cfg("--", 4, false);
+            assert_eq!(cand("ab--cd", 1, &c), Ok("a--1".to_owned()));
+        }
+
+        #[test]
+        fn never_the_suffix_alone() {
+            // `ab` at 2 has no room for `-1` and a character of the base: the smallest
+            // length that fits is one character, the separator and the digit.
+            assert_eq!(cand("ab", 1, &cfg("-", 2, false)), Err(3));
+            assert_eq!(cand("ab", 10, &cfg("-", 3, false)), Err(4));
+            assert_eq!(cand("ab", 1, &cfg("-", 3, false)), Ok("a-1".to_owned()));
+        }
+
+        #[test]
+        fn an_empty_base_has_no_suffixed_candidate() {
+            assert!(cand("", 1, &cfg("-", 0, false)).is_err());
+            assert!(cand("", 1, &cfg("-", 10, false)).is_err());
+        }
+
+        #[test]
+        fn allow_unicode_cuts_on_a_cluster_and_drops_a_trailing_joiner() {
+            // The finding: `a` + KA + VIRAMA + ZWJ + SSA at 13 gave `a` KA VIRAMA ZWJ `-1`.
+            let base = "a\u{915}\u{94D}\u{200D}\u{937}";
+            let got = cand(base, 1, &cfg("-", 13, true)).unwrap();
+            assert!(got.len() <= 13);
+            assert!(got.ends_with("-1"));
+            let head = got.strip_suffix("-1").unwrap();
+            assert!(!head.is_empty());
+            assert!(!head.ends_with(['\u{200C}', '\u{200D}']), "{got:?}");
+            assert!(base.starts_with(head));
+            // A cluster is kept whole or dropped whole.
+            // `a` + ZWJ is one cluster (GB9): at 6 it is kept and its joiner dropped; at 5
+            // it does not fit beside `-1`.
+            assert_eq!(
+                cand("a\u{200D}b", 1, &cfg("-", 6, true)),
+                Ok("a-1".to_owned())
+            );
+            assert_eq!(cand("a\u{200D}b", 1, &cfg("-", 5, true)), Err(6));
+            // The first cluster does not fit: no candidate, and the length that would.
+            let hangul = "\u{D55C}\u{AD6D}";
+            assert_eq!(cand(hangul, 1, &cfg("-", 4, true)), Err(5));
+            assert_eq!(
+                cand(hangul, 1, &cfg("-", 5, true)),
+                Ok("\u{D55C}-1".to_owned())
+            );
+        }
+
+        #[test]
+        fn distinct_counters_give_distinct_candidates() {
+            let c = cfg("-", 6, false);
+            let got: Vec<String> = (1..=200)
+                .filter_map(|k| unique_slug_candidate("abcdef", k, &c).ok())
+                .collect();
+            let unique: HashSet<&String> = got.iter().collect();
+            assert_eq!(unique.len(), got.len());
+            // Every one is a slug: no doubled, leading or trailing separator.
+            for g in &got {
+                assert!(
+                    !g.starts_with('-') && !g.ends_with('-') && !g.contains("--"),
+                    "{g}"
                 );
             }
         }

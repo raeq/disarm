@@ -193,6 +193,18 @@ docstrings, and the Rust unit tests of these modules). All pass.
 
 ## Findings
 
+**Status of the slug findings.** 4, 5, 6, 7, 8, 9, 10, 11 and 13 are fixed by #1028, with
+regression tests in `tests/slugify_formal_findings.rs`, `src/slugify.rs` and
+`tests/test_slugify_formal_findings.py`. `Slug.lean` and `Unique.lean` still model the
+code at `595fbda`, so the differential test now disagrees with the library on those
+inputs. `build_unique_candidate` moved from `src/py/slugify.rs` into the core, as
+`unique_slug_candidate` in `src/slugify.rs`. The shipped fixes follow `slugifyFixed` and `runFixed`, except: stopwords match
+case-insensitively with `lowercase=False` too (the model lowercases them only under
+`lowercase`); the `UniqueSlugifier` head is cut on a cluster boundary and cleaned of
+joiners under `allow_unicode`, as well as of a partial separator; an empty slug is
+returned without consulting `check`; and Finding 11 is fixed in the documentation, which
+now says a precomposed base's own marks count toward the cap.
+
 Numbered as in `scripts/repro.py`, listed by severity. Each has a reproduction in
 `scripts/repro.py` (Python) and, except Finding 9, `scripts/repro.rs` (Rust core); the
 model-level ones (1, 2, 3, 5-9) are also kernel-checked in `Findings.lean`. Outputs below

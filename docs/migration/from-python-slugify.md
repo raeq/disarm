@@ -39,9 +39,9 @@ assert slugify("C++ Code", replacements=[("C++", "cpp")]) == "cpp-code"
 | `separator` | `"-"` | `"-"` | |
 | `lowercase` | `True` | `True` | |
 | `max_length` | `0` | `0` | |
-| `word_boundary` | `False` | `False` | |
+| `word_boundary` | `False` | `False` | disarm keeps the words that fit, up to the first that does not; python-slugify without `save_order` also packs in later, shorter words |
 | `save_order` | `False` | `False` | |
-| `stopwords` | `()` | `()` | |
+| `stopwords` | `()` | `()` | Case-insensitive in disarm, also with `lowercase=False`, where python-slugify compares exactly |
 | `regex_pattern` | `None` | `None` | |
 | `replacements` | `()` | `()` | |
 | `allow_unicode` | `False` | `False` | |

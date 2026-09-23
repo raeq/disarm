@@ -575,26 +575,39 @@ def slugify(
             Hangul syllable is kept whole or dropped whole. A budget too small
             for the first cluster therefore yields an empty slug — handle it the
             same way you handle an all-stopword input, or pass ``default``.
-        word_boundary: When truncating via max_length, cut at word boundaries.
+
+            A cut never leaves a trailing separator, whole or partial, or a
+            trailing ZWJ or ZWNJ.
+        word_boundary: When truncating via max_length, cut at word boundaries:
+            the slug keeps the whole words that fit, up to the first that does
+            not. When not even the first word fits, it is cut as if
+            ``word_boundary`` were off.
         save_order: When ``True``, only leading and trailing stopwords are
             removed; interior stopwords are kept so relative word order is
             preserved (python-slugify compatible). When ``False`` (default),
             all matching stopwords are removed wherever they appear. (#118)
-        stopwords: Words to remove from the slug.
+        stopwords: Words to remove from the slug, compared case-insensitively
+            whether or not ``lowercase`` is set. With ``separator=""`` the slug
+            has no words, and nothing is removed.
         regex_pattern: Custom regex for stripping characters.
         replacements: Pre-transliteration (old, new) substitution pairs.
         allow_unicode: Keep non-ASCII **letters, digits and combining marks**
             instead of transliterating to ASCII. Everything else is a separator,
             as it is on the ASCII path: format characters (bidi controls, ZWSP,
             ZWNBSP, soft hyphen, the tag block), private use, noncharacters,
-            surrogates, punctuation, symbols and emoji. This matches
+            surrogates, punctuation, symbols and emoji. That includes the
+            letter-like symbols such as the circled Latin letters (U+24B6),
+            which are ``So`` although Unicode calls them alphabetic. This matches
             ``django.utils.text.slugify(allow_unicode=True)``, which keeps
             ``\\w`` — with two deliberate additions Django does not make:
 
             * **Combining marks** (``M*``) are kept, capped at two per base
               character. Django drops them, which breaks Devanagari and Arabic;
               two is the cap the ``strip_zalgo`` presets use and what Vietnamese
-              ``ệ`` needs.
+              ``ệ`` needs. The cap counts the base's own marks, over its
+              decomposition: ``à`` takes one more. A precomposed character that
+              already carries more than two, such as polytonic Greek U+1F82
+              with three, is kept whole and takes none.
             * **ZWJ and ZWNJ** are kept *between* two other kept characters.
               Both are orthographically required — ZWNJ separates a Persian
               ``می`` prefix from its verb, ZWJ forms a Devanagari conjunct — so
@@ -3124,6 +3137,16 @@ class UniqueSlugifier:
 
     Appends incrementing suffixes for uniqueness.
     Optional check callback for external uniqueness (e.g. database lookup).
+
+    With ``max_length`` set, a suffixed slug is cut to fit by shortening the
+    base, never the suffix, and the cut is the slug's own: no trailing
+    separator or joiner is left before the suffix, and at least one character
+    of the base is kept. When the suffix leaves no room for one,
+    ``InvalidArgumentError`` is raised rather than returning ``-1``.
+
+    An input with nothing sluggable gives the empty slug, every time: it is
+    not suffixed, not recorded, and ``check`` is not called for it. Pass
+    ``default`` to get a unique fallback instead.
 
     One instance can be shared between threads: calls are serialised, so each
     waits for the one in progress, ``check`` included. ``check`` must not call

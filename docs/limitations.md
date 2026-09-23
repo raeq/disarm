@@ -526,16 +526,23 @@ look.
 | `"` U+0022 | `''` | two apostrophes |
 | `` ` `` U+0060 | `'` | one apostrophe |
 
-Measured over `U+0021`–`U+007E`, these are the only printable ASCII characters any surface
+Measured over `U+0021`–`U+007E`, these are the only printable ASCII characters the fold
 changes, and the surfaces split cleanly:
 
 | surface | rewrites ASCII |
 |---|---|
 | `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`, `catalog_key` | **yes** — all three |
-| `search_key`, `sort_key`, `ml_normalize` | no |
+| `search_key`, `sort_key` | no under the default `digit_policy`; **yes**, all three, under `"tr39"` or `"preserve"` |
+| `ml_normalize` | no |
+| `skeleton_key` | **yes** — all three, and `I` to `l` always, and `1` to `l` and `0` to `O` under `"tr39"` (#650) |
 
-`search_key` and `sort_key` escape it because `strip_accents` and the transliteration step
-consume the characters before the fold runs, not because they were exempted deliberately.
+`search_key` and `sort_key` have no confusable fold of their own, which is why the default
+leaves the three alone. A non-default `digit_policy` adds one: it runs the **whole**
+confusable table on the raw text before the key is built, not only the digit rows, so under
+`"tr39"` or `"preserve"` `search_key("a|b")` is `alb` and a Cyrillic spelling of `paypal`
+keys as `paypal` rather than `raural`. `"preserve"` is named for what it does to numerals,
+not for leaving the rest of the key alone (Finding 7 of the Lean model in
+`formal/lean/Presets`).
 
 **The detectors do not report them (#957).** `is_confusable` and `find_confusables` skip
 printable ASCII entirely, so a quoted sentence or a JSON document is not a detection. Until
@@ -674,6 +681,12 @@ Measured at **Unicode 15.0.0** — the oldest version CI runs — over every ass
 frozen by `tests/test_empty_key.py` so a strip class that widens shows up as a diff. The
 version matters: a 16.0.0 host assigns more code points, and the surfaces that reach `""`
 through transliteration count them; `canonicalize`, `sort_key` and `skeleton_key` do not.
+
+A string built only from characters that reduce to `""` reduces to `""` too, on every
+surface here but one. In `ml_normalize` each regional indicator reduces to `""` alone and
+two of them together name a flag: `U+1F1FA` and `U+1F1F8` are each `""`, and the pair is
+`flag: united states` (259 such pairs, measured by the Lean model in
+`formal/lean/Presets`).
 
 This is **not** the homoglyph collision the key builders exist to produce. Those are
 deliberate — `аdmin` and `admin` *should* meet. This one collapses **absence** onto **a

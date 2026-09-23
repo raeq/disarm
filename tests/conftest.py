@@ -8,6 +8,7 @@ rediscovering or redeclaring them per file.
 from __future__ import annotations
 
 import functools
+import re
 from pathlib import Path
 
 import pytest
@@ -212,3 +213,173 @@ SCRIPT_SAMPLES: dict[Script, str] = {
 def script_samples() -> dict[Script, str]:
     """Return the canonical SCRIPT_SAMPLES dictionary."""
     return SCRIPT_SAMPLES
+
+
+# ---------------------------------------------------------------------------
+# The preset step lists, read from the Rust (Finding 5 of formal/lean/Presets)
+# ---------------------------------------------------------------------------
+
+#: Each preset in `PRESETS`, and the function in `src/presets.rs` that holds its list.
+PRESET_STEP_FUNCTIONS = {
+    "canonicalize": "canonicalize_with",
+    "canonicalize_strict": "canonicalize_strict_with",
+    "strip_obfuscation": "strip_obfuscation_with",
+    "strip_format": "strip_format",
+    "search_key": "search_key_with",
+    "catalog_key": "catalog_key_with",
+    "sort_key": "sort_key_with",
+    "ml_normalize": "ml_normalize",
+    "skeleton_key": "skeleton_key",
+}
+
+#: A `Step` with no payload, and the `PRESETS` tuple it reads as.
+_BARE_STEPS: dict[str, tuple[str, str | None]] = {
+    "ResolveDeletions": ("resolve_deletions", None),
+    "Nfkc": ("normalize", "NFKC"),
+    "Nfc": ("normalize", "NFC"),
+    # NFC of ASCII is ASCII, so the guard changes the cost and never the result.
+    "NfcIfNonAscii": ("normalize", "NFC"),
+    "StripBidi": ("strip_bidi", None),
+    "StripControl": ("strip_control", None),
+    "StripZeroWidth": ("strip_zero_width", None),
+    "CollapseWs": ("collapse_whitespace", None),
+    "DropRepeatedMarks": ("drop_repeated_marks", None),
+    "FoldCase": ("fold_case", None),
+    "StripAccents": ("strip_accents", None),
+    "TranslitPreservingLatin": ("transliterate", "non_latin"),
+    "PrototypeFold": ("prototype_fold", None),
+}
+
+
+def _strip_line_comments(src: str) -> str:
+    """Drop `//` comments, leaving string and char literals intact.
+
+    A `//` inside a literal (`"https://..."`) is text, not a comment. Raw strings are
+    not handled: `src/presets.rs` has none, and a test would fail loudly if one were
+    added to a step list.
+    """
+    out: list[str] = []
+    i, n = 0, len(src)
+    while i < n:
+        ch = src[i]
+        if ch == '"':
+            j = i + 1
+            while j < n and src[j] != '"':
+                j += 2 if src[j] == "\\" else 1
+            out.append(src[i : j + 1])
+            i = j + 1
+        elif ch == "'" and (m := _CHAR_LITERAL.match(src, i)):
+            out.append(m.group())
+            i = m.end()
+        elif src.startswith("//", i):
+            nl = src.find("\n", i)
+            i = n if nl < 0 else nl
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
+_CHAR_LITERAL = re.compile(r"'(?:\\(?:u\{[0-9A-Fa-f]+\}|x[0-9A-Fa-f]{2}|.)|[^\\'])'")
+
+
+def _balanced(src: str, i: int) -> int:
+    """Index one past the bracket that closes the one at `src[i]`."""
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    stack = [pairs[src[i]]]
+    j = i + 1
+    while stack:
+        ch = src[j]
+        if ch in pairs:
+            stack.append(pairs[ch])
+        elif ch == stack[-1]:
+            stack.pop()
+        j += 1
+    return j
+
+
+def _render(step: tuple[str, str | None]) -> str:
+    name, param = step
+    return name if param is None else f"{name}({param})"
+
+
+def _parse_steps(body: str) -> list[tuple[str, str | None]]:
+    """Parse the inside of a `[Step::…, …]` literal into `PRESETS` tuples."""
+    out: list[tuple[str, str | None]] = []
+    i = 0
+    while True:
+        i = body.find("Step::", i)
+        if i < 0:
+            return out
+        j = i + len("Step::")
+        k = j
+        while k < len(body) and (body[k].isalnum() or body[k] == "_"):
+            k += 1
+        name = body[j:k]
+        while k < len(body) and body[k] in " \n\t":
+            k += 1
+        payload = ""
+        if k < len(body) and body[k] in "({":
+            end = _balanced(body, k)
+            payload = body[k + 1 : end - 1].strip()
+            k = end
+        out.append(_step_tuple(name, payload))
+        i = k
+
+
+def _step_tuple(name: str, payload: str) -> tuple[str, str | None]:
+    if name in _BARE_STEPS:
+        return _BARE_STEPS[name]
+    if name == "PolicyPreFold":
+        return ("policy_pre_fold", payload.strip('"'))
+    if name == "ConfusablesCtx":
+        return ("confusables", payload.strip('"'))
+    if name == "ConfusablesNfcFixedPointCtx":
+        target = payload.strip('"')
+        return ("fixed_point", f"confusables({target}) -> normalize(NFC)")
+    if name == "ConfusablesMarkFixedPointCtx":
+        target = payload.strip('"')
+        return (
+            "fixed_point",
+            f"fixed_point(confusables({target}) -> normalize(NFC)) -> strip_cross_script_marks",
+        )
+    if name == "StripInvisible":
+        return ("strip_invisibles", {"COMPARISON_STRIP": "comparison"}.get(payload, "rendering"))
+    if name == "Zalgo":
+        return ("strip_zalgo", "max_marks=0" if payload == "0" else None)
+    if name == "Transliterate":
+        return ("transliterate", None)
+    if name == "Demojize":
+        return ("demojize", "cldr")
+    if name == "FixedPoint":
+        inner = _parse_steps(payload)
+        return ("fixed_point", " -> ".join(_render(s) for s in inner))
+    raise AssertionError(
+        f"Step::{name} has no PRESETS spelling; add it to tests/conftest.py and to PRESETS"
+    )
+
+
+@functools.cache
+def rust_preset_steps() -> dict[str, list[tuple[str, str | None]]]:
+    """Every preset's step list, read from `src/presets.rs` and spelled as `PRESETS` spells it.
+
+    `PRESETS` is a mirror, and it drifted because the test that pinned it compared it with
+    a second hand-written copy (Finding 5 of the Lean model in `formal/lean/Presets`). This
+    reads the lists the presets actually run, so a step added in Rust fails the comparison
+    until the mirror has it too. An unknown `Step` variant is an error rather than a skip.
+    """
+    src = _strip_line_comments((ROOT / "src" / "presets.rs").read_text(encoding="utf-8"))
+    out: dict[str, list[tuple[str, str | None]]] = {}
+    for preset, function in PRESET_STEP_FUNCTIONS.items():
+        start = src.index(f"\npub(crate) fn {function}")
+        # The body ends at the next function definition at column 0.
+        end = src.find("\npub(crate) fn ", start + 1)
+        body = src[start : end if end > 0 else len(src)]
+        if "static_steps!" in body:
+            at = body.index("static_steps!")
+            opener = body.index("[", body.index("fn apply;", at))
+        else:
+            opener = body.index("[", body.index("const STEPS: &[Step;") + len("const STEPS: &"))
+            opener = body.index("= &[", opener) + len("= &")
+        out[preset] = _parse_steps(body[opener + 1 : _balanced(body, opener) - 1])
+    return out

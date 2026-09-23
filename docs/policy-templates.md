@@ -52,7 +52,7 @@ assert pipe("Москва") == "moskva"
 
 | Property | Value |
 |----------|-------|
-| Steps | NFKC → transliterate (ISO 9) → fold_case → collapse_whitespace |
+| Steps | NFKC → strip_plane14 → transliterate (ISO 9) → fold_case → strip_control → strip_zero_width → strip_pua → collapse_whitespace |
 | Output charset | UTF-8 (ISO 9 diacritics preserved before case folding) |
 | Reversibility | Partially (case folding is lossy) |
 | Script coverage | All Cyrillic scripts |
@@ -69,7 +69,7 @@ assert pipe("Città di Firenze") == "citta di firenze"
 
 | Property | Value |
 |----------|-------|
-| Steps | NFKC → transliterate → confusables → strip_accents → fold_case → collapse_whitespace |
+| Steps | NFKC → strip_plane14 → strip_accents → transliterate → confusables → fold_case → confusables → fold_case → strip_control → strip_zero_width → strip_pua → collapse_whitespace |
 | Output charset | ASCII |
 | Reversibility | No (lossy) |
 | Script coverage | All 83 language profiles |
@@ -85,7 +85,7 @@ assert pipe("  Hello   World  ") == "Hello World"
 
 | Property | Value |
 |----------|-------|
-| Steps | NFKC → confusables → collapse_whitespace |
+| Steps | NFKC → confusables → strip_control → strip_zero_width → strip_pua → collapse_whitespace |
 | Output charset | UTF-8 (original script preserved) |
 | Reversibility | No (NFKC is lossy for some characters) |
 | Confusables | Folds TR39 confusable homoglyphs (not an output/injection defense) |
@@ -104,8 +104,8 @@ assert pipe("Héllo WÖRLD 🎉") == "hello world party popper"
 
 | Property | Value |
 |----------|-------|
-| Steps | NFKC → demojize → strip_accents → fold_case → collapse_whitespace |
-| Output charset | ASCII + emoji names |
+| Steps | NFKC → strip_plane14 → demojize → strip_accents → fold_case → strip_control → strip_zero_width → strip_pua → collapse_whitespace |
+| Output charset | UTF-8: no transliteration, so a script without accents keeps its letters; emoji become their English names |
 | Reversibility | No (lossy) |
 | Script coverage | All scripts |
 
@@ -121,7 +121,7 @@ assert pipe("Москва") == "moskva"
 
 | Property | Value |
 |----------|-------|
-| Steps | NFKC → transliterate → strip_accents → fold_case → collapse_whitespace |
+| Steps | NFKC → strip_plane14 → strip_accents → transliterate → fold_case → strip_control → strip_zero_width → strip_pua → collapse_whitespace |
 | Output charset | ASCII |
 | Reversibility | No (lossy) |
 | Script coverage | All 83 language profiles |

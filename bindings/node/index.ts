@@ -456,10 +456,11 @@ export function stripObfuscation(text: string, options: { digitPolicy?: DigitPol
 }
 
 /**
- * Canonicalize text for security-sensitive comparison: NFKC → strip bidi/format
- * → strip invisible classes (#413) → strip control → strip zero-width → collapse
- * whitespace → cap combining marks (anti-zalgo) → NFC → confusables → NFC
- * (confusables sandwiched between NFC passes for idempotency).
+ * Canonicalize text for security-sensitive comparison: resolve deletions → NFKC →
+ * strip bidi/format → strip invisible classes (#413) → strip control → strip
+ * zero-width → collapse whitespace → drop repeated marks → cap combining marks
+ * (anti-zalgo) → NFC → confusables and NFC to a fixed point → drop repeated marks
+ * (the fold is iterated with NFC for idempotency).
  *
  * The name describes the mechanism (Unicode canonicalization for matching), not
  * a safety guarantee — this is not an output sanitizer; encode at the sink.
@@ -617,8 +618,9 @@ export interface MlNormalizeOptions {
 }
 
 /**
- * ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
- * [case fold] → strip control → strip zero-width → collapse whitespace.
+ * ML/NLP normalization: resolve deletions → NFKC → emoji→text → transliterate →
+ * strip accents → emoji→text → [case fold] → strip control → strip zero-width →
+ * collapse whitespace → NFC.
  *
  * Note this folds no confusables — it is not a homoglyph defence at any setting. Put
  * {@link normalizeConfusables} in front of it when a model needs both.

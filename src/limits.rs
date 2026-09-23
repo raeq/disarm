@@ -51,11 +51,21 @@ pub const MAX_REGEX_DFA_BYTES: usize = 1_048_576; // 1 MiB
 /// caller-supplied and unbounded, so a tiny input can expand to an enormous
 /// string via a separately-registered value (an amplification a caller's own
 /// input-size check cannot foresee). The pre-pass output is therefore capped.
-/// The other is [`MAX_NORMALIZE_OUTPUT_BYTES`], below: NFKC amplifies by up to 18× and
-/// the same argument applies to it.
+/// The other is [`MAX_NORMALIZE_OUTPUT_BYTES`], below: NFKC amplifies by up to 18×, the
+/// emoji naming in `ml_normalize` by up to 10×, and the same argument applies to both.
 pub const MAX_REPLACEMENT_OUTPUT_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
 
-/// Output ceiling on the normalization pre-pass inside a preset (#768).
+/// The most a preset may grow its input by, in bytes (#768).
+///
+/// Checked after every step of a preset, against the length of the text the preset was
+/// called with: a step that leaves the text more than this much longer raises
+/// `NormalizeOutputTooLarge` (a `ResourceLimit` error). Growth, not size, because growth
+/// is what the reason below is about — an input-size check bounds the size already, and
+/// disarm does not cap input. It was an absolute size tested after the `Nfkc` step alone
+/// until the Lean model in `formal/lean/Presets` (Finding 6): the steps after NFKC grew
+/// unchecked (`ml_normalize` turned 10.4 MB of U+1FAF0 into 106.6 MB), and an 11 MiB
+/// input NFKC did not grow at all was refused whenever one byte of it made the fast path
+/// decline.
 ///
 /// The comment above gives the reason for the replacement cap as *an amplification a
 /// caller's own input-size check cannot foresee*. That is true of NFKC as well, and NFKC

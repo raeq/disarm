@@ -288,10 +288,11 @@ class Text:
     def canonicalize(self) -> Text:
         """Apply the canonicalize precompiled pipeline.
 
-        NFKC → strip bidi/format → strip invisibles (#413) → strip control →
-        strip zero-width → collapse whitespace → cap combining marks
-        (anti-zalgo, #429) → NFC → confusables → NFC (the confusable fold is
-        NFC-sandwiched and iterated to a fixed point for idempotency, #416/#434).
+        resolve deletions → NFKC → strip bidi/format → strip invisibles (#413) →
+        strip control → strip zero-width → collapse whitespace → drop repeated marks →
+        cap combining marks (anti-zalgo, #429) → NFC → confusables and NFC to a fixed
+        point → drop repeated marks (the confusable fold is iterated with NFC for
+        idempotency, #416/#434). `PRESETS` lists the steps exactly.
         """
         return Text(self._t().canonicalize(self._value))
 
@@ -313,8 +314,9 @@ class Text:
     ) -> Text:
         """Apply the ml_normalize precompiled pipeline.
 
-        NFKC → emoji→text → [transliterate] → strip_accents →
-        [fold_case] → strip_control → strip_zero_width → collapse_whitespace.
+        resolve deletions → NFKC → emoji→text → [transliterate] → strip_accents →
+        emoji→text → [fold_case] → strip_control → strip_zero_width →
+        collapse_whitespace → NFC.
 
         ``fold_case=False`` drops the fold step for a cased downstream model (#559);
         every other stage still runs, so accents are still stripped.
@@ -343,11 +345,12 @@ class Text:
     def canonicalize_strict(self) -> Text:
         """Apply the canonicalize_strict precompiled pipeline.
 
-        Strict Unicode hygiene for untrusted input: NFKC → strip bidi/format,
-        zero-width and control → strip invisibles (#413) → strip_zalgo →
-        confusables → collapse whitespace → NFC. Like `canonicalize` but
-        also strips zalgo, and unlike the key presets it does not transliterate —
-        the original script is preserved.
+        Strict Unicode hygiene for untrusted input: resolve deletions → NFKC → strip
+        bidi/format, zero-width and control → strip invisibles (#413) → confusables
+        and NFC, iterated with the cross-script mark strip → drop repeated marks →
+        strip_zalgo → collapse whitespace → NFC. Like `canonicalize` but also strips
+        zalgo, and unlike the key presets it has no transliteration step — though the
+        confusable fold still rewrites individual non-Latin letters (#907).
         """
         return Text(self._t().canonicalize_strict(self._value))
 
@@ -364,11 +367,12 @@ class Text:
     def strip_obfuscation(self) -> Text:
         """Apply the strip_obfuscation precompiled pipeline.
 
-        Maximum-strength deobfuscation: NFKC → strip_zalgo(0) → strip bidi →
-        strip zero-width → demojize → strip invisibles (#413) → confusables →
-        strip_accents → strip control → collapse whitespace. Strips all combining
+        Maximum-strength deobfuscation: resolve deletions → NFKC → strip_zalgo(0) →
+        strip bidi → strip zero-width → strip invisibles (#413) → confusables →
+        strip_accents → strip control → collapse whitespace → NFC. Strips all combining
         marks (zalgo and accents) and resolves homoglyphs by visual similarity,
-        but preserves case and does not transliterate.
+        but preserves case, does not transliterate, and leaves emoji where they
+        stand (#910).
         """
         return Text(self._t().strip_obfuscation(self._value))
 

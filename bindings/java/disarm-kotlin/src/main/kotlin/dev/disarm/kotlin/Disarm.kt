@@ -357,8 +357,9 @@ fun unicodeVersion(): String = JDisarm.unicodeVersion()
 fun keySchemaVersion(): Int = JDisarm.keySchemaVersion()
 
 /**
- * ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents → [case fold]
- * → strip control → strip zero-width → collapse whitespace.
+ * ML/NLP normalization: resolve deletions → NFKC → emoji→text → transliterate → strip
+ * accents → emoji→text → [case fold] → strip control → strip zero-width → collapse
+ * whitespace → NFC.
  *
  * [foldCase] defaults to true; pass false in front of a **cased** model. It restores
  * case, not diacritics — accents are still stripped. Folds no confusables, so it is not a

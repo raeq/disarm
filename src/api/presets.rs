@@ -10,12 +10,11 @@ use crate::Error;
 /// Canonicalize text for security-sensitive *comparison* (homoglyph / bidi /
 /// zero-width / control neutralization).
 ///
-/// Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
-/// strip control → strip zero-width → collapse whitespace → cap combining marks
-/// (anti-zalgo, #429) → NFC → confusables → NFC. (The confusable fold is
-/// sandwiched between two NFC passes
-/// so TR39 skeletoning is normalization-stable and the preset is idempotent —
-/// #416.) Fallible only through the confusables stage, whose target script is
+/// Pipeline: resolve deletions → NFKC → strip bidi/format → strip invisible classes
+/// (#413) → strip control → strip zero-width → collapse whitespace → drop repeated marks
+/// → cap combining marks (anti-zalgo, #429) → NFC → confusables and NFC to a fixed point
+/// → drop repeated marks. (The confusable fold is iterated with NFC so TR39
+/// skeletoning is normalization-stable and the preset is idempotent — #416/#434.) Fallible only through the confusables stage, whose target script is
 /// fixed internally, so in practice this never errors; the [`Result`] keeps the
 /// surface uniform with the other key/clean presets.
 ///
@@ -54,8 +53,9 @@ pub fn security_clean(text: &str) -> Result<Cow<'_, str>, Error> {
     canonicalize(text)
 }
 
-/// ML/NLP text normalization: NFKC → emoji→text → transliterate → strip accents →
-/// [case fold] → strip control → strip zero-width → collapse whitespace.
+/// ML/NLP text normalization: resolve deletions → NFKC → emoji→text → transliterate →
+/// strip accents → emoji→text → [case fold] → strip control → strip zero-width → collapse
+/// whitespace → NFC.
 ///
 /// `lang` selects the transliteration table (`None` skips transliteration).
 /// `emoji_style` is `"cldr"` (expand emoji to CLDR short names) or `"none"`
@@ -91,8 +91,9 @@ pub fn ml_normalize<'a>(
     crate::presets::ml_normalize(text, lang, emoji_style, fold_case).map_err(Error::from)
 }
 
-/// Library catalog deduplication key: NFKC → strip bidi → case fold →
-/// transliterate → confusables → strip accents → case fold → collapse whitespace.
+/// Library catalog deduplication key: resolve deletions → NFKC → strip bidi → strip
+/// invisibles → case fold → (transliterate → confusables → strip accents, to a fixed
+/// point) → case fold → strip control → strip zero-width → collapse whitespace.
 ///
 /// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails
 /// ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument)) on an unknown `lang`.
@@ -140,8 +141,8 @@ pub fn sort_key<'a>(text: &'a str, lang: Option<&str>) -> Result<Cow<'a, str>, E
 }
 
 /// Strip bidi/format and other invisible-injection vectors from rendered user
-/// content: strip bidi/format → strip invisibles (rendering policy) → collapse
-/// whitespace (also stripping control + zero-width). Infallible.
+/// content: strip bidi/format → strip invisibles (rendering policy) → strip control →
+/// strip zero-width → collapse whitespace. Infallible.
 ///
 /// Visual hygiene only — **not** markup-safe; still escape at the output layer.
 #[must_use]
@@ -176,13 +177,14 @@ pub fn strip_bidi(text: &str) -> String {
     crate::presets::strip_bidi(text)
 }
 
-/// Normalize user-submitted input — Unicode hygiene that **preserves the original
-/// script** (no transliteration): NFKC → strip bidi/format → strip zero-width →
-/// strip control → strip invisible classes (#413) → cap combining marks
-/// (anti-zalgo) → confusables → collapse whitespace → NFC. (The invisibles are
-/// stripped before the zalgo cap so they cannot split a mark run, and the
-/// terminal NFC recomposes any base+mark left adjacent — keeping the preset
-/// idempotent, #121/#416.)
+/// Normalize user-submitted input — Unicode hygiene with no transliteration step:
+/// resolve deletions → NFKC → strip bidi/format → strip zero-width → strip control →
+/// strip invisible classes (#413) → confusables and NFC, iterated with the cross-script
+/// mark strip (#638) → drop repeated marks → cap combining marks (anti-zalgo) → collapse
+/// whitespace → NFC. (The invisibles are stripped before the zalgo cap so they cannot
+/// split a mark run, the cap follows the mark strip for the same reason (#862), and the
+/// terminal NFC recomposes any base+mark left adjacent — keeping the preset idempotent,
+/// #121/#416.) The confusable fold still rewrites individual non-Latin letters (#907).
 ///
 /// Not an output sanitizer (no HTML/JS/SQL escaping). Fallible only through the
 /// fixed-target confusables stage; the [`Result`] keeps the surface uniform.
@@ -211,9 +213,10 @@ pub fn normalize_user_input(text: &str) -> Result<Cow<'_, str>, Error> {
     canonicalize_strict(text)
 }
 
-/// Maximum-strength deobfuscation: NFKC → strip all combining marks → strip bidi →
-/// strip zero-width → demojize → confusables → strip accents → collapse
-/// whitespace. Preserves case; does not transliterate.
+/// Maximum-strength deobfuscation: resolve deletions → NFKC → strip all combining marks
+/// → strip bidi → strip zero-width → strip invisibles → confusables → strip accents →
+/// strip control → collapse whitespace → NFC. Preserves case; does not transliterate, and
+/// leaves emoji where they stand (#910).
 ///
 /// Fallible only through the fixed-target confusables stage; the [`Result`] keeps
 /// the surface uniform.
@@ -266,6 +269,13 @@ pub struct Pipeline {
 
 impl Pipeline {
     /// Run the named pipeline over `text`.
+    ///
+    /// A profile runs its steps again until the output stops changing (bounded), so
+    /// `process(process(x)) == process(x)`. One pass was not always enough: the mark strip
+    /// runs before the confusable fold, and the control and zero-width strips after the
+    /// normalization, so `llm_guardrail` returned a negation overlay on a letter the next
+    /// call removed (Findings 3 and 4 of the Lean model in `formal/lean/Presets`). Text a
+    /// first pass leaves unchanged costs one pass.
     ///
     /// # Errors
     /// Propagates the pipeline's error (a profile's steps are validated at
@@ -369,7 +379,12 @@ pub fn strip_obfuscation_with(
 }
 
 /// [`search_key`] under `digit_policy` (#896). See [`canonicalize_with`]. This builder
-/// has no fold of its own, so the policy's whole reach is the fold on the raw text.
+/// has no fold of its own, so the policy's whole reach is the fold on the raw text — and
+/// under `Tr39` or `Preserve` that fold is the **whole** confusable table, not only its
+/// digit rows: a Cyrillic spelling of `paypal` keys as `paypal` rather than `raural`,
+/// and `|`, `"` and `` ` `` are rewritten. The case fold and transliteration then make
+/// new sources the fold did not see, so under those policies the builder runs to a fixed
+/// point; under `Numeric` it runs once, as [`search_key`] does.
 ///
 /// # Errors
 ///
@@ -382,7 +397,8 @@ pub fn search_key_with<'a>(
     crate::presets::search_key_with(text, lang, digit_policy.into()).map_err(Error::from)
 }
 
-/// [`sort_key`] under `digit_policy` (#896). See [`search_key_with`].
+/// [`sort_key`] under `digit_policy` (#896). See [`search_key_with`]: the same whole-table
+/// fold on the raw text, and the same fixed point under a non-default policy.
 ///
 /// # Errors
 ///
@@ -397,6 +413,9 @@ pub fn sort_key_with<'a>(
 
 /// [`catalog_key`] under `digit_policy` (#896). See [`canonicalize_with`]. The fold on
 /// the raw text runs before transliteration consumes the non-Latin digit it exists to read.
+/// Under `Tr39` or `Preserve` it is the whole confusable table, so a homoglyph the default
+/// romanizes is folded first: a Cyrillic spelling of `paypal` keys as `paypal` rather
+/// than `raural`.
 ///
 /// # Errors
 ///

@@ -980,7 +980,7 @@ pub(crate) fn selector_may_follow(prev: char) -> bool {
 /// Byte-identical to the former per-length hex-key PHF probe on every table key;
 /// `emoji_trie_matches_phf` verifies the two agree against `lookup_emoji_multi`. Unlike
 /// the probe it also accepts the fully qualified form of a key — a U+FE0F after an
-/// emoji base ([`selector_may_follow`]) — which the table stores unqualified. A sequence is a
+/// emoji base (`selector_may_follow`) — which the table stores unqualified. A sequence is a
 /// match only at a terminal node of length ≥ 2 whose **last** code point is not
 /// ZWJ/VS-15/VS-16 — replicating the original "skip incomplete sequences" rule
 /// (a trailing variation selector or ZWJ is a presentation/joiner mark handled

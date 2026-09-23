@@ -11,9 +11,11 @@ use unicode_normalization::UnicodeNormalization;
 // expansion they want.
 //
 // The preset path is not. NFKC widens `U+FDFA` by 18×, which is an amplification an
-// input-size check cannot foresee, so the `Step::Nfkc` arm of `presets::apply_into` caps
-// produced output at `MAX_NORMALIZE_OUTPUT_BYTES` (#768). This comment claimed otherwise
-// until then.
+// input-size check cannot foresee, so the preset runners refuse a step that leaves the text
+// more than `MAX_NORMALIZE_OUTPUT_BYTES` longer than the preset's input (#768,
+// `presets::check_growth`). This comment claimed there was no cap until #768; the cap sat
+// on the `Nfkc` arm alone until the Lean model in `formal/lean/Presets` found the steps
+// after it growing unchecked.
 
 // `UNICODE_VERSION`: the UCD release `unicode-normalization` implements. Emitted by
 // build.rs from the crate's own const, so it cannot drift from the tables it names — the
@@ -114,8 +116,8 @@ pub(crate) fn is_normalized(text: &str, form: &str) -> Result<bool, crate::Error
 /// - Not a zalgo control. [`crate::zalgo`] answers that question, with a different bound
 ///   and a different purpose; 30 non-starters is far above anything a reader would call
 ///   stacking abuse.
-/// - Not a size bound on the presets. `MAX_NORMALIZE_OUTPUT_BYTES` (#768) is that, and it
-///   already applies.
+/// - Not a size bound on the presets. `MAX_NORMALIZE_OUTPUT_BYTES` (#768) bounds how far
+///   a preset may grow its input, and it already applies.
 pub(crate) fn stream_safe(text: &str) -> String {
     use unicode_normalization::UnicodeNormalization;
     text.chars().stream_safe().collect()

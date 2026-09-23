@@ -3015,8 +3015,8 @@ def stream_safe(text: str) -> str:
     - **Not a zalgo control.** ``strip_zalgo()`` answers that. 30 non-starters is far
       above anything a reader would call stacking abuse, and this makes no judgement about
       whether the text is abusive.
-    - **Not a size bound.** The presets already cap produced output; this does not change
-      how much text a call returns.
+    - **Not a size bound.** The presets already cap how far a call can grow its input;
+      this does not change how much text a call returns.
 
     Args:
         text: Input string.
@@ -3262,7 +3262,9 @@ class TextPipeline:
     This constructor takes individual step flags only; there is **no**
     ``preset=`` argument. To obtain a pre-configured pipeline for a named policy
     profile (e.g. ``scholarly_cyrillic_iso9``), call `get_pipeline`
-    instead — it returns a ready-to-use ``TextPipeline``.
+    instead — it returns a ready-to-use ``TextPipeline``. A profile runs its steps
+    again until the output stops changing; a pipeline built here runs them once, as
+    composed, so the two agree wherever one pass is already a fixed point.
 
     ``digit_policy`` is the policy the ``confusables`` step folds digits under
     (``"numeric"``, ``"tr39"`` or ``"preserve"``), fixed here at construction the way

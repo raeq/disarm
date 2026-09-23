@@ -25,7 +25,7 @@ Ready-to-use multi-step text processing pipelines. Each is a single compiled Rus
 
 ### Pipeline steps
 
-`NFKC → strip bidi/format → strip invisibles (#413) → strip_control → strip_zero_width → collapse_whitespace → strip_zalgo (#429) → NFC → confusables → NFC`
+`resolve_deletions → policy_pre_fold → NFKC → strip bidi/format → strip invisibles (#413) → strip_control → strip_zero_width → collapse_whitespace → drop_repeated_marks → strip_zalgo (#429) → NFC → fixed point(confusables → NFC) → drop_repeated_marks`
 
 ```python
 from disarm import canonicalize
@@ -42,7 +42,7 @@ assert canonicalize("Ηello Ꮤorld") == "Hello World"
 
 ### Pipeline steps
 
-`NFKC → emoji→text → [transliterate] → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+`resolve_deletions → NFKC → emoji→text → [transliterate] → strip_accents → emoji→text → [fold_case] → strip_control → strip_zero_width → collapse_whitespace → NFC`
 
 ```python
 from disarm import ml_normalize
@@ -64,7 +64,7 @@ assert ml_normalize("José Martínez", fold_case=False) == "Jose Martinez"
 
 ### Pipeline steps
 
-`NFKC → fold_case → transliterate → confusables → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+`resolve_deletions → policy_pre_fold → NFKC → strip_bidi → strip invisibles → fold_case → fixed point(transliterate → confusables → strip_accents) → fold_case → strip_control → strip_zero_width → collapse_whitespace`
 
 ```python
 from disarm import catalog_key
@@ -101,7 +101,9 @@ assert strip_format("admin\u202euser") == "adminuser"
 
 ### Pipeline steps
 
-`NFKC → fold_case → transliterate → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+`resolve_deletions → policy_pre_fold → NFKC → strip_bidi → strip invisibles → fold_case → transliterate → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+
+Under `digit_policy="tr39"` or `"preserve"` the pre-fold is the whole confusable table, not only its digit rows, and the list runs until the key stops changing. See [`digit_policy` on the key builders](#digit_policy-on-the-key-builders).
 
 ```python
 from disarm import search_key
@@ -119,7 +121,7 @@ assert search_key("ΩMEGA", lang="auto") == "omega"
 
 ### Pipeline steps
 
-`strip_bidi → strip invisibles → strip_control → strip_zero_width → NFKC → confusables → **prototype fold** → fixed-point(fold_case → confusables → NFKC) → collapse_whitespace`
+`resolve_deletions → strip_bidi → strip invisibles → strip_control → strip_zero_width → NFKC → confusables → **prototype fold** → fixed-point(fold_case → confusables → NFKC) → collapse_whitespace`
 
 ### The class the other builders cannot reach
 
@@ -179,7 +181,9 @@ available home for it rather than the best.
 
 ### Pipeline steps
 
-`NFKC → strip_bidi → fold_case → transliterate-non-Latin → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+`resolve_deletions → policy_pre_fold → NFKC → strip_bidi → strip invisibles → fold_case → transliterate-non-Latin → fold_case → strip_control → strip_zero_width → collapse_whitespace → drop_repeated_marks → strip_zalgo → NFC`
+
+Like `search_key`, it runs to a fixed point under a non-default `digit_policy`.
 
 Unlike `search_key`, `sort_key` **preserves base accented characters** so
 accented and unaccented forms stay distinct and the accent survives for a
@@ -209,7 +213,7 @@ assert sort_key("Café") == "café"
 
 ### Pipeline steps
 
-`NFKC → strip_bidi → strip_zero_width → strip_control → strip invisibles (#413) → strip_zalgo → confusables → collapse_whitespace → NFC`
+`resolve_deletions → policy_pre_fold → NFKC → strip_bidi → strip_zero_width → strip_control → strip invisibles (#413) → fixed point(fixed point(confusables → NFC) → strip_cross_script_marks) → drop_repeated_marks → strip_zalgo → collapse_whitespace → NFC`
 
 ```python
 from disarm import canonicalize_strict
@@ -229,7 +233,7 @@ Unlike `canonicalize`, this pipeline also strips zalgo text (excessive combining
 
 ### Pipeline steps
 
-`NFKC → strip_zalgo(0) → strip_bidi → strip_zero_width → strip invisibles (#413) → confusables → strip_accents → strip_control → collapse_whitespace`
+`resolve_deletions → policy_pre_fold → NFKC → strip_zalgo(0) → strip_bidi → strip_zero_width → strip invisibles (#413) → confusables → strip_accents → strip_control → collapse_whitespace → NFC`
 
 ```python
 from disarm import strip_obfuscation
@@ -256,31 +260,82 @@ Dict mapping preset function names to their ordered pipeline steps. Each value i
 
 ```python
 assert PRESETS["canonicalize"] == [
+    ("resolve_deletions", None),
+    ("policy_pre_fold", "latin"),
     ("normalize", "NFKC"),
     ("strip_bidi", None),
     ("strip_invisibles", "comparison"),
     ("strip_control", None),
     ("strip_zero_width", None),
     ("collapse_whitespace", None),
+    ("drop_repeated_marks", None),
     ("strip_zalgo", None),
     ("normalize", "NFC"),
-    ("confusables", "latin"),
-    ("normalize", "NFC"),
+    ("fixed_point", "confusables(latin) -> normalize(NFC)"),
+    ("drop_repeated_marks", None),
 ]
 assert PRESETS["canonicalize_strict"] == [
+    ("resolve_deletions", None),
+    ("policy_pre_fold", "latin"),
     ("normalize", "NFKC"),
     ("strip_bidi", None),
     ("strip_zero_width", None),
     ("strip_control", None),
     ("strip_invisibles", "comparison"),
+    (
+        "fixed_point",
+        "fixed_point(confusables(latin) -> normalize(NFC)) -> strip_cross_script_marks",
+    ),
+    ("drop_repeated_marks", None),
     ("strip_zalgo", None),
-    ("confusables", "latin"),
     ("collapse_whitespace", None),
     ("normalize", "NFC"),
 ]
 ```
 
-Use `PRESETS` to audit exactly which transforms a preset applies, or to build equivalent `TextPipeline` configurations.
+Use `PRESETS` to audit exactly which transforms a preset applies. It is a mirror of the
+step lists in `src/presets.rs`, and a test reads those lists and fails when the two
+differ — it drifted for a long time before that, missing steps that ran and listing one
+that did not (Finding 5 of the Lean model in `formal/lean/Presets`).
+
+Most names are the `TextPipeline` step or public function of the same name. Five are not:
+
+| step | what it does |
+|---|---|
+| `policy_pre_fold` | Nothing under the default `digit_policy`. Under `"tr39"` or `"preserve"`, the whole Latin confusable fold on the raw text (#885, #896) |
+| `fixed_point` | Runs the inner steps, named in its parameter, as a group until the text stops changing (bounded) |
+| `drop_repeated_marks` | Drops a nonspacing mark repeated on one base (UTS #39 §5.4, #835) |
+| `strip_cross_script_marks` | Drops a combining mark whose script differs from its base's (#615) |
+| `prototype_fold` | `I` to `l`, and under `"tr39"` `1` to `l` and `0` to `O` (#650) |
+
+Two properties are not steps, so the lists cannot show them: `search_key` and `sort_key`
+run their whole list to a fixed point under a non-default `digit_policy`, and every preset
+raises `ResourceLimitError` when a step leaves the text more than 10 MiB longer than its
+input (#768). A `TextPipeline` has neither `fixed_point` nor the preset-only steps, so it
+reproduces a preset only approximately.
+
+### `digit_policy` on the key builders
+
+On `canonicalize`, `canonicalize_strict` and `strip_obfuscation`, which fold confusables
+anyway, a non-default policy changes the digit rows the fold reads. On `catalog_key`,
+`search_key` and `sort_key` it does more: `policy_pre_fold` runs the **whole** confusable
+table on the raw text, before transliteration, and `search_key` and `sort_key` have no
+fold of their own at all under the default. So under `"tr39"` or `"preserve"` a Cyrillic
+spelling of `paypal` keys as `paypal` rather than `raural`, and `search_key` and
+`sort_key` rewrite `|`, `"` and `` ` `` as the other folding surfaces do.
+
+```python
+from disarm import search_key
+
+cyrillic_paypal = "".join(map(chr, (0x440, 0x430, 0x443, 0x440, 0x430, 0x6C)))
+assert search_key(cyrillic_paypal) == "raural"
+assert search_key(cyrillic_paypal, digit_policy="preserve") == "paypal"
+assert search_key("a|b") == "a|b"
+assert search_key("a|b", digit_policy="tr39") == "alb"
+```
+
+`"preserve"` is named for what it does to numerals, not for leaving the rest of the key
+alone.
 
 !!! warning "`None` here is a parameter, not an off switch"
 
@@ -309,13 +364,31 @@ assert pipe("Москва") == "moskva"
 
 Returns a fresh `TextPipeline` configured for the named profile. Raises `DisarmError` for unknown profiles.
 
+A profile runs its steps again until the output stops changing (bounded), so calling it on
+its own output returns that output. One pass was not always enough (Findings 3 and 4 of the
+Lean model in `formal/lean/Presets`): the mark strip runs before the confusable fold and
+before `strip_pua`, and the control and zero-width strips run after `normalize`, so
+`llm_guardrail` kept a negation overlay on a symbol and then stripped it once the fold had
+made the symbol a letter. A `TextPipeline` built from the same flags runs its steps once;
+the two agree wherever one pass is already a fixed point, which includes every single code
+point.
+
+```python
+from disarm import get_pipeline
+
+guardrail = get_pipeline("llm_guardrail")
+cent_negated = chr(0xA2) + chr(0x338)
+assert guardrail(cent_negated) == "c"
+assert guardrail(guardrail(cent_negated)) == "c"
+```
+
 ### list_profiles
 
 ```python
 from disarm import list_profiles
 
 print(list_profiles())
-# ['library_catalog_key_eu', 'llm_guardrail', 'ml_corpus_normalize',
+# ['code_context', 'library_catalog_key_eu', 'llm_guardrail', 'ml_corpus_normalize',
 #  'normalize_web_input', 'rag_ingest', 'scholarly_cyrillic_iso9', 'search_index']
 ```
 
@@ -325,13 +398,16 @@ Returns sorted list of available profile names.
 
 | Profile | Steps | Output |
 |---------|-------|--------|
-| `scholarly_cyrillic_iso9` | NFKC → transliterate (ISO 9) → fold_case → collapse_whitespace | UTF-8 |
-| `library_catalog_key_eu` | NFKC → transliterate → confusables → strip_accents → fold_case → collapse_whitespace | ASCII |
-| `normalize_web_input` | NFKC → confusables → collapse_whitespace | UTF-8 |
-| `ml_corpus_normalize` | NFKC → demojize → strip_accents → fold_case → collapse_whitespace | ASCII |
-| `search_index` | NFKC → transliterate → strip_accents → fold_case → collapse_whitespace | ASCII |
-| `llm_guardrail` | NFKC → strip_zalgo(0) → strip_bidi → strip_plane14 → strip_accents → confusables → fold_case → strip_control → strip_zero_width → collapse_whitespace | UTF-8 |
-| `rag_ingest` | NFKC → strip_bidi → strip_accents → transliterate → strip_control → strip_zero_width → collapse_whitespace | ASCII |
+| `code_context` | strip_bidi → strip_control → strip_zero_width | UTF-8 |
+| `scholarly_cyrillic_iso9` | NFKC → strip_plane14 → transliterate (ISO 9) → fold_case → strip_control → strip_zero_width → strip_pua → collapse_whitespace | UTF-8 |
+| `library_catalog_key_eu` | NFKC → strip_plane14 → strip_accents → transliterate → confusables → fold_case → confusables → fold_case → strip_control → strip_zero_width → strip_pua → collapse_whitespace | ASCII |
+| `normalize_web_input` | NFKC → confusables → strip_control → strip_zero_width → strip_pua → collapse_whitespace | UTF-8 |
+| `ml_corpus_normalize` | NFKC → strip_plane14 → demojize → strip_accents → fold_case → strip_control → strip_zero_width → strip_pua → collapse_whitespace | UTF-8 (no transliteration: a script without accents keeps its letters) |
+| `search_index` | NFKC → strip_plane14 → strip_accents → transliterate → fold_case → strip_control → strip_zero_width → strip_pua → collapse_whitespace | ASCII |
+| `llm_guardrail` | resolve_deletions → NFKC → strip_zalgo(0) → strip_bidi → strip_plane14 → strip_accents → confusables → fold_case → confusables → fold_case → strip_control → strip_zero_width → strip_pua → collapse_whitespace | UTF-8 |
+| `rag_ingest` | resolve_deletions → NFKC → strip_bidi → strip_plane14 → strip_accents → transliterate → strip_control → strip_zero_width → strip_pua → collapse_whitespace | ASCII |
+
+Each list is what the profile's `steps` reports, and every profile runs it to a fixed point.
 
 `llm_guardrail` hardens text against prompt-injection and homoglyph/zalgo/bidi obfuscation before it reaches an LLM (digits are never remapped to letters). `rag_ingest` canonicalizes documents for retrieval pipelines while preserving case.
 

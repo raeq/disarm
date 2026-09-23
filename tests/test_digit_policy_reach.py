@@ -55,9 +55,22 @@ class TestEveryBuilder:
 
     def test_tr39_is_the_pre_pass_exactly(self, name: str) -> None:
         # What #885 defined, now produced by the core: fold on the raw text, then the key.
+        #
+        # `search_key` and `sort_key` have no fold of their own, so that one pass was not a
+        # fixed point: their NFKC, case fold and transliteration make sources the pre-pass
+        # never saw. `qty-` + U+00BD keyed as `qty-1` U+2044 `2`, and the key of that folds
+        # the fraction slash to `/`. Under a non-default policy they now repeat the pair
+        # until it stops changing (Finding 2 of the Lean model in `formal/lean/Presets`).
         f = getattr(disarm, name)
+
+        def once(text: str) -> str:
+            return f(disarm.normalize_confusables(text, digit_policy="tr39"))
+
         for text in CORPUS:
-            expected = f(disarm.normalize_confusables(text, digit_policy="tr39"))
+            expected = once(text)
+            if name in ("search_key", "sort_key"):
+                while once(expected) != expected:
+                    expected = once(expected)
             assert f(text, digit_policy="tr39") == expected, (name, text)
 
     def test_a_bad_token_is_refused_by_name(self, name: str) -> None:

@@ -565,8 +565,9 @@ pub fn catalog_key(
         .map_err(|e| map_err(&e))
 }
 
-/// ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
-/// [case fold] → strip control → strip zero-width → collapse whitespace.
+/// ML/NLP normalization: resolve deletions → NFKC → emoji→text → transliterate →
+/// strip accents → emoji→text → [case fold] → strip control → strip zero-width →
+/// collapse whitespace → NFC.
 ///
 /// `fold_case` defaults to `true`. Pass `false` in front of a CASED model: the fold is
 /// destructive, cannot be undone downstream, and an uncased evaluation harness cannot

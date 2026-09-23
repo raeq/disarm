@@ -8,8 +8,21 @@ profiles. The model is validated against the built library by differential testi
 any proof or counterexample counts. Properties the code and docs claim are then proved, or
 refuted with a minimal counterexample that is reproduced on the library.
 
-> **Status.** Nothing here is fixed yet. Seven findings, each reproduced on the library
-> (`repro/`), with a proposed fix modelled in `Presets/Fixes.lean` and checked there.
+> **Status.** All seven findings are fixed: Finding 1 (`skeleton_key`) in #1024, with the
+> confusable fold's own findings, and Findings 2 to 7 in #1029. What follows describes the
+> code at `595fbda`, before the fixes, and `scripts/difftest.py` still models that code,
+> so against a fixed build it is expected to disagree on the words the fixes move (it was
+> not re-run for the fix: no Lean toolchain was at hand). The library searches were: over
+> `scalars`, `pairs`, `F1`, `F2` and `F3`, no string moves on a second pass on any of the
+> 37 surfaces in `search/idempotence.py`, where every non-zero cell of the table below
+> was one of Findings 1 to 4. Findings 2, 4 (the
+> presets) and 3/4 (the profiles) were fixed as `Presets/Fixes.lean` proposes; Finding 1
+> took a different shape of the same fix (NFKC rather than NFC in the loop, see
+> `formal/lean/Confusables`). Finding 5 derives the test from the Rust step lists rather
+> than exposing them through the binding. Finding 6 bounds growth, checked after every
+> step. The regression tests are `tests/test_presets_formal_findings.py`,
+> `tests/test_profiles_are_fixed_points.py` and the `presets_formal_findings` module in
+> `src/presets.rs`.
 
 Written against `main` at `595fbda` (0.16.0 + unreleased, `KEY_SCHEMA_VERSION` 10). Line
 numbers (`presets.rs` L2103) refer to that commit. Core Lean 4.34.0 only, no Mathlib.

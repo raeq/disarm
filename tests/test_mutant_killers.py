@@ -15,6 +15,7 @@ Categories covered:
 from __future__ import annotations
 
 import pytest
+from conftest import PRESET_STEP_FUNCTIONS, rust_preset_steps
 
 import disarm
 from disarm import (
@@ -290,6 +291,7 @@ class TestPipelineStepTuples:
             "sort_key",
             "canonicalize_strict",
             "strip_obfuscation",
+            "skeleton_key",
         }
         # #430: deprecated preset-name aliases remain valid keys until 1.0.
         deprecated = {"security_clean", "display_clean", "normalize_user_input"}
@@ -301,109 +303,22 @@ class TestPipelineStepTuples:
         assert PRESETS["display_clean"] == PRESETS["strip_format"]
         assert PRESETS["normalize_user_input"] == PRESETS["canonicalize_strict"]
 
-    @pytest.mark.parametrize(
-        "name,expected_steps",
-        [
-            (
-                "canonicalize",
-                [
-                    ("normalize", "NFKC"),
-                    ("strip_bidi", None),
-                    ("strip_invisibles", "comparison"),
-                    ("strip_control", None),
-                    ("strip_zero_width", None),
-                    ("collapse_whitespace", None),
-                    ("strip_zalgo", None),
-                    ("normalize", "NFC"),
-                    ("confusables", "latin"),
-                    ("normalize", "NFC"),
-                ],
-            ),
-            (
-                "ml_normalize",
-                [
-                    ("normalize", "NFKC"),
-                    ("demojize", "cldr"),
-                    ("transliterate", None),  # only_if_lang, Ignore mode
-                    ("strip_accents", None),
-                    ("demojize", "cldr"),  # #498: names the base strip_accents exposes
-                    ("fold_case", None),
-                    ("strip_control", None),
-                    ("strip_zero_width", None),
-                    ("collapse_whitespace", None),
-                ],
-            ),
-            (
-                "catalog_key",
-                [
-                    ("normalize", "NFKC"),
-                    ("strip_bidi", None),
-                    ("fold_case", None),  # #419: before transliterate
-                    ("transliterate", None),
-                    ("confusables", "latin"),
-                    ("strip_accents", None),
-                    ("fold_case", None),  # #419: again after (transliterate emits uppercase)
-                    ("strip_control", None),
-                    ("strip_zero_width", None),
-                    ("collapse_whitespace", None),
-                ],
-            ),
-            (
-                "strip_format",
-                [
-                    ("strip_bidi", None),
-                    ("strip_invisibles", "rendering"),
-                    ("strip_control", None),
-                    ("strip_zero_width", None),
-                    ("collapse_whitespace", None),
-                ],
-            ),
-            (
-                "search_key",
-                [
-                    ("normalize", "NFKC"),
-                    ("strip_bidi", None),
-                    ("fold_case", None),  # #419: before transliterate
-                    ("transliterate", None),
-                    ("strip_accents", None),
-                    ("fold_case", None),  # #419: again after (transliterate emits uppercase)
-                    ("strip_control", None),
-                    ("strip_zero_width", None),
-                    ("collapse_whitespace", None),
-                ],
-            ),
-            (
-                "sort_key",
-                [
-                    ("normalize", "NFKC"),
-                    ("strip_bidi", None),
-                    ("fold_case", None),  # #419: before transliterate
-                    ("transliterate", "non_latin"),
-                    ("fold_case", None),  # again: transliterate can emit uppercase
-                    ("strip_control", None),
-                    ("strip_zero_width", None),
-                    ("collapse_whitespace", None),
-                    ("normalize", "NFC"),
-                ],
-            ),
-            (
-                "canonicalize_strict",
-                [
-                    ("normalize", "NFKC"),
-                    ("strip_bidi", None),
-                    ("strip_zero_width", None),
-                    ("strip_control", None),
-                    ("strip_invisibles", "comparison"),
-                    ("strip_zalgo", None),
-                    ("confusables", "latin"),
-                    ("collapse_whitespace", None),
-                    ("normalize", "NFC"),
-                ],
-            ),
-        ],
-    )
-    def test_preset_steps_exact(self, name: str, expected_steps: list):
-        assert PRESETS[name] == expected_steps
+    @pytest.mark.parametrize("name", sorted(PRESET_STEP_FUNCTIONS))
+    def test_preset_steps_exact(self, name: str):
+        """`PRESETS` against the step lists the presets run, read from `src/presets.rs`.
+
+        This used to compare `PRESETS` with a second hand-written copy of itself, so both
+        drifted together: they missed `resolve_deletions`, `strip_invisibles` in the key
+        builders, `drop_repeated_marks`, three moved or removed steps and the whole of
+        `skeleton_key`, and the test stayed green (Finding 5 of the Lean model in
+        `formal/lean/Presets`). The expected value is now the Rust.
+        """
+        assert PRESETS[name] == rust_preset_steps()[name]
+
+    def test_every_rust_preset_is_mirrored(self):
+        """A preset added in Rust must reach `PRESETS`, and nothing may be there that is not."""
+        deprecated = {"security_clean", "display_clean", "normalize_user_input"}
+        assert set(PRESETS) - deprecated == set(PRESET_STEP_FUNCTIONS)
 
     # -- TextPipeline.steps --
 
